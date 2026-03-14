@@ -661,9 +661,17 @@
   (let ([idx (env-lookup env name depth)])
     (cond
       [idx (expr-bvar idx)]
-      ;; Relational context: logic variable from defr params or solve query
+      ;; Relational context: logic variable from defr params or solve query.
+      ;; Try both the raw name and ?-stripped name since params strip the ?
+      ;; prefix (e.g., param ?x → key x) but body references keep it (?x).
       [(and (current-relational-env)
-            (hash-ref (current-relational-env) name #f))
+            (or (hash-ref (current-relational-env) name #f)
+                (let ([s (symbol->string name)])
+                  (and (> (string-length s) 1)
+                       (char=? (string-ref s 0) #\?)
+                       (hash-ref (current-relational-env)
+                                 (string->symbol (substring s 1))
+                                 #f)))))
        => (lambda (lv) lv)]
       ;; Relational fallback: when inside solve/explain/defr goals, bare names
       ;; become free logic variables — even if they happen to be bound in the
@@ -2552,7 +2560,10 @@
     ;; is — functional eval (is var [expr])
     [(surf-is var expr loc)
      (let ([ev (elaborate var env depth)]
-           [ee (elaborate expr env depth)])
+           ;; Expression is functional (not relational) — disable relational fallback
+           ;; so that (add ?x ?y) elaborates as expr-app, not expr-goal-app
+           [ee (parameterize ([current-relational-fallback? #f])
+                 (elaborate expr env depth))])
        (cond [(prologos-error? ev) ev]
              [(prologos-error? ee) ee]
              [else (expr-is-goal ev ee)]))]

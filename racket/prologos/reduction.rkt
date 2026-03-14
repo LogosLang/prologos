@@ -444,7 +444,9 @@
      (define rel-args (expr-goal-app-args goal*))
      (define-values (goal-args query-vars) (extract-query-info rel-args))
      (define store (current-relation-store))
-     (define answers (stratified-solve-goal config store rel-name goal-args query-vars))
+     (define answers
+       (parameterize ([current-is-eval-fn nf])
+         (stratified-solve-goal config store rel-name goal-args query-vars)))
      ;; Bound args: show ground arguments with parameter names from relation definition
      (define bound-args (compute-bound-args-for-relation rel-name goal-args query-vars))
      (answers->prologos-expr answers query-vars bound-args)]
@@ -460,7 +462,9 @@
      (define rel-args (expr-goal-app-args goal*))
      (define-values (goal-args query-vars) (extract-query-info rel-args))
      (define store (current-relation-store))
-     (define answers (stratified-solve-goal config store rel-name goal-args query-vars))
+     (define answers
+       (parameterize ([current-is-eval-fn nf])
+         (stratified-solve-goal config store rel-name goal-args query-vars)))
      (if (null? answers)
          (expr-fvar 'none)
          ;; Wrap first answer in 'some' — include bound args
@@ -493,7 +497,8 @@
      (define-values (goal-args query-vars) (extract-query-info rel-args))
      (define store (current-relation-store))
      (define answer-records
-       (explain-goal config store rel-name goal-args query-vars prov-level))
+       (parameterize ([current-is-eval-fn nf])
+         (explain-goal config store rel-name goal-args query-vars prov-level)))
      ;; Convert answer-records to Prologos list of maps
      ;; Each answer-record has bindings (hasheq), clause-id, depth, derivation, support
      ;; For now, just return the bindings as maps (same as solve)

@@ -44,9 +44,20 @@
  ;; Variable renaming helpers (for negation)
  rename-ast-vars
  collect-ast-vars
+ ;; Evaluation callback (set by reduction.rkt to break circular dep)
+ current-is-eval-fn
  ;; Execution
  solve-goal
  explain-goal)
+
+;; ========================================
+;; Evaluation callback
+;; ========================================
+
+;; Callback for evaluating functional expressions inside relational goals.
+;; Set by reduction.rkt to `whnf` to break circular dependency.
+;; When #f, is-goals fall back to raw unification (no evaluation).
+(define current-is-eval-fn (make-parameter #f))
 
 ;; ========================================
 ;; Core structs
@@ -217,6 +228,59 @@
      (goal-desc 'app (list 'unknown (list g)))]))
 
 ;; ========================================
+;; AST Expression Substitution
+;; ========================================
+
+;; Collect logic variable names from a general AST expression.
+(define (collect-logic-vars-in-expr expr vars)
+  (cond
+    [(expr-logic-var? expr)
+     (hash-set! vars (expr-logic-var-name expr) #t)]
+    [(expr-app? expr)
+     (collect-logic-vars-in-expr (expr-app-func expr) vars)
+     (collect-logic-vars-in-expr (expr-app-arg expr) vars)]
+    [(pair? expr)
+     (collect-logic-vars-in-expr (car expr) vars)
+     (collect-logic-vars-in-expr (cdr expr) vars)]
+    [else (void)]))
+
+;; Rename logic variable names inside an AST expression using a fresh-map.
+;; Used by rename-goal-vars for `is`-goal expressions.
+(define (rename-logic-vars-in-expr expr fresh-map)
+  (cond
+    [(expr-logic-var? expr)
+     (define fresh-name (hash-ref fresh-map (expr-logic-var-name expr)
+                                  (expr-logic-var-name expr)))
+     (expr-logic-var fresh-name (expr-logic-var-mode expr))]
+    [(expr-app? expr)
+     (expr-app (rename-logic-vars-in-expr (expr-app-func expr) fresh-map)
+               (rename-logic-vars-in-expr (expr-app-arg expr) fresh-map))]
+    [(pair? expr)
+     (cons (rename-logic-vars-in-expr (car expr) fresh-map)
+           (rename-logic-vars-in-expr (cdr expr) fresh-map))]
+    [else expr]))
+
+;; Substitute logic variable values from a substitution into an AST expression.
+;; Walks the AST tree, replacing expr-logic-var nodes with their resolved values.
+;; This is needed for `is`-goals and `guard` conditions where functional
+;; expressions reference logic variables that may be bound.
+(define (subst-logic-vars-in-expr expr subst)
+  (cond
+    [(expr-logic-var? expr)
+     (define val (walk subst (expr-logic-var-name expr)))
+     ;; If still a symbol (unbound var), keep as logic-var for whnf
+     (if (symbol? val)
+         (expr-logic-var val (expr-logic-var-mode expr))
+         val)]
+    [(expr-app? expr)
+     (expr-app (subst-logic-vars-in-expr (expr-app-func expr) subst)
+               (subst-logic-vars-in-expr (expr-app-arg expr) subst))]
+    [(pair? expr)
+     (cons (subst-logic-vars-in-expr (car expr) subst)
+           (subst-logic-vars-in-expr (cdr expr) subst))]
+    [else expr]))
+
+;; ========================================
 ;; Runtime Unification + DFS Solver (Sub-phase F)
 ;; ========================================
 
@@ -298,11 +362,19 @@
      (define result (unify-terms lhs-resolved rhs-resolved subst))
      (if result (list result) '())]
     [(is)
-     ;; Stub: is-goals evaluate functional expressions
-     ;; For now, just unify the var with the expr (both as ground)
+     ;; is-goal: evaluate a functional expression and unify result with var.
+     ;; var is a symbol (logic variable name), expr is an AST node.
      (define var (car args))
      (define expr (cadr args))
-     (define result (unify-terms (walk subst var) (walk subst expr) subst))
+     (define eval-fn (current-is-eval-fn))
+     (define val
+       (if eval-fn
+           ;; Substitute bound logic vars into the expression, then evaluate
+           (let ([substituted (subst-logic-vars-in-expr expr subst)])
+             (eval-fn substituted))
+           ;; No eval function available — use raw expression
+           expr))
+     (define result (unify-terms (walk subst var) val subst))
      (if result (list result) '())]
     [(not)
      ;; Negation-as-failure: succeed if inner goal fails.
@@ -319,13 +391,27 @@
      ;; Cut: return current substitution (cut semantics need special handling)
      (list subst)]
     [(guard)
-     ;; Guard: evaluate condition, if truthy proceed with inner goal
+     ;; Guard: evaluate condition, if truthy proceed with inner goal.
+     ;; Condition is an AST expression (functional); goal is an AST goal node.
      (define condition (car args))
      (define inner-goal-expr (cadr args))
      (define inner-goal (expr->goal-desc inner-goal-expr))
-     (define cond-resolved (walk subst condition))
-     ;; For now, guard passes through to inner goal if condition is not #f
-     (if cond-resolved
+     (define eval-fn (current-is-eval-fn))
+     (define cond-val
+       (if eval-fn
+           (let ([substituted (subst-logic-vars-in-expr condition subst)])
+             (eval-fn substituted))
+           (walk subst condition)))
+     ;; Check if condition evaluated to true.
+     ;; For boolean expressions like [gt ?x 0N], whnf returns expr-true/expr-false.
+     (define truthy?
+       (cond
+         [(expr-true? cond-val) #t]
+         [(expr-false? cond-val) #f]
+         [(boolean? cond-val) cond-val]
+         [(eq? cond-val #f) #f]
+         [else #t]))  ;; non-#f, non-false values are truthy
+     (if truthy?
          (solve-single-goal config store inner-goal subst depth)
          '())]
     [else
@@ -354,11 +440,17 @@
      (for ([a (in-list args)])
        (when (symbol? a) (hash-set! vars a #t)))]
     [(is)
-     (when (symbol? (car args)) (hash-set! vars (car args) #t))]
+     (when (symbol? (car args)) (hash-set! vars (car args) #t))
+     ;; Also collect logic vars from the expression AST
+     (collect-logic-vars-in-expr (cadr args) vars)]
     [(not)
      ;; Deep-walk the inner AST expr to collect variable names
      (define inner (car args))
      (collect-ast-vars inner vars)]
+    [(guard)
+     ;; Collect vars from condition expr and inner goal
+     (collect-logic-vars-in-expr (car args) vars)
+     (collect-ast-vars (cadr args) vars)]
     [else (void)]))
 
 ;; Apply a substitution to a goal-desc, resolving variables to their bindings.
@@ -524,11 +616,20 @@
     [(unify)
      (goal-desc 'unify (map rename-term args))]
     [(is)
-     (goal-desc 'is (map rename-term args))]
+     ;; var is a symbol (rename it), expr is an AST node (rename logic vars inside)
+     (define var (rename-term (car args)))
+     (define expr (rename-logic-vars-in-expr (cadr args) fresh-map))
+     (goal-desc 'is (list var expr))]
     [(not)
      ;; Deep-walk the inner AST expression to rename logic variables
      (define inner-expr (car args))
      (goal-desc 'not (list (rename-ast-vars inner-expr fresh-map)))]
+    [(guard)
+     ;; condition is an AST expr (rename logic vars), goal is an AST goal node
+     (define cond-expr (rename-logic-vars-in-expr (car args) fresh-map))
+     (define inner-goal (rename-ast-vars (cadr args) fresh-map))
+     (goal-desc 'guard (list cond-expr inner-goal))]
+    [(cut) goal]
     [else goal]))
 
 ;; ========================================

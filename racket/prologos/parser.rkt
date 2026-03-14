@@ -2726,8 +2726,11 @@
           [(current-parsing-relational-goal?)
            (or (check-arity 'is args 2 loc)
                (let ([v (parse-relational-goal (car args))]
-                     ;; expr is evaluated functionally, not relationally
-                     [e (parse-datum (cadr args))])
+                     ;; expr is evaluated functionally, not relationally —
+                     ;; disable relational goal parsing so (add ?x ?y) becomes
+                     ;; surf-app, not surf-goal-app
+                     [e (parameterize ([current-parsing-relational-goal? #f])
+                          (parse-datum (cadr args)))])
                  (cond [(prologos-error? v) v]
                        [(prologos-error? e) e]
                        [else (surf-is v e loc)])))]

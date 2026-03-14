@@ -125,17 +125,17 @@ solver default-config
 
 ;; --- B3: solve-with using named solver ---
 
-eval (solve-with default-config (path "a" dest))
+solve-with default-config (path "a" dest)
 ;; => same as regular solve (stratified is default)
 
 ;; --- B4: solve-with with inline overrides ---
 
-eval (solve-with {:tabling by-default} (path "a" dest))
+solve-with {:tabling by-default} (path "a" dest)
 ;; => same answers for stratifiable program
 
 ;; --- B5: solve-with named solver + overrides ---
 
-eval (solve-with default-config {:timeout 5000} (path "a" dest))
+solve-with default-config {:timeout 5000} (path "a" dest)
 
 
 ;; ========================================================================
@@ -337,10 +337,21 @@ eval (solve-with default-config {:timeout 5000} (path "a" dest))
 ;; stratified and well-founded semantics.
 
 ;; --- F1: is-goals (functional evaluation in clauses) ---
-;; STATUS: PRE-EXISTING GAP — is-goal runtime is a stub (unifies var with
-;; unevaluated expr AST instead of evaluating the functional expression).
-;; Tracked in DEFERRED.md.
+;; STATUS: WORKING (fixed — is-goal now evaluates functional expressions via nf)
 
+defr add-one [?n ?result]
+  &> (is result [add n 1N])
+
+solve (add-one 5N r)
+;; => [{:n_ 5N, :r 6N}]
+
+defr double [?n ?result]
+  &> (is result [add n n])
+
+solve (double 5N r)
+;; => [{:n_ 5N, :r 10N}]
+
+;; NOTE: factorial test requires 'mul' which is not yet in prelude
 ;; defr factorial [+n -result]
 ;;   || 0N 1N
 ;;   &> (is n1 [sub n 1N])
@@ -383,10 +394,10 @@ eval (solve-with default-config {:timeout 5000} (path "a" dest))
 ;; --- F5: solve-one (returns Option not Seq) ---
 ;; STATUS: WORKING (fixed — added surf-solve-one to parser/elaborator)
 
-eval (solve-one (path "a" dest))
+solve-one (path "a" dest)
 ;; => [some {:dest "b", :from_ "a"}]  — first answer only
 
-eval (solve-one (path "z" dest))
+solve-one (path "z" dest)
 ;; => none  — no answers
 
 ;; --- F6: cut (committed choice) ---
@@ -555,11 +566,11 @@ eval (solve-one (path "z" dest))
 ;; If any of these fail, we have a pre-existing gap to fix first.
 ;; The eval calls above in Section A are the primary baseline tests.
 
-eval (solve (path "a" "e"))
+solve (path "a" "e")
 ;; => [{:from "a" :to "e"}] or similar — confirms recursive path works
 
-eval (solve (color item hue))
+solve (color item hue)
 ;; => 4 answers — confirms fact-only relation works
 
-eval (solve (reachable "a" dest))
+solve (reachable "a" dest)
 ;; => confirms stratified negation works
