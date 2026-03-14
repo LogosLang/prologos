@@ -165,7 +165,10 @@
   (case semantics
     [(well-founded)
      ;; WFLE path: handles negation cycles via bilattice fixpoint
-     (define wf-answers (wf-solve-goal config store goal-name goal-args query-vars))
+     ;; Use tabled variant to store per-predicate certainty in WF tables
+     (define wf-answers
+       (parameterize ([current-wf-table-store (table-store-empty)])
+         (wf-solve-goal-tabled config store goal-name goal-args query-vars)))
      (wf-answers->standard wf-answers 'strict)]
     [else
      ;; Stratified path (default): unchanged

@@ -24,7 +24,8 @@
          "solver.rkt"
          "relations.rkt"
          "stratify.rkt"
-         "syntax.rkt")
+         "syntax.rkt"
+         "tabling.rkt")
 
 (provide
  ;; Core engine
@@ -40,7 +41,10 @@
  make-wf-naf-oracle
  transitive-pred-closure
  preds-with-negation
- bilattice-stable?)
+ bilattice-stable?
+ ;; Phase 4b: Tabling integration
+ wf-solve-goal-tabled
+ current-wf-table-store)
 
 ;; ========================================
 ;; Answer Types
@@ -355,6 +359,85 @@
           (wf-explained-answer
            (wf-answer-bindings answer) 'unknown
            (wf-undeterminacy-explanation goal-name cycle))]))]))
+
+;; ========================================
+;; Phase 4b: Tabling Integration
+;; ========================================
+;;
+;; After the bilattice fixpoint converges, store answers in three-valued
+;; tables with per-predicate certainty. This bridges the bilattice (which
+;; tracks predicate-level truth) with tabling (which stores per-answer
+;; results), enabling downstream consumers to query answers with certainty
+;; metadata.
+
+;; Parameter holding the current WF table store during tabled evaluation.
+(define current-wf-table-store (make-parameter #f))
+
+;; Tabled variant of wf-solve-goal.
+;; After the bilattice fixpoint, stores answers in WF tables with certainty.
+;; Returns: (listof wf-answer) — same as wf-solve-goal
+;; Side effect: updates current-wf-table-store with the final table store.
+(define (wf-solve-goal-tabled config store goal-name goal-args query-vars)
+  (define all-preds (transitive-pred-closure store goal-name))
+  (define neg-preds (preds-with-negation store all-preds))
+  (cond
+    ;; Fast path: no negation → delegate to standard solver, no tabling needed
+    [(null? neg-preds)
+     (define answers
+       (with-handlers ([exn:fail? (lambda (e) '())])
+         (solve-goal config store goal-name goal-args query-vars)))
+     (define wf-answers
+       (for/list ([a (in-list answers)])
+         (wf-answer a 'definite)))
+     ;; Store in WF table if we have a table store
+     (define ts (current-wf-table-store))
+     (when ts
+       (define-values (ts2 _cid) (wf-table-register ts goal-name))
+       (define ts3
+         (for/fold ([t ts2]) ([a (in-list answers)])
+           (wf-table-add t goal-name a 'definite)))
+       (define ts4 (wf-table-complete ts3 goal-name 'definite))
+       (current-wf-table-store ts4))
+     wf-answers]
+    [else
+     ;; Step 1: Create bilattice-vars
+     (define-values (net pred-bvar-map)
+       (for/fold ([net (make-prop-network)] [m (hasheq)])
+                 ([pred (in-list neg-preds)])
+         (let-values ([(net2 bvar) (bilattice-new-var net bool-lattice)])
+           (values net2 (hash-set m pred bvar)))))
+     ;; Step 2: Iterative fixpoint
+     (define-values (final-net final-answers)
+       (wf-iterate config store net pred-bvar-map
+                    goal-name goal-args query-vars))
+     ;; Step 3: Annotate answers
+     (define annotated (annotate-answers final-net pred-bvar-map final-answers goal-name))
+     ;; Step 4: Store in WF tables with per-predicate certainty
+     (define ts (or (current-wf-table-store) (table-store-empty)))
+     (define ts-final
+       (for/fold ([t ts])
+                 ([(pred-name bvar) (in-hash pred-bvar-map)])
+         (define-values (t2 _cid) (wf-table-register t pred-name))
+         (define status (bilattice-read-bool final-net bvar))
+         (define certainty
+           (case status
+             [(true) 'definite]
+             [(false) 'definite]
+             [(unknown) 'unknown]
+             [(contradiction) 'unknown]))
+         ;; If this is the goal predicate, store its answers with individual certainty
+         (define t3
+           (if (eq? pred-name goal-name)
+               (for/fold ([tt t2]) ([a (in-list annotated)])
+                 (wf-table-add tt goal-name (wf-answer-bindings a) (wf-answer-certainty a)))
+               t2))
+         (wf-table-complete t3 pred-name certainty)))
+     (current-wf-table-store ts-final)
+     annotated]))
+
+;; ========================================
+;; Dependency Analysis (internals)
+;; ========================================
 
 ;; Extract dep-info from a relation-info (inlined to avoid circular dep with stratified-eval).
 (define (wf-relation-info->dep-info ri)

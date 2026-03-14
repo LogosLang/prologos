@@ -14,6 +14,7 @@
          "../relations.rkt"
          "../stratified-eval.rkt"
          "../wf-engine.rkt"
+         "../tabling.rkt"
          "../syntax.rkt")
 
 ;; ========================================
@@ -330,7 +331,93 @@
     (check-equal? (length answers) 0)))
 
 ;; ========================================
-;; 11. E2E tests deferred to Phase 6
+;; 11. Phase 4b: Tabling Integration
+;; ========================================
+
+(test-case "wf-engine/tabled: simple fact populates WF table with 'definite"
+  (define store
+    (build-store (list 'color 1 '(("red") ("blue")) '())))
+  (parameterize ([current-relation-store store]
+                 [current-wf-table-store (table-store-empty)])
+    (define answers
+      (wf-solve-goal-tabled default-solver-config store 'color '() '(X0)))
+    (check-equal? (length answers) 2)
+    (for ([a (in-list answers)])
+      (check-equal? (wf-answer-certainty a) 'definite))
+    ;; Check the WF table store was populated
+    (define ts (current-wf-table-store))
+    (check-not-false ts)
+    (check-true (table-complete? ts 'color))
+    (check-equal? (wf-table-certainty ts 'color) 'definite)
+    (define tabled-answers (wf-table-answers ts 'color))
+    (check-equal? (length tabled-answers) 2)))
+
+(test-case "wf-engine/tabled: odd cycle stores 'unknown certainty in WF table"
+  (define inner-q (expr-goal-app 'q (list)))
+  (define inner-p (expr-goal-app 'p (list)))
+  (define store
+    (build-store
+     (list 'p 0 '() (list (list (goal-desc 'not (list inner-q)))))
+     (list 'q 0 '() (list (list (goal-desc 'not (list inner-p)))))))
+  (parameterize ([current-relation-store store]
+                 [current-wf-table-store (table-store-empty)])
+    (define answers-p
+      (wf-solve-goal-tabled default-solver-config store 'p '() '()))
+    ;; Both p and q should be unknown
+    (check-equal? (length answers-p) 0)
+    ;; WF table should record 'unknown certainty for p and q
+    (define ts (current-wf-table-store))
+    (check-not-false ts)
+    (check-equal? (wf-table-certainty ts 'p) 'unknown)
+    (check-equal? (wf-table-certainty ts 'q) 'unknown)))
+
+(test-case "wf-engine/tabled: stratifiable negation stores 'definite"
+  (define inner-c (expr-goal-app 'c (list)))
+  (define inner-b (expr-goal-app 'b (list)))
+  (define store
+    (build-store
+     (list 'c 0 '(()) '())
+     (list 'b 0 '() (list (list (goal-desc 'not (list inner-c)))))
+     (list 'a 0 '() (list (list (goal-desc 'not (list inner-b)))))))
+  (parameterize ([current-relation-store store]
+                 [current-wf-table-store (table-store-empty)])
+    (define answers
+      (wf-solve-goal-tabled default-solver-config store 'a '() '()))
+    (check-true (>= (length answers) 1))
+    (for ([a (in-list answers)])
+      (check-equal? (wf-answer-certainty a) 'definite))
+    ;; WF table should have definite for a
+    (define ts (current-wf-table-store))
+    (check-not-false ts)))
+
+(test-case "wf-engine/tabled: dispatch via stratified-solve-goal creates WF tables"
+  ;; The stratified-solve-goal with 'well-founded semantics should use tabled variant
+  (define cfg (make-solver-config (hasheq 'semantics 'well-founded)))
+  (define store
+    (build-store (list 'color 1 '(("red") ("blue")) '())))
+  (parameterize ([current-relation-store store]
+                 [current-relation-store-version 0]
+                 [current-strata-cache #f])
+    (define answers
+      (stratified-solve-goal cfg store 'color '() '(X0)))
+    (check-equal? (length answers) 2)
+    (check-true (hash? (car answers)))))
+
+(test-case "wf-engine/tabled: no negation fast path still stores in WF table"
+  (define store
+    (build-store (list 'parent 2 '(("a" "b") ("b" "c")) '())))
+  (parameterize ([current-relation-store store]
+                 [current-wf-table-store (table-store-empty)])
+    (define answers
+      (wf-solve-goal-tabled default-solver-config store 'parent '() '(X0 X1)))
+    (check-equal? (length answers) 2)
+    ;; WF table should be populated even for no-negation case
+    (define ts (current-wf-table-store))
+    (check-not-false ts)
+    (check-equal? (wf-table-certainty ts 'parent) 'definite)))
+
+;; ========================================
+;; 12. E2E tests deferred to Phase 6
 ;; ========================================
 ;; E2E tests through `solve ... :with solver-config` syntax require
 ;; WS-mode solver dispatch wiring (Phase 6). Unit tests above cover

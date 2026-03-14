@@ -112,7 +112,7 @@
    'solver.rkt                    '()
    'source-location.rkt           '()
    'stratified-eval.rkt           '(relations.rkt solver.rkt stratify.rkt syntax.rkt tabling.rkt wf-engine.rkt)
-   'wf-engine.rkt                 '(bilattice.rkt propagator.rkt relations.rkt solver.rkt stratify.rkt syntax.rkt)
+   'wf-engine.rkt                 '(bilattice.rkt propagator.rkt relations.rkt solver.rkt stratify.rkt syntax.rkt tabling.rkt)
    'wf-propagators.rkt            '(bilattice.rkt propagator.rkt)
    'stratify.rkt                  '()
    'substitution.rkt              '(prelude.rkt syntax.rkt)
@@ -794,7 +794,7 @@
    'test-wf-propagators-01.rkt
    (test-dep '(bilattice.rkt propagator.rkt wf-propagators.rkt) #f)
    'test-wf-engine-01.rkt
-   (test-dep '(bilattice.rkt propagator.rkt relations.rkt solver.rkt stratified-eval.rkt syntax.rkt wf-engine.rkt) #f)
+   (test-dep '(bilattice.rkt propagator.rkt relations.rkt solver.rkt stratified-eval.rkt syntax.rkt tabling.rkt wf-engine.rkt) #f)
    'test-wf-tabling-01.rkt
    (test-dep '(tabling.rkt propagator.rkt) #f)
    'test-string-ops.rkt
