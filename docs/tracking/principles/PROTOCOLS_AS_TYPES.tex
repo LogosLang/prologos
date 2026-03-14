@@ -1,0 +1,533 @@
+% Created 2026-03-05 Thu 16:16
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{The Prologos Project - from Zachary Larson}
+\date{2026-03-05}
+\title{Protocols as Types: Composable Session Types in Prologos}
+\hypersetup{
+ pdfauthor={The Prologos Project - from Zachary Larson},
+ pdftitle={Protocols as Types: Composable Session Types in Prologos},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{The Insight}
+\label{sec:org1f97f50}
+
+Session types are types. Continuations are type positions. Named session types
+can appear in continuation positions. Therefore: \textbf{protocols compose through
+the type system with no additional mechanism.}
+
+A session type describes a communication protocol. After each operation (send,
+receive, select, offer), there is a continuation --- a type describing "what
+comes next." When that continuation is a named session type, the protocol
+\textbf{transitions into a different protocol}. The type checker verifies the
+transition. The channel remains the same; only the protocol changes.
+
+This is not syntactic sugar, not a macro expansion, not a runtime dispatch. It
+is the natural consequence of session types being first-class types in a
+dependently-typed language. Composition falls out of the type system for free.
+\section{Composition Patterns}
+\label{sec:orgcd3a82a}
+
+Three composition patterns emerge from this insight, none requiring new
+mechanisms beyond what session types already provide.
+\subsection{Pattern 1: Phase Transition (Sequential Composition)}
+\label{sec:org1261dbb}
+
+A session type's continuation names the next phase of the protocol:
+
+\begin{verbatim}
+session Handshake
+  ! Version . ? Version . Authenticated  ;; after handshake → authenticate
+
+session Authenticated
+  ! Credentials
+  ? [Result Token AuthError]
+  +>
+    | :ok   -> Ready             ;; success → operational phase
+    | :fail -> end               ;; failure → done
+
+session Ready
+  +>
+    | :query -> ! String . ? [Result Rows DbError] . Ready
+    | :close -> end
+\end{verbatim}
+
+The protocol flows: \texttt{Handshake → Authenticated → Ready → (loop) → end}. Each
+phase is a named type. Each transition is verified by the type checker. The
+\textbf{author} of each session type decides what comes next --- \texttt{Handshake} declares
+"after me comes \texttt{Authenticated}," not the caller.
+\subsection{Pattern 2: Mode Branching}
+\label{sec:orgc116149}
+
+Choice operators (\texttt{+>} / \texttt{\&>}) can branch into different sub-protocols:
+
+\begin{verbatim}
+session DatabaseSession
+  +>
+    | :query  -> QueryMode
+    | :admin  -> AdminMode
+    | :close  -> end
+
+session QueryMode
+  ! String . ! [List Param] .
+  ? [Result [List Row] DbError] .
+  DatabaseSession                    ;; return to main protocol
+
+session AdminMode
+  +>
+    | :vacuum -> ? [Result Unit DbError] . DatabaseSession
+    | :backup -> ! Path . ? [Result Unit DbError] . DatabaseSession
+\end{verbatim}
+
+This is \textbf{mutual recursion between protocols}. \texttt{DatabaseSession} branches to
+\texttt{QueryMode}, which does its work, then transitions back to \texttt{DatabaseSession}.
+The protocol graph can be arbitrarily complex --- any directed graph of named
+session types is expressible.
+\subsection{Pattern 3: Inline Prefix with Named Continuation}
+\label{sec:org4b2223c}
+
+Operations are written inline, with a named type taking over as the final
+continuation:
+
+\begin{verbatim}
+session SecureFileSession
+  ! Version . ? Version .                      ;; inline handshake operations
+  ! Credentials . ? [Result Token AuthError] . ;; inline auth operations
+  FileOps                                      ;; named type takes over
+\end{verbatim}
+
+This is the most direct form of "do these things, then become that protocol."
+The inline prefix is protocol-specific; the named continuation is reusable.
+\section{What This Means: Protocol Libraries}
+\label{sec:org5554b17}
+
+Composition through types means session types become \textbf{building blocks}. A
+protocol library is a collection of named session types, each describing a
+reusable phase of interaction:
+
+\begin{verbatim}
+;; --- Protocol building blocks ---
+
+session Handshake
+  ! Version . ? Version . Authenticated
+
+session Authenticated
+  ! Credentials . ? [Result Token AuthError] .
+  +> | :ok -> Ready
+     | :fail -> end
+
+;; --- Domain protocols built from blocks ---
+
+session Ready
+  +>
+    | :query -> QueryMode
+    | :close -> end
+
+session SecureDbSession
+  Handshake               ;; starts with handshake → authenticated → ready
+  ;; (the chain follows from Handshake's continuation declarations)
+\end{verbatim}
+
+Each block is independently testable, independently verifiable, and
+independently documentable. Complex protocols are assembled from simple,
+well-understood components.
+\section{The State Machine Interpretation}
+\label{sec:org8db9adc}
+
+Named session types are states. Operations within a session type are
+transitions. The continuation after each operation names the next state.
+
+\begin{verbatim}
+               Handshake
+                  │
+         ! Version . ? Version
+                  │
+                  ▼
+            Authenticated
+                  │
+       ! Credentials . ? Result
+                  │
+             ┌────┴────┐
+             ▼         ▼
+          Ready      end
+           │
+    ┌──────┼──────┐
+    ▼      ▼      ▼
+QueryMode  │    end
+    │      │
+    └──────┘
+ (returns to Ready)
+\end{verbatim}
+
+This is a typed, verified finite state machine. Every transition is
+type-checked. Dead states are impossible (the type checker rejects protocols
+that don't reach \texttt{end}). Invalid transitions are type errors. The session type
+\textbf{is} the state machine specification.
+\section{The \texttt{end} Question: Intentional Design, Not Missing Feature}
+\label{sec:org59a0019}
+
+A natural question arises: if \texttt{Handshake} ends with \texttt{end}, can we compose it
+with \texttt{Auth} by replacing \texttt{end} with \texttt{Auth}?
+
+\begin{verbatim}
+;; Both are complete, terminal protocols:
+session Handshake
+  ! Version . ? Version . end
+
+session Auth
+  ! Credentials . ? Token . end
+
+;; Can we write this?
+;; session Composed = Handshake . Auth    ;; hypothetical end-splicing
+\end{verbatim}
+
+This would require \textbf{end-splicing} --- a type-level operation that substitutes
+\texttt{end} in one protocol with the start of another. Prologos \textbf{deliberately does
+not do this}, for principled reasons.
+\subsection{Why End-Splicing Is Rejected}
+\label{sec:org81e1389}
+
+End-splicing introduces semantic complications:
+
+\begin{enumerate}
+\item \textbf{Multiple exit points}: A protocol with several branches reaching \texttt{end}
+would have all of them spliced. Is that always what the author intended?
+
+\item \textbf{Recursive protocol interaction}: If a protocol has recursive
+self-references (\texttt{rec}) and \texttt{end} branches, splicing \texttt{end} must create a
+new recursive type where the self-references point to the spliced version.
+This requires type-level rewriting of recursive bindings.
+
+\item \textbf{Mixed continuations}: If some branches end with \texttt{end} and others with
+named types, which \texttt{end}​s get spliced? The semantics become ambiguous.
+
+\item \textbf{Retroactive composition}: A protocol defined with \texttt{end} was designed as
+terminal. Retroactively composing it changes its meaning without changing
+its definition. This violates referential transparency at the type level.
+\end{enumerate}
+\subsection{The Intentionality Principle}
+\label{sec:orgfcd196b}
+
+When \texttt{Handshake} says \texttt{end}, it means "\emph{I am done --- the connection is
+finished}." When \texttt{Handshake} says \texttt{. Authenticated}, it means "\emph{I am a phase,
+and after me comes authentication}." These are different protocols with
+different meanings.
+
+A handshake-then-close and a handshake-then-authenticate are not the same
+handshake with different suffixes. They are different commitments. The
+named-continuation approach makes protocol composition \textbf{intentional}:
+
+\begin{itemize}
+\item The \textbf{author} of a session type declares what comes next
+\item A protocol defined with \texttt{end} is \textbf{complete} --- it is not a composable prefix
+\item A protocol defined with a named continuation is \textbf{open} --- it transitions
+to another protocol
+\item This distinction is explicit, visible in the type definition, and
+enforced by the type checker
+\end{itemize}
+
+This is analogous to the difference between a function that returns \texttt{A} and a
+function that takes a continuation \texttt{(A -> B) -> B}. Both are useful; neither
+is the other.
+\subsection{Making Protocols Composable}
+\label{sec:orgfc697e3}
+
+If a protocol author intends their protocol to be used as a composable phase,
+they define it with a named continuation:
+
+\begin{verbatim}
+;; Reusable: author explicitly says "something comes after me"
+session Handshake
+  ! Version . ? Version . Authenticated     ;; open: transitions to Authenticated
+
+;; Terminal: author explicitly says "I'm the end"
+session HandshakeDone
+  ! Version . ? Version . end               ;; closed: terminates
+\end{verbatim}
+
+Two types, two intentions, both clear. No machinery needed to distinguish them.
+The author's intent is visible in the type definition.
+\section{Capability Composition}
+\label{sec:org8a0e235}
+
+When protocols compose, capabilities compose with them. Each named session type
+can carry capability requirements. The composed protocol's requirements are the
+union of its constituents':
+
+\begin{verbatim}
+;; Each phase has its own capability requirements
+session Handshake {net :0 TlsCap}
+  ! ClientHello . ? ServerHello . Authenticated
+
+session Authenticated {net :0 AuthCap}
+  ! Credentials . ? Token . Ready
+
+session Ready {fs :0 ReadCap}
+  +>
+    | :read -> ! Path . ? String . Ready
+    | :done -> end
+\end{verbatim}
+
+A process implementing the full \texttt{Handshake → Authenticated → Ready} chain
+requires \texttt{\{net :0 TlsCap, net :0 AuthCap, fs :0 ReadCap\}} --- the union of
+all phase requirements. The compiler computes this automatically. At runtime,
+\texttt{:0} capabilities are erased --- zero cost for authority verification.
+
+This means:
+\begin{itemize}
+\item \textbf{Protocols compose} --- named types in continuation position
+\item \textbf{Capabilities compose} --- union of per-phase requirements
+\item \textbf{Types verify the whole thing} --- the compiler checks authority at every
+phase transition
+\item \textbf{Runtime cost is zero} --- \texttt{:0} authority proofs are erased
+\end{itemize}
+\section{Relationship to Existing Type System Features}
+\label{sec:orgfcf0b2f}
+
+Protocol composition through types is not an isolated feature. It connects
+to and reinforces several existing Prologos design principles:
+\subsection{Session Types as Layer 5}
+\label{sec:org16fa2c1}
+
+The Layered Architecture (DESIGN\textsubscript{PRINCIPLES} §Layered Architecture) places
+protocols at Layer 5 (\texttt{session}) and processes at Layer 6 (\texttt{defproc}). Protocol
+composition works entirely within Layer 5 --- it is a property of protocol
+specifications, independent of process implementation. A \texttt{defproc} implements
+one endpoint of a (possibly composed) protocol; it does not need to know
+whether the protocol was assembled from multiple named session types.
+\subsection{Decomplection of Protocol and Process}
+\label{sec:org051ff39}
+
+DESIGN\textsubscript{PRINCIPLES} §Decomplection establishes that protocol specification
+(\texttt{session}) is decoupled from process implementation (\texttt{defproc}). Protocol
+composition deepens this decomplection: complex protocols can be assembled
+from simple building blocks at the type level, without any corresponding
+complexity in the process implementation. The process sees a single session
+type; whether it was composed from three named types or defined monolithically
+is invisible.
+\subsection{Duality Composes}
+\label{sec:org061ba85}
+
+Session type duality is preserved through composition. If \texttt{Handshake}
+transitions to \texttt{Auth}, then \texttt{dual Handshake} transitions to \texttt{dual Auth}. The
+type checker verifies duality for the entire composed protocol, not just each
+phase independently. This ensures end-to-end protocol safety.
+\subsection{Progressive Disclosure}
+\label{sec:org11a5e1c}
+
+Protocol composition is a Tier 3 feature --- expert users building complex
+concurrent systems. Tier 1 users (\texttt{defn main}) never see session types. Tier 2
+users (\texttt{with-open}) interact with single, monolithic protocols. Only users who
+need multi-phase, multi-protocol architectures encounter composition. The
+complexity is opt-in, following the Disappearing Features principle
+(ERGONOMICS §Guiding Principle).
+\section{Theoretical Foundations}
+\label{sec:org52cf036}
+
+Protocol composition through types has roots in several lines of research,
+but Prologos's specific combination is novel.
+\subsection{Curry-Howard for Linear Logic (Toninho, Caires, Pfenning, 2011)}
+\label{sec:org3fa04f8}
+
+Session types correspond to linear logic propositions under the Curry-Howard
+correspondence. Protocol composition corresponds to the \textbf{cut rule} --- the
+most fundamental operation in logic. Sequencing protocols is logically
+equivalent to composing proofs. The theoretical foundation for what Prologos
+does is as old as linear logic itself.
+\subsection{Polymorphic Session Types (Caires et al., 2013)}
+\label{sec:org3334997}
+
+Session types parameterized by other types, including continuation types. This
+gives the formal machinery for open-ended protocols:
+\texttt{Handshake[K] = ! Version . ? Version . K}. Prologos achieves the same
+effect through named continuations without requiring explicit type parameters.
+\subsection{Context-Free Session Types (Thiemann \& Vasconcelos, 2016; Padovani, 2017)}
+\label{sec:org496050b}
+
+Extensions that allow session types to express context-free languages, not
+just regular languages. This gives more expressive composition at the cost of
+decidability for some properties. Prologos stays within the regular fragment
+(tail-recursive protocols) for decidability guarantees.
+\subsection{Scribble (Honda, Yoshida, et al.)}
+\label{sec:orga195220}
+
+A protocol description language for multiparty session types that supports
+protocol modules. The closest existing practical tool to protocol composition.
+But Scribble is a specification language --- protocols are described, not typed.
+Prologos makes protocols first-class types in the programming language itself.
+\subsection{What Is Novel}
+\label{sec:orgc6e0047}
+
+The \textbf{combination} is novel:
+
+\begin{enumerate}
+\item Named session types as composable building blocks within a programming
+language (not a separate specification language)
+\item Capability composition tracking alongside protocol composition
+\item Propagator-based runtime that schedules composed protocols efficiently
+\item Progressive disclosure --- composition is opt-in, not forced
+\item The intentionality principle --- \texttt{end} means terminal, named continuations
+mean composable, and the distinction is a design choice
+\end{enumerate}
+
+No existing language or tool unifies all five. The individual pieces are
+well-understood; the synthesis is new.
+\section{Design Principles for Protocol Composition}
+\label{sec:org599fa57}
+
+\begin{enumerate}
+\item \textbf{Protocols Are Types.} A session type is a first-class type. It can appear
+anywhere a type can appear --- as a continuation, as a type parameter, as a
+constraint. Protocol composition is type composition.
+
+\item \textbf{Composition Is Intentional.} The author of a session type decides whether
+it is composable (named continuation) or terminal (\texttt{end}). Composition is
+not retroactive. The type definition is a commitment.
+
+\item \textbf{Named Continuations, Not End-Splicing.} Protocols compose through named
+types in continuation position. There is no mechanism to replace \texttt{end} in a
+complete protocol with a continuation. The distinction between open and
+closed protocols is part of the protocol's meaning.
+
+\item \textbf{Capabilities Compose With Protocols.} When protocols compose, their
+capability requirements compose via union. The compiler tracks authority
+through every phase transition. Authority verification is free (\texttt{:0} erased).
+
+\item \textbf{Duality Is Preserved.} Protocol composition preserves the duality
+invariant. If server-side composes phases A → B → C, the client-side sees
+dual(A) → dual(B) → dual(C). End-to-end safety is guaranteed.
+
+\item \textbf{State Machines Are Types.} The protocol graph (named session types as
+states, operations as transitions) is verified by the type checker. Dead
+states, invalid transitions, and stuck channels are type errors.
+
+\item \textbf{Progressive Disclosure.} Simple protocols are simple to define. Composition
+is available when needed but never required. A monolithic \texttt{session} that
+does everything inline is always valid.
+\end{enumerate}
+\section{Relationship to Other Principles}
+\label{sec:org905386c}
+
+\begin{center}
+\begin{tabular}{ll}
+Document & Relationship\\
+\hline
+\texttt{DESIGN\_PRINCIPLES.org} & "Correctness Through Types" --- protocol composition is type composition. "Decomplection" --- protocol spec decoupled from process impl. "Layered Architecture" --- composition operates at Layer 5.\\
+\texttt{LANGUAGE\_VISION.org} & "Protocol correctness" (§What Problem Does Prologos Solve?) extends from single protocols to composed protocols. "Session Types as Protocol Specifications" (§Cutting-Edge Research) gains composability.\\
+\texttt{CAPABILITY\_SECURITY.md} & "Session Types and Capability Protocols" (§Session Types) --- capability delegation follows composed protocol structure. Capability requirements union across composed phases.\\
+\texttt{ERGONOMICS.org} & "Disappearing Features" --- composition is Tier 3, invisible to beginners. Progressive disclosure governs when users encounter it.\\
+\texttt{LANGUAGE\_DESIGN.org} & "Session Types as Protocol Specifications" (§Session Types) --- composition extends the specification power of session types. Duality, recursion, and choice all compose naturally.\\
+\texttt{PATTERNS\_AND\_CONVENTIONS.org} & Session type naming patterns extend to composed protocols. Each named phase follows the same naming conventions.\\
+IO Library Design V2 & The IO design uses protocol composition extensively: \texttt{Handshake → Auth → FileOps} patterns, branching into sub-protocols, mode transitions.\\
+\end{tabular}
+\end{center}
+\section{Implications for the Language}
+\label{sec:org8fb1dbc}
+
+\subsection{Protocol Libraries Become Possible}
+\label{sec:org05ba1fc}
+
+Named, composable session types enable a \textbf{standard library of protocols} ---
+reusable communication patterns that users can compose into application-specific
+protocols. Examples:
+
+\begin{itemize}
+\item \texttt{Handshake} --- version negotiation
+\item \texttt{TlsHandshake} --- TLS setup
+\item \texttt{Auth} --- credential exchange
+\item \texttt{Heartbeat} --- keepalive with timeout
+\item \texttt{Pagination} --- cursor-based result traversal
+\end{itemize}
+
+These would live in \texttt{prologos.core.protocols} and compose freely.
+\subsection{Testing Protocols in Isolation}
+\label{sec:org76da910}
+
+Each named session type can be tested independently. A test for \texttt{QueryMode}
+doesn't need to set up the full \texttt{DatabaseSession → QueryMode} chain --- it
+directly tests the \texttt{QueryMode} protocol against a mock endpoint. This mirrors
+how pure functions are tested independently of their callers.
+\subsection{Error Handling at Phase Boundaries}
+\label{sec:org1480930}
+
+Errors at phase transitions --- authentication failure, handshake mismatch ---
+are type-level events. A branch to \texttt{end} at the wrong phase is visible in the
+type. Error protocols can be composed just like success protocols:
+
+\begin{verbatim}
+session Authenticated
+  ! Credentials . ? [Result Token AuthError] .
+  +>
+    | :ok   -> Ready
+    | :fail -> ErrorRecovery           ;; transition to error protocol
+
+session ErrorRecovery
+  ! RetryRequest . ? [Result Token AuthError] .
+  +>
+    | :ok    -> Ready
+    | :fail  -> end                     ;; final failure
+\end{verbatim}
+\subsection{AI Agent Protocols}
+\label{sec:org8d8408a}
+
+Multi-agent communication (LANGUAGE\textsubscript{VISION} §AI Agent Infrastructure) benefits
+directly from protocol composition. Agent interaction protocols are built from
+composable phases:
+
+\begin{verbatim}
+session AgentNegotiation
+  ! Proposal . ? CounterProposal .
+  +>
+    | :accept -> CollaborativeWork
+    | :counter -> AgentNegotiation     ;; re-negotiate
+    | :reject -> end
+
+session CollaborativeWork
+  rec
+    +>
+      | :delegate -> ! Task . ? Result . CollaborativeWork
+      | :report   -> ! Summary . end
+\end{verbatim}
+
+The session type guarantees that agents follow the negotiation protocol, that
+delegation respects authority boundaries (via capabilities), and that the
+collaboration terminates.
+\section{Inspirations}
+\label{sec:orga29a86d}
+
+\begin{itemize}
+\item \textbf{Toninho, Caires, Pfenning} --- Session types as propositions (Curry-Howard
+for linear logic). Protocol composition = cut rule. The deepest theoretical
+foundation for this work.
+\item \textbf{Honda, Yoshida, Carbone} --- Multiparty session types and the Scribble
+protocol description language. The closest practical precedent for protocol
+modularity.
+\item \textbf{Lindley \& Morris} --- Semantics for propositions as sessions. The cut rule
+gives composition; our named continuations are a user-facing expression
+of the same operation.
+\item \textbf{Padovani} --- Context-free session types. Shows that session types can
+express more than regular languages, though we stay within the regular
+fragment for decidability.
+\item \textbf{Mark Miller (E language)} --- Object-capability model. Capabilities compose
+through delegation; our capability composition through protocol composition
+mirrors this at the type level.
+\end{itemize}
+\end{document}

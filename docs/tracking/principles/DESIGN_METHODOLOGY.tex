@@ -1,0 +1,852 @@
+% Created 2026-03-09 Mon 22:06
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{The Prologos Project}
+\date{2026-02-24}
+\title{Design Methodology\\\medskip
+\large From Research to Realization — How We Design and Build Prologos}
+\hypersetup{
+ pdfauthor={The Prologos Project},
+ pdftitle={Design Methodology},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Purpose}
+\label{sec:org38268c4}
+
+This document describes the methodology we follow when designing and
+implementing significant features in Prologos. It is both a process guide
+and a set of meta-lessons about \emph{how to do design work well} in a language
+with deep theoretical foundations and practical engineering constraints.
+
+The methodology emerged organically from our practice on major efforts
+including the Extended Spec Language Design, the Logic Engine on
+Propagators, Collections Ergonomics, the Numerics Tower, and the
+Homoiconicity phases. It is descriptive (capturing what actually works)
+as much as prescriptive (defining what we should do).
+\section{The Five Stages}
+\label{sec:org018db5b}
+
+\subsection{Stage 1: Deep Research}
+\label{sec:org29a7a1b}
+
+\emph{Goal}: Ground ourselves in the best techniques --- cutting-edge and
+well-proven --- with a comprehensive survey of the landscape.
+\subsubsection{What this looks like}
+\label{sec:org9715882}
+
+\begin{itemize}
+\item Read primary literature (papers, specifications, reference implementations)
+\item Survey existing systems that address the same problem space
+\item Identify the theoretical foundations that our implementation will rest on
+\item Produce a research document (\texttt{docs/research/} or \texttt{docs/tracking/}) that
+synthesizes findings
+\end{itemize}
+\subsubsection{Key practices}
+\label{sec:orgfef096f}
+
+\begin{itemize}
+\item \textbf{Cast a wide net}: Survey at least 3--5 existing approaches to the same
+problem. For the Extended Spec Design, we surveyed Clojure Spec, Malli,
+PropEr, Agda, Idris 2, Lean 4, Haskell, F*, Koka, and Racket Contracts
+before writing a line of design prose.
+
+\item \textbf{Identify the essential vs. accidental}: What is fundamental to the
+problem domain vs. what is incidental to a particular implementation?
+The Logic Engine research distilled that propagator networks, lattice
+theory, and truth maintenance are the essential components --- the
+specific data structures (CHAMP vs. HAMTs, persistent vs. mutable)
+are implementation choices.
+
+\item \textbf{Name the theories}: Lattice theory, Curry-Howard correspondence,
+the pi-calculus, Radul-Sussman propagators, Kuper's LVars --- naming
+the theoretical foundations makes them citable, shareable, and
+critiquable. A design grounded in named theory is more robust than
+one grounded in intuition alone.
+
+\item \textbf{Document as you go}: Research that isn't written down evaporates
+when context windows reset. The research document becomes the
+institutional memory.
+\end{itemize}
+\subsubsection{Artifacts}
+\label{sec:orgf46db06}
+
+\begin{itemize}
+\item Research document: \texttt{docs/research/TOPIC.md} or
+\texttt{docs/tracking/YYYY-MM-DD\_TOPIC\_RESEARCH.md}
+\item Bibliography of key papers and systems surveyed
+\item A vocabulary of concepts that the team will use in subsequent phases
+\end{itemize}
+\subsubsection{Example}
+\label{sec:orgb3fbe5c}
+
+The Logic Engine began with \texttt{2026-02-23\_LATTICE\_PROPAGATOR\_RESEARCH.md},
+covering lattice foundations, LVars/LVish deterministic parallelism, the
+"Multiverse Mechanism" and "Pocket Universe" theories, Radul-Sussman
+propagator networks, and TMS/ATMS truth maintenance. This document
+established the conceptual vocabulary (cells, propagators, quiescence,
+monotonic merge) that all subsequent design work referenced.
+\subsection{Stage 2: Research Refinement and Gap Analysis}
+\label{sec:org286b5a1}
+
+\emph{Goal}: Refine our understanding, identify gaps in current infrastructure,
+consider tradeoffs, identify opportunities aligned with core principles,
+and make qualified recommendations.
+\subsubsection{What this looks like}
+\label{sec:org162a3db}
+
+\begin{itemize}
+\item Review research findings against our existing implementation
+\item Identify what infrastructure we already have and what is missing
+\item Enumerate alternative approaches with their tradeoffs
+\item Check alignment with design principles in \texttt{DESIGN\_PRINCIPLES.org} and
+\texttt{LANGUAGE\_VISION.org}
+\item Make recommendations, with rationale, for which approach to pursue
+\end{itemize}
+\subsubsection{Key practices}
+\label{sec:org0cdb1ad}
+
+\begin{itemize}
+\item \textbf{Infrastructure gap analysis}: Before designing the Logic Engine, we
+identified that we needed persistent data structures (CHAMP), lattice
+traits, and type-system exposure of runtime values --- and that we
+already had CHAMP maps, the trait system, and the 14-file AST pipeline.
+The gap analysis shapes the roadmap.
+
+\item \textbf{Tradeoff matrices}: When multiple approaches exist, make the tradeoffs
+explicit. Mutable vs. persistent propagator networks? The tradeoff is
+performance (mutable wins for raw speed) vs. backtracking simplicity
+(persistent wins --- O(1) backtrack is "keep old reference"). Making
+this explicit lets us choose with eyes open.
+
+\item \textbf{Principle alignment check}: Every recommendation should pass the
+"does this uphold our principles?" test:
+\begin{itemize}
+\item Does it maintain homoiconicity?
+\item Does it support progressive disclosure?
+\item Does it decomplect orthogonal concerns?
+\item Does it compose with the existing layered architecture?
+\item Does it follow the "most generalizable interface" principle?
+\end{itemize}
+
+The Logic Engine's decision to subsume LVars into propagator cells
+(rather than having separate LVar types) was driven by
+decomplection: cells with per-cell merge functions are the more
+general abstraction.
+
+\item \textbf{Opportunities over features}: Don't just fill gaps --- identify
+opportunities where our unique combination of features enables
+something no other system offers. The fusion of propagators with
+session types for distributed constraint solving is an opportunity
+that arises from having both systems in the same language.
+\end{itemize}
+\subsubsection{Artifacts}
+\label{sec:org2fa224c}
+
+\begin{itemize}
+\item Gap analysis section in the design document
+\item Tradeoff tables with explicit criteria
+\item Recommendation with rationale tied to principles
+\end{itemize}
+\subsection{Stage 3: Design Iteration}
+\label{sec:org6ce9496}
+
+\emph{Goal}: Produce a concrete design with a detailed, phased roadmap for
+implementation, refined through critique and feedback until there is
+full clarity.
+\subsubsection{What this looks like}
+\label{sec:org48d4af2}
+
+This is an iterative cycle:
+
+\begin{enumerate}
+\item \textbf{Draft}: Produce a complete design document with implementation roadmap
+\item \textbf{Critique}: Subject the design to rigorous, independent critique
+\item \textbf{Respond}: Address critiques --- accept, refine, or justify
+\item \textbf{Repeat}: Continue until all parties have clarity and confidence
+\end{enumerate}
+\subsubsection{Key practices}
+\label{sec:orgb15116b}
+
+\begin{itemize}
+\item \textbf{Comprehensive first drafts}: The first draft should be as complete
+as possible. Include data structures, type signatures, AST nodes,
+phase dependencies, test strategies, and concrete code examples.
+An incomplete draft invites incomplete critique.
+
+\item \textbf{Invite adversarial critique}: Seek critique that probes weaknesses,
+not confirmation that validates strengths. The Logic Engine design
+was subjected to a 10-point critique covering resolution strategy
+(underspecified), contradiction detection (hand-wavy), negation
+handling (unsound without stratification), and performance analysis
+(missing). Every point led to a design improvement.
+
+\item \textbf{Distinguish design issues from implementation issues}: A critique
+that says "the resolution strategy is unclear" is a design issue
+that must be resolved before implementation. A critique that says
+"CHAMP lookup is O(log₃₂ n)" is an implementation detail that can
+be optimized later. Don't let implementation concerns block design
+progress, but don't let design ambiguity persist into implementation.
+
+\item \textbf{Pushback with context}: Not all critiques are valid. When a critique
+misunderstands the system's context, push back with the fuller picture.
+When the Logic Engine critique suggested adding \texttt{:includes} to traits
+for contradiction detection, we pushed back: "We don't want trait
+hierarchies AT ALL, EVER! This is the whole rationale for the \texttt{bundle}
+concept." The pushback refined both the design and our articulation of
+the principle.
+
+\item \textbf{Phase dependencies are architecture}: The phased roadmap isn't just
+a schedule --- it's an architectural statement about what depends on
+what. The Logic Engine's critical path
+(\texttt{Phase 1 → 2 → 3 → 5 → 6 → 7}, with \texttt{Phase 4} parallelizable)
+encodes fundamental architectural dependencies. Getting this right
+prevents wasted work.
+
+\item \textbf{Concrete over abstract}: Show elaboration examples, not just type
+signatures. Show how \texttt{defr ancestor} becomes propagator cells and
+fire functions, not just "relations elaborate to propagator networks."
+Every level of abstraction should have at least one concrete example
+that a reader can trace through.
+\end{itemize}
+\subsubsection{The critique cycle in practice}
+\label{sec:org2c0d6d3}
+
+The Extended Spec Design went through multiple rounds:
+
+\begin{enumerate}
+\item \textbf{Initial research survey} → comprehensive landscape analysis
+\item \textbf{First design draft} → keyword symmetry table, metadata map design,
+\texttt{property} as composable proposition groups
+\item \textbf{Feedback round} → Should \texttt{property} use \texttt{:includes} or \texttt{:extends}?
+How do properties attach to traits? Resolution: \texttt{:includes} for
+conjunctive composition (set union), \texttt{:laws} on trait for attachment.
+\item \textbf{Final refinement} → phased roadmap separating syntax (Phase 1) from
+backends (Phase 2+), acknowledging what can be built now vs. what
+needs future infrastructure.
+\end{enumerate}
+
+The Logic Engine Design went through a similar cycle:
+
+\begin{enumerate}
+\item \textbf{Research} → lattice/propagator theory survey
+\item \textbf{Vision discussion} → relational language syntax, solver architecture,
+provenance, tabling-by-default
+\item \textbf{First design draft} → 7-phase roadmap, data structures, AST nodes
+\item \textbf{Independent critique} → 10 points of feedback, including fundamental
+gaps in resolution strategy and functional-relational boundary
+\item \textbf{Response and refinement} → accepted \texttt{HasTop} trait (Point 3), rejected
+trait hierarchy (Point 3 alternative), clarified UnionFind vs. cells,
+added resolution strategy section, added performance expectations
+\item \textbf{Final roadmap} → phased implementation plan with clear phase
+dependencies and test strategies per phase
+\end{enumerate}
+\subsubsection{Artifacts}
+\label{sec:org0669fd2}
+
+\begin{itemize}
+\item Design document: \texttt{docs/tracking/YYYY-MM-DD\_TOPIC\_DESIGN.org}
+(org-mode preferred for structured prose with code blocks)
+\item Phased implementation roadmap with explicit dependencies
+\item Phase-specific test strategies and success criteria
+\item Record of critique and responses (preserved in standups)
+\end{itemize}
+\subsection{Stage 4: Implementation}
+\label{sec:orgaddc453}
+
+\emph{Goal}: Execute the phased roadmap, shipping complete and sound solutions
+at each phase, raising design issues as they surface.
+\subsubsection{What this looks like}
+\label{sec:orga3208de}
+
+\begin{itemize}
+\item Work through the roadmap phase by phase
+\item Create tracking documents before implementation begins
+\item Ship complete, tested solutions --- not partial scaffolding
+\item When implementation reveals design gaps, stop and address them
+\end{itemize}
+\subsubsection{Key practices}
+\label{sec:org989217c}
+
+\begin{itemize}
+\item \textbf{Completeness over deferral}: This is our most important implementation
+principle (see \texttt{DEVELOPMENT\_LESSONS.org} § "Completeness Over Deferral").
+When you have clarity, vision, and full context --- finish the work now.
+Half-built pieces that get deferred are half-built pieces that get
+forgotten. The cost of re-acquiring context later almost always exceeds
+the cost of doing the work while the understanding is fresh.
+
+Defer \emph{only} when there is a genuine dependency on unbuilt infrastructure
+or genuinely uncertain design. "We'll come back to it" is a red flag.
+
+\item \textbf{Design issues surface during implementation}: This is expected and
+healthy. The Logic Engine Phase 3 revealed that:
+\begin{itemize}
+\item Parametric \texttt{impl} dispatch failed for compound type args without
+\texttt{where} constraints (a \texttt{macros.rkt} fix was needed)
+\item Generic trait accessor calls inside closures can't resolve implicit
+type params (a genuine meta-resolution limitation, deferred with
+explicit tracking)
+\item QTT multiplicity violations arise from inline lambdas that reference
+prelude functions differently from named definitions
+\end{itemize}
+
+Each of these was addressed: the first two with code fixes and design
+documentation, the third with a workaround and a tracked limitation.
+The key is: \emph{don't paper over design issues with quick fixes that meet
+criteria partially}.
+
+\item \textbf{If a gap requires deeper infrastructure, address the core concern}:
+When the Logic Engine critique identified that contradiction detection
+needed a \texttt{HasTop} trait, we built it --- including a \texttt{BoundedLattice}
+bundle and trait instances for Bool, FlatVal, and Interval. This was
+more work than a simple boolean flag, but it produced the correct
+abstraction that composes with the rest of the trait system.
+
+\item \textbf{Phase-gated implementation with sub-phases}: Break phases into
+lettered sub-phases (a, b, c\ldots{}) with explicit "done" vs.
+"remaining" tracking. The Logic Engine Phase 3 was broken into:
+\begin{itemize}
+\item 3a: AST structs + mechanical traversals
+\item 3b: Type rules + type tests
+\item 3c: Reduction rules + eval tests
+\item 3d: Surface syntax + integration tests
+\item 3e: Library wrappers + trait tests
+\end{itemize}
+
+Each sub-phase has a clear scope, produces testable artifacts, and
+creates a natural commit point.
+
+\item \textbf{Test at every boundary}: Every sub-phase should end with passing
+tests. The Logic Engine implementation produced 56 new tests across
+3 test files, verifying types (32 tests), integration (16 tests),
+and library-level traits (8 tests). Tests are not an afterthought
+--- they are the proof that the implementation matches the design.
+
+\item \textbf{Track deferred work immediately}: When something must be deferred
+(the \texttt{new-lattice-cell} generic wrapper, for instance), add it to
+\texttt{DEFERRED.md} in the same commit. Deferred work not tracked is
+abandoned work.
+\end{itemize}
+\subsubsection{Implementation flow}
+\label{sec:org27d9960}
+
+\begin{verbatim}
+┌──────────────────────────────────┐
+│ Create tracking document         │
+│ (before writing any code)        │
+└───────────────┬──────────────────┘
+                │
+┌───────────────▼──────────────────┐
+│ Sub-phase a: Foundation          │◄──── Tests pass? ──── Yes ──► Commit
+│ (structs, types, basic cases)    │         │
+└───────────────┬──────────────────┘         No
+                │                            │
+┌───────────────▼──────────────────┐         ▼
+│ Sub-phase b: Core logic          │    Fix / Investigate
+│ (type rules, reduction, etc.)    │         │
+└───────────────┬──────────────────┘         │
+                │                  ◄─────────┘
+                ▼
+┌──────────────────────────────────┐     ┌──────────────────┐
+│ Design issue discovered?         │────►│ Stop. Address it. │
+│                                  │ Yes │ Update design doc │
+└───────────────┬──────────────────┘     │ Then continue.    │
+                │ No                     └──────────────────┘
+                ▼
+┌──────────────────────────────────┐
+│ Sub-phases c, d, e...            │
+│ (repeat until phase complete)    │
+└───────────────┬──────────────────┘
+                │
+┌───────────────▼──────────────────┐
+│ Full test suite + whale check    │
+│ Update DEFERRED.md               │
+│ Update tracking document         │
+│ Commit                           │
+└──────────────────────────────────┘
+\end{verbatim}
+\subsubsection{Artifacts}
+\label{sec:org362ac80}
+
+\begin{itemize}
+\item Phase-specific commits with descriptive messages
+\item Updated tracking document with completion status
+\item Updated \texttt{DEFERRED.md} for any deferred work
+\item Test suite growth (measurable)
+\end{itemize}
+\subsection{Stage 5: Composition and Extension}
+\label{sec:org8d3205f}
+
+\emph{Goal}: Enjoy the well-thought-out design and how it composes with our
+multi-level, modular, extensible language. Verify that the new feature
+integrates cleanly and enables future extension.
+\subsubsection{What this looks like}
+\label{sec:org2c45c76}
+
+\begin{itemize}
+\item Write a capstone demo (\texttt{.prologos} file) exercising the feature in
+the user-facing syntax — this is the first mandatory step
+\item Verify that the new feature composes with existing features
+\item Check that the new abstractions are reusable in contexts beyond the
+original design
+\item Update principles documents if new patterns emerged
+\item Identify the new possibilities that the feature enables
+\item Conduct a Post Implementation Review for significant features
+\end{itemize}
+\subsubsection{Key practices}
+\label{sec:orgcfb9ec9}
+
+\begin{itemize}
+\item \textbf{Composition is the test}: A well-designed feature should compose
+with features it wasn't specifically designed for. The propagator
+network composes with the trait system (lattice traits define merge
+behavior), with the type system (PropNetwork is a first-class type),
+and with the prelude (users can write lattice-aware programs with
+standard library functions). If a feature \emph{doesn't} compose, that's
+a design smell worth investigating.
+
+\item \textbf{Extension paths are visible}: After shipping Phase 3 of the Logic
+Engine, the path to Phase 4 (UnionFind), Phase 5 (ATMS), and
+Phase 7 (surface syntax) is clear. Each depends on the infrastructure
+just built, and the design document already specifies what each will
+need. A good implementation \emph{opens doors} rather than closing them.
+
+\item \textbf{Update the living documents}: When a feature completes, update:
+\begin{itemize}
+\item \texttt{DEFERRED.md} (mark phases complete, add new deferrals)
+\item \texttt{MEMORY.md} (project memory for context recovery)
+\item Relevant principles docs (new patterns, new lessons)
+\item The original tracking document (completion status, lessons learned)
+\end{itemize}
+
+\item \textbf{Teach through the capstone demo}: Write a \texttt{.prologos} demo file that
+shows the feature in context (see "Feature Capstone Demo" below). The
+demo serves triple duty: user-facing documentation, integration
+validation, and honest assessment of WS-mode surface coverage. This
+replaces the test-files-as-documentation pattern — tests prove
+correctness, demos prove usability.
+\end{itemize}
+\subsubsection{Feature Capstone Demo (Mandatory)}
+\label{sec:orgb267be6}
+
+After a significant feature track is complete --- all sub-phases shipped,
+tests passing --- write a \textbf{capstone demo file} that exercises the feature
+in the user-facing \texttt{.prologos} syntax. This is not a test file (those
+exist already); it is a \emph{feature showcase} written in the ideal syntax of
+the language, intended to be read and run by users (including future selves).
+\begin{enumerate}
+\item Why this is mandatory
+\label{sec:org758e5fb}
+
+The capstone demo serves purposes that unit tests cannot:
+
+\begin{itemize}
+\item \textbf{Discovers syntax gaps}: Unit tests exercise the sexp/API layer. The
+capstone forces the WS reader → preparse → parse → elaborate path,
+revealing features that work internally but aren't surfaced in the
+user-facing syntax. The FL Narrowing capstone revealed that ground
+constructor args in WS narrowing (\texttt{[add zero ?y] = 5N}), nested match
+patterns, and composed-function narrowing don't yet work in WS mode ---
+none of which were visible from the passing test suite.
+
+\item \textbf{Validates integration with other features}: The demo should exercise
+how the new feature interacts with existing language components ---
+the prelude, the type system, other syntactic forms (pipes, match,
+pattern defn). A feature that works in isolation but breaks when
+composed with the rest of the language is not done.
+
+\item \textbf{Establishes ground truth for "what works"}: After the demo runs,
+you have an honest inventory: which ideal-syntax expressions produce
+correct output, which need commenting out, and which reveal future
+work. This inventory is more valuable than any design document for
+understanding the current state of the feature.
+
+\item \textbf{Creates user-facing documentation}: The demo is a teaching artifact.
+It shows users what the feature does, how to use it, and what the
+output looks like. Heavy commenting explains the underlying mechanisms.
+
+\item \textbf{Exercises the language vision}: Writing the demo forces you to think
+about how the feature \emph{should} look in the ideal syntax, even if the
+current parser doesn't support it yet. Ideal syntax that's commented
+out with a \texttt{NOTE:} becomes a specification for future work.
+\end{itemize}
+\item What the capstone should contain
+\label{sec:orgf30f295}
+
+\begin{itemize}
+\item \textbf{Prologos header and \texttt{ns} declaration}: First-class \texttt{.prologos} file
+in the examples directory
+\item \textbf{Sections organized by feature/phase}: Each section introduces one
+capability with commentary explaining the mechanism
+\item \textbf{Live executable expressions}: Every uncommented expression must run
+without errors
+\item \textbf{Commented ideal syntax}: Features not yet surfaced in WS mode are
+shown as commented-out ideal syntax with \texttt{NOTE:} explaining the gap
+\item \textbf{Cross-feature exercises}: At least one section showing how the new
+feature composes with existing features (e.g., narrowing + functional
+code, narrowing + prelude functions, narrowing + user definitions)
+\item \textbf{Summary table}: Lines/tests per sub-phase, giving readers a sense
+of the implementation's scope
+\end{itemize}
+\item What the capstone should NOT be
+\label{sec:org2e79e47}
+
+\begin{itemize}
+\item Not a test file (no \texttt{check-equal?}, no \texttt{rackunit})
+\item Not an exhaustive regression suite (that's what \texttt{tests/} is for)
+\item Not a design document (that's in \texttt{docs/tracking/})
+\item Not a copy of existing tests translated to WS mode (it should explore
+NEW combinations and usage patterns)
+\end{itemize}
+\item When to write it
+\label{sec:org0f316d9}
+
+After the last sub-phase is committed and all tests pass, but \emph{before}
+the PIR. The capstone often surfaces issues that inform the PIR's
+"challenges" and "forward enablement" sections.
+\item Naming and location
+\label{sec:org81f05de}
+
+\texttt{racket/prologos/examples/\{feature\}-demo.prologos}
+
+Examples: \texttt{narrowing-demo.prologos}, \texttt{relational-demo.prologos},
+\texttt{session-demo.prologos}.
+\item Example
+\label{sec:org78a4ea7}
+
+The FL Narrowing capstone (\texttt{examples/narrowing-demo.prologos}, 533 lines)
+covered all 11 sub-phases with 16 live narrowing queries and 5 commented
+ideal-syntax sections. It revealed 3 WS-mode gaps, validated 7 working
+cross-feature interactions, and established the ground truth that
+narrowing currently operates over inductively-defined types (Nat, Bool)
+with Int narrowing via constraint propagation as a future extension.
+\end{enumerate}
+\subsubsection{Post Implementation Review (PIR)}
+\label{sec:org5e44967}
+
+After a significant feature is complete --- all sub-phases shipped, tests
+passing, tracking documents updated --- conduct a Post Implementation
+Review. The PIR is the reflective counterpart to the research stage: where
+Stage 1 asks "what do we know going in?", the PIR asks "what do we know
+coming out?"
+
+A PIR is \emph{not} a retrospective about process (though process insights
+belong). It is primarily a \emph{technical} review: did the design hold up?
+What did the implementation reveal about our architecture? What does
+this feature enable that we didn't anticipate?
+\begin{enumerate}
+\item What to cover
+\label{sec:orgc0cd1e1}
+
+\begin{itemize}
+\item \textbf{Objectives vs. actuals}: What did we set out to build? What did we
+actually build? Quantify scope adherence (e.g., "36/38 sub-phases,
+95\%"). Note what was correctly deferred vs. what was scope creep or
+missed.
+
+\item \textbf{What went well}: Identify decisions, patterns, and practices that
+paid off. These are candidates for codification in principles
+documents. The Session Type PIR identified the 3-stage design process
+(research → design → plan) and propagator-as-universal-substrate as
+key successes worth replicating.
+
+\item \textbf{Challenges and how they were resolved}: Document the hard problems
+and their solutions. Be specific --- "the \texttt{??} / \texttt{\$typed-hole} reader
+conflict required context-sensitive disambiguation at three points in
+the desugaring pipeline" is more useful than "WS parsing was tricky."
+Future implementations facing similar challenges will benefit from
+the concrete resolution.
+
+\item \textbf{Architectural validation}: Did the feature integrate cleanly with
+existing systems? Were the extension points (AST pipeline, trait
+system, propagator network) sufficient, or did they need modification?
+A clean integration validates the architecture; friction points
+identify areas for improvement.
+
+\item \textbf{Quantitative summary}: Lines of code, test count growth, number of
+commits, implementation duration. These establish baselines for
+estimating future work of similar scope.
+
+\item \textbf{Forward enablement}: What does this feature make possible that wasn't
+possible before? What are the natural next steps? This section bridges
+from the completed work to the future roadmap.
+
+\item \textbf{Lessons learned}: Distill the key insights --- both technical and
+methodological --- into actionable guidance. The best lessons are
+specific enough to apply ("single-method trait dicts should be the
+function itself, not a wrapper struct") rather than generic ("test
+early and often").
+\end{itemize}
+\item When to do a PIR
+\label{sec:org97782ff}
+
+Not every change warrants a PIR. Use one when:
+\begin{itemize}
+\item The feature spanned multiple phases or sub-phases
+\item The implementation took more than a single session
+\item The work involved architectural decisions (new AST nodes, new
+infrastructure files, new cross-cutting concerns)
+\item You learned something that future work should benefit from
+\end{itemize}
+
+Skip for routine bug fixes, single-file changes, or features that
+followed established patterns without surprises.
+\item Artifacts
+\label{sec:orge21090e}
+
+\begin{itemize}
+\item PIR document: \texttt{docs/tracking/YYYY-MM-DD\_TOPIC\_PIR.md}
+\item Updates to \texttt{DEVELOPMENT\_LESSONS.org} for broadly applicable lessons
+\item Updates to \texttt{PATTERNS\_AND\_CONVENTIONS.org} for new patterns discovered
+\item Updates to \texttt{MEMORY.md} for project-level status
+\end{itemize}
+\item Example
+\label{sec:orgf488a02}
+
+The Session Types PIR (\texttt{2026-03-04\_SESSION\_TYPE\_PIR.md}) covered 36/38
+sub-phases across \textasciitilde{}24 hours. Key findings:
+\begin{itemize}
+\item The 3-stage design methodology (deep research → adversarial critique →
+phased implementation) produced zero architectural rework
+\item Propagator networks proved to be a universal substrate: session types
+were the third domain (after types and multiplicities) to use the
+same infrastructure without modification
+\item The \texttt{??} / \texttt{\$typed-hole} WS reader conflict revealed that
+context-sensitive token disambiguation requires handling at every
+stage of the desugaring pipeline, not just one
+\item Phase 0 scoping (defer concurrent runtime) was validated as correct:
+complete type-level infrastructure enables future runtime work without
+redesign
+\end{itemize}
+\end{enumerate}
+\section{Cross-Cutting Principles}
+\label{sec:org92c4466}
+
+These principles apply across all five stages.
+\subsection{Theoretical Grounding, Practical Surface}
+\label{sec:org0858d94}
+
+Every design decision should be traceable to a theoretical foundation,
+but the surface presentation should be practical and approachable.
+"Lattice-theoretic monotonic constraint propagation" is the theory;
+\texttt{net-cell-write} with a merge function is the practice. Both must
+exist: the theory ensures correctness, the practice ensures usability.
+\subsection{Design Documents Are Living}
+\label{sec:org639c8d5}
+
+Design documents are not write-once artifacts. They are updated as
+implementation reveals new information. The Logic Engine design document
+was refined after every critique round and after Phase 3 implementation
+revealed the \texttt{HasTop} trait need and the implicit-resolution limitation.
+Stale design documents are worse than no design documents.
+\subsection{Critique Is a Gift}
+\label{sec:org8759102}
+
+Adversarial critique --- even harsh critique --- improves designs. The
+10-point critique of the Logic Engine identified real gaps (resolution
+strategy underspecified, negation handling unsound). Every accepted
+critique made the design stronger. The discipline is to engage with
+critique on its merits, not defensively.
+
+Not all critiques are valid. The key judgment is: does this critique
+identify a real gap in the design, or does it misunderstand the
+system's context? When the latter, push back clearly and use the
+pushback to sharpen your articulation of \emph{why} the design is the way
+it is.
+\subsection{Standups as Design Memory}
+\label{sec:orgd4ce6b5}
+
+Our standup documents (\texttt{docs/standups/standup-YYYY-MM-DD.org}) serve as
+a chronological record of design discussions, including the back-and-forth
+of critique and refinement. The 🗣️ (human) and 🤖 (machine) annotations
+preserve the conversational flow. This record is invaluable for
+reconstructing design rationale months later.
+\subsection{The 14-File Pipeline as Discipline}
+\label{sec:orgaca980a}
+
+Prologos's 14-file AST pipeline (syntax → surface-syntax → parser →
+elaborator → typing-core → qtt → reduction → substitution → zonk →
+pretty-print → unify → macros → foreign) is both a cost and a benefit.
+The cost is that every new AST node requires touching many files. The
+benefit is that every subsystem handles every node consistently. This
+enforced consistency is a design methodology in itself: if a feature
+can't be expressed through the pipeline, it's a signal that the
+feature's abstraction is wrong.
+\section{Anti-Patterns}
+\label{sec:org7a8f38d}
+
+\subsection{"We'll come back to it"}
+\label{sec:org2ed5d93}
+
+Defer only when genuinely blocked. Track all deferrals immediately.
+See \texttt{DEVELOPMENT\_LESSONS.org} § "Completeness Over Deferral."
+\subsection{Quick fixes that meet criteria partially}
+\label{sec:orgea3405b}
+
+A partial solution that passes tests but doesn't address the underlying
+design concern creates technical debt with interest. Better to identify
+the design gap, address it, and ship the complete solution.
+\subsection{Research without documentation}
+\label{sec:org65dd746}
+
+Research that exists only in a developer's head is lost when context
+resets. Write it down. Even rough notes are better than nothing.
+\subsection{Design without critique}
+\label{sec:org26e7da9}
+
+A design that hasn't been subjected to adversarial critique has
+unknown weaknesses. Actively seek feedback, especially on the parts
+you're most confident about --- confidence is where blind spots hide.
+\subsection{Implementation without tests}
+\label{sec:org45dab49}
+
+An untested implementation is an unverified hypothesis. Tests are the
+proof that the implementation matches the design. New features aren't
+done until they have tests.
+\section{Relationship to Other Principles Documents}
+\label{sec:org0898d83}
+
+\begin{center}
+\begin{tabular}{ll}
+Document & Relationship to this methodology\\
+\hline
+\texttt{DESIGN\_PRINCIPLES.org} & Provides the values that Stage 2 alignment checks use\\
+\texttt{LANGUAGE\_VISION.org} & Provides the north star that research (Stage 1) aims at\\
+\texttt{DEVELOPMENT\_LESSONS.org} & Collects lessons that emerge from Stage 4\\
+\texttt{PATTERNS\_AND\_CONVENTIONS.org} & Captures patterns that Stage 5 discovers\\
+\texttt{ERGONOMICS.org} & Informs Stage 2 tradeoff analysis for user-facing features\\
+\texttt{RELATIONAL\_LANGUAGE\_VISION.org} & Example of Stage 1-2 output for a specific domain\\
+\end{tabular}
+\end{center}
+\section{Exemplar Projects}
+\label{sec:orgd078957}
+
+These completed efforts illustrate the methodology in practice:
+\subsection{Extended Spec Language Design}
+\label{sec:orgdff6ff9}
+\begin{itemize}
+\item \textbf{Research}: Survey of 10+ systems (Clojure Spec, Malli, PropEr, Agda,
+Idris 2, Lean 4, Haskell, F*, Koka, Racket Contracts)
+\item \textbf{Design}: \texttt{2026-02-22\_EXTENDED\_SPEC\_DESIGN.org} with keyword symmetry
+table, metadata map design, 4-phase roadmap
+\item \textbf{Iteration}: Multiple rounds on \texttt{property} composition, \texttt{:includes}
+semantics, functor metadata
+\item \textbf{Implementation}: Phase 1 complete (\texttt{??} holes, \texttt{property}, \texttt{functor},
+\texttt{:examples}, \texttt{:deprecated}). Phases 2+ tracked in DEFERRED.md.
+\item \textbf{Composition}: \texttt{property} composes with \texttt{trait} via \texttt{:laws}, \texttt{bundle}
+composes \texttt{property} groups, \texttt{functor} composes with \texttt{spec} metadata.
+\end{itemize}
+\subsection{Logic Engine on Propagators}
+\label{sec:orge8fe517}
+\begin{itemize}
+\item \textbf{Research}: \texttt{2026-02-23\_LATTICE\_PROPAGATOR\_RESEARCH.md} + the broader
+\texttt{TOWARDS\_A\_GENERAL\_LOGIC\_ENGINE\_ON\_PROPAGATORS.org} synthesis
+\item \textbf{Design}: \texttt{2026-02-24\_LOGIC\_ENGINE\_DESIGN.org} with 7-phase roadmap,
+14 AST nodes, data structure specifications
+\item \textbf{Iteration}: Relational language vision discussion, design critique
+(10 points), pushback on trait hierarchies, refinement of resolution
+strategy and HasTop design
+\item \textbf{Implementation}: Phases 1--3 complete. Phase 1 (lattice traits),
+Phase 2 (persistent PropNetwork with BSP), Phase 3 (14 AST nodes
+through 12-file pipeline, HasTop trait, BoundedLattice bundle).
+56 new tests, parametric impl dispatch fix.
+\item \textbf{Composition}: PropNetwork composes with trait system (Lattice, HasTop,
+BoundedLattice), type system (first-class type), prelude (available
+from any \texttt{ns} module).
+\end{itemize}
+\subsection{Collections Ergonomics}
+\label{sec:org02d89a4}
+\begin{itemize}
+\item \textbf{Research}: Audit of existing collection generics, gap identification
+\item \textbf{Design}: Stages A--I with clear boundaries
+\item \textbf{Implementation}: Stages A--H complete in one session (completeness
+over deferral). Stage I deferred (genuine infrastructure dependency
+on transient type exposure).
+\item \textbf{Composition}: Generic \texttt{map\textasciitilde{}/\textasciitilde{}filter\textasciitilde{}/\textasciitilde{}reduce} work across all
+collection types. \texttt{into} converts between any two collections.
+\end{itemize}
+\subsection{Session Types (S1--S8)}
+\label{sec:org1b8f046}
+\begin{itemize}
+\item \textbf{Research}: \texttt{2026-03-03\_SESSION\_TYPE\_RESEARCH.md} surveying the
+pi-calculus, Gay-Vasconcelos session types, Toninho-Caires-Pfenning
+propositions-as-sessions, Wadler's Classical Processes, Scalas-Yoshida
+multiparty session types, and Jespersen-Munksgaard-Sestoft Rust
+embedding
+\item \textbf{Design}: \texttt{2026-03-03\_SESSION\_TYPE\_DESIGN.md} with 8-phase roadmap,
+\textasciitilde{}26 surface syntax structs, propagator-based type checking,
+Galois connection bridges
+\item \textbf{Iteration}: Adversarial critique refined duality computation,
+deadlock detection strategy, capability integration, and the
+functional-relational boundary between session and process layers
+\item \textbf{Implementation}: 36/38 sub-phases complete (\textasciitilde{}24 hours). 4 new
+infrastructure files, 1,880 new lines, 392 test cases (+21\% suite
+growth). S8b correctly deferred (promises meaningless without
+concurrent runtime).
+\item \textbf{Composition}: Session types are the third domain on the propagator
+network (after types and multiplicities), using the same
+infrastructure without modification. Galois connection bridges
+compose session and type domains. \texttt{defproc} composes with trait
+system, QTT, and capability binders.
+\item \textbf{PIR}: \texttt{2026-03-04\_SESSION\_TYPE\_PIR.md} --- first exemplar of the
+PIR practice. Validated the 3-stage design methodology, identified
+the \texttt{??\textasciitilde{}/\textasciitilde{}\$typed-hole} desugaring lesson, and established forward
+roadmap for concurrent runtime and multi-party sessions.
+\end{itemize}
+\subsection{Effect Ordering via Session Types (Architecture A+D)}
+\label{sec:org0401db1}
+\begin{itemize}
+\item \textbf{Research}: \texttt{2026-03-06\_EFFECTFUL\_PROPAGATORS\_RESEARCH.md} surveying
+CALM theorem, LVars, Timely Dataflow, CRDTs, Radul-Sussman, BloomL,
+algebraic effects, and Flix. Three candidate architectures (A, B, C)
+for recovering order-dependent effects on a monotone substrate.
+\item \texttt{2026-03-06\_SESSION\_TYPES\_AS\_EFFECT\_ORDERING.org} (\textasciitilde{}1,200 lines):
+discovery that session types are \emph{causal clocks} --- each position in
+a session type's continuation chain is a causally-ordered event.
+Formal Galois connection \((\alpha, \gamma)\) between session lattice
+and effect position lattice. Quantale morphism at the algebraic level.
+\item \textbf{Key insight}: The Layered Recovery Principle --- non-monotone behavior
+(effect ordering) recovered on a monotone substrate (propagator network)
+by inserting a control layer between phases of monotone computation.
+Generalises the logic engine's recovery of choice-point semantics.
+\item \textbf{Design}: \texttt{2026-03-07\_ARCHITECTURE\_AD\_IMPLEMENTATION\_DESIGN.org}
+(\textasciitilde{}750 lines) with 16 sub-phases across 6 phases (AD-A through AD-F),
+dependency graph, concrete data structures, traced example, migration
+strategy, and test plan (\textasciitilde{}178 tests).
+\item \textbf{Architecture decision}: A + D --- session-derived ordering (D) for
+session-typed IO, sequential walk ordering (A) for unsessioned IO.
+Architecture B subsumed; no overlap, each mechanism maximally suited
+to its domain.
+\item \textbf{Implementation}: All 6 phases complete. 4 new modules
+(\texttt{effect-position.rkt}, \texttt{effect-bridge.rkt}, \texttt{effect-ordering.rkt},
+\texttt{effect-executor.rkt}), \texttt{770 lines, \textasciitilde{}165 tests, 0 regressions.
+  Auto-detection in \textasciitilde{}driver.rkt} selects Architecture A or D based on
+process structure.
+\item \textbf{Principles}: Elevated to \texttt{EFFECTFUL\_COMPUTATION\_ON\_PROPAGATORS.org}
+--- the Layered Recovery Principle as a general design methodology,
+the \texttt{rel\textasciitilde{}/\textasciitilde{}proc} structural parallel, and the five-layer architecture.
+\item \textbf{Composition}: Effect position lattice composes with session lattice
+via Galois connection bridge propagators. Effect ordering composes
+with ATMS branching (choice branches → per-branch orderings).
+Architecture selection composes with existing \texttt{rt-execute-process}
+(additive, not replacing).
+\end{itemize}
+\end{document}
