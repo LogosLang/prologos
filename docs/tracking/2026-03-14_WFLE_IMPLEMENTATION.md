@@ -348,8 +348,11 @@ For the Boolean bilattice (L = {false, true}):
 
 ```racket
 ;; Create a new bilattice variable in the network.
+;; #:consistency-check? — when #t, adds a consistency propagator
+;;   (lower ≤ upper). Default #f for Boolean lattice (invariant
+;;   maintained by construction); #t for non-Boolean or during testing.
 ;; Returns: (values new-network bilattice-var)
-(define (bilattice-new-var net lat)
+(define (bilattice-new-var net lat #:consistency-check? [check? #f])
   ;; Create ascending (lower) cell — starts at bot
   (define-values (net1 lower-cid)
     (net-new-cell net
@@ -360,8 +363,11 @@ For the Boolean bilattice (L = {false, true}):
     (net-new-cell-desc net1
                        (lattice-desc-top lat)
                        (lattice-desc-meet lat)))
-  (values net2
-          (bilattice-var lower-cid upper-cid lat)))
+  (define bvar (bilattice-var lower-cid upper-cid lat))
+  (define net3 (if check?
+                   (bilattice-add-consistency-propagator net2 bvar)
+                   net2))
+  (values net3 bvar))
 ```
 
 ### 2.4.2 `bilattice-read` — General Three-Valued Reading
@@ -412,15 +418,21 @@ For the Boolean bilattice (L = {false, true}):
   (net-cell-write net (bilattice-var-upper-cid bvar) val))
 ```
 
-### 2.4.5 `bilattice-add-consistency-propagator` — Cross-Cell Consistency
+### 2.4.5 `bilattice-add-consistency-propagator` — Cross-Cell Consistency (Optional)
 
 ```racket
 ;; Add a consistency propagator that enforces lower ≤ upper.
 ;; If lower > upper, sets contradiction.
 ;;
-;; In practice, for the well-founded semantics on Boolean lattice,
-;; this cannot happen (the propagator patterns maintain the invariant).
-;; This is a safety net for debugging and for richer lattices.
+;; For the Boolean lattice, the negation-flip patterns in Phase 3
+;; maintain lower ≤ upper by construction — this propagator can never
+;; fire. It is therefore optional for Boolean WF semantics:
+;;
+;;   #:consistency-check? #f  → omit (default for Boolean, saves a propagator)
+;;   #:consistency-check? #t  → include (mandatory for non-Boolean lattices,
+;;                              recommended during development/testing)
+;;
+;; bilattice-new-var accepts the flag and conditionally wires this propagator.
 (define (bilattice-add-consistency-propagator net bvar)
   (define lower-cid (bilattice-var-lower-cid bvar))
   (define upper-cid (bilattice-var-upper-cid bvar))
@@ -655,9 +667,12 @@ For a ground fact `p.` (clause with empty body):
 ;;   Each element is either ('pos . bvar) for a positive literal
 ;;   or ('neg . bvar) for a negated literal
 ;;
-;; Returns: (values new-network body-upper-fn)
+;; Returns: (values new-network body-upper-fn body-bvars)
 ;;   body-upper-fn: (prop-network → Bool) — checks if this clause's body
 ;;   is "possibly true" (for the aggregate upper bound)
+;;   body-bvars: (listof bilattice-var) — effective body bvars (after
+;;   negation wiring), used by wf-compile-program to compute precise
+;;   upper-bound dependency sets per head atom
 (define (wf-compile-clause net head-bvar body-specs)
   ;; Phase 1: wire negation for negative literals → get effective bvars
   (define-values (net1 effective-bvars)
@@ -690,7 +705,7 @@ For a ground fact `p.` (clause with empty body):
     (lambda (net)
       (for/and ([bv (in-list eff-bvars)])
         (net-cell-read net (bilattice-var-upper-cid bv)))))
-  (values net2 body-upper-fn))
+  (values net2 body-upper-fn eff-bvars))
 ```
 
 ## 3.5 Program Compilation: `wf-compile-program`
@@ -717,35 +732,37 @@ For a ground fact `p.` (clause with empty body):
           (values net m)
           (let-values ([(net2 bvar) (bilattice-new-var net bool-lattice)])
             (values net2 (hash-set m atom bvar))))))
-  ;; Phase 2: compile each clause, collecting upper-bound fns per head
-  (define-values (net2 head-clause-fns)
-    (for/fold ([net net1] [hcf (hasheq)])
+  ;; Phase 2: compile each clause, collecting upper-bound fns and body-bvars per head
+  (define-values (net2 head-clause-info)
+    (for/fold ([net net1] [hci (hasheq)])
               ([clause (in-list program)])
       (define head-name (car clause))
       (define body-specs
         (for/list ([spec (in-list (cdr clause))])
           (cons (car spec) (hash-ref atom-map (cdr spec)))))
       (define head-bvar (hash-ref atom-map head-name))
-      (define-values (net3 body-upper-fn)
+      (define-values (net3 body-upper-fn body-bvars)
         (wf-compile-clause net head-bvar body-specs))
       (values net3
-              (hash-update hcf head-name
-                           (lambda (fns) (cons body-upper-fn fns))
+              (hash-update hci head-name
+                           (lambda (entries)
+                             (cons (list body-upper-fn body-bvars) entries))
                            '()))))
   ;; Phase 3: wire aggregate upper bounds
   (define net3
     (for/fold ([net net2])
-              ([(head-name fns) (in-hash head-clause-fns)])
+              ([(head-name entries) (in-hash head-clause-info)])
       (define head-bvar (hash-ref atom-map head-name))
+      (define fns (map car entries))
       ;; Collect only the upper-cids that clauses for this head actually reference.
-      ;; Each body-upper-fn closes over its clause's effective bvars, so we extract
-      ;; their upper-cids from the clause structure. This avoids O(n²) dependencies
-      ;; where every head watches every atom.
+      ;; Each entry includes the body-bvars returned from wf-compile-clause. We
+      ;; extract their upper-cids, avoiding O(n²) dependencies where every head
+      ;; would watch every atom in the program.
       (define clause-upper-cids
         (remove-duplicates
          (apply append
-                (for/list ([clause (in-list (hash-ref head-clauses head-name '()))])
-                  (map bilattice-var-upper-cid (clause-effective-bvars clause))))))
+                (for/list ([entry (in-list entries)])
+                  (map bilattice-var-upper-cid (cadr entry))))))
       (wf-wire-aggregate-upper net head-bvar clause-upper-cids fns)))
   (values net3 atom-map))
 ```
@@ -903,6 +920,10 @@ Create the `wf-engine.rkt` module — the solver-level entry point that orchestr
 
 This hybrid approach preserves full Prolog-style queries (unification variables, function symbols, open Herbrand base) while gaining well-founded semantics for negation.
 
+**Bilattice granularity**: Phase 4a operates at **predicate granularity** — one bilattice-var per predicate name (e.g., one for `win`, one for `move`). This is conservative: if any ground instance of a predicate is unknown, all instances are treated as unknown for NAF purposes. For example, with `win(X) :- move(X,Y), not win(Y)` and `move(a,b). move(b,c).`, the bilattice tracks `win` as a single Boolean, not `win(a)` and `win(b)` separately. The DFS solver still returns specific bindings (`{X: a}`, `{X: c}`), but the NAF oracle consults the predicate-level bilattice to decide whether `not win(Y)` can succeed/fail/defer.
+
+Phase 4b (after Phase 5: tabling) refines to **per-tabled-variant granularity**. Each tabled variant gets its own `certainty` annotation in the `wf-table-entry`. This enables variant-specific NAF: `not win(b)` can succeed (b is definitely not a winner) while `not win(a)` defers (a's status is unknown). This is the target granularity for production use.
+
 ```
   User query: solve (ancestor ?x bob)
        │
@@ -1027,11 +1048,32 @@ No new syntax required — `semantics` is just another solver config key.
 ;; it consults the bilattice: "is upper-p = #f?" (definitely false → NAF succeeds)
 ;; or "is lower-p = #t?" (definitely true → NAF fails).
 ;; If neither (unknown), the NAF result is deferred.
+;; Iteration limit: for Boolean lattice with n negation-participating
+;; predicates, worst-case convergence is O(n) iterations (each iteration
+;; must refine at least one cell, and each cell changes at most twice:
+;; ⊥→⊤ for lower, ⊤→⊥ for upper). We set max-iterations = 2n with
+;; a floor of 10 to avoid hardcoded magic numbers.
+;;
+;; Fuel interaction: two separate limits apply during iteration:
+;; 1. Propagator fuel (prop-network-fuel): limits propagation steps
+;;    within a single run-to-quiescence call. If exhausted mid-iteration,
+;;    run-to-quiescence returns the network in its current state — values
+;;    are sound approximations (lower ≤ true fixpoint, upper ≥ true fixpoint)
+;;    but may be less precise than the true well-founded model.
+;; 2. Iteration limit (max-iterations): limits outer fixpoint iterations.
+;;    An iteration-capped result is valid but conservative — more 'unknown
+;;    than the true model, never incorrect.
+;;
+;; Critical: never terminate between Phase A (DFS solver) and Phase C
+;; (bilattice propagation). If fuel exhausts during Phase C, complete
+;; that propagation round before returning, so cross-cell negation links
+;; are consistent.
 (define (wf-iterate config store net pred-bvar-map
                      goal-name goal-args query-vars)
-  (let loop ([net net] [iteration 0] [max-iterations 100])
+  (define max-iterations (max 10 (* 2 (hash-count pred-bvar-map))))
+  (let loop ([net net] [iteration 0])
     (when (>= iteration max-iterations)
-      (values net '()))  ;; fuel exhaustion — return partial results
+      (values net '()))  ;; iteration limit — return partial (sound) results
     ;; Phase A: Run DFS solver with WF-aware NAF oracle
     (define naf-oracle (make-wf-naf-oracle net pred-bvar-map))
     (define answers
@@ -1040,11 +1082,12 @@ No new syntax required — `semantics` is just another solver config key.
     ;; Phase B: Update bilattice from solver results
     (define net2 (update-bilattice-from-results net pred-bvar-map store answers))
     ;; Phase C: Run bilattice propagators to quiescence
+    ;; (always completes this round, even if fuel is low)
     (define net3 (run-to-quiescence net2))
     ;; Phase D: Check for fixpoint (no bilattice change)
     (if (bilattice-stable? net net3 pred-bvar-map)
         (values net3 answers)
-        (loop net3 (add1 iteration) max-iterations))))
+        (loop net3 (add1 iteration)))))
 ```
 
 ### 4.4.3 `make-wf-naf-oracle` — Three-Valued NAF
@@ -1061,7 +1104,28 @@ No new syntax required — `semantics` is just another solver config key.
 ;; The DFS solver calls this when evaluating `not p`:
 ;;   'succeed → treat `not p` as true (NAF holds)
 ;;   'fail → treat `not p` as false (backtrack)
-;;   'defer → treat `not p` as unknown (skip this clause for now)
+;;   'defer → treat `not p` as unknown (clause-level skip — see below)
+;;
+;; 'defer semantics (clause-level skip):
+;;   When the oracle returns 'defer for `not p`, the DFS solver treats it
+;;   identically to 'fail — this clause does not contribute to the answer
+;;   set for this iteration. Other clauses for the same head still run.
+;;   This is sound because:
+;;   - Lower bounds are conservative: only proven atoms count, so skipping
+;;     a clause cannot produce false positives
+;;   - Upper bounds are handled independently by the bilattice aggregate,
+;;     which checks clause feasibility via upper cells
+;;   - The iterative loop retries all clauses on the next iteration, when
+;;     the bilattice may have refined the deferred predicate's status
+;;
+;;   Example: a :- b, not c. a :- d. b. d. c :- not c.
+;;   Iteration 1: c is unknown → not c deferred → clause 1 skipped
+;;                clause 2 (a :- d) succeeds → lower-a = #t
+;;   Result: a = 'definite true (via clause 2), c = 'unknown (self-loop)
+;;
+;; Implementation note: the current DFS solver (relations.rkt:307-317)
+;; hardcodes NAF as a direct solve-single-goal call. Phase 4a must
+;; introduce a `current-naf-oracle` parameter to intercept this.
 (define (make-wf-naf-oracle net pred-bvar-map)
   (lambda (pred-name)
     (define bvar (hash-ref pred-bvar-map pred-name #f))
@@ -1272,17 +1336,23 @@ In SLG-resolution (XSB Prolog), tabled predicates accumulate answers incremental
 ;; A tabled answer paired with its certainty.
 ;; The cell stores (listof (cons answer certainty)) instead of (listof answer).
 (define (wf-all-mode-merge old new)
-  ;; Merge answer lists, deduplicating by answer value.
+  ;; Merge answer lists, deduplicating by ANSWER VALUE only.
   ;; If the same answer appears with different certainties,
-  ;; prefer 'definite over 'unknown (definite subsumes unknown).
-  (define merged (append old new))
-  (define seen (make-hasheq))
-  (for/list ([entry (in-list merged)]
-             #:unless (let ([key (car entry)])
-                        (and (hash-has-key? seen key)
-                             (eq? (hash-ref seen key) 'definite))))
-    (hash-set! seen (car entry) (cdr entry))
-    entry))
+  ;; keep the higher certainty: 'definite subsumes 'unknown.
+  ;;
+  ;; This is monotonic in the certainty ordering (unknown ⊑ definite)
+  ;; and keys on answer alone — (X=5, 'definite) and (X=5, 'unknown)
+  ;; collapse to (X=5, 'definite), while (X=5, 'definite) and
+  ;; (X=6, 'definite) are both kept as distinct answers.
+  (define best (make-hash))  ;; answer → certainty (best seen)
+  (for ([entry (in-list (append old new))])
+    (define answer (car entry))
+    (define certainty (cdr entry))
+    (define current (hash-ref best answer #f))
+    (when (or (not current) (eq? certainty 'definite))
+      (hash-set! best answer certainty)))
+  (for/list ([(answer certainty) (in-hash best)])
+    (cons answer certainty)))
 ```
 
 ## 5.4 Core Operations
@@ -1347,8 +1417,10 @@ test-wf-tabling-01.rkt:
   8. Empty table returns '()
   9. wf-all-mode-merge deduplicates correctly
  10. wf-all-mode-merge prefers 'definite over 'unknown
- 11. Integration: wf-table with run-to-quiescence
- 12. Integration: wf-table with wf-engine (end-to-end)
+ 11. wf-all-mode-merge: same var, different ground values, different certainties
+     (e.g., X=5 'definite + X=6 'unknown → both kept, keyed on answer not certainty)
+ 12. Integration: wf-table with run-to-quiescence
+ 13. Integration: wf-table with wf-engine (end-to-end)
 ```
 
 ## 5.7 Dependencies
@@ -1492,6 +1564,7 @@ Quantitative comparison of the stratified engine and WFLE on the same programs, 
 | BSP rounds | Observer round count |
 | Answer count | Length of result list |
 | Answer agreement | Set equality of 'definite answers |
+| Iterations to convergence | Count from `wf-iterate` loop (WFLE only) |
 
 ### 7.2.2 Test Programs
 
@@ -1506,6 +1579,14 @@ Quantitative comparison of the stratified engine and WFLE on the same programs, 
 | 3-stratum chain (20 preds) | Large | Stratifiable | Same answers, compare time |
 | Random graph (50 preds, 10% neg) | Large | Mixed | Characterize |
 
+**Iteration convergence analysis**: For each WFLE benchmark, record iterations-to-convergence alongside wall time. Expected bounds:
+- Positive-only programs: 1 iteration (bilattice trivially stable)
+- Stratifiable programs: 1-2 iterations (all NAF resolved on first pass)
+- Odd-cycle programs: 2-3 iterations (initial pass → bilattice update → stability check)
+- Complex mixed programs: characterize (should be ≤ 2n where n = negation-participating predicates)
+
+Pathological examples to test: long alternating negation chains (a :- not b. b :- not c. c :- not d. ...) and dense negative dependency graphs.
+
 ### 7.2.3 Benchmark Runner
 
 ```racket
@@ -1514,17 +1595,17 @@ Quantitative comparison of the stratified engine and WFLE on the same programs, 
 (define (benchmark-program program-name clauses facts goal query-vars)
   (define config (default-solver-config))
   ;; Run stratified
+  (define strat-config (solver-config-merge config (hasheq 'semantics 'stratified)))
   (define strat-start (current-inexact-milliseconds))
   (define strat-result
     (with-handlers ([exn:fail? (lambda (e) (list 'error (exn-message e)))])
-      (parameterize ([current-solver-mode 'stratified])
-        (stratified-solve-goal config store goal-name goal-args query-vars))))
+      (stratified-solve-goal strat-config store goal-name goal-args query-vars)))
   (define strat-time (- (current-inexact-milliseconds) strat-start))
   ;; Run well-founded
+  (define wf-config (solver-config-merge config (hasheq 'semantics 'well-founded)))
   (define wf-start (current-inexact-milliseconds))
   (define wf-result
-    (parameterize ([current-solver-mode 'well-founded])
-      (wf-solve-goal config store goal-name goal-args query-vars)))
+    (wf-solve-goal wf-config store goal-name goal-args query-vars))
   (define wf-time (- (current-inexact-milliseconds) wf-start))
   ;; Compare and report
   ...)
@@ -1753,6 +1834,20 @@ This evolution would serve:
 
 Prerequisites: the `Lattice` trait infrastructure, a safe API for propagator construction from Prologos, and a story for managing cell lifetimes. This is post-WFLE work — the internal-only design in Phases 1-7 is the right first step.
 
+## C.3 Incremental Re-Query
+
+The current design computes well-founded semantics from scratch on each `wf-solve-goal` call: fresh bilattice-vars, fresh propagator wiring, full convergence. For interactive development (REPL use), this may be expensive when re-running the same query after small program changes.
+
+The propagator infrastructure inherently supports incrementality — that's a core benefit of the architecture. But exploiting it for the WFLE requires:
+
+1. **Persistent bilattice networks**: cache the converged bilattice between queries, keyed by program version (similar to `current-strata-cache` in `stratified-eval.rkt`)
+2. **Retraction protocol**: when facts are added/removed, identify affected bilattice-vars and reset them to their initial state (⊥ for lower, ⊤ for upper), then re-converge. This is non-trivial because cell values are monotonic — retracting a fact requires a "reset" operation that the current propagator network doesn't support
+3. **Delta propagation**: only re-fire propagators whose inputs changed since the last query, rather than re-running the full solver
+
+The ATMS already provides a form of incremental truth maintenance for branching. The WFLE+ATMS composition would be the natural place to address incremental re-query, since ATMS worldview exploration already maintains multiple consistent states.
+
+This is genuine future work — not a concern for Phases 1-7, where the from-scratch approach is correct and sufficient.
+
 
 ---
 
@@ -1764,11 +1859,11 @@ Prerequisites: the `Lattice` trait infrastructure, a safe API for propagator con
 | 2. Bilattice Module | ~120 | 0 | 1 | ~20 |
 | 3. WF Propagator Patterns | ~250 | 0 | 1 | ~25 |
 | 4a. WF Engine Core | ~200 | ~20 | 1 | ~25 |
-| 5. Three-Valued Tabling | ~60 | 0 | 0 | ~12 |
+| 5. Three-Valued Tabling | ~60 | 0 | 0 | ~13 |
 | 4b. Engine + Tabling | ~50 | ~10 | 0 | ~8 |
 | 6. Test Suite (Literature) | ~410 | 0 | 3 | ~30 |
 | 7. Benchmark Comparison | ~250 | 0 | 2 | ~8 |
-| **Total** | **~1380** | **~35** | **8** | **~143** |
+| **Total** | **~1380** | **~35** | **8** | **~144** |
 
 Total estimated effort: Medium. The propagator infrastructure does most of the heavy lifting — the WFLE is primarily new propagator *patterns* and *wiring*, not new infrastructure.
 
