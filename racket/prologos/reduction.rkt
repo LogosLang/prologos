@@ -821,7 +821,10 @@
                    [(eq? ctor expr-generic-mul) (nat->expr (* na nb))]
                    [(eq? ctor expr-generic-lt)  (if (< na nb) (expr-true) (expr-false))]
                    [(eq? ctor expr-generic-le)  (if (<= na nb) (expr-true) (expr-false))]
+                   [(eq? ctor expr-generic-gt)  (if (> na nb) (expr-true) (expr-false))]
+                   [(eq? ctor expr-generic-ge)  (if (>= na nb) (expr-true) (expr-false))]
                    [(eq? ctor expr-generic-eq)  (if (= na nb) (expr-true) (expr-false))]
+                   [(eq? ctor expr-generic-mod) (nat->expr (if (zero? nb) na (remainder na nb)))]
                    [else (ctor a* b*)]))]
               ;; Non-Nat same type: the same-type iota rules in whnf will handle it.
               ;; Retry via whnf so the pattern-match iota rules fire.
@@ -1634,6 +1637,34 @@
     [(expr-generic-le (expr-posit64 a) (expr-posit64 b))
      (if (posit64-le? a b) (expr-true) (expr-false))]
 
+    ;; generic-gt (swap operands for posit — no dedicated gt? predicate)
+    [(expr-generic-gt (expr-int a) (expr-int b))
+     (if (> a b) (expr-true) (expr-false))]
+    [(expr-generic-gt (expr-rat a) (expr-rat b))
+     (if (> a b) (expr-true) (expr-false))]
+    [(expr-generic-gt (expr-posit8 a) (expr-posit8 b))
+     (if (posit8-lt? b a) (expr-true) (expr-false))]
+    [(expr-generic-gt (expr-posit16 a) (expr-posit16 b))
+     (if (posit16-lt? b a) (expr-true) (expr-false))]
+    [(expr-generic-gt (expr-posit32 a) (expr-posit32 b))
+     (if (posit32-lt? b a) (expr-true) (expr-false))]
+    [(expr-generic-gt (expr-posit64 a) (expr-posit64 b))
+     (if (posit64-lt? b a) (expr-true) (expr-false))]
+
+    ;; generic-ge (swap operands for posit)
+    [(expr-generic-ge (expr-int a) (expr-int b))
+     (if (>= a b) (expr-true) (expr-false))]
+    [(expr-generic-ge (expr-rat a) (expr-rat b))
+     (if (>= a b) (expr-true) (expr-false))]
+    [(expr-generic-ge (expr-posit8 a) (expr-posit8 b))
+     (if (posit8-le? b a) (expr-true) (expr-false))]
+    [(expr-generic-ge (expr-posit16 a) (expr-posit16 b))
+     (if (posit16-le? b a) (expr-true) (expr-false))]
+    [(expr-generic-ge (expr-posit32 a) (expr-posit32 b))
+     (if (posit32-le? b a) (expr-true) (expr-false))]
+    [(expr-generic-ge (expr-posit64 a) (expr-posit64 b))
+     (if (posit64-le? b a) (expr-true) (expr-false))]
+
     ;; generic-eq
     [(expr-generic-eq (expr-int a) (expr-int b))
      (if (= a b) (expr-true) (expr-false))]
@@ -1647,6 +1678,11 @@
      (if (posit32-eq? a b) (expr-true) (expr-false))]
     [(expr-generic-eq (expr-posit64 a) (expr-posit64 b))
      (if (posit64-eq? a b) (expr-true) (expr-false))]
+
+    ;; generic-mod (no Posit — modulo not meaningful for approximate types)
+    [(expr-generic-mod (expr-int a) (expr-int b))
+     (if (zero? b) e (expr-int (remainder a b)))]
+    ;; Rat mod: skip — Racket's remainder requires integer args
 
     ;; generic-negate (no Nat — excluded at type level)
     [(expr-generic-negate (expr-int a)) (expr-int (- a))]
@@ -1687,7 +1723,10 @@
     [(expr-generic-div a b) (reduce-generic-binary expr-generic-div a b)]
     [(expr-generic-lt a b) (reduce-generic-binary expr-generic-lt a b)]
     [(expr-generic-le a b) (reduce-generic-binary expr-generic-le a b)]
+    [(expr-generic-gt a b) (reduce-generic-binary expr-generic-gt a b)]
+    [(expr-generic-ge a b) (reduce-generic-binary expr-generic-ge a b)]
     [(expr-generic-eq a b) (reduce-generic-binary expr-generic-eq a b)]
+    [(expr-generic-mod a b) (reduce-generic-binary expr-generic-mod a b)]
     ;; Unary ops: reduce operand
     [(expr-generic-negate a) (reduce-generic-unary expr-generic-negate a)]
     [(expr-generic-abs a) (reduce-generic-unary expr-generic-abs a)]
@@ -2982,7 +3021,10 @@
     [(expr-generic-div a b) (expr-generic-div (nf a) (nf b))]
     [(expr-generic-lt a b) (expr-generic-lt (nf a) (nf b))]
     [(expr-generic-le a b) (expr-generic-le (nf a) (nf b))]
+    [(expr-generic-gt a b) (expr-generic-gt (nf a) (nf b))]
+    [(expr-generic-ge a b) (expr-generic-ge (nf a) (nf b))]
     [(expr-generic-eq a b) (expr-generic-eq (nf a) (nf b))]
+    [(expr-generic-mod a b) (expr-generic-mod (nf a) (nf b))]
     [(expr-generic-negate a) (expr-generic-negate (nf a))]
     [(expr-generic-abs a) (expr-generic-abs (nf a))]
     [(expr-generic-from-int t a) (expr-generic-from-int (nf t) (nf a))]

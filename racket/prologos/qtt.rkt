@@ -513,6 +513,24 @@
               (tu (expr-Bool) (add-usage u1 u2))
               (tu-error))]
          [(_ _) (tu-error)]))]
+    [(expr-generic-gt a b)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx b)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu t2 u2))
+          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
+              (tu (expr-Bool) (add-usage u1 u2))
+              (tu-error))]
+         [(_ _) (tu-error)]))]
+    [(expr-generic-ge a b)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx b)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu t2 u2))
+          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
+              (tu (expr-Bool) (add-usage u1 u2))
+              (tu-error))]
+         [(_ _) (tu-error)]))]
     [(expr-generic-eq a b)
      (let ([r1 (inferQ ctx a)]
            [r2 (inferQ ctx b)])
@@ -520,6 +538,15 @@
          [((tu t1 u1) (tu t2 u2))
           (if (and (equal? t1 t2) (concrete-numeric-type? t1))
               (tu (expr-Bool) (add-usage u1 u2))
+              (tu-error))]
+         [(_ _) (tu-error)]))]
+    [(expr-generic-mod a b)
+     (let ([r1 (inferQ ctx a)]
+           [r2 (inferQ ctx b)])
+       (match* (r1 r2)
+         [((tu t1 u1) (tu t2 u2))
+          (if (and (equal? t1 t2) (concrete-numeric-type? t1))
+              (tu t1 (add-usage u1 u2))
               (tu-error))]
          [(_ _) (tu-error)]))]
 

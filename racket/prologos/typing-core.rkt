@@ -825,10 +825,22 @@
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
             [j (numeric-join/warn! ta tb)])
        (if j (expr-Bool) (expr-error)))]
+    [(expr-generic-gt a b)
+     (let* ([ta (infer ctx a)] [tb (infer ctx b)]
+            [j (numeric-join/warn! ta tb)])
+       (if j (expr-Bool) (expr-error)))]
+    [(expr-generic-ge a b)
+     (let* ([ta (infer ctx a)] [tb (infer ctx b)]
+            [j (numeric-join/warn! ta tb)])
+       (if j (expr-Bool) (expr-error)))]
     [(expr-generic-eq a b)
      (let* ([ta (infer ctx a)] [tb (infer ctx b)]
             [j (numeric-join/warn! ta tb)])
        (if j (expr-Bool) (expr-error)))]
+    [(expr-generic-mod a b)
+     (let* ([ta (infer ctx a)] [tb (infer ctx b)]
+            [j (numeric-join/warn! ta tb)])
+       (if j j (expr-error)))]
 
     ;; Unary: T -> T
     [(expr-generic-negate a)

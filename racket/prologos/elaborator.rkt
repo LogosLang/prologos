@@ -1284,12 +1284,30 @@
        (cond [(prologos-error? ea) ea]
              [(prologos-error? eb) eb]
              [else (expr-generic-le ea eb)]))]
+    [(surf-generic-gt a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-generic-gt ea eb)]))]
+    [(surf-generic-ge a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-generic-ge ea eb)]))]
     [(surf-generic-eq a b loc)
      (let ([ea (elaborate a env depth)]
            [eb (elaborate b env depth)])
        (cond [(prologos-error? ea) ea]
              [(prologos-error? eb) eb]
              [else (expr-generic-eq ea eb)]))]
+    [(surf-generic-mod a b loc)
+     (let ([ea (elaborate a env depth)]
+           [eb (elaborate b env depth)])
+       (cond [(prologos-error? ea) ea]
+             [(prologos-error? eb) eb]
+             [else (expr-generic-mod ea eb)]))]
     [(surf-generic-negate a loc)
      (let ([ea (elaborate a env depth)])
        (if (prologos-error? ea) ea (expr-generic-negate ea)))]

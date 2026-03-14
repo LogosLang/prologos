@@ -339,11 +339,9 @@ solve-with default-config {:timeout 5000} (path "a" dest)
 ;; --- F1: is-goals (functional evaluation in clauses) ---
 ;; STATUS: WORKING (fixed — is-goal now evaluates functional expressions via nf)
 ;; NOTE: is-goals use nf (full normal form) to evaluate the functional expression.
-;; Supports both Nat (via `add`) and Int (via `plus`, `int+`).
-;; For Nat: `add` resolves to the Nat-specific primitive.
-;; For Int: use `plus` (generic trait-dispatched Add) or `int+` (parser keyword).
-;; Generic trait dispatch works because `plus` has a `spec [Add A]` constraint
-;; that inserts the correct trait dict at elaboration time.
+;; Supports Nat (via `add`), Int (via `plus`, `int+`), and generic operators (`+`).
+;; Generic operators (`+`, `-`, `*`, `/`, `mod`) dispatch at reduction time to
+;; the correct type-specific implementation — no trait dict needed.
 
 ;; F1a: Nat arithmetic in is-goals (via `add`)
 defr add-one-nat [?n ?result]
@@ -366,11 +364,24 @@ defr double-int [?n ?result]
 solve (double-int 5 r)
 ;; => [{:n_ 5, :r 10}]
 
+;; F1d: Int arithmetic in is-goals (via `+` — generic operator)
+defr add-one-generic [?n ?result]
+  &> (is result [+ n 1])
+
+solve (add-one-generic 5 r)
+;; => [{:n_ 5, :r 6}]
+
+;; F1e: Nat arithmetic in is-goals (via `+` — generic operator)
+defr add-one-nat-generic [?n ?result]
+  &> (is result [+ n 1N])
+
+solve (add-one-nat-generic 5N r)
+;; => [{:n_ 5N, :r 6N}]
+
 ;; --- F2: guard goals ---
 ;; STATUS: WORKING (fixed — guard wired through parser/elaborator, 1-arg and 2-arg forms)
-;; Supports both Nat (via `gt?`) and Int (via `ord-gt`, `int-lt`).
-;; For Nat: `gt?` is a Nat-specific primitive.
-;; For Int: use `ord-gt` (generic trait-dispatched Ord) or `int-lt` (parser keyword).
+;; Supports Nat (via `gt?`), Int (via `ord-gt`, `int-lt`), and generic operators (`>`).
+;; Generic operators (`>`, `>=`, `<`, `<=`) dispatch at reduction time.
 
 ;; F2a: Nat guard (via `gt?`)
 defr weighted-edge-nat [?from ?to ?weight]
@@ -395,6 +406,26 @@ defr positive-edge [?from ?to ?weight]
 
 solve (positive-edge from to w)
 ;; => [{:to "b", :w 3, :from "a"} {:to "d", :w 5, :from "c"}]
+
+;; F2c: Int guard (via `gt` — generic operator keyword)
+;; NOTE: In WS mode, `>` is an angle-bracket delimiter, so use `gt` keyword.
+defr weighted-edge-gen [?from ?to ?weight]
+  || "a" "b" 3
+     "b" "c" 0
+     "c" "d" 5
+
+defr positive-edge-gen [?from ?to ?weight]
+  &> (weighted-edge-gen from to weight) (guard [gt weight 0])
+
+solve (positive-edge-gen from to w)
+;; => [{:to "b", :w 3, :from "a"} {:to "d", :w 5, :from "c"}]
+
+;; F2d: Nat guard (via `gt` — generic operator keyword)
+defr positive-edge-nat-gen [?from ?to ?weight]
+  &> (weighted-edge-nat from to weight) (guard [gt weight 0N])
+
+solve (positive-edge-nat-gen from to w)
+;; => [{:to "b", :w 3N, :from "a"} {:to "d", :w 5N, :from "c"}]
 
 ;; --- F3: Multi-arity dispatch with | ---
 ;; STATUS: WORKING — multi-arity | variants dispatch correctly; arity-mismatched

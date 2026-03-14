@@ -60,7 +60,7 @@
     Quire32 q32-zero q32-fma q32-to
     Quire64 q64-zero q64-fma q64-to
     ;; Generic arithmetic operators
-    + - * / < <= = negate abs
+    + - * / < <= > >= = mod negate abs
     Symbol symbol-lit
     Keyword Char String
     Map map-empty map-assoc map-get nil-safe-get nil? map-dissoc map-size map-has-key? map-keys map-vals
@@ -1773,6 +1773,22 @@
                     [(prologos-error? b) b]
                     [else (surf-generic-le a b loc)]))
             (parse-application head-stx args loc))]
+       [(gt)
+        (if (= (length args) 2)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-generic-gt a b loc)]))
+            (parse-application head-stx args loc))]
+       [(ge)
+        (if (= (length args) 2)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-generic-ge a b loc)]))
+            (parse-application head-stx args loc))]
        [(eq)
         (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
@@ -1780,6 +1796,14 @@
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
                     [else (surf-generic-eq a b loc)]))
+            (parse-application head-stx args loc))]
+       [(mod)
+        (if (= (length args) 2)
+            (let ([a (parse-datum (car args))]
+                  [b (parse-datum (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-generic-mod a b loc)]))
             (parse-application head-stx args loc))]
 
        ;; Unary: (negate a), (abs a)

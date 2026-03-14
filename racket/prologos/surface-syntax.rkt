@@ -84,7 +84,10 @@
  (struct-out surf-generic-div)
  (struct-out surf-generic-lt)
  (struct-out surf-generic-le)
+ (struct-out surf-generic-gt)
+ (struct-out surf-generic-ge)
  (struct-out surf-generic-eq)
+ (struct-out surf-generic-mod)
  (struct-out surf-generic-negate)
  (struct-out surf-generic-abs)
  ;; Generic conversion surface forms
@@ -579,10 +582,14 @@
 (struct surf-generic-from-int (target-type arg srcloc) #:transparent)
 (struct surf-generic-from-rat (target-type arg srcloc) #:transparent)
 
-;; Comparison: (< a b), (<= a b), (= a b)
+;; Comparison: (< a b), (<= a b), (> a b), (>= a b), (= a b)
 (struct surf-generic-lt (a b srcloc) #:transparent)
 (struct surf-generic-le (a b srcloc) #:transparent)
+(struct surf-generic-gt (a b srcloc) #:transparent)
+(struct surf-generic-ge (a b srcloc) #:transparent)
 (struct surf-generic-eq (a b srcloc) #:transparent)
+;; Modulo: (mod a b) → T -> T -> T
+(struct surf-generic-mod (a b srcloc) #:transparent)
 
 ;; ========================================
 ;; Posit8 surface forms (8-bit posit, es=2, 2022 Standard)

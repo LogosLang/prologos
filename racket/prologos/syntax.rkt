@@ -246,7 +246,10 @@
  (struct-out expr-generic-div)
  (struct-out expr-generic-lt)
  (struct-out expr-generic-le)
+ (struct-out expr-generic-gt)
+ (struct-out expr-generic-ge)
  (struct-out expr-generic-eq)
+ (struct-out expr-generic-mod)
  (struct-out expr-generic-negate)
  (struct-out expr-generic-abs)
  ;; Generic conversion operators (type-directed)
@@ -869,7 +872,11 @@
 ;; Binary comparison: T -> T -> Bool
 (struct expr-generic-lt (a b) #:transparent)
 (struct expr-generic-le (a b) #:transparent)
+(struct expr-generic-gt (a b) #:transparent)
+(struct expr-generic-ge (a b) #:transparent)
 (struct expr-generic-eq (a b) #:transparent)
+;; Binary modulo: T -> T -> T
+(struct expr-generic-mod (a b) #:transparent)
 ;; Unary: T -> T
 (struct expr-generic-negate (a) #:transparent)
 (struct expr-generic-abs (a) #:transparent)
@@ -1015,7 +1022,8 @@
       (expr-rat-lt? x) (expr-rat-le? x) (expr-rat-eq? x)
       (expr-from-int? x) (expr-rat-numer? x) (expr-rat-denom? x)
       (expr-generic-add? x) (expr-generic-sub? x) (expr-generic-mul? x) (expr-generic-div? x)
-      (expr-generic-lt? x) (expr-generic-le? x) (expr-generic-eq? x)
+      (expr-generic-lt? x) (expr-generic-le? x) (expr-generic-gt? x) (expr-generic-ge? x)
+      (expr-generic-eq? x) (expr-generic-mod? x)
       (expr-generic-negate? x) (expr-generic-abs? x)
       (expr-generic-from-int? x) (expr-generic-from-rat? x)
       (expr-Symbol? x) (expr-symbol? x)
