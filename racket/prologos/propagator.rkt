@@ -53,6 +53,9 @@
  net-contradiction?
  net-quiescent?
  net-fuel-remaining
+ ;; Descending cells (WFLE Phase 1)
+ net-new-cell-desc
+ net-cell-direction
  ;; Widening support (Phase 6a)
  net-set-widen-point
  net-widen-point?
@@ -117,6 +120,8 @@
 ;;   Per-cell sub-cell assignments for structural decomposition. (Phase 4c)
 ;; pair-decomps: champ-root : (cons cell-id cell-id) → #t
 ;;   Per-pair dedup: prevents duplicate sub-propagators between the same pair. (Phase 4c)
+;; cell-dirs: champ-root : cell-id → 'ascending | 'descending
+;;   Direction registry for cells. Absent entries default to 'ascending. (WFLE Phase 1)
 (struct prop-network
   (cells
    propagators
@@ -129,7 +134,8 @@
    contradiction-fns
    widen-fns
    cell-decomps
-   pair-decomps)
+   pair-decomps
+   cell-dirs)
   #:transparent)
 
 ;; ========================================
@@ -216,7 +222,8 @@
                 champ-empty    ;; contradiction-fns
                 champ-empty    ;; widen-fns
                 champ-empty    ;; cell-decomps (Phase 4c)
-                champ-empty))  ;; pair-decomps (Phase 4c)
+                champ-empty    ;; pair-decomps (Phase 4c)
+                champ-empty))  ;; cell-dirs (WFLE Phase 1)
 
 ;; ========================================
 ;; Cell Operations
@@ -244,6 +251,36 @@
                         h id contradicts?)])
        net*)
    id))
+
+;; Create a new descending cell (starts at top, refines downward via meet).
+;; top-value: the lattice top (initial value)
+;; meet-fn: (old-val new-val -> met-val) — the lattice meet (used as merge-fn)
+;; contradicts?: optional (val -> Bool) — for descending, typically (lambda (v) (eq? v bot))
+;; Returns: (values new-network cell-id)
+(define (net-new-cell-desc net top-value meet-fn [contradicts? #f])
+  (define id (cell-id (prop-network-next-cell-id net)))
+  (define cell (prop-cell top-value champ-empty))
+  (define h (cell-id-hash id))
+  (define net*
+    (struct-copy prop-network net
+      [cells (champ-insert (prop-network-cells net) h id cell)]
+      [merge-fns (champ-insert (prop-network-merge-fns net) h id meet-fn)]
+      [cell-dirs (champ-insert (prop-network-cell-dirs net) h id 'descending)]
+      [next-cell-id (+ 1 (prop-network-next-cell-id net))]))
+  (values
+   (if contradicts?
+       (struct-copy prop-network net*
+         [contradiction-fns
+          (champ-insert (prop-network-contradiction-fns net*)
+                        h id contradicts?)])
+       net*)
+   id))
+
+;; Query a cell's direction. Returns 'ascending (default) or 'descending.
+(define (net-cell-direction net cid)
+  (define dir (champ-lookup (prop-network-cell-dirs net)
+                             (cell-id-hash cid) cid))
+  (if (eq? dir 'none) 'ascending dir))
 
 ;; Read a cell's current value.
 ;; Errors on unknown cell-id.
