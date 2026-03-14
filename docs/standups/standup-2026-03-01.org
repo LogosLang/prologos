@@ -1,0 +1,953 @@
+#+TITLE: Standup — 2026-03-01
+#+DATE: 2026-03-01
+
+
+* Yesterday
+
+** Test Harness Re-Engineering — Complete
+
+Major overhaul of the test runner and test file organization:
+
+- Fixed =raco= resolution: resolve from running racket binary, not PATH (commit =412328b=)
+- Generalized racket binary path resolution across all tool files (commit =6d2fe77=)
+- Split 8 whale test files (>30s) into =-01=/=-02= halves for better parallelism (commit =718cae5=)
+- Converted 14 whale test files to shared fixture pattern (commit =0727fd6=)
+- Re-engineered test runner with batch workers: 10 workers share prelude, ~4x faster —
+  225 files in ~110s vs ~450s previously (commit =5c8078c=)
+- Fixed test isolation for =test-functor-ws= and =test-spec= (commit =649251d=)
+
+** Literate Book System — Phases 1-7 Complete
+
+Full build pipeline for the standard library book:
+
+- *Phase 1*: Tangler + first chapter (equality) — proof of concept (commit =ce12ac7=)
+- *Phase 2*: Weaver prototype (HTML rendering) + dark mode toggle (commits =3e88cd2=, =076a13b=)
+- *Phase 3*: All 12 initial chapters written (commits =396bfe5=, =c208357=)
+- *Phase 4*: 10 new chapters covering 65 remaining modules (commit =0051176=)
+- *Phase 5*: Spec pre-scan for =defn=-before-=spec= ordering (commit =49be0b8=)
+- *Phase 5 Extension*: Free ordering of declarations within modules — three-pass
+  pre-registration (Pass 0: no-dep forms, Pass 1: spec/impl), declaration-first
+  output ordering via stable partition (commit =53223ca=)
+- *Phase 5c*: Form-level dependency analysis tool (=tools/form-deps.rkt=, ~300 LOC) —
+  zero module-level cycles in stdlib DAG (commit =b17555c=)
+- *Phase 6*: Prelude generation from book (=PRELUDE= manifest, =gen-prelude.rkt=),
+  automated drift check in test runner (commit =7e5e034=)
+- *Phase 7*: Module container cards + regex-based syntax highlighting with 7 token
+  categories, light/dark themes (commit =05c9c21=)
+
+22 chapters, 121 modules total. Tangler verified, weaver renders HTML.
+
+** Reducible / Layer 1 Collection Generics — Complete
+
+Implemented the first layer of the three-layer collection generics design:
+
+- =Reducible= trait (left-fold) + =Buildable.conj= extension (commits =c6372c6= through =6cc204f=)
+- 4 Reducible instances (List, PVec, Set, LSeq) — each wraps native fold primitives
+- 4 Buildable instances extended with =conj= (cons/pvec-push/set-insert/lseq-cell)
+- Collection bundle updated (4 traits), generic ops rewritten (=reduce=, =length=, =any?=, =all?=, =find=)
+- 26 new tests in =test-reducible.rkt=
+- Prelude expanded (87 → 92 entries)
+
+** Design Discussions
+
+- *Collection Generics Layers 1-3*: Three-layer architecture for eliminating LSeq intermediary.
+  Layer 1 (Fold+Build) implemented. Layer 2 (trait-level specialization) and Layer 3
+  (transducer fusion) deferred. (commit =cdd6e99=)
+- *Clause-Style Constraint Matching*: Prolog-style clause ordering applied to constraint
+  resolution — the function declares alternative constraint signatures, resolver tries
+  top-to-bottom. Design direction chosen for Layer 2 dispatch.
+- *Stdlib Consolidation Design*: Rewrote design doc — standalone source files with collapsed
+  namespaces, not book-as-source. 104 core files → 18 consolidated. (commit =3ac2394=)
+
+** Standard Library Consolidation (Phases 1-7) — Complete
+
+Consolidated 104 core =.prologos= library files into 19 standalone files.
+Seven phases: trait consolidation, data type consolidation, instance consolidation,
+collection + generic-ops, lattice hierarchy, refined numerics, and final cleanup.
+Key pattern: each consolidated file retains its own =ns= declaration and is
+independently compilable. Commits =7941a8b= through =fb130cb=.
+
+** Literate Book System — Phase 8 Book Chapter Updates — Complete
+
+Updated 16 book chapters to reference consolidated module names. Established the
+pattern: chapter preamble (book-only prose, discarded by tangler) + =module=
+directives with standalone file content verbatim. Merged =foldable= +
+=seqable-buildable= chapters into unified =collection-traits= chapter.
+
+- 41 modules from 21 chapters (down from ~123 modules / 22 chapters)
+- 18 tangler-verified OK matches for consolidated core modules
+- 15 test files updated for consolidated module requires
+- Commits: =8dc559c= through =87d9c3f= (9 commits)
+
+** Metrics Summary
+
+| Metric     | Start of Day | End of Day |
+|------------+--------------+------------|
+| Tests      |         4583 |       4664 |
+| Test files |          215 |        227 |
+| Commits    |          ~40 |            |
+
+-----
+
+* Carry-Forward
+
+** Ongoing
+
+- [ ] Relational language implementation (Phase 7 scaffolding done)
+- [ ] Collections: Stage I transducer integration
+- [ ] Extended spec: Phase 2+ (example checking, property testing, refinement types)
+- [ ] HKT partial application for =Map K= as =Type -> Type= constructor
+- [ ] Homoiconicity Phase IV
+- [ ] =schema= top-level form implementation
+- [ ] Editor Assisted Interactive Programming design
+- [ ] Clause-style constraint matching design doc (Layer 2 dispatch)
+
+-----
+
+* Today (Mar 1)
+
+** I/O Library Design
+*** 🗣️ IO Library Design Research?
+#+begin_src quote
+Following our Design Methodology (`/Users/avanti/dev/projects/prologos/docs/tracking/principles/DESIGN_METHODOLOGY.md`), I'd like us to engage in research and design phase/discussion.
+
+We are to research and design an I/O library for prologos. Ideally, it would be pure prologos (not just a bridge to our host, Racket--so, not following the pattern of our string library)--but something "portable".
+
+The major intent for the I/O library is to provide support for being able to read other files from Path, reading them, writing out to files, etc. We would like this to be able to support a demonstration of our relational language, reading in csv or sqlite database, doing schema validation and graph querying across different db tables, etc.
+
+We are to consider best practices across I/O libraries across language design ecosystems (research), while also considering The Prologos Way (our unique strengths). One of those unique strengths of Prologos is the use of linear types. We should consider convenience functions (`with-open`, for example, and others) that guarantee linear usage in an I/O context.
+
+The output of this session is a design doc in our `tracking` directory, through and about which we'll continue the design process.
+#+end_src
+*** [[../tracking/2026-03-01_1200_IO_LIBRARY_DESIGN.md][IO Library Design]]
+*** Backtrack design needed for Capability Types, needed for IO considerations ->
+** Capabilities as Types
+*** 🗣️ Linear Capabilities
+#+begin_src quote
+Excellent findings! I think uncovers a lot of backtracking design work that needs to go through before we make an IO library workable.
+
+Session Types
+We have yet to go through an in-depth design cycle on the `session` language, and the various blocking/non-blocking send/receive (and dependent versions of those as well) syntax that would be incorporated in that design. I have some personal notes and conversations on the design of such, not all of which has been captured in this project yet. This is a separate design effort that needs to be addressed later. (Probably before we go further with considerations on an IO Library.)
+
+Linear Capabilities
+I'd like capability-based mechanisms to be a first-class model integral to Prologos. Linear types and session types makes this expressible at the type level, checked at compile time. Let's add this idea to our principles. We want Prologos to be capability-secure by design, easily expressible through our unique type system.
+
+I have been much inspired by Mark Miller's work in this field--someone whom I know personally. For example on the E language (and his work on the ECMAscript for eventual send, etc). I'm also inspired by SEL4 microkernel designed (a fork of which is deployed as SecureOS on every Apple device running their Secure Enclave).
+
+Designing a fine-grained capability security into our language--with it being as low-friction and low-burden as much as possible. I think QTT is a good example of being a light-weight linear type, that does a lot of lifting with only three symbols... is a good example (in comparison to borrow checking, or the Pony type system--which was incredible design, but difficult conceptually to adopt).
+
+I would like to discuss this line of design, around Linear Capabilities mostly (and a little about conceptions of Session Types--but not their specific design at the moment). I think having greater clarity on this topic will inform future design sessions around `type`.
+
+In particular, I would like to consider fine-grained capability support, and critique and contrast this, with the World token mechanism proposal. I would like to deeply consider the ergonomics of this layer... is there a way to capture incidental complexity, similar to how we manage dependent types as metadata on `spec` and `functor` etc.?
+
+Let's have a discussion. Respond only.
+#+end_src
+*** 🤖
+#+begin_src markdown
+  This is exactly the right kind of pushback. Let me engage with it seriously.
+
+## The World Token Was the Wrong Starting Point
+
+Looking back at the design doc through the lens you're describing, I started from Mercury/Clean's model and worked forward. But Mercury and Clean don't have session types, and they don't have QTT. They needed the World token *because they lacked the richer machinery we already have*. Starting from their model is reasoning from a deficit we don't share.
+
+The World token is a single coarse-grained capability: "you can do I/O." It's the equivalent of giving every function `root` access because the OS only has one permission level. Mark Miller's entire body of work is about why that's the wrong model — the principle of least authority (POLA) demands that you hand out *exactly* the capabilities needed, nothing more.
+
+## Capability Security as a Type-Level Concern
+
+What you're describing — fine-grained capabilities, checked at compile time via QTT + session types — is more fundamental than an I/O library design. It's an *operating system model expressed in the type system*.
+
+Let me think about what this looks like concretely.
+
+In the E language and object-capability model, the key insight is: **an object reference IS the capability**. You can't forge references, you can only receive them by being handed one. Access control isn't a separate ACL system bolted on — it's intrinsic to how references propagate through the system.
+
+In Prologos, the analogue would be: **a linear value IS the capability**. A `:1` value can't be duplicated (no ambient authority amplification), can't be forged (only created by the system or handed to you), and must be consumed (no dangling permissions). QTT already gives us the three levels:
+
+- `:0` — you can *name* the capability (for type-level reasoning) but not *use* it
+- `:1` — you have it, you must use it exactly once, you can't share it
+- `:w` — unrestricted (this is the "public" or "ambient" capability — use carefully)
+
+This is already more expressive than most capability systems. The `:0` multiplicity is particularly interesting — it's a *phantom capability*, a proof that something exists without granting access. That's exactly what you want for audit trails and provenance without authority leakage.
+
+## Fine-Grained Capabilities vs. World Token
+
+Let me contrast these concretely:
+
+**World token (coarse)**:
+
+read-file  : World :1 -> Path -> <World * Result String IOError>
+write-file : World :1 -> Path -> String -> <World * Result Unit IOError>
+connect-db : World :1 -> Path -> <World * Result Connection IOError>
+
+
+Every function gets the same `World`. A function that only needs to read one file could secretly write to another, connect to a database, launch missiles. The type system says "does I/O" but not *what* I/O.
+
+**Fine-grained capabilities**:
+
+read-file  : ReadCap :1 -> Path -> <ReadCap * Result String IOError>
+write-file : WriteCap :1 -> Path -> String -> <WriteCap * Result Unit IOError>
+connect-db : DbCap :1 -> Path -> <DbCap * Result Connection IOError>
+
+
+Now the type signature is a *security policy*. A function that takes `ReadCap` provably cannot write or connect to a database. The principle of least authority is enforced by the type checker.
+
+But this raises the ergonomics question you're probing: isn't threading `ReadCap` through every function call painful?
+
+## The Ergonomics Challenge — Learning from QTT
+
+Your analogy to QTT is incisive. QTT does enormous lifting with three symbols (`:0`, `:1`, `:w`) because it's **metadata on things you're already writing**. You don't write separate linearity annotations — you annotate the binders you already have. The cognitive load is marginal because it piggybacks on existing syntax.
+
+The question is: can capability passing follow the same pattern? Can we make capabilities metadata on something you're already writing, rather than extra parameters you thread?
+
+Here's a thought. What if capabilities are metadata on *modules*, not on individual function calls?
+
+```prologos
+ns my-app
+  :caps [Fs :read, Db :connect]     ;; this module's capability requirements
+
+;; Inside this module, read-file and connect-db just work
+;; No capability threading in function signatures
+defn process-data [path db-path]
+  let data = [read-file [path path]]
+  let conn = [connect [path db-path]]
+  ...
+```
+
+The `:caps` declaration is like a session type preamble — it states what capabilities this module needs. The compiler verifies that the caller provides them. But individual functions within the module don't thread capabilities manually.
+
+This is analogous to how `ns foo` auto-imports the prelude. The capability requirements are declared once and flow through implicitly.
+
+**But** — and this is where the OCaml Eio model is instructive — you lose granularity. If the module declares `:caps [Fs :read, Fs :write]`, every function in that module has both capabilities, even if most only need read. We've reintroduced ambient authority at the module level.
+
+## A Middle Path: Capability Parameters as Implicit Arguments
+
+What if capabilities use the same mechanism as trait constraints — implicit dictionary passing?
+
+```prologos
+spec read-file {Fs : ReadCap} : Path -> Result String IOError
+spec write-file {Fs : WriteCap} : Path -> String -> Result Unit IOError
+```
+
+The `{Fs : ReadCap}` is an implicit erased binder — just like `{A : Type}` or `{Eq A}`. The capability is resolved by the trait resolver at the call site. The caller must have the capability in scope; if they don't, it's a type error.
+
+This is low-friction in the same way trait constraints are. You don't manually thread `ReadCap` — the compiler resolves it. And the capability *is visible in the spec* — so you can read a function's security policy from its type signature.
+
+```prologos
+;; This function's type says exactly what it can do:
+spec process-data {Fs : ReadCap} {Db : ConnectCap} 
+  : Path -> Path -> Result Report IOError
+
+;; This function only reads — you can tell from the type:
+spec summarize {Fs : ReadCap} : Path -> Result Summary IOError
+
+;; This function is pure — no capabilities at all:
+spec transform : List String -> Report
+```
+
+The capability requirements propagate upward through the call chain, exactly like trait constraints do. A function that calls `read-file` automatically requires `ReadCap`. A function that calls both `read-file` and `connect-db` requires both. The compiler infers this.
+
+And here's where it connects to session types: a *session* can declare what capabilities each endpoint is granted:
+
+```prologos
+session FileService
+  ;; server has ReadCap + WriteCap
+  ;; client receives ReadCap only (least authority)
+  ...
+```
+
+## The SEL4 / Capability Kernel Analogy
+
+seL4's insight is that capabilities are *the only way to name a kernel object*. There's no global namespace. You can't say "open file /etc/passwd" — you can only say "use this capability I was handed."
+
+In Prologos, the analogue would be: I/O functions don't take `Path` (a global name) — they take a capability that *includes* the path authority:
+
+```prologos
+;; A FileCap is not just "can read" — it's "can read THIS specific file/directory"
+data FileCap : Path -> Type
+
+spec read-file : FileCap p :1 -> Result String IOError
+```
+
+Now `FileCap` is *indexed by the path it grants access to*. Dependent types make the capability's scope visible in the type. A `FileCap (path "/tmp")` grants access to `/tmp` and nothing else. This is exactly seL4's model, expressed in the type system.
+
+This is where Prologos's unique combination genuinely offers something no other language does: **dependent types + linear types + session types = capability security with compile-time verification of authority scope**.
+
+## What I Think the Design Doc Should Become
+
+The I/O library design doc is premature. What needs to come first is:
+
+1. **A Capability Security principles document** — articulating POLA, the E/seL4 model, and how QTT + dependent types + session types express it. This becomes a principle in `LANGUAGE_VISION` or its own principles doc.
+
+2. **A design cycle on capabilities as implicit parameters** — working through the ergonomics of `{Fs : ReadCap}` vs. module-level `:caps` vs. explicit threading. What's the QTT-level lightweight notation that makes this low-burden?
+
+3. **Session types design** (as you noted — a separate effort, probably prerequisite) — because session types govern the *protocols* of capability granting and I/O sequencing.
+
+4. **Then** the I/O library falls out naturally as an *application* of the capability system, not a design in its own right.
+
+The I/O library research is still valuable — it maps the problem space and identifies what we need. But the design doc's §4 (the actual type designs) should be rewritten once the capability model is clear.
+
+## The Open Question I'd Put Back to You
+
+The implicit-parameter model (`{Fs : ReadCap}`) is the lightest-weight mechanism I can see that preserves fine-grained authority in function signatures. But it has a tension: implicit parameters are `:0` (erased) by default in our system. Capabilities arguably should be `:1` (linear) — you should have to *give up* a capability, not just *mention* it.
+
+Is there a middle ground? Perhaps capabilities are `:0` (erased, compile-time-only proof) for *authority checking*, but `:1` (linear, runtime) for *authority transfer*? That is: proving you *have* a capability costs nothing at runtime (erased), but *handing* a capability to someone else is a linear operation (the compiler tracks delegation chains).
+
+That would mirror seL4 exactly: using a capability doesn't consume it (you keep your reference), but minting a *derived* capability (with reduced authority) is a tracked operation.
+
+I think this distinction — and whether QTT's three multiplicities are sufficient to express it, or whether we need something richer — is the core design question for the capability layer.
+
+
+
+
+
+## Response to Capability Discussion
+
+### On the Ordering
+
+You're right that the I/O library design jumped ahead. The dependency chain is:
+
+1. **Capability Security model** (principles-level)
+2. **Session Types design** (language-level — prerequisite for protocol-governed I/O)
+3. **I/O library** (application of 1 + 2)
+
+The I/O research remains useful as a survey of the problem space, but the §4 type designs are premature. They should be rewritten once the capability model is settled.
+
+### On Implicit Capabilities — Refinement
+
+The `{Fs : ReadCap}` implicit parameter model has the right ergonomic shape but needs refinement on what "implicit capability" means mechanically.
+
+In our trait system, `{Eq A}` means: "there exists an `Eq` instance for `A`, resolve it from the instance registry." The compiler finds the dictionary and passes it. The user never threads it.
+
+For capabilities, `{Fs : ReadCap}` would mean: "there exists a `ReadCap` in the caller's capability environment." But where does the capability *come from*? Trait instances come from `impl` declarations — they're globally available facts. Capabilities are the opposite: they must be *explicitly granted*, never ambient.
+
+This is the fundamental tension: **traits are ambient (any code can use `Eq Int`), but capabilities must be non-ambient (only code explicitly granted `ReadCap` can use it).**
+
+So the resolution mechanism is different. Traits resolve from a global registry. Capabilities resolve from a *lexical scope* — you have a capability only if someone handed it to you in your call chain.
+
+This actually maps to a pattern we already have: **function parameters**. A capability you receive as a parameter is lexically scoped. The question is whether we can make the *passing* implicit while keeping the *granting* explicit.
+
+Here's a sketch:
+
+```prologos
+;; Main entry point — capabilities are granted here
+defn main [!fs : Fs, !net : Net]    ;; system grants these at startup
+  let report = [process-data (path "/data") (path "/api")]
+  [write-file (path "/out/report.txt") report]
+
+;; process-data needs Fs (read) and Net — compiler infers from body
+spec process-data {Fs : ReadCap} {Net : HttpCap}
+  : Path -> Path -> Result Report IOError
+defn process-data [data-path api-path]
+  let csv-data = [read-file data-path]           ;; uses ReadCap
+  let api-data = [http-get api-path "/endpoint"]  ;; uses HttpCap
+  [build-report csv-data api-data]
+
+;; build-report is pure — no capabilities needed, visible in type
+spec build-report : CsvData -> ApiData -> Report
+```
+
+
+
+The capabilities propagate downward through the call chain (from `main` to `process-data`), are resolved implicitly (like trait dictionaries), but are only available if explicitly granted at the entry point. The type signature of every function is a capability manifest — you can read exactly what authority it requires.
+
+On `:0` for Authority Checking vs `:1` for Authority Transfer
+This distinction is sharp and I think correct. Let me formalize it:
+
+-- `:0` (erased) capability — a compile-time proof that you have authority. The type checker verifies it, but no runtime token exists. This is the common case: `read-file` needs proof you have `ReadCap`, but doesn't consume it. You can call `read-file` many times with the same `ReadCap`. This is like using an seL4 capability — invoking it doesn't destroy it.
+
+-- `:1` (linear) capability — a runtime token representing transferable authority. Handing a ReadCap `:1` to another function gives away your read access. This is seL4's capability transfer (or E's eventual-send of a capability reference). You can also attenuate — derive a weaker capability from a stronger one:
+
+;; Attenuation: derive a read-only cap from a read-write cap
+spec attenuate-read : FsCap :1 -> <ReadCap :1 * FsCap :1>
+
+Wait — that gives back both, which means we're duplicating. Linear attenuation would be:
+
+;; Attenuate: consume full cap, produce read-only cap (irreversible)
+spec attenuate-read : FsCap :1 -> ReadCap :1
+
+This is capability narrowing — you give up full access and receive restricted access. The linear type ensures you can't keep the original. This is a powerful pattern that no other language I know of expresses at the type level.
+
+:w (unrestricted) capability — ambient authority. This is what we want to avoid for security-sensitive capabilities. But it's appropriate for things that genuinely should be universally available (e.g., PureCap — the capability to perform pure computation, which everything has).
+So QTT's three multiplicities map precisely to three capability modes:
+
+QTT	Capability Meaning	seL4 Analogue
+:0	Compile-time authority proof (erased)	Capability slot exists but is type-checked only
+:1	Transferable, consumable authority	Capability transfer / delegation
+:w	Ambient authority (use sparingly)	Global objects (like the idle thread cap)
+The default for capability parameters in specs would be :0 — compile-time proof, no runtime cost. You opt into :1 only when you need to transfer or attenuate authority.
+
+On Hiding Incidental Complexity
+The spec/functor metadata model is the right analogy. Today, dependent types are "incidental complexity" that users encounter only when they read spec signatures:
+
+spec map {A B : Type} {C : Type -> Type} {Foldable C} {Buildable C}
+  : [A -> B] -> C A -> C B
+
+Most users write defn map [f xs] ... and never think about {Foldable C}. The implicit resolution machinery handles it.
+
+Capabilities should work the same way. Most users write:
+
+defn process [path]
+  let data = [read-file path]
+  [transform data]
+
+And the compiler infers that process requires {Fs : ReadCap}. The user never writes it unless they want to be explicit (or want to read the inferred signature for audit purposes).
+
+The compiler is the capability auditor. It computes the capability closure of every function — the full set of capabilities transitively required. This is visible on demand (like inferred types) but not syntactically required.
+
+The incidental complexity — "which capabilities does this code need?" — is managed the same way we manage "which trait constraints does this code need?" — by inference.
+
+Where This Gets Interesting: Capability Composition
+Capabilities should compose the way traits compose — via bundles:
+
+;; Fine-grained capabilities
+trait ReadCap        ;; can read files
+trait WriteCap       ;; can write files  
+trait HttpCap        ;; can make HTTP requests
+trait DbCap          ;; can connect to databases
+
+;; Composite capabilities (bundles)
+bundle FsCap = ReadCap + WriteCap
+bundle NetCap = HttpCap
+bundle AllIO = FsCap + NetCap + DbCap
+
+And capability attenuation is subtyping: if you have FsCap, you can pass it where ReadCap is needed (but not vice versa). This is our existing subtype mechanism applied to capabilities.
+
+What Needs to Happen Next
+I think the design doc should be updated to:
+
+Retitle the I/O section as preliminary/research — the type designs in §4 are placeholders pending the capability model
+Add a new section (or separate doc) on the Capability Security model — articulating POLA, the :0/:1/:w mapping, implicit resolution, and the main as authority root
+Flag session types as a prerequisite — the I/O protocol layer (Phase 5-6 in the current doc) requires session types, which need their own design cycle
+Identify the first concrete deliverable — probably: capability traits, implicit capability resolution through the existing trait solver, and a proof-of-concept read-file that requires {Fs : ReadCap} at the type level
+The core research question is: can our existing implicit argument resolution (the trait solver) serve as the capability resolution engine, with the constraint that capabilities are lexically scoped (not globally registered)? If yes, the implementation is lighter than it appears. If no, we need a separate resolution mechanism.
+
+
+
+
+
+#+end_src
+
+*** [[../tracking/principles/CAPABILITY_SECURITY.md][Design Capabilities Principles]] (👈 doc linked)
+*** 🗣️ Capabilities Composition as Union Types, Attenuation as Subtypes
+
+#+begin_src quote
+I've read through the principles.
+
+  Capabilities on types ARE constraints, so the comparison to `trait` is apt. But capabilities MUST default to either `:0` or `:1`--even though ambient authority is or should be expressible as `:w`, it should be discouraged (a compiler /warning/).
+
+  This different treatment is at tension for the purposes of trait. (a `:w` on a trait shouldn't have to be a copmiler warning--not unsafe)
+
+  One incorrect thing in the principles document, is the discussion of composite capabilities as bundles: Bundles are inherently refinements on types--narrowing the possibility space--"contraction" in logical terms.
+
+  Composit capabilities are "weakening"--they relax the constraints of what a capability can be. Composit capabilities are inherently a set uinion; and they would need a different expression than `bundle`. In fact, they could just be a union type on capability types. This should be corrected for in the document.
+
+  Attenuation is subtyping. That's a correct analogue. Whatever this subtype is, it's a subset (⊂) in set theoretic terms, of it's supertype: `subtype ReadCap ReadWriteCap`✔️
+
+  Let's correct these errors, then let's go back and do a fresh research and design phase following our methodologies, on Capabilities as Types. For context let's take what we have of our corrected principles, and recent conversations. You may consult outside research (seL4, Mark Miller's works, Fuchsia, etc), but stay grounded in the direction of our conversation and documents, focusing on the unique capabilities that our type system has and can express.
+
+  The outcome for this session is a design doc on Capabilities as Types in our `tracking` directory, over and about which we'll engage in design conversations to follow.
+
+
+#+end_src
+*** [[../tracking/2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md][Capabilities as Types: Design Document]]
+*** 🗣️ Capability Inference on LE
+#+begin_src quote
+  I'd be curious to hear what the cost/benefit critique would be to including our lattice-based propagator-network/Logic Engine would be...... §3.2 Gap 3; §4.6. I know our present type inference was rebuilt on top of this, so maybe it's implicit in the concern already. But I'm just curious to hear more of what this looks like from our Logic Engine's perspective, especially concerning "backward propation through call graph"
+
+
+Addressing some points:
+
+§4.1: I was also thinking of introducing the keyword `capability`, and envisioning it having it's own metadata fields just like `trait` or `spec`. I don't know how I /feel/ about it desurgaring to `trait`, however... it's very much a constraint on types, like `trait` is... but it has a few of it's own considerations (no global store, different default qtt type, doesn't need the same fields considered on trait, may want to extend in different ways that don't make sense on `trait`, such as dependent-type capabilities (different keywords needed, much like `spec`)...)
+
+  We also want to support overriding the :0 for linear types. I'm thinking a keyword `:kind` with possible values: (:erased :linear :ambient :0 :1 :w), where the :erased :linear :ambient would just map to their qtt types. I'm unsure of `:kind` as the best keyword.
+
+  But it seems we'll mostly ever want a :0 on a capability type, override on the type signature in `spec`? So not sure what utility that gives us. (Is that right?)
+
+
+§4.3 In `type`... I want to reserve `=` exclusively for the operation `unify`--take these two partial datastructures, and fill in each-other's missing pieces. For binding-value asignment-separators `:=` is prefered (looks more arrow-like "<-"). Just a small note, maybe we should put in prefered syntax in principles. Something to audit/correct for later. Small note, not a big deal.
+  This is also present in later sections in examples with `let` bindings.
+
+
+§4.4 I'm almost thinking of wanting to have a default syntax for subtying using infix `<:`
+
+  `subtype FsCap SysCap` =>
+  `FsCap <: SysCap`
+
+  Reads much more cleanly, and can be chained. This does break the /expectation/ of operator-first syntax, but can be read out canonically to still preserve homoiconicity...
+  I think this should be noted for a future session in deferred... unless, do we already support this syntax?? Actually, I'm thinking it would be much nicer to consider this as part of this design, because it would make the reading of Capability Attenuation much more readable.
+
+So, we're in design discussion mode. Seeking clarity and feedback, we aren't to modify or change documentation until clarity reached, and asked for. You may suggest what to change/modify and ask to do so.
+#+end_src
+
+*** 🤖
+#+begin_src markdown
+  Great questions — let me take these in order. This is exactly the kind of critique cycle the Design Methodology calls for.
+
+---
+
+### Logic Engine / Propagator Network for Capability Inference
+
+This is the most exciting angle and I think you're onto something deeper than the design doc captured.
+
+The "backward propagation through the call graph" described in §4.6 is **literally describing a propagator network computation**. Let me make this explicit:
+
+**The capability lattice:**
+- **Elements**: Sets of capability types (e.g., `{ReadCap}`, `{ReadCap, HttpCap}`, `{FsCap, DbCap}`)
+- **Bottom**: `{}` (pure — no capabilities)
+- **Join**: Set union (`{ReadCap} ⊔ {HttpCap} = {ReadCap, HttpCap}`)
+- **Top**: `{SysCap}` (all capabilities)
+- **Monotonicity**: Capability sets only grow — learning that a callee needs `HttpCap` can only ADD to the caller's set, never remove
+
+This is a textbook lattice, and computing capability closures is a textbook **monotonic fixed-point computation** — exactly what the propagator network does.
+
+**The propagator network formulation:**
+
+```markdown
+Cell per function:
+  cell(main)         : CapabilitySet   ;; starts with {SysCap} (declared)
+  cell(process-data) : CapabilitySet   ;; starts with {} (unknown)
+  cell(read-file)    : CapabilitySet   ;; starts with {ReadCap} (declared in spec)
+  cell(write-file)   : CapabilitySet   ;; starts with {WriteCap} (declared in spec)
+  cell(transform)    : CapabilitySet   ;; starts with {} (pure)
+
+Propagators from call edges:
+  process-data calls read-file  → propagator: cell(process-data) ⊇ cell(read-file)
+  process-data calls write-file → propagator: cell(process-data) ⊇ cell(write-file)
+  process-data calls transform  → propagator: cell(process-data) ⊇ cell(transform)
+  main calls process-data       → [verification] cell(main) ⊇ cell(process-data)
+
+Run to quiescence:
+  cell(read-file)    = {ReadCap}        (declared)
+  cell(write-file)   = {WriteCap}       (declared)
+  cell(transform)    = {}               (pure)
+  cell(process-data) = {ReadCap, WriteCap}  ← propagators fired
+  cell(main) ⊇ {ReadCap, WriteCap} ?   ← SysCap >: FsCap >: both ✓
+```
+
+The quiescence of the propagator network IS the fixed point of capability inference. Mutual recursion? Handled automatically — the propagator network iterates until stable. Adding a new callee? The cell merges in the new requirements and propagators fire forward.
+
+**Cost/benefit:**
+
+| | Benefit | Cost |
+|---|---------|------|
+| **Reuse** | Propagator network, lattice traits, quiescence detection already built | Integration surface — another client of the Logic Engine |
+| **Correctness** | Lattice-based fixed point handles mutual recursion, cycles, incremental updates automatically | Need CapabilitySet as a Lattice instance (straightforward — it's PowerSet) |
+| **Architecture** | Capability inference becomes "just another propagator problem" — same mental model as type inference | Dependency on Logic Engine being stable (Phases 1-3 done, which is sufficient) |
+| **Incrementality** | Propagator networks are naturally incremental — editing one function re-propagates only affected cells | Setup overhead for creating the network per module |
+| **Verification** | The "main ⊇ transitive closure" check is just reading the final cell values after quiescence | The verification step (checking satisfaction, not just computing closures) needs subtype-aware comparison, which is outside the propagator network itself |
+
+The key insight: **the "backward propagation through call graph" in §4.6 was unconsciously describing propagator behavior**. Making this explicit and using the actual Logic Engine infrastructure would be architecturally cleaner than a hand-rolled fixed-point pass.
+
+The one subtlety: propagators propagate *forward* (callee → caller), but the *verification* goes *backward* (does main's declared set subsume the computed closure?). The propagator network computes the closures; a separate pass checks them. This is the natural two-phase pattern: propagate to quiescence, then read results.
+
+What's your intuition — does framing capability inference as a propagator network problem feel right? It would mean the Logic Engine isn't just for the relational language — it's the *general infrastructure* for all monotonic fixed-point computations in the compiler.
+
+---
+
+### §4.1: `capability` as First-Class Construct
+
+Your instincts are good here. The more I think about it, the more I agree that **desugaring to `trait` is the wrong framing**. The differences are structural, not cosmetic:
+
+| Concern | `trait` | `capability` |
+|---------|---------|-------------|
+| Resolution | Global instance registry | Lexical scope only |
+| Default QTT | `:w` | `:0` |
+| Methods | Zero or more | Zero (proof of authority, not interface) |
+| Composition | Bundles (contraction/AND) | Union types (weakening/OR) |
+| Dependent params | Type params only | Can index on values (`FileCap p`) |
+| Extension direction | Add methods, instances | Add rights, dependent indices, revocation |
+
+Making `capability` desugar to `trait :capability` means every piece of trait infrastructure needs `(if (capability? ...) ...)` branches. That's the "special case pollution" anti-pattern. Better to have `capability` be its own top-level form in the AST pipeline — sharing the *pattern* of "constraint on types resolved as implicit parameter" but with its own resolution, defaulting, and extension points.
+
+Concretely: `capability` gets its own struct in `syntax.rkt`, its own surface syntax in `surface-syntax.rkt`, its own elaboration path in `elaborator.rkt`. It doesn't share the trait instance registry, it doesn't share the trait resolution code path, it doesn't share the multiplicity defaulting.
+
+On the metadata fields question — what metadata do you envision on a `capability` declaration beyond the dependent parameters? I'm thinking things like:
+
+- `:revocable` — whether the capability supports revocation protocols
+- `:transferable` — whether `:1` transfer is permitted (or only `:0` proofs)
+- `:composite` — sugar for declaring the union type and subtypes together?
+
+Or are you thinking more along the lines of the `spec` pattern where the metadata emerges organically from usage?
+
+---
+
+### The `:kind` / Multiplicity Override Question
+
+I think you're right that this has limited utility. Let me lay out the cases:
+
+The multiplicity is on the **constraint site** (in `spec`), not on the capability declaration:
+
+```prologos
+capability ReadCap                        ;; declaration — no multiplicity here
+
+spec read-file {fs :0 ReadCap} : ...     ;; :0 = erased proof (default)
+spec delegate  {fs :1 ReadCap} : ...     ;; :1 = linear transfer (explicit override)
+spec bad       {fs :w ReadCap} : ...     ;; :w = ambient authority (compiler warns)
+```
+
+So the capability declaration doesn't need a `:kind` field — the default is always `:0`, and overrides happen at the use site in `spec`.
+
+The one case where a `:kind` on the declaration *might* matter: a capability that is **inherently linear** — something like a one-time authorization token that can never be a mere `:0` proof, because the act of using it must consume it. In that case you'd want:
+
+```prologos
+capability AuthzToken :linear    ;; using this ALWAYS consumes it
+;; Now {tok :0 AuthzToken} would be a declaration error
+```
+
+But this is a niche case. I'd say: defer it. The `:0` default + `spec`-site override covers 99% of use cases. If we discover that inherently-linear capabilities are a real pattern, we add the declaration-level override then.
+
+Does that match your read?
+
+---
+
+### §4.3: `=` vs `:=`
+
+Noted and agreed. `=` for `unify`, `:=` for binding/assignment. So the capability examples should read:
+
+```prologos
+type FsCap  := ReadCap | WriteCap
+type NetCap := HttpCap | WsCap
+
+let data := [read-file in-path]
+```
+
+This is a syntax-level principle that should go into `prologos-syntax.md` (or a syntax principles doc). I won't touch anything now, but when we're ready to update, the audit scope would be:
+- The design doc examples
+- `CAPABILITY_SECURITY.md` examples  
+- The I/O design doc examples
+- Any other tracking docs using `=` for binding
+
+Let me check — does the current codebase already use `:=` anywhere, or is this a forward-looking change?
+#+end_src
+
+*** 🗣️ Feedback
+#+begin_src quote
+On the Logic Engine:
+  The more I'm thinking of the logic engine, the more use beyond just Relational logic variable resolution I'm seeing. I'm hoping we can start to incorporate it into more of our language's subsystems, as we did with type inference.
+  For example, I could see it playing an important role as a general purpose theorem prover for our ?? hole-driven development backend; or derive properties, and other structural inference; even the generative, property-based testing framework could potentially benefit. Furthermore, with the abstract interpretation work, extending it to constraint-solving over various domains (like CLPFD, or even over Reals, potentially...); and using this as infrastructure for enhanced static analysis with excellent tracing capabilities with our provenance data.
+  I'd like us to take a note of potential use cases for integrating and extending our logic engine in our `principles`. (Please check my reasoning, and ground your statements when doing so.)
+
+On `capability` as first class:
+  I think the keys you propose are valid considerations, but I don't think we need to worry too much about their inclusion yet. It suffices for now to keep annotations at the `spec` site.
+
+  On `:=` let's add this note in principles for prefered syntax now as well, and correct in the design doc for this.
+
+  On `<:` Yes, let's include it on the roadmap for this design now.
+
+
+  On the LE design considerations, I don't want to add to the design doc considerations on this... yet. I would it if you could carefully consider a design that includes this into the capabilities as types design and present what that is.
+
+  After doing those, and providing design considerations, we'll come back and discuss.
+
+
+#+end_src
+
+*** 🤖 Design Consideration: Propagator-Based Capability Inference
+#+begin_src markdown
+
+```markdown
+.
+```
+
+## Design Consideration: Propagator-Based Capability Inference
+
+### The Core Insight
+
+Capability inference through the call graph is a **monotonic fixed-point computation over a PowerSet lattice**. The Logic Engine — specifically the persistent propagator network (Phase 2) with lattice-based cells — was built for exactly this class of problem. The type inference refactoring (Phase 8) already proved that the propagator network scales to compiler-internal fixed-point computations. Capability inference is a structurally simpler instance of the same pattern.
+
+### The Lattice
+
+
+CapabilitySet = PowerSet(CapabilityType)
+
+  {SysCap}                                         ← top
+     │
+  {FsCap, NetCap, DbCap, SpawnCap, ClockCap}
+     │
+  ... all subsets ...
+     │
+  {ReadCap}    {WriteCap}    {HttpCap}    ...      ← singletons
+     │
+    {}                                              ← bottom (pure)
+
+
+- **Bottom**: `{}` — pure function, no capabilities
+- **Join**: Set union — `{ReadCap} ⊔ {HttpCap} = {ReadCap, HttpCap}`
+- **Leq**: Subset — `{ReadCap} ⊆ {ReadCap, HttpCap}`
+- **Monotonicity**: Capability sets only grow as we discover more callees
+
+This is a straightforward `Lattice` instance — simpler than the `Interval` or `Sign` lattices we already have. We could implement it as a `SetLattice` specialization (we already have `SetLattice` in the lattice library).
+
+### The Propagator Network Architecture
+
+For a module with functions `f₁, f₂, ..., fₙ`:
+
+
+Phase 1: Build the network
+─────────────────────────
+For each function fᵢ:
+  cell(fᵢ) := new cell with initial value:
+    - declared_caps(fᵢ)    if fᵢ has explicit capability params in its spec
+    - {}                    if fᵢ has no declared capabilities
+
+For each call edge (fᵢ calls fⱼ):
+  add propagator:
+    inputs:  [cell(fⱼ)]
+    outputs: [cell(fᵢ)]
+    fire:    cell(fᵢ) := cell(fᵢ) ⊔ cell(fⱼ)     ;; union the callee's caps into caller
+
+Phase 2: Run to quiescence
+──────────────────────────
+  run-to-quiescence(network)
+  ;; BSP scheduler fires propagators until no cell changes
+  ;; Result: each cell(fᵢ) holds the FULL capability closure of fᵢ
+
+Phase 3: Verify
+───────────────
+For the authority root (main):
+  check: cell(main).declared_caps ⊇ cell(main).inferred_caps
+  ;; main's explicit params must cover the transitive closure
+
+For each call edge (fᵢ calls fⱼ) where fᵢ has explicit caps:
+  check: cell(fᵢ).declared_caps ⊇ cell(fⱼ).inferred_caps
+  ;; explicit declarations are also verification points
+
+
+### How This Compares to the Hand-Rolled Approach
+
+The design doc's §4.6 described a "post-type-checking pass" with a hand-rolled algorithm:
+
+> 1. After all functions are type-checked, collect capability constraints
+> 2. Build a call graph from the module's functions
+> 3. For each function, compute the transitive union of all callee capability requirements
+> 4. Check that each function's explicit or inferred capability set is satisfied by its caller
+
+This IS the propagator network, just described procedurally. The differences:
+
+| Aspect | Hand-rolled pass | Propagator network |
+|--------|-----------------|-------------------|
+| **Mutual recursion** | Must detect cycles and iterate to fixed point manually | Handled automatically by BSP scheduler |
+| **Incrementality** | Recompute from scratch on any change | Write to one cell → only affected propagators re-fire |
+| **Backtracking** | Manual state save/restore | Keep old network reference (O(1), structural sharing via CHAMP) |
+| **Provenance** | Must build separately | ATMS integration gives it for free — "why does f require ReadCap?" answered by tracing the propagator chain |
+| **Correctness argument** | "The loop terminates because capability sets are bounded and monotonic" | Follows from lattice theory — quiescence IS the fixed point |
+| **Infrastructure reuse** | New code for capability-specific fixed-point | Reuses `propagator.rkt`, `Lattice` trait, `run-to-quiescence` |
+
+### The ATMS Angle: Provenance for Free
+
+This is where it gets really interesting. If we thread the ATMS (Phase 5) through the capability inference network, every capability requirement gets an **assumption set** — the set of leaf declarations that justify it.
+
+```markdown
+cell(process-data) = {ReadCap, WriteCap}
+  └── assumption: ReadCap  came from cell(read-file) via call edge at line 23
+  └── assumption: WriteCap came from cell(write-file) via call edge at line 25
+```
+
+This means the compiler can answer:
+- **"Why does `process-data` require `ReadCap`?"** → Because it calls `read-file` (line 23), which declares `{ReadCap}` in its spec.
+- **"What would happen if I removed the `write-file` call?"** → `process-data` would only require `{ReadCap}`, not `{WriteCap}`.
+- **"Which functions transitively contribute to `main`'s capability requirements?"** → Trace the ATMS dependency tree from `cell(main)`.
+
+This is the "compiler as capability auditor" from the principles document, realized via existing infrastructure. Without the ATMS, we'd need to build provenance tracking from scratch. With it, it's a configuration choice when constructing the network.
+
+### Speculative Resolution via ATMS
+
+There's an even deeper use: **speculative capability resolution**. When the compiler encounters a function whose capability requirements are ambiguous (e.g., it calls a higher-order function whose callback might or might not require capabilities), the ATMS can explore both hypotheses:
+
+```markdown
+;; map-with-io takes a function that MAY require capabilities
+spec map-with-io : (A -> B) -> List A -> List B
+
+;; If the callback is pure: map-with-io requires {}
+;; If the callback requires {ReadCap}: map-with-io requires {ReadCap}
+```
+
+The ATMS can create two assumptions (callback-pure, callback-effectful), propagate both, and resolve the ambiguity when the actual callback is known. This is the same speculative type-checking pattern we already use for Church fold attempts and union types (via `save-meta-state`/`restore-meta-state!`), but expressed as ATMS hypotheticals rather than imperative state save/restore.
+
+### Concrete Integration Points
+
+Where this plugs into the existing codebase:
+
+1. **After type checking** (in `driver.rkt`): Build the capability propagator network from the module's typed functions. Each function's spec provides declared capabilities; each function's body provides call edges.
+
+2. **Cell construction** (using `propagator.rkt`): `net-new-cell` with a `SetLattice CapabilityType` merge function. Initial values from specs.
+
+3. **Propagator construction** (using `propagator.rkt`): `net-add-propagator` for each call edge. Fire function: set union.
+
+4. **Quiescence** (using `propagator.rkt`): `run-to-quiescence` — the BSP scheduler we already have.
+
+5. **Verification** (new code, ~50-100 lines): Read final cell values, check subsumption against declared params, emit errors/warnings.
+
+6. **Provenance** (optional, using `atms.rkt`): Thread ATMS assumptions through cell writes. Query assumption sets for error messages and IDE tooling.
+
+### What This Means for the Roadmap
+
+Phase 5 (Capability Inference) in the design doc would change from "hand-rolled post-type-checking pass" to "build a propagator network from the call graph and run to quiescence." The implementation is **simpler** because it reuses existing infrastructure, and **more powerful** because it gets incrementality, backtracking, and provenance for free.
+
+The estimated scope actually *shrinks*: instead of ~200 lines of new fixed-point code, it's ~100 lines of network construction + ~50 lines of verification. The heavy lifting (scheduling, quiescence, CHAMP persistence, ATMS tracking) is already done.
+
+### Open Design Question
+
+One tension: the type inference propagator network (Phase 8 refactoring) lives in the elaborator and runs *during* type checking. The capability inference network would run *after* type checking (it needs the fully-typed call graph). Should these be two separate networks, or could capability inference be wired into the same network as type inference?
+
+My instinct: **separate networks**. The type inference network operates on type-level cells (metavariables, unification constraints). The capability inference network operates on set-level cells (capability sets). They have different lattices, different propagators, and different lifecycles. Sharing a network would complect them unnecessarily. Two networks, each with its own quiescence, is cleaner.
+
+But there's a subtlety: if capability inference influences type inference (e.g., the compiler needs to know a function's capability signature to type-check a caller), then the two networks might need to communicate. This is exactly the **cross-domain propagation** infrastructure from Phase 6c (Galois connections). A cross-domain propagator could bridge the type-inference network and the capability-inference network, allowing capability information to flow into type checking when needed.
+
+---
+
+That's the full design consideration. The key takeaway: the Logic Engine isn't just "nice to have" for capability inference — it's the **architecturally correct** solution. The hand-rolled pass described in §4.6 was reinventing propagator network behavior without the name. Making it explicit gives us incrementality, provenance, and correctness from lattice theory, while reducing implementation scope.
+
+What's your read on this? Particularly interested in your thoughts on the two-network vs. shared-network question, and whether the ATMS provenance angle is worth the integration cost upfront vs. adding it later.
+#+end_src
+
+*** 🗣️ Capability Inference as separate prot-net from Type Inference; Finalize and Critique
+#+begin_src quote
+  I had the same instinctual response: keep them separate networks.
+
+  The subtlety between the type inference network potentially needing information from the capability inference networks, and the galois connection being used is an exciting prospect to me. I envision an application where different agents encode information flows and provenance in a propagator network, and their dependent-typed computations carrying proof objects to boot, and for there to be a need to cross-reference or communicate about their respective network's data. So this could be an exciting opportunity to test out what cross-network interfacing could look like. If it's needed, I'd be excited to put this on the roadmap as well. (this could be an application point to capture in our principles for the LE/propagator network, if you think it is feasable/reasonable)
+
+  I also think the ATMS provenance is good to include to the roadmap as well. (Design Principle: Completeness Now over Partial Implementation)
+
+
+  Let's encorporate these considerations into our design doc.
+#+end_src
+
+#+begin_src quote
+Let's consider this outside, independent critique of our design, according to one of our last phases of our Design Methedology. Remember, it does not have the same context as you, so reason and pushback where necessary...
+#+end_src
+
+#+begin_src quote
+  I think Phase 8 looks interesting to implement for, to test out our cross-network interfacing. It also seems like it would be useful. Let's look at Designing an implementation for 8a-8c.
+
+I don't think we are ready for 8d, however. Not until we have designed out `session` more, and have that stabalized; and also have dependent capabilities. I think it's a very interesting experiment, and we should add it to our deferred tracking to revisit later.
+
+
+Considering Phase 7 of Capabilities as Types: Do you think that Phase 4-6 are stable enough to consider implementing this now? I feel like this would be an important piece to have in place for implementing our IO Library. Is our dependent type infrastructure sufficient for these considerations? If not, what considerations should we have for filling in the gaps?
+
+
+#+end_src
+
+*** 🤖 Phase 7: Dependent Capability Types
+#+begin_src markdown
+  This is an excellent strategic question. Let me give you a thorough assessment based on what the research turned up.
+
+## Short Answer
+
+**Phases 4-6 are rock-solid.** 350+ tests across 8 test files, all green, and Phase 8a-8c just exercised the full stack (propagator network, ATMS, cross-domain bridging) without revealing any instability. The dependent type infrastructure (Pi, substitution, reduction, unification) is also mature and well-tested.
+
+**But I'd push back slightly on the ordering.** Here's why:
+
+## The Key Insight: IO Library Phase 1 Doesn't Need Phase 7
+
+Looking at the IO library design (`docs/tracking/2026-03-01_1200_IO_LIBRARY_DESIGN.md`), Phase 1 core file I/O works with **simple capabilities**:
+
+```prologos
+spec read-file : {fs :0 ReadCap} -> Path -> Result String IOError
+spec write-file : {fs :0 WriteCap} -> Path -> String -> Result Unit IOError
+```
+
+Dependent capabilities (`FileCap (p : Path)`) are a Phase 2+ IO concern — path-specific access control for fine-grained security. The IO library's actual blocking dependency is:
+
+1. **Opaque FFI types** (`:opaque` for `Handle`, `Path`) — not yet in `foreign.rkt`
+2. **The `with-open` macro** — resource lifetime via QTT linearity
+3. **Simple capability gating** — already works via Phase 6
+
+So there's a real question of sequencing.
+
+## Two Viable Paths
+
+**Path A: IO Library Phase 1 first, then Phase 7**
+- Get `read-file`, `write-file`, `read-lines` working with simple `ReadCap`/`WriteCap`
+- Build the `:opaque` FFI extension needed anyway
+- Then implement Phase 7 and retrofit path-specific access in IO Phase 2
+- *Pro:* Delivers usable IO sooner; validates the cap system end-to-end with real IO
+- *Con:* May need to revisit API design when adding dependent caps
+
+**Path B: Phase 7 first, then IO Library**
+- Build dependent capabilities, then design IO with full path-specific access from day one
+- *Pro:* Cleaner IO API; no retrofitting
+- *Con:* Delays usable IO; Phase 7 is designed in isolation without a concrete consumer
+
+## Dependent Type Infrastructure Assessment
+
+The good news is the dependent type machinery is **fully sufficient** for Phase 7:
+
+| What Phase 7 Needs | Status | Evidence |
+|---|---|---|
+| `Pi` types / dependent functions | ✅ Complete | `expr-Pi`, formation rules, elimination |
+| De Bruijn shifting/substitution | ✅ Complete | `substitution.rkt` — used everywhere |
+| Dependent unification | ✅ Complete | `unify.rkt` handles Pi, Sigma, metas |
+| Type-level computation | ✅ Complete | `reduction.rkt` — WHNF/NF |
+| Parser for `(p : Type)` params | ✅ Ready | Error stub at `parser.rkt:2755` — "Phase 7" |
+| `surf-capability` has `params` field | ✅ Ready | Already in the struct, just unused |
+
+The gaps are all **capability-specific**, not type-system gaps:
+
+1. **CapabilitySet extension** — currently `cap-set (seteq of symbols)`. Dependent caps need `cap-set (seteq of (symbol | type-expr))`. This changes `cap-set-join`, `cap-set-subsumes?`, and how the propagator network handles them.
+
+2. **Dependent resolution** — when checking `{FileCap "/data" :0}`, the resolver must unify the path index against what's in scope. The unification machinery exists; the plumbing to invoke it during capability resolution doesn't.
+
+3. **Minting semantics** — how does `FsCap` narrow to `FileCap path`? The design suggests explicit minting functions: `mint-file-cap : FsCap -> (p : Path) -> FileCap p`. This is straightforward.
+
+## The Design Decisions That Need Thought
+
+These are the real considerations, regardless of sequencing:
+
+**1. CapabilitySet representation for dependent caps**
+
+The current lattice is `PowerSet(Symbol)` — dead simple. With dependent caps, you need to represent `FileCap "/data"` vs `FileCap "/etc"` as distinct elements. Options:
+- **Extend cap-set** to hold type expressions (uses existing unification for joins)
+- **Flatten to string keys** at inference time (simpler but lossy)
+- **Separate tier** for dependent vs simple caps
+
+I'd recommend extending `cap-set` to hold type expressions. The unification machinery handles everything else.
+
+**2. How dependent caps interact with the propagator network**
+
+When `f` calls `g : {FileCap p} -> ...` with a concrete path, what propagates to `f`'s cap cell? Options:
+- `FileCap "/data"` — concrete (requires path to be known at analysis time)
+- `FileCap ?p` — symbolic (constraint variable; deferred to inference)
+- `FsCap` — widened (conservative; loses precision)
+
+For IO library purposes, concrete paths are most useful. For general analysis, symbolic constraints are more powerful but harder.
+
+**3. IO library design tension: World token vs capability passing**
+
+The IO design doc mentions both Mercury's `World :1` token and fine-grained capabilities. These aren't contradictory — you can have `{fs :0 FsCap} -> World -> World` — but the interaction needs explicit design. Dependent caps make this richer: `{fc :0 FileCap "/data"} -> World -> (World, String)`.
+
+## My Recommendation
+
+Given the "completeness over deferral" principle and that Phase 7 is estimated at ~300-400 lines:
+
+**Do Phase 7 first, but scope it tightly.** Implement 7a-7d (parameterized capability declarations, dependent resolution, minting pattern, tests) without trying to solve the full propagator-network integration for dependent indices. That can come when the IO library exercises it. Specifically:
+
+- **7a**: Parse `(capability FileCap (p : Path))` — lift the error stub
+- **7b**: Elaborate dependent capability types as `Pi('m0, Path, Type)` — straightforward
+- **7c**: Dependent resolution — unify path indices during capability scope checking
+- **7d**: Minting functions — `mint-file-cap : {fs :0 FsCap} -> (p : Path) -> FileCap p`
+- **Defer**: CapabilitySet extension for the propagator network (Phase 7e in the design doc)
+
+This gives you the type-level dependent capabilities for the IO library without the complexity of dependent cap inference. The IO library's `read-file : {fc :0 FileCap p} -> Result String IOError` would type-check correctly; the cap inference network would conservatively widen to `FsCap` until you implement the lattice extension.
+
+That way you can immediately start the IO library with both simple AND dependent capabilities available, and the inference precision can improve incrementally.
+#+end_src
+
+
+
+
+
+
+** ✅ Revist CHAMP scaling issue (with 1356 cells being too much?) found in 5c/d
+
+
+** Properties are sets (set-builder `:` Range Syntax)
+
+** Examining `defr` facts `||` underlying representation
+#+begin_src quote
+
+
+#+end_src
+
+
+
+

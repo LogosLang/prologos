@@ -1,0 +1,1271 @@
+% Created 2026-03-06 Fri 12:39
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{The Prologos Project - from Zachary Larson}
+\date{2026-03-06}
+\title{Session Types as Causal Timelines for Effect Ordering}
+\hypersetup{
+ pdfauthor={The Prologos Project - from Zachary Larson},
+ pdftitle={Session Types as Causal Timelines for Effect Ordering},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+; Context: Effectful Propagators Research §9c — "Could session types serve as the causal context for IO effects?"
+; Status: Research document — formal exploration with novel synthesis
+; Prerequisite: `2026-03-06\textsubscript{EFFECTFUL}\textsubscript{PROPAGATORS}\textsubscript{RESEARCH.md}`, `2026-02-24\textsubscript{LOGIC}\textsubscript{ENGINE}\textsubscript{DESIGN.org}`
+\section{1. The Central Thesis}
+\label{sec:org50ad62b}
+
+A session type is not merely a protocol specification — it is a \emph{causal timeline}.
+Each position in a session type (each \texttt{!A . S} or \texttt{?A . S} node) represents a
+causally-ordered point in time. The session's syntactic structure \emph{is} the
+happens-before relation for effects at that channel.
+
+If we formalize this observation, session types can serve as the causal context
+that provides effect ordering on our monotone propagator substrate — not as an
+external scheduling discipline layered on top, but as an \emph{intrinsic property}
+of the session lattice itself. The ordering doesn't need to be recovered; it
+was always there, encoded in the session type's continuation structure.
+
+This potentially opens a \emph{fourth architecture} beyond the three proposed in
+the effectful propagators research: one where effect ordering is derived from
+the session lattice via a Galois connection to an effect lattice, rather than
+imposed by timestamps, barriers, or topological scheduling.
+\section{2. Grounding: What We Have Today}
+\label{sec:org58e48fc}
+
+\subsection{2a. The Session Lattice}
+\label{sec:org801b377}
+
+Our session lattice (\texttt{session-lattice.rkt}) orders session types by information:
+
+\begin{verbatim}
+sess-bot (⊥ — no information, fresh cell)
+    ↓
+sess-send(A, S) / sess-recv(A, S) / sess-choice(...) / ...
+    ↓
+sess-top (⊤ — contradiction, incompatible protocols)
+\end{verbatim}
+
+The merge function (\texttt{session-lattice-merge}) is a join: it unifies two session
+types if they're compatible, and produces \texttt{sess-top} if they conflict. This is
+a flat lattice at the top level — \texttt{sess-bot → concrete → sess-top} — but the
+internal structure of a concrete session is a \emph{chain}:
+
+\begin{verbatim}
+!String . ?Int . end
+   ↓        ↓      ↓
+  pos 0   pos 1   pos 2
+\end{verbatim}
+
+Each position in this chain is causally ordered: position 1 cannot occur until
+position 0 has been performed. This ordering is enforced by the continuation
+structure — to reach \texttt{?Int}, you must first decompose \texttt{!String . ?Int . end}
+into \texttt{!String} + \texttt{(?Int . end)}.
+\subsection{2b. Session Advancement}
+\label{sec:orgf61c9cc}
+
+In \texttt{session-runtime.rkt}, session advancement works via propagators:
+
+\begin{verbatim}
+(rt-add-session-advance-in-rnet rnet
+  src-cell       ;; current session cell
+  dst-cell       ;; next session cell
+  predicate      ;; e.g., sess-send-like?
+  cont-extractor ;; extracts continuation from session
+)
+\end{verbatim}
+
+This installs a propagator that watches \texttt{src-cell} and, when it matches the
+predicate, extracts the continuation and writes it to \texttt{dst-cell}. The chain
+of advancement propagators mirrors the session type's structure exactly:
+
+\begin{verbatim}
+cell₀: !String . ?Int . end
+  → advance propagator fires, writes to cell₁
+cell₁: ?Int . end
+  → advance propagator fires, writes to cell₂
+cell₂: end
+\end{verbatim}
+
+Each cell corresponds to one position in the session timeline. The advancement
+is monotone: \texttt{sess-bot → !String.?Int.end → end} (within each cell), and the
+chain of cells moves through the session positions sequentially.
+\subsection{2c. Direct IO Execution}
+\label{sec:org93e16e7}
+
+Today, IO effects execute inline during \texttt{compile-live-process}, which walks the
+process AST recursively. The walk visits \texttt{proc-send}, \texttt{proc-recv}, \texttt{proc-open}
+in syntactic order — the same order the session type dictates.
+
+\begin{verbatim}
+[(proc-send expr chan cont)
+ ;; Direct IO: if IO channel, write to file immediately
+ (when io-cell
+   (write-string str-val port)
+   (flush-output port))
+ ;; Advance session, then recurse into continuation
+ (compile-live-process rnet3 cont ...)]
+\end{verbatim}
+
+The session type determines the process structure, the process structure
+determines the AST walk order, and the walk order determines effect execution
+order. Session → Process → Walk → Effects. But this chain is mediated by the
+AST, not by the session lattice directly.
+\section{3. The Formal Connection: Sessions Encode Causal Order}
+\label{sec:org5ff5071}
+
+\subsection{3a. Curry-Howard: Propositions as Sessions}
+\label{sec:org47b8ee3}
+
+The foundational insight comes from Caires \& Pfenning (2010) and Wadler (2012):
+there is a Curry-Howard correspondence between linear logic and session types.
+
+\begin{center}
+\begin{tabular}{lll}
+Linear Logic & Session Types & Process Calculus\\
+\hline
+Proposition & Session type & Channel type\\
+Proof & Process & Implementation\\
+Cut & Channel composition & Communication\\
+Cut reduction & Computation step & Message exchange\\
+\end{tabular}
+\end{center}
+
+In this correspondence, \emph{cut elimination steps correspond to process reductions}.
+When two processes communicate (cut), the proof simplifies (cut reduction), and
+the protocol advances. The ordering of cut elimination steps IS the ordering of
+communications.
+
+\emph{Sources}:
+\begin{itemize}
+\item \href{https://homepages.inf.ed.ac.uk/wadler/papers/propositions-as-sessions/propositions-as-sessions.pdf}{Propositions as Sessions} — Wadler (2012)
+\item \href{https://www.cs.cmu.edu/\~fp/papers/mscs13.pdf}{Linear Logic Propositions as Session Types} — Caires \& Pfenning (2012)
+\item \href{https://link.springer.com/chapter/10.1007/978-3-642-15375-4\_16}{Session Types as Intuitionistic Linear Propositions} — Caires \& Pfenning (2010)
+\end{itemize}
+\subsection{3b. Linear Logic's Tensor and Sequencing}
+\label{sec:org6dfc091}
+
+In linear logic, the tensor (⊗) connective corresponds to parallel composition,
+and the "of course" (!) modality to reusable resources. But the key connective
+for sequencing is the \emph{linear implication} (⊸): \texttt{A ⊸ B} means "consume A to
+produce B." In session terms: receive A, then continue with B.
+
+This is exactly our \texttt{sess-recv(A, S)} — consume an A from the channel, then
+continue with protocol S. The continuation structure of session types IS linear
+implication applied repeatedly:
+
+\begin{verbatim}
+?A . ?B . !C . end  ≅  A ⊸ (B ⊸ (C ⊗ 1))
+\end{verbatim}
+
+The sequencing comes from the nesting of implications. Each "consume" must
+happen before the next one is available. This is a \emph{proof-theoretic} ordering,
+not a scheduling decision.
+\subsection{3c. Causality in Linear Logic (Abramsky, Melliès)}
+\label{sec:org294af75}
+
+Research on causality in linear logic (Abramsky \& Melliès) formalizes the
+dependency structure of proofs using event structures. In proof nets
+(the graph-theoretic presentation of linear logic), some inference rules can
+commute (their order doesn't matter) and some cannot. The rules that cannot
+commute have a causal dependency — one must happen before the other.
+
+These causal dependencies form a partial order, and this partial order is
+exactly the partial order of events in the corresponding process. For
+session-typed processes, the causal dependencies are:
+
+\begin{itemize}
+\item \emph{Sequential within a session}: \texttt{send x; recv y} — the send must precede the
+recv (they're on the same channel, in continuation order)
+\item \emph{Independent across sessions}: operations on channel \texttt{a} are concurrent with
+operations on channel \texttt{b} (they're in separate proof branches)
+\item \emph{Synchronized at joins}: \texttt{proc-par} with shared channels creates
+synchronization points
+\end{itemize}
+
+This is precisely the happens-before relation we need for effect ordering.
+
+\emph{Sources}:
+\begin{itemize}
+\item \href{https://link.springer.com/chapter/10.1007/978-3-030-17127-8\_9}{Causality in Linear Logic} — Hayman \& Winskel
+\item \href{https://arxiv.org/abs/1311.6057}{Games and Full Completeness for MLL} — Abramsky \& Jagadeesan
+\item \href{https://arxiv.org/pdf/1111.7159}{Sequentiality vs. Concurrency in Games and Logic} — Melliès
+\end{itemize}
+\subsection{3d. Session Fidelity = Causal Consistency}
+\label{sec:org9a31359}
+
+Session type systems guarantee \emph{session fidelity}: "session communications
+follow the order prescribed by the protocol." This is not just a type safety
+property — it is a causal consistency guarantee. A well-typed session process
+respects the happens-before relation encoded in its session type.
+
+Combined with type preservation (if \texttt{Γ ⊢ P} and \texttt{P → Q}, then \texttt{Γ ⊢ Q}) and
+progress (well-typed processes either terminate or can make a step), session
+types guarantee that effects happen in causal order and that all required
+effects eventually happen.
+
+\emph{Sources}:
+\begin{itemize}
+\item \href{https://link.springer.com/chapter/10.1007/978-3-642-15375-4\_16}{Session Fidelity and Deadlock Freedom}
+\item \href{https://eprints.gla.ac.uk/110759/1/110759.pdf}{Comparing Deadlock-Free Session Typed Processes}
+\end{itemize}
+\section{4. The Galois Connection: Session Lattice ↔ Effect Lattice}
+\label{sec:org58fa323}
+
+\subsection{4a. What Is the Effect Lattice?}
+\label{sec:org1816eea}
+
+We need to define what the "effect lattice" is before we can connect it to
+sessions. For IO effects, we propose:
+
+\emph{Effect Position Lattice (EPL)}: A lattice that tracks the causal position of
+an effect within a session timeline.
+
+\begin{verbatim}
+Elements:
+  eff-bot             ⊥ — no effect information
+  eff-pos(session-path, depth)   — effect at a specific position in a session
+  eff-top             ⊤ — conflicting position information
+
+where:
+  session-path = sequence of session operations leading to this position
+  depth = Nat — position index within the session chain
+\end{verbatim}
+
+The ordering is flat within each session (positions don't refine each other)
+but the \emph{depth} provides a total order on positions within a single session:
+\texttt{eff-pos(s, 0) < eff-pos(s, 1) < eff-pos(s, 2) < ...}
+
+For multiple sessions (concurrent channels), positions form a partial order:
+positions on different session paths are incomparable (concurrent), while
+positions on the same path are totally ordered.
+\subsection{4b. The Galois Connection}
+\label{sec:orgd11fc01}
+
+We propose a Galois connection \texttt{(α, γ)} between the session lattice and the
+effect position lattice:
+
+\begin{verbatim}
+α : Session → EffPos      (abstraction — extract effect position)
+γ : EffPos  → Session      (concretization — what session state corresponds to this position?)
+
+Adjunction: α(s) ≤ e  ⟺  s ≤ γ(e)
+\end{verbatim}
+
+\emph{α (Session → Effect Position)}: Given a session type at a cell, extract the
+current position in the effect timeline.
+
+\begin{verbatim}
+α(sess-bot) = eff-bot                                   (no info → no position)
+α(!A . S)   = eff-pos(path, depth)  where depth = session chain depth
+α(?A . S)   = eff-pos(path, depth)  where depth = session chain depth
+α(end)      = eff-pos(path, max-depth)                  (terminal position)
+α(sess-top) = eff-top                                   (contradiction → conflict)
+\end{verbatim}
+
+\emph{γ (Effect Position → Session)}: Given an effect position, reconstruct the
+remaining session protocol.
+
+\begin{verbatim}
+γ(eff-bot)            = sess-bot                         (no position → no session info)
+γ(eff-pos(path, d))   = tail(original-session, d)        (session from position d onward)
+γ(eff-top)            = sess-top                         (conflict → contradiction)
+\end{verbatim}
+\subsection{4c. Monotonicity of α and γ}
+\label{sec:orgfa752f5}
+
+Both functions must be monotone for the Galois connection to hold:
+
+\emph{α is monotone}: As the session cell refines (bot → concrete → advanced → end),
+the effect position increases monotonically. Session advancement never goes
+backward — once you've sent at position 0, you're at position 1 forever.
+This follows from the monotonicity of the session lattice merge.
+
+\emph{γ is monotone}: As the effect position increases, the remaining session
+"shrinks" (less protocol to execute). In the session lattice, this is an
+increase in information (from "full protocol remaining" to "less protocol
+remaining" to "end"). The concretization respects this ordering.
+
+\emph{Adjunction}: Knowing that an effect is at position \texttt{d} tells us at least as
+much as knowing the session is at position \texttt{d} (the session carries more
+information — what type to send/receive — but the position is the common
+abstraction).
+\subsection{4d. What the Galois Connection Enables}
+\label{sec:orga8f510c}
+
+With this connection formalized, we get:
+
+\begin{enumerate}
+\item \emph{Effect cells that derive ordering from session cells}: An effect cell
+doesn't need its own timestamp. Its position is computed from the session
+cell's value via α. As the session advances monotonically, the effect
+position advances monotonically.
+
+\item \emph{Cross-domain propagators}: A bridge propagator between the session lattice
+and the effect lattice, analogous to the existing type/session bridge.
+When the session cell advances (e.g., \texttt{!String.?Int.end → ?Int.end}), the
+bridge propagator updates the effect cell (e.g., \texttt{eff-pos(ch, 0) → eff-pos(ch, 1)}).
+
+\item \emph{Soundness of effect ordering}: If the session type system is sound
+(session fidelity), then the derived effect ordering is sound. Effects at
+position \texttt{d} provably happen before effects at position \texttt{d+1}, because
+session advancement is provably monotone.
+
+\item \emph{Parallel effects fall out naturally}: Effects on different channels get
+incomparable positions (different session paths). The effect lattice's partial
+order correctly captures that these effects are concurrent and may execute in
+either order.
+\end{enumerate}
+\section{5. Architecture D: Session-Derived Effect Ordering}
+\label{sec:org3962c18}
+
+This section proposes a fourth architecture — one that the three architectures
+in the effectful propagators research don't cover, because it derives ordering
+from the session structure rather than imposing it externally.
+\subsection{5a. Overview}
+\label{sec:org3807ae0}
+
+\begin{verbatim}
+Session Lattice                    Effect Position Lattice
+(session-lattice.rkt)              (NEW: effect-position.rkt)
+┌─────────────────┐               ┌──────────────────────┐
+│ sess-bot         │  ──── α ────→ │ eff-bot               │
+│    ↓             │               │    ↓                  │
+│ !A . ?B . end    │  ──── α ────→ │ eff-pos(ch, 0)        │
+│    ↓ (advance)   │               │    ↓                  │
+│ ?B . end         │  ──── α ────→ │ eff-pos(ch, 1)        │
+│    ↓ (advance)   │               │    ↓                  │
+│ end              │  ──── α ────→ │ eff-pos(ch, 2)        │
+│    ↓             │               │    ↓                  │
+│ sess-top         │  ──── α ────→ │ eff-top               │
+└─────────────────┘               └──────────────────────┘
+        ↑                                    │
+        └──────────── γ ─────────────────────┘
+
+Bridge propagator: watches session cell, updates effect position cell via α
+Effect handler: watches effect position cells, executes effects in position order
+\end{verbatim}
+\subsection{5b. Session Advancement as Causal Clock}
+\label{sec:org1c4e8e2}
+
+The key insight: \emph{session advancement is a causal clock}.
+
+In distributed systems, a Lamport clock increments at each event and each
+message send/receive. A vector clock maintains per-process counters. These
+provide causal ordering: if \texttt{clock(A) < clock(B)}, then A causally precedes B.
+
+Session advancement is exactly this:
+\begin{itemize}
+\item Each session operation increments the session "position" by one
+\item Each send/recv on a channel is an event on that channel's timeline
+\item The session type's continuation depth IS the Lamport timestamp for that channel
+\item For multiple channels, the per-channel depths form a vector clock
+\end{itemize}
+
+\begin{verbatim}
+Channel a: !String . ?Int . end          → positions: [0, 1, 2]
+Channel b: ?Bool . !Nat . !Nat . end     → positions: [0, 1, 2, 3]
+
+Vector clock at any program point:
+  after send(a), recv(b):  {a: 1, b: 1}
+  after recv(a), send(b):  {a: 2, b: 2}
+  etc.
+\end{verbatim}
+
+This vector clock is not imposed externally — it's \emph{derived} from the session
+type itself. The session type IS the causal structure.
+\subsection{5c. Process Structure Determines the Partial Order}
+\label{sec:org43c89c3}
+
+For a process with multiple channels:
+
+\begin{verbatim}
+proc a b =
+  send "hello" a
+  recv x b
+  send x a
+  stop
+\end{verbatim}
+
+The session types determine the causal ordering:
+\begin{itemize}
+\item \texttt{send "hello" a} is at position \texttt{\{a:0\}}
+\item \texttt{recv x b} is at position \texttt{\{a:0, b:0\}} — concurrent with the send on \texttt{a}
+unless sequentially composed
+\item \texttt{send x a} is at position \texttt{\{a:1\}} — causally after the first send on \texttt{a}
+\item \texttt{stop} is at position \texttt{\{a:2, b:1\}} — causally after everything
+\end{itemize}
+
+But the \emph{process structure} (sequential composition) adds more ordering:
+the \texttt{recv x b} must happen before \texttt{send x a} because \texttt{x} flows from recv
+to send. This data dependency is captured by the process AST, not by the
+session types alone.
+
+\emph{Key observation}: Session types provide the \emph{per-channel} causal order.
+The process structure provides the \emph{cross-channel} causal order. Together,
+they give the complete happens-before relation for effects.
+\subsection{5d. The Effect Handler}
+\label{sec:orgc82088d}
+
+With effect positions derived from session advancement:
+
+\begin{verbatim}
+Effect Execution Protocol:
+1. Compile process → propagator network with session cells + effect position cells
+2. Run session advancement propagators to quiescence
+   (session cells advance, effect positions update via α bridge)
+3. After quiescence: read all effect position cells
+4. Sort effects by position (total order within a channel, partial order across channels)
+5. Execute effects in position order
+6. For concurrent effects (incomparable positions): execute in any order
+   (they're on independent channels, so any interleaving is valid)
+\end{verbatim}
+
+Step 6 is the crucial insight: \emph{truly concurrent effects don't need ordering}.
+Effects on different channels can execute in any order because they're on
+independent resources (different files, different ports). The session type
+system's duality guarantee ensures that the two endpoints of a channel agree
+on the ordering, and the independence of separate channels ensures no
+interference.
+\subsection{5e. Comparison with Architectures A-C}
+\label{sec:org9fecd74}
+
+\begin{center}
+\begin{tabular}{lllll}
+Property & A (Barriers) & B (Timestamps) & C (Topo-Sort) & D (Session-Derived)\\
+\hline
+Ordering source & External (walk order) & External (syntactic position) & External (DAG construction) & Intrinsic (session types)\\
+Soundness proof & By construction (sequential walk) & Needs verification & Needs verification & Follows from session fidelity\\
+Concurrent effects & Not supported & Via vector timestamps & Via DAG independence & Via session independence\\
+Effect-computation interleaving & None (batch) & At barriers & Between topo-levels & At session advancement points\\
+Modification to propagator core & None & New cell type & New scheduler & New bridge propagator only\\
+Session type integration & None & None & None & Deep (effects derive from sessions)\\
+\end{tabular}
+\end{center}
+
+Architecture D's distinctive advantage: \emph{the ordering is a theorem, not a design decision}.
+Given a sound session type system with session fidelity, the derived effect ordering
+is provably correct. No additional verification is needed.
+\section{6. Deeper Implications: The Parameterised Monad View}
+\label{sec:org93db646}
+
+\subsection{6a. Session Types as Indexed Pre/Post Conditions}
+\label{sec:org54a2beb}
+
+The connection between session types and parameterised monads (Atkey 2009,
+Orchard \& Yoshida 2016) reveals a deeper algebraic structure.
+
+A parameterised monad \texttt{M s₁ s₂ a} represents a computation that:
+\begin{itemize}
+\item Starts in state \texttt{s₁} (precondition)
+\item Ends in state \texttt{s₂} (postcondition)
+\item Produces a value of type \texttt{a}
+\end{itemize}
+
+Sequential composition matches postcondition to precondition:
+\begin{verbatim}
+bind : M s₁ s₂ a → (a → M s₂ s₃ b) → M s₁ s₃ b
+\end{verbatim}
+
+Session types are a natural instance of this structure:
+\begin{verbatim}
+send : M (!A.S) (S) A      — starts with send-A session, ends with S, produces A
+recv : M (?A.S) (S) A      — starts with recv-A session, ends with S, receives A
+close : M (end) () ()      — starts with end session, ends with ()
+\end{verbatim}
+
+The session type IS the pre/post state. Sequential composition of session
+operations IS the bind of the parameterised monad. The ordering is enforced
+by the type system — you can't bind a \texttt{recv} after a \texttt{close} because the
+postcondition \texttt{()} doesn't match the precondition \texttt{?A.S}.
+
+\emph{Sources}:
+\begin{itemize}
+\item \href{https://www.researchgate.net/publication/220676480\_Parameterised\_notions\_of\_computation}{Parameterised Notions of Computation} — Atkey (2009)
+\item \href{https://kar.kent.ac.uk/66632/1/RP\_9788793519817C10.pdf}{Session Types with Linearity in Haskell} — Orchard \& Yoshida (2016)
+\item \href{https://arxiv.org/pdf/2001.10274}{Unifying Graded and Parameterised Monads} — Katsumata et al.
+\end{itemize}
+\subsection{6b. The Effect Quantale Connection}
+\label{sec:org856adfa}
+
+Graded monads generalize monads to track effects algebraically. The effect
+annotation forms a monoid (with sequential composition) and a partial order
+(with effect subsumption):
+
+\begin{verbatim}
+return : a → G_ε a                      (pure computation, identity effect)
+bind : G_i a → (a → G_j b) → G_{i⊕j} b  (composition, effects combine)
+\end{verbatim}
+
+When the effect monoid has a partial order that interacts well with composition,
+we get an \emph{effect quantale} — an algebraic structure where:
+\begin{itemize}
+\item Effects form a lattice (partial order with joins)
+\item Sequential composition (⊕) distributes over joins
+\item The ordering respects composition: if \texttt{i ≤ i'} and \texttt{j ≤ j'}, then \texttt{i ⊕ j ≤ i' ⊕ j'}
+\end{itemize}
+
+Session types, viewed as effect annotations, form an effect quantale:
+\begin{itemize}
+\item The session lattice provides the partial order
+\item Session continuation is sequential composition: \texttt{(!A.S) ⊕ (?B.T) = !A.?B.T}
+(compose the first session's operation with the second session's protocol)
+\item The ordering respects composition (monotonicity of session lattice merge)
+\end{itemize}
+
+\emph{This is the formal structure underlying the Galois connection.} The session
+lattice and the effect position lattice are both effect quantales, and the
+Galois connection (α, γ) is a quantale morphism — it preserves both the
+ordering and the sequential composition.
+
+\emph{Sources}:
+\begin{itemize}
+\item \href{https://www.cs.kent.ac.uk/people/staff/dao7/publ/effects-revisited.pdf}{Effect Systems Revisited — Control-Flow Algebra and Semantics} — Katsumata (2014)
+\item \href{https://dl.acm.org/doi/fullHtml/10.1145/3450272}{Polymorphic Iterable Sequential Effect Systems} — Gordon (2021)
+\end{itemize}
+\subsection{6c. The Category-Graded Monad Unification}
+\label{sec:org45b582e}
+
+Recent work by Katsumata, Orchard et al. unifies graded monads (effect systems)
+and parameterised monads (program logics, session types) into a single framework:
+\emph{category-graded monads}.
+
+In this framework, a category-graded monad is indexed by morphisms from a small
+category C. When C is a discrete category (objects only, no arrows), it degenerates
+to a graded monad. When C is the category of states and transitions, it degenerates
+to a parameterised monad.
+
+Session types correspond to the case where C is the category of session states
+(session types are objects, session operations are morphisms). Effect annotations
+correspond to the case where C is the effect monoid.
+
+The Galois connection between sessions and effects is, categorically, a functor
+between these two indexing categories — mapping session transitions to effect
+compositions while preserving the categorical structure.
+
+\emph{Source}:
+\begin{itemize}
+\item \href{https://arxiv.org/pdf/2001.10274}{Unifying Graded and Parameterised Monads}
+\end{itemize}
+\section{7. Interaction with Our Existing Infrastructure}
+\label{sec:org45adc9e}
+
+\subsection{7a. The Cross-Domain Bridge Pattern}
+\label{sec:orgdb38f49}
+
+We already have Galois connections in the propagator network:
+\begin{itemize}
+\item Type lattice ↔ Session lattice bridge (\texttt{session-propagators.rkt}, S4e)
+\item Type lattice ↔ Interval lattice bridge (from the Galois connections work)
+\end{itemize}
+
+Adding a Session lattice ↔ Effect Position lattice bridge follows the same
+pattern:
+
+\begin{verbatim}
+;; effect-position-bridge.rkt (hypothetical)
+
+;; Bridge propagator: session cell → effect position cell
+(define (add-session-effect-bridge net sess-cell effect-cell channel-path)
+  (net-add-propagator net
+    (list sess-cell)
+    (list effect-cell)
+    (lambda (n)
+      (define sess-val (net-cell-read n sess-cell))
+      (cond
+        [(sess-bot? sess-val) n]
+        [else
+         (define depth (session-depth sess-val))
+         (net-cell-write n effect-cell
+           (eff-pos channel-path depth))]))))
+
+;; session-depth: count continuation nesting
+(define (session-depth s)
+  (match s
+    [(sess-send _ cont) (add1 (session-depth cont))]
+    [(sess-recv _ cont) (add1 (session-depth cont))]
+    [(sess-dsend _ cont) (add1 (session-depth cont))]
+    [(sess-drecv _ cont) (add1 (session-depth cont))]
+    [(sess-end) 0]
+    [(sess-mu body) (session-depth body)]
+    [_ 0]))
+\end{verbatim}
+\subsection{7b. Integration with compile-live-process}
+\label{sec:orgc6b562c}
+
+Today's \texttt{compile-live-process} walks the AST sequentially and executes IO inline.
+With Architecture D, it would:
+
+\begin{enumerate}
+\item Walk the AST as before, installing session advancement propagators
+\item Additionally install session-effect bridge propagators
+\item Collect effect descriptors (without executing them)
+\item After quiescence, execute effects in position order
+\end{enumerate}
+
+The session advancement propagators already exist. The bridge propagators are
+new but follow an established pattern. The effect collection and execution
+are the novel components.
+\subsection{7c. The ATMS Connection for Speculative Effects}
+\label{sec:org97d7fee}
+
+With session-derived positions, speculative effects become well-defined:
+
+\begin{itemize}
+\item The ATMS tracks alternative worldviews (§5.4 of the logic engine design)
+\item Each worldview has its own session advancement (different choices lead to
+different session states)
+\item Effect positions in one worldview may differ from positions in another
+\item Effects are only executed for the \emph{chosen} worldview (after consistency
+filtering)
+\end{itemize}
+
+This connects to the research question §9d from the effectful propagators
+document: the ATMS enables hypothetical effects, and session-derived positions
+provide the ordering within each hypothesis.
+\section{8. The Session-Effect Duality}
+\label{sec:org24f4c26}
+
+\subsection{8a. An Observation}
+\label{sec:org7f15b75}
+
+The duality operator on session types (\texttt{dual}) swaps send ↔ recv, choice ↔ offer.
+What happens to effect positions under duality?
+
+\begin{verbatim}
+Session:     !String . ?Int . end
+Dual:        ?String . !Int . end
+
+Positions:   [0: write, 1: read, 2: close]
+Dual pos:    [0: read,  1: write, 2: close]
+\end{verbatim}
+
+The dual session has the \emph{same positions} but \emph{different effects} at each
+position. This is exactly right: the two endpoints of a channel perform
+complementary effects at the same logical moments.
+
+Effect duality: if endpoint A writes at position 0, endpoint B reads at
+position 0. The positions are synchronized (they're the same logical clock),
+but the effects are dual.
+\subsection{8b. Implications for IO}
+\label{sec:org2d07f06}
+
+For IO channels (where one endpoint is the file system), the dual of the
+process's session type is the "file's session type" — what the file expects.
+If the process sends a string (write), the file receives a string (append to
+file). If the process receives (read), the file sends (provide file contents).
+
+The IO bridge propagator already implements this duality implicitly: it watches
+for \texttt{sess-send} to know when to write and \texttt{sess-recv} to know when to read.
+Architecture D would make this correspondence explicit through the effect
+position lattice.
+\section{9. Challenges and Open Questions}
+\label{sec:orgf555c9b}
+
+\subsection{9a. Recursive Sessions and Infinite Timelines}
+\label{sec:org9b13083}
+
+Recursive session types (\texttt{sess-mu}) produce potentially infinite causal
+timelines. The position counter would grow without bound:
+
+\begin{verbatim}
+μt. !Nat . t       → positions: [0, 1, 2, 3, ...]
+\end{verbatim}
+
+This doesn't break the Galois connection (positions still form a well-ordered
+chain), but it means:
+\begin{itemize}
+\item Effect cells can't be allocated statically for all positions
+\item The bridge propagator must create fresh effect cells during unfolding
+\item Widening may be needed if the effect lattice has infinite ascending chains
+\end{itemize}
+
+One approach: use \emph{modular positions} — positions modulo the recursion depth.
+The recursive session \texttt{μt. !Nat . t} has period 1, so positions 0, 1, 2, \ldots{}
+all have the same structure. The effect handler needs only the current and next
+positions, not the entire history.
+\subsection{9b. Choice and Non-Deterministic Sessions}
+\label{sec:orge28d715}
+
+Session choice (\texttt{sess-choice}) introduces branching in the causal timeline:
+
+\begin{verbatim}
+⊕{left: !String . end, right: !Int . end}
+\end{verbatim}
+
+After the choice, the timeline follows one branch. Effect positions on unchosen
+branches are unreachable.
+
+This connects to the ATMS: each choice branch is a hypothesis. Effect positions
+in each branch are well-defined; the chosen branch's effects are executed;
+the unchosen branch's effects are discarded (nogoods prevent their execution).
+\subsection{9c. Data Dependencies Across Channels}
+\label{sec:org593e3c6}
+
+Session types capture per-channel ordering but not cross-channel data flow.
+Consider:
+
+\begin{verbatim}
+recv x a           → position {a: 0}
+send [f x] b       → position {b: 0}
+\end{verbatim}
+
+Here \texttt{x} flows from channel \texttt{a} to channel \texttt{b}. The session types on \texttt{a} and \texttt{b}
+are independent, but the data dependency creates a cross-channel ordering
+constraint: \texttt{recv x a} must happen before \texttt{send [f x] b}.
+
+This ordering is captured by the process structure (sequential composition in
+the AST), not by the session types. Architecture D captures it through the
+vector clock: after processing the recv, the vector clock is \texttt{\{a:1, b:0\}}.
+After the send, it's \texttt{\{a:1, b:1\}}. The happens-before relation
+\texttt{\{a:1, b:0\} < \{a:1, b:1\}} is correct.
+
+But the propagator network doesn't see this data dependency unless it's
+encoded explicitly. The process AST walk provides it (it processes recv before
+send because they're sequentially composed). Whether the propagator network
+can capture this without the walk is the key question for a fully
+propagator-native implementation.
+\subsection{9d. When Sessions Don't Cover All Effects}
+\label{sec:orgc7ae8e6}
+
+Not all effects are associated with session channels. Top-level \texttt{eval}
+expressions with \texttt{SysCap} perform IO outside of any session. These effects
+have no session type to derive ordering from.
+
+For these cases, Architecture D falls back to Architecture A (barriers) or
+Architecture B (timestamps). The session-derived ordering handles session-bound
+effects; unsessioned effects use the walk-order fallback.
+
+This is acceptable — the session type system is designed for structured IO,
+and unstructured IO (top-level eval with SysCap) is intentionally less
+disciplined. The type system correctly reflects this: session-typed IO has
+stronger guarantees than SysCap IO.
+\section{10. Discussion: Resolving the Open Questions}
+\label{sec:org2db6e7f}
+
+\textbf{This section captures findings from the Mar 6 design discussion, where the
+open questions from §9 were subjected to deeper analysis. Several key insights
+emerged that resolve the cross-channel data dependency problem (§9c), establish
+the architecture decision (§9d), and reveal a deep structural parallel between
+the \texttt{rel} and \texttt{proc} engines.}
+\subsection{10a. Cross-Channel Data Dependencies Are Constraint Resolution (§9c Resolved)}
+\label{sec:org85d388c}
+
+The central open question of §9c was: can the propagator network capture
+cross-channel data dependencies \emph{without} the sequential AST walk? The answer
+is \emph{yes} — via \emph{transitive closure of ordering edges}, which is a
+\emph{monotone fixed-point computation} and therefore lives natively in the
+propagator network.
+
+The insight: there are two kinds of ordering edges in a process:
+
+\begin{enumerate}
+\item \emph{Session ordering edges} (per-channel): \texttt{send a} → \texttt{recv a} → \texttt{send a}
+(from session type continuation structure)
+\item \emph{Data-flow edges} (cross-channel): \texttt{recv x a} → \texttt{send [f x] b}
+(from variable binding — \texttt{x} is produced by the recv and consumed by the send)
+\end{enumerate}
+
+The \emph{complete ordering} is the transitive closure of the union of these edges.
+And transitive closure is a monotone operation on sets of edges (adding edges
+never removes existing ordering relationships). This means a propagator can
+incrementally compute the ordering:
+
+\begin{verbatim}
+Ordering Cell: {(a₀ < a₁), (b₀ < b₁)}        ;; initial: session edges only
+    + data-flow edge (a₀ < b₀)                ;; recv x a flows to send [f x] b
+    → {(a₀ < a₁), (b₀ < b₁), (a₀ < b₀)}
+    + transitive closure
+    → {(a₀ < a₁), (b₀ < b₁), (a₀ < b₀), (a₀ < b₁)}  ;; a₀ before b₁ via transitivity
+\end{verbatim}
+
+Each new edge makes the ordering set "larger" (monotone). The propagator reaches
+a fixed point when no new transitive edges can be derived. At that point, the
+partial order is complete, and effects can be executed in any linearization of
+the partial order (concurrent effects in any interleaving).
+
+\emph{This is the same computational pattern as \texttt{rel}}: the logic engine computes
+the transitive closure of logical dependencies via propagation. Here, \texttt{proc}
+computes the transitive closure of causal dependencies via the same mechanism.
+\subsection{10b. ATMS for Branching Effect Orders}
+\label{sec:org153dd9d}
+
+When a process contains \texttt{proc-case} (branching based on received values), each
+branch may create different data-flow patterns and therefore different ordering
+edges:
+
+\begin{verbatim}
+proc a b =
+  recv x a
+  case x of
+    | "hello" -> send "world" b     ;; branch 1: edge (a₀ < b₀)
+    | "query" -> send [lookup x] b  ;; branch 2: edge (a₀ < b₀) + data dep on x
+  stop
+\end{verbatim}
+
+The ATMS handles this naturally. Each branch is a \emph{hypothesis} (an ATMS
+assumption). Ordering edges derived from a branch are tagged with that
+branch's assumption. The ATMS maintains multiple consistent worldviews:
+
+\begin{verbatim}
+Worldview 1 (x = "hello"): ordering = {(a₀ < b₀)}
+Worldview 2 (x = "query"): ordering = {(a₀ < b₀), (a₀ depends-on x)}
+\end{verbatim}
+
+When the recv resolves (the value of \texttt{x} becomes known), one worldview is
+selected and the other becomes a nogood. Effects are executed according to
+the ordering in the chosen worldview. This is exactly how the logic engine
+handles \texttt{amb} — maintain hypotheses, resolve when evidence arrives, discard
+inconsistent worldviews.
+\subsection{10c. The \texttt{rel=/=proc} Structural Parallel}
+\label{sec:org05b1b36}
+
+The pattern that emerges reveals a deep structural parallel between our two
+computational engines:
+
+\begin{center}
+\begin{tabular}{lll}
+Dimension & \texttt{rel} (Logic Engine) & \texttt{proc} (Session Runtime)\\
+\hline
+\emph{Variables} & Logic variables (unification) & Session cells (protocol state)\\
+\emph{Constraints} & Equality constraints (type/term) & Ordering constraints (causal)\\
+\emph{Propagation} & Unification propagators & Session advancement + ordering propagators\\
+\emph{Fixed point} & Constraint closure (all equalities derived) & Ordering closure (transitive closure of causal edges)\\
+\emph{Hypotheses} & ATMS worldviews (choice points) & ATMS worldviews (branch alternatives)\\
+\emph{Resolution} & Evidence selects worldview & Received value selects worldview\\
+\emph{Execution} & Proof terms (constructive evidence) & Effects (IO operations in causal order)\\
+\emph{Substrate} & Propagator network + ATMS + stratification & Propagator network + ATMS + effect handler\\
+\end{tabular}
+\end{center}
+
+Both engines share the three-layer architecture from the Logic Engine Design:
+
+\begin{verbatim}
+Layer 1: Propagator Network   — monotone fixed points on lattice cells
+Layer 2: ATMS                 — hypothetical reasoning over alternatives
+Layer 3: Control              — stratification (rel) / effect handler (proc)
+\end{verbatim}
+
+The Logic Engine Design (\texttt{2026-02-24\_LOGIC\_ENGINE\_DESIGN.org}, §5) established
+this three-layer pattern for recovering non-monotone behavior (negation, choice
+points) on a monotone substrate. The same pattern recovers non-monotone behavior
+(effect ordering, sequential execution) for \texttt{proc}. \textbf{\textbf{The Layered Recovery
+Principle is general}}: it applies to any domain where non-monotone operations
+must be performed on convergent infrastructure.
+\subsection{10d. Partial Order Planning Connection}
+\label{sec:org5aa8817}
+
+The ordering computation described in §10a is isomorphic to \textbf{\textbf{Partial Order
+Planning (POP)}}, a classical AI planning technique:
+
+\begin{center}
+\begin{tabular}{ll}
+POP Concept & Effect Ordering Analogue\\
+\hline
+\emph{Actions} & IO effects (read, write, open, close)\\
+\emph{Causal links} & Data-flow edges (variable flows from one effect to another)\\
+\emph{Ordering constraints} & Session ordering edges + data-flow edges\\
+\emph{Initial constraints} & Session type structure (per-channel total order)\\
+\emph{Plan alternatives} & \texttt{proc-case} branches\\
+\emph{Threats} & Potential re-orderings that violate data dependencies\\
+\emph{Threat resolution} & Transitive closure forces ordering; ATMS prevents inconsistent orderings\\
+\emph{Least commitment} & Don't order concurrent effects unnecessarily\\
+\end{tabular}
+\end{center}
+
+The POP connection is significant because it confirms that \emph{least commitment}
+is the correct strategy: effects that are truly concurrent (different channels,
+no data dependencies) should NOT be forced into an arbitrary order. The partial
+order is the maximally concurrent schedule. Any linearization is valid for
+execution.
+
+This also connects to the CALM theorem: the ordering computation is monotone
+(transitive closure, edge accumulation), so it can proceed without coordination.
+The only non-monotone operation is effect \emph{execution} (which consumes the plan
+and produces side effects), and that happens at the control layer boundary —
+exactly where the Layered Recovery Principle predicts it should be.
+\subsection{10e. Architecture D Refined: Five Layers}
+\label{sec:org609df56}
+
+With the cross-channel resolution, the architecture extends to five layers:
+
+\begin{verbatim}
+Layer 1: Session Advancement             [exists — session-runtime.rkt]
+    Session cells advance monotonically through session types.
+    Each advancement is a causal clock tick for that channel.
+
+Layer 2: Data-Flow Analysis              [NEW — per-variable ordering edges]
+    Analyze variable bindings to derive cross-channel ordering edges.
+    recv x a → send [f x] b  ⟹  ordering edge (a_pos < b_pos)
+
+Layer 3: Transitive Closure              [NEW — ordering cell propagator]
+    Compute the complete partial order by propagating ordering edges
+    to their transitive closure. Monotone fixed-point computation.
+    Concurrent effects remain unordered (least commitment).
+
+Layer 4: ATMS Branching                  [exists — atms.rkt]
+    Maintain per-branch ordering hypotheses for proc-case.
+    Resolve when branch is chosen; discard inconsistent worldviews.
+
+Layer 5: Effect Handler                  [NEW — sequential execution]
+    Read the resolved partial order. Execute effects in any valid
+    linearization. This is the only non-monotone step (actual IO).
+    Equivalent to the "stratification barrier" in the logic engine.
+\end{verbatim}
+
+Layers 1-4 are monotone and live entirely within the propagator network.
+Layer 5 is the control boundary — the point where monotone reasoning hands
+off to sequential execution, just as the logic engine's stratification barrier
+hands off to negation evaluation.
+\subsection{10f. \texttt{main} as Implicit Session}
+\label{sec:orge3f36a0}
+
+An important observation: \texttt{main} is already an implicit session. Today,
+\texttt{main} is a function that executes IO effects in sequential order. This is
+exactly what Architecture A (Stratified Barriers) provides — and it's also
+what Architecture D provides for a single-channel, single-session process.
+
+In fact, \emph{Architecture A is a degenerate case of Architecture D}:
+
+\begin{verbatim}
+Architecture A: main is a sequential walk → effects in walk order
+Architecture D: main as implicit single-channel session → effects in session order
+                (and walk order = session order for the degenerate case)
+\end{verbatim}
+
+This observation means the transition from A to D is smooth. The current
+behavior of \texttt{main} (sequential IO execution via AST walk) is exactly what D
+would produce for a process with a single implicit session. As \texttt{main} gains
+explicit session structure (multi-channel, concurrent sub-processes), D
+naturally extends to provide the richer ordering semantics.
+
+For non-\texttt{main} top-level IO (REPL, \texttt{eval} with \texttt{SysCap}), there is no session
+type, so Architecture A remains the fallback. This is correct — unstructured
+IO in the REPL is intentionally less disciplined. The type system makes this
+distinction visible.
+\section{11. Architecture Decision: A + D}
+\label{sec:org8ba83f6}
+
+\subsection{11a. The Recommended Pair}
+\label{sec:orgf4a6593}
+
+Architecture D provides session-derived ordering for session-typed IO (the
+structured case). Architecture A provides walk-based ordering for unsessioned
+IO (the unstructured case). Together, they cover all IO scenarios:
+
+\begin{center}
+\begin{tabular}{llll}
+Scenario & Architecture & Ordering Source & Guarantees\\
+\hline
+Session-typed IO (\texttt{defproc}) & D & Session type structure & Session fidelity (theorem)\\
+Multi-channel IO & D & Vector clock from per-channel sessions & Concurrent effects correctly unordered\\
+\texttt{main} (single-channel) & D (degenerate) & Implicit session ≅ walk order & Same as current behavior\\
+REPL / top-level \texttt{eval} & A & AST walk order & Sequential execution\\
+Non-IO pure computation & — & N/A & No effects to order\\
+\end{tabular}
+\end{center}
+\subsection{11b. Why B Is Subsumed}
+\label{sec:org918b3a6}
+
+Architecture B (Timestamped Effect Cells) assigns syntactic timestamps to
+effects and executes in timestamp order at barriers. For session-typed effects,
+Architecture D provides strictly more information:
+
+\begin{itemize}
+\item \emph{D's ordering is intrinsic}: derived from the session type, not from
+syntactic position. Refactoring code doesn't change the ordering (it can't
+— the session type is invariant).
+\item \emph{D's ordering is verified}: session fidelity is a theorem of the type
+system. Timestamp assignment has no such guarantee.
+\item \emph{D handles concurrency}: vector clocks from multi-channel sessions
+naturally express concurrent effects. Timestamps require explicit
+vector-timestamp machinery.
+\item \emph{D is compositional}: session type composition (PROTOCOLS\textsubscript{AS}\textsubscript{TYPES.org})
+composes effect orderings automatically.
+\end{itemize}
+
+For unsessioned effects, B and A are equivalent (both impose external ordering).
+A is simpler (walk order requires no new infrastructure). Therefore B adds
+nothing that A + D don't already provide.
+\subsection{11c. When C Might Be Relevant}
+\label{sec:org1768575}
+
+Architecture C (Reactive Effect Streams with topological scheduling) could be
+relevant for effects that are neither session-typed nor sequentially walked —
+e.g., declarative effect specifications in a constraint language. This remains
+a research direction but is not needed for Phase 0.
+\subsection{11d. Layered Architecture}
+\label{sec:orgc628968}
+
+\begin{verbatim}
+Layer 0: Propagator Network (monotone fixed points)               [exists]
+Layer 1: Session Lattice (protocol verification)                  [exists]
+Layer 2: Effect Position Lattice (session-derived ordering)       [NEW - D]
+Layer 3: ATMS (hypothetical effect orderings for branches)        [exists]
+Layer 4: Effect Handler (sequential execution in position order)  [NEW - D]
+Fallback: AST Walk (for unsessioned effects)                      [exists - A]
+\end{verbatim}
+\section{12. Formalization Roadmap}
+\label{sec:orge18c142}
+
+If we pursue Architecture D, the implementation would proceed:
+\subsection{Phase D1: Effect Position Lattice (Small, Self-Contained)}
+\label{sec:orga9634ae}
+\begin{itemize}
+\item Define \texttt{eff-bot}, \texttt{eff-pos(path, depth)}, \texttt{eff-top}
+\item Implement \texttt{eff-merge}, \texttt{eff-contradicts?}
+\item Tests: lattice properties (bot identity, idempotent, top absorption)
+\end{itemize}
+\subsection{Phase D2: Session-Effect Bridge Propagator}
+\label{sec:org10ea223}
+\begin{itemize}
+\item Implement \texttt{α} (session → effect position) and \texttt{γ} (effect position → session)
+\item Bridge propagator: watches session cell, updates effect cell
+\item Tests: bridge fires correctly on session advancement
+\end{itemize}
+\subsection{Phase D3: Effect Descriptor Cells}
+\label{sec:org2f9effe}
+\begin{itemize}
+\item Define effect descriptors: \texttt{eff-write(data)}, \texttt{eff-read}, \texttt{eff-close}, \texttt{eff-open(path, mode)}
+\item Effect descriptor cells with position + descriptor
+\item Tests: descriptors accumulate monotonically
+\end{itemize}
+\subsection{Phase D4: Effect Handler}
+\label{sec:orgc869d4e}
+\begin{itemize}
+\item Read all effect descriptor cells after quiescence
+\item Sort by position (total within channel, partial across channels)
+\item Execute in order, feeding results back
+\item Tests: end-to-end IO through session-derived ordering
+\end{itemize}
+\subsection{Phase D5: Vector Clock for Multi-Channel}
+\label{sec:orga6545ca}
+\begin{itemize}
+\item Extend positions to vectors for multi-channel processes
+\item Partial order for concurrent effects
+\item Tests: concurrent channel effects in correct order
+\end{itemize}
+\section{13. Critique and Limitations}
+\label{sec:orga0a3cb3}
+
+\subsection{13a. Data-Flow Analysis Complexity}
+\label{sec:org10296d9}
+
+The cross-channel data-flow analysis (§10a) requires tracking variable bindings
+through process structure. For simple cases (variable flows directly from recv
+to send), this is straightforward. For complex cases (pattern matching on
+received values, function application, higher-order bindings), the data-flow
+graph grows in complexity.
+
+However, the process language (\texttt{proc}) is intentionally restricted compared to
+the expression language. Processes don't have arbitrary higher-order functions —
+they have \texttt{send}, \texttt{recv}, \texttt{proc-case}, \texttt{proc-par}, and sequential composition.
+This restriction bounds the data-flow analysis to a manageable set of cases.
+\subsection{13b. Cycle Detection as Deadlock Detection}
+\label{sec:orgb87cceb}
+
+If the transitive closure computation discovers a cycle in the ordering graph
+(position A < position B < position A), this indicates a \emph{deadlock} — two
+effects that each depend on the other having already executed. This is not a
+failure of the ordering algorithm; it's a detection of a genuine program error.
+
+The session type system already prevents many deadlocks (session fidelity ensures
+that endpoints agree on ordering). But cross-channel cycles can still arise:
+
+\begin{verbatim}
+Process 1: recv x a . send [f x] b
+Process 2: recv y b . send [g y] a
+\end{verbatim}
+
+Each process waits for the other. The transitive closure would produce
+\texttt{a₀ < b₀ < a₀} — a cycle. The ordering propagator can detect this and raise
+an error at compile time, turning a runtime deadlock into a compile-time
+rejection. This is a significant advantage — the ordering analysis serves
+double duty as a static deadlock detector for cross-channel data dependencies.
+\subsection{13c. Performance Considerations}
+\label{sec:org8d00b09}
+
+Transitive closure on a set of ordering edges has \texttt{O(n³)} worst-case complexity
+(Floyd-Warshall). For typical process structures, \texttt{n} is the number of IO
+operations in a single process — usually small (< 50). The propagator-based
+incremental computation may be more efficient than batch algorithms because
+edges arrive incrementally as session cells advance.
+
+For very large processes with many channels, the vector clock representation
+grows linearly with the number of channels. This is the same scaling behavior
+as distributed vector clocks, and the same mitigation applies: only track
+channels that interact (sparse vector clocks).
+\subsection{13d. The "Fully Native" Limit}
+\label{sec:org63919da}
+
+Even with all five layers, the effect handler (Layer 5) remains non-monotone —
+it executes actual IO operations that produce observable side effects. This is
+irreducible: the CALM theorem guarantees that non-monotonic operations (which
+include all observable effects) require coordination.
+
+The achievement is not eliminating the coordination point, but \emph{minimizing} it.
+All reasoning about ordering is done monotonically in the propagator network.
+The only coordination point is the final execution barrier. This is optimal —
+it's the minimum coordination required by the CALM theorem.
+\section{14. Conclusions}
+\label{sec:org9d5ba8c}
+
+\subsection{14a. The Core Discovery}
+\label{sec:org695231a}
+
+Session types are not just protocol specifications — they are \emph{causal clocks}.
+The continuation structure of a session type encodes a total order on effects
+per channel, and the independence of separate session types encodes concurrency.
+Together, they provide a vector-clock-like causal ordering that is:
+
+\begin{enumerate}
+\item \emph{Intrinsic}: Derived from the session type, not imposed externally
+\item \emph{Sound}: Follows from session fidelity (a theorem, not a design choice)
+\item \emph{Compositional}: Multiple channels compose via vector clocks
+\item \emph{Compatible with monotone propagation}: Session advancement is monotone;
+effect position derivation via α is monotone; both live happily in the
+propagator network
+\end{enumerate}
+\subsection{14b. The Galois Connection}
+\label{sec:orga7dadaa}
+
+The Galois connection \texttt{(α, γ)} between the session lattice and the effect
+position lattice formalizes this relationship:
+
+\begin{itemize}
+\item α extracts ordering information from session types
+\item γ reconstructs session context from ordering information
+\item The adjunction guarantees soundness: session fidelity implies effect ordering
+\end{itemize}
+
+This connection is a quantale morphism between two effect quantales, reflecting
+the deep algebraic structure shared by session types and effect systems.
+\subsection{14c. Architecture A + D}
+\label{sec:orgaac2959}
+
+The recommended architecture pairs session-derived ordering (D) with walk-based
+barriers (A) as a fallback:
+
+\begin{itemize}
+\item \emph{D} handles session-typed IO — the structured, common case. Ordering is
+a theorem from session fidelity, not a design choice. Cross-channel data
+dependencies are resolved by transitive closure (a monotone fixed point).
+Branch alternatives are maintained by the ATMS.
+\item \emph{A} handles unsessioned IO — the REPL, top-level eval, \texttt{main} without
+explicit sessions. Walk order provides sequential execution.
+\item \emph{B} is subsumed — it adds nothing that A + D don't provide.
+\end{itemize}
+\subsection{14d. The \texttt{rel=/=proc} Parallel}
+\label{sec:org06916a3}
+
+The deep structural parallel between the logic engine (\texttt{rel}) and the session
+runtime (\texttt{proc}) confirms that the Layered Recovery Principle is general:
+non-monotone behavior is recovered on a monotone substrate by inserting control
+layers at the boundaries of monotone phases. The propagator network is the
+shared foundation; the ATMS provides hypothetical reasoning; the control layer
+(stratification for \texttt{rel}, effect handler for \texttt{proc}) performs the non-monotone
+operations at precisely the points where coordination is required.
+\subsection{14e. Architecture D as Natural Extension}
+\label{sec:org1e13bd9}
+
+Architecture D emerges as a natural extension of our existing infrastructure:
+
+\begin{itemize}
+\item The session lattice already exists
+\item Session advancement propagators already exist
+\item Cross-domain bridge propagators are an established pattern
+\item The ATMS for branching already exists
+\item The effect position lattice is a simple new lattice
+\item The bridge propagator follows the existing Galois connection pattern
+\item Transitive closure is a standard propagator computation
+\end{itemize}
+
+The novel contributions are:
+\begin{enumerate}
+\item Recognizing that session types provide causal clocks intrinsically
+\item Formalizing the session-to-effect mapping as a Galois connection
+\item Using transitive closure of ordering edges for cross-channel dependencies
+\item Leveraging the ATMS for branching effect orders
+\item Identifying the \texttt{rel=/=proc} structural parallel
+\end{enumerate}
+\section{References}
+\label{sec:orgf51bdb4}
+
+\subsection{Prologos Internal}
+\label{sec:org10c3c44}
+\begin{itemize}
+\item Effectful Propagators Research: \texttt{docs/tracking/2026-03-06\_EFFECTFUL\_PROPAGATORS\_RESEARCH.md}
+\item IO Implementation PIR: \texttt{docs/tracking/2026-03-06\_IO\_IMPLEMENTATION\_PIR.md}
+\item Galois Connections \& AI: \texttt{docs/tracking/2026-02-27\_1026\_GALOIS\_CONNECTIONS\_ABSTRACT\_INTERPRETATION.md}
+\item Logic Engine Design: \texttt{docs/tracking/2026-02-24\_LOGIC\_ENGINE\_DESIGN.org}
+\item Session Type Design: \texttt{docs/tracking/2026-03-03\_SESSION\_TYPE\_DESIGN.md}
+\item Session Type PIR: \texttt{docs/tracking/2026-03-04\_SESSION\_TYPE\_PIR.md}
+\item Protocols as Types: \texttt{docs/tracking/principles/PROTOCOLS\_AS\_TYPES.org}
+\item Effectful Computation on Propagators: \texttt{docs/tracking/principles/EFFECTFUL\_COMPUTATION\_ON\_PROPAGATORS.org}
+\end{itemize}
+\subsection{Foundational}
+\label{sec:orge693d2f}
+\begin{itemize}
+\item \href{https://homepages.inf.ed.ac.uk/wadler/papers/propositions-as-sessions/propositions-as-sessions.pdf}{Propositions as Sessions} — Wadler (ICFP 2012)
+\item \href{https://www.cs.cmu.edu/\~fp/papers/mscs13.pdf}{Linear Logic Propositions as Session Types} — Caires \& Pfenning (MSCS 2012)
+\item \href{https://link.springer.com/chapter/10.1007/978-3-642-15375-4\_16}{Session Types as Intuitionistic Linear Propositions} — Caires \& Pfenning (CONCUR 2010)
+\item \href{https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CSL.2012.228}{Cut Reduction as Asynchronous Session-Typed Communication} — DeYoung, Caires, Pfenning, Toninho (CSL 2012)
+\end{itemize}
+\subsection{Causality and Linear Logic}
+\label{sec:org383c35c}
+\begin{itemize}
+\item \href{https://link.springer.com/chapter/10.1007/978-3-030-17127-8\_9}{Causality in Linear Logic} — Hayman \& Winskel (FoSSaCS 2019)
+\item \href{https://arxiv.org/abs/1311.6057}{Games and Full Completeness for MLL} — Abramsky \& Jagadeesan
+\item \href{https://arxiv.org/pdf/1111.7159}{Sequentiality vs. Concurrency in Games and Logic} — Melliès
+\end{itemize}
+\subsection{Effect Systems and Graded Monads}
+\label{sec:org952a525}
+\begin{itemize}
+\item \href{https://www.researchgate.net/publication/220676480\_Parameterised\_notions\_of\_computation}{Parameterised Notions of Computation} — Atkey (JFP 2009)
+\item \href{https://kar.kent.ac.uk/66632/1/RP\_9788793519817C10.pdf}{Session Types with Linearity in Haskell} — Orchard \& Yoshida (2016)
+\item \href{https://arxiv.org/pdf/2001.10274}{Unifying Graded and Parameterised Monads} — Katsumata, Orchard et al.
+\item \href{https://www.cs.kent.ac.uk/people/staff/dao7/publ/effects-revisited.pdf}{Effect Systems Revisited} — Katsumata (2014)
+\item \href{https://dl.acm.org/doi/fullHtml/10.1145/3450272}{Polymorphic Iterable Sequential Effect Systems} — Gordon (TOPLAS 2021)
+\item \href{https://kar.kent.ac.uk/81880/1/dataflow-effect-monads.pdf}{Data-Flow Analyses as Effects and Graded Monads} — Orchard et al.
+\end{itemize}
+\subsection{Session Type Properties}
+\label{sec:orgabcaaaf}
+\begin{itemize}
+\item \href{https://eprints.gla.ac.uk/262401/1/262401.pdf}{Comparing Type Systems for Deadlock Freedom} — Kokke et al.
+\item \href{https://www.cs.cmu.edu/\~balzers/publications/manifest\_deadlock\_freedom.pdf}{Manifest Deadlock-Freedom for Shared Session Types} — Balzer et al.
+\item \href{https://arxiv.org/pdf/2103.14481}{Deadlock-Free Session Types in Linear Haskell} — Kokke (2021)
+\end{itemize}
+\subsection{Propagators, CRDTs, and Distributed Systems}
+\label{sec:org618dddb}
+\begin{itemize}
+\item \href{https://groups.csail.mit.edu/mac/users/gjs/propagators/}{Revised Report on the Propagator Model} — Radul \& Sussman
+\item \href{https://en.wikipedia.org/wiki/Conflict-free\_replicated\_data\_type}{CRDTs (Wikipedia)}
+\item \href{https://en.wikipedia.org/wiki/Vector\_clock}{Vector Clocks (Wikipedia)}
+\item \href{https://github.com/ekmett/propagators}{Kmett's Propagators (GitHub)}
+\item \href{https://dsf.berkeley.edu/papers/cidr11-bloom.pdf}{CALM Theorem} — Hellerstein (CIDR 2011)
+\end{itemize}
+\subsection{Planning and Ordering}
+\label{sec:org936f7ac}
+\begin{itemize}
+\item Weld, D.S. — An Introduction to Least Commitment Planning (AI Magazine, 1994)
+\item Penberthy, J.S. \& Weld, D.S. — UCPOP: A Sound, Complete, Partial Order Planner for ADL (KR 1992)
+\end{itemize}
+\end{document}

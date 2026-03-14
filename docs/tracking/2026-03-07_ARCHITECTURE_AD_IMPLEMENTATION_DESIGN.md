@@ -1,0 +1,1367 @@
+- [Document Purpose](#org2c531e4)
+  - [Scope](#org1cb51ff)
+- [Design Decisions Summary](#org7814acf)
+- [Prerequisites: What's Already Built](#orgaa3557c)
+- [Progress Tracker](#orgbed779c)
+- [Phase Dependency Graph](#orgbb06fcf)
+- [Effect Position Lattice](#org4569407)
+  - [Data Structures](#orgb43319e)
+  - [Session Depth Computation](#org1918063)
+  - [Lattice Operations](#orgc945bd6)
+  - [Contradiction Detection](#org9147aa1)
+- [Session-Effect Bridge Propagator](#org178b707)
+- [Effect Descriptor Accumulation](#orgf4bffcc)
+  - [Sum-Type Effect Descriptors](#org255337e)
+- [Prerequisite: `proc-recv` Binding Preservation (AD-A0)](#orgeccfc7a)
+  - [The Problem](#org7e89bda)
+  - [The Fix](#org7323a19)
+  - [Pipeline Impact](#orga3b1bd7)
+  - [Data-Flow Analysis Scope](#orgf272fd3)
+- [Data-Flow Analysis for Cross-Channel Ordering](#orgff9e5df)
+  - [The Problem](#org8bb76c8)
+  - [Static AST Analysis](#orgb907ea1)
+  - [Session Ordering Edges](#org3959868)
+- [Ordering Propagator (Transitive Closure)](#org5c44d00)
+  - [Performance Note](#org35af627)
+  - [Resource Aliasing Limitation](#org4ad8501)
+- [ATMS Integration for Branching](#org88f57ff)
+  - [Worldview Collapse Timing](#org133221f)
+- [Effect Handler (Layer 5)](#orgd88ad2c)
+  - [Linearization](#org65c735b)
+  - [Effect Executor](#org2bf4cb2)
+- [Architecture A Preservation](#org44e97fc)
+  - [When Architecture A Applies](#org86c9285)
+  - [Relationship to Architecture D](#orga8022cb)
+  - [Implementation](#org264d90f)
+- [Migration Strategy](#org88acec0)
+  - [Phase 1: Side-by-Side (AD-A through AD-E3)](#org87439f7)
+  - [Phase 2: Shadow Validation (after AD-E3)](#org8c15ae3)
+  - [Phase 3: Selective Activation (AD-F2)](#org4e7682f)
+  - [Phase 4: Full Transition (future, after concurrent runtime)](#org86d8ba5)
+  - [Backward Compatibility Guarantee](#org9e3fc8b)
+- [Traced Example: Multi-Channel Process](#org6c8c9d7)
+  - [Step 1: Compile with Effect Collection](#org5690dbc)
+  - [Step 2: Extract Data-Flow Edges](#orgca19d83)
+  - [Step 3: Compute Session Ordering Edges](#orgc58f672)
+  - [Step 4: Transitive Closure](#orgf243d89)
+  - [Step 5: Linearize](#org551eac6)
+  - [Step 6: Execute Effects](#orge9c5843)
+  - [Step 7: Post-Execution Verification](#org61a4a07)
+  - [Architecture A Comparison](#org417e0bf)
+- [Test Strategy](#orgce03cce)
+  - [Per-Phase Tests](#org268ded6)
+  - [Regression Testing](#orgb0e6df6)
+  - [Shadow Validation Tests (after AD-E3)](#orgb33825b)
+- [Deferred Features](#org201790d)
+  - [Architecture C: Reactive Effect Streams (RESEARCH)](#orgbbb475c)
+  - [Concurrent Runtime (S8b)](#org2941384)
+  - [Incremental Data-Flow Analysis](#org4f8a147)
+  - [Speculative IO via ATMS](#orgb6a6a79)
+  - [Append-Only / Idempotent Effect Optimizations](#org0b7cf92)
+- [Files Summary](#org1779206)
+- [References](#orgb3e60c1)
+  - [Prologos Internal](#org9acd98a)
+  - [External](#org4420d05)
+
+; Context: IO Implementation PIR §4a — "Propagator Networks Cannot Order Side Effects" ; Status: Phase 3 Design Artifact — implementation roadmap for Architecture A+D ; Prerequisite Reading: ; - docs/tracking/2026-03-06<sub>EFFECTFUL</sub><sub>PROPAGATORS</sub><sub>RESEARCH.md</sub> ; - docs/tracking/2026-03-06<sub>SESSION</sub><sub>TYPES</sub><sub>AS</sub><sub>EFFECT</sub><sub>ORDERING.org</sub> ; - docs/tracking/principles/EFFECTFUL<sub>COMPUTATION</sub><sub>ON</sub><sub>PROPAGATORS.org</sub> ; - docs/tracking/2026-03-05<sub>IO</sub><sub>IMPLEMENTATION</sub><sub>DESIGN.md</sub>
+
+
+<a id="org2c531e4"></a>
+
+# Document Purpose
+
+This document bridges the gap between the effectful propagator research (Phase 1 — "what the architecture should look like") and implementation ("how to build it"). It specifies:
+
+-   **Exact files to create or modify**, with function signatures and struct definitions
+-   **Phased sub-tasks** with explicit dependencies, so each sub-phase can be implemented and committed independently
+-   **Lattice definitions** for the effect position and ordering domains
+-   **Integration points** with existing session runtime, propagator network, IO bridge, and ATMS
+
+The research documents remain the canonical reference for theory, design rationale, and formal foundations. This document assumes familiarity with them.
+
+
+<a id="org1cb51ff"></a>
+
+## Scope
+
+**In scope** (Phases AD-A through AD-F):
+
+-   Effect position lattice and descriptor types
+-   Session-effect bridge propagator (Galois connection alpha direction)
+-   Effect collection mode in `compile-live-process`
+-   Data-flow analysis for cross-channel ordering edges
+-   Transitive closure propagator (monotone fixed point)
+-   ATMS integration for branching effect orders (`proc-case`)
+-   Effect handler (Layer 5 — linearization and execution)
+-   Architecture selection (A vs D, automatic and manual)
+-   Migration strategy (side-by-side → shadow validation → selective activation)
+
+**Out of scope** (see §17 Deferred):
+
+-   Concurrent runtime (multi-network execution) — blocked on S8b
+-   True async `!!`​/=??= with buffered channels
+-   Cross-network message delivery, distributed propagator scheduling
+-   Architecture C (reactive effect streams with topological scheduling)
+
+
+<a id="org7814acf"></a>
+
+# Design Decisions Summary
+
+| #  | Decision                              | Resolution                                                      | Rationale                                                                     |
+|--- |------------------------------------- |--------------------------------------------------------------- |----------------------------------------------------------------------------- |
+| 1  | Effect position representation        | Per-channel flat lattice + vector clock for multi-channel       | Follows Lamport/vector clock formalism; matches session advancement structure |
+| 2  | Ordering accumulation lattice         | Set-union of `eff-edge` (monotone)                              | Standard propagator pattern; adding edges never removes ordering              |
+| 3  | Architecture selection                | Auto-detect based on process structure                          | Multi-channel IO + cross-channel data flow → D; else → A                      |
+| 4  | Concurrent effects                    | Execute in any order (deterministic tiebreak by channel name)   | Session independence guarantees no interference                               |
+| 5  | Backward compatibility                | Architecture A preserved as fallback, never removed             | A is a degenerate case of D; both remain valid                                |
+| 6  | Effect collection vs inline execution | Dual-mode: `#:collect-effects?` parameter selects behavior      | Preserves A behavior while enabling D                                         |
+| 7  | Data-flow analysis approach           | Static AST walk (not incremental propagation)                   | Sufficient for Phase 0; incremental O(n²)/edge in Phase 2+                    |
+| 8  | ATMS integration scope                | `proc-case` branches only (not speculative IO)                  | Phase 0: walk-time resolution; full ATMS for concurrent runtime               |
+| 9  | Deadlock detection                    | Cycle in transitive closure → `eff-top` contradiction           | Falls out naturally from the ordering lattice structure                       |
+| 10 | Effect descriptor representation      | Sum types (`eff-open`, `eff-write`, `eff-read`, `eff-close`)    | Type-safe, extensible, clean pattern matching                                 |
+| 11 | `proc-recv` binding                   | Preserve binding name through elaboration (add `binding` field) | Data-flow analysis requires variable name to trace cross-channel deps         |
+| 12 | File format                           | `.org` (canonical per project rules)                            | `.md` is generated artifact                                                   |
+
+
+<a id="orgaa3557c"></a>
+
+# Prerequisites: What's Already Built
+
+| Module               | File                      | What It Provides                                                                          | Status            |
+|-------------------- |------------------------- |----------------------------------------------------------------------------------------- |----------------- |
+| Propagator Network   | `propagator.rkt`          | `net-new-cell`, `net-add-propagator`, `run-to-quiescence`, cross-domain bridge            | Complete          |
+| Session Lattice      | `session-lattice.rkt`     | `session-lattice-merge`: flat lattice `sess-bot → concrete → sess-top`                    | Complete          |
+| Session Types        | `sessions.rkt`            | `sess-send/recv/dsend/drecv/async-send/async-recv/choice/offer/mu/end` with `cont` fields | Complete          |
+| Process AST          | `processes.rkt`           | `proc-send/recv/sel/case/new/par/link/open/stop` with `chan/expr/cont` fields             | Complete          |
+| Session Propagators  | `session-propagators.rkt` | `compile-proc-to-network`, `add-send-prop`, `add-recv-prop`, `add-duality-prop`           | Complete (S4)     |
+| Session Runtime      | `session-runtime.rkt`     | `compile-live-process`, `rt-execute-process`, `rt-new-io-channel`                         | Complete (S7)     |
+| IO State Lattice     | `io-bridge.rkt`           | `io-bot/io-opening/io-open/io-closed/io-top`, `io-state-merge`                            | Complete          |
+| IO Bridge Propagator | `io-bridge.rkt`           | `make-io-bridge-propagator` (designed, bypassed in Phase 0)                               | Designed          |
+| ATMS                 | `atms.rkt`                | `atms-assume`, `atms-amb`, `atms-add-nogood`, `atms-consistent?`, `atms-solve-all`        | Complete (unused) |
+| IO FFI               | `io-ffi.rkt`              | File/console operations, CSV parser                                                       | Complete          |
+| Capabilities         | `capabilities.prologos`   | `ReadCap <: FsCap <: IOCap <: SysCap` hierarchy                                           | Complete          |
+| Stratified Barriers  | (formalized)              | Three-stratum architecture documented at commit `bc34e44`                                 | Complete          |
+
+
+<a id="orgbed779c"></a>
+
+# Progress Tracker
+
+| Phase | Sub-phase                            | Status | Commit    | Notes                                                                                                                    |
+|----- |------------------------------------ |------ |--------- |------------------------------------------------------------------------------------------------------------------------ |
+| AD-A  | A0: `proc-recv` binding preservation | ✅     | `9dce7dd` | 9 source + 8 test files; 5860 tests pass                                                                                 |
+| AD-A  | A1: Effect Position Lattice          | ✅     | `0f20fec` | `effect-position.rkt`: lattice + ordering + session-depth                                                                |
+| AD-A  | A2: Effect Descriptor Type           | ✅     | `0f20fec` | Sum-type descriptors + effect-set accumulator; 54 new tests                                                              |
+| AD-B  | B1: Single-Channel Bridge            | ✅     | `7da2cd8` | `effect-bridge.rkt`: alpha direction Galois connection                                                                   |
+| AD-B  | B2: Multi-Channel Bridge             | ✅     | `7da2cd8` | 18 tests; 5932 tests pass across 305 files                                                                               |
+| AD-C  | C1: Effect Collection Mode           | ✅     | `e76dd0c` | `#:collect-effects?` kwarg; effect descriptors with causal positions                                                     |
+| AD-C  | C2: Position Cells in Runtime        | ✅     | `e76dd0c` | Bridge propagators installed at proc-open; 19 tests; 5951 tests pass across 306 files                                    |
+| AD-D  | D1: Data-Flow Edge Extraction        | ✅     | `e7127d0` | `effect-ordering.rkt`: cross-channel data-flow analysis + session ordering edges                                         |
+| AD-D  | D2: Transitive Closure Propagator    | ✅     | `e7127d0` | Monotone fixed-point in propagator network; cycle = deadlock = contradiction                                             |
+| AD-D  | D3: Integration with Collection      | ✅     | `e7127d0` | `linearize-effects` + full pipeline test; 30 tests; 5981 pass across 307 files                                           |
+| AD-E  | E1: Effect Linearization             | ✅     | `d016902` | Multi-effect-per-position fix in `linearize-effects`; open→write/read→close priority sort                                |
+| AD-E  | E2: Effect Executor                  | ✅     | `d016902` | `effect-executor.rkt`: execute-effects, execute-effects-and-propagate (read feedback to msg-in)                          |
+| AD-E  | E3: Full D Pipeline                  | ✅     | `d016902` | `rt-execute-process-d`: compile→collect→order→linearize→execute→quiescence; 19 tests; 6000 pass across 308 files         |
+| AD-F  | F1: ATMS Branching                   | ✅     | `0f7ff6c` | Phase 0 simplified: bindings-threaded choice selections; only active branch effects collected                            |
+| AD-F  | F2: Architecture Selection           | ✅     | `0f7ff6c` | `rt-execute-process-auto`: auto-detect A vs D; `count-io-channels`, `architecture-d-required?`                           |
+| AD-F  | F3: Concurrent Hooks                 | ✅     | `0f7ff6c` | `current-effect-executor` parameter; default (sequential) + placeholder concurrent; 25 tests; 6025 pass across 310 files |
+
+
+<a id="orgbb06fcf"></a>
+
+# Phase Dependency Graph
+
+```
+AD-A0 (proc-recv binding) ── prerequisite ────────────────────────┐
+AD-A1 (Effect Position Lattice) ──────────────────────────────────┤
+AD-A2 (Effect Descriptor Type) ───────────────────────────────────┤
+                                                                  │
+AD-B1 (Single-Channel Bridge) ── requires AD-A ──────────────────┤
+AD-B2 (Multi-Channel Bridge) ── requires AD-B1 ──────────────────┤
+                                                                  │
+AD-C1 (Effect Collection Mode) ── requires AD-A2 ────────────────┤
+AD-C2 (Position Cells in Runtime) ── requires AD-B, AD-C1 ───────┤
+                                                                  │
+AD-D1 (Data-Flow Edge Extraction) ── requires AD-A0, AD-A ───────┤
+AD-D2 (Transitive Closure Propagator) ── requires AD-D1 ─────────┤
+AD-D3 (Integration with Collection) ── requires AD-C2, AD-D2 ────┤
+                                                                  │
+AD-E1 (Effect Linearization) ── requires AD-D3 ──────────────────┤
+AD-E2 (Effect Executor) ── requires AD-E1, AD-A2 ────────────────┤
+AD-E3 (Full D Pipeline) ── requires AD-E2, AD-C2 ────────────────┤
+                                                                  │
+AD-F1 (ATMS Branching) ── requires AD-E3 ────────────────────────┤
+AD-F2 (Architecture Selection) ── requires AD-E3 ────────────────┤
+AD-F3 (Concurrent Hooks) ── requires AD-F2 ──────────────────────┘
+
+Critical path: AD-A0 → AD-A → AD-B1 → AD-C1+C2 → AD-D3 → AD-E3 → AD-F2
+```
+
+
+<a id="org4569407"></a>
+
+# Effect Position Lattice
+
+
+<a id="orgb43319e"></a>
+
+## Data Structures
+
+The effect position lattice tracks where in the causal timeline an effect sits.
+
+```racket
+;; ── effect-position.rkt ──
+
+;; Bottom and top of position lattice
+(define eff-bot 'eff-bot)
+(define eff-top 'eff-top)
+(define (eff-bot? x) (eq? x 'eff-bot))
+(define (eff-top? x) (eq? x 'eff-top))
+
+;; A concrete position: channel identifier + depth in session chain
+;; For session !String . ?Int . end:
+;;   depth 0 = the !String step
+;;   depth 1 = the ?Int step
+;;   depth 2 = end
+(struct eff-pos (channel depth) #:transparent)
+
+;; A vector position: the composite "where are we now" across all channels.
+;; Used by the session-effect bridge to track runtime progress — the bridge
+;; updates the vector as each channel's session advances. This is the STATE
+;; of the system (how far we've gotten), as distinct from eff-edge/eff-ordering
+;; which represent ORDERING CONSTRAINTS (what must come before what).
+;;
+;; positions: hasheq channel-symbol → Nat
+(struct eff-vec (positions) #:transparent)
+
+;; Ordering edge: (source-pos, target-pos) meaning source happens-before target
+(struct eff-edge (source target) #:transparent)
+
+;; Ordering accumulator: set of ordering edges (monotone via set-union)
+(struct eff-ordering (edges) #:transparent)
+```
+
+
+<a id="org1918063"></a>
+
+## Session Depth Computation
+
+The alpha direction of the Galois connection extracts causal position from session state.
+
+```racket
+;; Count the continuation nesting depth of a session type.
+;; This is the number of communication steps completed so far.
+;;
+;; Full session type:  !String . ?Int . end   → depth 0
+;; After one step:     ?Int . end              → depth 1
+;; After two steps:    end                     → depth 2
+;;
+;; For branching (choice/offer), all branches have the same depth
+;; at the choice point; depths diverge within branches.
+;;
+;; Uses: sess-send-cont, sess-recv-cont, etc. from sessions.rkt (lines 31-43)
+(define (session-depth full-session current-session)
+  (cond
+    [(equal? full-session current-session) 0]
+    [(sess-end? current-session) (session-steps full-session)]
+    [else (session-steps-between full-session current-session)]))
+
+;; Count total steps in a session type
+(define (session-steps sess)
+  (match sess
+    [(sess-send _ cont)       (add1 (session-steps cont))]
+    [(sess-recv _ cont)       (add1 (session-steps cont))]
+    [(sess-dsend _ cont)      (add1 (session-steps cont))]
+    [(sess-drecv _ cont)      (add1 (session-steps cont))]
+    [(sess-async-send _ cont) (add1 (session-steps cont))]
+    [(sess-async-recv _ cont) (add1 (session-steps cont))]
+    [(sess-choice branches)   (add1 (apply max (map (λ (b) (session-steps (cdr b))) branches)))]
+    [(sess-offer branches)    (add1 (apply max (map (λ (b) (session-steps (cdr b))) branches)))]
+    [(sess-mu body)           (session-steps (unfold-session sess))]
+    [(sess-end)               0]
+    [_ 0]))
+```
+
+
+<a id="orgc945bd6"></a>
+
+## Lattice Operations
+
+```racket
+;; Position comparison: returns 'less | 'greater | 'equal | 'concurrent
+(define (eff-pos-compare p1 p2)
+  (cond
+    [(and (eff-pos? p1) (eff-pos? p2))
+     (if (eq? (eff-pos-channel p1) (eff-pos-channel p2))
+         ;; Same channel: total order by depth
+         (cond [(< (eff-pos-depth p1) (eff-pos-depth p2)) 'less]
+               [(> (eff-pos-depth p1) (eff-pos-depth p2)) 'greater]
+               [else 'equal])
+         ;; Different channels: concurrent (incomparable)
+         'concurrent)]
+    [else 'concurrent]))
+
+;; Ordering operations
+(define eff-ordering-empty (eff-ordering '()))
+
+(define (eff-ordering-add-edge ordering edge)
+  (eff-ordering (cons edge (eff-ordering-edges ordering))))
+
+;; Ordering merge: set-union of edges (monotone)
+(define (eff-ordering-merge o1 o2)
+  (eff-ordering (remove-duplicates
+                 (append (eff-ordering-edges o1)
+                         (eff-ordering-edges o2)))))
+
+;; Transitive closure: for each pair (a < b) and (b < c), derive (a < c)
+;; Repeat until fixed point.
+(define (eff-ordering-transitive-closure ordering)
+  (define edges (eff-ordering-edges ordering))
+  (define (step current-edges)
+    (define new-edges
+      (for*/fold ([acc current-edges])
+                 ([e1 (in-list current-edges)]
+                  [e2 (in-list current-edges)]
+                  #:when (equal? (eff-edge-target e1) (eff-edge-source e2)))
+        (define new-edge (eff-edge (eff-edge-source e1) (eff-edge-target e2)))
+        (if (member new-edge acc) acc (cons new-edge acc))))
+    (if (= (length new-edges) (length current-edges))
+        (eff-ordering new-edges)  ;; fixed point
+        (step new-edges)))
+  (step edges))
+
+;; Cycle detection: if transitive closure contains (a < a), it's a deadlock
+(define (eff-ordering-has-cycle? ordering)
+  (define closed (eff-ordering-transitive-closure ordering))
+  (for/or ([edge (in-list (eff-ordering-edges closed))])
+    (equal? (eff-edge-source edge) (eff-edge-target edge))))
+```
+
+
+<a id="org9147aa1"></a>
+
+## Contradiction Detection
+
+```racket
+;; An ordering with a cycle is a contradiction: it represents a deadlock.
+;; This makes deadlock a compile-time error, not a runtime hang.
+;;
+;; Example: recv x a → send x b → recv y b → send y a
+;; Creates edges: (a:0 < b:0), (b:0 < a:1)
+;; With session edges: (a:0 < a:1), (b:0 < b:1)
+;; Transitive closure: (a:0 < a:1), (b:0 < a:1), (a:0 < b:0), (b:0 < b:1)
+;;   → no cycle (a:0 < a:1, not a:0 < a:0)
+;;
+;; But if: recv x a → send x b AND recv y b → send y a (circular dependency)
+;; Creates edges: (a:0 < b:0), (b:0 < a:0)
+;; Transitive closure: (a:0 < b:0), (b:0 < a:0), (a:0 < a:0) ← CYCLE
+;; → eff-top contradiction → E-level error
+(define (eff-ordering-contradicts? ordering)
+  (eff-ordering-has-cycle? ordering))
+```
+
+
+<a id="org178b707"></a>
+
+# Session-Effect Bridge Propagator
+
+The bridge propagator implements the alpha direction of the Galois connection: `alpha : Session → EffectPosition`. It watches a session cell and writes the corresponding effect position to an effect position cell.
+
+```racket
+;; ── effect-bridge.rkt ──
+
+;; Install a bridge propagator that maps session advancement to effect positions.
+;;
+;; When the session cell advances (e.g., !String.?Int.end → ?Int.end),
+;; the bridge computes the new depth and writes it to the effect position cell.
+;;
+;; Pattern: follows net-add-cross-domain-propagator from propagator.rkt (line 812)
+;; but is unidirectional (alpha direction only — we don't need gamma at runtime).
+;;
+;; net         : prop-network
+;; sess-cell   : cell-id (session lattice cell)
+;; effect-cell : cell-id (effect position lattice cell)
+;; channel     : symbol (channel identifier)
+;; full-session: session type (the complete session, for depth computation)
+;; Returns: (values net* prop-id)
+(define (add-session-effect-bridge net sess-cell effect-cell channel full-session)
+  (define fire-fn
+    (lambda (read-cell write-cell)
+      (define sess-val (read-cell sess-cell))
+      (cond
+        [(sess-bot? sess-val) (void)]  ;; no information yet
+        [(sess-top? sess-val)
+         (write-cell effect-cell eff-top)]  ;; session contradiction → effect contradiction
+        [else
+         (define depth (session-steps-to full-session sess-val))
+         (write-cell effect-cell (eff-pos channel depth))])))
+  (net-add-propagator net (list sess-cell) (list effect-cell) fire-fn))
+
+;; Install bridges for all channels in a multi-channel process.
+;; Returns a vector clock: hasheq channel → effect-position-cell-id
+(define (add-multi-channel-bridges net channel-sessions)
+  ;; channel-sessions: list of (cons channel-symbol (cons sess-cell-id full-session-type))
+  (for/fold ([net* net]
+             [pos-cells (hasheq)])
+            ([cs (in-list channel-sessions)])
+    (define chan (car cs))
+    (define sess-cell (cadr cs))
+    (define full-sess (cddr cs))
+    (define-values (net** effect-cell) (net-new-cell net* eff-bot eff-pos-merge))
+    (define-values (net*** _pid) (add-session-effect-bridge net** sess-cell effect-cell chan full-sess))
+    (values net*** (hash-set pos-cells chan effect-cell))))
+```
+
+
+<a id="orgf4bffcc"></a>
+
+# Effect Descriptor Accumulation
+
+Effect descriptors are accumulated monotonically during the compilation walk. Each descriptor records *what* effect to perform and *where* in the causal timeline.
+
+
+<a id="org255337e"></a>
+
+## Sum-Type Effect Descriptors
+
+```racket
+;; ── In effect-position.rkt ──
+
+;; Effect descriptors use sum types for type safety and clean pattern matching.
+;; Each kind has exactly the fields it needs — no heterogeneous payload.
+(struct eff-open  (channel position path mode) #:transparent)   ;; mode: 'read | 'write | 'append
+(struct eff-write (channel position value) #:transparent)       ;; value: Prologos expr
+(struct eff-read  (channel position) #:transparent)             ;; no payload — reads from port
+(struct eff-close (channel position) #:transparent)             ;; no payload — closes port
+
+;; Predicate for any effect descriptor
+(define (effect-desc? x)
+  (or (eff-open? x) (eff-write? x) (eff-read? x) (eff-close? x)))
+
+;; Extract channel from any effect descriptor
+(define (effect-desc-channel eff)
+  (cond [(eff-open? eff)  (eff-open-channel eff)]
+        [(eff-write? eff) (eff-write-channel eff)]
+        [(eff-read? eff)  (eff-read-channel eff)]
+        [(eff-close? eff) (eff-close-channel eff)]))
+
+;; Extract position from any effect descriptor
+(define (effect-desc-position eff)
+  (cond [(eff-open? eff)  (eff-open-position eff)]
+        [(eff-write? eff) (eff-write-position eff)]
+        [(eff-read? eff)  (eff-read-position eff)]
+        [(eff-close? eff) (eff-close-position eff)]))
+
+;; Effect accumulator: list of effect descriptors (monotone via append/union)
+(struct effect-set (effects) #:transparent)
+
+(define effect-set-empty (effect-set '()))
+
+(define (effect-set-add es desc)
+  (effect-set (cons desc (effect-set-effects es))))
+
+(define (effect-set-merge es1 es2)
+  (effect-set (remove-duplicates
+               (append (effect-set-effects es1)
+                       (effect-set-effects es2)))))
+```
+
+When `compile-live-process` runs in `#:collect-effects? #t` mode, instead of:
+
+```
+(write-string str-val port)    ;; direct IO (Architecture A)
+(flush-output port)
+```
+
+It produces:
+
+```
+(eff-write channel (eff-pos channel depth) str-val)
+```
+
+The effect descriptors are purely data. They describe *what* to do without doing it. The propagator network can reason about them monotonically (accumulate, order, analyze). Execution happens later, at the Layer 5 barrier.
+
+
+<a id="orgeccfc7a"></a>
+
+# Prerequisite: `proc-recv` Binding Preservation (AD-A0)
+
+
+<a id="org7e89bda"></a>
+
+## The Problem
+
+The surface syntax `surf-proc-recv` (`surface-syntax.rkt` line 1092) stores the binding variable name: `(struct surf-proc-recv (var chan cont srcloc))`. But the elaborator (`elaborator.rkt` lines 3385-3392) **drops `var`** when constructing the elaborated process: `(proc-recv chan #f cont)`. The data-flow analysis needs this variable name to trace cross-channel dependencies.
+
+
+<a id="org7323a19"></a>
+
+## The Fix
+
+Add a `binding` field to `proc-recv`:
+
+```racket
+;; Before (processes.rkt line 42):
+(struct proc-recv (chan type cont) #:transparent)
+
+;; After:
+(struct proc-recv (chan binding type cont) #:transparent)
+;; binding: symbol | #f — the variable name bound by recv, or #f if unused
+```
+
+Then update the elaborator:
+
+```racket
+;; Before (elaborator.rkt line 3392):
+(proc-recv chan #f cont)
+
+;; After:
+(proc-recv chan var #f cont)
+```
+
+
+<a id="orga3b1bd7"></a>
+
+## Pipeline Impact
+
+The 14-file AST pipeline needs pass-through updates for the new field. These are mechanical — `substitution.rkt`, `zonk.rkt`, `reduction.rkt`, `pretty-print.rkt`, etc. just pass through the `binding` field unchanged. No semantic changes to any pipeline stage. This is the same pattern used when adding fields to other AST nodes (e.g., `expr-opaque` in IO-A1).
+
+
+<a id="orgf272fd3"></a>
+
+## Data-Flow Analysis Scope
+
+The process AST has no `proc-let` construct — the process language is a pi-calculus variant with only communication primitives. All computation happens inside `proc-send`'s expression field. This means:
+
+-   **Direct variable references**: ✓ — `recv content a; send [f content] b` → `content` is an `expr-fvar` in `f content`, traceable to channel `a`'s recv
+-   **Expression-level computation**: ✓ — `recv x a; send [to-upper [concat x " world"]] b` → `x` is a free variable in the expression tree, still traceable
+-   **Data structure flow**: Partial — `recv item a; send [car [cons item other]] b` → `item` is free in the expression; the analysis correctly detects the dependency even though the value flows through a cons/car. The analysis is conservative (any free variable reference = dependency) which is sound (may produce unnecessary ordering edges, but never misses a real dependency)
+-   **Higher-order flow**: Partial — `recv f a; send [f val] b` → `f` is free in `[f val]`; the analysis conservatively creates a dependency edge. Sound but imprecise (the result of `[f val]` depends on `f`, which came from `a`)
+
+The conservative approach is correct for all cases: it may create unnecessary ordering edges (reducing concurrency) but never misses a real data dependency (maintaining correctness). False positive edges make concurrent effects sequential — inefficient but safe. False negative edges would violate correctness — impossible with the conservative approach.
+
+
+<a id="orgff9e5df"></a>
+
+# Data-Flow Analysis for Cross-Channel Ordering
+
+
+<a id="org8bb76c8"></a>
+
+## The Problem
+
+Session types provide per-channel ordering but not cross-channel ordering. When a value received on channel `a` flows to a send on channel `b`, there is a data dependency that creates an ordering edge: the recv on `a` must happen before the send on `b`.
+
+```
+recv content a          ;; position (a, 0) — binds 'content'
+send [to-upper content] b  ;; position (b, 0) — uses 'content'
+                        ;; Data-flow edge: (a, 0) < (b, 0)
+```
+
+
+<a id="orgb907ea1"></a>
+
+## Static AST Analysis
+
+```racket
+;; ── effect-ordering.rkt ──
+
+;; Walk a process AST to extract cross-channel data-flow edges.
+;;
+;; Algorithm:
+;; 1. Track variable bindings: recv binds a variable at a (channel, depth) position
+;; 2. Track variable uses: send uses variables; if a used variable was bound by
+;;    a recv on a DIFFERENT channel, create an ordering edge
+;; 3. Walk recursively through continuations, parallel compositions, and branches
+;;
+;; proc      : proc-* (process AST from processes.rkt lines 40-55)
+;; chan-depth : hasheq symbol → Nat (current depth per channel)
+;; var-origins : hasheq symbol → eff-pos (where each variable was bound)
+;; Returns: list of eff-edge
+(define (extract-data-flow-edges proc [chan-depth (hasheq)] [var-origins (hasheq)])
+  (match proc
+    [(proc-stop) '()]
+
+    [(proc-recv chan binding type cont)
+     ;; recv binds a variable at this channel's current depth.
+     ;; The binding name comes from proc-recv-binding (preserved from
+     ;; surf-proc-recv during elaboration — see AD-A0 prerequisite).
+     (define depth (hash-ref chan-depth chan 0))
+     (define pos (eff-pos chan depth))
+     (define new-origins
+       (if binding
+           (hash-set var-origins binding pos)
+           var-origins))
+     (define new-depths (hash-set chan-depth chan (add1 depth)))
+     (extract-data-flow-edges cont new-depths new-origins)]
+
+    [(proc-send expr chan cont)
+     ;; send uses variables; check if any were bound on a different channel
+     (define depth (hash-ref chan-depth chan 0))
+     (define send-pos (eff-pos chan depth))
+     (define used-vars (free-variables-in-expr expr))
+     (define edges
+       (for*/list ([v (in-list used-vars)]
+                   [origin (in-value (hash-ref var-origins v #f))]
+                   #:when origin
+                   #:when (not (eq? (eff-pos-channel origin) chan)))
+         (eff-edge origin send-pos)))
+     (define new-depths (hash-set chan-depth chan (add1 depth)))
+     (append edges (extract-data-flow-edges cont new-depths var-origins))]
+
+    [(proc-par left right)
+     ;; Both sub-processes may have cross-channel data flow
+     (append (extract-data-flow-edges left chan-depth var-origins)
+             (extract-data-flow-edges right chan-depth var-origins))]
+
+    [(proc-case chan branches)
+     ;; Each branch independently analyzed
+     (apply append
+            (for/list ([b (in-list branches)])
+              (extract-data-flow-edges (cdr b) chan-depth var-origins)))]
+
+    [(proc-sel chan label cont)
+     (extract-data-flow-edges cont chan-depth var-origins)]
+
+    [(proc-open path session-type cap-type cont)
+     ;; open creates a new channel; depth starts at 0
+     (define new-chan (extract-open-channel cont))
+     (define new-depths (hash-set chan-depth new-chan 0))
+     (extract-data-flow-edges cont new-depths var-origins)]
+
+    [(proc-new session cont)
+     (extract-data-flow-edges cont chan-depth var-origins)]
+
+    [(proc-link chan1 chan2) '()]
+
+    [_ '()]))
+```
+
+
+<a id="org3959868"></a>
+
+## Session Ordering Edges
+
+Session ordering edges are derived directly from the session type structure. For a session `!String . ?Int . end` on channel `a`, the edges are:
+
+```
+(eff-edge (eff-pos 'a 0) (eff-pos 'a 1))    ;; send before recv
+(eff-edge (eff-pos 'a 1) (eff-pos 'a 2))    ;; recv before end
+```
+
+```racket
+;; Extract session ordering edges from a session type
+;; Returns: list of eff-edge (total order within the channel)
+(define (session-ordering-edges channel session-type)
+  (define steps (session-steps session-type))
+  (for/list ([i (in-range (sub1 steps))])
+    (eff-edge (eff-pos channel i) (eff-pos channel (add1 i)))))
+```
+
+
+<a id="org5c44d00"></a>
+
+# Ordering Propagator (Transitive Closure)
+
+The ordering propagator computes the complete partial order by taking the transitive closure of the union of session edges and data-flow edges. This is a monotone fixed-point computation — it lives natively in the propagator network.
+
+```racket
+;; ── In effect-ordering.rkt ──
+
+;; Install a propagator that computes transitive closure of ordering edges.
+;;
+;; Watches: session-edges-cell + data-flow-edges-cell
+;; Writes to: complete-ordering-cell
+;; Monotone: adding edges never removes ordering relationships
+;;
+;; If a cycle is detected (deadlock), writes eff-top to the contradiction cell.
+(define (add-ordering-propagator net session-edges-cell data-flow-edges-cell
+                                 complete-ordering-cell contradiction-cell)
+  (define fire-fn
+    (lambda (read-cell write-cell)
+      (define sess-edges (read-cell session-edges-cell))
+      (define df-edges (read-cell data-flow-edges-cell))
+      (cond
+        [(or (eff-bot? sess-edges) (eff-bot? df-edges)) (void)]
+        [else
+         (define combined (eff-ordering-merge sess-edges df-edges))
+         (define closed (eff-ordering-transitive-closure combined))
+         (if (eff-ordering-has-cycle? closed)
+             (write-cell contradiction-cell eff-top)
+             (write-cell complete-ordering-cell closed))])))
+  (net-add-propagator net
+                      (list session-edges-cell data-flow-edges-cell)
+                      (list complete-ordering-cell contradiction-cell)
+                      fire-fn))
+```
+
+The key property: **adding edges to the input cells only causes the transitive closure to grow**. It never shrinks. This means the propagator is monotone and the computation converges. The CALM theorem is satisfied: all reasoning about effect ordering is coordination-free. The only coordination point is the final effect execution barrier (Layer 5).
+
+
+<a id="org35af627"></a>
+
+## Performance Note
+
+The batch transitive closure computation is O(n³) in the number of edges. For Phase 0 processes (2-5 channels, 3-10 operations each, ~20-50 edges), this is sub-millisecond. For the concurrent runtime (Phase 2+) with larger graphs, an incremental approach is preferable: when a new edge (a < b) is added, propagate only to existing edges (x < a) → add (x < b) and (b < y) → add (a < y). This amortizes to O(n²) per edge addition. See McSherry's Differential Dataflow for the formal treatment.
+
+
+<a id="org4ad8501"></a>
+
+## Resource Aliasing Limitation
+
+The ordering system ensures *logical* consistency based on session types and data flow. It does NOT detect resource aliasing — two channels opening the same file path are treated as independent. However, the capability system with path-indexed capabilities (`FileCap "/data"`, commit `5c9eb93`) provides the mechanism to detect this: two `proc-open` calls with the same path would have the same `cap-entry` index expression, which the capability inference system can flag. This is a future extension, not a fundamental limitation.
+
+
+<a id="org88f57ff"></a>
+
+# ATMS Integration for Branching
+
+`proc-case` creates branching alternatives — different branches may have different data-flow patterns and therefore different orderings. The ATMS manages per-branch ordering hypotheses, just as it manages per-branch worldviews in the logic engine.
+
+```racket
+;; When compiling proc-case with effect collection:
+;;
+;; 1. Create an ATMS assumption for each branch
+;; 2. Extract data-flow edges per branch, tagged with the branch assumption
+;; 3. Add mutual-exclusion nogood (only one branch can be active)
+;; 4. When the choice cell resolves (partner writes a label):
+;;    - One worldview is selected
+;;    - Only effects from the consistent worldview are executed
+;;
+;; This reuses the existing ATMS API from atms.rkt:
+;;   atms-assume, atms-amb, atms-add-nogood, atms-consistent?, atms-read-cell
+
+(define (compile-case-with-effects rnet atms proc-case channel-eps chan-depth var-origins)
+  (define chan (proc-case-chan proc-case))
+  (define branches (proc-case-branches proc-case))
+
+  ;; Create per-branch assumptions
+  (define-values (atms* assumptions)
+    (for/fold ([a atms] [assms '()])
+              ([b (in-list branches)])
+      (define-values (a* assm-id) (atms-assume a (format "branch-~a" (car b))))
+      (values a* (cons (cons (car b) assm-id) assms))))
+
+  ;; Add mutual exclusion: branches are alternatives
+  (define branch-ids (map cdr assumptions))
+  (define atms** (atms-amb atms* branch-ids))
+
+  ;; Extract per-branch data-flow edges and effect descriptors
+  (for/fold ([edges '()]
+             [effects '()])
+            ([b (in-list branches)])
+    (define label (car b))
+    (define body (cdr b))
+    (define branch-assm (cdr (assoc label assumptions)))
+    (define branch-edges (extract-data-flow-edges body chan-depth var-origins))
+    (define branch-effects (collect-effects-from body channel-eps chan-depth))
+    ;; Tag edges and effects with assumption for ATMS filtering
+    (values (append (map (λ (e) (cons branch-assm e)) branch-edges) edges)
+            (append (map (λ (e) (cons branch-assm e)) branch-effects) effects))))
+```
+
+The pattern is the same as `amb` in the logic engine: alternatives are tracked monotonically (adding assumptions never removes them); the control layer selects a consistent worldview after reasoning converges. The Layered Recovery Principle applies identically.
+
+
+<a id="org133221f"></a>
+
+## Worldview Collapse Timing
+
+The timing of ATMS worldview collapse depends on the execution model:
+
+**Phase 0 (sequential, single-network)**: `proc-case` resolution is known at walk time. The partner's `proc-sel` was already compiled earlier in the walk (left-to-right walk order in `proc-par`). By the time `compile-live-process` reaches a `proc-case`, the choice cell already has its value from the partner's `proc-sel`. The ATMS worldview collapses during the compilation walk — we know which branch is active before collecting effects. This means Phase 0 can use a simplified approach: check the choice cell during the walk, collect effects from only the active branch.
+
+**Future concurrent runtime (S8b)**: The partner runs on a separate network. The choice cell doesn't resolve until runtime message delivery. The full ATMS machinery is needed: track all worldviews, defer collapse until the runtime delivers the branch label, then execute only the active worldview's effects.
+
+**Implementation note**: For Phase 0, AD-F1 can implement the simplified walk-time approach. The full ATMS path is infrastructure for the concurrent runtime.
+
+
+<a id="orgd88ad2c"></a>
+
+# Effect Handler (Layer 5)
+
+
+<a id="org65c735b"></a>
+
+## Linearization
+
+```racket
+;; ── In effect-ordering.rkt ──
+
+;; Given a complete ordering and a set of effect descriptors, produce a valid
+;; linearization (total order consistent with the partial order).
+;;
+;; Uses Kahn's algorithm (topological sort):
+;; 1. Find all effects with no predecessors in the ordering
+;; 2. Pick one (deterministic: lowest channel name, then lowest depth)
+;; 3. Remove it from the graph, add to output
+;; 4. Repeat until empty
+;;
+;; Concurrent effects (incomparable in the partial order) may appear in any
+;; order. The deterministic tiebreak ensures reproducible behavior.
+(define (linearize-effects ordering effects)
+  (define edges (eff-ordering-edges ordering))
+
+  ;; Build adjacency: which positions must come before which
+  (define predecessors (make-hasheq))  ;; pos → set of predecessor positions
+  (for ([e (in-list edges)])
+    (hash-update! predecessors (eff-edge-target e)
+                  (λ (s) (set-add s (eff-edge-source e)))
+                  (set)))
+
+  ;; Build position → effect-desc mapping
+  (define pos->effect (make-hasheq))
+  (for ([eff (in-list effects)])
+    (hash-set! pos->effect (effect-desc-position eff) eff))
+
+  ;; Kahn's algorithm
+  (define all-positions (map effect-desc-position effects))
+  (let loop ([remaining (list->set all-positions)]
+             [result '()])
+    (if (set-empty? remaining)
+        (reverse result)
+        (let* ([ready (for/list ([p (in-set remaining)]
+                                #:when (set-empty?
+                                        (set-intersect
+                                         (hash-ref predecessors p (set))
+                                         remaining)))
+                        p)]
+               ;; Deterministic tiebreak: channel name then depth
+               [sorted-ready (sort ready eff-pos-tiebreak<)]
+               [next (car sorted-ready)]
+               [next-eff (hash-ref pos->effect next)])
+          (loop (set-remove remaining next)
+                (cons next-eff result))))))
+
+(define (eff-pos-tiebreak< p1 p2)
+  (or (symbol<? (eff-pos-channel p1) (eff-pos-channel p2))
+      (and (eq? (eff-pos-channel p1) (eff-pos-channel p2))
+           (< (eff-pos-depth p1) (eff-pos-depth p2)))))
+```
+
+
+<a id="org2bf4cb2"></a>
+
+## Effect Executor
+
+```racket
+;; ── effect-executor.rkt ──
+
+;; Execute a linearized list of effect descriptors.
+;; Performs actual IO operations in the given order.
+;;
+;; This is the ONLY non-monotone step in the entire Architecture D pipeline.
+;; Everything before this point (position computation, ordering, transitive
+;; closure, linearization) is monotone and lives in the propagator network.
+;; This function is the Layer 5 barrier — the point where the CALM theorem
+;; requires coordination.
+;;
+;; Error handling follows the existing io-bridge.rkt pattern: filesystem errors
+;; are caught and converted to io-top contradictions, detectable by the
+;; post-execution verification (Stratum 3).
+;;
+;; rnet    : runtime-network
+;; effects : list of effect-desc (already linearized)
+;; Returns : (values rnet* results open-ports)
+;;   where results: hasheq eff-pos → any (IO results keyed by position)
+(define (execute-effects rnet effects)
+  (for/fold ([rnet* rnet]
+             [results (hasheq)]
+             [open-ports (hasheq)])  ;; channel → port mapping
+            ([eff (in-list effects)])
+    (match eff
+      [(eff-open chan pos path mode)
+       (with-handlers
+         ([exn:fail:filesystem?
+           (lambda (e)
+             ;; IO error → store error result, continue (contradiction detected in Stratum 3)
+             (values rnet*
+                     (hash-set results pos (format "IO error: ~a" (exn-message e)))
+                     open-ports))])
+         (define port
+           (case mode
+             [(read)   (open-input-file path #:mode 'text)]
+             [(write)  (open-output-file path #:mode 'text #:exists 'truncate)]
+             [(append) (open-output-file path #:mode 'text #:exists 'append)]))
+         (values rnet*
+                 (hash-set results pos port)
+                 (hash-set open-ports chan port)))]
+
+      [(eff-write chan pos value)
+       (define port (hash-ref open-ports chan))
+       (with-handlers
+         ([exn:fail? (lambda (e)
+                       (values rnet* (hash-set results pos (exn-message e)) open-ports))])
+         (define str-val (if (expr-string? value)
+                             (expr-string-val value)
+                             (format "~a" value)))
+         (write-string str-val port)
+         (flush-output port)
+         (values rnet* (hash-set results pos (void)) open-ports))]
+
+      [(eff-read chan pos)
+       (define port (hash-ref open-ports chan))
+       (with-handlers
+         ([exn:fail? (lambda (e)
+                       (values rnet* (hash-set results pos (exn-message e)) open-ports))])
+         (define data (read-string 1048576 port))  ;; 1MB max, matching Architecture A
+         (define result-str (if (eof-object? data) "" data))
+         (values rnet* (hash-set results pos result-str) open-ports))]
+
+      [(eff-close chan pos)
+       (define port (hash-ref open-ports chan #f))
+       (when port
+         (with-handlers ([exn:fail? void])
+           (cond [(input-port? port) (close-input-port port)]
+                 [(output-port? port) (close-output-port port)])))
+       (values rnet*
+               (hash-set results pos (void))
+               (hash-remove open-ports chan))])))
+
+;; Execute effects and feed results back into the propagator network.
+;; This is the complete Layer 5 barrier: execute → feed back → verify.
+;;
+;; rnet        : runtime-network
+;; effects     : list of effect-desc (already linearized)
+;; channel-eps : hasheq symbol → channel-endpoint
+;; Returns: runtime-network (after post-execution quiescence)
+(define (execute-effects-and-propagate rnet effects channel-eps)
+  (define-values (rnet* results open-ports) (execute-effects rnet effects))
+  ;; Feed read results back into msg-in cells for post-execution verification
+  (define rnet**
+    (for/fold ([net rnet*])
+              ([eff (in-list effects)]
+               #:when (eff-read? eff))
+      (define pos (eff-read-position eff))
+      (define val (hash-ref results pos #f))
+      (when (and val (string? val))
+        (define chan (eff-read-channel eff))
+        (define ep (hash-ref channel-eps chan #f))
+        (when ep
+          (rt-cell-write net (channel-endpoint-msg-in-cell ep) (expr-string val))))
+      net))
+  ;; Run to quiescence: session advancement, protocol completion, contradiction detection
+  (rt-run-to-quiescence rnet**))
+```
+
+
+<a id="org44e97fc"></a>
+
+# Architecture A Preservation
+
+Architecture A is not replaced — it is preserved as the fallback for unsessioned IO.
+
+
+<a id="org86c9285"></a>
+
+## When Architecture A Applies
+
+-   **REPL expressions**: Top-level `eval` has no explicit sessions. SysCap is provisioned by the REPL powerbox (commit `f2dd088`). Effects execute in walk order.
+-   **`main` without explicit sessions**: A simple `(defn main [] (println "hello"))` has no session type structure. Walk-based ordering is correct and sufficient.
+-   **Single-channel processes**: When only one channel is involved, the walk order equals the session type order equals the effect order. Architecture D would produce the same result but with unnecessary overhead.
+
+
+<a id="orga8022cb"></a>
+
+## Relationship to Architecture D
+
+Architecture A is a *degenerate case* of Architecture D:
+
+-   `main` with sequential IO and no explicit session is equivalent to a process with a single implicit session
+-   The "implicit session" has a trivial structure: `!T1 . !T2 . ... . end`
+-   The vector clock has a single entry: one channel, depth advancing sequentially
+-   The transitive closure adds nothing (no cross-channel edges)
+-   The linearization produces the same order as the walk
+
+As `main` gains explicit session structure (e.g., opening files with `open`, using protocol types), Architecture D's richer ordering semantics apply automatically. The transition is smooth — no code changes needed, just richer session types.
+
+
+<a id="org264d90f"></a>
+
+## Implementation
+
+`rt-execute-process` is renamed to `rt-execute-process-a` (or kept as-is). No modifications to its internals. The existing `compile-live-process` with `#:collect-effects? #f` (default) retains all current behavior:
+
+```
+;; Architecture A: unchanged
+(define (rt-execute-process-a proc session-type [fuel 1000000])
+  ;; ... existing implementation ...
+  ;; compile-live-process with inline IO
+  ;; rt-run-to-quiescence
+  ;; check contradictions
+  )
+```
+
+
+<a id="org88acec0"></a>
+
+# Migration Strategy
+
+
+<a id="org87439f7"></a>
+
+## Phase 1: Side-by-Side (AD-A through AD-E3)
+
+Architecture A remains the *sole production path*. Architecture D is built as a parallel path, testable independently. `rt-execute-process` is unchanged; `rt-execute-process-d` is new. All existing tests continue to pass (Architecture A untouched).
+
+```
+Production:  rt-execute-process → compile-live-process (inline IO) → quiescence
+Testing:     rt-execute-process-d → compile-live-process (collect) → order → execute → quiescence
+```
+
+
+<a id="org8c15ae3"></a>
+
+## Phase 2: Shadow Validation (after AD-E3)
+
+For processes that support both architectures, run both A and D in parallel:
+
+```
+(define result-a (rt-execute-process-a proc sess fuel))
+(define result-d (rt-execute-process-d proc sess fuel))
+(unless (equal? (rt-exec-result-status result-a)
+                (rt-exec-result-status result-d))
+  (log-warning "Architecture A/D divergence: ~a vs ~a"
+               result-a result-d))
+```
+
+Compare results: effects should produce the same output. Log divergences to stderr. This follows the project's proven shadow validation methodology (from P1-E3, P3, P1-G migrations).
+
+
+<a id="org4e7682f"></a>
+
+## Phase 3: Selective Activation (AD-F2)
+
+Architecture selection logic chooses A or D based on process characteristics:
+
+```racket
+;; Precise criterion for architecture selection:
+;; D is required only when multiple IO channels have cross-channel data flow.
+;; Otherwise A is sufficient and cheaper.
+(define (architecture-d-required? proc)
+  (and (> (count-io-channels proc) 1)                ;; multiple IO channels
+       (not (null? (extract-data-flow-edges proc))))) ;; with cross-channel data flow
+
+(define (rt-execute-process proc session-type [fuel 1000000] #:architecture [arch 'auto])
+  (case arch
+    [(a) (rt-execute-process-a proc session-type fuel)]
+    [(d) (rt-execute-process-d proc session-type fuel)]
+    [(auto)
+     (if (architecture-d-required? proc)
+         (rt-execute-process-d proc session-type fuel)
+         (rt-execute-process-a proc session-type fuel))]))
+```
+
+Override via strategy parameter for manual control. REPL and `main` without explicit sessions always use Architecture A.
+
+
+<a id="org86d8ba5"></a>
+
+## Phase 4: Full Transition (future, after concurrent runtime)
+
+-   `main` without explicit sessions remains Architecture A (degenerate case of D)
+-   All session-typed processes use Architecture D
+-   Architecture A preserved as fallback (never removed)
+
+
+<a id="org9e3fc8b"></a>
+
+## Backward Compatibility Guarantee
+
+Architecture A behavior is preserved for all existing tests at every phase. D is purely additive. No existing test should ever break. This is verified by running the full test suite (currently 5860 tests, 303 files) after each sub-phase.
+
+
+<a id="org6c8c9d7"></a>
+
+# Traced Example: Multi-Channel Process
+
+Consider a process that reads from one file and writes derived content to another:
+
+```
+;; Prologos session types
+session ReadProto  = ?String . end
+session WriteProto = !String . end
+
+;; Process: read from file a, transform, write to file b
+defproc transformer : ReadProto * WriteProto =
+  open "/input.txt" : ReadProto {ReadCap}
+  open "/output.txt" : WriteProto {WriteCap}
+  recv content a          ;; position (a, 0)
+  send [to-upper content] b  ;; position (b, 0), data dep: a:0 < b:0
+  stop                    ;; positions (a, 1), (b, 1)
+```
+
+
+<a id="org5690dbc"></a>
+
+## Step 1: Compile with Effect Collection
+
+```
+Walk proc-open a:    → effect-desc('open, a, eff-pos(a,0), "/input.txt")
+Walk proc-open b:    → effect-desc('open, b, eff-pos(b,0), "/output.txt")
+Walk proc-recv a:    → effect-desc('read, a, eff-pos(a,0), ...)
+  Install session advancement: sess-cell-a advances from ?String.end to end
+Walk proc-send b:    → effect-desc('write, b, eff-pos(b,0), [to-upper content])
+  Install session advancement: sess-cell-b advances from !String.end to end
+Walk proc-stop:      → effect-desc('close, a, eff-pos(a,1), ...)
+                     → effect-desc('close, b, eff-pos(b,1), ...)
+```
+
+
+<a id="orgca19d83"></a>
+
+## Step 2: Extract Data-Flow Edges
+
+```
+Variable 'content' bound at recv(a) at position (a, 0)
+Variable 'content' used at send(b) at position (b, 0)
+Data-flow edge: eff-edge(eff-pos(a, 0), eff-pos(b, 0))
+```
+
+
+<a id="orgc58f672"></a>
+
+## Step 3: Compute Session Ordering Edges
+
+```
+Session a: (a,0) < (a,1)     (recv before close)
+Session b: (b,0) < (b,1)     (send before close)
+```
+
+
+<a id="orgf243d89"></a>
+
+## Step 4: Transitive Closure
+
+```
+Union of edges:
+  (a:0 < a:1)   ── session edge
+  (b:0 < b:1)   ── session edge
+  (a:0 < b:0)   ── data-flow edge
+
+Transitive closure adds:
+  (a:0 < b:1)   ── a:0 < b:0 and b:0 < b:1 implies a:0 < b:1
+
+Complete partial order:
+  a:0 < a:1     ✓
+  a:0 < b:0     ✓
+  a:0 < b:1     ✓ (derived)
+  b:0 < b:1     ✓
+
+Note: a:1 and b:0 are CONCURRENT (no ordering between them)
+Note: a:1 and b:1 are CONCURRENT (no ordering between them)
+```
+
+
+<a id="org551eac6"></a>
+
+## Step 5: Linearize
+
+```
+Valid linearization (respects partial order):
+  1. open-a  (a:0 setup, before all a operations)
+  2. open-b  (b:0 setup, concurrent with open-a, but open precedes ops)
+  3. read-a  (a:0) ── must be first a operation
+  4. write-b (b:0) ── must come after read-a (data dependency)
+  5. close-a (a:1) ── concurrent with close-b, tiebreak: 'a' < 'b'
+  6. close-b (b:1)
+```
+
+
+<a id="orge9c5843"></a>
+
+## Step 6: Execute Effects
+
+```
+1. Open /input.txt for reading  → port-a
+2. Open /output.txt for writing → port-b
+3. Read from port-a             → "hello world"
+4. Write (to-upper "hello world") = "HELLO WORLD" to port-b
+5. Close port-a
+6. Close port-b
+```
+
+
+<a id="org61a4a07"></a>
+
+## Step 7: Post-Execution Verification
+
+```
+Feed read result into propagator network:
+  msg-in-cell-a ← (expr-string "hello world")
+
+Run to quiescence:
+  Session cells advance to end (all channels complete)
+  No contradictions detected
+
+Result: 'ok
+```
+
+
+<a id="org417e0bf"></a>
+
+## Architecture A Comparison
+
+Under Architecture A, the same process would execute effects inline during the walk in the same order (because the walk visits nodes in continuation order). The result is identical. The difference appears with concurrent processes or `proc-par`, where Architecture A visits sub-processes sequentially but Architecture D can correctly interleave effects from independent channels.
+
+
+<a id="orgce03cce"></a>
+
+# Test Strategy
+
+
+<a id="org268ded6"></a>
+
+## Per-Phase Tests
+
+| Phase | Test File                            | Count    | Focus                                                             |
+|----- |------------------------------------ |-------- |----------------------------------------------------------------- |
+| AD-A1 | `test-effect-position-01.rkt`        | ~15      | Lattice properties, depth computation, comparison, ordering edges |
+| AD-A2 | (extends above)                      | ~8       | Effect descriptor construction, effect set merge                  |
+| AD-B1 | `test-effect-bridge-01.rkt`          | ~12      | Bridge fires on session advancement, correct depths               |
+| AD-B2 | (extends above)                      | ~8       | Multi-channel bridges, vector clocks, concurrent positions        |
+| AD-C1 | `test-effect-collection-01.rkt`      | ~15      | Effect collection mode, correct positions, A unchanged            |
+| AD-C2 | (extends above)                      | ~10      | Position cells in runtime, bridge propagators during quiescence   |
+| AD-D1 | `test-effect-ordering-01.rkt`        | ~15      | Data-flow edge extraction, cross-channel, proc-par                |
+| AD-D2 | (extends above)                      | ~12      | Transitive closure, monotonicity, cycle detection                 |
+| AD-D3 | `test-effect-ordering-02.rkt`        | ~10      | Full pipeline: collect → extract → close → linearize              |
+| AD-E1 | (extends above)                      | ~8       | Topological sort, tiebreak, concurrent effects                    |
+| AD-E2 | `test-effect-executor-01.rkt`        | ~15      | Open/write/read/close, error handling, result feedback            |
+| AD-E3 | `test-architecture-d-01.rkt`         | ~20      | Full D pipeline, A/D result equivalence, multi-channel            |
+| AD-F1 | `test-architecture-d-02.rkt`         | ~15      | ATMS branching, worldview selection, unchosen effects             |
+| AD-F2 | `test-architecture-selection-01.rkt` | ~10      | Auto-detection, manual override, degenerate cases                 |
+| AD-F3 | (extends AD-E3)                      | ~5       | Concurrent hooks, placeholder behavior                            |
+|       | **Total**                            | **~178** |                                                                   |
+
+
+<a id="orgb0e6df6"></a>
+
+## Regression Testing
+
+After each sub-phase:
+
+-   Run `racket tools/run-affected-tests.rkt --all` — 0 regressions on 5860+ existing tests
+-   Architecture A behavior unchanged (default `#:collect-effects? #f` preserves all paths)
+
+
+<a id="orgb33825b"></a>
+
+## Shadow Validation Tests (after AD-E3)
+
+-   For each single-channel IO test, run both A and D, assert identical results
+-   This proves A is a degenerate case of D empirically, not just theoretically
+
+
+<a id="org201790d"></a>
+
+# Deferred Features
+
+
+<a id="orgbbb475c"></a>
+
+## Architecture C: Reactive Effect Streams (RESEARCH)
+
+-   Topological scheduling of effect propagators with freeze semantics
+-   Declarative effect specifications outside session contexts
+-   Blocked on: Phase 2 (Architecture D) completion, research prototype
+-   Source: `2026-03-06_EFFECTFUL_PROPAGATORS_RESEARCH.md` §5c
+
+
+<a id="org2941384"></a>
+
+## Concurrent Runtime (S8b)
+
+-   Multi-network concurrent execution with real async `!!`​/=??=
+-   Buffered channels, cross-network message delivery
+-   Architecture D provides the ordering discipline for this runtime
+-   Blocked on: multi-network runtime infrastructure
+-   Source: `2026-03-03_SESSION_TYPE_IMPL_PLAN.md`
+
+
+<a id="org4f8a147"></a>
+
+## Incremental Data-Flow Analysis
+
+-   Replace static AST walk (Decision #7) with incremental propagation
+-   Data-flow edges as propagator cell values; new edges trigger re-propagation
+-   Optimization, not correctness — static analysis is sufficient for Phase 0
+
+
+<a id="orgb6a6a79"></a>
+
+## Speculative IO via ATMS
+
+-   Hypothetical effects tagged with assumption support sets
+-   Execute only effects from consistent worldviews
+-   Extension of Decision #8 beyond `proc-case` to general speculation
+-   Research topic: when is speculative IO useful?
+
+
+<a id="org0b7cf92"></a>
+
+## Append-Only / Idempotent Effect Optimizations
+
+-   Monotone effects (append-only logs, idempotent PUTs) can execute during propagation without barriers (they commute)
+-   Partition effects into commutative (safe for propagators) and non-commutative (require barriers)
+-   Research topic: see `2026-03-06_EFFECTFUL_PROPAGATORS_RESEARCH.md` §9a, §9b
+
+
+<a id="org1779206"></a>
+
+# Files Summary
+
+| File                                   | Nature                  | Phases                                      |
+|-------------------------------------- |----------------------- |------------------------------------------- |
+| NEW `effect-position.rkt`              | New module (~160 lines) | AD-A1, AD-A2                                |
+| NEW `effect-bridge.rkt`                | New module (~150 lines) | AD-B1, AD-B2                                |
+| NEW `effect-ordering.rkt`              | New module (~290 lines) | AD-D1, AD-D2, AD-D3, AD-E1, AD-F1           |
+| NEW `effect-executor.rkt`              | New module (~120 lines) | AD-E2                                       |
+| `processes.rkt`                        | Modified (AD-A0)        | Add `binding` field to `proc-recv`          |
+| `elaborator.rkt`                       | Modified (AD-A0)        | Preserve `var` from `surf-proc-recv`        |
+| `substitution.rkt` + 10 pipeline files | Modified (AD-A0)        | Pass-through `binding` field                |
+| `session-runtime.rkt`                  | Modified                | AD-C1, AD-C2, AD-E3, AD-F2, AD-F3           |
+| `driver.rkt`                           | Modified                | AD-F2 (architecture selection wiring)       |
+| `propagator.rkt`                       | Reuse (read-only)       | All phases (cell/propagator API)            |
+| `atms.rkt`                             | Reuse (read-only)       | AD-F1 (ATMS API)                            |
+| `io-bridge.rkt`                        | Reuse (read-only)       | AD-E2 (IO state lattice, bridge functions)  |
+| `session-lattice.rkt`                  | Reuse (read-only)       | AD-B (source domain of Galois connection)   |
+| `sessions.rkt`                         | Reuse (read-only)       | AD-A1 (session type constructors for depth) |
+| `processes.rkt`                        | Reuse (read-only)       | AD-D1 (proc AST for data-flow analysis)     |
+| NEW test files (6-8)                   | Tests                   | All phases                                  |
+
+Estimated new code: ~720 lines across 4 new modules + ~100 lines of modifications to `session-runtime.rkt` + ~178 new tests across 6-8 test files.
+
+
+<a id="orgb3e60c1"></a>
+
+# References
+
+
+<a id="org9acd98a"></a>
+
+## Prologos Internal
+
+-   Effectful Propagators Research: `docs/tracking/2026-03-06_EFFECTFUL_PROPAGATORS_RESEARCH.md`
+-   Session Types as Causal Timelines: `docs/tracking/2026-03-06_SESSION_TYPES_AS_EFFECT_ORDERING.org`
+-   Layered Recovery Principle: `docs/tracking/principles/EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org`
+-   IO Implementation Design: `docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md`
+-   IO Implementation PIR: `docs/tracking/2026-03-06_IO_IMPLEMENTATION_PIR.md`
+-   Session Type Design: `docs/tracking/2026-03-03_SESSION_TYPE_DESIGN.md`
+-   Logic Engine Design: `docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org`
+-   Design Methodology: `docs/tracking/principles/DESIGN_METHODOLOGY.org`
+
+
+<a id="org4420d05"></a>
+
+## External
+
+-   [Revised Report on the Propagator Model](https://groups.csail.mit.edu/mac/users/gjs/propagators/) &#x2014; Radul & Sussman
+-   [Keeping CALM](https://arxiv.org/pdf/1901.01930) &#x2014; Hellerstein 2019
+-   [LVars: Lattice-based Deterministic Parallelism](https://users.soe.ucsc.edu/~lkuper/papers/lvars-fhpc13.pdf) &#x2014; Kuper & Newton
+-   [Freeze After Writing: Quasi-Deterministic LVars](https://users.soe.ucsc.edu/~lkuper/papers/lvish-popl14.pdf) &#x2014; Kuper et al.
+-   [Differential Dataflow](http://www.frankmcsherry.org/differential/dataflow/2015/04/07/differential.html) &#x2014; McSherry
+-   [Logic and Lattices for Distributed Programming](https://www.neilconway.org/docs/socc2012_bloom_lattices.pdf) &#x2014; Conway et al. (BloomL)
+-   [Handlers of Algebraic Effects](https://homepages.inf.ed.ac.uk/gdp/publications/Effect_Handlers.pdf) &#x2014; Plotkin & Pretnar
+-   [Polymorphic Iterable Sequential Effect Systems](https://dl.acm.org/doi/fullHtml/10.1145/3450272) &#x2014; Gordon
+-   [From Datalog to Flix](https://plg.uwaterloo.ca/~olhotak/pubs/pldi16.pdf) &#x2014; Madsen et al. (PLDI 2016)

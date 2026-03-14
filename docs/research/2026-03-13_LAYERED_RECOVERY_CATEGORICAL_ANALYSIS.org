@@ -1,5 +1,5 @@
 #+TITLE: The Categorical Structure of Layered Recovery: Stratified Endofunctors on Quantale-Enriched Lattices
-#+AUTHOR: The Prologos Project
+#+AUTHOR: The Prologos Project - From Zachary Larson
 #+DATE: 2026-03-13
 
 * Abstract

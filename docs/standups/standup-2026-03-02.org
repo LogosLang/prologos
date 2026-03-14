@@ -1,0 +1,477 @@
+#+TITLE: Standup — 2026-03-02
+#+DATE: 2026-03-02
+
+
+* Yesterday (since Mar 1 standup)
+
+** I/O Library Design — Research + Phase 3 Draft (commit =f8aaf83=)
+
+Design doc: =docs/tracking/2026-03-01_1200_IO_LIBRARY_DESIGN.md=
+
+- Research survey of 15+ ecosystems: Clean (uniqueness), Rust (ownership), Idris 2 (QTT),
+  Haskell (IO monad/conduit), OCaml Eio, Koka (effects), Clojure, Elixir, SWI-Prolog, Mercury
+- Key decisions: linear capability passing (not IO monad/effects), =with-open= macro,
+  data out (plain Prologos values), schema validation at boundary
+- 6-phase roadmap: Core File I/O → CSV → Relational integration → SQLite → Streaming → Sugar
+- Backtracked from I/O-first to capability security model-first design
+
+** Capability Security Principles (commit =be6f29c=, corrected =de2c260=)
+
+=docs/tracking/principles/CAPABILITY_SECURITY.md=
+
+- Linear values as unforgeable, non-duplicable capabilities
+- QTT multiplicity mapping: =:0= authority proof, =:1= authority transfer, =:w= ambient
+- Correction: composite capabilities are union types (weakening), NOT bundles (contraction)
+- Added =:w= tension subsection (=:w= ok for traits, compiler warning for capabilities)
+- Cross-referenced into LANGUAGE_VISION, DESIGN_PRINCIPLES, DESIGN_METHODOLOGY
+
+** Capabilities as Types Design Document (commit =2f0eec6=)
+
+=docs/tracking/2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md=
+
+Three parallel research tracks:
+- *seL4*: CNodes, CDT, 6 operations, badge model → maps to QTT multiplicities
+- *Mark Miller/E/Agoric*: 5 capability discipline rules, confused deputy, membranes → validates ocap model
+- *Fuchsia/Typed Caps*: Zircon handles, Pony lattice, WASI, Crary-Morrisett calculus, Austral, Granule
+
+Design decisions: =capability= keyword as first-class form, lexical resolution (not global),
+propagator-based capability inference, ATMS provenance, separate networks with Galois connections.
+
+9-phase implementation roadmap. Followed by external critique response (commit =acd7d29=):
+worked example, module boundaries, HOF handling, error mockups (E2001/E2002/W2001).
+
+** Design Discussions
+
+Extensive design conversations on:
+- *World token vs fine-grained capabilities*: POLA demands fine-grained, not coarse =World :1=
+- *Capabilities as implicit parameters*: ={Fs : ReadCap}= like trait constraints but lexically scoped
+- *=capability= as first-class form* (not trait sugar): different resolution, QTT defaults, extension paths
+- *Propagator-based capability inference*: LE as general infrastructure for monotonic fixed-point computation
+- *Separate networks*: type inference and capability inference as separate propagator networks
+  communicating via Galois connections
+- *Logic Engine use cases*: 6 grounded use cases added to LANGUAGE_VISION.org (commit =0f89a80=, =4646b8b=)
+- =.org= canonical source rule established (commit =4646b8b=)
+- =:== for binding (reserved === for =unify=) added to =prologos-syntax.md=
+
+** Capabilities Phases 1-6: Full Implementation
+
+All 6 phases implemented in a single marathon session:
+
+- *Phase 1* (commit =0fd0470=): =capability= keyword, =surf-capability= AST, registry, driver dispatch, 11 tests
+- *Phase 2* (commit =f2bf6ad=): QTT defaulting (=:0=), W2001 warning for =:w= on capabilities, 13 tests
+- *Phase 3* (commit =641f015=): Subtype hierarchy (=capabilities.prologos= stdlib), module loading, 11 tests
+- *Phase 4* (commit =756aaa4=): Lexical capability resolution (3-way: exact→solve, subtype→unsolved, missing→E2001), 12 tests
+- *Phase 5* (commits =7d651cb=, =a2dbea4=, =6b9eb57=, =44015d2=, =1372178=):
+  - CapabilitySet lattice + propagator network inference (migrated from iterative after CHAMP fix)
+  - CHAMP trie scaling fix: stored hash in data entries (=a2dbea4=)
+  - ATMS provenance for audit trails (15 tests in =test-capability-05b.rkt=)
+  - Authority root verification + =cap-verify= REPL command (10 additional tests)
+- *Phase 6* (commit =533928d=): Foreign function =:requires= capability gating, 15 tests
+
+** Capabilities Phase 8a-8c: Cross-Network Interfacing (commit =cd8b1e1=)
+
+Bridges type inference and capability inference networks via Galois connections:
+- α/γ abstraction functions (type-to-cap-set, cap-set-to-type) in =cap-type-bridge.rkt=
+- Cross-domain network construction with =net-add-cross-domain-propagator=
+- Overdeclared analysis + =cap-bridge= REPL command
+- Fixed overdeclared (exercised from callees' cap-cells, leaf-function detection)
+- Fixed mutual recursion test (direct env construction)
+- 20 tests, tracking docs updated (commit =db1d163=)
+
+** Capabilities Phase 7a-7d: Dependent Capabilities
+
+Parameterized capability types: =(capability FileCap (p : Path))= → =[FileCap "/data"]= is
+path-specific file access. Prerequisite for IO library.
+
+Key insight: elaborator resolves by functor name; type checker verifies indices via =expr-app=
+unification.
+
+- *7a* (commit =a6453f1=): Parser — =parse-binder= calls for capability params
+- *7b* (commit =08e4319=): Elaboration Pi chain + driver 4-element result
+- *7c* (commit =e8fc439=): =capability-type-expr?= helper, scope tracking, functor-based resolution
+- *7d* (commit =0a75942=): 20 tests in =test-capability-07.rkt=, dep-graph registration
+- Tracking + grammar (commit =4a3e063=): 7e-7g deferred, =capability-decl= in EBNF
+
+** Metrics
+
+| Metric                 | Mar 1 standup |      Current |
+|------------------------+---------------+--------------|
+| Tests                  |          4583 |         4810 |
+| Test files             |           215 |          236 |
+| Core =.prologos= files |           104 |           19 |
+| Cap phases             |        (none) | 1-8c + 7a-7d |
+
+* Today
+
+
+** `schema` Design
+*** 🗣️
+#+begin_src quote
+  Before we can get to `session`, I think we have to have a solid design and stability around `schema`--what I'm calling "The Language of Objects"--or "the shape of data". Maps are Open World, by design; `schema` closes them. In past design on the relational language, we explored a simple model for schema validation, where keys are assigned to the types they should close over.
+
+```prologos
+schema Employee
+  :name   String
+  :dept   Department
+  :salary Int
+```
+
+There is a design tension when striving for ergonomic validation schema... What if keys are optional vs required? Do we require certain keys to be present, while remaining open to other keys (probably fine/safe/allows extension)... or do we absolutely only want very specific keys and everything else would be a schema invalidation? (both use cases are useful.. ); and how do we represent this within the `schema` language?
+
+  This simple approach we have now for `schema` is likely not sufficient for richer validation semantics. Or--Do we have a separate toplevel form that provides a different layer of metadata that puts further constraints on the keys defined in a schema type? Or do they live as key metadata on `schema`? (I'm leaning toward the latter); in which case, there would be potential key collisions (and confusion of concerns) with our `schema` is envisioned currently.
+
+  I would like for us to do a research on this concern. Particularyly looking at `clojure.spec` and also Malli and Specter (third-party Clojure validation libraries), as well as considering approaches to specification and validation. We are to compare and consider, but ultimately, we  are striving for the most declarative and ergonomic way--The Prologos Way--for our design considerations (Let us remind ourselves of our principles in this accord, in our `principles` directory).
+
+  We are following our Design Methodology process (`/Users/avanti/dev/projects/prologos/docs/tracking/principles/DESIGN_METHODOLOGY.org`), and are to begin a deep research phase (first phase) on this topic. The outcome of this session is a research document with applications to a design and recommendation in Prologos, about which we will continue conversation. Since this is a deep research topic, you are to supplement your research with outside search (websearch).
+
+  Let us call this research "Schema Type Design Research"
+
+#+end_src
+*** [[../research/2026-03-02_SCHEMA_TYPE_DESIGN_RESEARCH.md][Schema Type Design Research]]
+*** 🤖 Open Questions for Refinement
+#+begin_src markdown
+##Open Questions (for Phase 2 refinement)
+1. Should require produce a new type or a constraint? (Type family vs validation function)
+2. How do dependent fields interact with schema? (schema Vec :len Nat :data [Array A :len])
+3. Should schemas participate in the trait system? (Schemaable trait?)
+4. What is the relationship between schema and deftype? (Sugar vs distinct concept)
+5. How do schemas compose with union types? (schema Response := Ok | Error)
+
+#+end_src
+
+*** 🗣️ Reflections, Research GraphQL
+#+begin_src quote
+  Some thoughts:
+
+  I like the realization of "separation of concerns" we see in Elixir Ecto.
+  I think the point of default open from ProtoBuff3, when considering `session`, and acrual doesn't break old callers is important; and that validation occurs at boundaries.
+
+  I'm somewhere between `Approach B` and `Approach D`, leaning more into Approach B. I don't really like the `require` syntax in `D`.
+
+  I think the layered approach follows a successful design pattern that we've established in patterns such as `spec` and `functor` for `defn`
+
+  This "object (sub)language" interacts and is usable by all three co-equal languages (Functional, Relational (`defr` facts/tables), Process\session)
+
+  You know, the interaction of `schema` with session/defproc I have in my mind, something like GraphQL... that didn't surface in our research/websearch; and I'm kind of curious to hear a comparison and response; and what we can learn from that approach in our language design efforts with `schema`.
+
+  Perhaps this could be a separate research document to supplement/go along with this current research document. Let's do that, then come back to address some of the open questions, and do further refinement.
+#+end_src
+*** [[../research/2026-03-02_SCHEMA_AS_PROTOCOL_RESEARCH.md][Schema as Protocol: GraphQL and the Schema-Session Interaction]]
+*** 🤖
+#+begin_src markdown
+Good — important findings. Note: `select` is already used as a process keyword for session internal choice (`(select channel label continuation)`), so we can't reuse it for schema selection. `selection` as a keyword is available though.
+
+Now let me work through the surface syntax variations systematically. Let me present several approaches with concrete examples.
+
+---
+
+Here are the variations I want to walk through. I'll ground each in a common scenario: a `User` schema used across functional, relational, and process contexts.
+
+### The Common Schema (all variations share this)
+
+```prologos
+schema Address
+  :street  String
+  :city    String
+  :state   StateCode
+  :zip     ZipCode
+
+schema User
+  :id       UserId
+  :name     String
+  :email    Email
+  :address  Address
+```
+
+---
+
+### Variation A: Named `selection` with `requires`/`provides` blocks
+
+Schema defines shape. `selection` is a separate named form. `requires` and `provides` are sub-clauses:
+
+```prologos
+;; Named selections — reusable
+selection MovieTimesReq from User
+  requires :id
+  requires :address { :zip }
+
+selection PlaceOrderReq from User
+  requires :name
+  requires :email
+  requires :address { :street :city :state :zip }
+
+selection UserResponse from User
+  provides :id
+  provides :name
+  provides :email
+  provides :address { * }
+
+;; Composition: include other selections
+selection FullOrderReq from User
+  includes PlaceOrderReq
+  requires :id
+
+;; Usage in spec
+spec get-times : User & MovieTimesReq -> List MovieTime
+defn get-times [user]
+  lookup-times user.id user.address.zip
+
+;; Usage in session
+session OrderService
+  ? req : User & PlaceOrderReq
+  ! conf : OrderConfirmation
+  end
+
+;; Usage in relation
+defr user : User & UserResponse
+  || 1N "Alice" "alice@co.com" {:street "123 Main" :city "SF" :state "CA" :zip "94102"}
+```
+
+**Pros**: Clean separation. Named selections are reusable. `requires`/`provides` are natural English. The `&` operator reads as "a User *that* satisfies MovieTimesReq." Follows the `spec`/`defn` pattern of "declaration shape separate from definition."
+
+**Cons**: Verbose for simple cases. Two new keywords (`selection`, `includes`). Nested selection syntax (`{ :zip }`) needs design.
+
+---
+
+### Variation B: Selection as schema refinement (no new top-level keyword)
+
+Instead of a separate `selection` keyword, selections are schemas that refine other schemas:
+
+```prologos
+schema MovieTimesReq := User
+  requires :id
+  requires :address { :zip }
+
+schema PlaceOrderReq := User
+  requires :name :email
+  requires :address { * }
+
+schema UserResponse := User
+  provides :id :name :email
+  provides :address { * }
+
+;; Usage
+spec get-times : MovieTimesReq -> List MovieTime
+
+;; Session — schemas used directly, no & needed
+session OrderService
+  ? req : PlaceOrderReq
+  ! conf : OrderConfirmation
+  end
+```
+
+**Pros**: No new top-level form. Selection IS a schema (just a constrained one). `schema X := Y` reads as "X is a Y with these constraints." Simpler — the `&` operator is replaced by just naming the refined schema. Follows the existing `deftype` pattern where `:=` introduces definitions.
+
+**Cons**: Blurs the schema/selection distinction (a selection looks like a schema). Can't use the *same* User type with *different* selections in the same session without naming every combination. `MovieTimesReq` is-a `User` subtype, which may have unintended implications.
+
+---
+
+### Variation C: Inline selection (GraphQL-style, no named form)
+
+No named selections. The selection is always inline where you use the schema:
+
+```prologos
+;; Inline selection with braces
+spec get-times : User { :id, :address { :zip } } -> List MovieTime
+defn get-times [user]
+  lookup-times user.id user.address.zip
+
+;; Session — inline selection
+session OrderService
+  ? req : User { :name, :email, :address { * } }
+  ! conf : OrderConfirmation
+  end
+
+;; For reuse, bind a selection to a name via def
+def MovieTimesReq := User { :id, :address { :zip } }
+
+spec get-times : MovieTimesReq -> List MovieTime
+```
+
+**Pros**: Maximum conciseness for one-off use. Directly mirrors GraphQL query syntax. No new top-level forms. The `{ }` braces after a schema type name naturally read as "this subset of fields." Progressive disclosure: start inline, name it when you reuse it.
+
+**Cons**: Inline selections in long session types become noisy. No `requires`/`provides` distinction (everything is a flat field list). The `{ }` syntax after a type name could conflict with map literal syntax or brace-params. Harder to compose — you'd need set operations on inline selections.
+
+---
+
+### Variation D: Hybrid — named form + inline shorthand
+
+Named `selection` for reuse, inline `{ }` for one-offs. `requires`/`provides` in named form:
+
+```prologos
+;; Named selection for reuse (Approach B style)
+selection MovieTimesReq from User
+  requires :id
+  requires :address { :zip }
+
+selection UserResponse from User
+  provides :id :name :email
+  provides :address { * }
+
+;; Inline shorthand for one-offs (GraphQL style)
+spec quick-lookup : User { :id, :address { :zip } } -> Info
+
+;; Both compose with &
+spec get-times : User & MovieTimesReq -> List MovieTime
+
+;; Session uses named selections for protocol clarity
+session OrderService
+  ? req  : User & PlaceOrderReq
+  ! resp : User & UserResponse
+  end
+
+;; Inline in session when ad-hoc
+session QuickService
+  ? req : User { :id }
+  ! resp : Bool
+  end
+```
+
+**Pros**: Best of both worlds. Named selections for shared contracts; inline for one-offs. `requires`/`provides` available for the directional distinction in named form. Progressive disclosure: `schema` → inline `{ }` → named `selection` → `requires`/`provides`.
+
+**Cons**: Two syntaxes for the same concept (inline vs named). Must define which is canonical for the sexp backend.
+
+---
+
+### Variation E: `requires`/`provides` as standalone spec-like annotations
+
+Rather than a new `selection` form, use `requires`/`provides` as standalone annotations that attach to an existing schema, like `spec` attaches to `defn`:
+
+```prologos
+;; Schema defines shape
+schema User
+  :id       UserId
+  :name     String
+  :email    Email
+  :address  Address
+
+;; requires/provides as standalone forms (like spec is to defn)
+requires MovieTimesReq : User [:id :address.zip]
+requires PlaceOrderReq : User [:name :email :address]
+provides UserResponse  : User [:id :name :email :address]
+
+;; Deep nested requirement
+requires DeepReq : User [:id :address.zip :address.city]
+
+;; Composition
+requires FullReq : User [PlaceOrderReq :id]
+
+;; Usage in spec
+spec get-times : MovieTimesReq -> List MovieTime
+defn get-times [user]
+  lookup-times user.id user.address.zip
+
+;; Usage in session
+session OrderService
+  ? req  : PlaceOrderReq
+  ! resp : UserResponse
+  end
+
+;; For ad-hoc: schema with inline vec of keys
+spec quick-lookup : User [:id :address.zip] -> Info
+```
+
+**Pros**: `requires` and `provides` are top-level forms — maximally visible. The `name : Schema [fields]` syntax is concise and reads naturally: "MovieTimesReq requires from User: id and address.zip." Dot-path syntax for nested fields (`address.zip`) avoids nested braces. Composition by including other selection names in the field list. Consistent with the `spec name : Type` pattern.
+
+**Cons**: Dot-path (`address.zip`) is clean but doesn't support "all of address" as naturally (would need `:address.*` or `:address`). The `[field-list]` syntax using vec brackets is concise but may not scale to complex nested requirements.
+
+---
+
+### My Observations on the Design Space
+
+1. **`requires`/`provides` as keyword names** — these are excellent. They're directional (input vs output), natural English, and with the module rename to `imports`/`exports`, there's zero collision.
+
+2. **The `selection` keyword vs. making it a schema variant** — Variation A (`selection ... from ...`) and Variation E (`requires Name : Schema [fields]`) are the cleanest separations. Variation B (schema refinement) conflates schema and selection.
+
+3. **The `&` operator** — useful for composing schema + selection in type positions, but if selections produce subtypes (as in Variation B/E), you can just use the selection name directly as the type. The `&` becomes optional convenience.
+
+4. **Nested field syntax** — three contenders:
+   - Brace nesting: `:address { :zip :city }` (tree-like, mirrors schema structure)
+   - Dot paths: `:address.zip` (flat, concise, like GraphQL)
+   - Wildcard: `:address { * }` or `:address.*` (select all sub-fields)
+
+5. **The progressive disclosure ladder** works best in Variation D:
+   - Level 0: `schema Point :x Int :y Int` (all required, use as-is)
+   - Level 1: `User { :id :name }` (inline selection)
+   - Level 2: `selection MovieTimesReq from User` (named, reusable)
+   - Level 3: `requires`/`provides` with directional semantics
+
+What's your instinct on which variation(s) feel right? I'm particularly curious about:
+- Named form keyword preference: `selection` vs standalone `requires`/`provides`
+- Nested field syntax: braces vs dot-paths
+- Whether the `&` operator is needed or if named selections as types are sufficient  
+#+end_src
+
+*** 🗣️
+
+#+begin_src quote
+---
+
+Excellent! So I'm looking at a few variations from our conversation before. I have also captured much of these design conversations, if the context is easier to pull from that file, than in conversation history...
+
+Looking at A:
+
+I actually like the term `selection` better anyways... I often tend to name my functional commands by the thing that they return (referential transparency)--it feels more declarative--a tend towards the denotational perspective over operational concerns. For functions that are side-effecting, though, I prefer a more operational term.
+
+  I'm thinking `requires` could take a list of keys instead of being so verbose?
+
+```prologos
+requires [:name :email :address {:street :city :state :zip}]
+
+```
+
+  I'm thinking `User * MovieTimesReq` instead of `&`
+
+---
+  In variation B... One consequence of subtyping (subset in set theorectic trems `⊆`) is equivalent to logical implication... We discovered in examinig trait hierarchy that inheritance is logical implication, and that this can cause brittleness (diamond inheritance problem) and demands careful design/not composable or open to extension. We should always remind ourselves whenever we see subsets being leaned on/used of this danger. It does not lend itself to extension. 🚫🚨 Rejecting this approach strongly out of this principle. It has inheritance problem smell.
+
+---
+
+
+  So, thinking through, I'm considering something of a hybrid between A and E:
+
+The `requires` and `provides` can be captured as keys in a metadata much like how we use `spec`. This could lend itself to further extenion, potentially providing mechanisms to some other open validation questions. `:includes` could be set union, with `:requires/:provides` refinement
+
+```prologos
+
+
+selection MovieTimesReq from User
+  :requires [:id :address.zip]
+
+selection DeepReq from User
+  :requires [:id :address.{zip city}]
+
+selection UserResponse from User
+  :provides [:id :name :email :address] ;; address is whole Map
+
+
+
+selection DeeperNesting from SomewhereElse
+  :requires [:id :foo.{bar baz.{zaz quaz.yaz.{taz}}}]
+
+```
+
+  I think we do want a wildcard for deep nesting. I think there may be some lessons in Specter for doing deep nesting selection/shaping...
+
+
+
+
+
+#+end_src
+
+
+
+
+
+
+** Properties are sets (set-builder `:` Range Syntax note)
+
+** Dependent types on LE? (currently `unify.rkt`)... any other candidates? should measure performance characteristics with benchmarking?
+
+** Examining `defr` facts `||` underlying representation
+#+begin_src quote
+
+
+#+end_src
+
+

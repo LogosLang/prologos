@@ -1,0 +1,1314 @@
+% Created 2026-03-05 Thu 16:17
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{The Prologos Project - from Zachary Larson}
+\date{2026-03-05}
+\title{The AT Protocol as Composable Session Types\\\medskip
+\large A Case Study in Protocol-as-Type Composition}
+\hypersetup{
+ pdfauthor={The Prologos Project - from Zachary Larson},
+ pdftitle={The AT Protocol as Composable Session Types},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Abstract}
+\label{sec:org5d13439}
+
+The Authenticated Transfer Protocol (AT Protocol, atproto) is a decentralized
+social networking protocol powering Bluesky and its federation network. It
+comprises multiple interlocking sub-protocols: identity resolution,
+authentication, repository synchronization, XRPC request/response, and
+real-time event streaming.
+
+This document demonstrates that the entire AT Protocol can be expressed as
+composable session types in Prologos, using the protocols-as-types composition
+mechanism described in \texttt{PROTOCOLS\_AS\_TYPES.org}. Each sub-protocol becomes a
+named session type; complex interactions are assembled from these building
+blocks through named continuations. Capabilities track authority through every
+phase transition.
+
+The result is a complete, type-checked specification of a real-world
+distributed protocol --- one that would catch protocol violations, state
+machine errors, and capability misuse at compile time.
+\section{1. AT Protocol Architecture Overview}
+\label{sec:org6d4f9f1}
+
+The AT Protocol is a layered architecture for decentralized social networking:
+
+\begin{verbatim}
+┌─────────────────────────────────────────────────┐
+│                  Applications                   │
+│          (Bluesky, feeds, labelers)             │
+├─────────────────────────────────────────────────┤
+│              Lexicon (Schema Layer)             │
+│     NSID-keyed schemas, record types, RPCs      │
+├─────────────────────────────────────────────────┤
+│          XRPC (HTTP API Layer)                  │
+│     Query (GET) / Procedure (POST) / Stream     │
+├─────────────────────────────────────────────────┤
+│         Identity (DID + Handle Layer)           │
+│   did:plc / did:web, DNS handles, key rotation  │
+├─────────────────────────────────────────────────┤
+│      Repository (Data Layer)                    │
+│   MST, signed commits, CAR exports, records     │
+├─────────────────────────────────────────────────┤
+│        Sync (Federation Layer)                  │
+│   Event streams (firehose), repo diffs, relays  │
+├─────────────────────────────────────────────────┤
+│    Auth (OAuth 2.1 + DPoP + PKCE)               │
+│   PAR, token exchange, scope management         │
+└─────────────────────────────────────────────────┘
+\end{verbatim}
+\subsection{1.1 Key Participants}
+\label{sec:org4d82253}
+
+\begin{center}
+\begin{tabular}{lll}
+Role & Description & ATP Name\\
+\hline
+User Client & Browser or mobile app & Client\\
+Personal Server & Hosts user's repo, auth, blobs & PDS\\
+Relay & Aggregates firehoses into network stream & Relay (BGS)\\
+App View & Application-specific indexing/aggregation & App View\\
+Labeler & Content moderation metadata service & Labeler\\
+\end{tabular}
+\end{center}
+\subsection{1.2 Key Data Types}
+\label{sec:org8072867}
+
+\begin{verbatim}
+;; --- AT Protocol Core Data Types ---
+
+type DID := String                      ;; did:plc:ewvi7nxzyoun6zhxrhs64oiz
+type Handle := String                   ;; user.bsky.social
+type NSID := String                     ;; com.atproto.repo.createRecord
+type TID := String                      ;; timestamp-based ID (logical clock)
+type CID := String                      ;; content-addressed identifier
+type ATUri := String                    ;; at://did:plc:xxx/app.bsky.feed.post/tid
+
+type AtIdentifier := DID | Handle
+
+type SigningKey
+  :public-key Bytes
+  :algorithm  KeyAlgorithm
+
+type KeyAlgorithm := :p256 | :k256
+
+type DIDDocument
+  :did              DID
+  :also-known-as    [List ATUri]         ;; handle claims
+  :verification     [List VerificationMethod]
+  :service          [List ServiceEndpoint]
+
+type VerificationMethod
+  :id               String               ;; e.g. did:plc:xxx#atproto
+  :type             String               ;; "Multikey"
+  :public-key       String               ;; multibase-encoded
+
+type ServiceEndpoint
+  :id               String               ;; e.g. did:plc:xxx#atproto_pds
+  :type             String               ;; "AtprotoPersonalDataServer"
+  :endpoint         String               ;; https://pds.example.com
+\end{verbatim}
+\section{2. Identity Resolution as Session Types}
+\label{sec:orga9c958b}
+
+Identity resolution in atproto is a multi-step verification process:
+handle → DID → DID document → verify handle claim (bidirectional).
+
+This is our first composition target. The resolution process has distinct
+phases, each of which becomes a named session type.
+\subsection{2.1 Handle Resolution Phase}
+\label{sec:orga5bd498}
+
+\begin{verbatim}
+;; Client resolves a handle to a DID via DNS TXT or HTTPS well-known.
+;; The resolver is a service that performs the lookup.
+
+session HandleResolve
+  ! Handle                               ;; client sends the handle to resolve
+  ? [Result DID ResolveError]            ;; service returns DID or error
+  end
+
+type ResolveError
+  := :dns-failure
+   | :no-txt-record
+   | :https-failure
+   | :invalid-did
+   | :handle-not-found
+\end{verbatim}
+\subsection{2.2 DID Document Resolution Phase}
+\label{sec:orga29d9ef}
+
+\begin{verbatim}
+;; Given a DID, resolve to a DID Document.
+;; For did:plc → PLC directory lookup.
+;; For did:web → HTTPS .well-known/did.json fetch.
+
+session DIDResolve
+  ! DID                                  ;; client sends DID
+  ? [Result DIDDocument ResolveError]    ;; service returns document or error
+  end
+\end{verbatim}
+\subsection{2.3 Bidirectional Verification (Composed)}
+\label{sec:org7f3ae10}
+
+The full identity verification composes both phases and adds a verification
+step. This is where protocol composition shines:
+
+\begin{verbatim}
+;; Full identity verification: resolve handle, resolve DID, verify bidirectional claim.
+;; This is NOT end-spliced — it's an inline prefix with a named continuation.
+
+session IdentityVerification
+  ;; Phase 1: Handle → DID
+  ! Handle
+  ? [Result DID ResolveError] .
+  +>
+    | :resolved ->
+        ;; Phase 2: DID → Document
+        ! DID
+        ? [Result DIDDocument ResolveError] .
+        +>
+          | :doc-resolved ->
+              ;; Phase 3: Verify handle ∈ document.also-known-as
+              ? [Result VerifiedIdentity VerificationError]
+              end
+          | :doc-failed -> end
+    | :handle-failed -> end
+
+type VerifiedIdentity
+  :did        DID
+  :handle     Handle
+  :pds-url    String
+  :signing-key SigningKey
+
+type VerificationError
+  := :handle-not-in-document             ;; DID doc doesn't claim this handle
+   | :signing-key-missing                ;; no #atproto verification method
+   | :pds-endpoint-missing               ;; no #atproto_pds service
+\end{verbatim}
+\subsection{2.4 Analysis}
+\label{sec:org5108d79}
+
+The \texttt{IdentityVerification} session type encodes the AT Protocol's critical
+security property — bidirectional verification — directly in the type. A
+process implementing this protocol \textbf{cannot} skip the verification step. The
+type checker guarantees that if the identity is returned as \texttt{VerifiedIdentity},
+both the handle→DID and DID→handle directions have been checked.
+
+Note the branching structure: each phase can fail independently. The session
+type's choice operators (\texttt{+>}) make the failure modes explicit in the type.
+A consumer of this protocol sees exactly which phases can fail and must handle
+each case.
+\section{3. OAuth Authentication as Session Types}
+\label{sec:org0dc099d}
+
+The AT Protocol's OAuth 2.1 flow is a complex multi-phase protocol involving
+client discovery, PAR (Pushed Authorization Requests), PKCE challenge,
+user consent, and token exchange with DPoP binding.
+\subsection{3.1 Foundational Types}
+\label{sec:orgb6a4d21}
+
+\begin{verbatim}
+type ClientId := String                  ;; https://app.example.com/oauth-client-metadata.json
+type AuthCode := String
+type AccessToken := String
+type RefreshToken := String
+type DPoPNonce := String
+type PKCEChallenge := String
+type PKCEVerifier := String
+type Scope := String                     ;; "atproto", "transition:generic", etc.
+type RequestUri := String                ;; PAR reference
+
+type TokenResponse
+  :access-token   AccessToken
+  :refresh-token  RefreshToken
+  :token-type     String                 ;; "DPoP"
+  :expires-in     Int
+  :scope          String
+
+type AuthError
+  := :invalid-client
+   | :invalid-grant
+   | :invalid-scope
+   | :access-denied
+   | :server-error
+   | :temporarily-unavailable
+\end{verbatim}
+\subsection{3.2 Server Discovery Phase}
+\label{sec:orge7326d8}
+
+\begin{verbatim}
+;; Discover the Authorization Server for a given PDS.
+;; Client resolves /.well-known/oauth-authorization-server
+
+session AuthServerDiscovery
+  ! String                               ;; PDS URL
+  ? [Result AuthServerMetadata AuthError]
+  end
+
+type AuthServerMetadata
+  :issuer                 String
+  :authorization-endpoint String
+  :token-endpoint         String
+  :par-endpoint           String
+  :dpop-signing-alg       [List String]  ;; ["ES256"]
+  :scopes-supported       [List Scope]
+\end{verbatim}
+\subsection{3.3 Pushed Authorization Request Phase}
+\label{sec:org0fdbf41}
+
+\begin{verbatim}
+;; PAR: client submits authorization parameters server-side,
+;; receives a request_uri for the redirect.
+
+session PushedAuthRequest
+  ! ClientId
+  ! [List Scope]                         ;; requested scopes
+  ! PKCEChallenge                        ;; S256 challenge
+  ! String                               ;; redirect_uri
+  ? [Result RequestUri AuthError]
+  end
+\end{verbatim}
+\subsection{3.4 Token Exchange Phase}
+\label{sec:org83e0dcb}
+
+\begin{verbatim}
+;; After user consent, client exchanges auth code for tokens.
+;; DPoP proof binds tokens to this client instance.
+
+session TokenExchange
+  ! AuthCode                             ;; authorization code from redirect
+  ! PKCEVerifier                         ;; proof of PKCE challenge
+  ! Bytes                                ;; DPoP proof JWT
+  ? [Result TokenResponse AuthError]
+  end
+\end{verbatim}
+\subsection{3.5 Token Refresh Phase}
+\label{sec:orgc3bf3fb}
+
+\begin{verbatim}
+;; Refresh an expired access token using the refresh token.
+;; DPoP nonce may rotate.
+
+session TokenRefresh
+  rec
+    ! RefreshToken
+    ! Bytes                              ;; DPoP proof
+    ? [Result TokenResponse AuthError] .
+    +>
+      | :refreshed -> TokenRefresh       ;; can refresh again later
+      | :expired   -> end                ;; refresh token expired, re-auth needed
+\end{verbatim}
+\subsection{3.6 Full OAuth Flow (Composed)}
+\label{sec:org4f8c448}
+
+Now we compose the phases into the full OAuth flow. This is the key
+demonstration: each phase is a named session type, and the full flow
+sequences them through named continuations.
+
+\begin{verbatim}
+;; The full OAuth flow composes four phases.
+;; Note: user consent happens out-of-band (browser redirect),
+;; so the session models the client↔server wire protocol, not the UI.
+
+session OAuthFlow
+  ;; Phase 1: Discover auth server
+  ! String                               ;; PDS URL
+  ? [Result AuthServerMetadata AuthError] .
+  +>
+    | :discovered ->
+        ;; Phase 2: PAR
+        ! ClientId . ! [List Scope] . ! PKCEChallenge . ! String .
+        ? [Result RequestUri AuthError] .
+        +>
+          | :par-ok ->
+              ;; [User consent happens out-of-band via browser redirect]
+              ;; Phase 3: Token exchange
+              ! AuthCode . ! PKCEVerifier . ! Bytes .
+              ? [Result TokenResponse AuthError] .
+              +>
+                | :tokens-granted -> AuthenticatedSession
+                | :exchange-failed -> end
+          | :par-failed -> end
+    | :discovery-failed -> end
+
+;; After successful OAuth, transition to authenticated operations
+session AuthenticatedSession
+  +>
+    | :xrpc-query    -> XRPCQuery . AuthenticatedSession
+    | :xrpc-procedure -> XRPCProcedure . AuthenticatedSession
+    | :refresh-token -> TokenRefresh
+    | :logout        -> end
+\end{verbatim}
+\subsection{3.7 Analysis}
+\label{sec:org8b97499}
+
+The composed \texttt{OAuthFlow} session type captures the \textbf{entire} OAuth 2.1 + DPoP +
+PKCE flow as a single verifiable type. Key observations:
+
+\begin{enumerate}
+\item \textbf{Phase sequencing is enforced}: you cannot exchange tokens before completing
+PAR, and you cannot do PAR before discovering the auth server. The type
+prevents out-of-order operations.
+
+\item \textbf{Error handling is explicit at every phase}: each phase can fail
+independently. The session type's branching makes it impossible to skip
+error handling.
+
+\item \textbf{The transition to \texttt{AuthenticatedSession}} is a named continuation. After
+successful authentication, the protocol transitions to a new mode where
+XRPC queries and procedures are available. This mode transition is
+type-checked.
+
+\item \textbf{Token refresh is recursive}: \texttt{TokenRefresh} recurses back to itself,
+modeling the repeated refresh cycle. When the refresh token expires, the
+session terminates — the client must re-authenticate.
+\end{enumerate}
+\section{4. XRPC Request/Response as Session Types}
+\label{sec:org8f454ad}
+
+XRPC is the HTTP API layer. Queries (GET) and Procedures (POST) are the
+two operation types.
+\subsection{4.1 XRPC Types}
+\label{sec:org6842e81}
+
+\begin{verbatim}
+type XRPCMethod := NSID                  ;; e.g. com.atproto.repo.createRecord
+
+type XRPCParams := Map String String     ;; query parameters
+
+type XRPCError
+  :error   String                        ;; error type name
+  :message String?                       ;; optional human-readable message
+
+type HTTPStatus := Int
+
+type XRPCResponse (A : Type)
+  := :ok A
+   | :client-error HTTPStatus XRPCError  ;; 400, 401, 403, 404, 413
+   | :rate-limited Int?                  ;; 429 + optional Retry-After seconds
+   | :server-error HTTPStatus XRPCError  ;; 500, 501, 502, 503, 504
+\end{verbatim}
+\subsection{4.2 Query Session (Cacheable, No Side Effects)}
+\label{sec:orgaf375c2}
+
+\begin{verbatim}
+;; An XRPC query: client sends method + params, server responds.
+;; Queries are idempotent and cacheable (HTTP GET semantics).
+
+session XRPCQuery
+  ! XRPCMethod                           ;; method NSID
+  ! XRPCParams                           ;; query parameters
+  ? [XRPCResponse Bytes]                 ;; response (JSON or CBOR body)
+  end
+\end{verbatim}
+\subsection{4.3 Procedure Session (May Mutate State)}
+\label{sec:org672547e}
+
+\begin{verbatim}
+;; An XRPC procedure: client sends method + params + body,
+;; server may mutate state and responds.
+
+session XRPCProcedure
+  ! XRPCMethod                           ;; method NSID
+  ! XRPCParams                           ;; query parameters
+  ! Bytes                                ;; request body
+  ? [XRPCResponse Bytes]                 ;; response body
+  end
+\end{verbatim}
+\subsection{4.4 Paginated Query (Recursive)}
+\label{sec:org21bc2d7}
+
+\begin{verbatim}
+;; Many XRPC queries support cursor-based pagination.
+;; This session type models the pagination loop.
+
+type CursorResponse (A : Type)
+  :data   A
+  :cursor String?                        ;; none = no more pages
+
+session PaginatedQuery
+  ! XRPCMethod . ! XRPCParams .
+  ? [XRPCResponse [CursorResponse Bytes]] .
+  +>
+    | :next-page ->
+        ! String .                       ;; cursor for next page
+        ? [XRPCResponse [CursorResponse Bytes]] .
+        PaginatedQuery                   ;; recurse: may have more pages
+    | :done -> end
+\end{verbatim}
+\subsection{4.5 Analysis}
+\label{sec:org0ab976f}
+
+Note how \texttt{PaginatedQuery} uses self-reference for recursion: the client can
+keep requesting pages until it selects \texttt{:done}. The session type guarantees
+that pagination follows the cursor protocol --- you can't request page 3
+without having received the cursor from page 2.
+
+The \texttt{XRPCResponse} union type captures all possible HTTP outcomes, forcing
+the consumer to handle rate limiting (429), authentication failures (401),
+and server errors.
+\section{5. Repository Operations as Session Types}
+\label{sec:org0799ad3}
+
+The AT Protocol repository is a Merkle Search Tree (MST) of records, signed
+with the account's key. Repository operations include creating, updating,
+and deleting records.
+\subsection{5.1 Repository Types}
+\label{sec:orgea96975}
+
+\begin{verbatim}
+type RepoCommit
+  :did     DID
+  :version Int                           ;; always 3
+  :data    CID                           ;; MST root
+  :rev     TID                           ;; revision (logical clock)
+  :prev    CID?                          ;; previous commit (typically none in v3)
+  :sig     Bytes                         ;; cryptographic signature
+
+type RecordKey := String                 ;; typically a TID
+type Collection := NSID                  ;; e.g. app.bsky.feed.post
+
+type RepoPath
+  :collection Collection
+  :rkey       RecordKey
+
+type RepoRecord
+  :uri     ATUri
+  :cid     CID
+  :value   Bytes                         ;; CBOR-encoded record
+
+type RepoOp
+  := :create RepoPath Bytes              ;; path + record value
+   | :update RepoPath Bytes CID          ;; path + new value + expected CID (swap)
+   | :delete RepoPath
+\end{verbatim}
+\subsection{5.2 Record CRUD Session}
+\label{sec:org779b02e}
+
+\begin{verbatim}
+;; Client ↔ PDS session for repository record operations.
+;; This models the com.atproto.repo.* family of XRPC endpoints
+;; as a single session type with choice.
+
+session RepoSession {auth :0 AuthCap}
+  rec
+    +>
+      | :create-record ->
+          ! Collection . ! RecordKey? . ! Bytes .
+          ? [Result RepoRecord RepoError] . RepoSession
+      | :get-record ->
+          ! Collection . ! RecordKey .
+          ? [Result RepoRecord RepoError] . RepoSession
+      | :update-record ->
+          ! Collection . ! RecordKey . ! Bytes . ! CID .
+          ? [Result RepoRecord RepoError] . RepoSession
+      | :delete-record ->
+          ! Collection . ! RecordKey .
+          ? [Result Unit RepoError] . RepoSession
+      | :list-records ->
+          ! Collection . ! Int . ! String? .     ;; collection, limit, cursor
+          ? [Result [CursorResponse [List RepoRecord]] RepoError] . RepoSession
+      | :describe ->
+          ? [Result RepoDescription RepoError] . RepoSession
+      | :done -> end
+
+type RepoError
+  := :invalid-record                     ;; record fails Lexicon validation
+   | :record-not-found
+   | :conflict CID                       ;; swap CID mismatch (optimistic concurrency)
+   | :repo-not-found
+   | :unauthorized
+   | :rate-limited
+
+type RepoDescription
+  :handle           Handle
+  :did              DID
+  :collections      [List NSID]
+  :did-doc          DIDDocument
+\end{verbatim}
+\subsection{5.3 Analysis: Capabilities}
+\label{sec:org739f97e}
+
+Note the \texttt{\{auth :0 AuthCap\}} on \texttt{RepoSession}. This is a capability
+constraint: the session requires proof of authentication. It is \texttt{:0} (erased)
+because it's an authority check, not a runtime value. The type checker
+verifies that any process operating this session has been authenticated ---
+but there is zero runtime cost.
+
+Write operations (\texttt{:create-record}, \texttt{:update-record}, \texttt{:delete-record})
+could further require \texttt{\{write :0 RepoWriteCap\}}, enabling fine-grained
+authority separation between read and write operations.
+\section{6. Data Sync and Firehose as Session Types}
+\label{sec:org7041191}
+
+The sync layer is the heart of AT Protocol federation. PDS instances emit
+repository events; Relays aggregate them; App Views consume them.
+\subsection{6.1 Sync Event Types}
+\label{sec:orgcee6d29}
+
+\begin{verbatim}
+type SyncEvent
+  := :commit CommitEvent
+   | :identity IdentityEvent
+   | :account AccountEvent
+   | :sync SyncResetEvent
+
+type CommitEvent
+  :repo    DID
+  :rev     TID
+  :since   TID?                          ;; previous rev (for chain verification)
+  :blocks  Bytes                         ;; CAR diff slice (≤ 2 MB)
+  :ops     [List RecordOp]              ;; record-level operations (≤ 200)
+  :commit  CID
+  :time    String                        ;; ISO 8601
+
+type RecordOp
+  :action    RecordAction
+  :path      String                      ;; collection/rkey
+  :cid       CID?                        ;; record CID (none for deletes)
+
+type RecordAction := :create | :update | :delete
+
+type IdentityEvent
+  :did     DID
+  :seq     Int
+  :handle  Handle?                       ;; current handle (may have changed)
+  :time    String
+
+type AccountEvent
+  :did     DID
+  :seq     Int
+  :active  Bool
+  :status  AccountStatus?
+  :time    String
+
+type AccountStatus
+  := :takendown | :suspended | :deleted | :deactivated
+
+type SyncResetEvent
+  :did     DID
+  :rev     TID
+  :commit  Bytes                         ;; signed commit block (no records)
+  :time    String
+\end{verbatim}
+\subsection{6.2 Firehose Subscription Session}
+\label{sec:org5c56664}
+
+This is the most interesting session type in the entire AT Protocol from a
+composition standpoint. The firehose is a long-lived, server-push stream
+with cursor-based resumption.
+
+\begin{verbatim}
+;; com.atproto.sync.subscribeRepos
+;; Server pushes events; client consumes them.
+;; Cursor enables resumption after disconnection.
+
+session Firehose
+  ;; Connection phase: client optionally provides a cursor to resume from
+  ! Int? .                               ;; cursor (none = start from current)
+  +>
+    | :accepted -> FirehoseStream
+    | :cursor-too-old ->
+        ? String .                       ;; info message: cursor outside backfill window
+        FirehoseStream                   ;; stream from earliest available
+    | :error ->
+        ? FirehoseError . end
+
+session FirehoseStream
+  rec
+    ? SyncEvent .                        ;; server pushes an event
+    +>
+      | :continue -> FirehoseStream      ;; keep consuming
+      | :disconnect -> end               ;; client disconnects
+
+type FirehoseError
+  := :consumer-too-slow                  ;; client can't keep up
+   | :future-cursor                      ;; cursor is ahead of server
+   | :internal-error String
+\end{verbatim}
+\subsection{6.3 Full Repository Sync Session}
+\label{sec:org1aa488c}
+
+\begin{verbatim}
+;; com.atproto.sync.getRepo — download a full repository as a CAR file.
+;; Used for initial sync or resynchronization after broken commit chains.
+
+session RepoExport
+  ! DID                                  ;; which repo to export
+  ! TID?                                 ;; since revision (none = full export)
+  ? [Result Bytes RepoExportError]       ;; CAR file bytes
+  end
+
+type RepoExportError
+  := :repo-not-found
+   | :repo-deactivated
+   | :repo-taken-down
+   | :export-too-large
+\end{verbatim}
+\subsection{6.4 Relay Aggregation (Multi-Source Composition)}
+\label{sec:org79baa51}
+
+A Relay subscribes to multiple PDS firehoses and produces a single aggregated
+stream. This is protocol composition at the infrastructure level:
+
+\begin{verbatim}
+;; A Relay is a process that:
+;; 1. Subscribes to N upstream PDS firehoses (as client)
+;; 2. Produces one aggregated firehose (as server)
+;; The Relay's SERVER-side session is the same Firehose type —
+;; consumers can't distinguish a PDS firehose from a Relay firehose.
+
+;; Relay's upstream subscription (one per PDS)
+session RelayUpstream
+  ! String .                             ;; PDS URL
+  ! Int? .                               ;; cursor
+  +>
+    | :connected -> RelayUpstreamStream
+    | :failed -> ? String . end
+
+session RelayUpstreamStream
+  rec
+    ? SyncEvent .                        ;; events from this PDS
+    +>
+      | :continue -> RelayUpstreamStream
+      | :pds-disconnect -> end           ;; upstream PDS disconnected
+      | :reconnect ->                    ;; re-establish with new cursor
+          ! Int . RelayUpstream
+
+;; Relay's downstream service is simply: Firehose
+;; (same type, same protocol — consumers see no difference)
+\end{verbatim}
+\subsection{6.5 Analysis: Protocol Reuse}
+\label{sec:org1a516cf}
+
+The Relay demonstrates a key property of protocol composition: \textbf{the same
+session type serves different roles at different points in the architecture}.
+A \texttt{Firehose} session type is used by:
+
+\begin{itemize}
+\item PDS → Relay (upstream sync)
+\item Relay → App View (downstream aggregation)
+\item PDS → Direct consumer (direct subscription)
+\end{itemize}
+
+The session type is the same in all cases. The process behind it differs,
+but the protocol contract is identical. This is the session type analog of
+interface polymorphism --- different implementations, same type.
+
+The \texttt{RelayUpstreamStream} adds reconnection logic (\texttt{:reconnect} branches
+back to \texttt{RelayUpstream}) that the basic \texttt{FirehoseStream} doesn't need.
+This is composition through branching: the Relay's client-side protocol is
+a \textbf{superset} of the basic consumer protocol, with additional operational
+modes.
+\section{7. Account Lifecycle as Session Types}
+\label{sec:org5d48234}
+
+Account management — creation, migration, deactivation, deletion — is a
+state machine with well-defined transitions.
+\subsection{7.1 Account State Machine}
+\label{sec:orgb039121}
+
+\begin{verbatim}
+;; Account states as a session type state machine.
+;; Each state is a named session type; transitions are operations.
+
+session AccountActive {admin :0 AdminCap}
+  +>
+    | :deactivate   -> AccountDeactivated
+    | :delete       -> AccountDeleted
+    | :suspend      -> AccountSuspended
+    | :takedown     -> AccountTakenDown
+    | :migrate      -> AccountMigration
+    | :operate      -> RepoSession        ;; normal operations
+    | :close-admin  -> end
+
+session AccountDeactivated {admin :0 AdminCap}
+  +>
+    | :reactivate -> AccountActive
+    | :delete     -> AccountDeleted
+    | :close      -> end
+
+session AccountSuspended {admin :0 AdminCap}
+  +>
+    | :unsuspend -> AccountActive
+    | :delete    -> AccountDeleted
+    | :close     -> end
+
+session AccountTakenDown {admin :0 AdminCap}
+  +>
+    | :restore -> AccountActive          ;; takedowns are potentially reversible
+    | :delete  -> AccountDeleted
+    | :close   -> end
+
+session AccountDeleted
+  end                                    ;; terminal — no operations possible
+\end{verbatim}
+\subsection{7.2 Account Migration (Cross-PDS)}
+\label{sec:org4e97230}
+
+\begin{verbatim}
+;; Account migration is a multi-phase protocol between old PDS, new PDS,
+;; and the account holder. This is the most complex composition in ATP.
+
+session AccountMigration {owner :0 AccountOwnerCap}
+  ;; Phase 1: Create account on new PDS (may start deactivated)
+  ! String .                             ;; new PDS URL
+  ? [Result MigrationTicket MigrationError] .
+  +>
+    | :ticket-granted ->
+        ;; Phase 2: Export repository from old PDS
+        ! DID .
+        ? [Result Bytes MigrationError] . ;; full CAR export
+        +>
+          | :export-ok ->
+              ;; Phase 3: Import repository to new PDS
+              ! Bytes .                  ;; CAR data
+              ? [Result Unit MigrationError] .
+              +>
+                | :import-ok ->
+                    ;; Phase 4: Update DID document (new PDS, new signing key)
+                    ! DIDDocument .       ;; updated document
+                    ? [Result Unit MigrationError] .
+                    +>
+                      | :did-updated ->
+                          ;; Phase 5: Deactivate on old PDS, activate on new
+                          ? MigrationComplete . end
+                      | :did-failed -> MigrationRollback
+                | :import-failed -> MigrationRollback
+          | :export-failed -> end
+    | :ticket-denied -> end
+
+session MigrationRollback
+  ? [Result Unit MigrationError]         ;; attempt to restore previous state
+  end
+
+type MigrationTicket
+  :new-pds     String
+  :signing-key SigningKey
+  :expires     String                    ;; ISO 8601
+
+type MigrationComplete
+  :old-pds     String
+  :new-pds     String
+  :did         DID
+
+type MigrationError
+  := :pds-unreachable
+   | :account-exists                     ;; already exists on target PDS
+   | :export-failed
+   | :import-validation-failed
+   | :did-update-failed
+   | :rollback-failed
+\end{verbatim}
+\subsection{7.3 Analysis: Capability Tracking Through Migration}
+\label{sec:org4a3988a}
+
+Account migration is particularly interesting for capability analysis.
+The \texttt{\{owner :0 AccountOwnerCap\}} constraint ensures only the account owner
+can initiate migration. But notice how the protocol crosses PDS boundaries:
+
+\begin{itemize}
+\item Phase 1-2: old PDS (export) — requires read authority on old PDS
+\item Phase 3-4: new PDS (import) — requires write authority on new PDS
+\item Phase 4: DID directory — requires DID update authority
+\end{itemize}
+
+In a full Prologos realization, each phase would carry distinct capability
+requirements. The composed protocol's capability set would be the union:
+\texttt{\{old-pds :0 ExportCap, new-pds :0 ImportCap, did :0 DIDUpdateCap\}}.
+
+The \texttt{MigrationRollback} session type handles the failure case — if DID
+update or import fails, the protocol transitions to rollback. This is
+error handling as a protocol phase, not as an exception.
+\section{8. Blob Management as Session Types}
+\label{sec:org6323798}
+
+Blobs (media files) are uploaded separately from records and referenced by CID.
+
+\begin{verbatim}
+;; Blob upload and reference lifecycle
+
+session BlobUpload {auth :0 AuthCap}
+  ! String .                             ;; Content-Type MIME
+  ! Bytes .                              ;; blob data
+  ? [Result BlobRef BlobError]
+  end
+
+type BlobRef
+  :cid       CID
+  :mime-type String
+  :size      Int
+
+type BlobError
+  := :too-large                          ;; exceeds size limit
+   | :invalid-type                       ;; disallowed MIME type
+   | :upload-failed
+   | :storage-full
+
+;; Blob retrieval
+session BlobDownload
+  ! DID . ! CID .                        ;; account + blob CID
+  ? [Result Bytes BlobError]
+  end
+\end{verbatim}
+\section{9. Lexicon Validation as a Type-Level Concern}
+\label{sec:org6a3882d}
+
+Lexicons define the schema for records and XRPC endpoints. In ATP, Lexicon
+validation happens at record creation time. In Prologos, we can express
+this as a \textbf{dependent} session type — the record schema depends on the
+collection NSID.
+
+\begin{verbatim}
+;; Dependent record creation: the record type depends on the collection.
+;; This uses dependent send (`:`) to bind the collection in the continuation.
+
+session TypedRecordCreate {auth :0 AuthCap, write :0 RepoWriteCap}
+  ?: collection Collection               ;; dependent receive: bind collection
+  ! [RecordFor collection]               ;; record type depends on collection!
+  ? [Result RepoRecord RepoError]
+  end
+
+;; RecordFor is a type family mapping collection NSIDs to record types:
+;; RecordFor "app.bsky.feed.post"    = PostRecord
+;; RecordFor "app.bsky.feed.like"    = LikeRecord
+;; RecordFor "app.bsky.graph.follow" = FollowRecord
+;; etc.
+\end{verbatim}
+
+This is where Prologos's dependent session types (\texttt{?:} / \texttt{!:} operators)
+go beyond what ATP itself can express. ATP validates records against Lexicon
+schemas at runtime (JSON Schema-like validation). Prologos encodes the
+schema in the type system — invalid records are \textbf{type errors}, caught at
+compile time.
+\subsection{9.1 Lexicon Schema as Type (Sketch)}
+\label{sec:org627c86b}
+
+\begin{verbatim}
+;; A Bluesky post record, typed
+type PostRecord
+  :text        String
+  :created-at  String                    ;; ISO 8601 datetime
+  :langs       [List String]?            ;; BCP 47 language tags
+  :reply       ReplyRef?
+  :embed       Embed?
+  :labels      Labels?
+  :tags        [List String]?
+  :facets      [List Facet]?
+
+type ReplyRef
+  :root   StrongRef
+  :parent StrongRef
+
+type StrongRef
+  :uri ATUri
+  :cid CID
+
+type Embed
+  := :images [List ImageEmbed]
+   | :external ExternalEmbed
+   | :record StrongRef
+   | :record-with-media StrongRef [List ImageEmbed]
+
+;; A like record
+type LikeRecord
+  :subject    StrongRef
+  :created-at String
+
+;; A follow record
+type FollowRecord
+  :subject    DID
+  :created-at String
+\end{verbatim}
+\section{10. The Full Client Session: Composition at Scale}
+\label{sec:orgc8d3471}
+
+Now we bring it all together. A full ATP client session composes identity
+resolution, authentication, repository operations, blob management, and
+sync subscription into a single session type.
+\subsection{10.1 Client ↔ PDS Full Session}
+\label{sec:org00b4863}
+
+\begin{verbatim}
+;; The full client-to-PDS protocol, composed from all sub-protocols.
+;; This is the capstone: every phase is a named session type,
+;; and the full interaction is a type-checked state machine.
+
+session ATPClientSession
+  ;; Phase 1: Identity resolution
+  ! Handle .
+  ? [Result VerifiedIdentity ResolveError] .
+  +>
+    | :identity-ok ->
+        ;; Phase 2: OAuth authentication
+        OAuthFlow                        ;; transitions to AuthenticatedSession on success
+    | :identity-failed -> end
+
+;; Recall: OAuthFlow on success transitions to AuthenticatedSession,
+;; which offers:
+;;   :xrpc-query    -> XRPCQuery . AuthenticatedSession
+;;   :xrpc-procedure -> XRPCProcedure . AuthenticatedSession
+;;   :refresh-token -> TokenRefresh
+;;   :logout        -> end
+
+;; A higher-level view that names the domain operations:
+
+session BlueskyClient {auth :0 AuthCap}
+  rec
+    +>
+      | :create-post   -> CreatePost . BlueskyClient
+      | :like-post     -> LikePost . BlueskyClient
+      | :follow-user   -> FollowUser . BlueskyClient
+      | :get-timeline  -> GetTimeline . BlueskyClient
+      | :get-profile   -> GetProfile . BlueskyClient
+      | :upload-image  -> BlobUpload . BlueskyClient
+      | :subscribe     -> Firehose
+      | :logout        -> end
+
+session CreatePost
+  ! PostRecord
+  ? [Result RepoRecord RepoError]
+  end
+
+session LikePost
+  ! LikeRecord
+  ? [Result RepoRecord RepoError]
+  end
+
+session FollowUser
+  ! FollowRecord
+  ? [Result RepoRecord RepoError]
+  end
+
+session GetTimeline
+  ! Int . ! String? .                    ;; limit, cursor
+  ? [Result [CursorResponse [List PostRecord]] RepoError]
+  end
+
+session GetProfile
+  ! AtIdentifier .                       ;; DID or handle
+  ? [Result ProfileView RepoError]
+  end
+
+type ProfileView
+  :did           DID
+  :handle        Handle
+  :display-name  String?
+  :description   String?
+  :avatar        String?                 ;; blob URL
+  :followers     Int
+  :following      Int
+  :posts         Int
+\end{verbatim}
+\subsection{10.2 The Protocol Graph}
+\label{sec:org7a795ed}
+
+The full \texttt{ATPClientSession} forms a protocol graph:
+
+\begin{verbatim}
+ATPClientSession
+       │
+  ! Handle . ? VerifiedIdentity
+       │
+  ┌────┴────┐
+  ▼         ▼
+OAuthFlow  end
+  │
+  ├─ AuthServerDiscovery
+  ├─ PushedAuthRequest
+  ├─ TokenExchange
+  │
+  ▼
+AuthenticatedSession ◄─────────────────────┐
+  │                                        │
+  ├── :xrpc-query ────► XRPCQuery ─────────┘
+  ├── :xrpc-procedure ► XRPCProcedure ─────┘
+  ├── :refresh-token ─► TokenRefresh ──────┘
+  └── :logout ────────► end
+
+BlueskyClient ◄────────────────────────────┐
+  │                                        │
+  ├── :create-post ───► CreatePost ────────┘
+  ├── :like-post ─────► LikePost ──────────┘
+  ├── :follow-user ───► FollowUser ────────┘
+  ├── :get-timeline ──► GetTimeline ───────┘
+  ├── :get-profile ───► GetProfile ────────┘
+  ├── :upload-image ──► BlobUpload ────────┘
+  ├── :subscribe ─────► Firehose
+  └── :logout ────────► end
+\end{verbatim}
+
+Each box is a named session type. Each arrow is a type-checked transition.
+The entire protocol --- from handle resolution through OAuth through CRUD
+through firehose subscription --- is a single verified state machine.
+\section{11. Federation as Multi-Party Protocol Composition}
+\label{sec:org6b38c3f}
+
+The AT Protocol's federation model involves multiple parties:
+Client ↔ PDS ↔ Relay ↔ App View. Each pair communicates via session-typed
+channels.
+
+\begin{verbatim}
+;; The federation topology as process composition.
+;; Each arrow is a session-typed channel.
+
+;; Client ↔ PDS: ATPClientSession (or BlueskyClient)
+;; PDS ↔ Relay: Firehose (PDS is server, Relay is client)
+;; Relay ↔ App View: Firehose (Relay is server, App View is client)
+;; Client ↔ App View: XRPC queries (proxied through PDS)
+
+defproc pds-node [config : PDSConfig] {sys : IOCap}
+  ;; Accept client connections
+  let client-ch := listen config.port ATPClientSession NetCap
+  ;; Connect to relay for firehose publishing
+  let relay-ch := connect config.relay-url Firehose NetCap
+
+  rec
+    +>
+      | :client-request ->
+          let ch := client-ch ?
+          spawn handle-client ch AuthCap RepoWriteCap
+          rec
+      | :repo-event ->
+          ;; Publish commit events to relay
+          relay-ch ! [make-sync-event latest-commit]
+          rec
+
+defproc relay-node [config : RelayConfig] {sys : IOCap}
+  ;; Subscribe to all known PDS firehoses
+  let upstreams := [map (fn [pds-url]
+    connect pds-url Firehose NetCap) config.pds-urls]
+
+  ;; Serve aggregated firehose to downstream consumers
+  let downstream-ch := listen config.port Firehose NetCap
+
+  ;; Merge upstream events, publish downstream
+  rec
+    let event := [select-any upstreams]    ;; whichever PDS sends next
+    downstream-ch ! event
+    rec
+\end{verbatim}
+\subsection{11.1 Analysis: Same Protocol, Different Roles}
+\label{sec:org8caab0e}
+
+The \texttt{Firehose} session type appears three times in the federation:
+
+\begin{enumerate}
+\item \textbf{PDS publishes} a firehose (server-side of \texttt{Firehose})
+\item \textbf{Relay subscribes} to PDS firehoses (client-side of \texttt{dual Firehose})
+\item \textbf{Relay publishes} an aggregated firehose (server-side of \texttt{Firehose})
+\end{enumerate}
+
+The session type is identical in all cases. Duality handles the role
+reversal automatically: what the PDS sends (\texttt{? SyncEvent}), the Relay
+receives (\texttt{! SyncEvent} in the dual). What the Relay publishes downstream
+uses the same type, with App Views as the dual endpoints.
+
+This is the power of protocols-as-types in a real federation:
+\textbf{the same type specification governs every firehose in the network},
+regardless of which service implements it.
+\section{12. Key Findings}
+\label{sec:orgcdad672}
+
+\subsection{12.1 Every ATP Sub-Protocol Maps to a Session Type}
+\label{sec:org9bcfca6}
+
+\begin{center}
+\begin{tabular}{lll}
+AT Protocol Layer & Session Type(s) & Composition Pattern\\
+\hline
+Identity & HandleResolve, DIDResolve, IdentityVerification & Sequential phases\\
+OAuth & AuthServerDiscovery, PushedAuthRequest, TokenExchange, TokenRefresh & Sequential + branching\\
+XRPC & XRPCQuery, XRPCProcedure, PaginatedQuery & Choice + recursion\\
+Repository & RepoSession, TypedRecordCreate & Choice + recursion\\
+Sync/Firehose & Firehose, FirehoseStream, RepoExport & Server-push + cursor\\
+Account & AccountActive/Deactivated/Suspended/TakenDown/Deleted & State machine\\
+Migration & AccountMigration, MigrationRollback & Multi-phase + rollback\\
+Blobs & BlobUpload, BlobDownload & Simple request/response\\
+Application & BlueskyClient, CreatePost, LikePost, etc. & Hub + sub-protocols\\
+\end{tabular}
+\end{center}
+
+Every layer of the AT Protocol can be expressed as one or more named session
+types. Complex protocols compose from simpler ones through named continuations.
+\subsection{12.2 Composition Patterns Observed}
+\label{sec:org51b1b8f}
+
+The AT Protocol exercise reveals several composition patterns:
+
+\begin{enumerate}
+\item \textbf{Sequential Phase Composition}: Identity resolution, OAuth flow,
+account migration. Each phase must complete before the next begins.
+Named continuations enforce ordering.
+
+\item \textbf{Hub-and-Spoke}: \texttt{BlueskyClient}, \texttt{AuthenticatedSession},
+\texttt{AccountActive}, \texttt{RepoSession}. A central session type branches to
+sub-protocols and returns. Mutual recursion between the hub and spokes
+creates a reusable operational loop.
+
+\item \textbf{Server-Push Stream}: \texttt{FirehoseStream}. The server pushes events; the
+client's only choices are \texttt{:continue} or \texttt{:disconnect}. This is a
+specialized pattern for real-time data feeds.
+
+\item \textbf{Cursor-Based Resumption}: \texttt{Firehose} accepts an optional cursor at
+connection time for resumption. \texttt{PaginatedQuery} threads cursors through
+recursive page fetches. Cursors are protocol state carried between
+sessions.
+
+\item \textbf{State Machine}: Account lifecycle. Each state is a named session type;
+transitions are operations. \texttt{AccountDeleted} is terminal (\texttt{end}). This
+directly implements the ATP account status model as a type-checked state
+machine.
+
+\item \textbf{Rollback Branch}: \texttt{AccountMigration} branches to \texttt{MigrationRollback}
+on failure. Error recovery is a named protocol phase, not an exception.
+\end{enumerate}
+\subsection{12.3 What Session Types Catch That ATP Cannot}
+\label{sec:org9efa013}
+
+The AT Protocol specification is informal prose supplemented by Lexicon
+schemas (JSON Schema-like). It describes protocol flows in natural language
+and enforces schema conformance at runtime. Session types would catch
+additional classes of errors:
+
+\begin{center}
+\begin{tabular}{lll}
+Error Class & ATP Today & With Session Types\\
+\hline
+Out-of-order operations & Runtime error / undefined & Compile-time type error\\
+Missing error handling & Silent failure & Type checker rejects\\
+Skipped auth phase & 401 at runtime & Can't construct the channel\\
+Double-use of token & Undefined behavior & Linear type error\\
+Broken commit chain & Runtime detection + re-sync & Type tracks revision\\
+Migration phase skipped & Undefined state & Can't reach next phase\\
+Firehose consumer lag & Connection dropped & Protocol-level backpressure\\
+\end{tabular}
+\end{center}
+\subsection{12.4 Dependent Types Add Schema Safety}
+\label{sec:orgdce1dae}
+
+The \texttt{TypedRecordCreate} session (§9) demonstrates something ATP cannot
+express today: the record type depends on the collection NSID. In ATP,
+Lexicon validation is a runtime JSON Schema check. In Prologos, the
+dependency is in the type:
+
+\begin{verbatim}
+?: collection Collection
+! [RecordFor collection]                 ;; compile-time: wrong record = type error
+\end{verbatim}
+
+This eliminates an entire class of runtime errors — posting a \texttt{LikeRecord}
+to the \texttt{app.bsky.feed.post} collection is a \textbf{type error}, not a 400
+response.
+\subsection{12.5 Capability Integration Is Natural}
+\label{sec:orge9288a9}
+
+Every session type that requires authentication carries \texttt{\{auth :0 AuthCap\}}.
+Write operations carry \texttt{\{write :0 RepoWriteCap\}}. Admin operations carry
+\texttt{\{admin :0 AdminCap\}}. The capabilities compose:
+
+\begin{itemize}
+\item \texttt{BlueskyClient} requires \texttt{\{auth :0 AuthCap\}}
+\item \texttt{CreatePost} (reached through \texttt{BlueskyClient}) inherits the auth cap
+\item \texttt{AccountActive} requires \texttt{\{admin :0 AdminCap\}} (separate authority)
+\item \texttt{AccountMigration} requires \texttt{\{owner :0 AccountOwnerCap\}} (owner-only)
+\end{itemize}
+
+The capability requirements are visible in the type, auditable by the
+compiler, and erased at runtime. This is exactly the POLA (Principle of
+Least Authority) model from \texttt{CAPABILITY\_SECURITY.md} applied to a real
+distributed protocol.
+\section{13. Implications for Prologos}
+\label{sec:org26c4b54}
+
+\subsection{13.1 Protocols-as-Types Is Practical}
+\label{sec:org937f71a}
+
+This exercise demonstrates that protocols-as-types composition is not merely
+theoretical --- it scales to a real-world protocol with 10+ interacting
+sub-protocols, multiple transport mechanisms (HTTP, WebSocket), complex
+authentication flows, and federated multi-party interactions.
+\subsection{13.2 Session Type Libraries Enable Protocol Ecosystems}
+\label{sec:org7484283}
+
+If Prologos provides a standard library of protocol building blocks
+(\texttt{Handshake}, \texttt{CursorPagination}, \texttt{TokenRefresh}, \texttt{ServerPushStream}),
+users can assemble application protocols by composition. The AT Protocol
+case study suggests a reusable set:
+
+\begin{itemize}
+\item \texttt{CursorPaginated} — cursor-based pagination loop
+\item \texttt{ServerPush} — server-push stream with client disconnect
+\item \texttt{OAuthBase} — PAR + PKCE + DPoP flow
+\item \texttt{StateMachine} — hub-and-spoke with named states
+\item \texttt{MultiPhaseWithRollback} — sequential phases with rollback branch
+\end{itemize}
+\subsection{13.3 Federation Is Natural}
+\label{sec:orgc4573c3}
+
+The AT Protocol's federation model --- same protocol, different roles,
+duality handling role reversal --- maps perfectly to session type duality.
+Prologos's existing duality mechanism handles federation without any new
+infrastructure.
+\subsection{13.4 Dependent Sessions Enable Schema-Safe APIs}
+\label{sec:org594f6bc}
+
+The \texttt{TypedRecordCreate} session demonstrates the value of dependent send/
+receive (\texttt{!:\textasciitilde{}/}?:\textasciitilde{}). Schema-typed APIs catch structural errors at compile
+time. This is a strong argument for prioritizing dependent send/receive
+implementation (Phase C in the IO Library roadmap).
+\subsection{13.5 The Intentionality Principle Holds}
+\label{sec:org808c264}
+
+Throughout this exercise, the intentionality principle from
+\texttt{PROTOCOLS\_AS\_TYPES.org} proved its worth. Protocols that end with \texttt{end} are
+genuinely terminal (\texttt{AccountDeleted}, \texttt{BlobUpload}). Protocols that end
+with named continuations are genuinely transitional (\texttt{OAuthFlow →
+AuthenticatedSession}). The distinction was never ambiguous. End-splicing
+was never needed.
+\section{14. References}
+\label{sec:orgb74d577}
+
+\begin{itemize}
+\item AT Protocol Specification: \url{https://atproto.com/specs/atp}
+\item XRPC Specification: \url{https://atproto.com/specs/xrpc}
+\item Repository Specification: \url{https://atproto.com/specs/repository}
+\item Event Stream (Firehose): \url{https://atproto.com/specs/event-stream}
+\item Sync Specification: \url{https://atproto.com/specs/sync}
+\item OAuth for AT Protocol: \url{https://atproto.com/specs/oauth}
+\item DID Specification: \url{https://atproto.com/specs/did}
+\item Handle Specification: \url{https://atproto.com/specs/handle}
+\item Lexicon Schema: \url{https://atproto.com/specs/lexicon}
+\item Account Specification: \url{https://atproto.com/specs/account}
+\item Bluesky Documentation: \url{https://docs.bsky.app/docs/advanced-guides/atproto}
+\end{itemize}
+\subsection{Prologos References}
+\label{sec:org5ab8516}
+
+\begin{itemize}
+\item Protocols as Types: \texttt{docs/tracking/principles/PROTOCOLS\_AS\_TYPES.org}
+\item Capability Security: \texttt{docs/tracking/principles/CAPABILITY\_SECURITY.md}
+\item Session Type Design: \texttt{docs/tracking/2026-03-03\_SESSION\_TYPE\_DESIGN.md}
+\item IO Library Design V2: \texttt{docs/tracking/2026-03-05\_IO\_LIBRARY\_DESIGN\_V2.md}
+\end{itemize}
+\end{document}

@@ -1,0 +1,2350 @@
+% Created 2026-03-06 Fri 20:10
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{The Prologos Project - from Zachary Larson}
+\date{2026-03-07}
+\title{Endo's Formula Graph and Capability Protocols as Session Types\\\medskip
+\large A Case Study in Object-Capability Protocol Verification}
+\hypersetup{
+ pdfauthor={The Prologos Project - from Zachary Larson},
+ pdftitle={Endo's Formula Graph and Capability Protocols as Session Types},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Abstract}
+\label{sec:org525c52b}
+
+Endo is a runtime framework for supply-chain attack resistance in JavaScript,
+built on Hardened JavaScript (SES) and the object-capability (OCap) security
+model. At its core is a \textbf{formula graph} --- a persistent, directed graph of
+typed formulas representing every capability, process, agent, and
+communication channel managed by the Endo daemon. The formula graph
+coordinates capability lifecycle, distributed garbage collection, process
+isolation, inter-agent messaging, and capability transport across network
+boundaries via CapTP (Capability Transport Protocol).
+
+This document demonstrates that Endo's interacting protocols can be expressed
+as composable session types in Prologos, using the protocols-as-types
+composition mechanism described in \texttt{PROTOCOLS\_AS\_TYPES.org}. We pay special
+attention to the asynchronous, eventual-send semantics pervasive in Endo,
+using Prologos's \texttt{!!} (async send) and \texttt{??} (async recv) operators to
+capture the non-blocking, promise-pipelined nature of capability interactions.
+Capabilities track authority through every protocol transition via Prologos's
+linear types and capability type annotations.
+
+The analysis identifies several protocol-level properties --- including
+mutex re-entrancy hazards, GC ordering constraints, and the implicit
+state machine governing formula lifecycle --- that session types make
+explicit and statically verifiable.
+\section{1. Endo Architecture Overview}
+\label{sec:orga5aa529}
+
+\subsection{1.1 What Is Endo?}
+\label{sec:org701fe6e}
+
+Endo is part of the Agoric ecosystem for hardened JavaScript. It provides:
+
+\begin{itemize}
+\item \textbf{Hardened JavaScript (SES)}: A locked-down JavaScript environment where all
+primordials are frozen, ambient authority (filesystem, network, \texttt{process.env})
+is removed, and code executes in isolated \texttt{Compartment} scopes with
+explicitly granted endowments.
+
+\item \textbf{Object-Capability Security}: Authority is represented by object references.
+Holding a reference \emph{is} having the capability. References cannot be forged,
+guessed, or extracted from strings. To gain a capability, it must be
+\emph{granted} by someone who already holds it.
+
+\item \textbf{Persistent Daemon}: The Endo daemon manages a formula graph on disk,
+persisting all capabilities, agents, workers, and naming relationships
+across restarts. Users interact via CLI commands (\texttt{endo eval}, \texttt{endo send},
+\texttt{endo invite}) that connect to the daemon over Unix domain sockets.
+
+\item \textbf{Distributed Capabilities}: CapTP enables capability references to cross
+process and network boundaries, maintaining the OCap discipline over the
+wire via marshalled slot references and promise pipelining.
+\end{itemize}
+
+\begin{verbatim}
+User                   CLI                   Daemon                  Worker(s)
+ |                      |                      |                       |
+ |--- endo eval ------->|                      |                       |
+ |                      |--- Unix socket ------>|                       |
+ |                      |    CapTP handshake    |                       |
+ |                      |<-- bootstrap cap -----|                       |
+ |                      |                      |--- fork process ----->|
+ |                      |                      |    CapTP over pipes    |
+ |                      |                      |--- CTP_CALL -------->|
+ |                      |                      |<-- CTP_RETURN -------|
+ |                      |<-- result ------------|                       |
+ |<-- output ------------|                      |                       |
+\end{verbatim}
+\subsection{1.2 Key Participants}
+\label{sec:orga2de8d2}
+
+\begin{center}
+\begin{tabular}{lll}
+Role & Description & Endo Name\\
+\hline
+Daemon & Central process managing the formula graph, agents, & \texttt{EndoDaemon}\\
+ & workers, networking, and persistence & \\
+Host & A fully-powered agent that can create workers, guests, & \texttt{EndoHost}\\
+ & evaluate code, manage invitations, and grant authority & \\
+Guest & A reduced-authority agent that must request evaluation & \texttt{EndoGuest}\\
+ & and capability grants through its host & \\
+Worker & An isolated Compartment for code execution; communicates & \texttt{EndoWorker}\\
+ & with the daemon via CapTP over stdin/stdout pipes & \\
+Client & A CLI or programmatic client connecting via Unix socket & \texttt{EndoClient}\\
+Peer & A remote Endo daemon connected via TCP/libp2p & \texttt{EndoPeer}\\
+\end{tabular}
+\end{center}
+\subsection{1.3 Key Data Types}
+\label{sec:org7b28e91}
+
+\begin{verbatim}
+;; --- Endo Core Identifier Types ---
+
+;; FormulaNumber and NodeNumber are 256-bit hex strings (64 chars)
+type FormulaNumber := String    ;; identifies a formula within a node
+type NodeNumber := String       ;; identifies a node (Ed25519 pubkey)
+
+;; FormulaIdentifier = "FormulaNumber:NodeNumber"
+type FormulaIdentifier := String
+
+;; Pet names are local, per-agent capability aliases
+type PetName := String
+
+;; Special names are built-in references (SELF, HOST, AGENT, ENDO, etc.)
+type SpecialName := :SELF | :HOST | :AGENT | :ENDO | :KEYPAIR
+                  | :MAIN | :NETS | :PINS | :INFO | :NONE | :MAIL
+
+;; CapTP slot references
+type SlotId
+  := ExportSlot Nat        ;; o+N — locally exported object
+   | ImportSlot Nat         ;; o-N — imported remote object
+   | ExportPromise Nat      ;; p+N — locally exported promise
+   | ImportPromise Nat      ;; p-N — imported remote promise
+   | Question Nat           ;; q-N — pending call awaiting answer
+
+;; Power attenuation levels
+type PowerLevel := :NONE | :SELF | :AGENT | :ENDO | :HOST
+\end{verbatim}
+\subsection{1.4 Formula Types}
+\label{sec:org997fb0e}
+
+The formula graph contains 26+ typed formulas. Each formula is a JSON record
+with a \texttt{type} discriminant and formula-specific fields:
+
+\begin{verbatim}
+;; --- Formula Type Hierarchy ---
+;; Formulas are the nodes of the formula graph.
+;; Each formula describes HOW to construct/reconstruct a capability.
+
+type Formula
+  ;; --- Agents & Identity ---
+  := EndoFormula                                ;; root of the system
+   | HostFormula PetStoreId MailboxId WorkerId PrivateStoreId
+   | GuestFormula HostId PetStoreId MailboxId
+   | DirectoryFormula PetStoreId
+   ;; --- Code Execution ---
+   | EvalFormula WorkerId Source [List PetName] [List PetName] PowerLevel
+   | WorkerFormula                              ;; sandboxed Compartment
+   | ReadableBlobFormula Content                ;; stored binary data
+   | BundleFormula ReadableId                   ;; importable module bundle
+   ;; --- Communication ---
+   | HandleFormula FormulaIdentifier            ;; local or remote reference
+   | PeerFormula NetworkId NodeNumber           ;; remote node connection
+   | LoopbackFormula                            ;; self-connection
+   ;; --- Persistence ---
+   | PetStoreFormula                            ;; name -> formula mapping
+   | PetInspectorFormula PetStoreId             ;; read-only view of a store
+   | MailboxFormula PetStoreId                  ;; message storage
+   ;; --- Promises ---
+   | PromiseFormula StoreId                     ;; deferred value
+   | ResolverFormula StoreId                    ;; resolution authority
+   ;; --- Networking ---
+   | InvitationFormula NetworkId [List Byte]    ;; capability invite token
+   | ChannelFormula                             ;; bidirectional pipe
+   ;; --- Authority ---
+   | LeastAuthorityFormula                      ;; the NONE capability
+   | LookupFormula HubId PetName               ;; deferred name resolution
+   ;; --- Messages ---
+   | RequestFormula SenderNum RecipientNum Description [List PetName]
+   | PackageFormula SenderNum RecipientNum [List String] [Map String FormulaIdentifier]
+\end{verbatim}
+\section{2. The Formula Graph}
+\label{sec:orgd41f91f}
+
+The formula graph is the central data structure of the Endo daemon. It is a
+persistent directed graph where nodes are typed formulas and edges represent
+dependencies and naming relationships.
+\subsection{2.1 Graph Structure}
+\label{sec:org2e88670}
+
+\begin{verbatim}
+                ┌─────────────┐
+                │  EndoFormula │ (permanent root)
+                │  type: endo │
+                └──────┬──────┘
+                       │ depends
+            ┌──────────┼──────────┐
+            v          v          v
+      ┌──────────┐ ┌───────┐ ┌───────┐
+      │ HostForm.│ │PinForm│ │NetForm│
+      │ type:host│ │ :pins │ │ :nets │
+      └──┬───────┘ └───────┘ └───────┘
+         │ depends
+   ┌─────┼─────┬─────────┐
+   v     v     v         v
+┌──────┐┌───┐┌──────┐┌───────┐
+│PetSt.││Wkr││Mailbx││PvtSt. │
+│:store││:wk││:mail ││:pvtSt.│
+└──┬───┘└───┘└──────┘└───────┘
+   │ dynamic (pet names)
+   v
+┌──────────────────────┐
+│  user-defined caps   │
+│  (eval, handle, ...) │
+└──────────────────────┘
+\end{verbatim}
+
+There are two kinds of edges:
+
+\begin{enumerate}
+\item \textbf{Static formula dependencies}: Derived from the formula definition. A
+\texttt{HostFormula} depends on its \texttt{petStore}, \texttt{mailbox}, \texttt{worker}, and
+\texttt{privateStore}. These are immutable once the formula is created.
+
+\item \textbf{Dynamic pet-store edges}: When a user writes a pet name (\texttt{endo store
+   my-app}), a dynamic edge is created from the pet store formula to the
+target formula. These edges can be added, renamed, and removed at any
+time.
+\end{enumerate}
+\subsection{2.2 Union-Find Groups}
+\label{sec:orgfeb69f0}
+
+Certain formulas share identity --- they are semantically "the same thing"
+and must be garbage-collected atomically:
+
+\begin{itemize}
+\item \textbf{Handle + Agent}: A \texttt{HandleFormula} paired with its \texttt{HostFormula} or
+\texttt{GuestFormula} form a single capability identity.
+\item \textbf{Promise + Resolver}: A \texttt{PromiseFormula} and its \texttt{ResolverFormula} share a
+\texttt{store} identifier. The promise observation and the resolution authority
+are two facets of one identity.
+\end{itemize}
+
+The formula graph uses a union-find data structure with path compression and
+union-by-size to manage these identity groups. Garbage collection operates at
+the group level --- if any formula in a group is reachable, the entire group
+is retained.
+\subsection{2.3 Persistence Invariant}
+\label{sec:org4038f40}
+
+A critical invariant: \textbf{disk before graph}. The formula JSON is persisted to
+the filesystem \emph{before} entering the in-memory maps. This ensures that a
+daemon crash at any point during formula creation leaves the system in a
+recoverable state --- the formula either exists fully on disk (and will be
+reconstructed on restart) or does not exist at all.
+\subsection{2.4 Single Async Mutex}
+\label{sec:orgd3cecdd}
+
+All mutations to the formula graph are serialized through a single async
+mutex (\texttt{formulaGraphJobs}). Operations are enqueued and executed
+sequentially. The mutex includes re-entrancy detection --- if a formula
+operation attempts to re-enter the mutex from within its own evaluation,
+this is detected and reported.
+
+This is a crucial design point. The single mutex ensures that the graph is
+always in a consistent state between operations, but it also means that all
+formula operations are sequentialized. This is where session types can
+contribute: by making the sequential protocol \emph{explicit}, we can verify that
+operations are correctly ordered without relying solely on runtime mutex
+enforcement.
+\section{3. Session Type Notation}
+\label{sec:orge478b7b}
+
+Before diving into the protocol models, we summarize the Prologos session
+type operators used throughout this document:
+
+\begin{center}
+\begin{tabular}{lll}
+Operator & Meaning & Example\\
+\hline
+\texttt{!} & Synchronous send & \texttt{! String}\\
+\texttt{?} & Synchronous receive & \texttt{? Int}\\
+\texttt{!!} & Asynchronous (buffered) send & \texttt{!! EvalRequest}\\
+\texttt{??} & Asynchronous (buffered) receive & \texttt{?? Result}\\
+\texttt{!:} & Dependent send (binds in cont.) & \texttt{!: n Nat}\\
+\texttt{?:} & Dependent receive (binds in cont.) & \texttt{?: n Nat}\\
+\texttt{+>} & Internal choice (select a branch) & \texttt{+> \textbackslash{}vert :ok -> ...}\\
+\texttt{\&>} & External choice (offer branches) & \texttt{\&> \textbackslash{}vert :ok -> ...}\\
+\texttt{rec} & Recursive session & \texttt{rec X. ... X}\\
+\texttt{end} & Session termination & \\
+\texttt{[Cap C]} & Capability annotation & \texttt{[Cap FileWrite]}\\
+\end{tabular}
+\end{center}
+
+The \texttt{!!} / \texttt{??} operators are essential for modelling Endo. In Endo, nearly
+all inter-object communication is \emph{eventual} --- method calls go through
+\texttt{E()} (the eventual-send proxy), which returns a promise rather than
+blocking. This maps directly to \texttt{!!/??} in session types: the sender fires
+and continues immediately; the receiver will observe the value eventually
+but not necessarily synchronously.
+
+\textbf{Naming convention}: Each named session type in this document corresponds to
+one identifiable protocol or sub-protocol in the Endo codebase. Session
+names are capitalized and use hyphens (\texttt{CapTP-Call}, \texttt{Formula-Lifecycle}).
+\section{4. CapTP: Capability Transport Protocol}
+\label{sec:orgd9c0525}
+
+CapTP is Endo's wire protocol for distributed capability communication. It
+implements the OCapN (Object Capability Network) standard. Every CLI-to-daemon,
+daemon-to-worker, and daemon-to-daemon interaction flows through CapTP.
+\subsection{4.1 Transport Layers}
+\label{sec:org3882cc3}
+
+CapTP is transport-agnostic. It requires only a message-passing channel:
+
+\begin{verbatim}
+Application:  E(remoteObj).method(args)    (eventual send)
+     |
+     v
+CapTP:        CTP_CALL { questionID, target, method, args }
+     |
+     v
+Marshal:      toCapData(args) -> { body: JSON, slots: [SlotId] }
+     |
+     v
+Framing:      Netstring encoding (length-prefixed message boundaries)
+     |
+     v
+Transport:    Unix socket / stdin-stdout pipes / TCP / libp2p
+\end{verbatim}
+\subsection{4.2 The CapTP Message Protocol}
+\label{sec:orgbac0282}
+
+\begin{verbatim}
+;; --- CapTP Messages ---
+
+type CapTP-Message
+  := CTP-Bootstrap QuestionId
+   | CTP-Call QuestionId SlotId MethodName [List CapData]
+   | CTP-Return AnswerId CapTP-Result
+   | CTP-Resolve PromiseSlotId CapTP-Resolution
+   | CTP-Drop SlotId Nat           ;; slot + decrement count
+   | CTP-Disconnect DisconnectReason
+   | CTP-TrapIterate QuestionId SerializedData
+
+type CapTP-Result
+  := CallFulfilled CapData
+   | CallRejected CapData
+
+type CapTP-Resolution
+  := PromiseFulfilled CapData
+   | PromiseRejected CapData
+
+;; Serialized capability data: body + slots
+type CapData
+  :body  String                     ;; JSON with slot markers
+  :slots [List SlotId]              ;; referenced capabilities
+\end{verbatim}
+\subsection{4.3 Session Types for CapTP}
+\label{sec:org4ab97e3}
+
+The CapTP protocol has two distinct phases: a bootstrap handshake, followed
+by a multiplexed steady-state protocol. We model these separately.
+
+\begin{verbatim}
+;; --- Bootstrap Handshake ---
+;; The initiating side requests the remote's root capability.
+
+session CapTP-Bootstrap
+  !! CTP-Bootstrap         ;; send bootstrap request (async — fire and continue)
+  ?? CapTP-Result           ;; receive the bootstrap capability (eventually)
+  CapTP-Steady              ;; transition to steady-state protocol
+\end{verbatim}
+
+The bootstrap is inherently asynchronous: the client sends a bootstrap
+request and continues setting up its local state; the daemon processes the
+request and returns the bootstrap capability when ready. This is why we use
+\texttt{!!/??} rather than \texttt{!/?.}
+
+\begin{verbatim}
+;; --- Steady-State CapTP ---
+;; After bootstrap, both sides can send any CapTP message.
+;; The protocol is symmetric — either side can initiate calls.
+;; Multiple concurrent calls are tracked by questionID.
+
+session CapTP-Steady
+  rec Steady
+    +>                                   ;; internal choice: what to send
+      | :call ->
+          !! CTP-Call                    ;; send method call (async)
+          ?? CapTP-Result                ;; receive result (eventually)
+          Steady
+      | :resolve ->
+          !! CTP-Resolve                 ;; notify promise settlement
+          Steady
+      | :drop ->
+          !! CTP-Drop                    ;; GC: decrement reference count
+          Steady
+      | :disconnect ->
+          !! CTP-Disconnect              ;; terminate connection
+          end
+      | :receive ->                      ;; also offering to the remote
+          &>
+            | :remote-call ->
+                ?? CTP-Call              ;; receive method call
+                !! CapTP-Result          ;; send result
+                Steady
+            | :remote-resolve ->
+                ?? CTP-Resolve           ;; receive promise resolution
+                Steady
+            | :remote-drop ->
+                ?? CTP-Drop              ;; receive GC signal
+                Steady
+            | :remote-disconnect ->
+                ?? CTP-Disconnect        ;; receive disconnection
+                end
+\end{verbatim}
+
+\textbf{Key observation}: CapTP is a \emph{multiplexed} protocol. Multiple concurrent
+calls share a single connection, each tracked by \texttt{questionID}. A more precise
+model would use \emph{indexed session types} where each \texttt{questionID} has its own
+sub-session:
+
+\begin{verbatim}
+;; --- Indexed CapTP Call ---
+;; Each questionID corresponds to an independent call sub-session.
+
+session CapTP-Call {qid : QuestionId}
+  !! [CTP-Call qid]              ;; send call with this question ID
+  ?? [CapTP-Result qid]          ;; receive result for this question ID
+  end                             ;; sub-session complete
+\end{verbatim}
+
+The multiplexing structure is where Endo's \emph{promise pipelining} lives:
+\texttt{E(E(x).foo()).bar()} sends \emph{two} \texttt{CTP\_CALL} messages immediately, without
+waiting for the first to resolve. The second call targets the \emph{promise slot}
+(\texttt{p-N}) of the first call's result. This is type-safe because the session
+type for the pipelined call accepts a promise slot as its target.
+\subsection{4.4 Slot Duality}
+\label{sec:org40a6826}
+
+CapTP's slot scheme has a beautiful duality structure:
+
+\begin{verbatim}
+Side A                    Side B
+──────                    ──────
+o+0 (my export)    ↔     o-0 (their import)
+o-1 (my import)    ↔     o+1 (their export)
+p+2 (my promise)   ↔     p-2 (their promise)
+q-3 (my question)  ↔     answer 3 (their answer)
+\end{verbatim}
+
+This is exactly \emph{session type duality}. Every export on one side is an import
+on the other. The \texttt{+/−} prefixes are the syntactic manifestation of the
+dual session type. In Prologos terms, if Side A has session type \texttt{S}, then
+Side B has session type \texttt{dual(S)} --- and the CapTP slot scheme is the
+runtime witness of this duality.
+\subsection{4.5 Protocol-Level Observations}
+\label{sec:orgf0e328e}
+
+\textbf{Promise pipelining and eventual-send semantics}: Every method call in Endo
+goes through \texttt{E()}, which is semantically an asynchronous message send. The
+caller gets back a \emph{handled promise} that supports further eventual sends
+without waiting for the first to resolve. This is why \texttt{!!/??} is the correct
+model: \texttt{E(target).method(args)} is an \texttt{!! CTP-Call} that returns a promise
+slot, and any subsequent \texttt{E(result).next()} is another \texttt{!! CTP-Call}
+targeting that promise slot.
+
+\textbf{No synchronous calls across boundaries}: CapTP has a \texttt{CTP\_TRAP\_ITERATE}
+message type for synchronous trap calls, but this is an escape hatch used
+only for specific debugging scenarios, not the normal protocol. The standard
+protocol is fully asynchronous. This aligns with the OCap principle that
+capabilities should not block on remote operations.
+\section{5. Formula Lifecycle Protocol}
+\label{sec:orga1e4f00}
+
+Every formula in the graph goes through a well-defined lifecycle. This
+lifecycle is currently implicit in the \texttt{daemon.js} code but can be made
+explicit as a session type.
+\subsection{5.1 The Lifecycle State Machine}
+\label{sec:org55c060f}
+
+\begin{verbatim}
+          ┌─────────────┐
+          │ Preformulate │
+          │  (allocate   │
+          │  formula ID) │
+          └──────┬──────┘
+                 │ persist to disk
+                 v
+          ┌─────────────┐
+          │  Formulate   │
+          │  (register   │
+          │  in graph)   │
+          └──────┬──────┘
+                 │ create controller (sync!)
+                 v
+          ┌─────────────┐
+          │  Controlled  │
+          │  (controller │
+          │  exists)     │
+          └──────┬──────┘
+                 │ evaluate (async)
+                 v
+          ┌─────────────┐
+     ┌────│   Active     │────┐
+     │    │ (value ready)│    │
+     │    └──────┬──────┘    │
+     │           │            │
+GC collect    cancel      crash
+     │           │            │
+     v           v            v
+  ┌──────────────────────────┐
+  │        Cancelled         │
+  │  (dependents notified,   │
+  │   resources cleaned up)  │
+  └──────────┬───────────────┘
+             │ dispose
+             v
+  ┌──────────────────────────┐
+  │        Disposed          │
+  │  (cleanup hooks run,     │
+  │   removed from graph)    │
+  └──────────────────────────┘
+\end{verbatim}
+\subsection{5.2 Session Type for Formula Lifecycle}
+\label{sec:orgeb4398c}
+
+\begin{verbatim}
+;; --- Formula Lifecycle ---
+;; Models the daemon's perspective on a single formula's life.
+
+session Formula-Lifecycle
+  ;; Phase 1: Allocate a unique FormulaIdentifier
+  ! FormulaIdentifier                  ;; assign formula number
+  ;; Phase 2: Persist to disk (disk-before-graph invariant)
+  ! Formula                            ;; write formula JSON to filesystem
+  ;; Phase 3: Register in graph and create controller (SYNCHRONOUS)
+  ! Controller                         ;; controller created before any await
+  ;; Phase 4: Evaluate asynchronously
+  !! EvalResult                        ;; async evaluation begins
+  ;; Phase 5: Active — the formula is now providing its value
+  Formula-Active
+
+session Formula-Active
+  rec Active
+    &>                                 ;; external choice: what happens to us?
+      | :provide ->
+          ?? ProvideRequest            ;; someone requests our value
+          !! Value                     ;; we provide it (memoized)
+          Active
+      | :cancel ->
+          ?? CancelSignal              ;; cancellation requested
+          Formula-Teardown
+      | :gc-collect ->
+          ?? GCCollect                 ;; garbage collector reached us
+          Formula-Teardown
+
+session Formula-Teardown
+  ;; Notify dependents of cancellation
+  !! CancelCascade                     ;; thisDiesIfThatDies dependents
+  ;; Run cleanup hooks
+  !! DisposeSignal                     ;; onCancel hooks execute
+  ;; Remove from graph
+  ! FormulaRemoval                     ;; delete from in-memory maps + disk
+  end
+\end{verbatim}
+\subsection{5.3 Critical Ordering: Synchronous Controller Creation}
+\label{sec:orgd355c77}
+
+A subtle but important invariant: controllers are created \emph{synchronously}
+(before any \texttt{await}) during formula registration. The Endo source comments
+explain why:
+
+\begin{quote}
+"The controller must be created synchronously to ensure that a re-entrant
+call to \texttt{provide} during the same formula graph job does not fail to find
+the controller."
+\end{quote}
+
+In session type terms, this means the \texttt{! Controller} step in
+\texttt{Formula-Lifecycle} \emph{must not} be an \texttt{!! Controller} (async). The
+synchronous send ensures that the controller is visible to any concurrent
+\texttt{provide} call before the async evaluation begins. Session types make this
+ordering constraint explicit --- changing \texttt{!} to \texttt{!!}  would be a type error
+if any downstream protocol depends on the controller's synchronous
+availability.
+\subsection{5.4 Transient Pinning}
+\label{sec:org939cf00}
+
+Newly created formulas face a race condition: between creation and the
+establishment of a pet-name reference, the formula has no incoming edges and
+could be garbage-collected. Endo resolves this with \emph{transient pinning}:
+
+\begin{verbatim}
+;; --- Pin Protocol ---
+;; Protects a formula from GC during the window between
+;; creation and naming.
+
+session Pin-Guard
+  ! FormulaIdentifier            ;; pin the formula
+  Pin-Protected
+
+session Pin-Protected
+  rec Pinned
+    +>
+      | :name-established ->
+          ! PetName              ;; the formula now has a named reference
+          ! Unpin                ;; safe to unpin
+          end
+      | :abandon ->
+          ! Unpin                ;; no name was established; formula may be GC'd
+          end
+\end{verbatim}
+
+\textbf{Protocol-level issue}: The pin protocol has no \emph{timeout}. If a formula is
+pinned and the naming step never completes (e.g., due to a crash between
+\texttt{pinTransient} and the pet-store write), the pin leaks. Session types could
+enforce a bounded liveness property here --- requiring that every
+\texttt{Pin-Guard} eventually reaches \texttt{Unpin}.
+\section{6. Agent Protocols}
+\label{sec:org84f5bd2}
+
+Endo has two primary agent types, \texttt{Host} and \texttt{Guest}, with the Guest being
+a capability-attenuated version of the Host.
+\subsection{6.1 Host Agent}
+\label{sec:org95c18bd}
+
+The Host is the most powerful agent type. It can create workers, evaluate
+code, manage guests, handle invitations, and access the full Endo system.
+
+\begin{verbatim}
+;; --- Host Agent Protocol ---
+;; The host is the "root of authority" for its subtree of capabilities.
+
+session Host-Protocol
+  rec HostOps
+    &>                                    ;; offer to handle requests
+      ;; --- Code Execution ---
+      | :evaluate ->
+          ?? EvalRequest                  ;; receive: worker, source, endowments
+          !! EvalResult                   ;; async: result of evaluation
+          HostOps
+      | :make-unconfined ->
+          ?? UnconfinedRequest            ;; receive: specifier, powers
+          !! EvalResult                   ;; async: imported module result
+          HostOps
+      | :make-bundle ->
+          ?? BundleRequest                ;; receive: readable, powers
+          !! EvalResult                   ;; async: bundle evaluation result
+          HostOps
+      ;; --- Agent Management ---
+      | :make-host ->
+          ?? HostRequest                  ;; create a new sub-host
+          !! FormulaIdentifier            ;; async: the new host's ID
+          HostOps
+      | :make-guest ->
+          ?? GuestRequest                 ;; create a reduced-authority guest
+          !! FormulaIdentifier            ;; async: the new guest's ID
+          HostOps
+      ;; --- Capability Management ---
+      | :store-value ->
+          ?? StoreValueRequest            ;; receive: pet name + value
+          ! Acknowledgment               ;; stored (sync — disk write)
+          HostOps
+      | :store-blob ->
+          ?? StoreBlobRequest             ;; receive: pet name + bytes
+          ! Acknowledgment
+          HostOps
+      | :lookup ->
+          ?? LookupRequest               ;; receive: pet name to resolve
+          !! Value                        ;; async: the resolved capability
+          HostOps
+      | :remove ->
+          ?? RemoveRequest               ;; receive: pet name to delete
+          ! Acknowledgment               ;; GC may trigger
+          HostOps
+      ;; --- Invitation Protocol ---
+      | :invite ->
+          ?? InviteRequest               ;; create an invitation
+          !! Invitation                   ;; async: invitation bytes
+          HostOps
+      | :accept ->
+          ?? AcceptRequest               ;; accept an invitation
+          !! FormulaIdentifier           ;; async: the new peer's handle
+          HostOps
+      ;; --- Messaging ---
+      | :send ->
+          ?? SendRequest                 ;; send a message/package
+          ! Acknowledgment
+          HostOps
+      | :request ->
+          ?? RequestMsg                  ;; send a request (expects response)
+          ?? Resolution                  ;; await resolution
+          HostOps
+      ;; --- Lifecycle ---
+      | :cancel ->
+          ?? CancelRequest               ;; cancel a named capability
+          ! Acknowledgment
+          HostOps
+\end{verbatim}
+\subsection{6.2 Guest Agent}
+\label{sec:orgda49b2d}
+
+The Guest is a capability-attenuated view. It \emph{cannot} directly create
+workers, hosts, or guests. Instead, it must \emph{request} evaluation through
+a messaging protocol that the host (or an evaluator agent) must approve.
+
+\begin{verbatim}
+;; --- Guest Agent Protocol ---
+;; Guests have a reduced method set compared to hosts.
+;; They can evaluate code only if the host grants permission.
+
+session Guest-Protocol
+  rec GuestOps
+    &>
+      | :request-eval ->
+          ?? EvalRequestFromGuest        ;; guest wants to evaluate code
+          !! RequestAcknowledgment       ;; the request is registered
+          ;; The host will receive a message and must approve.
+          ;; The guest awaits the result via its mailbox.
+          GuestOps
+      | :lookup ->
+          ?? LookupRequest
+          !! Value
+          GuestOps
+      | :store-value ->
+          ?? StoreValueRequest
+          ! Acknowledgment
+          GuestOps
+      | :list ->
+          ?? ListRequest
+          !! [List PetName]
+          GuestOps
+      | :follow-names ->
+          ?? FollowRequest
+          Guest-NameStream
+      | :send ->
+          ?? SendRequest
+          ! Acknowledgment
+          GuestOps
+      | :request ->
+          ?? RequestMsg
+          ?? Resolution
+          GuestOps
+
+session Guest-NameStream
+  rec Stream
+    ?? NameChange                         ;; receive name change notification
+    Stream
+\end{verbatim}
+\subsection{6.3 Capability Attenuation: Host → Guest}
+\label{sec:org903f148}
+
+The Host-to-Guest relationship is a classic OCap \emph{attenuation} pattern. The
+Guest has strictly fewer methods than the Host. In Prologos's session type
+system, this is captured by \emph{subtyping}: \texttt{Guest-Protocol} is a subtype of
+\texttt{Host-Protocol} (it offers a subset of the choices). Any code that works
+with a \texttt{Guest-Protocol} session will also work with a \texttt{Host-Protocol}
+session, but not vice versa.
+
+\begin{verbatim}
+;; The subtyping relationship (conceptual):
+;; Host-Protocol <: Guest-Protocol   (Host offers MORE choices)
+;;
+;; But session subtyping inverts for offers (&>):
+;; If Guest offers fewer options, Host is "wider" — so
+;; Host-Protocol is a subtype of Guest-Protocol for clients.
+;;
+;; This captures the OCap attenuation: a Host can be used
+;; anywhere a Guest is expected, but not the reverse.
+\end{verbatim}
+\section{7. Worker Isolation Protocol}
+\label{sec:orga438487}
+
+Workers are sandboxed JavaScript execution environments. They run in
+separate OS processes, communicating with the daemon exclusively through
+CapTP over stdin/stdout pipes.
+
+\begin{verbatim}
+;; --- Worker Protocol ---
+;; The daemon is the sole initiator; the worker is purely reactive.
+
+session Worker-Protocol
+  rec WorkerOps
+    +>                                     ;; daemon chooses what to send
+      | :evaluate ->
+          !! EvalCommand                   ;; send: source, names, values
+          ?? EvalResult                    ;; receive: evaluation result
+          WorkerOps
+      | :make-unconfined ->
+          !! UnconfinedCommand             ;; send: specifier, powers
+          ?? EvalResult
+          WorkerOps
+      | :make-bundle ->
+          !! BundleCommand                 ;; send: readable, powers
+          ?? EvalResult
+          WorkerOps
+      | :terminate ->
+          !! TerminateCommand              ;; send: shutdown signal
+          end
+\end{verbatim}
+
+The worker protocol has an important asymmetry: \emph{the worker never initiates
+a call}. The daemon holds the worker facet (received as the worker's CapTP
+bootstrap), and all interaction is daemon-to-worker. The worker can only
+respond to calls.
+
+This asymmetry is captured by the session type: the daemon side uses \texttt{+>}
+(internal choice --- it decides which operation to perform), while the dual
+worker side uses \texttt{\&>} (external choice --- it must be prepared to handle
+any operation the daemon selects).
+
+\begin{verbatim}
+;; --- Worker Sandboxing ---
+;; The Compartment endowments define the worker's capability surface.
+
+type WorkerEndowments
+  :assert     AssertCapability
+  :console    ConsoleCapability
+  :e          EventualSendProxy
+  :far        FarMaker
+  :make-exo   ExoMaker
+  :m          MethodGuard
+  :text-encoder TextEncoderCap
+  :text-decoder TextDecoderCap
+  :url        URLConstructor
+
+;; Note: The worker does NOT receive filesystem, network, or process
+;; capabilities. All authority must come through the capability arguments
+;; passed in the evaluate/makeUnconfined/makeBundle calls.
+\end{verbatim}
+\section{8. Pet Store: Capability Naming Protocol}
+\label{sec:orgd090064}
+
+The pet store is Endo's capability naming layer. Each agent has its own
+pet store with its own names --- there is no global namespace. This
+implements the \emph{pet name} pattern from capability security literature.
+\subsection{8.1 Core Protocol}
+\label{sec:orgd2269d9}
+
+\begin{verbatim}
+;; --- Pet Store Protocol ---
+;; A local, per-agent namespace for capabilities.
+
+session PetStore-Protocol
+  rec StoreOps
+    &>
+      | :write ->
+          ?? WriteRequest                  ;; { petName, formulaIdentifier }
+          ! WriteAck                       ;; persisted to disk
+          StoreOps
+      | :remove ->
+          ?? RemoveRequest                 ;; { petName }
+          ! RemoveAck                      ;; edge removed, GC may trigger
+          StoreOps
+      | :rename ->
+          ?? RenameRequest                 ;; { fromName, toName }
+          ! RenameAck
+          StoreOps
+      | :identify ->
+          ?? IdentifyRequest               ;; { petName }
+          ! [Option FormulaIdentifier]     ;; Some if found, None if not
+          StoreOps
+      | :reverse-identify ->
+          ?? ReverseIdRequest              ;; { formulaIdentifier }
+          ! [List PetName]                 ;; all names for this formula
+          StoreOps
+      | :list ->
+          ?? ListRequest
+          ! [List PetName]                 ;; sorted list of all names
+          StoreOps
+      | :follow ->
+          ?? FollowRequest
+          PetStore-ChangeStream
+      | :follow-id ->
+          ?? FollowIdRequest               ;; { formulaIdentifier }
+          PetStore-IdChangeStream
+
+session PetStore-ChangeStream
+  rec Changes
+    !! NameChange                          ;; async: push change notification
+    Changes
+
+type NameChange
+  := NameAdded PetName FormulaIdentifier
+   | NameRemoved PetName FormulaIdentifier
+\end{verbatim}
+\subsection{8.2 Bidirectional Mapping}
+\label{sec:org57ed1a1}
+
+The pet store maintains a bidirectional mapping: name → formulaId \emph{and}
+formulaId → [names]. This enables both \texttt{identifyLocal} (name → id) and
+\texttt{reverseIdentify} (id → names) in O(1). The session type exposes both
+directions as separate protocol steps.
+\subsection{8.3 Protocol-Level Observation: Write Ordering}
+\label{sec:org3ebe539}
+
+Pet store writes are persisted to the filesystem. The \texttt{WriteAck} is sent
+\emph{after} the disk write completes. This is a synchronous \texttt{!} (not \texttt{!!})
+because the caller needs to know that the name is durably recorded before
+proceeding. If we changed this to \texttt{!! WriteAck} (async), we would lose
+the persistence guarantee --- a crash between the async ack and the actual
+write would leave the in-memory mapping inconsistent with disk.
+
+This is a good example of where the choice between \texttt{!} and \texttt{!!} in the
+session type encodes a \emph{correctness requirement}, not just a performance
+preference.
+\section{9. Mail and Messaging Protocol}
+\label{sec:orge0de794}
+
+The mail system enables agents to communicate with each other. Messages carry
+capability references (as formula identifiers), enabling the \emph{capability
+introduction} pattern: Agent A introduces a capability to Agent B by
+including it as a message edge.
+\subsection{9.1 Message Types}
+\label{sec:org0320791}
+
+\begin{verbatim}
+;; --- Message Type Hierarchy ---
+
+type Message
+  := RequestMessage Nat Nat Description [List PetName]
+   | PackageMessage Nat Nat [List String] [Map String FormulaIdentifier]
+   | EvalRequestMessage Nat Nat Source [List PetName] [List PetName] PetName
+   | DefinitionMessage Nat FormulaIdentifier PetName
+   | FormMessage Nat Nat Description [List String]
+   | ValueMessage Nat Nat Value
+   | EvalProposalReviewer Nat Nat Source [List PetName] [List PetName] PetName
+   | EvalProposalProposer Nat Nat Source [List PetName] [List PetName] PetName
+\end{verbatim}
+\subsection{9.2 Mail Protocol}
+\label{sec:org1429ebe}
+
+\begin{verbatim}
+;; --- Mailbox Protocol ---
+;; Agents send and receive messages through their mailbox.
+
+session Mailbox-Send
+  +>
+    | :send-package ->
+        !! PackageMessage                  ;; async: send a package to a recipient
+        end
+    | :send-request ->
+        !! RequestMessage                  ;; async: send a request
+        ?? Resolution                      ;; await: resolution from recipient
+        end
+    | :send-eval-request ->
+        !! EvalRequestMessage              ;; async: request code evaluation
+        ?? EvalResult                      ;; await: evaluation result
+        end
+    | :send-value ->
+        !! ValueMessage                    ;; async: send a raw value
+        end
+    | :send-form ->
+        !! FormMessage                     ;; async: send an interactive form
+        ?? FormSubmission                  ;; await: submitted values
+        end
+
+session Mailbox-Receive
+  rec Inbox
+    ?? Message                             ;; receive any message type
+    +>                                     ;; choose how to handle it
+      | :adopt ->
+          ! AdoptRequest                   ;; claim a capability edge
+          Inbox
+      | :resolve ->
+          ! ResolveResponse                ;; fulfill a request
+          Inbox
+      | :reject ->
+          ! RejectResponse                 ;; reject a request
+          Inbox
+      | :dismiss ->
+          ! DismissSignal                  ;; discard the message
+          Inbox
+      | :submit ->
+          ! FormSubmission                 ;; submit form values
+          Inbox
+      | :grant-evaluate ->
+          ! GrantSignal                    ;; approve an eval proposal
+          Inbox
+      | :counter-evaluate ->
+          ! CounterProposal               ;; send a counter-proposal
+          Inbox
+\end{verbatim}
+\subsection{9.3 Capability Introduction Pattern}
+\label{sec:orgc83b88a}
+
+When Agent A sends a message to Agent B that includes capability references:
+
+\begin{verbatim}
+;; --- Capability Introduction ---
+;; A three-party protocol: sender, daemon, recipient.
+
+session Capability-Introduction
+  ;; Phase 1: Sender references capabilities by local pet name
+  ! [List PetName]                         ;; sender's pet names
+
+  ;; Phase 2: Daemon resolves names to formula identifiers
+  ;; (internal — not visible as a protocol step to sender/recipient)
+
+  ;; Phase 3: Message is stored with formula identifiers as edges
+  ! [Map String FormulaIdentifier]         ;; edges: edgeName -> formulaId
+
+  ;; Phase 4: Recipient adopts edges under their own pet names
+  rec Adopt
+    +>
+      | :adopt-edge ->
+          ? String                         ;; edge name in the message
+          ? PetName                        ;; recipient's chosen pet name
+          Adopt
+      | :done ->
+          end
+\end{verbatim}
+
+This is the mechanism by which capabilities flow between agents while
+maintaining the pet-name discipline: each agent only sees their own names,
+never the other's. The daemon mediates the translation through formula
+identifiers.
+\section{10. Garbage Collection Protocol}
+\label{sec:org4cb1879}
+
+The formula graph's garbage collector is a critical correctness component.
+It determines which formulas are still reachable and cancels/removes those
+that are not.
+\subsection{10.1 GC Algorithm as Protocol Steps}
+\label{sec:orgde038bb}
+
+\begin{verbatim}
+;; --- Garbage Collection Protocol ---
+;; The 10-step GC sweep, modeled as a session.
+
+session GC-Sweep
+  ;; Step 1: Assign union-find groups
+  ! GroupAssignment                        ;; merge handle+agent, promise+resolver
+
+  ;; Step 2: Build dependency graph at group level
+  ! [Map GroupId [Set GroupId]]            ;; group -> dependent groups
+
+  ;; Step 3: Count references to each group
+  ! [Map GroupId Nat]                      ;; group -> reference count
+
+  ;; Step 4: Identify root set + reachable groups
+  ! [Set GroupId]                          ;; permanently rooted groups
+  ! [Set GroupId]                          ;; transitively reachable groups
+
+  ;; Step 5: Identify unreachable groups for collection
+  ! [Set GroupId]                          ;; groups to collect
+
+  ;; Step 6: Cancel unreachable formulas (cascading)
+  !! CancelBatch                           ;; async: cancel signals sent
+
+  ;; Step 7: Drop CapTP references for collected formulas
+  !! DropBatch                             ;; async: CTP_DROP sent to peers
+
+  ;; Step 8: Disconnect CapTP sessions for collected formulas
+  !! DisconnectBatch                       ;; async: CTP_DISCONNECT sent
+
+  ;; Step 9: Delete formulas from disk
+  ! DeleteBatch                            ;; sync: filesystem deletion
+
+  ;; Step 10: Clear dirty flag
+  ! GCComplete
+  end
+\end{verbatim}
+\subsection{10.2 GC Trigger Protocol}
+\label{sec:org1018639}
+
+GC does not run continuously. It is triggered by \texttt{withCollection}, a wrapper
+that runs a user-facing operation and then triggers collection if the graph
+is dirty:
+
+\begin{verbatim}
+;; --- withCollection ---
+;; Every capability-affecting operation is wrapped in withCollection.
+
+session WithCollection {A : Type}
+  ! Operation                              ;; the user-facing operation
+  ?? A                                     ;; its result (async)
+  +>
+    | :graph-dirty ->
+        GC-Sweep                           ;; trigger collection
+    | :graph-clean ->
+        end                                ;; no collection needed
+\end{verbatim}
+\subsection{10.3 Protocol-Level Observations}
+\label{sec:org53289c7}
+
+\textbf{Promise resolution ordering}: When a promise resolves, the daemon writes
+the resolved formula identifier as a pet store entry \emph{before} writing the
+resolution status. This ensures that the GC sees the new reference edge
+before it sees that the promise is resolved. If this ordering were reversed,
+a GC sweep between the status write and the edge write could collect the
+target formula. Session types make this ordering constraint explicit:
+
+\begin{verbatim}
+;; --- Promise Resolution Ordering ---
+;; The edge must be written before the status, or GC could
+;; collect the target formula.
+
+session Promise-Resolution-Safe
+  ! PetStoreEdge                           ;; write: name -> resolved formula (FIRST)
+  ! ResolutionStatus                       ;; write: promise is resolved (SECOND)
+  end
+
+;; INCORRECT ordering would be:
+;; session Promise-Resolution-Unsafe
+;;   ! ResolutionStatus                    ;; write status first — DANGER
+;;   ! PetStoreEdge                        ;; GC could run between these two steps!
+;;   end
+\end{verbatim}
+
+\textbf{Distributed GC via CTP\textsubscript{DROP}}: When a formula is collected, any CapTP
+connections that were importing it must be notified. The \texttt{CTP\_DROP} message
+decrements the remote reference count. If the count reaches zero, the remote
+side can collect its proxy. This is modeled by the \texttt{DropBatch} step in
+\texttt{GC-Sweep}.
+\section{11. Invitation and Peering Protocol}
+\label{sec:orgbf6379f}
+
+Endo supports cross-daemon capability sharing through an invitation
+protocol.
+
+\begin{verbatim}
+;; --- Invitation Protocol ---
+;; A two-phase protocol for establishing a peering relationship.
+
+;; Phase 1: The inviting host creates an invitation
+session Create-Invitation
+  ! NetworkId                              ;; which network to use
+  ! InvitationBytes                        ;; cryptographic invitation token
+  !! InvitationFormula                     ;; async: formula registered in graph
+  end
+
+;; Phase 2: The accepting host uses the invitation
+session Accept-Invitation
+  ? InvitationBytes                        ;; receive the invitation token
+  ;; Validate the invitation against the network
+  ?? PeerHandle                            ;; async: the new peer's handle
+  ;; The peer is now a named formula in the accepting host's store
+  ! PetName                               ;; assign a local name to the peer
+  end
+
+;; The full peering handshake composes both phases:
+session Peering-Handshake
+  ;; Inviting side:
+  Create-Invitation
+  ;; ... invitation bytes are transferred out-of-band ...
+  ;; Accepting side:
+  Accept-Invitation
+  ;; Both sides now have CapTP connections to each other.
+  CapTP-Bootstrap
+\end{verbatim}
+
+The invitation protocol is interesting because the invitation bytes travel
+\emph{out-of-band} (e.g., via email, QR code, or another communication channel).
+The session type cannot model the out-of-band transfer directly, but it can
+model the two sides independently and verify that their composed types are
+compatible.
+\section{12. Cancellation and Context Protocol}
+\label{sec:org36833a5}
+
+Each formula has a \texttt{Context} that manages its lifecycle dependencies and
+cancellation cascade.
+
+\begin{verbatim}
+;; --- Cancellation Context ---
+;; The cascading cancellation protocol.
+
+type ContextDependency
+  := ThisDiesIfThatDies FormulaIdentifier
+   | ThatDiesIfThisDies FormulaIdentifier
+
+session Context-Protocol
+  rec ContextOps
+    &>
+      | :add-dependency ->
+          ?? ContextDependency             ;; register a liveness dependency
+          ContextOps
+      | :add-cancel-hook ->
+          ?? CancelHook                    ;; register a cleanup callback
+          ContextOps
+      | :cancel ->
+          ?? CancelSignal                  ;; cancellation initiated
+          Context-Cancel-Cascade
+      | :dispose ->
+          ?? DisposeSignal                 ;; external disposal request
+          Context-Dispose
+
+session Context-Cancel-Cascade
+  ;; 1. Mark as cancelled (reject the cancelled promise)
+  ! CancelledNotification
+  ;; 2. Cancel all dependents (thatDiesIfThisDies)
+  !! [List CancelSignal]                   ;; async: cascade to dependents
+  ;; 3. Run cleanup hooks
+  !! [List HookResult]                     ;; async: execute onCancel hooks
+  ;; 4. Resolve the disposed promise
+  ! DisposedNotification
+  end
+
+session Context-Dispose
+  ;; Run cleanup hooks
+  !! [List HookResult]
+  ! DisposedNotification
+  end
+\end{verbatim}
+
+\textbf{Protocol-level observation}: The cancellation cascade creates a directed
+acyclic graph of liveness dependencies. If this graph has a cycle, a
+formula's cancellation would cascade back to itself, potentially causing
+infinite recursion. Session types with recursive structure can detect such
+cycles statically. The \texttt{ContextDependency} type encodes the direction of the
+dependency --- \texttt{ThisDiesIfThatDies} vs \texttt{ThatDiesIfThisDies} --- and a
+static analysis can verify that the dependency graph is acyclic.
+\section{13. Connection and Remote Control}
+\label{sec:org4b28f10}
+
+The \texttt{RemoteControl} type in Endo represents the state machine for a peering
+connection.
+
+\begin{verbatim}
+;; --- Remote Control State Machine ---
+;; Tracks the lifecycle of a connection to a remote peer.
+
+type RemoteControlState
+  := Pending                               ;; connection not yet established
+   | Connected CapTPConnection             ;; active connection
+   | Disconnected DisconnectReason         ;; connection closed
+   | Failed Error                          ;; connection failed
+
+session RemoteControl-Protocol
+  ;; Initial state: pending
+  ?? ConnectionAttempt                     ;; receive connection parameters
+  +>
+    | :connect-success ->
+        ! Connected                        ;; report connected state
+        RemoteControl-Active
+    | :connect-failure ->
+        ! Failed                           ;; report failure
+        end
+
+session RemoteControl-Active
+  rec Active
+    &>
+      | :send-message ->
+          ?? CapTP-Message                 ;; receive message to send
+          !! DeliveryResult                ;; async: delivery outcome
+          Active
+      | :receive-message ->
+          ?? CapTP-Message                 ;; receive message from remote
+          Active
+      | :disconnect ->
+          ?? DisconnectRequest
+          ! Disconnected
+          end
+      | :connection-lost ->
+          ?? ConnectionError
+          ! Disconnected
+          end
+\end{verbatim}
+\section{14. Composed Protocol: Full Daemon Bootstrap}
+\label{sec:orgb8ccfc8}
+
+The full Endo daemon bootstrap sequence composes many of the protocols above:
+
+\begin{verbatim}
+;; --- Full Daemon Bootstrap ---
+;; This is the composition of all protocols involved in starting
+;; the Endo daemon and processing its first client request.
+
+session Daemon-Bootstrap
+  ;; Phase 1: Formula graph initialization
+  Formula-Lifecycle                        ;; create the Endo root formula
+  Formula-Lifecycle                        ;; create networks formula
+  Formula-Lifecycle                        ;; create pins formula
+  Formula-Lifecycle                        ;; create main worker
+  Formula-Lifecycle                        ;; create host agent
+
+  ;; Phase 2: Socket listener
+  ?? ClientConnection                      ;; accept Unix socket connection
+
+  ;; Phase 3: CapTP handshake
+  CapTP-Bootstrap                          ;; exchange bootstrap capabilities
+
+  ;; Phase 4: Steady-state operation
+  Daemon-Steady
+
+session Daemon-Steady
+  rec Steady
+    &>
+      ;; Accept new client connections
+      | :new-client ->
+          ?? ClientConnection
+          CapTP-Bootstrap
+          Steady
+      ;; Process existing client requests
+      | :client-request ->
+          ?? CapTP-Message
+          ;; Route to appropriate agent protocol
+          +>
+            | :host-op -> Host-Protocol
+            | :guest-op -> Guest-Protocol
+            | :worker-op -> Worker-Protocol
+          Steady
+      ;; Manage lifecycle
+      | :gc-trigger ->
+          WithCollection
+          Steady
+      ;; Shutdown
+      | :shutdown ->
+          !! ShutdownSignal
+          ;; Cancel all formulas
+          GC-Sweep
+          end
+\end{verbatim}
+
+This composition demonstrates the power of named session types as protocol
+building blocks. Each named session (\texttt{Formula-Lifecycle}, \texttt{CapTP-Bootstrap},
+\texttt{Host-Protocol}, etc.) is independently verifiable, and their composition
+is verified at the type level.
+\section{15. Protocol-Level Issues and Recommendations}
+\label{sec:org35c65a1}
+
+The session type analysis reveals several protocol-level properties that are
+currently implicit in the Endo codebase but could benefit from being made
+explicit and statically verified.
+\subsection{15.1 Mutex Re-Entrancy}
+\label{sec:org7cf0b6e}
+
+The formula graph mutex (\texttt{formulaGraphJobs}) serializes all graph mutations.
+The code includes re-entrancy detection, logging a warning if a formula
+operation re-enters the mutex. But this is a runtime check.
+
+\textbf{Session type approach}: Model the mutex as a session with a \emph{linear}
+acquire-release protocol:
+
+\begin{verbatim}
+;; --- Mutex Protocol ---
+;; Linear typing ensures acquire/release pairing.
+
+session Mutex-Protocol
+  ? MutexToken [1]                         ;; acquire: linear — must be used exactly once
+  ;; ... critical section ...
+  ! MutexToken [1]                         ;; release: returns the token
+  end
+
+;; Re-entrancy is a type error: if you hold a MutexToken,
+;; attempting to acquire another would require TWO tokens,
+;; but the mutex session only provides one.
+\end{verbatim}
+
+Linearity prevents re-entrancy \emph{statically} --- you cannot acquire a linear
+token while already holding one.
+\subsection{15.2 Pin Leak Prevention}
+\label{sec:orga57e340}
+
+As noted in Section 5.4, the transient pin protocol has no timeout or
+bounded liveness guarantee. A crash between \texttt{pinTransient} and the
+corresponding \texttt{unpinTransient} leaves a permanent pin.
+
+\textbf{Session type approach}: Model the pin as a linear resource:
+
+\begin{verbatim}
+;; --- Linear Pin ---
+;; The pin MUST be consumed (unpinned). Linearity prevents leaks.
+
+session Pin-Linear
+  ? PinToken [1]                           ;; acquire pin: linear
+  ;; ... naming operations ...
+  ! PinToken [1]                           ;; release pin: MUST happen
+  end
+
+;; Dropping a linear PinToken without consuming it is a type error.
+;; This catches pin leaks at compile time.
+\end{verbatim}
+\subsection{15.3 Promise Resolution GC Ordering}
+\label{sec:org34a9720}
+
+Section 10.3 described the critical ordering requirement for promise
+resolution: the pet store edge must be written \emph{before} the resolution
+status. This is currently enforced by code ordering (sequential statements),
+which is fragile under refactoring.
+
+\textbf{Session type approach}: The ordering is explicit in the
+\texttt{Promise-Resolution-Safe} session type. Any refactoring that swaps the two
+writes would be a type error, because the session's continuation structure
+enforces the order.
+\subsection{15.4 CTP\textsubscript{DROP} Before CTP\textsubscript{DISCONNECT}}
+\label{sec:orgf05711d}
+
+During GC, the daemon must send \texttt{CTP\_DROP} messages to decrement reference
+counts \emph{before} sending \texttt{CTP\_DISCONNECT} to close connections. If the order
+is reversed, the remote side may not process the drops before the connection
+closes, leaving stale references.
+
+\begin{verbatim}
+;; --- GC Network Cleanup Ordering ---
+
+session GC-Network-Cleanup
+  ;; Drops MUST precede disconnect
+  !! [List CTP-Drop]                       ;; send all reference decrements
+  !! CTP-Disconnect                        ;; THEN close the connection
+  end
+
+;; The session type enforces: Drop < Disconnect
+;; Swapping them would change the session type and be caught by the checker.
+\end{verbatim}
+\subsection{15.5 Formula Type Dispatch Completeness}
+\label{sec:orgc59ecb4}
+
+The daemon dispatches on formula type in \texttt{formulate} and several other
+functions. If a new formula type is added but a dispatch case is missed,
+it manifests as a runtime \texttt{undefined} error.
+
+\textbf{Session type approach}: Model the formula dispatch as an external choice
+(\texttt{\&>}) with one branch per formula type. The session type checker verifies
+that all branches are handled. Adding a new formula type without adding
+the corresponding handler is a type error:
+
+\begin{verbatim}
+;; --- Formula Type Dispatch ---
+;; Exhaustive matching enforced by session type.
+
+session Formula-Dispatch
+  &>
+    | :endo -> ...
+    | :host -> ...
+    | :guest -> ...
+    | :eval -> ...
+    | :worker -> ...
+    | :handle -> ...
+    | :promise -> ...
+    | :resolver -> ...
+    ;; ... all 26+ formula types ...
+    ;; Missing a case is a type error.
+\end{verbatim}
+\subsection{15.6 Mailbox Message Number Monotonicity}
+\label{sec:org0aaae0f}
+
+Mailbox messages are numbered with a monotonically increasing \texttt{bigint}
+counter. But the mailbox protocol does not enforce that responses reference
+valid (existing) message numbers. A \texttt{resolve(999, ...)} where message 999
+does not exist is a runtime error.
+
+\textbf{Session type approach}: Use dependent session types to bind the message
+number at receive time and constrain it at response time:
+
+\begin{verbatim}
+;; --- Dependent Message Numbers ---
+
+session Mailbox-Receive-Dep
+  rec Inbox
+    ?: msgNum Nat                          ;; dependent recv: binds msgNum
+    ?? [Message msgNum]                    ;; the message, indexed by its number
+    +>
+      | :resolve ->
+          ! [Resolution msgNum]            ;; MUST reference the same msgNum
+          Inbox
+      | :dismiss ->
+          ! [Dismiss msgNum]
+          Inbox
+\end{verbatim}
+\section{16. Summary of Session Type Mappings}
+\label{sec:org8a011d1}
+
+\begin{center}
+\begin{tabular}{lll}
+Endo Component & Session Type & Key Operators\\
+\hline
+CapTP handshake & \texttt{CapTP-Bootstrap} & \texttt{!! ??}\\
+CapTP steady-state & \texttt{CapTP-Steady} & \texttt{!! ?? +> \&>}\\
+Indexed CapTP call & \texttt{CapTP-Call \{qid\}} & \texttt{!! ??} (dep.)\\
+Formula lifecycle & \texttt{Formula-Lifecycle} & \texttt{! !! \&>}\\
+Transient pinning & \texttt{Pin-Guard} & \texttt{! +}\\
+Host agent & \texttt{Host-Protocol} & \texttt{?? !! \&>}\\
+Guest agent & \texttt{Guest-Protocol} & \texttt{?? !! \&>}\\
+Worker sandboxing & \texttt{Worker-Protocol} & \texttt{!! ?? +>}\\
+Pet store & \texttt{PetStore-Protocol} & \texttt{?? ! \&>}\\
+Pet store change stream & \texttt{PetStore-ChangeStream} & \texttt{!!}\\
+Mailbox send & \texttt{Mailbox-Send} & \texttt{!! ?? +>}\\
+Mailbox receive & \texttt{Mailbox-Receive} & \texttt{?? ! +>}\\
+Capability introduction & \texttt{Capability-Introduction} & \texttt{! ? +>}\\
+GC sweep & \texttt{GC-Sweep} & \texttt{! !!}\\
+GC trigger & \texttt{WithCollection} & \texttt{! ?? +>}\\
+Promise resolution ordering & \texttt{Promise-Resolution-Safe} & \texttt{!}\\
+Cancellation cascade & \texttt{Context-Cancel-Cascade} & \texttt{! !!}\\
+Invitation & \texttt{Create-/Accept-Invitation} & \texttt{! ?? !!}\\
+Remote control & \texttt{RemoteControl-Protocol} & \texttt{?? !! +> \&>}\\
+Mutex protocol & \texttt{Mutex-Protocol} & \texttt{? ! [1]}\\
+Daemon bootstrap & \texttt{Daemon-Bootstrap} & composed\\
+Daemon steady-state & \texttt{Daemon-Steady} & \texttt{\&> +>}\\
+\end{tabular}
+\end{center}
+\section{17. Where Prologos Stands: System Modelling and Protocol Verification}
+\label{sec:orgb7f3033}
+
+\subsection{17.1 What Prologos Can Do Today}
+\label{sec:org6ea2862}
+
+Prologos is a Phase 0 research language with a working implementation in
+Racket. Its current capabilities relevant to system modelling:
+
+\begin{itemize}
+\item \textbf{Session Types with Full Operator Set}: Prologos implements synchronous
+(\texttt{!/}?=), asynchronous (\texttt{!!/??}), dependent (\texttt{!:/??:}), choice (\texttt{+>/\&>}),
+and recursive (\texttt{rec/end}) session type operators. Every session type in
+this document uses syntax that Prologos already parses, type-checks, and
+verifies.
+
+\item \textbf{Session Type Duality}: The type checker verifies that dual endpoints have
+compatible session types. This directly maps to CapTP's slot duality
+(\texttt{o+N} / \texttt{o-N}).
+
+\item \textbf{Linear Types (QTT)}: Prologos uses Quantitative Type Theory with
+multiplicities (\texttt{0}, \texttt{1}, \texttt{\textbackslash{}omega}). Linear resources (multiplicity \texttt{1})
+are used exactly once. This can model the mutex token, pin token, and
+capability transfer patterns described in this document.
+
+\item \textbf{Dependent Types}: Prologos has full dependent types with type-level
+computation, enabling indexed session types (\texttt{CapTP-Call \{qid\}}) and
+dependent message binding (\texttt{?: msgNum Nat}).
+
+\item \textbf{Propagator Network Substrate}: The underlying computation model is
+propagator networks, supporting monotone constraint propagation, partial
+information, and hypothetical reasoning (ATMS). This is the foundation
+for the session-derived effect ordering system.
+
+\item \textbf{Capability Type Annotations}: \texttt{[Cap C]} annotations on session types
+track which capabilities are required for each protocol step, composing
+alongside the protocol itself.
+
+\item \textbf{Protocol Composition via Named Sessions}: Named session types compose
+through type-level continuations --- exactly the mechanism used throughout
+this document to build complex protocols from simple building blocks.
+\end{itemize}
+\subsection{17.2 What Prologos Is Building Toward}
+\label{sec:org46a977d}
+
+Several capabilities are in active development or planned:
+
+\begin{itemize}
+\item \textbf{Session-Derived Effect Ordering (Architecture A+D)}: The effect position
+lattice (recently completed) enables IO effects to be ordered by session
+type structure via a Galois connection. This means the ordering of
+capability operations in an Endo-like system would be derived from the
+session types --- not from ad-hoc code ordering --- and verified by the
+type checker.
+
+\item \textbf{Async Session Semantics}: The \texttt{!!/??} operators currently exist in the
+type system but their runtime semantics (buffered channels, promise
+pipelining) are not yet fully implemented. Full async session support
+would enable direct execution of the protocols modelled in this document.
+
+\item \textbf{Process Calculus Runtime}: Prologos's \texttt{proc} runtime supports
+multi-channel processes, but does not yet have network-transparent
+capability passing. Adding CapTP-like capability transport at the runtime
+level would enable Prologos processes to interact with Endo-style systems.
+
+\item \textbf{Static Deadlock Detection}: The transitive closure computation in the
+effect position lattice can detect cycles in cross-channel data
+dependencies, turning runtime deadlocks into compile-time errors. Applied
+to an Endo-like formula graph, this would detect circular liveness
+dependencies in the cancellation context.
+
+\item \textbf{Refinement Types for Protocol Properties}: With dependent types, Prologos
+can express refinement predicates over session states --- e.g., "this
+message number refers to an existing message" or "this slot ID refers to
+an exported object." These go beyond standard session types into
+property-rich protocol specifications.
+\end{itemize}
+\subsection{17.3 The Unique Value Proposition}
+\label{sec:org7ff045a}
+
+What makes Prologos uniquely suited to modelling systems like Endo is the
+\emph{convergence} of multiple type system features:
+
+\begin{enumerate}
+\item \textbf{Session types} capture the communication protocol structure.
+\item \textbf{Linear types} capture the resource discipline (capability transfer,
+mutex acquire/release, one-shot tokens).
+\item \textbf{Dependent types} capture data-dependent protocol branching (indexed
+sessions, message-number-scoped responses).
+\item \textbf{Capability annotations} track authority through protocol transitions.
+\item \textbf{Propagator networks} provide the compositional, monotone reasoning
+substrate for effect ordering and constraint solving.
+\end{enumerate}
+
+No other system currently combines all five. Existing tools offer subsets:
+
+\begin{itemize}
+\item \textbf{Scribble/mpst}: Session types, but no dependent types, linear types, or
+capability tracking.
+\item \textbf{Linear Haskell}: Linear types, but session types require encoding tricks
+and dependent types are limited.
+\item \textbf{Idris 2}: Dependent types with QTT multiplicities, but session types
+require encoding as indexed monads.
+\item \textbf{Rust}: Ownership/borrowing (affine types), but no session types or
+dependent types in the type system.
+\end{itemize}
+
+Prologos aims to be the first language where all five features are native
+and compose naturally through the type system.
+\subsection{17.4 Toward an Endo Verification Story}
+\label{sec:org134e18e}
+
+A fully realized Prologos could provide Endo with:
+
+\begin{itemize}
+\item \textbf{Protocol specification language}: Define each CapTP message flow, formula
+lifecycle, and agent interaction as a session type. The specification
+serves as both documentation and executable verification.
+
+\item \textbf{Exhaustive dispatch verification}: Session type choices (\texttt{\&>}) ensure
+that every formula type, message type, and protocol branch is handled.
+Missing a case is a compile-time error.
+
+\item \textbf{Linear resource safety}: Capabilities that must be used exactly once
+(invitations, pins, mutex tokens) are tracked by the type system.
+Dropping a linear capability is a type error. Using it twice is a type
+error.
+
+\item \textbf{Ordering constraint verification}: The session-derived effect ordering
+ensures that operations like "write edge before status" are verified by
+the type checker, not by code review.
+
+\item \textbf{Cross-agent protocol compatibility}: When Agent A sends a message to
+Agent B, their session types must be \emph{dual}. The type checker verifies
+this, catching protocol mismatches before runtime.
+
+\item \textbf{Composition verification}: When protocols are composed (\texttt{Daemon-Bootstrap}
+chains \texttt{Formula-Lifecycle}, \texttt{CapTP-Bootstrap}, \texttt{Host-Protocol}), the
+composed session type is well-formed if and only if all the named
+sub-sessions are compatible at their boundaries.
+\end{itemize}
+\section{18. Theoretical Connections}
+\label{sec:orge0bd02c}
+
+\subsection{18.1 OCap and Session Types}
+\label{sec:org25af20f}
+
+Object-capability security and session types share a deep connection through
+linear logic. Both enforce:
+
+\begin{itemize}
+\item \textbf{Authority is held, not named}: In OCap, holding a reference is having
+the capability. In session types, holding a channel endpoint is having
+the communication capability.
+\item \textbf{Transfer is explicit}: In OCap, capabilities are granted by passing
+references. In session types, channel delegation (\texttt{!} / \texttt{?} of a channel)
+explicitly transfers communication authority.
+\item \textbf{Attenuation via typing}: In OCap, a restricted facet attenuates
+authority. In session types, a subtype (offering fewer choices) attenuates
+the protocol.
+\end{itemize}
+
+Caires and Pfenning's foundational work connecting session types to linear
+logic propositions (Curry-Howard for sessions) provides the theoretical
+bridge: a session type \emph{is} a linear logic proposition, and linear logic
+is the logic of resources --- the same resource discipline that underlies
+OCap.
+\subsection{18.2 Promise Pipelining and Async Sessions}
+\label{sec:org16146cb}
+
+Endo's promise pipelining (\texttt{E(E(x).foo()).bar()} sends both calls
+immediately) is precisely the operational semantics of async session types.
+In a session with \texttt{!! A . !! B}, both sends can be issued without waiting
+for acknowledgment. The session type guarantees that they will be received
+in order on the dual side, but the sender does not block.
+
+This connection is not accidental. Mark Miller's E language --- the direct
+ancestor of Endo's \texttt{E()} eventual-send proxy --- was designed with
+exactly this pipelining semantics. Async session types formalize what E
+provided operationally.
+\subsection{18.3 Formula Graph as Process Calculus}
+\label{sec:orgf1e2fb9}
+
+The Endo formula graph can be viewed as a \emph{process calculus} configuration:
+each formula is a process, each edge is a channel, and formula lifecycle
+operations (create, evaluate, cancel) are process creation, execution, and
+termination. The formula graph's GC is process-level garbage collection ---
+collecting processes that are no longer reachable through any channel.
+
+This process calculus view is exactly what Prologos's \texttt{proc} runtime
+provides. The connection suggests a natural embedding: Endo formulas as
+Prologos processes, formula identifiers as channel names, and CapTP messages
+as session-typed communications.
+\section{19. CRDT-Based Retention for Distributed Formula References}
+\label{sec:org5526901}
+
+A hypothesis contributed by an Endo maintainer: \emph{the formula system is
+missing a CRDT for managing retention of local formulas on a pair of
+connected peers that must be able to progress when partitioned, notably for
+deletion of references, as this is the basis for revocation.}
+
+This section analyzes this hypothesis through the lens of our session type
+models and finds it well-founded.
+\subsection{19.1 The Partition Problem}
+\label{sec:org54ee6d6}
+
+The formula graph currently assumes a centralized, connected model.
+Reference counting between peers flows through \texttt{CTP\_DROP} messages, and GC
+is a local sweep that runs under the single async mutex. When two peers are
+connected, this works:
+
+\begin{verbatim}
+Peer A                    Peer B
+──────                    ──────
+Host holds handle →       Guest has o-N import
+Host cancels formula →    Sends CTP_DROP → Guest releases
+GC sweep →                Reference count = 0 → Collect
+\end{verbatim}
+
+Under partition, this breaks:
+
+\begin{verbatim}
+Peer A                    ║  Peer B
+──────                    ║  ──────
+Host cancels formula      ║  Guest still holds o-N import
+Wants to send CTP_DROP    ║  Network down — message never arrives
+GC sweep sees no remote   ║  Guest may pass capability to Carol
+  refs (can't reach B)    ║    via promise pipelining
+                          ║
+Dilemma:                  ║
+- GC eagerly?             ║  → Dangling reference when B reconnects
+- Retain conservatively?  ║  → Leaked references, no revocation
+\end{verbatim}
+\subsection{19.2 Why Reference Counting Fails Under Partition}
+\label{sec:orgabee685}
+
+The current \texttt{CTP\_DROP} protocol is a \emph{coordination-dependent} reference
+counting scheme. It has three properties that are individually reasonable
+but collectively problematic for partitioned operation:
+
+\begin{enumerate}
+\item \textbf{Reference counts are split across peers}: The exporting side tracks
+how many times a slot has been imported, but this count is maintained
+through \texttt{CTP\_DROP} messages that decrement it. If messages can't flow,
+the count diverges from reality.
+
+\item \textbf{GC assumes reachability information is current}: The 10-step GC sweep
+counts references from local pet stores, local formula dependencies, and
+\emph{known} remote imports. But during partition, the "known remote imports"
+set is stale --- the remote peer may have already dropped references, or
+may have created new ones via capability delegation.
+
+\item \textbf{Revocation is a cancel + GC cycle}: When a host cancels a formula, the
+\texttt{withCollection} wrapper triggers GC, which should collect the cancelled
+formula and send \texttt{CTP\_DROP} to all importers. But under partition, the
+drops don't arrive, and the remote peer continues holding a reference to
+a cancelled formula. On reconnection, the peer discovers the formula no
+longer exists --- a dangling reference.
+\end{enumerate}
+\subsection{19.3 CRDT Design for Retention State}
+\label{sec:orgc9c93fc}
+
+A CRDT (Conflict-Free Replicated Data Type) for retention state would allow
+each peer to make progress independently during partition, with convergent
+merge on reconnection. The natural choice is an operation-based CRDT where:
+
+\begin{itemize}
+\item \textbf{Retain} and \textbf{Revoke} are the two operations
+\item \textbf{Revoke wins} on conflict (authority-first semantics, aligned with OCap)
+\item Each formula's retention state includes a \emph{vector clock} or \emph{Lamport
+timestamp} so that causal ordering is preserved
+\end{itemize}
+
+\begin{verbatim}
+;; --- Retention CRDT ---
+;; A per-formula, per-peer retention state.
+
+type RetentionOp
+  := Retain Timestamp                    ;; "I am holding this reference"
+   | Revoke Timestamp                    ;; "I revoke this capability"
+
+type RetentionState
+  :formula-id FormulaIdentifier
+  :local-ops  [List RetentionOp]         ;; operations from this peer
+  :remote-ops [List RetentionOp]         ;; operations from the other peer
+  :merged     RetentionDecision          ;; resolved state
+
+type RetentionDecision
+  := Alive                               ;; at least one active Retain, no Revoke
+   | Revoked Timestamp                   ;; authoritative revocation (wins)
+   | Expired Timestamp                   ;; all Retains withdrawn, no Revoke needed
+
+;; The merge function: join-semilattice (monotone, commutative, idempotent)
+;; Revoke always wins over Retain. Later timestamps supersede earlier ones.
+;; This IS a lattice: bot = no operations, top = Revoked.
+\end{verbatim}
+
+The merge semantics are:
+
+\begin{center}
+\begin{tabular}{llll}
+Local State & Remote State & Merged Result & Rationale\\
+\hline
+Retain(t1) & Retain(t2) & Alive & Both peers agree: reference is live\\
+Retain(t1) & Revoke(t2) & Revoked(t2) & Revocation wins (authority-first)\\
+Revoke(t1) & Retain(t2) & Revoked(t1) & Revocation wins regardless of ordering\\
+Revoke(t1) & Revoke(t2) & Revoked(max) & Both agree, use latest timestamp\\
+Retain(t1) & (none) & Alive & Remote hasn't reported; assume live\\
+Revoke(t1) & (none) & Revoked(t1) & Local revocation is immediately binding\\
+\end{tabular}
+\end{center}
+\subsection{19.4 Session Type for CRDT-Aware Retention}
+\label{sec:org59e9a4d}
+
+\begin{verbatim}
+;; --- CRDT Retention Protocol ---
+;; Replaces CTP_DROP with a convergent retention protocol.
+
+session Retention-Protocol
+  ;; Phase 1: Initial capability grant
+  !! Handle                                ;; export the capability
+  !! RetentionEpoch                        ;; initial epoch (monotonic)
+  Retention-Active
+
+session Retention-Active
+  rec Active
+    &>
+      ;; Normal capability usage — calls tagged with epoch
+      | :use ->
+          ?? [CapTP-Call Epoch]             ;; call tagged with peer's epoch
+          +>
+            | :epoch-current ->
+                !! CapTP-Result
+                Active
+            | :epoch-stale ->
+                !! EpochExpired            ;; clean error, not dangling ref
+                Active
+      ;; Local revocation (works during partition)
+      | :revoke ->
+          ! RevocationRecord               ;; persist CRDT op locally
+          ;; Does NOT send CTP_DROP — revocation is a CRDT op
+          Active                           ;; stay active; merge on reconnect
+      ;; Reconnection: merge CRDT states
+      | :reconnect ->
+          ?? PeerRetentionState            ;; receive peer's retention ops
+          ! MergedRetentionState           ;; send merge result
+          ;; Apply merged revocations
+          Retention-Active-Post-Merge
+      ;; Clean disconnection
+      | :disconnect ->
+          end
+
+session Retention-Active-Post-Merge
+  rec PostMerge
+    +>
+      | :apply-revocation ->
+          ! FormulaIdentifier              ;; revoke this formula
+          ! CancelSignal                   ;; cancel its dependents
+          PostMerge
+      | :merge-complete ->
+          Retention-Active                 ;; back to normal operation
+\end{verbatim}
+\subsection{19.5 Impact on GC}
+\label{sec:org2f43b70}
+
+With CRDT retention, the GC algorithm gains a new input: the local
+retention state. The current "count references from known remote imports"
+step would be replaced by "consult the retention CRDT for each formula's
+aliveness across all peers":
+
+\begin{verbatim}
+;; --- CRDT-Aware GC ---
+;; Step 4 of GC-Sweep changes: root set includes CRDT-alive formulas.
+
+session GC-Sweep-CRDT
+  ;; Steps 1-3 unchanged (assign groups, build deps, count refs)
+  ! GroupAssignment
+  ! [Map GroupId [Set GroupId]]
+  ! [Map GroupId Nat]
+
+  ;; Step 4 (modified): Root set includes CRDT-alive formulas
+  ! [Set GroupId]                          ;; permanent roots (unchanged)
+  ! [Set GroupId]                          ;; CRDT-alive: Retain without Revoke
+  ! [Set GroupId]                          ;; transitively reachable from both
+
+  ;; Steps 5-10 unchanged
+  ! [Set GroupId]                          ;; groups to collect
+  !! CancelBatch
+  !! DropBatch
+  !! DisconnectBatch
+  ! DeleteBatch
+  ! GCComplete
+  end
+\end{verbatim}
+\subsection{19.6 Why This Matters for Revocation}
+\label{sec:org54a8e47}
+
+In OCap security, revocation must be \emph{authoritative}. When Alice grants Bob
+a capability and later wants to revoke it, the revocation must take effect
+regardless of Bob's state. With the current protocol, revocation requires
+Bob to be connected (to receive \texttt{CTP\_DROP}). With a revoke-wins CRDT:
+
+\begin{itemize}
+\item Alice revokes locally, immediately. Her daemon marks the formula as
+revoked in the CRDT.
+\item Bob may continue using the capability during partition (his local CRDT
+still says "Alive").
+\item On reconnection, CRDT merge happens. Revoke wins. Bob discovers the
+formula is revoked. His calls get clean "EpochExpired" errors, not
+dangling references.
+\item Crucially: Bob cannot "un-revoke" by sending a Retain after the Revoke.
+The lattice is monotone --- once revoked, always revoked.
+\end{itemize}
+
+This aligns with the capability discipline: the authority that grants a
+capability should be the authority that revokes it, without requiring
+consensus from the holder.
+\section{20. Practical Recommendations for the Endo Codebase}
+\label{sec:org5b63d8d}
+
+This section offers concrete, graduated recommendations for the Endo team
+--- organized from lowest to highest implementation effort, all achievable
+within the existing JavaScript codebase without requiring Prologos or any
+external type system.
+\subsection{20.1 Immediate / Low Effort}
+\label{sec:org6372f02}
+
+\subsubsection{20.1.1 Explicit State Machine for Formula Lifecycle}
+\label{sec:org0b3707a}
+
+The formula lifecycle (§5.1) is currently implicit across \texttt{daemon.js},
+\texttt{graph.js}, and \texttt{context.js}. Different code paths implement different
+lifecycle transitions with no single authoritative representation.
+
+\textbf{Recommendation}: Extract a \texttt{FormulaState} enum and a \texttt{transitionState}
+function that validates transitions:
+
+\begin{verbatim}
+// formula-state.js
+const FormulaState = /** @enum {string} */ ({
+  PREFORMULATE: 'preformulate',   // ID assigned, not yet persisted
+  PERSISTED: 'persisted',         // on disk, not yet in graph
+  REGISTERED: 'registered',       // in graph, controller not yet created
+  CONTROLLED: 'controlled',       // controller exists (synchronous)
+  EVALUATING: 'evaluating',       // async evaluation in progress
+  ACTIVE: 'active',               // value available
+  CANCELLING: 'cancelling',       // cancel initiated, cascading
+  CANCELLED: 'cancelled',         // fully cancelled
+  DISPOSED: 'disposed',           // cleanup hooks run, removed from graph
+});
+
+const validTransitions = new Map([
+  [FormulaState.PREFORMULATE, [FormulaState.PERSISTED]],
+  [FormulaState.PERSISTED, [FormulaState.REGISTERED]],
+  [FormulaState.REGISTERED, [FormulaState.CONTROLLED]],
+  [FormulaState.CONTROLLED, [FormulaState.EVALUATING, FormulaState.CANCELLING]],
+  [FormulaState.EVALUATING, [FormulaState.ACTIVE, FormulaState.CANCELLING]],
+  [FormulaState.ACTIVE, [FormulaState.CANCELLING]],
+  [FormulaState.CANCELLING, [FormulaState.CANCELLED]],
+  [FormulaState.CANCELLED, [FormulaState.DISPOSED]],
+]);
+
+const transitionState = (current, next) => {
+  const allowed = validTransitions.get(current);
+  if (!allowed || !allowed.includes(next)) {
+    throw Error(`Invalid formula transition: ${current} → ${next}`);
+  }
+  return next;
+};
+\end{verbatim}
+
+\textbf{Effort}: Small. The transitions already happen; this just makes them
+explicit and validates them. Every \texttt{Fail("unexpected formula state")} in the
+codebase becomes a caught invalid transition instead of a mystery crash.
+
+\textbf{Value}: This is the JavaScript equivalent of the \texttt{Formula-Lifecycle}
+session type from §5. It turns implicit protocol assumptions into runtime
+assertions. When a new formula type is added, the valid transitions are
+declared alongside the type.
+\subsubsection{20.1.2 Exhaustive Formula Type Dispatch}
+\label{sec:org358c2c9}
+
+Several dispatch sites in \texttt{daemon.js} switch on \texttt{formula.type} but do not
+assert exhaustiveness. TypeScript's \texttt{satisfies} or a runtime assertion can
+catch missing cases:
+
+\begin{verbatim}
+// At each dispatch site:
+const formulaHandlers = /** @type {Record<FormulaType, Function>} */ ({
+  endo: makeEndoFormula,
+  host: makeHostFormula,
+  guest: makeGuestFormula,
+  // ... all 26+ types
+});
+
+const handler = formulaHandlers[formula.type];
+if (!handler) {
+  throw Error(`Unhandled formula type: ${formula.type}`);
+}
+\end{verbatim}
+
+\textbf{Effort}: Minimal per dispatch site. An afternoon of auditing to find all
+switch sites and add the handler map.
+
+\textbf{Value}: This is the JavaScript equivalent of the exhaustive \texttt{\&>} session
+type choice from §15.5. Adding a new formula type without updating \emph{all}
+dispatch sites becomes an immediate, obvious error.
+\subsubsection{20.1.3 Pin Lifecycle Tracking}
+\label{sec:org1205fd5}
+
+Add a \texttt{WeakRef} + \texttt{FinalizationRegistry} based tracker for transient pins
+to detect leaks:
+
+\begin{verbatim}
+const activePins = new Map();  // formulaId → { pinTime, stackTrace }
+
+const pinTransientTracked = (formulaId) => {
+  activePins.set(formulaId, {
+    pinnedAt: Date.now(),
+    stack: new Error('pin origin').stack,
+  });
+  pinTransient(formulaId);
+};
+
+const unpinTransientTracked = (formulaId) => {
+  activePins.delete(formulaId);
+  unpinTransient(formulaId);
+};
+
+// Periodic leak detection (e.g., every 60s)
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, info] of activePins) {
+    if (now - info.pinnedAt > 30_000) {
+      console.warn(`Pin leak detected: ${id}, pinned ${now - info.pinnedAt}ms ago`);
+      console.warn(info.stack);
+    }
+  }
+}, 60_000);
+\end{verbatim}
+
+\textbf{Effort}: Small. Wraps existing pin/unpin calls with tracking.
+
+\textbf{Value}: Detects the pin leak scenario described in §5.4 and §15.2 at
+runtime. Not a static guarantee, but a practical diagnostic that catches
+the exact failure mode.
+\subsection{20.2 Medium Effort}
+\label{sec:org97014b1}
+
+\subsubsection{20.2.1 Operation Ordering Assertions}
+\label{sec:orga1b9021}
+
+The GC protocol has critical ordering constraints (§10.3, §15.3, §15.4):
+pet store edge before resolution status, \texttt{CTP\_DROP} before
+\texttt{CTP\_DISCONNECT}. These can be asserted with ordered checkpoints:
+
+\begin{verbatim}
+// ordering.js — lightweight ordered-checkpoint assertions
+const makeOrderedCheckpoints = (name) => {
+  const reached = [];
+  return harden({
+    checkpoint(label) {
+      reached.push(label);
+    },
+    assertOrder(...expectedOrder) {
+      for (let i = 0; i < expectedOrder.length - 1; i++) {
+        const a = reached.indexOf(expectedOrder[i]);
+        const b = reached.indexOf(expectedOrder[i + 1]);
+        if (a === -1 || b === -1 || a >= b) {
+          throw Error(
+            `${name}: ordering violation: ` +
+            `expected ${expectedOrder[i]} before ${expectedOrder[i + 1]}`
+          );
+        }
+      }
+    },
+  });
+};
+
+// Usage in promise resolution:
+const cp = makeOrderedCheckpoints('promise-resolution');
+// ... write pet store edge ...
+cp.checkpoint('edge-written');
+// ... write resolution status ...
+cp.checkpoint('status-written');
+cp.assertOrder('edge-written', 'status-written');
+\end{verbatim}
+
+\textbf{Effort}: Medium. Requires identifying all ordering-critical code paths
+and inserting checkpoints. The \texttt{makeOrderedCheckpoints} utility is trivial;
+the audit to find all critical orderings is the real work.
+
+\textbf{Value}: This is the JavaScript equivalent of the ordered session type
+\texttt{Promise-Resolution-Safe} from §15.3. It turns implicit code-ordering
+dependencies into explicit, runtime-checked invariants.
+\subsubsection{20.2.2 RemoteControl State Machine Hardening}
+\label{sec:orgaecb0c3}
+
+The \texttt{RemoteControl} type already has an implicit state machine
+(Pending → Connected → Disconnected). The test suite covers ID-based
+connection arbitration. But there are no partition-specific tests, and
+the state machine doesn't model "partitioned" as a distinct state.
+
+\textbf{Recommendation}: Add a \texttt{PARTITIONED} state and a heartbeat/timeout
+mechanism:
+
+\begin{verbatim}
+const RemoteControlState = {
+  PENDING: 'pending',
+  CONNECTED: 'connected',
+  PARTITIONED: 'partitioned',   // NEW: connection silent for > timeout
+  DISCONNECTED: 'disconnected',
+};
+\end{verbatim}
+
+When a connection has received no messages for a configurable timeout,
+transition from \texttt{CONNECTED} to \texttt{PARTITIONED}. In the \texttt{PARTITIONED} state:
+\begin{itemize}
+\item Outbound calls are queued (not dropped)
+\item The retention state for shared formulas is frozen (no GC of remotely-held formulas)
+\item A reconnection attempt is scheduled
+\end{itemize}
+
+On reconnection, transition from \texttt{PARTITIONED} back to \texttt{CONNECTED} and
+flush the queued calls.
+
+\textbf{Effort}: Medium. The heartbeat mechanism needs to be added to the CapTP
+layer. The state machine change is straightforward given the existing
+\texttt{RemoteControl} structure.
+
+\textbf{Value}: This is the architectural prerequisite for CRDT-based retention.
+Without a \texttt{PARTITIONED} state, the system can't distinguish "peer is slow"
+from "peer is unreachable," and can't defer GC decisions accordingly.
+\subsubsection{20.2.3 Structured Protocol Logging}
+\label{sec:org653c5c4}
+
+Add structured logging at protocol boundaries that captures the session
+type operations (send/recv/select/offer) as named events:
+
+\begin{verbatim}
+// protocol-log.js
+const protocolLog = (sessionName, step, data) => {
+  console.log(JSON.stringify({
+    session: sessionName,
+    step: step,      // 'send', 'recv', 'select', 'offer'
+    timestamp: Date.now(),
+    data: typeof data === 'object' ? Object.keys(data) : typeof data,
+  }));
+};
+
+// Usage:
+protocolLog('CapTP-Bootstrap', 'send', { type: 'CTP_BOOTSTRAP' });
+protocolLog('Formula-Lifecycle', 'transition', { from: 'CONTROLLED', to: 'EVALUATING' });
+\end{verbatim}
+
+\textbf{Effort}: Medium (pervasive but mechanical).
+
+\textbf{Value}: Creates an observable trace that can be compared against the
+session type specifications in this document. Deviations between the
+expected session type protocol and the actual log trace indicate protocol
+bugs.
+\subsection{20.3 Larger Architectural Shifts}
+\label{sec:org6624b59}
+
+\subsubsection{20.3.1 CRDT Retention Layer}
+\label{sec:org6666850}
+
+Implement the CRDT-based retention protocol described in §19. This is the
+most impactful recommendation but also the largest effort.
+
+\textbf{Implementation sketch}:
+
+\begin{enumerate}
+\item Define a \texttt{RetentionCRDT} module with:
+\begin{itemize}
+\item Per-formula, per-peer retention state
+\item \texttt{retain(formulaId, timestamp)} and \texttt{revoke(formulaId, timestamp)} operations
+\item \texttt{merge(localState, remoteState) → mergedState} using revoke-wins semantics
+\item Persistence to disk alongside formula JSON
+\end{itemize}
+
+\item Replace \texttt{CTP\_DROP} reference counting with CRDT operations:
+\begin{itemize}
+\item When a peer imports a formula: \texttt{retain(formulaId, now)}
+\item When a peer drops a reference: \texttt{revoke(formulaId, now)} (instead of \texttt{CTP\_DROP})
+\item On reconnection: exchange and merge retention states
+\end{itemize}
+
+\item Modify GC to consult the retention CRDT:
+\begin{itemize}
+\item A formula with any \texttt{Alive} retention state across any peer is a root
+\item A formula with \texttt{Revoked} retention from the granting host is dead
+regardless of remote retention
+\end{itemize}
+\end{enumerate}
+
+\textbf{Effort}: Substantial (multi-week, across multiple subsystems). The CRDT
+itself is simple (join-semilattice with revoke-wins). The integration with
+GC, CapTP, and persistence is the real work.
+
+\textbf{Value}: Solves the partition-revocation problem entirely. Enables the
+following properties that the current system lacks:
+\begin{itemize}
+\item Revocation works during partition
+\item GC does not create dangling references across peers
+\item Reconnection is idempotent (merge is commutative and idempotent)
+\item No coordination required between peers for revocation
+\end{itemize}
+\subsubsection{20.3.2 TypeScript Branded Types for FormulaIdentifier}
+\label{sec:org5259646}
+
+The \texttt{types.d.ts} already uses branded string types (\texttt{FormulaNumber},
+\texttt{NodeNumber}, \texttt{FormulaIdentifier}). Extend this pattern to enforce formula
+lifecycle states at the type level:
+
+\begin{verbatim}
+type UnpersistedFormulaId = string & { __brand: 'UnpersistedFormulaId' };
+type PersistedFormulaId = string & { __brand: 'PersistedFormulaId' };
+type ActiveFormulaId = string & { __brand: 'ActiveFormulaId' };
+
+// Functions that require specific lifecycle states:
+declare function persistFormula(id: UnpersistedFormulaId): PersistedFormulaId;
+declare function evaluateFormula(id: PersistedFormulaId): ActiveFormulaId;
+declare function cancelFormula(id: ActiveFormulaId): void;
+
+// Type error: can't cancel an unpersisted formula
+cancelFormula(makeFormulaId()); // Error!
+\end{verbatim}
+
+\textbf{Effort}: Medium (requires converting JSDoc types to proper TypeScript or
+extending the existing branded type pattern).
+
+\textbf{Value}: A limited form of session typing — the branded types track which
+lifecycle state a formula ID is in, and functions that require specific
+states reject IDs in the wrong state. Not as powerful as real session types,
+but catches a class of bugs where a formula ID is used before its formula
+has been properly initialized.
+\subsubsection{20.3.3 Protocol Conformance Testing}
+\label{sec:orgca74a31}
+
+Write integration tests that verify protocol conformance against the
+session type specifications in this document. For each named session type,
+write a test that:
+
+\begin{enumerate}
+\item Exercises the happy path (all protocol steps in order)
+\item Exercises error branches (what happens when the protocol is violated)
+\item Exercises edge cases (timeout, partition, crash-recovery)
+\end{enumerate}
+
+The existing test suite has \texttt{remote-control.test.js} with state machine
+coverage, but no tests for partition scenarios, GC ordering, or
+cross-agent protocol conformance.
+
+\textbf{Effort}: Medium-to-large (depends on how many protocols are tested).
+
+\textbf{Value}: Even without static session typing, conformance tests verify that
+the implementation matches the protocol specification. When the protocol
+specification (this document) and the test suite agree, there is high
+confidence in the implementation's correctness.
+\section{21. Conclusion}
+\label{sec:orgf81b30b}
+
+The Endo system, with its formula graph, CapTP protocol, agent hierarchy,
+and distributed garbage collection, is a rich target for session type
+analysis. Every major component maps naturally to a session type:
+
+\begin{itemize}
+\item The \emph{formula lifecycle} is a linear state machine with ordering
+constraints that session types make explicit.
+\item \emph{CapTP} is a multiplexed, asynchronous protocol that maps directly to
+indexed async session types with duality.
+\item \emph{Agent protocols} (host, guest, worker) are choice-based session types
+with subtyping for capability attenuation.
+\item \emph{Pet store} and \emph{mailbox} are stateful protocols with pub/sub extensions
+that compose with the main agent protocols.
+\item \emph{Garbage collection} is an ordering-critical protocol where session types
+prevent the subtle bugs that arise from misordered steps.
+\item \emph{Retention under partition} is a convergent state problem that CRDTs solve,
+with revoke-wins semantics preserving OCap revocation authority.
+\end{itemize}
+
+The analysis identifies concrete protocol properties --- mutex re-entrancy
+prevention, pin leak detection, GC ordering safety, dispatch exhaustiveness,
+message number validity, and partition-safe revocation --- that session types
+and related type-theoretic tools can verify statically. These properties are
+currently enforced by runtime checks, code ordering, and developer
+discipline. The practical recommendations in §20 show how to incrementally
+harden the existing codebase, from low-effort state machine extraction and
+exhaustive dispatch maps to medium-effort protocol ordering assertions and
+partition-aware state machines, culminating in a CRDT retention layer that
+would solve the distributed revocation problem.
+
+Prologos's unique combination of session types, linear types, dependent
+types, capability annotations, and propagator-based effect ordering makes
+it the natural tool for this kind of protocol verification. As the language
+matures, it aims to provide not just a modelling language for systems like
+Endo, but a verification substrate where protocol correctness is a theorem,
+not a hope.
+\section{References}
+\label{sec:org7eea64a}
+
+\begin{itemize}
+\item Agoric. "Endo: Hardened JavaScript Runtime." \url{https://github.com/endojs/endo}.
+Commit \texttt{57f5ff1629e136a53fabdf0e27051b9641cd24c2}.
+
+\item Agoric. "Formula Graph Design." \texttt{packages/daemon/FORMULA-GRAPH.md} in Endo
+repository.
+
+\item Caires, L. and Pfenning, F. "Session Types as Intuitionistic Linear
+Propositions." CONCUR 2010.
+
+\item Miller, M. "Robust Composition: Towards a Unified Approach to Access
+Control and Concurrency Control." PhD Thesis, Johns Hopkins, 2006.
+
+\item Miller, M., Van Cutsem, T., and Tulloh, B. "Distributed Electronic
+Rights in JavaScript." ESOP 2013.
+
+\item Honda, K., Yoshida, N., and Carbone, M. "Multiparty Asynchronous Session
+Types." POPL 2008.
+
+\item Wadler, P. "Propositions as Sessions." ICFP 2012.
+
+\item Atkey, R. "Parameterised Notions of Computation." JFP 2009.
+
+\item Katsumata, S. "Parametric Effect Monads and Semantics of Effect Systems."
+POPL 2014.
+
+\item Prologos Project. "Protocols as Types: Composable Session Types in Prologos."
+\texttt{docs/tracking/principles/PROTOCOLS\_AS\_TYPES.org}. 2026.
+
+\item Prologos Project. "The AT Protocol as Composable Session Types."
+\texttt{docs/research/2026-03-05\_ATP\_AS\_SESSION\_TYPES.org}. 2026.
+
+\item Shapiro, M., Preguica, N., Baquero, C., and Zawirski, M. "Conflict-Free
+Replicated Data Types." SSS 2011.
+
+\item Bieniusa, A., et al. "An Optimized Conflict-Free Replicated Set."
+arXiv:1210.3368. 2012.
+
+\item Bocchi, L., Honda, K., and Tuosto, E. "Timed Multiparty Session Types."
+CONCUR 2014.
+
+\item Neykova, R., and Yoshida, N. "Session Types Go Dynamic, or How to Verify
+Your Python Conversations." FORTE 2017.
+\end{itemize}
+\end{document}

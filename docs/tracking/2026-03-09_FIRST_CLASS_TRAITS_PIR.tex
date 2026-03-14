@@ -1,0 +1,588 @@
+% Created 2026-03-09 Mon 23:52
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{Prologos}
+\date{2026-03-09}
+\title{Post Implementation Review: First-Class Traits (Stage 3)}
+\hypersetup{
+ pdfauthor={Prologos},
+ pdftitle={Post Implementation Review: First-Class Traits (Stage 3)},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\setcounter{tocdepth}{2}
+\tableofcontents
+
+\section{Overview}
+\label{sec:orgdc1a31e}
+
+\begin{center}
+\begin{tabular}{ll}
+Field & Value\\
+\hline
+\textbf{Date} & 2026-03-09\\
+\textbf{Scope} & Phases 1–3d of the First-Class Traits feature track (Stage 3)\\
+\textbf{Duration} & \textasciitilde{}7 hours (2026-03-09 16:13 through 22:52)\\
+\textbf{Design Duration} & \textasciitilde{}11 hours (2026-03-09 04:52 through 15:32, design + critique)\\
+\textbf{Commits} & Phase 1 (\texttt{f6b540e}) through capstone (\texttt{481e6de}) — 19 total\\
+\textbf{Design Document} & \texttt{docs/tracking/2026-03-09\_FIRST\_CLASS\_TRAITS\_STAGE3\_DESIGN.md}\\
+\textbf{Capstone Demo} & \texttt{examples/2026-03-09-fc-trait-rel-dom.prologos}\\
+\end{tabular}
+\end{center}
+
+\noindent\rule{\textwidth}{0.5pt}
+\section{1. Objectives and Scope}
+\label{sec:org77e71e0}
+
+\subsection{1.1 Original Goal}
+\label{sec:orgef3d58f}
+
+Make traits first-class in Prologos across three cumulative levels:
+
+\begin{center}
+\begin{tabular}{rll}
+Level & What becomes first-class & Key capability\\
+\hline
+1 & Trait names as type constructors & Abstract over \emph{which trait} at the type level\\
+2 & Trait dispatch as propagator cells & Bidirectional type↔dispatch; narrowing through ops\\
+3 & Traits as first-class propositions & Quantify over traits; method projection; relational constraints\\
+\end{tabular}
+\end{center}
+
+The central thesis: traits are constraints on types. Making constraints first-class
+creates a combinatorial surface where functional code, relational narrowing, and
+type-level dispatch compose freely.
+\subsection{1.2 Planned Scope}
+\label{sec:org975de49}
+
+9 phases across 3 levels:
+
+\begin{center}
+\begin{tabular}{rlll}
+\# & Phase & Level & Deliverable\\
+\hline
+1 & Phase 1 & L1 & Trait names as type constructors (\texttt{trait-ref})\\
+2 & Phase 2a & L2 & Static generic operator resolution in narrowing\\
+3 & Phase 2b & L2 & \texttt{constraint-cell.rkt} finite-domain lattice\\
+4 & Phase 2c & L2 & Constraint propagators P1–P4\\
+5 & Phase 2d & L2 & ATMS multi-candidate search\\
+6 & Phase 3a & L3 & HasMethod constraint + method projection\\
+7 & Phase 3b & L3 & Trait introspection (instances-of, methods-of, satisfies?)\\
+8 & Phase 3c & L3 & Constraint chain syntax \texttt{?var:C1:C2}\\
+9 & Phase 3d & L3 & Incremental trait resolution (no batch pass)\\
+\end{tabular}
+\end{center}
+\subsection{1.3 Actual Scope}
+\label{sec:org09d1193}
+
+\textbf{9 of 9 phases completed. Scope adherence: 100\%.}
+
+No phases were deferred and no unplanned scope was added. The design document's
+phase ordering was followed exactly. The only out-of-order decision was implementing
+Phase 3a (HasMethod) before Phase 2c–2d, because HasMethod's \texttt{:over/:method} spec
+syntax was independent of the propagator infrastructure and could be tested in sexp
+mode immediately.
+
+\noindent\rule{\textwidth}{0.5pt}
+\section{2. What Was Delivered}
+\label{sec:orgabc2f95}
+
+\subsection{2.1 Quantitative Summary}
+\label{sec:org8665a8d}
+
+\begin{center}
+\begin{tabular}{ll}
+Metric & Value\\
+\hline
+New implementation files & 2 (constraint-cell, constraint-propagators)\\
+New implementation LOC & 487 (195 + 292)\\
+Modified source files (significantly) & 16 (across the AST pipeline)\\
+Total implementation changes & 1,367 insertions, 117 deletions\\
+New test files & 8\\
+New test LOC & 1,612\\
+Test cases added & 391\\
+Overall test suite growth & 6,290 → 6,681 (+391, +6.2\%)\\
+Test files growth & 337 → 345 (+8)\\
+Capstone demo & 518 lines, 15 sections, \textasciitilde{}45 live expressions\\
+Implementation commits & 9 (phases) + 8 (tracker updates) + 1 (demo) + 1 (dep-graph) = 19\\
+Design commits & 4 (design doc, critique, refinement, tracker)\\
+\end{tabular}
+\end{center}
+\subsection{2.2 Architectural Components Delivered}
+\label{sec:org5174898}
+
+\begin{enumerate}
+\item \textbf{\texttt{trait-ref} type constructor} — Trait names (\texttt{Add}, \texttt{Eq}, \texttt{Ord}) usable in type-level
+positions, enabling abstraction over which trait is satisfied.
+
+\item \textbf{Generic operator resolution in narrowing} — \texttt{add}, \texttt{sub}, \texttt{mult}, \texttt{div} in
+narrowing queries resolve through the trait registry, extract concrete definitional
+trees, and run the DT backwards.
+
+\item \textbf{\texttt{constraint-cell.rkt}} — Pure finite-domain lattice (bot/set/one/top) with
+merge = set intersection. Domain-generic: works for dispatch candidates, type
+memberships, predicate constraints, and interval constraints.
+
+\item \textbf{Constraint propagators P1–P4} — Four propagators maintaining consistency across
+type cells, dispatch cells, and method evidence. Registry-based dispatch replaces
+the static operator table.
+
+\item \textbf{ATMS multi-candidate search} — When type inference hasn't resolved a unique trait
+impl, enumerate candidates in ATMS worldviews, run narrowing in each, and merge
+results with deduplication.
+
+\item \textbf{HasMethod constraint + method projection} — \texttt{:over/:method} spec metadata for
+abstracting over which trait provides a method. Search-based trait P discovery via
+the trait registry.
+
+\item \textbf{Trait introspection} — Three REPL/sexp commands: \texttt{instances-of}, \texttt{methods-of},
+\texttt{satisfies?}. Query the trait registry at runtime.
+
+\item \textbf{Constraint chain syntax \texttt{?var:C1:C2}} — Reader greedy consumption of \texttt{:UpperCase}
+segments, parser constraint splitting, narrowing type-guard forward-checking.
+
+\item \textbf{Incremental trait resolution} — Removed all batch \texttt{resolve-trait-constraints!}
+calls from the pipeline. Trait constraints resolved immediately when type-arg
+metas are solved, via \texttt{solve-meta!} → \texttt{retry-trait-for-meta!} callback chain.
+\end{enumerate}
+
+\noindent\rule{\textwidth}{0.5pt}
+\section{3. What Went Well}
+\label{sec:orgc8f369b}
+
+\subsection{3.1 Single-Session Implementation}
+\label{sec:org54fb54f}
+
+All 9 phases were designed, implemented, tested, and committed in a single working
+session (\textasciitilde{}7 hours of implementation, \textasciitilde{}11 hours of design beforehand). The design
+document's thoroughness — each phase had clear scope, file list, and test targets —
+eliminated ambiguity during coding.
+\subsection{3.2 Existing Infrastructure Paid Dividends (Again)}
+\label{sec:org62c4e53}
+
+The pattern from the Session Types PIR repeats: mature infrastructure absorbs new
+features without modification.
+
+\begin{itemize}
+\item \textbf{Propagator network} (\texttt{propagator.rkt}): zero changes. Constraint propagators used
+\texttt{net-add-propagator} / \texttt{run-to-quiescence} unchanged.
+\item \textbf{ATMS} (\texttt{atms.rkt}): zero changes. Multi-candidate search used existing worldview
+enumeration.
+\item \textbf{Narrowing engine} (\texttt{narrowing.rkt}): minimal changes (11 insertions). The DT-guided
+search needed only a hook for trait-resolved operator dispatch.
+\item \textbf{Trait registry} (\texttt{trait-resolution.rkt}): extended with query functions but core
+resolution logic unchanged.
+\end{itemize}
+\subsection{3.3 The Constraint Cell Abstraction Generalized Cleanly}
+\label{sec:org159aa8b}
+
+The design document proposed \texttt{dispatch-lattice.rkt} specifically for trait impl
+candidate sets. During implementation, this was generalized to \texttt{constraint-cell.rkt} —
+a domain-generic finite-domain lattice. The same structure handles dispatch candidates,
+type memberships, predicate constraints, and interval constraints. The generalization
+was free: the lattice operations (bot, set, one, top, merge = intersection) don't
+depend on the element type.
+\subsection{3.4 Phase 3d Was Surgical}
+\label{sec:orgfb49f6b}
+
+Removing the batch \texttt{resolve-trait-constraints!} post-pass — the most architecturally
+significant change — required modifying only 2 files:
+
+\begin{itemize}
+\item \texttt{metavar-store.rkt}: 8 lines added (immediate-resolve for already-ground type-args)
+\item \texttt{expander.rkt}: 4 call sites removed (replaced with comments)
+\end{itemize}
+
+The incremental resolution infrastructure had been built across prior sprints (Sprint
+5–9) and the FL Narrowing track. Phase 3d merely removed the redundant batch fallback.
+This validates the architectural principle: when the incremental path is correct, the
+batch path is pure overhead.
+\subsection{3.5 Zero Regressions}
+\label{sec:org5faa507}
+
+All 6,681 tests pass after every phase. No existing test broke during the entire
+feature track. The new infrastructure is purely additive — it doesn't modify existing
+dispatch or resolution behavior, only adds new entry points.
+
+\noindent\rule{\textwidth}{0.5pt}
+\section{4. What Was Challenging}
+\label{sec:org4615807}
+
+\subsection{4.1 Constraint Chain Reader Integration}
+\label{sec:orgcd309f8}
+
+Phase 3c's \texttt{?var:C1:C2} syntax required changes at three pipeline stages:
+
+\begin{itemize}
+\item \textbf{Reader} (\texttt{reader.rkt}): Greedy consumption of \texttt{:UpperCase} segments into a single
+token. The reader must distinguish \texttt{?x:Nat} (constraint chain) from \texttt{?x:nat}
+(lowercase, not a constraint) and \texttt{?x :} expr= (assignment, not a constraint).
+\item \textbf{Parser} (\texttt{parser.rkt}): Split the combined token into variable name + constraint list.
+\item \textbf{Surface syntax} (\texttt{surface-syntax.rkt}): New \texttt{surf-constrained-lvar} struct.
+\end{itemize}
+
+The greedy reader approach is simple but means constraint chains can't contain lowercase
+identifiers (e.g., \texttt{?x:myType} won't parse as a constraint). This is consistent with
+the naming convention (types are UpperCase) but is a design trade-off worth noting.
+\subsection{4.2 WS-Mode Gaps in HasMethod Syntax}
+\label{sec:orgad3912d}
+
+Phase 3a's \texttt{:over/:method} spec metadata works in sexp mode but has no WS surface
+syntax. The WS preparser's spec metadata parser (\texttt{macros.rkt}) would need extension
+to recognize these keywords in whitespace-significant mode. This was intentionally
+deferred (tracked in DEFERRED.md) as a WS integration task, but it means the
+capstone demo can only show HasMethod as commented ideal syntax.
+\subsection{4.3 Narrowing Through Complex DTs}
+\label{sec:orgbdfa283}
+
+The capstone demo revealed that backward narrowing through wrapper functions and
+nested pattern matches doesn't always produce expected results. See §6 (Demo Issue
+Catalogue) for details. These aren't Stage 3 bugs per se — they're limitations of
+the narrowing engine's DT-guided search that Stage 3's trait dispatch exposes more
+visibly.
+
+\noindent\rule{\textwidth}{0.5pt}
+\section{5. How Results Compared to Expectations}
+\label{sec:orgdcebef5}
+
+\subsection{5.1 Timeline: Faster Than Expected}
+\label{sec:orgd8496c4}
+
+The design document suggested a multi-session implementation. Actual: single session.
+Contributing factors:
+
+\begin{itemize}
+\item Mature infrastructure: no new lattice/propagator primitives needed
+\item Phase 1 established the pattern; subsequent phases were variations
+\item The out-of-order Phase 3a decision (HasMethod before propagators) parallelized
+the conceptual work: sexp-mode spec metadata is independent of narrowing
+\end{itemize}
+\subsection{5.2 Test Count: Almost Exactly As Expected}
+\label{sec:org013651d}
+
+391 new test cases across 8 test files. The distribution:
+
+\begin{center}
+\begin{tabular}{lr}
+Test File & Cases\\
+\hline
+test-constraint-cell-01.rkt & 99\\
+test-constraint-chain-01.rkt & 59\\
+test-constraint-propagators-01.rkt & 56\\
+test-trait-introspection-01.rkt & 56\\
+test-trait-tycon-01.rkt & 45\\
+test-hasmethod-01.rkt & 34\\
+test-constraint-amb-01.rkt & 26\\
+test-trait-narrowing-01.rkt & 16\\
+\hline
+\textbf{Total} & \textbf{391}\\
+\end{tabular}
+\end{center}
+\subsection{5.3 Scope: Clean Completion}
+\label{sec:org040a16d}
+
+No phases deferred, no scope creep. The design document's 9-phase structure matched
+the implementation exactly. The only structural deviation was phase ordering (3a
+before 2c–2d), which was a beneficial optimization, not a deviation.
+\subsection{5.4 Architecture: Constraint Cell Generalization Was the Right Call}
+\label{sec:org2224f08}
+
+The design document's transition from \texttt{dispatch-lattice} to \texttt{constraint-cell} (§4.1)
+proved correct. The same module supports dispatch cells, and the API is clean enough
+that future constraint types (interval, predicate) can plug in without modification.
+
+\noindent\rule{\textwidth}{0.5pt}
+\section{6. Demo Issue Catalogue}
+\label{sec:orgac72452}
+
+The capstone demo (\texttt{examples/2026-03-09-fc-trait-rel-dom.prologos}) surfaced 7
+categories of issues when evaluated from a source-connected REPL. These are
+catalogued here with hypotheses; none are addressed in this PIR.
+\subsection{Issue 1: String \texttt{add} resolves to Nat FQN (Line 76)}
+\label{sec:org4fa6348}
+
+\textbf{Symptom}: \texttt{[add "hello " "world"]} returns \texttt{nil} instead of \texttt{"hello world"}.
+
+\textbf{Hypothesis}: The expression evaluates as \texttt{[prologos::data::nat::add "hello " "world"]}
+(per the error trace). The generic \texttt{add} is resolving to the Nat instance's FQN
+instead of String's \texttt{String-{}-{}Add-{}-{}dict}. This may be a prelude import ordering issue:
+the Nat-specific \texttt{add} function (non-generic, defined in \texttt{prologos::data::nat}) shadows
+the generic \texttt{add} trait method.
+\subsection{Issue 2: Multiplication/subtraction narrowing returns nil (Lines 114, 118)}
+\label{sec:org237c13d}
+
+\textbf{Symptom}: \texttt{mult ?x ?y = 6N} and \texttt{sub ?x ?y = 3N} return \texttt{nil} or incomplete results.
+
+\textbf{Hypothesis}: Nat multiplication is defined via recursive addition, creating a DT
+with deep nesting. The backward search exhausts its fuel (default depth limit) before
+finding factor pairs. Saturating subtraction (\texttt{sub 3N 5N = 0N}) creates a non-injective
+DT that the backward search over-approximates. These are narrowing engine depth/shape
+limitations, not Stage 3 bugs.
+\subsection{Issue 3: Wrapper function narrowing over-approximates (Lines 216, 219, 336)}
+\label{sec:org6c516d2}
+
+\textbf{Symptom}: \texttt{[my-double ?x] = 6N} returns \texttt{'[\{:x 6N\} \{:x 5N\} \{:x 4N\} \{:x 3N\}]}
+instead of \texttt{'[\{:x 3N\}]}.
+
+\textbf{Hypothesis}: \texttt{my-double} is defined as \texttt{[add n n]}, creating a trivial DT that wraps
+\texttt{add}. When narrowing backwards, the engine decomposes to \texttt{add ?n ?n = 6N} but treats
+the two \texttt{?n} occurrences as independent variables (no aliasing constraint). The DT
+search finds all \texttt{(x, y)} pairs where \texttt{x + y = 6}, not just the diagonal \texttt{x = y}.
+This is a known limitation of DT-guided narrowing for non-linear patterns — aliased
+variables require either equational unification or a post-filter.
+\subsection{Issue 4: String pipe type error (Line 252)}
+\label{sec:orge527f78}
+
+\textbf{Symptom}: \texttt{"hello" |> [add " "] |> [add "world"]} produces a type error referencing
+\texttt{prologos::data::nat::add}.
+
+\textbf{Hypothesis}: Same root cause as Issue 1 — generic \texttt{add} resolves to the Nat-specific
+function rather than the String trait instance. The pipe merely exposes it in a
+different context. The partially-applied \texttt{[add " "]} elaborates with the Nat FQN,
+then fails when applied to a String argument.
+\subsection{Issue 5: Recursive \texttt{even?} narrowing returns nil (Line 284)}
+\label{sec:org5a8de04}
+
+\textbf{Symptom}: \texttt{[even? ?n:Nat] = true} returns \texttt{nil}.
+
+\textbf{Hypothesis}: \texttt{even?} has a nested match (match-within-match) that creates a complex
+DT with recursive calls. The backward search either: (a) exceeds depth for the
+recursive \texttt{even?} call in the \texttt{suc (suc j)} branch, or (b) the nested match
+generates a DT shape that the backward walker doesn't decompose correctly. Nested
+match DT extraction is a known area for improvement.
+\subsection{Issue 6: \texttt{compare} and \texttt{eq?} are unbound (Lines 303, 306, 310, 313)}
+\label{sec:orgfae316f}
+
+\textbf{Symptom}: \texttt{Unbound variable: compare} and \texttt{Unbound variable: eq?}.
+
+\textbf{Hypothesis}: The prelude's \texttt{:refer} lists for \texttt{prologos::core::ord} and
+\texttt{prologos::core::eq} export wrapper functions (\texttt{ord-lt}, \texttt{eq-check}, \texttt{nat-eq}) but
+\textbf{not} the trait method names (\texttt{compare}, \texttt{eq?}) themselves. The trait method names
+are defined inside trait bodies and are only accessible through dict dispatch, not as
+standalone functions. To use them, the user must either: (a) call the wrapper
+(\texttt{eq-check}, \texttt{ord-compare}), or (b) import the method explicitly. The capstone demo
+assumed these were prelude-exported generic functions.
+\subsection{Issue 7: \texttt{collatz-step} fails to parse (Lines 463–476)}
+\label{sec:org87ce3b3}
+
+\textbf{Symptom}: \texttt{Unbound variable: spec} and \texttt{defn requires: ...} errors.
+
+\textbf{Hypothesis}: The \texttt{spec=/=defn} pair at lines 463–464 is being parsed in an unexpected
+context. Possible causes: (a) A prior expression's evaluation changed the parser
+state (e.g., the file-level \texttt{ns} form expects all subsequent forms to be in expression
+mode after the narrowing queries). (b) The WS-mode file processor treats narrowing
+queries (\texttt{add ?x ?y = 5N}) as expressions, and after processing them, the parser
+context may not reset to accept new declaration forms. (c) There may be a scoping
+interaction where the prior \texttt{even?} definition's recursive DT leaves the parser in
+a state that doesn't recognize subsequent \texttt{spec} forms.
+
+\noindent\rule{\textwidth}{0.5pt}
+\section{7. Architectural Validation}
+\label{sec:org588a2fb}
+
+\subsection{7.1 Propagator-as-Universal-Substrate: Confirmed (Third Time)}
+\label{sec:orgf4def67}
+
+Stage 3 is the fourth domain using the propagator network:
+
+\begin{center}
+\begin{tabular}{llll}
+Domain & Cells & Propagators & Committed\\
+\hline
+Type inference & Type lattice cells & Unification propagators & Sprint 5\\
+QTT & Multiplicity cells & mult-propagators & Sprint 7\\
+Session types & Session lattice cells & Send/recv/duality propagators & S4\\
+\textbf{Trait dispatch} & \textbf{Constraint cells (dispatch)} & \textbf{P1–P4 (type↔constraint↔method)} & \textbf{Stage 3}\\
+\end{tabular}
+\end{center}
+
+Zero changes to \texttt{propagator.rkt} across all four domains. The abstraction holds.
+\subsection{7.2 AST Pipeline Extension Points}
+\label{sec:orgb2e0c4c}
+
+Stage 3 touched 14 of the 14 AST pipeline files (syntax → surface → parser →
+elaborator → typing-core → qtt → reduction → substitution → zonk → pretty-print +
+unify, macros, foreign). The extension points — adding new struct types to \texttt{syntax.rkt}
+and \texttt{surface-syntax.rkt}, adding elaboration cases to \texttt{elaborator.rkt}, adding
+reduction rules to \texttt{reduction.rkt} — all worked as expected.
+
+The one friction point: \texttt{macros.rkt} (WS desugaring) is 7,600+ lines and growing.
+Spec metadata parsing for new keywords (\texttt{:over}, \texttt{:method}) required understanding a
+1,200-line function. This is not a correctness issue but an ergonomics issue for
+future developers.
+\subsection{7.3 Narrowing Engine Integration}
+\label{sec:orgdc2a0e4}
+
+The narrowing engine (\texttt{narrowing.rkt}) required only 11 lines of changes — a hook
+for trait-resolved operator dispatch. This validates the DT-based architecture: trait
+dispatch is orthogonal to the search algorithm. The narrowing engine doesn't know or
+care about traits; it receives concrete DTs after dispatch resolution and walks them
+backwards as before.
+
+However, the demo issues (§6) reveal that this clean separation has a cost: the
+narrowing engine can't exploit trait-level information (e.g., knowing that \texttt{add} is
+commutative) for search pruning. The DT is the only interface, and DTs don't carry
+algebraic properties.
+
+\noindent\rule{\textwidth}{0.5pt}
+\section{8. Forward Enablement}
+\label{sec:orgd13aba4}
+
+\subsection{8.1 WS Surface for HasMethod (Immediate)}
+\label{sec:orgd3f2e74}
+
+Phase 3a's \texttt{:over/:method} works in sexp mode. Wiring up WS surface syntax is a
+straightforward parser extension — add keyword recognition to \texttt{parse-spec-metadata}
+in the WS preparser path. This would complete the capstone demo's §12.
+\subsection{8.2 Parameterized Constraints (Medium-Term)}
+\label{sec:org6ddf715}
+
+The design document specifies \texttt{?n:Between[50 100]:Even} syntax with parameterized
+constraints. The reader already handles \texttt{?var:C} chains; extending to \texttt{C[args]} requires
+a small reader change (recognize \texttt{[} after a constraint identifier). The
+\texttt{constraint-cell.rkt} lattice is domain-generic and handles parameterized constraints
+without modification.
+\subsection{8.3 Narrowing Improvements (Informed by Demo Issues)}
+\label{sec:org775387d}
+
+The demo issues point to three specific narrowing improvements:
+
+\begin{enumerate}
+\item \textbf{Variable aliasing in DT search} (Issue 3): When a function uses a variable
+non-linearly (\texttt{[add n n]}), the backward search should unify the alias
+occurrences, not treat them as independent. This requires equational constraints
+in the DT walk.
+
+\item \textbf{Depth-bounded multiplication/subtraction} (Issue 2): Deeper fuel or iterative
+deepening for recursive DTs.
+
+\item \textbf{Nested match DT extraction} (Issue 5): Match-within-match should produce
+composed DTs, not flat ones.
+\end{enumerate}
+\subsection{8.4 Trait Method Re-export (Informed by Demo Issue 6)}
+\label{sec:org1335cd1}
+
+The prelude should export trait method names (\texttt{eq?}, \texttt{compare}) as generic functions,
+not just wrapper functions. This is a \texttt{namespace.rkt} change — add the trait method
+names to the \texttt{:refer} lists for \texttt{prologos::core::eq} and \texttt{prologos::core::ord}.
+
+\noindent\rule{\textwidth}{0.5pt}
+\section{9. Lessons Learned}
+\label{sec:orge6dc16b}
+
+\subsection{9.1 Technical Lessons}
+\label{sec:orgd9fe86f}
+
+\begin{enumerate}
+\item \textbf{Constraint cells generalize dispatch cells.} Starting with a domain-specific
+\texttt{dispatch-lattice} and generalizing to \texttt{constraint-cell} during implementation
+was the right move. The generalization was free and enables future constraint types.
+
+\item \textbf{Registry-based dispatch > static operator table.} Phase 2c replaced a static table
+mapping operators to trait names with a dynamic registry lookup. This means
+user-defined traits automatically participate in narrowing dispatch without
+code changes.
+
+\item \textbf{Immediate-resolve safety net for ground type-args.} In \texttt{register-trait-constraint!},
+if all type-args are already ground (no metas), the wakeup map has no entries and
+incremental resolution would never fire. The safety net (Phase 3d) invokes the
+resolve callback immediately. Without this, already-ground constraints would silently
+fail.
+
+\item \textbf{Prelude export lists are a user-facing API.} The demo's \texttt{compare=/=eq?} unbound
+errors (Issue 6) show that what's in the \texttt{:refer} list is what users can call.
+Trait method names should be treated as first-class exports, not internal
+implementation details.
+
+\item \textbf{Non-linear DT variables need equational unification.} The \texttt{my-double} over-
+approximation (Issue 3) reveals a fundamental gap: DT-guided backward search
+treats each variable occurrence independently. Functions with aliased variables
+(\texttt{[add n n]}) need either: (a) a post-filter unifying alias groups, or (b)
+equational constraints threaded through the DT walk.
+\end{enumerate}
+\subsection{9.2 Process Lessons}
+\label{sec:orge8620d2}
+
+\begin{enumerate}
+\item \textbf{Phase ordering flexibility matters.} The design document numbered phases
+sequentially (1, 2a, 2b, 2c, 2d, 3a, 3b, 3c, 3d) but implementation went
+1, 2a, 2b, 3a, 2c, 2d, 3b, 3c, 3d. The out-of-order Phase 3a was beneficial:
+HasMethod's spec metadata was independent of propagator infrastructure and could
+be tested immediately.
+
+\item \textbf{Capstone demos are diagnostic instruments.} The demo surfaced 7 issue categories
+that unit tests didn't catch — not because the unit tests are wrong, but because
+the demo exercises end-to-end composition in ways that unit tests don't.
+The narrowing engine passes all its tests; the trait dispatch passes all its tests;
+but their \emph{composition} in a user-facing \texttt{.prologos} file reveals gaps.
+
+\item \textbf{Single-session features benefit from design doc investment.} The \textasciitilde{}11 hours of
+design (research, external critique, refinement) paid off in \textasciitilde{}7 hours of clean
+implementation. Design:implementation ratio of \textasciitilde{}1.6:1 is efficient for a feature
+of this complexity.
+\end{enumerate}
+
+\noindent\rule{\textwidth}{0.5pt}
+\section{10. Comparison with Prior PIRs}
+\label{sec:org0628357}
+
+\subsection{10.1 Session Types PIR (2026-03-04) vs. First-Class Traits PIR}
+\label{sec:org90ba8f3}
+
+\begin{center}
+\begin{tabular}{lrr}
+Dimension & Session Types & First-Class Traits\\
+\hline
+Phases & 36/38 (95\%) & 9/9 (100\%)\\
+Duration (impl) & \textasciitilde{}24 hours & \textasciitilde{}7 hours\\
+New impl files & 4 & 2\\
+New impl LOC & 1,880 & 487\\
+Modified files & 9 & 16\\
+Total changes & \textasciitilde{}23,500 & 1,484\\
+New test files & 27 & 8\\
+New test cases & 392 & 391\\
+Suite growth & +21\% & +6.2\%\\
+\texttt{propagator.rkt} changes & 0 & 0\\
+Regressions & 0 & 0\\
+\end{tabular}
+\end{center}
+
+Key observation: Stage 3 was smaller in raw LOC but wider in file touches (16 vs. 9).
+This reflects the nature of the work — session types added new infrastructure files;
+first-class traits threaded new dispatch paths through \emph{existing} infrastructure.
+The near-identical test case count (392 vs. 391) suggests a stable testing discipline.
+
+\noindent\rule{\textwidth}{0.5pt}
+\section{11. Conclusion}
+\label{sec:orgf56688f}
+
+The First-Class Traits feature track achieved its objectives: Prologos traits are
+now first-class citizens that can be stored, passed, inspected, and used as constraint
+domains on logic variables. The implementation validated the propagator-as-universal-
+substrate architecture for the fourth time and demonstrated that the constraint cell
+lattice generalizes beyond trait dispatch.
+
+The capstone demo validated the composition thesis — functional code, relational
+narrowing, and type-level dispatch compose naturally — while surfacing 7 issue
+categories that inform future narrowing improvements. The most significant finding
+is that non-linear variable aliasing in DT-guided backward search is the primary
+gap preventing full compositional narrowing.
+
+\textbf{Final metrics}: 19 commits, 9 completed phases, 487 new implementation LOC + 997
+changed LOC, 391 test cases, zero regressions, zero deferrals.
+\end{document}

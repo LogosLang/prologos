@@ -1,0 +1,1120 @@
+% Created 2026-03-05 Thu 00:16
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{The Prologos Project - from Zachary Larson}
+\date{2026-03-05}
+\title{Propagator Networks\\\medskip
+\large A Comprehensive Survey of Theory, Practice, and Applications}
+\hypersetup{
+ pdfauthor={The Prologos Project - from Zachary Larson},
+ pdftitle={Propagator Networks},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Introduction}
+\label{sec:org1511226}
+
+A \textbf{propagator network} is a model of computation in which autonomous,
+stateless computational agents --- called \textbf{propagators} --- communicate
+through shared stateful storage elements --- called \textbf{cells} --- that
+accumulate partial information about values. Unlike traditional models
+where programs execute as sequential instructions over mutable memory,
+propagator networks describe computation as the gradual, multidirectional
+accumulation of knowledge, driven by local rules, until no further
+deductions can be made.
+
+The key insight, due to Alexey Radul \footnote{Radul, A. (2009). "Propagation Networks: A Flexible
+and Expressive Substrate for Computation." PhD thesis, MIT.\label{org978162e}}, is that \textbf{a cell
+should not be seen as storing a value, but as accumulating information
+about a value}. This reframing transforms cells from simple memory
+locations into lattice-structured accumulators of partial information,
+and elevates the computational model from "compute a result" to "refine
+what we know until we know enough."
+
+Propagator networks unify ideas from constraint propagation, truth
+maintenance, dataflow programming, and lattice-theoretic fixed-point
+computation into a single, composable framework. They have applications
+in type inference, constraint solving, abstract interpretation,
+incremental compilation, reactive programming, and protocol
+verification. Despite this breadth, the core model is remarkably simple:
+cells hold lattice elements; propagators are monotone functions between
+them; and the network runs until quiescence (a fixed point).
+
+There is, as of this writing, no Wikipedia article on propagator
+networks. This document aims to fill that gap: a self-contained survey
+accessible to a reader with general programming background, progressing
+from foundations through theory to applications and the state of the
+art.
+\section{Origins and History}
+\label{sec:orgfcaf9d2}
+
+\subsection{Constraint Propagation in Circuit Analysis (1977)}
+\label{sec:org6eeffdb}
+
+The propagator model traces its lineage to Gerald Jay Sussman and
+Richard Stallman's 1977 work on computer-aided circuit analysis
+\subsection{Steele's Constraint Language (1980)}
+\label{sec:org9b00a1c}
+
+Guy Lewis Steele Jr., also working under Sussman at MIT, developed the
+theoretical foundations of constraint-based programming in his 1980 PhD
+thesis \footnote{Steele, G.L. (1980). "The Definition and
+Implementation of a Computer Programming Language Based on
+Constraints." PhD thesis, MIT. AI Laboratory TR-595.}. His key contribution was the \textbf{locality
+principle}: each constraint operates using only locally available
+information and places newly derived values on locally attached wires.
+No constraint needs global knowledge of the network; all computation is
+local.
+
+This principle became a cornerstone of the propagator model. It is what
+makes propagator networks inherently parallelizable: if every
+computational element operates independently using only local
+information, there is no need for global coordination.
+\subsection{Truth Maintenance Systems (1979--1986)}
+\label{sec:orgd9c48ee}
+
+Sussman's circuit analysis work spawned a line of research into \textbf{truth
+maintenance} --- systems that track \emph{why} facts are believed, not just
+\emph{what} is believed.
+
+\textbf{Jon Doyle's TMS (1979)} \footnote{Doyle, J. (1979). "A Truth Maintenance System."
+\emph{Artificial Intelligence}, 12:231--272.} introduced the
+justification-based truth maintenance system. Each belief in the system
+is annotated with its justification --- the set of prior beliefs and
+inference rules that support it. When a supporting belief is retracted,
+all conclusions that depended on it are automatically invalidated. This
+enabled non-monotonic reasoning: the system can change its mind as
+assumptions change.
+
+\textbf{Johan de Kleer's ATMS (1986)} \footnote{de Kleer, J. (1986). "An Assumption-Based TMS."
+\emph{Artificial Intelligence}, 28(2):127--162.} advanced the idea
+significantly with the assumption-based truth maintenance system.
+Rather than maintaining one "current" set of beliefs (as the TMS does),
+the ATMS simultaneously tracks \emph{all possible} assumption sets --- each a
+consistent "worldview." With \(n\) assumptions, there are potentially
+\(2^n\) environments. Since all environments are maintained in parallel,
+switching between worldviews is free (no retraction or re-derivation
+needed).
+
+The ATMS proved essential for the propagator model's handling of
+hypothetical reasoning and search, as we will see.
+\subsection{Waltz Filtering and Arc Consistency (1975--1977)}
+\label{sec:org0d36c57}
+
+Independently from the Sussman lineage, David Waltz's 1975 algorithm for
+interpreting line drawings of 3D scenes \footnote{Waltz, D. (1975). "Understanding Line Drawings of Scenes
+with Shadows." In \emph{The Psychology of Computer Vision}, McGraw-Hill.} demonstrated that
+local constraint propagation could dramatically reduce search spaces.
+Alan Mackworth formalized this as \textbf{arc consistency} in 1977
+\subsection{Dataflow Programming (1974)}
+\label{sec:orgdd3763f}
+
+Jack Dennis formalized dataflow schemas in 1974 \footnote{Dennis, J.B. (1974). "First Version of a Data Flow
+Procedure Language." \emph{Lecture Notes in Computer Science}, vol 19,
+Springer.}: programs
+as directed graphs where operations execute upon data availability,
+rather than following a sequential program counter. Gilles Kahn
+independently introduced Kahn Process Networks \footnote{Kahn, G. (1974). "The Semantics of a Simple Language for
+Parallel Programming." \emph{IFIP Congress}, pp. 471--475.} --- sequential
+processes communicating through FIFO queues --- and proved that such
+networks are deterministic: the output sequence does not depend on
+process execution speed.
+
+Propagator networks generalize dataflow in two ways: (1) information
+flows \emph{multidirectionally} (not just producer-to-consumer), and (2)
+cells accumulate \emph{partial information} (not complete values). A standard
+dataflow network is a special case of a propagator network where all
+propagators are unidirectional and all cells hold complete values.
+\subsection{Radul's PhD Thesis (2009)}
+\label{sec:orgff987da}
+
+Alexey Radul's 2009 PhD thesis at MIT, "Propagation Networks: A Flexible
+and Expressive Substrate for Computation" \textsuperscript{\ref{org978162e}}, supervised
+by Sussman, is the definitive formulation of the propagator model as a
+general-purpose computational paradigm. The thesis synthesized three
+decades of ideas --- constraint propagation, truth maintenance, lattice
+theory, dataflow --- into a unified model with a precise mathematical
+foundation.
+
+Radul argued that conventional programming systems are insufficiently
+expressive because they are built on the image of a single computer with
+global effects on a large memory. The propagator model offers an
+alternative: autonomous machines communicating through shared cells,
+where computation is the progressive accumulation of partial information
+about values.
+
+The thesis demonstrated that an astonishing range of computational
+paradigms embed naturally into propagator networks: expression
+evaluation, constraint satisfaction, truth maintenance, functional
+reactive programming, rule-based systems, and type inference are all
+instances of the same underlying pattern.
+\subsection{"The Art of the Propagator" (2009)}
+\label{sec:org524c90e}
+
+Radul and Sussman published a companion paper, "The Art of the
+Propagator" \footnote{Radul, A. \& Sussman, G.J. (2009). "The Art of the
+Propagator." MIT-CSAIL-TR-2009-002.}, presenting the model more concisely. The
+paper emphasizes that the model "makes it easy to smoothly combine
+expression-oriented and constraint-based programming, and easily
+accommodates implicit incremental distributed search in ordinary
+programs."
+\subsection{The Revised Report (2010)}
+\label{sec:org427cf9c}
+
+Radul and Sussman published the "Revised Report on the Propagator Model"
+\subsection{Software Design for Flexibility (2021)}
+\label{sec:orgd35cf7c}
+
+Chris Hanson and Sussman's book \emph{Software Design for Flexibility}
+\section{Core Concepts}
+\label{sec:org7d03620}
+
+\subsection{Cells}
+\label{sec:org56cd361}
+
+A \textbf{cell} is the stateful storage element of a propagator network. Unlike
+a variable in traditional programming (which holds a single definitive
+value and can be overwritten), a cell \emph{accumulates information about a
+value}. A cell supports three operations:
+
+\begin{enumerate}
+\item \textbf{Add content}: New information is \emph{merged} with the cell's existing
+information (not overwritten).
+\item \textbf{Read content}: Retrieve the current state of accumulated knowledge.
+\item \textbf{Register propagators}: Propagators subscribe to the cell and are
+notified when its content changes.
+\end{enumerate}
+
+The information in a cell ranges from "I know absolutely nothing" (the
+special value \texttt{nothing}, or lattice bottom \(\bot\)) to "I know everything
+there is to know, and the answer is 42" to the anomalous case "I know
+there is a contradiction!" (lattice top \(\top\)).
+
+Critically, information in a cell \emph{never decreases}. A cell can move
+from "I don't know" to "it's an integer" to "it's a positive integer" to
+"it's 42," but it can never move backward from "it's 42" to "I don't
+know." This monotonicity is not merely a convention --- it is the
+mathematical foundation ensuring convergence and determinism.
+\subsection{Propagators}
+\label{sec:orgc1045d1}
+
+A \textbf{propagator} is the computational element of the network. Propagators are:
+
+\begin{itemize}
+\item \textbf{Autonomous}: They operate independently, with no central controller
+directing their execution.
+\item \textbf{Stateless}: They maintain no internal state. All persistent state
+resides in cells.
+\item \textbf{Asynchronous}: They can fire in any order; the final result is the
+same (confluence).
+\end{itemize}
+
+A propagator monitors its input cells and, when any input changes,
+computes new information and adds it to its output cells. The
+computation is always \emph{additive} --- a propagator can only \emph{contribute}
+information, never \emph{remove} it.
+
+In practice, a propagator is a function from the current network state to
+a (possibly modified) network state: it reads from some cells, computes,
+and writes to others via the merge operation. If its contribution adds
+no new information (i.e., the merge result is identical to the cell's
+existing content), the network state is unchanged and no further
+propagation is triggered.
+\subsection{The Merge Operation}
+\label{sec:orgc826b69}
+
+The merge operation is the heart of the propagator model. When a
+propagator writes information \(b\) to a cell already containing
+information \(a\), the cell's new content is \(\text{merge}(a, b)\) --- the
+combination of both pieces of knowledge.
+
+Merge must satisfy three algebraic laws:
+
+\begin{itemize}
+\item \textbf{Commutativity}: \(\text{merge}(a, b) = \text{merge}(b, a)\)
+--- the order in which information arrives does not matter.
+\item \textbf{Associativity}: \(\text{merge}(\text{merge}(a, b), c) = \text{merge}(a, \text{merge}(b, c))\)
+--- grouping does not matter.
+\item \textbf{Idempotency}: \(\text{merge}(a, a) = a\)
+--- re-contributing the same information has no effect.
+\end{itemize}
+
+These three laws make merge a \textbf{join-semilattice} operation (see
+\ref{sec:org063aa5a}). The commutativity and associativity
+ensure that the final cell state is independent of the order in which
+propagators fire. The idempotency ensures that redundant contributions
+are harmless. Together, these properties guarantee \textbf{confluence}: the
+result of running a propagator network depends only on the initial cell
+contents and the set of propagators, not on the order or timing of
+execution.
+
+Key behaviors of merge:
+
+\begin{itemize}
+\item \(\text{merge}(\bot, x) = x\) --- merging anything with "nothing" yields
+that thing (bottom is the identity).
+\item \(\text{merge}(x, x) = x\) --- consistent redundant information is
+harmless.
+\item \(\text{merge}(\top, x) = \top\) --- once a contradiction is reached, it
+cannot be undone (top is absorbing).
+\item \(\text{merge}(a, b) = \top\) when \(a\) and \(b\) are incompatible ---
+contradictory information produces a contradiction.
+\end{itemize}
+\subsection{Partial Information}
+\label{sec:org05317c2}
+
+The propagator model supports a rich hierarchy of partial information types:
+
+\begin{itemize}
+\item \textbf{Nothing (\(\bot\))}: Complete ignorance about the value.
+\item \textbf{Raw values}: Fully determined information (e.g., the integer 42).
+\item \textbf{Intervals}: Bounded ranges (e.g., \([3.0, 5.0]\)), representing the
+knowledge that a value lies somewhere within bounds.
+\item \textbf{Finite domains}: Sets of possible values (e.g., \(\{1, 2, 3, 4\}\)).
+\item \textbf{Supported values}: Values paired with the set of assumptions that
+justify them (see \ref{sec:org6c85cbb}).
+\item \textbf{TMS entries}: Sets of supported values, representing multiple
+contingent beliefs that coexist.
+\end{itemize}
+
+Each partial information type defines three generic operations:
+\texttt{equivalent?} (test whether two structures represent the same
+information), \texttt{merge} (combine two structures), and \texttt{contradictory?}
+(test whether a structure represents an impossible state).
+
+The power of the propagator model comes from the ability to define \emph{new}
+partial information types. Any data type that forms a join-semilattice
+with a bottom element and a contradiction test can be used as cell
+content. This extensibility is what allows propagator networks to
+operate over types, multiplicities, session protocols, intervals, finite
+domains, or any other structured form of partial knowledge.
+\subsection{Monotonicity}
+\label{sec:orgd4073be}
+
+All information flow in a propagator network must be \textbf{monotonic}: cells
+can only gain information, never lose it. In lattice-theoretic terms,
+the content of a cell can only move \emph{upward} in the information ordering
+(toward more-determined states, further from \(\bot\), closer to \(\top\)).
+
+Monotonicity is the property that makes everything else work:
+
+\begin{itemize}
+\item \textbf{Confluence}: Because merge is commutative and associative, and
+propagators can only increase cell values, the final result is
+independent of execution order.
+\item \textbf{Termination}: In a finite lattice, information can only increase a
+finite number of times before reaching a fixed point. (Infinite
+lattices require \emph{widening} --- see \ref{sec:orgddf2bf4}.)
+\item \textbf{Compositionality}: Networks can be freely combined without worrying
+about interference. Each sub-network's monotonic contributions compose
+with others.
+\end{itemize}
+\subsection{Quiescence and Fixed Points}
+\label{sec:org9157938}
+
+A propagator network reaches \textbf{quiescence} when no propagator has new
+information to contribute --- the system has reached a \textbf{fixed point}.
+At quiescence, every cell contains the \textbf{least fixed point} of the system
+of equations defined by the propagators: the smallest (least-informative)
+cell contents consistent with all propagators being satisfied.
+
+The existence and uniqueness of this least fixed point is guaranteed by
+the \textbf{Knaster-Tarski fixed-point theorem}: every monotone function on a
+complete lattice has a least fixed point, and it can be computed by
+iterating from \(\bot\):
+
+$$\text{lfp}(f) = \bigsqcup_{n \in \mathbb{N}} f^n(\bot)$$
+
+This is precisely what running a propagator network to quiescence
+computes: starting from cells containing \(\bot\) (nothing), repeatedly
+firing propagators until nothing changes.
+\subsection{Multidirectional Computation}
+\label{sec:org2691539}
+
+Unlike traditional functions (which map inputs to outputs in one
+direction), propagators support \textbf{multidirectional computation}.
+A constraint like \(x + y = z\) is expressed not as a function from
+\((x, y)\) to \(z\), but as a set of propagators:
+
+\begin{itemize}
+\item One computes \(z\) from \(x\) and \(y\)
+\item One computes \(x\) from \(z\) and \(y\)
+\item One computes \(y\) from \(z\) and \(x\)
+\end{itemize}
+
+Given any two of the three values, the third is determined. Given all
+three, consistency is verified. This arises naturally from the merge
+semantics: each propagator contributes whatever it can, and merge
+reconciles all contributions.
+
+The classic example (from Radul and Sussman) is temperature conversion.
+The relationship \(C = (F - 32) \times 5/9\) is expressed once, and the
+network automatically solves for whichever variable is unknown ---
+forward (F to C) or backward (C to F).
+\subsection{Supported Values and Dependencies}
+\label{sec:org6c85cbb}
+
+A \textbf{supported value} is a pair \((v, P)\) of a datum \(v\) and a set of
+\textbf{premises} \(P\) --- the assumptions on which \(v\) depends. This enables
+the system to track not just \emph{what} it believes, but \emph{why}.
+
+When a propagator derives new information, the result is tagged with the
+union of its inputs' premise sets. If cell \(A\) holds \((3, \{p_1\})\) and
+cell \(B\) holds \((5, \{p_2\})\), an addition propagator writes \((8,
+\{p_1, p_2\})\) to cell \(C\) --- "the sum is 8, given that we believe both
+\(p_1\) and \(p_2\)."
+
+When a contradiction is discovered, the system can identify \emph{which
+premises} contributed. The conflicting premise set is recorded as a
+\textbf{nogood} --- a set of assumptions that cannot all be simultaneously true.
+This enables \textbf{dependency-directed backtracking}: the system retracts the
+minimal set of assumptions needed to resolve the conflict, rather than
+blindly reverting the most recent choice.
+\subsection{Truth Maintenance Integration}
+\label{sec:org9c4b2c5}
+
+Propagator networks integrate with \textbf{truth maintenance systems} to enable
+hypothetical reasoning. A TMS-backed cell contains a set of supported
+values, each contingent on different assumptions. When assumptions are
+activated or deactivated, the TMS automatically updates which values are
+"in" (currently believed) and which are "out."
+
+The ATMS (Assumption-Based Truth Maintenance System) extends this to
+maintain \emph{all possible} worldviews simultaneously. Rather than committing
+to one set of assumptions, the ATMS tracks every consistent combination.
+This enables:
+
+\begin{itemize}
+\item \textbf{Hypothetical reasoning}: "What if we assume \(p_1\)? What follows?"
+--- without committing to \(p_1\).
+\item \textbf{Dependency-directed backtracking}: When a contradiction is found,
+trace back to the responsible premises and record the nogood.
+\item \textbf{Non-monotonic reasoning}: While the underlying information flow is
+monotonic (lattice joins), the TMS layer enables \emph{belief revision} by
+changing which premises are active.
+\end{itemize}
+\section{Lattice-Theoretic Foundations}
+\label{sec:org063aa5a}
+
+\subsection{Lattices and Partial Orders}
+\label{sec:org288f4b7}
+
+A \textbf{partial order} is a set \(S\) with a binary relation \(\leq\) that is
+reflexive (\(a \leq a\)), antisymmetric (\(a \leq b\) and \(b \leq a\)
+implies \(a = b\)), and transitive (\(a \leq b\) and \(b \leq c\) implies \(a
+\leq c\)). The ordering represents "has at least as much information as."
+
+A \textbf{join-semilattice} \((L, \leq, \bot, \sqcup)\) is a partial order with:
+
+\begin{itemize}
+\item A \textbf{bottom element} \(\bot\) (least informative --- "nothing")
+\item A \textbf{join operation} \(\sqcup\) (least upper bound --- "combine
+information")
+\end{itemize}
+
+The join is commutative, associative, and idempotent. Join is precisely
+the merge operation of propagator cells.
+
+A \textbf{complete lattice} additionally has a \textbf{top element} \(\top\) (maximally
+informative, representing contradiction) and a \textbf{meet} operation \(\sqcap\)
+(greatest lower bound). In propagator networks, reaching \(\top\) signals
+that incompatible information has been merged.
+\subsection{Merge as Lattice Join}
+\label{sec:org3046f89}
+
+The merge operation implements the lattice join:
+
+$$\text{merge}(a, b) = a \sqcup b$$
+
+All algebraic properties of merge follow from the lattice axioms:
+
+\begin{center}
+\begin{tabular}{lll}
+Property & Equation & Consequence\\
+\hline
+Commutativity & \(a \sqcup b = b \sqcup a\) & Order-independence\\
+Associativity & \((a \sqcup b) \sqcup c = a \sqcup (b \sqcup c)\) & Grouping-independence\\
+Idempotency & \(a \sqcup a = a\) & Redundancy-tolerance\\
+Identity & \(a \sqcup \bot = a\) & Adding nothing changes nothing\\
+Annihilation & \(a \sqcup \top = \top\) & Contradiction is irreversible\\
+\end{tabular}
+\end{center}
+\subsection{Monotone Functions and Convergence}
+\label{sec:orgf7abde4}
+
+A function \(f : L \to L\) is \textbf{monotone} if \(a \leq b\) implies \(f(a) \leq
+f(b)\) --- more information in, at least as much information out.
+Propagators must be monotone functions.
+
+The \textbf{Knaster-Tarski fixed-point theorem} guarantees that every monotone
+function on a complete lattice has a least fixed point. Combined with
+Kleene's iteration theorem, this means:
+
+\begin{enumerate}
+\item A fixed point exists.
+\item It can be computed by iterated application from \(\bot\).
+\item For finite lattices, iteration terminates in finitely many steps.
+\item The result is independent of the iteration order.
+\end{enumerate}
+
+Property (4) --- \emph{confluence} --- is the deepest guarantee of the
+propagator model: no matter how propagators are scheduled, the network
+converges to the same result.
+\subsection{The CALM Theorem}
+\label{sec:org526044c}
+
+The CALM theorem (Consistency As Logical Monotonicity) \footnote{Hellerstein, J.M. \& Alvaro, P. (2019). "Keeping CALM:
+When Distributed Consistency Is Easy." \emph{Communications of the ACM},
+63(9).\label{orge067b9c}},
+formulated by Hellerstein and Alvaro, establishes that monotonic
+programs (those expressible as monotone functions on lattices) can be
+executed in a distributed, coordination-free manner while still
+producing consistent results. Non-monotonic operations (like negation or
+aggregation) require coordination (synchronization barriers).
+
+Propagator networks are inherently monotonic, so the CALM theorem
+guarantees that they can be distributed across multiple processors or
+machines without coordination, and the result will be the same as
+single-machine execution. This makes propagator networks a natural fit
+for parallel and distributed computation.
+\subsection{Widening and Narrowing}
+\label{sec:orgddf2bf4}
+
+For lattices of infinite height (e.g., the lattice of integer intervals
+\([lo, hi]\)), Kleene iteration may not terminate --- a cell could ascend
+through infinitely many refinements. \textbf{Widening} (due to Cousot \& Cousot
+\section{Relationship to Other Computational Paradigms}
+\label{sec:org28167ef}
+
+\subsection{Constraint Programming}
+\label{sec:orgea00c65}
+
+Propagator networks subsume the constraint propagation phase of
+constraint programming (CP) systems. In CP, variables have domains
+(typically finite sets), and constraints are propagators that narrow
+domains by removing inconsistent values. Modern production CP solvers
+like Gecode \footnote{Schulte, C. \& Stuckey, P.J. (2008). "Efficient Constraint
+Propagation Engines." \emph{ACM Transactions on Programming Languages and
+Systems}, 31(1).\label{org4786136}} are explicitly built on propagator architectures.
+
+The relationship is direct:
+
+\begin{center}
+\begin{tabular}{ll}
+Constraint Programming & Propagator Networks\\
+\hline
+Variable domain & Cell content (lattice value)\\
+Constraint propagator & Propagator (fire function)\\
+Arc consistency (AC-3, etc.) & Run to quiescence\\
+Backtracking search & ATMS worldview branching\\
+Learned nogood & Recorded assumption conflict\\
+\end{tabular}
+\end{center}
+
+Propagator networks generalize CP in that cells can hold \emph{any}
+lattice-structured partial information, not just finite domains. An
+interval, a type, a session protocol, or a user-defined lattice are all
+valid cell contents.
+\subsection{Datalog and Fixed-Point Logic}
+\label{sec:orgfcd42f3}
+
+Datalog --- the database query language based on Horn clauses evaluated
+to a fixed point --- is a direct instance of propagator-style
+computation on a specific lattice: sets of tuples ordered by subset
+inclusion.
+
+\begin{itemize}
+\item Each Datalog relation is a cell holding a set of tuples.
+\item Each Datalog rule is a propagator: when input relations change,
+derive new tuples for the head relation.
+\item Naive evaluation (iterate all rules until nothing changes) =
+run to quiescence.
+\item Semi-naive evaluation (only propagate \emph{new} tuples) = an optimization
+of the propagator scheduling strategy.
+\end{itemize}
+
+Flix \footnote{Madsen, M., Yee, M.-H., \& Lhotak, O. (2016). "From Datalog
+to Flix: A Declarative Language for Fixed Points on Lattices." \emph{PLDI 2016}.}, a research language by Madsen et al. (PLDI 2016),
+extends Datalog by replacing set inclusion with arbitrary user-defined
+lattices. Flix's model is essentially Datalog-as-propagator-network:
+lattice-valued relations, monotone rules, iterative fixed-point
+evaluation. Datafun \footnote{Arntzenius, M. \& Krishnaswami, N.R. (2016). "Datafun: A
+Functional Datalog." \emph{ICFP 2016}.} (Arntzenius \& Krishnaswami, ICFP 2016)
+takes this further, embedding monotone fixed-point computation into a
+functional type system.
+\subsection{Reactive Programming and Spreadsheets}
+\label{sec:orgd9706a2}
+
+Spreadsheets are the most widely deployed example of propagator-like
+computation. When a cell changes, dependent cells recompute
+automatically --- unidirectional propagation through a dependency graph.
+
+Reactive programming generalizes this with observable streams and
+automatic change propagation. Functional reactive programming (FRP)
+adds compositional abstractions.
+
+Propagator networks differ from reactive/FRP systems in three key ways:
+
+\begin{enumerate}
+\item \textbf{Multidirectionality}: Reactive systems propagate change in one
+direction (from sources to dependents). Propagators support
+multidirectional constraints.
+\item \textbf{Partial information}: FRP cells hold complete values that are
+overwritten on change. Propagator cells accumulate partial
+information via merge.
+\item \textbf{Merge semantics}: FRP cells are "last writer wins." Propagator cells
+are "all writers contribute" via lattice join.
+\end{enumerate}
+
+Radul's thesis demonstrates that FRP embeds naturally within the
+propagator framework: a standard reactive system is a propagator network
+with unidirectional propagators and complete-value cells. David
+Thompson's work \footnote{Thompson, D. (2014). "Functional Reactive User
+Interfaces with Propagators."} shows the practical value of this
+embedding for building functional reactive user interfaces with
+propagators.
+\subsection{SAT/SMT Solvers}
+\label{sec:org67eee2a}
+
+The relationship between propagators and SAT/SMT solvers is structural.
+Modern SAT solvers use CDCL (Conflict-Driven Clause Learning):
+
+\begin{enumerate}
+\item \textbf{Decision}: Choose an unassigned variable and assign it.
+\item \textbf{Unit propagation}: Deduce forced assignments from clauses.
+\item \textbf{Conflict analysis}: When a contradiction is found, learn a new
+clause (nogood).
+\item \textbf{Non-chronological backjumping}: Jump back to the most relevant
+decision level.
+\end{enumerate}
+
+Each of these maps directly to propagator concepts:
+
+\begin{center}
+\begin{tabular}{ll}
+CDCL & Propagator Network\\
+\hline
+Decision literal & ATMS assumption\\
+Unit propagation & Run to quiescence\\
+Conflict clause & Nogood set\\
+Non-chronological backjump & Dependency-directed backtracking\\
+Theory solver & Domain-specific propagators\\
+\end{tabular}
+\end{center}
+
+SMT (Satisfiability Modulo Theories) extends SAT with "theory
+propagators" that participate in propagation and conflict analysis ---
+the same architectural pattern as domain-specific propagators in a
+propagator network.
+
+D'Silva et al. \footnote{D'Silva, V. et al. (2013). "Abstract Conflict Driven
+Learning." \emph{SAS 2013}.\label{org393d4e3}} showed that CDCL can be lifted from the
+Boolean lattice to arbitrary lattice-based abstract domains ("Abstract
+CDCL"). This directly connects SAT/SMT solving to the lattice-theoretic
+core of propagator networks.
+\subsection{The Actor Model}
+\label{sec:orgbac87a9}
+
+Carl Hewitt's Actor Model \footnote{Hewitt, C. (1973). "A Universal Modular ACTOR Formalism
+for Artificial Intelligence."} describes computation as
+autonomous agents (actors) communicating through asynchronous messages.
+Propagator networks resemble actor systems architecturally --- both
+feature autonomous computational elements without central control ---
+but differ crucially:
+
+\begin{center}
+\begin{tabular}{lll}
+Dimension & Actors & Propagators\\
+\hline
+Communication & Point-to-point messages & Shared cells with merge\\
+State & Per-actor mutable state & Shared cells accumulate info\\
+Determinism & Non-deterministic & Deterministic (confluence)\\
+Convergence & No guarantee & Guaranteed (lattice theory)\\
+Fault model & Supervision, let-it-crash & Contradiction + ATMS nogood\\
+\end{tabular}
+\end{center}
+
+The lattice constraint on cell values is what buys determinism: unlike
+actors, where message ordering can affect the outcome, the commutativity
+of merge ensures that propagator execution order is irrelevant.
+
+Kuper and Newton's LVars \footnote{Kuper, L. \& Newton, R.R. (2013). "LVars: Lattice-based Data
+Structures for Deterministic Parallelism." \emph{FHPC 2013}.} (see ) formalize this connection: LVars are shared mutable
+variables with monotonic writes and threshold reads, guaranteeing
+deterministic parallelism --- precisely the semantics of propagator
+cells.
+\subsection{CRDTs and Distributed Systems}
+\label{sec:org561d394}
+
+\textbf{Conflict-Free Replicated Data Types} (CRDTs) \footnote{Shapiro, M. et al. (2011). "Conflict-Free Replicated Data
+Types." \emph{SSS 2011}.} share the
+same mathematical substrate as propagator cells. State-based CRDTs
+(CvRDTs) require:
+
+\begin{itemize}
+\item A join-semilattice structure on state
+\item A merge function that is commutative, associative, and idempotent
+\item Monotonic state updates
+\end{itemize}
+
+These are \emph{exactly} the requirements for propagator cell contents.
+Both CRDTs and propagators solve the problem of combining information
+from multiple autonomous sources in a consistent, order-independent
+way. CRDTs solve it for distributed replicas across a network;
+propagators solve it for computational elements within a program.
+
+The CALM theorem \textsuperscript{\ref{orge067b9c}} makes this connection precise: monotonic
+computations (like propagator networks and CRDT merges) can be
+distributed without coordination. Edward Kmett's influential talks on
+propagators \footnote{Kmett, E. (2016--2019). "Propagators." Talks at FnConf,
+YOW!, and others.} explicitly identify this unification: "propagators,
+CRDTs, Datalog, SAT solving, and FRP all share the same
+lattice-fixpoint structure."
+\section{Applications}
+\label{sec:orga9bab48}
+
+\subsection{Type Inference}
+\label{sec:orgc741aaf}
+
+Type inference --- the problem of determining the types of expressions
+in a program without explicit annotations --- maps directly onto
+propagator networks. Radul's thesis includes a chapter titled "Type
+Inference Looks Like Propagation Too."
+
+The mapping:
+
+\begin{itemize}
+\item Each type variable (metavariable) is a \emph{cell}, initially containing
+\(\bot\) ("I don't yet know what type this is").
+\item Each typing rule (function application, variable binding, etc.) is a
+\emph{propagator} that constrains related type cells.
+\item Unification is \emph{merge}: when two type cells are constrained to be
+equal, their contents are merged (unified). Compatible types merge to
+a more-specific type; incompatible types merge to \(\top\)
+(type error).
+\item Running to quiescence computes the principal type (the most general
+type consistent with all constraints).
+\end{itemize}
+
+Bidirectional type checking --- splitting inference into synthesis
+(bottom-up, from term to type) and checking (top-down, from expected
+type to term) --- is a natural instance of multidirectional propagation.
+Recent work by Leijen \footnote{Leijen, D. (2025). "Omnidirectional Type Inference
+for ML."} on "omnidirectional type
+inference" makes this explicit: typing constraints suspend when
+information is insufficient and resume when other constraints supply it
+--- precisely propagator semantics.
+\subsection{Constraint Solving}
+\label{sec:org41de211}
+
+Propagator networks are the native architecture of constraint solving.
+Variables are cells, constraints are propagators, and solving is running
+to quiescence. The advantages over traditional constraint solvers:
+
+\begin{itemize}
+\item \textbf{Mixed-domain solving}: Finite domain constraints, interval
+constraints, type constraints, and user-defined constraints can
+coexist in a single network, connected by cross-domain propagators.
+\item \textbf{Persistent backtracking}: If the network uses persistent (immutable)
+data structures, backtracking is \(O(1)\) --- just keep the old network
+reference. Traditional CP systems pay \(O(\text{trail length})\) per
+backtrack.
+\item \textbf{Extensibility}: Adding a new constraint domain is defining a new
+lattice and wiring propagators. In traditional systems (Gecode,
+MiniZinc), adding a domain requires low-level implementation.
+\end{itemize}
+\subsection{Abstract Interpretation}
+\label{sec:org9053461}
+
+Abstract interpretation \footnote{Cousot, P. \& Cousot, R. (1977). "Abstract
+Interpretation: A Unified Lattice Model for Static Analysis of Programs
+by Construction or Approximation of Fixpoints." \emph{POPL 1977}.} --- computing sound
+approximations of program behavior over abstract domains --- is
+propagator networks operating over abstract lattices:
+
+\begin{itemize}
+\item Each \emph{program point} is a cell holding an abstract value (e.g., sign,
+interval, pointer alias set).
+\item Each \emph{program statement} is a propagator computing abstract transfer
+functions.
+\item Running to quiescence computes the analysis fixed point.
+\item Widening handles infinite-height abstract domains.
+\end{itemize}
+
+The connection to propagators is made precise by \textbf{Galois connections}:
+pairs of monotone functions \((\alpha : C \to A, \gamma : A \to C)\)
+connecting concrete and abstract domains. Cross-domain propagators use
+Galois connections to flow information between multiple abstract domains
+simultaneously --- the "reduced product" of multiple analyses becomes
+automatic when all domains share a propagator network.
+\subsection{Protocol Verification via Session Types}
+\label{sec:orgabb0b61}
+
+Session types --- type-theoretic specifications of communication
+protocols --- can be verified using propagator networks. Each channel
+endpoint is a cell in a session type lattice; each communication
+operation (send, receive, select, offer) is a propagator that constrains
+the channel's protocol.
+
+Caires and Pfenning \footnote{Caires, L. \& Pfenning, F. (2010). "Session Types
+as Intuitionistic Linear Propositions." \emph{CONCUR 2010}.} established a Curry-Howard
+correspondence between session types and intuitionistic linear logic.
+Propagator-based session type checking exploits this: the duality
+constraint (client and server must follow dual protocols) is a
+bidirectional propagator, and protocol violations are contradictions
+(lattice top) with dependency chains explaining \emph{which} communication
+step violated \emph{which} protocol clause.
+\subsection{Incremental Compilation}
+\label{sec:orgc79f174}
+
+An incremental compiler can be structured as a propagator network:
+
+\begin{itemize}
+\item Source files are cells (content = parsed AST).
+\item Compilation phases (parse → elaborate → type-check → codegen) are
+propagator chains.
+\item A file change updates a cell; running to quiescence recomputes only
+affected downstream cells.
+\item Persistent networks give \(O(1)\) access to the previous version for
+delta computation.
+\end{itemize}
+
+The multidirectionality of propagators adds a novel capability: a type
+signature change can propagate \emph{backward} to callers, enabling "what-if"
+analysis ("what happens if I change this type?") without recompiling.
+This connects to Acar's work on self-adjusting computation
+\subsection{Diagnostic Reasoning}
+\label{sec:orgddc88f8}
+
+De Kleer and Williams's General Diagnostic Engine (GDE, 1987)
+\section{Implementations}
+\label{sec:orgf1dc383}
+
+\subsection{The Reference Implementation (Scheme)}
+\label{sec:org7769237}
+
+The canonical implementation is Radul and Sussman's Scheme-Propagators
+\subsection{Haskell Libraries}
+\label{sec:org9ae21d5}
+
+\textbf{Edward Kmett's \texttt{propagators}} \footnote{Kmett, E. Haskell \texttt{propagators} library.
+\url{https://github.com/ekmett/propagators}}: An exploration
+of propagator design in Haskell. The primary innovation beyond the
+published Scheme work is the use of \textbf{observable sharing} to let users
+write in a direct programming style that is automatically transformed
+to and from propagator form.
+
+\textbf{Holmes} \footnote{Holmes (i-am-tom). Haskell constraint-solving with
+propagators and CDCL. \url{https://github.com/i-am-tom/holmes}}: A reference library for constraint-solving with
+propagators and CDCL. Holmes exposes two strategies: \texttt{satisfying}
+(returns first valid configuration) and \texttt{whenever} (returns all valid
+configurations). Its README demonstrates a complete Sudoku solver.
+\subsection{Clojure Libraries}
+\label{sec:org62e9c38}
+
+\textbf{propaganda} \footnote{Nilsson, T.K. \texttt{propaganda} --- Clojure propagator
+library. \url{https://github.com/tgk/propaganda}}: A Clojure propagator library implementing
+the model from "The Art of the Propagator." Offers both an STM-based
+and an immutable implementation strategy.
+\subsection{Constraint Programming Systems}
+\label{sec:orgcef0018}
+
+\textbf{Gecode} \textsuperscript{\ref{org4786136}}: A production-quality, highly efficient constraint
+solver explicitly built on a propagator architecture. Gecode
+demonstrates that the propagator architecture is viable for
+industrial-strength constraint solving. Its propagation kernel is
+domain-independent, and propagators are first-class objects that can be
+dynamically added to a constraint model.
+
+Most modern CP systems (SICStus Prolog, ECLiPSe, SWI-Prolog's CLP
+libraries) use propagator-based architectures internally, where each
+constraint is a propagator that narrows variable domains.
+\section{A Worked Example: The Prologos Propagator Architecture}
+\label{prologos}
+To illustrate how propagator networks function as practical
+infrastructure, we describe the propagator architecture of Prologos ---
+a programming language that uses propagator networks as the unified
+substrate for type inference, multiplicity tracking (QTT), and session
+type verification.
+\subsection{Design Principles}
+\label{sec:org08bf018}
+
+Prologos's propagator network is built on three architectural principles:
+
+\begin{enumerate}
+\item \textbf{Persistent/immutable data structures}: The entire network is a pure,
+immutable value. Each operation (cell creation, propagator addition,
+cell write) returns a \emph{new} network, leaving the old one unchanged.
+This enables \(O(1)\) backtracking (keep the old reference) and safe
+parallel exploration (fork the network value).
+
+\item \textbf{Three-domain unification}: Type inference, QTT multiplicity
+tracking, and session type verification all operate on the same
+propagator network. Each domain defines its own lattice and
+propagators; cross-domain \emph{Galois connection} propagators bridge them.
+
+\item \textbf{Trait-based extensibility}: Lattice behavior (bottom, join,
+contradiction detection) is defined via a \texttt{Lattice} trait.
+New domains can be added at the library level by implementing
+the trait, without modifying the propagator infrastructure.
+\end{enumerate}
+\subsection{Core Data Structures}
+\label{sec:org91b37b5}
+
+The network is built on CHAMP (Compressed Hash Array Mapped Prefix-tree)
+persistent hash maps, giving \(O(\log_{32} N)\) lookup, insert, and delete
+with structural sharing.
+
+\begin{verbatim}
+struct cell-id(n : Nat)          ;; unique cell identifier
+struct prop-id(n : Nat)          ;; unique propagator identifier
+
+struct prop-cell
+  value      : Lattice           ;; current lattice element (starts at ⊥)
+  dependents : CHAMP(prop-id)    ;; propagators to fire on change
+
+struct propagator
+  inputs  : List(cell-id)        ;; cells this reads from
+  outputs : List(cell-id)        ;; cells this may write to
+  fire-fn : Network → Network    ;; pure state transformer
+
+struct prop-network
+  cells         : CHAMP(cell-id → prop-cell)
+  propagators   : CHAMP(prop-id → propagator)
+  worklist      : List(prop-id)  ;; propagators waiting to fire
+  fuel          : Nat            ;; step limit to prevent runaway
+  contradiction : cell-id | #f   ;; first cell that reached ⊤
+  merge-fns     : CHAMP(cell-id → (a b → merged))
+  ...                            ;; + contradiction-fns, widen-fns,
+                                 ;;   decomposition registries
+\end{verbatim}
+\subsection{The Three Lattice Domains}
+\label{sec:org5375384}
+
+\subsubsection{Type Lattice}
+\label{sec:orgbcdf05f}
+
+\begin{verbatim}
+type-bot (⊥, no information — fresh metavariable)
+    ↓
+T (concrete type expression)
+    ↓
+type-top (⊤, contradiction — incompatible types)
+\end{verbatim}
+
+The merge function attempts \emph{pure} unification (side-effect free) of
+two type expressions. If unification succeeds, the result is the unified
+type. If it fails, the result is \(\top\) (type error).
+
+A critical design choice: the type lattice's merge function uses only
+\emph{read-only callbacks} to resolve metavariables, breaking the circular
+dependency between the metavar store (which uses the network) and the
+type lattice (which the network uses).
+\subsubsection{Multiplicity Lattice}
+\label{sec:org2136a55}
+
+\begin{verbatim}
+mult-bot (⊥, no information)
+    ↓
+m0 / m1 / mw (erased, linear, unrestricted — mutually incomparable)
+    ↓
+mult-top (⊤, contradiction)
+\end{verbatim}
+
+This is a flat lattice: \(\bot \sqcup x = x\), \(x \sqcup x = x\), \(x
+\sqcup y = \top\) for \(x \neq y\). Multiplicities track how many times a
+value is used, supporting Quantitative Type Theory (QTT).
+\subsubsection{Session Lattice}
+\label{sec:org3afce1c}
+
+\begin{verbatim}
+sess-bot (⊥, no information)
+    ↓
+Send(A, S) / Recv(A, S) / Choice{...} / Offer{...} / End / ...
+    ↓
+sess-top (⊤, protocol violation)
+\end{verbatim}
+
+Session types describe communication protocols. Merge performs structural
+unification: same-polarity sessions (send + send) merge component types
+and continuations; different-polarity sessions (send + recv) produce
+\(\top\) (protocol violation). Choice labels merge covariantly (intersection);
+offer labels merge contravariantly (union).
+\subsection{Cross-Domain Propagation via Galois Connections}
+\label{sec:org31cc2e6}
+
+Different lattice domains are connected by \textbf{Galois connection
+propagators} --- pairs of monotone functions \((\alpha, \gamma)\) that
+bridge information between domains:
+
+\begin{verbatim}
+;; Type → Multiplicity bridge:
+;;   α extracts multiplicity info from type structure
+;;   γ returns ⊥ (types don't learn from multiplicities)
+
+;; Session → Type bridge:
+;;   α extracts message type from session step
+;;   γ returns ⊥ (sessions don't learn from types)
+\end{verbatim}
+
+Each Galois connection creates two unidirectional propagators (one per
+direction). The \(\alpha\) direction (concrete → abstract) extracts
+information; the \(\gamma\) direction typically returns \(\bot\) (the
+abstract domain doesn't constrain the concrete domain). More
+sophisticated connections can propagate information in both directions.
+\subsection{Scheduling Strategies}
+\label{sec:org2e3aa88}
+
+\subsubsection{Gauss-Seidel (Sequential)}
+\label{sec:org4df115a}
+
+The default scheduler processes one propagator at a time:
+
+\begin{verbatim}
+while worklist ≠ empty:
+  pop propagator p from worklist
+  apply fire-fn(p) to network, producing network'
+  if any output cell changed: enqueue dependent propagators
+  decrement fuel
+\end{verbatim}
+
+This is the simplest and typically fastest strategy for single-threaded
+execution.
+\subsubsection{BSP (Parallel)}
+\label{sec:org0876f56}
+
+The Bulk Synchronous Parallel scheduler processes all worklist entries in
+parallel against a frozen snapshot, then bulk-merges results:
+
+\begin{verbatim}
+while worklist ≠ empty:
+  Round k:
+    fire ALL propagators in worklist (in parallel, against snapshot)
+    bulk-merge all cell changes
+    enqueue affected propagators for next round
+\end{verbatim}
+
+By the CALM theorem, both strategies converge to the same fixed point.
+The BSP strategy can leverage multiple cores but may require more rounds
+(Jacobi iteration converges more slowly than Gauss-Seidel for chain
+topologies).
+\subsection{Structural Decomposition}
+\label{sec:org0d88e7b}
+
+When the network unifies two compound types (e.g., \(\text{Pi}(A_1,
+B_1)\) with \(\text{Pi}(A_2, B_2)\)), the unification propagator creates
+\emph{sub-cells} for the components (\(A_1\) vs \(A_2\), \(B_1\) vs \(B_2\)) and
+registers new sub-propagators to unify them. A deduplication registry
+prevents the same compound pair from being decomposed twice.
+
+This on-demand structural decomposition is key to handling recursive and
+compound types efficiently: cells and propagators are created only as
+needed, keeping the network sparse.
+\subsection{Example: Type Inference as Propagation}
+\label{sec:org1dea322}
+
+Consider type-checking the expression \texttt{f x} where \texttt{f : Int -> Bool} and
+\texttt{x : Int}:
+
+\begin{enumerate}
+\item Create cells: \(c_f\) (type of \texttt{f}), \(c_x\) (type of \texttt{x}), \(c_r\)
+(type of result).
+\item Write known types: \(c_f \leftarrow \text{Int} \to \text{Bool}\), \(c_x
+   \leftarrow \text{Int}\).
+\item Add application propagator: "if \(c_f = A \to B\) and \(c_x\) is
+compatible with \(A\), then \(c_r \leftarrow B\)."
+\item Propagator fires: \(c_f\) is \(\text{Int} \to \text{Bool}\), \(c_x\) is
+\(\text{Int}\). Merge \(c_x\) with domain type \(A = \text{Int}\):
+consistent. Write \(c_r \leftarrow \text{Bool}\).
+\item Quiescence: all cells stable. Result type is \(\text{Bool}\).
+\end{enumerate}
+
+If \texttt{x} had been \texttt{"hello"} (type \(\text{String}\)), step 4 would merge
+\(\text{String}\) with \(\text{Int}\), producing \(\top\) (type error) ---
+with a dependency chain explaining that the error arose from the
+application of \texttt{f} to \texttt{x}.
+\subsection{Propagators as Universal Substrate}
+\label{sec:org1cb94ce}
+
+The deepest validation of this architecture is that \emph{the same
+infrastructure serves all three domains without modification}. The
+propagator network does not know or care whether a cell holds a type, a
+multiplicity, or a session protocol. It only knows that cells have merge
+functions, propagators have fire functions, and the network runs to
+quiescence.
+
+This means that the three domains compose for free: type inference,
+multiplicity tracking, and session type verification run simultaneously
+on the same network, with Galois connections bridging information
+between them. A type error can surface from a session type constraint;
+a multiplicity violation can arise from a type structure. The
+propagator network routes information to wherever it is needed,
+automatically.
+\section{Future Directions}
+\label{sec:org56f8ccf}
+
+\subsection{Theorem Proving via Abstract CDCL}
+\label{sec:org822417e}
+
+D'Silva et al. \textsuperscript{\ref{org393d4e3}} showed that CDCL generalizes from Booleans to
+arbitrary lattices. Combined with an ATMS, this yields a
+propagator-native theorem prover: cells hold lattice values, propagators
+encode inference rules, ATMS manages hypothetical reasoning and conflict
+analysis. This could enable type-level theorem proving and automated
+capability verification without an external SMT solver.
+\subsection{User-Defined Constraint Domains}
+\label{sec:org512d634}
+
+Because lattice behavior is defined by a trait, users of a
+propagator-based language can define their own constraint domains
+entirely at the library level. A string-length-bound lattice, a
+nullability lattice, or a permission lattice can be defined, populated
+with propagators, and connected to the type system via Galois
+connections --- all without modifying the core infrastructure.
+\subsection{Distributed Propagation}
+\label{sec:org0557a49}
+
+Since propagator cells satisfy CRDT merge requirements, a propagator
+network can be partitioned across nodes. Boundary cells are replicated
+and synchronized via lattice merge. Message ordering is irrelevant
+(commutativity), and convergence is guaranteed (CALM theorem). This
+enables distributed type checking, multi-agent constraint solving, and
+decentralized belief propagation.
+\subsection{Incremental and Live Programming}
+\label{sec:orgbb8c7c4}
+
+Persistent propagator networks enable "what-if" exploration: fork the
+network, make a hypothetical change, observe consequences, and discard
+the fork at zero cost. Combined with IDE integration, this enables live
+type checking where edits propagate incrementally to diagnostics,
+completions, and refactoring suggestions.
+\subsection{Provenance and Explainability}
+\label{sec:org8e2e4d0}
+
+ATMS dependency chains provide causal explanations for every derived
+value. Combined with provenance semirings \footnote{Green, T.J., Karvounarakis, G., \& Tannen, V.
+(2007). "Provenance Semirings." \emph{PODS 2007}.},
+this enables rich answers to questions like "why does this cell have
+this type?" "what assumptions contributed?" and "what is the minimal
+change to resolve this error?" --- transforming compiler diagnostics
+from symptoms to explanations.
+\section{References}
+\label{sec:org91a08b8}
+\end{document}

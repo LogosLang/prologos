@@ -1,0 +1,847 @@
+#+TITLE: Standup — 2026-03-04
+#+DATE: 2026-03-04
+
+
+* Yesterday (since Mar 3 standup)
+
+** Audit subsystems for LE suitability & Deep Research on future LE Applications
+*** [[../tracking/2026-03-03_LE_SUBSYSTEM_AUDIT.md][Logic Engine Subsystem Audit]]
+*** [[../research/2026-03-03_PROPAGATOR_NETWORK_FUTURE_OPPORTUNITIES.md][Propagator Networks: Future Opportunities Research]]
+
+** Research and Design `session` and `defproc`
+- Completed entire design cycle using our Design Methodology on design for `session` and `defproc`
+*** [[../research/2026-03-03_PROCESS_CALCULI_SURVEY.md][Process Calculi and Session Types: A Theoretical Survey]]
+*** [[../research/2026-03-03_SESSION_TYPE_DESIGN_RESEARCH.md][Session Type Design Research: Foundations for The Process Language]]
+
+*** [[../tracking/2026-03-03_SESSION_TYPE_DESIGN.md][Session Type System: Phase II Design Document]]
+
+** P-Unify Phase 4c: Structural Decomposition Propagators
+
+Completed the propagator-based structural decomposition for unification:
+
+- *Phase 4c-a* (commit =8624a33=): Infrastructure — =structural-decomposition-propagator= creator,
+  =try-decompose-rigid-rigid= pure analysis, parameterized =current-structural-decomp-callback=
+- *Phase 4c-b* (commit =3094aa1=): Core propagators for Pi and App decomposition — when
+  =(Pi A1 B1) ≡ (Pi A2 B2)=, installs propagators on =A1≡A2= and =B1≡B2= sub-problems
+- *Phase 4c-c* (commit =2785e09=): Extended constructor decomposers + =try-unify-pure= lambda fix —
+  decomposes =Sigma=, =List=, =Vec=, =Option=, =Result=, =Pair=, =Session= constructors
+- *Phase 4c-d* (commit =6eeb049=): Phase validation complete, tracking + PIR updated
+
+Full suite: 5277 tests, 259 files, all pass
+
+** GDE Phases 1-4: Generalized Diagnosis Engine
+
+Built ATMS-backed diagnosis infrastructure:
+
+- *GDE-1* (commit =163f7c6=): Widen ATMS assumption coverage with context assumptions
+- *GDE-2* (commit =9c45b64=): Minimal diagnosis algorithm + conflict graph in ATMS
+- *GDE-3* (commit =fdf0d49=): Rich error formatting with derivation trees and diagnosis
+- *GDE-4* (commit =f7cbe22=): Structured error testing infrastructure
+
+** Rich Test Failure Diagnostics (Phases D1-D3 + D2b)
+
+Closed the gap between rich provenance-bearing errors and what appears in failure logs:
+
+- *D1* (commit =c365240=): Error diagnostic emission — =current-emit-error-diagnostics= parameter,
+  =emit-error-diagnostic= function in =errors.rkt=; emission loops in =process-string= and
+  =process-file= in =driver.rkt=. Emits =ERROR-DIAGNOSTIC:BEGIN...END= blocks to stderr.
+- *D2* (commit =b86bcc0=): Batch worker integration — =extract-error-diagnostics= parses
+  diagnostic blocks from captured stderr; structured failure logs with 4 sections
+  (Error Diagnostics / Exception / RackUnit stderr / Provenance Stats)
+- *D3* (commit =0ce10c4=): Custom =check-prologos= in =test-support.rkt= — drop-in replacement
+  for =check-equal?= that enriches rackunit failure output with =format-error= and provenance
+  chains. =error-provenance-summary= helper for type-mismatch and union-exhaustion errors.
+- *D2b* (commit =ef1ba29=): Full diagnostics in console output — failing files now dump
+  complete error diagnostics inline. =--failures= flag for instant replay of failure logs
+  without re-running tests. All diagnostics captured (not just first).
+
+Before: failure logs showed =#(struct:type-mismatch-error ...)= — opaque.
+After: failure logs show =Error at <string>:1 / Type mismatch / Expected: Nat / Got: Bool / because: ...=
+
+** Path Algebra: Phases 3d-3f (Selection Paths + get-in/update-in)
+
+Extended selection system with deep path access and algebraic operations:
+
+- *Phase 3d-a* (commit =1d342a9=): Verify sub-paths in brace items work
+- *Phase 3d-b* (commit =b288922=): Nested braces inside branch items
+- *Phase 3d-c* (commit =91528fe=): Uniform post-brace continuation
+- *Phase 3d-d* (commit =5b4d4dc=): Cons-dot normalization for chained braces
+- *Phase 3d-e* (commit =994d9fb=): E2E pipeline tests for extended selection paths
+- *Phase 3e-a* (commit =32993ad=): AST nodes and parsing for =get-in= / =update-in=
+- *Phase 3e-b/c* (commit =f5749c8=): =get-in= and =update-in= elaboration
+- *Phase 3e-f* (commit =93af4bc=): Tests for general path expressions
+- *Phase 3f* (commit =3c2f730=): Path algebra design document + grammar update
+- Expanded design doc with detailed examples in both modes (commits =4eaf6ae=, =fedcbdf=)
+
+** Efficient Nat: Phases A-C (expr-nat-val Replacing Peano Nat)
+
+Replaced O(n) Peano Nat representation with O(1) =expr-nat-val=:
+
+- *Phase A* (commit =f17c522=): Add =expr-nat-val= to AST pipeline (purely additive)
+- *Phase B* (commit =c2ad2b5=): Core behavior switch to =expr-nat-val=
+- *Phase C* (commit =5ef9fed=): Update 17 test files for new representation
+
+** Session Type Design and Planning
+
+Completed full design cycle following our Design Methodology:
+
+- *Design Document* (commit =ddac95e=): Phase II design document consolidating all decisions —
+  session types, process calculus, capability integration, WS syntax
+- *Critique Integration* (commit =19ba6a1=): Incorporated design critique feedback
+- *Implementation Plan* (commit =1c6b75c=): 8-phase roadmap with 30 sub-tasks
+- *LE Migration Plan* (commit =686a0d2=): 5 priorities, phased benchmarking strategy
+
+** Session Type Implementation: S1-S2 (Parsing)
+
+- *S1a + S2a* (commit =4a42b38=): 26 session/process surface syntax structs
+- *S1b* (commit =4f3c789=): Reserve session/process keywords in parser
+- *S1c* (commit =8cba95e=): Sexp-mode session parser — 18 tests
+- *S2b* (commit =8c750b2=): Sexp-mode process parser — 17 tests
+- *S1e + S2d* (commit =56fe397=): Macro pass-through for session/process forms + dep-graph
+- *S1d* (commit =bc6a961=): WS-mode session preparse desugaring — 16 tests
+
+** Session Type Implementation: S3 (Elaboration)
+
+- *S3a+S3b* (commit =79ced0d=): Session and process elaboration + driver integration —
+  =elaborate-session-body= (13 surface → 9 core), =elaborate-proc-body= (10 surface → 8 core),
+  4 new =elaborate-top-level= clauses, session registry
+- *S3d* (commits =a15cb7f=, =7a2d6e5=): E2E tests, unannotated proc-recv fix,
+  =pp-process= pretty-printer — 19 tests
+- *S3c* (commit =78e6638=): =throws= desugaring — =maybe-wrap-throws= wraps protocol
+  steps in =sess-offer= with =:ok= / =:error= branches — 10 tests
+- *S2c* (commit =9f7692b=): WS-mode process body desugaring — =!= reader handler,
+  full =desugar-defproc-ws= + =desugar-proc-ws= — 24 tests
+
+** Session Type Implementation: S4 (Propagator-Based Type Checking)
+
+- *S4a* (commit =c01182b=): Session lattice — =sess-bot= / =sess-top=, merge,
+  pure structural unification — 26 tests
+- *S4b+S4c* (commit =54c7c90=): Session inference propagators + duality propagator —
+  =compile-proc-to-network=, =check-session-via-propagators= — 20 tests
+- *S4d* (commit =6383f1b=): ATMS-style operation tracing for session error derivations —
+  =session-protocol-error= struct, "because:" derivation chains — 10 tests
+- *S4f* (commit =2e244b1=): Deadlock detection — =check-session-completeness=,
+  incomplete protocols, unused channels — 9 tests
+
+** Session Type Implementation: S5 (Capabilities) + S6 (Strategy)
+
+- *S5a* (commit =497bb73=): Capability binders on process headers — 12 tests
+- *S5b* (commit =ff63591=): Boundary operations (open/connect/listen) —
+  3 surface + 3 core structs, parser, elaborator, propagators, typing — 13 tests
+- *S5c* (commit =50b6616=): Delegation detection — W2002/W2003 warnings — 6 tests
+- *S6* (commit =4ddc546=): Strategy parsing + registration — =surf-strategy=,
+  =strategy-entry= struct, property validation, driver integration — 14 tests
+
+** E3 Provenance Pivot: ATMS Derivation Chains in Errors
+
+- *E3a* (commit =4e1edee=): =atms-explain= API for derivation chain extraction
+- *E3b* (commit =3aef572=): Wire ATMS derivation chains into union exhaustion errors
+- *E3c* (commit =cbe43dd=): Add provenance to =type-mismatch-error=
+- *E3d* (commit =da02fb3=): Provenance stats logging to test infrastructure
+- *E3e* (commit =0588c19=): Provenance error tests with ATMS derivation chains
+
+** Propagator Migration: P1, P3, P5, P1-G (Infrastructure)
+
+Major infrastructure migration to propagator-driven subsystems:
+
+- *P1 Constraint Retry* (commits =d2ef419= → =2de330f=): Shadow → validation → switchover → cleanup
+- *P3 Trait Resolution* (commits =ccdd042= → =478a82b=): Shadow → validation → switchover → cleanup
+- *P5 Multiplicity* (commits =9317e1e= → =f443906=): Lattice → cells → cross-domain bridge → PIR
+- *P1-G Unification* (commits =466eabf= → =09186bd=): Design → =unify*= wrapper → meta-bearing upgrade →
+  shadow validation → benchmark → switchover → rename =unify→unify-core= → PIR
+
+** P-Unify Phases 1-5: Propagator-Driven Unification
+
+- *P-U1a-b* (commits =b34e716=, =b9ceceb=): Extract classifiers as pure decomposition passes
+- *P-U2a-b* (commits =caf3328=, =0e19085=): Cell-driven contradiction checks
+- *P-U3c* (commit =73d5fd5=): Quiescence flush in structural decomposition dispatcher
+- *P-U4b* (commit =f944d2c=): Meta-aware =try-unify-pure= for transitive lattice resolution
+- *P-U5a* (commit =5c28ed0=): Post-implementation review + benchmark data
+
+** Tooling: P4 (Dep-Graph Auto-Sync)
+
+- *P4* (commit =ec10d77=): Implement =--write= mode in =update-deps.rkt= — auto-scans
+  project for actual requires/dependencies and regenerates =dep-graph.rkt=
+
+** Metrics
+
+| Metric       | Mar 3 standup | Current                    |
+|--------------+---------------+----------------------------|
+| Tests        | 5005          | 5471                       |
+| Test files   | 247           | 276                        |
+| P-Unify      | Phase 4b      | Phase 4c + P-U1-5 complete |
+| Propagators  | Legacy        | P1, P3, P5, P1-G migrated  |
+| GDE          | (none)        | Phases 1-4 complete        |
+| Diagnostics  | (none)        | D1-D3 + D2b + E3a-e        |
+| Sessions     | Design only   | S1-S6 + WS-1-5 complete    |
+| Path Algebra | Phase 3c      | Phases 3d-3f complete      |
+| Nat repr     | Peano O(n)    | expr-nat-val O(1)          |
+
+* Today
+** `session` implementation
+
+
+
+
+** Properties are sets (set-builder `:` Range Syntax note)
+
+** Examining `defr` facts `||` underlying representation
+#+begin_src quote
+
+
+#+end_src
+
+
+
+
+** [[https://www.youtube.com/watch?v=HB5TrK7A4pI]["We Really Don't Know How to Compute!" - Gerald Sussman (2011)]]
+#+begin_src quote
+ you get a better guess but now you can also make an iterative wiring diagram view of the world
+okay what are we seeing here what we're seeing is of course a machine a wiring time for a
+machine the machine is potentially infinite because it's got a copy of itself right
+there inside of itself right it's got the huron step in it the machine inside of it of course
+okay but this is a this is a way to think about things which is quite different okay turns out things may have multiple
+outputs okay this none of the ones here do but things may have multiple outputs for example
+the way you divide integers you get the quotient and the remainder okay that's it why why have to do one or
+the other and why not even think about that as being the normal way to think most processes have that property or
+what if you have things which have many things that go in and many go out but in any case
+okay we have wiring diagrams like this and of course the way in which this guy squared energy
+knows whether or not to expand himself that's a implementation question is a question
+like the difference between applicative water and normal order in calculus lambda calculus are you choosing to
+expand something when you all the inputs are there or only one input or you want the output or anything like
+
+that that's a different question okay i'm not going to worry about that right now okay
+
+
+we can make machines do it any way we like and we can have policies that can be can be can be allow you to do both
+remember a real engineer doesn't want just a religion about how
+to solve a problem like object oriented or functional or imperative
+or logic programming this piece of the problem wants to be a functional program this piece of the
+program wants to be imperative this piece wants to be object oriented and guess what this piece wants to be logically based
+and they all want to work together usefully and because of the way that the problem is
+structured whatever it is and i want i don't want to think that there's any correct answer
+to any of those...
+
+
+it would be awful bad writing writing writing a device driver in a
+functional language it would be awful bad writing anything like a symbolic manipulator
+in a thing with complicated syntax it's awful bad to write a to write a uh
+what's good a new numerical pro a numerical program in in anything but fortran
+okay that's a joke i actually fortunate fortune is a wonderful language in some ways it's the ancestor
+of the wall besides lisp fortunately the two oldest languages that still can have anybody using them
+and i think that they are the keys to everything else the current version of languages okay
+but let me go further hey what do we what can you do with these propagators and i'm only pushing this idea not
+because i think it's the right answer i'm trying to twist us so we say this is
+a different way to think okay some other we have to think 52 different ways
+to fix this problem we haven't i don't know the answer to how to get out of this i don't know how to make a machine that builds a person out of a cell
+okay or but i but i think the problem is that we've been stuck for too long thinking about the fact that we've
+been diddling with our details we've been sitting here worrying about our type system but we ought to be worrying about how to get flexible machines
+and flexible programming so here for example um yes okay one thing i could do with
+propagating is i can make i can make constraint propagators out of directional ones
+if i say that look i can make a thing that will that has an adder that knows that this is the sum of these
+two which means if it knows these it'll compute that if it knows these it computes this
+if it knows these it computes this okay it doesn't matter which the other which
+way the the information flows and in fact i could do that by just
+building two subpropagators which are directional three of them okay
+um multiplication here is a lie it's actually a little more complicated because multiplication by zero
+has special properties okay multiplication by zero it doesn't depend upon the other argument so this is just for show that
+you're seeing here so it fits on the slide and there are other things like that okay but once i can do that of course i
+can back make my electricity stuff because indeed a resist a resistor really is a two-terminal device
+with a constraint that is i times r equals v and indeed some other constraints which
+is for example the voltage is the difference of potentials from the two nodes it's connected to the current some of the currents into
+those terminals is zero that the product of the current and the voltage is the power okay and
+that that sort of thing okay i can build that sort of machine that's you know so i can build up from
+what i just showed you okay so that's nice and it all works very nicely
+but the crucial thing here is what i said before what mr radul invented uh two or three years ago
+for a doctoral thesis the idea that the idea that that the cells merge information
+monotonically so i'm going to tell you the story about you know the story about if you've got a
+barometer a stopwatch and a ruler how to measure the height of a building
+
+#+end_src
+
+
+
+** IO Library Design, Take 2
+*** 🗣️
+#+begin_src quote
+Now that we have built out our Capability Type system and our Session Type System with `session` and `defproc`, I think it's time to take a fresh look at what an idealized version of a Prologos IO Library would look like built on these foundations.
+
+Context for us to Consider:
+  - Our Principles Documents
+  - Our Past design documents on Capabilities as Types and Session Type Design
+  - Past IO Library Design Document pulled from external research
+    (We want to rethink this in light of our current infrastructure, however.)
+
+
+Things NOT to Consider:
+  Examples of past library work.
+
+
+We want an idealized library based on our Principles and Core Values in our `principles` directory--The Prologos Way.
+
+  There may be more work before we actually get to actual library code in pure Prologos. For instance, would it be ideal to have dependent send/receive? (I think so!) We talked in previous design sessions of an IOPropNet lattice. How do we handle open/stream/connect?
+
+This worlk should be considered a Phase I/II Research and Design step. (Prior research can count as a depper Phase I that this extends, now that we have more mechanisms in place to consider.)
+
+
+The outcome of this session is a design doc in our `tracking` directory, that considers past research from the first IO Library Design, but recast and reconsidered with our recently built tools (Capability Types and Session Types, with their respective PropNets).  Let's be thorough in examining our past design on `session` and capability types, their integration points in code, and if there are any gaps in realizing an ideal syntax in alignment with our Core Principles, Values, and Vision.
+
+After we have the design doc, we'll enter a cycle of clarifying and feedback, following our Design Methodology.
+
+#+end_src
+*** [[../tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md][I/O Library Design: Capabilities + Sessions + Propagators]]
+*** 🗣️
+#+begin_src quote
+  Many, many examples of `let = ...` should be `let := ...`  We've been over this syntactic issue before... You're always forgetting `let :=...`;  `=` is reserved for "unify".
+  You also often use `Nat` outside of inductive typing context, where we should be using Int. (No examples here) /frowny-face/
+
+
+  § 5.4
+  Is the ceremony of `let read-only := [attenuate sys ReadCap]` necessary?
+
+  could it not be elided with the same understanding, that, if it's coming from the `main` powerbox with `{sys : IOCap}` capabilities, that any viable subtype attenuation can be issued directly, so:
+
+  ```prologos
+  spawn (data-loader ReadCap)
+  spawn (report-writer WriteCap)
+  ```
+  Without the preceding let statement attenuations?
+
+  Is that sound reasoning? I think it'd be an ergonomics win, to reduce ceremony (there's already a bit for people to have to pick up with all of this as it is). The effect is the same, yes? You hand out a lesser authority, issued from the powerbox?
+
+
+
+
+  §10.2
+I think all MEDIUM/HIGH gaps should be included in design roadmap for implementation stage, as well as a PATH type.
+  We don't yet have Byte type designed, so will have to defer until then, Lazy IO I think needs a design iteration as well.
+  Capability Inference through call chains should be put on the roadmap phases; we should do a quick design round when we get to that phase, then.
+
+  § 10.3
+  I think dependent capabilities should be a higher priority order, perhaps at 2 or even 1. This should be in place so that IO has a concept of "what path am I allowed to touch", even, for example.
+
+  § 12
+  1. Agreed. `print` `println` and friends in prelude. file/net/db type stuff in `prologos.core.io`
+  2. Let's discuss Handle vs Channel more... give examples of both approaches with design tradeoff/ergonomics.
+  3. Now that I think about, Reading in a SQLite database as a demo is a major capstone/push for a lot of this work. Let's add Bytes to the roadmap.
+  4. How is our error handling story in sessions today? Let's discuss this more.
+  5. Ok.
+  6. Both... I definitely want to explore what the differences would look like. But both, regardless.
+
+#+end_src
+*** 🗣️
+#+begin_src quote
+  Ok, turning back to our Library Design V2.
+
+  § 12
+  2.
+  I would like to support both (Option C). I agree that exposing that session types are a tier 3 feature. I personally want to use them, but I think having a more gentle Tier 1/2 alternative for basic io is highly desirable... When thinking of the pedagogical presentation of Prologos, the fact of having to introducing session types as an up-front concept sounds like a daunting ask of people unfamiliar... I think providing both options, however, makes for a muddled mish-mash; careful to design clear separation (perhaps separate library namespaces/modules?). Maybe `io` and `fio` (functional io). We want to steer towards session as the easier-to-reach--but not forced--approach. Handling linear types need to be considered for fio, however, (familiar to Rust devs, at least)... ergonomic opportunities?
+
+
+  I read through section 12. I think I'm fine with recommended approaches, or we've already covered the open design considerations.
+
+
+  Is there any other considerations before we move this to the next design phase?
+
+
+
+
+#+end_src
+
+
+
+** Sessions as Composeable Protocols Types
+*** 🗣️ 🤯
+#+begin_src quote
+  So, I'm just thinking through the aspects of our Session types... and I'm kind of just realizing something... If a continuation of a session can be it's own type recursively... then... could the continuation of a session, also not be another session type? Do we have composable protocols-as-types... am I thinking of this correctly? That's kind of blowing my mind right now, actually.... Respond only, think through and provide examples if that helps. Let's discuss this... has that been done before???
+#+end_src
+
+*** 🤖
+#+begin_src markdown
+```markdown
+  You're absolutely right, and yes — this is a genuinely profound observation. Let me think through it with you.
+```
+
+## The Core Insight
+
+In our session types, after every operation there's a **continuation** — a type that describes "what comes next." We already use this for recursion:
+
+```prologos
+session FileRead
+  +>
+    | :read-line -> ? String? . FileRead    ;; continuation = self (recursion)
+    | :close     -> end                      ;; continuation = end (termination)
+```
+
+But there's nothing in the formalism that says the continuation *must* be `self` or `end`. It's a **type position**. So what if the continuation is... a different session type?
+
+```prologos
+session FileRead
+  +>
+    | :read-line -> ? String? . FileRead
+    | :close     -> end
+    | :upgrade   -> SecureFileRead           ;; continuation = a DIFFERENT protocol!
+```
+
+That `:upgrade` branch **transitions the protocol**. You were speaking `FileRead`, and now you're speaking `SecureFileRead`. The type checker verifies the transition. The channel is the same physical channel — only the protocol changes.
+
+## Protocol Composition: Sequencing
+
+This gets really powerful when you think about sequential composition. Consider real-world network protocols — they're almost always layered phases:
+
+```prologos
+;; Phase 1: negotiate protocol version
+session Handshake
+  ! Version
+  ? Version
+  end
+
+;; Phase 2: authenticate
+session Auth
+  ! Credentials
+  ? [Result Token AuthError]
+  end
+
+;; Phase 3: do actual work
+session FileOps
+  +>
+    | :read  -> ! Path . ? [Result String IOError] . FileOps
+    | :write -> ! Path . ! String . ? [Result Unit IOError] . FileOps
+    | :done  -> end
+```
+
+Each of those is a complete, self-contained protocol. But what you're realizing is: **what if we compose them?**
+
+```prologos
+;; HTTPS-like: handshake, then authenticate, then operate
+session SecureFileSession
+  ! Version . ? Version .                      ;; Handshake phase
+  ! Credentials . ? [Result Token AuthError] . ;; Auth phase
+  FileOps                                       ;; Operations phase (named type!)
+```
+
+The continuation after auth is `FileOps` — a whole other session type. The composed protocol IS a type. And if `FileOps` has internal recursion and branching, all of that is inherited. You've built a complex protocol by snapping together simpler pieces.
+
+## Protocol Branching: Mode Transitions
+
+It gets even wilder when you combine this with choice. A protocol can *branch* into different sub-protocols:
+
+```prologos
+session DatabaseSession
+  +>
+    | :query    -> QueryProtocol        ;; switch to query sub-protocol
+    | :admin    -> AdminProtocol        ;; switch to admin sub-protocol
+    | :close    -> end
+
+session QueryProtocol
+  ! String . ! [List String] .              ;; SQL + params
+  ? [Result [List Row] DbError] .
+  DatabaseSession                            ;; ...and back to main protocol!
+
+session AdminProtocol
+  +>
+    | :vacuum   -> ? [Result Unit DbError] . DatabaseSession
+    | :backup   -> ! Path . ? [Result Unit DbError] . DatabaseSession
+    | :drop-all -> ! Confirmation . DatabaseSession
+```
+
+Look at what's happening: `DatabaseSession` branches to `QueryProtocol`, which does its thing, and then the continuation goes *back to* `DatabaseSession`. You've got **mutual recursion between protocol types**. The protocol graph forms a state machine where named session types are states and operations are transitions.
+
+## The Really Mind-Bending Part: Capabilities Compose Too
+
+In Prologos, each session type can carry capability requirements. When you compose protocols, the capabilities compose:
+
+```prologos
+session Handshake {net :0 TlsCap}
+  ! ClientHello . ? ServerHello . end
+
+session Auth {net :0 AuthCap}
+  ! Credentials . ? Token . end
+
+session FileOps {fs :0 ReadCap}
+  +>
+    | :read -> ! Path . ? String . FileOps
+    | :done -> end
+
+;; Composed: capability requirements are the UNION
+session SecureFileSession {net :0 TlsCap, net :0 AuthCap, fs :0 ReadCap}
+  Handshake . Auth . FileOps
+```
+
+The composed protocol's authority requirements are automatically the union of its constituent protocols. The compiler can verify this. At runtime, `:0` capabilities are erased — zero cost.
+
+**Protocols compose. Capabilities compose. Types verify the whole thing.**
+
+## Has This Been Done Before?
+
+Short answer: the *theory* supports it, but nobody has made it a user-facing design feature the way you're envisioning.
+
+**What exists in the literature:**
+
+- **Toninho, Caires, Pfenning (2011)** — Session types as propositions via Curry-Howard for linear logic. In their framework, composing sessions is just the **cut rule** — the most fundamental operation in logic. So theoretically, yes, session composition is as old as linear logic itself. But their work is deeply theoretical — process calculi, not programming languages.
+
+- **Polymorphic/parameterized session types** (Caires et al., 2013; various) — Session types that take type parameters, including continuation parameters. This gives you open-ended protocols: `session Handshake[K] = ! Version . ? Version . K` where `K` is the "what comes after." This is the formal machinery that makes composition work cleanly. But again, primarily in calculi, not in user-facing languages.
+
+- **Nested session types** (Das et al., 2021) — Session types that can nest, giving more expressive protocols. Related but focused on nesting rather than sequential composition.
+
+- **Context-free session types** (Padovani, 2017; Thiemann & Vasconcelos, 2016) — Extend session types beyond regular languages to context-free, which gives more expressive composition. Powerful but adds significant complexity.
+
+- **Scribble** (Honda, Yoshida et al.) — A protocol description language for multiparty session types. Scribble has some notion of protocol "modules" that can be composed, and it's the closest practical tool. But it's a specification language, not a programming language with types.
+
+**What's potentially novel in Prologos:**
+
+1. **Protocols-as-types with named composition** — Using named session types as continuations in other session types, with the language's type system verifying the whole thing. Most implementations treat session types as monolithic specifications, not as composable building blocks.
+
+2. **Capability composition tracking** — The combination of session composition with capability composition, where the compiler automatically infers the authority union. I'm not aware of another system that does this.
+
+3. **Progressive disclosure** — Tier 1 users never see any of this. Tier 2 users see simple `with-open` brackets. Only Tier 3 users compose protocols. The protocol composition is available but never forced.
+
+4. **Propagator-based runtime** — The propagator network scheduling composed protocols is architecturally novel. Each phase of the composed protocol can be a different propagator, and the scheduler handles transitions.
+
+## The Design Question: `end`-Splicing
+
+There's one real design subtlety. If `Handshake` is defined with `end`:
+
+```prologos
+session Handshake
+  ! Version . ? Version . end
+```
+
+Then `Handshake` is a *complete* protocol. To use it as a composable prefix, you'd need to "splice out" the `end` and replace it with the next phase. Two approaches:
+
+**Approach A: Parameterized session types (continuation passing)**
+
+```prologos
+;; Open-ended: K is "what comes next"
+session Handshake[K]
+  ! Version . ? Version . K
+
+;; Closed: Handshake that ends
+type HandshakeDone = Handshake[end]
+
+;; Composed: Handshake then Auth then FileOps
+type SecureFile = Handshake[Auth[FileOps]]
+```
+
+This is the theoretically clean approach — session types are higher-kinded, parameterized by their continuation. But it adds complexity.
+
+**Approach B: Implicit `end`-replacement (`.` as sequencing operator)**
+
+```prologos
+;; Both defined as complete protocols
+session Handshake
+  ! Version . ? Version . end
+
+session Auth
+  ! Credentials . ? Token . end
+
+;; `.` between session types means "replace end with next"
+session SecureFile = Handshake . Auth . FileOps
+```
+
+The `.` operator between named session types does the `end`-substitution automatically. Simpler surface syntax, but the semantics need to be clear: `.` on session types is not the same as `.` within a session type (which separates action from continuation). Though arguably they ARE the same operation at different levels — "do this, then do that."
+
+**Approach C: The continuation position just works (what we have)**
+
+Actually... looking at our current system, if you just write a named session type in continuation position, it already works without any new mechanism:
+
+```prologos
+session SecureFileSession
+  ! Version . ? Version .           ;; inline the handshake actions
+  ! Credentials . ? [Result Token AuthError] .  ;; inline auth
+  FileOps                            ;; named type as continuation
+```
+
+You inline the phases you want and use the named type at the end. The named type in continuation position is already legal — it's just a type. No new mechanism needed. The cost is that you manually inline the prefix phases rather than referencing them by name.
+
+---
+
+So yes — you're thinking about this correctly, and it *is* a big deal. Composable protocols-as-types means you can build a **protocol library** — small, verified, reusable protocol building blocks that snap together like Lego. Handshake protocols, auth protocols, compression negotiation protocols, each defined once, composed freely, with capabilities tracking automatically.
+
+The existing theory supports it. But making it a *first-class design feature* in a practical language with nice syntax, automatic capability composition, and progressive disclosure? That's where Prologos would be doing something genuinely new.
+#+end_src
+
+
+
+
+
+
+*** 🗣️ Exploring End Splicing Options
+#+begin_src quote
+  Ok, so walk through Approach C... what we already have works, without complicating end-splicing machinery? What's the tradeoff with the considerations on end-splicing?
+#+end_src
+*** 🤖 End Splicing Considerations (Let's not...)
+#+begin_src markdown
+
+```markdown
+  Yeah, let's walk through this carefully, because I think the answer is "what we have is more powerful than it first appears, and the end-splicing question is narrower than it seems."
+```
+
+## What Already Works: Named Types in Continuation Position
+
+The core mechanism is simple. In any session type, after the `.`, there's a continuation — and that continuation is a **type**. Any session type name is a valid type. So:
+
+```prologos
+session Reading
+  +>
+    | :read-line -> ? String? . Reading  ;; continuation = self (recursion)
+    | :switch    -> Writing              ;; continuation = different session type!
+    | :done      -> end                  ;; continuation = terminal
+
+session Writing
+  +>
+    | :write-line -> ! String . Writing
+    | :switch     -> Reading                   ;; ...and back again
+    | :done       -> end
+```
+
+No new machinery. `Writing` in continuation position just resolves to the `Writing` session type. The type checker already does this — it's the same mechanism as recursive self-reference, just with a different name. You've got a **state machine** where named session types are states and operations are transitions.
+
+This gives you three composition patterns for free:
+
+### Pattern 1: Phase Transition (Sequential)
+
+```prologos
+session Handshake
+  ! Version . ? Version . Authenticated       ;; after handshake, become Authenticated
+
+session Authenticated
+  ! Credentials
+  ? [Result Token AuthError]
+  +>
+    | :ok   -> Ready                           ;; success → operational phase
+    | :fail -> end                              ;; failure → done
+
+session Ready
+  +>
+    | :query -> ! String . ? [Result Rows DbError] . Ready
+    | :close -> end
+```
+
+The protocol flows: `Handshake → Authenticated → Ready → (loop) → end`. Each phase is a named type. Each transition is verified. The **author** of each session type decides what comes next — `Handshake` says "after me comes `Authenticated`," not the caller.
+
+### Pattern 2: Mode Branching
+
+```prologos
+session DatabaseSession
+  +>
+    | :query  -> QueryMode
+    | :admin  -> AdminMode
+    | :close  -> end
+
+session QueryMode
+  ! String . ! [List Param] .
+  ? [Result [List Row] DbError] .
+  DatabaseSession                              ;; return to main protocol
+
+session AdminMode
+  +>
+    | :vacuum -> ? [Result Unit DbError] . DatabaseSession
+    | :backup -> ! Path . ? [Result Unit DbError] . DatabaseSession
+```
+
+Branch into a sub-protocol, do work, return to the parent. This is **mutual recursion** between session types — `DatabaseSession` branches to `QueryMode`, which returns to `DatabaseSession`. The protocol graph can be arbitrarily complex.
+
+### Pattern 3: Inline Prefix + Named Continuation
+
+```prologos
+session SecureFileSession
+  ;; Inline the handshake and auth operations...
+  ! Version . ? Version .
+  ! Credentials . ? [Result Token AuthError] .
+  ;; ...then transition to the named operational protocol
+  FileOps
+```
+
+You write out the prefix phases inline and use a named type as the final continuation. This is the most direct form of "do these things, then become that protocol."
+
+## So What CAN'T You Do Without End-Splicing?
+
+One specific thing: you can't write this —
+
+```prologos
+;; Three complete, self-contained protocols:
+session Handshake
+  ! Version . ? Version . end
+
+session Auth
+  ! Credentials . ? Token . end
+
+session FileOps
+  +> | :read -> ! Path . ? String . FileOps
+     | :done -> end
+
+;; HYPOTHETICAL: compose them with `.`
+session Composed = Handshake . Auth . FileOps
+```
+
+This would require the `.` operator between named types to mean "take `Handshake`, find every `end` in it, replace with `Auth`; then take that result, find every `end`, replace with `FileOps`." That's end-splicing.
+
+## Why End-Splicing Gets Complicated
+
+It seems simple — just substitute `end` → next phase. But consider:
+
+**Multiple exit points:**
+```prologos
+session MaybeAuth
+  +>
+    | :auth -> ! Credentials . ? Token . end    ;; exit point 1
+    | :skip -> end                               ;; exit point 2
+
+MaybeAuth . FileOps
+;; Both `end`s become FileOps? Probably yes — "after MaybeAuth finishes
+;; (by any path), do FileOps." That's actually reasonable.
+```
+
+OK, that case works. But:
+
+**Recursion with partial exits:**
+```prologos
+session RetryLoop
+  ! Request . ? Response .
+  +>
+    | :retry -> RetryLoop     ;; recurse (no end)
+    | :accept -> end          ;; exit
+
+RetryLoop . NextPhase
+```
+
+The `:accept` branch's `end` should become `NextPhase`. But what about `:retry → RetryLoop`? That recursive reference points to the *original* `RetryLoop` — whose `:accept` branch still says `end`. For the composition to be correct, the recursive reference needs to point to the *spliced* version.
+
+This means the `.` operator isn't a simple textual substitution — it needs to create a **new recursive type** where the recursive self-references also reflect the spliced continuation. That's:
+
+```markdown
+rec X. ! Request . ? Response .
+  +> | :retry -> X              ;; X = the whole spliced thing
+     | :accept -> NextPhase     ;; end replaced
+```
+
+Doable, but it's real type-level machinery. You're transforming recursive type definitions.
+
+**Ambiguity with mixed patterns:**
+```prologos
+session Weird
+  +>
+    | :a -> OtherProtocol    ;; continuation is ALREADY a named type
+    | :b -> end              ;; continuation is end
+
+Weird . NextPhase
+;; Replace end → NextPhase in :b branch. Fine.
+;; But :a already goes to OtherProtocol... leave it? 
+;; What if OtherProtocol also has `end`? Do we splice THAT too?
+```
+
+Do you splice transitively? Only at the top level? This is where the semantics get genuinely ambiguous.
+
+## The Tradeoff, Honestly
+
+**Without end-splicing (what we have):**
+- Protocol authors decide continuations at definition time: `Handshake` says "after me comes `Authenticated`"
+- Protocols that need to be reusable prefix phases are defined *without* `end` — they name their continuation directly
+- Protocols with `end` are *complete* — they're terminal, not composable prefixes
+- This distinction is **explicit and intentional**, not an accident
+- No new machinery, no ambiguity, no recursive type transformation
+
+**With end-splicing:**
+- Any complete protocol can be retroactively composed with any other
+- Beautiful syntax: `Composed = A . B . C`
+- But: non-trivial type machinery, ambiguous edge cases, and arguably **less clear** — when you read `Handshake`, you don't know if it's terminal or a prefix without checking who's splicing it
+
+## The Deeper Point
+
+I actually think the "without end-splicing" design is **better**, not just simpler. Here's why:
+
+When `Handshake` says `end`, it means "I'm done, the connection is finished." When `Handshake` says `. Authenticated`, it means "I'm a phase, and after me comes authentication." These are **different protocols with different meanings**. A handshake-then-close and a handshake-then-authenticate are not the same handshake with different suffixes — they're different commitments.
+
+The named-continuation approach makes protocol composition **intentional**. The author of `Handshake` explicitly declares what comes next. This is a design choice, not a mechanical operation. And in a language about correctness through types, that intentionality matters.
+
+If you want reusable phases, you define them as open-ended:
+
+```prologos
+;; Reusable: author explicitly says "something comes after me"
+session Handshake
+  ! Version . ? Version . Authenticated
+
+;; Terminal: author explicitly says "I'm the end"
+session HandshakeDone
+  ! Version . ? Version . end
+```
+
+Two types, two intentions, both clear. No machinery needed to distinguish them.
+
+So to directly answer your question: Approach C — what we already have — gives you protocol composition through named types in continuation position, mutual recursion between protocols, and branching into sub-protocols. The end-splicing question is really about whether you can *retroactively* compose protocols that were defined as terminal. And I'd argue: if they were defined as terminal, respecting that is a feature, not a limitation.
+#+end_src
+
+
+*** [[../research/2026-03-05_ATP_AS_SESSION_TYPES.org][The AT Protocol as Composable Session Types]]
+*** [[../tracking/principles/PROTOCOLS_AS_TYPES.org][Protocols as Types: Composable Session Types in Prologos]]
+
+
+** IO Library Design
+*** [[../docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md][I/O Library Design: Capabilities + Sessions + Propagators]]
+*** [[../docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md][IO Library Implementation Design]]
+
+*** 🗣️
+#+begin_src quote
+  Doc1: `/Users/avanti/dev/projects/prologos/docs/tracking/2026-03-05_IO_LIBRARY_DESIGN_V2.md`
+  Doc2: `/Users/avanti/dev/projects/prologos/docs/tracking/2026-03-05_IO_IMPLEMENTATION_DESIGN.md`
+
+
+  Doc1 describes High Level Design goals for an IO Library. This document should be considered Frozen.
+  Doc2 describes a plan for Implementation that is to realize this Library Design. We intend to work from this document as a living document through the implementation phase.
+
+  Doc2 (the implementation plan) is in early Phase III of our Design Methodology: Feedback and Critique. We are in process in improving this document.
+
+  I would like for us to audit Doc2, to check with how well it does in capturing the fidelity of the design in Doc1, and completeness in coverage. I would like Doc2 to check it's implementation guide for groundedness in our codebase. If there are gaps that need to be addressed in realizing the design in Doc1, those are to be accounted for as explicit steps in Doc2.
+
+
+  We are NOT to edit these documents on this round. We are to respond only, providing our findings and critique. Then we will consider what of this self-critique to incorporate into Doc2.
+
+
+#+end_src
+*** 
+
+
+
+
+
+
+
+** WS as primary design target
+
+#+begin_src quote
+  In the previous plan file, it was mentioned that Full WS reader integrations for .prologos files was a non-goal:
+
+```
+  Non-Goals (Explicitly Deferred)
+
+Full WS reader integration for .prologos files: Session declarations in WS mode
+also have this gap (the tests use hand-constructed datums). This plan fixes the reader
+for !/!: tokens and the preparse for process bodies. Session WS-mode will work
+once .prologos files exercise it, but that's a separate test expansion.
+match inside process bodies: Pattern matching on received values (design doc §5.5)
+is an expression-level feature that already works. The preparse just passes it through.
+new/par with deeply nested bodies: The WS reader grouping for parallel bodies
+under new needs careful handling of indentation-based blocks. The basic 2-body case
+is handled; deeper nesting may need refinement.
+```
+
+
+  I want to pushback against this strongly, and understand more this position. Pure `.prologos` WS files, is the ONLY way the user has been using this system, and is the Principle Design Target. It is the only target we actually care about supporting throughout this project.
+
+  The sexpr form is seen as a convenience form for implementation, but is not a target. Do we even need the sexpr form to be supported, to realize our design goals? Can we safely drop efforts to support sexpr form; and focus solely on supporting prologos syntax in .prologos files? Would this reduce our effort level, or is sexpr forms essential to our implementation?
+
+  What is a reasonable path to support Full WS integration for the work on `session` and `defproc` now? What is the detailed roadmap to realize Full WS support in .prologos files, across the board?
+
+#+end_src
+
+
+** incomplete standup
+
+#+begin_src quote
+  Looking at today's standup org dcoment under "Yesterday" is quite incomplete from the work actually done. We did research and design on session, adopted path algebra in the general language, and other things. Let's look at the creation time of previous standup and everything up to today's standup in our git history, to make a complete summary of work done during the previous day-interval. Only touch the section under "Ysterday (since Mar 3 standup)" You may edit today's standup org document this time, to augment the Yesterday section.
+
+#+end_src
+
+
+
