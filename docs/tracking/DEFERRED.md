@@ -529,6 +529,27 @@ The following collection items ARE also deferred (genuine infrastructure deps):
 - Fix requires deeper integration between narrowing substitution env and DT body traversal
 - Source: C3 analysis, 2026-03-08; `examples/narrowing-demo.prologos` §9
 
+### Pre-Existing Relational Runtime Gaps (identified 2026-03-14)
+These gaps were identified during WS acceptance testing for the WFLE feature. They are pre-existing
+issues in the relational subsystem (Phase 7 surface syntax), not WS-specific bugs.
+
+- **`is`-goals don't evaluate functional expressions**: `relations.rkt:321` is a stub that unifies
+  the variable with the expression as ground — doesn't actually evaluate arithmetic/functional
+  expressions. E.g., `?x is [add 1N 2N]` just unifies `?x` with the AST node `[add 1N 2N]`,
+  not with `3N`. Fix requires calling `whnf` on the expression before unification.
+- **`guard` not in parser keyword list**: The runtime handler exists in `relations.rkt:313` but
+  `guard` is not registered as a parser keyword, so WS-mode `guard [gt ?x 0N]` doesn't parse.
+  Fix: add to keyword dispatch in `parser.rkt`.
+- **`cut` not in parser keyword list**: Same as `guard` — runtime handler exists (`relations.rkt:316`)
+  but `cut` is not a parser keyword. Fix: add to keyword dispatch in `parser.rkt`.
+- **Multi-arity `|` relation variants**: `|`-separated variants (multi-clause defr sugar) don't
+  register properly with the solver runtime for dispatch. The parser produces them but the
+  runtime doesn't always see all clauses.
+- **Anonymous `rel` + `solve` integration**: Anonymous relations created with `rel` inside `solve`
+  expressions don't fully integrate — the relation isn't registered in the solver's relation
+  environment before solve dispatches.
+- Source: `examples/2026-03-14-wfle-acceptance.prologos` §F (STATUS annotations)
+
 ---
 
 ## Homoiconicity
