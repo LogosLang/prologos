@@ -338,6 +338,12 @@ solve-with default-config {:timeout 5000} (path "a" dest)
 
 ;; --- F1: is-goals (functional evaluation in clauses) ---
 ;; STATUS: WORKING (fixed — is-goal now evaluates functional expressions via nf)
+;; NOTE: is-goals use nf (full normal form) to evaluate the functional expression.
+;; LIMITATION: Nat is used here because `add`/`gt?` in the global env are Nat-specific
+;; primitive functions. Int arithmetic needs trait dispatch (Add/Ord instances),
+;; which doesn't occur inside relational `is`-goals — the nf evaluator sees the
+;; trait dict application as opaque. Fixing this requires relational-context trait
+;; resolution (deferred).
 
 defr add-one [?n ?result]
   &> (is result [add n 1N])
@@ -351,18 +357,10 @@ defr double [?n ?result]
 solve (double 5N r)
 ;; => [{:n_ 5N, :r 10N}]
 
-;; NOTE: factorial test requires 'mul' which is not yet in prelude
-;; defr factorial [+n -result]
-;;   || 0N 1N
-;;   &> (is n1 [sub n 1N])
-;;      (factorial n1 partial)
-;;      (is result [mul n partial])
-;;
-;; eval (solve (factorial 5N r))
-;; => [{:r 120N}]
-
 ;; --- F2: guard goals ---
 ;; STATUS: WORKING (fixed — guard wired through parser/elaborator, 1-arg and 2-arg forms)
+;; NOTE: Same Nat limitation as F1 — `gt?` is a Nat primitive, Int comparison
+;; needs trait dispatch which doesn't happen in guard condition evaluation.
 
 defr weighted-edge [?from ?to ?weight]
   || "a" "b" 3N
@@ -376,18 +374,27 @@ solve (positive-edge from to w)
 ;; => [{:to "b", :w 3N, :from "a"} {:to "d", :w 5N, :from "c"}]
 
 ;; --- F3: Multi-arity dispatch with | ---
-;; STATUS: PRE-EXISTING GAP — multi-arity | variants parse but don't
-;; register properly with the solver runtime.
+;; STATUS: WORKING — multi-arity | variants dispatch correctly; arity-mismatched
+;; variants are gracefully skipped by the DFS solver.
 
-;; defr list-length
-;;   | [-len]
-;;     || 0N
-;;   | [+xs -len]
-;;     &> (= xs '[])
-;;        (= len 0N)
-;;     &> (is rest [tail xs])
-;;        (list-length rest sub-len)
-;;        (is len [add sub-len 1N])
+defr describe
+  | [?x]
+    || "unknown"
+  | [?x ?detail]
+    || "alice" "engineer"
+       "bob"   "designer"
+  | [?x ?detail ?level]
+    || "alice" "engineer" "senior"
+       "bob"   "designer" "junior"
+
+solve (describe name)
+;; => [{:name "unknown"}]
+
+solve (describe "alice" detail)
+;; => [{:detail "engineer"}]
+
+solve (describe "bob" detail level)
+;; => [{:detail "designer", :level "junior"}]
 
 ;; --- F4: Anonymous relations with rel ---
 ;; STATUS: WORKING (fixed — solve dispatches on expr-rel, creates temporary relation-info)

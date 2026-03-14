@@ -547,6 +547,13 @@ issues in the relational subsystem (Phase 7 surface syntax), not WS-specific bug
   first variant only. Fix: iterate all variants or require explicit args for multi-arity rels.
 - ~~**Anonymous `rel` + `solve` integration**~~ — **RESOLVED** (commit `14c3d2b`):
   `run-solve-goal` now dispatches on `expr-rel?`, creates temporary relation-info with gensym name.
+- **Trait dispatch in relational `is`-goals and `guard` conditions**: The `nf` evaluator
+  used for `is`/`guard` evaluation doesn't trigger trait resolution. Arithmetic operators
+  like `add`, `gt?` work for Nat (primitive functions in global env) but not for Int
+  (needs `Add`/`Ord` trait instance dispatch). This forces Nat usage in relational
+  arithmetic, which is an anti-pattern outside inductive typing. Fix: add trait-aware
+  expression evaluation in the relational context, or resolve trait dicts before
+  passing expressions to `nf`.
 - Source: `examples/2026-03-14-wfle-acceptance.prologos` §F (STATUS annotations)
 
 ---

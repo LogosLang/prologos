@@ -75,10 +75,12 @@
         (when (eq? (goal-desc-kind inner) 'app)
           (neg-cb (car (goal-desc-args inner))))])]
     [(guard)
-     ;; Guard's inner goal may reference relations
-     (define inner-expr (cadr (goal-desc-args goal)))
-     (when (expr-goal-app? inner-expr)
-       (pos-cb (expr-goal-app-name inner-expr)))]
+     ;; Guard's inner goal may reference relations (absent for 1-arg guard)
+     (define gargs (goal-desc-args goal))
+     (when (pair? (cdr gargs))
+       (define inner-expr (cadr gargs))
+       (when (expr-goal-app? inner-expr)
+         (pos-cb (expr-goal-app-name inner-expr))))]
     [else (void)]))
 
 ;; Extract dep-infos from all relations in a store.
