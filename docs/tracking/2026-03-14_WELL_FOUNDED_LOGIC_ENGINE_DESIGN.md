@@ -350,7 +350,7 @@ Both engines share the same underlying propagator network. The WFLE creates bila
 ### Risk 4: ATMS interaction with bilattice cells
 **Likelihood**: Low
 **Impact**: Medium — ATMS TMS cells have their own multi-valued reading semantics
-**Mitigation**: Keep ATMS and bilattice concerns separate initially. The WFLE uses standard propagator cells (not TMS cells) for bilattice pairs. ATMS integration (hypothetical well-founded reasoning) is a future extension, not part of the initial design.
+**Mitigation**: ATMS and bilattice address orthogonal concerns (see §11.1). The ATMS handles branching (choice points, `amb`); the bilattice handles incomplete information (NAF, well-founded unknown). Within a single ATMS worldview, run the well-founded fixpoint on bilattice cells. The WFLE uses standard propagator cells (not TMS cells) for bilattice pairs — the ATMS wraps the network as today, providing worldview-scoped reads.
 
 ### Risk 5: Tabling with three-valued entries
 **Likelihood**: Low
@@ -409,14 +409,94 @@ Widening (ascending → post-fixpoint) then narrowing (descending → refined fi
 **Total**: Medium effort. The propagator infrastructure does most of the heavy lifting — the WFLE is primarily new propagator *patterns* and *wiring*, not new infrastructure.
 
 
-## 10. Open Questions
+## 10. Open Questions (Resolved)
 
-1. **Grounding**: The well-founded semantics is defined for ground atoms. Prologos uses unification variables. How do bilattice pairs interact with unification? Options: (a) ground-instantiate before WF computation (standard approach), (b) lift bilattice to first-order level (research territory).
+### Q1: Grounding — How do bilattice pairs interact with unification?
 
-2. **Stable models**: Should the WFLE also compute stable models (via AFT's stable operator)? This would enable answer-set-programming-style search. Deferred to a future extension — the well-founded fixpoint is the immediate target.
+**Resolution: Tabled evaluation with three-valued table entries (Approach C).**
 
-3. **Interaction with type checker**: The type checker uses propagators for constraint solving. Should type-level reasoning ever produce `'unknown`? Probably not for Phase 0 — unknown types are meta-variables, not three-valued results. But for dependent types with undecidable predicates, this could be useful.
+The well-founded semantics is defined for ground atoms, but Prologos uses unification variables. Three approaches were considered:
 
-4. **Performance threshold**: What overhead is acceptable for the bilattice approach vs. stratified? We need to establish this empirically. Hypothesis: for programs that are stratifiable (the common case), the stratified engine should be faster; for programs with negation cycles, the WFLE gives answers where the stratified engine gives errors.
+- **(a) Ground-instantiate**: Enumerate the Herbrand base before WF computation. Standard in ASP/Datalog but incompatible with Prologos's open-ended unification — the Herbrand base may be infinite or impractically large.
+- **(b) Lift bilattice to first-order**: Research territory. Requires constructive negation (complement computation over constrained substitutions). Theoretically elegant but significantly harder to implement.
+- **(c) Tabled evaluation with partial answers**: SLG-resolution style (as in XSB Prolog). Each tabled predicate accumulates answers incrementally. Negation checks the table: if complete (all derivations explored), use closed-world assumption; if incomplete, delay the negative literal and revisit when the table grows.
 
-5. **Negation in WS-mode**: The current WS-mode reader parses `not` as a goal modifier. Does the surface syntax need any changes for well-founded programs? Likely no — the change is purely in the solver backend.
+Approach (c) fits most naturally because Prologos already has tabling infrastructure (`tabling.rkt`). The bilattice pairs store tabled answer sets: lower bound = answers proven so far, upper bound = answers not yet ruled out. Three-valued table entries (Phase 5 in §9) implement this directly. Table completion detection triggers the transition from `'unknown` to definite.
+
+### Q2: Stable models — Should the WFLE compute them?
+
+**Resolution: Deferred, but the composition path is clear.**
+
+The well-founded fixpoint is always unique and polynomial-time. Stable models (answer sets) can be multiple and NP-hard to enumerate. Both are AFT fixpoints:
+- Well-founded = ≤_p-least fixpoint of S_A (unique, cautious)
+- Stable = exact fixpoints of S_A (possibly multiple, credulous)
+
+The WFLE targets the well-founded fixpoint initially. Stable model enumeration follows naturally by composing ATMS with bilattice: after computing the well-founded fixpoint, for each `'unknown` atom, use `atms-amb` to create choice points (assume true vs. false). Each consistent combination that produces an exact fixpoint (no remaining unknowns) is a stable model. This is the Option 3 composition (§11.1) — ATMS handles the branching over unknowns, bilattice handles the negation semantics.
+
+### Q3: Interaction with type checker — Should types ever be `'unknown`?
+
+**Resolution: Not directly, but `'unknown` maps to "emit runtime check."**
+
+The type checker should continue producing types or errors. It should not produce `'unknown` as a type. But when a dependent type's predicate involves logic programming with negation cycles (e.g., a type-level guard calling a relation with well-founded undeterminacy), the type checker delegates to the WFLE and interprets the three-valued result:
+
+- `'true` → type checks (static guarantee)
+- `'false` → type error (static rejection)
+- `'unknown` → insert a **runtime guard** (the theory doesn't determine this statically)
+
+This gives `'unknown` a natural operational semantics at the type level: it's the **boundary between static and dynamic verification**. The type system admits the program but instruments it with a runtime check. This connects directly to the runtime monitoring story in `FORMAL_MODELING_ON_PROPAGATORS.org` §7.3.4 — temporal properties that can't be verified statically compile to runtime monitors using the same propagator infrastructure.
+
+### Q4: Performance threshold — What overhead is acceptable?
+
+**Resolution: Empirical benchmark plan.**
+
+Hypothesis: for stratifiable programs (the common case), the stratified engine should be ~1.5-2× faster (no bilattice cell overhead). For programs with negation cycles, the WFLE gives answers where the stratified engine gives compile errors (qualitative improvement, not quantitative).
+
+Benchmark plan:
+1. Run the existing logic-programming test suite on both engines
+2. Compare wall time for stratifiable programs (expect stratified to win)
+3. Compare answers for programs with negation cycles (expect WFLE to produce results where stratified rejects)
+4. Measure cell count and propagator firing count for overhead characterization
+5. Establish a threshold: if WFLE overhead on stratifiable programs exceeds 3×, investigate optimization (lazy upper-bound cell creation, elide bilattice pairs for atoms with no negative dependencies)
+
+### Q5: WS-mode syntax — Any changes needed?
+
+**Resolution: No syntax changes. Backend-only.**
+
+The WS-mode reader already parses `not` as a goal modifier. The solver backend switch is transparent to the surface language. The only user-visible difference is output: where the stratified engine rejects a program with cyclic negation, the WFLE returns `'unknown` for undetermined atoms.
+
+One potential future surface addition (not part of this design): a `certain?` query form that exposes the three-valued result — `[certain? [ancestor avanti bob]]` returning `'true`/`'false`/`'unknown`. This is syntactic sugar over the existing query mechanism, not new infrastructure.
+
+
+## 11. Resolved Design Decisions
+
+### 11.1 Choice Points: ATMS and Bilattice Compose Orthogonally (Option 3)
+
+**Decision**: The ATMS handles **branching** (choice points, `amb`, disjunctive alternatives). The bilattice handles **incomplete information** (NAF, well-founded undeterminacy). They compose orthogonally — within a single ATMS worldview, the well-founded fixpoint runs on bilattice cells.
+
+**Three options were considered**:
+
+**Option 1 — ATMS on top (layered)**: Run a separate well-founded fixpoint per worldview. Clean but potentially expensive (full re-computation per worldview).
+
+**Option 2 — ATMS-aware bilattice (integrated)**: Bilattice cells hold supported lower/upper bounds tagged with assumption sets, producing worldview-dependent bilattice gaps. Efficient (one fixpoint, multiple readings) but conflates two different kinds of uncertainty.
+
+**Option 3 — Orthogonal composition (chosen)**: ATMS manages worldview alternatives; bilattice manages negation-as-failure. Within each worldview, the bilattice converges independently. The ATMS's `atms-solve-all` enumerates worldviews; for each, the bilattice produces three-valued results.
+
+**Rationale**: The two concerns are semantically distinct:
+- "Which branch to take?" → ATMS (alternatives are *choices*, mutually exclusive)
+- "Can the theory determine this?" → bilattice (unknown is *epistemic*, not a choice)
+
+Conflating them (Option 2) loses this distinction. A `'unknown` result should mean "the theory genuinely doesn't determine this," not "we haven't explored all branches yet."
+
+**Implementation**: The existing `infra-state` wraps `atms` which wraps `prop-network`. The WFLE creates bilattice pairs as standard propagator cells within the network. The ATMS manages assumptions and worldviews as today. The solver dispatch (`wf-engine.rkt`) runs `run-to-quiescence` on the bilattice-augmented network, then reads results under the current worldview. No structural changes to `atms.rkt`.
+
+**Composition for stable models (future)**: When the well-founded fixpoint produces `'unknown` atoms, `atms-amb` can create choice points over those atoms to enumerate stable models. This is the clean decomposition: bilattice identifies *what's undetermined*, ATMS searches *how to resolve it*.
+
+### 11.2 Execution Model: Simultaneous Convergence
+
+**Decision**: Both μ-cells (lower bounds, ascending) and ν-cells (upper bounds, descending) fire in the **same `run-to-quiescence` pass**. There is no turn-taking, no priority scheduling, no stratum barriers.
+
+**Rationale**: All propagators are monotone in the precision ordering ≤_p on L² (lower bounds only rise, upper bounds only fall). The entire bilattice network is a single monotone operator on L², and Knaster-Tarski guarantees convergence regardless of firing order. The BSP scheduler's confluence property (CALM theorem) extends to mixed-direction cells because the precision ordering makes the product lattice well-defined.
+
+**Tradeoff**: This trades **space** (2× cells) for **scheduling simplicity** (no reset logic, no re-convergence, single pass). For the well-founded semantics (alternation depth 1), this is optimal — no nested fixpoints need resetting. For Level 2+ alternation (future: Approach C evolution), the simultaneous approach would need to be augmented with priority-aware scheduling.
+
+**When to evolve to Approach C**: When the system needs to compute properties like `νX. μY. φ(X,Y)` — nested alternating fixpoints where the inner μ must fully reconverge each time the outer ν takes a step. This arises in response properties (`AG(p → AF q)`), coinductive types with nested inductive substructure, and full μ-calculus model checking. The bilattice infrastructure from Approach A carries over; only the scheduler needs augmentation.
