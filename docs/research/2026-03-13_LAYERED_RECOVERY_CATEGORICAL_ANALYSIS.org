@@ -1,6 +1,6 @@
 #+TITLE: The Categorical Structure of Layered Recovery: Grothendieck Opfibrations over Well-Founded Bases
 #+AUTHOR: The Prologos Project - From Zachary Larson
-#+DATE: 2026-03-13 (revised 2026-03-14)
+#+DATE: 2026-03-14
 
 * Abstract
 
@@ -11,30 +11,31 @@ sequencing), and the type checker (reactive constraint resolution). Each system
 faces the same fundamental problem: recovering non-monotone behavior on a
 monotone propagator substrate.
 
-We show that all three systems are instances of a common categorical pattern: a
-*Grothendieck opfibration* over a *well-founded base category*, where each fiber
-is a complete lattice equipped with a monotone endofunctor, within-fiber
+We show that all three systems are instances of a common categorical pattern: an
+*opfibration with cleavage* over a *well-founded base category*, where each
+fiber is a complete lattice equipped with a monotone endofunctor, within-fiber
 computation is fixpoint iteration (Knaster-Tarski), and exactly one inter-fiber
 transition is permitted to be non-monotone (the barrier). Fibers may optionally
 carry additional monoidal or quantale enrichment when sequential composition is
 meaningful in that domain.
 
-This framing supersedes our earlier characterization in terms of
-quantale-enriched lattices. While the quantale structure is genuinely
-load-bearing for the effect order system (System II) — where the quantale
-morphism preserves sequential composition across the session-to-effect bridge —
-it is incidental to the logic engine (System I), whose stratified negation and
-ATMS layers operate on lattice and sheaf-theoretic structure alone. The
-opfibration framework is the most general category that honestly captures all
-three systems without over-attributing structure to those that do not require it.
+The quantale structure is genuinely load-bearing for the effect order system
+(System II), where the quantale morphism preserves sequential composition across
+the session-to-effect bridge, but incidental to the logic engine (System I),
+whose stratified negation and ATMS layers operate on lattice and sheaf-theoretic
+structure alone. The opfibration framework is the most general category that
+honestly captures all three systems without over-attributing structure to those
+that do not require it.
 
 We further characterize the ATMS (Assumption-based Truth Maintenance System) as
-a *sheaf on a dynamically-refined site*, where nogoods define a consistency
+a *presheaf on a dynamically-refined consistency site*, where nogoods define a
 topology on the Boolean algebra of assumption sets, and nogood discovery is a
-global topology refinement — an operation that modifies the base of the inner
-fibration rather than any individual fiber. This cross-level interaction (fiber
-computation modifying the base) is a distinctive feature not captured by the
-earlier quantale framing.
+global topology refinement — an operation that modifies the base of the
+worldview fibration rather than any individual fiber. The stratification and
+worldview axes are orthogonal, forming a product base B_strata × B_worldviews
+with a one-directional cross-level interaction: within-fiber computation
+(propagation discovering contradictions) can refine the worldview-axis topology
+(adding nogoods), but not vice versa.
 
 * 1. The Three Systems
 
@@ -193,24 +194,36 @@ pattern.
 
 The global computation is the colimit construction in the total category ∫F.
 
-*** 1.1.4 The Full Structure: Double Fibration
+*** 1.1.4 The Full Structure: Bifibered Over a Product Base
 
-System I's complete categorical structure is a *double fibration*:
+System I's complete categorical structure is a *bifibered structure over a
+product base*:
 
 #+begin_example
-  ∫_W ∫_k L(k, W)
+  L(k, W) fibered over B_strata × B_worldviews
 
-  Outer axis: Worldviews W ∈ Valid(Σ, N)  [sheaf over dynamically-refined site]
-  Inner axis: Strata k ∈ {0, ..., n}     [opfibration over well-ordered base]
-  Fiber:      L(k, W) = complete lattice of interpretations at stratum k
-              under worldview W
+  Strata axis:    k ∈ {0, ..., n}        [opfibration over well-ordered base]
+  Worldview axis: W ∈ Valid(Σ, N)        [presheaf over dynamically-refined site]
+  Fiber:          L(k, W) = complete lattice of interpretations at stratum k
+                  under worldview W
 #+end_example
 
-The nesting order matters: stratified evaluation runs *within* each worldview.
-The function =stratified-solve-multi= in =stratified-eval.rkt= evaluates all
-strata for a fixed worldview. The function =atms-solve-all= in =atms.rkt=
-enumerates worldviews *after* (or around) the stratified evaluation. So
-worldviews are the outer axis, strata the inner.
+The two axes are *orthogonal*, not nested. In the implementation:
+- Stratification is the *default evaluation engine* for all relational queries.
+  The function =stratified-solve-multi= in =stratified-eval.rkt= evaluates
+  strata bottom-up — this is the universal code path regardless of ATMS.
+- The ATMS is *optional and value-level*. It is activated only when =amb= creates
+  choice points. The function =atms-solve-all= in =atms.rkt= enumerates
+  worldviews as a separate operation, not as a wrapper around stratified
+  evaluation.
+- Neither axis modifies the other's structure: stratified evaluation within one
+  worldview does not change the worldview, and worldview enumeration does not
+  change the strata ordering.
+
+The one interaction between axes is the *nogood side-channel*: a nogood
+discovered during within-fiber propagation (strata axis) refines the consistency
+topology (worldview axis). This is a one-directional cross-level effect — fiber
+computation modifying the worldview base — not a composition of fibrations.
 
 *Key structural properties:*
 
@@ -421,26 +434,27 @@ violate monotonicity.
 
 * 2. The Common Categorical Structure
 
-** 2.1 Definition: Stratified Recovery System (Revised)
+** 2.1 Definition: Stratified Recovery System
 
-A *stratified recovery system* is a Grothendieck opfibration p : E → B where:
+A *stratified recovery system* is an opfibration with cleavage p : E → B where:
 
 1. *B* is a well-founded category (the /base/ — typically a finite poset of
    strata, a chain of processing stages, or a well-ordered set).
 2. For each object b ∈ B, the fiber E_b is a *complete lattice* equipped with a
    monotone endofunctor F_b : E_b → E_b (the /propagation phase/). By
    Knaster-Tarski, F_b has a least fixpoint lfp(F_b).
-3. For each morphism f : b → b' in B, the transition functor
-   f_! : E_b → E_{b'} (the opcartesian lifting) carries fixpoints from fiber b
-   to initial conditions for fiber b'. All transition functors are monotone
-   except at most one, which is the /barrier/.
+3. For each morphism f : b → b' in B, a *chosen lift* f_! : E_b → E_{b'}
+   carries fixpoints from fiber b to initial conditions for fiber b'. The
+   cleavage provides a specific lift at each transition; the lift may or may not
+   be unique (see §2.3). All chosen lifts are monotone except at most one,
+   which is the /barrier/.
 4. The *global computation* is the Kleene iteration in the total category ∫E:
    compute lfp(F_b) in each fiber bottom-up along B, transporting results via
-   transition functors.
+   chosen lifts.
 
-This definition subsumes the earlier tuple-based definition $(L, F_m, f_{nm}, n)$
-as the special case where B is a linear order and all fibers are the same
-lattice.
+The special case where B is a linear order and all fibers are the same lattice
+reduces to a tuple $(L, F_m, f_{nm}, n)$: a substrate lattice L, a monotone
+endofunctor F_m, a non-monotone barrier f_{nm}, and a stratification depth n.
 
 ** 2.2 Optional Enrichment: Quantale Structure
 
@@ -482,7 +496,39 @@ sequential composition needs preservation. System III has quantale structure in
 the type cell fiber (where substitution composition matters) but not in the
 readiness or action fibers.
 
-** 2.3 Inter-Fiber Connections: Local Adjunctions
+** 2.3 Cleavage, Not Strict Opfibration
+
+A strict Grothendieck opfibration requires opcartesian liftings — lifts with a
+*universal factorization* property (uniqueness up to isomorphism). Not all three
+systems satisfy this.
+
+The test is *determinism*: given the fixpoint of stratum k, is the
+initialization for stratum k+1 uniquely determined?
+
+| System | Barrier operation        | Deterministic? | Opcartesian? |
+|--------+--------------------------+----------------+--------------|
+| Logic  | NAF (null? check)        | Yes            | Yes          |
+| Types  | Resolution commitment    | Yes*           | Yes*         |
+| Effects| Effect linearization     | No             | No           |
+
+(*) Under the non-overlapping instance invariant: each (trait, type-args) pair
+has at most one valid resolution (monomorphic lookup by key, parametric
+most-specific-wins with ambiguity rejection).
+
+The effect execution barrier (System II) is not opcartesian because multiple
+valid topological sorts of a partial order exist. When effects e₁ and e₂ are
+unordered (neither e₁ < e₂ nor e₂ < e₁), both [e₁, e₂] and [e₂, e₁] are valid
+linearizations. The implementation chooses one (via canonical enumeration order),
+but this choice is contingent — it lacks the universal property.
+
+The appropriate generalization is an *opfibration with cleavage*: a choice of
+lift at each transition, which may or may not be unique. In fibration theory, a
+cleavage is "a choice of cartesian lifting for every object and morphism." A
+fibration with cleavage is weaker than a split fibration (where the choice is
+functorial). Systems I and III have canonical (unique) lifts; System II has
+chosen lifts.
+
+** 2.4 Inter-Fiber Connections: Local Adjunctions
 
 In the Grothendieck opfibration framework, cross-domain connections between
 different fiber lattices are *local adjunctions* — adjunctions (α_b, γ_b)
@@ -513,7 +559,7 @@ sequential composition. The one-sided connection in System III (α without a
 proper γ) reflects the non-monotonicity of trait resolution commitment — the
 barrier operation prevents the formation of a full adjunction.
 
-** 2.4 Theorem: Stratification Preserves Fixpoint Equivalence
+** 2.5 Theorem: Stratification Preserves Fixpoint Equivalence
 
 *Theorem* (Fixpoint Equivalence). Let p : E → B be a stratified recovery system
 (Grothendieck opfibration over a well-founded base). If the composed transition
@@ -544,7 +590,7 @@ information could change which instance is selected). This is why Prologos
 rejects overlapping instances — it is a /semantic requirement for confluence/,
 not merely a design choice.
 
-** 2.5 Theorem: Quantale Morphism Preservation (for Enriched Fibers)
+** 2.6 Theorem: Quantale Morphism Preservation (for Enriched Fibers)
 
 When fibers carry quantale enrichment and inter-fiber connections are quantale
 morphisms, an additional soundness result holds.
@@ -570,14 +616,16 @@ in another domain (e.g., effect positions). This theorem applies to System II
 (sessions ⇌ effects) but not to System I (no cross-domain bridge) or the R and A
 fibers of System III (no quantale enrichment).
 
-** 2.6 The Common Structure: Diagram
+** 2.7 The Common Structure: Diagram
 
 #+begin_example
                     ┌──────────────────────────────────┐
-                    │   GROTHENDIECK OPFIBRATION        │
+                    │   OPFIBRATION WITH CLEAVAGE       │
                     │   over well-founded base B        │
                     │                                  │
                     │   p : E → B                      │
+                    │   (canonical lifts for I, III;   │
+                    │    chosen lifts for II)           │
                     └───────────────┬──────────────────┘
                                     │
               ┌─────────────────────┼─────────────────────┐
@@ -768,9 +816,10 @@ the nogood set only grows (N ⊆ N'), and the valid worldview set only shrinks
   (P(Σ)^op, J_{N_0}) → (P(Σ)^op, J_{N_1}) → ... → (P(Σ)^op, J_{N_final})
 #+end_example
 
-This chain is itself a well-founded diagram — it can be viewed as a *second
-opfibration*, orthogonal to the stratification axis. The full structure is then
-an opfibration over a 2-dimensional base: strata × topology-refinement-stages.
+This chain is itself a well-founded diagram — a second opfibration, orthogonal
+to the stratification axis. The full structure is a fibration over the product
+base B_strata × B_worldviews (see §1.1.4), with the nogood side-channel
+providing the one-directional cross-axis interaction.
 
 ** 4.4 Worldview Enumeration: Sections of the Presheaf
 
@@ -912,7 +961,7 @@ fuel limit (as System III does with fuel=100). In the opfibration framing: the
 Kleene iteration in the total category is truncated after finitely many steps.
 This is a pragmatic safety valve, not a theoretical guarantee.
 
-** 6.2 The Adaptation Recipe (Revised)
+** 6.2 The Adaptation Recipe
 
 For any new non-monotonic domain:
 
@@ -926,9 +975,11 @@ For any new non-monotonic domain:
 3. *Identify the non-monotone operation f*: What operation violates monotonicity?
    Classify it (A, B, C, or D above).
 
-4. *Construct the opfibration*: Define the base category B (strata ordering),
-   the fibers (lattices at each stratum), and the transition functors (including
-   exactly one non-monotone barrier).
+4. *Construct the opfibration with cleavage*: Define the base category B (strata
+   ordering), the fibers (lattices at each stratum), and the chosen lifts
+   (transition functors, including exactly one non-monotone barrier). Determine
+   whether lifts are canonical (opcartesian — unique) or chosen (contingent on
+   implementation details like enumeration order).
 
 5. *If cross-domain interaction is needed*: Define a local adjunction
    (α, γ) : E_b ⇌ E_{b'} between the relevant fibers. If both fibers are
@@ -1007,46 +1058,58 @@ load-bearing for the stratified recovery pattern.
 The opfibration is the only structure required by all three systems. Everything
 else is optional enrichment, present where the domain demands it.
 
-** 7.4 Open Questions
+** 7.4 Resolved Questions
 
-1. *Is the barrier an opcartesian lifting?* Opcartesian liftings have a universal
-   (unique factorization) property. The negation barrier (System I) is
-   deterministic — given a fixpoint, negation evaluation is determined — which
-   suggests universality. But effect execution (System II) involves choosing a
-   linearization, which may not be universal. Must the barrier be opcartesian, or
-   is a general functor between fibers sufficient? If the latter, the structure
-   is not a true Grothendieck opfibration but a /lax/ variant.
+Three structural questions were investigated by cross-referencing the
+implementation against fibration theory. The resolutions are:
 
-2. *Nesting order of the double fibration.* For System I, we argued that the
-   correct nesting is ∫_W ∫_k L(k,W) (worldviews outside, strata inside)
-   because =stratified-solve-multi= runs within a fixed worldview, and
-   =atms-solve-all= enumerates worldviews around the stratified evaluation.
-   But are the two axes truly nested, or more independent? The ATMS worldview
-   and the stratification stratum evolve on different timescales and could
-   potentially be modeled as a product B_strata × B_worldviews rather than a
-   nested construction.
+1. *Cleavage, not strict opfibration (§2.3).* The negation barrier (System I)
+   and resolution commitment barrier (System III) are opcartesian — given the
+   fixpoint, the transition is uniquely determined (NAF is a pure =null?= check;
+   resolution is unique under the non-overlapping instance invariant). The effect
+   execution barrier (System II) is /not/ opcartesian: multiple valid topological
+   sorts of a partial order exist, and the implementation makes a contingent
+   choice. The common framework is therefore an opfibration with cleavage
+   (chosen lifts), not a strict Grothendieck opfibration.
 
-3. *Internalizing the Herbrand base.* Negation-as-failure computes the complement
-   of derivability relative to a fixed ambient set (the Herbrand base H). In the
-   opfibration picture, H is a parameter of the transition functor, not intrinsic
-   to the fibered structure. Can H be internalized — perhaps as a terminal object
-   in the fiber, or as a representing object for the negation functor? The answer
-   may connect to the Lawvere-style characterization of negation in hyperdoctrines.
+2. *Product base, not nested fibration (§1.1.4).* The stratification and
+   worldview axes are orthogonal. Stratified evaluation is the default path for
+   all relational queries (=stratified-solve-goal= is called unconditionally in
+   =reduction.rkt=). The ATMS is optional and value-level, activated only when
+   =amb= creates choice points. Neither axis modifies the other's structure
+   directly. The correct model is a fibration over the product base
+   B_strata × B_worldviews, with a one-directional side-channel (nogoods
+   discovered during stratum-axis computation refine the worldview-axis
+   topology).
 
-4. *Fibrations over evolving sites.* The ATMS's dynamic topology refinement
-   (nogood accumulation modifying the base) is not captured by the standard
-   Grothendieck construction, which assumes a fixed base. Is there a known
-   categorical framework for fibrations where the base evolves? Candidates
-   include: indexed categories over a filtered diagram of sites, or
-   coalgebraic state machines on sites.
+3. *Herbrand base is properly external.* Negation-as-failure in Prologos is
+   pure proof-search failure (=solve-single-goal= returns empty → negation
+   succeeds). It does not complement against an explicit universe. In the
+   Lawvere hyperdoctrine framework, this corresponds to the /closed-world
+   assumption/ — a metalogical operation on the fixpoint, not an internal
+   complement in a Boolean fiber. The Herbrand base H enters only as the carrier
+   of the powerset lattice ℘(H) (determining /what/ the fiber /is/) and need not
+   be internalized. Internalization would be needed only for /explicit negation/
+   (where ¬P is a derivable positive fact), which would require Boolean
+   hyperdoctrine structure (complements in each fiber P(A)). Under NAF, the
+   current implicit treatment is categorically honest.
 
-5. *The 2-categorical structure.* Do the bridge propagators between fibers form
+** 7.5 Open Questions
+
+1. *Fibrations over evolving sites.* The ATMS's dynamic topology refinement
+   (nogood accumulation modifying the worldview base) is not captured by the
+   standard Grothendieck construction, which assumes a fixed base. Is there a
+   known categorical framework for fibrations where the base evolves? Candidates
+   include: indexed categories over a filtered diagram of sites, or coalgebraic
+   state machines on sites.
+
+2. *The 2-categorical structure.* Do the bridge propagators between fibers form
    2-cells in a 2-category whose 1-cells are the local adjunctions? If so, what
    coherence conditions arise? The natural home for multiple interacting
    quantale-enriched fibers might be a *quantaloid* — a category enriched over
    quantales (Stubbe 2013).
 
-6. *Graded monads and the Grothendieck construction.* Fujii (2019) showed that
+3. *Graded monads and the Grothendieck construction.* Fujii (2019) showed that
    graded monads can be understood via the Grothendieck construction: the
    algebras of an indexed state monad are sections of a 2-categorical fibration.
    Our stratified recovery systems have a graded structure (indexed by stratum).
@@ -1069,17 +1132,28 @@ else is optional enrichment, present where the domain demands it.
   Galois Connections.
   [[https://math.libretexts.org/Bookshelves/Applied_Mathematics/Seven_Sketches_in_Compositionality:_An_Invitation_to_Applied_Category_Theory_(Fong_and_Spivak)/01:_Generative_Effects_-_Orders_and_Adjunctions/1.03:_Galois_Connections][LibreTexts]]
 
-** 8.2 Grothendieck Fibrations and Indexed Categories
+** 8.2 Grothendieck Fibrations, Indexed Categories, and Hyperdoctrines
 
 - nLab. "Grothendieck fibration."
   [[https://ncatlab.org/nlab/show/Grothendieck+fibration][nLab]]
 - nLab. "Grothendieck construction."
   [[https://ncatlab.org/nlab/show/Grothendieck+construction][nLab]]
+- nLab. "hyperdoctrine."
+  [[https://ncatlab.org/nlab/show/hyperdoctrine][nLab]]
 - Streicher, T. "Fibred Categories à la Bénabou."
   [[https://www2.mathematik.tu-darmstadt.de/~streicher/FIBR/FiBo.pdf][PDF]]
 - Turkenburg, R. et al. (2023). "Forward and Backward Steps in a Fibration."
   /CALCO 2023/.
   [[https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CALCO.2023.6][Dagstuhl]]
+- Milewski, B. (2019). "Fibrations, Cleavages, and Lenses."
+  [[https://bartoszmilewski.com/2019/10/09/fibrations-cleavages-and-lenses/][Blog]]
+- Loregian, F. & de Oliveira Santos, E. (2019). "Categorical Notions of
+  Fibration." /Expositiones Mathematicae/ 38(4).
+  [[https://arxiv.org/pdf/1806.06129][arXiv]]
+- Bonchi, F. et al. (2024). "When Lawvere Meets Peirce: An Equational
+  Presentation of Boolean Hyperdoctrines." /MFCS 2024/.
+  [[https://drops.dagstuhl.de/storage/00lipics/lipics-vol306-mfcs2024/LIPIcs.MFCS.2024.30/LIPIcs.MFCS.2024.30.pdf][Dagstuhl]]
+- Lawvere, F.W. (1969). "Adjointness in Foundations." /Dialectica/ 23(3-4).
 
 ** 8.3 Graded Monads and Effect Systems
 
