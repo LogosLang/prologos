@@ -58,40 +58,23 @@ The engine is built in 7 phases:
 
 Per workflow rules, a `.prologos` acceptance file is written BEFORE implementation. This file exercises the WFLE through WS-mode surface syntax — the primary design target.
 
-**File**: `examples/2026-03-14-wfle-acceptance.prologos`
+**File**: `examples/2026-03-14-wfle-acceptance.prologos` (commit `742e075`)
 
-Target expressions (commented out, uncommented as phases complete):
+9 sections covering the full relational language capability envelope:
 
-```prologos
-ns wfle-acceptance
+| Section | Coverage | Status |
+|---------|----------|--------|
+| A. Baseline | facts, rules, recursion, unification, NAF, modes | ✅ Passing |
+| B. Solver configuration | `solver` form, `solve-with`, `semantics` key | Commented |
+| C. Well-founded semantics | odd cycles, self-ref, Nixon diamond, win/lose | Commented |
+| D. Explain and provenance | three-valued explanations, cycle info | Commented |
+| E. Tabling interaction | `:tabled` + WF, per-variant certainty | Commented |
+| F. Advanced relational | `is`, `guard`, `cut`, multi-arity, `rel`, `solve-one`, `schema` | Commented |
+| G. Functional interaction | solve results in def/let/match, QTT | Commented |
+| H. Type system interaction | Solver/Goal/Relation types | Commented |
+| I. Edge cases | empty relations, timeout, engine switching | Commented |
 
-;; -- Phase 4a: Basic WF solving --
-;; solver wf-solver
-;;   semantics well-founded
-
-;; rel [even Nat]
-;;   | [even zero]
-;;   | {n : Nat} -> [even n] -> [even [succ [succ n]]]
-
-;; rel [win Pos]
-;;   | {p q : Pos} -> [move p q] -> [not [win q]] -> [win p]
-
-;; -- Phase 4a: Classic WF programs --
-;; rel [p] := [not [q]]
-;; rel [q] := [not [p]]
-;; ;; Both p and q should be 'unknown under WF semantics
-
-;; -- Phase 5: Tabled WF queries --
-;; rel [reaches Node Node] :tabled
-;;   | {x y : Node} -> [edge x y] -> [reaches x y]
-;;   | {x y z : Node} -> [edge x z] -> [reaches z y] -> [reaches x y]
-
-;; -- Phase 6: Explanation --
-;; explain [win a] with wf-solver
-;; ;; Should produce proof tree or cycle explanation
-```
-
-This file is the Level 3 validation gate. The WFLE is not DONE until all target expressions run with 0 errors via `process-file`.
+This file is the Level 3 validation gate. The WFLE is not DONE until all target expressions run with 0 errors via `process-file`. Sections B and F also serve as a gap-detection mechanism — features that exist at sexp level but may not be fully wired to WS mode.
 
 
 ## Critical Path
