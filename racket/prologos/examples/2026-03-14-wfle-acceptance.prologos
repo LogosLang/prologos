@@ -362,11 +362,18 @@ solve (double 5N r)
 ;; => [{:r 120N}]
 
 ;; --- F2: guard goals ---
-;; STATUS: PRE-EXISTING GAP — guard not in parser keyword list, not parsed
-;; from surface syntax. Runtime handler exists but unreachable from user code.
+;; STATUS: WORKING (fixed — guard wired through parser/elaborator, 1-arg and 2-arg forms)
 
-;; defr positive-edge [?from ?to ?weight]
-;;   &> (weighted-edge from to weight) (guard [gt? weight 0N])
+defr weighted-edge [?from ?to ?weight]
+  || "a" "b" 3N
+     "b" "c" 0N
+     "c" "d" 5N
+
+defr positive-edge [?from ?to ?weight]
+  &> (weighted-edge from to weight) (guard [gt? weight 0N])
+
+solve (positive-edge from to w)
+;; => [{:to "b", :w 3N, :from "a"} {:to "d", :w 5N, :from "c"}]
 
 ;; --- F3: Multi-arity dispatch with | ---
 ;; STATUS: PRE-EXISTING GAP — multi-arity | variants parse but don't
@@ -401,9 +408,12 @@ solve-one (path "z" dest)
 ;; => none  — no answers
 
 ;; --- F6: cut (committed choice) ---
-;; STATUS: PRE-EXISTING GAP — cut not in parser keyword list, not parsed.
-;; Runtime handler exists but unreachable from user code.
+;; STATUS: PARTIAL — cut parses and elaborates, but runtime handler only
+;; succeeds without actually pruning alternatives (needs solver-level
+;; cooperation for true committed choice). Wired through parser/elaborator.
 
+;; NOTE: cut currently acts as a no-op goal (succeeds) because the solver
+;; doesn't implement backtracking pruning. Full cut semantics deferred.
 ;; defr first-color [?item -hue]
 ;;   &> (color item hue) (cut)
 ;;

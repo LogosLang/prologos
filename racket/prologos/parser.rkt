@@ -74,7 +74,7 @@
     UnionFind uf-empty uf-make-set uf-find uf-union uf-value
     ;; Relational language (Phase 7)
     defr rel solve solve-with solve-one explain explain-with solver schema selection
-    is not all-different element cumulative minimize
+    is not guard cut all-different element cumulative minimize
     Solver Goal DerivationTree Answer
     def defn check eval infer expand expand-1 expand-full parse elaborate match
     instances-of methods-of satisfies?
@@ -2748,6 +2748,40 @@
                      (surf-not g loc))))]
           [else
            ;; 'not' is not a functional keyword — treat as application
+           (parse-application head-stx args loc)])]
+
+       ;; (guard [condition]) or (guard [condition] goal) — conditional in relational context
+       ;; With 1 arg: tests condition, succeeds if truthy
+       ;; With 2 args: tests condition, proceeds with goal if truthy
+       [(guard)
+        (cond
+          [(current-parsing-relational-goal?)
+           (define nargs (length args))
+           (cond
+             [(= nargs 1)
+              (let ([c (parameterize ([current-parsing-relational-goal? #f])
+                         (parse-datum (car args)))])
+                (if (prologos-error? c) c
+                    (surf-guard c #f loc)))]
+             [(= nargs 2)
+              (let ([c (parameterize ([current-parsing-relational-goal? #f])
+                         (parse-datum (car args)))]
+                    [g (parse-relational-goal (cadr args))])
+                (cond [(prologos-error? c) c]
+                      [(prologos-error? g) g]
+                      [else (surf-guard c g loc)]))]
+             [else
+              (prologos-error loc (format "guard expects 1-2 arguments, got ~a" nargs))])]
+          [else
+           (parse-application head-stx args loc)])]
+
+       ;; (cut) — committed choice, prunes remaining alternatives
+       [(cut)
+        (cond
+          [(current-parsing-relational-goal?)
+           (or (check-arity 'cut args 0 loc)
+               (surf-cut loc))]
+          [else
            (parse-application head-stx args loc)])]
 
        ;; ---- Constraint forms (Phase 3c) ----

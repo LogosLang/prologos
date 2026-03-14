@@ -390,7 +390,7 @@
     [(expr-explain-with sv ov g) (expr-explain-with (and sv (shift delta cutoff sv)) (and ov (shift delta cutoff ov)) (shift delta cutoff g))]
     [(expr-narrow func args target vars)
      (expr-narrow (shift delta cutoff func) (map (lambda (a) (shift delta cutoff a)) args) (shift delta cutoff target) vars)]
-    [(expr-guard cond goal) (expr-guard (shift delta cutoff cond) (shift delta cutoff goal))]
+    [(expr-guard cond goal) (expr-guard (shift delta cutoff cond) (and goal (shift delta cutoff goal)))]
 
     ;; Int (all non-binding)
     [(expr-Int) e]
@@ -833,7 +833,7 @@
     [(expr-explain-with sv ov g) (expr-explain-with (and sv (subst k s sv)) (and ov (subst k s ov)) (subst k s g))]
     [(expr-narrow func args target vars)
      (expr-narrow (subst k s func) (map (lambda (a) (subst k s a)) args) (subst k s target) vars)]
-    [(expr-guard cond goal) (expr-guard (subst k s cond) (subst k s goal))]
+    [(expr-guard cond goal) (expr-guard (subst k s cond) (and goal (subst k s goal)))]
 
     ;; Int (all non-binding)
     [(expr-Int) e]

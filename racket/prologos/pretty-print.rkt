@@ -577,7 +577,9 @@
              (string-join (map (lambda (a) (pp-expr a names)) args) " ")
              (pp-expr target names))]
     [(expr-guard cond goal)
-     (format "(guard ~a ~a)" (pp-expr cond names) (pp-expr goal names))]
+     (if goal
+         (format "(guard ~a ~a)" (pp-expr cond names) (pp-expr goal names))
+         (format "(guard ~a)" (pp-expr cond names)))]
 
     ;; Int
     [(expr-Int) "Int"]
@@ -1151,7 +1153,7 @@
     [(expr-explain g) (uses-bvar0? g)]
     [(expr-explain-with sv ov g) (or (and sv (uses-bvar0? sv)) (and ov (uses-bvar0? ov)) (uses-bvar0? g))]
     [(expr-narrow func args target vars) (or (uses-bvar0? func) (ormap uses-bvar0? args) (uses-bvar0? target))]
-    [(expr-guard cond goal) (or (uses-bvar0? cond) (uses-bvar0? goal))]
+    [(expr-guard cond goal) (or (uses-bvar0? cond) (and goal (uses-bvar0? goal)))]
 
     [(expr-Int) #f]
     [(expr-int _) #f]

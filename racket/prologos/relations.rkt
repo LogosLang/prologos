@@ -222,7 +222,9 @@
     [(expr-cut? g)
      (goal-desc 'cut '())]
     [(expr-guard? g)
-     (goal-desc 'guard (list (expr-guard-condition g) (expr-guard-goal g)))]
+     (if (expr-guard-goal g)
+         (goal-desc 'guard (list (expr-guard-condition g) (expr-guard-goal g)))
+         (goal-desc 'guard (list (expr-guard-condition g))))]
     [else
      ;; Fallback: wrap as-is
      (goal-desc 'app (list 'unknown (list g)))]))
@@ -391,11 +393,10 @@
      ;; Cut: return current substitution (cut semantics need special handling)
      (list subst)]
     [(guard)
-     ;; Guard: evaluate condition, if truthy proceed with inner goal.
-     ;; Condition is an AST expression (functional); goal is an AST goal node.
+     ;; Guard: evaluate condition, if truthy proceed with inner goal (or succeed).
+     ;; Condition is an AST expression (functional); goal is an AST goal node or #f.
      (define condition (car args))
-     (define inner-goal-expr (cadr args))
-     (define inner-goal (expr->goal-desc inner-goal-expr))
+     (define inner-goal-expr (and (pair? (cdr args)) (cadr args)))
      (define eval-fn (current-is-eval-fn))
      (define cond-val
        (if eval-fn
@@ -403,7 +404,6 @@
              (eval-fn substituted))
            (walk subst condition)))
      ;; Check if condition evaluated to true.
-     ;; For boolean expressions like [gt ?x 0N], whnf returns expr-true/expr-false.
      (define truthy?
        (cond
          [(expr-true? cond-val) #t]
@@ -412,7 +412,10 @@
          [(eq? cond-val #f) #f]
          [else #t]))  ;; non-#f, non-false values are truthy
      (if truthy?
-         (solve-single-goal config store inner-goal subst depth)
+         (if (and inner-goal-expr (not (eq? inner-goal-expr #f)))
+             (let ([inner-goal (expr->goal-desc inner-goal-expr)])
+               (solve-single-goal config store inner-goal subst depth))
+             (list subst))  ;; 1-arg guard: condition passed, succeed
          '())]
     [else
      (error 'solve "Unknown goal kind: ~a" kind)]))
@@ -448,9 +451,10 @@
      (define inner (car args))
      (collect-ast-vars inner vars)]
     [(guard)
-     ;; Collect vars from condition expr and inner goal
+     ;; Collect vars from condition expr and optionally inner goal
      (collect-logic-vars-in-expr (car args) vars)
-     (collect-ast-vars (cadr args) vars)]
+     (when (pair? (cdr args))
+       (collect-ast-vars (cadr args) vars))]
     [else (void)]))
 
 ;; Apply a substitution to a goal-desc, resolving variables to their bindings.
@@ -625,10 +629,12 @@
      (define inner-expr (car args))
      (goal-desc 'not (list (rename-ast-vars inner-expr fresh-map)))]
     [(guard)
-     ;; condition is an AST expr (rename logic vars), goal is an AST goal node
+     ;; condition is an AST expr (rename logic vars), goal is an AST goal node or absent
      (define cond-expr (rename-logic-vars-in-expr (car args) fresh-map))
-     (define inner-goal (rename-ast-vars (cadr args) fresh-map))
-     (goal-desc 'guard (list cond-expr inner-goal))]
+     (if (pair? (cdr args))
+         (let ([inner-goal (rename-ast-vars (cadr args) fresh-map)])
+           (goal-desc 'guard (list cond-expr inner-goal)))
+         (goal-desc 'guard (list cond-expr)))]
     [(cut) goal]
     [else goal]))
 

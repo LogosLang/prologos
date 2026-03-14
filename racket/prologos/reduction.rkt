@@ -3115,7 +3115,7 @@
     [(expr-unify-goal l r) (expr-unify-goal (nf l) (nf r))]
     [(expr-is-goal v ex) (expr-is-goal (nf v) (nf ex))]
     [(expr-not-goal g) (expr-not-goal (nf g))]
-    [(expr-guard cond goal) (expr-guard (nf cond) (nf goal))]
+    [(expr-guard cond goal) (expr-guard (nf cond) (and goal (nf goal)))]
     [(expr-schema nm fs) (expr-schema nm (map nf fs))]
     [(expr-solve g) (expr-solve (nf g))]
     [(expr-solve-with sv ov g) (expr-solve-with (and sv (nf sv)) (and ov (nf ov)) (nf g))]

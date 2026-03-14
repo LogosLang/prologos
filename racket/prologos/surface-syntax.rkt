@@ -262,6 +262,7 @@
  (struct-out surf-defr) (struct-out surf-defr-variant) (struct-out surf-rel)
  (struct-out surf-clause) (struct-out surf-facts) (struct-out surf-fact-row)
  (struct-out surf-goal-app) (struct-out surf-unify) (struct-out surf-not) (struct-out surf-is)
+ (struct-out surf-guard) (struct-out surf-cut)
  (struct-out surf-solve) (struct-out surf-solve-one) (struct-out surf-solve-with)
  (struct-out surf-explain) (struct-out surf-explain-with)
  ;; Narrowing (Phase 1e)
@@ -928,6 +929,10 @@
 (struct surf-not              (goal srcloc) #:transparent)
 ;; Functional eval in relation: (is var [expr])
 (struct surf-is               (var expr srcloc) #:transparent)
+;; Guard: (guard [condition] goal) — conditional goal execution
+(struct surf-guard            (condition goal srcloc) #:transparent)
+;; Cut: (cut) — committed choice, prunes remaining alternatives
+(struct surf-cut              (srcloc) #:transparent)
 ;; Solve: (solve (goal))
 (struct surf-solve            (goal srcloc) #:transparent)
 ;; Solve-one: (solve-one (goal)) — returns first answer or none

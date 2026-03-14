@@ -2568,6 +2568,23 @@
              [(prologos-error? ee) ee]
              [else (expr-is-goal ev ee)]))]
 
+    ;; guard — conditional goal: (guard [condition]) or (guard [condition] goal)
+    ;; With goal=#f (1-arg form): just test condition, succeed if truthy
+    [(surf-guard condition goal loc)
+     (let ([ec (parameterize ([current-relational-fallback? #f])
+                 (elaborate condition env depth))])
+       (cond [(prologos-error? ec) ec]
+             [(not goal)
+              ;; 1-arg guard: condition only, no inner goal
+              (expr-guard ec #f)]
+             [else
+              (let ([eg (elaborate goal env depth)])
+                (cond [(prologos-error? eg) eg]
+                      [else (expr-guard ec eg)]))]))]
+
+    ;; cut — committed choice
+    [(surf-cut loc) (expr-cut)]
+
     ;; not — negation-as-failure
     [(surf-not goal loc)
      (let ([eg (elaborate goal env depth)])
