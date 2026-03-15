@@ -528,8 +528,9 @@
            (expr-app (expr-fvar 'some) (expr-champ champ-val))))]
     [else (expr-solve-one goal*)]))
 
-;; Run explain for a goal expression, returning a Prologos list of answer-records.
+;; Run explain for a goal expression, returning a Prologos list of answer maps.
 ;; Routes through stratified-explain-goal to support WF-aware explain.
+;; All paths now produce answer-result structs (D4).
 (define (run-explain-goal goal-expr config prov-level)
   (define goal* (whnf goal-expr))
   (cond
@@ -541,17 +542,17 @@
      (define results
        (parameterize ([current-is-eval-fn nf])
          (stratified-explain-goal config store rel-name goal-args query-vars prov-level)))
-     ;; Results may be answer-record (stratified) or wf-explained-answer (WF).
-     ;; For WF results, convert to Prologos maps with certainty metadata.
      (define bound-args (compute-bound-args-for-relation rel-name goal-args query-vars))
      (define prologos-maps
        (for/list ([r (in-list results)])
          (cond
+           [(answer-result? r)
+            (answer-result->prologos-expr r query-vars bound-args)]
+           ;; Legacy fallback: wf-explained-answer (should no longer occur after full migration)
            [(wf-explained-answer? r)
             (define bindings (wf-explained-answer-bindings r))
             (define certainty (wf-explained-answer-certainty r))
             (define explanation (wf-explained-answer-explanation r))
-            ;; Build base CHAMP map from query var bindings
             (define base-champ
               (for/fold ([c champ-empty])
                         ([qv (in-list query-vars)])
@@ -559,22 +560,19 @@
                 (define key (expr-keyword qv))
                 (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
                 (champ-insert c (equal-hash-code key) key pval)))
-            ;; Add bound args
             (define with-bound
               (for/fold ([c base-champ])
                         ([ba (in-list bound-args)])
                 (define key (expr-keyword (car ba)))
                 (define pval (ground->prologos-expr (cdr ba)))
                 (champ-insert c (equal-hash-code key) key pval)))
-            ;; Add __certainty
-            (define cert-key (expr-keyword '__certainty))
+            (define cert-key (expr-keyword 'certainty))
             (define with-cert
               (champ-insert with-bound (equal-hash-code cert-key) cert-key
-                            (expr-fvar certainty)))
-            ;; For unknown, add __cycle
+                            (expr-keyword certainty)))
             (if (and (wf-undeterminacy-explanation? explanation)
                      (eq? certainty 'unknown))
-                (let* ([cycle-key (expr-keyword '__cycle)]
+                (let* ([cycle-key (expr-keyword 'cycle)]
                        [cycle-preds (wf-undeterminacy-explanation-cycle-predicates explanation)]
                        [cycle-expr (racket-list->prologos-list
                                     (map (lambda (p) (expr-string (symbol->string p)))
@@ -582,8 +580,8 @@
                   (expr-champ
                    (champ-insert with-cert (equal-hash-code cycle-key) cycle-key cycle-expr)))
                 (expr-champ with-cert))]
+           ;; Legacy fallback: answer-record
            [(answer-record? r)
-            ;; Standard answer-record → build map from bindings
             (define bindings (answer-record-bindings r))
             (define base-champ
               (for/fold ([c champ-empty])
@@ -602,6 +600,133 @@
            [else r])))
      (racket-list->prologos-list prologos-maps)]
     [else (expr-explain goal*)]))
+
+;; ----------------------------------------
+;; D4: Serialize answer-result → Prologos map
+;; ----------------------------------------
+
+;; Convert an answer-result struct to a Prologos CHAMP expression.
+;; Structure: bindings at top level, :certainty/:cycle at top level (WF only),
+;; :provenance as nested map (when present).
+(define (answer-result->prologos-expr ar query-vars bound-args)
+  ;; 1. Build base CHAMP from query variable bindings
+  (define bindings (answer-result-bindings ar))
+  (define base-champ
+    (for/fold ([c champ-empty])
+              ([qv (in-list query-vars)])
+      (define val (hash-ref bindings qv #f))
+      (define key (expr-keyword qv))
+      (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
+      (champ-insert c (equal-hash-code key) key pval)))
+
+  ;; 2. Add bound args (ground args that were already specified in the query)
+  (define with-bound
+    (for/fold ([c base-champ])
+              ([ba (in-list bound-args)])
+      (define key (expr-keyword (car ba)))
+      (define pval (ground->prologos-expr (cdr ba)))
+      (champ-insert c (equal-hash-code key) key pval)))
+
+  ;; 3. Add :certainty if present (WF semantics only)
+  (define with-certainty
+    (let ([cert (answer-result-certainty ar)])
+      (if cert
+          (let ([k (expr-keyword 'certainty)])
+            (champ-insert with-bound (equal-hash-code k) k (expr-keyword cert)))
+          with-bound)))
+
+  ;; 4. Add :cycle if present (WF unknown only)
+  (define with-cycle
+    (let ([cyc (answer-result-cycle ar)])
+      (if cyc
+          (let* ([k (expr-keyword 'cycle)]
+                 [cycle-expr (racket-list->prologos-list
+                              (map (lambda (p) (expr-string (symbol->string p))) cyc))])
+            (champ-insert with-certainty (equal-hash-code k) k cycle-expr))
+          with-certainty)))
+
+  ;; 5. Add :provenance if present (provenance level >= :summary)
+  (define with-provenance
+    (let ([prov (answer-result-provenance ar)])
+      (if prov
+          (let ([k (expr-keyword 'provenance)])
+            (champ-insert with-cycle (equal-hash-code k) k
+                          (provenance-data->prologos-expr prov)))
+          with-cycle)))
+
+  (expr-champ with-provenance))
+
+;; Serialize provenance-data → Prologos CHAMP map.
+(define (provenance-data->prologos-expr pd)
+  (define c0 champ-empty)
+
+  ;; :clause-id
+  (define cid-key (expr-keyword 'clause-id))
+  (define c1
+    (let ([cid (provenance-data-clause-id pd)])
+      (if cid
+          (champ-insert c0 (equal-hash-code cid-key) cid-key (expr-keyword cid))
+          c0)))
+
+  ;; :depth
+  (define depth-key (expr-keyword 'depth))
+  (define c2
+    (champ-insert c1 (equal-hash-code depth-key) depth-key
+                  (expr-nat-val (provenance-data-depth pd))))
+
+  ;; :derivation (if present — :full and :atms only)
+  (define c3
+    (let ([dt (provenance-data-derivation pd)])
+      (if dt
+          (let ([k (expr-keyword 'derivation)])
+            (champ-insert c2 (equal-hash-code k) k
+                          (derivation-tree->prologos-expr dt)))
+          c2)))
+
+  ;; :support (if present — :atms only)
+  (define c4
+    (let ([sup (provenance-data-support pd)])
+      (if sup
+          (let ([k (expr-keyword 'support)])
+            (champ-insert c3 (equal-hash-code k) k
+                          (racket-list->prologos-list
+                           (map (lambda (s) (expr-keyword s)) sup))))
+          c3)))
+
+  (expr-champ c4))
+
+;; Serialize derivation-tree → Prologos CHAMP map (recursive).
+(define (derivation-tree->prologos-expr dt)
+  (define c0 champ-empty)
+
+  ;; :goal
+  (define goal-key (expr-keyword 'goal))
+  (define c1
+    (champ-insert c0 (equal-hash-code goal-key) goal-key
+                  (expr-keyword (derivation-tree-goal dt))))
+
+  ;; :args
+  (define args-key (expr-keyword 'args))
+  (define c2
+    (champ-insert c1 (equal-hash-code args-key) args-key
+                  (racket-list->prologos-list
+                   (map ground->prologos-expr (derivation-tree-args dt)))))
+
+  ;; :rule
+  (define rule-key (expr-keyword 'rule))
+  (define c3
+    (champ-insert c2 (equal-hash-code rule-key) rule-key
+                  (expr-keyword (derivation-tree-rule dt))))
+
+  ;; :children
+  (define children-key (expr-keyword 'children))
+  (define c4
+    (champ-insert c3 (equal-hash-code children-key) children-key
+                  (racket-list->prologos-list
+                   (map derivation-tree->prologos-expr
+                        (derivation-tree-children dt)))))
+
+  (expr-champ c4))
 
 ;; ========================================
 ;; Helpers for Posit8 reduction
