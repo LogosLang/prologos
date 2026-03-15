@@ -51,7 +51,10 @@
  current-naf-oracle
  ;; Execution
  solve-goal
- explain-goal)
+ explain-goal
+ ;; D4 Provenance: parallel explain solver internals (for wf-engine.rkt)
+ explain-goals
+ explain-app-goal)
 
 ;; ========================================
 ;; Evaluation callback
@@ -779,27 +782,292 @@
         (values qv (walk* subst qv))))))
 
 ;; ========================================
-;; Execution: explain-goal
+;; Execution: explain-goal (D4 Provenance — parallel explain solver)
 ;; ========================================
 
-;; Like solve-goal but returns answer-records with provenance.
+;; Like solve-goal but returns answer-result structs with provenance.
 ;; prov-level: 'none | 'summary | 'full | 'atms
+;; explain forces :full when :none (calling explain implies you want the why).
 ;;
-;; Returns: (listof answer-record)
+;; Returns: (listof answer-result)
 (define (explain-goal config store goal-name goal-args query-vars prov-level)
-  ;; For now, delegate to solve-goal and wrap results
-  ;; Full provenance tracking will be wired in reduction.rkt
   (define effective-level
     (if (eq? prov-level 'none) 'full prov-level))
+  (define max-depth (solver-config-max-derivation-depth config))
 
-  (define binding-maps
-    (solve-goal config store goal-name goal-args query-vars))
+  (define rel (relation-lookup store goal-name))
+  (unless rel
+    (error 'explain "Unknown relation: ~a" goal-name))
 
-  ;; Wrap each binding map in an answer-record
-  (for/list ([bm (in-list binding-maps)])
-    (make-answer
-     #:bindings bm
-     #:clause-id #f
-     #:depth 0
-     #:derivation #f
-     #:support #f)))
+  ;; Same effective-args logic as solve-goal
+  (define effective-args
+    (if (null? goal-args)
+        (let ([params (if (pair? (relation-info-variants rel))
+                          (variant-info-params (car (relation-info-variants rel)))
+                          '())])
+          (map param-info-name params))
+        goal-args))
+
+  ;; Run explain-app-goal which returns (listof (cons subst provenance-data))
+  (define results
+    (explain-app-goal config store goal-name effective-args (hasheq) 0 max-depth effective-level))
+
+  ;; Project query variables from each result and build answer-result
+  (for/list ([r (in-list results)])
+    (define subst (car r))
+    (define prov (cdr r))
+    (define bindings
+      (for/hasheq ([qv (in-list query-vars)])
+        (values qv (walk* subst qv))))
+    (make-answer-result #:bindings bindings #:provenance prov)))
+
+;; ----------------------------------------
+;; Parallel explain DFS solver
+;; Mirrors solve-goals/solve-single-goal/solve-app-goal
+;; but returns (cons subst provenance-data) pairs alongside the substitution.
+;; ----------------------------------------
+
+;; explain-goals: solve a conjunction of goals, threading the substitution
+;; and collecting child derivation trees.
+;; Returns: (listof (cons subst (listof derivation-tree)))
+;;   Each result is (subst . children) where children are derivation nodes
+;;   from all sub-goals in the conjunction.
+(define (explain-goals config store goals subst depth max-depth prov-level)
+  (cond
+    [(null? goals) (list (cons subst '()))]
+    [else
+     (define first-goal (car goals))
+     (define rest-goals (cdr goals))
+     (define sub-results
+       (explain-single-goal config store first-goal subst depth max-depth prov-level))
+     ;; sub-results: (listof (cons subst (listof derivation-tree)))
+     (append-map
+      (lambda (r)
+        (define s (car r))
+        (define children-so-far (cdr r))
+        (define rest-results
+          (explain-goals config store rest-goals s depth max-depth prov-level))
+        (for/list ([rr (in-list rest-results)])
+          (cons (car rr) (append children-so-far (cdr rr)))))
+      sub-results)]))
+
+;; explain-single-goal: dispatch a single goal with provenance.
+;; Returns: (listof (cons subst (listof derivation-tree)))
+;;   For app goals, produces derivation-tree nodes.
+;;   For unify/is/guard/not/cut, produces empty children (no derivation to record).
+(define (explain-single-goal config store goal subst depth max-depth prov-level)
+  (when (> depth DEFAULT-DEPTH-LIMIT)
+    (error 'explain "Depth limit exceeded (~a)" DEFAULT-DEPTH-LIMIT))
+  (define kind (goal-desc-kind goal))
+  (define args (goal-desc-args goal))
+  (case kind
+    [(app)
+     (define goal-name (car args))
+     (define goal-args (cadr args))
+     ;; explain-app-goal returns (listof (cons subst provenance-data))
+     ;; Convert to (cons subst (list derivation-tree-or-#f))
+     (define results
+       (explain-app-goal config store goal-name goal-args subst (add1 depth) max-depth prov-level))
+     (for/list ([r (in-list results)])
+       (define s (car r))
+       (define prov (cdr r))
+       (define dtree (and prov (provenance-data-derivation prov)))
+       (cons s (if dtree (list dtree) '())))]
+    [(unify)
+     (define lhs (car args))
+     (define rhs (cadr args))
+     (define lhs-resolved (walk subst lhs))
+     (define rhs-resolved (walk subst rhs))
+     (define result (unify-terms lhs-resolved rhs-resolved subst))
+     (if result (list (cons result '())) '())]
+    [(is)
+     (define var (car args))
+     (define expr (cadr args))
+     (define eval-fn (current-is-eval-fn))
+     (define val
+       (if eval-fn
+           (let ([substituted (subst-logic-vars-in-expr expr subst)])
+             (eval-fn substituted))
+           expr))
+     (define result (unify-terms (walk subst var) val subst))
+     (if result (list (cons result '())) '())]
+    [(not)
+     ;; Negation-as-failure: succeed if inner goal fails. No derivation children.
+     (define inner-goal-expr (car args))
+     (define inner-goal (expr->goal-desc inner-goal-expr))
+     (define naf-oracle (current-naf-oracle))
+     (cond
+       [(and naf-oracle (eq? (goal-desc-kind inner-goal) 'app))
+        (define pred-name (car (goal-desc-args inner-goal)))
+        (define oracle-result (naf-oracle pred-name))
+        (case oracle-result
+          [(succeed) (list (cons subst '()))]
+          [(fail) '()]
+          [(defer) '()]
+          [else
+           (define resolved-inner-goal (apply-subst-to-goal inner-goal subst))
+           (define results (explain-single-goal config store resolved-inner-goal subst depth max-depth prov-level))
+           (if (null? results) (list (cons subst '())) '())])]
+       [else
+        (define resolved-inner-goal (apply-subst-to-goal inner-goal subst))
+        (define results (explain-single-goal config store resolved-inner-goal subst depth max-depth prov-level))
+        (if (null? results)
+            (list (cons subst '()))
+            '())])]
+    [(cut) (list (cons subst '()))]
+    [(guard)
+     (define condition (car args))
+     (define inner-goal-expr (and (pair? (cdr args)) (cadr args)))
+     (define eval-fn (current-is-eval-fn))
+     (define cond-val
+       (if eval-fn
+           (let ([substituted (subst-logic-vars-in-expr condition subst)])
+             (eval-fn substituted))
+           (walk subst condition)))
+     (define truthy?
+       (cond
+         [(expr-true? cond-val) #t]
+         [(expr-false? cond-val) #f]
+         [(boolean? cond-val) cond-val]
+         [(eq? cond-val #f) #f]
+         [else #t]))
+     (if truthy?
+         (if (and inner-goal-expr (not (eq? inner-goal-expr #f)))
+             (let ([inner-goal (expr->goal-desc inner-goal-expr)])
+               (explain-single-goal config store inner-goal subst depth max-depth prov-level))
+             (list (cons subst '())))
+         '())]
+    [else
+     (error 'explain "Unknown goal kind: ~a" kind)]))
+
+;; explain-app-goal: look up relation, try facts then clauses, building provenance.
+;; Returns: (listof (cons subst provenance-data))
+(define (explain-app-goal config store goal-name goal-args subst depth max-depth prov-level)
+  (perf-inc-solver-backtrack!)
+  (define rel (relation-lookup store goal-name))
+  (unless rel
+    (error 'explain "Unknown relation: ~a" goal-name))
+
+  ;; Resolve goal-args through current substitution
+  (define resolved-args
+    (for/list ([a (in-list goal-args)])
+      (walk subst a)))
+
+  ;; Compute clause-id convention: count total facts+clauses across all variants
+  ;; to decide if index suffix is needed
+  (define total-entries
+    (for/sum ([v (in-list (relation-info-variants rel))])
+      (+ (length (variant-info-facts v))
+         (length (variant-info-clauses v)))))
+
+  ;; Build clause-id from name, arity, and index
+  (define (make-clause-id arity idx)
+    (if (= total-entries 1)
+        (string->symbol (format "~a/~a" goal-name arity))
+        (string->symbol (format "~a/~a-~a" goal-name arity idx))))
+
+  ;; Depth limit check: truncate if at max depth
+  (when (> depth max-depth)
+    ;; Return empty — we've exceeded the derivation depth limit
+    ;; (the solver depth limit DEFAULT-DEPTH-LIMIT still applies for correctness)
+    (void))
+
+  ;; Try each variant
+  (append-map
+   (lambda (variant)
+     (define params (variant-info-params variant))
+     (define facts (variant-info-facts variant))
+     (define clauses (variant-info-clauses variant))
+     (define param-names (map param-info-name params))
+     (define arity (length param-names))
+
+     ;; Try facts
+     (define fact-results
+       (let loop ([frs facts] [fact-idx 0] [acc '()])
+         (cond
+           [(null? frs) (reverse acc)]
+           [else
+            (define fr (car frs))
+            (define terms (fact-row-terms fr))
+            (define result
+              (let inner ([as resolved-args] [ts terms] [s subst])
+                (cond
+                  [(and (null? as) (null? ts)) s]
+                  [(or (null? as) (null? ts)) #f]
+                  [else
+                   (define s* (unify-terms (car as) (car ts) s))
+                   (if s* (inner (cdr as) (cdr ts) s*) #f)])))
+            (if result
+                (let* ([cid (make-clause-id arity fact-idx)]
+                       [dtree (if (memq prov-level '(full atms))
+                                  (make-derivation goal-name
+                                                   (for/list ([a (in-list goal-args)])
+                                                     (walk* result a))
+                                                   cid '())
+                                  #f)]
+                       [prov (make-provenance-data
+                              #:clause-id cid
+                              #:depth depth
+                              #:derivation dtree)])
+                  (loop (cdr frs) (add1 fact-idx) (cons (cons result prov) acc)))
+                (loop (cdr frs) (add1 fact-idx) acc))])))
+
+     ;; Try clauses
+     (define clause-results
+       (let loop ([cis clauses] [clause-idx (length facts)] [acc '()])
+         (cond
+           [(null? cis) (reverse acc)]
+           [else
+            (define ci (car cis))
+            ;; Fresh variables for this clause
+            (define fresh-map (make-hasheq))
+            (define (freshen name)
+              (define key (string->symbol (format "~a_~a" name (gensym))))
+              (hash-set! fresh-map name key)
+              key)
+            (define all-vars (collect-clause-vars ci param-names))
+            (for ([v (in-list all-vars)]) (freshen v))
+            (define fresh-params
+              (for/list ([pn (in-list param-names)])
+                (hash-ref fresh-map pn)))
+            ;; Unify goal args with fresh params
+            (define initial-subst
+              (let inner ([as resolved-args] [fps fresh-params] [s subst])
+                (cond
+                  [(and (null? as) (null? fps)) s]
+                  [(or (null? as) (null? fps)) #f]
+                  [else
+                   (define s* (unify-terms (car as) (car fps) s))
+                   (if s* (inner (cdr as) (cdr fps) s*) #f)])))
+            (if initial-subst
+                ;; Rename variables in clause goals and recurse
+                (let* ([renamed-goals (map (lambda (g) (rename-goal-vars g fresh-map))
+                                          (clause-info-goals ci))]
+                       [body-results
+                        (if (> depth max-depth)
+                            ;; At depth limit: truncate — don't recurse into body
+                            (list (cons initial-subst '()))
+                            (explain-goals config store renamed-goals initial-subst
+                                           depth max-depth prov-level))]
+                       [cid (make-clause-id arity clause-idx)])
+                  (define new-results
+                    (for/list ([br (in-list body-results)])
+                      (define final-subst (car br))
+                      (define children (cdr br))
+                      (define dtree
+                        (if (memq prov-level '(full atms))
+                            (make-derivation goal-name
+                                             (for/list ([a (in-list goal-args)])
+                                               (walk* final-subst a))
+                                             cid children)
+                            #f))
+                      (define prov (make-provenance-data
+                                   #:clause-id cid
+                                   #:depth depth
+                                   #:derivation dtree))
+                      (cons final-subst prov)))
+                  (loop (cdr cis) (add1 clause-idx) (append acc new-results)))
+                (loop (cdr cis) (add1 clause-idx) acc))])))
+
+     (append fact-results clause-results))
+   (relation-info-variants rel)))
