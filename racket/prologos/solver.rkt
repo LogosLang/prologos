@@ -41,6 +41,8 @@
  solver-config-cfa-scope
  ;; Well-founded semantics (WFLE Phase 4a)
  solver-config-semantics
+ ;; Derivation depth limit (D4 provenance)
+ solver-config-max-derivation-depth
  ;; Merge
  solver-config-merge
  ;; Validation
@@ -63,7 +65,7 @@
   '(execution threshold strategy tabling provenance timeout
     narrow-value-order narrow-search narrow-iterative
     narrow-constraints narrow-minimize cfa-scope
-    semantics))
+    semantics max-derivation-depth))
 
 (define (valid-solver-key? k)
   (memq k valid-solver-keys))
@@ -82,7 +84,8 @@
           'narrow-constraints '()
           'narrow-minimize    #f
           'cfa-scope          'module
-          'semantics          'stratified))
+          'semantics          'stratified
+          'max-derivation-depth 50))
 
 ;; ========================================
 ;; Construction
@@ -150,6 +153,9 @@
 ;; Well-founded semantics (WFLE Phase 4a)
 (define (solver-config-semantics cfg)
   (solver-config-get cfg 'semantics 'stratified))
+
+(define (solver-config-max-derivation-depth cfg)
+  (solver-config-get cfg 'max-derivation-depth 50))
 
 ;; ========================================
 ;; Merge
