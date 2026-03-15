@@ -23,7 +23,9 @@ lessons systematically, we:
 For the full design-to-implementation lifecycle, see
 [[file:DESIGN_METHODOLOGY.org][DESIGN_METHODOLOGY.org]] --- the five-phase process
 (Research → Refinement → Design Iteration → Implementation → Composition)
-that governs how we approach significant features.
+that governs how we approach significant features. For how lessons are
+extracted from completed work via Post-Implementation Reviews, see
+[[file:POST_IMPLEMENTATION_REVIEW.org][POST_IMPLEMENTATION_REVIEW.org]].
 
 ** Phase-Gated Implementation
 Break large features into lettered sub-phases (a, b, c...) with explicit

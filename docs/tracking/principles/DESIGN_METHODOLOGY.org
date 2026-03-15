@@ -562,6 +562,10 @@ belong). It is primarily a /technical/ review: did the design hold up?
 What did the implementation reveal about our architecture? What does
 this feature enable that we didn't anticipate?
 
+For the full PIR methodology --- questions to answer, format template,
+what to collect during implementation, pre-implementation practices,
+and anti-patterns --- see [[file:POST_IMPLEMENTATION_REVIEW.org][POST_IMPLEMENTATION_REVIEW.org]].
+
 **** What to cover
 
 - *Objectives vs. actuals*: What did we set out to build? What did we
@@ -749,6 +753,7 @@ and Level 3 (file). See "WS-Mode Validation Protocol" under Stage 4.
 | ~PATTERNS_AND_CONVENTIONS.org~ | Captures patterns that Stage 5 discovers            |
 | ~ERGONOMICS.org~            | Informs Stage 2 tradeoff analysis for user-facing features |
 | ~RELATIONAL_LANGUAGE_VISION.org~ | Example of Stage 1-2 output for a specific domain |
+| ~POST_IMPLEMENTATION_REVIEW.org~ | Full PIR methodology for Stage 5 reviews             |
 
 * Exemplar Projects
 
