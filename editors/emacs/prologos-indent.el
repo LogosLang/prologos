@@ -52,9 +52,14 @@ WS mode cycles through plausible indentation levels."
 (put 'defmacro 'lisp-indent-function 'defun)
 (put 'data     'lisp-indent-function 'defun)
 (put 'relation 'lisp-indent-function 'defun)
+(put 'defr     'lisp-indent-function 'defun)
+(put 'schema   'lisp-indent-function 'defun)
+(put 'solver   'lisp-indent-function 'defun)
 
 ;; 1-arg special forms (first arg on same line, rest indented)
 (put 'fn      'lisp-indent-function 1)
+(put 'solve-with   'lisp-indent-function 1)
+(put 'explain-with 'lisp-indent-function 1)
 (put 'the     'lisp-indent-function 1)
 (put 'match   'lisp-indent-function 1)
 

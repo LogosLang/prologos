@@ -140,11 +140,11 @@
     },
     "declaration-keyword": {
       "name": "keyword.control.declaration.prologos",
-      "match": "\\b(?:defn|def|data|deftype|spec|trait|impl|bundle|property|functor|defmacro|foreign|subtype|capability|relation|clause)\\b"
+      "match": "\\b(?:defn|def|data|deftype|spec|trait|impl|bundle|property|functor|defmacro|foreign|subtype|capability|relation|clause|schema|defr|solver)\\b"
     },
     "expression-keyword": {
       "name": "keyword.control.expression.prologos",
-      "match": "\\b(?:match|fn|let|if|cond|do|the|forall|exists|where|when|with-transient|transient|reduce|eval|infer|check|expand|expand-1|expand-full|parse|elaborate|solve|query)\\b"
+      "match": "\\b(?:match|fn|let|if|cond|do|the|forall|exists|where|when|with-transient|transient|reduce|eval|infer|check|expand|expand-1|expand-full|parse|elaborate|solve|solve-one|solve-with|explain|explain-with|rel|query)\\b"
     },
     "module-keyword": {
       "name": "keyword.control.module.prologos",

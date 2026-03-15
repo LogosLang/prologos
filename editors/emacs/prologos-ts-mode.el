@@ -63,7 +63,7 @@
    :feature 'keyword
    :override t
    '(((identifier) @font-lock-keyword-face
-      (:match "\\`\\(?:def\\|defn\\|data\\|deftype\\|match\\|fn\\|ns\\|provide\\|require\\|the\\|let\\|do\\|if\\|forall\\|exists\\|check\\|eval\\|infer\\|defmacro\\|spec\\|relation\\|clause\\|query\\|foreign\\|trait\\|impl\\)\\'"
+      (:match "\\`\\(?:def\\|defn\\|data\\|deftype\\|match\\|fn\\|ns\\|provide\\|require\\|the\\|let\\|do\\|if\\|forall\\|exists\\|check\\|eval\\|infer\\|defmacro\\|spec\\|relation\\|clause\\|query\\|foreign\\|trait\\|impl\\|schema\\|defr\\|solver\\|solve-one\\|solve-with\\|explain\\|explain-with\\|rel\\)\\'"
               @font-lock-keyword-face)))
    ;; TODO: When the tree-sitter grammar adds `foreign` declarations,
    ;; add structural rules for :as aliases, racket language identifier,

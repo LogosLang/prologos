@@ -40,7 +40,8 @@
 (defconst prologos-font-lock-keywords-1
   `(;; Top-level definition forms
     (,(regexp-opt '("def" "defn" "defmacro" "deftype" "data" "spec"
-                    "ns" "imports" "exports" "require" "provide" "foreign" "trait" "impl")
+                    "ns" "imports" "exports" "require" "provide" "foreign" "trait" "impl"
+                    "schema" "defr" "solver")
                   'symbols)
      . font-lock-keyword-face)
     ;; Top-level commands
@@ -52,7 +53,8 @@
   (append prologos-font-lock-keywords-1
    `(;; Expression forms
      (,(regexp-opt '("fn" "the" "the-fn" "let" "do" "if"
-                     "match" "forall" "exists")
+                     "match" "forall" "exists"
+                     "solve-one" "solve-with" "explain" "explain-with" "rel")
                    'symbols)
       . font-lock-keyword-face)
      ;; Type constructors
@@ -111,6 +113,15 @@
       (1 font-lock-function-name-face))
      ;; Spec name (sexp or WS mode)
      ("\\bspec\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)"
+      (1 font-lock-function-name-face))
+     ;; Relation name after defr (sexp or WS mode)
+     ("\\bdefr\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)"
+      (1 font-lock-function-name-face))
+     ;; Schema name after schema (sexp or WS mode)
+     ("\\bschema\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)"
+      (1 font-lock-type-face))
+     ;; Solver name after solver (sexp or WS mode)
+     ("\\bsolver\\s-+\\([a-zA-Z_][a-zA-Z0-9_!?*-]*\\)"
       (1 font-lock-function-name-face))
      ;; Data type name (sexp or WS mode)
      ("\\(?:^\\|[(\\[]\\)data\\s-+(?\\([A-Z][a-zA-Z0-9_]*\\)"

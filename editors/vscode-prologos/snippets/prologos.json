@@ -116,5 +116,43 @@
       "  :holds ${0:expr}"
     ],
     "description": "Property declaration (law)"
+  },
+  "Relation definition": {
+    "prefix": "defr",
+    "body": [
+      "defr ${1:name} [${2:?args}]",
+      "  ${0:body}"
+    ],
+    "description": "Relation definition"
+  },
+  "Schema definition": {
+    "prefix": "schema",
+    "body": [
+      "schema ${1:Name}",
+      "  :${2:field} ${0:Type}"
+    ],
+    "description": "Schema (typed relation structure)"
+  },
+  "Solver configuration": {
+    "prefix": "solver",
+    "body": [
+      "solver ${1:name}",
+      "  :semantics ${0:well-founded}"
+    ],
+    "description": "Solver configuration"
+  },
+  "Solve with solver": {
+    "prefix": "solve-with",
+    "body": [
+      "solve-with ${1:solver} (${0:goal})"
+    ],
+    "description": "Solve goal with specific solver"
+  },
+  "Explain with solver": {
+    "prefix": "explain-with",
+    "body": [
+      "explain-with ${1:solver} (${0:goal})"
+    ],
+    "description": "Explain goal with provenance via specific solver"
   }
 }
