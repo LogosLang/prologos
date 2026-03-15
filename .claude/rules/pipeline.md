@@ -1,0 +1,50 @@
+# Pipeline Exhaustiveness Checklists
+
+These checklists prevent the recurring class of bugs where a new construct is added but not handled in all pipeline stages. Missing one stage causes subtle failures — silent wrong results, performance regressions, or crashes in unrelated code paths.
+
+## New AST Node
+
+When adding a new AST node (e.g., `expr-foo`), update all 14 pipeline files:
+
+1. `syntax.rkt` — struct definition
+2. `surface-syntax.rkt` — surface struct if user-facing
+3. `parser.rkt` — parse rule
+4. `elaborator.rkt` — elaboration case
+5. `typing-core.rkt` — `infer`/`check` cases
+6. `qtt.rkt` — `inferQ`/`checkQ` cases (must parallel typing-core)
+7. `reduction.rkt` — reduction/normalization
+8. `substitution.rkt` — substitution traversal
+9. `zonk.rkt` — all three zonk functions (intermediate, final, level)
+10. `pretty-print.rkt` — display
+11. Possibly: `unify.rkt`, `macros.rkt`, `foreign.rkt`
+
+## New Racket Parameter
+
+When adding a new Racket parameter, immediately add entries in ALL applicable locations:
+
+1. Definition site (the module that owns it)
+2. `test-support.rkt` parameterize block
+3. `batch-worker.rkt` save/restore list
+4. `with-fresh-meta-env` if it's meta/constraint-related
+5. `reset-meta-store!` / `reset-constraint-store!` if it needs reset
+6. `save-meta-state` / `restore-meta-state!` if it must survive speculation rollback
+
+Missing any one causes intermittent failures that are difficult to diagnose — batch worker isolation failures, speculation leaks, or test pollution.
+
+## New Struct Field
+
+When adding a field to an existing struct:
+
+1. Run `raco make driver.rkt` to recompile ALL transitive dependents (stale `.zo` caches cause "expected N fields" errors)
+2. Grep for all pattern-matches on that struct — each must handle the new field
+3. Check `trace-serialize.rkt` and any other reflection-based consumers
+4. If the struct is in `prop-network` or `elab-network`, modules like `session-propagators.rkt` and `trace-serialize.rkt` that import by struct linklet will fail if not recompiled
+
+## New Pattern Kind
+
+When adding a new pattern kind to the pattern compiler:
+
+1. Update `pattern-is-simple-flat?` — the fast-path classifier. Missing this causes ALL patterns to fall through to the slow `compile-match-tree` path (850s regression observed from missing `'wildcard`)
+2. Update `compile-match-tree` — the full compiler
+3. Update narrowing pattern handlers in `narrowing.rkt` if applicable
+4. Update `narrow-match` and `narrow-subst-bvars` if the pattern contains sub-expressions
