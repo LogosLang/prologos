@@ -21,6 +21,7 @@
          "tabling.rkt"
          "relations.rkt"
          "solver.rkt"
+         "provenance.rkt"
          "wf-engine.rkt")
 
 (provide
@@ -36,7 +37,10 @@
  store-has-negation?
  stratified-solve-goal
  stratified-explain-goal
- ;; WF explanation types (re-exported from wf-engine)
+ ;; D4 structured answer type (re-exported from provenance.rkt via relations.rkt)
+ (struct-out answer-result)
+ (struct-out provenance-data)
+ ;; WF explanation types (legacy, re-exported from wf-engine — to be removed)
  (struct-out wf-explained-answer)
  (struct-out wf-undeterminacy-explanation))
 
