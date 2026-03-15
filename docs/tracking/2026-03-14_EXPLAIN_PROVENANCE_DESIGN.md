@@ -191,9 +191,9 @@ solver wf-debug
 
 explain-with wf-debug (reachable "a" to)
 ;; => [{:to_ "b", :certainty :definite,
-;;      :provenance {:clause-id :clause-1, :depth 1N}}
+;;      :provenance {:clause-id :reachable/2-1, :depth 1N}}
 ;;     {:to_ "c", :certainty :definite,
-;;      :provenance {:clause-id :clause-2, :depth 2N}}]
+;;      :provenance {:clause-id :reachable/2-1, :depth 2N}}]
 ```
 
 **WF, `:full` provenance:**
@@ -204,12 +204,12 @@ solver wf-full
 
 explain-with wf-full (ancestor "tom" desc)
 ;; => [{:desc "bob", :certainty :definite,
-;;      :provenance {:clause-id :clause-1, :depth 1N,
+;;      :provenance {:clause-id :ancestor/2-0, :depth 1N,
 ;;                   :derivation {:goal :ancestor, :args '["tom" "bob"],
-;;                                :rule :clause-1,
+;;                                :rule :ancestor/2-0,
 ;;                                :children '[{:goal :parent,
 ;;                                             :args '["tom" "bob"],
-;;                                             :rule :fact-0,
+;;                                             :rule :parent/2,
 ;;                                             :children '[]}]}}}]
 ```
 
@@ -220,9 +220,9 @@ solver debug-solver
 
 explain-with debug-solver (ancestor "tom" desc)
 ;; => [{:desc "bob",
-;;      :provenance {:clause-id :clause-1, :depth 1N,
+;;      :provenance {:clause-id :ancestor/2-0, :depth 1N,
 ;;                   :derivation {:goal :ancestor, :args '["tom" "bob"],
-;;                                :rule :clause-1,
+;;                                :rule :ancestor/2-0,
 ;;                                :children '[...]}}}]
 ```
 No certainty (stratified). Full provenance tree.
@@ -293,13 +293,15 @@ For `:summary` level, the tree structure is not built — only `clause-id` and
   (define prov-level (solver-config-provenance config))
   ;; ... match facts/clauses as in solve-app-goal ...
   ;; For each successful fact:
+  (define arity (length goal-args))
+  (define clause-id
+    (string->symbol (format "~a/~a-~a" goal-name arity fact-idx)))
   (define node
     (if (eq? prov-level 'summary)
         #f  ;; no tree node at summary level
-        (make-derivation goal-name resolved-args
-                         (format "fact-~a" fact-idx) '())))
+        (make-derivation goal-name resolved-args clause-id '())))
   (define prov
-    (provenance-data (format "fact-~a" fact-idx) depth node #f))
+    (provenance-data clause-id depth node #f))
   (cons result-subst prov)
   ;; ... similar for clauses, with children from recursive explain-goals ...
   )
@@ -415,11 +417,11 @@ solver atms-debug
 
 explain-with atms-debug (coloring node color)
 ;; => [{:node "a", :color "red",
-;;      :provenance {:clause-id :clause-1, :depth 2N,
+;;      :provenance {:clause-id :coloring/2-0, :depth 2N,
 ;;                   :derivation {...},
 ;;                   :support #{:h1 :h3}}}    ;; assumption set
 ;;     {:node "a", :color "blue",
-;;      :provenance {:clause-id :clause-1, :depth 2N,
+;;      :provenance {:clause-id :coloring/2-0, :depth 2N,
 ;;                   :derivation {...},
 ;;                   :support #{:h2 :h4}}}]   ;; different worldview
 ```
@@ -492,25 +494,56 @@ purely our test suite.
 
 ---
 
-## 9. Open Questions
+## 9. Design Decisions (Resolved)
 
-1. **`explain` default provenance**: The LE Design says `explain` forces provenance
-   to `:full` when the solver says `:none`. Should we honor this, or should bare
-   `explain` behave like `solve` + certainty (for WF)? Current design follows the
-   LE spec: `explain` implies you want the why, so it forces `:full`.
+1. **`explain` default provenance**: `explain` forces provenance to `:full` when
+   the solver says `:none`. Follows the LE Design spec — calling `explain` implies
+   you want the why. If `:full` proves too heavy in practice, we can default to
+   `:summary` later. **Decision: `:full`.**
 
-2. **Clause identification**: How to generate stable clause IDs? Options:
-   - Positional: `"fact-0"`, `"clause-1"` (fragile across edits)
-   - Content-hash: hash of clause body (stable but opaque)
-   - User-named: allow `defr` clauses to have names (future)
-   Initial implementation: positional. Revisit if stability matters.
+2. **Clause identification scheme**: `relation-name/arity-index` format.
 
-3. **Tree depth limit**: Should derivation trees be depth-limited? Large recursive
-   relations could produce massive trees. Options:
-   - Unlimited (trust the user)
-   - Configurable `:max-derivation-depth` on solver
-   - Default limit (e.g., 100) with override
-   Initial implementation: unlimited. Add limit if perf issues arise.
+   **Convention**:
+   ```
+   ancestor/2-0    — relation "ancestor", arity 2, first clause (or fact)
+   ancestor/2-1    — relation "ancestor", arity 2, second clause
+   ancestor/2      — elided index when only one clause at this arity
+   parent/2        — single-clause relation, arity 2
+   rel-g1234/3-0   — anonymous rel, gensym-based name, arity 3, first clause
+   ```
+
+   **Rationale**: Arity is structurally meaningful — multi-arity `defr` defines
+   genuinely different variants. `ancestor/2-1` tells you *which variant shape*
+   matched, not just which clause. Adding a clause to the 3-arity variant doesn't
+   shift IDs for the 2-arity clauses. Arity partitions provide natural stability
+   boundaries.
+
+   For named `defr`: uses the relation name directly.
+   For anonymous `rel`: uses `rel-<gensym>` prefix — reads more honestly than
+   `anon-<gensym>`, since `rel` is the syntactic form that produced it.
+
+   Whether a clause-id points to a fact or clause is visible from the derivation
+   tree structure: facts have empty `:children`, clauses don't. The ID is a
+   *locator*, not a complete description.
+
+   **Future**: Named clauses on `defr` (e.g., `:base &> ...`, `:recurse &> ...`)
+   would allow user-chosen stable IDs. This is a separate syntax design concern
+   — touches parser, surface syntax, `clause-info` struct. Not entangled with
+   provenance implementation.
+
+   Content-hashing was considered but rejected: stable but opaque — you can't
+   look at the ID and know which clause it refers to.
+
+   **Decision: `name/arity-index`, `rel-<gensym>/arity-index` for anonymous.**
+
+3. **Derivation tree depth limit**: Configurable via `:max-derivation-depth` on
+   the solver config, with a default of 50. Most real relational programs are
+   shallow (ancestor chains, graph reachability). Depth 50 means 50 levels of
+   recursive clause application — already very deep. If hit, the tree is truncated
+   at that depth with a sentinel node (e.g., `{:goal :truncated, :depth 50N}`).
+   Users can override higher on their solver config if needed.
+
+   **Decision: default 50, configurable via `:max-derivation-depth`.**
 
 ---
 
@@ -523,7 +556,7 @@ purely our test suite.
 | `racket/prologos/stratified-eval.rkt` | Dispatch by provenance level |
 | `racket/prologos/wf-engine.rkt` | Produce `answer-result` instead of `wf-explained-answer` |
 | `racket/prologos/reduction.rkt` | Serialize `answer-result` → Prologos map (nested) |
-| `racket/prologos/solver.rkt` | No changes needed (`:provenance` key already exists) |
+| `racket/prologos/solver.rkt` | Add `:max-derivation-depth` key (default 50) |
 | `tests/test-explain-provenance.rkt` | NEW: provenance level tests |
 | `tests/test-wfle-*.rkt` | Update expected keys: `__certainty` → `certainty` |
 | `examples/2026-03-14-wfle-acceptance.prologos` | D4 section with working examples |
