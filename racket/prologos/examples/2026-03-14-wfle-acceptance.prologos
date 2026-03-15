@@ -290,14 +290,30 @@ explain-with wf-solver (pacifist "nixon")
 ;; => [{:cycle '["pacifist" "hawk"], :x_ "nixon", :certainty :unknown}]
 
 ;; --- D4: explain with provenance levels ---
-;; Provenance levels are not yet wired as solver config keys in WS mode.
-;; The explain-with form always uses 'full. Granular provenance levels
-;; (none, summary, full, atms) require extending solver config parsing.
-;; For now, the default 'full level is used for all explain-with calls.
+;; Provenance levels: :none, :summary, :full, :atms
+;; Configured via :provenance key on solver config.
+;; explain forces :full when solver says :none.
 
-;; TODO: Wire provenance level as solver config key
-;; eval (explain-with wf-solver {:provenance full} (win "d"))
-;; => full derivation with rule IDs and depth
+;; Default explain returns full provenance (clause-id, depth, derivation tree):
+explain (parent "tom" who)
+;; => [{:who_ "bob", :provenance {:clause-id :parent/2-0, :depth 0, ...}}
+;;     {:who_ "liz", :provenance {:clause-id :parent/2-1, :depth 0, ...}}]
+
+;; Summary provenance — clause-id and depth only, no tree:
+solver summary-solver
+  :provenance summary
+
+explain-with summary-solver (parent "tom" who)
+;; => [{:who_ "bob", :provenance {:clause-id :parent/2-0, :depth 0}}
+;;     {:who_ "liz", :provenance {:clause-id :parent/2-1, :depth 0}}]
+
+;; WF + provenance — certainty + provenance data:
+solver wf-full
+  :semantics well-founded
+  :provenance full
+
+explain-with wf-full (reachable "a" to)
+;; => [{:to_ "b", :certainty :definite, :provenance {:clause-id ..., :depth ..., :derivation ...}}]
 
 
 ;; ========================================================================

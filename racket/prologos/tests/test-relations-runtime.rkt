@@ -152,7 +152,7 @@
 ;; Explain — basic fact queries with provenance
 ;; ========================================
 
-(test-case "explain-goal: returns answer-records"
+(test-case "explain-goal: returns answer-results"
   (define store (make-relation-store))
   (define rel (relation-info 'parent #f
                 (list (variant-info
@@ -164,11 +164,11 @@
   (define config (make-solver-config))
   (define answers (explain-goal config store2 'parent '() '(x y) 'full))
   (check-equal? (length answers) 1)
-  (check-true (answer-record? (car answers)))
-  (check-equal? (hash-ref (answer-record-bindings (car answers)) 'x) "alice"))
+  (check-true (answer-result? (car answers)))
+  (check-equal? (hash-ref (answer-result-bindings (car answers)) 'x) "alice"))
 
 (test-case "explain-goal: promotes 'none to 'full"
-  ;; Even with 'none, explain should still return answer-records
+  ;; Even with 'none, explain should still return answer-results
   (define store (make-relation-store))
   (define rel (relation-info 'test #f
                 (list (variant-info
@@ -180,4 +180,4 @@
   (define config (make-solver-config))
   (define answers (explain-goal config store2 'test '() '(x) 'none))
   (check-equal? (length answers) 1)
-  (check-true (answer-record? (car answers))))
+  (check-true (answer-result? (car answers))))
