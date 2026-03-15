@@ -1,7 +1,7 @@
 # D4: Explain Provenance — Stage 3 Design
 
 **Date**: 2026-03-14
-**Status**: DESIGN (Stage 3)
+**Status**: IMPLEMENTING (Phases 1-5 complete, Phase 6 in progress)
 **Depends on**: WFLE (complete), Logic Engine Phase 7 surface syntax (complete)
 **Blocked by**: Nothing — all prerequisites are in place
 **Source design**: `2026-02-24_LOGIC_ENGINE_DESIGN.md` §7.4.4, §7.6.3, §7.6.4
@@ -10,12 +10,12 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 1 | Answer type + derivation tree structures | ⬜ | Racket-side structs |
-| 2 | explain-goals parallel DFS solver | ⬜ | Option B: decoupled from solve path |
-| 3 | Provenance level dispatch | ⬜ | :none / :summary / :full / :atms |
-| 4 | WF integration (certainty + cycle) | ⬜ | Orthogonal to provenance |
-| 5 | Output serialization to Prologos maps | ⬜ | Answer → user-facing map |
-| 6 | Tests (L1/L2/L3) | ⬜ | Three-level WS validation |
+| 1 | Answer type + derivation tree structures | ✅ | `answer-result`, `provenance-data` structs (commit `f9d39ed`) |
+| 2 | explain-goals parallel DFS solver | ✅ | Option B: decoupled from solve path (commit `dc0c1f2`) |
+| 3 | Provenance level dispatch | ✅ | Re-export + dispatch correct (commit `28bc636`) |
+| 4 | WF integration (certainty + cycle) | ✅ | `answer-result` from wf-explain-goal (commit `0fd01d8`) |
+| 5 | Output serialization to Prologos maps | ✅ | Nested maps, unprefixed keys (commit `aaa23d9`) |
+| 6 | Tests (L1/L2/L3) | 🔄 | Three-level WS validation |
 | 7 | Acceptance file updates | ⬜ | D4 section uncommented |
 
 ---
