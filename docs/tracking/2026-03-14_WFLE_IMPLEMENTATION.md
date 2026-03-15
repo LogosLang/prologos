@@ -22,6 +22,7 @@
 | 7 | Benchmark Comparison | ✅ | `8e9a66f` — 10 benchmarks: positive/stratifiable/cycle/convergence, wall time + answer agreement |
 | WS | WS-Mode Wiring + Stratification Scoping | ✅ | `2e8f9f6` — scoped stratification, cycle-scoped bilattice, closed-world oracle, acceptance B2/C1-C5/I5 |
 | WS2 | Probe Fix + Expanded Acceptance | ✅ | `3ea9ae9` — fix probe goal-args (symbols not expr-logic-var), acceptance C6-C8/D1-D2/F7/I1-I3 |
+| WS3 | WF-Aware Explain + Full Acceptance | ✅ | `9c16fb3` — route explain through stratified path, undeterminacy info for unknown atoms, all sections resolved (D3/E/F6/G/H/I4/I6/I7) |
 
 ---
 
