@@ -1,7 +1,7 @@
 # D4: Explain Provenance — Stage 3 Design
 
 **Date**: 2026-03-14
-**Status**: IMPLEMENTING (Phases 1-5 complete, Phase 6 in progress)
+**Status**: DONE (All 7 phases complete)
 **Depends on**: WFLE (complete), Logic Engine Phase 7 surface syntax (complete)
 **Blocked by**: Nothing — all prerequisites are in place
 **Source design**: `2026-02-24_LOGIC_ENGINE_DESIGN.md` §7.4.4, §7.6.3, §7.6.4
@@ -15,8 +15,8 @@
 | 3 | Provenance level dispatch | ✅ | Re-export + dispatch correct (commit `28bc636`) |
 | 4 | WF integration (certainty + cycle) | ✅ | `answer-result` from wf-explain-goal (commit `0fd01d8`) |
 | 5 | Output serialization to Prologos maps | ✅ | Nested maps, unprefixed keys (commit `aaa23d9`) |
-| 6 | Tests (L1/L2/L3) | 🔄 | Three-level WS validation |
-| 7 | Acceptance file updates | ⬜ | D4 section uncommented |
+| 6 | Tests (L1/L2/L3) | ✅ | 15 new tests + migrated existing (commits `ee245e3`, `99eb62d`) |
+| 7 | Acceptance file updates | ✅ | D4 section with provenance examples (commit `99eb62d`) |
 
 ---
 
