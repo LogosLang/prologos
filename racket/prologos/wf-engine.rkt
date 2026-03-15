@@ -25,7 +25,8 @@
          "relations.rkt"
          "stratify.rkt"
          "syntax.rkt"
-         "tabling.rkt")
+         "tabling.rkt"
+         "provenance.rkt")
 
 (provide
  ;; Core engine
@@ -343,16 +344,19 @@
 ;; ========================================
 
 ;; Explain a well-founded result.
+;; Returns: (listof answer-result)
+;; Each answer-result has :certainty (always), :cycle (when unknown),
+;; and :provenance (when prov-level ≥ :summary).
 (define (wf-explain-goal config store goal-name goal-args query-vars prov-level)
   (define all-preds (transitive-pred-closure store goal-name))
   (define neg-preds (preds-with-negation store all-preds))
   (cond
     [(null? neg-preds)
-     ;; No negation → delegate to standard explain
-     (define answers (solve-goal config store goal-name goal-args query-vars))
-     (for/list ([a (in-list answers)])
-       (wf-explained-answer a 'definite
-         (explain-goal config store goal-name goal-args query-vars prov-level)))]
+     ;; No negation → delegate to standard explain, annotate as definite
+     (define explain-results (explain-goal config store goal-name goal-args query-vars prov-level))
+     ;; explain-goal now returns (listof answer-result); set certainty to 'definite
+     (for/list ([ar (in-list explain-results)])
+       (struct-copy answer-result ar [certainty 'definite]))]
     [else
      (define-values (net pred-bvar-map)
        (for/fold ([net (make-prop-network)] [m (hasheq)])
@@ -370,25 +374,40 @@
                (and bvar
                     (let ([status (bilattice-read-bool final-net bvar)])
                       (memq status '(unknown contradiction))))))
-        (define cycle (find-negation-cycle store goal-name))
-        (list (wf-explained-answer
-               (hasheq) 'unknown
-               (wf-undeterminacy-explanation goal-name cycle)))]
-       ;; Has answers → annotate each with explanation
+        (define cycle-preds (find-negation-cycle store goal-name))
+        (list (make-answer-result
+               #:bindings (hasheq)
+               #:certainty 'unknown
+               #:cycle cycle-preds))]
+       ;; Has answers → annotate each
        [else
         (for/list ([answer (in-list annotated)])
           (define certainty (wf-answer-certainty answer))
+          (define bindings (wf-answer-bindings answer))
           (case certainty
             [(definite)
-             (wf-explained-answer
-              (wf-answer-bindings answer) 'definite
-              (with-handlers ([exn:fail? (lambda (e) '())])
-                (explain-goal config store goal-name goal-args query-vars prov-level)))]
+             ;; For definite answers: get provenance from explain-goal if requested
+             (define prov
+               (if (memq prov-level '(summary full atms))
+                   (with-handlers ([exn:fail? (lambda (e) #f)])
+                     (let ([ers (explain-goal config store goal-name goal-args query-vars prov-level)])
+                       ;; Find the matching answer-result by bindings
+                       (define matching
+                         (for/first ([er (in-list ers)]
+                                     #:when (equal? (answer-result-bindings er) bindings))
+                           er))
+                       (and matching (answer-result-provenance matching))))
+                   #f))
+             (make-answer-result
+              #:bindings bindings
+              #:certainty 'definite
+              #:provenance prov)]
             [(unknown)
-             (define cycle (find-negation-cycle store goal-name))
-             (wf-explained-answer
-              (wf-answer-bindings answer) 'unknown
-              (wf-undeterminacy-explanation goal-name cycle))]))])]))
+             (define cycle-preds (find-negation-cycle store goal-name))
+             (make-answer-result
+              #:bindings bindings
+              #:certainty 'unknown
+              #:cycle cycle-preds)]))])]))
 
 ;; ========================================
 ;; Phase 4b: Tabling Integration
