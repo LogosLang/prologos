@@ -1,0 +1,100 @@
+#+TITLE: Standup — 2026-03-15
+#+DATE: 2026-03-15
+
+* Yesterday (since Mar 14 standup creation)
+
+** Well-Founded Logic Engine (WFLE) — ALL 7 PHASES COMPLETE
+
+Full implementation of an alternate logic engine backend using bilattice cell pairs (AFT) to compute well-founded semantics. ~1200 lines of implementation, ~1500 lines of tests, 125 new tests across 8 test files.
+
+*** Phase 1: Descending Cells (=4a492c7=)
+Extended =propagator.rkt= with descending cells (start at top, refine downward via meet). =cell-dirs= field on =prop-network=, =net-new-cell-desc=, =net-cell-direction=.
+
+*** Phase 2: Bilattice Module (=edb3fad=)
+New =bilattice.rkt= — pairs ascending + descending cells into bilattice variables with three-valued reading. =lattice-desc=, =bool-lattice=, =make-set-lattice=, =bilattice-var=, =bilattice-read-bool=.
+
+*** Phase 3: WF Propagator Patterns (=fc83451=)
+New =wf-propagators.rkt= — clause-to-cell wiring. =wf-wire-fact=, =wf-wire-negation= (cross-wire flip), =wf-wire-positive-clause=, =wf-wire-aggregate-upper=, =wf-compile-program=.
+
+*** Phase 4a: WF Engine Core (=333130a=)
+New =wf-engine.rkt= (~350 lines). Hybrid DFS + bilattice architecture — reuses existing DFS solver, adds bilattice layer on top. NAF oracle parameter, iterative fixpoint, solver dispatch via =solver-config-semantics=.
+
+*** Phase 5: Three-Valued Tabling (=9bc99fc=)
+Extended =tabling.rkt= with =wf-table-entry= (certainty field), =wf-all-mode-merge= (dedup by answer, prefer definite over unknown).
+
+*** Phase 4b: Engine + Tabling Integration (=7281c1a=)
+Connected bilattice fixpoint with three-valued tabling — answers stored with per-predicate certainty.
+
+*** Phase 6: Test Suite (=9a03bb9=)
+30 tests: canonical WF models (odd cycle, Nixon diamond, win/lose, self-reference), stratified vs WF comparison, error handling.
+
+*** Phase 7: Benchmarks (=8e9a66f=)
+10 benchmarks confirming WF engine converges and agrees with stratified on stratifiable programs.
+
+** WFLE WS-Mode Wiring + Correctness Fixes (=2e8f9f6=, =3ea9ae9=, =9c16fb3=)
+
+- Scoped stratification: only stratifies predicates reachable from query (not entire store)
+- Cycle-scoped bilattice tracking: Tarjan SCC + negative edge detection for actual negative cycles only
+- Closed-world oracle for fast path: =make-closed-world-oracle= for undefined predicates
+- WF probe fix: =expr-logic-var= structs → plain symbols for parameterized predicates
+- WF-aware explain: =run-explain-goal= routes through =stratified-explain-goal= for WF dispatch
+- Acceptance file: ALL sections resolved (C1-C8, D1-D4, E, F, G, H, I)
+
+** D4: Explain Provenance — ALL 7 PHASES COMPLETE (=f9d39ed= → =60588b7=)
+
+Full provenance system for the logic engine. 15 new tests.
+
+- Phase 1: =answer-result= / =provenance-data= structs, =max-derivation-depth= config
+- Phase 2: Parallel DFS solver with provenance tracking (=explain-goals=, =explain-single-goal=)
+- Phase 3: Re-export structs from =stratified-eval.rkt=
+- Phase 4: =wf-explain-goal= produces =answer-result= (not =wf-explained-answer=)
+- Phase 5: Serialization — =answer-result->prologos-expr= with nested =:provenance= maps
+- Phase 6: 15 tests + migrate =__certainty=/__cycle= → unprefixed keys
+- Phase 7: Acceptance file D4 section updated
+
+** WFLE Stage 2 + Stage 3 Design Documents (=55b21ad=, =aca9cb8=, =063ca8c=, =c0cf366=)
+
+- Stage 2: Bilattice cell pairs for well-founded semantics, 3 approaches evaluated
+- Stage 3: 1532-line implementation guide, 7 phases, ~130 tests planned, 3 appendices
+- Self-critique against principles docs (11 findings resolved)
+- External critique refinement (8 areas addressed)
+
+** Pre-Existing Relational Runtime Gaps — 4 of 5 Fixed
+
+- =is=-goals evaluate functional expressions (=df65974=)
+- =guard= wired through parser/elaborator (=a863f20=)
+- =cut= wired through parser (=a863f20=) — runtime stub, true cut semantics intentionally omitted
+- Anonymous =rel= + =solve= integration (=14c3d2b=)
+
+** Generic Operators: gt, ge, mod (=0b30c9d=)
+
+10-file AST pipeline for =gt=, =ge=, =mod=. Int/Nat/Rat/Posit dispatch. 27 new tests.
+
+** WS Syntax Gaps: Solver Config Pipeline (=c74357e=, =8f3a336=)
+
+=$solver-config= sentinel, =flatten-ws-kv-pairs= helper, =surf-solve-one= disambiguation, schema WS indentation fix.
+
+** Research: Formal Modeling on Propagators (=6d1b05c=)
+
+1337-line research document covering modal μ-calculus, temporal logics, fixpoint theory, runtime verification, session types / linear logic, and verification frontiers. 13-item research program.
+
+** Other
+
+- VSCode syntax highlighting for hyphenated keywords + relational forms (=585ec50=, =00c2296=)
+- PIR methodology principles document (=964926c=)
+- WFLE post-implementation review (=fa19d21=)
+- Eval result fix when form followed by comment (=d1129ce=)
+- Revised categorical analysis: Grothendieck opfibrations over well-founded bases (=c518971=, =1c8f9ea=)
+
+** Metrics
+
+- ~40 commits this interval
+- Test count: 7096 → post-D4 (370 files, 2 skipped)
+- Performance: ~200s full suite
+- Two complete subsystem implementations: WFLE (7 phases) + D4 Provenance (7 phases)
+
+* Today
+
+- Review plan for Track 2 Phase 7 (Error Cell + Grouped Error Reporting)
+- Consider Track 3 (Cell-Primary Registries) implementation
+- Review uncommitted .prologos file changes
