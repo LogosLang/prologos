@@ -50,16 +50,16 @@ export function getTopLevelFormRange(
       while (nextNonBlank < lineCount && document.lineAt(nextNonBlank).text.trim() === '') {
         nextNonBlank++;
       }
-      if (nextNonBlank < lineCount && !isTopLevelStart(document.lineAt(nextNonBlank).text)) {
+      if (nextNonBlank < lineCount && isContinuationLine(document.lineAt(nextNonBlank).text)) {
         // Next non-blank line is indented — blank line is within the form
         endLine = i;
         continue;
       }
-      // Blank followed by col-0 or EOF — form ends here
+      // Blank followed by col-0 content, comment, or EOF — form ends here
       break;
     }
-    if (isTopLevelStart(lineText)) {
-      // New top-level form starts — our form ended on the previous line
+    if (!isContinuationLine(lineText)) {
+      // New top-level form or comment at col 0 — our form ended on the previous line
       break;
     }
     // Indented line — belongs to current form
@@ -83,6 +83,17 @@ function isTopLevelStart(text: string): boolean {
   if (text.match(/^\s/)) return false; // starts with whitespace = indented
   if (text.match(/^\s*;/)) return false; // comment-only line
   return true;
+}
+
+/**
+ * Check if a line is a continuation of the current form (indented content).
+ * Returns false for blank lines, col-0 code, and col-0 comments.
+ * Col-0 comments are form boundaries — they don't belong to the preceding form.
+ */
+function isContinuationLine(text: string): boolean {
+  if (text.trim() === '') return false;
+  if (text.match(/^\s/)) return true; // starts with whitespace = indented = continuation
+  return false; // col-0 anything (code or comment) = not continuation
 }
 
 /**
