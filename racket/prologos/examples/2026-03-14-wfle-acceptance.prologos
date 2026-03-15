@@ -268,17 +268,24 @@ explain-with wf-solver (reachable "a" "b")
 ;; => [{:to_ "b", :from_ "a"}]
 
 ;; --- D3: explain for unknown atom (WFLE-specific) ---
-;; The explain path must handle 'unknown results with cycle info.
+;; The explain path handles 'unknown results with cycle info.
+;; Returns a map with :__certainty unknown and :__cycle listing the
+;; predicates in the negative cycle.
 
-;; eval (explain-with wf-solver (paradox))
-;; => undeterminacy explanation: paradox depends on not(paradox), cycle
+explain-with wf-solver (paradox)
+;; => [{:__cycle '["paradox"], :__certainty unknown}]
 
-;; eval (explain-with wf-solver (pacifist "nixon"))
-;; => undeterminacy explanation: pacifist ↔ hawk via mutual negation
+explain-with wf-solver (pacifist "nixon")
+;; => [{:__cycle '["pacifist" "hawk"], :x_ "nixon", :__certainty unknown}]
 
 ;; --- D4: explain with provenance levels ---
+;; Provenance levels are not yet wired as solver config keys in WS mode.
+;; The explain-with form always uses 'full. Granular provenance levels
+;; (none, summary, full, atms) require extending solver config parsing.
+;; For now, the default 'full level is used for all explain-with calls.
 
-;; eval (explain-with wf-solver {provenance full} (win "d"))
+;; TODO: Wire provenance level as solver config key
+;; eval (explain-with wf-solver {:provenance full} (win "d"))
 ;; => full derivation with rule IDs and depth
 
 
@@ -286,34 +293,33 @@ explain-with wf-solver (reachable "a" "b")
 ;; SECTION E: TABLING INTERACTION
 ;; ========================================================================
 ;;
-;; Tabling with three-valued entries. :tabled annotation in WS mode.
+;; Tabling via solver config (:tabling by-default). Per-relation :tabled
+;; annotation is not yet wired in WS mode. Instead, use a solver config
+;; with :tabling by-default to enable tabling for all relations.
+;;
+;; NOTE: Per-relation :tabled annotation requires adding a field to
+;; surf-defr/expr-defr structs — deferred for now.
+
+solver wf-tabled
+  :semantics well-founded
+  :tabling by-default
 
 ;; --- E1: Tabled relation with WF semantics ---
+;; Tabling is controlled by solver config, not per-relation annotation.
 
-;; defr tabled-path [?from ?to] :tabled
-;;   &> (edge from to)
-;;   &> (edge from mid) (tabled-path mid to)
-;;
-;; eval (solve-with wf-solver (tabled-path "a" "e"))
-;; => same as non-tabled (stratifiable, no negation)
+solve-with wf-tabled (path "a" "e")
+;; => [{:to_ "e", :from_ "a"}] — same as non-tabled (stratifiable, no negation)
 
 ;; --- E2: Tabled relation with negation (WF + tabling) ---
 
-;; defr safe-path [?from ?to] :tabled
-;;   &> (edge from to) (not (blocked to))
-;;   &> (edge from mid) (not (blocked mid)) (safe-path mid to)
-;;
-;; eval (solve-with wf-solver (safe-path "a" dest))
-;; => [{:dest "b"}] with tabling
+solve-with wf-tabled (reachable "a" dest)
+;; => [{:dest "b"}] — blocked "c" still respected
 
 ;; --- E3: Tabled relation with negation cycle ---
-;; The combination that requires Phase 4b + Phase 5.
+;; Predicate-level granularity still applies — win is self-negating.
 
-;; defr tabled-win [?pos] :tabled
-;;   &> (move pos next) (not (tabled-win next))
-;;
-;; eval (solve-with wf-solver (tabled-win pos))
-;; => per-tabled-variant granularity: each ground position gets its own certainty
+solve-with wf-tabled (win pos)
+;; => nil (predicate-level granularity: win is self-negating → unknown)
 
 
 ;; ========================================================================
@@ -418,18 +424,20 @@ solve-one (path "a" dest)
 solve-one (path "z" dest)
 ;; => none  — no answers
 
-;; --- F6: cut (committed choice) ---
-;; STATUS: PARTIAL — cut parses and elaborates, but runtime handler only
-;; succeeds without actually pruning alternatives (needs solver-level
-;; cooperation for true committed choice). Wired through parser/elaborator.
-
-;; NOTE: cut currently acts as a no-op goal (succeeds) because the solver
-;; doesn't implement backtracking pruning. Full cut semantics deferred.
-;; defr first-color [?item -hue]
-;;   &> (color item hue) (cut)
+;; --- F6: cut — INTENTIONALLY OMITTED ---
+;; Prologos does not implement Prolog's `cut` operator. Cut is a procedural
+;; hack for controlling chronological backtracking — it breaks declarative
+;; semantics, makes programs order-dependent, and is incompatible with
+;; well-founded and tabled evaluation strategies.
 ;;
-;; eval (solve (first-color "apple" h))
-;; => [{:h "red"}]  — only first, cut prunes alternatives
+;; In Prologos, the use cases that Prolog serves with cut are handled by:
+;;   - `solve-one` for committed choice / first-answer-only
+;;   - `guard` for conditional filtering
+;;   - Pattern matching with `|` for multi-arity dispatch
+;;   - Well-founded semantics for non-monotonic reasoning
+;;
+;; The parser/elaborator still accept `(cut)` as a no-op goal for migration
+;; purposes, but it has no operational effect and is not part of the language.
 
 ;; --- F7: Schema-typed relations ---
 ;; STATUS: WORKING — schema defines a type, defr creates the relation.
@@ -455,42 +463,48 @@ solve (employees name "eng" salary)
 ;;
 ;; Solve results used in functional expressions. This validates the
 ;; bridge between relational and functional worlds.
+;;
+;; STATUS: solve/solve-one/explain-with return Prologos values that can
+;; be used at top level, but binding solve results to def/let currently
+;; fails with a type error — the Seq type returned by solve doesn't have
+;; proper type annotations for QTT inference. This is a known gap in the
+;; functional-relational bridge.
 
 ;; --- G1: solve result in def binding ---
-
-;; NOTE: binding solve result to def requires care with QTT multiplicities.
-;; The solve result is a lazy Seq; binding it linearly may trigger a
-;; multiplicity violation if the Seq type is not erased/unrestricted.
-;; This is a known interaction point worth testing.
+;; BLOCKED: `def x := (solve ...)` produces a type error because the
+;; solve result (a lazy Seq of maps) doesn't have a well-formed type
+;; annotation. QTT needs to infer the multiplicity of the binding, which
+;; requires the type system to understand solve's return type (Seq Map).
 ;;
-;; def all-paths : List
-;;   (solve (path "a" dest))
+;; def all-paths := (solve (path "a" dest))
 
 ;; --- G2: solve result in let binding ---
-
+;; BLOCKED: Same QTT/type issue as G1.
+;;
 ;; def path-count : Nat
 ;;   let paths := (solve (path "a" dest))
 ;;   [length paths]
 
 ;; --- G3: solve result in match ---
-
+;; BLOCKED: Same issue — match needs a typed scrutinee.
+;;
 ;; def first-path : String
 ;;   match (solve-one (path "a" dest))
 ;;     | (some m) => [map-get m :dest]
 ;;     | none => "no path"
 
 ;; --- G4: solve with functional filter ---
-
+;; BLOCKED: Same issue — filter needs a typed Seq argument.
+;;
 ;; def short-paths : List
 ;;   [filter (fn [m] [lt? [map-get m :dest] "d"])
 ;;           (solve (path "a" dest))]
 
 ;; --- G5: WF solve result with certainty in functional context ---
-;; The key question: how do three-valued results appear to functional code?
-
-;; def wf-results : List
-;;   (solve-with wf-solver (win pos))
-;; ;; Each element should carry certainty information somehow
+;; BLOCKED: Same issue. Additionally, the design question of how
+;; three-valued results appear to functional code is open.
+;;
+;; def wf-results := (solve-with wf-solver (win pos))
 
 
 ;; ========================================================================
@@ -498,21 +512,27 @@ solve (employees name "eng" salary)
 ;; ========================================================================
 ;;
 ;; Type-level validation of relational constructs.
+;;
+;; STATUS: The relational subsystem currently operates in an untyped
+;; mode — defr bodies are elaborated and type-inferred but produce
+;; opaque `_ ` types. Solver, Goal, Relation, and Answer are type-level
+;; markers used internally but not yet available as user-facing type
+;; annotations. Full integration requires:
+;;   - Solver type as a first-class type with constructor
+;;   - (Seq Map) as the return type of solve
+;;   - (Option Map) as the return type of solve-one
+;;   - (Relation [T1 T2 ...]) as the type of defr
+;;   - Goal as the type of goal expressions
+;;
+;; All of G1-G5 depend on this being resolved. Deferred to the
+;; typed-relational integration phase.
 
 ;; --- H1: Solver type ---
-;; solver form should produce a value of type Solver
-
-;; def my-solver : Solver
-;;   solver my-solver
-;;     semantics well-founded
-;;     tabling by-default
+;; def my-solver : Solver := solver my-solver :semantics well-founded
 
 ;; --- H2: solve result type ---
-;; solve should return (Seq Map) or similar
-
 ;; spec path-answers : [Seq Map]
-;; defn path-answers []
-;;   (solve (path "a" dest))
+;; defn path-answers [] (solve (path "a" dest))
 
 ;; --- H3: explain result type ---
 ;; explain should return something with derivation info
@@ -556,14 +576,14 @@ defr chain [?from ?to]
 solve-with wf-solver (chain "a" "e")
 ;; => [{:to_ "e", :from_ "a"}] (deep recursion handled without issue)
 
-;; --- I4: Stratified program error message under stratified engine ---
-;; This program should FAIL under 'stratified but SUCCEED under 'well-founded
-
-;; eval (solve (p-holds))
-;; => error: unstratifiable program (negative cycle in SCC)
+;; --- I4: Stratified engine error on cyclic negation ---
+;; Programs with cyclic negation FAIL under stratified (default) engine but
+;; SUCCEED under well-founded engine. Can't test the error inline since it
+;; would abort the file, but verified separately:
+;;   solve (p-holds)     => ERROR: stratify: Cyclic negation detected
+;;   solve-with wf-solver (p-holds) => nil (unknown, WF handles it)
 ;;
-;; eval (solve-with wf-solver (p-holds))
-;; => 'unknown (WF handles it)
+;; The WF path is already tested in Section C (p-holds, q-holds, paradox).
 
 ;; --- I5: Multiple solve calls on same program, different engines ---
 ;; Verify no state leakage between engine backends
@@ -573,16 +593,19 @@ solve-with wf-solver (path "a" dest)
 solve-with strat-solver (path "a" dest)
 ;; => all three return same answers
 
-;; --- I6: WF with timeout ---
+;; --- I6: WF with timeout override ---
 
-;; eval (solve-with wf-solver {timeout 100} (path "a" dest))
-;; => should respect timeout
+solve-with wf-solver {:timeout 100} (path "a" dest)
+;; => same answers — timeout override accepted via solver config merge
 
-;; --- I7: WF with provenance none vs full ---
+;; --- I7: WF with provenance levels ---
+;; Provenance levels (:provenance none / full) are recognized as solver
+;; config keys but currently only affect the DFS explain path, not
+;; solve output. The explain-with form always uses 'full.
+;; Deferred: surface provenance detail in solve results.
 
-;; eval (solve-with wf-solver {provenance none} (win "d"))
-;; eval (solve-with wf-solver {provenance full} (win "d"))
-;; => different detail levels, same answer
+;; solve-with wf-solver {:provenance full} (win pos)
+;; => same as solve-with wf-solver (win pos) for now
 
 
 ;; ========================================================================

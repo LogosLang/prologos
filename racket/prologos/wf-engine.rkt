@@ -363,19 +363,32 @@
        (wf-iterate config store net pred-bvar-map
                     goal-name goal-args query-vars))
      (define annotated (annotate-answers final-net pred-bvar-map final-answers goal-name))
-     (for/list ([answer (in-list annotated)])
-       (define certainty (wf-answer-certainty answer))
-       (case certainty
-         [(definite)
-          (wf-explained-answer
-           (wf-answer-bindings answer) 'definite
-           (with-handlers ([exn:fail? (lambda (e) '())])
-             (explain-goal config store goal-name goal-args query-vars prov-level)))]
-         [(unknown)
-          (define cycle (find-negation-cycle store goal-name))
-          (wf-explained-answer
-           (wf-answer-bindings answer) 'unknown
-           (wf-undeterminacy-explanation goal-name cycle))]))]))
+     (cond
+       ;; No answers but predicate is unknown → produce undeterminacy explanation
+       [(and (null? annotated)
+             (let ([bvar (hash-ref pred-bvar-map goal-name #f)])
+               (and bvar
+                    (let ([status (bilattice-read-bool final-net bvar)])
+                      (memq status '(unknown contradiction))))))
+        (define cycle (find-negation-cycle store goal-name))
+        (list (wf-explained-answer
+               (hasheq) 'unknown
+               (wf-undeterminacy-explanation goal-name cycle)))]
+       ;; Has answers → annotate each with explanation
+       [else
+        (for/list ([answer (in-list annotated)])
+          (define certainty (wf-answer-certainty answer))
+          (case certainty
+            [(definite)
+             (wf-explained-answer
+              (wf-answer-bindings answer) 'definite
+              (with-handlers ([exn:fail? (lambda (e) '())])
+                (explain-goal config store goal-name goal-args query-vars prov-level)))]
+            [(unknown)
+             (define cycle (find-negation-cycle store goal-name))
+             (wf-explained-answer
+              (wf-answer-bindings answer) 'unknown
+              (wf-undeterminacy-explanation goal-name cycle))]))])]))
 
 ;; ========================================
 ;; Phase 4b: Tabling Integration

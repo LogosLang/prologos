@@ -529,6 +529,7 @@
     [else (expr-solve-one goal*)]))
 
 ;; Run explain for a goal expression, returning a Prologos list of answer-records.
+;; Routes through stratified-explain-goal to support WF-aware explain.
 (define (run-explain-goal goal-expr config prov-level)
   (define goal* (whnf goal-expr))
   (cond
@@ -537,18 +538,69 @@
      (define rel-args (expr-goal-app-args goal*))
      (define-values (goal-args query-vars) (extract-query-info rel-args))
      (define store (current-relation-store))
-     (define answer-records
+     (define results
        (parameterize ([current-is-eval-fn nf])
-         (explain-goal config store rel-name goal-args query-vars prov-level)))
-     ;; Convert answer-records to Prologos list of maps
-     ;; Each answer-record has bindings (hasheq), clause-id, depth, derivation, support
-     ;; For now, just return the bindings as maps (same as solve)
-     (define binding-maps
-       (for/list ([ar (in-list answer-records)])
-         (answer-record-bindings ar)))
-     ;; Bound args for explain output
+         (stratified-explain-goal config store rel-name goal-args query-vars prov-level)))
+     ;; Results may be answer-record (stratified) or wf-explained-answer (WF).
+     ;; For WF results, convert to Prologos maps with certainty metadata.
      (define bound-args (compute-bound-args-for-relation rel-name goal-args query-vars))
-     (answers->prologos-expr binding-maps query-vars bound-args)]
+     (define prologos-maps
+       (for/list ([r (in-list results)])
+         (cond
+           [(wf-explained-answer? r)
+            (define bindings (wf-explained-answer-bindings r))
+            (define certainty (wf-explained-answer-certainty r))
+            (define explanation (wf-explained-answer-explanation r))
+            ;; Build base CHAMP map from query var bindings
+            (define base-champ
+              (for/fold ([c champ-empty])
+                        ([qv (in-list query-vars)])
+                (define val (hash-ref bindings qv #f))
+                (define key (expr-keyword qv))
+                (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
+                (champ-insert c (equal-hash-code key) key pval)))
+            ;; Add bound args
+            (define with-bound
+              (for/fold ([c base-champ])
+                        ([ba (in-list bound-args)])
+                (define key (expr-keyword (car ba)))
+                (define pval (ground->prologos-expr (cdr ba)))
+                (champ-insert c (equal-hash-code key) key pval)))
+            ;; Add __certainty
+            (define cert-key (expr-keyword '__certainty))
+            (define with-cert
+              (champ-insert with-bound (equal-hash-code cert-key) cert-key
+                            (expr-fvar certainty)))
+            ;; For unknown, add __cycle
+            (if (and (wf-undeterminacy-explanation? explanation)
+                     (eq? certainty 'unknown))
+                (let* ([cycle-key (expr-keyword '__cycle)]
+                       [cycle-preds (wf-undeterminacy-explanation-cycle-predicates explanation)]
+                       [cycle-expr (racket-list->prologos-list
+                                    (map (lambda (p) (expr-string (symbol->string p)))
+                                         cycle-preds))])
+                  (expr-champ
+                   (champ-insert with-cert (equal-hash-code cycle-key) cycle-key cycle-expr)))
+                (expr-champ with-cert))]
+           [(answer-record? r)
+            ;; Standard answer-record → build map from bindings
+            (define bindings (answer-record-bindings r))
+            (define base-champ
+              (for/fold ([c champ-empty])
+                        ([qv (in-list query-vars)])
+                (define val (hash-ref bindings qv #f))
+                (define key (expr-keyword qv))
+                (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
+                (champ-insert c (equal-hash-code key) key pval)))
+            (define with-bound
+              (for/fold ([c base-champ])
+                        ([ba (in-list bound-args)])
+                (define key (expr-keyword (car ba)))
+                (define pval (ground->prologos-expr (cdr ba)))
+                (champ-insert c (equal-hash-code key) key pval)))
+            (expr-champ with-bound)]
+           [else r])))
+     (racket-list->prologos-list prologos-maps)]
     [else (expr-explain goal*)]))
 
 ;; ========================================

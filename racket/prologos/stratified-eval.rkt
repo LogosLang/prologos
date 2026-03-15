@@ -35,7 +35,10 @@
  ;; Phase S3: Stratified solver
  store-has-negation?
  stratified-solve-goal
- stratified-explain-goal)
+ stratified-explain-goal
+ ;; WF explanation types (re-exported from wf-engine)
+ (struct-out wf-explained-answer)
+ (struct-out wf-undeterminacy-explanation))
 
 ;; ========================================
 ;; Phase S1: Dependency Extraction
