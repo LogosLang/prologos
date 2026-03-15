@@ -160,8 +160,8 @@
           (wf-answer (hasheq 'X "b") 'unknown)))
   (define all (wf-answers->standard answers 'all))
   (check-equal? (length all) 2)
-  (check-equal? (hash-ref (car all) '__certainty) 'definite)
-  (check-equal? (hash-ref (cadr all) '__certainty) 'unknown))
+  (check-equal? (hash-ref (car all) 'certainty) 'definite)
+  (check-equal? (hash-ref (cadr all) 'certainty) 'unknown))
 
 ;; ========================================
 ;; 6. Solver config: semantics key

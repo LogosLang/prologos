@@ -335,7 +335,7 @@
     [(all)
      (for/list ([a (in-list answers)])
        (hash-set (wf-answer-bindings a)
-                 '__certainty (wf-answer-certainty a)))]
+                 'certainty (wf-answer-certainty a)))]
     [else
      (error 'wf-answers->standard "Unknown mode: ~a" mode)]))
 

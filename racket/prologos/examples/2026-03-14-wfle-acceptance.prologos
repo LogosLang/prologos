@@ -166,11 +166,20 @@ defr paradox []
 solve-with wf-solver (paradox)
 ;; => nil (no definite answers — self-referencing negation → unknown)
 
+explain-with wf-solver (paradox)
+;; => '[{:_cycle '["paradox"], :_certainty unknown}] : _
+
 ;; --- C3: Self-referencing positive (p :- p) ---
 ;; Positive self-loop with no base case. Under WF: unfounded → no definite answers.
 
 defr unfounded []
   &> (unfounded)
+
+;; In a naive implementation, this would cause infinite recursion. Under WF semantics,
+;; the solver detects this as unfounded (no base case, depends on itself)
+
+;; solve (unfounded)
+;; => → solve: Depth limit exceeded (100)
 
 solve-with wf-solver (unfounded)
 ;; => nil (no base case → no definite answers)
@@ -242,7 +251,9 @@ solve-with wf-solver (win pos)
 ;; Under WF, predicate-level granularity → unknown for all queries.
 
 defr odd-path [?from ?to]
-  &> (edge from mid) (not (odd-path mid to)) (path mid to)
+  &> (edge from mid) 
+     (not (odd-path mid to)) 
+     (path mid to)
 
 solve-with wf-solver (odd-path "a" to)
 ;; => nil (self-negating → unknown)
@@ -269,14 +280,14 @@ explain-with wf-solver (reachable "a" "b")
 
 ;; --- D3: explain for unknown atom (WFLE-specific) ---
 ;; The explain path handles 'unknown results with cycle info.
-;; Returns a map with :__certainty unknown and :__cycle listing the
+;; Returns a map with :certainty :unknown and :cycle listing the
 ;; predicates in the negative cycle.
 
 explain-with wf-solver (paradox)
-;; => [{:__cycle '["paradox"], :__certainty unknown}]
+;; => [{:cycle '["paradox"], :certainty :unknown}]
 
 explain-with wf-solver (pacifist "nixon")
-;; => [{:__cycle '["pacifist" "hawk"], :x_ "nixon", :__certainty unknown}]
+;; => [{:cycle '["pacifist" "hawk"], :x_ "nixon", :certainty :unknown}]
 
 ;; --- D4: explain with provenance levels ---
 ;; Provenance levels are not yet wired as solver config keys in WS mode.
@@ -447,11 +458,11 @@ solve-one (path "z" dest)
 schema Employee
   :name   String
   :dept   String
-  :salary Nat
+  :salary Int
 
 defr employees [?name ?dept ?salary]
-  || "alice" "eng"   100000N
-     "bob"   "sales" 80000N
+  || "alice" "eng"   100000
+     "bob"   "sales" 80000
 
 solve (employees name "eng" salary)
 ;; => [{:dept_ "eng", :name "alice", :salary 100000N}]
