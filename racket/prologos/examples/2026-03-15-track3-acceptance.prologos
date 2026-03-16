@@ -1,0 +1,714 @@
+;; ========================================================================
+;;
+;;   Track 3 Acceptance File — Cell-Primary Registries
+;;
+;;   STATUS: Phase 0 (Pre-Implementation Baseline)
+;;   Run via: process-file "racket/prologos/examples/2026-03-15-track3-acceptance.prologos"
+;;
+;;   Track 3 is an infrastructure track (no syntax changes). This file
+;;   broadly exercises Prologos features in ideal WS syntax to confirm
+;;   no regressions from the cell-primary migration. Expressions that
+;;   don't work are commented out with annotations explaining WHY.
+;;   These are pre-existing L3 gaps to address — NOT Track 3 regressions.
+;;
+;;   Conventions:
+;;     - Uncurried type signatures: `spec f A B -> C`
+;;     - Direct pattern dispatch on defn: `defn f | [pat] -> body`
+;;     - match for multi-step logic within a single clause
+;;     - Full prelude (no :no-prelude) — exercise the standard library
+;;     - Commented-out = aspirational ideal; annotated with BUG/BLOCKED
+;;     - Uncommented = must pass today; regression if broken
+;;
+;;   Sections:
+;;     A. Pattern matching and basic definitions
+;;     B. Polymorphic functions and implicit arguments
+;;     C. Traits and instances (Eq, Ord, Add, etc.)
+;;     D. Collections (List, Option, Result, Pair, Set, Map)
+;;     E. Higher-order functions (map, filter, fold, pipe, compose)
+;;     F. Data type definitions and constructors
+;;     G. Dependent types (Vec, Fin)
+;;     H. Numeric operations (Int, Rat, Posit)
+;;     I. String and Char operations
+;;     J. Dot-access and Map syntax
+;;     K. Module imports and qualified access
+;;     L. Where-clause generics and specialize
+;;     M. Bundle and first-class arithmetic
+;;
+;; ========================================================================
+
+
+ns acceptance::track3
+
+
+;; ========================================================================
+;; SECTION A: PATTERN MATCHING AND BASIC DEFINITIONS
+;; ========================================================================
+;;
+;; Exercises: spec/defn, direct pattern dispatch, match, Bool/Nat, if.
+
+;; --- A1: Direct pattern dispatch on defn ---
+;; BUG (L3): defn with | dispatch at file level produces match-fail holes
+;; for non-first cases. The multi-clause pipe syntax is parsed but pattern
+;; branches after the first don't bind correctly. This is the IDEAL syntax
+;; per the grammar (see grammar.md § "Function Definition (defn)").
+;;
+;; spec is-zero Nat -> Bool
+;; defn is-zero
+;;   | [zero]  -> true
+;;   | [suc _] -> false
+;;
+;; is-zero zero
+;; is-zero [suc zero]
+;; => Expected: true : Bool, false : Bool
+
+;; --- A1-fallback: match-based (works today) ---
+
+spec is-zero Nat -> Bool
+defn is-zero [n]
+  match n
+    | zero  -> true
+    | suc _ -> false
+
+is-zero zero
+is-zero [suc zero]
+is-zero [suc [suc zero]]
+
+;; --- A2: Boolean combinators ---
+;; Ideal form (direct dispatch):
+;;
+;; spec my-not Bool -> Bool
+;; defn my-not
+;;   | [true]  -> false
+;;   | [false] -> true
+;;
+;; spec my-and Bool Bool -> Bool
+;; defn my-and
+;;   | [true  b] -> b
+;;   | [false _] -> false
+
+;; A2-fallback:
+
+spec my-not Bool -> Bool
+defn my-not [b]
+  match b
+    | true  -> false
+    | false -> true
+
+spec my-and Bool Bool -> Bool
+defn my-and [a b]
+  match a
+    | true  -> b
+    | false -> false
+
+spec my-or Bool Bool -> Bool
+defn my-or [a b]
+  match a
+    | true  -> true
+    | false -> b
+
+spec my-xor Bool Bool -> Bool
+defn my-xor [a b]
+  match a
+    | true  -> my-not b
+    | false -> b
+
+my-not true
+my-not false
+my-and true true
+my-and true false
+my-or false true
+my-or false false
+my-xor true false
+my-xor true true
+
+;; --- A3: If-then-else ---
+
+if true 1 0
+if false "yes" "no"
+
+;; --- A4: Nat arithmetic ---
+;; Ideal form (direct dispatch):
+;;
+;; spec add Nat Nat -> Nat
+;; defn add
+;;   | [x zero]    -> x
+;;   | [x (suc k)] -> suc [add x k]
+;;
+;; spec fact Nat -> Nat
+;; defn fact
+;;   | [zero]  -> suc zero
+;;   | [suc n] -> mult [suc n] [fact n]
+
+;; A4-fallback:
+
+spec add Nat Nat -> Nat
+defn add [x y]
+  match y
+    | zero  -> x
+    | suc k -> suc [add x k]
+
+spec mult Nat Nat -> Nat
+defn mult [x y]
+  match y
+    | zero  -> zero
+    | suc k -> add x [mult x k]
+
+spec double Nat -> Nat
+defn double [x] [add x x]
+
+add [suc zero] [suc [suc zero]]
+add zero zero
+mult [suc [suc zero]] [suc [suc [suc zero]]]
+double [suc [suc zero]]
+
+;; --- A5: Nested patterns ---
+;; Ideal form:
+;;
+;; spec depth Nat -> Nat
+;; defn depth
+;;   | [zero]          -> zero
+;;   | [suc zero]      -> suc zero
+;;   | [suc (suc k)]   -> suc [suc [depth k]]
+
+;; A5-fallback:
+
+spec depth Nat -> Nat
+defn depth [n]
+  match n
+    | zero        -> zero
+    | suc zero    -> suc zero
+    | suc (suc k) -> suc [suc [depth k]]
+
+depth zero
+depth [suc zero]
+depth [suc [suc [suc zero]]]
+
+
+;; ========================================================================
+;; SECTION B: POLYMORPHIC FUNCTIONS AND IMPLICIT ARGUMENTS
+;; ========================================================================
+;;
+;; Exercises: implicit erased binders {A : Type}, polymorphic application,
+;; uncurried signatures.
+
+spec my-id {A : Type} A -> A
+defn my-id [a] a
+
+spec my-const {A B : Type} A B -> A
+defn my-const [a _] a
+
+my-id zero
+my-id true
+my-id "hello"
+my-id 42
+my-const "hello" zero
+my-const true 42
+
+;; --- B2: Higher-order polymorphic functions ---
+;; BUG (L3): Uncurried multi-arg functions whose body applies a function
+;; argument (`f x`) fail at file level: the elaborator treats `f` as the
+;; return value instead of applying it to `x`. The type becomes
+;; `[A -> B]` instead of `B`.
+;;
+;; spec apply {A B : Type} [A -> B] A -> B
+;; defn apply [f x] f x
+;;
+;; spec twice {A : Type} [A -> A] A -> A
+;; defn twice [f x] f [f x]
+;;
+;; spec compose {A B C : Type} [B -> C] [A -> B] A -> C
+;; defn compose [f g x] f [g x]
+;;
+;; apply (fn [x : Nat] suc x) zero
+;; twice (fn [x : Nat] suc x) [suc [suc zero]]
+;; compose suc double [suc zero]
+;; => Expected: 1N, 4N, 3N
+
+
+;; ========================================================================
+;; SECTION C: TRAITS AND INSTANCES (PRELUDE)
+;; ========================================================================
+;;
+;; Exercises: trait resolution, dict-passing, prelude Eq/Ord instances.
+
+;; --- C1: Eq via prelude dict (nat-eq) ---
+
+eq-check nat-eq [suc [suc zero]] [suc [suc zero]]
+eq-check nat-eq zero [suc zero]
+eq-neq nat-eq zero [suc zero]
+
+;; --- C2: Ord via prelude dict (nat-ord) ---
+
+ord-compare nat-ord [suc zero] [suc [suc zero]]
+ord-compare nat-ord [suc zero] [suc zero]
+ord-lt nat-ord zero [suc zero]
+ord-gt nat-ord [suc [suc zero]] zero
+
+;; --- C3: Where-clause generics ---
+;; BUG (L3): where-clause functions define correctly but at call site,
+;; trait resolution fails: "No instance of Eq for D". The where-clause
+;; dict injection doesn't wire the concrete type's dict.
+;;
+;; spec my-equal {A : Type} A A -> Bool where (Eq A)
+;; defn my-equal [x y] where (Eq A)
+;;   eq-check x y
+;;
+;; my-equal [suc zero] [suc zero]
+;; my-equal 5 5
+;; => Expected: true : Bool, true : Bool
+
+;; --- C4: Derived comparison ---
+;; BLOCKED on C3 (where-clause resolution).
+;;
+;; spec max-of {A : Type} A A -> A where (Ord A)
+;; defn max-of [x y] where (Ord A)
+;;   match [ord-compare x y]
+;;     | lt-ord -> y
+;;     | _      -> x
+;;
+;; max-of [suc [suc zero]] [suc zero]
+;; => Expected: 2N : Nat
+
+;; --- C5: Add/Sub via prelude dicts ---
+;;
+;; plus Nat--Add--dict [suc zero] [suc [suc zero]]
+;; minus Nat--Sub--dict [suc [suc [suc zero]]] [suc zero]
+;; => Expected: 3N : Nat, 2N : Nat
+
+
+;; ========================================================================
+;; SECTION D: COLLECTIONS (LIST, OPTION, RESULT, PAIR, SET, MAP)
+;; ========================================================================
+;;
+;; Exercises: prelude List/Option/Result, Sigma pairs, Set/Map keywords.
+
+;; --- D1: List construction and operations ---
+
+def nums : [List Nat]
+  cons [suc zero] [cons [suc [suc zero]] [cons [suc [suc [suc zero]]] nil]]
+
+length nums
+
+;; BUG (L3): head from prologos::core::collections requires HKT Foldable
+;; trait resolution, which fails at L3. Dict-passing version untested.
+;; head zero nums
+
+;; D1a: map/filter over list (BLOCKED on E1: fn at L3)
+;;
+;; map (fn [x : Nat] suc x) nums
+;; filter is-zero nums
+;; foldr (fn [x : Nat] (fn [acc : Nat] [add x acc])) zero nums
+;; => Expected: [2N 3N 4N], [], 6N
+
+;; --- D2: List literal syntax ---
+;; BUG: '[1 2 3] produces a Datum (quoted s-expression), not List Int.
+;;
+;; def ints : [List Int] := '[1 2 3 4 5]
+;; length ints
+;; => Expected: 5N : Nat
+
+;; --- D3: Option ---
+
+def opt-some : [Option Nat] := some [suc zero]
+def opt-none : [Option Nat] := none
+
+;; --- D4: Result ---
+
+def ok-val : [Result Nat String] := ok [suc zero]
+def err-val : [Result Nat String] := err "oops"
+
+;; --- D5: Pair (Sigma) ---
+;; BUG (L3): [A * B] Sigma syntax doesn't resolve at file-level defs.
+;; `*` is unbound as a type operator.
+;;
+;; def p : [Nat * Bool] := pair zero true
+;; fst p
+;; snd p
+;; => Expected: 0N, true
+
+;; --- D6: Set operations ---
+;;
+;; def s := set-insert [set-insert [set-empty Nat] [suc zero]] [suc [suc zero]]
+;; set-member? s [suc zero]
+;; set-size s
+;; => Expected: true, 2N
+
+;; --- D7: Map operations ---
+;;
+;; def m := map-insert [map-insert [map-empty Keyword Int] :x 1] :y 2
+;; map-get m :x
+;; map-size m
+;; => Expected: 1, 2N
+
+
+;; ========================================================================
+;; SECTION E: HIGHER-ORDER FUNCTIONS
+;; ========================================================================
+;;
+;; Exercises: fn expressions, pipe (|>), compose (>>).
+
+;; --- E1: Anonymous functions (fn) ---
+;; BUG (L3): fn with typed binders fails at file level. Error: "fn: all
+;; parameters except body must be bare symbols or a binder (x : T)".
+;; Works at L2 (process-string-ws) but fails at L3 (process-file).
+;; Root cause: file-level preparse handles fn differently from string-mode.
+;;
+;; (fn [x : Nat] suc x) zero
+;; (fn [x : Bool] my-not x) true
+;; (fn [a : Nat b : Nat] add a b) [suc zero] [suc [suc zero]]
+;; => Expected: 1N, false, 3N
+
+;; --- E2: Pipe operator (|>) ---
+;;
+;; zero |> suc |> suc |> suc
+;; => Expected: 3N : Nat
+;;
+;; 5 |> (fn [x : Int] [int+ x 1]) |> (fn [x : Int] [int* x 2])
+;; => Expected: 12 : Int
+
+;; --- E3: Compose operator (>>) ---
+;;
+;; [suc >> suc >> suc] zero
+;; => Expected: 3N : Nat
+
+;; --- E4: Map/filter/fold with function names ---
+;; If map accepts a bare function name (not just lambdas):
+;;
+;; map suc nums
+;; map double nums
+;; => Expected: [2N 3N 4N], [2N 4N 6N]
+
+
+;; ========================================================================
+;; SECTION F: DATA TYPE DEFINITIONS AND CONSTRUCTORS
+;; ========================================================================
+;;
+;; Exercises: data declarations, constructor scoping, user-defined types.
+
+;; --- F1: Simple enum ---
+;; BUG (L3): data at file level creates the type but constructors are
+;; UNSCOPED — not brought into the file-level namespace. The type is
+;; registered but constructors aren't in the lexical environment.
+;; This affects ALL data declarations in .prologos files.
+;;
+;; data Color where
+;;   | red   : Color
+;;   | green : Color
+;;   | blue  : Color
+;;
+;; spec color-name Color -> String
+;; defn color-name
+;;   | [red]   -> "red"
+;;   | [green] -> "green"
+;;   | [blue]  -> "blue"
+;;
+;; color-name red
+;; color-name blue
+;; => Expected: "red", "blue"
+
+;; --- F2: Parameterized recursive type ---
+;;
+;; data Tree [A : Type] where
+;;   | leaf : A -> [Tree A]
+;;   | node : [Tree A] -> [Tree A] -> [Tree A]
+;;
+;; spec tree-size {A : Type} [Tree A] -> Nat
+;; defn tree-size [t]
+;;   match t
+;;     | leaf _   -> suc zero
+;;     | node l r -> suc [add [tree-size l] [tree-size r]]
+;;
+;; def my-tree : [Tree Nat]
+;;   node [node [leaf [suc zero]] [leaf [suc [suc zero]]]] [leaf [suc [suc [suc zero]]]]
+;;
+;; tree-size my-tree
+;; => Expected: 3N
+
+;; --- F3: Either ---
+;;
+;; data Either [A : Type] [B : Type] where
+;;   | left  : A -> [Either A B]
+;;   | right : B -> [Either A B]
+;;
+;; spec from-either {A B C : Type} [A -> C] [B -> C] [Either A B] -> C
+;; defn from-either [f g e]
+;;   match e
+;;     | left a  -> f a
+;;     | right b -> g b
+
+;; --- F4: data with uncurried syntax (no `where`) ---
+;;
+;; data Option2 {A}
+;;   none2
+;;   some2 : A
+;;
+;; spec unwrap {A : Type} A [Option2 A] -> A
+;; defn unwrap [default opt]
+;;   match opt
+;;     | none2   -> default
+;;     | some2 x -> x
+;;
+;; unwrap 0 [some2 42]
+;; unwrap 0 none2
+;; => Expected: 42, 0
+
+
+;; ========================================================================
+;; SECTION G: DEPENDENT TYPES (VEC, FIN)
+;; ========================================================================
+;;
+;; Exercises: indexed types, dependent pattern matching.
+
+;; --- G1: Length-indexed vectors ---
+;; BLOCKED: data constructor scoping (F1), plus implicit arg resolution.
+;;
+;; data Vec [A : Type] [n : Nat] where
+;;   | vnil  : [Vec A zero]
+;;   | vcons : {m : Nat} -> A -> [Vec A m] -> [Vec A [suc m]]
+;;
+;; spec vhead {A : Type} {n : Nat} [Vec A [suc n]] -> A
+;; defn vhead [v]
+;;   match v
+;;     | vcons x _ -> x
+;;
+;; def v3 : [Vec Nat 3]
+;;   vcons [suc zero] [vcons [suc [suc zero]] [vcons [suc [suc [suc zero]]] vnil]]
+;;
+;; vhead v3
+;; => Expected: 1N : Nat
+
+;; --- G2: Fin (bounded naturals) ---
+;;
+;; data Fin [n : Nat] where
+;;   | fzero : {m : Nat} -> [Fin [suc m]]
+;;   | fsuc  : {m : Nat} -> [Fin m] -> [Fin [suc m]]
+;;
+;; def f0 : [Fin 3] := fzero
+;; def f1 : [Fin 3] := fsuc fzero
+;; def f2 : [Fin 3] := fsuc [fsuc fzero]
+
+;; --- G3: Propositional equality (from prelude eq module) ---
+;;
+;; def refl-proof : [Eq Nat zero zero] := refl
+;; => Expected: refl : [Eq Nat 0N 0N]
+
+
+;; ========================================================================
+;; SECTION H: NUMERIC OPERATIONS
+;; ========================================================================
+;;
+;; Exercises: Int, Rat, Posit literals and arithmetic.
+
+;; --- H1: Int literals ---
+
+def my-int : Int := 42
+def my-neg : Int := -7
+my-int
+my-neg
+
+;; --- H2: Int arithmetic via foreign builtins ---
+;;
+;; int+ 3 4
+;; int* 6 7
+;; int- 10 3
+;; => Expected: 7, 42, 7
+
+;; --- H3: Rat literals and arithmetic ---
+;;
+;; def half : Rat := 1/2
+;; def third : Rat := 1/3
+;; rat+ half third
+;; => Expected: 5/6 : Rat
+
+;; --- H4: Posit literals ---
+;;
+;; def p8val : Posit8 := 1.5p8
+;; def p16val : Posit16 := 3.14p16
+
+;; --- H5: Numeric subtyping (refined) ---
+;;
+;; def pos : PosInt := 5
+;; def neg : NegInt := -3
+;; def zero-val : Zero := 0
+;; => Expected: refined numeric subtypes
+
+
+;; ========================================================================
+;; SECTION I: STRING AND CHAR OPERATIONS
+;; ========================================================================
+;;
+;; Exercises: String/Char literals, qualified access to char::/str:: ops.
+
+;; --- I1: String literals and qualified operations ---
+
+def greeting : String := "hello world"
+greeting
+str::length greeting
+str::append "hello " "world"
+
+;; --- I2: Char literals ---
+;; BUG (L3): Char literal 'a' is read as (quote a) = datum-sym, not Char.
+;; WS-mode single-quote invokes quoting. Need distinct char literal syntax.
+;;
+;; def ch : Char := 'a'
+;; char::code ch
+;; char::alpha? ch
+;; char::upper ch
+;; => Expected: 97, true, 'A'
+
+;; --- I3: String equality and comparison ---
+;;
+;; eq-check String--Eq--dict "hello" "hello"
+;; eq-check String--Eq--dict "hello" "world"
+;; => Expected: true, false
+
+;; --- I4: String concatenation via Add trait ---
+;;
+;; plus String--Add--dict "hello " "world"
+;; => Expected: "hello world" : String
+
+;; --- I5: String operations (qualified) ---
+;;
+;; str-ops::split "a,b,c" ","
+;; str-ops::join ", " '[1 2 3]
+;; str-ops::trim "  hello  "
+;; => Expected: list of strings, joined string, "hello"
+
+
+;; ========================================================================
+;; SECTION J: DOT-ACCESS AND MAP SYNTAX
+;; ========================================================================
+;;
+;; Exercises: dot-access for keyword map lookup, map construction.
+
+;; --- J1: Map literal and dot-access ---
+;; BUG (L3): '{:x 1 :y 2} produces a Datum (quote), not typed Map.
+;;
+;; def config : [Map Keyword Int]
+;;   '{:x 1 :y 2 :z 3}
+;;
+;; config.:x
+;; config.:y
+;; config.:z
+;; => Expected: 1, 2, 3
+
+;; --- J2: Implicit map syntax (indentation-based keyword blocks) ---
+;;
+;; def settings
+;;   :host "localhost"
+;;   :port 8080
+;;   :debug true
+;;
+;; settings.:host
+;; settings.:port
+;; => Expected: "localhost", 8080
+
+
+;; ========================================================================
+;; SECTION K: MODULE IMPORTS AND QUALIFIED ACCESS
+;; ========================================================================
+;;
+;; Exercises: require, qualified access, alias imports.
+
+;; --- K1: Qualified access to prelude modules ---
+
+str::length "test"
+
+;; --- K2: Explicit require ---
+;; BUG: require at file level (inside an `ns` file, not `module` file)
+;; hasn't been validated at L3. Library modules use `require` but they
+;; go through the module-loading path, not the ns path.
+;;
+;; require [prologos::data::ordering :refer [Ordering lt-ord eq-ord gt-ord]]
+;; lt-ord
+;; => Expected: lt-ord : Ordering
+
+;; --- K3: Alias imports ---
+;;
+;; require [prologos::data::list :as list :refer []]
+;; list::length nums
+;; => Expected: 3N
+
+
+;; ========================================================================
+;; SECTION L: WHERE-CLAUSE GENERICS AND SPECIALIZE
+;; ========================================================================
+;;
+;; Exercises: generic functions with where constraints, dict injection,
+;; specialization for concrete types.
+
+;; --- L1: Generic equality ---
+;; BLOCKED on C3 (where-clause resolution at call site).
+;;
+;; spec equal-pair {A B : Type} A A B B -> Bool where (Eq A) (Eq B)
+;; defn equal-pair [a1 a2 b1 b2] where (Eq A) (Eq B)
+;;   my-and [eq-check a1 a2] [eq-check b1 b2]
+;;
+;; equal-pair zero zero [suc zero] [suc zero]
+;; => Expected: true
+
+;; --- L2: Specialize blocks ---
+;; BLOCKED on L1.
+;;
+;; specialize my-equal Nat
+;;   defn my-equal [x y]
+;;     nat-eq? x y
+
+;; --- L3: Call-site specialization ---
+;; The rewrite-specializations pass replaces where-style calls with
+;; specialized versions when the type arg is statically known.
+;; BLOCKED on L1 resolution.
+
+
+;; ========================================================================
+;; SECTION M: BUNDLE AND FIRST-CLASS ARITHMETIC
+;; ========================================================================
+;;
+;; Exercises: Num/Fractional bundles, sum/product, generic numerics.
+
+;; --- M1: Num bundle ---
+;; BLOCKED on where-clause resolution (C3/L1).
+;;
+;; spec generic-double {A : Type} A -> A where (Num A)
+;; defn generic-double [x] where (Num A)
+;;   plus x x
+;;
+;; generic-double 5
+;; generic-double 1/2
+;; => Expected: 10, 1/1
+
+;; --- M2: Sum/product over list ---
+;;
+;; sum Nat--Add--dict Nat--AdditiveIdentity--dict nums
+;; product Nat--Mul--dict Nat--MultiplicativeIdentity--dict nums
+;; => Expected: 6N, 6N
+
+;; --- M3: int-range ---
+;;
+;; int-range 1 5
+;; => Expected: [List Int] [1 2 3 4]
+
+
+;; ========================================================================
+;; SECTION Z: UNCOMMENTED BASELINE — Must Pass Today
+;; ========================================================================
+;;
+;; All uncommented expressions from above, plus regression-critical
+;; operations. If ANY fail after a Track 3 phase, it's a regression.
+
+;; Nat arithmetic (A4)
+add [suc [suc [suc zero]]] [suc [suc zero]]
+mult [suc [suc zero]] [suc [suc [suc zero]]]
+
+;; Polymorphic id (B1)
+my-id "track 3 acceptance"
+
+;; Boolean logic (A2)
+my-and [my-not false] [my-or false true]
+
+;; Eq/Ord via prelude dicts (C1/C2)
+eq-check nat-eq zero zero
+ord-lt nat-ord zero [suc zero]
+
+;; String ops (I1, qualified)
+str::append "cell" "-primary"

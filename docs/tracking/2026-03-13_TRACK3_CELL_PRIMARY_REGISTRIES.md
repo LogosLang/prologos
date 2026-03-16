@@ -17,7 +17,7 @@
 | D.1 | Design analysis and read-site audit | ✅ | This document |
 | D.2 | Design iteration (external critique) | ✅ | 5 items accepted, 7 rejected |
 | D.3 | Internal self-critique (principle alignment) | ✅ | 5 items; Phase 6 design resolved |
-| 0 | Performance baseline + acceptance file | ⬜ | `examples/2026-03-15-track3-acceptance.prologos` |
+| 0 | Performance baseline + acceptance file | ⬜ | `racket/prologos/examples/2026-03-15-track3-acceptance.prologos` |
 | 1 | Core type registries → cell-primary (8 registries) | ⬜ | |
 | 2 | Trait + instance registries → cell-primary (7 registries) | ⬜ | |
 | 3 | Remaining registries → cell-primary (8 registries) | ⬜ | |
@@ -315,7 +315,7 @@ This means Phase 6 is a *partial* cleanup for Track 3. Full parameter eliminatio
 - **Threshold**: >25% regression = investigate before committing (per testing.md rule)
 - **Comparison**: `racket tools/benchmark-tests.rkt --compare benchmark-baseline-track-3`
 
-**Acceptance file** — `examples/2026-03-15-track3-acceptance.prologos` broadly exercises Prologos features in ideal WS syntax: type definitions, pattern matching, traits/instances, generics, collections, numeric ops, pipe/compose, dot-access, etc. Track 3 is an infrastructure track (no syntax changes), so the acceptance file serves as a **diagnostic safety net**: run before and after each phase via `process-file` to confirm no WS-mode regressions from the cell-primary migration. This follows the Phase 0 acceptance file practice (see `.claude/rules/workflow.md`).
+**Acceptance file** — `racket/prologos/examples/2026-03-15-track3-acceptance.prologos` broadly exercises Prologos features in ideal WS syntax: type definitions, pattern matching, traits/instances, generics, collections, numeric ops, pipe/compose, dot-access, etc. Track 3 is an infrastructure track (no syntax changes), so the acceptance file serves as a **diagnostic safety net**: run before and after each phase via `process-file` to confirm no WS-mode regressions from the cell-primary migration. This follows the Phase 0 acceptance file practice (see `.claude/rules/workflow.md`).
 
 ---
 
