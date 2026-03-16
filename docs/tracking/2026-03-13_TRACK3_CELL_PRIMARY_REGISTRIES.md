@@ -20,10 +20,10 @@
 | 0 | Performance baseline + acceptance file | ✅ | Acceptance: `a5408f0` (0 errors, 13 sections). Baseline: 194.3s / 7096 tests / 370 files |
 | 1 | Core type registries → cell-primary (8 registries) | ✅ | `a7f61ca` — 8 readers + elaboration guard, 14 computation reads converted |
 | 2 | Trait + instance registries → cell-primary (7 registries) | ✅ | `0880c4a` — 7 readers, 12 computation reads converted (macros, elaborator, trait-resolution, driver) |
-| 3 | Remaining registries → cell-primary (8 registries) | ⬜ | |
-| 4 | Warnings → cell-primary (3 parameters) | ⬜ | |
-| 5a | Narrowing constraints → cell (monotonic, `merge-list-append`) | ⬜ | |
-| 5b | Narrowing var-constraints → cell (non-monotonic, `merge-last-write-wins`) | ⬜ | |
+| 3 | Remaining registries → cell-primary (8 registries) | ✅ | `31ba07f` — 8 readers, ~20 computation reads, all internal to macros.rkt |
+| 4 | Warnings → cell-primary (3 parameters) | ✅ | `c5c1681` — 3 readers + cell-read callback, simpler guard (no elaboration check needed) |
+| 5a | Narrowing constraints → cell (monotonic, `merge-list-append`) | ✅ | `9ebebdc` — combined with 5b |
+| 5b | Narrowing var-constraints → cell (non-monotonic, `merge-last-write-wins`) | ✅ | `9ebebdc` — elaboration guard required (same pattern as macros) |
 | 6 | Remove parameter writes + cleanup | ⬜ | Two-context architecture (see §3.7) |
 | 7 | Post-Implementation Review | ⬜ | Lightweight — established patterns |
 
