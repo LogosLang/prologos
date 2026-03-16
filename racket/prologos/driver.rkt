@@ -491,7 +491,7 @@
                   ;; (instances-of TraitName) — list all type instances
                   [(list 'instances-of trait-name)
                    (define impl-reg (read-impl-registry))
-                   (define param-reg (current-param-impl-registry))
+                   (define param-reg (read-param-impl-registry))
                    ;; Collect monomorphic instances from impl registry
                    (define mono-instances
                      (for/list ([(key entry) (in-hash impl-reg)]
@@ -539,7 +539,7 @@
                   ;; (satisfies? TypeName TraitName) — check if type implements trait
                   [(list 'satisfies? type-name trait-name)
                    (define impl-reg (read-impl-registry))
-                   (define param-reg (current-param-impl-registry))
+                   (define param-reg (read-param-impl-registry))
                    ;; Check monomorphic: look for key "TypeName--TraitName"
                    (define mono-key
                      (string->symbol (format "~a--~a" type-name trait-name)))

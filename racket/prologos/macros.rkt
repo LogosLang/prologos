@@ -69,6 +69,7 @@
          lookup-type-ctors
          ;; Trait metadata registry
          current-trait-registry
+         read-trait-registry
          trait-meta
          trait-meta?
          trait-meta-name
@@ -94,6 +95,7 @@
          read-impl-registry
          ;; Parametric impl metadata registry
          current-param-impl-registry
+         read-param-impl-registry
          param-impl-entry
          param-impl-entry?
          param-impl-entry-trait-name
@@ -105,6 +107,7 @@
          lookup-param-impls
          ;; Bundle registry
          current-bundle-registry
+         read-bundle-registry
          bundle-entry
          bundle-entry?
          bundle-entry-name
@@ -140,6 +143,7 @@
          find-capability-in-scope
          ;; HKT-8: Specialization registry
          current-specialization-registry
+         read-specialization-registry
          specialization-entry
          specialization-entry?
          specialization-entry-generic-name
@@ -185,6 +189,7 @@
          parse-schema-fields
          ;; Selection registry
          current-selection-registry
+         read-selection-registry
          selection-entry
          selection-entry?
          selection-entry-name
@@ -202,6 +207,7 @@
          desugar-proc-ws
          ;; Session registry
          current-session-registry
+         read-session-registry
          session-entry
          session-entry?
          session-entry-name
@@ -300,6 +306,7 @@
          process-functor
          ;; Trait laws
          current-trait-laws
+         read-trait-laws
          register-trait-laws!
          lookup-trait-laws
          ;; Implicit map, dot-access, and introspection helpers
@@ -695,8 +702,13 @@
   ;; Phase 2b: dual-write to cell
   (macros-cell-write! (current-selection-registry-cell-id) (hasheq name entry)))
 
+;; Track 3 Phase 2: cell-primary reader for selection registry
+(define (read-selection-registry)
+  (define v (macros-cell-read-safe (current-selection-registry-cell-id)))
+  (if (eq? v 'not-found) (current-selection-registry) v))
+
 (define (lookup-selection name)
-  (hash-ref (current-selection-registry) name #f))
+  (hash-ref (read-selection-registry) name #f))
 
 ;; ========================================
 ;; Session registry
@@ -715,8 +727,13 @@
   ;; Phase 2b: dual-write to cell
   (macros-cell-write! (current-session-registry-cell-id) (hasheq name entry)))
 
+;; Track 3 Phase 2: cell-primary reader for session registry
+(define (read-session-registry)
+  (define v (macros-cell-read-safe (current-session-registry-cell-id)))
+  (if (eq? v 'not-found) (current-session-registry) v))
+
 (define (lookup-session name)
-  (hash-ref (current-session-registry) name #f))
+  (hash-ref (read-session-registry) name #f))
 
 ;; ========================================
 ;; Strategy registry (Phase S6): scheduling/execution configuration
@@ -5721,8 +5738,13 @@
   ;; Phase 2b: dual-write to cell
   (macros-cell-write! (current-trait-registry-cell-id) (hasheq name meta)))
 
+;; Track 3 Phase 2: cell-primary reader for trait registry
+(define (read-trait-registry)
+  (define v (macros-cell-read-safe (current-trait-registry-cell-id)))
+  (if (eq? v 'not-found) (current-trait-registry) v))
+
 (define (lookup-trait name)
-  (hash-ref (current-trait-registry) name #f))
+  (hash-ref (read-trait-registry) name #f))
 
 ;; ========================================
 ;; Trait laws store
@@ -5738,8 +5760,13 @@
   ;; Phase 2b: dual-write to cell
   (macros-cell-write! (current-trait-laws-cell-id) (hasheq name laws)))
 
+;; Track 3 Phase 2: cell-primary reader for trait laws
+(define (read-trait-laws)
+  (define v (macros-cell-read-safe (current-trait-laws-cell-id)))
+  (if (eq? v 'not-found) (current-trait-laws) v))
+
 (define (lookup-trait-laws name)
-  (hash-ref (current-trait-laws) name '()))
+  (hash-ref (read-trait-laws) name '()))
 
 ;; ========================================
 ;; Impl metadata registry
@@ -5859,9 +5886,14 @@
 ;; Keyed by trait name (not impl key) because lookup requires pattern matching.
 (define current-param-impl-registry (make-parameter (hasheq)))
 
+;; Track 3 Phase 2: cell-primary reader for parametric impl registry
+(define (read-param-impl-registry)
+  (define v (macros-cell-read-safe (current-param-impl-registry-cell-id)))
+  (if (eq? v 'not-found) (current-param-impl-registry) v))
+
 ;; HKT-4: Overlap detection — warn if a new parametric impl could overlap with existing ones.
 (define (register-param-impl! trait-name entry)
-  (define existing (hash-ref (current-param-impl-registry) trait-name '()))
+  (define existing (hash-ref (read-param-impl-registry) trait-name '()))
   ;; Idempotency guard: skip if an entry with the same dict-name already exists.
   ;; This happens when impl is pre-registered in Pass 1 and re-processed in Pass 2.
   (define dict-name (param-impl-entry-dict-name entry))
@@ -5917,7 +5949,7 @@
             " ")))))
 
 (define (lookup-param-impls trait-name)
-  (hash-ref (current-param-impl-registry) trait-name '()))
+  (hash-ref (read-param-impl-registry) trait-name '()))
 
 ;; ========================================
 ;; Bundle registry (named constraint conjunctions)
@@ -5938,8 +5970,13 @@
   ;; Phase 2b: dual-write to cell
   (macros-cell-write! (current-bundle-registry-cell-id) (hasheq name entry)))
 
+;; Track 3 Phase 2: cell-primary reader for bundle registry
+(define (read-bundle-registry)
+  (define v (macros-cell-read-safe (current-bundle-registry-cell-id)))
+  (if (eq? v 'not-found) (current-bundle-registry) v))
+
 (define (lookup-bundle name)
-  (hash-ref (current-bundle-registry) name #f))
+  (hash-ref (read-bundle-registry) name #f))
 
 ;; ========================================
 ;; HKT-8: Specialization registry
@@ -5964,8 +6001,13 @@
   ;; Phase 2b: dual-write to cell (hash with equal?-based cons keys)
   (macros-cell-write! (current-specialization-registry-cell-id) (hash key entry)))
 
+;; Track 3 Phase 2: cell-primary reader for specialization registry
+(define (read-specialization-registry)
+  (define v (macros-cell-read-safe (current-specialization-registry-cell-id)))
+  (if (eq? v 'not-found) (current-specialization-registry) v))
+
 (define (lookup-specialization generic-name type-con)
-  (hash-ref (current-specialization-registry) (cons generic-name type-con) #f))
+  (hash-ref (read-specialization-registry) (cons generic-name type-con) #f))
 
 ;; ========================================
 ;; process-bundle: parse and register a bundle definition

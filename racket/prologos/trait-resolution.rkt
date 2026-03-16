@@ -559,7 +559,7 @@
 ;; If multiple traits match, returns #f (ambiguity — future: error).
 (define (find-trait-with-method method-name type-args)
   (define candidates
-    (for/list ([(name tm) (in-hash (current-trait-registry))]
+    (for/list ([(name tm) (in-hash (read-trait-registry))]
                #:when (ormap (lambda (m) (eq? (trait-method-name m) method-name))
                              (trait-meta-methods tm))
                #:when (or (try-monomorphic-resolve name type-args)

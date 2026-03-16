@@ -224,7 +224,7 @@
 ;; Uses the current trait registry. Returns a hasheq: symbol → (listof method-reverse-index-entry).
 (define (build-method-reverse-index)
   (for/fold ([idx (hasheq)])
-            ([(trait-name tm) (in-hash (current-trait-registry))])
+            ([(trait-name tm) (in-hash (read-trait-registry))])
     (for/fold ([idx idx])
               ([method (in-list (trait-meta-methods tm))])
       (define mname (trait-method-name method))
