@@ -17,7 +17,7 @@
 | D.2 | Design discussion + rework | ✅ | `17142ec` — persistent networks, cross-module edges, lifecycle, TMS discussion |
 | D.2+ | External critique incorporation | ✅ | `b0c63bc` — Shadow-cell pattern, staleness model, performance hypotheses, non-goals, rollback |
 | D.3 | Self-critique (principle alignment) | ✅ | Principle alignment check: 6 aligned, 3 tensions noted; deferred items to Track 6 + LSP |
-| 0 | Performance baseline + acceptance file | ⬜ | |
+| 0 | Performance baseline + acceptance file | ✅ | `157f7aa` — 294 pass, 0 errors, 12 BUGs commented |
 | 1 | Persistent module network infrastructure + cross-network prototype | ⬜ | `module-network-ref`, `mod-status`, shadow-cell prototype |
 | 2 | Definition removal → cell-aware cleanup | ⬜ | `global-env-remove!` helper |
 | 3 | Per-module network activation | ⬜ | Remove `#f` overrides, dual-path validation |
