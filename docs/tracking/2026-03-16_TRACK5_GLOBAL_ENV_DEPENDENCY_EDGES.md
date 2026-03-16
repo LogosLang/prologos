@@ -20,7 +20,7 @@
 | 0 | Performance baseline + acceptance file | ✅ | `157f7aa` — 294 pass, 0 errors, 12 BUGs commented |
 | 1 | Persistent module network infrastructure + cross-network prototype | ✅ | `7ad5b88` — lifecycle lattice, module-network-ref CRUD, shadow-cell prototype (15 tests) |
 | 2 | Definition removal → cell-aware cleanup | ✅ | `085b77d` — `global-env-remove!`, `definition-cell-remove!`, 6 sites consolidated |
-| 3 | Per-module network activation | ⬜ | Remove `#f` overrides, dual-path validation |
+| 3 | Per-module network activation | ✅ | `011fe3f` — removed #f overrides, module-network-ref built per-module, dual-path validation (0 mismatches across 200+ modules) |
 | 4 | Cross-module dependency edges | ⬜ | Shadow-cells, same-file edges, TMS-ready API |
 | 5 | Write consolidation + `module-network-ref` cutover | ⬜ | Env-threading cleanup, drop materialized hash |
 | 6 | Performance validation + PIR | ⬜ | Compare against hypotheses |
