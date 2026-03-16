@@ -46,6 +46,8 @@
  record-speculation-failure!
  ;; Phase D: ATMS integration
  current-command-atms
+ ;; Track 4 Phase 1: Speculation stack (TMS cell navigation)
+ current-speculation-stack
  ;; GDE-1: Context assumptions (user annotations)
  current-context-assumptions
  add-context-assumption!
@@ -72,6 +74,12 @@
 ;; #f when not active; box of atms when active.
 ;; The boxed value is mutated as hypotheses and nogoods are added.
 (define current-command-atms (make-parameter #f))
+
+;; Track 4 Phase 1: Speculation stack for TMS cell navigation.
+;; (listof assumption-id), outermost first. '() = not speculating (depth 0).
+;; Pushed on speculation entry (parameterize), popped automatically on exit.
+;; Used by tms-read/tms-write to navigate the recursive CHAMP tree.
+(define current-speculation-stack (make-parameter '()))
 
 ;; Initialize per-command speculation tracking.
 ;; Phase D: Also initializes a fresh ATMS for dependency-directed errors.
