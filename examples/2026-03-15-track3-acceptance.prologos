@@ -1,0 +1,121 @@
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;; Track 3 Acceptance File — Cell-Primary Registries
+;; ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;;
+;; Purpose: diagnostic safety net for the cell-primary migration.
+;; Track 3 is an infrastructure track with no syntax changes.
+;; This file broadly exercises Prologos features in WS syntax to
+;; confirm no regressions from the migration. Run via process-file
+;; before and after each phase.
+;;
+;; Uses :no-prelude to exercise the core pipeline directly.
+;;
+;; Expected output: 0 errors, all definitions + evals succeed.
+;; Known pre-existing L3 issues (documented, NOT regressions):
+;;   - data declarations: constructors unscoped at file level
+;;   - Sigma types: polymorphic fst/snd inference fails
+;;   - (fn [x : T] body) args: parse error at file level
+;;   - Numeric literals: 3 is Int, not Nat; use zero/suc for Nat
+
+ns acceptance::track3 :no-prelude
+
+;; ── §1. Basic Types and Pattern Matching ─────────────
+
+spec is-zero Nat -> Bool
+defn is-zero [n]
+  match n
+    | zero  -> true
+    | suc _ -> false
+
+is-zero zero
+is-zero [suc zero]
+is-zero [suc [suc zero]]
+
+;; ── §2. Boolean Combinators ─────────────────────────
+
+spec my-not Bool -> Bool
+defn my-not [b]
+  match b
+    | true  -> false
+    | false -> true
+
+spec my-and Bool -> Bool -> Bool
+defn my-and [a b]
+  match a
+    | true  -> b
+    | false -> false
+
+spec my-or Bool -> Bool -> Bool
+defn my-or [a b]
+  match a
+    | true  -> true
+    | false -> b
+
+my-not true
+my-not false
+my-and true true
+my-and true false
+my-or false true
+my-or false false
+
+;; If-then-else
+if true 1 0
+if false "yes" "no"
+
+;; ── §3. Nat Arithmetic ──────────────────────────────
+
+spec add Nat -> Nat -> Nat
+defn add [x y]
+  match y
+    | zero  -> x
+    | suc k -> suc [add x k]
+
+spec mult Nat -> Nat -> Nat
+defn mult [x y]
+  match y
+    | zero  -> zero
+    | suc k -> add x [mult x k]
+
+add [suc zero] [suc [suc zero]]
+add zero zero
+mult [suc [suc zero]] [suc [suc [suc zero]]]
+
+;; ── §4. Polymorphic Functions ────────────────────────
+
+spec my-id {A : Type} A -> A
+defn my-id [a] a
+
+spec my-const {A B : Type} A -> B -> A
+defn my-const [a b] a
+
+my-id zero
+my-id true
+my-id "hello"
+my-id 42
+my-const "hello" zero
+my-const true 42
+
+;; ── §5. Int and String Literals ─────────────────────
+
+def my-int : Int := 42
+def my-str : String := "hello world"
+def my-neg : Int := -7
+my-int
+my-str
+my-neg
+
+;; Int comparison
+if true my-int my-neg
+
+;; ── §6. Nested Match ────────────────────────────────
+
+spec deep-match Nat -> Nat
+defn deep-match [n]
+  match n
+    | zero        -> zero
+    | suc zero    -> suc zero
+    | suc (suc k) -> suc [suc [suc k]]
+
+deep-match zero
+deep-match [suc zero]
+deep-match [suc [suc [suc zero]]]

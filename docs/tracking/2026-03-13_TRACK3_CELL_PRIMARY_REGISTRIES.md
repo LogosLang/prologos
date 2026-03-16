@@ -17,7 +17,7 @@
 | D.1 | Design analysis and read-site audit | ✅ | This document |
 | D.2 | Design iteration (external critique) | ✅ | 5 items accepted, 7 rejected |
 | D.3 | Internal self-critique (principle alignment) | ✅ | 5 items; Phase 6 design resolved |
-| 0 | Performance baseline | ⬜ | |
+| 0 | Performance baseline + acceptance file | ⬜ | `examples/2026-03-15-track3-acceptance.prologos` |
 | 1 | Core type registries → cell-primary (8 registries) | ⬜ | |
 | 2 | Trait + instance registries → cell-primary (7 registries) | ⬜ | |
 | 3 | Remaining registries → cell-primary (8 registries) | ⬜ | |
@@ -306,14 +306,16 @@ This means Phase 6 is a *partial* cleanup for Track 3. Full parameter eliminatio
 | `batch-worker.rkt` | Mirror driver | Update in parallel with driver |
 | `namespace.rkt` | Phase 3 | `read-spec-store` |
 
-### 3.6 Performance Baseline Protocol (Phase 0)
+### 3.6 Phase 0: Performance Baseline + Acceptance File
 
-Following the established protocol from Track 1 (codified in `.claude/rules/testing.md`):
+**Performance baseline** — following the established protocol from Track 1 (codified in `.claude/rules/testing.md`):
 
 - **Metrics**: Full test suite wall time via `racket tools/run-affected-tests.rkt --all`
 - **Tag**: `benchmark-baseline-track-3`
 - **Threshold**: >25% regression = investigate before committing (per testing.md rule)
 - **Comparison**: `racket tools/benchmark-tests.rkt --compare benchmark-baseline-track-3`
+
+**Acceptance file** — `examples/2026-03-15-track3-acceptance.prologos` broadly exercises Prologos features in ideal WS syntax: type definitions, pattern matching, traits/instances, generics, collections, numeric ops, pipe/compose, dot-access, etc. Track 3 is an infrastructure track (no syntax changes), so the acceptance file serves as a **diagnostic safety net**: run before and after each phase via `process-file` to confirm no WS-mode regressions from the cell-primary migration. This follows the Phase 0 acceptance file practice (see `.claude/rules/workflow.md`).
 
 ---
 
@@ -359,7 +361,7 @@ This is the most mechanical of all tracks. The dual-write infrastructure has bee
 
 | Phase | Scope | Est. Effort | Risk |
 |-------|-------|-------------|------|
-| 0 | Performance baseline | 15 min | None |
+| 0 | Performance baseline + acceptance file | 30 min | None |
 | 1 | 8 core type registries | 2–3 hours | Low |
 | 2 | 7 trait + instance registries | 2–3 hours | Low-Medium |
 | 3 | 8 remaining registries | 2–3 hours | Low |
