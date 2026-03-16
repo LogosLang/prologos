@@ -14,15 +14,28 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | D.1 | Initial design document | ✅ | `339fedb` |
-| D.2 | Design discussion + rework | 🔄 | Persistent networks, cross-module edges, lifecycle, TMS discussion |
+| D.2 | Design discussion + rework | ✅ | `17142ec` — persistent networks, cross-module edges, lifecycle, TMS discussion |
+| D.2+ | External critique incorporation | 🔄 | Shadow-cell pattern, staleness model, performance hypotheses, non-goals, rollback |
 | D.3 | Self-critique (principle alignment) | ⬜ | |
 | 0 | Performance baseline + acceptance file | ⬜ | |
-| 1 | Persistent module network infrastructure | ⬜ | New primitive: `module-network-ref`, `mod-status` cell |
+| 1 | Persistent module network infrastructure + cross-network prototype | ⬜ | `module-network-ref`, `mod-status`, shadow-cell prototype |
 | 2 | Definition removal → cell-aware cleanup | ⬜ | `global-env-remove!` helper |
-| 3 | Per-module network activation | ⬜ | Remove `#f` overrides in module loading |
-| 4 | Cross-module dependency edges | ⬜ | Cross-network propagators, identity α/γ |
-| 5 | Write consolidation + validation | ⬜ | Env-threading cleanup, full validation |
-| 6 | Performance validation + PIR | ⬜ | |
+| 3 | Per-module network activation | ⬜ | Remove `#f` overrides, dual-path validation |
+| 4 | Cross-module dependency edges | ⬜ | Shadow-cells, same-file edges, TMS-ready API |
+| 5 | Write consolidation + `module-network-ref` cutover | ⬜ | Env-threading cleanup, drop materialized hash |
+| 6 | Performance validation + PIR | ⬜ | Compare against hypotheses |
+
+---
+
+## Non-Goals
+
+Track 5 does NOT deliver:
+
+- **TMS-aware module definition cells** — designing for TMS-compatible API (Track 5), but implementation of parameterized module contexts is a Track 6 design concern (noted in master roadmap)
+- **Automatic re-elaboration on staleness** — Track 5 wires the edges and marks staleness; the re-elaboration trigger is LSP scope
+- **Definition-level incremental recompile** — Track 5 marks *which* definitions are stale; actually re-elaborating only those definitions is LSP scope
+- **Dual-write parameter elimination** — Track 5 keeps belt-and-suspenders; Track 6 removes the parameter path
+- **Elaboration guard removal** — Track 5 gives module loading networks (eliminating the root cause); Track 6 removes the now-unnecessary guards
 
 ---
 
@@ -46,9 +59,9 @@ The two-layer architecture (Migration Sprint Phase 3a–3d) was the right de-ris
 
 1. **Persistent per-module networks** — each loaded module gets its own persistent `prop-network` holding definition cells, cached as a live `module-network-ref` rather than a materialized hasheq. Consumers read from the module's cells, not dead copies.
 2. **Module lifecycle lattice** — a `mod-status` cell per module network with states `loaded | stale | reloading`, giving the LSP a single cell to watch for invalidation.
-3. **Cross-module dependency edges** — when file `foo` references `bar::map`, a cross-network propagator wires `bar`'s `map` cell to `foo`'s dependency tracking. When `bar` changes, only definitions in `foo` that transitively depend on changed definitions are marked stale. Minimum recompute.
+3. **Cross-module dependency edges** — when file `foo` references `bar::map`, a shadow cell in `foo`'s network mirrors `bar`'s `map` cell. When `bar` changes, only definitions in `foo` that transitively depend on changed definitions are marked stale. Minimum recompute.
 4. **Definition failure cleanup consolidation** — the 12 inline `hash-remove` sites become `global-env-remove!` operating on both layers.
-5. **Env-threading write consolidation** — the 36+ `(current-global-env (global-env-add ...))` calls become direct `global-env-add` once module loading has networks.
+5. **Env-threading write consolidation + `module-network-ref` cutover** — the 36+ `(current-global-env (global-env-add ...))` calls become direct `global-env-add`, and consumers migrate from materialized hasheq to cell-based reads.
 
 The "biggest payoff" from the Pipeline Audit: incremental module re-elaboration. Combined with Track 4's ATMS, the LSP can retract a definition assumption and let propagation settle rather than re-elaborating an entire file.
 
@@ -62,7 +75,6 @@ The existing `prop-network` is built on immutable CHAMP maps. All operations cre
 
 - **"Separate network per module" and "shared pointers to common structure" are the same thing at the CHAMP level.** Two module networks that share common definitions (e.g., both import the prelude) share CHAMP nodes for those cells. Logically separate (`prop-network` structs), physically sharing.
 - **Persistence is free.** Keeping a module's network alive is just keeping the CHAMP references alive instead of discarding them.
-- **Cross-network reads are cell reads.** No new primitive needed — read a cell from network A while executing in network B.
 
 ### 2.2 What persists vs. what's ephemeral
 
@@ -80,7 +92,54 @@ Per-command state is **ephemeral** and lives outside the module network:
 
 This separation is already the architecture: `reset-meta-store!` creates a fresh elab-network per command for metas/constraints, while `current-definition-cells-content` persists across commands. Track 5 makes this explicit: the module network persists in the cache; the per-command network is created and discarded as before.
 
-### 2.3 `module-network-ref`: the new module cache type
+### 2.3 Cross-module reads: the shadow-cell pattern
+
+**The problem**: Propagators exist WITHIN a single `prop-network`. A propagator registered in network X fires when cells in network X change, and writes to cells in network X. There is no built-in cross-network scheduling — `net-add-cross-domain-propagator` operates within one network, bridging different lattice domains, not different network instances.
+
+**The solution: shadow cells + invalidation callbacks**.
+
+When file `foo` imports definition `bar::map`:
+
+1. `foo`'s network creates a **local shadow cell** initialized from `bar`'s `map` cell value
+2. Within `foo`'s network, all propagators reference the local shadow cell — normal within-network propagation
+3. The dependency is recorded: "foo's shadow-bar-map mirrors bar's map cell"
+
+In **batch mode**, the shadow cell is initialized once. `bar` doesn't change during batch. No callbacks fire.
+
+In **LSP mode**, when `bar` reloads:
+1. The LSP iterates `bar`'s dependents (via `dep-edges` in `module-network-ref`)
+2. For each dependent, the LSP updates the shadow cell with `bar`'s new cell value
+3. The shadow cell write triggers normal within-network propagation in `foo`'s network
+4. Only definitions in `foo` that transitively depend on `bar::map` (via propagators wired to the shadow cell) are affected
+
+This is the right design — not a compromise. Cross-network propagation in the scheduler sense (one run loop spanning multiple networks) would be a complexity explosion. Module dependencies form a DAG. The LSP walks the DAG. Within each network, propagation is local and uses proven infrastructure.
+
+```
+┌─────────────────────────┐         ┌─────────────────────────┐
+│  Module bar             │         │  File foo               │
+│  (module-network-ref)   │         │  (per-file network)     │
+│                         │         │                         │
+│  ┌───────────────┐      │  init   │  ┌───────────────┐      │
+│  │ cell: map     │──────┼─────────┼─▶│ shadow: b.map │      │
+│  │ type: A → B   │      │         │  │ (local cell)  │      │
+│  │ value: <fn>   │      │         │  └───────┬───────┘      │
+│  └───────────────┘      │         │          │ propagator   │
+│                         │         │          ▼              │
+│  ┌───────────────┐      │         │  ┌───────────────┐      │
+│  │ mod-status    │      │         │  │ cell: usesMap │      │
+│  │ = loaded      │      │         │  │ (depends on   │      │
+│  └───────────────┘      │         │  │  shadow)      │      │
+│                         │         │  └───────────────┘      │
+└─────────────────────────┘         └─────────────────────────┘
+        │                                      │
+        │  On bar reload (LSP):                │
+        │  1. LSP reads new bar::map value     │
+        │  2. LSP writes to foo's shadow cell  │
+        │  3. foo's propagators fire locally   │
+        └──────────────────────────────────────┘
+```
+
+### 2.4 `module-network-ref`: the new module cache type
 
 Currently `module-info` stores `env-snapshot` as a flat `hasheq` of `symbol → (cons type value)`. Track 5 replaces this with a `module-network-ref` struct:
 
@@ -89,12 +148,36 @@ Currently `module-info` stores `env-snapshot` as a flat `hasheq` of `symbol → 
   (prop-net          ;; the persistent prop-network
    cell-id-map       ;; hasheq: symbol → cell-id (for definition lookup)
    mod-status-cell   ;; cell-id of the mod-status cell
-   dep-edges))       ;; hasheq: symbol → (listof dep-edge) (outbound edges)
+   dep-edges)        ;; hasheq: symbol → (listof dep-edge-info)
+  #:transparent)
 ```
 
-**Backwards compatibility**: `module-network-ref` can implement `prop:dict` (or provide a `module-network-ref-ref` function matching `hash-ref` signature) so existing code that does `(hash-ref snapshot name)` keeps working — but actually reads from live cells underneath.
+**Backwards compatibility strategy** (Phase 3 → Phase 5 migration):
 
-### 2.4 Module lifecycle lattice
+Audit of all `env-snapshot` consumers reveals two usage patterns:
+- `(for ([(k v) (in-hash snapshot)])` — iteration (driver.rkt:1523, driver.rkt:1344)
+- `(hash-ref snapshot name)` — point lookup (capability-inference.rkt, cap-type-bridge.rkt, tests)
+
+No consumers use `hash-keys`, `hash-values`, `hash-count`, `equal?`, or pattern matching.
+
+**Phase 3 (belt-and-suspenders)**: `module-network-ref` contains BOTH the live network AND a materialized hash. Consumers use the materialized hash. Assertions verify agreement between cell reads and hash reads.
+
+**Phase 5 (cutover)**: Migrate consumers to `module-network-ref-lookup` (cell read) and `in-module-network-ref` (iteration sequence). Drop the materialized hash. This completes the transition to live cell reads.
+
+### 2.5 Definition cell value schema
+
+```racket
+;; Definition cell value — one of:
+;;   #f                         — removed/uninitialized (sentinel)
+;;   (cons Type #f)             — type-only (forward declaration)
+;;   (cons Type Value)          — fully elaborated definition
+```
+
+`global-env-lookup-type` and `global-env-lookup-value` already check for `#f` and return `#f` (not found). The sentinel value is the same whether the cell was never written or was explicitly cleared by `definition-cell-remove!`.
+
+Future (Track 6+, if TMS-aware module cells): cells may hold `(tms-cell-value ...)` wrapping the above schema. The `#:tms?` flag on `make-module-network` controls this.
+
+### 2.6 Module lifecycle lattice
 
 Drawing on the lifecycle patterns across existing domain sub-graphs:
 
@@ -103,7 +186,7 @@ Drawing on the lifecycle patterns across existing domain sub-graphs:
 | Session | `sess-bot → send/recv/... → sess-top` | `session-lattice-merge` | cross-domain propagator (α/γ) |
 | Effect | `eff-bot → eff-position → eff-top` | unidirectional α from session | `add-session-effect-bridge` |
 | IO | `io-bot → io-opening → io-open → io-closed → io-top` | `io-lattice-merge` | Gauss-Seidel scheduler |
-| **Module** | `mod-loading → mod-loaded → mod-stale` | `mod-status-merge` | dependency edge propagators |
+| **Module** | `mod-loading → mod-loaded → mod-stale` | `mod-status-merge` | shadow-cell invalidation callbacks |
 
 The module lifecycle lattice:
 - `mod-loading` → module is being elaborated (definitions being added)
@@ -112,9 +195,15 @@ The module lifecycle lattice:
 
 **Staleness is monotonic**: once a dependency changes, the module is stale until explicitly reloaded. The `mod-status` cell uses a merge function where `stale` dominates `loaded` (once stale, stays stale). Reloading resets to `mod-loading` (non-monotonic — requires a fresh network or cell reset).
 
-The LSP watches `mod-status` cells. When a `.prologos` library file changes, its module's status is set to `stale`, which propagates to all dependent modules via cross-module edges.
+### 2.7 Staleness model
 
-In batch mode, the lifecycle is trivially `loading → loaded` per module (no invalidation during a single compilation run).
+Two distinct staleness concepts interact:
+
+**Definition staleness** (implicit): A definition's shadow cell value differs from the source module's cell value. This is detected by the propagator infrastructure — `net-cell-write` compares `(merge old new)` against `old`. If the merged value equals the old value, no change occurred and no propagators fire. This means: if `bar` is reloaded and `bar::map`'s type+value are identical, `foo`'s shadow cell write is a no-op. `foo` is NOT marked stale. Correct behavior — identical definitions don't trigger recomputation.
+
+**Module staleness** (explicit): The `mod-status` cell tracks whether the module as a whole needs re-elaboration. When any definition cell in a module receives a value-changing write via an incoming cross-module edge, a propagator writes `mod-stale` to that module's `mod-status` cell.
+
+The relationship: definition staleness is fine-grained (per-definition, implicit in cell values). Module staleness is coarse-grained (per-module, explicit in `mod-status` cell). The LSP watches `mod-status` for coarse invalidation, then inspects individual definition cells for fine-grained recompute decisions.
 
 ---
 
@@ -129,7 +218,7 @@ In batch mode, the lifecycle is trivially `loading → loaded` per module (no in
 | Definition dependency recording | ✅ | `global-env.rkt` Phase 3b — `record-definition-dependency!`, informational edges |
 | Elaboration guard pattern | ✅ | Track 3 — `current-macros-in-elaboration?`, `current-narrow-in-elaboration?` |
 | TMS cells for speculation | ✅ | Track 4 — `tms-cell-value`, depth-0 fast path |
-| Cross-domain propagators | ✅ | `propagator.rkt` — `net-add-cross-domain-propagator` with α/γ Galois connections |
+| Cross-domain propagators | ✅ | `propagator.rkt` — `net-add-cross-domain-propagator` with α/γ (within one network) |
 | Error descriptor cell | ✅ | Track 2 Phase 7 — `current-error-descriptor-cell-id`, `read-error-descriptors` |
 | Cell-primary readers for all registries | ✅ | Track 3 — 28 readers across macros.rkt, warnings.rkt, global-constraints.rkt |
 | merge-replace for definition cells | ✅ | `infra-cell.rkt` — last-write-wins for non-monotonic definitions |
@@ -139,12 +228,12 @@ In batch mode, the lifecycle is trivially `loading → loaded` per module (no in
 
 | Gap | Required for | Complexity |
 |-----|-------------|-----------|
-| `module-network-ref` struct | Persistent module cache (Phase 1) | Medium — new struct + `prop:dict` wrapper |
+| `module-network-ref` struct | Persistent module cache (Phase 1) | Medium — new struct, dual hash+network during transition |
 | `mod-status` cell + lifecycle lattice | Module invalidation (Phase 1) | Low — new merge fn, single cell per module |
+| Shadow-cell creation + callback registration | Cross-module reads (Phase 1 prototype, Phase 4 full) | Medium — new pattern, prototype early |
 | `global-env-remove!` helper | Failure cleanup consolidation (Phase 2) | Low — mirror `global-env-add` for removal |
 | Remove `#f` overrides in module loading | Module loading cell path (Phase 3) | Medium — behavior change, wide test coverage |
-| Cross-network dependency propagators | Cross-module edges (Phase 4) | Medium — identity α/γ via existing `net-add-cross-domain-propagator` |
-| Module snapshot → network-ref conversion | Module cache migration (Phase 3) | Medium — `global-env-snapshot` returns `module-network-ref` |
+| Consumer migration to cell reads | `module-network-ref` cutover (Phase 5) | Low — 2 iteration sites, 3 lookup sites |
 
 ---
 
@@ -200,7 +289,7 @@ Same as Category A — `global-env-add` already dispatches. Foreign registration
 
 ### Phase 0: Performance Baseline + Acceptance File
 
-**Goal**: Establish baseline and create acceptance file.
+**Goal**: Establish baseline, create acceptance file, state performance hypotheses.
 
 - Run full test suite, record timing and test count
 - Create `examples/2026-03-16-track5-acceptance.prologos` exercising:
@@ -211,11 +300,25 @@ Same as Category A — `global-env-add` already dispatches. Foreign registration
   - All prelude features (regression net)
 - Record acceptance file baseline (L3 via `process-file`)
 
-### Phase 1: Persistent Module Network Infrastructure
+**Performance hypotheses** (to be validated in Phase 6 PIR):
 
-**Goal**: Create the new primitives — `module-network-ref`, `mod-status` cell, lifecycle lattice.
+| Operation | Current | Track 5 | Expected change |
+|-----------|---------|---------|-----------------|
+| Definition lookup | `hasheq` O(1) | Cell read O(1) | Equivalent — both are hash lookups (CHAMP vs hasheq) |
+| Module load | Accumulate in hasheq | Accumulate in cells | Equivalent — same number of writes, different target |
+| Module snapshot | Materialize hasheq | Return `module-network-ref` | Faster — no copy, just wrap reference |
+| Cross-module lookup | `hash-ref` on snapshot | Local shadow cell read | Equivalent — shadow cell initialized once, reads are local O(1) |
+| Module import (caller) | `in-hash` iteration + `hash-set` per entry | Shadow cell creation per used definition | Potentially faster — lazy (only used defs), not eager (all defs) |
+| Memory (15 prelude modules) | 15 flat hasheq snapshots | 15 persistent networks | Comparable — CHAMP sharing means networks share structure |
+| Dependency edge wiring | N/A (informational only) | One propagator per cross-def reference | Small overhead — only value-changing lookups wire edges |
 
-**Files**: `global-env.rkt`, `namespace.rkt`, `infra-cell.rkt`
+Overall hypothesis: **Track 5 should be performance-neutral or slightly faster** due to eliminating snapshot materialization and making module imports lazy (shadow cells created only for actually-referenced definitions, vs current eager copy of all module definitions).
+
+### Phase 1: Persistent Module Network Infrastructure + Cross-Network Prototype
+
+**Goal**: Create the new primitives and validate the cross-network pattern early.
+
+**Files**: `global-env.rkt`, `namespace.rkt`, `infra-cell.rkt`, `elaborator-network.rkt`
 
 **1a: Module lifecycle lattice** in `infra-cell.rkt`:
 
@@ -241,26 +344,33 @@ Same as Category A — `global-env-add` already dispatches. Foreign registration
   (prop-net          ;; persistent prop-network with definition cells
    cell-id-map       ;; hasheq: symbol → cell-id
    mod-status-cell   ;; cell-id for lifecycle monitoring
-   dep-edges)        ;; hasheq: symbol → (listof dep-edge-info)
+   dep-edges         ;; hasheq: symbol → (listof dep-edge-info)
+   snapshot-hash)    ;; hasheq or #f — materialized hash (belt-and-suspenders, Phase 3-4)
   #:transparent)
 ```
 
-Provide a `module-network-ref-lookup` that reads from cells:
-```racket
-(define (module-network-ref-lookup mnr name)
-  (define cell-id (hash-ref (module-network-ref-cell-id-map mnr) name #f))
-  (and cell-id
-       (net-cell-read (module-network-ref-prop-net mnr) cell-id)))
-```
-
-**1c: Module network creation**: Factory function `make-module-network` that:
+`make-module-network` factory:
 1. Creates a fresh `prop-network`
 2. Creates a `mod-status` cell initialized to `mod-loading`
-3. Returns a `module-network-ref` with empty cell-id-map and dep-edges
+3. Returns a `module-network-ref` with empty cell-id-map, dep-edges, and snapshot-hash = `#f`
 
-**Phase 1 is infrastructure-only** — no behavior change. Module loading still uses the parameter path. The new structs exist but aren't wired in yet.
+**1c: Shadow-cell prototype** — validate the cross-network pattern before building on it:
 
-**Deliverable**: New primitives, unit tests for lifecycle merge, module-network-ref lookup.
+```racket
+;; Prototype test (unit test, not wired into pipeline):
+;; 1. Create two prop-network instances (A = "module bar", B = "file foo")
+;; 2. Create cell in A: bar-map-cell with value (cons type value)
+;; 3. Create shadow cell in B: shadow-bar-map initialized from A's cell value
+;; 4. Create propagator in B: when shadow-bar-map changes, write to foo-result-cell
+;; 5. Simulate "bar reloads": read new value from A, write to B's shadow cell
+;; 6. Verify: foo-result-cell updated via normal propagation in B's network
+```
+
+This prototype resolves the key architectural uncertainty early. If the pattern doesn't work, we redesign before Phase 2.
+
+**Phase 1 is infrastructure-only** — no behavior change. Module loading still uses the parameter path.
+
+**Deliverable**: New primitives, unit tests for lifecycle merge, `module-network-ref` lookup, shadow-cell prototype passing.
 
 ### Phase 2: Definition Removal → Cell-Aware Cleanup
 
@@ -275,14 +385,14 @@ New helper in `global-env.rkt`:
   ;; Layer 1: remove from per-file definitions content
   (current-definition-cells-content
    (hash-remove (current-definition-cells-content) name))
-  ;; Layer 1: write sentinel to cell (not delete — cell stays, value cleared)
+  ;; Layer 1: write sentinel to cell (not delete — cell stays, value = #f)
   (definition-cell-remove! name)
   ;; Layer 2: remove from prelude env parameter
   (current-global-env
    (hash-remove (current-global-env) name)))
 ```
 
-`definition-cell-remove!` writes a sentinel value (`#f` or `(cons #f #f)`) to the cell. `global-env-lookup-type`/`value` already handle `#f` entries (return `#f`).
+`definition-cell-remove!` writes `#f` (sentinel) to the cell. `global-env-lookup-type`/`value` already handle `#f` entries (return `#f`).
 
 Convert all 12 failure cleanup sites from inline `hash-remove` × 2 layers to `(global-env-remove! name)`.
 
@@ -290,7 +400,7 @@ Convert all 12 failure cleanup sites from inline `hash-remove` × 2 layers to `(
 
 ### Phase 3: Per-Module Network Activation
 
-**Goal**: Remove `#f` overrides so module loading runs with networks. Wire module definitions to persistent `module-network-ref`.
+**Goal**: Remove `#f` overrides so module loading runs with networks. Dual-path validation.
 
 **Files**: `driver.rkt`, `namespace.rkt`, `global-env.rkt`
 
@@ -306,15 +416,29 @@ Convert all 12 failure cleanup sites from inline `hash-remove` × 2 layers to `(
 ;; and set up global-env-prop-net-box via its own parameterize.
 ```
 
-**3b: Create module network at load start**: Before the module's command loop, call `make-module-network`. Pass the resulting `module-network-ref` to the module loading context. As `process-command` processes each module form, definitions are written to both the per-command network cells (ephemeral) and the module's persistent network cells (via `definition-cell-write!` targeting the module network).
+**3b: Create module network at load start**: Before the module's command loop, call `make-module-network`. As `process-command` processes each module form, definitions are written to both the per-command network cells (ephemeral) and the module's persistent network cells (via `definition-cell-write!` targeting the module network).
 
-**3c: Module env snapshot → network-ref**: At the end of module loading, instead of `global-env-snapshot` materializing a flat hasheq, store the `module-network-ref` in `module-info`'s `env-snapshot` field. Set `mod-status` to `mod-loaded`.
+**3c: Module env snapshot → dual-path `module-network-ref`**: At the end of module loading, store the `module-network-ref` in `module-info`'s `env-snapshot` field. Set `mod-status` to `mod-loaded`. **Also materialize the snapshot hash** (same as current behavior) and store it in `module-network-ref`'s `snapshot-hash` field. Consumers continue reading from the hash.
+
+**3d: Dual-path validation**: After storing the `module-network-ref`, assert that every entry in `snapshot-hash` agrees with the corresponding cell read:
+
+```racket
+(for ([(name entry) (in-hash (module-network-ref-snapshot-hash mnr))])
+  (define cell-val (module-network-ref-lookup mnr name))
+  (unless (equal? entry cell-val)
+    (error 'module-load "Cell/hash mismatch for ~a: cell=~a hash=~a"
+           name cell-val entry)))
+```
+
+This assertion runs during testing and catches any dual-write divergence immediately.
 
 **Accumulation semantics**: Module loading currently accumulates definitions in `(current-global-env)` across commands. With networks, definitions accumulate in `current-definition-cells-content` (Layer 1), which also persists across commands. Accumulation behavior is preserved — now through cells.
 
-**Belt-and-suspenders**: During Phase 3, keep Layer 2 writes (dual-write). Module loading writes to both cells and parameters. Validate that cell-based reads produce identical results to parameter-based reads before any caller switches.
+**Belt-and-suspenders**: During Phase 3, keep Layer 2 writes (dual-write). Module loading writes to both cells and parameters. The validation assertion catches any divergence.
 
 **Risk**: High. Module loading is exercised by every test using `(ns test-X)` — 200+ test files. But this wide coverage is also the mitigation: regressions surface immediately.
+
+**Rollback plan**: If >10% of tests fail after Phase 3 dual-write and the failures aren't readily diagnosable, revert by restoring the `#f` overrides. Phase 3 changes should be a single commit for easy revert. Define abort criteria: if a fundamental incompatibility is discovered between per-command network semantics and module loading semantics (e.g., `reset-meta-store!` side effects that break module accumulation), pause Track 5 and redesign.
 
 ### Phase 4: Cross-Module Dependency Edges
 
@@ -336,80 +460,89 @@ When elaboration references a prior definition via `global-env-lookup-*`, wire a
 
 **4b: Cross-module dependency edges** (the high-value case):
 
-When file `foo` looks up `bar::map`, the definition lives in `bar`'s persistent `module-network-ref`. Wire a cross-network propagator using the existing `net-add-cross-domain-propagator` with identity α/γ (same type domain, different network):
+When file `foo` looks up `bar::map`, the definition lives in `bar`'s persistent `module-network-ref`. Create a shadow cell in `foo`'s network, initialized from `bar`'s cell value, and wire within-network propagators from the shadow cell:
 
 ```racket
-;; foo's network watches bar's map cell
-(define bar-map-cell (module-network-ref-cell-id bar-mnr 'map))
-(define foo-dep-cell (hash-ref (current-definition-cell-ids) elab-name))
-;; Cross-network edge: bar's cell → foo's staleness tracking
-(cross-module-dep-wire! bar-mnr bar-map-cell foo-dep-cell elab-name)
+;; foo's network gets a local shadow cell for bar::map
+(define bar-mnr (module-info-env-snapshot bar-module-info))
+(define bar-map-val (module-network-ref-lookup bar-mnr 'map))
+(define shadow-cell-id (create-shadow-cell! bar-map-val))
+;; Record cross-module edge for LSP invalidation
+(register-cross-module-edge! bar-mnr 'map shadow-cell-id)
+;; Wire within-network: shadow cell → foo's dependent definition cell
+(definition-dep-wire! shadow-cell-id elab-cell-id 'bar::map elab-name)
 ```
 
-When `bar`'s `map` cell changes (module reloaded), the cross-network propagator fires, marking `foo`'s dependent definitions as stale. Only definitions in `foo` that transitively depend on `bar::map` are affected — everything else in `foo` is untouched. **Minimum recompute**.
+**4c: TMS-ready edge API**:
 
-**4c: Staleness propagation to `mod-status`**:
+There is one edge type. Every edge has an `assumption` field. `#f` means unconditional (always believed). This avoids future migration — Track 6 or LSP can pass real TMS assumptions without changing the edge type.
 
-When any definition cell in a module is marked stale (via incoming cross-module edge), a propagator writes `mod-stale` to that module's `mod-status` cell. The LSP watches one cell per module, not every definition cell.
+```racket
+(define (definition-dep-wire! src-cell dst-cell src-name dst-name
+                              #:assumption [assumption #f])
+  ;; Create propagator: when src-cell changes, mark dst-cell stale
+  ;; If assumption is non-#f, propagator only fires when assumption is believed
+  ...)
+```
+
+**4d: Staleness propagation to `mod-status`**:
+
+When any definition cell in a module receives a value-changing write via an incoming cross-module edge, a propagator writes `mod-stale` to that module's `mod-status` cell. The LSP watches one cell per module, not every definition cell.
 
 **What the edges provide immediately** (batch mode):
 - Observable dependency graph via cell inspection (tooling, debugging)
 - Validation that dependency recording matches cell wiring (any missed edge = a bug)
-- Foundation for incremental re-elaboration (LSP — just connect a re-elaboration trigger to the propagator)
+- Foundation for incremental re-elaboration (LSP — connect a re-elaboration trigger to the shadow cell callback)
 
-### Phase 5: Write Consolidation + Validation
+### Phase 5: Write Consolidation + `module-network-ref` Cutover
 
-**Goal**: Clean up the now-redundant env-threading pattern. Full validation.
+**Goal**: Clean up env-threading, migrate consumers from materialized hash to cell reads.
 
-**Files**: `driver.rkt`
+**Files**: `driver.rkt`, `capability-inference.rkt`, `cap-type-bridge.rkt`
 
-With module loading running through networks (Phase 3), the `(current-global-env (global-env-add ...))` wrapper is truly redundant everywhere. Simplify all 23 Category A sites to just `(global-env-add ...)`.
+**5a: Env-threading cleanup**: With module loading running through networks (Phase 3), the `(current-global-env (global-env-add ...))` wrapper is truly redundant everywhere. Simplify all 23 Category A sites to just `(global-env-add ...)`.
 
-Also: annotated audit of all remaining `(current-global-env)` references. Document which references are still needed (Layer 2 initialization, snapshot reads) vs. which are legacy.
+**5b: Consumer migration**: The dual-path validation (Phase 3d) has been running since Phase 3. With confidence established:
 
-**Deliverable**: All env-threading wrappers removed. Acceptance file passes at L3. Full test suite 0 failures.
+- `driver.rkt:1523` — `(for ([(k v) (in-hash (module-info-env-snapshot cached))])` → iterate via `module-network-ref` cells
+- `driver.rkt:1344` — `(for ([(name entry) (in-hash (global-env-snapshot))])` → iterate via cell-based snapshot
+- `capability-inference.rkt`, `cap-type-bridge.rkt` — use `module-network-ref-lookup` for env reads
+- Tests — update `global-env-snapshot` calls
+
+**5c: Drop materialized hash**: Set `module-network-ref`'s `snapshot-hash` to `#f` (no longer materialized). Remove the dual-path validation assertion. The transition is complete.
+
+**Deliverable**: All env-threading wrappers removed. All consumers reading from cells. Acceptance file passes at L3. Full test suite 0 failures.
 
 ### Phase 6: Performance Validation + PIR
 
-- Run full suite, compare against Phase 0 baseline
+- Run full suite, compare against Phase 0 baseline and performance hypotheses
 - Run acceptance file at L3
-- Per-module network creation adds ~1 persistent network per module load. With prelude loading ~15 modules, this is 15 persistent networks. Measure: memory footprint (CHAMP sharing should keep it small) and lookup time (cell read vs hasheq lookup).
-- Cross-module edge count: how many propagators per typical file compilation? Profile.
+- Measure specifically:
+  - Module load time (cell writes vs hasheq accumulation)
+  - Module snapshot time (network-ref wrapping vs hasheq materialization)
+  - Cross-module lookup time (shadow cell read vs hasheq read)
+  - Memory footprint (15 persistent networks vs 15 hasheq snapshots)
+  - Propagator count per typical file compilation (how many dependency edges?)
+- Compare measured values against Phase 0 hypotheses table
 - Write PIR following methodology
 
 ---
 
-## 6. Design Discussion: TMS-Awareness of Dependency Edges
+## 6. Design Decision: TMS-Awareness
 
-**Status**: Under active discussion. Design the API for TMS-aware edges now; implementation decision to be finalized in D.3.
+### Dependency edges: TMS-ready API, plain implementation
 
-### The case for TMS-aware edges in Track 5
+There is one edge type: `definition-dep-wire!` with `#:assumption` parameter. In Track 5, all edges pass `#f` (unconditional — always believed). The API is ready for Track 6 or LSP to pass real TMS assumptions.
 
-Dependency edges are *created* in Track 5 Phase 4. Designing them without TMS-awareness means Track 6 has to retrofit it — the "late L3 validation causes cascading fixes" anti-pattern. The design cost is low: when wiring an edge, check if the source definition was created under a TMS assumption; if so, the edge inherits that assumption's label.
+This is the belt-and-suspenders principle applied forward: **design for TMS, implement with plain edges, upgrade is adding one argument**.
 
-### The architectural fit
+### Module definition cells: TMS-compatible API, plain cells
 
-Track 4's TMS cells already support assumption-tagged values. A dependency edge is conceptually a propagator — it already lives in the network. Making it TMS-aware means the propagator's firing is conditional on its assumption being believed.
+The `module-network-ref` API is TMS-cell-compatible. `make-module-network` can take an optional `#:tms?` flag that creates TMS cells instead of plain cells. Default is plain cells in Track 5.
 
-```racket
-;; Edge wiring with optional TMS label:
-(define (definition-dep-wire! src-cell dst-cell src-name dst-name
-                              #:assumption [assumption #f])
-  ;; If assumption provided, edge only fires when assumption is believed
-  ...)
-```
+### TMS-aware parameterized modules: Track 6 design concern
 
-### Where TMS edges pay off
-
-1. **LSP completion**: if the LSP speculatively elaborates a definition to check completion candidates, edges from that speculative definition should retract when the speculation is abandoned.
-2. **Conditional compilation** (future): if a module's definitions are parameterized by a compile-time flag (an assumption), edges from flag-dependent definitions retract when the flag changes.
-3. **Multi-context sharing**: different open files in the LSP with different configurations are different assumption contexts. A module's network serves all contexts; edges resolve per-context.
-
-### Current recommendation
-
-Design the `definition-dep-wire!` API with an optional `#:assumption` parameter. In Track 5 Phase 4, pass `#f` (no assumption — unconditional edges). The API is ready for Track 6 or the LSP track to pass real assumptions. This is the belt-and-suspenders principle applied forward: **design for TMS, implement with plain edges, upgrade is adding one argument**.
-
-The broader question of TMS-aware module definition cells (where the same module has different definitions under different assumptions) remains open for further discussion — see Open Questions.
+The broader question of TMS-aware module definition cells — where the same module has different definitions under different assumptions (e.g., different parameter contexts in the LSP) — is a Track 6 design concern. This is the right future architecture, but today module caching is deterministic (same source → same definitions). The ATMS approach shines when there are multiple simultaneous parameter contexts (LSP scenario). Noted in master roadmap for Track 6 design consideration.
 
 ---
 
@@ -422,29 +555,31 @@ Module loading touches every test (via `ns` declarations). The change from "no n
 - Registry cell readers (guards check for elaboration context)
 - `reset-meta-store!` behavior (creates per-command networks)
 
-**Mitigation**: Belt-and-suspenders — dual-write continues during Phase 3. Module loading writes to BOTH cells and parameters. Existing parameter-based reads remain as fallback.
+**Mitigation**: Belt-and-suspenders — dual-write continues during Phase 3. Dual-path validation assertion catches divergence. Explicit rollback plan with abort criteria.
 
-### Medium risk: `module-network-ref` backwards compatibility (Phase 3)
+### Medium risk: `module-network-ref` consumer compatibility (Phase 5)
 
-Changing `module-info`'s `env-snapshot` from `hasheq` to `module-network-ref` affects every call site that reads from the snapshot. If the `prop:dict` wrapper has subtle behavioral differences from plain `hasheq`, callers may break.
+Migrating consumers from `(in-hash snapshot)` to cell-based iteration. If any consumer relies on hasheq ordering or other hasheq-specific behavior, migration may break subtly.
 
-**Mitigation**: Audit all `env-snapshot` consumers before Phase 3. Consider a transition period where `module-network-ref` stores both the live network and a materialized snapshot, with an assertion that they agree.
+**Mitigation**: Phase 3 dual-path validation catches behavioral differences. Phase 5 migration is gradual — one consumer at a time, test suite between each. Only 5 consumer sites to migrate (2 iteration, 3 lookup).
 
 ### Medium risk: Definition removal correctness (Phase 2)
 
 Failed definitions must be completely invisible after cleanup. Cell-aware removal must clear the cell value, or a subsequent cell-primary read would see stale data.
 
-**Mitigation**: Write sentinel value to cell on removal. `global-env-lookup-type`/`value` already handle `#f` entries. Verify with existing error test suite.
+**Mitigation**: Write sentinel `#f` to cell on removal. `global-env-lookup-type`/`value` already handle `#f`. Verify with existing error test suite.
 
-### Medium risk: Cross-network propagator correctness (Phase 4)
+### Medium risk: Shadow-cell pattern correctness (Phase 4)
 
-Cross-module edges wire propagators between separate `prop-network` structs. The existing `net-add-cross-domain-propagator` was designed for sub-graphs within a single network, not across networks. May need a new variant.
+The shadow-cell pattern is new — no existing usage in the codebase. Edge cases: what if a shadow cell is created for a definition that doesn't exist in the source module? What if the source module is reloaded while the consumer is mid-elaboration?
 
-**Mitigation**: Prototype the cross-network wiring early in Phase 4. If `net-add-cross-domain-propagator` doesn't work across networks, implement a lightweight cross-network watcher (monitor source cell, write to destination cell via callback).
+**Mitigation**: Phase 1 prototype validates the pattern in isolation. Phase 4 builds on proven prototype. Source-module-doesn't-exist is `#f` (sentinel) — same as "definition not found." Mid-elaboration reload doesn't happen in batch mode; in LSP mode, re-elaboration is sequenced after reload completes.
 
 ### Low risk: Persistent network memory (Phase 1)
 
-CHAMP structural sharing means persistent networks share nodes. 15 module networks for the prelude should be negligible. But verify empirically.
+CHAMP structural sharing means persistent networks share nodes. 15 module networks for the prelude should be negligible.
+
+**Mitigation**: Measure in Phase 6 against hypothesis.
 
 ---
 
@@ -456,19 +591,19 @@ Track 3 discovered that any cell readable outside `process-command` needs an ela
 
 ### From Track 4 PIR: Dual-write coherence breaks under branching
 
-Track 4 discovered that dual-write (CHAMP + cell) creates coherence issues under TMS branching. Track 5's module definition cells aren't speculative in batch mode, so this doesn't apply directly. But if we introduce TMS-aware edges, the edge propagators must respect TMS branching semantics.
+Track 4 discovered that dual-write (CHAMP + cell) creates coherence issues under TMS branching. Track 5's module definition cells aren't speculative in batch mode, so this doesn't apply directly. But the TMS-ready edge API ensures future TMS branching won't require edge type migration.
 
 ### From Track 3 PIR: First-one-is-the-hardest
 
-Phase 1 (module network infrastructure) will take the most time — it's a new primitive. Phases 2-5 apply patterns established by Phase 1. Budget accordingly.
+Phase 1 (module network infrastructure + shadow-cell prototype) will take the most time — it's a new primitive and a new pattern. Phases 2-5 apply patterns established by Phase 1.
 
 ### From Track 4 PIR: Belt-and-suspenders is standard practice
 
-Keep both paths (cell + parameter) operational during Phases 1-4. Don't remove the parameter path in Track 5.
+Keep both paths (cell + parameter, materialized hash + live network) operational during Phases 1-4. Phase 5 cuts over. Clear validation at each stage.
 
-### From existing architecture: Cross-domain propagators already exist
+### From existing architecture: Cross-domain propagators inform the shadow-cell design
 
-Session→effect bridges use `net-add-cross-domain-propagator` with α/γ Galois connections. Module→file bridges use the same mechanism with identity α/γ. The infrastructure exists — Track 5 applies it to a new domain.
+Session→effect bridges use `net-add-cross-domain-propagator` with α/γ Galois connections within one network. The shadow-cell pattern applies the same principle (one domain bridges to another) but across networks via explicit initialization + callback rather than scheduler-driven propagation.
 
 ### From DEFERRED.md triage
 
@@ -484,11 +619,12 @@ Session→effect bridges use `net-add-cross-domain-propagator` with α/γ Galois
 | File | Changes |
 |------|---------|
 | `racket/prologos/infra-cell.rkt` | Phase 1: `mod-status-merge` lifecycle lattice |
-| `racket/prologos/namespace.rkt` | Phase 1: `module-network-ref` struct, `make-module-network` factory; Phase 3: module cache migration |
-| `racket/prologos/global-env.rkt` | Phase 2: `global-env-remove!`, `definition-cell-remove!`; Phase 4: cross-module edge wiring in lookups |
-| `racket/prologos/driver.rkt` | Phase 2: consolidated failure cleanup; Phase 3: remove `#f` overrides; Phase 5: env-threading cleanup |
-| `racket/prologos/elaborator-network.rkt` | Phase 4: `definition-dep-wire!`, `cross-module-dep-wire!` propagator factories |
-| `racket/prologos/propagator.rkt` | Phase 4: cross-network propagator variant (if needed) |
+| `racket/prologos/namespace.rkt` | Phase 1: `module-network-ref` struct, `make-module-network` factory; Phase 3: module cache migration; Phase 5: consumer cutover |
+| `racket/prologos/global-env.rkt` | Phase 2: `global-env-remove!`, `definition-cell-remove!`; Phase 4: shadow-cell creation, edge wiring in lookups |
+| `racket/prologos/driver.rkt` | Phase 2: consolidated failure cleanup; Phase 3: remove `#f` overrides, dual-path validation; Phase 5: env-threading cleanup, consumer migration |
+| `racket/prologos/elaborator-network.rkt` | Phase 1: shadow-cell prototype; Phase 4: `definition-dep-wire!`, `create-shadow-cell!`, `register-cross-module-edge!` |
+| `racket/prologos/capability-inference.rkt` | Phase 5: `module-network-ref-lookup` migration |
+| `racket/prologos/cap-type-bridge.rkt` | Phase 5: `module-network-ref-lookup` migration |
 
 ---
 
@@ -496,28 +632,36 @@ Session→effect bridges use `net-add-cross-domain-propagator` with α/γ Galois
 
 1. **Per-phase**: `racket tools/run-affected-tests.rkt --all 2>&1 | tail -30` — 0 failures after each phase
 2. **Acceptance file**: Run via `process-file` at L3 after each phase
-3. **Module loading**: Every test using `(ns test-X)` exercises module loading — 200+ test files provide integration coverage
-4. **Failure cleanup**: `test-error-messages.rkt`, `test-trait-resolution.rkt`, `test-trait-impl-*.rkt` exercise definition failure → error paths
-5. **Cross-module edges**: Compare `definition-dependencies-snapshot` edge count against cell-wired edge count — they must agree
-6. **Module network-ref**: Assert `module-network-ref` lookup results match old `hasheq` snapshot results during Phase 3 belt-and-suspenders
-7. **Performance**: Compare total wall time against 187.1s baseline; investigate if >25% regression
+3. **Shadow-cell prototype**: Unit tests in Phase 1 validate the cross-network pattern in isolation
+4. **Module loading**: Every test using `(ns test-X)` exercises module loading — 200+ test files provide integration coverage
+5. **Dual-path validation**: Phase 3 assertion verifies cell reads match hash reads for every module definition
+6. **Failure cleanup**: `test-error-messages.rkt`, `test-trait-resolution.rkt`, `test-trait-impl-*.rkt` exercise definition failure → error paths
+7. **Cross-module edges**: Compare `definition-dependencies-snapshot` edge count against cell-wired edge count — they must agree
+8. **Performance**: Compare total wall time against 187.1s baseline; compare measured values against Phase 0 hypothesis table; investigate if >25% regression
 
 ---
 
-## 11. Open Questions
+## 11. Batch-Worker Isolation: Resolved
 
-### Q1: TMS-aware module definition cells (beyond TMS-aware edges)
+The batch-worker (`tools/batch-worker.rkt`) saves post-prelude state and restores it per-test via `parameterize`. Specifically:
+- Line 90: `ready-module-registry` captures `(current-module-registry)` after prelude loads
+- Line 195: restores `[current-module-registry ready-module-registry]` per-test
+- Lines 204-211: fresh `current-definition-cells-content`, `current-definition-cell-ids`, etc.
 
-Should module definition cells themselves be TMS cells, allowing different parameter contexts to produce different definitions from the same module? This enables multi-context module sharing in the LSP (different open files with different configs share one module network, reading definitions under different assumption contexts).
+Persistent module networks in Track 5 live inside `module-info` structs, which live inside `current-module-registry`. When the batch-worker restores `current-module-registry` to the post-prelude ready state, module networks are restored too (since the registry is immutable — pointing to the post-prelude `module-info` structs).
 
-**Current thinking**: The right future architecture, but potentially premature. Today module caching is deterministic — same source → same definitions. Parameters like `current-fuel` affect elaboration effort, not definition semantics. The ATMS approach shines when there are multiple simultaneous parameter contexts (LSP scenario).
+Test-specific modules (loaded during a test) are added to the test's parameterized registry copy and discarded after the test. Prelude module networks are read-only (shared by all tests).
 
-**Design principle**: The `module-network-ref` API should be TMS-cell-compatible. `make-module-network` can take an optional `#:tms?` flag that creates TMS cells instead of plain cells. Default is plain cells in Track 5; flipped for LSP.
+**No additional save/restore needed.**
+
+---
+
+## 12. Open Questions
+
+### Q1: TMS-aware module definition cells
+
+Noted as Track 6 design concern. See §6.
 
 ### Q2: Cross-network propagator mechanics
 
-Does `net-add-cross-domain-propagator` work across separate `prop-network` structs, or only within one network? If the latter, we need a lightweight cross-network callback mechanism. Investigate during Phase 4 prototyping.
-
-### Q3: Module network persistence under batch-worker isolation
-
-The batch-worker (`batch-worker.rkt`) saves/restores state for test isolation. Persistent module networks need to be included in save/restore, or they'll leak across tests. Check the batch-worker's state list.
+Resolved: shadow-cell + callback pattern. Prototype in Phase 1. See §2.3.
