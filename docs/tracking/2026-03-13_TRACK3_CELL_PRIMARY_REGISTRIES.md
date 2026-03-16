@@ -17,7 +17,7 @@
 | D.1 | Design analysis and read-site audit | ✅ | This document |
 | D.2 | Design iteration (external critique) | ✅ | 5 items accepted, 7 rejected |
 | D.3 | Internal self-critique (principle alignment) | ✅ | 5 items; Phase 6 design resolved |
-| 0 | Performance baseline + acceptance file | ⬜ | `racket/prologos/examples/2026-03-15-track3-acceptance.prologos` |
+| 0 | Performance baseline + acceptance file | ✅ | Acceptance: `a5408f0` (0 errors, 13 sections). Baseline: 194.3s / 7096 tests / 370 files |
 | 1 | Core type registries → cell-primary (8 registries) | ⬜ | |
 | 2 | Trait + instance registries → cell-primary (7 registries) | ⬜ | |
 | 3 | Remaining registries → cell-primary (8 registries) | ⬜ | |
