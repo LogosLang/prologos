@@ -233,14 +233,17 @@
   (define entry (cons type value))
   (cond
     [(current-global-env-prop-net-box)
-     ;; Per-file processing: write to Layer 1 + cell
+     ;; Cell path: write to Layer 1 cells (callers discard return)
      (current-definition-cells-content
       (hash-set (current-definition-cells-content) name entry))
      (definition-cell-write! name entry)
-     env]  ;; return UNCHANGED
+     env]
     [else
-     ;; Module loading / tests: legacy behavior
-     (hash-set env name entry)]))
+     ;; Legacy path: update parameter AND return new hash (some callers
+     ;; compose functionally: (global-env-add (global-env-add ...) ...))
+     (define new-env (hash-set env name entry))
+     (current-global-env new-env)
+     new-env]))
 
 ;; Pre-register only the type (value = #f) for recursive definitions.
 ;; whnf treats #f as stuck (no unfolding), so self-references are opaque
@@ -249,14 +252,16 @@
   (define entry (cons type #f))
   (cond
     [(current-global-env-prop-net-box)
-     ;; Per-file processing: write to Layer 1 + cell
+     ;; Cell path: write to Layer 1 cells (callers discard return)
      (current-definition-cells-content
       (hash-set (current-definition-cells-content) name entry))
      (definition-cell-write! name entry)
-     env]  ;; return UNCHANGED
+     env]
     [else
-     ;; Module loading / tests: legacy behavior
-     (hash-set env name entry)]))
+     ;; Legacy path: update parameter AND return new hash
+     (define new-env (hash-set env name entry))
+     (current-global-env new-env)
+     new-env]))
 
 ;; Remove a definition from both layers on failure.
 ;; Layer 1: remove from per-file content hash + write sentinel to cell.
