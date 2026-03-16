@@ -1,0 +1,1056 @@
+;; ========================================================================
+;;
+;;   Track 4 Acceptance File — ATMS Speculation (TMS-in-Network)
+;;
+;;   STATUS: Phase 0 (Pre-Implementation Baseline)
+;;   Run via: process-file "racket/prologos/examples/2026-03-16-track4-acceptance.prologos"
+;;
+;;   Track 4 is an infrastructure track (no syntax changes). This file
+;;   broadly exercises Prologos speculation-heavy features in ideal WS
+;;   syntax to confirm no regressions from the TMS-in-network migration.
+;;   Speculation-heavy = union types, map widening, Church folds, trait
+;;   resolution — anything that triggers with-speculative-rollback.
+;;
+;;   Conventions:
+;;     - Union types: `<A | B>` — angle brackets for type-level grouping
+;;     - A? sugar for `<A | Nil>`
+;;     - Uncurried type signatures: `spec f A B -> C`
+;;     - Direct pattern dispatch on defn preferred
+;;     - Generic dispatch: `+`, `-`, `*`, `/` for trait-resolved ops
+;;     - Full prelude — exercise the standard library
+;;     - Commented-out = aspirational ideal; annotated with BUG/BLOCKED
+;;     - Uncommented = must pass today; regression if broken
+;;     - Nat ONLY for inductive/structural patterns
+;;     - Int for computation, Num generics for polymorphism
+;;
+;;   Sections:
+;;     A. Union type speculation (single-level)
+;;     B. Nested union speculation (union-of-unions)
+;;     C. Map value widening
+;;     D. Generic dispatch (+, -, *, /, Eq, Ord)
+;;     E. Dependent types — inductive Nat patterns
+;;     F. Numeric tower (Int, Rat, Posit)
+;;     G. Higher-order functions under speculation
+;;     H. Lambda, let, closures
+;;     I. Data types, Option, Result, A? sugar
+;;     J. Collections (List, PVec, Set, Map)
+;;     K. Quote, quasiquote, macros
+;;     L. Combined stress patterns
+;;
+;; ========================================================================
+
+
+ns acceptance::track4
+
+
+;; ========================================================================
+;; SECTION A: UNION TYPE SPECULATION (SINGLE-LEVEL)
+;; ========================================================================
+;;
+;; Union type checking triggers with-speculative-rollback.
+;; The checker tries the left branch; on failure, rolls back and tries right.
+;; After Track 4: rollback via TMS retraction instead of save/restore.
+
+;; --- A1: Simple union values ---
+
+def a1-int : <Int | String> := 42
+def a1-str : <Int | String> := "hello"
+a1-int
+a1-str
+
+;; --- A2: Union in function return ---
+
+spec tag-int Int -> <Int | String>
+defn tag-int [x] x
+
+spec tag-str String -> <Int | String>
+defn tag-str [s] s
+
+tag-int 10
+tag-str "world"
+
+;; --- A3: Union with Bool ---
+
+def a3-val : <Bool | Int> := true
+def a3-num : <Bool | Int> := 99
+
+;; --- A4: Three-way union ---
+
+def a4-int  : <Int | String | Bool> := 42
+def a4-str  : <Int | String | Bool> := "hello"
+def a4-bool : <Int | String | Bool> := true
+
+;; --- A5: Union as function parameter ---
+
+spec accept-either <Int | String> -> Bool
+defn accept-either [_] true
+
+accept-either 42
+accept-either "hi"
+
+;; --- A6: Union in both parameter and return ---
+;; BUG (L3): type mismatch on identity function with union return type.
+
+;; spec echo-union <Int | String> -> <Int | String>
+;; defn echo-union [x] x
+;;
+;; echo-union 42
+;; echo-union "reflected"
+
+;; --- A7: Union narrowing via direct dispatch ---
+;; IDEAL: direct pattern dispatch on union values.
+;; BUG (L3): union dispatch not wired at file level.
+
+;; spec describe <Int | String> -> String
+;; defn describe
+;;   | [(the Int n)]    -> "number"
+;;   | [(the String s)] -> s
+;;
+;; describe 42
+;; describe "hi"
+
+;; --- A8: A? nullable sugar ---
+;; IDEAL: `Int?` desugars to `<Int | Nil>`.
+;; BUG (L3): A? sugar may not work at file level.
+
+;; def a8-val  : Int? := 42
+;; def a8-nil  : Int? := nil
+;; def a8-str  : String? := "maybe"
+;; def a8-none : String? := nil
+
+
+;; ========================================================================
+;; SECTION B: NESTED UNION SPECULATION (UNION-OF-UNIONS)
+;; ========================================================================
+;;
+;; Nested with-speculative-rollback. Checking against <<Int | Bool> | String>
+;; triggers outer speculation (try left = <Int | Bool>), inner speculation.
+;; After Track 4: TMS cell tree mirrors nesting via recursive CHAMP.
+
+;; --- B1: Two-level nesting ---
+
+def b1-int  : <<Int | Bool> | String> := 42
+def b1-bool : <<Int | Bool> | String> := false
+def b1-str  : <<Int | Bool> | String> := "nested"
+
+;; --- B2: Three-level nesting (stress) ---
+
+def b2-deep : <<<Int | Bool> | String> | Char> := 7
+
+;; --- B3: Nested union in function ---
+
+spec classify-deep Int -> <<Int | Bool> | String>
+defn classify-deep [x] x
+
+classify-deep 100
+
+;; --- B4: Nested union parameter ---
+
+spec accept-nested <<Int | Bool> | String> -> Bool
+defn accept-nested [_] true
+
+accept-nested 42
+accept-nested false
+accept-nested "yes"
+
+;; --- B5: Right-associated nesting ---
+
+def b5 : <Int | <String | Bool>> := "right"
+
+
+;; ========================================================================
+;; SECTION C: MAP VALUE WIDENING
+;; ========================================================================
+;;
+;; Map-value-widening speculation: checker speculatively checks if new
+;; value fits existing map type. Failure triggers type widening.
+
+;; --- C1: Homogeneous string map ---
+
+def c1 := {:name "alice" :role "admin"}
+c1
+
+;; --- C2: Int-valued map ---
+
+def c2 := {:x 1 :y 2 :z 3}
+c2
+
+;; --- C3: Nested maps ---
+;; BUG (L3): multiplicity error on nested map literal.
+
+;; def c3 := {:server {:host "localhost" :port 8080} :debug true}
+;; c3
+
+;; --- C4: Heterogeneous values (widening) ---
+
+def c4 := {:name "alice" :age 30 :active true}
+c4
+
+;; --- C5: Single-entry maps ---
+
+def c5-str := {:key "value"}
+def c5-int := {:count 42}
+
+;; --- C6: Dot-access ---
+;; IDEAL: dot-access desugars to map-get.
+;; BUG (L3): dot-access not consistently wired at file level.
+
+;; c1.name
+;; c2.x
+;; c3.server.host
+
+;; --- C7: Map operations (aspirational) ---
+;; BUG (L3): map operations may not be at file level.
+
+;; map-get c2 :x
+;; map-keys c1
+;; map-values c2
+
+
+;; ========================================================================
+;; SECTION D: GENERIC DISPATCH (+, -, *, /, Eq, Ord)
+;; ========================================================================
+;;
+;; Generic arithmetic dispatches through Add/Sub/Mul/Div traits.
+
+;; --- D1: Generic + on Int ---
+
+[+ 3 4]
+[+ 100 200]
+[+ 0 0]
+
+;; --- D2: Generic - on Int ---
+
+[- 10 3]
+[- 100 1]
+[- 0 0]
+
+;; --- D3: Generic * on Int ---
+
+[* 6 7]
+[* 0 999]
+[* 1 42]
+
+;; --- D4: Generic / on Int ---
+
+[/ 100 4]
+[/ 42 6]
+
+;; --- D5: Generic + on Rat ---
+
+[+ 1/2 1/3]
+[+ 0/1 5/7]
+
+;; --- D6: Generic * on Rat ---
+
+[* 2/3 3/5]
+[* 1/2 1/2]
+
+;; --- D7: Generic - on Rat ---
+
+[- 3/4 1/4]
+
+;; --- D8: Chained generic arithmetic ---
+
+[+ [* 3 4] [- 10 3]]
+[* [+ 2 3] [+ 4 5]]
+[+ [+ 1 2] [+ 3 [+ 4 5]]]
+
+;; --- D9: Deeply nested generic ops ---
+
+[+ [* [+ 1 2] [- 5 2]] [/ 100 10]]
+;; => (1+2)*(5-2) + 100/10 = 9 + 10 = 19
+
+;; --- D10: Eq on Nat (explicit dict) ---
+
+eq-check nat-eq 2N 2N
+eq-check nat-eq 0N 1N
+eq-neq nat-eq 0N 1N
+
+;; --- D11: Ord on Nat (explicit dict) ---
+
+ord-compare nat-ord 1N 2N
+ord-lt nat-ord 0N 1N
+ord-gt nat-ord 2N 0N
+
+;; --- D12: Generic comparison ---
+;; BUG (WS reader): `<` and `>` conflict with angle-bracket reader.
+
+;; [< 1 2]
+;; [> 5 3]
+;; [== 42 42]
+
+;; --- D13: Concrete int ops (fallback) ---
+
+int+ 3 4
+int- 10 3
+int* 6 7
+;; BUG (L3): int= unbound variable.
+;; int= 42 42
+;; int= 0 1
+
+;; --- D14: Trait-constrained generics ---
+;; BUG (L3): where-clause not at file level.
+
+;; spec double-it {A} A -> A
+;;   where (Add A)
+;; defn double-it [x] [+ x x]
+;;
+;; double-it 21
+;; double-it 1/4
+
+;; --- D15: Num bundle ---
+;; BUG (L3): bundle constraints not at file level.
+
+;; spec quadratic {A} A A A A -> A
+;;   where (Num A)
+;; defn quadratic [a b c x]
+;;   [+ [* a [* x x]] [+ [* b x] c]]
+;;
+;; quadratic 1 0 0 5
+
+
+;; ========================================================================
+;; SECTION E: DEPENDENT TYPES — INDUCTIVE NAT PATTERNS
+;; ========================================================================
+;;
+;; Nat for: inductive proofs, structural recursion, Peano arithmetic.
+;; Direct dispatch preferred where it works.
+
+;; --- E1: Boolean direct dispatch ---
+
+spec my-not Bool -> Bool
+defn my-not
+  | true  -> false
+  | false -> true
+
+my-not true
+my-not false
+
+spec my-and Bool Bool -> Bool
+defn my-and [a b]
+  | true  b  -> b
+  | false _  -> false
+
+my-and true true
+my-and true false
+my-and false true
+
+spec my-or Bool Bool -> Bool
+defn my-or [a b]
+  | true  _  -> true
+  | false b  -> b
+
+my-or false true
+my-or false false
+
+;; --- E2: Peano add ---
+;; BUG (L3): direct multi-clause at file level.
+;; IDEAL:
+;; spec peano-add Nat Nat -> Nat
+;; defn peano-add
+;;   | [x zero]    -> x
+;;   | [x (suc k)] -> suc [peano-add x k]
+
+spec peano-add Nat Nat -> Nat
+defn peano-add [x y]
+  match y
+    | zero  -> x
+    | suc k -> suc [peano-add x k]
+
+peano-add 2N 3N
+peano-add 0N 0N
+peano-add 1N 1N
+
+;; --- E3: Peano mul ---
+
+spec peano-mul Nat Nat -> Nat
+defn peano-mul [x y]
+  match y
+    | zero  -> zero
+    | suc k -> peano-add x [peano-mul x k]
+
+peano-mul 2N 3N
+peano-mul 3N 3N
+
+;; --- E4: Mutual recursion ---
+;; BUG (L3): forward reference to odd? at file level — mutual recursion not supported.
+
+;; spec even? Nat -> Bool
+;; defn even? [n]
+;;   match n
+;;     | zero  -> true
+;;     | suc k -> odd? k
+;;
+;; spec odd? Nat -> Bool
+;; defn odd? [n]
+;;   match n
+;;     | zero  -> false
+;;     | suc k -> even? k
+;;
+;; even? 0N
+;; even? 4N
+;; odd? 3N
+;; odd? 2N
+
+;; --- E5: Nat to Int ---
+
+spec nat-to-int Nat -> Int
+defn nat-to-int [n]
+  match n
+    | zero  -> 0
+    | suc k -> [+ 1 [nat-to-int k]]
+
+nat-to-int 0N
+nat-to-int 5N
+
+;; --- E6: Nat max ---
+
+spec nat-max Nat Nat -> Nat
+defn nat-max [x y]
+  if [ord-gt nat-ord x y] x y
+
+nat-max 3N 5N
+nat-max 5N 3N
+
+;; --- E7: Vec (aspirational) ---
+;; BUG (L3): indexed type families not at file level.
+
+;; type Vec (A : Type) : Nat -> Type
+;;   | vnil  : Vec A zero
+;;   | vcons : A -> Vec A n -> Vec A (suc n)
+;;
+;; spec vhead {A} {n : Nat} Vec A (suc n) -> A
+;; defn vhead
+;;   | [(vcons x _)] -> x
+
+;; --- E8: Fin (aspirational) ---
+
+;; type Fin : Nat -> Type
+;;   | fzero : Fin (suc n)
+;;   | fsuc  : Fin n -> Fin (suc n)
+
+
+;; ========================================================================
+;; SECTION F: NUMERIC TOWER (Int, Rat, Posit)
+;; ========================================================================
+
+;; --- F1: Int concrete ---
+
+int+ 10 20
+int- 100 42
+int* 6 7
+int/ 100 3
+
+;; --- F2: Int generic ---
+
+[+ 10 20]
+[- 100 42]
+[* 6 7]
+[/ 100 3]
+
+;; --- F3: Rat concrete ---
+
+rat+ 1/2 1/3
+rat- 3/4 1/4
+rat* 2/3 3/5
+rat/ 7/8 1/2
+
+;; --- F4: Rat generic ---
+
+[+ 1/2 1/3]
+[* 2/3 3/5]
+[- 3/4 1/4]
+[/ 7/8 1/2]
+
+;; --- F5: Equality ---
+;; BUG (L3): int= and rat= unbound variables.
+
+;; int= 42 42
+;; int= 0 1
+;; rat= 2/4 1/2
+
+;; --- F6: Posit (aspirational) ---
+;; BUG (L3): Posit literal syntax not fully wired.
+
+;; [+ 1.5p32 2.5p32]
+;; [* 3.0p16 4.0p16]
+
+;; --- F7: FromInt coercion (aspirational) ---
+
+;; (the Rat [from-int 42])
+
+;; --- F8: Numeric subtyping (aspirational) ---
+
+;; subtype PosInt Int
+;;   :where [fn [x] [> x 0]]
+;; def f8 : PosInt := 42
+
+;; --- F9: Generic square (aspirational) ---
+
+;; spec square {A} A -> A
+;;   where (Mul A)
+;; defn square [x] [* x x]
+;; square 5
+;; square 1/3
+
+
+;; ========================================================================
+;; SECTION G: HIGHER-ORDER FUNCTIONS UNDER SPECULATION
+;; ========================================================================
+
+;; --- G1: map ---
+
+map [fn [x] [int+ x 1]] '[1 2 3]
+map [fn [x] [int* x x]] '[1 2 3 4]
+
+;; --- G2: map with generic + ---
+;; BUG (L3): generic + in lambda may not resolve in map context.
+
+;; map [fn [x] [+ x 1]] '[1 2 3]
+;; map [fn [x] [* x x]] '[1 2 3 4]
+
+;; --- G3: foldl ---
+
+;; BUG (L3): parse error "Expected binder [x <T>]" — foldl lambda with 2 args.
+;; foldl [fn [acc x] [int+ acc x]] 0 '[1 2 3 4 5]
+;; foldl [fn [acc _] [int+ acc 1]] 0 '[1 2 3 4 5]
+
+;; --- G4: foldl with generic ---
+
+;; foldl [fn [acc x] [+ acc x]] 0 '[1 2 3 4 5]
+
+;; --- G5: compose ---
+
+spec inc Int -> Int
+defn inc [x] [int+ x 1]
+
+spec dbl Int -> Int
+defn dbl [x] [int* x 2]
+
+spec sqr Int -> Int
+defn sqr [x] [int* x x]
+
+compose inc dbl 5
+compose dbl inc 5
+compose sqr inc 3
+
+;; --- G6: Pipe ---
+
+|> 5 inc dbl
+|> 10 dbl inc
+|> 3 inc sqr
+
+;; --- G7: Triple compose ---
+
+|> 2 inc dbl sqr
+;; => ((2+1)*2)^2 = 36
+
+;; --- G8: Apply and twice ---
+
+spec apply-fn [Int -> Int] Int -> Int
+defn apply-fn [f x] [f x]
+
+apply-fn inc 41
+apply-fn sqr 6
+
+spec twice-fn [Int -> Int] Int -> Int
+defn twice-fn [f x] [f [f x]]
+
+twice-fn inc 40
+twice-fn dbl 3
+
+;; --- G9: Map + fold pipeline ---
+;; BUG (L3): parse error "Expected binder [x <T>]" — foldl lambda with 2 args in pipeline.
+
+;; |> '[1 2 3 4 5]
+;;   [map [fn [x] [int* x x]]]
+;;   [foldl [fn [a b] [int+ a b]] 0]
+
+;; --- G10: Filter (aspirational) ---
+;; BUG (WS reader): `>` parsed as rangle.
+
+;; filter [fn [x] [> x 2]] '[1 2 3 4 5]
+
+;; --- G11: Map then reverse ---
+
+|> '[1 2 3]
+  [map [fn [x] [int* x 10]]]
+  reverse
+
+;; --- G12: Polymorphic HOFs (aspirational) ---
+
+;; spec apply {A B} [A -> B] A -> B
+;;   :implicits [A B]
+;; defn apply [f x] [f x]
+;; apply inc 41
+
+;; --- G13: Church numerals (aspirational) ---
+;; Exercises speculation through higher-rank polymorphism.
+
+;; type Church := {A} (A -> A) -> A -> A
+;; spec church-zero Church
+;; defn church-zero [_ x] x
+;; spec church-succ Church -> Church
+;; defn church-succ [n f x] [f [n f x]]
+;; spec church-to-int Church -> Int
+;; defn church-to-int [n] [n [fn [x] [+ x 1]] 0]
+;; church-to-int [church-succ [church-succ church-zero]]
+
+
+;; ========================================================================
+;; SECTION H: LAMBDA, LET, CLOSURES
+;; ========================================================================
+;;
+;; fn expressions, let bindings, closures — create fresh metas during
+;; speculation that must be properly rolled back.
+
+;; --- H1: Lambda basics ---
+
+(fn [x : Int] [int+ x 1]) 41
+(fn [x : Int] [int* x x]) 5
+
+;; --- H2: Lambda with generic dispatch ---
+;; BUG (L3): generic + in bare lambda may not resolve.
+
+;; (fn [x : Int] [+ x 1]) 41
+
+;; --- H3: Let bindings ---
+
+(let [x := 42] x)
+(let [x := 10] [int+ x x])
+
+;; --- H4: Nested let ---
+
+(let [x := 10]
+  (let [y := 20]
+    [int+ x y]))
+
+;; --- H5: Let with function value ---
+
+(let [f := [fn [x : Int] [int+ x 1]]]
+  [f 41])
+
+;; --- H6: Let with computation ---
+
+(let [a := [int* 3 4]]
+  (let [b := [int+ a 1]]
+    [int* a b]))
+;; => 12 * 13 = 156
+
+;; --- H7: Closure capturing ---
+
+spec make-adder Int -> [Int -> Int]
+defn make-adder [n]
+  fn [x : Int] [int+ n x]
+
+[make-adder 10] 32
+[make-adder 0] 42
+
+;; --- H8: Closure with multiple captures ---
+
+spec make-linear Int Int -> [Int -> Int]
+defn make-linear [a b]
+  fn [x : Int] [int+ [int* a x] b]
+
+[make-linear 2 3] 5
+;; => 2*5 + 3 = 13
+
+;; --- H9: If as expression ---
+
+if true 42 0
+if false "yes" "no"
+;; BUG (L3): int= unbound variable.
+;; if [int= 1 1] "equal" "nope"
+
+;; --- H10: Nested if ---
+
+if true
+  (if false 1 2)
+  3
+
+;; --- H11: Let with union type (aspirational) ---
+;; BUG (L3): let with union annotation.
+
+;; (let [x : <Int | String> := 42] x)
+
+;; --- H12: Do-block (aspirational) ---
+;; BUG (L3): do-block may not be wired at file level.
+
+;; do
+;;   let x := 10
+;;   let y := [+ x 5]
+;;   [* x y]
+
+
+;; ========================================================================
+;; SECTION I: DATA TYPES, OPTION, RESULT, A? SUGAR
+;; ========================================================================
+
+;; --- I1: Option ---
+
+some 42
+some "hello"
+some true
+some 1/2
+none
+
+;; --- I2: Result ---
+
+ok 42
+ok "success"
+err "failed"
+err 404
+
+;; --- I3: Pair ---
+;; BUG (L3): inference failed on bare pair calls.
+
+;; pair 1 "hello"
+;; fst [pair 1 "hello"]
+;; snd [pair 1 "hello"]
+;; pair true 42
+;; pair "key" '[1 2 3]
+
+;; --- I4: Option matching (aspirational) ---
+;; BUG (L3): direct dispatch on Option at file level.
+
+;; spec unwrap-or (Option Int) Int -> Int
+;; defn unwrap-or
+;;   | [(some x) _]      -> x
+;;   | [none     default] -> default
+;;
+;; unwrap-or [some 42] 0
+;; unwrap-or none 0
+
+;; --- I5: Custom data type (aspirational) ---
+
+;; data Color
+;;   | red
+;;   | green
+;;   | blue
+;;
+;; spec color-to-int Color -> Int
+;; defn color-to-int
+;;   | [red]   -> 0
+;;   | [green] -> 1
+;;   | [blue]  -> 2
+;;
+;; color-to-int red
+
+;; --- I6: Parameterized data type (aspirational) ---
+
+;; data Tree A
+;;   | leaf : A -> Tree A
+;;   | node : Tree A -> Tree A -> Tree A
+;;
+;; def i6-tree := node [leaf 1] [node [leaf 2] [leaf 3]]
+;;
+;; spec tree-sum (Tree Int) -> Int
+;; defn tree-sum
+;;   | [(leaf x)]   -> x
+;;   | [(node l r)] -> [+ [tree-sum l] [tree-sum r]]
+;;
+;; tree-sum i6-tree
+
+;; --- I7: A? sugar (aspirational) ---
+;; BUG (L3): A? sugar may not be wired.
+
+;; def i7-val  : Int? := 42
+;; def i7-nil  : Int? := nil
+
+;; --- I8: Nested option ---
+
+some [some 42]
+some none
+some [some [some "deep"]]
+
+
+;; ========================================================================
+;; SECTION J: COLLECTIONS (List, PVec, Set, Map)
+;; ========================================================================
+
+;; --- J1: List basics ---
+
+'[1 2 3]
+'["hello" "world"]
+'[true false true]
+
+head '[1 2 3]
+tail '[1 2 3]
+length '[1 2 3 4 5]
+
+;; --- J2: map/fold ---
+
+map [fn [x] [int* x 2]] '[1 2 3]
+;; BUG (L3): parse error "Expected binder [x <T>]" — foldl lambda with 2 args.
+;; foldl [fn [a b] [int+ a b]] 0 '[10 20 30]
+
+;; --- J3: reverse, append ---
+
+reverse '[1 2 3]
+append '[1 2 3] '[4 5 6]
+
+;; --- J4: Nested lists ---
+
+'['[1 2] '[3 4] '[5 6]]
+
+;; --- J5: Empty list ---
+
+'[]
+length '[]
+
+;; --- J6: List of pairs ---
+;; BUG (L3): inference failed on pair calls.
+
+;; map [fn [x] [pair x [int* x x]]] '[1 2 3]
+
+;; --- J7: PVec (aspirational) ---
+
+;; def j7 := pvec-of '[1 2 3 4 5]
+;; pvec-nth j7 2
+;; pvec-length j7
+;; pvec-push j7 6
+
+;; --- J8: Set (aspirational) ---
+
+;; def j8 := set-from-list '[1 2 3 4 5]
+;; set-member? j8 3
+;; set-insert j8 6
+;; set-size j8
+
+;; --- J9: Map literal operations (aspirational) ---
+
+;; map-get {:a 1 :b 2} :a
+;; map-keys {:x 10 :y 20}
+;; map-values {:x 10 :y 20}
+
+;; --- J10: String as collection ---
+;; BUG (L3): string-length, string-append, string-ref unbound.
+
+;; string-length "hello world"
+;; string-append "foo" "bar"
+;; string-ref "hello" 0
+;; string-ref "hello" 4
+
+
+;; ========================================================================
+;; SECTION K: QUOTE, QUASIQUOTE, MACROS
+;; ========================================================================
+
+;; --- K1: List literals via quote ---
+
+'[1 2 3]
+'[true false]
+'["a" "b" "c"]
+'[1/2 1/3 1/4]
+
+;; --- K2: Nested quote ---
+
+'['[1 2] '[3 4]]
+
+;; --- K3: Empty quote ---
+
+'[]
+
+;; --- K4: Quasiquote (aspirational) ---
+;; BUG (L3): quasiquote may not be wired at file level.
+
+;; def k4-x := 42
+;; `[1 2 ,k4-x]
+
+;; --- K5: Defmacro (aspirational) ---
+;; BUG (L3): defmacro not at file level.
+
+;; defmacro unless [$cond $body]
+;;   (if $cond nil $body)
+;;
+;; unless false 42
+
+;; --- K6: Char literal (aspirational) ---
+;; BUG (L3): Char literal 'a' is read as (quote a) = datum-sym, not Char.
+
+;; def k6-ch : Char := 'a'
+;; char-upcase 'a'
+;; char-downcase 'A'
+
+
+;; ========================================================================
+;; SECTION L: COMBINED STRESS PATTERNS
+;; ========================================================================
+;;
+;; Deep nesting, mutual recursion, multiple speculation sites.
+
+;; --- L1: Mutual recursion ---
+;; BUG (L3): forward reference to pong at file level + int= unbound.
+
+;; spec ping Int -> Int
+;; defn ping [n]
+;;   if [int= n 0] 0
+;;     [pong [int- n 1]]
+;;
+;; spec pong Int -> Int
+;; defn pong [n]
+;;   if [int= n 0] 0
+;;     [ping [int- n 1]]
+;;
+;; ping 10
+;; pong 5
+
+;; --- L2: Deep application chain ---
+
+spec f1 Int -> Int
+defn f1 [x] [int+ x 1]
+
+spec f2 Int -> Int
+defn f2 [x] [int* x 2]
+
+spec f3 Int -> Int
+defn f3 [x] [int- x 3]
+
+f1 [f2 [f3 [f1 [f2 10]]]]
+
+;; --- L3: Multiple speculation per expression ---
+
+spec both-unions <Int | String> -> <Int | Bool> -> Int
+defn both-unions [_ _] 0
+
+both-unions 42 99
+both-unions "hello" true
+
+;; --- L4: Conditional with computed predicate ---
+
+;; BUG (L3): int= unbound variable.
+;; if [int= [int+ 1 1] 2] "two" "not two"
+
+;; --- L5: Large list (performance canary) ---
+
+'[1 2 3 4 5 6 7 8 9 10]
+length '[1 2 3 4 5 6 7 8 9 10]
+
+;; --- L6: Multi-stage pipeline ---
+;; BUG (L3): parse error "Expected binder [x <T>]" — foldl lambda with 2 args in pipeline.
+
+;; |> '[1 2 3 4 5]
+;;   [map [fn [x] [int+ x 10]]]
+;;   [map [fn [x] [int* x 2]]]
+;;   [foldl [fn [a b] [int+ a b]] 0]
+
+;; --- L7: Identity polymorphism ---
+
+spec my-id {A} A -> A
+  :implicits [A]
+defn my-id [x] x
+
+my-id 42
+my-id "hello"
+my-id true
+my-id 1/2
+my-id zero
+
+;; --- L8: Const polymorphism ---
+
+spec my-const {A B} A -> B -> A
+  :implicits [A B]
+defn my-const [a _] a
+
+my-const 42 "ignored"
+my-const true 0
+
+;; --- L9: String operations ---
+;; BUG (L3): string-length, string-append, string-ref unbound.
+
+;; string-length "hello"
+;; string-append "hello" " world"
+;; string-ref "hello" 0
+
+;; --- L10: Nested generic arithmetic ---
+
+[+ [+ 1 2] [+ 3 [+ 4 5]]]
+[* [+ 1 1] [* 2 [+ 1 2]]]
+[+ [* 2 3] [* 4 5]]
+[- [+ 100 50] [* 3 10]]
+
+;; --- L11: Generic + on strings (aspirational) ---
+;; String concatenation via Add trait.
+
+;; [+ "hello" " world"]
+
+;; --- L12: Pipeline ending in union-typed function ---
+
+;; |> 42 tag-int
+
+;; --- L13: Closure with captured + generic ---
+;; BUG (L3): generic * in closure.
+
+;; spec make-multiplier Int -> [Int -> Int]
+;; defn make-multiplier [n]
+;;   fn [x : Int] [* n x]
+;; [make-multiplier 3] 14
+
+;; --- L14: Lambda in pipeline ---
+;; BUG (L3): parse error — lambda fn [x] in pipeline.
+
+;; |> 3
+;;   [fn [x] [int* x x]]
+;;   [fn [x] [int+ x 1]]
+
+;; --- L15: Nested option in pipeline ---
+;; BUG (L3): inference failed on pair calls.
+
+;; some [pair 42 "answer"]
+;; some [pair "key" '[1 2 3]]
+
+;; --- L16: Union-returning function used multiple times ---
+
+tag-int 1
+tag-int 2
+tag-str "a"
+tag-str "b"
+
+;; --- L17: Mixed Int and Rat generic ops ---
+
+[+ 1 2]
+[+ 1/2 1/3]
+[* 3 4]
+[* 2/3 3/4]
+
+;; --- L18: Let with generic arithmetic ---
+
+(let [x := [+ 3 4]] [* x x])
+;; => 49 : Int
+
+(let [a := [+ 1/2 1/3]] [* a a])
+;; => 25/36 : Rat
+
+;; --- L19: Deeply nested lets ---
+
+(let [a := 1]
+  (let [b := [+ a 1]]
+    (let [c := [+ b 1]]
+      (let [d := [+ c 1]]
+        [* a [* b [* c d]]]))))
+;; => 1 * 2 * 3 * 4 = 24
+
+;; --- L20: Speculation + polymorphism ---
+;; Polymorphic function applied to union-typed values.
+
+my-id [tag-int 42]
+my-id [tag-str "poly"]
+
+
+;; ========================================================================
+;; END OF ACCEPTANCE FILE
+;; ========================================================================
+;;
+;; Phase validation checklist:
+;;   Phase 0: Run baseline — all uncommented expressions must pass
+;;   Phase 1: TMS cell infrastructure — no regression
+;;   Phase 2: Per-meta TMS cells — no regression (same speculation results)
+;;   Phase 3: Level/mult/session TMS — no regression
+;;   Phase 4: Write-once registry — no regression
+;;   Phase 5: Learned clauses — possible speedup on nested unions (B2, B3)
+;;   Phase 6: Cleanup + performance — benchmark before/after
+;;   Phase 7: PIR — document findings
+;;
+;; After each phase: run this file via process-file, verify 0 new failures.
+;; Pre-existing BUG/BLOCKED items do not count as regressions.
