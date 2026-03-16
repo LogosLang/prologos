@@ -32,6 +32,10 @@
  module-network-set-status
  module-network-status
  module-network-materialize
+ ;; Module lifecycle constants (re-exported from infra-cell.rkt)
+ mod-loading
+ mod-loaded
+ mod-stale
  ;; Module registry
  current-module-registry
  register-module!
@@ -90,7 +94,8 @@
    macros         ; hasheq: short-name → preparse-macro or procedure
    type-aliases   ; hasheq: short-name → alias body
    specs          ; hasheq: short-name → spec-entry (for implicit arg insertion)
-   definition-locations)  ; hasheq: symbol → srcloc (LSP Tier 2.3: go-to-definition)
+   definition-locations  ; hasheq: symbol → srcloc (LSP Tier 2.3: go-to-definition)
+   module-network)       ; module-network-ref or #f — Track 5 Phase 3: persistent per-module network
   #:transparent)
 
 ;; ========================================

@@ -1522,6 +1522,7 @@
      (define mod-subtype-reg #f)
      (define mod-coercion-reg #f)
      (define mod-capability-reg #f)
+     (define mod-module-network #f)
      (parameterize ([current-global-env (hasheq)]
                     [current-ns-context #f]
                     [current-meta-store (make-hasheq)]
@@ -1540,11 +1541,12 @@
                     ;; Phase 8b: fresh propagator network per module
                     [current-prop-net-box #f]
                     [current-prop-id-map-box #f]
-                    ;; Phase 3a: Module loading uses legacy hasheq path.
-                    ;; Set prop-net-box to #f so global-env-add writes to
-                    ;; current-global-env (Layer 2), not definition-cells (Layer 1).
-                    [current-global-env-prop-net-box #f]
-                    [current-ns-prop-net-box #f]                ;; Phase 3c: no ns cell writes during module loading
+                    ;; Track 5 Phase 3a: Module loading now uses cell path.
+                    ;; process-command sets current-global-env-prop-net-box to
+                    ;; (current-prop-net-box) in its inner parameterize, so
+                    ;; global-env-add writes to Layer 1 cells. Definitions
+                    ;; accumulate in current-definition-cells-content (persists
+                    ;; across commands). global-env-snapshot merges both layers.
                     [current-module-registry-cell-id #f]
                     [current-ns-context-cell-id #f]
                     [current-defn-param-names-cell-id #f]
@@ -1589,10 +1591,7 @@
        (cache-module-captures! ns-sym captures-before)
 
        ;; Capture the resulting environment, namespace context, and registries.
-       ;; Use global-env-snapshot to merge both layers: per-definition cells
-       ;; (Layer 1) and legacy hasheq (Layer 2). During module loading,
-       ;; reset-meta-store! may create a prop-net despite parameterize setting
-       ;; current-prop-net-box to #f, so some definitions may end up in Layer 1.
+       ;; global-env-snapshot merges both layers (per-definition cells + legacy).
        (set! mod-env (global-env-snapshot))
        (set! mod-ns-ctx (current-ns-context))
        (set! mod-preparse-reg (current-preparse-registry))
@@ -1602,7 +1601,30 @@
        (set! mod-spec-store (current-spec-store))
        (set! mod-subtype-reg (current-subtype-registry))
        (set! mod-coercion-reg (current-coercion-registry))
-       (set! mod-capability-reg (current-capability-registry)))
+       (set! mod-capability-reg (current-capability-registry))
+
+       ;; Track 5 Phase 3b: Build module-network-ref from accumulated definitions.
+       ;; Each entry in mod-env becomes a definition cell in the module's network.
+       (set! mod-module-network
+             (let ([mnr0 (make-module-network)])
+               (define-values (mnr-final _)
+                 (for/fold ([mnr mnr0] [_ (void)])
+                           ([(name entry) (in-hash mod-env)])
+                   (define-values (mnr* cid) (module-network-add-definition mnr name entry))
+                   (values mnr* (void))))
+               ;; Mark loaded and store snapshot hash for dual-path validation
+               (let* ([mnr1 (module-network-set-status mnr-final mod-loaded)]
+                      [snap (module-network-materialize mnr1)]
+                      [mnr2 (struct-copy module-network-ref mnr1
+                               [snapshot-hash snap])])
+                 ;; Phase 3d: Dual-path validation — cell reads must match snapshot
+                 (for ([(name entry) (in-hash mod-env)])
+                   (define cell-val (module-network-lookup mnr2 name))
+                   (unless (equal? entry cell-val)
+                     (error 'module-load
+                            "Cell/hash mismatch for ~a in ~a: cell=~v hash=~v"
+                            name ns-sym cell-val entry)))
+                 mnr2))))
 
      ;; Propagate preparse registry changes (deftype/defmacro) to the caller.
      ;; This ensures type aliases and macros defined in loaded modules are
@@ -1660,7 +1682,8 @@
                              (hasheq)
                              (hasheq)
                              mod-spec-store
-                             (current-definition-locations)))
+                             (current-definition-locations)
+                             mod-module-network))
 
      ;; 6. Register
      (register-module! ns-sym mi)
