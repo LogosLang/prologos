@@ -1,0 +1,469 @@
+* Introduction and Motivation
+
+Prologos's relational sublanguage is, at its current stage, a well-typed port of
+Prolog augmented with two features that most logic programming systems lack:
+SLG-style tabling and propagator-network-based execution over persistent,
+CHAMP-backed immutable data structures. Relations are defined with =defr= and
+=rel=, rule clauses are introduced by =&>=, fact blocks by =||=, and variables
+carry mode prefixes (=+var= for input, =-var= for output, =?var= for free). A
+configurable solver supports strategy selection, threshold tuning, tabling
+policy, provenance tracking, and timeouts. The propagator network is fully
+persistent: every cell write produces a new network via structural sharing,
+enabling speculative execution and backtracking without mutation.
+
+This is a solid foundation. But it is also, fundamentally, conservative. The
+mode prefixes are parsed and stored in =param-info= structs but ignored by the
+solver at runtime --- every argument is searched linearly regardless of binding
+state. The planned =?var:Type= domain constraint syntax is designed but
+unimplemented. The solver uses DFS backtracking, which is correct but leaves
+enormous optimisation potential on the table. Tabling prevents infinite loops in
+recursive relations but does not exploit the richer structure that dependent types
+and the lattice trait system make available.
+
+Prologos is not merely a Prolog. It is a language where types are first-class,
+where linearity is tracked by QTT, where session types govern protocol
+conformance, and where a lattice trait hierarchy provides abstract
+interpretation infrastructure as a library. These features, taken together, open
+doors that traditional logic programming never had access to.
+
+This document explores six such doors --- frontiers where the existing
+infrastructure, extended with targeted new machinery, could produce capabilities
+that go well beyond what Prolog, Mercury, or even modern CLP systems offer:
+
+1. *Mode prefixes --- from annotations to optimisation engine.* The =+/-/?=
+   annotations already live in the AST. Mercury demonstrated decades ago that
+   mode and determinism information can yield order-of-magnitude speedups over
+   Prolog. We examine how to activate these annotations: argument indexing, goal
+   reordering, determinism inference, compile-time mode checking, and directional
+   propagator cell selection.
+
+2. *Domain constraints --- from types to constraint domains.* The planned
+   =?var:Type= syntax is not mere syntactic sugar for typing logic variables. A
+   type that implements =Lattice= /is/ a constraint domain. This insight
+   collapses the distinction between type annotation and CLP domain declaration,
+   yielding =CLP(L)= for any lattice =L= --- a parameterised constraint logic
+   programming framework where the trait system serves as the plugin API.
+
+3. *Coinduction and greatest fixed points.* Standard Prolog computes least fixed
+   points; coinduction computes greatest fixed points, enabling reasoning about
+   infinite structures, bisimulation, and liveness properties. The tabling
+   infrastructure (SLG resolution) is already halfway to coinductive tabling.
+
+4. *Rule learning and inductive reasoning.* Given ground facts and a hypothesis
+   space, can the relational engine learn new rules? Inductive Logic Programming
+   (ILP) has a long history, but Prologos's dependent types provide a novel
+   mechanism for constraining the hypothesis space via type-directed search.
+
+5. *Probabilistic and weighted logic programming.* Extending relations with
+   weights or probability distributions enables statistical relational learning,
+   Bayesian inference, and soft constraint satisfaction. The provenance system
+   (already configurable in =solver-config=) provides the accounting
+   infrastructure.
+
+6. *Category-theoretic foundations for novel logical constructs.* Dependent types
+   give us access to categorical semantics. Kan extensions, adjunctions, and
+   profunctors have computational content that maps onto logic programming
+   patterns in ways that are only beginning to be explored.
+
+Each section is self-contained but builds on the same architectural substrate:
+the propagator network as execution engine, the lattice trait system as
+abstraction mechanism, and the dependent type system as static guarantor. The
+goal is not to propose a development roadmap (that belongs in tracking documents)
+but to map the intellectual landscape --- to understand what becomes /possible/
+when a logic programming engine is embedded in a language of this richness.
+
+* Mode Prefixes --- From Annotations to Optimisation Engine
+
+** Current State
+
+Prologos parses mode prefixes on relational parameters and stores them in
+=param-info= structs (defined in =relations.rkt=):
+
+#+begin_src racket
+(struct param-info (name mode) #:transparent)
+;; mode: 'free | 'in | 'out
+#+end_src
+
+When a =defr= form is elaborated, each parameter's mode annotation (=+=, =-=, or
+=?=) is preserved through the AST pipeline into the runtime =variant-info=:
+
+#+begin_src racket
+(param-info (expr-logic-var-name p)
+            (or (expr-logic-var-mode p) 'free))
+#+end_src
+
+But that is where the story ends. The solver's DFS backtracking engine treats
+every parameter identically: it attempts unification against each clause in
+declaration order, regardless of which arguments are ground, which are free, and
+which pattern of bindings the caller provides. The mode information is dead
+weight --- parsed, stored, and ignored.
+
+This is the gap between Prolog and Mercury.
+
+** Mercury's Mode System: The Gold Standard
+
+Mercury, developed by Somogyi, Henderson, and Conway at the University of
+Melbourne, demonstrated that mode and determinism information can transform logic
+programming performance. Mercury's mode system classifies each predicate call
+into determinism categories:
+
+- =det=: exactly one solution, no choice points
+- =semidet=: zero or one solution
+- =multi=: one or more solutions (at least one)
+- =nondet=: zero or more solutions
+- =failure=: no solutions (always fails)
+- =cc_multi= / =cc_nondet=: committed-choice variants (first solution only)
+
+These categories are not merely documentation. Mercury uses them to:
+
+1. *Statically reorder conjunctions* so that goals binding variables are
+   scheduled before goals consuming those bindings.
+2. *Select indexing strategies* --- a =det= predicate with a ground first
+   argument can use hash-based indexing instead of linear search.
+3. *Eliminate choice points* entirely for =det= and =semidet= predicates,
+   avoiding the overhead of backtracking bookkeeping.
+4. *Compile to direct calls* when determinism is known, bypassing the
+   search machinery.
+
+The result: Mercury benchmarks show performance that is significantly faster than
+mature Prolog implementations (SICStus, SWI, YAP) on equivalent programs. The
+speedup comes not from cleverer unification or faster term representation but
+from /not doing unnecessary search/.
+
+** How Modes Enable Optimisation in Prologos
+
+Prologos can exploit mode information at multiple levels, each building on the
+previous:
+
+*** Argument Indexing
+
+When a parameter is marked =+= (input), the solver knows it will be ground at
+the call site. Ground arguments can be /indexed/: rather than scanning all
+clauses linearly, the solver can hash on the first ground argument and jump
+directly to matching clauses. This is the single highest-impact optimisation in
+Prolog compilers (WAM first-argument indexing), and Prologos currently lacks it
+entirely.
+
+For a relation with /n/ clauses, linear search is O(n) per call. Hash-based
+indexing on a =+= argument reduces this to amortised O(1). For fact tables ---
+which Prologos already stores separately as =fact-row= lists --- this
+transformation is straightforward: build a hash map keyed on the indexed
+argument positions at registration time.
+
+*** Goal Reordering
+
+The constraint-programming insight is: /schedule the most constrained goals
+first/. In a conjunction of goals, those with more =+= (ground) arguments are
+more constrained --- they have smaller search spaces. The solver should execute
+these first, binding variables that subsequent goals can then use as inputs.
+
+Currently, Prologos executes goals in declaration order. With mode information,
+the solver can statically reorder a conjunction:
+
+#+begin_src prologos
+defr path [+from -to]
+  &> (edge from ?mid)     ;; from is +, mid is ?: semi-constrained
+     (path ?mid to)        ;; mid now bound from edge: effectively + -
+#+end_src
+
+Here the declaration order happens to be optimal. But in general, the programmer
+may write goals in a logical order that is not the best execution order. Mode
+analysis enables automatic reordering without changing semantics.
+
+*** Determinism Inference
+
+A relation where all parameters are =+= and exactly one clause matches is
+=det=: it produces exactly one answer with no backtracking. The solver can
+compile such a call to a direct Racket function call, bypassing the entire
+search infrastructure (no choice points, no trailing, no worklist management).
+
+More subtly, a relation with =n= clauses whose first =+= argument has =n=
+distinct constant patterns is also =det= under first-argument indexing --- each
+call matches at most one clause.
+
+Determinism inference composes with tabling: a tabled relation that is =det= on
+its input pattern needs only a memo table, not the full SLG completion machinery.
+
+*** Compile-Time Mode Checking
+
+With modes as part of the type signature, the elaborator can verify at compile
+time that =+= arguments are ground at every call site. This catches a class of
+bugs --- "instantiation errors" in Prolog terminology --- before runtime:
+
+#+begin_src prologos
+defr lookup [+key -val] :det
+  &> (table key val)
+
+;; Compile error: 'key' is not ground at call site
+;; query (lookup ?k ?v)   ;; ?k has mode +, but is free here
+#+end_src
+
+This is a strict improvement over Prolog, where instantiation errors surface
+only at runtime (and often deep in a search tree).
+
+*** Propagator Cell Selection
+
+The propagator network does not inherently know which cells are inputs and which
+are outputs. Mode annotations provide this information directly: =+= cells are
+populated by the caller and should trigger forward propagation; =-= cells are
+targets for narrowing and should receive propagated values. This enables
+/directional propagation/ strategies that avoid wasted work --- an output cell
+does not need to fire propagators back towards already-ground input cells.
+
+** Future: Surface-Level Determinism Annotations
+
+The natural next step is to expose Mercury-style determinism categories as
+surface syntax:
+
+#+begin_src prologos
+defr lookup [+key -val] :det
+  &> (table key val)
+
+defr member [+elem +list] :semidet
+  &> (match list
+       (cons elem _) => true
+       (cons _ ?rest) => (member elem ?rest))
+
+defr append [-x -y +z] :multi
+  &> ...
+#+end_src
+
+The =:det=, =:semidet=, =:multi=, and =:nondet= annotations serve both as
+documentation and as checked contracts: the compiler infers the determinism from
+mode analysis and clause structure, then verifies it matches the declared
+category. A mismatch is a compile-time error.
+
+** Connection to Abstract Interpretation
+
+There is a deeper theoretical point here. Modes are an /abstract domain/ over
+the binding states of logic variables. The concrete domain is the set of all
+possible binding states (ground, free, partially instantiated, etc.). The
+abstract domain is the three-point lattice =+/-/?=:
+
+- =+= (input / ground): the variable is bound to a value.
+- =-= (output): the variable is free but will be bound by this relation.
+- =?= (free): the variable's binding state is unknown.
+
+The abstraction function maps a concrete binding state to its mode; the
+concretisation function maps a mode to the set of concrete states it represents.
+This pair forms a Galois connection:
+
+#+begin_example
+concrete: { ground, free, partial-struct, ... }
+    α ↕ γ
+abstract: { + , - , ? }
+#+end_example
+
+Mode inference /is/ abstract interpretation over this lattice. A fixed-point
+computation propagates mode information through the call graph until it
+stabilises. This is exactly what Prologos's propagator network is designed to
+compute --- fixed points of monotone functions over lattices.
+
+The implication is striking: mode inference can be implemented /as a Prologos
+program/ using the propagator network, with each relation's mode signature as a
+cell and each call site as a propagator. The language analyses itself using its
+own execution model. This self-hosting property is a strong signal that modes are
+not an ad hoc annotation but a natural part of the language's semantic framework.
+
+* Domain Constraints --- From Types to Constraint Domains
+
+** Current Design
+
+The =?var:Type= syntax is planned as an extension of the mode prefix system.
+Where =?x= declares a free logic variable, =?x:Interval= would declare a free
+logic variable whose domain is the =Interval= type. The parser is designed to
+accept this syntax (the =:Type= suffix is a natural extension of the existing
+=?var= prefix), but the elaborator does not yet process domain annotations.
+
+At first glance this appears to be syntactic sugar --- a convenience for adding
+type annotations to logic variables. It is far more than that.
+
+** The Key Insight: A Type IS a Constraint Domain
+
+Consider what it means for a type to implement the =Lattice= trait in Prologos.
+A type =L= with a =Lattice= instance provides:
+
+- =bot=: the bottom element (least information / unconstrained)
+- =join=: the merge operation (combine two pieces of information)
+- A partial order where =join= is monotone
+
+Now consider what a constraint domain is in the CLP (Constraint Logic
+Programming) tradition. CLP(X) parameterises logic programming by a constraint
+domain X, which provides:
+
+- A set of values (the domain)
+- Constraint operations that narrow the domain
+- A test for satisfiability (non-empty domain)
+
+The parallel is exact. A =Lattice= instance /is/ a constraint domain. The
+=bot= element represents the unconstrained state. The =join= operation merges
+constraints. A contradiction (the =top= element or an empty set) signals
+unsatisfiability. The propagator network already computes fixed points over
+lattice-valued cells.
+
+This means that =?x:Interval= is not a type annotation. It is a /constraint
+domain declaration/. It tells the solver: "Create a propagator cell for =x=
+whose merge function is =Interval='s =join=, whose initial value is
+=Interval='s =bot= (the full interval =[-inf, +inf]=), and whose contradiction
+test is =Interval='s emptiness check."
+
+** CLP(L): Constraint Logic Programming over Any Lattice
+
+Traditional CLP systems are parameterised by specific, hardcoded domains:
+
+- *CLP(FD)*: Finite domain constraints, as in SICStus Prolog's =clpfd= library
+  or SWI-Prolog's =clpz=. Variables range over finite integer sets. Constraints
+  like =X in 1..10=, =X #\= Y=, and =all_different= narrow domains via arc
+  consistency.
+- *CLP(R)* / *CLP(Q)*: Real or rational number constraints. Variables range over
+  numeric intervals. Linear arithmetic constraints are solved via simplex.
+- *CLP(B)*: Boolean constraints. Variables are 0/1. Constraints are propositional
+  formulas solved via BDDs or SAT.
+- *CLP(Sets)*: Set constraints. Variables range over sets. Constraints include
+  membership, subset, intersection.
+
+Each of these is implemented as a separate library with its own solver, its own
+data structures, and its own integration hooks. Mixing domains (e.g., using
+finite-domain constraints alongside interval constraints in the same query)
+requires explicit bridging code.
+
+Prologos's architecture collapses this tower. Instead of =CLP(FD)=, =CLP(R)=,
+=CLP(B)=, and =CLP(Sets)= as separate systems, we have =CLP(L)= for any type
+=L= implementing =Lattice=. The trait system is the plugin API:
+
+- =?x:FlatVal[Nat]= gives flat-lattice behaviour: a variable is either
+  unconstrained or bound to a single value, with contradiction on conflicting
+  bindings. This is classical Prolog-style unification, recast as a lattice
+  operation.
+- =?x:SetOf[Nat]= gives powerset-lattice behaviour: the variable ranges over a
+  set of possible natural numbers. Constraints narrow the set. Emptiness is
+  contradiction.
+- =?x:Interval= gives interval-lattice behaviour: the variable ranges over a
+  numeric interval. Constraints narrow the interval. An empty interval is
+  contradiction.
+- =?x:FD[1..100]= (with appropriate =FD= type) gives finite-domain behaviour.
+
+The programmer does not need to import a separate CLP library or learn a separate
+constraint syntax. They annotate a variable with a type, and the type's =Lattice=
+instance determines the constraint semantics. New constraint domains are added by
+implementing a trait, not by modifying the solver.
+
+** The Elaboration Bridge
+
+When the elaborator encounters =?x:Interval= in a relational parameter, the
+following sequence occurs:
+
+1. *Cell creation.* A propagator cell is created in the network with =Interval='s
+   lattice =join= as its merge function and =Interval='s =bot= (the full
+   interval =[-inf, +inf]=) as its initial value.
+
+2. *Contradiction registration.* The cell's contradiction function is set to
+   =Interval='s emptiness check: a cell is contradictory when its interval has
+   been narrowed to the empty set.
+
+3. *Propagation.* Constraint goals in the relation body (e.g.,
+   ~(end is [interval-add start [interval-const duration]])~) become
+   propagators attached to the relevant cells. When an input cell's interval
+   narrows, the propagator fires and computes a new interval for the output
+   cell. The merge function incorporates this new information monotonically.
+
+4. *Quiescence.* The network runs to quiescence. If no contradiction is
+   detected, the cells' final values represent the tightest intervals consistent
+   with all constraints. If a contradiction is detected, the solver backtracks
+   (or reports failure).
+
+This is already how the propagator network operates for its existing use cases.
+The domain constraint feature requires no new execution machinery --- only a new
+elaboration path that connects the =:Type= annotation to cell initialisation
+parameters.
+
+The existing =prop-network= struct already carries per-cell merge functions
+(=merge-fns=) and contradiction functions (=contradiction-fns=) as CHAMP maps.
+The infrastructure is in place; the elaboration bridge wires it to the surface
+syntax.
+
+** Widening for Infinite-Height Lattices
+
+Not all lattices have finite height. The =Interval= lattice, for example, admits
+infinite ascending chains: =[0, 100] ⊑ [0, 50] ⊑ [0, 25] ⊑ ...= converges, but
+=[0, 1] ⊑ [0, 2] ⊑ [0, 3] ⊑ ...= diverges. Without intervention, the
+propagator network would iterate forever.
+
+The standard solution from abstract interpretation is /widening/: a binary
+operator ∇ that accelerates convergence by overshooting. Critically, Prologos's
+propagator network already has widening support. Phase 6a introduced:
+
+- =net-set-widen-point=: designate a cell as a widening point
+- =net-new-cell-widen=: create a cell with an associated widening function
+- =net-cell-write-widen=: write to a cell with widening applied
+- =run-to-quiescence-widen=: a scheduler variant that applies widening at
+  designated cells
+
+When a domain constraint uses an infinite-height lattice, the elaborator
+designates the cell as a widening point and attaches the lattice's widening
+operator. The existing =run-to-quiescence-widen= scheduler then handles
+convergence automatically. No new machinery is needed.
+
+** Generalisation and Composition
+
+The =CLP(L)= approach generalises naturally in several directions:
+
+*Product domains.* A relation with =?x:Interval= and =?y:SetOf[Nat]= uses two
+different constraint domains simultaneously, with no special bridging. Each cell
+has its own merge function; the propagator network handles heterogeneous lattices
+natively. The existing cross-domain propagation support (Phase 6c,
+=net-add-cross-domain-propagator=) enables propagators that read from an Interval
+cell and write to a SetOf cell, or vice versa.
+
+*Derived domains.* A type like =SignedInterval= (extending =Interval= with sign
+tracking) can implement =Lattice= with a more refined merge, gaining the
+precision benefits of a richer domain without any changes to the solver.
+
+*User-defined domains.* Because =Lattice= is a trait, users can define custom
+constraint domains for their specific problem. A scheduling application might
+define a =TimeSlot= lattice; a compiler might define a =RegisterSet= lattice.
+Each participates in CLP(L) automatically.
+
+** Surface Syntax
+
+The proposed surface syntax integrates domain constraints seamlessly into
+existing relational definitions:
+
+#+begin_src prologos
+defr schedule [?task:String ?start:Interval ?end:Interval ?duration:Nat]
+  &> (end is [interval-add start [interval-const duration]])
+     (no-overlap task start end)
+
+defr colour-map [?region:String ?colour:FD]
+  &> (colour in '[red green blue yellow])
+     (adjacent region ?neighbour)
+     (colour-map ?neighbour ?neighbour-colour)
+     (colour neq ?neighbour-colour)
+
+defr type-check [+expr -type:SetOf[Type]]
+  &> (infer-candidates expr type)
+     (filter-by-context expr type)
+#+end_src
+
+In the scheduling example, =?start:Interval= and =?end:Interval= declare
+interval-domain variables. The constraint ~(end is [interval-add start
+[interval-const duration]])~ becomes a propagator relating the three cells. The
+=no-overlap= sub-goal adds further interval constraints. The solver runs the
+propagator network to quiescence, narrowing the intervals until either a
+solution is found or a contradiction is detected.
+
+In the graph colouring example, =?colour:FD= declares a finite-domain variable.
+The =in= constraint initialises its domain; =neq= narrows it. This is
+textbook CLP(FD), but expressed using the same trait-based machinery as every
+other constraint domain.
+
+In the type-checking example, =type:SetOf[Type]= declares a set-valued logic
+variable. The type-checker relation narrows the candidate set via constraints.
+This is a natural encoding of type inference as constraint solving --- an
+approach that connects the relational sublanguage to the type-checking pipeline
+itself.
+
+The domain constraint feature, when realised, will transform Prologos's
+relational sublanguage from "Prolog with propagators" into a general-purpose
+constraint programming framework --- one where the trait system provides
+unlimited extensibility and the propagator network provides the execution model.
