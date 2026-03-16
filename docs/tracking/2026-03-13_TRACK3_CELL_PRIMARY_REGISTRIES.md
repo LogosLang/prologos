@@ -15,14 +15,15 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | D.1 | Design analysis and read-site audit | ✅ | This document |
-| D.2 | Design iteration (review feedback) | ⬜ | |
+| D.2 | Design iteration (external critique) | ✅ | 5 items accepted, 7 rejected |
 | 0 | Performance baseline | ⬜ | |
 | 1 | Core type registries → cell-primary (8 registries) | ⬜ | |
 | 2 | Trait + instance registries → cell-primary (7 registries) | ⬜ | |
 | 3 | Remaining registries → cell-primary (8 registries) | ⬜ | |
 | 4 | Warnings → cell-primary (3 parameters) | ⬜ | |
-| 5 | Narrowing constraints → cells (2 parameters) | ⬜ | |
-| 6 | Remove parameter writes + cleanup | ⬜ | |
+| 5a | Narrowing constraints → cell (monotonic, `merge-list-append`) | ⬜ | |
+| 5b | Narrowing var-constraints → cell (non-monotonic, `merge-last-write-wins`) | ⬜ | |
+| 6 | Remove parameter writes + cleanup | ⬜ | Module-loading fallback investigation |
 
 ---
 
@@ -242,12 +243,48 @@ The 24 registries (plus 3 warnings, plus 2 narrowing params) are grouped by depe
 - `current-deprecation-warnings` → `read-deprecation-warnings`
 - `current-capability-warnings` → `read-capability-warnings`
 
-**Phase 5: Narrowing constraints (2)** — No cells exist yet. Must create cells first (in `global-constraints.rkt` or `narrowing.rkt`), then convert reads. `current-narrow-var-constraints` uses a setter pattern which is the ad-hoc anti-pattern cells replace.
+**Phase 5a: Narrowing constraints — monotonic (1)** — `current-narrow-constraints` is a list accumulator (monotonic, `merge-list-append`). No cell exists yet. Create cell in `global-constraints.rkt` following the `warnings.rkt` pattern. Reads in `narrowing.rkt` use `parameterize` to thread constraints into sub-computations — these are threading sites (keep as-is). The computation reads are in `narrow-match-tree` and `narrow-top-level` where the code inspects the constraint list to make decisions.
 
-- `current-narrow-constraints` → create cell + `read-narrow-constraints`
-- `current-narrow-var-constraints` → create cell + `read-narrow-var-constraints`
+- `current-narrow-constraints` → create cell with `merge-list-append` + `read-narrow-constraints`
+
+**Phase 5b: Narrowing var-constraints — non-monotonic (1)** — `current-narrow-var-constraints` is a hasheq set via wholesale replacement (`(current-narrow-var-constraints var-constraints)` in `elaborator.rkt:2731`), NOT monotonic accumulation. The setter replaces the entire map per-clause during narrowing elaboration. This is a **non-monotonic update** that does not fit the standard `merge-hasheq-union` model.
+
+Options:
+1. **`merge-last-write-wins`** — treats the cell as a mutable register. Semantically correct (each clause's var-constraints replace the previous), follows the `enet11` error-descriptor precedent. Loses monotonicity but this parameter is already non-monotonic.
+2. **Defer to Track 4** — ATMS assumption-based management can handle non-monotonic state natively (each clause creates an assumption; retraction undoes its var-constraints).
+3. **Per-variable cells** — model each variable's constraints as a separate cell. Overkill for 1 read site.
+
+**Recommendation**: Option 1 (`merge-last-write-wins`). The parameter is already non-monotonic; the cell faithfully represents the same semantics. Track 4 can upgrade this to assumption-managed if needed.
+
+- `current-narrow-var-constraints` → create cell with `merge-last-write-wins` + `read-narrow-var-constraints`
 
 **Phase 6: Remove parameter writes + cleanup** — With all reads going through cells, remove the parameter write from each `register-X!` function. Audit for any remaining parameter reads. Remove the parameter-fallback branch from each reader (the "network-everywhere" flip from Track 1 Phase 6).
+
+**Note (from critique D.2)**: Module loading calls computation reads (e.g., `lookup-trait` during `require` processing) in contexts where the propagator network may not exist. Unlike Track 1 Phase 6 (where `with-fresh-meta-env` contexts don't do module loading), Phase 6 here must preserve the parameter fallback for module-loading read paths, or ensure the network exists during module loading. Investigate during Phase 6 — this may mean the fallback is kept for a subset of readers that are called during module loading.
+
+### 3.5 File-to-Phase Mapping
+
+| File | Updated In | Nature |
+|------|-----------|--------|
+| `macros.rkt` | Phases 1–3 | Reader definitions (source of all `read-X` functions) |
+| `elaborator.rkt` | Phase 2 | `read-trait-registry` computation reads |
+| `trait-resolution.rkt` | Phase 2 | `read-trait-registry` computation reads |
+| `expander.rkt` | Phase 3 | `read-preparse-registry`, `read-spec-store` |
+| `warnings.rkt` | Phase 4 | Warning reader definitions |
+| `global-constraints.rkt` | Phase 5 | Narrowing cell creation |
+| `narrowing.rkt` | Phase 5 | Narrowing computation reads |
+| `driver.rkt` | Phases 1–3 (computation reads only) | Leave parameter threading sites for Track 6 |
+| `batch-worker.rkt` | Mirror driver | Update in parallel with driver |
+| `namespace.rkt` | Phase 3 | `read-spec-store` |
+
+### 3.6 Performance Baseline Protocol (Phase 0)
+
+Following the established protocol from Track 1 (codified in `.claude/rules/testing.md`):
+
+- **Metrics**: Full test suite wall time via `racket tools/run-affected-tests.rkt --all`
+- **Tag**: `benchmark-baseline-track-3`
+- **Threshold**: >25% regression = investigate before committing (per testing.md rule)
+- **Comparison**: `racket tools/benchmark-tests.rkt --compare benchmark-baseline-track-3`
 
 ---
 
@@ -298,9 +335,12 @@ This is the most mechanical of all tracks. The dual-write infrastructure has bee
 | 2 | 7 trait + instance registries | 2–3 hours | Low-Medium |
 | 3 | 8 remaining registries | 2–3 hours | Low |
 | 4 | 3 warnings | 1 hour | Low |
-| 5 | 2 narrowing constraints (new cells) | 1–2 hours | Medium |
-| 6 | Remove parameter writes + network-everywhere | 2–3 hours | Low |
+| 5a | 1 narrowing constraint (monotonic, new cell) | 30 min | Low |
+| 5b | 1 narrowing var-constraint (non-monotonic, new cell) | 1 hour | Medium |
+| 6 | Remove parameter writes + network-everywhere | 2–3 hours | Low-Medium |
 | **Total** | ~26 readers, ~200 call-site updates | **~1 day** | Low |
+
+**Schedule risk**: Phase 5b (non-monotonic narrowing) and Phase 6 (module-loading fallback investigation) are the two places where surprises could add time. Phases 1–4 and 5a are purely mechanical.
 
 This is significantly faster than Tracks 1 and 2 because:
 - All cell infrastructure already exists (no `enet` creation needed for Phases 1–4)
@@ -326,3 +366,31 @@ When the global environment becomes cell-primary (Track 5), definition changes p
 ### 7.4 Self-Hosting Foundation
 
 When Prologos self-hosts, the compiler's registration state will be Prologos propagator cells. Cell-primary registries in the Racket implementation establish the patterns that the self-hosted version will use natively.
+
+---
+
+## §8. External Critique Response (D.2)
+
+External critique received 2026-03-15. 12 items raised (3 critical, 3 significant, 3 moderate, 3 minor). Assessment grounded in project implementation history:
+
+### Accepted (5)
+
+| # | Issue | Action |
+|---|-------|--------|
+| 3 | Phase 5 under-specified (narrowing monotonicity) | **Expanded Phase 5 into 5a (monotonic) and 5b (non-monotonic)**. `current-narrow-constraints` is list-append (monotonic). `current-narrow-var-constraints` uses wholesale replacement (non-monotonic) — will use `merge-last-write-wins` following `enet11` precedent. |
+| 4 | Performance baseline undefined | **Added §3.6** referencing established protocol from Track 1 and `testing.md` rules. |
+| 6 | File-to-phase mapping unclear | **Added §3.5** with file-to-phase table showing which files are touched in which phases. |
+| — | Phase 6 module-loading fallback | **Added Phase 6 note**: module loading calls computation reads without a network. Phase 6 must preserve fallback for module-loading paths or ensure network exists during loading. |
+| 12 | Effort estimate assumes no surprises | **Added schedule risk note** identifying Phase 5b and Phase 6 as the two sources of potential surprise. |
+
+### Rejected with Rationale (7)
+
+| # | Issue | Rationale |
+|---|-------|-----------|
+| 1 | Missing atomicity guarantees | **Not applicable.** Propagator network is single-threaded and synchronous. No concurrent reads/writes. BSP runs to quiescence in a single thread. `read-fn` is a CHAMP hash lookup. Track 1 and Track 2 validated this across 14+ readers with zero atomicity issues. |
+| 2 | Fallback creates silent divergence | **Already solved by Track 1 precedent.** Network-everywhere (Track 1 Phase 6) guarantees the network exists during elaboration. Fallback only triggers during module loading where the parameter IS the correct state. Dual-write uses `macros-cell-write!` which calls the same hash operation — divergence between cell merge and parameter `hash-set` is structurally impossible for single-key writes. |
+| 5 | Computation vs threading distinction fragile | **Track 1 validated this approach.** 14 read sites classified across 3 files with zero misclassifications (validated by 6889 tests). The distinction is syntactically mechanical: left-side of `parameterize` = threading, `hash-ref`/lookup = computation. After Phase 6, any remaining parameter reads would return stale data and immediately fail tests — the test suite IS the verification. |
+| 7 | Merge function consistency | **Already correct.** All 24 registries use `merge-hasheq-union` because registrations are monotonic hash accumulation with unique keys (type names, trait names). Duplicate keys would be a registration bug caught by existing tests, not a merge issue. Validated during Migration Sprint Phase 2. |
+| 8 | LSP/REPL snapshots critical for correctness | **Correctly deferred.** Snapshots capture parameters AFTER elaboration completes (sequential, not concurrent). No race between elaboration and snapshot. Dual-write ensures parameter/cell consistency during Phases 1–5. Track 6 will address post-parameter-removal snapshots. |
+| 9 | No rollback plan | **Covered by project methodology.** Every phase is a git commit. Layered Recovery Principle (master roadmap) explicitly addresses retreat via dual-write pattern. Track 1 demonstrated this when Phase 5a revealed the fallback issue. |
+| 11 | Missing error handling in reader | **Correct by design.** `read-fn` is a CHAMP lookup — it doesn't throw unless the cell ID is invalid, which is a programming error. Track 1 has 7 readers using this exact pattern with zero exceptions. We WANT crashes on invalid IDs to surface bugs at the call site. |
