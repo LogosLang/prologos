@@ -101,6 +101,23 @@ Converted all 28 registry/accumulator computation reads from parameter-primary t
 
 **Result**: All computation reads are cell-primary. 28 readers, ~80 call sites converted. Two elaboration guard parameters (`current-macros-in-elaboration?`, `current-narrow-in-elaboration?`). Dual-write continues — parameter writes preserved for save/restore, batch-worker, and module loading. PIR: `2026-03-16_TRACK3_CELL_PRIMARY_REGISTRIES_PIR.md`. 7096 tests, 197.6s.
 
+### Track 4: ATMS Speculation
+
+Integrated TMS (Truth Maintenance System) cells into the propagator network for speculation-aware type inference. All four meta types (type, level, mult, session) now have per-meta TMS cells. Learned-clause pruning skips branches known to be inconsistent.
+
+| Phase | Description | Status | Key Commits |
+|-------|-------------|--------|-------------|
+| D.1–D.5 | Design analysis, iteration, self-critique, lattice-theoretic rework | ✅ | `cf4001b`..`ae82836` |
+| 0 | Performance baseline + acceptance file | ✅ | `50b00d8` |
+| 1 | TMS cell infrastructure (struct, read/write/commit/merge) | ✅ | `ecde661` |
+| 2 | TMS-transparent read/write + domain-aware merge | ✅ | `10ecb0c` |
+| 3 | Level/mult/session metas → per-meta TMS cells; save/restore 6→3 boxes | ✅ | `addaf46` |
+| 4 | Meta-info CHAMP → write-once registry; save/restore → 1 box | ⏸️ | Deferred to Track 6 (see §Deferrals) |
+| 5 | Learned-clause pruning via `atms-consistent?` | ✅ | `f0f72da` |
+| 6–7 | Performance validation + PIR | ✅ | `62ecb3f` |
+
+**Result**: Per-meta TMS cells for all 4 meta types (type, level, mult, session). `save-meta-state` reduced from 6 boxes to 3 (network + id-map + meta-info). Depth-0 fast path makes TMS cells zero-overhead for the common case. Learned-clause pruning infrastructure operational. Belt-and-suspenders: network-box restore handles rollback during Phases 2–5; speculation stack push and TMS retraction deferred to Track 6. PIR: `2026-03-16_TRACK4_ATMS_SPECULATION_PIR.md`. 7124 tests, 187.1s (2.4% faster than baseline).
+
 ---
 
 ## Current Infrastructure
@@ -147,7 +164,7 @@ Plus additional cells via `register-*-cells!`:
 
 ### Speculation
 
-`with-speculative-rollback` → `save-meta-state`/`restore-meta-state!` (box-snapshot pattern). 4 call sites in `typing-core.rkt`. ATMS infrastructure exists but is not used for speculation.
+`with-speculative-rollback` → `save-meta-state`/`restore-meta-state!` (3-box snapshot: network + id-map + meta-info). 4 call sites in `typing-core.rkt`. ATMS hypothesis creation per speculation for error tracking (nogoods recorded on failure). Per-meta TMS cells support assumption-tagged branching with depth-0 fast path (zero overhead at speculation depth 0). Learned-clause pruning via `atms-consistent?` skips branches subsumed by known nogoods. Belt-and-suspenders: network-box restore handles rollback; TMS retraction deferred to Track 6.
 
 ### Dirty Flags
 
@@ -163,21 +180,11 @@ Moved to §Completed Work above. See Track 3 PIR for full review.
 
 **Key residual**: Phase 6 (parameter write removal) deferred to Tracks 5/6. Dual-write continues because `save-meta-state`/`restore-meta-state!` and `batch-worker.rkt` still read parameters. See §Deferrals.
 
-### Track 4: ATMS Speculation
+### Track 4: ATMS Speculation — ✅ COMPLETE
 
-**Goal**: Replace `save-meta-state`/`restore-meta-state!` box-snapshot pattern with ATMS assumption creation/retraction. Speculative type-checking (Church folds, union types, bare params) creates named assumptions; failure retracts them.
+Moved to §Completed Work above. See Track 4 PIR for full review.
 
-**Scope**: 4 call sites of `with-speculative-rollback` in `typing-core.rkt`. The ATMS infrastructure (`atms.rkt`, `infra-cell.rkt` assumption API) already exists from Migration Sprint Phase 0b.
-
-**Risk**: Medium — speculation is the most delicate part of the type checker, but the call sites are well-tested and few.
-
-**Composition synergy**: Eliminates the fragile 6-box snapshot pattern that must be updated whenever new state is added. ATMS nogoods from failed speculations become permanent learned clauses. Enables the "dependency-directed backjumping" described in the Whole-System Migration Thesis §2.3.
-
-**Depends on**: Track 3 ✅ (registries are cell-primary; ATMS retraction covers them). Track 4 is unblocked.
-
-**Files**: `elab-speculation-bridge.rkt`, `typing-core.rkt`, `metavar-store.rkt`.
-
-**Design document**: `docs/tracking/2026-03-16_TRACK4_ATMS_SPECULATION.md` — Stage 2/3 design complete (`cf4001b`).
+**Key residual**: Phase 4 (meta-info CHAMP → write-once registry; save/restore → 1 box) deferred to Track 6. See §Deferrals.
 
 ### Track 5: Global-Env Cell-Primary + Dependency Edges
 
@@ -195,7 +202,7 @@ Moved to §Completed Work above. See Track 3 PIR for full review.
 
 **Absorbed from Track 3 Phase 6**: Per-module networks would eliminate the module-loading parameter fallback in all 28 cell-primary readers, collapsing the two-context architecture to a single cell-primary context.
 
-**Depends on**: Track 4 (ATMS for non-monotonic definition replacement).
+**Depends on**: Track 4 ✅ (ATMS for non-monotonic definition replacement).
 
 **Files**: `global-env.rkt`, `driver.rkt`, `elaborator.rkt`, `namespace.rkt`.
 
@@ -203,7 +210,7 @@ Moved to §Completed Work above. See Track 3 PIR for full review.
 
 ### Track 6: Driver Simplification + Cleanup
 
-**Goal**: With Tracks 3–5 complete, simplify the driver's per-command `parameterize` block, remove dirty flags, and clean up vestigial infrastructure.
+**Goal**: With Tracks 3–5 complete, simplify the driver's per-command `parameterize` block, remove dirty flags, complete the TMS retraction pipeline, and clean up vestigial infrastructure.
 
 **Scope**:
 - Simplify per-command parameterize (Migration Sprint Phase 5a–5b)
@@ -212,12 +219,22 @@ Moved to §Completed Work above. See Track 3 PIR for full review.
 - `reset-meta-store!` becomes assumption management rather than wholesale state wipe
 - **Remove dual-write parameter writes** — with Track 5's per-module networks and Track 4's ATMS-based snapshots, `save-meta-state`/`restore-meta-state!` and `batch-worker.rkt` can capture cell content instead of parameters. This is the completion of Track 3's deferred Phase 6.
 - **Remove elaboration guard parameters** — once all contexts (including module loading) have networks, `current-macros-in-elaboration?` and `current-narrow-in-elaboration?` become unnecessary
+- **Complete TMS retraction pipeline** (absorbed from Track 4 Phase 4):
+  1. Speculation stack push — route cell writes to TMS branches during speculation
+  2. Commit-on-success — promote TMS branch values to base on speculation success
+  3. TMS retraction — replace network-box restore with per-cell assumption retraction
+  4. Meta-info CHAMP → write-once registry (remove mutable status/solution fields)
+  5. Reduce `save-meta-state` from 3 boxes to 1 (network only)
 
-**Risk**: Low (by this point, all the hard structural work is done).
+**Risk**: Low-to-moderate. The TMS retraction pipeline (from Track 4 Phase 4) touches the speculation hot path and requires careful ordering. The remaining items are straightforward cleanup.
 
-**Depends on**: Tracks 3 ✅, 4, 5.
+**Depends on**: Tracks 3 ✅, 4 ✅, 5.
+
+**Design document**: TBD — will need a design doc given the TMS retraction pipeline complexity.
 
 **Absorbed from Track 3 Phase 6**: Parameter write removal for all 28+ registries, plus guard parameter cleanup. This is the final step in the dual-write → cell-only migration path.
+
+**Absorbed from Track 4 Phase 4**: Meta-info simplification, save/restore reduction (3→1 boxes), and the full speculation stack push → commit-on-success → TMS retraction chain. See §Deferrals for rationale.
 
 **Files**: `driver.rkt`, `metavar-store.rkt`, `global-constraints.rkt`, `macros.rkt`, `warnings.rkt`, `batch-worker.rkt`.
 
@@ -274,11 +291,11 @@ Moved to §Completed Work above. See Track 3 PIR for full review.
 ```
 Track 3 (Cell-Primary Registries) ✅
   │
-  ├──→ Track 4 (ATMS Speculation)          ← unblocked
+  ├──→ Track 4 (ATMS Speculation) ✅
   │      │
-  │      └──→ Track 5 (Global-Env + Per-Module Networks)
+  │      └──→ Track 5 (Global-Env + Per-Module Networks)    ← next
   │             │
-  │             └──→ Track 6 (Driver Simplification + Dual-Write Removal)
+  │             └──→ Track 6 (Driver Simplification + Cleanup)
   │                    │
   │                    └──→ Track 7 (QTT Multiplicity Cells)
   │                           │
@@ -286,11 +303,15 @@ Track 3 (Cell-Primary Registries) ✅
   │                                  │
   │                                  └──→ Track 9 (GDE)
   │
-  └─ ─ ─ Phase 6 deferred ─ ─ ─→ Track 5 (per-module networks)
-                                   Track 6 (parameter write removal)
+  ├─ ─ ─ Track 3 Phase 6 deferred ─ ─ ─→ Track 5 (per-module networks)
+  │                                        Track 6 (parameter write removal)
+  │
+  └─ ─ ─ Track 4 Phase 4 deferred ─ ─ ─→ Track 6 (meta-info simplification,
+                                           save/restore → 1 box, speculation
+                                           stack push, TMS retraction)
 ```
 
-Track 4 is now unblocked (Track 3 complete). The dashed line shows Track 3's deferred Phase 6 flowing into Tracks 5 and 6.
+Track 5 is now unblocked (Tracks 3 and 4 complete). Dashed lines show deferred phases flowing into future tracks.
 
 ---
 
@@ -311,6 +332,23 @@ Active deferrals that affect future track scope:
 
 **Risk if never addressed**: Ongoing conceptual overhead (maintainers must understand dual-write). Every new registry must follow the dual-write pattern. Performance impact is negligible (~1%).
 
+### Track 4 Phase 4 → Track 6: Meta-Info Simplification + Full TMS Retraction
+
+**What**: Converting meta-info CHAMP to a write-once registry (no mutable status/solution fields), removing id-map and meta-info from `save-meta-state`, reducing save/restore from 3 boxes to 1 (network only), implementing speculation stack push, commit-on-success, and TMS retraction as the sole rollback mechanism.
+
+**Why deferred**: These form a prerequisite chain where each step depends on the prior:
+1. **Speculation stack push** — routes cell writes to TMS branches. But without commit-on-success, depth-0 reads see stale base values after speculation success. (Discovered in Track 4 Phase 2c — caused "already solved" errors.)
+2. **Commit-on-success** (`tms-commit`) — promotes TMS branch values to base on speculation success. Requires TMS retraction to replace network restore (otherwise both mechanisms conflict).
+3. **TMS retraction** — replaces network-box restore with per-cell assumption retraction. Once operational, network snapshots become unnecessary for speculation.
+4. **Remove id-map from save/restore** — after retraction replaces restore, stale cell-ID references from speculation are no longer possible (retraction preserves network structure, only retracting values).
+5. **Remove meta-info from save/restore** — requires `all-unsolved-metas` to scan per-meta TMS cells instead of meta-info CHAMP entries.
+
+**Current state**: Track 4 achieved save/restore 6→3 boxes with belt-and-suspenders (network-box restore + TMS cells coexist). The 3-box pattern works correctly. The depth-0 fast path makes TMS cells zero-overhead for the common case (all 7124 tests).
+
+**Impact on Track 6**: Track 6's scope explicitly includes this work. The full chain (stack push → commit → retraction → 1-box) is a Track 6 deliverable.
+
+**Risk if never addressed**: 3-box save/restore works but is fragile — any new mutable state that participates in speculation must be manually added. TMS retraction eliminates this class of fragility entirely.
+
 ### Migration Sprint Phases 3e, 5a–5b: Deferred from Foundation
 
 | Phase | Description | Why Deferred | Absorbs Into |
@@ -328,9 +366,10 @@ Active deferrals that affect future track scope:
 | Post-Migration Sprint Phase 4 | 6826 | 354 | ~200s |
 | Post-Track 1 | 6888 | 358 | 191.4s |
 | Post-Track 2 Phase 9 | 6907 | 359 | 197.6s |
-| Post-Track 3 (current) | 7096 | 370 | 197.6s |
+| Post-Track 3 | 7096 | 370 | 197.6s |
+| Post-Track 4 (current) | 7124 | 371 | 187.1s |
 
-Migration has been performance-neutral to slightly positive despite adding cell infrastructure. Each track should maintain this invariant. The test count increase (6907→7096) between Track 2 and Track 3 is from non-propagator work (WFLE, D4 Provenance, etc.) in the intervening interval.
+Migration has been performance-neutral to slightly positive despite adding cell infrastructure. Each track should maintain this invariant. The test count increase (6907→7096) between Track 2 and Track 3 is from non-propagator work (WFLE, D4 Provenance, etc.) in the intervening interval. Track 4 added 28 TMS cell unit tests and achieved a 2.4% speedup (191.6s→187.1s) from reducing save/restore from 6 to 3 boxes.
 
 ---
 

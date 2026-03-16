@@ -2,7 +2,7 @@
 
 **Created**: 2026-03-16
 **Revised**: 2026-03-16 (D.5 — recursive CHAMP TMS cells, provenance-by-default)
-**Status**: DESIGN (Stage 2/3)
+**Status**: ✅ COMPLETE (Phase 4 deferred to Track 6 — see §Phase 4 Deferral Rationale)
 **Depends on**: Track 3 (Cell-Primary Registries) — ✅ COMPLETE
 **Enables**: Track 5 (Global-Env + Dependency Edges), Track 9 (GDE)
 **Research basis**: `2026-03-11_WHOLE_SYSTEM_PROPAGATOR_MIGRATION.md` §2.3 (Dependency-Directed Backjumping), `2026-02-24_LOGIC_ENGINE_DESIGN.md` §5 (ATMS Integration)
@@ -22,12 +22,26 @@
 | D.5 | Recursive CHAMP cells + provenance-by-default | ✅ | This revision |
 | 0 | Performance baseline + acceptance file | ✅ | 191.6s / 7096 tests, acceptance 76 speculations, commit `50b00d8` |
 | 1 | TMS cell integration into prop-network | ✅ | tms-cell-value struct, tms-read/write/commit/merge, net-new-tms-cell, 27 unit tests, 197.0s / 7123 tests, commit `ecde661` |
-| 2 | Per-meta cells → TMS cells | ✅ | TMS-transparent read/write, domain-aware merge, stack push deferred to Phase 6, 196.1s / 7124 tests, commit `10ecb0c` |
+| 2 | Per-meta cells → TMS cells | ✅ | TMS-transparent read/write, domain-aware merge, stack push deferred to Track 6, 196.1s / 7124 tests, commit `10ecb0c` |
 | 3 | Level/mult/session metas → per-meta TMS cells | ✅ | Per-meta TMS cells for all 3, save/restore reduced 6→3 boxes, 188.2s / 7124 tests, commit `addaf46` |
-| 4 | Meta-info CHAMP → write-once registry; eliminate from save/restore | ⏸️ | Deferred to Phase 6 (cleanup); 3-box save/restore works correctly |
+| 4 | Meta-info CHAMP → write-once registry; eliminate from save/restore | ⏸️ | Deferred to Track 6 — requires speculation stack push + commit-on-success + TMS retraction pipeline (see §Deferral Rationale below) |
 | 5 | Learned-clause integration (nogood reuse) | ✅ | atms-consistent? pruning before thunk execution, speculation-pruned counter, 187.1s / 7124 tests, commit `f0f72da` |
 | 6 | Performance validation + cleanup | ✅ | 187.1s vs 191.6s baseline (2.4% faster), acceptance L3 0 errors, 76 speculations / 113 hypotheses / 32 nogoods / 0 pruned, Phase 4 deferred |
 | 7 | Post-Implementation Review | ✅ | PIR at `2026-03-16_TRACK4_ATMS_SPECULATION_PIR.md` |
+
+### Phase 4 Deferral Rationale
+
+Phase 4 (meta-info CHAMP → write-once registry; save/restore → 1 box) is deferred to **Track 6 (Driver Simplification + Cleanup)**, not to a later phase within Track 4. The reasons:
+
+1. **Removing id-map from save/restore risks stale cell references**: After `restore-meta-state!`, id-map entries created during speculation point to cell IDs that no longer exist in the restored network. Any subsequent read via those stale IDs would return incorrect values or crash. Solving this requires TMS retraction (where cell values are retracted rather than the network being replaced), which is a Track 6 concern.
+
+2. **Removing meta-info from save/restore requires `all-unsolved-metas` migration**: Currently `all-unsolved-metas` walks the meta-info CHAMP to find unsolved entries. If meta-info becomes write-once (no status field), `all-unsolved-metas` must instead scan all per-meta TMS cells in the network — a different iteration pattern that depends on Track 5's network infrastructure.
+
+3. **The prerequisite chain is**: speculation stack push → commit-on-success → TMS retraction → remove network-box restore → save/restore → 1 box. Each step depends on the prior. Stack push requires commit-on-success (otherwise depth-0 reads see stale base values after speculation success). Commit-on-success requires TMS retraction to replace network restore. All of this is Track 6 scope.
+
+4. **The 3-box save/restore works correctly**: Phases 1–3 and 5 achieved the primary Track 4 goals (TMS cells for all 4 meta types, learned-clause pruning) with the 3-box pattern. The reduction from 6→3 boxes already eliminated the level/mult/session CHAMPs from the snapshot. Further reduction to 1 box is cleanup, not architectural.
+
+**Impact**: Track 6's scope explicitly includes this work. See master roadmap §Deferrals.
 
 ---
 
@@ -318,7 +332,7 @@ The data plane (TMS cell values in network cells) snapshots with the network. Bo
 - **Network-box restore** (imperative): works for TMS cells since they're in the network
 - **TMS retraction** (structural): marks branches as disbelieved without box restore
 
-Belt-and-suspenders through implementation phases; cleanup in Phase 6 after proving TMS retraction sufficient.
+Belt-and-suspenders through implementation phases; cleanup in Track 6 after proving TMS retraction sufficient.
 
 #### 3.2.5 TMS Cell Merge Function
 
@@ -421,7 +435,7 @@ The id-map (`meta-id → cell-id`) records which cell was created for which meta
   (set-box! atms-box _a*)
   ;; 2. Push assumption onto speculation stack
   (define prev-stack (current-speculation-stack))
-  ;; 3. Snapshot for belt-and-suspenders (Phases 2-5; Phase 6 removes)
+  ;; 3. Snapshot for belt-and-suspenders (Phases 2-5; Track 6 removes)
   (define saved-net (unbox (current-prop-net-box)))
   ;; 4. Run thunk under assumption (stack-based: reads/writes navigate tree)
   (define result
@@ -748,7 +762,7 @@ Refinement of TMS cell representation and provenance design principles. Key deci
 3. **Lazy base promotion on commit** — `base` field updated to committed value (micro-optimization for future depth-0 reads) while branch entry preserved (provenance: "this value came from speculation H").
 4. **ID-map assumption-tagged** — provenance-by-default design principle. Every piece of infrastructure should be observable and explainable. ID-map entries track which speculation created which meta→cell mapping.
 5. **Retraction preserves data** — retracted branches are never deleted. They're negative knowledge (proof certificates of failed paths). Tools enumerate all branches; type checker follows only believed path.
-6. **Belt-and-suspenders through all implementation phases**, cleanup in Phase 6 after proving TMS retraction correct across full test suite.
+6. **Belt-and-suspenders through all implementation phases**, cleanup in Track 6 after proving TMS retraction correct across full test suite.
 7. **Provenance-by-default as design principle** — observability/correctness/explainability over micro-optimization. Infrastructure must support self-hosting, proof techniques, tooling, and error reporting. Hot paths optimize via fast paths (depth-0 base return), not by dropping provenance.
 
 ---
