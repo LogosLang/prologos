@@ -17,11 +17,21 @@
          racket/list
          racket/set
          racket/path
-         "infra-cell.rkt")  ;; merge-replace, merge-hasheq-union
+         "infra-cell.rkt"    ;; merge-replace, merge-hasheq-union, mod-status, net-new-mod-status-cell
+         "propagator.rkt")   ;; make-prop-network, net-cell-read, net-cell-write
 
 (provide
  ;; Module info
  (struct-out module-info)
+ ;; Module network — Track 5 persistent per-module networks
+ (struct-out module-network-ref)
+ make-module-network
+ module-network-lookup
+ module-network-add-definition
+ module-network-write
+ module-network-set-status
+ module-network-status
+ module-network-materialize
  ;; Module registry
  current-module-registry
  register-module!
@@ -82,6 +92,82 @@
    specs          ; hasheq: short-name → spec-entry (for implicit arg insertion)
    definition-locations)  ; hasheq: symbol → srcloc (LSP Tier 2.3: go-to-definition)
   #:transparent)
+
+;; ========================================
+;; Module Network Reference — Track 5
+;; ========================================
+;;
+;; Each loaded module gets a persistent prop-network holding its definition
+;; cells. The module-network-ref is stored inside module-info and provides
+;; a live, persistent reference to the module's definitions — replacing
+;; the materialized hasheq snapshot for module-to-module dependency edges.
+;;
+;; During the dual-path migration (Phases 3-4), both the env-snapshot
+;; hasheq and the live module-network-ref coexist. Phase 5 cuts over
+;; to module-network-ref as the primary lookup path.
+
+(struct module-network-ref
+  (prop-net          ;; prop-network: persistent network with definition cells
+   cell-id-map      ;; hasheq: symbol → cell-id (definition name → cell)
+   mod-status-cell  ;; cell-id: lifecycle monitoring (mod-loading → mod-loaded → mod-stale)
+   dep-edges        ;; hasheq: symbol → (listof dep-edge-info) (Track 5 Phase 4)
+   snapshot-hash)   ;; hasheq or #f: materialized env snapshot (belt-and-suspenders, Phases 3-4)
+  #:transparent)
+
+;; Create a fresh module network for a module about to be loaded.
+;; Returns: module-network-ref with empty cell-id-map, no dep-edges,
+;; and mod-status initialized to mod-loading.
+(define (make-module-network)
+  (define net0 (make-prop-network))
+  (define-values (net1 status-cid) (net-new-mod-status-cell net0 mod-loading))
+  (module-network-ref net1 (hasheq) status-cid (hasheq) #f))
+
+;; Look up a definition cell's value in a module network.
+;; Returns: (cons type value) or #f if not found.
+(define (module-network-lookup mnr name)
+  (define cid (hash-ref (module-network-ref-cell-id-map mnr) name #f))
+  (and cid
+       (let ([val (net-cell-read (module-network-ref-prop-net mnr) cid)])
+         (if (eq? val 'infra-bot) #f val))))
+
+;; Add a definition cell to a module network.
+;; Returns: (values updated-module-network-ref cell-id)
+(define (module-network-add-definition mnr name initial-value)
+  (define net (module-network-ref-prop-net mnr))
+  (define-values (net* cid) (net-new-replace-cell net initial-value))
+  (values
+   (struct-copy module-network-ref mnr
+     [prop-net net*]
+     [cell-id-map (hash-set (module-network-ref-cell-id-map mnr) name cid)])
+   cid))
+
+;; Write a value to an existing definition cell.
+;; Returns: updated module-network-ref
+(define (module-network-write mnr name value)
+  (define cid (hash-ref (module-network-ref-cell-id-map mnr) name #f))
+  (unless cid
+    (error 'module-network-write "no cell for ~a" name))
+  (struct-copy module-network-ref mnr
+    [prop-net (net-cell-write (module-network-ref-prop-net mnr) cid value)]))
+
+;; Update the module status cell (e.g., mod-loading → mod-loaded).
+;; Returns: updated module-network-ref
+(define (module-network-set-status mnr status)
+  (struct-copy module-network-ref mnr
+    [prop-net (net-cell-write (module-network-ref-prop-net mnr)
+                              (module-network-ref-mod-status-cell mnr)
+                              status)]))
+
+;; Read the current module status.
+(define (module-network-status mnr)
+  (net-cell-read (module-network-ref-prop-net mnr)
+                 (module-network-ref-mod-status-cell mnr)))
+
+;; Materialize the env snapshot hash from live cells.
+;; Returns: hasheq of symbol → (cons type value)
+(define (module-network-materialize mnr)
+  (for/hasheq ([(name cid) (in-hash (module-network-ref-cell-id-map mnr))])
+    (values name (net-cell-read (module-network-ref-prop-net mnr) cid))))
 
 ;; ========================================
 ;; Module Registry — caches loaded modules

@@ -37,6 +37,11 @@
  merge-last-write-wins
  merge-constraint-status-map
  merge-error-descriptor-map
+ ;; Module lifecycle lattice — Track 5
+ mod-loading
+ mod-loaded
+ mod-stale
+ merge-mod-status
  ;; General cell factory — The Most Generalizable Interface
  net-new-cell-with-merge
  ;; Convenience cell factories (delegate to net-new-cell-with-merge)
@@ -44,6 +49,7 @@
  net-new-list-cell
  net-new-set-cell
  net-new-replace-cell
+ net-new-mod-status-cell
  ;; Named cell registry — registration protocol (Phase 0c)
  net-register-named-cell
  net-named-cell-ref
@@ -153,6 +159,30 @@
        (hash-set acc k v))]))
 
 ;; ========================================
+;; Module Lifecycle Lattice — Track 5
+;; ========================================
+;;
+;; Module lifecycle states form a monotone lattice:
+;;   mod-loading < mod-loaded < mod-stale
+;; Stale dominates: once a module is marked stale, it stays stale
+;; until explicitly reloaded (which resets to mod-loading).
+
+(define mod-loading 'mod-loading)
+(define mod-loaded  'mod-loaded)
+(define mod-stale   'mod-stale)
+
+;; Monotone merge: stale dominates loaded dominates loading.
+(define (merge-mod-status old new)
+  (cond
+    [(eq? old 'infra-bot) new]
+    [(eq? new 'infra-bot) old]
+    [(eq? old mod-stale) mod-stale]    ;; once stale, stays stale
+    [(eq? new mod-stale) mod-stale]    ;; stale always wins
+    [(eq? new mod-loaded) mod-loaded]  ;; loaded beats loading
+    [(eq? old mod-loaded) mod-loaded]  ;; loaded beats loading
+    [else old]))                       ;; loading = loading
+
+;; ========================================
 ;; General Cell Factory
 ;; ========================================
 
@@ -189,6 +219,12 @@
 ;; Returns: (values new-network cell-id)
 (define (net-new-replace-cell net [initial-content 'infra-bot])
   (net-new-cell-with-merge net merge-replace initial-content))
+
+;; Module status cell: lifecycle lattice (loading < loaded < stale).
+;; For: module-network-ref mod-status tracking.
+;; Returns: (values new-network cell-id)
+(define (net-new-mod-status-cell net [initial-status mod-loading])
+  (net-new-cell-with-merge net merge-mod-status initial-status))
 
 ;; ========================================
 ;; Named Cell Registry — Registration Protocol
