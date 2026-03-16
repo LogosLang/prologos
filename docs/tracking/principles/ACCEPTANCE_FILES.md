@@ -83,6 +83,22 @@ The WFLE acceptance file's Nixon diamond, win/lose game positions, and self-refe
 
 ## 4. Conventions
 
+### Syntax style
+
+Acceptance files are living showcases of the language. They must use **ideal WS syntax** as defined in `.claude/rules/prologos-syntax.md`. Key points:
+
+- **Multi-arity `defn`** for constructor dispatch — `defn foo | zero -> ... | suc k -> ...`, NOT `defn foo [x] match x | ...`
+- **`[]` for all functional contexts** — application, lambda, partial application. Never `()` for these.
+- **Partial application with wildcards** over inline lambdas — `[int* _ 2]` not `[fn [x] [int* x 2]]`
+- **`def` at top level**, never `let` (which is not legal at top level in `.prologos` files)
+- **Minimize `if`** — prefer structural pattern matching. `if` is essentially redundant with Bool dispatch.
+- **Prefer type inference** — `def x := 42` over `def x : Int := 42` where unambiguous
+- **No sexp wrapping** — `(let ...)`, `(fn ...)` are sexp fallback forms. WS ideal uses `def`/`[fn ...]`/multi-arity.
+
+When an ideal syntax form doesn't work yet, comment it out with `IDEAL:` annotation and provide a working fallback. The gap between ideal and working is valuable diagnostic information.
+
+### Header block
+
 Every acceptance file must open with a header block documenting:
 
 ```
