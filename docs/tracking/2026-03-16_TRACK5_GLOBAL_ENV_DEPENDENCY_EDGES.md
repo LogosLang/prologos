@@ -15,8 +15,8 @@
 |-------|-------------|--------|-------|
 | D.1 | Initial design document | ✅ | `339fedb` |
 | D.2 | Design discussion + rework | ✅ | `17142ec` — persistent networks, cross-module edges, lifecycle, TMS discussion |
-| D.2+ | External critique incorporation | 🔄 | Shadow-cell pattern, staleness model, performance hypotheses, non-goals, rollback |
-| D.3 | Self-critique (principle alignment) | ⬜ | |
+| D.2+ | External critique incorporation | ✅ | `b0c63bc` — Shadow-cell pattern, staleness model, performance hypotheses, non-goals, rollback |
+| D.3 | Self-critique (principle alignment) | ✅ | Principle alignment check: 6 aligned, 3 tensions noted; deferred items to Track 6 + LSP |
 | 0 | Performance baseline + acceptance file | ⬜ | |
 | 1 | Persistent module network infrastructure + cross-network prototype | ⬜ | `module-network-ref`, `mod-status`, shadow-cell prototype |
 | 2 | Definition removal → cell-aware cleanup | ⬜ | `global-env-remove!` helper |
@@ -113,6 +113,8 @@ In **LSP mode**, when `bar` reloads:
 4. Only definitions in `foo` that transitively depend on `bar::map` (via propagators wired to the shadow cell) are affected
 
 This is the right design — not a compromise. Cross-network propagation in the scheduler sense (one run loop spanning multiple networks) would be a complexity explosion. Module dependencies form a DAG. The LSP walks the DAG. Within each network, propagation is local and uses proven infrastructure.
+
+**Correctness scope**: Shadow-cell consistency is correct-by-construction for batch mode (single invocation — initialize once, never update). For multi-invocation contexts (LSP), a correct-by-construction sync mechanism is needed to prevent divergence between shadow cells and source cells. This is a Track 6 design concern (see §13.2). Track 5's shadow cells are correct for batch; the LSP track must provide structural consistency guarantees.
 
 ```
 ┌─────────────────────────┐         ┌─────────────────────────┐
@@ -665,3 +667,91 @@ Noted as Track 6 design concern. See §6.
 ### Q2: Cross-network propagator mechanics
 
 Resolved: shadow-cell + callback pattern. Prototype in Phase 1. See §2.3.
+
+### Q3: Batch-worker isolation
+
+Resolved: `current-module-registry` save/restore covers persistent module networks. See §11.
+
+---
+
+## 13. D.3 Self-Critique: Principle Alignment
+
+Systematic check against `DESIGN_PRINCIPLES.org`.
+
+| Principle | Alignment | Notes |
+|-----------|-----------|-------|
+| Propagator-First Infrastructure | ✅ Strong | Core purpose of Track 5 |
+| Correct by Construction | ⚠️ Mostly | Shadow-cell consistency is batch-only; Track 6 must address |
+| Decomplection | ✅ Strong | Clean separation of concerns throughout |
+| Data Orientation | ⚠️ Minor | Module networks should be first-class pure data; LSP invalidation should use descriptors |
+| First-Class by Default | ✅ Aligned | All new constructs are first-class values |
+| Most Generalizable Interface | ✅ Aligned | Shadow-cell pattern generalizes beyond modules |
+| Simplicity of Foundation | ⚠️ Moderate | Shadow cells = plain cells + metadata, not a new primitive |
+| Open Extension, Closed Verification | ✅ Aligned | Monotonic lattice preserves verification |
+| Propagator Statelessness | ✅ Check | Verify during implementation |
+
+### 13.1 Propagator-First Infrastructure — ✅ STRONG ALIGNMENT
+
+This is the core principle Track 5 serves. The design converts the last major parameter-based subsystem (global-env) to cell-based infrastructure:
+
+- **Persistent module networks** replace materialized hasheq snapshots with live cell references
+- **Dependency edges as propagators** make definition dependencies a structural property of network topology, not informational metadata
+- **Shadow cells** for cross-module reads mean module consumers participate in the propagator paradigm across network boundaries
+
+### 13.2 Correct by Construction — ⚠️ MOSTLY ALIGNED, ONE GAP
+
+**Where we align**: The staleness model is correct-by-construction — `net-cell-write`'s merge-then-compare means no-op writes structurally cannot trigger false staleness. The module lifecycle lattice structurally prevents `loaded → loading` (monotonic merge).
+
+**The gap**: The shadow-cell + callback pattern is NOT correct-by-construction for cross-invocation consistency. In batch mode it's trivially correct (initialize once, never update). But the design describes LSP invalidation as a future callback — the *mechanism* for keeping shadow cells consistent with source modules is deferred.
+
+**Decision**: Accepted for Track 5. Batch mode doesn't need the sync mechanism, and designing it without the LSP trigger would be untestable. **Track 6 must provide a correct-by-construction approach** — the current shadow-cell + callback pattern's potential for divergence is a known liability. Noted in master roadmap as a Track 6 design concern.
+
+### 13.3 Decomplection — ✅ STRONG ALIGNMENT
+
+The design decomplects several previously braided concerns:
+
+- **Module cache representation** decoupled from **module lookup mechanism** (network-ref vs hasheq is transparent during belt-and-suspenders)
+- **Definition persistence** decoupled from **per-command elaboration state** (§2.2's ephemeral vs persistent)
+- **Same-file edges** decoupled from **cross-module edges** (different mechanisms for the same dependency concept)
+- **Staleness detection** decoupled from **staleness response** (Track 5 detects; LSP responds)
+
+### 13.4 Data Orientation — ⚠️ MINOR TENSION, NOTED FOR FUTURE
+
+Two data orientation considerations:
+
+1. **Module networks as first-class pure data**: The `module-network-ref` struct is a first-class value, but we want module networks to be *pure data* — reusable and composable in ways we can't yet foresee. The CHAMP-based `prop-network` is already immutable/persistent, which supports this. The LSP track should treat module networks as first-class data for unforeseen reuse and composition. Noted in master roadmap as an LSP track design concern.
+
+2. **LSP invalidation mechanism**: The current design sketches the LSP invalidation as imperative ("LSP iterates dependents and writes to shadow cells"). A more data-oriented design would use invalidation *descriptors* (e.g., `(stale-module bar '(map filter fold))`) interpreted at explicit control boundaries — enabling logging, batching, deduplication. This is an LSP track concern; Track 5 doesn't implement the callback.
+
+### 13.5 First-Class by Default — ✅ ALIGNED
+
+- Module networks are first-class values (`module-network-ref` struct)
+- Dependency edges are first-class data (`dep-edges` field)
+- `mod-status` cell is a first-class observable value
+- TMS `#:assumption` parameter on edges is first-class metadata
+
+### 13.6 Most Generalizable Interface — ✅ ALIGNED
+
+The shadow-cell pattern is more general than cross-network propagators — it works for ANY cross-network dependency, not just module→file. The TMS-ready edge API serves future use cases without migration.
+
+### 13.7 Simplicity of Foundation — ⚠️ MODERATE TENSION
+
+Track 5 introduces three mechanisms:
+1. `module-network-ref` — composition (wraps existing `prop-network` + `cell-id-map`)
+2. Module lifecycle lattice — composition (existing `net-new-cell-with-merge` + new merge fn)
+3. Shadow cells — conceptually new pattern
+
+**Resolution**: Shadow cells are structurally just plain cells with an initialization value. The "shadow" is a conceptual label + cross-module edge metadata (`register-cross-module-edge!`), not a new cell type or primitive. Implementation must keep this clear: no `shadow-cell` struct, just a regular cell + metadata tracking.
+
+### 13.8 Propagator Statelessness — ✅ VERIFY DURING IMPLEMENTATION
+
+`definition-dep-wire!` propagators must be stateless pure fire functions: capture only cell-IDs (immutable) in closures, no mutable state. Shadow-cell initialization is not a propagator — it's one-time setup.
+
+### 13.9 Deferred Principle Concerns → Future Tracks
+
+| Concern | Deferred To | Description |
+|---------|-------------|-------------|
+| Shadow-cell divergence | Track 6 | Correct-by-construction cross-network consistency mechanism |
+| TMS-aware parameterized modules | Track 6 | Module definition cells as TMS cells for multi-context sharing |
+| First-class module network data | LSP Track | Pure data composition for unforeseen reuse |
+| Data-oriented invalidation | LSP Track | Invalidation descriptors instead of imperative callbacks |

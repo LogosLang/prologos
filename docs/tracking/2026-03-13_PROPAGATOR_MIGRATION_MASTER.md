@@ -206,7 +206,7 @@ Moved to §Completed Work above. See Track 4 PIR for full review.
 
 **Files**: `global-env.rkt`, `driver.rkt`, `elaborator.rkt`, `namespace.rkt`.
 
-**Design document**: TBD — create before implementation.
+**Design document**: `docs/tracking/2026-03-16_TRACK5_GLOBAL_ENV_DEPENDENCY_EDGES.md` — Stage 2/3 complete (D.1–D.3).
 
 ### Track 6: Driver Simplification + Cleanup
 
@@ -227,6 +227,10 @@ Moved to §Completed Work above. See Track 4 PIR for full review.
   5. Reduce `save-meta-state` from 3 boxes to 1 (network only)
 
 **Risk**: Low-to-moderate. The TMS retraction pipeline (from Track 4 Phase 4) touches the speculation hot path and requires careful ordering. The remaining items are straightforward cleanup.
+
+**Track 5 D.3 forward notes** (design concerns for Track 6):
+- **TMS-aware parameterized modules** — module definition cells as TMS cells for multi-context sharing (same module, different assumptions e.g. different parameter contexts in LSP). Track 5 designs API compatibility (`#:tms?` flag on `make-module-network`), Track 6 implements.
+- **Correct-by-construction cross-network consistency** — Track 5's shadow-cell + callback pattern can diverge in multi-invocation contexts (LSP). Track 6 must provide a correct-by-construction mechanism for keeping shadow cells consistent with source module cells, replacing the imperative callback sketch with structural guarantees.
 
 **Depends on**: Tracks 3 ✅, 4 ✅, 5.
 
@@ -283,6 +287,13 @@ Moved to §Completed Work above. See Track 4 PIR for full review.
 **Design reference**: `docs/tracking/2026-03-04_PROPAGATOR_MIGRATION_GDE.md` § GDE.
 
 **Design document**: TBD.
+
+### LSP Track: Forward Design Notes
+
+Design concerns identified during Track 5 D.3 principle alignment review:
+
+- **First-class module network data** — module networks (persistent `prop-network` + `module-network-ref`) should be treated as first-class pure data, enabling reuse and composition in ways not yet foreseeable. The CHAMP-based `prop-network` is already immutable/persistent, supporting this. The LSP track should design for module networks as composable data structures, not just caching artifacts.
+- **Data-oriented invalidation** — Track 5 sketches LSP invalidation as imperative ("LSP iterates dependents and writes to shadow cells"). The LSP track should use invalidation *descriptors* (e.g., `(stale-module bar '(map filter fold))`) interpreted at explicit control boundaries, enabling logging, batching, and deduplication per the Data Orientation principle.
 
 ---
 
