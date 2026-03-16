@@ -25,7 +25,7 @@
 | 5a | Narrowing constraints → cell (monotonic, `merge-list-append`) | ✅ | `9ebebdc` — combined with 5b |
 | 5b | Narrowing var-constraints → cell (non-monotonic, `merge-last-write-wins`) | ✅ | `9ebebdc` — elaboration guard required (same pattern as macros) |
 | 6 | Remove parameter writes + cleanup | ⏸️ | Deferred to Track 5/6 — removing parameter writes breaks save/restore + batch-worker isolation (see notes below) |
-| 7 | Post-Implementation Review | ✅ | See §10 |
+| 7 | Post-Implementation Review | ✅ | See `2026-03-16_TRACK3_CELL_PRIMARY_REGISTRIES_PIR.md` |
 
 ---
 
@@ -442,48 +442,8 @@ Internal review against DESIGN_PRINCIPLES.org, DESIGN_METHODOLOGY.org, EFFECTFUL
 
 ---
 
-## §10. Post-Implementation Review (Phase 7)
+## §10. Post-Implementation Review
 
-### 10.1 Summary
+**PIR document**: `docs/tracking/2026-03-16_TRACK3_CELL_PRIMARY_REGISTRIES_PIR.md`
 
-Track 3 converted 28 registry/accumulator reads from parameter-primary to cell-primary across 5 phases. All 7096 tests pass with no performance regression (197.6s vs 194.3s baseline, within noise).
-
-### 10.2 Metrics
-
-| Metric | Planned | Actual | Notes |
-|--------|---------|--------|-------|
-| Cell-primary readers | ~26 | 28 | 23 macros + 3 warnings + 2 narrowing |
-| Computation reads converted | ~200 | ~80 | Many "reads" are actually 1 reader call covering N internal uses |
-| Elaboration guard parameters | 1 | 2 | `current-macros-in-elaboration?` + `current-narrow-in-elaboration?` |
-| New Racket parameters (Phase 5) | ~4 | 6 | 3 callbacks + 1 guard + 2 cell-ids |
-| Phases executed | 7 | 5 + deferred | Phase 6 deferred to Track 5/6 |
-| Test regressions | 0 | 0 | 7096/7096 pass |
-| Performance | <25% regression | ~2% (noise) | 197.6s vs 194.3s |
-
-### 10.3 Key Lessons
-
-1. **Elaboration guard is the structural boundary.** The `current-X-in-elaboration?` pattern is essential for any cell that might be read outside `process-command`. Tests that parameterize constraints directly (bypassing the driver) will read stale cell content without this guard. This was discovered in Phase 1 (macros) and re-confirmed in Phase 5 (narrowing). Two guard parameters exist because `global-constraints.rkt` cannot import from `macros.rkt` without risking circular deps.
-
-2. **Warnings are the exception.** Warning readers don't need an elaboration guard because they're only read inside `process-command` (driver.rkt). This is a simpler pattern and worth noting for future similar cases.
-
-3. **Phase 6 (parameter write removal) is blocked by save/restore.** The design doc's Phase 6 assumes parameter writes can be removed for elaboration-only registries. However, `save-meta-state`/`restore-meta-state!` and `batch-worker.rkt` still read parameters for speculation snapshots and worker isolation. Removing writes would break these paths. True parameter elimination requires Track 5/6 (cell-based snapshots).
-
-4. **Non-monotonic cells need `merge-last-write-wins`.** The `merge-replace` alias was added to `infra-cell.rkt` for clarity. Narrowing var-constraints are non-monotonic (each clause gets its own constraint map), so standard merge-list-append doesn't apply. This works correctly as a transitional measure; proper ATMS-backed cells are Track 4 scope.
-
-5. **Mechanical phases compound efficiency.** Phases 1-4 each took ~30-60 minutes because the pattern was established in Phase 1 and replicated exactly. Phase 5 took longer (~90 minutes) because it required new cell infrastructure. The design doc's estimate of "~1 day" was accurate for Phases 0-5.
-
-### 10.4 Phase 6 Disposition
-
-Phase 6 (remove parameter writes + cleanup) is **deferred to Track 5/6**. Rationale:
-
-- Removing parameter writes breaks `save-meta-state`/`restore-meta-state!` (used for speculation)
-- Removing parameter writes breaks `batch-worker.rkt` state isolation
-- These paths must migrate to cell-based snapshots first (Track 5/6 scope)
-- The dual-write overhead is negligible (~1% per Track 1 measurements)
-- The two-context architecture is correct as-is; cleanup is optimization, not correctness
-
-### 10.5 Track Status
-
-**Track 3 is COMPLETE** (Phases 0-5 implemented, Phase 6 deferred, Phase 7 done).
-
-All computation reads now go through cell-primary readers. Parameters remain as fallback for module loading and as the write target for dual-write. Full parameter elimination is Track 5/6 scope.
+**Track 3 is COMPLETE** (Phases 0-5 implemented, Phase 6 deferred to Track 5/6, Phase 7 PIR done). 28 cell-primary readers, ~80 computation reads converted, 7096 tests pass at 197.6s.
