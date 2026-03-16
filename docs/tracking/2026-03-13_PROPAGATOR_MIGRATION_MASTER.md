@@ -21,6 +21,9 @@
 | Track 3 Design | `docs/tracking/2026-03-13_TRACK3_CELL_PRIMARY_REGISTRIES.md` | Cell-primary registries design + progress |
 | Track 3 PIR | `docs/tracking/2026-03-16_TRACK3_CELL_PRIMARY_REGISTRIES_PIR.md` | Post-implementation review |
 | Track 4 Design | `docs/tracking/2026-03-16_TRACK4_ATMS_SPECULATION.md` | ATMS speculation design + phase plan |
+| Track 4 PIR | `docs/tracking/2026-03-16_TRACK4_ATMS_SPECULATION_PIR.md` | Post-implementation review |
+| Track 5 Design | `docs/tracking/2026-03-16_TRACK5_GLOBAL_ENV_DEPENDENCY_EDGES.md` | Global-env consolidation + dependency edges design |
+| Track 5 PIR | `docs/tracking/2026-03-16_TRACK5_GLOBAL_ENV_DEPENDENCY_EDGES_PIR.md` | Post-implementation review |
 | Propagator Research | `docs/tracking/2026-02-23_LATTICE_PROPAGATOR_RESEARCH.md` | Lattice-theoretic foundations |
 | BSP Parallel | `docs/tracking/2026-02-24_BSP_PARALLEL_PROPAGATOR.md` | Parallel propagation via Bulk Synchronous Parallel |
 | Effectful Propagators | `docs/tracking/2026-03-06_EFFECTFUL_PROPAGATORS_RESEARCH.md` | Side effects in propagator networks |
@@ -118,6 +121,25 @@ Integrated TMS (Truth Maintenance System) cells into the propagator network for 
 
 **Result**: Per-meta TMS cells for all 4 meta types (type, level, mult, session). `save-meta-state` reduced from 6 boxes to 3 (network + id-map + meta-info). Depth-0 fast path makes TMS cells zero-overhead for the common case. Learned-clause pruning infrastructure operational. Belt-and-suspenders: network-box restore handles rollback during Phases 2–5; speculation stack push and TMS retraction deferred to Track 6. PIR: `2026-03-16_TRACK4_ATMS_SPECULATION_PIR.md`. 7124 tests, 187.1s (2.4% faster than baseline).
 
+### Track 5: Global-Env Consolidation + Dependency Edges
+
+Converted `current-global-env` from parameter-primary to a two-layer cell architecture with persistent per-module networks and cross-module dependency edges. Infrastructure for LSP incremental re-elaboration.
+
+| Phase | Description | Status | Key Commits |
+|-------|-------------|--------|-------------|
+| D.1–D.3 | Design: persistent module networks, lifecycle lattice, shadow-cell prototype, principle alignment | ✅ | `339fedb`..`9febbb5` |
+| 0 | Performance baseline + acceptance file (294 expressions, 12 BUGs) | ✅ | `157f7aa` |
+| 1 | Module-network-ref infrastructure + shadow-cell prototype (15 tests) | ✅ | `7ad5b88` |
+| 2 | `global-env-remove!` + failure cleanup consolidation (6 sites → 1) | ✅ | `085b77d` |
+| 3 | Per-module network activation + dual-path validation (0 mismatches across 200+ modules) | ✅ | `011fe3f` |
+| 4 | Cross-module dependency edge recording (same-file + module provenance) | ✅ | `b70331a` |
+| 5 | Write consolidation: `global-env-add` self-updates, 22 env-threading wrappers eliminated, dual-path validation removed | ✅ | `1fb01ea` |
+| 6 | Performance validation (213.3s, +14% within 25% threshold) | ✅ | — |
+
+**Result**: Each loaded module has a persistent `module-network-ref` (one cell per definition, lifecycle status cell, materialized snapshot, dep-edges map). `global-env-add` is self-updating — callers never need env-threading wrappers. Cross-module dependency edges record source provenance (`'same-file` vs `'module`). Dual-path validation confirmed 0 cell/hash mismatches across ~1.4M checks before removal. 24 new unit tests. PIR: `2026-03-16_TRACK5_GLOBAL_ENV_DEPENDENCY_EDGES_PIR.md`. 7148 tests, 213.3s.
+
+**Key residual**: TMS-ready `definition-dep-wire!` with propagator wiring (Phase 4c) and staleness propagation (Phase 4d) deferred to LSP scope. `current-global-env` → `current-prelude-env` rename (266 references) deferred to Track 6. Dual-write parameter elimination deferred to Track 6. See §Deferrals.
+
 ---
 
 ## Current Infrastructure
@@ -145,6 +167,7 @@ Plus additional cells via `register-*-cells!`:
 - 3 warning cells (`register-warning-cells!`) — coercion, deprecation, capability warnings
 - 2 narrowing cells (`register-narrow-cells!`, Track 3) — narrow-constraints (`merge-list-append`), narrow-var-constraints (`merge-last-write-wins`)
 - Per-definition global-env cells, module registry cells, ns-context cells
+- Per-module `module-network-ref` cells (Track 5): one definition cell per exported name + `mod-status` lifecycle cell per module
 - Per-metavariable cells from elaboration
 
 ### Cell Read Paths
@@ -158,9 +181,10 @@ Plus additional cells via `register-*-cells!`:
 | 23 macros.rkt registries (schema, ctor, trait, impl, etc.) | Cell-primary (elaboration), parameter (module loading) | ✅ Track 3 Phases 1–3 |
 | Warnings (coercion, deprecation, capability) | Cell-primary | ✅ Track 3 Phase 4 |
 | Narrowing constraints | Cell-primary (elaboration), parameter (direct tests) | ✅ Track 3 Phase 5 |
-| Global environment | Two-layer (cell Layer 1, param Layer 2) | 🔄 Partial — Track 5 |
+| Global environment | Two-layer: cell Layer 1 (per-file), param Layer 2 (prelude/module); `global-env-add` self-updates both | ✅ Track 5 |
+| Module networks | Persistent `module-network-ref` per loaded module; dep-edges with provenance | ✅ Track 5 |
 
-**Note**: "Cell-primary" for Track 3 registries means cell reads during elaboration (guarded by `current-macros-in-elaboration?` or `current-narrow-in-elaboration?`), with parameter fallback during module loading. Dual-write continues — parameter writes are NOT removed (blocked by save/restore and batch-worker dependencies; deferred to Track 5/6). See §Deferrals.
+**Note**: "Cell-primary" for Track 3 registries means cell reads during elaboration (guarded by `current-macros-in-elaboration?` or `current-narrow-in-elaboration?`), with parameter fallback during module loading. Dual-write continues — parameter writes are NOT removed (blocked by save/restore and batch-worker dependencies; deferred to Track 6). See §Deferrals.
 
 ### Speculation
 
@@ -186,27 +210,11 @@ Moved to §Completed Work above. See Track 4 PIR for full review.
 
 **Key residual**: Phase 4 (meta-info CHAMP → write-once registry; save/restore → 1 box) deferred to Track 6. See §Deferrals.
 
-### Track 5: Global-Env Cell-Primary + Dependency Edges
+### Track 5: Global-Env Consolidation + Dependency Edges — ✅ COMPLETE
 
-**Goal**: Complete the cell-primary conversion for global environment reads. Wire per-definition dependency tracking as propagator edges, enabling incremental re-elaboration (the "biggest payoff" from the Pipeline Audit).
+Moved to §Completed Work above. See Track 5 PIR for full review.
 
-**Scope**:
-- Convert remaining `(current-global-env)` reads to `global-env-lookup-*` (36 references in `driver.rkt`)
-- Wire `current-definition-dependencies` as propagator edges between definition cells
-- Incremental invalidation: when a definition cell changes, downstream definitions re-elaborate
-- **Per-module network context for module loading** — enables module loading to run with a network, eliminating the two-context architecture's parameter fallback (absorbs part of Track 3's deferred Phase 6)
-
-**Risk**: High — `current-global-env` is the backbone of the pipeline. The two-layer architecture (Migration Sprint Phase 3a–3d) de-risked the structural change, but full cell-primary conversion touches the hottest code paths.
-
-**Composition synergy**: This is the "incremental module re-elaboration" synergy from Pipeline Audit §5.2. Combined with ATMS (Track 4), enables the LSP to retract a definition assumption and let propagation settle rather than re-elaborating the entire file.
-
-**Absorbed from Track 3 Phase 6**: Per-module networks would eliminate the module-loading parameter fallback in all 28 cell-primary readers, collapsing the two-context architecture to a single cell-primary context.
-
-**Depends on**: Track 4 ✅ (ATMS for non-monotonic definition replacement).
-
-**Files**: `global-env.rkt`, `driver.rkt`, `elaborator.rkt`, `namespace.rkt`.
-
-**Design document**: `docs/tracking/2026-03-16_TRACK5_GLOBAL_ENV_DEPENDENCY_EDGES.md` — Stage 2/3 complete (D.1–D.3).
+**Key residuals**: TMS-ready `definition-dep-wire!` (Phase 4c) and staleness propagation (Phase 4d) deferred to LSP scope. `current-global-env` → `current-prelude-env` rename deferred to Track 6. Dual-write parameter elimination deferred to Track 6. See §Deferrals.
 
 ### Track 6: Driver Simplification + Cleanup
 
@@ -232,7 +240,7 @@ Moved to §Completed Work above. See Track 4 PIR for full review.
 - **TMS-aware parameterized modules** — module definition cells as TMS cells for multi-context sharing (same module, different assumptions e.g. different parameter contexts in LSP). Track 5 designs API compatibility (`#:tms?` flag on `make-module-network`), Track 6 implements.
 - **Correct-by-construction cross-network consistency** — Track 5's shadow-cell + callback pattern can diverge in multi-invocation contexts (LSP). Track 6 must provide a correct-by-construction mechanism for keeping shadow cells consistent with source module cells, replacing the imperative callback sketch with structural guarantees.
 
-**Depends on**: Tracks 3 ✅, 4 ✅, 5.
+**Depends on**: Tracks 3 ✅, 4 ✅, 5 ✅.
 
 **Design document**: TBD — will need a design doc given the TMS retraction pipeline complexity.
 
@@ -304,9 +312,9 @@ Track 3 (Cell-Primary Registries) ✅
   │
   ├──→ Track 4 (ATMS Speculation) ✅
   │      │
-  │      └──→ Track 5 (Global-Env + Per-Module Networks)    ← next
+  │      └──→ Track 5 (Global-Env + Per-Module Networks) ✅
   │             │
-  │             └──→ Track 6 (Driver Simplification + Cleanup)
+  │             └──→ Track 6 (Driver Simplification + Cleanup)    ← next
   │                    │
   │                    └──→ Track 7 (QTT Multiplicity Cells)
   │                           │
@@ -314,15 +322,18 @@ Track 3 (Cell-Primary Registries) ✅
   │                                  │
   │                                  └──→ Track 9 (GDE)
   │
-  ├─ ─ ─ Track 3 Phase 6 deferred ─ ─ ─→ Track 5 (per-module networks)
-  │                                        Track 6 (parameter write removal)
+  ├─ ─ ─ Track 3 Phase 6 deferred ─ ─ ─→ Track 6 (parameter write removal,
+  │                                        guard parameter cleanup)
   │
-  └─ ─ ─ Track 4 Phase 4 deferred ─ ─ ─→ Track 6 (meta-info simplification,
-                                           save/restore → 1 box, speculation
-                                           stack push, TMS retraction)
+  ├─ ─ ─ Track 4 Phase 4 deferred ─ ─ ─→ Track 6 (meta-info simplification,
+  │                                        save/restore → 1 box, speculation
+  │                                        stack push, TMS retraction)
+  │
+  └─ ─ ─ Track 5 deferrals ─ ─ ─ ─ ─ ─→ Track 6 (rename, dual-write removal)
+                                          LSP (dep-wire!, staleness propagation)
 ```
 
-Track 5 is now unblocked (Tracks 3 and 4 complete). Dashed lines show deferred phases flowing into future tracks.
+Track 6 is now unblocked (Tracks 3, 4, and 5 complete). Dashed lines show deferred phases flowing into future tracks.
 
 ---
 
@@ -330,18 +341,18 @@ Track 5 is now unblocked (Tracks 3 and 4 complete). Dashed lines show deferred p
 
 Active deferrals that affect future track scope:
 
-### Track 3 Phase 6 → Tracks 5/6: Dual-Write Parameter Elimination
+### Track 3 Phase 6 → Track 6: Dual-Write Parameter Elimination
 
 **What**: Removing parameter writes from `register-X!` functions and removing the elaboration guard parameters. Currently all 28+ registries write to both cells and parameters.
 
-**Why deferred**: Three consumers still depend on parameter reads:
-1. **`save-meta-state`/`restore-meta-state!`** — captures parameters for speculation rollback. Must migrate to cell-based snapshots (Track 4/5).
+**Why deferred**: Two consumers still depend on parameter reads (third resolved by Track 5):
+1. **`save-meta-state`/`restore-meta-state!`** — captures parameters for speculation rollback. Must migrate to cell-based snapshots (Track 6).
 2. **`batch-worker.rkt`** — captures parameters for worker state isolation. Must migrate to cell-based capture (Track 6).
-3. **Module loading** — runs without a network; parameter IS the correct state. Must gain per-module networks (Track 5).
+3. ~~**Module loading** — runs without a network; parameter IS the correct state. Must gain per-module networks.~~ **Resolved by Track 5**: each loaded module now has a persistent `module-network-ref`.
 
-**Impact on Tracks 5/6**: Track 5 should include per-module network creation as a goal (not just global-env reads). Track 6 should include dual-write removal and guard parameter cleanup as explicit scope items.
+**Impact on Track 6**: Track 6 should include dual-write removal, guard parameter cleanup, and `current-global-env` → `current-prelude-env` rename as explicit scope items.
 
-**Risk if never addressed**: Ongoing conceptual overhead (maintainers must understand dual-write). Every new registry must follow the dual-write pattern. Performance impact is negligible (~1%).
+**Risk if never addressed**: Ongoing conceptual overhead (maintainers must understand dual-write). Every new registry must follow the dual-write pattern. Performance impact is negligible (~1%) but Track 5 showed that redundant parameter updates in the legacy path contribute to overhead.
 
 ### Track 4 Phase 4 → Track 6: Meta-Info Simplification + Full TMS Retraction
 
@@ -359,6 +370,22 @@ Active deferrals that affect future track scope:
 **Impact on Track 6**: Track 6's scope explicitly includes this work. The full chain (stack push → commit → retraction → 1-box) is a Track 6 deliverable.
 
 **Risk if never addressed**: 3-box save/restore works but is fragile — any new mutable state that participates in speculation must be manually added. TMS retraction eliminates this class of fragility entirely.
+
+### Track 5 Phases 4c–4d → LSP: TMS-Ready Wiring + Staleness Propagation
+
+**What**: `definition-dep-wire!` with real propagator wiring (Phase 4c) and staleness propagation to `mod-status` cells (Phase 4d). Currently dep-edges are recorded as data but not wired as active propagators.
+
+**Why deferred**: Batch mode doesn't need active wiring — modules never become stale during a single batch compilation. The wiring and staleness propagation are purely LSP concerns (detecting when a source file changes and propagating invalidation through the dep-edge graph).
+
+**Current state**: Track 5 records dep-edges with source provenance (`'same-file` vs `'module`) in each `module-network-ref`. The data is complete; the active consumption is LSP scope.
+
+**Impact on LSP track**: The LSP track consumes Track 5's dep-edges directly. No intermediate track work needed.
+
+### Track 5 → Track 6: Rename + Dual-Write Removal
+
+**What**: `current-global-env` → `current-prelude-env` rename (266 references). Mechanical but noisy. Plus removing the dual-write for global-env (cells become sole write target for definition writes).
+
+**Why deferred**: The rename is pure cleanup — not blocking any functionality. The dual-write removal depends on Track 6's broader parameter elimination work (save/restore and batch-worker migration).
 
 ### Migration Sprint Phases 3e, 5a–5b: Deferred from Foundation
 
@@ -378,9 +405,10 @@ Active deferrals that affect future track scope:
 | Post-Track 1 | 6888 | 358 | 191.4s |
 | Post-Track 2 Phase 9 | 6907 | 359 | 197.6s |
 | Post-Track 3 | 7096 | 370 | 197.6s |
-| Post-Track 4 (current) | 7124 | 371 | 187.1s |
+| Post-Track 4 | 7124 | 371 | 187.1s |
+| Post-Track 5 (current) | 7148 | 372 | 213.3s |
 
-Migration has been performance-neutral to slightly positive despite adding cell infrastructure. Each track should maintain this invariant. The test count increase (6907→7096) between Track 2 and Track 3 is from non-propagator work (WFLE, D4 Provenance, etc.) in the intervening interval. Track 4 added 28 TMS cell unit tests and achieved a 2.4% speedup (191.6s→187.1s) from reducing save/restore from 6 to 3 boxes.
+Migration has been performance-neutral to slightly positive through Track 4. Track 5 added +14% overhead (187.1s→213.3s) from module-network-ref construction per module load and additional parameter updates in `global-env-add`'s legacy path. Still within the 25% threshold. Cumulative from pre-migration: 208.6s→213.3s (+2.3%). The test count increase (6907→7096) between Track 2 and Track 3 is from non-propagator work (WFLE, D4 Provenance, etc.) in the intervening interval. Track 4 achieved a 2.4% speedup (191.6s→187.1s) from reducing save/restore from 6 to 3 boxes. Track 6's dual-write removal should partially offset Track 5's overhead by eliminating redundant parameter writes.
 
 ---
 
