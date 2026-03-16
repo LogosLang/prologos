@@ -18,7 +18,7 @@
 | D.2+ | External critique incorporation | ✅ | `b0c63bc` — Shadow-cell pattern, staleness model, performance hypotheses, non-goals, rollback |
 | D.3 | Self-critique (principle alignment) | ✅ | Principle alignment check: 6 aligned, 3 tensions noted; deferred items to Track 6 + LSP |
 | 0 | Performance baseline + acceptance file | ✅ | `157f7aa` — 294 pass, 0 errors, 12 BUGs commented |
-| 1 | Persistent module network infrastructure + cross-network prototype | ⬜ | `module-network-ref`, `mod-status`, shadow-cell prototype |
+| 1 | Persistent module network infrastructure + cross-network prototype | ✅ | `7ad5b88` — lifecycle lattice, module-network-ref CRUD, shadow-cell prototype (15 tests) |
 | 2 | Definition removal → cell-aware cleanup | ⬜ | `global-env-remove!` helper |
 | 3 | Per-module network activation | ⬜ | Remove `#f` overrides, dual-path validation |
 | 4 | Cross-module dependency edges | ⬜ | Shadow-cells, same-file edges, TMS-ready API |
