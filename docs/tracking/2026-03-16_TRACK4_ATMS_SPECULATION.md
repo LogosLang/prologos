@@ -23,7 +23,7 @@
 | 0 | Performance baseline + acceptance file | ✅ | 191.6s / 7096 tests, acceptance 76 speculations, commit `50b00d8` |
 | 1 | TMS cell integration into prop-network | ✅ | tms-cell-value struct, tms-read/write/commit/merge, net-new-tms-cell, 27 unit tests, 197.0s / 7123 tests, commit `ecde661` |
 | 2 | Per-meta cells → TMS cells | ✅ | TMS-transparent read/write, domain-aware merge, stack push deferred to Phase 6, 196.1s / 7124 tests, commit `10ecb0c` |
-| 3 | Level/mult/session metas → per-meta TMS cells | ⬜ | |
+| 3 | Level/mult/session metas → per-meta TMS cells | ✅ | Per-meta TMS cells for all 3, save/restore reduced 6→3 boxes, 188.2s / 7124 tests, commit `addaf46` |
 | 4 | Meta-info CHAMP → write-once registry; eliminate from save/restore | ⬜ | |
 | 5 | Learned-clause integration (nogood reuse) | ⬜ | |
 | 6 | Performance validation + cleanup | ⬜ | |
