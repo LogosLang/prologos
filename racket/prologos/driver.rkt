@@ -937,9 +937,9 @@
                      (observatory-next-sequence! obs)
                      #f))))
   ;; Append warnings to result string (if any)
-  (define coercion-warns (reverse (current-coercion-warnings)))
-  (define deprecation-warns (reverse (current-deprecation-warnings)))
-  (define capability-warns (reverse (current-capability-warnings)))
+  (define coercion-warns (reverse (read-coercion-warnings)))
+  (define deprecation-warns (reverse (read-deprecation-warnings)))
+  (define capability-warns (reverse (read-capability-warnings)))
   (define all-warning-strs
     (append (map format-coercion-warning coercion-warns)
             (map format-deprecation-warning deprecation-warns)
@@ -2020,6 +2020,8 @@
 
 ;; Phase 2c: Install warnings cell-write callback.
 (current-warnings-prop-cell-write elab-cell-write)
+;; Track 3 Phase 4: Install warnings cell-read callback.
+(current-warnings-prop-cell-read elab-cell-read)
 
 ;; Phase 3a: Install global-env cell callbacks.
 (current-global-env-prop-cell-write elab-cell-write)

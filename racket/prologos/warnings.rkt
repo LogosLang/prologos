@@ -36,10 +36,15 @@
          ;; Phase 2c: Warning cell infrastructure
          current-warnings-prop-net-box
          current-warnings-prop-cell-write
+         current-warnings-prop-cell-read
          current-coercion-warnings-cell-id
          current-deprecation-warnings-cell-id
          current-capability-warnings-cell-id
-         register-warning-cells!)
+         register-warning-cells!
+         ;; Track 3 Phase 4: cell-primary readers
+         read-coercion-warnings
+         read-deprecation-warnings
+         read-capability-warnings)
 
 (require "infra-cell.rkt")  ;; merge-list-append
 
@@ -49,6 +54,7 @@
 ;; Callback parameters for network access (set by driver.rkt).
 (define current-warnings-prop-net-box (make-parameter #f))
 (define current-warnings-prop-cell-write (make-parameter #f))
+(define current-warnings-prop-cell-read (make-parameter #f))  ;; Track 3 Phase 4: (enet cell-id → value)
 ;; Cell-id parameters for each warning accumulator.
 (define current-coercion-warnings-cell-id (make-parameter #f))
 (define current-deprecation-warnings-cell-id (make-parameter #f))
@@ -77,6 +83,30 @@
     (define-values (enet3 capw-cid) (new-cell-fn enet2 (current-capability-warnings) merge-list-append))
     (current-capability-warnings-cell-id capw-cid)
     (set-box! net-box enet3)))
+
+;; Track 3 Phase 4: cell-primary read helper for warnings.
+;; Simpler than macros-cell-read-safe — no elaboration guard needed because
+;; warning reads only occur inside process-command (driver.rkt).
+(define (warnings-cell-read-safe cid)
+  (define net-box (current-warnings-prop-net-box))
+  (define read-fn (current-warnings-prop-cell-read))
+  (if (and cid net-box read-fn)
+      (with-handlers ([exn:fail? (λ (_) 'not-found)])
+        (read-fn (unbox net-box) cid))
+      'not-found))
+
+;; Track 3 Phase 4: cell-primary readers for warning accumulators
+(define (read-coercion-warnings)
+  (define v (warnings-cell-read-safe (current-coercion-warnings-cell-id)))
+  (if (eq? v 'not-found) (current-coercion-warnings) v))
+
+(define (read-deprecation-warnings)
+  (define v (warnings-cell-read-safe (current-deprecation-warnings-cell-id)))
+  (if (eq? v 'not-found) (current-deprecation-warnings) v))
+
+(define (read-capability-warnings)
+  (define v (warnings-cell-read-safe (current-capability-warnings-cell-id)))
+  (if (eq? v 'not-found) (current-capability-warnings) v))
 
 ;; ========================================
 ;; Coercion warnings
