@@ -42,6 +42,7 @@
          global-env-lookup-value
          global-env-add
          global-env-add-type-only
+         global-env-remove!
          global-env-names
          global-env-import-module
          global-env-snapshot
@@ -110,6 +111,18 @@
        (current-definition-cell-ids
         (hash-set (current-definition-cell-ids) name new-cid))
        (set-box! net-box enet*)])))
+
+;; Helper: write sentinel (#f) to a definition cell in the prop-net.
+;; The cell itself persists (cells are never deleted); the #f sentinel
+;; tells global-env-lookup-type/value to return #f (definition invisible).
+;; Track 5 Phase 2: extracted for failure cleanup consolidation.
+(define (definition-cell-remove! name)
+  (define net-box (current-global-env-prop-net-box))
+  (define write-fn (current-global-env-prop-cell-write))
+  (when (and net-box write-fn)
+    (define cid (hash-ref (current-definition-cell-ids) name #f))
+    (when cid
+      (set-box! net-box (write-fn (unbox net-box) cid #f)))))
 
 ;; Helper: write to a known cell-id in the prop-net.
 ;; Used for param-names and other singleton cells.
@@ -218,6 +231,20 @@
     [else
      ;; Module loading / tests: legacy behavior
      (hash-set env name entry)]))
+
+;; Remove a definition from both layers on failure.
+;; Layer 1: remove from per-file content hash + write sentinel to cell.
+;; Layer 2: remove from prelude/module env parameter.
+;; Track 5 Phase 2: consolidates 12 inline removal sites in driver.rkt.
+(define (global-env-remove! name)
+  ;; Layer 1: per-file definitions content
+  (current-definition-cells-content
+   (hash-remove (current-definition-cells-content) name))
+  ;; Layer 1: cell sentinel (cell stays, value = #f)
+  (definition-cell-remove! name)
+  ;; Layer 2: prelude/module env parameter
+  (current-global-env
+   (hash-remove (current-global-env) name)))
 
 ;; ========================================
 ;; Utilities (merge both layers)

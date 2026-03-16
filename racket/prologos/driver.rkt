@@ -359,6 +359,15 @@
       (emit-process-cap-warning! 'W2002 cap-name
         (format "capability ~a declared but unused in process ~a" cap-name name)))))
 
+;; Track 5 Phase 2: Consolidated failure cleanup.
+;; Removes a failed definition from both layers + its FQN if in a namespace.
+;; Replaces 6 identical 4-line inline removal patterns in process-def.
+(define (remove-failed-definition! name)
+  (global-env-remove! name)
+  (when (current-ns-context)
+    (define fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
+    (global-env-remove! fqn)))
+
 ;; Returns a result string, or a prologos-error.
 ;; Side effect: may update current-global-env for 'def'.
 ;;
@@ -1131,13 +1140,7 @@
               (cond
                 [(prologos-error? body)
                  ;; Remove pre-registered entry on elaboration failure
-                 ;; Phase 3a: remove from both layers (per-file + legacy) for safety
-                 (current-definition-cells-content (hash-remove (current-definition-cells-content) name))
-                 (current-global-env (hash-remove (current-global-env) name))
-                 (when (current-ns-context)
-                   (define fail-fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
-                   (current-definition-cells-content (hash-remove (current-definition-cells-content) fail-fqn))
-                   (current-global-env (hash-remove (current-global-env) fail-fqn)))
+                 (remove-failed-definition! name)
                  body]
                 [else
                  ;; 5. Check body against type (use type* which has metas instead of holes)
@@ -1146,13 +1149,7 @@
                  (cond
                    [(prologos-error? chk)
                     ;; Remove pre-registered entry on type-check failure
-                    ;; Phase 3a: remove from both layers
-                    (current-definition-cells-content (hash-remove (current-definition-cells-content) name))
-                    (current-global-env (hash-remove (current-global-env) name))
-                    (when (current-ns-context)
-                      (define chk-fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
-                      (current-definition-cells-content (hash-remove (current-definition-cells-content) chk-fqn))
-                      (current-global-env (hash-remove (current-global-env) chk-fqn)))
+                    (remove-failed-definition! name)
                     chk]
                    [else
                     ;; Track 2: trait + hasmethod resolution handled reactively by propagator callbacks
@@ -1162,22 +1159,12 @@
                     (define cap-errors-ann (check-unresolved-capability-constraints))
                     (cond
                       [(not (null? trait-errors-ann))
-                       ;; Phase 3a: remove from both layers
-                       (current-definition-cells-content (hash-remove (current-definition-cells-content) name))
-                       (current-global-env (hash-remove (current-global-env) name))
-                       (when (current-ns-context)
-                         (define te-fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
-                         (current-definition-cells-content (hash-remove (current-definition-cells-content) te-fqn))
-                         (current-global-env (hash-remove (current-global-env) te-fqn)))
+                       ;; Remove pre-registered entry on trait constraint failure
+                       (remove-failed-definition! name)
                        (car trait-errors-ann)]
                       [(not (null? cap-errors-ann))
-                       ;; Phase 3a: remove from both layers
-                       (current-definition-cells-content (hash-remove (current-definition-cells-content) name))
-                       (current-global-env (hash-remove (current-global-env) name))
-                       (when (current-ns-context)
-                         (define ce-fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
-                         (current-definition-cells-content (hash-remove (current-definition-cells-content) ce-fqn))
-                         (current-global-env (hash-remove (current-global-env) ce-fqn)))
+                       ;; Remove pre-registered entry on capability constraint failure
+                       (remove-failed-definition! name)
                        (car cap-errors-ann)]
                       [else
                     ;; 5.5. Check for failed constraints (Sprint 5)
@@ -1185,13 +1172,7 @@
                     (cond
                       [(not (null? failed))
                        ;; Remove pre-registered entry on constraint failure
-                       ;; Phase 3a: remove from both layers
-                       (current-definition-cells-content (hash-remove (current-definition-cells-content) name))
-                       (current-global-env (hash-remove (current-global-env) name))
-                       (when (current-ns-context)
-                         (define cf-fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
-                         (current-definition-cells-content (hash-remove (current-definition-cells-content) cf-fqn))
-                         (current-global-env (hash-remove (current-global-env) cf-fqn)))
+                       (remove-failed-definition! name)
                        ;; Sprint 9: structured constraint failure with provenance
                        (define c (car failed))
                        (define prov (constraint-source c))
@@ -1228,13 +1209,7 @@
                        (cond
                          [(prologos-error? qtt-ok)
                           ;; Remove pre-registered entry on QTT failure
-                          ;; Phase 3a: remove from both layers
-                          (current-definition-cells-content (hash-remove (current-definition-cells-content) name))
-                          (current-global-env (hash-remove (current-global-env) name))
-                          (when (current-ns-context)
-                            (define qtt-fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
-                            (current-definition-cells-content (hash-remove (current-definition-cells-content) qtt-fqn))
-                            (current-global-env (hash-remove (current-global-env) qtt-fqn)))
+                          (remove-failed-definition! name)
                           qtt-ok]
                          [else
                           (current-global-env
