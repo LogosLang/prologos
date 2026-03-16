@@ -26,8 +26,8 @@
 | 3 | Level/mult/session metas → per-meta TMS cells | ✅ | Per-meta TMS cells for all 3, save/restore reduced 6→3 boxes, 188.2s / 7124 tests, commit `addaf46` |
 | 4 | Meta-info CHAMP → write-once registry; eliminate from save/restore | ⏸️ | Deferred to Phase 6 (cleanup); 3-box save/restore works correctly |
 | 5 | Learned-clause integration (nogood reuse) | ✅ | atms-consistent? pruning before thunk execution, speculation-pruned counter, 187.1s / 7124 tests, commit `f0f72da` |
-| 6 | Performance validation + cleanup | ⬜ | |
-| 7 | Post-Implementation Review | ⬜ | |
+| 6 | Performance validation + cleanup | ✅ | 187.1s vs 191.6s baseline (2.4% faster), acceptance L3 0 errors, 76 speculations / 113 hypotheses / 32 nogoods / 0 pruned, Phase 4 deferred |
+| 7 | Post-Implementation Review | ✅ | PIR at `2026-03-16_TRACK4_ATMS_SPECULATION_PIR.md` |
 
 ---
 
