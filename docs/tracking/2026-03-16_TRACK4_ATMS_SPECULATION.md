@@ -20,8 +20,8 @@
 | D.3 | Internal self-critique (principle alignment) | ✅ | 5 items resolved |
 | D.4 | Lattice-theoretic rework (TMS-in-network) | ✅ | Initial TMS-in-network design |
 | D.5 | Recursive CHAMP cells + provenance-by-default | ✅ | This revision |
-| 0 | Performance baseline + acceptance file | ⬜ | |
-| 1 | TMS cell integration into prop-network | ⬜ | |
+| 0 | Performance baseline + acceptance file | ✅ | 191.6s / 7096 tests, acceptance 76 speculations, commit `50b00d8` |
+| 1 | TMS cell integration into prop-network | ✅ | tms-cell-value struct, tms-read/write/commit/merge, net-new-tms-cell, 27 unit tests, 197.0s / 7123 tests, commit `ecde661` |
 | 2 | Per-meta cells → TMS cells | ⬜ | |
 | 3 | Level/mult/session metas → per-meta TMS cells | ⬜ | |
 | 4 | Meta-info CHAMP → write-once registry; eliminate from save/restore | ⬜ | |
