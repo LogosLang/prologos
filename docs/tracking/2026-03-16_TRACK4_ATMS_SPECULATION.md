@@ -15,8 +15,8 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | D.1 | Design analysis and speculation audit | ✅ | This document |
-| D.2 | Design iteration (external critique) | ⬜ | |
-| D.3 | Internal self-critique (principle alignment) | ⬜ | |
+| D.2 | Design iteration (external critique) | ✅ | 8 accepted, 2 accepted-with-modification, 5 rejected-with-rationale |
+| D.3 | Internal self-critique (principle alignment) | ✅ | 5 items resolved |
 | 0 | Performance baseline + acceptance file | ⬜ | |
 | 1 | Meta-info CHAMP → network cell | ⬜ | |
 | 2 | Level/mult/session CHAMPs → network cells | ⬜ | |
@@ -52,12 +52,16 @@ Two parallel speculation mechanisms exist in the codebase:
 
 ### 1.2 What This Track Does
 
-Unify Mechanisms A and B: make the propagator network the single snapshot target for speculation, and make ATMS assumptions the structural mechanism for rollback instead of imperative save/restore.
+Two-tier goal:
+
+1. **Core goal (Phases 1–3): Network consolidation** — move all metavar CHAMPs into propagator network cells, reducing `save-meta-state` from 6 boxes to 1. This is network-consolidated imperative rollback: the snapshot mechanism is unchanged (save/restore), but the surface area is reduced to a single box and future state additions are automatically captured.
+
+2. **Stretch goal (Phases 4–5): Structural ATMS speculation** — convert metavar cells to ATMS TMS cells, enabling assumption-tagged writes where retraction structurally hides speculative state. This replaces imperative save/restore with ATMS-backed rollback. Conditional on Phase 1–3 stability and downstream requirements from Track 5/9.
 
 Concretely:
-1. Move meta-info, level-meta, mult-meta, and sess-meta from standalone CHAMP boxes into propagator network cells
-2. Reduce `save-meta-state` from 6 boxes to 1 (network only)
-3. Make ATMS assumption retraction the rollback mechanism (retract assumption → cell values revert to pre-assumption state)
+- Move meta-info, level-meta, mult-meta, and sess-meta from standalone CHAMP boxes into propagator network cells
+- Reduce `save-meta-state` from 6 boxes to 1 (network only)
+- Optionally (Phase 4): make ATMS assumption retraction the rollback mechanism
 
 ### 1.3 Why This Matters
 
@@ -84,7 +88,9 @@ Concretely:
 
 **Pattern**: All 6 sites use the same structure: `(with-speculative-rollback thunk success? label)`. The thunk runs `check`/`checkQ`/`infer` which mutate meta-state imperatively. On failure, state is restored. On success, mutations persist.
 
-**Call site #6** (`typing-errors.rkt`) is special: it's error enrichment, not type-checking logic. It speculatively checks each union branch to produce per-branch mismatch details. This is read-only from a type-checking perspective — the overall check has already failed.
+**Call site #6** (`typing-errors.rkt`) is special: it's error enrichment, not type-checking logic. It speculatively checks each union branch to produce per-branch mismatch details. The overall check has already failed; the speculation collects per-branch diagnostics. Note: despite being "diagnostic," each speculative `(check ctx e br)` does create metas and solve constraints — `fresh-meta!` and `solve-meta!` fire during the thunk. The rollback in `with-speculative-rollback` correctly discards these mutations. The speculation is therefore not "read-only" at the meta-state level, but its results are used only for error message construction.
+
+**Nested speculation**: Call sites #4 and #5 (union check) can nest arbitrarily. If the left branch `l` of a union `(union l r)` is itself a union `(union l2 r2)`, the `check` call inside the outer speculation triggers an inner speculation. This creates a stack of save/restore frames. The current implementation handles this correctly: each `with-speculative-rollback` independently saves/restores the network box, and inner failures are extracted as `sub-failures` of the outer failure (Phase D2). After Track 4, nested speculation continues to work because each nesting level saves/restores the same single network box.
 
 ### 2.2 State Captured by save-meta-state
 
@@ -116,6 +122,18 @@ From Migration Sprint Phase 0b (`atms.rkt`, `infra-cell.rkt`):
 | `speculation-begin` / `speculation-try-branch` / `speculation-commit` | ✅ Ready | Network-level speculation |
 
 **Key property**: All ATMS operations are pure (return new ATMS, never mutate). This is the structural foundation for eliminating imperative save/restore.
+
+### 2.3.1 ATMS State Location and Speculation Semantics
+
+The per-command ATMS lives in `current-command-atms` — a boxed parameter in `elab-speculation-bridge.rkt`, **NOT** in the propagator network. This is intentional: the ATMS accumulates hypotheses and nogoods across all speculation branches within a command, surviving rollback to build a complete failure tree for error messages.
+
+**Two-level rollback semantics** (current architecture):
+1. **Logic-level rollback**: Meta-state (metas, constraints, network) rolls back via `restore-meta-state!`
+2. **Error-tracking persistence**: ATMS hypotheses and nogoods accumulate across all branches, NOT rolled back
+
+This separation is correct and must be preserved in Track 4. When Phases 1–3 consolidate meta-state into the network, the ATMS box remains outside the network — it's an error-tracking accumulator, not type-checking state. When/if Phase 4 introduces TMS cells, the ATMS would gate cell *reads* (worldview filtering) but the ATMS struct itself would still live outside the network and persist across rollbacks.
+
+**Nested speculation worldview semantics**: When speculation nests (e.g., union-of-unions), each level creates its own ATMS hypothesis. Inner failures record nogoods referencing their hypothesis. The outer speculation's hypothesis remains believed throughout — inner retraction doesn't affect outer state. This is correct because the ATMS hypothesis graph is append-only during a command; only the network box is rolled back.
 
 ### 2.4 What's NOT in the Network
 
@@ -160,6 +178,18 @@ Move id-map (monotonic) into the network. Keep meta-info, level, mult, sess as C
 - Con: Still has 5-box save/restore
 - Con: Doesn't achieve the "single snapshot target" goal
 
+**Option D: Lazy Snapshot (Copy-on-Write CHAMPs)**
+
+Keep CHAMPs as standalone boxes. On speculation start, mark them as "speculative." On first write to a speculative CHAMP, fork (copy-on-write). On commit, clear the flag. On rollback, discard the forked version.
+
+- Pro: No read-path overhead (no cell indirection on hot path)
+- Pro: Write cost only paid when speculation actually writes
+- Con: Requires tracking which CHAMPs are in speculative mode — a new mechanism orthogonal to both cells and ATMS
+- Con: Doesn't move state into the network (violates propagator-first principle)
+- Con: Copy-on-write is exactly what CHAMP structural sharing already provides for free — the current save/restore is effectively O(1) CoW. Option D re-implements what already exists with more complexity.
+
+**Rejected**: Option D provides no benefit over the current save/restore mechanism, which is already O(1) via CHAMP structural sharing. The current mechanism's problem is fragility (6 boxes to maintain), not performance. Option D doesn't reduce the box count.
+
 ### 3.2 Recommended Approach: Option A (Network Cells)
 
 ✓ DESIGN DECISION
@@ -198,6 +228,8 @@ Option A is the correct long-term architecture, despite the short-term cost. Rat
 **Why per-key last-write-wins**: `solve-meta!` writes a single key (`meta-id → updated-meta-info`). The cell merge must apply this to the full CHAMP. This is equivalent to `merge-hasheq-union` but for CHAMPs, with overwrite semantics instead of union.
 
 **Important**: During speculation, the thunk may create new metas (`fresh-meta!`) and solve existing metas (`solve-meta!`). On failure, both operations must be rolled back. With ATMS assumption-tagged writes, the new metas and solutions are associated with the speculation's assumption. On retraction, they become invisible.
+
+**Merge correctness under save/restore (Phases 1–3)**: The merge function is only invoked during cell writes. Save/restore operates at the network-box level, not the cell level. When `restore-meta-state!` swaps the network box reference, the cell's merge function is irrelevant — the entire cell (including its accumulated value) reverts to the saved snapshot. Merge correctness matters for normal (non-speculative) writes; speculation correctness depends on box-level save/restore. This constraint is inherent to the Phase 1–3 approach and is identical to how constraint cells already work today.
 
 #### 3.3.2 Level/Mult/Session Cells
 
@@ -244,24 +276,77 @@ The new `with-speculative-rollback` would:
      #f]))
 ```
 
-**Critical point**: Even with ATMS assumption-tagged writes, we still save/restore the network box. This is because the propagator network's monotonic cells (constraints, registries) don't use TMS — they use direct merge. The ATMS TMS cells are a separate layer.
+### 3.4.1 Two-Layer Speculation Model
 
-**Design question — OPEN**: Should we convert the meta-info cell to a TMS cell (ATMS-aware, with assumption-tagged values) or a monotonic cell (standard merge, with box-level save/restore)?
+The network contains two kinds of cells with fundamentally different speculation semantics:
 
-- **TMS cell**: Full ATMS retraction. But TMS cells store `(listof supported-value)` — a list of values tagged with assumption sets. Reading requires filtering by believed assumptions. This changes the read path for EVERY metavar lookup.
-- **Monotonic cell**: Standard merge, no assumption tags. Save/restore still needed for the network, but it's just 1 box. Simpler, but doesn't get full ATMS retraction benefits.
+**Layer 1: Monotonic cells** (constraints, registries, wakeups, and after this track: meta-info, level/mult/session, id-map)
+- Standard merge functions (hasheq union, list append, last-write-wins)
+- Rollback via network-box save/restore: save an immutable CHAMP reference, restore it on failure
+- This is the only mechanism in Phases 1–3
 
-✓ DESIGN DECISION: **Monotonic cell** for Phase 1–3. TMS conversion is Phase 4+ and may be deferred to Track 5.
+**Layer 2: TMS cells** (if Phase 4 proceeds)
+- Assumption-tagged values: each write carries an assumption-id
+- Reads filter by believed assumptions (the current worldview)
+- Retraction makes writes invisible without explicit restore
+- The ATMS struct (which tracks beliefs/nogoods) lives OUTSIDE the network in `current-command-atms` and is NOT rolled back
 
-Rationale: The primary goal of Track 4 is to eliminate the 6-box fragility and bring metavar state into the network. Full TMS cells for meta-info would change every metavar read path — a much higher risk change. The network-cell approach achieves the consolidation goal. TMS assumption-tagging can be layered on later when the GDE track (Track 9) has clearer requirements.
+**Can a network have both?** Yes. The `prop-network` struct's cell store is a CHAMP of `cell-id → prop-cell`. TMS cells would be a different cell type (`tms-cell`) stored in the ATMS's `tms-cells` map, not in the prop-network's cells. Monotonic and TMS cells coexist without interference.
+
+**How does save/restore interact with TMS?** Network-box save/restore captures monotonic cells. TMS cells live in the ATMS, which is NOT restored. This means:
+- Monotonic cells (constraints, registries): rolled back by network restore
+- TMS cells (if added): not rolled back by network restore — rollback is via assumption retraction
+- The two mechanisms are independent and composable
+
+**Phase 1–3 implication**: All new metavar cells are monotonic. Network-box save/restore captures them. The same single-box snapshot mechanism that works today (for the network) extends to cover meta-info, level/mult/session, and id-map.
+
+### 3.4.2 Cell Type Decision
+
+✓ DESIGN DECISION (Phases 1–3): **Monotonic cells** for all metavar state. TMS conversion is deferred to Phase 4, pending performance validation and GDE requirements analysis.
+
+Rationale: The primary goal is to eliminate the 6-box fragility and bring metavar state into the network. Full TMS cells for meta-info would change every metavar read path (adding worldview filtering on every `meta-solved?` / `meta-solution` call — the hottest operations in the type checker). The network-cell approach achieves the consolidation goal. TMS assumption-tagging can be layered on later when Track 9 (GDE) clarifies requirements.
+
+**Decision point for Phase 4**: Track 5 design (D.1) will be completed before Track 4 Phase 3 ends. If Track 5 requires TMS cells for non-monotonic definition retraction, proceed with Phase 4. Otherwise, mark Phase 4 as "deferred to Track 9."
+
+### 3.4.3 Worked Example: Union Type Speculation
+
+Concrete illustration of how speculation changes across Track 4 phases.
+
+**Scenario**: `check expr against (union (Map String Int) (Map String String))`
+
+**Before Track 4 (current):**
+1. `save-meta-state` → snapshot 6 boxes (network, id-map, meta-info, level, mult, sess)
+2. `check expr (Map String Int)` → `fresh-meta` M1, writes to meta-info CHAMP box + network cell; `solve-meta` M1; type fails
+3. `restore-meta-state!` → restores all 6 boxes (M1 gone from meta-info; network constraints rolled back)
+4. `check expr (Map String String)` → `fresh-meta` M2, succeeds
+5. Commit — M2 persists
+
+**After Track 4 Phase 3 (network consolidation):**
+1. `save-meta-state` → snapshot 1 box (network only — meta-info, level, mult, sess, id-map are all cells inside the network)
+2. `check expr (Map String Int)` → `fresh-meta` M1, writes to meta-info cell in network; fails
+3. `restore-meta-state!` → restores 1 box (entire network including meta-info cell reverts; M1 gone)
+4. `check expr (Map String String)` → `fresh-meta` M2, succeeds
+5. Commit — M2 persists
+
+**After Track 4 Phase 4 (TMS cells, if implemented):**
+1. `atms-assume` A1 → create assumption for "try (Map String Int)"
+2. `check expr (Map String Int)` → `fresh-meta` M1, writes to meta-info TMS cell with A1 tag; fails
+3. `atms-retract` A1 → A1's writes become invisible (no box save/restore needed for TMS state)
+4. `atms-assume` A2 → create assumption for "try (Map String String)"
+5. `check expr (Map String String)` → writes with A2 tag, succeeds
+6. Commit — A2 stays believed, writes visible; A1's nogood recorded for GDE
+
+**Note**: In Phase 3, the behavior is identical to the current mechanism — just with 1 box instead of 6. In Phase 4, the monotonic cells (constraints, registries) still use network-box save/restore; only TMS cells get assumption-based retraction.
 
 ### 3.5 Phase Structure
 
-#### Phase 0: Performance Baseline + Acceptance File
+#### Phase 0: Performance Baseline + Profiling
 
 - Acceptance file: `examples/2026-03-16-track4-acceptance.prologos` covering speculation-exercising patterns (union types, map widening, Church folds)
 - Baseline: full suite timing, cell count metrics
+- **Profiling**: Instrument `meta-info` read frequency during full suite. Measure: (a) total `meta-solved?` / `meta-solution` calls, (b) breakdown by caller (which functions read meta-info most?). This quantifies the "hot path" risk and sets the regression threshold.
 - Pre-flight: verify all 6 call sites with grep, confirm no new ones since Track 3
+- **Verify two-context assumption**: Instrument `read-meta-info` (once added) with a context check — confirm meta-info is only read during elaboration, not during module loading
 
 #### Phase 1: Meta-Info CHAMP → Network Cell
 
@@ -276,9 +361,14 @@ Rationale: The primary goal of Track 4 is to eliminate the 6-box fragility and b
 5. Add cell writer: metavar operations (`fresh-meta!`, `solve-meta!`, `unsolve-meta!`, etc.) write to both cell and CHAMP box (dual-write, as in Track 3's transitional pattern)
 6. Update `save-meta-state` to exclude meta-info from the explicit snapshot (it's now in the network, captured by the network box snapshot)
 
-**Risk**: This is the highest-risk phase. Meta-info reads are the most frequent operation in the type checker. Instrument before/after to detect performance regression.
+**Risk**: This is the highest-risk phase. Meta-info reads are the most frequent operation in the type checker (`meta-solved?` and `meta-solution` are called on every unification, constraint posting, and type-checking decision). Instrument before/after to detect performance regression.
 
 **Verification**: Full suite must pass with 0 regressions. Performance within 10% of baseline.
+
+**Contingency**: If Phase 1 shows >15% performance regression after investigation:
+1. Profile to identify whether the overhead is in reads (cell lookup) or writes (cell merge)
+2. If reads: investigate caching the meta-info cell-id to avoid repeated lookups
+3. If still unacceptable: fall back to Option B (assumption-associated CHAMPs) — keep CHAMPs standalone, associate snapshots with ATMS assumptions. This preserves the consolidation benefit for the other 4 CHAMPs (level/mult/session/id-map) while keeping meta-info on its current fast path.
 
 #### Phase 2: Level/Mult/Session CHAMPs → Network Cells
 
@@ -330,6 +420,16 @@ After this phase:
 
 Standalone PIR document following the established template.
 
+### 3.5.1 Parallelism Interaction
+
+Speculation is **single-threaded** within the current architecture. Each `with-speculative-rollback` call is sequential: try left, if fail restore, try right. There is no parallel speculation (e.g., forking two workers to try left and right simultaneously).
+
+BSP parallel propagation (`run-to-quiescence-bsp`) applies to propagators within a single speculation context, not across speculation branches. During a speculative thunk, propagators may fire in parallel (BSP supersteps), but the speculation boundary is a sequential decision point.
+
+**After Track 4**: This doesn't change. Phases 1–3 don't introduce parallelism. Phase 4 (TMS cells) would theoretically enable parallel speculation (each branch uses its own assumption, reads are filtered by worldview), but this is far-future scope. For Track 4, speculation remains serial.
+
+**Merge safety**: Multiple propagators writing to the meta-info cell during BSP cannot cause corruption because (a) each propagator writes to a different meta-id (propagators are scoped to specific metas), and (b) the per-key last-write-wins merge is commutative at the key level. No two propagators write to the same meta-id key.
+
 ### 3.6 Two-Context Architecture Impact
 
 Track 3 established the two-context architecture: elaboration reads cells, module loading reads parameters. This applies to Track 4:
@@ -376,12 +476,14 @@ Track 4 touches the metavar store, which is the most-written state in the type c
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| Meta-info cell read overhead on hot path | Medium | Medium | Profile before/after Phase 1; abort if >15% regression |
+| Meta-info cell read overhead on hot path | Medium | Medium | Profile before/after Phase 1; abort if >15% regression. Contingency: fall back to Option B for meta-info only |
 | Merge function complexity (CHAMP-in-cell) | Low | Medium | Use simple per-key last-write-wins; test with existing suite |
 | `fresh-meta!` write overhead (creates new meta + writes to cell) | Medium | Low | `fresh-meta!` creates one entry; cell write is O(1) merge |
-| Elaboration guard needed for meta-info | Low | Low | Meta-info is only read during elaboration; no guard expected (but verify) |
+| Elaboration guard needed for meta-info | Low | Low | Meta-info is only read during elaboration; verify in Phase 0 by instrumenting reads |
 | Phase 4 TMS conversion changes read API | High (if attempted) | High | Phase 4 is conditional; defer unless clear GDE requirement |
 | Interaction with batch-worker isolation | Low | Medium | batch-worker saves/restores parameters; after Phase 3, it needs to save/restore the network instead |
+| Speculation with cascading propagation | Low | Low | If speculative `fresh-meta!`/`solve-meta!` triggers propagators that cascade widely, the network diverges from the saved snapshot. But rollback is still O(1) — it's a single box reference swap, regardless of how much propagation occurred. The cost is in wasted propagation work, not in rollback itself. |
+| ATMS state synchronization | Low | Low | ATMS lives in `current-command-atms` (boxed parameter), intentionally NOT captured by network save/restore. ATMS accumulates hypotheses/nogoods across all branches for error reporting. No synchronization needed — the two-level rollback semantics are correct by design (see §2.3.1). |
 
 ### 4.3 Open Questions
 
@@ -402,6 +504,9 @@ Track 4 touches the metavar store, which is the most-written state in the type c
 | **Correct by Construction** | Save/restore is structurally correct when it's just "save network" — no way to miss a box |
 | **Decomplection** | Eliminates the 6-box coupling in save/restore; each concern lives in its own cell |
 | **Compositionality** | ATMS assumptions compose — speculation within speculation works via nested assumptions |
+| **Debuggability** | Network consolidation means all speculation state is inspectable via cell reads. ATMS hypothesis IDs tag which speculation created which state. Phase 4 would add worldview inspection (which values are believed under which assumptions). |
+
+**Honest tension**: Phases 1–3 achieve *consolidation* but not *structural ATMS*. The propagator-first principle is fully satisfied only if Phase 4 proceeds. However, Phases 1–3 are a strict improvement over the status quo (6 boxes → 1 box), and the Phase 4 decision is explicit, not accidental.
 
 ---
 
@@ -409,8 +514,8 @@ Track 4 touches the metavar store, which is the most-written state in the type c
 
 | Phase | Scope | Est. Effort | Risk |
 |-------|-------|-------------|------|
-| 0 | Baseline + acceptance | 30 min | Low |
-| 1 | Meta-info → cell | 2–3 hours | Medium |
+| 0 | Baseline + profiling + acceptance | 1 hour | Low |
+| 1 | Meta-info → cell | 3–5 hours | Medium |
 | 2 | Level/mult/sess → cells | 1–2 hours | Low |
 | 3 | ID-map → cell + save/restore simplification | 1–2 hours | Low |
 | 4 | ATMS assumption-tagged speculation | 3–5 hours (if not deferred) | High |
@@ -418,10 +523,20 @@ Track 4 touches the metavar store, which is the most-written state in the type c
 | 6 | Performance validation + cleanup | 1 hour | Low |
 | 7 | PIR | 1 hour | Low |
 
-**Total**: Phases 0–3 + 6–7: ~7–10 hours (core track, certain value).
+**Total**: Phases 0–3 + 6–7: ~9–13 hours (core track, certain value).
 Phases 4–5: +5–8 hours (conditional, higher risk, deferrable).
 
-**Comparison**: Track 3 was ~2 hours implementation after ~3 hours design (mechanical). Track 4 Phases 0–3 are similarly mechanical (same cell-primary pattern). Phases 4–5 are architectural and may require more iteration.
+Phase 1 estimate is higher than Track 3's per-phase time because meta-info is higher-frequency and requires more verification/profiling. Phases 2–3 are mechanical.
+
+### 6.1 Success Metrics
+
+| Metric | Phase 3 Target | Phase 4 Target (if attempted) |
+|--------|----------------|-------------------------------|
+| save/restore box count | 1 (was 6) | 1 (monotonic) + 0 (TMS — automatic retraction) |
+| Performance delta | <10% regression | <15% regression |
+| Test regressions | 0 | 0 |
+| Speculation bugs introduced | 0 | 0 |
+| Nogood reuse rate | N/A | >0 (pruning observed in speculation-heavy tests) |
 
 ---
 
@@ -450,13 +565,49 @@ From the Whole-System Migration Thesis §2.3: when speculation fails, the ATMS n
 
 ## §8. External Critique Response (D.2)
 
-*To be completed during design review.*
+### Accepted (8 items)
+
+| # | Critique | Action Taken |
+|---|----------|--------------|
+| 1 | §1.2 understatement — reframe to distinguish consolidation (core) vs structural ATMS (stretch) | Rewrote §1.2 with explicit two-tier framing: "Core goal (Phases 1–3): Network consolidation" vs "Stretch goal (Phases 4–5): Structural ATMS speculation" |
+| 2 | Missing Option D (lazy copy-on-write CHAMPs) | Added Option D to §3.1 with explicit rejection rationale: CHAMP structural sharing already provides O(1) CoW; the problem is fragility (6 boxes), not performance |
+| 3 | Add worked example | Added §3.4.3 with concrete before/after for union speculation across all three Track 4 phases |
+| 4 | Verify call site #6 is truly read-only | Updated §2.1 to clarify: call site #6 does create metas and solve constraints during the thunk (not read-only at meta-state level), but rollback correctly discards all mutations. Results used only for error message construction. |
+| 5 | Add nested speculation semantics | Added explanation to §2.1 (nested call site analysis) and §2.3.1 (two-level rollback semantics, worldview composition). Nesting works because each level independently saves/restores the same network box, and inner ATMS hypotheses don't affect outer worldview. |
+| 6 | Add ATMS state synchronization risk | Added §2.3.1 clarifying ATMS location (boxed parameter, intentionally outside network), two-level rollback semantics, and new risk table entry confirming no synchronization issue. |
+| 7 | Profile before Phase 1 + contingency plan | Updated Phase 0 to include meta-info read frequency profiling. Added contingency plan to Phase 1: if >15% regression, investigate; fall back to Option B for meta-info only while keeping other CHAMPs as cells. |
+| 8 | Add success metrics | Added §6.1 with explicit targets for save/restore box count, performance delta, test regressions, and nogood reuse rate. |
+
+### Accepted with modification (2 items)
+
+| # | Critique | Disposition |
+|---|----------|-------------|
+| 9 | "OPEN" framing for TMS cell decision is confusing — either remove or keep undecided | Reframed: removed "OPEN" label, created §3.4.2 "Cell Type Decision" with clear decision statement and explicit decision point: "Track 5 D.1 will be completed before Track 4 Phase 3 ends" to break the dependency loop. |
+| 10 | Phase 1 estimate too low (2–3 hours) | Increased to 3–5 hours. Added rationale: meta-info is higher-frequency than any Track 3 registry; extra time for profiling and verification. |
+
+### Rejected with rationale (5 items)
+
+| # | Critique | Rationale for Rejection |
+|---|----------|------------------------|
+| 11 | Add §3.4.1 "Two-Layer Speculation Model" | **Accepted in spirit, different structure**: Added as §3.4.1 but integrated with §3.4.2 (cell type decision) rather than as a standalone section in the pseudocode area. The two-layer model (monotonic vs TMS) is now explained with explicit answers to "can a network have both?" and "how does save/restore interact with TMS?" |
+| 12 | Quantify meta-info read frequency ("how many reads per expression?") | Deferred to Phase 0 profiling rather than design-time estimation. The read count depends on expression complexity and is not meaningfully estimable in advance. Phase 0 will instrument and measure across the full suite, providing actual numbers. Speculative estimation would be unreliable. |
+| 13 | Verify module loading doesn't read meta-info | **Accepted as Phase 0 verification step**, not as a design-doc analysis. Added to Phase 0: "Verify two-context assumption: instrument `read-meta-info` with context check." This is a runtime verification, not something resolvable by code inspection. However, strong structural evidence: `fresh-meta!` is called only inside `infer`/`check` (type-checking), which only runs inside `process-command`. Module loading calls `process-string`/`process-file` which goes through `process-command`. Meta reads outside elaboration would be a bug in the existing architecture, not a Track 4 issue. |
+| 14 | Add "Parallelism Interaction" section — can speculations run in parallel? | Added §3.5.1 but the answer is simple: **no**. Speculation is single-threaded. BSP parallelism applies within a speculation context (propagators fire in parallel), not across speculation branches. This doesn't change in Track 4. |
+| 15 | Missing principle: "Debuggability" | Added to §5. However, debuggability is a quality attribute, not one of the project's formal design principles from `DESIGN_PRINCIPLES.org`. Included as an observation rather than a formal principle alignment. |
 
 ---
 
 ## §9. Internal Self-Critique — Principle Alignment (D.3)
 
-*To be completed during design review.*
+1. **Data Orientation: Is a CHAMP-in-a-cell still "data oriented"?** The meta-info cell contains a CHAMP (a persistent hash array mapped trie). This is data — an immutable value with structural sharing. The cell doesn't contain procedures, closures, or mutable references. The merge function is a pure function on data. Resolved: yes, this upholds data orientation.
+
+2. **Propagator-First: Does Phase 3 truly achieve "all state in network"?** The ATMS struct in `current-command-atms` lives outside the network. However, the ATMS is not type-checking state — it's error-tracking infrastructure. Its hypotheses and nogoods are metadata *about* the computation, not inputs *to* the computation. The propagator-first principle applies to state that participates in type-checking (metas, constraints, registries). ATMS is a diagnostic overlay. Resolved: principle is satisfied for type-checking state; ATMS is correctly excluded.
+
+3. **Correct by Construction: Is 1-box save/restore actually safer than 6-box?** Yes. The failure mode of 6-box save/restore is: "new state added, save/restore not updated, speculation leaks." This happened with level/mult/session CHAMPs (Track 1 Phase B). With 1-box save/restore, any new cell added to the network is automatically captured — there is no update to forget. The correctness is structural: "network snapshot captures everything in the network."
+
+4. **Completeness over Deferral: Is deferring Phase 4 justified?** Phase 4 (TMS cells) changes every metavar read path. The risk is disproportionate to the value gained at this point — learned-clause pruning and GDE integration are Track 9 concerns, not Track 4 urgency. Phases 1–3 deliver concrete value (fragility elimination). Phase 4 should wait for Track 5 design to clarify whether TMS is actually needed. This is genuine dependency, not scope avoidance. Resolved: deferral justified.
+
+5. **PIR process: What should the PIR focus on for this track?** If only Phases 0–3 are implemented, the PIR should compare: (a) actual meta-info read overhead vs. pre-Phase-0 profiling estimate, (b) whether the 1-box consolidation held (no new state leaked outside the network), (c) any bugs analogous to Track 3's elaboration guard discovery. If Phase 4 is implemented, add: (d) TMS read overhead, (e) nogood reuse observations.
 
 ---
 
