@@ -57,6 +57,9 @@
  elab-fresh-mult-cell
  elab-mult-cell-read
  elab-mult-cell-write
+ ;; Track 4 Phase 3: Level and session cells
+ elab-fresh-level-cell
+ elab-fresh-sess-cell
  ;; P5c: Cross-domain bridge (type ↔ multiplicity)
  elab-add-type-mult-bridge
  ;; Phase 4c: Structural decomposition support
@@ -845,10 +848,11 @@
 ;; Cross-domain propagators (P5c) will bridge type cells and mult cells.
 
 ;; Allocate a mult cell on the network. Returns (values elab-network* cell-id).
+;; Track 4 Phase 3: Now creates a TMS cell (paralleling type metas).
 (define (elab-fresh-mult-cell enet source)
   (define net (elab-network-prop-net enet))
   (define-values (net* cid)
-    (net-new-cell net mult-bot mult-lattice-merge mult-lattice-contradicts?))
+    (net-new-tms-cell net mult-bot mult-lattice-merge mult-lattice-contradicts?))
   (define info (elab-cell-info '() #f source))
   (define h (cell-id-hash cid))
   (values
@@ -868,6 +872,51 @@
    (net-cell-write (elab-network-prop-net enet) cid val)
    (elab-network-cell-info enet)
    (elab-network-next-meta-id enet)))
+
+;; ========================================
+;; Track 4 Phase 3: Level and Session Cells
+;; ========================================
+;;
+;; Per-meta TMS cells for level and session metavariables, paralleling
+;; type metas (Phase 2) and mult metas (P5b, now TMS).
+;; These use last-write-wins merge: once solved, the value is final.
+;; Initial value is 'unsolved (a sentinel, not a lattice element).
+
+;; Last-write-wins merge for level/session metas.
+;; 'unsolved is the bottom element; any non-unsolved value overwrites.
+(define (merge-last-write-wins old new)
+  (cond
+    [(eq? old 'unsolved) new]
+    [(eq? new 'unsolved) old]
+    [else new]))
+
+;; Allocate a level cell on the network. Returns (values elab-network* cell-id).
+(define (elab-fresh-level-cell enet source)
+  (define net (elab-network-prop-net enet))
+  (define-values (net* cid)
+    (net-new-tms-cell net 'unsolved merge-last-write-wins))
+  (define info (elab-cell-info '() #f source))
+  (define h (cell-id-hash cid))
+  (values
+   (elab-network
+    net*
+    (champ-insert (elab-network-cell-info enet) h cid info)
+    (+ 1 (elab-network-next-meta-id enet)))
+   cid))
+
+;; Allocate a session cell on the network. Returns (values elab-network* cell-id).
+(define (elab-fresh-sess-cell enet source)
+  (define net (elab-network-prop-net enet))
+  (define-values (net* cid)
+    (net-new-tms-cell net 'unsolved merge-last-write-wins))
+  (define info (elab-cell-info '() #f source))
+  (define h (cell-id-hash cid))
+  (values
+   (elab-network
+    net*
+    (champ-insert (elab-network-cell-info enet) h cid info)
+    (+ 1 (elab-network-next-meta-id enet)))
+   cid))
 
 ;; ========================================
 ;; P5c: Cross-Domain Bridge (Type ↔ Multiplicity)

@@ -178,6 +178,9 @@
  ;; P5b: Multiplicity cell callbacks
  current-prop-fresh-mult-cell
  current-prop-mult-cell-write
+ ;; Track 4 Phase 3: Level and session cell callbacks
+ current-prop-fresh-level-cell
+ current-prop-fresh-sess-cell
  ;; P1-G2: Network contradiction check
  current-prop-has-contradiction?
  ;; Propagator quiescence + rewrap (used by solve-meta!)
@@ -1052,6 +1055,10 @@
 (define current-prop-fresh-mult-cell (make-parameter #f))   ;; (enet source → (values enet* cell-id))
 (define current-prop-mult-cell-write (make-parameter #f))   ;; (enet cell-id value → enet*)
 
+;; Track 4 Phase 3: Level and session cell callbacks
+(define current-prop-fresh-level-cell (make-parameter #f))  ;; (enet source → (values enet* cell-id))
+(define current-prop-fresh-sess-cell (make-parameter #f))   ;; (enet source → (values enet* cell-id))
+
 ;; P1-G2: Network contradiction check (set by driver.rkt).
 ;; Returns #t if the current propagator network has a contradiction, #f otherwise.
 (define current-prop-has-contradiction? (make-parameter #f))  ;; (→ boolean)
@@ -1353,14 +1360,28 @@
 
 ;; Create a fresh level metavariable, register in store, return level-meta.
 ;; Hash removal: Always writes to CHAMP.
+;; Track 4 Phase 3: Allocates a TMS cell on the propagator network if available.
 (define (fresh-level-meta source)
   (define id (gensym 'lvl))
   (define box (current-level-meta-champ-box))
   (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id 'unsolved))
+  ;; Track 4 Phase 3: Allocate level cell on propagator network if available
+  (define net-box (current-prop-net-box))
+  (define fresh-fn (current-prop-fresh-level-cell))
+  (when (and net-box fresh-fn)
+    (define enet (unbox net-box))
+    (define-values (enet* cid) (fresh-fn enet source))
+    (set-box! net-box enet*)
+    ;; Record mapping: level-meta-id → cell-id in the prop id-map
+    (define id-map-box (current-prop-id-map-box))
+    (when id-map-box
+      (set-box! id-map-box
+        (champ-insert (unbox id-map-box) (prop-meta-id-hash id) id cid))))
   (level-meta id))
 
 ;; Assign a solution to a level metavariable.
 ;; Hash removal: Always reads/writes CHAMP.
+;; Track 4 Phase 3: Also writes to propagator TMS cell if available.
 (define (solve-level-meta! id solution)
   (define box (current-level-meta-champ-box))
   (define status
@@ -1370,25 +1391,69 @@
     (error 'solve-level-meta! "unknown level-meta: ~a" id))
   (when (not (eq? status 'unsolved))
     (error 'solve-level-meta! "level-meta ~a already solved" id))
-  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution)))
+  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution))
+  ;; Track 4 Phase 3: Write to propagator level cell
+  (define net-box (current-prop-net-box))
+  (define write-fn (current-prop-cell-write))
+  (when (and net-box write-fn)
+    (define id-map-box (current-prop-id-map-box))
+    (define cid (and id-map-box
+                     (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id)))
+    (when (and cid (not (eq? cid 'none)))
+      (define enet (unbox net-box))
+      (set-box! net-box (write-fn enet cid solution)))))
 
 ;; Check if a level metavariable has been solved.
-;; Hash removal: Always reads from CHAMP.
+;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
 (define (level-meta-solved? id)
-  (define box (current-level-meta-champ-box))
-  (define v
-    (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-      (if (eq? r 'none) #f r)))
-  (and v (not (eq? v 'unsolved))))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (define id-map-box (current-prop-id-map-box))
+  (cond
+    [(and net-box read-fn id-map-box)
+     (define cid (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id))
+     (cond
+       [(eq? cid 'none)
+        ;; Not in id-map — fallback to CHAMP
+        (define box (current-level-meta-champ-box))
+        (define v (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+        (and (not (eq? v 'none)) (not (eq? v 'unsolved)))]
+       [else
+        (define v (read-fn (unbox net-box) cid))
+        (not (eq? v 'unsolved))])]
+    [else
+     ;; No network — CHAMP fallback
+     (define box (current-level-meta-champ-box))
+     (define v
+       (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+         (if (eq? r 'none) #f r)))
+     (and v (not (eq? v 'unsolved)))]))
 
 ;; Retrieve the solution of a level metavariable, or #f if unsolved/unknown.
-;; Hash removal: Always reads from CHAMP.
+;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
 (define (level-meta-solution id)
-  (define box (current-level-meta-champ-box))
-  (define v
-    (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-      (if (eq? r 'none) #f r)))
-  (and v (not (eq? v 'unsolved)) v))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (define id-map-box (current-prop-id-map-box))
+  (cond
+    [(and net-box read-fn id-map-box)
+     (define cid (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id))
+     (cond
+       [(eq? cid 'none)
+        ;; Not in id-map — fallback to CHAMP
+        (define box (current-level-meta-champ-box))
+        (define v (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+        (and (not (eq? v 'none)) (not (eq? v 'unsolved)) v)]
+       [else
+        (define v (read-fn (unbox net-box) cid))
+        (and (not (eq? v 'unsolved)) v)])]
+    [else
+     ;; No network — CHAMP fallback
+     (define box (current-level-meta-champ-box))
+     (define v
+       (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+         (if (eq? r 'none) #f r)))
+     (and v (not (eq? v 'unsolved)) v)]))
 
 ;; Zonk a level: follow solved level-metas, leave unsolved in place.
 ;; Use zonk-level-default for final output (defaults unsolved to lzero).
@@ -1463,22 +1528,52 @@
       (set-box! net-box (write-fn enet cid solution)))))
 
 ;; Check if a mult metavariable has been solved.
-;; Hash removal: Always reads from CHAMP.
+;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
 (define (mult-meta-solved? id)
-  (define box (current-mult-meta-champ-box))
-  (define v
-    (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-      (if (eq? r 'none) #f r)))
-  (and v (not (eq? v 'unsolved))))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (define id-map-box (current-prop-id-map-box))
+  (cond
+    [(and net-box read-fn id-map-box)
+     (define cid (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id))
+     (cond
+       [(eq? cid 'none)
+        (define box (current-mult-meta-champ-box))
+        (define v (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+        (and (not (eq? v 'none)) (not (eq? v 'unsolved)))]
+       [else
+        (define v (read-fn (unbox net-box) cid))
+        (and (not (eq? v 'mult-bot)) (not (eq? v 'unsolved)))])]
+    [else
+     (define box (current-mult-meta-champ-box))
+     (define v
+       (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+         (if (eq? r 'none) #f r)))
+     (and v (not (eq? v 'unsolved)))]))
 
 ;; Retrieve the solution of a mult metavariable, or #f if unsolved/unknown.
-;; Hash removal: Always reads from CHAMP.
+;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
 (define (mult-meta-solution id)
-  (define box (current-mult-meta-champ-box))
-  (define v
-    (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-      (if (eq? r 'none) #f r)))
-  (and v (not (eq? v 'unsolved)) v))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (define id-map-box (current-prop-id-map-box))
+  (cond
+    [(and net-box read-fn id-map-box)
+     (define cid (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id))
+     (cond
+       [(eq? cid 'none)
+        (define box (current-mult-meta-champ-box))
+        (define v (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+        (and (not (eq? v 'none)) (not (eq? v 'unsolved)) v)]
+       [else
+        (define v (read-fn (unbox net-box) cid))
+        (and (not (eq? v 'mult-bot)) (not (eq? v 'unsolved)) v)])]
+    [else
+     (define box (current-mult-meta-champ-box))
+     (define v
+       (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+         (if (eq? r 'none) #f r)))
+     (and v (not (eq? v 'unsolved)) v)]))
 
 ;; Zonk a multiplicity: follow solved mult-metas, leave unsolved in place.
 ;; Use zonk-mult-default for final output (defaults unsolved to 'mw).
@@ -1505,14 +1600,28 @@
 
 ;; Create a fresh sess metavariable, register in store, return sess-meta.
 ;; Hash removal: Always writes to CHAMP.
+;; Track 4 Phase 3: Allocates a TMS cell on the propagator network if available.
 (define (fresh-sess-meta source)
   (define id (gensym 'smeta))
   (define box (current-sess-meta-champ-box))
   (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id 'unsolved))
+  ;; Track 4 Phase 3: Allocate session cell on propagator network if available
+  (define net-box (current-prop-net-box))
+  (define fresh-fn (current-prop-fresh-sess-cell))
+  (when (and net-box fresh-fn)
+    (define enet (unbox net-box))
+    (define-values (enet* cid) (fresh-fn enet source))
+    (set-box! net-box enet*)
+    ;; Record mapping: sess-meta-id → cell-id in the prop id-map
+    (define id-map-box (current-prop-id-map-box))
+    (when id-map-box
+      (set-box! id-map-box
+        (champ-insert (unbox id-map-box) (prop-meta-id-hash id) id cid))))
   (sess-meta id))
 
 ;; Assign a solution to a sess metavariable.
 ;; Hash removal: Always reads/writes CHAMP.
+;; Track 4 Phase 3: Also writes to propagator TMS cell if available.
 (define (solve-sess-meta! id solution)
   (define box (current-sess-meta-champ-box))
   (define status
@@ -1522,25 +1631,65 @@
     (error 'solve-sess-meta! "unknown sess-meta: ~a" id))
   (when (not (eq? status 'unsolved))
     (error 'solve-sess-meta! "sess-meta ~a already solved" id))
-  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution)))
+  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution))
+  ;; Track 4 Phase 3: Write to propagator session cell
+  (define net-box (current-prop-net-box))
+  (define write-fn (current-prop-cell-write))
+  (when (and net-box write-fn)
+    (define id-map-box (current-prop-id-map-box))
+    (define cid (and id-map-box
+                     (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id)))
+    (when (and cid (not (eq? cid 'none)))
+      (define enet (unbox net-box))
+      (set-box! net-box (write-fn enet cid solution)))))
 
 ;; Check if a sess metavariable has been solved.
-;; Hash removal: Always reads from CHAMP.
+;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
 (define (sess-meta-solved? id)
-  (define box (current-sess-meta-champ-box))
-  (define v
-    (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-      (if (eq? r 'none) #f r)))
-  (and v (not (eq? v 'unsolved))))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (define id-map-box (current-prop-id-map-box))
+  (cond
+    [(and net-box read-fn id-map-box)
+     (define cid (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id))
+     (cond
+       [(eq? cid 'none)
+        (define box (current-sess-meta-champ-box))
+        (define v (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+        (and (not (eq? v 'none)) (not (eq? v 'unsolved)))]
+       [else
+        (define v (read-fn (unbox net-box) cid))
+        (not (eq? v 'unsolved))])]
+    [else
+     (define box (current-sess-meta-champ-box))
+     (define v
+       (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+         (if (eq? r 'none) #f r)))
+     (and v (not (eq? v 'unsolved)))]))
 
 ;; Retrieve the solution of a sess metavariable, or #f if unsolved/unknown.
-;; Hash removal: Always reads from CHAMP.
+;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
 (define (sess-meta-solution id)
-  (define box (current-sess-meta-champ-box))
-  (define v
-    (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-      (if (eq? r 'none) #f r)))
-  (and v (not (eq? v 'unsolved)) v))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (define id-map-box (current-prop-id-map-box))
+  (cond
+    [(and net-box read-fn id-map-box)
+     (define cid (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id))
+     (cond
+       [(eq? cid 'none)
+        (define box (current-sess-meta-champ-box))
+        (define v (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+        (and (not (eq? v 'none)) (not (eq? v 'unsolved)) v)]
+       [else
+        (define v (read-fn (unbox net-box) cid))
+        (and (not (eq? v 'unsolved)) v)])]
+    [else
+     (define box (current-sess-meta-champ-box))
+     (define v
+       (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+         (if (eq? r 'none) #f r)))
+     (and v (not (eq? v 'unsolved)) v)]))
 
 ;; Zonk a session: follow solved sess-metas, leave unsolved in place.
 ;; Use zonk-session-default for final output (defaults unsolved to sess-end).
@@ -1665,21 +1814,17 @@
 ;; Phase 4d: INTERNAL to elab-speculation-bridge.rkt — do not call directly.
 ;; Use with-speculative-rollback instead.
 ;;
-;; Captures all six CHAMP references (network, id-map, meta-info, level, mult, sess).
+;; Track 4 Phase 3: Captures 3 CHAMP references (network, id-map, meta-info).
+;; Down from 6 — level/mult/session meta state now lives in per-meta TMS cells
+;; within the network. Restoring the network restores their cell values.
 ;; O(1) — reads immutable CHAMP references from boxes.
-;; With network-everywhere (Phase 6) and cell-only writes (Phases 5-7), the network
-;; snapshot captures ALL constraint state — no separate parameter save/restore needed.
-;; When no network is available (pre-initialization), net/id-map are #f — still captured.
 (define (save-meta-state)
   (define net-box (current-prop-net-box))
   (define id-box (current-prop-id-map-box))
   (list 'prop
         (and net-box (unbox net-box))
         (and id-box (unbox id-box))
-        (unbox (current-prop-meta-info-box))
-        (unbox (current-level-meta-champ-box))
-        (unbox (current-mult-meta-champ-box))
-        (unbox (current-sess-meta-champ-box))))
+        (unbox (current-prop-meta-info-box))))
 
 (define (restore-meta-state! saved)
   ;; All O(1) — swap immutable CHAMP references
@@ -1687,10 +1832,7 @@
   (define id-box (current-prop-id-map-box))
   (when net-box (set-box! net-box (list-ref saved 1)))
   (when id-box (set-box! id-box (list-ref saved 2)))
-  (set-box! (current-prop-meta-info-box) (list-ref saved 3))
-  (set-box! (current-level-meta-champ-box) (list-ref saved 4))
-  (set-box! (current-mult-meta-champ-box) (list-ref saved 5))
-  (set-box! (current-sess-meta-champ-box) (list-ref saved 6)))
+  (set-box! (current-prop-meta-info-box) (list-ref saved 3)))
 
 ;; List all unsolved metavariable infos.
 ;; Hash removal: Always reads from CHAMP.

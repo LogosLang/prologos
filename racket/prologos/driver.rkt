@@ -2043,6 +2043,10 @@
 (current-prop-fresh-mult-cell elab-fresh-mult-cell)
 (current-prop-mult-cell-write elab-mult-cell-write)
 
+;; Track 4 Phase 3: Install level and session cell callbacks
+(current-prop-fresh-level-cell elab-fresh-level-cell)
+(current-prop-fresh-sess-cell elab-fresh-sess-cell)
+
 ;; P1-G2: Install contradiction check callback
 (current-prop-has-contradiction?
  (lambda ()
