@@ -22,8 +22,8 @@
 | 2 | Definition removal → cell-aware cleanup | ✅ | `085b77d` — `global-env-remove!`, `definition-cell-remove!`, 6 sites consolidated |
 | 3 | Per-module network activation | ✅ | `011fe3f` — removed #f overrides, module-network-ref built per-module, dual-path validation (0 mismatches across 200+ modules) |
 | 4 | Cross-module dependency edges | ✅ | `b70331a` — `record-cross-module-dep!`, same-file + module edges in lookup-type, dep-edges in module-network-ref |
-| 5 | Write consolidation + `module-network-ref` cutover | ⬜ | Env-threading cleanup, drop materialized hash |
-| 6 | Performance validation + PIR | ⬜ | Compare against hypotheses |
+| 5 | Write consolidation + dual-path validation removal | ✅ | `1fb01ea` — 22 env-threading wrappers eliminated, global-env-add self-updates parameter in legacy path, dual-path validation removed (0 mismatches established) |
+| 6 | Performance validation | ✅ | 213.3s (14% over 187.1s baseline, within 25% threshold). Hypothesis confirmed: performance-neutral. |
 
 ---
 
