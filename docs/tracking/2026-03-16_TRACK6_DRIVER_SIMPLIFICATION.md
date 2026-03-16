@@ -14,27 +14,34 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
+| **Design** | | | |
 | D.1 | Initial design document | ✅ | This document |
 | D.1+ | Design critique + refinement | ✅ | Data orientation, ordering, retirement gate, id-map cell, test-support migration |
 | D.2 | External critique + rework | ⬜ | |
 | D.3 | Self-critique (principle alignment) | ⬜ | |
+| **WS-A** | **Data Orientation + TMS Retraction** | | |
 | 0 | Performance baseline + acceptance file | ⬜ | |
-| 1a | id-map → infrastructure cell (3→2 box) | ⬜ | Workstream A — early win |
-| 1b | meta-info `#:mutable` removal (already write-once in practice) | ⬜ | Workstream A |
-| 1c | constraint status → functional CHAMP updates | ⬜ | Workstream A — data orientation |
-| 1d | `all-unsolved-metas` → infrastructure cell | ⬜ | Workstream A |
-| 2 | Speculation stack push activation | ⬜ | Workstream A |
-| 3 | Commit-on-success machinery | ⬜ | Workstream A |
-| 4 | TMS retraction (replace network-box restore) | ⬜ | Workstream A |
-| 5 | save/restore 2→1 box + belt-and-suspenders retirement | ⬜ | Workstream A — concrete retirement gate |
-| 6 | batch-worker.rkt migration to cell-based state | ⬜ | Workstream B |
-| 7a | test-support.rkt → network-based isolation (shadow phase) | ⬜ | Workstream B |
-| 7b | Dual-write elimination: macros.rkt (23 registries) | ⬜ | Workstream B |
-| 7c | Dual-write elimination: warnings.rkt (3) + global-constraints.rkt (2) | ⬜ | Workstream B |
-| 7d | Dual-write elimination: global-env.rkt | ⬜ | Workstream B |
-| 8 | Elaboration guard + callback cleanup | ⬜ | Workstream B |
-| 9 | `current-global-env` → `current-prelude-env` rename | ⬜ | Workstream B |
-| 10 | Driver simplification | ⬜ | Workstream B |
+| 1a | id-map → infrastructure cell (3→2 box) | ⬜ | Early win |
+| 1b | meta-info `#:mutable` removal | ⬜ | Trivial — already write-once in practice |
+| 1c | constraint status → functional CHAMP updates | ⬜ | Data orientation — ~10 mutation sites |
+| 1d | `all-unsolved-metas` → infrastructure cell | ⬜ | Incremental O(1) tracking |
+| 2 | Speculation stack push activation | ⬜ | Belt-and-suspenders begins |
+| 3 | Commit-on-success machinery | ⬜ | Promotes branch values to base |
+| 4 | TMS retraction (replace network-box restore) | ⬜ | Belt-and-suspenders validation |
+| 5 | save/restore 2→1 box + retirement gate | ⬜ | **Concrete retirement**: 0 divergences required |
+| **WS-B** | **Dual-Write Elimination + Cleanup** | | |
+| 6 | batch-worker.rkt → cell-based state | ⬜ | Network snapshot save/restore |
+| 7a | test-support.rkt → network-based isolation | ⬜ | Shadow phase: dual-path validation |
+| 7b | Dual-write elimination: macros.rkt (23) | ⬜ | Mechanical |
+| 7c | Dual-write elimination: warnings (3) + constraints (2) | ⬜ | Mechanical |
+| 7d | Dual-write elimination: global-env.rkt | ⬜ | Mechanical |
+| 8a | Audit all guard + callback usage | ⬜ | Determine removal safety |
+| 8b | Remove `current-macros-in-elaboration?` guard | ⬜ | 23 cell readers → unconditional |
+| 8c | Remove `current-narrow-in-elaboration?` guard | ⬜ | 2 cell readers → unconditional |
+| 8d | Remove callback parameters | ⬜ | Or mark deprecated if edge cases |
+| 9 | `current-global-env` → `current-prelude-env` rename | ⬜ | ~266 references, mechanical |
+| 10 | Driver `parameterize` simplification | ⬜ | ~30 bindings → ~5 |
+| **Final** | | | |
 | 11 | Performance validation + PIR | ⬜ | |
 
 ---
