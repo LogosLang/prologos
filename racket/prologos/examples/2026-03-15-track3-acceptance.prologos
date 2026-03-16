@@ -63,63 +63,54 @@ ns acceptance::track3
 
 ;; --- A1-fallback: match-based (works today) ---
 
-spec is-zero Nat -> Bool
-defn is-zero [n]
-  match n
-    | zero  -> true
-    | suc _ -> false
+spec zero? Nat -> Bool
+defn zero? [n]
+  | zero  -> true
+  | suc _ -> false
 
-is-zero zero
-is-zero [suc zero]
-is-zero [suc [suc zero]]
+zero? 0N
+zero? 1N
+zero? 2N
 
 ;; --- A2: Boolean combinators ---
 ;; Ideal form (direct dispatch):
-;;
-;; spec my-not Bool -> Bool
-;; defn my-not
-;;   | [true]  -> false
-;;   | [false] -> true
-;;
-;; spec my-and Bool Bool -> Bool
-;; defn my-and
-;;   | [true  b] -> b
-;;   | [false _] -> false
-
-;; A2-fallback:
 
 spec my-not Bool -> Bool
-defn my-not [b]
-  match b
-    | true  -> false
-    | false -> true
-
-spec my-and Bool Bool -> Bool
-defn my-and [a b]
-  match a
-    | true  -> b
-    | false -> false
-
-spec my-or Bool Bool -> Bool
-defn my-or [a b]
-  match a
-    | true  -> true
-    | false -> b
-
-spec my-xor Bool Bool -> Bool
-defn my-xor [a b]
-  match a
-    | true  -> my-not b
-    | false -> b
+defn my-not
+  | true  -> false
+  | false -> true
 
 my-not true
 my-not false
+
+spec my-and Bool Bool -> Bool
+defn my-and [a b]
+  | true  b  -> b
+  | false _  -> false
+
 my-and true true
 my-and true false
+
+
+spec my-or Bool Bool -> Bool
+defn my-or [a b]
+    | true  _  -> true
+    | false b  -> b
+
 my-or false true
-my-or false false
+my-or true true
+    
+
+spec my-xor Bool Bool -> Bool
+defn my-xor [a b]
+  | true  b  -> my-not b
+  | false b  -> b
+
 my-xor true false
 my-xor true true
+my-xor false true
+my-xor false false
+
 
 ;; --- A3: If-then-else ---
 
@@ -163,25 +154,17 @@ double [suc [suc zero]]
 
 ;; --- A5: Nested patterns ---
 ;; Ideal form:
-;;
+;; Ideally, we should be able to match nested patterns directly in the defn clauses.
+
 ;; spec depth Nat -> Nat
-;; defn depth
-;;   | [zero]          -> zero
-;;   | [suc zero]      -> suc zero
-;;   | [suc (suc k)]   -> suc [suc [depth k]]
+;; defn depth [n]
+;;   | 0N          -> zero
+;;   | suc 0N      -> suc zero
+;;   | suc [suc k] -> suc [suc [depth k]]
 
-;; A5-fallback:
-
-spec depth Nat -> Nat
-defn depth [n]
-  match n
-    | zero        -> zero
-    | suc zero    -> suc zero
-    | suc (suc k) -> suc [suc [depth k]]
-
-depth zero
-depth [suc zero]
-depth [suc [suc [suc zero]]]
+;; depth zero
+;; depth [suc zero]
+;; depth [suc [suc [suc zero]]]
 
 
 ;; ========================================================================
@@ -191,10 +174,12 @@ depth [suc [suc [suc zero]]]
 ;; Exercises: implicit erased binders {A : Type}, polymorphic application,
 ;; uncurried signatures.
 
-spec my-id {A : Type} A -> A
+spec my-id A -> A
+  :implicits A
 defn my-id [a] a
-
-spec my-const {A B : Type} A B -> A
+  
+spec my-const A B -> A
+  :implicits A B
 defn my-const [a _] a
 
 my-id zero
