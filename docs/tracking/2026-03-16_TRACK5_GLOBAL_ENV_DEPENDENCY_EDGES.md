@@ -19,7 +19,7 @@
 | D.3 | Self-critique (principle alignment) | ✅ | Principle alignment check: 6 aligned, 3 tensions noted; deferred items to Track 6 + LSP |
 | 0 | Performance baseline + acceptance file | ✅ | `157f7aa` — 294 pass, 0 errors, 12 BUGs commented |
 | 1 | Persistent module network infrastructure + cross-network prototype | ✅ | `7ad5b88` — lifecycle lattice, module-network-ref CRUD, shadow-cell prototype (15 tests) |
-| 2 | Definition removal → cell-aware cleanup | ⬜ | `global-env-remove!` helper |
+| 2 | Definition removal → cell-aware cleanup | ✅ | `085b77d` — `global-env-remove!`, `definition-cell-remove!`, 6 sites consolidated |
 | 3 | Per-module network activation | ⬜ | Remove `#f` overrides, dual-path validation |
 | 4 | Cross-module dependency edges | ⬜ | Shadow-cells, same-file edges, TMS-ready API |
 | 5 | Write consolidation + `module-network-ref` cutover | ⬜ | Env-threading cleanup, drop materialized hash |
