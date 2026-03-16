@@ -32,9 +32,11 @@
          expand-top-level
          expand-expression
          current-macro-registry
+         read-macro-registry
          register-macro!
          ;; Pre-parse (layer 1)
          current-preparse-registry
+         read-preparse-registry
          register-preparse-macro!
          preparse-expand-form
          preparse-expand-all
@@ -217,6 +219,7 @@
          lookup-session
          ;; Strategy registry (Phase S6)
          current-strategy-registry
+         read-strategy-registry
          strategy-entry
          strategy-entry?
          strategy-entry-name
@@ -229,6 +232,7 @@
          parse-strategy-properties
          ;; Process registry (Phase S7c)
          current-process-registry
+         read-process-registry
          process-entry
          process-entry?
          process-entry-name
@@ -240,7 +244,9 @@
          lookup-process
          ;; Spec store
          current-spec-store
+         read-spec-store
          current-propagated-specs
+         read-propagated-specs
          spec-propagated?
          spec-entry
          spec-entry?
@@ -355,7 +361,9 @@
          register-macros-cells!
          ;; Mixfix / precedence groups (Phase 2)
          current-user-precedence-groups
+         read-user-precedence-groups
          current-user-operators
+         read-user-operators
          register-precedence-group!
          lookup-precedence-group
          register-user-operator!
@@ -402,6 +410,11 @@
   ;; Phase 2c: dual-write to cell
   (macros-cell-write! (current-preparse-registry-cell-id) (hasheq name entry)))
 
+;; Track 3 Phase 3: cell-primary reader for preparse registry
+(define (read-preparse-registry)
+  (define v (macros-cell-read-safe (current-preparse-registry-cell-id)))
+  (if (eq? v 'not-found) (current-preparse-registry) v))
+
 ;; ========================================
 ;; Spec store: type signatures for named definitions
 ;; ========================================
@@ -432,11 +445,21 @@
   ;; Phase 2c: dual-write to cell
   (macros-cell-write! (current-spec-store-cell-id) (hasheq name entry)))
 
+;; Track 3 Phase 3: cell-primary reader for spec store
+(define (read-spec-store)
+  (define v (macros-cell-read-safe (current-spec-store-cell-id)))
+  (if (eq? v 'not-found) (current-spec-store) v))
+
 (define (lookup-spec name)
-  (hash-ref (current-spec-store) name #f))
+  (hash-ref (read-spec-store) name #f))
+
+;; Track 3 Phase 3: cell-primary reader for propagated specs
+(define (read-propagated-specs)
+  (define v (macros-cell-read-safe (current-propagated-specs-cell-id)))
+  (if (eq? v 'not-found) (current-propagated-specs) v))
 
 (define (spec-propagated? name)
-  (set-member? (current-propagated-specs) name))
+  (set-member? (read-propagated-specs) name))
 
 ;; ========================================
 ;; Phase 2a: Propagator-First Migration — Registry Cell Infrastructure
@@ -772,8 +795,13 @@
   ;; Phase 2c: dual-write to cell
   (macros-cell-write! (current-strategy-registry-cell-id) (hasheq name entry)))
 
+;; Track 3 Phase 3: cell-primary reader for strategy registry
+(define (read-strategy-registry)
+  (define v (macros-cell-read-safe (current-strategy-registry-cell-id)))
+  (if (eq? v 'not-found) (current-strategy-registry) v))
+
 (define (lookup-strategy name)
-  (hash-ref (current-strategy-registry) name #f))
+  (hash-ref (read-strategy-registry) name #f))
 
 ;; ========================================
 ;; Process registry (Phase S7c): stores defproc definitions for spawn
@@ -795,8 +823,13 @@
   ;; Phase 2c: dual-write to cell
   (macros-cell-write! (current-process-registry-cell-id) (hasheq name entry)))
 
+;; Track 3 Phase 3: cell-primary reader for process registry
+(define (read-process-registry)
+  (define v (macros-cell-read-safe (current-process-registry-cell-id)))
+  (if (eq? v 'not-found) (current-process-registry) v))
+
 (define (lookup-process name)
-  (hash-ref (current-process-registry) name #f))
+  (hash-ref (read-process-registry) name #f))
 
 ;; Parse strategy properties from a flat keyword-value list.
 ;; Input: (:fairness :priority :fuel 10000) → hasheq
@@ -1516,7 +1549,7 @@
 ;; Loops until fixpoint or depth limit.
 ;; After expanding the head form, recursively expands subexpressions.
 (define (preparse-expand-form datum [registry #f] [depth 0])
-  (define reg (or registry (current-preparse-registry)))
+  (define reg (or registry (read-preparse-registry)))
   (cond
     [(> depth 100)
      (error 'preparse "Macro expansion depth limit exceeded (possible infinite loop)")]
@@ -1580,7 +1613,7 @@
 ;; Does NOT recurse into subforms — shows only the outermost rewrite.
 ;; Used by the `expand-1` inspection command.
 (define (preparse-expand-1 datum [registry #f])
-  (define reg (or registry (current-preparse-registry)))
+  (define reg (or registry (read-preparse-registry)))
   (cond
     [(symbol? datum)
      (define entry (hash-ref reg datum #f))
@@ -5326,7 +5359,7 @@
 ;; builtin-operators is a mutable hash; user-operators is immutable.
 ;; We copy user entries into the mutable table (or return builtin as-is).
 (define (effective-operator-table)
-  (define user-ops (current-user-operators))
+  (define user-ops (read-user-operators))
   (if (hash-empty? user-ops)
       builtin-operators
       ;; Create merged mutable hash
@@ -5337,7 +5370,7 @@
 
 ;; --- Effective precedence groups (merges builtin + user-defined) ---
 (define (effective-precedence-groups)
-  (define user-groups (current-user-precedence-groups))
+  (define user-groups (read-user-precedence-groups))
   (if (hash-empty? user-groups)
       builtin-precedence-groups
       (for/fold ([h builtin-precedence-groups])
@@ -7415,13 +7448,23 @@
   ;; Phase 2c: dual-write to cell
   (macros-cell-write! (current-user-precedence-groups-cell-id) (hasheq name entry)))
 
+;; Track 3 Phase 3: cell-primary reader for user precedence groups
+(define (read-user-precedence-groups)
+  (define v (macros-cell-read-safe (current-user-precedence-groups-cell-id)))
+  (if (eq? v 'not-found) (current-user-precedence-groups) v))
+
 (define (lookup-precedence-group name)
-  (or (hash-ref (current-user-precedence-groups) name #f)
+  (or (hash-ref (read-user-precedence-groups) name #f)
       (hash-ref builtin-precedence-groups name #f)))
 
 ;; User-defined mixfix operators: symbol → op-info
 ;; Populated from :mixfix metadata on spec entries
 (define current-user-operators (make-parameter (hasheq)))
+
+;; Track 3 Phase 3: cell-primary reader for user operators
+(define (read-user-operators)
+  (define v (macros-cell-read-safe (current-user-operators-cell-id)))
+  (if (eq? v 'not-found) (current-user-operators) v))
 
 (define (register-user-operator! sym info)
   (current-user-operators
@@ -7469,7 +7512,7 @@
   ;; Validate that all referenced groups exist
   (for ([g (in-list tighter-than)])
     (unless (or (hash-ref builtin-precedence-groups g #f)
-                (hash-ref (current-user-precedence-groups) g #f))
+                (hash-ref (read-user-precedence-groups) g #f))
       (error 'precedence-group
              "~a: :tighter-than references unknown group '~a'" name g)))
   ;; Register
@@ -7486,13 +7529,13 @@
     (when (and op-sym grp-name (symbol? op-sym) (symbol? grp-name))
       ;; Resolve group from builtin or user-defined groups
       (define grp (or (hash-ref builtin-precedence-groups grp-name #f)
-                      (hash-ref (current-user-precedence-groups) grp-name #f)))
+                      (hash-ref (read-user-precedence-groups) grp-name #f)))
       (unless grp
         (error 'spec ":mixfix on '~a': unknown precedence group '~a'" fn-name grp-name))
       ;; Compute binding powers — merge all groups for the computation
       (define all-groups
         (for/fold ([h builtin-precedence-groups])
-                  ([(k v) (in-hash (current-user-precedence-groups))])
+                  ([(k v) (in-hash (read-user-precedence-groups))])
           (hash-set h k v)))
       (define bps (compute-binding-powers all-groups))
       (define bp-pair (hash-ref bps grp-name))
@@ -8075,8 +8118,13 @@
   ;; Phase 2c: dual-write to cell
   (macros-cell-write! (current-macro-registry-cell-id) (hasheq name proc)))
 
+;; Track 3 Phase 3: cell-primary reader for macro registry
+(define (read-macro-registry)
+  (define v (macros-cell-read-safe (current-macro-registry-cell-id)))
+  (if (eq? v 'not-found) (current-macro-registry) v))
+
 (define (lookup-macro name)
-  (hash-ref (current-macro-registry) name #f))
+  (hash-ref (read-macro-registry) name #f))
 
 ;; ========================================
 ;; Top-level command predicate
@@ -8201,7 +8249,7 @@
       (global-env-lookup-type name)                      ;; previously defined def/defn
       (hash-ref (read-ctor-registry) name #f)         ;; data constructor (cell-primary)
       (hash-ref (read-type-meta) name #f)             ;; data type name (cell-primary)
-      (hash-ref (current-preparse-registry) name #f)))   ;; deftype alias / macro
+      (hash-ref (read-preparse-registry) name #f)))   ;; deftype alias / macro (cell-primary)
 
 ;; Detect if a surf-defn already has explicit implicit params (from {A B} syntax).
 ;; If the first Pi binder has mult='m0 and type=(surf-type ...) and its name
