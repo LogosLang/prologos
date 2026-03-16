@@ -1,7 +1,7 @@
 # Track 6: Driver Simplification + Cleanup — Stage 2/3 Design
 
 **Created**: 2026-03-16
-**Status**: DESIGN (D.2 — revised after external critique)
+**Status**: DESIGN (D.3 — self-critique principle alignment complete)
 **Depends on**: Track 3 ✅ (Cell-Primary Registries), Track 4 ✅ (ATMS Speculation), Track 5 ✅ (Global-Env + Module Networks)
 **Enables**: Track 7 (QTT Multiplicity Cells)
 **Master roadmap**: `2026-03-13_PROPAGATOR_MIGRATION_MASTER.md` Track 6
@@ -18,7 +18,7 @@
 | D.1 | Initial design document | ✅ | This document |
 | D.1+ | Design critique + refinement | ✅ | Data orientation, ordering, retirement gate, id-map cell, test-support migration |
 | D.2 | External critique + rework | ✅ | 10 critiques addressed — see §6b |
-| D.3 | Self-critique (principle alignment) | ⬜ | |
+| D.3 | Self-critique (principle alignment) | ✅ | 6 principles aligned, 0 tensions, 6 observations — see §12 |
 | **WS-A** | **Data Orientation + TMS Retraction** | | |
 | 0 | Performance baseline + acceptance file | ⬜ | |
 | 1a | id-map → infrastructure cell (3→2 box) | ⬜ | Early win |
@@ -661,12 +661,12 @@ This means batch-worker's per-file restore becomes: swap network box + parameter
 - The stratified quiescence scheduler handles all re-resolution cases
 
 **Sub-phases**:
-- 8a: **Exhaustive cell-reader audit** — categorize EVERY cell reader call site into one of three contexts:
-  - **Elaboration context** (inside `process-command` / `with-speculative-rollback`): cells always valid, guards unnecessary
-  - **Module-loading context** (inside `load-module` / `process-file`): Track 5 gave per-module networks, cells valid
+- 8a: **Exhaustive cell-reader + callback audit** — categorize EVERY cell reader call site AND every callback parameter reference into one of three contexts:
+  - **Elaboration context** (inside `process-command` / `with-speculative-rollback`): cells always valid, guards unnecessary; callbacks superseded by reactive scheduler
+  - **Module-loading context** (inside `load-module` / `process-file`): Track 5 gave per-module networks, cells valid; callbacks may not have reactive scheduler active
   - **Other context** (test setup, batch-worker init, REPL): may lack network — if any readers are called here, guard removal is blocked until the context is migrated
 
-  This exhaustive categorization (not sampling) is the decision-making deliverable of Phase 8. If any readers fall into the "other" category, the phase plan must be revised before proceeding.
+  This exhaustive categorization (not sampling) is the decision-making deliverable of Phase 8. If any readers fall into the "other" category, the phase plan must be revised before proceeding. Callback references (D.3 self-critique T-3) must be included in the audit — the 3 retry callbacks may be invoked from module-loading or other contexts where the stratified quiescence scheduler isn't active.
 - 8b: Remove `current-macros-in-elaboration?` guard — readers unconditionally use cells
 - 8c: Remove `current-narrow-in-elaboration?` guard
 - 8d: Remove callback parameters (or mark deprecated if edge cases found)
@@ -674,7 +674,7 @@ This means batch-worker's per-file restore becomes: swap network box + parameter
 **Risk**: Medium — guard removal is the riskiest part. Track 3 PIR specifically warns that guards are mandatory for cells readable outside `process-command`.
 
 **Done when**:
-- [ ] Phase 8a: exhaustive categorization table for all 25 guarded readers (23 macros + 2 constraints)
+- [ ] Phase 8a: exhaustive categorization table for all 25 guarded readers (23 macros + 2 constraints) + 3 callback parameters (~28 references)
 - [ ] Phase 8b: zero references to `current-macros-in-elaboration?`
 - [ ] Phase 8c: zero references to `current-narrow-in-elaboration?`
 - [ ] Phase 8d: zero references to callback parameters (or documented edge cases)
@@ -706,10 +706,12 @@ This means batch-worker's per-file restore becomes: swap network box + parameter
 
 **Depends on**: All prior phases (dual-write removal, guard removal, batch-worker migration).
 
+**Note** (D.3 self-critique T-2): The "~5 bindings" target depends on Phase 8's outcome. If the Phase 8a audit finds cell readers in "other" contexts that require guards, some guard bindings remain in `parameterize`. The target is "only genuinely per-command bindings" — the exact count depends on what Phase 8 discovers.
+
 **Risk**: Low — removing parameter bindings from `parameterize` is mechanical once the parameters are no longer written.
 
 **Done when**:
-- [ ] `process-command` `parameterize` block has ≤ 5 bindings
+- [ ] `process-command` `parameterize` block has ≤ 5 bindings (or documented justification if higher)
 - [ ] Removed bindings are not referenced anywhere under `process-command`
 - [ ] Full suite passes
 - [ ] Acceptance file L3 with 0 errors
@@ -1052,3 +1054,152 @@ The following critiques were raised in external review and resolved in the D.2 r
 **Critique**: No rollback plan for individual phases.
 
 **Resolution**: Added §11 (Rollback Procedures) covering general rollback protocol, per-phase rollback notes, and emergency multi-phase rollback. Key insight: Phases 2–4 are inherently safe to revert because network-box restore remains the production mechanism. Phase 5b (retirement) is the most critical rollback scenario.
+
+---
+
+## §12. D.3 Self-Critique: Principle Alignment
+
+Systematic check of Track 6 design against each principle in `DESIGN_PRINCIPLES.org`, plus tensions and gaps identified.
+
+### Principle-by-Principle Assessment
+
+#### Correct by Construction ✅ STRONG ALIGNMENT
+
+Track 6's central arc is moving from a discipline-maintained dual-write system to a structurally correct single-write architecture. The current system requires discipline to keep parameters and cells in sync — every `register-X!` call must write to both, every save/restore must capture all three boxes, every elaboration guard must be checked. Track 6 eliminates the discipline requirement:
+
+- **Single write path**: After Phase 7, cells are the sole write path. It's structurally impossible to forget the parameter write because there is no parameter write.
+- **1-box save/restore**: After Phase 5a, network snapshot captures all state. It's structurally impossible to miss a box because there's only one box.
+- **TMS retraction**: After Phase 5b, speculation correctness is a structural property of the TMS branch/retract mechanism, not a property maintained by correctly-ordered box swaps.
+
+The belt-and-suspenders retirement gate (Phase 5b) is itself correct-by-construction thinking: don't remove the secondary path until the primary path has been structurally proven correct (0 divergences).
+
+**No tension identified.**
+
+#### Propagator-First Infrastructure ✅ STRONG ALIGNMENT
+
+Track 6 completes the propagator-first migration started in the Migration Sprint. Every change moves state from parameters/boxes into the propagator network:
+
+- Phase 1a: id-map → infrastructure cell
+- Phase 1d: unsolved-metas → infrastructure cell
+- Phase 5a: meta-info CHAMP → infrastructure cell
+- Phases 7b–d: remove parameter write path entirely
+
+After Track 6, the propagator network is the single source of truth for all elaboration state. `save-meta-state` becomes a single network CHAMP snapshot. This is the full realization of the principle: infrastructure as network-resident values with automatic dependency propagation.
+
+**No tension identified.**
+
+#### Data Orientation ✅ STRONG ALIGNMENT
+
+Phase 1c is explicitly data-oriented: converting constraint status from in-place mutation (side effects embedded in control flow) to functional CHAMP updates (data transformations). The re-entrancy guard becomes a value check on the store rather than a mutation protocol. This aligns constraints with the propagator network's data-oriented model — constraint state transitions become cell writes, visible to TMS branching and network snapshots.
+
+The design explicitly rejected the lattice merge approach (CR-2) because constraint status transitions are non-monotonic. This is the right call — data orientation means representing effects as data, not forcing everything into a lattice. The state machine is a protocol expressed as data transformations, not embedded in mutable control flow.
+
+**No tension identified.**
+
+#### First-Class by Default ⬜ NOT APPLICABLE
+
+Track 6 is an infrastructure cleanup track — it removes transitional machinery, it doesn't introduce new language constructs. There are no new reification decisions. The principle doesn't apply directly.
+
+**Observation**: Track 6 does make infrastructure cells more first-class in the network (id-map, unsolved-metas, meta-info become cells rather than separate boxes). This is the infrastructure corollary of first-class-by-default: state that participates in the network is more composable than state in ad-hoc boxes.
+
+#### Simplicity of Foundation ✅ ALIGNMENT
+
+Track 6 simplifies: 3 boxes → 1 box, 28+ dual-write paths → 28 single-write paths, ~30 `parameterize` bindings → ~5, 2 elaboration guard parameters → 0, 3 callback parameters → 0. Every change reduces the surface area of the infrastructure. The driver becomes simpler to understand and modify.
+
+**No tension identified.**
+
+#### Decomplection ✅ ALIGNMENT
+
+The current system has coupled concerns:
+- Parameter writes coupled with cell writes (dual-write)
+- Elaboration context coupled with cell validity (guards)
+- Speculation coupled with manual box management (3-box save/restore)
+- Batch isolation coupled with parameter semantics (save/restore 26 params)
+
+Track 6 decomplects each pair:
+- Cell writes stand alone (Phases 7b–d)
+- Cell reads are unconditional (Phase 8)
+- Speculation uses TMS (Phase 5b)
+- Batch isolation uses network snapshot (Phase 6)
+
+**No tension identified.**
+
+### Tensions and Gaps
+
+#### T-1: Phase 6 Hybrid Approach — Partial Migration ⚠️ MINOR TENSION
+
+Phase 6 introduces a hybrid: 20 cell-based parameters captured by network snapshot, 7 runtime config parameters kept as `parameterize`. This is pragmatically correct — the 7 namespace.rkt parameters are genuinely per-file configuration, not reactive state. But it means the batch-worker still has a `parameterize` block, just smaller (7 instead of 26+). The "clean driver" goal (§1.2) is partially met.
+
+**Assessment**: Acceptable. Moving configuration into cells would be architecturally wrong (violating propagator-first's "When Not To Use Propagators" section — the access pattern is pure lookup with no dependency tracking). The tension is cosmetic, not structural. The 7 remaining parameters are correctly categorized as configuration, not elaboration state.
+
+#### T-2: Phase 8 Guard Removal — Open Question Remains ⚠️ DESIGN RISK
+
+The §6 "Remaining Open Questions" section identifies that elaboration guard removal depends on Phase 8a's exhaustive audit. If the audit finds cell readers called in "other" contexts (test setup, batch-worker init, REPL) that lack networks, guard removal is blocked.
+
+**Assessment**: The design correctly identifies this as a runtime discovery, not a design-time decision. Phase 8a is the decision-making deliverable — everything after it is conditional on the categorization results. The risk is properly managed. But the design should acknowledge the **fallback**: if guards can't be removed for some readers, the cleanup is partial, and the driver simplification (Phase 10) target of "~5 bindings" may be higher.
+
+**Action**: Add a note to Phase 10 that the binding count target depends on Phase 8's outcome.
+
+#### T-3: Callback Parameter Removal — Insufficient Analysis ⚠️ GAP
+
+Phase 8d says "remove callback parameters (or mark deprecated if edge cases found)" but the §2.6 analysis only identifies 3 callbacks with reference counts. It doesn't trace each reference to confirm whether the stratified quiescence scheduler handles every case. The callbacks might be invoked from code paths outside the standard elaboration loop (e.g., module loading, batch processing) where the reactive scheduler isn't active.
+
+**Assessment**: The Phase 8a audit (strengthened in D.2 to exhaustive categorization) should cover this — callback usage sites fall into the same elaboration/module-loading/other categorization. But the design should explicitly note that callback references must be traced as part of 8a, not just guard references.
+
+**Action**: Add callback reference tracing to Phase 8a's scope.
+
+#### T-4: Speculation Stats as Correctness Metric — Necessary but Insufficient ⚠️ SUBTLE RISK
+
+Multiple phases use "speculation stats (hypotheses, nogoods, pruning) match Phase 0 baseline" as a correctness criterion. This catches divergences where TMS produces different branching behavior. But it doesn't catch the case where TMS produces the **same stats but different values** — e.g., the same number of hypotheses but with different cell values in the committed branch.
+
+**Assessment**: The belt-and-suspenders comparison (Phases 2–4) catches value divergences, not just stat divergences. The stats metric is an additional fast-check, not the sole correctness criterion. The done-when checklists correctly list "0 divergences" as the primary criterion and "stats unchanged" as a secondary sanity check. No action needed — the design is correct, but the distinction should be understood: stats match is a necessary but not sufficient correctness condition. The sufficient condition is the 0-divergence belt-and-suspenders comparison.
+
+#### T-5: WS-Mode Validation — Track 6 Is Infrastructure, Not Syntax ⬜ LOW RISK
+
+Track 6 adds no new user-facing syntax. The three-level WS validation protocol's Level 3 testing is addressed by the acceptance file (run before and after each phase), but there's no new WS syntax to validate. The acceptance file is a regression net, not a feature showcase.
+
+**Assessment**: Correct approach. The acceptance file catches regressions introduced by infrastructure changes (e.g., if removing dual-write breaks something that test-support relied on, the acceptance file at L3 catches it). No WS Impact section is needed because there are no WS changes.
+
+#### T-6: Phase Ordering Optimality — Could Phase 9 Run Earlier? ⬜ OBSERVATION
+
+The dependency DAG (§10) notes that Phase 9 (rename) "could also run after Phase 1b." The current plan places it after Phase 8, which means it's blocked by the entire Workstream B chain. Running it earlier would provide a quick win and reduce the pending rename debt.
+
+**Assessment**: Phase 9 is purely mechanical (find-replace + compile check) and has no interactions with any other phase except that `current-global-env` references exist throughout the codebase. Running it after Phase 1b is safe and would reduce cognitive overhead during subsequent phases (the correct name `current-prelude-env` makes the code clearer). Consider opportunistically running Phase 9 early if there's a natural break between Phase 1d and Phase 2.
+
+### Methodology Alignment
+
+#### Design Methodology Stage 3 Checklist
+
+| Requirement | Status |
+|-------------|--------|
+| Comprehensive first draft (data structures, phases, tests) | ✅ D.1 |
+| Adversarial critique invited | ✅ D.1+ (internal) + D.2 (external) |
+| Phase dependencies are architecture | ✅ §10 DAG |
+| Concrete over abstract (examples, code) | ✅ §2 code snippets, §4 before/after patterns |
+| Test strategies per phase | ✅ Every phase has test strategy + done-when |
+| Tradeoff matrices | ✅ §5 Risk Analysis |
+| Principle alignment check | ✅ This section (D.3) |
+| Record of critique and responses | ✅ §6 (D.1+) + §6b (D.2) |
+
+#### Development Lessons Applied
+
+| Lesson | Application |
+|--------|-------------|
+| Completeness over deferral | Track 6 absorbs 9 deferred items from Tracks 3–5 |
+| Phase-gated with sub-phases | 17 sub-phases (1a–1d, 5a–5b, 7a–7d, 8a–8d) |
+| Tracking document before code | This document |
+| Deferred work triaged | §7 — 9 absorbed, 3 remain deferred |
+| Three-level WS validation | Acceptance file at L3 per-phase |
+| Performance baseline comparison | Phase 0 + Phase 11 graduated criteria |
+| Shared fixture pattern | Not directly applicable (Track 6 doesn't add tests, it migrates infrastructure) |
+
+### Summary
+
+**6 principles aligned, 0 tensions with principles, 6 observations/gaps identified:**
+
+1. T-1 (Phase 6 hybrid): Cosmetic, not structural — correct categorization of config vs. state
+2. T-2 (Phase 8 guard removal): Risk properly managed by Phase 8a audit, but Phase 10 target should note dependency
+3. T-3 (Callback tracing): Phase 8a scope should explicitly include callback references
+4. T-4 (Stats metric): Necessary but not sufficient — belt-and-suspenders comparison is the sufficient condition
+5. T-5 (WS validation): Not applicable — infrastructure track, acceptance file is the right approach
+6. T-6 (Phase 9 ordering): Opportunistic early execution is safe and provides quick clarity win
