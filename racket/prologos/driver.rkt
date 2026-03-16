@@ -380,7 +380,8 @@
   (when (not (current-command-atms))
     (current-command-atms (box (atms-empty))))
   (init-speculation-tracking!)
-  (parameterize ([current-global-env-prop-net-box (current-prop-net-box)]  ;; Phase 3a: activate cell writes (auto-reverts)
+  (parameterize ([current-macros-in-elaboration? #t]                        ;; Track 3: cell-primary readers active
+                 [current-global-env-prop-net-box (current-prop-net-box)]  ;; Phase 3a: activate cell writes (auto-reverts)
                  [current-ns-prop-net-box (current-prop-net-box)]          ;; Phase 3c: activate ns cell writes (auto-reverts)
                  [current-nf-cache (make-hash)]         ;; per-command nf memoization
                  [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
@@ -1329,7 +1330,7 @@
 
 (define (run-post-compilation-inference!)
   ;; Fast path: skip if no capability types exist
-  (when (not (hash-empty? (current-capability-registry)))
+  (when (not (hash-empty? (read-capability-registry)))
     (define result (run-capability-inference))
     (current-module-cap-result result)
     ;; Check all entries in the global env for authority roots.

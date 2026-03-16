@@ -54,7 +54,9 @@
          process-impl
          ;; Constructor metadata registry (for reduce)
          current-ctor-registry
+         read-ctor-registry
          current-type-meta
+         read-type-meta
          ctor-meta
          ctor-meta?
          ctor-meta-type-name
@@ -115,16 +117,19 @@
          expand-bundle-constraints
          ;; Subtype registry (Phase E)
          current-subtype-registry
+         read-subtype-registry
          register-subtype-pair!
          subtype-pair?
          all-supertypes
          all-subtypes
          ;; Coercion registry (Phase E)
          current-coercion-registry
+         read-coercion-registry
          register-coercion!
          lookup-coercion
          ;; Capability registry (Capabilities as Types)
          current-capability-registry
+         read-capability-registry
          (struct-out capability-meta)
          register-capability!
          lookup-capability
@@ -161,6 +166,7 @@
          parametric-impls-could-overlap?
          format-param-impl-entry
          ;; Schema registry
+         read-schema-registry
          current-schema-registry
          schema-field
          schema-field?
@@ -252,6 +258,7 @@
          param-type->angle-type
          ;; Property registry
          current-property-store
+         read-property-store
          property-entry
          property-entry?
          property-entry-name
@@ -281,6 +288,7 @@
          process-property
          ;; Functor registry
          current-functor-store
+         read-functor-store
          functor-entry
          functor-entry?
          functor-entry-name
@@ -306,6 +314,7 @@
          qq->datum-expr
          keyword-like-symbol?
          ;; Phase 2a/2b: Propagator-first migration — registry cell infrastructure
+         current-macros-in-elaboration?
          current-macros-prop-net-box
          current-macros-prop-cell-write
          current-macros-prop-cell-read
@@ -442,6 +451,25 @@
 (define current-macros-prop-cell-write (make-parameter #f))
 (define current-macros-prop-cell-read (make-parameter #f))   ;; (enet cell-id → value)
 
+;; Track 3: Elaboration-context guard for cell-primary readers.
+;; Set to #t via parameterize in process-command (driver.rkt). Properly scoped —
+;; reverts to #f when process-command returns. Prevents cell-primary readers
+;; from using stale cell data outside active elaboration (e.g., test assertions).
+(define current-macros-in-elaboration? (make-parameter #f))
+
+;; Track 3: Safe cell-primary read helper.
+;; Returns cell content when we are inside active elaboration AND the
+;; propagator network exists and contains the cell.
+;; Falls back to 'not-found otherwise (caller should use parameter fallback).
+(define (macros-cell-read-safe cid)
+  (define in-elab? (current-macros-in-elaboration?))
+  (define net-box (current-macros-prop-net-box))
+  (define read-fn (current-macros-prop-cell-read))
+  (if (and in-elab? cid net-box read-fn)
+      (with-handlers ([exn:fail? (λ (_) 'not-found)])
+        (read-fn (unbox net-box) cid))
+      'not-found))
+
 ;; Cell-id parameters for each registry (set by register-macros-cells!).
 ;; When #f, dual-write is skipped (legacy-only mode).
 (define current-schema-registry-cell-id (make-parameter #f))
@@ -575,8 +603,13 @@
   ;; Phase 2a: dual-write to cell
   (macros-cell-write! (current-schema-registry-cell-id) (hasheq name entry)))
 
+;; Track 3 Phase 1: cell-primary reader
+(define (read-schema-registry)
+  (define v (macros-cell-read-safe (current-schema-registry-cell-id)))
+  (if (eq? v 'not-found) (current-schema-registry) v))
+
 (define (lookup-schema name)
-  (hash-ref (current-schema-registry) name #f))
+  (hash-ref (read-schema-registry) name #f))
 
 ;; Parse schema field pairs from a datum list.
 ;; Input: (:name String :age Nat) → list of schema-field
@@ -5487,11 +5520,20 @@
   ;; Phase 2a: dual-write to cell
   (macros-cell-write! (current-ctor-registry-cell-id) (hasheq name meta)))
 
+;; Track 3 Phase 1: cell-primary readers
+(define (read-ctor-registry)
+  (define v (macros-cell-read-safe (current-ctor-registry-cell-id)))
+  (if (eq? v 'not-found) (current-ctor-registry) v))
+
+(define (read-type-meta)
+  (define v (macros-cell-read-safe (current-type-meta-cell-id)))
+  (if (eq? v 'not-found) (current-type-meta) v))
+
 (define (lookup-ctor name)
-  (hash-ref (current-ctor-registry) name #f))
+  (hash-ref (read-ctor-registry) name #f))
 
 (define (lookup-type-ctors type-name)
-  (hash-ref (current-type-meta) type-name #f))
+  (hash-ref (read-type-meta) type-name #f))
 
 ;; ========================================
 ;; Built-in constructor metadata (Nat, Bool)
@@ -5527,18 +5569,23 @@
   ;; Phase 2a: dual-write to cell
   (macros-cell-write! (current-subtype-registry-cell-id) (hash (cons sub-key super-key) #t)))
 
+;; Track 3 Phase 1: cell-primary reader
+(define (read-subtype-registry)
+  (define v (macros-cell-read-safe (current-subtype-registry-cell-id)))
+  (if (eq? v 'not-found) (current-subtype-registry) v))
+
 (define (subtype-pair? sub-key super-key)
-  (hash-ref (current-subtype-registry) (cons sub-key super-key) #f))
+  (hash-ref (read-subtype-registry) (cons sub-key super-key) #f))
 
 ;; Return all registered supertypes of a given sub-key.
 (define (all-supertypes sub-key)
-  (for/list ([(k _v) (in-hash (current-subtype-registry))]
+  (for/list ([(k _v) (in-hash (read-subtype-registry))]
              #:when (equal? (car k) sub-key))
     (cdr k)))
 
 ;; Return all registered subtypes of a given super-key.
 (define (all-subtypes super-key)
-  (for/list ([(k _v) (in-hash (current-subtype-registry))]
+  (for/list ([(k _v) (in-hash (read-subtype-registry))]
              #:when (equal? (cdr k) super-key))
     (car k)))
 
@@ -5555,8 +5602,13 @@
   ;; Phase 2a: dual-write to cell
   (macros-cell-write! (current-coercion-registry-cell-id) (hash (cons sub-key super-key) coerce-fn)))
 
+;; Track 3 Phase 1: cell-primary reader
+(define (read-coercion-registry)
+  (define v (macros-cell-read-safe (current-coercion-registry-cell-id)))
+  (if (eq? v 'not-found) (current-coercion-registry) v))
+
 (define (lookup-coercion sub-key super-key)
-  (hash-ref (current-coercion-registry) (cons sub-key super-key) #f))
+  (hash-ref (read-coercion-registry) (cons sub-key super-key) #f))
 
 ;; ========================================
 ;; Built-in subtype registrations
@@ -5594,13 +5646,18 @@
   ;; Phase 2a: dual-write to cell
   (macros-cell-write! (current-capability-registry-cell-id) (hasheq name meta)))
 
+;; Track 3 Phase 1: cell-primary reader
+(define (read-capability-registry)
+  (define v (macros-cell-read-safe (current-capability-registry-cell-id)))
+  (if (eq? v 'not-found) (current-capability-registry) v))
+
 (define (lookup-capability name)
-  (hash-ref (current-capability-registry) name #f))
+  (hash-ref (read-capability-registry) name #f))
 
 ;; Kind marker check: is this name a registered capability type?
 ;; Checks both the exact name and short name (for namespace-qualified lookups).
 (define (capability-type? name)
-  (and (hash-ref (current-capability-registry) name #f) #t))
+  (and (hash-ref (read-capability-registry) name #f) #t))
 
 ;; Extract capability functor name from a type expression.
 ;; Handles both simple fvar (ReadCap) and applied forms (FileCap "/data").
@@ -5702,12 +5759,8 @@
 ;; Falls back to the parameter when no network exists (during module loading,
 ;; where instances are registered to the parameter before the network is initialized).
 (define (read-impl-registry)
-  (define cid (current-impl-registry-cell-id))
-  (define net-box (current-macros-prop-net-box))
-  (define read-fn (current-macros-prop-cell-read))
-  (if (and cid net-box read-fn)
-      (read-fn (unbox net-box) cid)
-      (current-impl-registry)))
+  (define v (macros-cell-read-safe (current-impl-registry-cell-id)))
+  (if (eq? v 'not-found) (current-impl-registry) v))
 
 (define (register-impl! key entry)
   ;; Duplicate check uses the parameter — it's the persistent cross-command
@@ -6940,8 +6993,13 @@
   ;; Phase 2a: dual-write to cell
   (macros-cell-write! (current-property-store-cell-id) (hasheq name entry)))
 
+;; Track 3 Phase 1: cell-primary reader
+(define (read-property-store)
+  (define v (macros-cell-read-safe (current-property-store-cell-id)))
+  (if (eq? v 'not-found) (current-property-store) v))
+
 (define (lookup-property name)
-  (hash-ref (current-property-store) name #f))
+  (hash-ref (read-property-store) name #f))
 
 ;; Parse a single property clause datum.
 ;; Input: (- :name "law-name" :forall ($brace-params x : A) :holds expr)
@@ -7208,8 +7266,13 @@
   ;; Phase 2a: dual-write to cell
   (macros-cell-write! (current-functor-store-cell-id) (hasheq name entry)))
 
+;; Track 3 Phase 1: cell-primary reader
+(define (read-functor-store)
+  (define v (macros-cell-read-safe (current-functor-store-cell-id)))
+  (if (eq? v 'not-found) (current-functor-store) v))
+
 (define (lookup-functor name)
-  (hash-ref (current-functor-store) name #f))
+  (hash-ref (read-functor-store) name #f))
 
 ;; process-functor: parse and register a functor declaration
 ;; Also registers as a deftype for transparent expansion.
@@ -8094,8 +8157,8 @@
 (define (known-name? name)
   (or (memq name builtin-names)
       (global-env-lookup-type name)                      ;; previously defined def/defn
-      (hash-ref (current-ctor-registry) name #f)         ;; data constructor
-      (hash-ref (current-type-meta) name #f)             ;; data type name
+      (hash-ref (read-ctor-registry) name #f)         ;; data constructor (cell-primary)
+      (hash-ref (read-type-meta) name #f)             ;; data type name (cell-primary)
       (hash-ref (current-preparse-registry) name #f)))   ;; deftype alias / macro
 
 ;; Detect if a surf-defn already has explicit implicit params (from {A B} syntax).
