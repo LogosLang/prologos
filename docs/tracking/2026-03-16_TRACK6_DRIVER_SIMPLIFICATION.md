@@ -1,7 +1,7 @@
 # Track 6: Driver Simplification + Cleanup — Stage 2/3 Design
 
 **Created**: 2026-03-16
-**Status**: DESIGN (D.1+ — revised after initial critique)
+**Status**: DESIGN (D.2 — revised after external critique)
 **Depends on**: Track 3 ✅ (Cell-Primary Registries), Track 4 ✅ (ATMS Speculation), Track 5 ✅ (Global-Env + Module Networks)
 **Enables**: Track 7 (QTT Multiplicity Cells)
 **Master roadmap**: `2026-03-13_PROPAGATOR_MIGRATION_MASTER.md` Track 6
@@ -17,32 +17,33 @@
 | **Design** | | | |
 | D.1 | Initial design document | ✅ | This document |
 | D.1+ | Design critique + refinement | ✅ | Data orientation, ordering, retirement gate, id-map cell, test-support migration |
-| D.2 | External critique + rework | ⬜ | |
+| D.2 | External critique + rework | ✅ | 10 critiques addressed — see §6b |
 | D.3 | Self-critique (principle alignment) | ⬜ | |
 | **WS-A** | **Data Orientation + TMS Retraction** | | |
 | 0 | Performance baseline + acceptance file | ⬜ | |
 | 1a | id-map → infrastructure cell (3→2 box) | ⬜ | Early win |
 | 1b | meta-info `#:mutable` removal | ⬜ | Trivial — already write-once in practice |
-| 1c | constraint status → functional CHAMP updates | ⬜ | Data orientation — ~10 mutation sites |
+| 1c | constraint status → functional CHAMP updates | ⬜ | Data orientation — ~10 mutation sites, single-threaded |
 | 1d | `all-unsolved-metas` → infrastructure cell | ⬜ | Incremental O(1) tracking |
-| 2 | Speculation stack push activation | ⬜ | Belt-and-suspenders begins |
+| 2 | Speculation stack push activation | ⬜ | Belt-and-suspenders shadow — network-box restore is production |
 | 3 | Commit-on-success machinery | ⬜ | Promotes branch values to base |
 | 4 | TMS retraction (replace network-box restore) | ⬜ | Belt-and-suspenders validation |
-| 5 | save/restore 2→1 box + retirement gate | ⬜ | **Concrete retirement**: 0 divergences required |
+| 5a | meta-info CHAMP → infrastructure cell (2→1 box) | ⬜ | Mechanical — mirrors Phase 1a pattern |
+| 5b | Belt-and-suspenders retirement gate | ⬜ | **Concrete retirement**: 0 divergences required |
 | **WS-B** | **Dual-Write Elimination + Cleanup** | | |
-| 6 | batch-worker.rkt → cell-based state | ⬜ | Network snapshot save/restore |
-| 7a | test-support.rkt → network-based isolation | ⬜ | Shadow phase: dual-path validation |
+| 6 | batch-worker.rkt → hybrid state (20 cell + 7 param) | ⬜ | Network snapshot + parameterize for runtime config |
+| 7a | test-support.rkt → network-based isolation | ⬜ | Shadow phase ~7min one-time cost |
 | 7b | Dual-write elimination: macros.rkt (23) | ⬜ | Mechanical |
 | 7c | Dual-write elimination: warnings (3) + constraints (2) | ⬜ | Mechanical |
 | 7d | Dual-write elimination: global-env.rkt | ⬜ | Mechanical |
-| 8a | Audit all guard + callback usage | ⬜ | Determine removal safety |
+| 8a | Exhaustive cell-reader audit + categorization | ⬜ | Categorize: elaboration / module-loading / other |
 | 8b | Remove `current-macros-in-elaboration?` guard | ⬜ | 23 cell readers → unconditional |
 | 8c | Remove `current-narrow-in-elaboration?` guard | ⬜ | 2 cell readers → unconditional |
 | 8d | Remove callback parameters | ⬜ | Or mark deprecated if edge cases |
 | 9 | `current-global-env` → `current-prelude-env` rename | ⬜ | ~266 references, mechanical |
 | 10 | Driver `parameterize` simplification | ⬜ | ~30 bindings → ~5 |
 | **Final** | | | |
-| 11 | Performance validation + PIR | ⬜ | |
+| 11 | Performance validation + PIR | ⬜ | Graduated criteria: <5% ship, 5–15% investigate, >15% block |
 
 ---
 
@@ -312,6 +313,13 @@ The rename (Phase 9) is purely mechanical and has no ordering constraints — it
 
 **Test strategy**: Full suite. save/restore behavior unchanged (network snapshot captures id-map cell).
 
+**Done when**:
+- [ ] id-map stored as infrastructure cell in network
+- [ ] `save-meta-state` returns 2-element list (network + meta-info), not 3
+- [ ] `restore-meta-state!` restores 2 boxes, not 3
+- [ ] Full suite passes
+- [ ] Speculation stats unchanged
+
 ### Phase 1b: meta-info `#:mutable` Removal (Workstream A)
 
 **Goal**: Remove vestigial `#:mutable` annotation from `meta-info` struct.
@@ -323,6 +331,11 @@ The rename (Phase 9) is purely mechanical and has no ordering constraints — it
 **Risk**: Trivial — no behavioral change. This is removing dead capability.
 
 **Test strategy**: Compilation check + full suite (should be bit-identical behavior).
+
+**Done when**:
+- [ ] `#:mutable` removed from `meta-info` struct
+- [ ] `raco make driver.rkt` succeeds (catches any hidden setter usage)
+- [ ] Full suite passes (bit-identical behavior)
 
 ### Phase 1c: constraint Status → Functional CHAMP Updates (Workstream A)
 
@@ -353,6 +366,12 @@ The rename (Phase 9) is purely mechanical and has no ordering constraints — it
 
 **Key insight**: The re-entrancy guard works by value identity — checking whether the constraint is still in the state we set it to. This composes with functional updates: read from store, check status, write back. No mutation needed.
 
+**Concurrency safety** (D.2 critique): The read-modify-write cycle is safe because constraint resolution is **strictly single-threaded**. `run-stratified-resolution!` runs in `parameterize ([current-in-stratified-resolution? #t])` and processes constraints sequentially. The BSP parallel mode (`run-to-quiescence-bsp`) fires type propagators in parallel (Stratum 0) but constraint resolution (Stratum 2) is always sequential. No concurrent constraint retry exists.
+
+**Why not lattice merge?** (D.2 critique): Constraint status transitions are **non-monotonic**: `'retrying → 'postponed` is a demotion. The re-entrancy guard explicitly cycles status downward. This doesn't fit a lattice join — `join('retrying, 'postponed)` cannot simultaneously equal `'postponed` and `'retrying`. The state machine is a protocol, not a lattice.
+
+**cid stability contract** (D.2 critique): Constraint cid is a gensym, stable and unique for the lifetime of the constraint. No code path creates, deletes, or re-adds a constraint with an existing cid. This invariant ensures the functional pattern's cid lookup correctly identifies the "same" constraint that the old object-identity pattern relied on.
+
 **Consumers to update**:
 - `retry-constraints-for-meta!` (metavar-store.rkt:633–645)
 - `retry-constraints-via-cells!` (metavar-store.rkt:652–672)
@@ -364,7 +383,13 @@ The rename (Phase 9) is purely mechanical and has no ordering constraints — it
 
 **Risk**: Medium — touches the constraint retry hot path. The state machine must behave identically.
 
-**Test strategy**: Full suite + acceptance file. Constraint retry counts must match Phase 0 baseline. Speculation stats unchanged.
+**Done when**:
+- [ ] Zero call sites use `set-constraint-status!` or `set-constraint-cell-ids!`
+- [ ] `#:mutable` removed from constraint struct
+- [ ] `raco make driver.rkt` succeeds
+- [ ] Full suite passes
+- [ ] Constraint resolution counts match Phase 0 baseline
+- [ ] Speculation stats (hypotheses, nogoods) unchanged
 
 ### Phase 1d: `all-unsolved-metas` → Infrastructure Cell (Workstream A)
 
@@ -392,6 +417,13 @@ This matches the infrastructure cell pattern from Track 3. The cell participates
 
 **Test strategy**: Dual-path validation during phase: run both old CHAMP scan and new cell read, assert identical results across full suite. Remove old path after 0 divergences.
 
+**Done when**:
+- [ ] Infrastructure cell tracks unsolved meta set incrementally
+- [ ] `fresh-meta` adds to cell, `solve-meta-core!` removes from cell
+- [ ] Dual-path validation: 0 divergences between CHAMP scan and cell read across full suite
+- [ ] Old CHAMP scan removed
+- [ ] Full suite passes
+
 ### Phase 2: Speculation Stack Push Activation (Workstream A)
 
 **Goal**: Activate the speculation stack (deferred since Track 4 Phase 2). Cell writes during speculation go to TMS branches rather than the base network.
@@ -405,11 +437,20 @@ This matches the infrastructure cell pattern from Track 3. The cell participates
 
 **Critical**: Reads at depth 0 must NOT see branch values. The TMS cell `tms-read` function already handles this (Track 4 Phase 1 implemented depth-aware reads). What's new is that `net-write!` during speculation actually routes to branches.
 
-**Belt-and-suspenders**: Keep network-box restore as fallback. After thunk execution, compare TMS branch values against network-box diff — log divergences.
+**Belt-and-suspenders** (D.2 clarification): During Phases 2–4, **network-box restore is the production mechanism**. TMS retraction is being validated in shadow mode. A failure in any of Phases 2–4 does not leave the system in an inconsistent state — it means the TMS shadow path isn't ready yet, and network-box restore continues to handle all speculation correctly. The TMS path is being *observed* for correctness, not *relied upon*.
 
-**Risk**: High — changes what speculation sees. Any error in TMS write routing breaks type-checking.
+Keep network-box restore as fallback. After thunk execution, compare TMS branch values against network-box diff — log divergences.
+
+**Risk**: High — changes what speculation sees. Any error in TMS write routing breaks type-checking. Mitigated by network-box restore remaining the production path.
 
 **Test strategy**: Full suite + acceptance file. Divergence counter must be 0.
+
+**Done when**:
+- [ ] `with-speculative-rollback` pushes assumption before thunk
+- [ ] `net-write!` routes to TMS branch when stack depth > 0
+- [ ] Depth-0 reads do NOT see branch values
+- [ ] 0 divergences between TMS shadow and network-box restore across full suite
+- [ ] Speculation stats unchanged from Phase 0
 
 ### Phase 3: Commit-On-Success Machinery (Workstream A)
 
@@ -425,6 +466,13 @@ This matches the infrastructure cell pattern from Track 3. The cell participates
 **Belt-and-suspenders**: Compare base values after commit against what the base would have been without stack push.
 
 **Risk**: High — incorrect commit means solved metas are invisible after speculation success.
+
+**Done when**:
+- [ ] `tms-commit` promotes branch values to base on success
+- [ ] Speculation stack pops after commit
+- [ ] Base values after commit match pre-Phase-2 behavior (belt-and-suspenders check)
+- [ ] Full suite passes
+- [ ] 0 divergences between TMS commit and direct-write baseline
 
 ### Phase 4: TMS Retraction (Workstream A)
 
@@ -446,18 +494,24 @@ This matches the infrastructure cell pattern from Track 3. The cell participates
 
 **Risk**: High — incorrect retraction means stale speculation data leaks into subsequent type-checking.
 
-### Phase 5: save/restore 2→1 Box + Belt-and-Suspenders Retirement (Workstream A)
+**Done when**:
+- [ ] `tms-retract` called on failure with speculation's hypothesis-id
+- [ ] Speculation stack pops after retraction
+- [ ] ATMS nogood recorded for failed assumption
+- [ ] 0 divergences between TMS retraction and network-box restore across full suite
+- [ ] Acceptance file passes at L3
+- [ ] Retirement gate criteria met for Phase 5b
 
-**Goal**: Two deliverables in one phase:
-1. Reduce `save-meta-state` from 2-box (network + meta-info, after Phase 1a reduced 3→2) to 1-box (network only)
-2. **Retire the network-box restore secondary path** — the concrete retirement gate for belt-and-suspenders
+### Phase 5a: meta-info CHAMP → Infrastructure Cell (Workstream A)
 
-**Prerequisites (all must be met)**:
-- Phase 1a complete: id-map is an infrastructure cell in the network (3→2 already done)
-- Phase 1b complete: meta-info is immutable (CHAMP entries captured by network snapshot)
-- Phase 1d complete: `all-unsolved-metas` reads from infrastructure cell (no CHAMP scan dependency)
-- Phase 4 complete: TMS retraction handles all speculation failure paths
-- **Retirement gate passed**: 0 divergences between TMS retraction and network-box restore across full suite + batch mode for Phase 4
+**Goal**: Move the meta-info CHAMP from a separate box into an infrastructure cell in the network. Reduces `save-meta-state` from 2-box (network + meta-info) to 1-box (network only).
+
+This mirrors Phase 1a's id-map migration — same pattern, same risk profile.
+
+**Prerequisites**:
+- Phase 1a complete: id-map already migrated (pattern established)
+- Phase 1b complete: meta-info is immutable (CHAMP entries are values)
+- Phase 1d complete: `all-unsolved-metas` reads from infrastructure cell (no CHAMP scan dependency on meta-info box)
 
 **Changes**:
 ```racket
@@ -470,39 +524,73 @@ This matches the infrastructure cell pattern from Track 3. The cell participates
   (unbox net-box))
 ```
 
-**meta-info CHAMP disposition**: After this phase, the meta-info CHAMP either:
-- (a) becomes an infrastructure cell in the network (mirroring Phase 1a's id-map migration), or
-- (b) is removed entirely if all consumers now read from per-meta TMS cells + the unsolved-metas infrastructure cell
+**Risk**: Low — mechanical, mirrors Phase 1a. The meta-info CHAMP becomes a cell in the network; all consumers read via `net-read` instead of `unbox`. Network snapshot automatically captures it.
 
-Option (a) is simpler and preserves the existing `meta-info` lookup pattern. Option (b) is cleaner but requires migrating every `champ-lookup` on the meta-info box.
+**Done when**:
+- [ ] `current-prop-meta-info-box` replaced by infrastructure cell
+- [ ] `save-meta-state` returns single value (network CHAMP)
+- [ ] `restore-meta-state!` sets single box
+- [ ] Full suite passes
+- [ ] Speculation stats unchanged
 
-**This phase also removes**:
-- `restore-meta-state!`'s network-box restore path (replaced by TMS retraction)
+### Phase 5b: Belt-and-Suspenders Retirement Gate (Workstream A)
+
+**Goal**: **Retire the network-box restore secondary path**. This is the concrete retirement gate for belt-and-suspenders.
+
+**Prerequisites (all must be met)**:
+- Phase 4 complete: TMS retraction handles all speculation failure paths
+- Phase 5a complete: save/restore is 1-box (network only)
+- **Retirement gate passed**: 0 divergences between TMS retraction and network-box restore across full suite + batch mode for Phase 4
+
+**This phase removes**:
+- `restore-meta-state!`'s network-box restore fallback path (replaced by TMS retraction)
 - The belt-and-suspenders divergence counter and validation code from Phases 2–4
 - Any fallback logic in `with-speculative-rollback` that kept both paths
 
-**Risk**: Medium — the retirement is gated by concrete criteria from Phase 4. The 2→1 box reduction is mechanical once retirement passes.
+After this phase, the system has exactly one speculation mechanism (TMS retraction). Any regression is immediately attributable.
 
-**Test strategy**: Full suite + batch mode + acceptance file at L3. The system now has exactly one speculation mechanism (TMS retraction). Any regression is immediately attributable.
+**Risk**: Medium — the retirement is gated by concrete criteria from Phase 4. All risk is front-loaded into the gate validation.
+
+**Test strategy**: Full suite + batch mode + acceptance file at L3.
+
+**Done when**:
+- [ ] No network-box restore code remains in `with-speculative-rollback`
+- [ ] No divergence counter or shadow validation code remains
+- [ ] Full suite passes
+- [ ] Batch mode passes (file-by-file comparison)
+- [ ] Acceptance file L3 with 0 errors
+- [ ] Speculation stats match Phase 0 baseline
 
 ### Phase 6: batch-worker.rkt Migration (Workstream B)
 
-**Goal**: Replace batch-worker's parameter save/restore with cell-based per-file state management.
+**Goal**: Replace batch-worker's parameter save/restore with hybrid cell-based + parameter state management.
 
 **Current**: batch-worker saves 26 parameter values after prelude load, restores per-file via `parameterize`.
 
-**Target**: batch-worker creates a fresh network per file (similar to how `process-command` creates per-command state) with all prelude registrations pre-loaded as cell values.
+**Parameter categorization** (D.2 critique — not all 26 are cell-based):
 
-**Approach options**:
-- (a) **Network snapshot**: Save the post-prelude network CHAMP (not just parameters), restore per file by swapping the network box. This is essentially what `save-meta-state` does for speculation.
-- (b) **Fresh network + prelude replay**: Create a fresh network per file, replay prelude registrations into it. More expensive but cleaner isolation.
-- (c) **Parameter → cell migration**: Keep the batch-worker structure but read from cells instead of parameters. Simplest change, but preserves the parameter dependency.
+| Category | Count | Parameters | Migration |
+|----------|-------|------------|-----------|
+| **Cell-based** (in network) | 20 | 19 macros.rkt registries + 1 global-env | Captured by network CHAMP snapshot |
+| **Runtime config** (NOT in network) | 7 | module-registry, ns-context, lib-paths, loading-set, module-loader, spec-propagation-handler, foreign-handler | Keep as `parameterize` — these are genuinely per-file runtime configuration, not elaboration state |
 
-Option (a) is recommended — O(1) restore via CHAMP structural sharing, matches existing infrastructure, provides clean isolation without replay cost.
+The 7 namespace.rkt parameters are runtime configuration values that control how module loading, spec propagation, and FFI work. They have no corresponding cells and are not part of the propagator network — they configure the environment in which elaboration runs. Moving them to cells would be architecturally wrong (they're not reactive state, they're configuration).
+
+**Target**: Hybrid approach:
+- **Network snapshot** for the 20 cell-based parameters: save post-prelude network CHAMP, restore per-file by swapping the network box (O(1) via CHAMP structural sharing)
+- **`parameterize`** for the 7 runtime config parameters: keep exactly the current pattern
+
+This means batch-worker's per-file restore becomes: swap network box + parameterize 7 values, instead of parameterize 26+ values.
 
 **Risk**: Medium — batch-worker processes the entire test suite. Any isolation failure cascades.
 
 **Test strategy**: Run full suite in batch mode after each sub-step. Compare results file-by-file against standalone `raco test` baseline.
+
+**Done when**:
+- [ ] Network CHAMP snapshot replaces 20 cell-based parameter saves
+- [ ] 7 namespace.rkt parameters remain as `parameterize`
+- [ ] Full suite in batch mode matches standalone `raco test` results
+- [ ] No file-by-file divergences
 
 ### Phase 7a: test-support.rkt → Network-Based Isolation (Workstream B)
 
@@ -516,9 +604,16 @@ Option (a) is recommended — O(1) restore via CHAMP structural sharing, matches
 
 **The shadow phase is tedious but non-negotiable**: 370 test files × 2 isolation strategies. If even one test depends on a subtle parameter-vs-cell ordering difference, the shadow phase catches it before dual-write removal makes the old path unavailable.
 
+**Time budget** (D.2 critique): The shadow phase doubles the full suite run — approximately **~7 minutes one-time cost** (200s baseline × 2). This is a single validation run, not a per-phase ongoing cost. The investment is small relative to the risk of discovering parameter-vs-cell divergences after dual-write removal.
+
 **Risk**: Medium — test infrastructure touches every test. The shadow phase contains the risk.
 
 **Test strategy**: Shadow comparison across full suite. 0 divergences before proceeding to 7b.
+
+**Done when**:
+- [ ] test-support.rkt creates per-test network state
+- [ ] Shadow validation: 0 divergences across 370 test files × 2 isolation strategies
+- [ ] No test file depends on parameter-based isolation only
 
 ### Phase 7b–d: Dual-Write Elimination (Workstream B)
 
@@ -545,6 +640,13 @@ Option (a) is recommended — O(1) restore via CHAMP structural sharing, matches
 
 **Risk**: Low — mechanical transformation. The cell path is already the primary read path (Track 3). Phase 7a's shadow validation confirmed all tests work with network-based isolation.
 
+**Done when**:
+- [ ] Phase 7b: 23 macros.rkt registry functions write to cells only (parameter write removed)
+- [ ] Phase 7c: 3 warning + 2 constraint registries write to cells only
+- [ ] Phase 7d: global-env dual-write removed
+- [ ] Full suite passes after each sub-phase
+- [ ] Batch mode passes after each sub-phase
+
 ### Phase 8: Elaboration Guard + Callback Cleanup (Workstream B)
 
 **Goal**: Remove the two elaboration guard parameters and three callback parameters.
@@ -559,12 +661,25 @@ Option (a) is recommended — O(1) restore via CHAMP structural sharing, matches
 - The stratified quiescence scheduler handles all re-resolution cases
 
 **Sub-phases**:
-- 8a: Audit all guard and callback usage
+- 8a: **Exhaustive cell-reader audit** — categorize EVERY cell reader call site into one of three contexts:
+  - **Elaboration context** (inside `process-command` / `with-speculative-rollback`): cells always valid, guards unnecessary
+  - **Module-loading context** (inside `load-module` / `process-file`): Track 5 gave per-module networks, cells valid
+  - **Other context** (test setup, batch-worker init, REPL): may lack network — if any readers are called here, guard removal is blocked until the context is migrated
+
+  This exhaustive categorization (not sampling) is the decision-making deliverable of Phase 8. If any readers fall into the "other" category, the phase plan must be revised before proceeding.
 - 8b: Remove `current-macros-in-elaboration?` guard — readers unconditionally use cells
 - 8c: Remove `current-narrow-in-elaboration?` guard
 - 8d: Remove callback parameters (or mark deprecated if edge cases found)
 
 **Risk**: Medium — guard removal is the riskiest part. Track 3 PIR specifically warns that guards are mandatory for cells readable outside `process-command`.
+
+**Done when**:
+- [ ] Phase 8a: exhaustive categorization table for all 25 guarded readers (23 macros + 2 constraints)
+- [ ] Phase 8b: zero references to `current-macros-in-elaboration?`
+- [ ] Phase 8c: zero references to `current-narrow-in-elaboration?`
+- [ ] Phase 8d: zero references to callback parameters (or documented edge cases)
+- [ ] Full suite passes
+- [ ] Batch mode passes
 
 ### Phase 9: `current-global-env` → `current-prelude-env` Rename (Workstream B)
 
@@ -575,6 +690,11 @@ Option (a) is recommended — O(1) restore via CHAMP structural sharing, matches
 **Approach**: Automated find-replace + `raco make driver.rkt` to catch all compilation errors.
 
 **Risk**: Low — purely mechanical. The compiler catches any missed references.
+
+**Done when**:
+- [ ] Zero references to `current-global-env` (grep returns 0)
+- [ ] `raco make driver.rkt` succeeds
+- [ ] Full suite passes
 
 ### Phase 10: Driver Simplification (Workstream B)
 
@@ -588,15 +708,30 @@ Option (a) is recommended — O(1) restore via CHAMP structural sharing, matches
 
 **Risk**: Low — removing parameter bindings from `parameterize` is mechanical once the parameters are no longer written.
 
+**Done when**:
+- [ ] `process-command` `parameterize` block has ≤ 5 bindings
+- [ ] Removed bindings are not referenced anywhere under `process-command`
+- [ ] Full suite passes
+- [ ] Acceptance file L3 with 0 errors
+
 ### Phase 11: Performance Validation + PIR
 
 **Goal**: Verify no performance regression. Write Post-Implementation Review.
 
-**Acceptance criteria**:
-- Full suite wall time within 25% of Phase 0 baseline
+**Graduated performance criteria** (D.2 critique — not a binary pass/fail):
+
+| Regression | Action |
+|------------|--------|
+| **< 5%** | Ship. Normal variance / acceptable cost of cleaner architecture. |
+| **5–15%** | Investigate. Profile to identify which phase introduced the regression. If attributable to a specific CHAMP lookup pattern or TMS overhead, optimize before shipping. If distributed across many phases, document as architectural cost. |
+| **> 15%** | Block. Do not merge Track 6. Profile, identify, and fix. The Track 3 pattern-kind regression (850s from a single missing fast-path) shows that large regressions have discrete causes. |
+
+**Full acceptance criteria**:
+- Full suite wall time within graduated criteria above
 - Acceptance file passes at L3 with 0 errors
 - Speculation stats (hypotheses, nogoods, pruning) match Phase 0
 - All deferred items from Tracks 3, 4, 5 confirmed resolved
+- PIR written following `POST_IMPLEMENTATION_REVIEW.org` methodology (all 16 questions)
 
 ---
 
@@ -742,3 +877,178 @@ Items NOT absorbed (remain deferred):
 | `global-env.rkt` | two-layer architecture, rename target (266 refs) |
 | `tests/test-support.rkt` | test isolation parameterize block |
 | `atms.rkt` | ATMS tracking, assumption retraction |
+
+---
+
+## §10. Phase Dependency DAG
+
+```
+                    Phase 0 (baseline)
+                         │
+            ┌────────────┼────────────┐
+            ↓            ↓            ↓
+        Phase 1a     Phase 1b     Phase 1c
+        (id-map)     (#:mutable)  (constraint)
+            │            │            │
+            └────────┬───┘            │
+                     ↓                │
+                 Phase 1d ←───────────┘
+                 (unsolved-metas)
+                     │
+                     ↓
+                 Phase 2
+                 (stack push)
+                     │
+                     ↓
+                 Phase 3
+                 (commit)
+                     │
+                     ↓
+                 Phase 4
+                 (retraction)
+                     │
+              ┌──────┴──────┐
+              ↓             ↓
+          Phase 5a      Phase 6 ←──── (independent of 5a)
+          (2→1 box)     (batch-worker)
+              │             │
+              ↓             ↓
+          Phase 5b      Phase 7a
+          (retirement)  (test-support)
+                            │
+                     ┌──────┼──────┐
+                     ↓      ↓      ↓
+                   7b      7c     7d
+                   (macros)(warn) (g-env)
+                     └──────┬──────┘
+                            ↓
+                        Phase 8a
+                        (audit)
+                     ┌──────┼──────┐
+                     ↓      ↓      ↓
+                   8b      8c     8d
+                   (guard) (guard)(callback)
+                     └──────┬──────┘
+                            ↓
+                        Phase 9 ←──── (could also run after 1b)
+                        (rename)
+                            │
+                            ↓
+                        Phase 10
+                        (driver simplify)
+                            │
+                            ↓
+                        Phase 11
+                        (PIR)
+```
+
+**Key observations**:
+- Phases 1a, 1b, 1c are independent of each other (can run in any order)
+- Phase 1d depends on all three Phase 1 sub-phases
+- Workstream A (1→5) is strictly sequential after Phase 1d
+- Phase 6 (batch-worker) can start after Phase 4, independent of Phase 5a/5b
+- Phase 9 (rename) has minimal ordering constraints — could run after Phase 1b
+- The critical path is: 0 → 1c → 1d → 2 → 3 → 4 → 6 → 7a → 7b → 8a → 8b → 10 → 11
+
+---
+
+## §11. Rollback Procedures
+
+Each phase has a defined rollback strategy. Since phases are committed individually, rollback is always to the previous phase's commit.
+
+### General Rollback Protocol
+
+1. **Detect**: Full suite or acceptance file fails after phase completion
+2. **Diagnose**: Identify whether the failure is in the phase's changes or pre-existing
+3. **Revert**: `git revert <phase-commit>` — creates a new commit, preserving history
+4. **Validate**: Full suite passes after revert
+5. **Root-cause**: Fix the issue in a new commit before re-attempting the phase
+
+### Phase-Specific Rollback Notes
+
+**Phases 1a–1d (data orientation)**: Each sub-phase is independently revertable. Phase 1a (id-map) can be reverted without affecting 1b (meta-info) or 1c (constraint). Phase 1d depends on all three, so reverting 1d also reverts the infrastructure cell but leaves 1a–1c intact.
+
+**Phase 2 (stack push)**: Revert deactivates stack push — writes return to depth-0 base. Since network-box restore is still the production mechanism during this phase, the revert leaves the system in a known-good state.
+
+**Phases 3–4 (commit/retract)**: Same as Phase 2 — network-box restore is production. Revert removes TMS shadow path, system continues functioning via network-box restore.
+
+**Phase 5b (retirement)**: **Most critical rollback**. If post-retirement regression found, revert re-enables network-box restore as production. This is why Phase 5b has the strictest entry gate (0 divergences). However: reverting Phase 5b alone may not restore the validation code removed in that phase — the rollback may need to also revert Phase 5a if the meta-info infrastructure cell interacts with the issue.
+
+**Phases 7b–d (dual-write removal)**: Revert re-enables dual-write. Since Phase 7a validated network isolation, this should only be needed if an undiscovered parameter consumer exists. Diagnosis: check which test fails, identify what it reads, trace to the parameter path.
+
+**Phase 9 (rename)**: Trivially revertable — automated find-replace in both directions.
+
+### Emergency Rollback
+
+If multiple phases interact to produce a failure that no single revert fixes:
+1. Identify the earliest phase where the failure first appears (bisect using phase commits)
+2. Revert to that phase's predecessor
+3. Re-analyze the design for that phase before re-attempting
+
+This has not been needed in Tracks 1–5, but the protocol exists for completeness.
+
+---
+
+## §6b. D.2 Critique Resolution
+
+The following critiques were raised in external review and resolved in the D.2 revision:
+
+### CR-1: Phase 1c concurrency safety
+
+**Critique**: The read-modify-write cycle in the functional constraint pattern could be unsafe under concurrent access.
+
+**Resolution**: Constraint resolution is **strictly single-threaded**. `run-stratified-resolution!` runs in `parameterize ([current-in-stratified-resolution? #t])` and processes constraints sequentially. BSP parallel mode fires type propagators (Stratum 0) but constraint resolution (Stratum 2) is always sequential. No concurrent constraint retry exists. Added to Phase 1c.
+
+### CR-2: Phase 1c lattice merge vs. non-monotonic status
+
+**Critique**: Could constraint status use propagator-style lattice merge semantics?
+
+**Resolution**: **No — constraint status is non-monotonic.** `'retrying → 'postponed` is a demotion, not a lattice join. The re-entrancy guard explicitly cycles status downward. `join('retrying, 'postponed)` has no valid definition. The state machine is a protocol, not a lattice. Added to Phase 1c.
+
+### CR-3: Phase 1c cid stability
+
+**Critique**: The functional pattern relies on cid lookups. Is cid stable?
+
+**Resolution**: Constraint cid is a gensym, stable and unique for the lifetime of the constraint. No code path creates, deletes, or re-adds a constraint with an existing cid. This invariant ensures the functional pattern's cid lookup correctly identifies the "same" constraint. Added to Phase 1c.
+
+### CR-4: Phase 2–4 belt-and-suspenders clarification
+
+**Critique**: The relationship between TMS and network-box restore during Phases 2–4 was unclear.
+
+**Resolution**: **Network-box restore is the production mechanism during Phases 2–4.** TMS is being validated in shadow mode — observed for correctness, not relied upon. A failure in TMS does not leave the system in an inconsistent state; network-box restore handles all speculation correctly while TMS is being proven. Added to Phase 2.
+
+### CR-5: Phase 5 split into 5a/5b
+
+**Critique**: Phase 5 conflated mechanical box reduction with the retirement gate.
+
+**Resolution**: Split into Phase 5a (meta-info CHAMP → infrastructure cell, mechanical, mirrors Phase 1a) and Phase 5b (belt-and-suspenders retirement gate, concrete criteria). The retirement is a defined step with hard criteria, not a side-effect of box reduction.
+
+### CR-6: Phase 6 parameter categorization
+
+**Critique**: The design assumed all 26 batch-worker parameters are cell-based.
+
+**Resolution**: Only 20 are cell-based (19 macros + 1 global-env). The 7 namespace.rkt parameters are runtime configuration (module-registry, ns-context, lib-paths, etc.) — genuinely per-file config, not reactive state. Hybrid approach: network snapshot for 20, `parameterize` for 7. Added to Phase 6.
+
+### CR-7: Phase 7a time budget
+
+**Critique**: The shadow phase lacked a concrete cost estimate.
+
+**Resolution**: ~7 minutes one-time cost (200s baseline × 2). Single validation run, not ongoing. Small investment relative to the risk of discovering divergences after dual-write removal. Added to Phase 7a.
+
+### CR-8: Phase 8a exhaustive categorization
+
+**Critique**: The guard removal audit should be exhaustive, not sampled.
+
+**Resolution**: Phase 8a now requires categorizing **every** cell reader call site into elaboration / module-loading / other contexts. If any reader falls into "other" (lacks network), guard removal is blocked until that context is migrated. This is the decision-making deliverable — everything after 8a is mechanical based on the categorization table. Updated Phase 8.
+
+### CR-9: Phase 11 graduated performance criteria
+
+**Critique**: The 25% performance threshold was binary — no guidance for intermediate regressions.
+
+**Resolution**: Graduated criteria: <5% ship, 5–15% investigate and profile, >15% block. The Track 3 850s regression proves large regressions have discrete causes. Updated Phase 11.
+
+### CR-10: Rollback procedures
+
+**Critique**: No rollback plan for individual phases.
+
+**Resolution**: Added §11 (Rollback Procedures) covering general rollback protocol, per-phase rollback notes, and emergency multi-phase rollback. Key insight: Phases 2–4 are inherently safe to revert because network-box restore remains the production mechanism. Phase 5b (retirement) is the most critical rollback scenario.
