@@ -296,12 +296,37 @@ Moved to §Completed Work above. See Track 5 PIR for full review.
 
 **Design document**: TBD.
 
-### LSP Track: Forward Design Notes
+### Track 10: LSP Integration
 
-Design concerns identified during Track 5 D.3 principle alignment review:
+**Goal**: Integrate the full propagator infrastructure into a Language Server Protocol implementation. Incremental re-elaboration, live diagnostics, and enhanced error reporting — the user-facing payoff of Tracks 1–9.
 
-- **First-class module network data** — module networks (persistent `prop-network` + `module-network-ref`) should be treated as first-class pure data, enabling reuse and composition in ways not yet foreseeable. The CHAMP-based `prop-network` is already immutable/persistent, supporting this. The LSP track should design for module networks as composable data structures, not just caching artifacts.
-- **Data-oriented invalidation** — Track 5 sketches LSP invalidation as imperative ("LSP iterates dependents and writes to shadow cells"). The LSP track should use invalidation *descriptors* (e.g., `(stale-module bar '(map filter fold))`) interpreted at explicit control boundaries, enabling logging, batching, and deduplication per the Data Orientation principle.
+**Scope**:
+- **Incremental re-elaboration** — use Track 5's dep-edges and persistent module networks to identify and re-check only the definitions affected by a source change, rather than re-elaborating entire files
+- **Shadow-cell materialization** — create shadow cells in importing modules for cross-module references, enabling change propagation across module boundaries (Track 5 prototype → production)
+- **Module staleness propagation** — wire `mod-stale` status changes through the dep-edge graph to downstream module networks (Track 5 Phases 4c–4d, deferred to this track)
+- **TMS-aware parameterized modules** — module definition cells as TMS cells for multi-context sharing (same module, different parameter contexts in LSP); Track 5 designed API compatibility, Track 6 implements TMS retraction, this track consumes both
+- **GDE-powered diagnostics** — surface Track 9's minimal diagnoses through LSP diagnostic messages; explain *why* errors occur, not just *where*
+- **Data-oriented invalidation** — invalidation *descriptors* (e.g., `(stale-module bar '(map filter fold))`) interpreted at explicit control boundaries, enabling logging, batching, and deduplication per the Data Orientation principle
+- **Correct-by-construction cross-network consistency** — replace Track 5's shadow-cell + callback sketch with structural guarantees for keeping shadow cells consistent with source module cells in multi-invocation contexts
+
+**Risk**: Moderate — new capability, but built entirely on proven infrastructure from Tracks 1–9. The risk is in the *composition* (making all the pieces work together in a long-running server process) rather than in any individual component.
+
+**Composition synergy**: This is the culmination of the propagator migration's user-facing value. Every preceding track contributes:
+- Track 1–3: Cell-primary reads (stable observation substrate)
+- Track 4: TMS cells + learned-clause pruning (speculation-aware incremental checking)
+- Track 5: Persistent module networks + dep-edges (incremental invalidation graph)
+- Track 6: Clean single-write-path architecture (no dual-write complexity in server)
+- Track 7: Cross-domain bridges (multiplicity-aware diagnostics)
+- Track 8: Propagator-driven unification (reactive type error updates)
+- Track 9: GDE minimal diagnoses (root-cause error explanations)
+
+**Depends on**: Track 9 (GDE), Track 5 ✅ (dep-edges, module networks).
+
+**Design document**: TBD — full design required. Should address: server lifecycle, file watcher integration, incremental vs full re-elaboration heuristics, diagnostic batching/debouncing, and the composition of all Track 1–9 infrastructure.
+
+**Forward design notes** (from Track 5 D.3 principle alignment review):
+- **First-class module network data** — module networks should be treated as first-class pure data, enabling reuse and composition. The CHAMP-based `prop-network` is already immutable/persistent, supporting this. Design for module networks as composable data structures, not just caching artifacts.
+- **Data-oriented invalidation** — use invalidation descriptors interpreted at explicit control boundaries rather than imperative "iterate and write" patterns.
 
 ---
 
@@ -321,6 +346,11 @@ Track 3 (Cell-Primary Registries) ✅
   │                           └──→ Track 8 (Unification as Propagators)
   │                                  │
   │                                  └──→ Track 9 (GDE)
+  │                                         │
+  │                                         └──→ Track 10 (LSP Integration)
+  │                                                ↑
+  │                                                │
+  Track 5 (dep-edges, module networks) ✅ ─ ─ ─ ─ ┘
   │
   ├─ ─ ─ Track 3 Phase 6 deferred ─ ─ ─→ Track 6 (parameter write removal,
   │                                        guard parameter cleanup)
@@ -330,10 +360,10 @@ Track 3 (Cell-Primary Registries) ✅
   │                                        stack push, TMS retraction)
   │
   └─ ─ ─ Track 5 deferrals ─ ─ ─ ─ ─ ─→ Track 6 (rename, dual-write removal)
-                                          LSP (dep-wire!, staleness propagation)
+                                          Track 10 (dep-wire!, staleness propagation)
 ```
 
-Track 6 is now unblocked (Tracks 3, 4, and 5 complete). Dashed lines show deferred phases flowing into future tracks.
+Track 6 is now unblocked (Tracks 3, 4, and 5 complete). Track 10 depends on Track 9 (GDE) and Track 5 (already complete). Dashed lines show deferred phases flowing into future tracks.
 
 ---
 
@@ -371,15 +401,15 @@ Active deferrals that affect future track scope:
 
 **Risk if never addressed**: 3-box save/restore works but is fragile — any new mutable state that participates in speculation must be manually added. TMS retraction eliminates this class of fragility entirely.
 
-### Track 5 Phases 4c–4d → LSP: TMS-Ready Wiring + Staleness Propagation
+### Track 5 Phases 4c–4d → Track 10: TMS-Ready Wiring + Staleness Propagation
 
 **What**: `definition-dep-wire!` with real propagator wiring (Phase 4c) and staleness propagation to `mod-status` cells (Phase 4d). Currently dep-edges are recorded as data but not wired as active propagators.
 
-**Why deferred**: Batch mode doesn't need active wiring — modules never become stale during a single batch compilation. The wiring and staleness propagation are purely LSP concerns (detecting when a source file changes and propagating invalidation through the dep-edge graph).
+**Why deferred**: Batch mode doesn't need active wiring — modules never become stale during a single batch compilation. The wiring and staleness propagation are LSP concerns (detecting when a source file changes and propagating invalidation through the dep-edge graph).
 
-**Current state**: Track 5 records dep-edges with source provenance (`'same-file` vs `'module`) in each `module-network-ref`. The data is complete; the active consumption is LSP scope.
+**Current state**: Track 5 records dep-edges with source provenance (`'same-file` vs `'module`) in each `module-network-ref`. The data is complete; the active consumption is Track 10 (LSP) scope.
 
-**Impact on LSP track**: The LSP track consumes Track 5's dep-edges directly. No intermediate track work needed.
+**Impact on Track 10**: Track 10 consumes Track 5's dep-edges directly. No intermediate track work needed.
 
 ### Track 5 → Track 6: Rename + Dual-Write Removal
 
