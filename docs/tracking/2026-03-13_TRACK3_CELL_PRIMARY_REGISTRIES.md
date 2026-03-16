@@ -1,7 +1,7 @@
 # Track 3: Cell-Primary Registries
 
 **Created**: 2026-03-13
-**Status**: Stage 2/3 (Design — pre-implementation)
+**Status**: COMPLETE (Phases 0-5 + PIR done; Phase 6 deferred to Track 5/6)
 **Depends on**: Track 1 (Cell-Primary Constraint Tracking) — COMPLETE, Track 2 (Reactive Resolution) — COMPLETE
 **Enables**: Track 4 (ATMS Speculation), Track 6 (Driver Simplification)
 **Research basis**: `2026-03-11_PROPAGATOR_FIRST_PIPELINE_AUDIT.md` §3.4 (Registry Parameters), §3.8 (Warnings)
@@ -24,8 +24,8 @@
 | 4 | Warnings → cell-primary (3 parameters) | ✅ | `c5c1681` — 3 readers + cell-read callback, simpler guard (no elaboration check needed) |
 | 5a | Narrowing constraints → cell (monotonic, `merge-list-append`) | ✅ | `9ebebdc` — combined with 5b |
 | 5b | Narrowing var-constraints → cell (non-monotonic, `merge-last-write-wins`) | ✅ | `9ebebdc` — elaboration guard required (same pattern as macros) |
-| 6 | Remove parameter writes + cleanup | ⬜ | Two-context architecture (see §3.7) |
-| 7 | Post-Implementation Review | ⬜ | Lightweight — established patterns |
+| 6 | Remove parameter writes + cleanup | ⏸️ | Deferred to Track 5/6 — removing parameter writes breaks save/restore + batch-worker isolation (see notes below) |
+| 7 | Post-Implementation Review | ✅ | See §10 |
 
 ---
 
@@ -439,3 +439,51 @@ Internal review against DESIGN_PRINCIPLES.org, DESIGN_METHODOLOGY.org, EFFECTFUL
 | 3 | **Correct by Construction** | Phase 6 fallback preservation creates `if/else` at reader sites — "correct by convention" rather than "correct by construction." | **Resolved by investigation of `driver.rkt:1546-1583`.** Module loading explicitly sets `current-prop-net-box` to `#f`. Creating a per-module network (Option A) is Track 5/6 scope. **Adopted Option B: two-context architecture** — the `if/else` is a structural boundary between genuinely different execution contexts (elaboration vs. module loading), not a correctness-by-convention pattern. See §3.7 for full analysis. |
 | 4 | **Decomplection** | The computation vs. threading distinction is conceptual but not yet structural. | After Track 3, it IS structural: `read-X` = computation, `current-X` = threading. Added framing note to §3.3. |
 | 5 | **Design Methodology** (Stage 5 PIR) | No PIR commitment in the design. | Added Phase 7 (lightweight PIR) to progress tracker. Track 3 follows established patterns so a full PIR is not warranted, but a lightweight review captures any lessons from the two-context architecture and Phase 5b's non-monotonic handling. |
+
+---
+
+## §10. Post-Implementation Review (Phase 7)
+
+### 10.1 Summary
+
+Track 3 converted 28 registry/accumulator reads from parameter-primary to cell-primary across 5 phases. All 7096 tests pass with no performance regression (197.6s vs 194.3s baseline, within noise).
+
+### 10.2 Metrics
+
+| Metric | Planned | Actual | Notes |
+|--------|---------|--------|-------|
+| Cell-primary readers | ~26 | 28 | 23 macros + 3 warnings + 2 narrowing |
+| Computation reads converted | ~200 | ~80 | Many "reads" are actually 1 reader call covering N internal uses |
+| Elaboration guard parameters | 1 | 2 | `current-macros-in-elaboration?` + `current-narrow-in-elaboration?` |
+| New Racket parameters (Phase 5) | ~4 | 6 | 3 callbacks + 1 guard + 2 cell-ids |
+| Phases executed | 7 | 5 + deferred | Phase 6 deferred to Track 5/6 |
+| Test regressions | 0 | 0 | 7096/7096 pass |
+| Performance | <25% regression | ~2% (noise) | 197.6s vs 194.3s |
+
+### 10.3 Key Lessons
+
+1. **Elaboration guard is the structural boundary.** The `current-X-in-elaboration?` pattern is essential for any cell that might be read outside `process-command`. Tests that parameterize constraints directly (bypassing the driver) will read stale cell content without this guard. This was discovered in Phase 1 (macros) and re-confirmed in Phase 5 (narrowing). Two guard parameters exist because `global-constraints.rkt` cannot import from `macros.rkt` without risking circular deps.
+
+2. **Warnings are the exception.** Warning readers don't need an elaboration guard because they're only read inside `process-command` (driver.rkt). This is a simpler pattern and worth noting for future similar cases.
+
+3. **Phase 6 (parameter write removal) is blocked by save/restore.** The design doc's Phase 6 assumes parameter writes can be removed for elaboration-only registries. However, `save-meta-state`/`restore-meta-state!` and `batch-worker.rkt` still read parameters for speculation snapshots and worker isolation. Removing writes would break these paths. True parameter elimination requires Track 5/6 (cell-based snapshots).
+
+4. **Non-monotonic cells need `merge-last-write-wins`.** The `merge-replace` alias was added to `infra-cell.rkt` for clarity. Narrowing var-constraints are non-monotonic (each clause gets its own constraint map), so standard merge-list-append doesn't apply. This works correctly as a transitional measure; proper ATMS-backed cells are Track 4 scope.
+
+5. **Mechanical phases compound efficiency.** Phases 1-4 each took ~30-60 minutes because the pattern was established in Phase 1 and replicated exactly. Phase 5 took longer (~90 minutes) because it required new cell infrastructure. The design doc's estimate of "~1 day" was accurate for Phases 0-5.
+
+### 10.4 Phase 6 Disposition
+
+Phase 6 (remove parameter writes + cleanup) is **deferred to Track 5/6**. Rationale:
+
+- Removing parameter writes breaks `save-meta-state`/`restore-meta-state!` (used for speculation)
+- Removing parameter writes breaks `batch-worker.rkt` state isolation
+- These paths must migrate to cell-based snapshots first (Track 5/6 scope)
+- The dual-write overhead is negligible (~1% per Track 1 measurements)
+- The two-context architecture is correct as-is; cleanup is optimization, not correctness
+
+### 10.5 Track Status
+
+**Track 3 is COMPLETE** (Phases 0-5 implemented, Phase 6 deferred, Phase 7 done).
+
+All computation reads now go through cell-primary readers. Parameters remain as fallback for module loading and as the write target for dual-write. Full parameter elimination is Track 5/6 scope.
