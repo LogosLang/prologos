@@ -370,6 +370,7 @@
   (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   ;; Phase 2c: Create warning cells in the fresh network.
   (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
+  (register-narrow-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   ;; Phase 3a: Create per-definition cells in the fresh network.
   (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   ;; Phase 3c: Create namespace cells in the fresh network.
@@ -381,6 +382,7 @@
     (current-command-atms (box (atms-empty))))
   (init-speculation-tracking!)
   (parameterize ([current-macros-in-elaboration? #t]                        ;; Track 3: cell-primary readers active
+                 [current-narrow-in-elaboration? #t]                       ;; Track 3 Phase 5: narrowing cell readers active
                  [current-global-env-prop-net-box (current-prop-net-box)]  ;; Phase 3a: activate cell writes (auto-reverts)
                  [current-ns-prop-net-box (current-prop-net-box)]          ;; Phase 3c: activate ns cell writes (auto-reverts)
                  [current-nf-cache (make-hash)]         ;; per-command nf memoization
@@ -1285,6 +1287,7 @@
       (reset-meta-store!)
       (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
+  (register-narrow-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (register-namespace-cells! (current-prop-net-box) (current-prop-new-infra-cell))
       (init-speculation-tracking!)
@@ -1869,6 +1872,7 @@
   (reset-meta-store!)
   (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
+  (register-narrow-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (register-namespace-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   (define type-surf (parse-datum type-sexp))
@@ -2022,6 +2026,10 @@
 (current-warnings-prop-cell-write elab-cell-write)
 ;; Track 3 Phase 4: Install warnings cell-read callback.
 (current-warnings-prop-cell-read elab-cell-read)
+
+;; Track 3 Phase 5: Install narrowing cell callbacks.
+(current-narrow-prop-cell-write elab-cell-write)
+(current-narrow-prop-cell-read elab-cell-read)
 
 ;; Phase 3a: Install global-env cell callbacks.
 (current-global-env-prop-cell-write elab-cell-write)

@@ -34,6 +34,7 @@
  merge-list-append
  merge-set-union
  merge-replace
+ merge-last-write-wins
  merge-constraint-status-map
  merge-error-descriptor-map
  ;; General cell factory — The Most Generalizable Interface
@@ -117,6 +118,11 @@
   (cond
     [(eq? new 'infra-bot) old]
     [else new]))
+
+;; Track 3 Phase 5b: Alias for merge-replace with clearer semantics for
+;; non-monotonic per-clause narrowing var-constraints. Each write replaces
+;; the entire map (one var-constraint map per narrowing clause).
+(define merge-last-write-wins merge-replace)
 
 ;; Track 2 Phase 2: Monotonic hash with per-key status max.
 ;; Maps constraint-id → status symbol with lattice: 'pending < 'resolved.

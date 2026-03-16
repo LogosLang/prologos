@@ -571,8 +571,8 @@
                             (narrow-search-config-search-mode search-cfg)))
            ;; Phase 3c: Global constraints and BB optimization
            ;; Inject type-guard constraints from ?x:Nat:Even constraint chains
-           (define base-constraints (current-narrow-constraints))
-           (define var-constraint-map (current-narrow-var-constraints))
+           (define base-constraints (read-narrow-constraints))
+           (define var-constraint-map (read-narrow-var-constraints))
            (define type-guard-constraints
              (if (hash-empty? var-constraint-map)
                  '()
@@ -728,7 +728,7 @@
                                (hash-set (current-narrow-intervals) sub-name sub-iv))
                              (current-narrow-intervals)))
                        ;; Phase 3c: forward-check constraints
-                       (define active-constraints (current-narrow-constraints))
+                       (define active-constraints (read-narrow-constraints))
                        (define fc-result
                          (if (null? active-constraints)
                              (list new-subst active-constraints new-intervals)
@@ -775,7 +775,7 @@
         ;; Phase 3c: post-match constraint checking
         ;; Variables may be bound during matching (not just enumeration),
         ;; so we must verify constraints on the complete solutions.
-        (define active-constraints (current-narrow-constraints))
+        (define active-constraints (read-narrow-constraints))
         (if (null? active-constraints)
             raw-solutions
             (filter-map

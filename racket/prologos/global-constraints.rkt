@@ -20,7 +20,8 @@
 (require racket/match
          racket/list
          "interval-domain.rkt"
-         "syntax.rkt")
+         "syntax.rkt"
+         "infra-cell.rkt")  ;; Track 3 Phase 5: merge-list-append, merge-last-write-wins
 
 (provide
  ;; Constraint struct
@@ -36,7 +37,18 @@
  ;; Helpers for testing
  expr->nat-val
  resolve-var
- var-ground?)
+ var-ground?
+ ;; Track 3 Phase 5: cell infrastructure for narrowing constraints
+ current-narrow-prop-net-box
+ current-narrow-prop-cell-read
+ current-narrow-prop-cell-write
+ current-narrow-in-elaboration?
+ current-narrow-constraints-cell-id
+ current-narrow-var-constraints-cell-id
+ register-narrow-cells!
+ ;; Track 3 Phase 5: cell-primary readers
+ read-narrow-constraints
+ read-narrow-var-constraints)
 
 ;; ========================================
 ;; Constraint representation
@@ -59,6 +71,62 @@
 ;; hasheq mapping stripped var name (symbol) → (listof symbol) of constraint names.
 ;; Set by the elaborator when processing surf-narrow with constraint chains.
 (define current-narrow-var-constraints (make-parameter (hasheq)))
+
+;; ========================================
+;; Track 3 Phase 5: Propagator cell infrastructure for narrowing
+;; ========================================
+;; Following warnings.rkt pattern: callback parameters for network access.
+(define current-narrow-prop-net-box (make-parameter #f))
+(define current-narrow-prop-cell-write (make-parameter #f))
+(define current-narrow-prop-cell-read (make-parameter #f))
+;; Elaboration guard: only read from cells when inside process-command.
+;; Without this guard, tests that parameterize current-narrow-constraints
+;; directly (without going through the driver) would read stale cell content
+;; instead of the parameterized value.
+(define current-narrow-in-elaboration? (make-parameter #f))
+(define current-narrow-constraints-cell-id (make-parameter #f))
+(define current-narrow-var-constraints-cell-id (make-parameter #f))
+
+;; Helper: write to a narrowing cell.
+(define (narrow-cell-write! cid value)
+  (define net-box (current-narrow-prop-net-box))
+  (define write-fn (current-narrow-prop-cell-write))
+  (when (and net-box write-fn cid)
+    (set-box! net-box (write-fn (unbox net-box) cid value))))
+
+;; Create narrowing cells in the propagator network.
+(define (register-narrow-cells! net-box new-cell-fn)
+  (when (and net-box new-cell-fn)
+    (current-narrow-prop-net-box net-box)
+    (define enet0 (unbox net-box))
+    ;; Phase 5a: narrow-constraints — monotonic list accumulator
+    (define-values (enet1 nc-cid) (new-cell-fn enet0 (current-narrow-constraints) merge-list-append))
+    (current-narrow-constraints-cell-id nc-cid)
+    ;; Phase 5b: narrow-var-constraints — non-monotonic, last-write-wins
+    (define-values (enet2 nvc-cid) (new-cell-fn enet1 (current-narrow-var-constraints) merge-last-write-wins))
+    (current-narrow-var-constraints-cell-id nvc-cid)
+    (set-box! net-box enet2)))
+
+;; Cell-primary read helper for narrowing.
+;; Mirrors macros-cell-read-safe: checks elaboration guard before reading cells.
+(define (narrow-cell-read-safe cid)
+  (define in-elab? (current-narrow-in-elaboration?))
+  (define net-box (current-narrow-prop-net-box))
+  (define read-fn (current-narrow-prop-cell-read))
+  (if (and in-elab? cid net-box read-fn)
+      (with-handlers ([exn:fail? (λ (_) 'not-found)])
+        (read-fn (unbox net-box) cid))
+      'not-found))
+
+;; Track 3 Phase 5a: cell-primary reader for narrowing constraints
+(define (read-narrow-constraints)
+  (define v (narrow-cell-read-safe (current-narrow-constraints-cell-id)))
+  (if (eq? v 'not-found) (current-narrow-constraints) v))
+
+;; Track 3 Phase 5b: cell-primary reader for narrowing var-constraints
+(define (read-narrow-var-constraints)
+  (define v (narrow-cell-read-safe (current-narrow-var-constraints-cell-id)))
+  (if (eq? v 'not-found) (current-narrow-var-constraints) v))
 
 ;; ========================================
 ;; Variable resolution helpers
