@@ -1,7 +1,7 @@
 # Track 4: ATMS Speculation — TMS-in-Network Design
 
 **Created**: 2026-03-16
-**Revised**: 2026-03-16 (D.4 — lattice-theoretic rework: TMS integrated into prop-network)
+**Revised**: 2026-03-16 (D.5 — recursive CHAMP TMS cells, provenance-by-default)
 **Status**: DESIGN (Stage 2/3)
 **Depends on**: Track 3 (Cell-Primary Registries) — ✅ COMPLETE
 **Enables**: Track 5 (Global-Env + Dependency Edges), Track 9 (GDE)
@@ -18,7 +18,8 @@
 | D.1 | Design analysis and speculation audit | ✅ | Initial document |
 | D.2 | Design iteration (external critique) | ✅ | 8 accepted, 2 accepted-with-modification, 5 rejected-with-rationale |
 | D.3 | Internal self-critique (principle alignment) | ✅ | 5 items resolved |
-| D.4 | Lattice-theoretic rework (TMS-in-network) | ✅ | This revision |
+| D.4 | Lattice-theoretic rework (TMS-in-network) | ✅ | Initial TMS-in-network design |
+| D.5 | Recursive CHAMP cells + provenance-by-default | ✅ | This revision |
 | 0 | Performance baseline + acceptance file | ⬜ | |
 | 1 | TMS cell integration into prop-network | ⬜ | |
 | 2 | Per-meta cells → TMS cells | ⬜ | |
@@ -183,87 +184,143 @@ Both cell types live in the same `cells` CHAMP in `prop-network`. The distinctio
 
 ### 3.2 TMS Cell Design
 
-#### 3.2.1 Cell Value Representation
+#### 3.2.1 Cell Value Representation: Recursive CHAMP Tree
 
-A TMS cell's value in the network is a `tms-cell-value`:
+✓ DESIGN DECISION (D.5)
+
+TMS cell values use a **recursive CHAMP-indexed tree** that mirrors the nesting structure of speculation. The data structure shape reflects the domain shape — speculation nests, so the data nests.
 
 ```
-(struct tms-cell-value (entries) #:transparent)
-;; entries: (listof supported-entry) — newest first
-;; Each entry: value + support set (which assumptions justify it)
-
-(struct supported-entry (value support) #:transparent)
-;; value: any (the lattice element — e.g., a type for per-meta cells)
-;; support: hasheq assumption-id → #t
+(struct tms-cell-value
+  (base       ;; unconditional value (the ⊥ / ground truth, always visible at depth 0)
+   branches)  ;; hasheq assumption-id → (value | tms-cell-value)
+  #:transparent)
 ```
 
-A TMS cell is stored in `prop-network-cells` just like any other cell. The difference is its merge function and how reads filter by worldview.
+Nesting is structural: if `(hash-ref branches H1)` returns a `tms-cell-value`, that means H1's speculation itself had sub-speculations. If it returns a plain value, it's a leaf. The tree IS the data — no flattened lists, no backpointers.
 
-**Why in the network cells CHAMP**: This means `save-meta-state` (which snapshots the network box) automatically captures TMS cell state. The CHAMP is immutable — the snapshot shares structure. New assumption-tagged writes create new CHAMP nodes. Restoring the snapshot makes new writes invisible (same as current rollback for monotonic cells).
+**Example** — nested union speculation:
 
-**Important**: This means we get BOTH rollback mechanisms:
-- **Network-box restore** (imperative, current mechanism): works for TMS cells too, since they're in the network
-- **TMS retraction** (structural, new mechanism): marks values as disbelieved without box restore
+```
+;; check expr against (union (union A B) C)
+;; Outer H1 ("try union-left = (union A B)"), inner H2 ("try A"), inner H3 ("try B"), outer H4 ("try C")
+(tms-cell-value
+  type-bot                              ;; base: unconditional ⊥
+  {H1 → (tms-cell-value
+           Int                          ;; H1's base: solved to Int
+           {H2 → Nat                   ;; nested: tried Nat under H2 (failed)
+            H3 → Int})                 ;; nested: tried Int under H3 (succeeded)
+   H4 → String})                       ;; alternative: solved to String under H4
+```
 
-During the transitional phase, both coexist. Once TMS retraction is proven correct, network-box restore becomes a no-op for TMS cells (retraction already handled it), and `save-meta-state` simplifies to 1 box.
+**Why recursive CHAMP over flat list + backpointers**: The flat list approach requires O(k) scan with subset checks on the hot path. The recursive CHAMP gives O(d) indexed traversal (d = speculation depth, d ≤ k always). Each level is a CHAMP `hash-ref` — the same O(1) primitive we use everywhere. The tree structure also directly supports all provenance queries without reconstruction.
 
-#### 3.2.2 ATMS Metadata in the Network
+**Query pattern analysis:**
+
+| Query | Recursive CHAMP cost | Flat list cost |
+|-------|---------------------|---------------|
+| Hot path: "value under current worldview" | O(d) CHAMP lookups via speculation stack | O(k) scan + subset checks |
+| Tooling: "what was written under H2?" | O(1) — `hash-ref branches H2` | O(k) scan for H2 |
+| Provenance: "path from root to current value" | O(d) — traverse from root through believed | O(d) — walk parent links |
+| Full tree enumeration | Natural recursive traversal | Reconstruct from backpointers |
+
+**Reading via speculation stack**: `with-speculative-rollback` maintains a `current-speculation-stack` parameter (a list of assumption-ids, pushed on speculation entry, popped on exit). Reads traverse the tree following the stack:
+
+```
+;; Read: follow the speculation stack through the tree
+(define (tms-read cell-val stack)
+  (cond
+    [(null? stack) (tms-cell-value-base cell-val)]
+    [else
+     (define branch (hash-ref (tms-cell-value-branches cell-val)
+                               (car stack) #f))
+     (cond
+       [(not branch) (tms-cell-value-base cell-val)]   ;; no write at this depth
+       [(tms-cell-value? branch) (tms-read branch (cdr stack))]  ;; recurse
+       [else branch])]))  ;; leaf value
+```
+
+**Writing via speculation stack**: Writes navigate to the correct nesting depth and insert:
+
+```
+;; Write: nested CHAMP insert at the current speculation depth
+(define (tms-write cell-val stack value)
+  (cond
+    [(null? stack)
+     ;; Unconditional write — update base
+     (struct-copy tms-cell-value cell-val [base value])]
+    [(null? (cdr stack))
+     ;; Leaf of stack — insert/update in branches
+     (struct-copy tms-cell-value cell-val
+       [branches (hash-set (tms-cell-value-branches cell-val)
+                           (car stack) value)])]
+    [else
+     ;; Deeper — recurse into existing branch or create new sub-tree
+     (define existing (hash-ref (tms-cell-value-branches cell-val)
+                                (car stack)
+                                (tms-cell-value 'tms-bot (hasheq))))
+     (define sub-tree (if (tms-cell-value? existing) existing
+                          (tms-cell-value existing (hasheq))))
+     (struct-copy tms-cell-value cell-val
+       [branches (hash-set (tms-cell-value-branches cell-val)
+                           (car stack)
+                           (tms-write sub-tree (cdr stack) value))])]))
+```
+
+Write cost: O(d) nested CHAMP updates. Each creates a new CHAMP node (structural sharing preserves old state). For d=1-2, this is negligible — and still cheaper than the current dual-write (meta-info CHAMP + cell).
+
+**CHAMP structural sharing for snapshots**: Each level of the tree is a CHAMP. The network snapshot shares structure across the entire tree. A speculative write at depth 2 modifies only the inner CHAMP — outer CHAMPs share structure with pre-write state. Same structural sharing property as current save/restore.
+
+**Depth-0 fast path**: At speculation depth 0, `(current-speculation-stack)` is `'()`, so `tms-read` returns `base` directly. Zero traversal, zero filtering — the common case pays no TMS overhead beyond a `null?` check.
+
+#### 3.2.2 Commit Semantics: Lazy Base Promotion
+
+✓ DESIGN DECISION (D.5)
+
+When speculation succeeds and commits, the speculative value is **promoted to `base`** while **keeping the branch entry for provenance**.
+
+```
+;; On commit of assumption H1 with value V:
+;; Before: (tms-cell-value old-base {H1 → V, H4 → String})
+;; After:  (tms-cell-value V       {H1 → V, H4 → String})
+```
+
+- The branch entry `{H1 → V}` remains — it records that V came from speculation H1. Full provenance preserved.
+- `base` is updated to V — future depth-0 reads hit `base` directly. Micro-optimization without losing provenance.
+- The invariant: `base` always equals what you'd get by traversing the believed branches from root. It's a materialized view, not a separate source of truth. The tree is the source of truth; `base` is a cache.
+
+Cost: one extra CHAMP update at commit time. Commits are rare compared to reads (one commit per successful speculation, vs thousands of reads during the speculation thunk).
+
+#### 3.2.3 Retraction Semantics: Data Preserved, Path Blocked
+
+Retraction of assumption H1 means "don't follow branch H1 in reads." The branch entry is never deleted. This is fundamental for provenance:
+
+- **Retracted branches are negative knowledge** — proof certificates of failed paths
+- **Nogoods reference retracted assumptions** — if the branch data were deleted, nogoods would point to nothing
+- **Tools can enumerate all branches** (including retracted) to show the full speculation tree
+- **The type checker only follows believed branches** — retracted branches are invisible on the hot path
+
+Retraction cost: O(1) — update the believed set in the ATMS control plane. No tree modification needed.
+
+#### 3.2.4 ATMS Control Plane
 
 The ATMS tracks metadata that must persist across rollback:
 - **Assumptions registry**: `hasheq assumption-id → assumption` — which hypotheses exist
-- **Nogoods**: `(listof hasheq)` — known-inconsistent assumption sets
+- **Nogoods**: `(listof hasheq)` — known-inconsistent assumption sets (proof certificates of failure)
 - **Believed set**: `hasheq assumption-id → #t` — current worldview
 - **Next-assumption counter**: monotonic Nat
 
-This metadata is stored in a **dedicated ATMS cell** in the network with a `merge-atms-metadata` function. The cell is monotonic for some fields (assumptions, nogoods — only grow) and non-monotonic for believed (changes on retract/assume).
+✓ DESIGN DECISION: **ATMS metadata stays in `current-command-atms` (control plane). TMS cell values live in the network (data plane).**
 
-**But**: if the believed set is in the network and the network is snapshot-restored on speculation failure, the believed set would also revert. This conflicts with error-tracking persistence (nogoods must accumulate).
+The control plane is append-only for assumptions and nogoods (they only grow), and mutated for believed (changes on assume/retract). It does not need snapshot/restore — it's the accumulation layer for error tracking, provenance, and GDE.
 
-**Resolution**: The ATMS metadata cell uses **merge-accumulate semantics**: the merge function is a union that never discards. Network-box restore replaces the cell value with the saved snapshot, but the `with-speculative-rollback` code re-applies accumulated nogoods/hypotheses after restore. This is a small amount of bookkeeping:
+The data plane (TMS cell values in network cells) snapshots with the network. Both rollback mechanisms coexist during implementation:
+- **Network-box restore** (imperative): works for TMS cells since they're in the network
+- **TMS retraction** (structural): marks branches as disbelieved without box restore
 
-```
-;; Pseudocode
-(define pre-atms (read-atms-metadata))
-(define saved-net (unbox net-box))
-(define result (thunk))
-(cond
-  [(success? result) result]
-  [else
-   (set-box! net-box saved-net)
-   ;; Re-apply ATMS accumulations that occurred during the thunk
-   (define post-atms (read-atms-metadata-from saved-net)) ;; doesn't have new nogoods
-   (write-atms-metadata! (merge-atms-accumulated pre-atms current-atms post-atms))
-   ...])
-```
+Belt-and-suspenders through implementation phases; cleanup in Phase 6 after proving TMS retraction sufficient.
 
-**Alternative (simpler)**: Keep the ATMS metadata in its own dedicated box (`current-command-atms`) that is NOT snapshot-restored. Only TMS cell *values* (the `tms-cell-value` structs) live in the network. The ATMS box is the "control plane" (which assumptions exist, which are believed), while TMS cell values in the network are the "data plane" (what values are tagged with which assumptions). The control plane persists; the data plane snapshots.
-
-This alternative is simpler, preserves the existing two-level rollback semantics, and still achieves total observability — TMS cell values are in the network (inspectable), and the ATMS box is a well-defined parameter (inspectable via `current-command-atms`).
-
-✓ DESIGN DECISION: **ATMS metadata stays in `current-command-atms` (control plane). TMS cell values live in the network (data plane).** The control plane is append-only during a command (hypotheses and nogoods only grow), so it doesn't need snapshot/restore. The data plane snapshots with the network.
-
-#### 3.2.3 Worldview for Cell Reads
-
-TMS cell reads filter by the currently believed assumptions. The believed set comes from the ATMS control plane (`current-command-atms`).
-
-```
-;; Reading a TMS cell
-(define (tms-cell-read net cid believed)
-  (define cell-val (net-cell-read net cid))  ;; returns tms-cell-value
-  (cond
-    [(tms-cell-value? cell-val)
-     ;; Find newest entry whose support ⊆ believed
-     (for/or ([entry (in-list (tms-cell-value-entries cell-val))])
-       (and (hash-subset? (supported-entry-support entry) believed)
-            (supported-entry-value entry)))]
-    [else cell-val]))  ;; non-TMS cell, return as-is
-```
-
-**Cost on hot path**: `meta-solved?` currently does 2 CHAMP lookups (id-map + cells). With TMS, it does 2 CHAMP lookups + iterate supported entries (typically 1 at speculation depth 0, 2 at depth 1). The `hash-subset?` check on small support sets (1-2 assumptions) is effectively O(1).
-
-**Optimization**: At speculation depth 0, no TMS filtering needed. A `current-speculation-depth` counter (incremented on speculation entry) can skip TMS filtering entirely when depth=0.
-
-#### 3.2.4 TMS Cell Merge Function
+#### 3.2.5 TMS Cell Merge Function
 
 ```
 (define (merge-tms-cell old new)
@@ -271,19 +328,24 @@ TMS cell reads filter by the currently believed assumptions. The believed set co
     [(eq? old 'infra-bot) new]
     [(eq? new 'infra-bot) old]
     [(and (tms-cell-value? old) (tms-cell-value? new))
-     ;; Merge entry lists: union of supported entries
-     ;; Same (value, support) pair → deduplicate
-     ;; Different values with same support → keep both (worldview resolves)
-     (tms-cell-value (append (tms-cell-value-entries new)
-                             (tms-cell-value-entries old)))]
-    ;; Transition from plain value to TMS: wrap the old value with empty support
-    [(tms-cell-value? new)
-     (tms-cell-value (cons (supported-entry old (hasheq))
-                           (tms-cell-value-entries new)))]
+     ;; Merge trees: union branches, recurse on shared keys
+     (define merged-branches
+       (for/fold ([acc (tms-cell-value-branches old)])
+                 ([(k v) (in-hash (tms-cell-value-branches new))])
+         (define existing (hash-ref acc k #f))
+         (hash-set acc k
+           (cond
+             [(not existing) v]
+             [(and (tms-cell-value? existing) (tms-cell-value? v))
+              (merge-tms-cell existing v)]  ;; recursive merge
+             [else v]))))  ;; leaf: latest write wins
+     (tms-cell-value (tms-cell-value-base new) merged-branches)]
     [else new]))
 ```
 
-**Note on monotonicity**: Within a single speculation branch, meta solving is monotone (unsolved→solved, never reversed). Across branches, TMS handles non-monotonicity structurally (retraction = disbelief, not deletion). The merge function doesn't need to handle conflict between branches — worldview filtering resolves which branch's values are visible.
+The merge is recursive — matching the tree structure. Per-branch, latest write wins (same assumption can't produce two different values at the same depth). Cross-branch, the tree preserves both — worldview determines which is visible.
+
+**Note on monotonicity**: Within a single speculation branch, meta solving is monotone (unsolved→solved, never reversed). Across branches, TMS handles non-monotonicity structurally (retraction = disbelief, not deletion).
 
 ### 3.3 Per-Meta TMS Cell Architecture
 
@@ -333,11 +395,17 @@ Write-once means: `fresh-meta!` inserts an entry, and no operation ever modifies
 
 **Refinement**: On speculation failure, orphaned meta-registry entries remain but are invisible because their TMS cells show `type-bot` under the current worldview. `all-unsolved-metas` already filters by status — bot means unsolved, and the meta was never used for anything. The post-fixpoint error sweep can safely ignore metas whose cells were never written under the current worldview.
 
-#### 3.3.4 ID-Map
+#### 3.3.4 ID-Map: Assumption-Tagged for Provenance
 
-The id-map (`meta-id → cell-id`) is monotonic (IDs are only added). Like the meta-info registry, it doesn't need speculation rollback. Orphaned entries from failed speculation are harmless (the cell exists but shows bot under the worldview).
+✓ DESIGN DECISION (D.5): **ID-map entries get assumption tags**, same pattern as per-meta cells. Provenance-by-default: every piece of infrastructure should be observable and explainable, even if hot paths optimize around it.
 
-**Decision**: Keep id-map as a standalone monotonic CHAMP box. It could be a network cell, but there's no benefit (it doesn't need merge semantics, TMS, or propagator wiring). Including it in the network adds overhead without value. It's a pure lookup index.
+The id-map (`meta-id → cell-id`) records which cell was created for which meta. With assumption tags, `prop-meta-id->cell-id` becomes worldview-aware: a meta created during retracted speculation H2 is only visible if H2 is believed.
+
+**Implementation**: The id-map becomes a TMS cell in the network (same recursive CHAMP structure). At depth 0, `tms-read` returns `base` directly — single `null?` check, negligible overhead. During speculation, lookups follow the stack (O(d) CHAMP lookups, d=1-2).
+
+**Provenance benefit**: Tools can query "this meta was created during speculation H2, which failed" — the assumption tag on the id-map entry connects meta creation to speculation context. Without assumption tags, orphaned id-map entries are invisible state that breaks the observability promise.
+
+**Cost on hot path**: `prop-meta-id->cell-id` is called on every `meta-solved?`/`meta-solution`. The depth-0 fast path (return `base`) keeps the common-case cost to a `null?` check beyond what exists today.
 
 ### 3.4 Speculation Rewrite
 
@@ -351,20 +419,20 @@ The id-map (`meta-id → cell-id`) is monotonic (IDs are only added). Like the m
   (define atms-box (current-command-atms))
   (define-values (_a* hyp-id) (atms-assume (unbox atms-box) ...))
   (set-box! atms-box _a*)
-  ;; 2. Enter speculation context
-  (define prev-assumption (current-speculation-assumption))
-  (define prev-depth (current-speculation-depth))
-  ;; 3. Snapshot for belt-and-suspenders (Phase 2 transitional; Phase 4 removes)
+  ;; 2. Push assumption onto speculation stack
+  (define prev-stack (current-speculation-stack))
+  ;; 3. Snapshot for belt-and-suspenders (Phases 2-5; Phase 6 removes)
   (define saved-net (unbox (current-prop-net-box)))
-  ;; 4. Run thunk under assumption
+  ;; 4. Run thunk under assumption (stack-based: reads/writes navigate tree)
   (define result
-    (parameterize ([current-speculation-assumption hyp-id]
-                   [current-speculation-depth (add1 prev-depth)])
+    (parameterize ([current-speculation-stack (cons hyp-id prev-stack)])
       (thunk)))
   (cond
-    [(success? result) result]  ;; Commit: assumption stays believed
+    [(success? result)
+     ;; Commit: promote base for committed TMS cells (lazy base promotion)
+     result]
     [else
-     ;; 5a. Retract assumption (TMS cells' tagged values become invisible)
+     ;; 5a. Retract assumption (control plane: H removed from believed)
      (set-box! atms-box (atms-retract (unbox atms-box) hyp-id))
      ;; 5b. Restore network snapshot (belt-and-suspenders for monotonic cells)
      (set-box! (current-prop-net-box) saved-net)
@@ -377,20 +445,32 @@ The id-map (`meta-id → cell-id`) is monotonic (IDs are only added). Like the m
 
 #### 3.4.2 Nested Speculation
 
-Nesting works naturally with TMS. Each nesting level creates its own assumption. Inner writes are tagged with the inner assumption. Inner retraction makes inner writes invisible without affecting outer writes.
+Nesting is handled by the speculation stack and recursive tree structure. Each nesting level pushes its assumption onto the stack. Reads/writes navigate the tree to the stack's depth.
 
-Example: union-of-unions `check e (union (union A B) C)`:
-1. Outer speculation: assume H1 ("try union left = (union A B)")
-2. Inner speculation: assume H2 ("try inner left = A")
-3. Inner check fails → retract H2 (inner writes invisible)
-4. Inner speculation: assume H3 ("try inner right = B")
-5. Inner check succeeds → H3 stays believed, inner writes visible
-6. Outer check succeeds → H1 stays believed, outer writes visible
-7. Final worldview: {H1, H3} believed; H2 retracted
+**Example**: union-of-unions `check e (union (union A B) C)`:
 
-The sub-failure extraction (Phase D2) continues to work: inner failures are captured as sub-failures of the outer failure.
+1. Outer: push H1. Stack = `(H1)`. Cell tree: `(tms-cell-value ⊥ {})`
+2. Inner: push H2. Stack = `(H2 H1)`. Thunk solves meta M1 → tree: `(tms-cell-value ⊥ {H1 → (tms-cell-value ⊥ {H2 → Nat})})`
+3. Inner fails → retract H2, pop stack back to `(H1)`. H2's branch preserved in tree (negative knowledge) but read navigates only through H1, finding ⊥ (no write at H1 leaf level)
+4. Inner: push H3. Stack = `(H3 H1)`. Thunk solves M1 → tree: `(tms-cell-value ⊥ {H1 → (tms-cell-value ⊥ {H2 → Nat, H3 → Int})})`
+5. Inner succeeds → H3 stays, base promoted: `{H1 → (tms-cell-value Int {H2 → Nat, H3 → Int})}`
+6. Outer succeeds → H1 stays, base promoted: `(tms-cell-value Int {H1 → (tms-cell-value Int {H2 → Nat, H3 → Int})})`
 
-#### 3.4.3 Worked Example: Union Type Speculation
+**Final tree state** (complete provenance):
+```
+M1: (tms-cell-value
+      Int                                    ;; base: committed result
+      {H1 → (tms-cell-value
+               Int                           ;; H1's committed result
+               {H2 → Nat                    ;; ❌ retracted: tried Nat, failed
+                H3 → Int})})                 ;; ✅ believed: tried Int, succeeded
+```
+
+The tree preserves the full speculation history. H2's branch (Nat) is the proof certificate that "trying Nat under the inner-left speculation failed." Tools can enumerate all branches; the type checker only follows the believed path.
+
+The sub-failure extraction (Phase D2) continues to work: inner failures are captured as sub-failures of the outer failure, cross-referencing the tree branches.
+
+#### 3.4.3 Worked Example: Simple Union Speculation
 
 **Scenario**: `check expr against (union (Map String Int) (Map String String))`
 
@@ -402,14 +482,14 @@ The sub-failure extraction (Phase D2) continues to work: inner failures are capt
 5. Commit — M2 persists
 
 **After Track 4:**
-1. `atms-assume` H1 → hypothesis for "try Map String Int"
-2. `check expr (Map String Int)` → `fresh-meta` M1 with TMS cell tagged {H1}; `solve-meta` M1 writes solution tagged {H1}; type fails
-3. `atms-retract` H1 → M1's TMS entries invisible (meta-info registry has orphaned entry — harmless)
+1. `atms-assume` H1. Stack = `(H1)`. M1 TMS cell: `(tms-cell-value ⊥ {})`
+2. `solve-meta` M1 under `(H1)` → M1 tree: `(tms-cell-value ⊥ {H1 → Int})`; type fails
+3. `atms-retract` H1. Nogood {H1} recorded. M1's tree unchanged but read at stack `()` returns ⊥
 4. Network-box restore (belt-and-suspenders) — restores monotonic cells
-5. `atms-assume` H2 → hypothesis for "try Map String String"
-6. `check expr (Map String String)` → `fresh-meta` M2 with TMS cell tagged {H2}; succeeds
-7. Commit — H2 believed, M2's solution visible; H1 retracted, M1's entries invisible
-8. Nogood {H1} recorded for GDE error chains
+5. `atms-assume` H2. Stack = `(H2)`. `fresh-meta` M2 → TMS cell: `(tms-cell-value ⊥ {H2 → String})`
+6. M2 succeeds → base promoted: `(tms-cell-value String {H2 → String})`
+7. H1 retracted, M1's tree preserved (provenance: "tried Int, failed")
+8. Nogood {H1} available for GDE error chains and learned-clause pruning
 
 ### 3.5 Phase Structure
 
@@ -424,15 +504,15 @@ The sub-failure extraction (Phase D2) continues to work: inner failures are capt
 
 **Scope**: Add TMS cell support to the propagator network. No meta cells converted yet — this is pure infrastructure.
 
-**Files**: `propagator.rkt`, `atms.rkt` (or new `tms-cell.rkt`)
+**Files**: `propagator.rkt` or new `tms-cell.rkt`, `infra-cell.rkt`
 
-1. Define `tms-cell-value` and `supported-entry` structs
-2. Add `merge-tms-cell` merge function
-3. Add `net-new-tms-cell` factory: creates a cell with `merge-tms-cell` and initial `(tms-cell-value '())`
-4. Add `net-tms-cell-read`: reads cell value, filters by believed set
-5. Add `net-tms-cell-write`: creates `supported-entry` with current assumption, writes via standard cell write (merge appends)
-6. Add `current-speculation-assumption` parameter (assumption-id | #f)
-7. Add `current-speculation-depth` parameter (Nat, 0 = not speculating)
+1. Define `tms-cell-value` struct (base + branches hasheq) — the recursive CHAMP tree node
+2. Add `merge-tms-cell` merge function (recursive tree merge, per-branch latest-write-wins)
+3. Add `net-new-tms-cell` factory: creates a cell with `merge-tms-cell` and initial `(tms-cell-value initial-value (hasheq))`
+4. Add `tms-read`: navigate tree via speculation stack, return value at current depth (O(d) CHAMP lookups)
+5. Add `tms-write`: nested CHAMP insert at current stack depth (O(d) CHAMP updates)
+6. Add `current-speculation-stack` parameter (`(listof assumption-id)`, `'()` = not speculating)
+7. Unit tests for: depth-0 read/write, depth-1 branch creation, nested depth-2, retraction (branch preserved but read returns base), commit (base promotion)
 
 **Verification**: Unit tests for TMS cell operations. No production code changes — existing behavior unchanged.
 
@@ -442,17 +522,18 @@ The sub-failure extraction (Phase D2) continues to work: inner failures are capt
 
 **Files**: `metavar-store.rkt`, `driver.rkt` (cell creation in `elab-fresh-meta`)
 
-1. `elab-fresh-meta` creates TMS cells instead of monotonic cells (initial value: `(tms-cell-value (list (supported-entry type-bot (hasheq))))`)
-2. `solve-meta-core!` writes through `net-tms-cell-write` with current assumption
-3. `meta-solved?` reads through `net-tms-cell-read` with current believed set
-4. `meta-solution` reads through `net-tms-cell-read`
-5. Update `with-speculative-rollback` to set `current-speculation-assumption` and use TMS retraction on failure (retain network-box restore as belt-and-suspenders)
+1. `elab-fresh-meta` creates TMS cells instead of monotonic cells (initial value: `(tms-cell-value type-bot (hasheq))`)
+2. `solve-meta-core!` writes through `tms-write` with `current-speculation-stack`
+3. `meta-solved?` reads through `tms-read` with `current-speculation-stack` — at depth 0, returns `base` directly
+4. `meta-solution` reads through `tms-read`
+5. Update `with-speculative-rollback` to push/pop `current-speculation-stack` and use TMS retraction on failure (retain network-box restore as belt-and-suspenders)
+6. On successful commit: lazy base promotion — update `base` to committed value while keeping branch entry for provenance
 
 **Critical invariant**: At speculation depth 0, all TMS reads must return the same values as current monotonic reads. This is verified by the full test suite (which doesn't exercise manual speculation).
 
 **Risk**: This is the highest-risk phase. `meta-solved?` and `meta-solution` are the hottest operations. TMS filtering adds cost. Mitigated by: (a) depth-0 fast path (skip filtering), (b) small support sets (O(1) subset check), (c) profile before/after.
 
-**Contingency**: If TMS read overhead >15%: investigate caching the worldview-filtered result per cell per worldview version (a "TMS read cache" that's invalidated on assume/retract). This avoids repeated filtering of the same cell within a speculation context.
+**Contingency**: If TMS read overhead >15%: the recursive CHAMP already minimizes overhead (O(d) indexed lookups vs O(k) scan), but we could add a per-cell read cache invalidated on write. Alternatively, investigate whether the overhead is in the CHAMP lookups or the struct allocation/matching.
 
 #### Phase 3: Level/Mult/Session Metas → Per-Meta TMS Cells
 
@@ -511,10 +592,10 @@ Standalone PIR document following established template.
 
 | File | Phase | Nature |
 |------|-------|--------|
-| `propagator.rkt` or new `tms-cell.rkt` | 1 | TMS cell structs, merge, read/write |
+| `propagator.rkt` or new `tms-cell.rkt` | 1 | `tms-cell-value` struct (recursive CHAMP tree), `tms-read`/`tms-write`, merge |
 | `metavar-store.rkt` | 2, 3, 4 | TMS cell creation/read/write for metas; registry refactor; save/restore simplification |
 | `driver.rkt` | 2 | `elab-fresh-meta` creates TMS cells |
-| `elab-speculation-bridge.rkt` | 2, 4 | Assumption parameterization, TMS retraction, save/restore simplification |
+| `elab-speculation-bridge.rkt` | 2, 4 | Speculation stack push/pop, TMS retraction, base promotion on commit, save/restore simplification |
 | `infra-cell.rkt` | 1 | TMS merge function |
 | `atms.rkt` | 1 | Possibly extended for network-integrated TMS |
 
@@ -553,7 +634,7 @@ Track 4 introduces TMS cells on the hottest read path in the type checker. Howev
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| TMS read overhead on `meta-solved?`/`meta-solution` | Medium | High | Depth-0 fast path; profile before/after Phase 2 |
+| TMS read overhead on `meta-solved?`/`meta-solution` | Low-Medium | High | Depth-0 returns `base` (null? check). In speculation: O(d) CHAMP lookups vs current O(1) — d=1-2. Profile before/after Phase 2. |
 | TMS cell value growth (many entries per cell) | Low | Medium | Entries bounded by speculation depth × branches; typical: 1-3 |
 | ATMS believed set update cost | Low | Low | Set is small (bounded by speculation depth); hash-subset? is O(k) for k=set size |
 | Orphaned meta-registry entries | Low | Low | Harmless — unsolved metas with invisible cells; filtered by `all-unsolved-metas` |
@@ -564,11 +645,11 @@ Track 4 introduces TMS cells on the hottest read path in the type checker. Howev
 
 ### 4.3 Open Questions
 
-1. **Should `tms-cell-value` use a vector instead of list for entries?** Lists are simpler but vectors would allow indexed access. For typical entry counts (1-3), list is fine. Defer optimization.
+1. **What happens to `batch-worker.rkt`?** After Phase 4, it saves/restores the network box (1 box). This is mechanical. The `current-command-atms` parameter also needs save/restore for worker isolation. The `current-speculation-stack` parameter resets to `'()` per worker (workers don't inherit speculation context).
 
-2. **What happens to `batch-worker.rkt`?** After Phase 4, it saves/restores the network box (1 box). This is mechanical. The `current-command-atms` parameter also needs save/restore for worker isolation.
+2. **Can Phase 5 (learned clauses) prune enough to be measurable?** Depends on speculation patterns. Union-of-unions creates the most speculation. Profile in Phase 0 to count how often the same branch patterns recur.
 
-3. **Can Phase 5 (learned clauses) prune enough to be measurable?** Depends on speculation patterns. Union-of-unions creates the most speculation. Profile in Phase 0 to count how often the same branch patterns recur.
+3. **Should base promotion on commit be eager or lazy?** Current design: eager (update `base` immediately on commit). Alternative: lazy (only update `base` when the outer-most speculation commits). Eager is simpler and gives better depth-0 read performance. Lazy avoids unnecessary base updates for intermediate commits in nested speculation. Start eager; revisit if profiling shows commit overhead.
 
 ---
 
@@ -659,6 +740,16 @@ Major rework based on collaborative design discussion. Key insights:
 4. **Lattice embedding framing** — speculation as sub-lattice creation (pocket universes), not temporal save/restore. TMS cells implement this directly.
 5. **Meta-info CHAMP → write-once registry** — immutable metadata exits the speculation snapshot.
 6. **ATMS control/data plane split** — ATMS metadata (hypotheses, nogoods, believed) stays in `current-command-atms` (control plane, persists across rollback). TMS cell values live in the network (data plane, snapshots with network).
+
+### D.5: Recursive CHAMP Cells + Provenance-by-Default (2026-03-16)
+Refinement of TMS cell representation and provenance design principles. Key decisions:
+1. **Recursive CHAMP tree** replaces flat list + backpointers. Data structure shape mirrors domain shape (speculation nests → data nests). Hot path: O(d) indexed CHAMP traversal via speculation stack, not O(k) scan with subset checks. Tooling queries: O(1) per assumption via `hash-ref`.
+2. **Speculation stack** (`current-speculation-stack`) replaces `current-speculation-assumption` + `current-speculation-depth`. Single parameter, pushed/popped by `with-speculative-rollback`. Reads/writes navigate tree by following the stack.
+3. **Lazy base promotion on commit** — `base` field updated to committed value (micro-optimization for future depth-0 reads) while branch entry preserved (provenance: "this value came from speculation H").
+4. **ID-map assumption-tagged** — provenance-by-default design principle. Every piece of infrastructure should be observable and explainable. ID-map entries track which speculation created which meta→cell mapping.
+5. **Retraction preserves data** — retracted branches are never deleted. They're negative knowledge (proof certificates of failed paths). Tools enumerate all branches; type checker follows only believed path.
+6. **Belt-and-suspenders through all implementation phases**, cleanup in Phase 6 after proving TMS retraction correct across full test suite.
+7. **Provenance-by-default as design principle** — observability/correctness/explainability over micro-optimization. Infrastructure must support self-hosting, proof techniques, tooling, and error reporting. Hot paths optimize via fast paths (depth-0 base return), not by dropping provenance.
 
 ---
 
