@@ -1,0 +1,1103 @@
+;; ========================================================================
+;;
+;;   Track 5 Acceptance File — Global-Env Cell-Primary + Dependency Edges
+;;
+;;   STATUS: Phase 0 (Pre-Implementation Baseline)
+;;   Run via: process-file "racket/prologos/examples/2026-03-16-track5-acceptance.prologos"
+;;
+;;   Track 5 is an infrastructure track (no syntax changes). It converts
+;;   global-env to persistent per-module networks, wires cross-module
+;;   dependency edges, and consolidates env-threading writes. This file
+;;   exercises every CONSUMER of the global environment subsystem to
+;;   confirm no regressions from the migration.
+;;
+;;   Organization: by consumer subsystem (per ACCEPTANCE_FILES.md §2).
+;;   Track 5 changes how definitions are stored, looked up, cached in
+;;   modules, and cleaned up on failure. Every section exercises a
+;;   different consumer of that infrastructure.
+;;
+;;   Conventions:
+;;     - Commented-out = aspirational or pre-existing BUG; annotated
+;;     - Uncommented = must pass today; regression if broken
+;;     - Union types: `<A | B>` — angle brackets for type-level grouping
+;;     - Uncurried: `spec f A B -> C`, `defn f [x y] body`
+;;     - `[]` for application: `[f x]`, NOT `(f x)`
+;;     - Full prelude — exercise the standard library
+;;     - Nat ONLY for inductive patterns; Int for computation
+;;
+;;   Sections:
+;;     A. Definition lookup — spec/defn/def, the core global-env path
+;;     B. Definition dependency chains — same-file references (Phase 4a)
+;;     C. Module imports and qualified access — module cache consumer
+;;     D. Cross-module dependency chains — multi-hop imports (Phase 4b)
+;;     E. Trait resolution and generic dispatch — instance lookup
+;;     F. Definition failure and recovery — cleanup paths (Phase 2)
+;;     G. Higher-order functions and closures — lookup in nested contexts
+;;     H. Pattern matching and constructors — constructor lookup
+;;     I. Prelude breadth — broad module loading regression net
+;;     J. Relational features — global-env used by defr/solve
+;;     K. Type system interactions — dependent types, unions, specs
+;;     L. Combined stress patterns — compositional creativity
+;;     Z. Uncommented baseline — quick regression check
+;;
+;; ========================================================================
+
+
+ns acceptance::track5
+
+
+;; ========================================================================
+;; SECTION A: DEFINITION LOOKUP — The Core Global-Env Path
+;; ========================================================================
+;;
+;; Every `spec`, `defn`, `def` writes to global-env. Every reference to
+;; a prior definition reads from it. Track 5 changes the storage from
+;; parameter-primary (Layer 2) to cell-primary for module loading too.
+;; These exercises are the bread and butter — if definition lookup breaks,
+;; everything breaks.
+
+;; --- A1: Simple def + reference ---
+
+def a1-int : Int := 42
+def a1-str : String := "hello"
+a1-int
+a1-str
+
+;; --- A2: spec + defn + invocation ---
+
+spec inc Int -> Int
+defn inc [x] [int+ x 1]
+
+spec dbl Int -> Int
+defn dbl [x] [int* x 2]
+
+inc 41
+dbl 21
+
+;; --- A3: def referencing a prior def ---
+
+def a3-base : Int := 10
+def a3-derived : Int := [int+ a3-base 5]
+a3-derived
+
+;; --- A4: defn referencing a prior defn ---
+
+spec sqr Int -> Int
+defn sqr [x] [int* x x]
+
+spec sqr-inc Int -> Int
+defn sqr-inc [x] [inc [sqr x]]
+
+sqr-inc 5
+;; => 26
+
+;; --- A5: Type annotation references prior type ---
+
+spec wrap-int Int -> [Option Int]
+defn wrap-int [x] [some x]
+
+wrap-int 42
+
+;; --- A6: Multiple definitions in sequence, each referencing prior ---
+
+spec step1 Int -> Int
+defn step1 [x] [int+ x 1]
+
+spec step2 Int -> Int
+defn step2 [x] [int* [step1 x] 2]
+
+spec step3 Int -> Int
+defn step3 [x] [int- [step2 x] 3]
+
+step3 5
+;; => (5+1)*2 - 3 = 9
+
+;; --- A7: Redefinition shadow (def overrides prelude name) ---
+;; The `length` function comes from prelude. A local def should shadow it.
+
+spec my-length [List Int] -> Nat
+defn my-length
+  | nil         -> zero
+  | cons _ rest -> suc [my-length rest]
+
+my-length '[1 2 3 4]
+
+;; --- A8: Forward reference within match branches ---
+;; Each branch of a match may reference definitions from earlier in the file.
+
+spec classify-nat Nat -> String
+defn classify-nat
+  | zero  -> "zero"
+  | suc _ -> "positive"
+
+classify-nat 0N
+classify-nat 3N
+
+
+;; ========================================================================
+;; SECTION B: DEFINITION DEPENDENCY CHAINS — Same-File References
+;; ========================================================================
+;;
+;; Track 5 Phase 4a wires propagator edges between definitions in the
+;; same file. When definition A references definition B, an edge is
+;; created from B's cell to A's cell. These exercises create dependency
+;; chains of increasing depth and verify they resolve correctly.
+
+;; --- B1: Linear chain (A → B → C → D) ---
+
+spec chain-a Int -> Int
+defn chain-a [x] [int+ x 1]
+
+spec chain-b Int -> Int
+defn chain-b [x] [chain-a [int* x 2]]
+
+spec chain-c Int -> Int
+defn chain-c [x] [chain-b [int+ x 3]]
+
+spec chain-d Int -> Int
+defn chain-d [x] [chain-c [int- x 1]]
+
+chain-d 10
+;; => chain-c(9) = chain-b(12) = chain-a(24) = 25
+
+;; --- B2: Diamond dependency (D depends on B and C, both depend on A) ---
+
+spec diamond-a Int -> Int
+defn diamond-a [x] [int+ x 1]
+
+spec diamond-b Int -> Int
+defn diamond-b [x] [int* [diamond-a x] 2]
+
+spec diamond-c Int -> Int
+defn diamond-c [x] [int+ [diamond-a x] 10]
+
+spec diamond-d Int -> Int
+defn diamond-d [x] [int+ [diamond-b x] [diamond-c x]]
+
+diamond-d 5
+;; => diamond-b(5) + diamond-c(5) = 12 + 16 = 28
+
+;; --- B3: Recursive self-dependency ---
+
+;; BUG (L3): int= not exported in prelude — foreign builtin not accessible.
+;; Hypothesis: int=, int<, int> not included in namespace.rkt requires.
+;; Cascading: fib-iter definition fails, all invocations unbound.
+
+;; spec fib-iter Int -> Int
+;; defn fib-iter [n]
+;;   if [int= n 0] 0
+;;     (if [int= n 1] 1
+;;       [int+ [fib-iter [int- n 1]] [fib-iter [int- n 2]]])
+;;
+;; fib-iter 0
+;; fib-iter 1
+;; fib-iter 6
+
+;; --- B4: Multiple definitions used by one consumer ---
+
+spec b4-x Int -> Int
+defn b4-x [n] [int+ n 1]
+
+spec b4-y Int -> Int
+defn b4-y [n] [int* n 2]
+
+spec b4-z Int -> Int
+defn b4-z [n] [int- n 3]
+
+spec b4-combine Int -> Int
+defn b4-combine [n] [int+ [b4-x n] [int+ [b4-y n] [b4-z n]]]
+
+b4-combine 10
+;; => 11 + 20 + 7 = 38
+
+;; --- B5: Nat structural recursion with dependency ---
+
+spec b5-add Nat Nat -> Nat
+defn b5-add
+  | x zero  -> x
+  | x suc k -> suc [b5-add x k]
+
+spec nat-sum Nat -> Nat
+defn nat-sum
+  | zero  -> zero
+  | suc k -> b5-add [suc k] [nat-sum k]
+
+nat-sum 3N
+;; => 3+2+1+0 = 6N
+
+
+;; ========================================================================
+;; SECTION C: MODULE IMPORTS AND QUALIFIED ACCESS
+;; ========================================================================
+;;
+;; Module loading creates env snapshots (currently hasheq, Track 5 →
+;; module-network-ref). Qualified access resolves through the module
+;; cache. These exercises stress module loading and cross-module lookup.
+
+;; --- C1: Qualified access to prelude string module ---
+
+str::length "hello world"
+str::append "foo" "bar"
+
+;; --- C2: Prelude Eq/Ord dicts (loaded via module system) ---
+
+eq-check nat-eq 2N 2N
+eq-check nat-eq 0N 1N
+eq-neq nat-eq 0N 1N
+
+;; --- C3: Prelude Ord comparison ---
+
+ord-compare nat-ord 1N 2N
+ord-lt nat-ord 0N 1N
+ord-gt nat-ord 2N 0N
+
+;; --- C4: Multiple prelude modules used together ---
+;; This exercises the case where one file references definitions from
+;; many different prelude modules. Each module has its own env snapshot.
+
+;; From prelude list module:
+length '[1 2 3]
+head '[1 2 3]
+tail '[1 2 3]
+reverse '[1 2 3]
+append '[1 2] '[3 4]
+
+;; From prelude option module:
+some 42
+none
+
+;; From prelude result module:
+ok "success"
+err "failure"
+
+;; --- C5: Definitions that use prelude then extend ---
+
+;; BUG (L3): multiplicity violation — using xs twice in [add [length xs] [length xs]].
+;; Hypothesis: QTT linear checking rejects double-use of xs even with non-linear Nat result.
+;; spec double-length [List Int] -> Nat
+;; defn double-length [xs] [add [length xs] [length xs]]
+;; double-length '[10 20 30]
+
+;; Even single-use [add [length xs] zero] triggers multiplicity violation.
+;; Workaround: just exercise length directly (C4 already covers this)
+length '[10 20 30]
+
+
+;; ========================================================================
+;; SECTION D: CROSS-MODULE DEPENDENCY CHAINS
+;; ========================================================================
+;;
+;; Track 5 Phase 4b creates shadow cells when file foo references
+;; bar::map. These exercises create multi-hop dependency chains
+;; through the module system.
+
+;; --- D1: Definition depends on prelude → prelude depends on prelude ---
+;; length comes from prologos::core::collections which imports from
+;; prologos::data::nat. A chain: our def → length → Nat.
+
+;; BUG (L3): multiplicity violation — QTT rejects xs usage pattern.
+;; spec count-and-add [List Int] Nat -> Nat
+;; defn count-and-add [xs extra] [add [length xs] extra]
+;; count-and-add '[1 2 3] 2N
+
+;; Simpler: just test that length works through dependency chain
+length '[1 2 3 4 5]
+;; => 5N (verifies prelude→nat→collections chain)
+
+;; --- D2: Map operations chain through multiple modules ---
+
+def d2-map := {:name "alice" :age 30}
+d2-map
+
+;; --- D3: String ops chain (str:: module → char module → nat) ---
+
+str::length "abcdef"
+str::append "hello" " world"
+
+;; --- D4: Generic dispatch chains through trait module ---
+;; `+` resolves through Add trait → Int instance → foreign int+
+;; This is a 3-hop dependency: our code → Add trait → Int impl → builtin
+
+[+ 3 4]
+[+ 100 200]
+[- 10 3]
+[* 6 7]
+
+;; --- D5: Rat generic dispatch (separate module chain) ---
+
+[+ 1/2 1/3]
+[* 2/3 3/5]
+[- 3/4 1/4]
+
+;; --- D6: Nested generic expressions (deep dependency fan-out) ---
+
+[+ [* 3 4] [- 10 3]]
+;; => 12 + 7 = 19
+
+[* [+ 2 3] [+ 4 5]]
+;; => 5 * 9 = 45
+
+[+ [* [+ 1 2] [- 5 2]] [/ 100 10]]
+;; => 3*3 + 10 = 19
+
+
+;; ========================================================================
+;; SECTION E: TRAIT RESOLUTION AND GENERIC DISPATCH
+;; ========================================================================
+;;
+;; Trait resolution looks up instances via global-env. Track 5 changes
+;; where those instances live (parameter → cell → module network).
+
+;; --- E1: Explicit dict passing (prelude Eq) ---
+
+eq-check nat-eq 0N 0N
+eq-check nat-eq 1N 2N
+
+;; --- E2: Explicit dict passing (prelude Ord) ---
+
+ord-compare nat-ord 1N 1N
+ord-lt nat-ord 1N 2N
+
+;; --- E3: Generic + dispatch (Add trait, Int instance) ---
+
+[+ 1 2]
+[+ 0 0]
+[+ -3 3]
+
+;; --- E4: Generic * dispatch (Mul trait, Int instance) ---
+
+[* 6 7]
+[* 0 999]
+
+;; --- E5: Generic dispatch on Rat ---
+
+[+ 1/2 1/2]
+[* 1/3 3/1]
+[/ 7/8 1/2]
+
+;; --- E6: Chained generic ops (multiple trait resolutions) ---
+
+[+ [* 2 3] [- 10 4]]
+;; => 6 + 6 = 12
+
+;; --- E7: Where-clause generics (aspirational) ---
+;; BUG (L3): where-clause dict injection fails at file level.
+
+;; spec double-it {A} A -> A
+;;   where (Add A)
+;; defn double-it [x] [+ x x]
+;;
+;; double-it 21
+;; double-it 1/4
+
+;; --- E8: Trait-constrained with Num bundle (aspirational) ---
+;; BUG (L3): bundle constraints not at file level.
+
+;; spec quadratic {A} A A A A -> A
+;;   where (Num A)
+;; defn quadratic [a b c x]
+;;   [+ [* a [* x x]] [+ [* b x] c]]
+
+
+;; ========================================================================
+;; SECTION F: DEFINITION FAILURE AND RECOVERY
+;; ========================================================================
+;;
+;; Track 5 Phase 2 consolidates 12 failure cleanup sites into
+;; global-env-remove!. When a definition fails elaboration, it must
+;; be completely invisible to subsequent lookups. These exercises
+;; create successful definitions before and after (hypothetical)
+;; failure points.
+
+;; --- F1: Definitions before and after a gap ---
+;; This verifies that the definition namespace is clean even when
+;; intervening definitions are complex.
+
+spec f1-before Int -> Int
+defn f1-before [x] [int+ x 100]
+
+;; (imagine a definition here that would fail type checking —
+;;  in a real scenario, the failed def would be cleaned up)
+
+spec f1-after Int -> Int
+defn f1-after [x] [int* [f1-before x] 2]
+
+f1-after 5
+;; => (5+100)*2 = 210
+
+;; --- F2: Many definitions in sequence (stress env accumulation) ---
+
+spec f2a Int -> Int
+defn f2a [x] [int+ x 1]
+spec f2b Int -> Int
+defn f2b [x] [int+ x 2]
+spec f2c Int -> Int
+defn f2c [x] [int+ x 3]
+spec f2d Int -> Int
+defn f2d [x] [int+ x 4]
+spec f2e Int -> Int
+defn f2e [x] [int+ x 5]
+
+[int+ [f2a 0] [int+ [f2b 0] [int+ [f2c 0] [int+ [f2d 0] [f2e 0]]]]]
+;; => 1+2+3+4+5 = 15
+
+;; --- F3: Definition that uses a complex type ---
+
+;; BUG (L3): int= not exported in prelude.
+;; spec f3-wrap Int -> [Result Int String]
+;; defn f3-wrap [x]
+;;   if [int= x 0] (err "zero")
+;;     (ok x)
+;;
+;; f3-wrap 42
+;; f3-wrap 0
+
+;; Alternative without int= — just return ok always
+spec f3-wrap-ok Int -> [Result Int String]
+defn f3-wrap-ok [x] [ok x]
+
+f3-wrap-ok 42
+
+
+;; ========================================================================
+;; SECTION G: HIGHER-ORDER FUNCTIONS AND CLOSURES
+;; ========================================================================
+;;
+;; HOFs look up the function definition at application time. Closures
+;; capture values that were looked up earlier. Both exercise global-env
+;; lookup in nested contexts.
+
+;; --- G1: map with named function ---
+
+map [fn [x] [int* x 2]] '[1 2 3]
+map [fn [x] [int+ x 10]] '[1 2 3 4]
+
+;; --- G2: Pipe operator ---
+
+|> 5 inc dbl
+;; => (5+1)*2 = 12
+
+|> 10 dbl inc
+;; => 10*2+1 = 21
+
+;; --- G3: Compose operator ---
+
+compose inc dbl 5
+;; => inc(dbl(5)) = inc(10) = 11
+
+compose dbl inc 5
+;; => dbl(inc(5)) = dbl(6) = 12
+
+;; --- G4: Triple pipeline ---
+
+|> 2 inc dbl sqr
+;; => sqr(dbl(inc(2))) = sqr(dbl(3)) = sqr(6) = 36
+
+;; --- G5: Closure capturing a looked-up definition ---
+
+spec make-adder Int -> [Int -> Int]
+defn make-adder [n]
+  [fn [x : Int] [int+ n x]]
+
+[make-adder 10] 32
+[make-adder 100] 1
+
+;; --- G6: Closure capturing multiple values ---
+
+spec make-linear Int Int -> [Int -> Int]
+defn make-linear [a b]
+  [fn [x : Int] [int+ [int* a x] b]]
+
+[make-linear 2 3] 5
+;; => 2*5 + 3 = 13
+
+[make-linear 0 42] 999
+;; => 0*999 + 42 = 42
+
+;; --- G7: HOF that applies a definition by name ---
+
+spec apply-fn [Int -> Int] Int -> Int
+defn apply-fn [f x] [f x]
+
+apply-fn inc 41
+apply-fn sqr 6
+apply-fn dbl 21
+
+;; --- G8: Twice (HOF composing a function with itself) ---
+
+spec twice-fn [Int -> Int] Int -> Int
+defn twice-fn [f x] [f [f x]]
+
+twice-fn inc 40
+;; => 42
+
+twice-fn dbl 3
+;; => 12
+
+;; --- G9: Lambda in pipeline (aspirational) ---
+;; BUG (L3): lambda fn [x] in pipeline.
+
+;; |> 3
+;;   [fn [x] [int* x x]]
+;;   [fn [x] [int+ x 1]]
+
+;; --- G10: Map then reverse (pipeline with HOF) ---
+
+|> '[1 2 3]
+  [map [fn [x] [int* x 10]]]
+  reverse
+
+
+;; ========================================================================
+;; SECTION H: PATTERN MATCHING AND CONSTRUCTORS
+;; ========================================================================
+;;
+;; Pattern matching looks up constructors via global-env. Constructor
+;; names (zero, suc, cons, nil, some, none, ok, err) are definitions
+;; loaded from prelude modules.
+
+;; --- H1: Nat pattern matching ---
+
+spec is-zero Nat -> Bool
+defn is-zero
+  | zero  -> true
+  | suc _ -> false
+
+is-zero 0N
+is-zero 1N
+
+;; --- H2: Bool direct dispatch ---
+
+spec negate Bool -> Bool
+defn negate
+  | true  -> false
+  | false -> true
+
+;; BUG (L3): multi-arity Bool->Bool inference fails at invocation.
+;; Hypothesis: multi-arity dispatch without Nat/constructor pattern fails.
+;; negate true
+;; negate false
+
+;; --- H3: Option matching ---
+
+spec unwrap-or [Option Int] Int -> Int
+defn unwrap-or
+  | [some x] default -> x
+  | none     default -> default
+
+unwrap-or [some 42] 0
+unwrap-or none 99
+
+;; --- H4: Result matching ---
+
+spec result-to-int [Result Int String] -> Int
+defn result-to-int
+  | ok x  -> x
+  | err _ -> -1
+
+result-to-int [ok 42]
+result-to-int [err "fail"]
+
+;; --- H5: List pattern matching ---
+
+spec safe-head [List Int] -> Int
+defn safe-head
+  | nil      -> 0
+  | cons x _ -> x
+
+safe-head '[10 20 30]
+safe-head '[]
+
+;; --- H6: Nested Nat patterns ---
+
+spec nat-pred Nat -> Nat
+defn nat-pred
+  | zero  -> zero
+  | suc k -> k
+
+nat-pred 0N
+nat-pred 1N
+nat-pred 3N
+
+;; --- H7: Pattern matching with guard-like behavior ---
+
+;; BUG (L3): int= not exported in prelude.
+;; spec abs-int Int -> Int
+;; defn abs-int [x]
+;;   if [int= x 0] 0
+;;     (if [int= [int/ x [int- 0 -1]] x] x
+;;       [int- 0 x])
+;;
+;; abs-int 5
+;; abs-int -3
+;; abs-int 0
+
+
+;; ========================================================================
+;; SECTION I: PRELUDE BREADTH — Broad Module Loading Regression Net
+;; ========================================================================
+;;
+;; The prelude loads ~15 modules. Track 5 changes how modules are cached
+;; (hasheq → module-network-ref). Every prelude module must still load
+;; and function correctly.
+
+;; --- I1: Nat module (data constructors + arithmetic) ---
+
+zero
+suc zero
+suc [suc [suc zero]]
+add 2N 3N
+
+;; --- I2: Bool module ---
+
+true
+false
+if true "yes" "no"
+
+;; --- I3: List module ---
+
+'[1 2 3]
+'[true false]
+'["a" "b" "c"]
+'[1/2 1/3 1/4]
+length '[1 2 3 4 5]
+
+;; --- I4: Option module ---
+
+some 42
+some "hello"
+some [some 42]
+none
+
+;; --- I5: Result module ---
+
+ok 42
+ok "success"
+err "failed"
+err 404
+
+;; --- I6: Eq module (dict) ---
+
+eq-check nat-eq 0N 0N
+eq-neq nat-eq 0N 1N
+
+;; --- I7: Ord module (dict) ---
+
+ord-compare nat-ord 1N 2N
+ord-lt nat-ord 0N 1N
+
+;; --- I8: String module (qualified) ---
+
+str::length "hello"
+str::append "hello" " world"
+
+;; --- I9: Int arithmetic (foreign builtins) ---
+
+int+ 3 4
+int- 10 3
+int* 6 7
+int/ 100 4
+
+;; --- I10: Rat arithmetic (foreign builtins) ---
+
+rat+ 1/2 1/3
+rat- 3/4 1/4
+rat* 2/3 3/5
+rat/ 7/8 1/2
+
+;; --- I11: Generic arithmetic (Add/Sub/Mul/Div traits) ---
+
+[+ 3 4]
+[- 10 3]
+[* 6 7]
+[/ 100 4]
+
+;; --- I12: Collection operations ---
+
+head '[1 2 3]
+tail '[1 2 3]
+reverse '[1 2 3]
+append '[1 2] '[3 4]
+length '[]
+
+;; --- I13: Map literal ---
+
+{:name "alice" :role "admin"}
+{:x 1 :y 2 :z 3}
+
+;; --- I14: Nested list ---
+
+'['[1 2] '[3 4] '[5 6]]
+
+
+;; ========================================================================
+;; SECTION J: RELATIONAL FEATURES
+;; ========================================================================
+;;
+;; defr and solve use global-env for relation registration and lookup.
+;; Module loading of prelude relations (if any) goes through the same
+;; module cache path.
+
+;; --- J1: Simple facts ---
+
+defr color [?item ?hue]
+  || "apple"  "red"
+     "banana" "yellow"
+     "grape"  "purple"
+
+solve (color "apple" c)
+solve (color fruit "yellow")
+
+;; --- J2: Recursive rules ---
+
+defr edge [?from ?to]
+  || "a" "b"
+     "b" "c"
+     "c" "d"
+
+defr path [?from ?to]
+  &> (edge from to)
+  &> (edge from mid) (path mid to)
+
+solve (path "a" dest)
+
+;; --- J3: Negation-as-failure ---
+
+defr blocked [?node]
+  || "c"
+
+defr reachable [?from ?to]
+  &> (edge from to) (not (blocked to))
+  &> (edge from mid) (not (blocked mid)) (reachable mid to)
+
+solve (reachable "a" dest)
+
+;; --- J4: Anonymous relation ---
+
+solve (rel [?from ?to] &> (edge from mid) (edge mid to))
+
+;; --- J5: solve-one ---
+
+solve-one (path "a" dest)
+
+;; --- J6: is-goal with generic arithmetic ---
+
+defr double-rel [?n ?result]
+  &> (is result [* n 2])
+
+solve (double-rel 5 r)
+
+;; --- J7: guard goal ---
+
+defr positive-edge [?from ?to]
+  &> (edge from to) (guard [gt to "b"])
+
+solve (positive-edge from to)
+
+
+;; ========================================================================
+;; SECTION K: TYPE SYSTEM INTERACTIONS
+;; ========================================================================
+;;
+;; Type checking resolves types through global-env. Union types trigger
+;; speculation (with-speculative-rollback). Dependent types reference
+;; definitions in type positions. All exercise global-env lookup.
+
+;; --- K1: Union type values ---
+
+def k1-int : <Int | String> := 42
+def k1-str : <Int | String> := "hello"
+k1-int
+k1-str
+
+;; --- K2: Union as function parameter ---
+
+spec accept-either <Int | String> -> Bool
+defn accept-either [_] true
+
+accept-either 42
+accept-either "hi"
+
+;; --- K3: Nested union ---
+
+def k3-deep : <<Int | Bool> | String> := 42
+def k3-str  : <<Int | Bool> | String> := "nested"
+
+;; --- K4: Three-way union ---
+
+def k4-int  : <Int | String | Bool> := 42
+def k4-str  : <Int | String | Bool> := "hello"
+def k4-bool : <Int | String | Bool> := true
+
+;; --- K5: Polymorphic identity ---
+
+spec my-id {A} A -> A
+  :implicits [A]
+defn my-id [x] x
+
+my-id 42
+my-id "hello"
+my-id true
+my-id 1/2
+my-id zero
+
+;; --- K6: Polymorphic const ---
+
+spec my-const {A B} A -> B -> A
+  :implicits [A B]
+defn my-const [a _] a
+
+my-const 42 "ignored"
+my-const true 0
+
+;; --- K7: Lambda with type annotation ---
+
+[fn [x : Int] [int+ x 1]] 41
+[fn [x : Int] [int* x x]] 5
+
+;; --- K8: Def bindings ---
+
+def k8x : Int := 42
+k8x
+
+def k8y : Int := 10
+[int+ k8y k8y]
+
+;; --- K9: Def with generic arithmetic ---
+
+def k9a : Int := [+ 3 4]
+[* k9a k9a]
+;; => 49
+
+def k9b : Rat := [+ 1/2 1/3]
+[* k9b k9b]
+;; => 25/36
+
+;; --- K10: Chained defs (dependency chain) ---
+def k10a : Int := 1
+def k10b : Int := [+ k10a 1]
+def k10c : Int := [+ k10b 1]
+def k10d : Int := [+ k10c 1]
+[* k10a [* k10b [* k10c k10d]]]
+;; => 1 * 2 * 3 * 4 = 24
+
+;; --- K11: Union-returning function ---
+
+spec tag-int Int -> <Int | String>
+defn tag-int [x] x
+
+spec tag-str String -> <Int | String>
+defn tag-str [s] s
+
+tag-int 42
+tag-str "hello"
+
+;; --- K12: A? nullable sugar (aspirational) ---
+;; BUG (L3): A? sugar may not work at file level.
+
+;; def k12-val  : Int? := 42
+;; def k12-nil  : Int? := nil
+
+;; --- K13: Dependent Nat type ---
+
+;; BUG (L3): int= not exported in prelude.
+;; spec to-nat Int -> Nat
+;; defn to-nat [n]
+;;   if [int= n 0] zero
+;;     (suc [to-nat [int- n 1]])
+;;
+;; to-nat 0
+;; to-nat 3
+
+;; --- K14: Multiple speculation per expression ---
+
+spec both-unions <Int | String> -> <Int | Bool> -> Int
+defn both-unions [_ _] 0
+
+both-unions 42 99
+both-unions "hello" true
+
+
+;; ========================================================================
+;; SECTION L: COMBINED STRESS PATTERNS
+;; ========================================================================
+;;
+;; Novel compositional targets that stretch coverage into the spaces
+;; between features. Each exercises multiple global-env consumers
+;; simultaneously.
+
+;; --- L1: Deep application chain (5 definitions deep) ---
+
+step3 [step2 [step1 [inc [dbl 3]]]]
+;; => dbl(3)=6, inc(6)=7, step1(7)=8, step2(8)=18-3=15... let's just run it
+
+;; --- L2: Pipeline through named functions (4 stages) ---
+
+|> 5 inc dbl sqr inc
+;; => inc(5)=6, dbl(6)=12, sqr(12)=144, inc(144)=145
+
+;; --- L3: Generic arithmetic in a let, result used in a named function ---
+
+def l3x : Int := [+ [* 3 4] [- 10 3]]
+[int+ l3x l3x]
+;; => (12 + 7) = 19, 19 + 19 = 38
+
+;; --- L4: Closure over generic result, applied in pipeline ---
+
+spec make-multiplier Int -> [Int -> Int]
+defn make-multiplier [n]
+  [fn [x : Int] [int* n x]]
+
+|> 7 [make-multiplier 3] inc
+;; => 3*7=21, 21+1=22
+
+;; --- L5: Pattern matching on result of function application ---
+
+;; BUG (L3): int= not exported in prelude.
+;; spec safe-div Int Int -> [Option Int]
+;; defn safe-div [x y]
+;;   if [int= y 0] none
+;;     (some [int/ x y])
+;;
+;; unwrap-or [safe-div 100 4] -1
+;; unwrap-or [safe-div 100 0] -1
+
+;; Alternative: just wrap in some (no branching)
+unwrap-or [some 100] -1
+unwrap-or none -1
+
+;; --- L6: List of computed values ---
+
+'[[+ 1 1] [+ 2 2] [+ 3 3]]
+;; Should produce a list containing the evaluated sums
+
+;; --- L7: Map with closure that captures a definition ---
+
+map [fn [x] [sqr [inc x]]] '[1 2 3]
+;; => [4, 9, 16]
+
+;; --- L8: Nested options ---
+
+some [some 42]
+some none
+some [some [some "deep"]]
+
+;; --- L9: Bool combinators composed with Nat predicates ---
+
+spec my-and Bool Bool -> Bool
+defn my-and
+  | true  b  -> b
+  | false _  -> false
+
+my-and [is-zero 0N] [is-zero 0N]
+my-and [is-zero 0N] [is-zero 1N]
+my-and [is-zero 1N] [is-zero 0N]
+
+;; --- L10: Mixed Int and Rat generic ops in one expression ---
+
+[+ 1 2]
+[+ 1/2 1/3]
+[* [+ 1 1] [+ 2 2]]
+[* [+ 1/2 1/2] [+ 1/3 1/3]]
+
+;; --- L11: Relational + functional bridge ---
+;; Use solve result as a top-level expression, verify it evaluates.
+
+solve (path "a" "d")
+solve (reachable "a" dest)
+
+;; --- L12: Many-definition fan-in (one expression uses 5 defs) ---
+
+[int+ [step1 1] [int+ [step2 1] [int+ [step3 1] [int+ [inc 1] [dbl 1]]]]]
+
+;; --- L13: Polymorphic id applied to union-typed value ---
+
+my-id [tag-int 42]
+my-id [tag-str "poly"]
+
+;; --- L14: Let binding feeding a definition call ---
+;; Exercises def + invocation in sequence (the non-sexp ideal)
+
+def l14-n : Nat := 3N
+classify-nat l14-n
+
+;; --- L15: Large list (performance canary) ---
+
+'[1 2 3 4 5 6 7 8 9 10]
+length '[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20]
+
+;; --- L16: Deeply nested generic ops (fan-out) ---
+
+[+ [+ [+ 1 2] [+ 3 4]] [+ [+ 5 6] [+ 7 8]]]
+;; => 3 + 7 + 11 + 15 = 36
+
+;; --- L17: Nat conversion through definition chain ---
+
+spec nat-to-int Nat -> Int
+defn nat-to-int
+  | zero  -> 0
+  | suc k -> [+ 1 [nat-to-int k]]
+
+nat-to-int 5N
+nat-to-int [add 2N 3N]
+
+
+;; ========================================================================
+;; SECTION Z: UNCOMMENTED BASELINE — Quick Regression Check
+;; ========================================================================
+;;
+;; Critical must-pass expressions from above. If Section Z passes,
+;; the file is likely healthy.
+
+;; Definitions and references (A)
+inc 99
+dbl 50
+sqr 7
+
+;; Dependency chains (B)
+chain-d 5
+diamond-d 3
+
+;; Module imports (C)
+str::length "test"
+eq-check nat-eq 1N 1N
+
+;; Trait dispatch (E)
+[+ 10 20]
+[* 3 4]
+
+;; HOFs (G)
+|> 10 inc dbl
+compose sqr inc 4
+
+;; Pattern matching (H)
+unwrap-or [some 99] 0
+result-to-int [ok 7]
+
+;; Prelude breadth (I)
+head '[42 43 44]
+reverse '[1 2 3]
+
+;; Relational (J)
+solve (color "grape" c)
+
+;; Types and speculation (K)
+my-id "baseline"
+my-const 42 false
+
+
+;; ========================================================================
+;; END OF ACCEPTANCE FILE
+;; ========================================================================
+;;
+;; Phase validation checklist:
+;;   Phase 0: Run baseline — all uncommented expressions must pass
+;;   Phase 1: Module network infra — no regression (Section C, I critical)
+;;   Phase 2: global-env-remove! — no regression (Section F critical)
+;;   Phase 3: Per-module activation — Section C, D, I critical (module loading)
+;;   Phase 4: Dependency edges — Section B, D critical (same-file + cross-module)
+;;   Phase 5: Write consolidation — all sections, cutover validation
+;;   Phase 6: PIR — benchmark before/after, compare against hypotheses
+;;
+;; After each phase: run this file via process-file, verify 0 new failures.
+;; Pre-existing BUG/BLOCKED items do not count as regressions.
