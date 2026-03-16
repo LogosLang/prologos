@@ -1399,7 +1399,7 @@
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define surfs (map parse-datum expanded-stxs))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
-  (define pv (provenance-counters 0 0 0 0 0 0 0))
+  (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define mem-before (measure-memory-before))
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
@@ -1435,7 +1435,7 @@
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define surfs (map parse-datum expanded-stxs))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
-  (define pv (provenance-counters 0 0 0 0 0 0 0))
+  (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define mem-before (measure-memory-before))
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
@@ -1474,7 +1474,7 @@
   (define expanded-stxs (preparse-expand-all raw-stxs))
   (define surfs (map parse-datum expanded-stxs))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
-  (define pv (provenance-counters 0 0 0 0 0 0 0))
+  (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define mem-before (measure-memory-before))
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]

@@ -66,6 +66,8 @@
  perf-inc-gde-diagnosis!
  ;; P-U2b: Cell-write consistency counter
  perf-inc-cell-write-mismatch!
+ ;; Track 4 Phase 5: Speculation pruning counter
+ perf-inc-speculation-pruned!
  provenance-counters->hasheq
  print-provenance-report!)
 
@@ -321,7 +323,8 @@
    provenance-chain-count
    constraint-shadow-mismatches   ;; P1-E3b: cell-path vs legacy divergences
    gde-diagnosis-count            ;; GDE-4: diagnoses computed
-   cell-write-mismatches)         ;; P-U2b: cell value ≠ solution after write
+   cell-write-mismatches          ;; P-U2b: cell value ≠ solution after write
+   speculation-pruned-count)      ;; Track 4 Phase 5: branches pruned by learned nogoods
   #:mutable #:transparent)
 
 (define current-provenance-counters (make-parameter #f))
@@ -361,6 +364,11 @@
     (when pv (set-provenance-counters-cell-write-mismatches!
               pv (add1 (provenance-counters-cell-write-mismatches pv))))))
 
+(define-syntax-rule (perf-inc-speculation-pruned!)
+  (let ([pv (current-provenance-counters)])
+    (when pv (set-provenance-counters-speculation-pruned-count!
+              pv (add1 (provenance-counters-speculation-pruned-count pv))))))
+
 (define (provenance-counters->hasheq pv)
   (hasheq 'speculation_count       (provenance-counters-speculation-count pv)
           'atms_hypothesis_count   (provenance-counters-atms-hypothesis-count pv)
@@ -368,7 +376,8 @@
           'provenance_chain_count  (provenance-counters-provenance-chain-count pv)
           'constraint_shadow_mismatches (provenance-counters-constraint-shadow-mismatches pv)
           'gde_diagnosis_count     (provenance-counters-gde-diagnosis-count pv)
-          'cell_write_mismatches   (provenance-counters-cell-write-mismatches pv)))
+          'cell_write_mismatches   (provenance-counters-cell-write-mismatches pv)
+          'speculation_pruned_count (provenance-counters-speculation-pruned-count pv)))
 
 (define (print-provenance-report! pv)
   (define h (provenance-counters->hasheq pv))

@@ -183,61 +183,78 @@
       (set-box! atms-box a*)
       (perf-inc-atms-hypothesis!)
       (values a* aid)))
-  ;; Phase D2: Snapshot failure count for sub-failure capture
-  (define failures-before-count
-    (let ([b (current-speculation-failures)])
-      (if b (length (unbox b)) 0)))
-  ;; 1. Save meta-state (immutable CHAMP snapshot — O(1) for network)
-  ;; Track 1 Phase 6d: Network is always present (network-everywhere).
-  ;; save-meta-state captures the network box, and restore-meta-state! reverts
-  ;; all cell contents (including constraint cells). No parameter fallback needed.
-  (define saved (save-meta-state))
-  ;; 2. Run the speculation
-  ;; NOTE: Speculation stack push deferred to Phase 6. During belt-and-suspenders
-  ;; (Phases 2-5), network-box restore handles rollback. Pushing the stack now
-  ;; would route cell writes to TMS branches, but without commit-on-success
-  ;; machinery, depth-0 reads would see stale base values after success.
-  (define result (thunk))
+  ;; Track 4 Phase 5: Learned-clause pruning.
+  ;; Before running the thunk, check if the new hypothesis combined with
+  ;; context assumptions subsumes any known nogood. If so, skip the branch
+  ;; entirely — the combination is already known to be inconsistent.
+  ;; This avoids redundant type-checking work for branches proven infeasible.
+  (define ctx-aids (get-context-assumption-ids))
+  (define proposed-set
+    (for/fold ([s (hasheq hyp-id #t)])
+              ([aid (in-list ctx-aids)])
+      (hash-set s aid #t)))
   (cond
-    [(success? result) result]
+    [(not (atms-consistent? (unbox atms-box) proposed-set))
+     ;; Branch pruned by a learned nogood — skip entirely.
+     (perf-inc-speculation-pruned!)
+     (record-speculation-failure! label hyp-id #f '())
+     #f]
     [else
-     ;; 3. Restore meta-state (O(1) for network — includes constraint cells)
-     (restore-meta-state! saved)
-     ;; Phase D2: Extract sub-failures (failures added during this thunk)
-     ;; The box stores newest-first, so new failures are at the front.
-     (define-values (sub-failures support-set)
+     ;; Phase D2: Snapshot failure count for sub-failure capture
+     (define failures-before-count
        (let ([b (current-speculation-failures)])
-         (cond
-           [(not b) (values '() #f)]
-           [else
-            (define all-now (unbox b))
-            (define new-count (- (length all-now) failures-before-count))
-            (define subs
-              (if (> new-count 0)
-                  (let ([raw (for/list ([f (in-list all-now)]
-                                        [_ (in-range new-count)])
-                               f)])
-                    (reverse raw))  ;; chronological order
-                  '()))
-            ;; Remove sub-failures from main list (they'll be nested)
-            (when (> new-count 0)
-              (set-box! b (list-tail all-now new-count)))
-            ;; GDE-1: Build multi-hypothesis nogood including context assumptions.
-            ;; The nogood set contains the speculation hypothesis AND any context
-            ;; assumptions (user annotations), enabling diagnoses like
-            ;; "because: user annotated x : Nat".
-            ;; Phase 4c: Always record nogoods (ATMS is always available).
-            (define ss
-              (let* ([ctx-aids (get-context-assumption-ids)]
-                     [nogood-set
-                      (for/fold ([s (hasheq hyp-id #t)])
-                                ([aid (in-list ctx-aids)])
-                        (hash-set s aid #t))])
-                (set-box! atms-box
-                          (atms-add-nogood (unbox atms-box) nogood-set))
-                (perf-inc-atms-nogood!)
-                nogood-set))
-            (values subs ss)])))
-     ;; 4. Record failure with sub-failures and support-set
-     (record-speculation-failure! label hyp-id support-set sub-failures)
-     #f]))
+         (if b (length (unbox b)) 0)))
+     ;; 1. Save meta-state (immutable CHAMP snapshot — O(1) for network)
+     ;; Track 1 Phase 6d: Network is always present (network-everywhere).
+     ;; save-meta-state captures the network box, and restore-meta-state! reverts
+     ;; all cell contents (including constraint cells). No parameter fallback needed.
+     (define saved (save-meta-state))
+     ;; 2. Run the speculation
+     ;; NOTE: Speculation stack push deferred to Phase 6. During belt-and-suspenders
+     ;; (Phases 2-5), network-box restore handles rollback. Pushing the stack now
+     ;; would route cell writes to TMS branches, but without commit-on-success
+     ;; machinery, depth-0 reads would see stale base values after success.
+     (define result (thunk))
+     (cond
+       [(success? result) result]
+       [else
+        ;; 3. Restore meta-state (O(1) for network — includes constraint cells)
+        (restore-meta-state! saved)
+        ;; Phase D2: Extract sub-failures (failures added during this thunk)
+        ;; The box stores newest-first, so new failures are at the front.
+        (define-values (sub-failures support-set)
+          (let ([b (current-speculation-failures)])
+            (cond
+              [(not b) (values '() #f)]
+              [else
+               (define all-now (unbox b))
+               (define new-count (- (length all-now) failures-before-count))
+               (define subs
+                 (if (> new-count 0)
+                     (let ([raw (for/list ([f (in-list all-now)]
+                                           [_ (in-range new-count)])
+                                  f)])
+                       (reverse raw))  ;; chronological order
+                     '()))
+               ;; Remove sub-failures from main list (they'll be nested)
+               (when (> new-count 0)
+                 (set-box! b (list-tail all-now new-count)))
+               ;; GDE-1: Build multi-hypothesis nogood including context assumptions.
+               ;; The nogood set contains the speculation hypothesis AND any context
+               ;; assumptions (user annotations), enabling diagnoses like
+               ;; "because: user annotated x : Nat".
+               ;; Phase 4c: Always record nogoods (ATMS is always available).
+               (define ss
+                 (let* ([ctx-aids (get-context-assumption-ids)]
+                        [nogood-set
+                         (for/fold ([s (hasheq hyp-id #t)])
+                                   ([aid (in-list ctx-aids)])
+                           (hash-set s aid #t))])
+                   (set-box! atms-box
+                             (atms-add-nogood (unbox atms-box) nogood-set))
+                   (perf-inc-atms-nogood!)
+                   nogood-set))
+               (values subs ss)])))
+        ;; 4. Record failure with sub-failures and support-set
+        (record-speculation-failure! label hyp-id support-set sub-failures)
+        #f])]))
