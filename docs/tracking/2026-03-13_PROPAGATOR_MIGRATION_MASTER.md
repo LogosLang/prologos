@@ -20,6 +20,7 @@
 | Track 2 Design | `docs/tracking/2026-03-13_TRACK2_REACTIVE_RESOLUTION_DESIGN.md` | Reactive resolution via stratified quiescence |
 | Track 3 Design | `docs/tracking/2026-03-13_TRACK3_CELL_PRIMARY_REGISTRIES.md` | Cell-primary registries design + progress |
 | Track 3 PIR | `docs/tracking/2026-03-16_TRACK3_CELL_PRIMARY_REGISTRIES_PIR.md` | Post-implementation review |
+| Track 4 Design | `docs/tracking/2026-03-16_TRACK4_ATMS_SPECULATION.md` | ATMS speculation design + phase plan |
 | Propagator Research | `docs/tracking/2026-02-23_LATTICE_PROPAGATOR_RESEARCH.md` | Lattice-theoretic foundations |
 | BSP Parallel | `docs/tracking/2026-02-24_BSP_PARALLEL_PROPAGATOR.md` | Parallel propagation via Bulk Synchronous Parallel |
 | Effectful Propagators | `docs/tracking/2026-03-06_EFFECTFUL_PROPAGATORS_RESEARCH.md` | Side effects in propagator networks |
@@ -176,7 +177,7 @@ Moved to §Completed Work above. See Track 3 PIR for full review.
 
 **Files**: `elab-speculation-bridge.rkt`, `typing-core.rkt`, `metavar-store.rkt`.
 
-**Design document**: TBD — create before implementation.
+**Design document**: `docs/tracking/2026-03-16_TRACK4_ATMS_SPECULATION.md` — Stage 2/3 design complete (`cf4001b`).
 
 ### Track 5: Global-Env Cell-Primary + Dependency Edges
 
