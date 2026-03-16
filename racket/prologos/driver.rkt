@@ -1553,6 +1553,7 @@
                     [current-definition-cells-content (hasheq)]
                     [current-definition-cell-ids (hasheq)]
                     [current-definition-dependencies (hasheq)]  ;; Phase 3b
+                    [current-cross-module-deps '()]  ;; Track 5 Phase 4
                     ;; Phase A: fresh meta-info CHAMP per module
                     [current-prop-meta-info-box #f]
                     ;; Phase B: fresh auxiliary meta CHAMPs per module
@@ -1612,11 +1613,23 @@
                            ([(name entry) (in-hash mod-env)])
                    (define-values (mnr* cid) (module-network-add-definition mnr name entry))
                    (values mnr* (void))))
-               ;; Mark loaded and store snapshot hash for dual-path validation
+               ;; Mark loaded, store snapshot hash, and populate dep-edges
                (let* ([mnr1 (module-network-set-status mnr-final mod-loaded)]
                       [snap (module-network-materialize mnr1)]
+                      ;; Track 5 Phase 4: Build dep-edges from recorded cross-module deps.
+                      ;; Groups edges by destination name → list of (src-name . source).
+                      [dep-edge-hash
+                       (for/fold ([h (hasheq)])
+                                 ([dep (in-list (current-cross-module-deps))])
+                         (define dst-name (car dep))
+                         (define src-name (cadr dep))
+                         (define source (caddr dep))
+                         (hash-set h dst-name
+                                   (cons (cons src-name source)
+                                         (hash-ref h dst-name '()))))]
                       [mnr2 (struct-copy module-network-ref mnr1
-                               [snapshot-hash snap])])
+                               [snapshot-hash snap]
+                               [dep-edges dep-edge-hash])])
                  ;; Phase 3d: Dual-path validation — cell reads must match snapshot
                  (for ([(name entry) (in-hash mod-env)])
                    (define cell-val (module-network-lookup mnr2 name))

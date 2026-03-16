@@ -62,6 +62,9 @@
          current-defn-param-names-cell-id
          register-defn-param-names!
          lookup-defn-param-names
+         ;; Track 5 Phase 4: Cross-module dependency edges
+         current-cross-module-deps
+         record-cross-module-dep!
          ;; LSP Tier 2.3: Definition location registry
          current-definition-locations
          register-definition-location!
@@ -159,6 +162,20 @@
 (define (definition-dependencies-snapshot)
   (current-definition-dependencies))
 
+;; Track 5 Phase 4: Cross-module dependency edge recording.
+;; Accumulates (list dep-name src-origin) pairs where src-origin is 'same-file
+;; or a module namespace symbol. Persistent across commands within a file.
+;; Used by driver.rkt to populate module-network-ref dep-edges at file end.
+(define current-cross-module-deps (make-parameter '()))
+
+;; Record a cross-module dependency: current definition depends on `dep-name`
+;; which was resolved from `source` ('same-file or a module namespace symbol).
+(define (record-cross-module-dep! elab-name dep-name source)
+  (when (and elab-name (not (eq? elab-name dep-name)))
+    (current-cross-module-deps
+     (cons (list elab-name dep-name source)
+           (current-cross-module-deps)))))
+
 ;; ========================================
 ;; Lookups (two-layer: per-file first, prelude fallback)
 ;; ========================================
@@ -172,10 +189,17 @@
   ;; Layer 1: per-file definitions
   (define cell-entry (hash-ref (current-definition-cells-content) name #f))
   (cond
-    [cell-entry (car cell-entry)]
+    [cell-entry
+     ;; Track 5 Phase 4: same-file edge
+     (when elab-name
+       (record-cross-module-dep! elab-name name 'same-file))
+     (car cell-entry)]
     [else
      ;; Layer 2: prelude/module definitions
      (let ([entry (hash-ref (current-global-env) name #f)])
+       ;; Track 5 Phase 4: cross-module edge (source is a module, not same-file)
+       (when (and entry elab-name)
+         (record-cross-module-dep! elab-name name 'module))
        (and entry (car entry)))]))
 
 ;; Lookup the value of a global definition
@@ -187,7 +211,9 @@
   ;; Layer 1: per-file definitions
   (define cell-entry (hash-ref (current-definition-cells-content) name #f))
   (cond
-    [cell-entry (cdr cell-entry)]
+    [cell-entry
+     ;; Track 5 Phase 4: same-file edge (already recorded in lookup-type)
+     (cdr cell-entry)]
     [else
      ;; Layer 2: prelude/module definitions
      (let ([entry (hash-ref (current-global-env) name #f)])

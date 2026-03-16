@@ -77,6 +77,7 @@
   (parameterize ([current-global-env (hasheq)]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
+                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -106,6 +107,7 @@
   (parameterize ([current-global-env (hasheq)]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
+                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -122,6 +124,7 @@
   (parameterize ([current-global-env (hasheq)]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
+                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -143,6 +146,7 @@
   (parameterize ([current-global-env (hasheq)]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
+                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -158,6 +162,7 @@
   (parameterize ([current-global-env (hasheq)]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
+                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -180,6 +185,7 @@
     (parameterize ([current-global-env (hasheq)]
                    [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
+                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
                    [current-error-port stderr-out])
       (process-string s)))
   (cons results (get-output-string stderr-out)))
