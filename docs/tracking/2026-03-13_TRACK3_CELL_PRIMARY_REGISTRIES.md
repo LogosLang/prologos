@@ -18,8 +18,8 @@
 | D.2 | Design iteration (external critique) | ✅ | 5 items accepted, 7 rejected |
 | D.3 | Internal self-critique (principle alignment) | ✅ | 5 items; Phase 6 design resolved |
 | 0 | Performance baseline + acceptance file | ✅ | Acceptance: `a5408f0` (0 errors, 13 sections). Baseline: 194.3s / 7096 tests / 370 files |
-| 1 | Core type registries → cell-primary (8 registries) | ⬜ | |
-| 2 | Trait + instance registries → cell-primary (7 registries) | ⬜ | |
+| 1 | Core type registries → cell-primary (8 registries) | ✅ | `a7f61ca` — 8 readers + elaboration guard, 14 computation reads converted |
+| 2 | Trait + instance registries → cell-primary (7 registries) | ✅ | `0880c4a` — 7 readers, 12 computation reads converted (macros, elaborator, trait-resolution, driver) |
 | 3 | Remaining registries → cell-primary (8 registries) | ⬜ | |
 | 4 | Warnings → cell-primary (3 parameters) | ⬜ | |
 | 5a | Narrowing constraints → cell (monotonic, `merge-list-append`) | ⬜ | |
