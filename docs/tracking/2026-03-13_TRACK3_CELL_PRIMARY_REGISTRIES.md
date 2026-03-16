@@ -16,6 +16,7 @@
 |-------|-------------|--------|-------|
 | D.1 | Design analysis and read-site audit | ✅ | This document |
 | D.2 | Design iteration (external critique) | ✅ | 5 items accepted, 7 rejected |
+| D.3 | Internal self-critique (principle alignment) | ✅ | 5 items; Phase 6 design resolved |
 | 0 | Performance baseline | ⬜ | |
 | 1 | Core type registries → cell-primary (8 registries) | ⬜ | |
 | 2 | Trait + instance registries → cell-primary (7 registries) | ⬜ | |
@@ -23,7 +24,8 @@
 | 4 | Warnings → cell-primary (3 parameters) | ⬜ | |
 | 5a | Narrowing constraints → cell (monotonic, `merge-list-append`) | ⬜ | |
 | 5b | Narrowing var-constraints → cell (non-monotonic, `merge-last-write-wins`) | ⬜ | |
-| 6 | Remove parameter writes + cleanup | ⬜ | Module-loading fallback investigation |
+| 6 | Remove parameter writes + cleanup | ⬜ | Two-context architecture (see §3.7) |
+| 7 | Post-Implementation Review | ⬜ | Lightweight — established patterns |
 
 ---
 
@@ -186,6 +188,8 @@ During Phases 1–5, the dual-write pattern remains:
 
 Phase 6 removes the parameter write for registries where the network is always present.
 
+**Note on Data Orientation (from D.3)**: Registration writes remain imperative (`register-X!` mutates inline) rather than data-oriented (registration descriptors interpreted at a control boundary). This is intentional: registrations are monotonic accumulation with no ordering sensitivity or rollback concerns — the cell merge handles the semantics directly. The Data Orientation free-monad pattern (as used in Track 2 for constraint resolution) adds complexity without benefit for simple monotonic writes. If Track 4 (ATMS) requires speculation-aware registration (where speculative registrations must be retractable), that is where a data-oriented registration pattern would become relevant.
+
 ### 3.3 Distinguishing Read Types
 
 Not every `(current-X)` in the codebase is a "computation read" that should become `(read-X)`:
@@ -198,6 +202,8 @@ Not every `(current-X)` in the codebase is a "computation read" that should beco
 | **Registration write** | `(current-X (hash-set (current-X) k v))` | ❌ No — this is a write, not a read |
 
 The key insight: **only computation reads need conversion**. Threading and snapshot sites remain on parameters until Track 6 eliminates those parameters entirely.
+
+**Decomplection (from D.3)**: After Track 3, the naming convention *is* the structural decomplection. `read-X` always means "computation read from cell" and `current-X` always means "parameter threading/snapshot." The two concerns — querying state for decisions vs. threading state through execution contexts — become syntactically distinct in the codebase. A grep for `current-X-registry` after Track 3 returns only threading/snapshot sites; a grep for `read-X-registry` returns only computation sites.
 
 ### 3.4 Phase Structure
 
@@ -256,11 +262,34 @@ Options:
 
 **Recommendation**: Option 1 (`merge-last-write-wins`). The parameter is already non-monotonic; the cell faithfully represents the same semantics. Track 4 can upgrade this to assumption-managed if needed.
 
+**Principle deviation (from D.3)**: `merge-last-write-wins` is a principled deviation from the Propagator-First guideline (DESIGN_PRINCIPLES.org §"When Not To Use Propagators") that non-monotonic state should use ATMS-backed cells. This is a transitional choice — the cell semantically becomes a mutable register in cell clothing. Track 4 (ATMS Speculation) will upgrade this cell to assumption-managed, restoring proper non-monotonic semantics where each narrowing clause creates an assumption and retraction undoes its var-constraints.
+
 - `current-narrow-var-constraints` → create cell with `merge-last-write-wins` + `read-narrow-var-constraints`
 
 **Phase 6: Remove parameter writes + cleanup** — With all reads going through cells, remove the parameter write from each `register-X!` function. Audit for any remaining parameter reads. Remove the parameter-fallback branch from each reader (the "network-everywhere" flip from Track 1 Phase 6).
 
-**Note (from critique D.2)**: Module loading calls computation reads (e.g., `lookup-trait` during `require` processing) in contexts where the propagator network may not exist. Unlike Track 1 Phase 6 (where `with-fresh-meta-env` contexts don't do module loading), Phase 6 here must preserve the parameter fallback for module-loading read paths, or ensure the network exists during module loading. Investigate during Phase 6 — this may mean the fallback is kept for a subset of readers that are called during module loading.
+### 3.7 Phase 6: Two-Context Architecture (resolved from D.2 + D.3)
+
+The external critique (D.2) identified that module loading calls computation reads without a network. The internal critique (D.3) flagged this as a Correct-by-Construction concern — the fallback `if/else` is "correct by convention." Investigation of `driver.rkt:1546-1583` resolves the question:
+
+**Module loading explicitly sets `current-prop-net-box` to `#f`.** This is deliberate — each module loads in a network-free context with fresh parameter state. Creating a per-module network (Option A) would require: creating a network, wiring all registry cells, processing the module's definitions, then merging the module's cell content back into the parent command's network. This is Track 5/6 scope (global-env cell-primary + dependency edges), not Track 3.
+
+**Decision: Option B — Two-context architecture.**
+
+| Context | Read Path | Write Path | Rationale |
+|---------|-----------|------------|-----------|
+| **Elaboration** (per-command) | Cell-primary (`read-X`) | Cell-only (Phase 6 removes parameter write) | Network always exists (Track 1 Phase 6 guarantee) |
+| **Module loading** (`load-module`) | Parameter fallback (`current-X`) | Parameter-only (cell IDs are `#f`) | No network; parameter IS the correct state |
+
+The `if/else` in reader functions is **not** a correctness-by-convention concern in this case — it's a structural boundary between two genuinely different execution contexts. Module loading is not "elaboration without a network" — it's a distinct operation that runs before the command's elaboration begins, with its own parameter scope (`parameterize` block at `driver.rkt:1546`). The fallback is semantically correct: during module loading, no cells exist, no propagator network exists, and the parameter holds the accumulated state from prior module loads.
+
+Phase 6 therefore:
+- **Removes** parameter writes from `register-X!` functions for registries only written during elaboration
+- **Preserves** parameter writes for registries written during module loading (trait, impl, ctor, type-meta, subtype, coercion, capability, preparse)
+- **Removes** the fallback branch from readers only called during elaboration
+- **Preserves** the fallback branch in readers called during module loading
+
+This means Phase 6 is a *partial* cleanup for Track 3. Full parameter elimination requires Track 5 (global-env cell-primary with per-module networks), at which point module loading itself runs in a network context and the fallback can be removed.
 
 ### 3.5 File-to-Phase Mapping
 
@@ -340,7 +369,7 @@ This is the most mechanical of all tracks. The dual-write infrastructure has bee
 | 6 | Remove parameter writes + network-everywhere | 2–3 hours | Low-Medium |
 | **Total** | ~26 readers, ~200 call-site updates | **~1 day** | Low |
 
-**Schedule risk**: Phase 5b (non-monotonic narrowing) and Phase 6 (module-loading fallback investigation) are the two places where surprises could add time. Phases 1–4 and 5a are purely mechanical.
+**Schedule risk**: Phase 5b (non-monotonic narrowing) is the one place where surprises could add time. Phase 6 is now architecturally resolved (two-context, see §3.7) but requires per-registry classification of which are module-loading-visible. Phases 1–4 and 5a are purely mechanical.
 
 This is significantly faster than Tracks 1 and 2 because:
 - All cell infrastructure already exists (no `enet` creation needed for Phases 1–4)
@@ -380,7 +409,7 @@ External critique received 2026-03-15. 12 items raised (3 critical, 3 significan
 | 3 | Phase 5 under-specified (narrowing monotonicity) | **Expanded Phase 5 into 5a (monotonic) and 5b (non-monotonic)**. `current-narrow-constraints` is list-append (monotonic). `current-narrow-var-constraints` uses wholesale replacement (non-monotonic) — will use `merge-last-write-wins` following `enet11` precedent. |
 | 4 | Performance baseline undefined | **Added §3.6** referencing established protocol from Track 1 and `testing.md` rules. |
 | 6 | File-to-phase mapping unclear | **Added §3.5** with file-to-phase table showing which files are touched in which phases. |
-| — | Phase 6 module-loading fallback | **Added Phase 6 note**: module loading calls computation reads without a network. Phase 6 must preserve fallback for module-loading paths or ensure network exists during loading. |
+| — | Phase 6 module-loading fallback | **Resolved in D.3**: investigation of `driver.rkt:1546-1583` confirmed module loading runs network-free. Adopted two-context architecture (§3.7): cell-primary during elaboration, parameter fallback during module loading. |
 | 12 | Effort estimate assumes no surprises | **Added schedule risk note** identifying Phase 5b and Phase 6 as the two sources of potential surprise. |
 
 ### Rejected with Rationale (7)
@@ -394,3 +423,17 @@ External critique received 2026-03-15. 12 items raised (3 critical, 3 significan
 | 8 | LSP/REPL snapshots critical for correctness | **Correctly deferred.** Snapshots capture parameters AFTER elaboration completes (sequential, not concurrent). No race between elaboration and snapshot. Dual-write ensures parameter/cell consistency during Phases 1–5. Track 6 will address post-parameter-removal snapshots. |
 | 9 | No rollback plan | **Covered by project methodology.** Every phase is a git commit. Layered Recovery Principle (master roadmap) explicitly addresses retreat via dual-write pattern. Track 1 demonstrated this when Phase 5a revealed the fallback issue. |
 | 11 | Missing error handling in reader | **Correct by design.** `read-fn` is a CHAMP lookup — it doesn't throw unless the cell ID is invalid, which is a programming error. Track 1 has 7 readers using this exact pattern with zero exceptions. We WANT crashes on invalid IDs to surface bugs at the call site. |
+
+---
+
+## §9. Internal Self-Critique — Principle Alignment (D.3)
+
+Internal review against DESIGN_PRINCIPLES.org, DESIGN_METHODOLOGY.org, EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org, and DEVELOPMENT_LESSONS.org. 5 items identified:
+
+| # | Principle | Finding | Resolution |
+|---|-----------|---------|------------|
+| 1 | **Data Orientation** | Registration writes remain imperative, not data-oriented (action descriptors). | Intentional scope boundary — monotonic accumulation doesn't benefit from free-monad pattern. Added note to §3.2. Track 4 is where data-oriented registration becomes relevant if speculation requires retractable registrations. |
+| 2 | **Propagator-First** ("When Not To Use Propagators") | Phase 5b's `merge-last-write-wins` sidesteps the guideline that non-monotonic state should use ATMS-backed cells. | Principled deviation — ATMS is Track 4 scope. Flagged as transitional in Phase 5b with forward reference. |
+| 3 | **Correct by Construction** | Phase 6 fallback preservation creates `if/else` at reader sites — "correct by convention" rather than "correct by construction." | **Resolved by investigation of `driver.rkt:1546-1583`.** Module loading explicitly sets `current-prop-net-box` to `#f`. Creating a per-module network (Option A) is Track 5/6 scope. **Adopted Option B: two-context architecture** — the `if/else` is a structural boundary between genuinely different execution contexts (elaboration vs. module loading), not a correctness-by-convention pattern. See §3.7 for full analysis. |
+| 4 | **Decomplection** | The computation vs. threading distinction is conceptual but not yet structural. | After Track 3, it IS structural: `read-X` = computation, `current-X` = threading. Added framing note to §3.3. |
+| 5 | **Design Methodology** (Stage 5 PIR) | No PIR commitment in the design. | Added Phase 7 (lightweight PIR) to progress tracker. Track 3 follows established patterns so a full PIR is not warranted, but a lightweight review captures any lessons from the two-context architecture and Phase 5b's non-monotonic handling. |
