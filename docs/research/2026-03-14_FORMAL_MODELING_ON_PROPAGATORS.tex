@@ -1,0 +1,1544 @@
+% Created 2026-03-14 Sat 06:02
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{The Prologos Project - from Zachary Larson}
+\date{2026-03-14}
+\title{Formal Modeling on Propagator Networks\\\medskip
+\large The Landscape of Temporal Logic, Fixpoint Theory, and Formal Verification --- and How Propagators Embed It All}
+\hypersetup{
+ pdfauthor={The Prologos Project - from Zachary Larson},
+ pdftitle={Formal Modeling on Propagator Networks},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Abstract}
+\label{sec:orged3eafc}
+
+This document surveys the landscape of formal modeling, temporal logic, and
+verification, with a sustained focus on how propagator networks serve as a
+universal computational substrate for these formalisms. The core observation,
+developed in our earlier research (\texttt{PROPAGATORS\_AS\_MODEL\_CHECKERS.org}), is
+that model checking, abstract interpretation, and temporal reasoning are all
+\emph{monotone fixpoint computations over complete lattices} --- and propagator
+networks are precisely the engine for such computations.
+
+We cast a wide net: from the modal \(\mu\)-calculus and its alternation hierarchy
+through signal temporal logic and continuous-domain verification; from
+Approximation Fixpoint Theory and bilattices through coinduction and greatest
+fixpoints; from runtime verification and shield synthesis through reactive
+synthesis and separation logic. In each case, we identify the lattice-theoretic
+core and trace the connection to propagator network computation. The document
+concludes with a synthesis of how these formalisms map to Prologos's existing
+and planned infrastructure, and a research program for bringing formal
+verification from expert-only tools to type-system-level accessibility.
+
+This is a stage-0 research document: it maps the territory and identifies
+implementation tracks, but does not commit to specific implementation timelines.
+\section{1. The Modal \(\mu\)-Calculus}
+\label{sec:orgaefd4df}
+
+\subsection{1.1 Foundations}
+\label{sec:orga8cd2ad}
+
+The modal \(\mu\)-calculus (Kozen 1983) is the most expressive logic in the
+temporal/modal family that retains decidable model checking. It extends
+propositional modal logic with explicit least (\(\mu\)) and greatest (\(\nu\)) fixpoint
+operators:
+
+\(\phi\) ::= p | \(\neg{}\) \(\phi\) | \(\phi\) \(\land\) \(\psi\) | \(\phi\) \(\lor\) \(\psi\)
+\begin{center}
+\begin{tabular}{ll}
+\(\langle\) a \(\rangle\) \(\phi\) & {[}a] \(\phi\)\\
+X & \(\mu\) X. \(\phi\)(X) & \(\nu\) X. \(\phi\)(X)\\
+\end{tabular}
+\end{center}
+
+where X occurs positively in \(\phi\)(X) (under an even number of negations).
+
+\textbf{Semantics}: Formulas are interpreted over labeled transition systems
+(S, \{R\textsubscript{a}\}\textsubscript{a \(\in\) Act}, L). The denotation \llbracket \(\phi\) \rrbracket \subseteq S
+is a subset of states. The fixpoint operators have set-theoretic semantics via
+the Knaster-Tarski theorem:
+
+\begin{itemize}
+\item \llbracket \(\mu\) X. \(\phi\)(X) \rrbracket = \bigcap $\backslash${ T \subseteq S \mid F(T) \subseteq T $\backslash$}
+(least pre-fixpoint = least fixpoint for monotone F)
+\item \llbracket \(\nu\) X. \(\phi\)(X) \rrbracket = \bigcup $\backslash${ T \subseteq S \mid T \subseteq F(T) $\backslash$}
+(greatest post-fixpoint = greatest fixpoint)
+\end{itemize}
+
+where F(T) = \llbracket \(\phi\)(X := T) \rrbracket is monotone by the positivity
+requirement.
+
+When the state space is finite, fixpoints are computable by Kleene iteration:
+\(\mu\) X. \(\phi\)(X) = \bigcup\textsubscript{i \(\ge\) 0} F\textsuperscript{i}(\(\emptyset\)), converging in at most |S| steps.
+Dually, \(\nu\) X. \(\phi\)(X) = \bigcap\textsubscript{i \(\ge\) 0} F\textsuperscript{i}(S).
+
+\textbf{Key references}:
+\begin{itemize}
+\item Kozen, D. "Results on the propositional \(\mu\)-calculus." \emph{TCS} 27(3), 1983.
+\item Walukiewicz, I. "Completeness of Kozen's axiomatisation." \emph{Information and Computation} 157(1-2), 2000.
+\end{itemize}
+\subsection{1.2 Expressiveness: The Janin-Walukiewicz Theorem}
+\label{sec:org1fd1d4a}
+
+The \(\mu\)-calculus has exactly the right expressiveness for model checking:
+
+\textbf{Theorem} (Janin-Walukiewicz 1996): The modal \(\mu\)-calculus is expressively
+equivalent to the bisimulation-invariant fragment of monadic second-order logic
+(MSO) over trees.
+
+This places the \(\mu\)-calculus at a precise point in the logical landscape: it
+captures everything that MSO can say about transition systems, up to
+bisimulation equivalence. Since bisimulation is the natural equivalence for
+concurrent systems, the \(\mu\)-calculus is the "right" logic for process
+verification.
+\subsection{1.3 The Alternation Hierarchy}
+\label{sec:orge4900ce}
+
+The alternation depth of a \(\mu\)-calculus formula measures the nesting depth of
+mutually recursive least and greatest fixpoint operators. Bradfield (1996) and
+Lenzi (1996) independently proved:
+
+\textbf{Theorem} (Bradfield 1996): The modal \(\mu\)-calculus alternation hierarchy is
+\textbf{strictly infinite}. For every n, there exist properties expressible at
+alternation depth n+1 but not at depth n.
+
+The hierarchy levels correspond to increasing complexity of temporal properties:
+
+\begin{center}
+\begin{tabular}{rlll}
+Level & \(\mu\)-Calculus Pattern & Temporal Meaning & Example\\
+\hline
+0 & p (no fixpoint) & State property & "this state is labeled p"\\
+1 & \(\mu\) X. \(\phi\) or \(\nu\) X. \(\phi\) & Safety/reachability & AG p, EF p\\
+2 & \(\nu\) X. \(\mu\) Y. \(\phi\)(X,Y) & Response/persistence & AG(p \(\to\) AF q), AGEF p\\
+3+ & Deeper alternation & Fairness, complex liveness & Streett/Rabin conditions\\
+\end{tabular}
+\end{center}
+
+\textbf{For Prologos}: Our current session type checker operates at Level 1 (safety
+via contradiction detection, reachability via completeness checking). Level 2
+properties (response: "every request gets a reply") require nested fixpoints
+--- computationally feasible in propagator networks but needing an interface
+for specification. Level 3+ properties appear rarely in session type contexts
+but are needed for fairness in multi-party protocols.
+\subsection{1.4 Parity Games: The Decision Procedure}
+\label{sec:org2348743}
+
+Model checking \(\mu\)-calculus formulas reduces to solving \emph{parity games} --- two-player
+infinite games where vertices are colored with natural numbers (priorities) and
+the winner is determined by the parity (even/odd) of the highest priority seen
+infinitely often.
+
+\textbf{Theorem} (Emerson-Jutla-Sistla 1993): The \(\mu\)-calculus model checking problem
+is equivalent to solving parity games.
+
+The complexity of parity games was a major open problem for decades:
+\begin{itemize}
+\item The problem lies in NP \(\cap\) coNP (Emerson-Jutla-Sistla 1993)
+\item It is in UP \(\cap\) coUP (Jurdzinski 1998)
+\item \textbf{Quasipolynomial-time algorithms} were discovered by Calude, Jain, Khoussainov,
+Li, and Stephan (STOC 2017), resolving a long-standing conjecture. The algorithm
+runs in time n\textsuperscript{O(\(\log\) d)} where n is the game size and d is the number of
+priorities.
+\item Jurdzinski and Lazic (LICS 2017) gave a succinct progress measure algorithm
+also achieving quasipolynomial time.
+\end{itemize}
+
+\textbf{For propagators}: Parity games correspond to mixed lfp/gfp computations with
+alternating fixpoints. The game-theoretic view suggests that propagator networks
+computing nested fixpoints can be understood as strategies in parity games,
+with the scheduler playing the role of the game solver.
+\subsection{1.5 The Automata-Logic-Games Triangle}
+\label{sec:org7039cac}
+
+A deep structural equivalence connects three formalisms:
+
+\begin{verbatim}
+  Alternating Parity Tree Automata
+            /                   \
+           /                     \
+Modal μ-Calculus  ←————→   Parity Games
+\end{verbatim}
+
+\begin{itemize}
+\item \(\mu\)-calculus formulas translate to alternating parity tree automata (Wilke 2001)
+\item Emptiness of alternating parity tree automata reduces to parity games
+\item Parity games can be encoded as \(\mu\)-calculus model checking problems
+\end{itemize}
+
+This triangle means results in any one formalism transfer to the others. The
+quasipolynomial breakthrough for parity games immediately gives
+quasipolynomial \(\mu\)-calculus model checking and automata emptiness.
+\subsection{1.6 Extensions}
+\label{sec:orge6b1bb3}
+
+\subsubsection{Coalgebraic \(\mu\)-Calculus}
+\label{sec:org498ae5f}
+
+Cirstea, Kupke, and Pattinson generalize the \(\mu\)-calculus from Kripke frames to
+coalgebras for arbitrary endofunctors F : Set \(\to\) Set. The key innovation is
+\emph{predicate liftings} \(\lambda\) : Q\textsuperscript{n} \(\to\) Q \^{} F that replace the modal operators
+\(\langle\) a \(\rangle\) and [a] with functorial generalizations. This captures:
+\begin{itemize}
+\item Probabilistic modal logic (F = distribution functor)
+\item Graded modal logic (F = multiset/bag functor)
+\item Coalition logic (F = coalition functor)
+\end{itemize}
+
+The coalgebraic perspective is categorically dual to inductive definitions ---
+where least fixpoints are initial algebras, greatest fixpoints are terminal
+coalgebras. This connects directly to the coinductive reasoning Prologos needs
+for recursive session types.
+\subsubsection{Quantitative and Vectorial \(\mu\)-Calculus}
+\label{sec:org141d43f}
+
+Fischer and Grädel (LICS 2023) develop a \emph{vectorial} \(\mu\)-calculus where fixpoint
+variables range over tuples of sets, enabling systems of mutually recursive
+fixpoint equations. This corresponds to multi-cell propagator interactions
+where cells mutually constrain each other.
+
+Lattice-valued \(\mu\)-calculus replaces the Boolean powerset 2\textsuperscript{S} with an arbitrary
+complete lattice L, yielding L-valued satisfaction. This is precisely the
+generalization that propagator networks already implement: cells hold lattice
+values, not Boolean sets.
+\subsubsection{Fixpoint Logic with Chop (FLC)}
+\label{sec:orge0947d5}
+
+Müller-Olm (1999) extends the \(\mu\)-calculus with a sequential composition operator
+("chop"), enabling specification of properties that depend on the \emph{sequential
+structure} of computations. This is relevant for session types, which are
+inherently sequential protocols.
+\section{2. The Temporal Logic Landscape}
+\label{sec:org1be338f}
+
+\subsection{2.1 The Classical Core: LTL, CTL, CTL*}
+\label{sec:orgd781ad9}
+
+Three fundamental temporal logics form the core of the landscape:
+
+\textbf{LTL} (Pnueli 1977) reasons about individual computation paths with operators
+X (next), U (until), F (eventually), G (always). It captures exactly the
+star-free \(\omega\)-regular languages (Kamp's theorem). Model checking is
+PSPACE-complete.
+
+\textbf{CTL} (Clarke-Emerson 1981) reasons about branching computation trees. Every
+temporal operator is paired with a path quantifier (A = all paths, E = exists
+path). Model checking is polynomial: O(|\(\phi\)| \(\cdot\) |M|) via iterative fixpoint
+computation on the powerset lattice.
+
+\textbf{CTL*} (Emerson-Halpern 1986) subsumes both by allowing free mixing of path
+quantifiers and temporal operators. CTL and LTL are \emph{incomparable} fragments:
+CTL can express existential path properties (EG p) that LTL cannot; LTL can
+express fairness properties (FG p \(\to\) GF q) that CTL cannot.
+
+All three embed into the modal \(\mu\)-calculus:
+
+\begin{center}
+\begin{tabular}{ll}
+Temporal Logic & \(\mu\)-Calculus Translation\\
+\hline
+AG \(\phi\) & \(\nu\) X. \(\phi\) \(\land\) {[}a]X\\
+EF \(\phi\) & \(\mu\) X. \(\phi\) \(\lor\) \(\langle\) a \(\rangle\) X\\
+AF \(\phi\) & \(\mu\) X. \(\phi\) \(\lor\) {[}a]X\\
+EG \(\phi\) & \(\nu\) X. \(\phi\) \(\land\) \(\langle\) a \(\rangle\) X\\
+A(\(\phi\) U \(\psi\)) & \(\mu\) X. \(\psi\) \(\lor\) (\(\phi\) \(\land\) {[}a]X \(\land\) \(\langle\) a \(\rangle\) \top)\\
+E(\(\phi\) U \(\psi\)) & \(\mu\) X. \(\psi\) \(\lor\) (\(\phi\) \(\land\) \(\langle\) a \(\rangle\) X)\\
+\end{tabular}
+\end{center}
+
+CTL embeds into the alternation-free fragment (Level 1). CTL* requires
+alternation depth 2. The Emerson-Lei algorithm computes nested fixpoints in
+O(n\textsuperscript{d}) symbolic steps where d is the alternation depth.
+\subsection{2.2 Signal Temporal Logic (STL)}
+\label{sec:orgf151770}
+
+STL (Maler-Nickovic 2004; Fainekos-Pappas 2009; Donzé-Maler 2010) brings
+temporal logic to continuous-time, real-valued signals --- the natural output
+of cyber-physical systems.
+
+\textbf{Syntax}:
+\(\phi\) ::= \(\mu\) | \(\neg{}\) \(\phi\) | \(\phi\) \(\land\) \(\psi\) | F\textsubscript{{[}a,b]} \(\phi\) | G\textsubscript{{[}a,b]} \(\phi\) | \(\phi\) U\textsubscript{{[}a,b]} \(\psi\)
+
+where \(\mu\) is a predicate f(s(t)) > 0 over signal values. All temporal operators
+carry explicit time bounds [a,b].
+
+\textbf{The Robustness Innovation}: The key contribution of STL is \emph{quantitative
+robustness semantics}. Instead of Boolean satisfaction, the robustness degree
+\(\rho\)(\(\phi\), s, t) \(\in\) \overline\{\mathbb{R}\} measures \emph{how robustly} a signal
+satisfies or violates a specification:
+
+\begin{itemize}
+\item \(\rho\)(\(\mu\), s, t) = f(s(t)) (raw predicate value)
+\item \(\rho\)(\(\neg{}\) \(\phi\), s, t) = -\(\rho\)(\(\phi\), s, t)
+\item \(\rho\)(\(\phi\) \(\land\) \(\psi\), s, t) = \(\min\)(\(\rho\)(\(\phi\), s, t), \(\rho\)(\(\psi\), s, t))
+\item \(\rho\)(\(\phi\) \(\lor\) \(\psi\), s, t) = \(\max\)(\(\rho\)(\(\phi\), s, t), \(\rho\)(\(\psi\), s, t))
+\item \(\rho\)(G\textsubscript{{[}a,b]} \(\phi\), s, t) = \(\inf\)\textsubscript{t' \(\in\) {[}t+a, t+b]} \(\rho\)(\(\phi\), s, t')
+\item \(\rho\)(F\textsubscript{{[}a,b]} \(\phi\), s, t) = \(\supset\)\textsubscript{t' \(\in\) {[}t+a, t+b]} \(\rho\)(\(\phi\), s, t')
+\end{itemize}
+
+\textbf{Soundness}: \(\rho\) > 0 implies satisfaction; \(\rho\) < 0 implies violation. The
+magnitude |\(\rho\)| quantifies the margin.
+
+\textbf{Lattice-theoretic structure}: STL replaces the Boolean lattice \{false, true\}
+with the complete lattice (\overline\{\mathbb{R}\}, \(\le\)) where min/max replace
+meet/join, and inf/sup over time intervals replace the fixpoint iteration.
+This is exactly the pattern propagator networks compute: cells hold lattice
+values, propagators are monotone functions, and run-to-quiescence computes
+the fixpoint.
+
+\textbf{Applications}: Online/offline monitoring of CPS, robustness-guided
+falsification for automotive/avionics testing, control synthesis via
+optimization-based MPC, and differentiable STL for gradient-based learning.
+
+\textbf{Key references}:
+\begin{itemize}
+\item Maler, O. and Nickovic, D. "Monitoring temporal properties of continuous signals." \emph{FORMATS} 2004.
+\item Fainekos, G. and Pappas, G. "Robustness of temporal logic specifications for continuous-time signals." \emph{TCS} 410(42), 2009.
+\item Donzé, A. and Maler, O. "Robust satisfaction of temporal logic over real-valued signals." \emph{FORMATS} 2010.
+\end{itemize}
+\subsection{2.3 Metric Temporal Logic (MTL)}
+\label{sec:orge631957}
+
+MTL (Koymans 1990) extends LTL with time-bounded temporal operators interpreted
+over \emph{timed words} --- sequences of events with real-valued timestamps.
+
+\(\phi\) ::= p | \(\neg{}\) \(\phi\) | \(\phi\) \(\land\) \(\psi\) | \(\phi\) U\textsubscript{I} \(\psi\)
+
+where I is an interval (e.g., [0,5], (3, \(\infty\))). The decidability landscape
+is surprisingly delicate:
+
+\begin{center}
+\begin{tabular}{llll}
+Domain & Problem & Decidability & Complexity\\
+\hline
+Finite timed words & Satisfiability & Decidable & Non-primitive recursive\\
+Infinite timed words & Satisfiability & Undecidable & ---\\
+Finite timed words & Model checking & Decidable & Non-primitive recursive\\
+Infinite timed words & Model checking & Undecidable & ---\\
+\end{tabular}
+\end{center}
+
+The decidability of MTL over finite timed words was established by Ouaknine and
+Worrell (LICS 2005), resolving a longstanding open question.
+
+\textbf{MITL} (Alur-Feder-Henzinger 1996) bans punctual constraints (exact-time like
+U\textsubscript{=5}), achieving EXPSPACE-completeness. The slogan: "the cost of punctuality"
+--- exact timing is the source of undecidability.
+
+\textbf{Connection to timed automata}: MTL formulas can be translated to one-clock
+alternating timed automata (OCATA), which bridge to timed automata (Alur-Dill
+\begin{enumerate}
+\item for model checking.
+\end{enumerate}
+\subsection{2.4 HyperLTL and Hyperproperties}
+\label{sec:org8d9c44e}
+
+Clarkson and Schneider (JCS 2010) introduced \emph{hyperproperties} --- properties
+of \emph{sets of traces} rather than individual traces. This generalization is
+necessary because security properties like non-interference and opacity relate
+multiple execution traces:
+
+\textbf{HyperLTL} (Clarkson-Finkbeiner-Koleini-Rabe-Sanchez, POST 2014) adds trace
+quantifiers to LTL:
+
+\(\psi\) ::= \(\forall\) \(\pi\). \(\psi\) | \(\exists\) \(\pi\). \(\psi\) | \(\phi\)
+
+where \(\phi\) is an LTL formula with indexed atomic propositions a\textsubscript{\(\pi\)}.
+
+\textbf{Expressible properties}:
+\begin{itemize}
+\item \emph{Non-interference}: \(\forall\) \(\pi\). \(\exists\) \(\pi\)'. (lo\textsubscript{\(\pi\)} = lo\textsubscript{\(\pi\)'}) \(\land\) G(out\textsubscript{\(\pi\)} \(\leftrightarrow\) out\textsubscript{\(\pi\)'})
+\item \emph{Observational determinism}: \(\forall\) \(\pi\). \(\forall\) \(\pi\)'. G(l\textsubscript{\(\pi\)} \(\leftrightarrow\) l\textsubscript{\(\pi\)'}) \(\to\) G(o\textsubscript{\(\pi\)} \(\leftrightarrow\) o\textsubscript{\(\pi\)'})
+\item \emph{Opacity}: \(\forall\) \(\pi\). (secret\textsubscript{\(\pi\)} \(\to\) \(\exists\) \(\pi\)'. \(\neg{}\) secret\textsubscript{\(\pi\)'} \(\land\) G(obs\textsubscript{\(\pi\)} \(\leftrightarrow\) obs\textsubscript{\(\pi\)'}))
+\end{itemize}
+
+Model checking is decidable for the alternation-free fragment but undecidable
+with quantifier alternation (\(\forall\) \(\exists\)). Monitoring alternation-free HyperLTL
+is feasible; monitoring with alternation is fundamentally limited.
+
+\textbf{For Prologos}: HyperLTL's trace quantifiers mirror the ATMS worldview
+structure. Universal hyperproperties (\(\forall\) \(\pi\)) correspond to "all worldviews
+satisfy"; existential (\(\exists\) \(\pi\)) to "some worldview satisfies." This
+connection suggests that Prologos could verify hypersecurity properties of
+session-typed protocols using existing ATMS infrastructure.
+\subsection{2.5 Probabilistic Temporal Logics}
+\label{sec:org574f917}
+
+\textbf{PCTL} (Hansson-Jonsson 1994) replaces CTL's path quantifiers A/E with
+probability thresholds P\textsubscript{\(\ge\) p}. Model checking over DTMCs reduces to
+solving linear equation systems. Over MDPs, it asks whether there exists a
+policy achieving the probability bound, solvable via linear programming.
+
+\textbf{CSL} (Baier-Haverkort-Hermanns-Katoen 2003) extends PCTL for continuous-time
+Markov chains with time-bounded until and steady-state operators. Model
+checking uses uniformisation for transient probability computation.
+
+\textbf{For propagators}: Probabilistic verification replaces the Boolean lattice with
+{[}0,1]. Propagator cells holding probability values, refined by probabilistic
+transition propagators, would compute the same fixpoints as PRISM/Storm.
+Widening operators for probability lattices (interval abstraction) could
+accelerate convergence.
+\subsection{2.6 Spatial and Spatio-Temporal Logics}
+\label{sec:orga8a1ae0}
+
+Caires and Cardelli (2001-2004) developed a \emph{spatial logic for concurrency}
+with a parallel composition operator and its adjoint (guarantee), mirroring
+multiplicative linear logic:
+
+\begin{itemize}
+\item \(\phi\) | \(\psi\): parallel composition (separating conjunction, like * in
+separation logic)
+\item \(\phi\) \triangleright \(\psi\): guarantee (linear implication)
+\end{itemize}
+
+This connects temporal logic directly to \emph{resource reasoning}: spatial
+reasoning about concurrent processes is fundamentally resource-sensitive.
+The ambient logic (Cardelli-Gordon 2000) extends this to mobile computation
+with nested locations.
+
+Topological semantics for modal logic (McKinsey-Tarski 1944) interprets
+\Box \(\phi\) as the interior and \(\diamondsuit\) \(\phi\) as the closure, identifying
+S4 modal logic with topological spaces.
+\subsection{2.7 Quantitative and Weighted Temporal Logics}
+\label{sec:orgdb916fe}
+
+\textbf{Discounted LTL} (Almagor-Boker-Kupferman, TACAS 2014) replaces Boolean
+satisfaction with [0,1]-valued satisfaction, discounting temporal distance:
+\llbracket F \(\phi\) \rrbracket(w,i) = \(\supset\)\textsubscript{j \(\ge\) i} \(\lambda\)\textsuperscript{j-i} \(\cdot\) \llbracket \(\phi\) \rrbracket(w,j).
+
+\textbf{Energy/mean-payoff games} (Chatterjee-Doyen-Henzinger 2010) combine parity
+conditions with quantitative resource constraints. Energy parity games
+(ensuring resource never drops below zero while satisfying a \(\omega\)-regular
+condition) are decidable in NP \(\cap\) coNP.
+
+\textbf{For propagators}: Quantitative temporal logics correspond to propagator
+computations over richer lattices than the Boolean powerset. The energy lattice
+(\mathbb{Z}, \(\le\)) with min as meet, the discount lattice ([0,1], \(\le\)) with
+sup/inf --- these are all complete lattices amenable to propagator computation.
+The key insight is that the \emph{same propagator scheduler} handles all lattices;
+only the cell merge function changes.
+\section{3. Fixpoint Theory and Propagator Networks}
+\label{sec:org13c6079}
+
+\subsection{3.1 The Knaster-Tarski Foundation}
+\label{sec:orgc0731d4}
+
+The Knaster-Tarski theorem is the mathematical bedrock of both model checking
+and propagator computation:
+
+\textbf{Theorem} (Knaster 1928, Tarski 1955): Let L be a complete lattice and
+f : L \(\to\) L a monotone function. Then the set of fixpoints of f forms a complete
+lattice, with:
+\begin{itemize}
+\item lfp(f) = \bigcap $\backslash${ x \(\in\) L \mid f(x) \(\le\) x $\backslash$} (meet of pre-fixpoints)
+\item gfp(f) = \bigcup $\backslash${ x \(\in\) L \mid x \(\le\) f(x) $\backslash$} (join of post-fixpoints)
+\end{itemize}
+
+\textbf{Kleene's theorem} strengthens this for \(\omega\)-continuous functions (those
+preserving directed suprema): lfp(f) = \bigsqcup\textsubscript{i \(\ge\) 0} f\textsuperscript{i}(\bot), computed
+by iterating from bottom. Dually, gfp(f) = \bigsqcap\textsubscript{i \(\ge\) 0} f\textsuperscript{i}(\top).
+
+Propagator networks are \emph{precisely} Kleene iteration engines:
+\begin{itemize}
+\item Each cell starts at \bot (ascending) or \top (descending)
+\item Each propagator is a monotone function
+\item \texttt{run-to-quiescence} iterates until no cell changes --- the fixpoint
+\end{itemize}
+\subsection{3.2 Approximation Fixpoint Theory (AFT)}
+\label{sec:orgb4e38ee}
+
+Denecker, Marek, and Truszczyński (2000-2004) developed Approximation Fixpoint
+Theory to unify the semantics of non-monotone reasoning formalisms. The key
+construction:
+
+Given a lattice L, form the \emph{bilattice} L\textsuperscript{2} = L \texttimes{} L with two orderings:
+\begin{itemize}
+\item \emph{Precision ordering} \(\le\)\textsubscript{p}: (x\textsubscript{1}, x\textsubscript{2}) \(\le\)\textsubscript{p} (y\textsubscript{1}, y\textsubscript{2}) iff x\textsubscript{1} \(\le\) y\textsubscript{1} and y\textsubscript{2} \(\le\) x\textsubscript{2}
+(more precise = tighter approximation)
+\item \emph{Truth ordering} \(\le\)\textsubscript{t}: (x\textsubscript{1}, x\textsubscript{2}) \(\le\)\textsubscript{t} (y\textsubscript{1}, y\textsubscript{2}) iff x\textsubscript{1} \(\le\) y\textsubscript{1} and x\textsubscript{2} \(\le\) y\textsubscript{2}
+(more true = higher in both components)
+\end{itemize}
+
+A pair (x, y) \(\in\) L\textsuperscript{2} represents an \emph{approximation}: x is the lower bound
+(what is certainly true) and y is the upper bound (what is possibly true). An
+exact element has x = y.
+
+\textbf{Stable operators}: An operator A : L\textsuperscript{2} \(\to\) L\textsuperscript{2} is an approximation of an
+operator O : L \(\to\) L if for exact (x,x), A(x,x) = (O(x), O(x)). AFT defines:
+\begin{itemize}
+\item \emph{Kripke-Kleene fixpoint}: lfp\textsubscript{\(\le\)\textsubscript{p}}(A) --- the most precise fixpoint in the
+precision ordering
+\item \emph{Stable fixpoint}: a fixpoint that is minimal in a certain well-founded
+iteration
+\item \emph{Well-founded fixpoint}: always exists and is unique
+\end{itemize}
+
+\textbf{Unification power}: AFT simultaneously captures:
+\begin{itemize}
+\item Stable model semantics (answer set programming)
+\item Well-founded semantics (logic programming with negation)
+\item Default logic fixpoints
+\item Autoepistemic logic expansions
+\end{itemize}
+
+\textbf{For Prologos}: The bilattice L\textsuperscript{2} maps directly to a two-cell propagator
+pattern: one cell for the lower bound (ascending), one for the upper bound
+(descending). The precision ordering is the product lattice ordering. AFT's
+approximation operators are exactly cross-cell propagators that enforce the
+consistency between lower and upper bounds. This gives Prologos a principled
+way to handle non-monotone operations (like negation-as-failure in the logic
+engine) within a monotone propagator framework --- which is precisely what
+the stratification controller already does, but without the theoretical
+framework to generalize it.
+\subsection{3.3 Belnap's Four-Valued Logic and Bilattices}
+\label{sec:org4eca73b}
+
+Belnap (1977) introduced a four-valued logic FOUR = \{\bot, t, f, \top\}
+for reasoning with incomplete and contradictory information:
+
+\begin{verbatim}
+  ⊤ (both/contradictory)
+ / \
+t   f
+ \ /
+  ⊥ (neither/unknown)
+\end{verbatim}
+
+This carries two orderings:
+\begin{itemize}
+\item \emph{Knowledge} (information): \bot < t,f < \top
+\item \emph{Truth}: f < \bot, \top < t
+\end{itemize}
+
+Ginsberg (1988) generalized to \emph{bilattices} --- structures with two lattice
+orderings. Fitting (1991-2002) applied bilattices to logic programming,
+interpreting programs over FOUR to handle incomplete and contradictory
+information simultaneously.
+
+\textbf{For Prologos}: The session lattice \texttt{sess-bot} / concrete / \texttt{sess-top} is
+already a three-valued approximation of FOUR. The ATMS adds a fourth value
+(contradictory worldview). The connection to bilattice logic programming
+suggests a path toward handling contradictory constraints gracefully rather
+than treating contradiction as a hard failure.
+\subsection{3.4 Mixed Least/Greatest Fixpoints}
+\label{sec:orgb43798b}
+
+The central challenge of the \(\mu\)-calculus is interleaving least and greatest
+fixpoints. A formula \(\nu\) X. \(\mu\) Y. \(\phi\)(X, Y) requires computing:
+\begin{enumerate}
+\item For a given approximation of X, compute the least fixpoint of Y \mapsto \(\phi\)(X, Y)
+\item Use the result to refine X toward its greatest fixpoint
+\item Iterate until both X and Y stabilize
+\end{enumerate}
+
+The \emph{parity condition} is the general pattern for such interleaving: assign
+a priority (natural number) to each fixpoint variable, and determine the
+winner by the parity of the highest priority seen infinitely often. This is
+why parity games are the decision procedure for the \(\mu\)-calculus.
+
+\textbf{Progress measures} (Jurdzinski 2000) provide an alternative characterization:
+a progress measure is a function that assigns to each state a value from a
+well-founded set, such that the function decreases along certain edges.
+Computing the least progress measure solves the parity game.
+
+\textbf{For propagator networks}: Mixed lfp/gfp requires cells with \emph{different
+directions} in the same network:
+\begin{itemize}
+\item Ascending cells (lfp): start at \bot, refine up via join
+\item Descending cells (gfp): start at \top, refine down via meet
+\end{itemize}
+
+The scheduler must handle both directions, with nested fixpoints computed
+inside-out. This is architecturally straightforward --- the current BSP/Jacobi
+scheduler already processes all cells in rounds; adding descending cells
+requires only changing the merge operation per cell. The deeper question is
+termination for mixed networks, addressed by Baldan et al.'s fixpoint games
+(§3.7).
+\subsection{3.5 Domain Theory and Propagators}
+\label{sec:orgee70dd7}
+
+Scott domains and dcpos (directed-complete partial orders) provide the
+denotational semantics that connects to propagator computation:
+
+\begin{itemize}
+\item A \emph{dcpo} is a partial order where every directed set has a supremum
+\item A \emph{Scott-continuous} function preserves directed suprema
+\item The \emph{information ordering} on a dcpo models increasing knowledge
+\end{itemize}
+
+Propagator cells are elements of a dcpo (or complete lattice). The cell's
+value increases monotonically, representing accumulating information. The
+merge operation (join) is the directed supremum. Propagators are
+Scott-continuous functions between dcpos.
+
+This framing connects propagator networks to the rich theory of domain
+equations, powerdomains, and continuous function spaces. In particular:
+\begin{itemize}
+\item \emph{Powerdomain} constructions (Plotkin, Smyth, Hoare) for nondeterminism
+correspond to the three ways propagator networks can handle nondeterministic
+cells (must-may analysis)
+\item \emph{Bilimit-compact categories} (Amadio-Curien) ensure that recursive domain
+equations have solutions --- relevant for recursive session types interpreted
+as elements of recursive domains
+\end{itemize}
+\subsection{3.6 Coinduction and Greatest Fixpoints}
+\label{sec:orgb82fb57}
+
+Greatest fixpoints are mathematically dual to least fixpoints but operationally
+different:
+\begin{itemize}
+\item Least fixpoint: finite proof/derivation, inductive definition
+\item Greatest fixpoint: infinite behavior, coinductive definition
+\end{itemize}
+
+The canonical example is \emph{bisimulation}: two processes are bisimilar iff they
+are related by the \emph{greatest fixpoint} of the bisimulation functional. This is
+the coinductive definition: assume the processes are related, and verify that
+every step preserves the relation.
+
+\textbf{Coinductive types in type theory}: Coinductive types (streams, conatural
+numbers, infinite trees) represent infinite data. Abel, Pientka, Thibodeau,
+and Setzer (POPL 2013) introduced \emph{copatterns} for programming with
+coinductive types: instead of pattern matching on constructors (inductive),
+copattern matching defines behavior in response to destructors (coinductive).
+
+\textbf{Productivity checking}: For coinductive definitions to be well-defined, they
+must be \emph{productive} --- each observation step must terminate. This is the
+dual of termination checking for inductive definitions.
+
+\textbf{For Prologos}: Recursive session types with \texttt{rec} are naturally coinductive
+when the protocol loops forever (a server that perpetually accepts requests).
+The distinction between \(\mu\) X (inductive, eventually terminating) and \(\nu\) X
+(coinductive, potentially infinite) session types maps directly to the
+lfp/gfp distinction in propagator cells. A coinductive session type should be
+checked for \emph{productivity} (each protocol step makes progress) rather than
+\emph{termination} (the protocol eventually ends).
+\subsection{3.7 Fixpoint Games on Continuous Lattices}
+\label{sec:org18005ff}
+
+Baldan, König, Padoan, and Tsampas (POPL 2019) introduced \emph{fixpoint games on
+continuous lattices} --- a game-theoretic characterization of lattice fixpoints
+that unifies parity games and abstract interpretation:
+
+Given a system of fixpoint equations x\textsubscript{i} = f\textsubscript{i}(x\textsubscript{1}, \ldots{}, x\textsubscript{n}) over a
+continuous lattice, they define a two-player game where:
+\begin{itemize}
+\item Player \(\exists\) (Existential) chooses witnesses for joins
+\item Player \(\forall\) (Universal) chooses witnesses for meets
+\item The winner is determined by a parity condition on the fixpoint types (\(\mu\)/\(\nu\))
+\end{itemize}
+
+\textbf{Key results}:
+\begin{itemize}
+\item The game characterizes the solution of the fixpoint equation system
+\item For finite lattices, the game reduces to classical parity games
+\item For infinite lattices, the game provides a sound approximation framework
+\end{itemize}
+
+This directly addresses the question of how propagator networks compute
+nested fixpoints: the scheduler can be viewed as \emph{playing the fixpoint game},
+with ascending cell updates as Existential moves and descending cell updates
+as Universal moves.
+\subsection{3.8 Widening and Narrowing}
+\label{sec:org82c40f8}
+
+Cousot and Cousot (1977, 1992) introduced widening (\(\nabla\)) and narrowing
+(\(\Delta\)) operators to ensure termination of fixpoint iteration over
+infinite-height lattices:
+
+\begin{itemize}
+\item \emph{Widening} \(\nabla\) : L \texttimes{} L \(\to\) L accelerates ascending chains by
+jumping ahead, guaranteeing termination at the cost of precision (the
+result is an over-approximation of the lfp)
+\item \emph{Narrowing} \(\Delta\) : L \texttimes{} L \(\to\) L improves precision by descending from
+the widened result, without losing the termination guarantee
+\end{itemize}
+
+Standard variants include:
+\begin{itemize}
+\item \emph{Delayed widening}: apply standard iteration for k steps before widening
+\item \emph{Threshold widening}: widen to predefined thresholds (e.g., 0, 1, \(\infty\))
+\item \emph{Guided widening}: use the property being checked to guide the widening
+\end{itemize}
+
+\textbf{For Prologos}: Widening is already implemented via the \texttt{Widenable} trait and
+\texttt{net-add-widening-propagator}. The connection to abstract interpretation
+suggests widening strategies informed by the temporal property being verified:
+if checking AF(x < 10), widen the interval lattice with threshold 10.
+\section{4. Runtime Verification and Monitoring}
+\label{sec:orgf24867d}
+
+\subsection{4.1 Three-Valued Semantics (LTL3)}
+\label{sec:org4565a4e}
+
+Runtime verification faces a fundamental challenge: LTL is defined over
+infinite traces, but monitors observe only finite (growing) prefixes. Bauer,
+Leucker, and Schallhart (TOSEM 2011) introduced LTL3 with three values:
+
+\begin{itemize}
+\item \textbf{T} (true): every possible infinite continuation satisfies the property
+\item \textbf{F} (false): every possible infinite continuation violates the property
+\item \textbf{?} (inconclusive): some continuations satisfy, some violate
+\end{itemize}
+
+Formally: [u \models \(\phi\)]\textsubscript{3} = T iff \(\forall\) w \(\in\) \(\Sigma\)\^{}\(\omega\) : u \(\cdot\) w \models \(\phi\).
+
+The monitor construction produces a \emph{minimal deterministic finite-state machine}
+that reads finite traces and outputs B3 verdicts. Extended to RV-LTL with four
+values: \{T, F, T\textsubscript{p} (presumably true), F\textsubscript{p} (presumably false)\} based on
+behavioral pattern extrapolation.
+
+\textbf{Monitorable properties}: A property \(\phi\) is monitorable if for every finite
+trace u, there exists a finite extension v such that u \(\cdot\) v yields a
+definitive verdict. This class is \emph{strictly larger} than safety \(\cup\) co-safety.
+Safety properties are finitely refutable; co-safety are finitely verifiable;
+liveness properties are generally not finitely monitorable.
+
+\textbf{Monitorable fragments of the \(\mu\)-calculus}: The alternation-free fragment (no
+mutual recursion between \(\mu\) and \(\nu\)) yields monitorable properties. Research
+on Hennessy-Milner logic with recursion (a \(\mu\)-calculus variant) has
+established an expressiveness hierarchy of monitorable fragments.
+\subsection{4.2 Monitoring Tools and Architectural Patterns}
+\label{sec:orgcc07987}
+
+The runtime verification community has developed a rich ecosystem of tools:
+
+\textbf{Stream-based monitors}:
+\begin{itemize}
+\item \emph{Lola} (D'Angelo et al., TIME 2005): Declarative stream equations defining
+output streams as functions of inputs. Bounded memory for syntactically
+well-behaved specifications.
+\item \emph{RTLola} (Finkbeiner et al., CAV 2020): Real-time extension with
+asynchronous timestamped streams and temporal window aggregation. Compiles to
+FPGA for hardware monitoring. Deployed on DLR ARTIS autonomous rotorcraft.
+\item \emph{TeSSLa}: Non-synchronized real-time streams with recursive aggregation.
+\end{itemize}
+
+\textbf{Embedded/hardware monitors}:
+\begin{itemize}
+\item \emph{Copilot} (Pike et al., RV 2010): Haskell EDSL generating hard real-time
+C99 monitors running in constant memory and constant time. Developed under
+NASA contract for avionics.
+\item \emph{R2U2} (Reinbacher et al., FMSD 2017): FPGA-based monitoring with LTL/MLTL
+observers and integrated Bayesian health diagnosis. Zero software overhead.
+\end{itemize}
+
+\textbf{Parametric monitors}:
+\begin{itemize}
+\item \emph{JavaMOP} (Jin et al., ICSE 2012): Monitoring-Oriented Programming with
+AspectJ code generation. Supports parametric properties relating specific
+object instances.
+\item \emph{MarQ} (Reger et al., TACAS 2015): Quantified Event Automata for
+parametric monitoring with efficient trace slicing.
+\end{itemize}
+
+\begin{center}
+\begin{tabular}{lll}
+Pattern & Description & Examples\\
+\hline
+Inline & Monitor woven into system code & JavaMOP (AspectJ)\\
+Sidecar & Monitor observes traces externally & Copilot, R2U2\\
+Stream pipeline & Declarative stream equations & Lola, RTLola, TeSSLa\\
+Hardware parallel & FPGA-based constant-time monitoring & R2U2, RTLola-FPGA\\
+\end{tabular}
+\end{center}
+
+\textbf{For Prologos}: The stream-based monitoring pattern maps directly to propagator
+networks. Lola's stream equations \emph{are} propagator wiring: each output stream
+is a cell whose value is determined by propagators reading input streams. The
+"compile temporal spec to monitor" pipeline is the same as "compile temporal
+spec to propagator network." The difference is that Prologos monitors would
+run at \emph{type-checking time} (static analysis) or at \emph{runtime} (dynamic
+monitoring), using the same propagator infrastructure for both.
+\subsection{4.3 Distributed Runtime Verification}
+\label{sec:org73e99d0}
+
+Monitoring distributed systems introduces challenges from partial ordering
+and concurrent observation:
+
+\textbf{Lamport timestamps and vector clocks}: Establish partial ordering of events
+across processes. Vector clocks (Fidge 1988, Mattern 1989) precisely
+characterize the happens-before relation.
+
+\textbf{Chase-Garg lattice of consistent cuts} (1995): The set of consistent global
+states forms a finite distributive lattice under inclusion. Predicate
+detection on this lattice ranges from O(n\textsuperscript{2}) for linear predicates
+(meet-closed) to NP-complete for general predicates.
+
+\textbf{Decentralized monitoring} (Bauer-Falcone, FMSD 2016): Decomposing LTL
+specifications into sub-formulae distributed among local monitors with
+partial observation.
+
+\textbf{For Prologos}: Distributed session types (multi-party protocols) require
+distributed verification. The lattice of consistent cuts is itself a complete
+lattice, and predicate detection on it is a fixpoint computation --- naturally
+amenable to propagator-based evaluation. Prologos's multi-party session types
+could embed distributed monitors that check protocol compliance across
+endpoints.
+\subsection{4.4 Predictive Runtime Verification}
+\label{sec:orga7a2d92}
+
+Predictive RV detects \emph{potential} violations that haven't occurred yet by
+analyzing causal models:
+\begin{itemize}
+\item \emph{Happens-before analysis}: Explore alternative interleavings consistent with
+the observed partial order
+\item \emph{Maximal causal models}: Consider all causally compatible executions
+\item \emph{SMT-based approaches}: Encode the space of possible interleavings as SMT
+constraints and check for violations
+\end{itemize}
+
+This connects to the ATMS: each consistent worldview is an alternative
+interleaving, and checking a property across all worldviews is predictive
+verification.
+\subsection{4.5 Shield Synthesis}
+\label{sec:org2fcbf00}
+
+Bloem, Könighofer, and Ehlers introduced \emph{shields} --- reactive systems that
+enforce safety by observing the system's output and correcting unsafe actions:
+
+\begin{itemize}
+\item \emph{Pre-shields}: Intercept controller inputs, restricting available actions
+to those guaranteed safe
+\item \emph{Post-shields}: Intercept controller outputs, correcting unsafe actions to
+safe alternatives
+\item Formalized as safety games between the shield and the environment
+\end{itemize}
+
+\textbf{Safe reinforcement learning through shielding}: The shield constrains the
+RL agent's action space, preventing unsafe exploration while maintaining
+learning effectiveness. The shield is synthesized from a temporal specification
+and a model of the environment.
+
+\textbf{For Prologos}: Shield synthesis from session types would produce runtime
+monitors that \emph{enforce} protocol compliance, not just detect violations. A
+session-typed channel with a shield would automatically correct protocol
+deviations --- a form of self-healing communication. This extends the static
+verification story with dynamic enforcement.
+\section{5. Session Types, Linear Logic, and Verification}
+\label{sec:orgd91586f}
+
+\subsection{5.1 The Curry-Howard Correspondence for Sessions}
+\label{sec:org26d4f1f}
+
+The Caires-Pfenning correspondence (CONCUR 2010) and Wadler's "Propositions as
+Sessions" (ICFP 2012) establish a deep isomorphism between classical linear
+logic and session types:
+
+\begin{center}
+\begin{tabular}{ll}
+Linear Logic & Session Type\\
+\hline
+A \(\otimes\) B & Send A then continue as B\\
+A \parr B & Receive A then continue as B\\
+A \(\oplus\) B & Internal choice (select A or B)\\
+A $\backslash$& B & External choice (offer A or B)\\
+!A & Server (replicated service)\\
+?A & Client (replicated usage)\\
+Cut elimination & Communication (\(\beta\)-reduction)\\
+\end{tabular}
+\end{center}
+
+\textbf{Key theorem}: Deadlock freedom follows from cut elimination in linear logic.
+Well-typed processes do not deadlock because their typing derivations correspond
+to valid linear logic proofs, and cut elimination preserves validity.
+\subsection{5.2 Recursive Session Types: \(\mu\) vs \(\nu\)}
+\label{sec:org3b4aec7}
+
+Recursive session types come in two flavors, mirroring the lfp/gfp distinction:
+
+\begin{itemize}
+\item \textbf{Inductive} (\(\mu\)): The protocol eventually terminates. The recursive type
+\(\mu\) X. !Msg. ?Ack. X describes a bounded interaction that must reach a
+base case. Checked by termination/productivity analysis.
+
+\item \textbf{Coinductive} (\(\nu\)): The protocol may run forever. The recursive type
+\(\nu\) X. !Req. ?Resp. X describes a persistent server that perpetually accepts
+requests. Checked by productivity: each protocol step is responsive.
+\end{itemize}
+
+The distinction is operationally critical: inductive session types correspond
+to clients (finite interaction); coinductive session types correspond to
+servers (persistent service). Prologos's \texttt{rec} keyword currently treats all
+recursion as potentially infinite; distinguishing \(\mu\)-rec from \(\nu\)-rec would
+enable more precise verification.
+\subsection{5.3 Multiparty Session Types}
+\label{sec:org079acd3}
+
+Honda, Yoshida, and Carbone (POPL 2008) extended binary session types to
+multi-party protocols via \emph{global types} --- protocol specifications describing
+the interaction among all participants:
+
+\begin{enumerate}
+\item \emph{Global type}: Describes the protocol from a bird's-eye view
+\item \emph{Projection}: Each participant's local type is projected from the global type
+\item \emph{Deadlock freedom}: If all participants follow their projected local types,
+the system is deadlock-free
+\end{enumerate}
+
+Recent extensions include:
+\begin{itemize}
+\item \emph{Timed multiparty session types} (ECOOP 2024): Adding timing constraints
+\item \emph{Crash-stop multiparty session types} (ECOOP 2023): Handling participant
+failures
+\item \emph{Behavioral contracts} (Castagna-Gesbert-Padovani 2009): Subtyping for
+session types ensuring safe substitution
+\item \emph{Gradual session types} (Igarashi et al. 2017): Blending static and
+dynamic session type checking
+\end{itemize}
+\subsection{5.4 Session Types and Model Checking}
+\label{sec:org0774c5a}
+
+Lange, Tuosto, and Yoshida developed Communicating Session Automata (CSA) ---
+a direct bridge between session types and model checking:
+
+\begin{itemize}
+\item Global types are translated to communicating finite-state machines (CFSMs)
+\item Properties (deadlock freedom, protocol conformance) are checked via model
+checking on the product CFSM
+\item The model checking can verify temporal properties beyond what type checking
+alone can ensure
+\end{itemize}
+
+This is precisely the bridge Prologos aims to build, but using propagator
+networks instead of CFSMs as the verification substrate.
+\subsection{5.5 Actris: Session Types Meet Separation Logic}
+\label{sec:org6cc348d}
+
+Hinrichsen, Bengtson, and Krebbers (POPL 2020) introduced Actris ---
+\emph{Dependent Separation Protocols} within the Iris framework. This merges session
+types with higher-order separation logic, where protocol steps can depend on
+separation logic propositions about heap state.
+
+Actris 2.0 (LMCS 2022) adds subprotocols (session-type subtyping) for
+compositional reasoning. This is the most sophisticated integration of
+session types with formal verification to date, and demonstrates that
+session types and separation logic are not competing but complementary
+verification approaches.
+\section{6. Formal Verification Frontiers}
+\label{sec:org3507473}
+
+\subsection{6.1 Separation Logic and Iris}
+\label{sec:orgd124c6f}
+
+Iris (Jung et al., POPL 2015) is a higher-order concurrent separation logic
+framework mechanized in Coq, built on three orthogonal pillars:
+
+\begin{enumerate}
+\item \textbf{Resource Algebras (Cameras)}: Generalized partial commutative monoids with
+a validity predicate --- the algebraic foundation for resource reasoning
+\item \textbf{Invariants}: Named propositions that hold at all times, with impredicative
+invariant opening
+\item \textbf{Ghost State}: Logical state not in the physical program, governed by
+resource algebras and frame-preserving updates
+\end{enumerate}
+
+The \emph{later modality} (\triangleright P) resolves circularity in impredicative
+definitions via guarded recursion.
+
+\textbf{RustBelt} (Jung et al., POPL 2018) proves Rust's type system sound, including
+unsafe code, using Iris's lifetime logic. \textbf{RefinedRust} (Sammler et al., PLDI
+\begin{enumerate}
+\item layers refinement types on Rust within Iris, with machine-checked proofs.
+\end{enumerate}
+\subsection{6.2 Refinement Types}
+\label{sec:org0b467d2}
+
+\textbf{Liquid types} (Rondon-Kawaguchi-Jhala, PLDI 2008) combine HM type inference
+with predicate abstraction: types \{v : T | p\} where p is drawn from a decidable
+qualifier language. Subtyping reduces to SMT implication checking.
+
+\textbf{Refinement reflection} (Vazou et al., POPL 2018) enables complete verification
+by reflecting function definitions into their output refinement types.
+
+\textbf{F*} (Swamy et al.) combines refinement types with an \emph{indexed effect system}
+organized as a lattice of effects, enabling modular verification of stateful
+programs.
+
+\textbf{For Prologos}: Refinement types could extend Prologos's dependent types with
+SMT-backed lightweight verification. The qualifier lattice in liquid type
+inference is a complete lattice amenable to propagator computation ---
+qualifier inference \emph{is} fixpoint computation over the qualifier lattice.
+\subsection{6.3 Algebraic Effects and Handlers}
+\label{sec:orge5949ad}
+
+Algebraic effects (Plotkin-Power 2001-2003) model computational effects as
+operations of an algebraic theory. Effect handlers (Plotkin-Pretnar, ESOP 2009)
+generalize exception handlers with access to delimited continuations.
+
+Key languages: Eff, Frank (where handlers are the universal abstraction), Koka
+(row-polymorphic effect types compiling to C). Recent work (Sekiyama-Tsukada,
+POPL 2024) combines refinement types with algebraic effects.
+
+\textbf{Connection to session types}: Communication operations (send, receive) can be
+modeled as algebraic effects; session types then become effect types constraining
+operation ordering. Both algebraic effects (via free monads) and session types
+(via indexed monads) unify under graded monadic frameworks.
+\subsection{6.4 Reactive Synthesis}
+\label{sec:orge444803}
+
+Given a temporal specification, \emph{synthesize} an implementation automatically:
+
+\begin{itemize}
+\item \textbf{Church's problem} (1957): Realized by the Büchi-Landweber theorem (1969)
+for \(\omega\)-regular specifications
+\item \textbf{GR(1) synthesis} (Bloem-Jobstmann-Piterman-Pnueli-Sa'ar, JCSS 2012):
+Efficient O(n \(\cdot\) m \(\cdot\) N\textsuperscript{2}) synthesis for the practically important
+generalized reactivity(1) fragment
+\item \textbf{LTL synthesis}: 2EXPTIME-complete (Pnueli-Rosner 1989); Safraless
+approaches (Kupferman-Vardi, FOCS 2005) avoid determinization
+\item \textbf{Bounded synthesis} (Finkbeiner-Schewe, ATVA 2007): Restrict to
+implementations with at most k states; reduces to SAT
+\end{itemize}
+
+\textbf{For Prologos}: Reactive synthesis from session type specifications is a
+natural extension of the propagator-based verification story. Given temporal
+properties on session types, synthesize process implementations that satisfy
+them. The propagator network supports this through its \emph{bidirectional} nature
+--- constraints flow in both directions, enabling constructive derivation of
+implementations from specifications.
+\subsection{6.5 Coalgebraic Semantics}
+\label{sec:orgd494936}
+
+Coalgebras provide a unified categorical treatment of transition systems and
+temporal logics:
+
+\begin{itemize}
+\item A coalgebra for functor F is a morphism c : X \(\to\) F(X)
+\item Different F capture different system types: P(X) for nondeterminism,
+D(X) for probability, (2 \texttimes{} X)\textsuperscript{A} for deterministic automata
+\item Coalgebraic modal logic uses predicate liftings to define modal operators
+parametrically in the functor
+\end{itemize}
+
+This enables \emph{parametric verification}: fixing the functor determines the
+system type, and results transfer across functor choices. Stone duality
+connects coalgebraic logic to topology, yielding representation theorems
+and completeness results.
+
+\textbf{For Prologos}: Prologos's propagator network is itself a coalgebra ---
+the network state transforms via propagator application. Temporal properties
+of the network (convergence, stability, monotonicity) can be expressed in
+coalgebraic modal logic. The terminal coalgebra (greatest fixpoint) of the
+network functor represents the "fully resolved" type/session/effect
+assignment.
+\subsection{6.6 Capability-Based Security Verification}
+\label{sec:orgb6c28d9}
+
+Object-capability (oCap) security restricts authority propagation to explicit
+capability passing. Formal verification includes:
+
+\begin{itemize}
+\item \textbf{Cerise} (Georges et al., JACM 2023): Verifying capability machine programs
+using Iris, proving security even with untrusted code
+\item \textbf{CHERI} (Watson et al.): Hardware-enforced capabilities with unforgeable
+tagged pointers; VeriCHERI provides RTL-level verification
+\item \textbf{WebAssembly}: Capability-based module system with explicit import/export
+surfaces
+\end{itemize}
+
+\textbf{Connection to linear types}: Capability security and linear types share deep
+structure --- both enforce resource discipline. Affine capabilities (usable at
+most once) are linear resources. CHERI's hardware tag enforces a form of
+linearity. Cerise explicitly uses Iris's resource algebras (substructural
+reasoning) to verify capability programs.
+
+\textbf{For Prologos}: Prologos's linear types (QTT) already provide resource control;
+adding a capability-based module system would formalize authority propagation.
+The propagator network can verify capability confinement properties: a
+capability that should not escape a scope is a linear resource that must not
+be sent outside its boundary --- checkable via the session type checker.
+\section{7. The Propagator Network as Universal Verification Substrate}
+\label{sec:org1bdabd5}
+
+\subsection{7.1 The Fundamental Observation}
+\label{sec:orgdfa6074}
+
+The preceding survey reveals a common mathematical structure across all
+formalisms:
+
+\textbf{Every verification formalism discussed in this document computes fixpoints
+over complete lattices.}
+
+\begin{center}
+\begin{tabular}{lll}
+Formalism & Lattice & Fixpoint Type\\
+\hline
+CTL model checking & (2\textsuperscript{S}, \subseteq) & lfp and gfp\\
+\(\mu\)-calculus & (2\textsuperscript{S}, \subseteq) & nested lfp/gfp\\
+STL robustness & (\overline\{\mathbb{R}\}, \(\le\)) & inf/sup over time\\
+Abstract interpretation & Abstract domain via Galois conn. & lfp with widening\\
+AFT / bilattice & L\textsuperscript{2} with precision ordering & Kripke-Kleene/stable\\
+PCTL probabilistic & ([0,1], \(\le\)) & lfp via lin. eqs.\\
+Energy games & (\mathbb{Z}, \(\le\)) & lfp/gfp combined\\
+Type inference & Type lattice & lfp via unification\\
+Session type checking & Session lattice & lfp (currently)\\
+LTL3 monitoring & (\{T, F, ?\}, \(\le\)\textsubscript{k}) & lfp (trace prefixes)\\
+Liquid type inference & Qualifier lattice & lfp via abstraction\\
+Reactive synthesis & Game lattice & nested lfp/gfp\\
+\end{tabular}
+\end{center}
+
+Propagator networks are a \emph{general-purpose engine} for lattice fixpoint
+computation. The network infrastructure --- cells, propagators, scheduler,
+ATMS --- is agnostic to the specific lattice. Adding a new verification
+capability means:
+\begin{enumerate}
+\item Define the lattice (implement the \texttt{Lattice} trait)
+\item Define the propagators (monotone functions between cells)
+\item Wire them into the existing network
+\item \texttt{run-to-quiescence} computes the fixpoint
+\end{enumerate}
+\subsection{7.2 What Prologos Already Has (Infrastructure Inventory)}
+\label{sec:orgbd3a5f2}
+
+From \texttt{propagator.rkt} and the existing verification layers:
+
+\begin{center}
+\begin{tabular}{lll}
+Component & What It Provides & Verification Role\\
+\hline
+Cells (ascending) & Lattice-valued mutable state & State labeling, property cells\\
+Monotone propagators & Functions between cells & Transition relation, operators\\
+BSP/Jacobi scheduler & Parallel fixpoint iteration & Model checking algorithm\\
+ATMS & Multi-hypothesis reasoning & Path quantification (A/E)\\
+Nogoods & Inconsistent assumption sets & Impossible paths / counterexamples\\
+Galois connections & Cross-domain abstraction & Abstract model checking\\
+Widening (\texttt{Widenable}) & Accelerated convergence & Termination for infinite lattices\\
+Threshold propagators & Wait-for-value patterns & Stratified evaluation barriers\\
+Cross-domain propagators & Inter-lattice bridges & Multi-domain verification\\
+\end{tabular}
+\end{center}
+\subsection{7.3 What Would Complete the Picture}
+\label{sec:orgc48f1a0}
+
+\subsubsection{7.3.1 Greatest Fixpoint Support (Descending Cells)}
+\label{sec:org269bcfb}
+
+Currently all cells start at \bot and refine upward (lfp). Safety properties
+and coinductive definitions require the dual: cells starting at \top and
+refining downward (gfp).
+
+\textbf{Implementation sketch}:
+\begin{enumerate}
+\item Add \texttt{cell-direction} flag: \texttt{:ascending} (default) or \texttt{:descending}
+\item Descending cells use \texttt{meet} instead of \texttt{join} for \texttt{net-cell-write}
+\item Contradiction for descending cells is reaching \bot (dual of ascending \top)
+\item The scheduler processes both directions; nested fixpoints stabilize
+inside-out
+\end{enumerate}
+
+This is architecturally straightforward. The session lattice already has both
+join and meet. The extension adds the dual direction to the scheduler.
+\subsubsection{7.3.2 Temporal Property Specification Language}
+\label{sec:org25444a1}
+
+A user-facing language for specifying temporal properties that compiles to
+propagator wiring (developed in detail in \texttt{PROPAGATORS\_AS\_MODEL\_CHECKERS.org}
+§4):
+
+\begin{verbatim}
+property pin-safe
+  :session Pin-Guard
+  :always [not [and :pinned :gc-collecting]]
+
+property request-response
+  :session CapTP-Steady
+  :always [implies [sent :call] [eventually [received :return]]]
+\end{verbatim}
+
+Each keyword maps to a fixpoint construction:
+\begin{itemize}
+\item \texttt{:always} \(\to\) \(\nu\) X. \(\phi\) \(\land\) {[}a]X (greatest fixpoint)
+\item \texttt{:eventually} \(\to\) \(\mu\) X. \(\phi\) \(\lor\) {[}a]X (least fixpoint)
+\item \texttt{:until} \(\to\) \(\mu\) X. \(\psi\) \(\lor\) (\(\phi\) \(\land\) {[}a]X) (least fixpoint)
+\end{itemize}
+\subsubsection{7.3.3 Approximation Fixpoint Theory Integration}
+\label{sec:org244ceaf}
+
+Using AFT's bilattice construction L\textsuperscript{2} for handling non-monotone operations:
+\begin{itemize}
+\item Lower bound cell (what is certainly true) + upper bound cell (what is
+possibly true)
+\item Stable operator applied to the pair
+\item Generalizes the stratification controller to arbitrary non-monotone
+operators
+\end{itemize}
+\subsubsection{7.3.4 Runtime Monitoring Compilation}
+\label{sec:org02781cd}
+
+Temporal properties that cannot be verified statically (due to undecidability
+or state-space explosion) compile to \emph{runtime monitors} --- propagator networks
+that run alongside the program:
+\begin{itemize}
+\item Stream-based monitoring (Lola-style) maps directly to propagator wiring
+\item The same temporal specification language works for both static and dynamic
+verification
+\item Shields (enforcement monitors) correct unsafe behavior rather than just
+detecting it
+\end{itemize}
+\subsubsection{7.3.5 Quantitative Verification Support}
+\label{sec:orgbc47f4a}
+
+Replace the Boolean lattice with richer domains:
+\begin{itemize}
+\item (\overline\{\mathbb{R}\}, \(\le\)) for STL robustness monitoring
+\item ([0,1], \(\le\)) for probabilistic verification
+\item (\mathbb{Z}, \(\le\)) for energy/resource constraints
+\end{itemize}
+
+The propagator scheduler is lattice-agnostic; only the cell merge function
+changes.
+\subsection{7.4 The Verification Layer Cake (Extended)}
+\label{sec:org30815ae}
+
+\begin{verbatim}
+Layer 7: Hyperproperties          (HyperLTL: information flow, non-interference)
+     |                              → ATMS worldview quantification
+Layer 6: Temporal Properties      (CTL/LTL/μ-calculus: safety, liveness, fairness)
+     |                              → Fixpoint propagators (ascending + descending)
+Layer 5: Runtime Monitors         (Stream-based monitoring, shields)
+     |                              → Compiled propagator sub-networks
+Layer 4: Effect Ordering          (Causal model: deadlock detection)
+     |                              → Galois connection to session domain
+Layer 3: Session Types            (Protocol state machines: duality, completeness)
+     |                              → Session lattice, decomposition propagators
+Layer 2: Linear Types (QTT)       (Resource tracking: use-once, capabilities)
+     |                              → Multiplicity lattice, QTT propagators
+Layer 1: Dependent Types          (Value-dependent properties: indexed types)
+     |                              → Type lattice, unification propagators
+Layer 0: Propagator Network       (Monotone fixpoint computation: universal substrate)
+         + ATMS (path quantification)
+         + Galois Connections (abstraction)
+         + Widening (convergence acceleration)
+         + AFT/Bilattice (non-monotone recovery)
+\end{verbatim}
+
+Every layer builds on Layer 0. Every new layer adds cells and propagators to
+the \emph{same network}. The cross-layer interactions happen through the shared
+substrate. A temporal property that references type information, session state,
+effect ordering, and resource tracking is verified in a single
+\texttt{run-to-quiescence} pass because all layers share the network.
+\section{8. Cross-Cutting Themes}
+\label{sec:org31d1549}
+
+\subsection{8.1 The Lattice Universality Principle}
+\label{sec:org39ba87f}
+
+The recurring theme across all formalisms is that \emph{verification is lattice
+computation}. Different formalisms choose different lattices and different
+fixpoint operators, but the computational pattern is invariant:
+
+\begin{enumerate}
+\item Define a complete lattice
+\item Define monotone functions over it
+\item Compute fixpoints (least, greatest, or nested)
+\item Interpret the fixpoint as a verification result
+\end{enumerate}
+
+Propagator networks are the most general realization of this pattern: they are
+\emph{parameterized} by the lattice and the functions, and the scheduler computes
+fixpoints for \emph{any} instantiation.
+\subsection{8.2 The Duality of Safety and Liveness}
+\label{sec:org2c4d014}
+
+Safety (\emph{nothing bad happens}) and liveness (\emph{something good eventually
+happens}) are the two fundamental verification concerns. They correspond
+exactly to the two fixpoint types:
+
+\begin{center}
+\begin{tabular}{llll}
+Concern & Fixpoint & Cell Direction & Iteration\\
+\hline
+Safety & gfp (\(\nu\)) & Descending & Start at \top, refine down\\
+Liveness & lfp (\(\mu\)) & Ascending & Start at \bot, refine up\\
+\end{tabular}
+\end{center}
+
+The Alpern-Schneider decomposition theorem (1985) states that every temporal
+property is the intersection of a safety and a liveness property. In
+propagator terms: every temporal property can be decomposed into an ascending
+cell (liveness component) and a descending cell (safety component), with
+propagators connecting them.
+\subsection{8.3 Static vs. Dynamic Verification}
+\label{sec:org93541a4}
+
+The same propagator infrastructure supports both static (compile-time) and
+dynamic (runtime) verification:
+
+\begin{center}
+\begin{tabular}{lll}
+Aspect & Static Verification & Dynamic Verification\\
+\hline
+Input & Type/session annotations & Runtime events/signals\\
+Lattice & Type/session lattice & Trace prefix lattice / [0,1]\\
+Completeness & May be incomplete & Always reflects actual behavior\\
+Overhead & Compile-time only & Runtime performance cost\\
+Expressiveness & Decidable properties only & Any monitorable property\\
+Implementation & Propagators in type checker & Propagators in runtime system\\
+\end{tabular}
+\end{center}
+
+The key insight is that \emph{the propagator wiring is the same}. A temporal
+property specification compiles to the same propagator structure whether it
+runs during type checking or during execution. The difference is only in
+the source of cell updates: type annotations vs. runtime events.
+\subsection{8.4 The Abstraction-Refinement Paradigm}
+\label{sec:orgdd0b2ff}
+
+Abstract interpretation, CEGAR, and Galois connections are all manifestations
+of the same pattern: compute on a simpler (abstract) domain, and refine when
+the abstraction is too coarse.
+
+In propagator terms:
+\begin{enumerate}
+\item Create abstract cells connected to concrete cells via Galois connection
+propagators
+\item Compute the fixpoint on the abstract domain (faster, may be imprecise)
+\item If the abstract result is inconclusive, refine the abstraction (add finer
+abstract cells) and re-run
+\item The propagator network handles this incrementally --- only affected cells
+are re-evaluated
+\end{enumerate}
+\subsection{8.5 Resource Discipline as Universal Theme}
+\label{sec:org566fd82}
+
+Across the formalisms, \emph{resource discipline} --- controlling who can use what,
+when, and how many times --- is the universal verification theme:
+
+\begin{itemize}
+\item \textbf{Linear types (QTT)}: Resources used exactly once (or controlled multiplicity)
+\item \textbf{Session types}: Communication channels used according to protocol
+\item \textbf{Capabilities}: Authorities that cannot be forged
+\item \textbf{Energy constraints}: Resources consumed/produced along execution
+\item \textbf{Separation logic}: Heap resources owned exclusively or shared under invariant
+\item \textbf{Algebraic effects}: Computational effects requiring explicit handling
+\end{itemize}
+
+All enforce the same principle at different granularities. Prologos's
+combination of QTT + session types + capability security already covers the
+first three; extending to energy constraints and separation-logic reasoning
+would complete the resource verification picture.
+\section{9. Research Program}
+\label{sec:org0b52054}
+
+\subsection{9.1 Immediate (Infrastructure Extensions)}
+\label{sec:orgdd41f6b}
+
+\begin{enumerate}
+\item \textbf{Greatest fixpoint cells}: Add \texttt{:descending} cell direction to
+\texttt{propagator.rkt}. Validate with bisimulation checking as the first
+application.
+
+\item \textbf{Mixed ascending/descending networks}: Verify that the BSP scheduler
+correctly handles mixed-direction cells with nested fixpoint computation.
+Test with Level 2 alternation (\(\nu\) X. \(\mu\) Y. \(\phi\)).
+
+\item \textbf{STL robustness cells}: Implement
+\overline\{\mathbb{R}\}-valued cells with inf/sup merge. Validate with
+simple continuous signal monitoring.
+\end{enumerate}
+\subsection{9.2 Medium-Term (New Verification Capabilities)}
+\label{sec:org936b696}
+
+\begin{enumerate}
+\item \textbf{Temporal property language}: Design and implement the \texttt{property} keyword
+with temporal operators (:always, :eventually, :until, :within). Compile to
+propagator wiring.
+
+\item \textbf{AFT integration}: Implement bilattice L\textsuperscript{2} cell pairs for non-monotone
+operator recovery. Generalize the stratification controller.
+
+\item \textbf{Runtime monitor compilation}: Compile temporal specifications to Lola-style
+stream monitors that can run alongside Prologos programs.
+
+\item \textbf{Multiparty session type verification}: Extend session type propagators to
+handle global types with projection and multi-participant deadlock checking.
+\end{enumerate}
+\subsection{9.3 Long-Term (Research Frontiers)}
+\label{sec:org41d061b}
+
+\begin{enumerate}
+\item \textbf{Reactive synthesis from session types}: Given temporal properties on a
+session type, synthesize conforming process implementations. Leverage the
+bidirectional nature of propagator networks.
+
+\item \textbf{Probabilistic session types}: Session types with probabilistic branching
+and PCTL-style probability bounds on protocol properties.
+
+\item \textbf{Hyperproperty verification}: Leverage ATMS worldview quantification
+to verify HyperLTL properties of session-typed protocols (information
+flow, non-interference).
+
+\item \textbf{Coinductive session types}: Distinguish \(\mu\)-rec (inductive/terminating)
+from \(\nu\)-rec (coinductive/persistent) and check productivity rather than
+termination for persistent servers.
+
+\item \textbf{Capability confinement verification}: Verify that capabilities do not
+escape their intended scope, using propagator-based reachability analysis
+on the session type's communication graph.
+
+\item \textbf{Shield synthesis for session types}: Synthesize runtime enforcement
+shields from session type specifications, producing self-healing
+communication channels.
+\end{enumerate}
+\section{10. References}
+\label{sec:org9466ad8}
+
+\subsection{Modal \(\mu\)-Calculus and Fixpoint Theory}
+\label{sec:org3a1d80d}
+\begin{itemize}
+\item Kozen, D. "Results on the propositional \(\mu\)-calculus." \emph{TCS} 27(3), 1983.
+\item Walukiewicz, I. "Completeness of Kozen's axiomatisation." \emph{Information and Computation} 157(1-2), 2000.
+\item Janin, D. and Walukiewicz, I. "On the expressive completeness of the propositional \(\mu\)-calculus with respect to MSO." \emph{CONCUR} 1996.
+\item Bradfield, J. "The modal \(\mu\)-calculus alternation hierarchy is strict." \emph{CONCUR} 1996.
+\item Calude, C., Jain, S., Khoussainov, B., Li, W., and Stephan, F. "Deciding parity games in quasipolynomial time." \emph{STOC} 2017.
+\item Jurdzinski, M. "Small progress measures for solving parity games." \emph{STACS} 2000.
+\item Jurdzinski, M. and Lazic, R. "Succinct progress measures for solving parity games." \emph{LICS} 2017.
+\item Baldan, P., König, B., Padoan, T., and Tsampas, C. "Fixpoint games on continuous lattices." \emph{POPL} 2019.
+\item Emerson, E.A. and Jutla, C. "Tree automata, mu-calculus and determinacy." \emph{FOCS} 1991.
+\end{itemize}
+\subsection{Temporal Logics}
+\label{sec:org037c2d6}
+\begin{itemize}
+\item Pnueli, A. "The temporal logic of programs." \emph{FOCS} 1977.
+\item Clarke, E., Emerson, E., and Sistla, A. "Automatic verification of finite-state concurrent systems using temporal logic specifications." \emph{ACM TOPLAS} 8(2), 1986.
+\item Emerson, E. and Halpern, J. "'Sometimes' and 'not never' revisited: on branching versus linear time temporal logic." \emph{JACM} 33(1), 1986.
+\item Maler, O. and Nickovic, D. "Monitoring temporal properties of continuous signals." \emph{FORMATS} 2004.
+\item Fainekos, G. and Pappas, G. "Robustness of temporal logic specifications for continuous-time signals." \emph{TCS} 410(42), 2009.
+\item Donzé, A. and Maler, O. "Robust satisfaction of temporal logic over real-valued signals." \emph{FORMATS} 2010.
+\item Koymans, R. "Specifying real-time properties with metric temporal logic." \emph{RTS} 2(4), 1990.
+\item Alur, R., Feder, T., and Henzinger, T. "The benefits of relaxing punctuality." \emph{JACM} 43(1), 1996.
+\item Ouaknine, J. and Worrell, J. "On the decidability of metric temporal logic." \emph{LICS} 2005.
+\end{itemize}
+\subsection{Hyperproperties and Information Flow}
+\label{sec:orgb643c73}
+\begin{itemize}
+\item Clarkson, M. and Schneider, F. "Hyperproperties." \emph{JCS} 18(6), 2010.
+\item Clarkson, M., Finkbeiner, B., Koleini, M., Rabe, M., and Sanchez, C. "Temporal logics for hyperproperties." \emph{POST} 2014.
+\end{itemize}
+\subsection{Probabilistic and Quantitative Verification}
+\label{sec:org1ea8744}
+\begin{itemize}
+\item Hansson, H. and Jonsson, B. "A logic for reasoning about time and reliability." \emph{Formal Aspects of Computing} 6(5), 1994.
+\item Baier, C., Haverkort, B., Hermanns, H., and Katoen, J.-P. "Model-checking algorithms for continuous-time Markov chains." \emph{IEEE TSE} 29(6), 2003.
+\item Kwiatkowska, M., Norman, G., and Parker, D. "PRISM 4.0: Verification of probabilistic real-time systems." \emph{CAV} 2011.
+\item Almagor, S., Boker, U., and Kupferman, O. "Discounting in LTL." \emph{TACAS} 2014.
+\item Chatterjee, K. and Doyen, L. "Energy parity games." \emph{ICALP} 2010.
+\item Kaminski, B., Katoen, J.-P., Matheja, C., and Olmedo, F. "Weakest precondition reasoning for expected runtimes of randomized algorithms." \emph{JACM} 2018.
+\end{itemize}
+\subsection{Runtime Verification}
+\label{sec:orgcb36ad3}
+\begin{itemize}
+\item Bauer, A., Leucker, M., and Schallhart, C. "Runtime verification for LTL and TLTL." \emph{ACM TOSEM} 20(4), 2011.
+\item Leucker, M. and Schallhart, C. "A brief account of runtime verification." \emph{JLAP} 78(5), 2009.
+\item D'Angelo, B. et al. "LOLA: Runtime monitoring of synchronous systems." \emph{TIME} 2005.
+\item Finkbeiner, B. et al. "RTLola cleared for take-off: Monitoring autonomous aircraft." \emph{CAV} 2020.
+\item Pike, L. et al. "Copilot: A hard real-time runtime monitor." \emph{RV} 2010.
+\item Reinbacher, T. et al. "R2U2: Monitoring and diagnosis of security threats for unmanned aerial systems." \emph{FMSD} 2017.
+\item Jin, D., Meredith, P., Lee, C., and Rosu, G. "JavaMOP: Efficient parametric runtime monitoring framework." \emph{ICSE} 2012.
+\end{itemize}
+\subsection{Approximation Fixpoint Theory and Bilattices}
+\label{sec:orgd380b49}
+\begin{itemize}
+\item Denecker, M., Marek, V., and Truszczyński, M. "Approximations, stable operators, well-founded fixpoints and applications in nonmonotonic reasoning." \emph{Logic-Based AI} 2000.
+\item Denecker, M., Marek, V., and Truszczyński, M. "Ultimate approximation and its application in nonmonotonic knowledge representation systems." \emph{Information and Computation} 192(1), 2004.
+\item Belnap, N. "A useful four-valued logic." \emph{Modern Uses of Multiple-Valued Logic} 1977.
+\item Ginsberg, M. "Multivalued logics: A uniform approach to reasoning in AI." \emph{Computational Intelligence} 4, 1988.
+\item Fitting, M. "Bilattices and the semantics of logic programming." \emph{JLP} 11(2), 1991.
+\end{itemize}
+\subsection{Abstract Interpretation}
+\label{sec:orgcff7f58}
+\begin{itemize}
+\item Cousot, P. and Cousot, R. "Abstract interpretation: A unified lattice model for static analysis." \emph{POPL} 1977.
+\item Cousot, P. and Cousot, R. "Comparing the Galois connection and widening/narrowing approaches to abstract interpretation." \emph{PLILP} 1992.
+\item Clarke, E., Grumberg, O., and Long, D. "Model checking and abstraction." \emph{ACM TOPLAS} 16(5), 1994.
+\end{itemize}
+\subsection{Session Types and Linear Logic}
+\label{sec:org768b3d7}
+\begin{itemize}
+\item Caires, L. and Pfenning, F. "Session types as intuitionistic linear propositions." \emph{CONCUR} 2010.
+\item Wadler, P. "Propositions as sessions." \emph{JFP} 24(2-3), 2014.
+\item Honda, K., Yoshida, N., and Carbone, M. "Multiparty asynchronous session types." \emph{POPL} 2008.
+\item Hinrichsen, J., Bengtson, J., and Krebbers, R. "Actris: Session-type based reasoning in separation logic." \emph{POPL} 2020.
+\end{itemize}
+\subsection{Separation Logic}
+\label{sec:org978203d}
+\begin{itemize}
+\item Jung, R. et al. "Iris: Monoids and invariants as an orthogonal basis for concurrent reasoning." \emph{POPL} 2015.
+\item Jung, R. et al. "Iris from the ground up." \emph{JFP} 28, 2018.
+\item Jung, R. et al. "RustBelt: Securing the foundations of the Rust programming language." \emph{POPL} 2018.
+\item Sammler, M. et al. "RefinedRust: A type system for high-assurance verification of Rust programs." \emph{PLDI} 2024.
+\end{itemize}
+\subsection{Refinement Types and Verification}
+\label{sec:orgf037ec9}
+\begin{itemize}
+\item Rondon, P., Kawaguchi, M., and Jhala, R. "Liquid types." \emph{PLDI} 2008.
+\item Vazou, N. et al. "Refinement reflection: Complete verification with SMT." \emph{POPL} 2018.
+\item Swamy, N. et al. "Dependent types and multi-monadic effects in F*." \emph{POPL} 2016.
+\end{itemize}
+\subsection{Algebraic Effects}
+\label{sec:org708df32}
+\begin{itemize}
+\item Plotkin, G. and Pretnar, M. "Handlers of algebraic effects." \emph{ESOP} 2009.
+\item Lindley, S., McBride, C., and McLaughlin, C. "Do be do be do." \emph{POPL} 2017.
+\end{itemize}
+\subsection{Reactive Synthesis}
+\label{sec:orgeab16d5}
+\begin{itemize}
+\item Bloem, R., Jobstmann, B., Piterman, N., Pnueli, A., and Sa'ar, Y. "Synthesis of reactive(1) designs." \emph{JCSS} 78(3), 2012.
+\item Pnueli, A. and Rosner, R. "On the synthesis of a reactive module." \emph{POPL} 1989.
+\item Finkbeiner, B. and Schewe, S. "Bounded synthesis." \emph{ATVA} 2007.
+\end{itemize}
+\subsection{Capability Security}
+\label{sec:org56859bc}
+\begin{itemize}
+\item Swasey, D., Garg, D., and Dreyer, D. "Robust and compositional verification of object capability patterns." \emph{OOPSLA} 2017.
+\item Georges, A. et al. "Cerise: Program verification on a capability machine in the presence of untrusted code." \emph{JACM} 2023.
+\end{itemize}
+\subsection{Coalgebraic Methods}
+\label{sec:org9afd08f}
+\begin{itemize}
+\item Kupke, C. and Pattinson, D. "Coalgebraic semantics of modal logics: An overview." \emph{TCS} 2011.
+\item Hasuo, I. "Tracing anonymity with coalgebras." PhD Thesis, Radboud University, 2008.
+\end{itemize}
+\subsection{Domain Theory and Coinduction}
+\label{sec:org9c1a458}
+\begin{itemize}
+\item Abel, A., Pientka, B., Thibodeau, D., and Setzer, A. "Copatterns: Programming infinite structures by observations." \emph{POPL} 2013.
+\item Amadio, R. and Curien, P.-L. \emph{Domains and Lambda-Calculi}. Cambridge, 1998.
+\end{itemize}
+\subsection{Propagator Networks}
+\label{sec:orgf1e283b}
+\begin{itemize}
+\item Radul, A. "Propagation Networks: A Flexible and Expressive Substrate for Computation." PhD Thesis, MIT, 2009.
+\item Radul, A. and Sussman, G. "The Art of the Propagator." MIT CSAIL, 2009.
+\item De Kleer, J. "An assumption-based TMS." \emph{Artificial Intelligence} 28(2), 1986.
+\end{itemize}
+\subsection{Prologos Project Internal Documents}
+\label{sec:org812b1eb}
+\begin{itemize}
+\item "Propagator Networks as Model Checkers." \texttt{docs/research/2026-03-07\_PROPAGATORS\_AS\_MODEL\_CHECKERS.org}. 2026.
+\item "The Categorical Structure of Layered Recovery." \texttt{docs/research/2026-03-13\_LAYERED\_RECOVERY\_CATEGORICAL\_ANALYSIS.org}. 2026.
+\item "Propagator Networks: A Comprehensive Survey." \texttt{docs/research/PROPAGATOR\_NETWORKS.org}. 2026.
+\end{itemize}
+\end{document}

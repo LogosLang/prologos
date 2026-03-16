@@ -95,6 +95,10 @@ Full provenance system for the logic engine. 15 new tests.
 
 * Today
 
+
+** [[../tracking/2026-03-13_TRACK3_CELL_PRIMARY_REGISTRIES.md][Track 3: Cell-Primary Registries]]
+
+
 - Review plan for Track 2 Phase 7 (Error Cell + Grouped Error Reporting)
 - Consider Track 3 (Cell-Primary Registries) implementation
 - Review uncommitted .prologos file changes
