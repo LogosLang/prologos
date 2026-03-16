@@ -317,10 +317,6 @@ Active deferrals that affect future track scope:
 | 3e | Reduction cache cells | LSP-specific, not needed for batch mode | Track 5 or standalone |
 | 5a–5b | Driver simplification | Requires cell-primary reads first | Track 6 |
 
-### Track 2 Phase 7 (Error Cell): Approved Plan Ready
-
-Not a deferral but a completed plan awaiting implementation. Design at `.claude/plans/buzzing-launching-pascal.md`. Error descriptor cell + resolution callback writes + post-fixpoint sweep reads cell. Independent of other tracks.
-
 ---
 
 ## Performance Baseline
