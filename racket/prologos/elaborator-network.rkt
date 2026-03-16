@@ -102,11 +102,14 @@
 ;; ========================================
 
 ;; Allocate a meta as a cell on the network.
+;; Track 4 Phase 2: Creates a TMS cell for assumption-tagged speculation.
+;; At depth 0, TMS-transparent read/write in net-cell-read/write provides
+;; identical behavior to the previous monotonic cell.
 ;; Returns (values elab-network* cell-id).
 (define (elab-fresh-meta enet ctx type source)
   (define net (elab-network-prop-net enet))
   (define-values (net* cid)
-    (net-new-cell net type-bot type-lattice-merge type-lattice-contradicts?))
+    (net-new-tms-cell net type-bot type-lattice-merge type-lattice-contradicts?))
   (define info (elab-cell-info ctx type source))
   (define h (cell-id-hash cid))
   (values

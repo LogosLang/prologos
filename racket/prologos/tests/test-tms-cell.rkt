@@ -201,73 +201,101 @@
      (define net (make-prop-network))
      (define-values (net* cid) (net-new-tms-cell net 'type-bot))
      (check-true (cell-id? cid))
-     (define val (net-cell-read net* cid))
-     (check-true (tms-cell-value? val))
-     (check-equal? (tms-cell-value-base val) 'type-bot)
-     (check-equal? (tms-cell-value-branches val) (hasheq)))
+     ;; net-cell-read returns TMS-unwrapped value (the base at depth 0)
+     (check-equal? (net-cell-read net* cid) 'type-bot)
+     ;; net-cell-read-raw returns the full tms-cell-value
+     (define raw (net-cell-read-raw net* cid))
+     (check-true (tms-cell-value? raw))
+     (check-equal? (tms-cell-value-base raw) 'type-bot)
+     (check-equal? (tms-cell-value-branches raw) (hasheq)))
 
-   (test-case "net-new-tms-cell: write and read via network"
+   (test-case "net-new-tms-cell: TMS-transparent write and read via network"
      (define net (make-prop-network))
      (define-values (net* cid) (net-new-tms-cell net 'bot))
-     ;; Write a speculative value at depth 1 (assumption H=1)
-     (define old-val (net-cell-read net* cid))
-     (define new-val (tms-write old-val '(1) 'solved))
-     (define net** (net-cell-write net* cid new-val))
-     ;; Read at depth 0 — should see base (because merge-tms-cell base = new's base = 'bot)
-     (define read-val (net-cell-read net** cid))
-     ;; At depth 1 under H1
-     (check-equal? (tms-read read-val '(1)) 'solved)
-     ;; At depth 0 — base
-     (check-equal? (tms-read read-val '()) 'bot))
+     ;; Write a plain value 'solved — TMS-transparent write wraps it at depth 0
+     (define net** (net-cell-write net* cid 'solved))
+     ;; Read at depth 0 — should see 'solved (base was updated)
+     (check-equal? (net-cell-read net** cid) 'solved)
+     ;; Raw value shows TMS structure
+     (define raw (net-cell-read-raw net** cid))
+     (check-true (tms-cell-value? raw))
+     (check-equal? (tms-cell-value-base raw) 'solved))
+
+   (test-case "net-new-tms-cell: speculative write via parameterize"
+     (define net (make-prop-network))
+     (define-values (net* cid) (net-new-tms-cell net 'bot))
+     ;; Write under speculation H=1 using TMS-transparent net-cell-write
+     (define net**
+       (parameterize ([current-speculation-stack '(1)])
+         (net-cell-write net* cid 'solved)))
+     ;; At depth 0 — should see base 'bot (speculation hasn't committed)
+     (check-equal? (net-cell-read net** cid) 'bot)
+     ;; At depth 1 under H1 — should see 'solved
+     (check-equal?
+      (parameterize ([current-speculation-stack '(1)])
+        (net-cell-read net** cid))
+      'solved))
 
    ;; --- Speculation workflow simulation ---
 
-   (test-case "speculation workflow: write under H1, fail, write under H2, succeed"
+   (test-case "speculation workflow: TMS-transparent write under H1, fail, write under H2, succeed"
      (define net0 (make-prop-network))
      (define-values (net1 cid) (net-new-tms-cell net0 'bot))
      ;; Snapshot for belt-and-suspenders
      (define snapshot net1)
-     ;; Speculation H1: write 'int
-     (define val1 (net-cell-read net1 cid))
-     (define val1* (tms-write val1 '(1) 'int))
-     (define net2 (net-cell-write net1 cid val1*))
+     ;; Speculation H1: write 'int via TMS-transparent API
+     (define net2
+       (parameterize ([current-speculation-stack '(1)])
+         (net-cell-write net1 cid 'int)))
+     ;; Verify: at depth 1 under H1, reads 'int
+     (check-equal?
+      (parameterize ([current-speculation-stack '(1)])
+        (net-cell-read net2 cid))
+      'int)
+     ;; At depth 0, still 'bot
+     (check-equal? (net-cell-read net2 cid) 'bot)
      ;; H1 fails — restore snapshot (belt-and-suspenders)
-     ;; In TMS terms: retract H1 (reads at '() won't follow H1)
-     ;; With belt-and-suspenders, we also restore:
      (define net3 snapshot)
      ;; Speculation H2: write 'string
-     (define val2 (net-cell-read net3 cid))
-     (define val2* (tms-write val2 '(2) 'string))
-     (define net4 (net-cell-write net3 cid val2*))
+     (define net4
+       (parameterize ([current-speculation-stack '(2)])
+         (net-cell-write net3 cid 'string)))
      ;; H2 succeeds — commit
-     (define val-final (net-cell-read net4 cid))
-     (define val-committed (tms-commit val-final 2))
+     (define raw-final (net-cell-read-raw net4 cid))
+     (define committed (tms-commit raw-final 2))
      ;; After commit, base should be 'string
-     (check-equal? (tms-cell-value-base val-committed) 'string)
+     (check-equal? (tms-cell-value-base committed) 'string)
      ;; Branch 2 preserved for provenance
-     (check-equal? (hash-ref (tms-cell-value-branches val-committed) 2) 'string))
+     (check-equal? (hash-ref (tms-cell-value-branches committed) 2) 'string))
 
-   (test-case "nested speculation: union-of-unions pattern"
+   (test-case "nested speculation: union-of-unions pattern with TMS-transparent API"
      (define net0 (make-prop-network))
      (define-values (net1 cid) (net-new-tms-cell net0 'bot))
      ;; Outer H1, inner H2 (fails), inner H3 (succeeds)
      ;; Write at depth (1 2) — H1 outer, H2 inner
-     (define v0 (net-cell-read net1 cid))
-     (define v1 (tms-write v0 '(1 2) 'nat))   ;; inner speculation: try Nat
-     ;; H2 fails — read at (1) should see base of H1's sub-tree (= tms-bot)
-     ;; because we haven't written at (1) alone
-     (check-equal? (tms-read v1 '(1)) 'tms-bot)
+     (define net2
+       (parameterize ([current-speculation-stack '(1 2)])
+         (net-cell-write net1 cid 'nat)))
+     ;; At depth (1) — should see 'bot (base of H1's sub-tree = tms-bot)
+     (define raw2 (net-cell-read-raw net2 cid))
+     (check-equal? (tms-read raw2 '(1)) 'tms-bot)
+     ;; H2 fails — belt-and-suspenders restore
      ;; H3 succeeds — write at (1 3)
-     (define v2 (tms-write v1 '(1 3) 'int))
-     ;; Read at (1 3) — committed inner
-     (check-equal? (tms-read v2 '(1 3)) 'int)
-     ;; Commit H3 under H1's sub-tree
-     (define h1-subtree (hash-ref (tms-cell-value-branches v2) 1))
+     (define net3
+       (parameterize ([current-speculation-stack '(1 3)])
+         (net-cell-write net1 cid 'int)))
+     ;; Read at (1 3) via TMS-transparent API
+     (check-equal?
+      (parameterize ([current-speculation-stack '(1 3)])
+        (net-cell-read net3 cid))
+      'int)
+     ;; Verify raw structure
+     (define raw3 (net-cell-read-raw net3 cid))
+     (define h1-subtree (hash-ref (tms-cell-value-branches raw3) 1))
      (check-true (tms-cell-value? h1-subtree))
+     ;; Commit H3 under H1's sub-tree
      (define h1-committed (tms-commit h1-subtree 3))
-     (check-equal? (tms-cell-value-base h1-committed) 'int)
-     ;; H2's branch preserved as negative knowledge
-     (check-equal? (hash-ref (tms-cell-value-branches h1-committed) 2) 'nat))
+     (check-equal? (tms-cell-value-base h1-committed) 'int))
 
    ))
 

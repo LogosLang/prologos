@@ -32,6 +32,7 @@
 
 (require "metavar-store.rkt"
          "atms.rkt"
+         "propagator.rkt"
          "performance-counters.rkt")
 
 (provide
@@ -47,6 +48,7 @@
  ;; Phase D: ATMS integration
  current-command-atms
  ;; Track 4 Phase 1: Speculation stack (TMS cell navigation)
+ ;; Re-exported from propagator.rkt (defined there to avoid circular deps)
  current-speculation-stack
  ;; GDE-1: Context assumptions (user annotations)
  current-context-assumptions
@@ -75,11 +77,8 @@
 ;; The boxed value is mutated as hypotheses and nogoods are added.
 (define current-command-atms (make-parameter #f))
 
-;; Track 4 Phase 1: Speculation stack for TMS cell navigation.
-;; (listof assumption-id), outermost first. '() = not speculating (depth 0).
-;; Pushed on speculation entry (parameterize), popped automatically on exit.
-;; Used by tms-read/tms-write to navigate the recursive CHAMP tree.
-(define current-speculation-stack (make-parameter '()))
+;; Track 4 Phase 1: current-speculation-stack is defined in propagator.rkt
+;; and re-exported here. See propagator.rkt for documentation.
 
 ;; Initialize per-command speculation tracking.
 ;; Phase D: Also initializes a fresh ATMS for dependency-directed errors.
@@ -194,6 +193,10 @@
   ;; all cell contents (including constraint cells). No parameter fallback needed.
   (define saved (save-meta-state))
   ;; 2. Run the speculation
+  ;; NOTE: Speculation stack push deferred to Phase 6. During belt-and-suspenders
+  ;; (Phases 2-5), network-box restore handles rollback. Pushing the stack now
+  ;; would route cell writes to TMS branches, but without commit-on-success
+  ;; machinery, depth-0 reads would see stale base values after success.
   (define result (thunk))
   (cond
     [(success? result) result]

@@ -78,7 +78,14 @@
  tms-write
  tms-commit
  merge-tms-cell
+ make-tms-merge
  net-new-tms-cell
+ ;; TMS speculation stack — Track 4 Phase 1
+ ;; Lives in propagator.rkt (not elab-speculation-bridge.rkt) to avoid
+ ;; circular dependency: metavar-store.rkt needs it for TMS-aware reads.
+ current-speculation-stack
+ ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
+ net-cell-read-raw
  ;; Trace data types (Visualization Phase 0)
  (struct-out bsp-round)
  (struct-out cell-diff)
@@ -291,15 +298,35 @@
   (if (eq? dir 'none) 'ascending dir))
 
 ;; Read a cell's current value.
+;; Track 4 Phase 2: TMS-transparent. If the cell holds a tms-cell-value,
+;; automatically applies tms-read with the current speculation stack.
+;; At depth 0, this returns base directly (one null? check).
 ;; Errors on unknown cell-id.
 (define (net-cell-read net cid)
   (define cell (champ-lookup (prop-network-cells net)
                               (cell-id-hash cid) cid))
   (if (eq? cell 'none)
       (error 'net-cell-read "unknown cell: ~a" cid)
+      (let ([v (prop-cell-value cell)])
+        (if (tms-cell-value? v)
+            (tms-read v (current-speculation-stack))
+            v))))
+
+;; Read a cell's raw value without TMS unwrapping.
+;; Used for commit operations and provenance inspection where
+;; the full tms-cell-value tree is needed.
+(define (net-cell-read-raw net cid)
+  (define cell (champ-lookup (prop-network-cells net)
+                              (cell-id-hash cid) cid))
+  (if (eq? cell 'none)
+      (error 'net-cell-read-raw "unknown cell: ~a" cid)
       (prop-cell-value cell)))
 
 ;; Write a value to a cell: computes merge-fn(old, new).
+;; Track 4 Phase 2: TMS-transparent. If the cell holds a tms-cell-value and
+;; the new value is NOT a tms-cell-value (i.e., a plain domain value from a
+;; propagator or solve-meta!), wraps it via tms-write at the current speculation
+;; depth. This allows all existing code to write plain values to TMS cells.
 ;; If the merged value equals the old value, returns the network unchanged.
 ;; Otherwise: updates the cell, enqueues dependent propagators, and
 ;; optionally checks the contradiction predicate.
@@ -312,7 +339,14 @@
   (define merge-fn
     (champ-lookup (prop-network-merge-fns net) h cid))
   (define old-val (prop-cell-value cell))
-  (define merged (merge-fn old-val new-val))
+  ;; TMS-transparent write: wrap plain values into TMS tree structure
+  (define actual-new-val
+    (cond
+      [(and (tms-cell-value? old-val) (not (tms-cell-value? new-val)))
+       ;; Plain value → insert at current speculation depth in the tree
+       (tms-write old-val (current-speculation-stack) new-val)]
+      [else new-val]))
+  (define merged (merge-fn old-val actual-new-val))
   (if (equal? merged old-val)
       net  ;; No change — return same network (critical for termination)
       (let* ([new-cell (struct-copy prop-cell cell [value merged])]
@@ -438,6 +472,8 @@
 ;; Merge two TMS cell values (recursive tree merge).
 ;; Per-branch: latest write wins (same assumption can't produce two
 ;; different values at the same depth). Cross-branch: tree preserves both.
+;; Base merge uses identity semantics (new base wins) — for domain-aware
+;; merging, use make-tms-merge with a domain merge function.
 (define (merge-tms-cell old new)
   (cond
     [(eq? old 'infra-bot) new]
@@ -458,14 +494,50 @@
     ;; If old is tms-cell-value but new isn't (or vice versa), new wins
     [else new]))
 
+;; Create a TMS merge function that applies a domain merge at base/leaf level.
+;; domain-merge: (old-val new-val → merged-val) — the underlying lattice join.
+;; Returns a merge function suitable for use as a cell's merge-fn.
+;;
+;; This is essential for cells where the domain merge can detect contradictions
+;; (e.g., type-lattice-merge produces type-top when types conflict).
+(define (make-tms-merge domain-merge)
+  (define (tms-merge old new)
+    (cond
+      [(eq? old 'infra-bot) new]
+      [(eq? new 'infra-bot) old]
+      [(and (tms-cell-value? old) (tms-cell-value? new))
+       ;; Merge bases using domain merge
+       (define merged-base (domain-merge (tms-cell-value-base old)
+                                         (tms-cell-value-base new)))
+       ;; Merge branches: union, recurse on shared keys
+       (define merged-branches
+         (for/fold ([acc (tms-cell-value-branches old)])
+                   ([(k v) (in-hash (tms-cell-value-branches new))])
+           (define existing (hash-ref acc k #f))
+           (hash-set acc k
+             (cond
+               [(not existing) v]
+               [(and (tms-cell-value? existing) (tms-cell-value? v))
+                (tms-merge existing v)]  ;; recursive merge
+               [else v]))))  ;; leaf: latest write wins
+       (tms-cell-value merged-base merged-branches)]
+      [else new]))
+  tms-merge)
+
 ;; Create a new TMS cell in the network.
 ;; initial-value: the starting lattice value (e.g., type-bot)
+;; domain-merge: optional domain merge function for base/leaf values.
+;;   If provided, uses make-tms-merge to create a domain-aware TMS merge.
+;;   If #f, uses merge-tms-cell (new base wins, no domain merge).
 ;; contradicts?: optional contradiction predicate (applied to base value after merge)
 ;; Returns: (values new-network cell-id)
 ;;
 ;; The cell is initialized with (tms-cell-value initial-value (hasheq)).
-;; Uses merge-tms-cell as the merge function.
-(define (net-new-tms-cell net initial-value [contradicts? #f])
+(define (net-new-tms-cell net initial-value [domain-merge #f] [contradicts? #f])
+  (define tms-merge-fn
+    (if domain-merge
+        (make-tms-merge domain-merge)
+        merge-tms-cell))
   (define tms-contradicts?
     (and contradicts?
          (lambda (v)
@@ -474,8 +546,22 @@
                (contradicts? v)))))
   (net-new-cell net
                 (tms-cell-value initial-value (hasheq))
-                merge-tms-cell
+                tms-merge-fn
                 tms-contradicts?))
+
+;; ========================================
+;; TMS Speculation Stack
+;; ========================================
+
+;; The current speculation nesting, outermost first.
+;; '() = not speculating (depth 0).
+;; Pushed on speculation entry (parameterize), popped automatically on exit.
+;; Used by tms-read/tms-write to navigate the recursive CHAMP tree.
+;;
+;; Lives here (not in elab-speculation-bridge.rkt) to avoid circular deps:
+;; metavar-store.rkt needs this for TMS-aware reads, but
+;; elab-speculation-bridge.rkt depends on metavar-store.rkt.
+(define current-speculation-stack (make-parameter '()))
 
 ;; ========================================
 ;; Propagator Operations
@@ -884,7 +970,13 @@
   (define merge-fn
     (champ-lookup (prop-network-merge-fns net) h cid))
   (define old-val (prop-cell-value cell))
-  (define merged (merge-fn old-val new-val))
+  ;; Track 4 Phase 2: TMS-transparent write (same pattern as net-cell-write)
+  (define actual-new-val
+    (cond
+      [(and (tms-cell-value? old-val) (not (tms-cell-value? new-val)))
+       (tms-write old-val (current-speculation-stack) new-val)]
+      [else new-val]))
+  (define merged (merge-fn old-val actual-new-val))
   ;; If cell is a widening point, apply widen to the merged result
   (define widen-entry (champ-lookup (prop-network-widen-fns net) h cid))
   (define final-val
