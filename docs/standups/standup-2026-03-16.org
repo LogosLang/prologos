@@ -1,0 +1,105 @@
+#+TITLE: Standup — 2026-03-16
+#+DATE: 2026-03-16
+
+* Yesterday (since Mar 15 standup creation)
+
+Massive interval: 40 commits, two complete propagator migration tracks (Track 3 + Track 4), design review cycle, documentation overhaul, and a research document. This was the most implementation-dense interval of the project.
+
+** Track 3: Cell-Primary Registries — COMPLETE (7 phases)
+
+Converted 28 registry parameter reads from parameter-primary to cell-primary across 10 files. Established the elaboration-guard pattern used in all subsequent phases.
+
+*** Design Review (=2bab84c=, =b96ec31=)
+D.2 external critique incorporation + D.3 internal self-critique against design principles.
+
+*** Phase 0: Baseline + Acceptance File (=058bdc3=, =a5408f0=, =4ba09f4=)
+Acceptance file (13 sections, ~712 lines, 0 errors at L3). Baseline: 194.3s / 7096 tests / 370 files. Discovered HKT Foldable regression at L3 (bug-annotated).
+
+*** Phase 1: Core Type Registries (=a7f61ca=)
+8 readers + elaboration guard. Key design discovery: =current-macros-in-elaboration?= guard pattern for scoping cell reads vs parameter fallback.
+
+*** Phase 2: Trait + Instance Registries (=0880c4a=)
+7 readers, 12 computation reads. Purely mechanical — Phase 1 pattern applied identically.
+
+*** Phase 3: Remaining Registries (=31ba07f=)
+8 readers, ~20 computation reads, all internal to macros.rkt.
+
+*** Phase 4: Warnings (=c5c1681=)
+3 readers. Simpler guard — no elaboration check needed (warnings only read inside process-command).
+
+*** Phase 5: Narrowing Constraints (=9ebebdc=)
+2 cells: narrow-constraints (monotonic, merge-list-append) + narrow-var-constraints (non-monotonic, merge-last-write-wins). Required own =current-narrow-in-elaboration?= guard to avoid circular deps.
+
+*** Phase 6: Deferred
+Parameter write removal blocked by save/restore + batch-worker. Deferred to Track 5/6.
+
+*** Phase 7: PIR (=6de8328=, =4e72fa0=)
+Post-implementation review. Standalone document following PIR methodology.
+
+** Track 4: ATMS Speculation — COMPLETE (6 phases, Phase 4 deferred to Track 6)
+
+Integrated TMS (Truth Maintenance System) cells into the propagator network for assumption-tagged speculation. Reduced save/restore from 6 boxes to 3. Added learned-clause pruning.
+
+*** Design Cycle (=cf4001b=, =7a0e977=, =7a164db=, =ae82836=)
+4-iteration design: Stage 2/3 document, D.2 external critique, D.4 lattice-theoretic rework (TMS-in-network rather than meta-info-in-cell), D.5 recursive CHAMP TMS cells + provenance-by-default. Extended collaborative design discussion about: lattice embeddings for speculation, TMS cell representation (=tms-cell-value= with base + branches), depth-0 fast path, belt-and-suspenders validation, provenance considerations.
+
+*** Phase 0: Baseline + Acceptance File (=50b00d8=)
+12 sections (A–L), 1056 lines, 0 errors at L3. Baseline: 191.6s / 7096 tests / 370 files. 76 speculation events, 113 ATMS hypotheses, 32 nogoods.
+
+*** Phase 1: TMS Cell Infrastructure (=ecde661=)
+=tms-cell-value= struct (base + branches hasheq) — recursive CHAMP tree. =tms-read= (O(d) traversal, depth-0 fast path via =null?= check), =tms-write= (O(d) nested CHAMP insert). =tms-commit= (lazy base promotion), =merge-tms-cell= (recursive tree merge). 27 unit tests. 197.0s / 7123 tests.
+
+*** Phase 2: TMS-Transparent Read/Write (=10ecb0c=)
+=net-cell-read= unwraps TMS via =tms-read=. =make-tms-merge= domain-aware factory. =elab-fresh-meta= creates TMS cells. Speculation stack push deferred (belt-and-suspenders). 196.1s / 7124 tests.
+
+*** Phase 3: Level/Mult/Session Metas (=addaf46=)
+All meta types now create TMS cells. Dual write (CHAMP + cell), cell-primary reads. =save-meta-state= reduced from 6 boxes to 3. 188.2s / 7124 tests.
+
+*** Phase 4: Deferred to Track 6
+Meta-info CHAMP simplification. Prerequisite chain: speculation stack push -> commit-on-success -> TMS retraction -> remove network-box restore -> 1-box save/restore.
+
+*** Phase 5: Learned-Clause Integration (=f0f72da=)
+=with-speculative-rollback= checks =atms-consistent?= before running thunk. Branches pruned by known nogoods skip save/restore entirely. =perf-inc-speculation-pruned!= counter. 187.1s / 7124 tests.
+
+*** Phase 6: Performance Validated
+187.1s vs 191.6s baseline = 2.4% faster.
+
+*** Phase 7: PIR (=62ecb3f=, =048bcb4=)
+Initial PIR sparse (7 sections); rewritten to 290+ lines / 13 sections after reviewing PIR methodology. Added: Bugs Found and Fixed, What Went Well/Wrong/Lucky/Surprised, Architecture Assessment, What's Next, Key Files, Cross-References.
+
+** Documentation + Process
+
+*** Master Roadmap Updates (=efd9c56=, =7f14d32=)
+Track 3 + Track 4 completion, dependency graph, Phase 4 deferral rationale (5-step prerequisite chain), performance baseline table, Track 6 scope expansion (absorbs TMS retraction pipeline).
+
+*** PIR Methodology Workflow Rule (=10a2949=)
+New rule: review =POST_IMPLEMENTATION_REVIEW.org= before writing any PIR. Motivated by Track 4 PIR initially missing 6 sections.
+
+*** Meta-Learning + Pipeline Checklists (=d8ab9ff=)
+New =.claude/rules/pipeline.md= with exhaustiveness checklists for AST nodes, parameters, struct fields, pattern kinds.
+
+** Research
+
+*** Next-Generation Logic Programming (=880b041=)
+1351-line .org document: mode prefixes, domain-constrained variables, coinductive LP, ILP/rule learning, probabilistic LP, category-theoretic foundations (toposes, sheaves, Kan extensions, Galois connections, fibered categories), novel directions (linear/temporal/epistemic LP, abduction, ASP, CHR, advanced tabling). 58 references. Survey of Flix, Formulog, Souffl\eacute{}, Ascent, Crepe, Flan. Propagator-as-universal-substrate thesis.
+
+** Metrics
+
+- 40 commits
+- Test count: 7096 -> 7124 (+28 TMS unit tests)
+- Performance: 194.3s -> 187.1s (3.7% faster over 2 tracks)
+- Two complete tracks: Track 3 (7 phases) + Track 4 (6 phases + Phase 4 deferred)
+- Key files changed: propagator.rkt, metavar-store.rkt, elaborator-network.rkt, driver.rkt, macros.rkt, trait-resolution.rkt, narrowing.rkt, warnings.rkt, global-constraints.rkt, elab-speculation-bridge.rkt
+
+* Today
+
+- Track 5 (Error Cell + Grouped Error Reporting) or evaluate priorities
+- DEFERRED.md triage for new track
+
+* Blockers
+
+None.
+
+* Notes
+
+The interval crossed midnight extensively (Mar 15 10:27 -> Mar 16 ~08:00). The collaborative design discussion on Track 4 (lattice embeddings, TMS-in-network, provenance-by-default) produced a significantly better design than the initial Stage 2/3 doc — the D.4/D.5 iterations changed the core approach from "meta-info CHAMP in a cell" to "existing per-meta cells become TMS-aware." This validates the multi-iteration design methodology.
