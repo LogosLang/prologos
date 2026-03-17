@@ -30,7 +30,7 @@
 | 5a | meta-info CHAMP → elab-network field (2→1 box) | ✅ | commit `9358b67` — 7148 tests, 210.5s, acceptance 0 errors |
 | 5b | Belt-and-suspenders retirement gate | ⏸️ | **Blocked**: TMS retraction insufficient — infra cells + meta-info not TMS-managed. See §4 Phase 5b notes |
 | **WS-B** | **Dual-Write Elimination + Cleanup** | | |
-| 6 | batch-worker.rkt → hybrid state (20 cell + 7 param) | ⬜ | Network snapshot + parameterize for runtime config |
+| 6 | batch-worker.rkt → snapshot-based state (19→1 vector + 8 param) | ✅ | commit `25d7b20` — 7154 tests, 208.9s |
 | 7a | test-support.rkt → network-based isolation | ⬜ | Shadow phase ~7min one-time cost |
 | 7b | Dual-write elimination: macros.rkt (23) | ⬜ | Mechanical |
 | 7c | Dual-write elimination: warnings (3) + constraints (2) | ⬜ | Mechanical |
