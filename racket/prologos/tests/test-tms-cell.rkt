@@ -73,6 +73,15 @@
      (check-equal? (tms-read 42 '()) 42)
      (check-equal? (tms-read 42 '(1 2)) 42))
 
+   (test-case "tms-read: nested fallback to outer hypothesis (Phase 4 fix)"
+     ;; Cell has branch for H1 (outer) but NOT for H2 (inner).
+     ;; Stack (H2 H1) — H2 missing, should fall back to try H1.
+     ;; Before Phase 4 fix, this fell to base instead.
+     (define tv (tms-cell-value 'base (hasheq 1 'outer-val)))
+     (check-equal? (tms-read tv '(2 1)) 'outer-val)
+     ;; Also check: no branch for either → falls to base
+     (check-equal? (tms-read tv '(3 4)) 'base))
+
    (test-case "tms-read: leaf value with deeper stack returns leaf"
      ;; H1 → leaf 'int (not a tms-cell-value)
      ;; Stack (1 2) — H1 maps to leaf, deeper stack entries ignored
@@ -141,14 +150,25 @@
      ;; Branch preserved for provenance
      (check-equal? (hash-ref (tms-cell-value-branches tv*) 1) 'committed-val))
 
-   (test-case "tms-commit: promotes sub-tree base to base"
+   (test-case "tms-commit: flattens sub-tree into outer cell"
      (define inner (tms-cell-value 'inner-committed (hasheq 2 'still-here)))
      (define tv (tms-cell-value 'bot (hasheq 1 inner)))
      (define tv* (tms-commit tv 1))
-     ;; Base promoted from inner's base
+     ;; Base promoted from inner's base (non-bot)
      (check-equal? (tms-cell-value-base tv*) 'inner-committed)
-     ;; Branch preserved
-     (check-true (tms-cell-value? (hash-ref (tms-cell-value-branches tv*) 1))))
+     ;; Inner's branches merged into outer; committed branch removed
+     (check-false (hash-ref (tms-cell-value-branches tv*) 1 #f))
+     (check-equal? (hash-ref (tms-cell-value-branches tv*) 2) 'still-here))
+
+   (test-case "tms-commit: sub-tree with tms-bot base preserves outer base"
+     (define inner (tms-cell-value 'tms-bot (hasheq 2 'nested-val)))
+     (define tv (tms-cell-value 'outer-base (hasheq 1 inner)))
+     (define tv* (tms-commit tv 1))
+     ;; tms-bot base means keep outer base
+     (check-equal? (tms-cell-value-base tv*) 'outer-base)
+     ;; Inner's branches merged into outer
+     (check-false (hash-ref (tms-cell-value-branches tv*) 1 #f))
+     (check-equal? (hash-ref (tms-cell-value-branches tv*) 2) 'nested-val))
 
    (test-case "tms-commit: no-op for missing assumption"
      (define tv (tms-cell-value 'bot (hasheq 1 'val)))
@@ -157,6 +177,30 @@
 
    (test-case "tms-commit: non-tms-cell-value passes through"
      (check-equal? (tms-commit 42 1) 42))
+
+   ;; --- tms-retract ---
+
+   (test-case "tms-retract: removes branch for assumption"
+     (define tv (tms-cell-value 'base (hasheq 1 'val1 2 'val2)))
+     (define tv* (tms-retract tv 1))
+     (check-equal? (tms-cell-value-base tv*) 'base)
+     (check-false (hash-ref (tms-cell-value-branches tv*) 1 #f))
+     (check-equal? (hash-ref (tms-cell-value-branches tv*) 2) 'val2))
+
+   (test-case "tms-retract: no-op for missing assumption"
+     (define tv (tms-cell-value 'base (hasheq 1 'val)))
+     (define tv* (tms-retract tv 99))
+     (check-eq? tv tv*))
+
+   (test-case "tms-retract: non-tms-cell-value passes through"
+     (check-equal? (tms-retract 42 1) 42))
+
+   (test-case "tms-retract: removes sub-tree branch"
+     (define inner (tms-cell-value 'inner-base (hasheq 2 'nested)))
+     (define tv (tms-cell-value 'base (hasheq 1 inner)))
+     (define tv* (tms-retract tv 1))
+     (check-equal? (tms-cell-value-base tv*) 'base)
+     (check-false (hash-ref (tms-cell-value-branches tv*) 1 #f)))
 
    ;; --- merge-tms-cell ---
 

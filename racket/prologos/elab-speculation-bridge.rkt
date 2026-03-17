@@ -210,41 +210,47 @@
      ;; save-meta-state captures the network box, and restore-meta-state! reverts
      ;; all cell contents (including constraint cells). No parameter fallback needed.
      (define saved (save-meta-state))
-     ;; 2. Run the speculation with TMS stack push (Track 6 Phase 2+3)
+     ;; 2. Run the speculation with TMS stack push (Track 6 Phases 2–4)
      ;; Push hyp-id onto the speculation stack so cell writes are routed to
      ;; TMS branches at this depth. On success, commit-on-success promotes
-     ;; branch values to base. On failure, network-box restore handles rollback.
-     ;; Belt-and-suspenders: network-box restore remains the production mechanism;
-     ;; TMS stack push + commit validates that TMS branching is coherent.
+     ;; branch values to base. On failure, TMS retraction removes the branch,
+     ;; then network-box restore handles rollback (belt-and-suspenders).
      ;;
-     ;; IMPORTANT: Only push the stack at depth 0 (top-level speculation).
-     ;; Nested speculation (depth > 0) stays on the production path (network-box
-     ;; restore) because the TMS tree model has a read-fallback bug for nested
-     ;; depths (tms-read falls to base instead of checking outer hypotheses).
-     ;; Full nested TMS support is Phase 4 (TMS retraction) scope.
-     (define tms-pushed? (null? (current-speculation-stack)))
+     ;; Track 6 Phase 4: Push at ALL depths (nested speculation too).
+     ;; The tms-read nested fallback bug is now fixed — on branch miss,
+     ;; tms-read checks outer hypotheses instead of falling to base.
      (define result
-       (if tms-pushed?
-           (parameterize ([current-speculation-stack (list hyp-id)])
-             (thunk))
-           (thunk)))
+       (parameterize ([current-speculation-stack
+                       (cons hyp-id (current-speculation-stack))])
+         (thunk)))
      (cond
        [(success? result)
         ;; Track 6 Phase 3: Commit-on-success — promote TMS branch values to base.
-        ;; Only needed when we pushed the TMS stack (depth-0 speculation).
         ;; All cell writes during the thunk went to TMS branches at hyp-id depth.
         ;; Now promote them so depth-0 reads see the committed values.
         ;; The box holds an elab-network; unwrap to prop-network, commit, rewrap.
-        (when tms-pushed?
-          (define net-box (current-prop-net-box))
-          (when net-box
-            (define enet (unbox net-box))
-            (define committed-pnet
-              (net-commit-assumption (elab-network-prop-net enet) hyp-id))
-            (set-box! net-box (struct-copy elab-network enet [prop-net committed-pnet]))))
+        (define net-box (current-prop-net-box))
+        (when net-box
+          (define enet (unbox net-box))
+          (define committed-pnet
+            (net-commit-assumption (elab-network-prop-net enet) hyp-id))
+          (set-box! net-box (struct-copy elab-network enet [prop-net committed-pnet])))
         result]
        [else
+        ;; Track 6 Phase 4: TMS retraction — remove the failed assumption's branches.
+        ;; This cleans up speculative writes so they don't leak into subsequent
+        ;; type-checking. Belt-and-suspenders: network-box restore follows as the
+        ;; production rollback mechanism. Phase 5b will retire restore-meta-state!
+        ;; once 0-divergence is validated across the full suite.
+        (let ([net-box (current-prop-net-box)])
+          (when net-box
+            (define enet (unbox net-box))
+            (define retracted-pnet
+              (net-retract-assumption (elab-network-prop-net enet) hyp-id))
+            (set-box! net-box (struct-copy elab-network enet [prop-net retracted-pnet]))))
         ;; 3. Restore meta-state (O(1) for network — includes constraint cells)
+        ;; Belt-and-suspenders: this overwrites the retracted network with the
+        ;; saved snapshot. Both should produce equivalent results.
         (restore-meta-state! saved)
         ;; Phase D2: Extract sub-failures (failures added during this thunk)
         ;; The box stores newest-first, so new failures are at the front.

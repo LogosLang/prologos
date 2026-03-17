@@ -88,6 +88,9 @@
  net-cell-read-raw
  ;; Track 6 Phase 2+3: Network-wide TMS commit
  net-commit-assumption
+ ;; Track 6 Phase 4: TMS retraction
+ tms-retract
+ net-retract-assumption
  ;; Trace data types (Visualization Phase 0)
  (struct-out bsp-round)
  (struct-out cell-diff)
@@ -408,7 +411,7 @@
      (define branch (hash-ref (tms-cell-value-branches cell-val)
                               (car stack) #f))
      (cond
-       [(not branch) (tms-cell-value-base cell-val)]   ;; no write at this depth → fall back
+       [(not branch) (tms-read cell-val (cdr stack))]   ;; no write at this depth → try outer hypothesis
        [(tms-cell-value? branch) (tms-read branch (cdr stack))]  ;; recurse into sub-tree
        ;; Leaf value — but if there are deeper stack entries, we still return
        ;; the leaf (it was written at this depth, deeper speculation hasn't overridden)
@@ -463,9 +466,25 @@
      (cond
        [(not branch-val) cell-val]  ;; no write under this assumption — nothing to commit
        [(tms-cell-value? branch-val)
-        ;; Sub-tree: commit promotes the sub-tree's base to our base
-        (struct-copy tms-cell-value cell-val
-          [base (tms-cell-value-base branch-val)])]
+        ;; Sub-tree: flatten — merge sub-tree's contents into outer cell.
+        ;; The sub-tree has its own base and branches. Committing means:
+        ;; - If sub-tree base is not tms-bot, promote it to outer base
+        ;; - Merge sub-tree branches into outer branches (sub-tree wins on conflict)
+        ;; - Remove the committed assumption's branch entry
+        ;; This handles nested speculation correctly: inner writes that nested
+        ;; under outer hypotheses get lifted to become direct outer branches.
+        (define sub-base (tms-cell-value-base branch-val))
+        (define new-base
+          (if (eq? sub-base tms-bot)
+              (tms-cell-value-base cell-val)   ;; keep outer base
+              sub-base))                        ;; promote sub-tree's base
+        (define outer-branches-sans-committed
+          (hash-remove (tms-cell-value-branches cell-val) assumption-id))
+        (define new-branches
+          (for/fold ([acc outer-branches-sans-committed])
+                    ([(k v) (in-hash (tms-cell-value-branches branch-val))])
+            (hash-set acc k v)))
+        (tms-cell-value new-base new-branches)]
        [else
         ;; Leaf value: promote to base
         (struct-copy tms-cell-value cell-val
@@ -487,6 +506,41 @@
                   acc  ;; no change
                   (champ-insert acc (cell-id-hash cid) cid
                                 (struct-copy prop-cell cell [value committed]))))
+            acc))
+      cells))
+  (struct-copy prop-network net [cells new-cells]))
+
+;; Track 6 Phase 4: Retract an assumption from a TMS cell value.
+;; Removes the branch for assumption-id, reverting to the state before
+;; writes under that assumption. If the cell has nested sub-trees,
+;; the entire sub-tree rooted at assumption-id is removed.
+;; Returns: updated tms-cell-value with the assumption's branch removed.
+(define (tms-retract cell-val assumption-id)
+  (cond
+    [(not (tms-cell-value? cell-val)) cell-val]
+    [else
+     (define branches (tms-cell-value-branches cell-val))
+     (define new-branches (hash-remove branches assumption-id))
+     (if (eq? branches new-branches)
+         cell-val  ;; no branch for this assumption — nothing to retract
+         (struct-copy tms-cell-value cell-val [branches new-branches]))]))
+
+;; Track 6 Phase 4: Retract an assumption across all TMS cells in the network.
+;; For each cell whose value is a tms-cell-value, applies tms-retract to remove
+;; the assumption's branch. Non-TMS cells are unaffected.
+;; Returns the updated network.
+(define (net-retract-assumption net assumption-id)
+  (define cells (prop-network-cells net))
+  (define new-cells
+    (champ-fold cells
+      (lambda (cid cell acc)
+        (define v (prop-cell-value cell))
+        (if (tms-cell-value? v)
+            (let ([retracted (tms-retract v assumption-id)])
+              (if (eq? retracted v)
+                  acc  ;; no change
+                  (champ-insert acc (cell-id-hash cid) cid
+                                (struct-copy prop-cell cell [value retracted]))))
             acc))
       cells))
   (struct-copy prop-network net [cells new-cells]))
