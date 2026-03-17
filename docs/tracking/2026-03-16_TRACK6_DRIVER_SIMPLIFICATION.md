@@ -26,7 +26,7 @@
 | 1c | constraint status → functional CHAMP updates | ✅ | commit `e88c2b2` — store: list→hasheq, 7148 tests, 210.8s |
 | 1d | `all-unsolved-metas` → infrastructure cell | ✅ | commit `a82e4d2` — 7148 tests, 207.4s, acceptance 0 errors |
 | 2+3 | Speculation stack push + commit-on-success | ✅ | commit `4a08db6` — depth-0 only; 7148 tests, 199.6s, acceptance 0 errors |
-| 4 | TMS retraction (replace network-box restore) | ⬜ | Belt-and-suspenders validation |
+| 4 | TMS retraction (replace network-box restore) | ✅ | commit `acc76e4` — nested TMS, tms-read fix, tms-commit flatten; 7154 tests, 207.9s, acceptance 302/0 |
 | 5a | meta-info CHAMP → elab-network field (2→1 box) | ✅ | commit `9358b67` — 7148 tests, 210.5s, acceptance 0 errors |
 | 5b | Belt-and-suspenders retirement gate | ⬜ | **Concrete retirement**: 0 divergences required |
 | **WS-B** | **Dual-Write Elimination + Cleanup** | | |
