@@ -28,7 +28,7 @@
 | 2+3 | Speculation stack push + commit-on-success | ✅ | commit `4a08db6` — depth-0 only; 7148 tests, 199.6s, acceptance 0 errors |
 | 4 | TMS retraction (replace network-box restore) | ✅ | commit `acc76e4` — nested TMS, tms-read fix, tms-commit flatten; 7154 tests, 207.9s, acceptance 302/0 |
 | 5a | meta-info CHAMP → elab-network field (2→1 box) | ✅ | commit `9358b67` — 7148 tests, 210.5s, acceptance 0 errors |
-| 5b | Belt-and-suspenders retirement gate | ⬜ | **Concrete retirement**: 0 divergences required |
+| 5b | Belt-and-suspenders retirement gate | ⏸️ | **Blocked**: TMS retraction insufficient — infra cells + meta-info not TMS-managed. See §4 Phase 5b notes |
 | **WS-B** | **Dual-Write Elimination + Cleanup** | | |
 | 6 | batch-worker.rkt → hybrid state (20 cell + 7 param) | ⬜ | Network snapshot + parameterize for runtime config |
 | 7a | test-support.rkt → network-based isolation | ⬜ | Shadow phase ~7min one-time cost |
@@ -532,33 +532,34 @@ This mirrors Phase 1a's id-map migration — same pattern, same risk profile.
 - [ ] Full suite passes
 - [ ] Speculation stats unchanged
 
-### Phase 5b: Belt-and-Suspenders Retirement Gate (Workstream A)
+### Phase 5b: Belt-and-Suspenders Retirement Gate (Workstream A) — BLOCKED
 
 **Goal**: **Retire the network-box restore secondary path**. This is the concrete retirement gate for belt-and-suspenders.
 
-**Prerequisites (all must be met)**:
-- Phase 4 complete: TMS retraction handles all speculation failure paths
-- Phase 5a complete: save/restore is 1-box (network only)
-- **Retirement gate passed**: 0 divergences between TMS retraction and network-box restore across full suite + batch mode for Phase 4
+**Status**: ⏸️ BLOCKED — TMS retraction alone is insufficient for full rollback.
 
-**This phase removes**:
-- `restore-meta-state!`'s network-box restore fallback path (replaced by TMS retraction)
-- The belt-and-suspenders divergence counter and validation code from Phases 2–4
-- Any fallback logic in `with-speculative-rollback` that kept both paths
+**Finding (Phase 4 validation attempt)**:
 
-After this phase, the system has exactly one speculation mechanism (TMS retraction). Any regression is immediately attributable.
+Removing `restore-meta-state!` from the failure path produces 2 test failures:
 
-**Risk**: Medium — the retirement is gated by concrete criteria from Phase 4. All risk is front-loaded into the gate validation.
+1. **Constraint store leaks**: Infrastructure cells (constraint store, unsolved-metas set) use accumulative merge functions, not TMS branches. Constraints added during a failed speculation persist after TMS retraction because `net-retract-assumption` only removes TMS branches — it doesn't undo non-TMS cell merges.
 
-**Test strategy**: Full suite + batch mode + acceptance file at L3.
+2. **Meta-info leaks**: The `meta-info` CHAMP is a field in `elab-network`, not a TMS-managed cell. When a meta is solved during a failed speculation, `meta-info` retains the "solved" status. Subsequent attempts to solve the same meta hit "already solved" errors.
 
-**Done when**:
+**Root cause**: TMS manages VALUE-level branching (cell read/write through `tms-read`/`tms-write`), but STRUCTURAL state (new cells, infrastructure cell accumulations, elab-network fields like meta-info/id-map/next-meta-id) isn't TMS-managed. Full retirement requires:
+- Infrastructure cells (constraint store, unsolved-metas) → TMS-aware accumulation (retraction removes entries added under the retracted assumption)
+- meta-info, id-map, next-meta-id → either TMS-managed or separate rollback mechanism
+
+**Current state**: Belt-and-suspenders remains active. TMS retraction handles branch cleanup, `restore-meta-state!` handles structural rollback. Both run on every failure path.
+
+**Forward path**: Making infrastructure cells TMS-aware requires extending the TMS model to support set-like accumulation with retraction (currently only supports value replacement). This is Track 7+ / LSP scope.
+
+**Done when** (deferred):
+- [ ] Infrastructure cells support TMS-aware accumulation with retraction
+- [ ] meta-info, id-map, next-meta-id are TMS-managed or have separate rollback
 - [ ] No network-box restore code remains in `with-speculative-rollback`
-- [ ] No divergence counter or shadow validation code remains
-- [ ] Full suite passes
-- [ ] Batch mode passes (file-by-file comparison)
+- [ ] Full suite passes without `restore-meta-state!`
 - [ ] Acceptance file L3 with 0 errors
-- [ ] Speculation stats match Phase 0 baseline
 
 ### Phase 6: batch-worker.rkt Migration (Workstream B)
 

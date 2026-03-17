@@ -207,8 +207,10 @@
          (if b (length (unbox b)) 0)))
      ;; 1. Save meta-state (immutable CHAMP snapshot — O(1) for network)
      ;; Track 1 Phase 6d: Network is always present (network-everywhere).
-     ;; save-meta-state captures the network box, and restore-meta-state! reverts
-     ;; all cell contents (including constraint cells). No parameter fallback needed.
+     ;; save-meta-state captures the elab-network (prop-network + structural state).
+     ;; restore-meta-state! reverts all cell contents AND structural state
+     ;; (meta-info, id-map, next-meta-id) which aren't TMS-managed.
+     ;; TMS retraction handles cell branch cleanup; restore handles structural state.
      (define saved (save-meta-state))
      ;; 2. Run the speculation with TMS stack push (Track 6 Phases 2–4)
      ;; Push hyp-id onto the speculation stack so cell writes are routed to
@@ -238,19 +240,20 @@
         result]
        [else
         ;; Track 6 Phase 4: TMS retraction — remove the failed assumption's branches.
-        ;; This cleans up speculative writes so they don't leak into subsequent
-        ;; type-checking. Belt-and-suspenders: network-box restore follows as the
-        ;; production rollback mechanism. Phase 5b will retire restore-meta-state!
-        ;; once 0-divergence is validated across the full suite.
+        ;; This cleans TMS branch metadata. restore-meta-state! follows to handle
+        ;; full structural rollback (meta-info, id-map, infrastructure cells).
+        ;; Phase 5b finding: TMS retraction alone is insufficient because:
+        ;; - Infrastructure cells (constraint store, unsolved-metas) use accumulative
+        ;;   merge, not TMS branches — constraints added during speculation aren't retracted
+        ;; - meta-info CHAMP in elab-network isn't TMS-managed — solved metas persist
+        ;; Full retirement requires making all speculation-scoped state TMS-aware.
         (let ([net-box (current-prop-net-box)])
           (when net-box
             (define enet (unbox net-box))
             (define retracted-pnet
               (net-retract-assumption (elab-network-prop-net enet) hyp-id))
             (set-box! net-box (struct-copy elab-network enet [prop-net retracted-pnet]))))
-        ;; 3. Restore meta-state (O(1) for network — includes constraint cells)
-        ;; Belt-and-suspenders: this overwrites the retracted network with the
-        ;; saved snapshot. Both should produce equivalent results.
+        ;; 3. Restore meta-state — handles structural state that TMS doesn't cover
         (restore-meta-state! saved)
         ;; Phase D2: Extract sub-failures (failures added during this thunk)
         ;; The box stores newest-first, so new failures are at the front.
