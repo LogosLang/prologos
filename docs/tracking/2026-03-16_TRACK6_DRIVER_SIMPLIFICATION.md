@@ -31,9 +31,9 @@
 | 5b | Belt-and-suspenders retirement gate | ⏸️ | **Blocked**: TMS retraction insufficient — infra cells + meta-info not TMS-managed. See §4 Phase 5b notes |
 | **WS-B** | **Dual-Write Elimination + Cleanup** | | |
 | 6 | batch-worker.rkt → snapshot-based state (19→1 vector + 8 param) | ✅ | commit `25d7b20` — 7154 tests, 208.9s. Per-file timeout: `9a600c3` |
-| 7a | Dual-write elimination: macros.rkt (22 registers + driver.rkt spec propagation) | ✅ | commit `520c2f8` — cell-or-param pattern gated by `current-macros-in-elaboration?`; `sync-macros-cells-to-params!` at command end. 7154 tests, 207.9s |
-| 7b | Dual-write elimination: warnings (3) | ⬜ | Mechanical |
-| 7c | Dual-write elimination: constraints (2) | ⬜ | Mechanical |
+| 7a | test-support.rkt → network-based isolation | ⬜ | Shadow phase ~7min one-time cost |
+| 7b | Dual-write elimination: macros.rkt (23) | ⬜ | Mechanical |
+| 7c | Dual-write elimination: warnings (3) + constraints (2) | ⬜ | Mechanical |
 | 7d | Dual-write elimination: global-env.rkt | ⬜ | Mechanical |
 | 8a | Exhaustive cell-reader audit + categorization | ⬜ | Categorize: elaboration / module-loading / other |
 | 8b | Remove `current-macros-in-elaboration?` guard | ⬜ | 23 cell readers → unconditional |

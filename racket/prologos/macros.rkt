@@ -364,8 +364,6 @@
          restore-macros-cell-ids!
          save-macros-registry-snapshot
          restore-macros-registry-snapshot!
-         ;; Track 6 Phase 7a: Sync cells → params at command end
-         sync-macros-cells-to-params!
          ;; Mixfix / precedence groups (Phase 2)
          current-user-precedence-groups
          read-user-precedence-groups
@@ -412,11 +410,10 @@
 (define current-preparse-registry (make-parameter (hasheq)))
 
 (define (register-preparse-macro! name entry)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-preparse-registry-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name entry))
-      (current-preparse-registry (hash-set (current-preparse-registry) name entry))))
+  (current-preparse-registry
+   (hash-set (current-preparse-registry) name entry))
+  ;; Phase 2c: dual-write to cell
+  (macros-cell-write! (current-preparse-registry-cell-id) (hasheq name entry)))
 
 ;; Track 3 Phase 3: cell-primary reader for preparse registry
 (define (read-preparse-registry)
@@ -449,11 +446,9 @@
 (define current-propagated-specs (make-parameter (seteq)))
 
 (define (register-spec! name entry)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-spec-store-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name entry))
-      (current-spec-store (hash-set (current-spec-store) name entry))))
+  (current-spec-store (hash-set (current-spec-store) name entry))
+  ;; Phase 2c: dual-write to cell
+  (macros-cell-write! (current-spec-store-cell-id) (hasheq name entry)))
 
 ;; Track 3 Phase 3: cell-primary reader for spec store
 (define (read-spec-store)
@@ -539,7 +534,7 @@
 (define current-user-operators-cell-id (make-parameter #f))
 (define current-macro-registry-cell-id (make-parameter #f))
 
-;; Helper: write a single entry to a registry cell.
+;; Helper: dual-write a single entry to a registry cell.
 ;; value should be a hasheq/hash with just the new entry — the cell's merge
 ;; function (merge-hasheq-union) will union it with existing content.
 (define (macros-cell-write! cid value)
@@ -547,15 +542,6 @@
   (define write-fn (current-macros-prop-cell-write))
   (when (and net-box write-fn cid)
     (set-box! net-box (write-fn (unbox net-box) cid value))))
-
-;; Track 6 Phase 7a: cell-or-param write pattern.
-;; Register functions write to cell when BOTH conditions hold:
-;;   1. cell-id is non-#f (cells have been registered)
-;;   2. current-macros-in-elaboration? is #t (inside process-command's parameterize)
-;; Otherwise fall back to param write. This handles:
-;;   - load-module context (prop-net-box is #f, cells not created)
-;;   - preparse-time registration (outside process-command's parameterize)
-;;   - test contexts where cells exist from prelude but aren't command-scoped
 
 ;; Initialize registry cells in the propagator network.
 ;; Called by driver.rkt after reset-meta-store! to create cells initialized
@@ -728,42 +714,6 @@
   (current-user-operators          (vector-ref v 17))
   (current-macro-registry          (vector-ref v 18)))
 
-;; Track 6 Phase 7a: Sync cell values back to parameters at command end.
-;; Called by driver.rkt after successful elaboration. Reads each cell's
-;; accumulated value and writes it to the corresponding parameter, so
-;; inter-command persistence works without intra-elaboration param writes.
-;; Only syncs when cell-id is set (i.e., cells were registered this command).
-(define (sync-macros-cells-to-params!)
-  (define (sync-one cid param-setter)
-    (when cid
-      (define v (macros-cell-read-safe cid))
-      (unless (eq? v 'not-found)
-        (param-setter v))))
-  (sync-one (current-preparse-registry-cell-id)       current-preparse-registry)
-  (sync-one (current-spec-store-cell-id)               current-spec-store)
-  (sync-one (current-propagated-specs-cell-id)         current-propagated-specs)
-  (sync-one (current-schema-registry-cell-id)          current-schema-registry)
-  (sync-one (current-ctor-registry-cell-id)            current-ctor-registry)
-  (sync-one (current-type-meta-cell-id)                current-type-meta)
-  (sync-one (current-subtype-registry-cell-id)         current-subtype-registry)
-  (sync-one (current-coercion-registry-cell-id)        current-coercion-registry)
-  (sync-one (current-trait-registry-cell-id)           current-trait-registry)
-  (sync-one (current-trait-laws-cell-id)               current-trait-laws)
-  (sync-one (current-impl-registry-cell-id)            current-impl-registry)
-  (sync-one (current-param-impl-registry-cell-id)      current-param-impl-registry)
-  (sync-one (current-bundle-registry-cell-id)          current-bundle-registry)
-  (sync-one (current-specialization-registry-cell-id)  current-specialization-registry)
-  (sync-one (current-selection-registry-cell-id)       current-selection-registry)
-  (sync-one (current-session-registry-cell-id)         current-session-registry)
-  (sync-one (current-capability-registry-cell-id)      current-capability-registry)
-  (sync-one (current-property-store-cell-id)           current-property-store)
-  (sync-one (current-functor-store-cell-id)            current-functor-store)
-  (sync-one (current-strategy-registry-cell-id)        current-strategy-registry)
-  (sync-one (current-process-registry-cell-id)         current-process-registry)
-  (sync-one (current-user-precedence-groups-cell-id)   current-user-precedence-groups)
-  (sync-one (current-user-operators-cell-id)           current-user-operators)
-  (sync-one (current-macro-registry-cell-id)           current-macro-registry))
-
 ;; ========================================
 ;; Schema registry: field information for schema types
 ;; ========================================
@@ -787,11 +737,9 @@
 (define current-schema-registry (make-parameter (hasheq)))
 
 (define (register-schema! name entry)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-schema-registry-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name entry))
-      (current-schema-registry (hash-set (current-schema-registry) name entry))))
+  (current-schema-registry (hash-set (current-schema-registry) name entry))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-schema-registry-cell-id) (hasheq name entry)))
 
 ;; Track 3 Phase 1: cell-primary reader
 (define (read-schema-registry)
@@ -881,11 +829,9 @@
 (define current-selection-registry (make-parameter (hasheq)))
 
 (define (register-selection! name entry)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-selection-registry-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name entry))
-      (current-selection-registry (hash-set (current-selection-registry) name entry))))
+  (current-selection-registry (hash-set (current-selection-registry) name entry))
+  ;; Phase 2b: dual-write to cell
+  (macros-cell-write! (current-selection-registry-cell-id) (hasheq name entry)))
 
 ;; Track 3 Phase 2: cell-primary reader for selection registry
 (define (read-selection-registry)
@@ -908,11 +854,9 @@
 (define current-session-registry (make-parameter (hasheq)))
 
 (define (register-session! name entry)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-session-registry-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name entry))
-      (current-session-registry (hash-set (current-session-registry) name entry))))
+  (current-session-registry (hash-set (current-session-registry) name entry))
+  ;; Phase 2b: dual-write to cell
+  (macros-cell-write! (current-session-registry-cell-id) (hasheq name entry)))
 
 ;; Track 3 Phase 2: cell-primary reader for session registry
 (define (read-session-registry)
@@ -955,11 +899,9 @@
 (define current-strategy-registry (make-parameter (hasheq)))
 
 (define (register-strategy! name entry)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-strategy-registry-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name entry))
-      (current-strategy-registry (hash-set (current-strategy-registry) name entry))))
+  (current-strategy-registry (hash-set (current-strategy-registry) name entry))
+  ;; Phase 2c: dual-write to cell
+  (macros-cell-write! (current-strategy-registry-cell-id) (hasheq name entry)))
 
 ;; Track 3 Phase 3: cell-primary reader for strategy registry
 (define (read-strategy-registry)
@@ -985,11 +927,9 @@
 (define current-process-registry (make-parameter (hasheq)))
 
 (define (register-process! name entry)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-process-registry-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name entry))
-      (current-process-registry (hash-set (current-process-registry) name entry))))
+  (current-process-registry (hash-set (current-process-registry) name entry))
+  ;; Phase 2c: dual-write to cell
+  (macros-cell-write! (current-process-registry-cell-id) (hasheq name entry)))
 
 ;; Track 3 Phase 3: cell-primary reader for process registry
 (define (read-process-registry)
@@ -5734,11 +5674,9 @@
 (define current-type-meta (make-parameter (hasheq)))
 
 (define (register-ctor! name meta)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-ctor-registry-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name meta))
-      (current-ctor-registry (hash-set (current-ctor-registry) name meta))))
+  (current-ctor-registry (hash-set (current-ctor-registry) name meta))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-ctor-registry-cell-id) (hasheq name meta)))
 
 ;; Track 3 Phase 1: cell-primary readers
 (define (read-ctor-registry)
@@ -5784,11 +5722,10 @@
 (define current-subtype-registry (make-parameter (hash)))
 
 (define (register-subtype-pair! sub-key super-key)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-subtype-registry-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hash (cons sub-key super-key) #t))
-      (current-subtype-registry (hash-set (current-subtype-registry) (cons sub-key super-key) #t))))
+  (current-subtype-registry
+   (hash-set (current-subtype-registry) (cons sub-key super-key) #t))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-subtype-registry-cell-id) (hash (cons sub-key super-key) #t)))
 
 ;; Track 3 Phase 1: cell-primary reader
 (define (read-subtype-registry)
@@ -5818,11 +5755,10 @@
 (define current-coercion-registry (make-parameter (hash)))
 
 (define (register-coercion! sub-key super-key coerce-fn)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-coercion-registry-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hash (cons sub-key super-key) coerce-fn))
-      (current-coercion-registry (hash-set (current-coercion-registry) (cons sub-key super-key) coerce-fn))))
+  (current-coercion-registry
+   (hash-set (current-coercion-registry) (cons sub-key super-key) coerce-fn))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-coercion-registry-cell-id) (hash (cons sub-key super-key) coerce-fn)))
 
 ;; Track 3 Phase 1: cell-primary reader
 (define (read-coercion-registry)
@@ -5863,11 +5799,10 @@
 (define current-capability-registry (make-parameter (hasheq)))
 
 (define (register-capability! name meta)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-capability-registry-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name meta))
-      (current-capability-registry (hash-set (current-capability-registry) name meta))))
+  (current-capability-registry
+   (hash-set (current-capability-registry) name meta))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-capability-registry-cell-id) (hasheq name meta)))
 
 ;; Track 3 Phase 1: cell-primary reader
 (define (read-capability-registry)
@@ -5940,11 +5875,9 @@
 (define current-trait-registry (make-parameter (hasheq)))
 
 (define (register-trait! name meta)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-trait-registry-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name meta))
-      (current-trait-registry (hash-set (current-trait-registry) name meta))))
+  (current-trait-registry (hash-set (current-trait-registry) name meta))
+  ;; Phase 2b: dual-write to cell
+  (macros-cell-write! (current-trait-registry-cell-id) (hasheq name meta)))
 
 ;; Track 3 Phase 2: cell-primary reader for trait registry
 (define (read-trait-registry)
@@ -5964,11 +5897,9 @@
 (define current-trait-laws (make-parameter (hasheq)))
 
 (define (register-trait-laws! name laws)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-trait-laws-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name laws))
-      (current-trait-laws (hash-set (current-trait-laws) name laws))))
+  (current-trait-laws (hash-set (current-trait-laws) name laws))
+  ;; Phase 2b: dual-write to cell
+  (macros-cell-write! (current-trait-laws-cell-id) (hasheq name laws)))
 
 ;; Track 3 Phase 2: cell-primary reader for trait laws
 (define (read-trait-laws)
@@ -6002,22 +5933,24 @@
 (define (register-impl! key entry)
   ;; Duplicate check uses the parameter — it's the persistent cross-command
   ;; accumulator, always accurate at registration time.
-  ;; Track 6 Phase 7a: duplicate check uses cell-primary reader
-  (define existing (hash-ref (read-impl-registry) key #f))
+  (define existing (hash-ref (current-impl-registry) key #f))
   (when (and existing
              (not (eq? (impl-entry-dict-name existing) (impl-entry-dict-name entry))))
     (error 'impl
       "Duplicate instance: ~a already registered (dict ~a), cannot re-register (dict ~a)"
       key (impl-entry-dict-name existing) (impl-entry-dict-name entry)))
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-impl-registry-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq key entry))
-      (current-impl-registry (hash-set (current-impl-registry) key entry))))
+  ;; Parameter write kept for cross-command accumulation (prelude loading).
+  ;; The parameter seeds the cell at network init via register-macros-cells!.
+  (current-impl-registry (hash-set (current-impl-registry) key entry))
+  ;; Cell write for intra-command visibility (Track 2: sole authority during elaboration).
+  (macros-cell-write! (current-impl-registry-cell-id) (hasheq key entry)))
 
-;; Track 6 Phase 7a: lookup-impl now uses cell-primary reader (was parameter-direct).
+;; lookup-impl uses the parameter — it's called during registration paths
+;; (register-impl!, maybe-register-trait-dict-def) where the parameter is the
+;; authoritative source. For mid-elaboration reads that need cell-authoritative
+;; data, use read-impl-registry instead.
 (define (lookup-impl key)
-  (hash-ref (read-impl-registry) key #f))
+  (hash-ref (current-impl-registry) key #f))
 
 ;; ========================================
 ;; HKT-3: Auto-register trait dict defs in impl registry
@@ -6115,11 +6048,10 @@
                  (format-param-impl-entry entry)
                  (format-param-impl-entry ex))))
     (define new-list (cons entry existing))
-    ;; Track 6 Phase 7a: cell-or-param write
-    (define cid (current-param-impl-registry-cell-id))
-    (if (and cid (current-macros-in-elaboration?))
-        (macros-cell-write! cid (hasheq trait-name new-list))
-        (current-param-impl-registry (hash-set (current-param-impl-registry) trait-name new-list)))))
+    (current-param-impl-registry
+      (hash-set (current-param-impl-registry) trait-name new-list))
+    ;; Phase 2b: dual-write to cell
+    (macros-cell-write! (current-param-impl-registry-cell-id) (hasheq trait-name new-list))))
 
 ;; Check if two parametric impls could overlap.
 ;; Two impls overlap if their type patterns could unify (i.e., there exists a type
@@ -6175,11 +6107,9 @@
 (define current-bundle-registry (make-parameter (hasheq)))
 
 (define (register-bundle! name entry)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-bundle-registry-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name entry))
-      (current-bundle-registry (hash-set (current-bundle-registry) name entry))))
+  (current-bundle-registry (hash-set (current-bundle-registry) name entry))
+  ;; Phase 2b: dual-write to cell
+  (macros-cell-write! (current-bundle-registry-cell-id) (hasheq name entry)))
 
 ;; Track 3 Phase 2: cell-primary reader for bundle registry
 (define (read-bundle-registry)
@@ -6207,11 +6137,10 @@
 (define (register-specialization! generic-name type-con specialized-name)
   (define key (cons generic-name type-con))
   (define entry (specialization-entry generic-name type-con specialized-name))
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-specialization-registry-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hash key entry))
-      (current-specialization-registry (hash-set (current-specialization-registry) key entry))))
+  (current-specialization-registry
+    (hash-set (current-specialization-registry) key entry))
+  ;; Phase 2b: dual-write to cell (hash with equal?-based cons keys)
+  (macros-cell-write! (current-specialization-registry-cell-id) (hash key entry)))
 
 ;; Track 3 Phase 2: cell-primary reader for specialization registry
 (define (read-specialization-registry)
@@ -6913,11 +6842,10 @@
 
   ;; Register constructor metadata for reduce
   (define ctor-names (map car ctors))
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define tm-cid (current-type-meta-cell-id))
-  (if (and tm-cid (current-macros-in-elaboration?))
-      (macros-cell-write! tm-cid (hasheq type-name ctor-names))
-      (current-type-meta (hash-set (current-type-meta) type-name ctor-names)))
+  (current-type-meta
+   (hash-set (current-type-meta) type-name ctor-names))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-type-meta-cell-id) (hasheq type-name ctor-names))
 
   (for ([ctor (in-list ctors)]
         [i (in-naturals)])
@@ -7244,11 +7172,9 @@
 (define current-property-store (make-parameter (hasheq)))
 
 (define (register-property! name entry)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-property-store-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name entry))
-      (current-property-store (hash-set (current-property-store) name entry))))
+  (current-property-store (hash-set (current-property-store) name entry))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-property-store-cell-id) (hasheq name entry)))
 
 ;; Track 3 Phase 1: cell-primary reader
 (define (read-property-store)
@@ -7519,11 +7445,9 @@
 (define current-functor-store (make-parameter (hasheq)))
 
 (define (register-functor! name entry)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-functor-store-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name entry))
-      (current-functor-store (hash-set (current-functor-store) name entry))))
+  (current-functor-store (hash-set (current-functor-store) name entry))
+  ;; Phase 2a: dual-write to cell
+  (macros-cell-write! (current-functor-store-cell-id) (hasheq name entry)))
 
 ;; Track 3 Phase 1: cell-primary reader
 (define (read-functor-store)
@@ -7627,11 +7551,10 @@
 (define current-user-precedence-groups (make-parameter (hasheq)))
 
 (define (register-precedence-group! name entry)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-user-precedence-groups-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name entry))
-      (current-user-precedence-groups (hash-set (current-user-precedence-groups) name entry))))
+  (current-user-precedence-groups
+   (hash-set (current-user-precedence-groups) name entry))
+  ;; Phase 2c: dual-write to cell
+  (macros-cell-write! (current-user-precedence-groups-cell-id) (hasheq name entry)))
 
 ;; Track 3 Phase 3: cell-primary reader for user precedence groups
 (define (read-user-precedence-groups)
@@ -7652,11 +7575,10 @@
   (if (eq? v 'not-found) (current-user-operators) v))
 
 (define (register-user-operator! sym info)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-user-operators-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq sym info))
-      (current-user-operators (hash-set (current-user-operators) sym info))))
+  (current-user-operators
+   (hash-set (current-user-operators) sym info))
+  ;; Phase 2c: dual-write to cell
+  (macros-cell-write! (current-user-operators-cell-id) (hasheq sym info)))
 
 ;; process-precedence-group: parse and register a precedence-group declaration
 ;; Syntax (WS mode): precedence-group mygroup :assoc left :tighter-than additive
@@ -8299,11 +8221,10 @@
 (define current-macro-registry (make-parameter (hasheq)))
 
 (define (register-macro! name proc)
-  ;; Track 6 Phase 7a: cell-or-param write
-  (define cid (current-macro-registry-cell-id))
-  (if (and cid (current-macros-in-elaboration?))
-      (macros-cell-write! cid (hasheq name proc))
-      (current-macro-registry (hash-set (current-macro-registry) name proc))))
+  (current-macro-registry
+   (hash-set (current-macro-registry) name proc))
+  ;; Phase 2c: dual-write to cell
+  (macros-cell-write! (current-macro-registry-cell-id) (hasheq name proc)))
 
 ;; Track 3 Phase 3: cell-primary reader for macro registry
 (define (read-macro-registry)
