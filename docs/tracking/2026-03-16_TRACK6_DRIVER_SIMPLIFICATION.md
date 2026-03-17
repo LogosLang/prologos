@@ -21,10 +21,10 @@
 | D.3 | Self-critique (principle alignment) | ✅ | 6 principles aligned, 0 tensions, 6 observations — see §12 |
 | **WS-A** | **Data Orientation + TMS Retraction** | | |
 | 0 | Performance baseline + acceptance file | ✅ | 278 evals, 0 errors, 6 BUGs (commit `7cd1ad6`) |
-| 1a | id-map → infrastructure cell (3→2 box) | ⬜ | Early win |
-| 1b | meta-info `#:mutable` removal | ⬜ | Trivial — already write-once in practice |
-| 1c | constraint status → functional CHAMP updates | ⬜ | Data orientation — ~10 mutation sites, single-threaded |
-| 1d | `all-unsolved-metas` → infrastructure cell | ⬜ | Incremental O(1) tracking |
+| 1a | id-map → elab-network struct field (3→2 box) | ✅ | commit `9677970` — 7148 tests, 224.3s |
+| 1b | meta-info `#:mutable` removal | ✅ | commit `39421e6` — vestigial, zero mutator call sites |
+| 1c | constraint status → functional CHAMP updates | ✅ | commit `e88c2b2` — store: list→hasheq, 7148 tests, 210.8s |
+| 1d | `all-unsolved-metas` → infrastructure cell | ✅ | commit `a82e4d2` — 7148 tests, 207.4s, acceptance 0 errors |
 | 2 | Speculation stack push activation | ⬜ | Belt-and-suspenders shadow — network-box restore is production |
 | 3 | Commit-on-success machinery | ⬜ | Promotes branch values to base |
 | 4 | TMS retraction (replace network-box restore) | ⬜ | Belt-and-suspenders validation |
