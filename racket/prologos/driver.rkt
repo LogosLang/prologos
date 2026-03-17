@@ -1520,7 +1520,7 @@
                     [current-loading-set (set-add (current-loading-set) ns-sym)]
                     ;; Phase 8b: fresh propagator network per module
                     [current-prop-net-box #f]
-                    [current-prop-id-map-box #f]
+                    ;; Track 6 Phase 1a: id-map is now a field of elab-network (no separate box)
                     ;; Track 5 Phase 3a: Module loading now uses cell path.
                     ;; process-command sets current-global-env-prop-net-box to
                     ;; (current-prop-net-box) in its inner parameterize, so
@@ -1999,6 +1999,10 @@
 
 ;; Phase 1a: Install infrastructure cell creation callback.
 (current-prop-new-infra-cell elab-new-infra-cell)
+
+;; Track 6 Phase 1a: Install id-map access callbacks.
+(current-prop-id-map-read elab-network-id-map)
+(current-prop-id-map-set elab-network-id-map-set)
 
 ;; Phase 2a: Install macros cell-write and cell-read callbacks (constant — don't
 ;; depend on net-box). net-box is installed per-command via register-macros-cells!,

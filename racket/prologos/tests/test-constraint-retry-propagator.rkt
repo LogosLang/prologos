@@ -225,7 +225,7 @@
     (define m2 (fresh-meta ctx-empty (expr-hole) "b"))
     (define c (add-constraint! m1 m2 ctx-empty "test"))
     ;; Verify cell-ids match what the id-map has
-    (define id-map (unbox (current-prop-id-map-box)))
+    (define id-map (elab-network-id-map (unbox (current-prop-net-box))))
     (define cid1 (champ-lookup id-map (prop-meta-id-hash (expr-meta-id m1)) (expr-meta-id m1)))
     (define cid2 (champ-lookup id-map (prop-meta-id-hash (expr-meta-id m2)) (expr-meta-id m2)))
     (check-not-equal? cid1 'none)

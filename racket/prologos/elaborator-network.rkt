@@ -53,6 +53,8 @@
  elab-contradicted-cells
  ;; Phase 1a: Infrastructure cell creation (for propagator-first migration)
  elab-new-infra-cell
+ ;; Track 6 Phase 1a: id-map update
+ elab-network-id-map-set
  ;; P5b: Multiplicity cells
  elab-fresh-mult-cell
  elab-mult-cell-read
@@ -82,8 +84,14 @@
 (struct elab-network
   (prop-net      ;; prop-network (the underlying propagator network)
    cell-info     ;; champ-root : cell-id → elab-cell-info
-   next-meta-id) ;; Nat — deterministic counter (reserved for Phase 3 naming)
+   next-meta-id  ;; Nat — deterministic counter (reserved for Phase 3 naming)
+   id-map)       ;; champ-root : meta-id (gensym) → cell-id — Track 6 Phase 1a
   #:transparent)
+
+;; Track 6 Phase 1a: Functional update of the id-map field.
+;; Returns a new elab-network with the given id-map, all other fields unchanged.
+(define (elab-network-id-map-set enet new-id-map)
+  (struct-copy elab-network enet [id-map new-id-map]))
 
 ;; Contradiction details for error reporting.
 (struct contradiction-info
@@ -98,7 +106,7 @@
 
 ;; Create a fresh elaboration network.
 (define (make-elaboration-network [fuel 1000000])
-  (elab-network (make-prop-network fuel) champ-empty 0))
+  (elab-network (make-prop-network fuel) champ-empty 0 champ-empty))
 
 ;; ========================================
 ;; Cell Operations
@@ -119,7 +127,8 @@
    (elab-network
     net*
     (champ-insert (elab-network-cell-info enet) h cid info)
-    (+ 1 (elab-network-next-meta-id enet)))
+    (+ 1 (elab-network-next-meta-id enet))
+    (elab-network-id-map enet))
    cid))
 
 ;; Read a cell's current type value.
@@ -131,7 +140,8 @@
   (elab-network
    (net-cell-write (elab-network-prop-net enet) cid val)
    (elab-network-cell-info enet)
-   (elab-network-next-meta-id enet)))
+   (elab-network-next-meta-id enet)
+   (elab-network-id-map enet)))
 
 ;; Phase 1a: Create an infrastructure cell in the elab-network's prop-net.
 ;; Unlike elab-fresh-meta, this does NOT add cell-info metadata or increment
@@ -141,7 +151,8 @@
   (define net (elab-network-prop-net enet))
   (define-values (net* cid) (net-new-cell net initial-value merge-fn))
   (values
-   (elab-network net* (elab-network-cell-info enet) (elab-network-next-meta-id enet))
+   (elab-network net* (elab-network-cell-info enet) (elab-network-next-meta-id enet)
+                 (elab-network-id-map enet))
    cid))
 
 ;; Retrieve cell metadata, or 'none if unknown.
@@ -214,7 +225,8 @@
      (values
       (elab-network net*
                     (elab-network-cell-info enet)
-                    (elab-network-next-meta-id enet))
+                    (elab-network-next-meta-id enet)
+                    (elab-network-id-map enet))
       pid)]))
 
 ;; ========================================
@@ -228,7 +240,8 @@
   (define enet*
     (elab-network net*
                   (elab-network-cell-info enet)
-                  (elab-network-next-meta-id enet)))
+                  (elab-network-next-meta-id enet)
+                  (elab-network-id-map enet)))
   (if (net-contradiction? net*)
       (values 'error (extract-contradiction-info enet*))
       (values 'ok enet*)))
@@ -859,7 +872,8 @@
    (elab-network
     net*
     (champ-insert (elab-network-cell-info enet) h cid info)
-    (+ 1 (elab-network-next-meta-id enet)))
+    (+ 1 (elab-network-next-meta-id enet))
+    (elab-network-id-map enet))
    cid))
 
 ;; Read a mult cell's current value.
@@ -871,7 +885,8 @@
   (elab-network
    (net-cell-write (elab-network-prop-net enet) cid val)
    (elab-network-cell-info enet)
-   (elab-network-next-meta-id enet)))
+   (elab-network-next-meta-id enet)
+   (elab-network-id-map enet)))
 
 ;; ========================================
 ;; Track 4 Phase 3: Level and Session Cells
@@ -901,7 +916,8 @@
    (elab-network
     net*
     (champ-insert (elab-network-cell-info enet) h cid info)
-    (+ 1 (elab-network-next-meta-id enet)))
+    (+ 1 (elab-network-next-meta-id enet))
+    (elab-network-id-map enet))
    cid))
 
 ;; Allocate a session cell on the network. Returns (values elab-network* cell-id).
@@ -915,7 +931,8 @@
    (elab-network
     net*
     (champ-insert (elab-network-cell-info enet) h cid info)
-    (+ 1 (elab-network-next-meta-id enet)))
+    (+ 1 (elab-network-next-meta-id enet))
+    (elab-network-id-map enet))
    cid))
 
 ;; ========================================
@@ -969,6 +986,7 @@
    (elab-network
     net*
     (elab-network-cell-info enet)
-    (elab-network-next-meta-id enet))
+    (elab-network-next-meta-id enet)
+    (elab-network-id-map enet))
    pid-alpha
    pid-gamma))

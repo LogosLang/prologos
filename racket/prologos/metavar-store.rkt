@@ -135,6 +135,9 @@
  install-prop-network-callbacks!
  ;; Phase 1a: Infrastructure cell callback
  current-prop-new-infra-cell
+ ;; Track 6 Phase 1a: id-map access callbacks
+ current-prop-id-map-read
+ current-prop-id-map-set
  current-constraint-cell-id
  read-constraint-store
  read-trait-constraints
@@ -325,8 +328,9 @@
              (hash-set acc ta-id (list meta-id)))])
       (set-box! tc-net-box (write-fn (unbox tc-net-box) tw-cid tw-delta))))
   ;; P3a: Record cell-ids for type-arg metas for cell-state-driven resolution.
-  (define id-map-box (current-prop-id-map-box))
-  (define id-map (unbox id-map-box))
+  (define id-map (if (current-prop-id-map-read)
+                     ((current-prop-id-map-read) (unbox tc-net-box))
+                     champ-empty))
   (define cell-ids
     (for*/list ([ta-id (in-list type-arg-metas)]
                 [cid (in-value (champ-lookup id-map (prop-meta-id-hash ta-id) ta-id))]
@@ -402,9 +406,9 @@
       (set-box! hm-net-box (write-fn (unbox hm-net-box) hw-cid hw-delta))))
   ;; Track 2 Phase 6: Record cell-ids for dependency metas (cell-state-driven resolution).
   ;; Mirrors trait-cell-map pattern: enables collect-ready-hasmethods-via-cells.
-  (define id-map-box (current-prop-id-map-box))
-  (when id-map-box
-    (define id-map (unbox id-map-box))
+  (define id-map-read-fn (current-prop-id-map-read))
+  (when (and hm-net-box id-map-read-fn)
+    (define id-map (id-map-read-fn (unbox hm-net-box)))
     (define cell-ids
       (for*/list ([dep-id (in-list all-dep-metas)]
                   [cid (in-value (champ-lookup id-map (prop-meta-id-hash dep-id) dep-id))]
@@ -598,7 +602,7 @@
   (define add-unify-fn (current-prop-add-unify-constraint))
   (when (and net-box add-unify-fn)
     (define enet (unbox net-box))
-    (define id-map (unbox (current-prop-id-map-box)))
+    (define id-map ((current-prop-id-map-read) (unbox net-box)))
     (define lhs-metas (extract-shallow-meta-ids lhs))
     (define rhs-metas (extract-shallow-meta-ids rhs))
     (define enet*
@@ -987,7 +991,9 @@
 
 ;; Box of elab-network | #f
 (define current-prop-net-box (make-parameter #f))
-;; Box of CHAMP: meta-id (gensym) → cell-id | #f
+;; DEPRECATED: Box of CHAMP: meta-id (gensym) → cell-id | #f
+;; Retained for external consumers (driver.rkt, test files). New code should use
+;; current-prop-id-map-read / current-prop-id-map-set callbacks instead.
 (define current-prop-id-map-box (make-parameter #f))
 ;; Box of CHAMP: meta-id (gensym) → meta-info | #f
 ;; Phase A: Primary metadata store (replaces hash for production reads).
@@ -1016,6 +1022,11 @@
 ;; Phase 1a: Infrastructure cell creation callback (set by driver.rkt).
 ;; (enet initial-value merge-fn → (values enet* cell-id))
 (define current-prop-new-infra-cell (make-parameter #f))
+
+;; Track 6 Phase 1a: id-map access callbacks (set by driver.rkt).
+;; Break circular dep: metavar-store doesn't import elaborator-network.
+(define current-prop-id-map-read (make-parameter #f))   ;; (enet → champ)
+(define current-prop-id-map-set (make-parameter #f))    ;; (enet champ → enet)
 
 ;; Phase 1a: Cell ID for the constraint store cell (set by reset-meta-store!).
 ;; When #f, falls back to legacy parameter-based storage.
@@ -1085,10 +1096,12 @@
   (current-prop-add-unify-constraint add-unify))
 
 ;; Look up cell-id for a meta-id in the prop id-map. Returns cell-id or #f.
+;; Track 6 Phase 1a: Reads from elab-network id-map field (was: separate box).
 (define (prop-meta-id->cell-id id)
-  (define box (current-prop-id-map-box))
-  (and box
-       (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
+  (define net-box (current-prop-net-box))
+  (define id-map-read (current-prop-id-map-read))
+  (and net-box id-map-read
+       (let ([v (champ-lookup (id-map-read (unbox net-box)) (prop-meta-id-hash id) id)])
          (if (eq? v 'none) #f v))))
 
 ;; ========================================
@@ -1129,7 +1142,6 @@
                  ;; CHAMP boxes + network: #f — reset-meta-store! creates fresh
                  [current-prop-meta-info-box #f]
                  [current-prop-net-box #f]
-                 [current-prop-id-map-box #f]
                  [current-level-meta-champ-box #f]
                  [current-mult-meta-champ-box #f]
                  [current-sess-meta-champ-box #f])
@@ -1156,9 +1168,12 @@
   (when (and net-box fresh-fn)
     (define enet (unbox net-box))
     (define-values (enet* cid) (fresh-fn enet ctx type source))
-    (define id-box (current-prop-id-map-box))
-    (set-box! id-box (champ-insert (unbox id-box) (prop-meta-id-hash id) id cid))
-    (set-box! net-box enet*))
+    ;; Track 6 Phase 1a: id-map is a field of elab-network
+    (define id-map-read (current-prop-id-map-read))
+    (define id-map-set (current-prop-id-map-set))
+    (set-box! net-box (id-map-set enet*
+                        (champ-insert (id-map-read enet*)
+                                      (prop-meta-id-hash id) id cid))))
   (expr-meta id))
 
 ;; Track 2 Phase 3: Stratified resolution flag.
@@ -1373,10 +1388,12 @@
     (define-values (enet* cid) (fresh-fn enet source))
     (set-box! net-box enet*)
     ;; Record mapping: level-meta-id → cell-id in the prop id-map
-    (define id-map-box (current-prop-id-map-box))
-    (when id-map-box
-      (set-box! id-map-box
-        (champ-insert (unbox id-map-box) (prop-meta-id-hash id) id cid))))
+    (define id-map-read (current-prop-id-map-read))
+    (define id-map-set (current-prop-id-map-set))
+    (when (and net-box id-map-read id-map-set)
+      (set-box! net-box (id-map-set (unbox net-box)
+                          (champ-insert (id-map-read (unbox net-box))
+                                        (prop-meta-id-hash id) id cid)))))
   (level-meta id))
 
 ;; Assign a solution to a level metavariable.
@@ -1396,9 +1413,9 @@
   (define net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
   (when (and net-box write-fn)
-    (define id-map-box (current-prop-id-map-box))
-    (define cid (and id-map-box
-                     (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id)))
+    (define id-map-read-fn (current-prop-id-map-read))
+    (define cid (and net-box id-map-read-fn
+                     (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id)))
     (when (and cid (not (eq? cid 'none)))
       (define enet (unbox net-box))
       (set-box! net-box (write-fn enet cid solution)))))
@@ -1408,10 +1425,10 @@
 (define (level-meta-solved? id)
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
-  (define id-map-box (current-prop-id-map-box))
+  (define id-map-read-fn (current-prop-id-map-read))
   (cond
-    [(and net-box read-fn id-map-box)
-     (define cid (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id))
+    [(and net-box read-fn id-map-read-fn)
+     (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
         ;; Not in id-map — fallback to CHAMP
@@ -1434,10 +1451,10 @@
 (define (level-meta-solution id)
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
-  (define id-map-box (current-prop-id-map-box))
+  (define id-map-read-fn (current-prop-id-map-read))
   (cond
-    [(and net-box read-fn id-map-box)
-     (define cid (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id))
+    [(and net-box read-fn id-map-read-fn)
+     (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
         ;; Not in id-map — fallback to CHAMP
@@ -1497,10 +1514,12 @@
     (define-values (enet* cid) (fresh-fn enet source))
     (set-box! net-box enet*)
     ;; Record mapping: mult-meta-id → cell-id in the prop id-map
-    (define id-map-box (current-prop-id-map-box))
-    (when id-map-box
-      (set-box! id-map-box
-        (champ-insert (unbox id-map-box) (prop-meta-id-hash id) id cid))))
+    (define id-map-read (current-prop-id-map-read))
+    (define id-map-set (current-prop-id-map-set))
+    (when (and net-box id-map-read id-map-set)
+      (set-box! net-box (id-map-set (unbox net-box)
+                          (champ-insert (id-map-read (unbox net-box))
+                                        (prop-meta-id-hash id) id cid)))))
   (mult-meta id))
 
 ;; Assign a solution to a mult metavariable.
@@ -1520,9 +1539,9 @@
   (define net-box (current-prop-net-box))
   (define write-fn (current-prop-mult-cell-write))
   (when (and net-box write-fn)
-    (define id-map-box (current-prop-id-map-box))
-    (define cid (and id-map-box
-                     (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id)))
+    (define id-map-read-fn (current-prop-id-map-read))
+    (define cid (and net-box id-map-read-fn
+                     (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id)))
     (when (and (not (eq? cid 'none)) cid)
       (define enet (unbox net-box))
       (set-box! net-box (write-fn enet cid solution)))))
@@ -1532,10 +1551,10 @@
 (define (mult-meta-solved? id)
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
-  (define id-map-box (current-prop-id-map-box))
+  (define id-map-read-fn (current-prop-id-map-read))
   (cond
-    [(and net-box read-fn id-map-box)
-     (define cid (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id))
+    [(and net-box read-fn id-map-read-fn)
+     (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
         (define box (current-mult-meta-champ-box))
@@ -1556,10 +1575,10 @@
 (define (mult-meta-solution id)
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
-  (define id-map-box (current-prop-id-map-box))
+  (define id-map-read-fn (current-prop-id-map-read))
   (cond
-    [(and net-box read-fn id-map-box)
-     (define cid (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id))
+    [(and net-box read-fn id-map-read-fn)
+     (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
         (define box (current-mult-meta-champ-box))
@@ -1613,10 +1632,12 @@
     (define-values (enet* cid) (fresh-fn enet source))
     (set-box! net-box enet*)
     ;; Record mapping: sess-meta-id → cell-id in the prop id-map
-    (define id-map-box (current-prop-id-map-box))
-    (when id-map-box
-      (set-box! id-map-box
-        (champ-insert (unbox id-map-box) (prop-meta-id-hash id) id cid))))
+    (define id-map-read (current-prop-id-map-read))
+    (define id-map-set (current-prop-id-map-set))
+    (when (and net-box id-map-read id-map-set)
+      (set-box! net-box (id-map-set (unbox net-box)
+                          (champ-insert (id-map-read (unbox net-box))
+                                        (prop-meta-id-hash id) id cid)))))
   (sess-meta id))
 
 ;; Assign a solution to a sess metavariable.
@@ -1636,9 +1657,9 @@
   (define net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
   (when (and net-box write-fn)
-    (define id-map-box (current-prop-id-map-box))
-    (define cid (and id-map-box
-                     (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id)))
+    (define id-map-read-fn (current-prop-id-map-read))
+    (define cid (and net-box id-map-read-fn
+                     (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id)))
     (when (and cid (not (eq? cid 'none)))
       (define enet (unbox net-box))
       (set-box! net-box (write-fn enet cid solution)))))
@@ -1648,10 +1669,10 @@
 (define (sess-meta-solved? id)
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
-  (define id-map-box (current-prop-id-map-box))
+  (define id-map-read-fn (current-prop-id-map-read))
   (cond
-    [(and net-box read-fn id-map-box)
-     (define cid (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id))
+    [(and net-box read-fn id-map-read-fn)
+     (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
         (define box (current-sess-meta-champ-box))
@@ -1672,10 +1693,10 @@
 (define (sess-meta-solution id)
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
-  (define id-map-box (current-prop-id-map-box))
+  (define id-map-read-fn (current-prop-id-map-read))
   (cond
-    [(and net-box read-fn id-map-box)
-     (define cid (champ-lookup (unbox id-map-box) (prop-meta-id-hash id) id))
+    [(and net-box read-fn id-map-read-fn)
+     (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
         (define box (current-sess-meta-champ-box))
@@ -1759,12 +1780,10 @@
   (when make-net
     (define net-box (current-prop-net-box))
     (if net-box
-        (begin
-          (set-box! net-box (make-net))
-          (set-box! (current-prop-id-map-box) champ-empty))
-        (begin
-          (current-prop-net-box (box (make-net)))
-          (current-prop-id-map-box (box champ-empty))))
+        (set-box! net-box (make-net))
+        (current-prop-net-box (box (make-net))))
+    ;; id-map is now a field of elab-network, initialized to champ-empty
+    ;; by make-elaboration-network — no separate box needed.
     ;; Phase 1a: Create constraint store cell in the unified network.
     ;; merge-list-append ensures constraints accumulate monotonically.
     (define new-cell-fn (current-prop-new-infra-cell))
@@ -1818,21 +1837,19 @@
 ;; Down from 6 — level/mult/session meta state now lives in per-meta TMS cells
 ;; within the network. Restoring the network restores their cell values.
 ;; O(1) — reads immutable CHAMP references from boxes.
+;; Track 6 Phase 1a: 3→2 box — id-map is now a field of elab-network,
+;; automatically captured/restored with the network snapshot.
 (define (save-meta-state)
   (define net-box (current-prop-net-box))
-  (define id-box (current-prop-id-map-box))
   (list 'prop
         (and net-box (unbox net-box))
-        (and id-box (unbox id-box))
         (unbox (current-prop-meta-info-box))))
 
 (define (restore-meta-state! saved)
   ;; All O(1) — swap immutable CHAMP references
   (define net-box (current-prop-net-box))
-  (define id-box (current-prop-id-map-box))
   (when net-box (set-box! net-box (list-ref saved 1)))
-  (when id-box (set-box! id-box (list-ref saved 2)))
-  (set-box! (current-prop-meta-info-box) (list-ref saved 3)))
+  (set-box! (current-prop-meta-info-box) (list-ref saved 2)))
 
 ;; List all unsolved metavariable infos.
 ;; Hash removal: Always reads from CHAMP.
