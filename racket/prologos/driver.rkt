@@ -391,6 +391,7 @@
     (current-command-atms (box (atms-empty))))
   (init-speculation-tracking!)
   (parameterize ([current-macros-in-elaboration? #t]                        ;; Track 3: cell-primary readers active
+                 [current-warnings-in-elaboration? #t]                     ;; Track 6 Phase 7b: warning cell writes active
                  [current-narrow-in-elaboration? #t]                       ;; Track 3 Phase 5: narrowing cell readers active
                  [current-global-env-prop-net-box (current-prop-net-box)]  ;; Phase 3a: activate cell writes (auto-reverts)
                  [current-ns-prop-net-box (current-prop-net-box)]          ;; Phase 3c: activate ns cell writes (auto-reverts)
@@ -938,7 +939,8 @@
   ;; Track 6 Phase 7a: sync cell values back to parameters on success.
   ;; This ensures inter-command persistence without intra-elaboration param writes.
   (unless (prologos-error? result)
-    (sync-macros-cells-to-params!))
+    (sync-macros-cells-to-params!)
+    (sync-warning-cells-to-params!))
   ;; Append warnings to result string (if any)
   (define coercion-warns (reverse (read-coercion-warnings)))
   (define deprecation-warns (reverse (read-deprecation-warnings)))
