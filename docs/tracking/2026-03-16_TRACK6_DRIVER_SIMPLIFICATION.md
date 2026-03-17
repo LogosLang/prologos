@@ -20,7 +20,7 @@
 | D.2 | External critique + rework | ✅ | 10 critiques addressed — see §6b |
 | D.3 | Self-critique (principle alignment) | ✅ | 6 principles aligned, 0 tensions, 6 observations — see §12 |
 | **WS-A** | **Data Orientation + TMS Retraction** | | |
-| 0 | Performance baseline + acceptance file | ⬜ | |
+| 0 | Performance baseline + acceptance file | ✅ | 278 evals, 0 errors, 6 BUGs (commit `7cd1ad6`) |
 | 1a | id-map → infrastructure cell (3→2 box) | ⬜ | Early win |
 | 1b | meta-info `#:mutable` removal | ⬜ | Trivial — already write-once in practice |
 | 1c | constraint status → functional CHAMP updates | ⬜ | Data orientation — ~10 mutation sites, single-threaded |
