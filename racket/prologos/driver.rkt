@@ -935,6 +935,10 @@
                      (current-inexact-milliseconds)
                      (observatory-next-sequence! obs)
                      #f))))
+  ;; Track 6 Phase 7b: sync cell values back to parameters on success.
+  ;; This ensures inter-command persistence without intra-elaboration param writes.
+  (unless (prologos-error? result)
+    (sync-macros-cells-to-params!))
   ;; Append warnings to result string (if any)
   (define coercion-warns (reverse (read-coercion-warnings)))
   (define deprecation-warns (reverse (read-deprecation-warnings)))
@@ -1705,15 +1709,14 @@
                                 names))])
         (define spec-entry (hash-ref mod-specs name #f))
         (when spec-entry
-          (current-spec-store
-            (hash-set (current-spec-store) name spec-entry))
-          ;; Phase 2c: dual-write spec-store to cell
-          (macros-cell-write! (current-spec-store-cell-id) (hasheq name spec-entry))
-          ;; Mark as propagated so own-module defs can override silently
-          (current-propagated-specs
-            (set-add (current-propagated-specs) name))
-          ;; Phase 2c: dual-write propagated-specs to cell (set merge)
-          (macros-cell-write! (current-propagated-specs-cell-id) (seteq name))))))
+          ;; Track 6 Phase 7b: cell-only during elaboration; param-only outside.
+          (if (current-macros-in-elaboration?)
+              (begin
+                (macros-cell-write! (current-spec-store-cell-id) (hasheq name spec-entry))
+                (macros-cell-write! (current-propagated-specs-cell-id) (seteq name)))
+              (begin
+                (current-spec-store (hash-set (current-spec-store) name spec-entry))
+                (current-propagated-specs (set-add (current-propagated-specs) name))))))))
   (when (null? (current-lib-paths))
     (current-lib-paths (list prologos-lib-dir))))
 
