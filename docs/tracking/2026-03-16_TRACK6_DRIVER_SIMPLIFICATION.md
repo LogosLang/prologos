@@ -552,7 +552,7 @@ Removing `restore-meta-state!` from the failure path produces 2 test failures:
 
 **Current state**: Belt-and-suspenders remains active. TMS retraction handles branch cleanup, `restore-meta-state!` handles structural rollback. Both run on every failure path.
 
-**Forward path**: Making infrastructure cells TMS-aware requires extending the TMS model to support set-like accumulation with retraction (currently only supports value replacement). This is Track 7+ / LSP scope.
+**Forward path**: Making infrastructure cells TMS-aware requires extending the TMS model to support set-like accumulation with retraction (currently only supports value replacement). This work is tracked as a concrete DEFERRED item: "TMS-Aware Infrastructure Cells + Structural State" in `DEFERRED.md` § Propagator-First Elaboration Migration. Target placement: prerequisite phase in Track 7 (QTT Multiplicity Cells) or standalone mini-track between Track 6 and Track 7. **Must be resolved before Track 8** (Unification as Propagators) where incremental rollback correctness becomes load-bearing. See DEFERRED.md for the two-part fix path (infra cells → TMS-aware, structural fields → TMS cells).
 
 **Done when** (deferred):
 - [ ] Infrastructure cells support TMS-aware accumulation with retraction

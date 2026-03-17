@@ -264,6 +264,8 @@ Moved to §Completed Work above. See Track 5 PIR for full review.
 
 **Depends on**: Track 6 (clean driver baseline).
 
+**Prerequisite from Track 6**: TMS-aware infrastructure cells + structural state migration (Track 6 Phase 5b blocker). Infrastructure cells (constraint store, unsolved-metas) and elab-network structural fields (meta-info, id-map, next-meta-id) are not TMS-managed, blocking belt-and-suspenders retirement. This should be a prerequisite phase in Track 7 or a standalone mini-track. See `DEFERRED.md` § "TMS-Aware Infrastructure Cells + Structural State" for full analysis.
+
 **Design reference**: `docs/tracking/2026-03-04_PROPAGATOR_MIGRATION_GDE.md` § Track 3 (P5).
 
 **Design document**: TBD.

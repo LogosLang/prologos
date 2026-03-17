@@ -639,6 +639,50 @@ issues in the relational subsystem (Phase 7 surface syntax), not WS-specific bug
 
 ## Propagator-First Elaboration Migration
 
+### TMS-Aware Infrastructure Cells + Structural State — NOT STARTED (Track 6 Phase 5b blocker)
+
+- **Problem**: Infrastructure cells and elab-network structural fields are NOT TMS-managed,
+  violating the propagator-first principle. This creates a two-tier system where some state
+  (TMS cells) participates in speculation branching and retraction, while other state
+  (infrastructure cells, meta-info, id-map, next-meta-id) requires the legacy
+  `restore-meta-state!` snapshot/restore mechanism as a mandatory fallback.
+- **Discovered**: Track 6 Phase 5b (commit `cb393bb`) — attempting to retire belt-and-suspenders
+  produced 2 test failures: constraint store leaks and meta-info solved-status leaks.
+- **Root cause analysis**:
+  1. **Infrastructure cells bypass TMS**: Created with `net-new-cell` (plain values), not
+     `net-new-tms-cell`. The `net-cell-write` TMS routing (propagator.rkt line 350–352) only
+     activates when `(tms-cell-value? old-val)` — infrastructure cells never enter TMS branching.
+     Affected cells: constraint store, unsolved-metas set, and any cell created via
+     `elab-new-infra-cell` in `elaborator-network.rkt`.
+  2. **elab-network structural fields not TMS-managed**: `meta-info` CHAMP, `id-map` CHAMP,
+     `next-meta-id` counter are fields in the `elab-network` struct, not cells in the propagator
+     network. When a meta is solved during speculation, `meta-info` retains "solved" status after
+     TMS retraction. Similarly, `id-map` mappings and `next-meta-id` advances persist.
+- **Consequence**: `restore-meta-state!` (snapshot/restore) cannot be retired. The belt-and-suspenders
+  pattern must remain active: TMS retraction handles cell branch cleanup, `restore-meta-state!`
+  handles structural rollback. This is architectural debt — the snapshot mechanism is a
+  whole-state sledgehammer that undermines incremental TMS-based rollback.
+- **Fix path (two parts)**:
+  1. **Infrastructure cells → TMS-aware** (~10 lines, low risk): Change `elab-new-infra-cell` to
+     use `net-new-tms-cell` with `make-tms-merge` wrapping the existing merge function. This makes
+     constraint store, unsolved-metas, and all infrastructure cells participate in TMS branching.
+     Retraction would then undo accumulations added under the retracted assumption.
+  2. **Structural fields → TMS cells or infrastructure cells** (medium effort): Move `meta-info`,
+     `id-map`, and `next-meta-id` from `elab-network` struct fields to TMS-aware cells in the
+     propagator network. This undoes the Phase 5a pattern (which moved meta-info INTO the struct)
+     but is necessary for full TMS management. Alternative: keep as struct fields with a separate
+     TMS-aware rollback mechanism (less clean, but lower risk).
+- **Placement**: This should be addressed in **Track 7 (QTT Multiplicity Cells)** as a prerequisite
+  phase, or as a standalone mini-track between Track 6 and Track 7. The work is architecturally
+  independent of QTT but shares the same infrastructure surface area. It must be completed before
+  Track 8 (Unification as Propagators) where incremental rollback correctness is load-bearing.
+- **Principle**: Propagator-first — all speculation-scoped state should flow through the TMS
+  mechanism, not maintain a parallel snapshot/restore path. The current two-tier system is
+  an acceptable transitional state but NOT the target architecture.
+- **Source**: Track 6 Phase 5b findings (commit `cb393bb`), analysis in
+  `docs/tracking/2026-03-16_TRACK6_DRIVER_SIMPLIFICATION.md` §4 Phase 5b notes
+- **Forward references**: Track 6 design doc (Phase 5b section), master roadmap Track 7
+
 ### Unify type inference and trait resolution under the propagator network — NOT STARTED
 - **Problem**: The current elaboration pipeline uses the propagator network for infrastructure
   cells (registries, environments) but does NOT create formal propagator edges between cells.
