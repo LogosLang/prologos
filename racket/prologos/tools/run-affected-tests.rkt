@@ -171,6 +171,7 @@
 (define timeout-secs (make-parameter 600))
 (define do-precompile? (make-parameter #t))
 (define show-failures? (make-parameter #f))
+(define bail-timeout-threshold (make-parameter 3))
 
 (define (main)
   (command-line
@@ -196,6 +197,10 @@
     (do-precompile? #f)]
    ["--failures" "Show failure logs from last run (no tests executed)"
     (show-failures? #t)]
+   ["--bail-timeouts" n "Abort after N per-file timeouts (default: 3, 0=disable)"
+    (bail-timeout-threshold (string->number n))]
+   ["--no-bail" "Disable early-bail on timeouts"
+    (bail-timeout-threshold 0)]
    #:multi
    ["--skip" file "Skip an additional test file (additive with .skip-tests)"
     (extra-skips (cons (string->symbol file) (extra-skips)))])
@@ -449,20 +454,39 @@
 
   ;; Collect results with progress output
   (define collected '())
+  (define timeout-count 0)
+  (define bailed? #f)
   (let loop ([remaining file-count] [count 0])
     (when (> remaining 0)
       (define r (sync/timeout (* (timeout-secs) 1.0) result-ch))
       (cond
         [r
          (define ms (hash-ref r 'wall_ms))
+         (define status (hash-ref r 'status))
          (printf "[~a/~a] ~a ~a (~as)\n"
                  (add1 count) file-count
                  (hash-ref r 'file)
-                 (status-label (hash-ref r 'status))
+                 (status-label status)
                  (real->decimal-string (/ ms 1000.0) 1))
          (flush-output)
          (set! collected (cons r collected))
-         (loop (sub1 remaining) (add1 count))]
+         ;; Early-bail: abort if too many per-file timeouts
+         (when (string=? status "timeout")
+           (set! timeout-count (add1 timeout-count)))
+         (define bail-threshold (bail-timeout-threshold))
+         (cond
+           [(and (> bail-threshold 0)
+                 (>= timeout-count bail-threshold))
+            (set! bailed? #t)
+            (printf "\n⚠  EARLY BAIL: ~a file(s) timed out (threshold: ~a).\n" timeout-count bail-threshold)
+            (printf "   This usually indicates a systemic regression (infinite loop, missing writes, etc.).\n")
+            (printf "   Killing ~a remaining files. Check failure logs for details.\n\n" (sub1 remaining))
+            (flush-output)
+            (for ([p (in-list all-procs)])
+              (with-handlers ([exn:fail? void])
+                (subprocess-kill p #t)))]
+           [else
+            (loop (sub1 remaining) (add1 count))])]
         [else
          ;; Timeout — kill all workers, report remaining as timeout
          (eprintf "\nTIMEOUT: No result received for ~as. Killing ~a remaining.\n"
@@ -486,13 +510,16 @@
   ;; Print summary
   (define failed-files
     (filter (λ (r) (not (string=? (hash-ref r 'status) "pass"))) file-results))
-  (printf "\n~a tests in ~as (~a files, ~a batch workers, ~a)\n"
+  (define completed-count (length file-results))
+  (printf "\n~a tests in ~as (~a~a files, ~a batch workers, ~a)\n"
           total-tests
           (real->decimal-string (/ total-wall-ms 1000.0) 1)
+          (if bailed? (format "~a of " completed-count) "")
           file-count
           jobs
-          (if all-pass? "all pass"
-              (format "~a FAILURES" (length failed-files))))
+          (cond [bailed? (format "ABORTED — ~a timeouts" timeout-count)]
+                [all-pass? "all pass"]
+                [else (format "~a FAILURES" (length failed-files))]))
   (unless all-pass?
     (for ([r (in-list failed-files)])
       (printf "\n~a\n" (make-string 60 #\─))
@@ -506,8 +533,8 @@
     (printf "~a\n" (make-string 60 #\─))
     (printf "Failure logs: data/benchmarks/failures/*.log\n"))
 
-  ;; Record to JSONL (unless --no-record)
-  (when (record-timings?)
+  ;; Record to JSONL (unless --no-record or early bail)
+  (when (and (record-timings?) (not bailed?))
     (define timings-file (make-timings-path project-root))
     (define record
       (hasheq 'schema_version 3
@@ -527,6 +554,7 @@
     (append-run-record timings-file record)
     (printf "Timings recorded to ~a\n" (path->string timings-file)))
 
+  (when bailed? (exit 2))
   (unless all-pass? (exit 1)))
 
 (main)
