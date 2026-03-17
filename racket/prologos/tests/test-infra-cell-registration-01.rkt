@@ -93,7 +93,7 @@
   ;; Write to infra-cell
   (define net3 (net-cell-write net2 impl-cid (hasheq 'Nat-Eq 'eq-fn)))
   ;; 2. Create elab-network wrapping the SAME prop-network
-  (define enet0 (elab-network net3 champ-empty 0 champ-empty))
+  (define enet0 (elab-network net3 champ-empty 0 champ-empty champ-empty))
   ;; 3. Create a metavariable cell in the elab-network
   (define-values (enet1 meta-cid) (elab-fresh-meta enet0 '() type-top "test-meta"))
   ;; 4. The elab-network's underlying prop-network has BOTH cells
@@ -114,7 +114,7 @@
   (define net0 (make-prop-network))
   (define-values (net1 log-cid) (net-new-list-cell net0))
   ;; Create elab-network on top
-  (define enet0 (elab-network net1 champ-empty 0 champ-empty))
+  (define enet0 (elab-network net1 champ-empty 0 champ-empty champ-empty))
   ;; Create meta cell
   (define-values (enet1 meta-cid) (elab-fresh-meta enet0 '() type-top "test"))
   ;; Add propagator: when meta cell changes, log it
@@ -160,7 +160,7 @@
             (net-cell-write net notif-cid
                             (list (format "~a impls registered" count)))))))
   ;; 3. Create elab-network on top
-  (define enet0 (elab-network net5 champ-empty 0 champ-empty))
+  (define enet0 (elab-network net5 champ-empty 0 champ-empty champ-empty))
   ;; 4. Write to infra-cell through the underlying network
   (define enet1
     (struct-copy elab-network enet0
@@ -188,7 +188,7 @@
   (define-values (net2 cid2) (net-new-list-cell net1))
   (define-values (net3 cid3) (net-new-set-cell net2))
   ;; Create elab-network on top
-  (define enet0 (elab-network net3 champ-empty 0 champ-empty))
+  (define enet0 (elab-network net3 champ-empty 0 champ-empty champ-empty))
   ;; Create 2 meta cells
   (define-values (enet1 mcid1) (elab-fresh-meta enet0 '() type-top "m1"))
   (define-values (enet2 mcid2) (elab-fresh-meta enet1 '() type-top "m2"))

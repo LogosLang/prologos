@@ -2004,6 +2004,11 @@
 (current-prop-id-map-read elab-network-id-map)
 (current-prop-id-map-set elab-network-id-map-set)
 
+;; Track 6 Phase 5a: Install meta-info access callbacks.
+;; Meta-info CHAMP now lives in elab-network struct → captured with network snapshot.
+(current-prop-meta-info-read elab-network-meta-info)
+(current-prop-meta-info-set elab-network-meta-info-set)
+
 ;; Phase 2a: Install macros cell-write and cell-read callbacks (constant — don't
 ;; depend on net-box). net-box is installed per-command via register-macros-cells!,
 ;; since it's created fresh in reset-meta-store!.

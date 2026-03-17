@@ -104,7 +104,8 @@
     (elab-network net*
                   (elab-network-cell-info enet-after)
                   (elab-network-next-meta-id enet-after)
-                  (elab-network-id-map enet-after)))
+                  (elab-network-id-map enet-after)
+                  (elab-network-meta-info enet-after)))
   (define has-contradiction (net-contradiction? net*))
   (define br*
     (if has-contradiction

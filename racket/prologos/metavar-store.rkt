@@ -124,6 +124,8 @@
  current-prop-net-box
  current-prop-id-map-box
  current-prop-meta-info-box
+ current-prop-meta-info-read
+ current-prop-meta-info-set
  prop-meta-id-hash
  ;; Phase B: Auxiliary meta CHAMP boxes
  current-level-meta-champ-box
@@ -1038,7 +1040,15 @@
 (define current-prop-id-map-box (make-parameter #f))
 ;; Box of CHAMP: meta-id (gensym) → meta-info | #f
 ;; Phase A: Primary metadata store (replaces hash for production reads).
+;; Track 6 Phase 5a: DEPRECATED — meta-info CHAMP moves into elab-network struct.
+;; Retained for fallback in contexts without a network (test isolation).
 (define current-prop-meta-info-box (make-parameter #f))
+;; Track 6 Phase 5a: Callback parameters for meta-info access through elab-network.
+;; Breaks circular dependency: metavar-store.rkt → elaborator-network.rkt.
+;; Installed by driver.rkt. When available, meta-info lives in the elab-network
+;; struct (captured/restored with the network snapshot → 2→1 box).
+(define current-prop-meta-info-read (make-parameter #f))  ;; (elab-network → champ)
+(define current-prop-meta-info-set (make-parameter #f))   ;; (elab-network champ → elab-network)
 
 ;; Phase B: Auxiliary meta CHAMP boxes (level, mult, session).
 ;; Each stores id → 'unsolved | solution. Included in save/restore for
@@ -1206,29 +1216,36 @@
   (perf-inc-meta-created!)
   (define id (gensym 'meta))
   (define info (meta-info id ctx type 'unsolved #f '() source))
-  ;; Write to CHAMP meta-info store (always available)
-  (define mi-box (current-prop-meta-info-box))
-  (set-box! mi-box (champ-insert (unbox mi-box) (prop-meta-id-hash id) id info))
-  ;; Optionally allocate cell on propagator network
+  (define h (prop-meta-id-hash id))
+  ;; Track 6 Phase 5a: Write meta-info to elab-network when available, else box fallback
+  (define mi-read (current-prop-meta-info-read))
+  (define mi-set (current-prop-meta-info-set))
   (define net-box (current-prop-net-box))
   (define fresh-fn (current-prop-fresh-meta))
-  (when (and net-box fresh-fn)
-    (define enet (unbox net-box))
-    (define-values (enet* cid) (fresh-fn enet ctx type source))
-    ;; Track 6 Phase 1a: id-map is a field of elab-network
-    (define id-map-read (current-prop-id-map-read))
-    (define id-map-set (current-prop-id-map-set))
-    (define enet** (id-map-set enet*
-                     (champ-insert (id-map-read enet*)
-                                   (prop-meta-id-hash id) id cid)))
-    ;; Track 6 Phase 1d: write to unsolved-metas tracking cell
-    (define write-fn (current-prop-cell-write))
-    (define um-cid (current-unsolved-metas-cell-id))
-    (define enet***
-      (if (and write-fn um-cid)
-          (write-fn enet** um-cid (hasheq id #t))
-          enet**))
-    (set-box! net-box enet***))
+  (cond
+    [(and net-box fresh-fn mi-read mi-set)
+     ;; Network path: meta-info lives in elab-network struct
+     (define enet (unbox net-box))
+     (define enet0 (mi-set enet (champ-insert (mi-read enet) h id info)))
+     (define-values (enet1 cid) (fresh-fn enet0 ctx type source))
+     ;; Track 6 Phase 1a: id-map is a field of elab-network
+     (define id-map-read (current-prop-id-map-read))
+     (define id-map-set (current-prop-id-map-set))
+     (define enet2 (id-map-set enet1
+                      (champ-insert (id-map-read enet1) h id cid)))
+     ;; Track 6 Phase 1d: write to unsolved-metas tracking cell
+     (define write-fn (current-prop-cell-write))
+     (define um-cid (current-unsolved-metas-cell-id))
+     (define enet3
+       (if (and write-fn um-cid)
+           (write-fn enet2 um-cid (hasheq id #t))
+           enet2))
+     (set-box! net-box enet3)]
+    [else
+     ;; Fallback: write to standalone box (test/legacy contexts)
+     (define mi-box (current-prop-meta-info-box))
+     (when mi-box
+       (set-box! mi-box (champ-insert (unbox mi-box) h id info)))])
   (expr-meta id))
 
 ;; Track 2 Phase 3: Stratified resolution flag.
@@ -1268,10 +1285,19 @@
   (define progress-box (current-stratified-progress-box))
   (when progress-box
     (set-box! progress-box #t))
-  (define mi-box (current-prop-meta-info-box))
+  (define h (prop-meta-id-hash id))
+  ;; Track 6 Phase 5a: Read meta-info from elab-network when available, else box
+  (define mi-read (current-prop-meta-info-read))
+  (define mi-set (current-prop-meta-info-set))
+  (define net-box (current-prop-net-box))
+  (define mi-champ
+    (if (and mi-read net-box)
+        (mi-read (unbox net-box))
+        (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))))
   (define info
-    (let ([v (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id)])
-      (if (eq? v 'none) #f v)))
+    (and mi-champ
+         (let ([v (champ-lookup mi-champ h id)])
+           (if (eq? v 'none) #f v))))
   (unless info
     (error 'solve-meta! "unknown metavariable: ~a" id))
   (when (eq? (meta-info-status info) 'solved)
@@ -1280,25 +1306,26 @@
   (define updated (meta-info id (meta-info-ctx info) (meta-info-type info)
                               'solved solution
                               (meta-info-constraints info) (meta-info-source info)))
-  (set-box! mi-box (champ-insert (unbox mi-box) (prop-meta-id-hash id) id updated))
+  (define new-mi-champ (champ-insert mi-champ h id updated))
+  ;; Track 6 Phase 5a: Write back to elab-network or box
+  (cond
+    [(and mi-set net-box)
+     (set-box! net-box (mi-set (unbox net-box) new-mi-champ))]
+    [else
+     (define mi-box (current-prop-meta-info-box))
+     (when mi-box (set-box! mi-box new-mi-champ))])
   ;; Propagator path: write to cell
-  (define net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
   (when (and net-box write-fn)
     (define cid (prop-meta-id->cell-id id))
     (when cid
       (set-box! net-box (write-fn (unbox net-box) cid solution))
       ;; P-U2b: Post-write consistency validation.
-      ;; After writing solution to cell, read it back and verify it matches.
-      ;; A mismatch would indicate a lattice merge conflict (cell had a prior
-      ;; value that doesn't unify with solution). Log as advisory — the
-      ;; propagator contradiction check will catch actual errors.
       (define read-fn (current-prop-cell-read))
       (when read-fn
         (define cell-val (read-fn (unbox net-box) cid))
         (when (and cell-val
                    (not (equal? cell-val solution))
-                   ;; Don't flag bot/top — those are expected lattice states
                    (not (prop-type-bot? cell-val))
                    (not (prop-type-top? cell-val)))
           (perf-inc-cell-write-mismatch!))))
@@ -1417,11 +1444,16 @@
            (and (not (eq? v 'none)) (meta-info-solution v))))]))
 
 ;; Retrieve the full meta-info struct, or #f if unknown.
-;; Hash removal: Always reads from CHAMP meta-info store.
+;; Track 6 Phase 5a: reads from elab-network meta-info when available, else box.
 (define (meta-lookup id)
-  (define mi-box (current-prop-meta-info-box))
-  (if (not mi-box) #f  ;; No meta store initialized
-      (let ([v (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id)])
+  (define mi-read (current-prop-meta-info-read))
+  (define net-box (current-prop-net-box))
+  (define mi-champ
+    (if (and mi-read net-box)
+        (mi-read (unbox net-box))
+        (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))))
+  (if (not mi-champ) #f
+      (let ([v (champ-lookup mi-champ (prop-meta-id-hash id) id)])
         (if (eq? v 'none) #f v))))
 
 ;; ========================================
@@ -1900,19 +1932,29 @@
 ;; Down from 6 — level/mult/session meta state now lives in per-meta TMS cells
 ;; within the network. Restoring the network restores their cell values.
 ;; O(1) — reads immutable CHAMP references from boxes.
-;; Track 6 Phase 1a: 3→2 box — id-map is now a field of elab-network,
-;; automatically captured/restored with the network snapshot.
+;; Track 6 Phase 1a: 3→2 box — id-map is now a field of elab-network.
+;; Track 6 Phase 5a: 2→1 box — meta-info is now a field of elab-network.
+;; When callbacks are available, only the network box needs save/restore.
+;; Fallback: 2-box for legacy/test contexts without callbacks.
 (define (save-meta-state)
   (define net-box (current-prop-net-box))
+  (define mi-read (current-prop-meta-info-read))
   (list 'prop
         (and net-box (unbox net-box))
-        (unbox (current-prop-meta-info-box))))
+        ;; When meta-info lives in elab-network, slot 2 is #f (not needed)
+        (if mi-read
+            #f
+            (let ([b (current-prop-meta-info-box)]) (and b (unbox b))))))
 
 (define (restore-meta-state! saved)
   ;; All O(1) — swap immutable CHAMP references
   (define net-box (current-prop-net-box))
   (when net-box (set-box! net-box (list-ref saved 1)))
-  (set-box! (current-prop-meta-info-box) (list-ref saved 2)))
+  ;; Track 6 Phase 5a: only restore meta-info box when it was captured (slot 2 non-#f)
+  (define saved-mi (list-ref saved 2))
+  (when saved-mi
+    (define mi-box (current-prop-meta-info-box))
+    (when mi-box (set-box! mi-box saved-mi))))
 
 ;; List all unsolved metavariable infos.
 ;; Hash removal: Always reads from CHAMP.
@@ -1922,16 +1964,21 @@
   (define um-cid (current-unsolved-metas-cell-id))
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
-  (define mi-box (current-prop-meta-info-box))
+  ;; Track 6 Phase 5a: read meta-info from elab-network when available
+  (define mi-read (current-prop-meta-info-read))
+  (define mi-champ
+    (if (and mi-read net-box)
+        (mi-read (unbox net-box))
+        (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))))
   (if (and um-cid net-box read-fn)
       ;; Cell path: read the tracking hash, filter for #t (unsolved)
       (let ([um-hash (read-fn (unbox net-box) um-cid)])
         (for/list ([(mid unsolved?) (in-hash um-hash)]
                    #:when unsolved?)
-          (let ([v (champ-lookup (unbox mi-box) (prop-meta-id-hash mid) mid)])
+          (let ([v (champ-lookup mi-champ (prop-meta-id-hash mid) mid)])
             (if (eq? v 'none) #f v))))
       ;; Fallback: CHAMP scan (legacy, pre-initialization)
-      (champ-fold (unbox mi-box)
+      (champ-fold mi-champ
                   (lambda (k v acc)
                     (if (eq? (meta-info-status v) 'unsolved)
                         (cons v acc)
