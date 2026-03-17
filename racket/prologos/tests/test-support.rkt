@@ -86,7 +86,15 @@
                  [current-trait-registry (current-trait-registry)]
                  [current-impl-registry (current-impl-registry)]
                  [current-param-impl-registry (current-param-impl-registry)]
-                 [current-capability-registry (current-capability-registry)])
+                 [current-capability-registry (current-capability-registry)]
+                 ;; Track 6 Phase 7a: network isolation (fresh network per call)
+                 [current-prop-net-box              #f]
+                 [current-global-env-prop-net-box   #f]
+                 [current-ns-prop-net-box           #f]
+                 [current-definition-cell-ids       (hasheq)]
+                 [current-module-registry-cell-id   #f]
+                 [current-ns-context-cell-id        #f]
+                 [current-defn-param-names-cell-id  #f])
     (install-module-loader!)
     (process-string "(ns prelude-cache)\n")
     (values (current-module-registry)
@@ -115,7 +123,15 @@
                  [current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry prelude-trait-registry]
                  [current-impl-registry prelude-impl-registry]
-                 [current-param-impl-registry prelude-param-impl-registry])
+                 [current-param-impl-registry prelude-param-impl-registry]
+                 ;; Track 6 Phase 7a: network isolation
+                 [current-prop-net-box              #f]
+                 [current-global-env-prop-net-box   #f]
+                 [current-ns-prop-net-box           #f]
+                 [current-definition-cell-ids       (hasheq)]
+                 [current-module-registry-cell-id   #f]
+                 [current-ns-context-cell-id        #f]
+                 [current-defn-param-names-cell-id  #f])
     (install-module-loader!)
     (last (process-string s))))
 
@@ -132,7 +148,15 @@
                  [current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry prelude-trait-registry]
                  [current-impl-registry prelude-impl-registry]
-                 [current-param-impl-registry prelude-param-impl-registry])
+                 [current-param-impl-registry prelude-param-impl-registry]
+                 ;; Track 6 Phase 7a: network isolation
+                 [current-prop-net-box              #f]
+                 [current-global-env-prop-net-box   #f]
+                 [current-ns-prop-net-box           #f]
+                 [current-definition-cell-ids       (hasheq)]
+                 [current-module-registry-cell-id   #f]
+                 [current-ns-context-cell-id        #f]
+                 [current-defn-param-names-cell-id  #f])
     (install-module-loader!)
     (process-string s)))
 
@@ -154,7 +178,15 @@
                  [current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry prelude-trait-registry]
                  [current-impl-registry prelude-impl-registry]
-                 [current-param-impl-registry prelude-param-impl-registry])
+                 [current-param-impl-registry prelude-param-impl-registry]
+                 ;; Track 6 Phase 7a: network isolation
+                 [current-prop-net-box              #f]
+                 [current-global-env-prop-net-box   #f]
+                 [current-ns-prop-net-box           #f]
+                 [current-definition-cell-ids       (hasheq)]
+                 [current-module-registry-cell-id   #f]
+                 [current-ns-context-cell-id        #f]
+                 [current-defn-param-names-cell-id  #f])
     (install-module-loader!)
     (last (process-string-ws s))))
 
@@ -170,7 +202,15 @@
                  [current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry prelude-trait-registry]
                  [current-impl-registry prelude-impl-registry]
-                 [current-param-impl-registry prelude-param-impl-registry])
+                 [current-param-impl-registry prelude-param-impl-registry]
+                 ;; Track 6 Phase 7a: network isolation
+                 [current-prop-net-box              #f]
+                 [current-global-env-prop-net-box   #f]
+                 [current-ns-prop-net-box           #f]
+                 [current-definition-cell-ids       (hasheq)]
+                 [current-module-registry-cell-id   #f]
+                 [current-ns-context-cell-id        #f]
+                 [current-defn-param-names-cell-id  #f])
     (install-module-loader!)
     (process-string-ws s)))
 
@@ -184,9 +224,17 @@
   (define results
     (parameterize ([current-global-env (hasheq)]
                    [current-definition-cells-content (hasheq)]  ;; Phase 3a
-                 [current-definition-dependencies (hasheq)]  ;; Phase 3b
-                 [current-cross-module-deps '()]  ;; Track 5 Phase 4
-                   [current-error-port stderr-out])
+                   [current-definition-dependencies (hasheq)]  ;; Phase 3b
+                   [current-cross-module-deps '()]  ;; Track 5 Phase 4
+                   [current-error-port stderr-out]
+                   ;; Track 6 Phase 7a: network isolation
+                   [current-prop-net-box              #f]
+                   [current-global-env-prop-net-box   #f]
+                   [current-ns-prop-net-box           #f]
+                   [current-definition-cell-ids       (hasheq)]
+                   [current-module-registry-cell-id   #f]
+                   [current-ns-context-cell-id        #f]
+                   [current-defn-param-names-cell-id  #f])
       (process-string s)))
   (cons results (get-output-string stderr-out)))
 
