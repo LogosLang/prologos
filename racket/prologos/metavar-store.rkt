@@ -140,6 +140,10 @@
  install-prop-network-callbacks!
  ;; Phase 1a: Infrastructure cell callback
  current-prop-new-infra-cell
+ ;; Track 6 Phase 6: Persistent base network for batch-worker
+ current-persistent-base-network
+ current-prop-reset-network-command-state
+ save-base-elaboration-network
  ;; Track 6 Phase 1a: id-map access callbacks
  current-prop-id-map-read
  current-prop-id-map-set
@@ -1074,6 +1078,15 @@
 ;; (enet initial-value merge-fn → (values enet* cell-id))
 (define current-prop-new-infra-cell (make-parameter #f))
 
+;; Track 6 Phase 6: Persistent base network for batch-worker cell persistence.
+;; When set to an elab-network, reset-meta-store! uses this as the starting
+;; network (resetting per-command fields) instead of creating a fresh network.
+;; This preserves persistent cells (macros registries, etc.) across commands.
+(define current-persistent-base-network (make-parameter #f))
+;; Callback: (elab-network → elab-network) — resets per-command state while
+;; keeping persistent cells. Set by driver.rkt (breaks circular dep).
+(define current-prop-reset-network-command-state (make-parameter #f))
+
 ;; Track 6 Phase 1a: id-map access callbacks (set by driver.rkt).
 ;; Break circular dep: metavar-store doesn't import elaborator-network.
 (define current-prop-id-map-read (make-parameter #f))   ;; (enet → champ)
@@ -1914,6 +1927,13 @@
       (define-values (enet12 um-cid) (new-cell-fn enet11 (hasheq) merge-hasheq-union))
       (current-unsolved-metas-cell-id um-cid)
       (set-box! nb enet12))))
+
+;; Track 6 Phase 6: Save the current elab-network for batch restoration.
+;; Returns the elab-network value (immutable CHAMP reference) or #f if no network.
+;; Used by batch-worker.rkt to capture post-prelude cell state.
+(define (save-base-elaboration-network)
+  (define nb (current-prop-net-box))
+  (and nb (unbox nb)))
 
 ;; ========================================
 ;; Meta state save/restore for speculative type-checking

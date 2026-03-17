@@ -2009,6 +2009,10 @@
 (current-prop-meta-info-read elab-network-meta-info)
 (current-prop-meta-info-set elab-network-meta-info-set)
 
+;; Track 6 Phase 6: Install network reset callback for persistent cell mode.
+;; Used by reset-meta-store! when current-persistent-base-network is set.
+(current-prop-reset-network-command-state reset-elab-network-command-state)
+
 ;; Phase 2a: Install macros cell-write and cell-read callbacks (constant — don't
 ;; depend on net-box). net-box is installed per-command via register-macros-cells!,
 ;; since it's created fresh in reset-meta-store!.

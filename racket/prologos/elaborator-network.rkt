@@ -57,6 +57,8 @@
  elab-network-id-map-set
  ;; Track 6 Phase 5a: meta-info update
  elab-network-meta-info-set
+ ;; Track 6 Phase 6: Network reset for persistent cells
+ reset-elab-network-command-state
  ;; P5b: Multiplicity cells
  elab-fresh-mult-cell
  elab-mult-cell-read
@@ -115,6 +117,31 @@
 ;; Create a fresh elaboration network.
 (define (make-elaboration-network [fuel 1000000])
   (elab-network (make-prop-network fuel) champ-empty 0 champ-empty champ-empty))
+
+;; Track 6 Phase 6: Reset an elab-network for a new command while preserving
+;; persistent cell state (macros registry cells, etc.).
+;; Keeps: prop-net cells, merge-fns, contradiction-fns, widen-fns, cell-dirs,
+;;        cell-info, and next-cell-id (to avoid reusing cell IDs).
+;; Resets: propagators, worklist, fuel, contradiction, cell-decomps, pair-decomps,
+;;         next-meta-id, id-map, meta-info, next-prop-id.
+;; The result is a network with all persistent cell values intact but ready
+;; for a new command's per-command cells and metavariables.
+(define (reset-elab-network-command-state enet [fuel 1000000])
+  (define pnet (elab-network-prop-net enet))
+  (define clean-pnet
+    (struct-copy prop-network pnet
+      [propagators champ-empty]
+      [worklist '()]
+      [next-prop-id 0]
+      [fuel fuel]
+      [contradiction #f]
+      [cell-decomps champ-empty]
+      [pair-decomps champ-empty]))
+  (elab-network clean-pnet
+                (elab-network-cell-info enet)
+                0            ;; fresh meta counter
+                champ-empty  ;; fresh id-map
+                champ-empty));; fresh meta-info
 
 ;; ========================================
 ;; Cell Operations

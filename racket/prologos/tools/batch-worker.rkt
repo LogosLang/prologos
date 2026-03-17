@@ -64,29 +64,18 @@
                              ".." "tests" "test-support.rkt")))
 (dynamic-require test-support-path #f)
 
-;; Save ALL Prologos parameters (post-prelude = ready state).
-;; Individual defines because parameterize is a macro — can't use apply.
-;; macros.rkt parameters
-(define ready-preparse-registry       (current-preparse-registry))
-(define ready-spec-store              (current-spec-store))
-(define ready-propagated-specs        (current-propagated-specs))
-(define ready-ctor-registry           (current-ctor-registry))
-(define ready-type-meta               (current-type-meta))
-(define ready-subtype-registry        (current-subtype-registry))
-(define ready-coercion-registry       (current-coercion-registry))
-(define ready-trait-registry          (current-trait-registry))
-(define ready-trait-laws              (current-trait-laws))
-(define ready-impl-registry           (current-impl-registry))
-(define ready-param-impl-registry     (current-param-impl-registry))
-(define ready-bundle-registry         (current-bundle-registry))
-(define ready-specialization-registry (current-specialization-registry))
-(define ready-capability-registry    (current-capability-registry))
-(define ready-property-store          (current-property-store))
-(define ready-functor-store           (current-functor-store))
-(define ready-user-precedence-groups  (current-user-precedence-groups))
-(define ready-user-operators          (current-user-operators))
-(define ready-macro-registry          (current-macro-registry))
-;; namespace.rkt parameters
+;; Save post-prelude state. Two categories:
+;;
+;; (1) Cell-based registries (19 macros params): saved as a single vector via
+;;     save-macros-registry-snapshot. These are the registry contents that
+;;     register-macros-cells! uses to initialize cells each command.
+;;
+;; (2) Runtime config (7 namespace params + 1 global-env): saved individually
+;;     because these are configuration, not reactive elaboration state.
+;;
+;; Track 6 Phase 6: Consolidated 19 individual macros param saves → 1 vector.
+(define ready-macros-snapshot         (save-macros-registry-snapshot))
+;; namespace.rkt parameters (runtime config — NOT cell-based)
 (define ready-module-registry         (current-module-registry))
 (define ready-ns-context              (current-ns-context))
 (define ready-lib-paths               (current-lib-paths))
@@ -169,29 +158,11 @@
     ;; This gives each test file a state with all prelude registrations
     ;; present — constructors, specs, impls, etc. — matching what each
     ;; file would see if run in its own process via `raco test`.
+    ;; Track 6 Phase 6: macros params restored from snapshot vector.
     ;; Fresh meta-store per file (mutable, can't share).
+    (restore-macros-registry-snapshot! ready-macros-snapshot)
     (parameterize
-        (;; macros.rkt
-         [current-preparse-registry       ready-preparse-registry]
-         [current-spec-store              ready-spec-store]
-         [current-propagated-specs        ready-propagated-specs]
-         [current-ctor-registry           ready-ctor-registry]
-         [current-type-meta               ready-type-meta]
-         [current-subtype-registry        ready-subtype-registry]
-         [current-coercion-registry       ready-coercion-registry]
-         [current-trait-registry          ready-trait-registry]
-         [current-trait-laws              ready-trait-laws]
-         [current-impl-registry           ready-impl-registry]
-         [current-param-impl-registry     ready-param-impl-registry]
-         [current-bundle-registry         ready-bundle-registry]
-         [current-specialization-registry ready-specialization-registry]
-         [current-capability-registry    ready-capability-registry]
-         [current-property-store          ready-property-store]
-         [current-functor-store           ready-functor-store]
-         [current-user-precedence-groups  ready-user-precedence-groups]
-         [current-user-operators          ready-user-operators]
-         [current-macro-registry          ready-macro-registry]
-         ;; namespace.rkt
+        (;; namespace.rkt
          [current-module-registry         ready-module-registry]
          [current-ns-context              ready-ns-context]
          [current-lib-paths               ready-lib-paths]

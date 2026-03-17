@@ -359,6 +359,11 @@
          current-macro-registry-cell-id
          macros-cell-write!
          register-macros-cells!
+         ;; Track 6 Phase 6: Snapshot/restore for batch-worker
+         save-macros-cell-ids
+         restore-macros-cell-ids!
+         save-macros-registry-snapshot
+         restore-macros-registry-snapshot!
          ;; Mixfix / precedence groups (Phase 2)
          current-user-precedence-groups
          read-user-precedence-groups
@@ -605,6 +610,109 @@
     (define-values (enet24 mr-cid) (new-cell-fn enet23 (current-macro-registry) merge-hasheq-union))
     (current-macro-registry-cell-id mr-cid)
     (set-box! net-box enet24)))
+
+;; Track 6 Phase 6: Save/restore cell IDs for batch-worker network snapshot.
+;; Returns a vector of 24 cell IDs in a fixed order.
+(define (save-macros-cell-ids)
+  (vector (current-schema-registry-cell-id)
+          (current-ctor-registry-cell-id)
+          (current-type-meta-cell-id)
+          (current-subtype-registry-cell-id)
+          (current-coercion-registry-cell-id)
+          (current-capability-registry-cell-id)
+          (current-property-store-cell-id)
+          (current-functor-store-cell-id)
+          (current-trait-registry-cell-id)
+          (current-trait-laws-cell-id)
+          (current-impl-registry-cell-id)
+          (current-param-impl-registry-cell-id)
+          (current-bundle-registry-cell-id)
+          (current-specialization-registry-cell-id)
+          (current-selection-registry-cell-id)
+          (current-session-registry-cell-id)
+          (current-preparse-registry-cell-id)
+          (current-spec-store-cell-id)
+          (current-propagated-specs-cell-id)
+          (current-strategy-registry-cell-id)
+          (current-process-registry-cell-id)
+          (current-user-precedence-groups-cell-id)
+          (current-user-operators-cell-id)
+          (current-macro-registry-cell-id)))
+
+;; Restore cell IDs from a saved vector (must match save-macros-cell-ids order).
+(define (restore-macros-cell-ids! v)
+  (current-schema-registry-cell-id       (vector-ref v 0))
+  (current-ctor-registry-cell-id         (vector-ref v 1))
+  (current-type-meta-cell-id             (vector-ref v 2))
+  (current-subtype-registry-cell-id      (vector-ref v 3))
+  (current-coercion-registry-cell-id     (vector-ref v 4))
+  (current-capability-registry-cell-id   (vector-ref v 5))
+  (current-property-store-cell-id        (vector-ref v 6))
+  (current-functor-store-cell-id         (vector-ref v 7))
+  (current-trait-registry-cell-id        (vector-ref v 8))
+  (current-trait-laws-cell-id            (vector-ref v 9))
+  (current-impl-registry-cell-id        (vector-ref v 10))
+  (current-param-impl-registry-cell-id   (vector-ref v 11))
+  (current-bundle-registry-cell-id       (vector-ref v 12))
+  (current-specialization-registry-cell-id (vector-ref v 13))
+  (current-selection-registry-cell-id    (vector-ref v 14))
+  (current-session-registry-cell-id      (vector-ref v 15))
+  (current-preparse-registry-cell-id     (vector-ref v 16))
+  (current-spec-store-cell-id            (vector-ref v 17))
+  (current-propagated-specs-cell-id      (vector-ref v 18))
+  (current-strategy-registry-cell-id     (vector-ref v 19))
+  (current-process-registry-cell-id      (vector-ref v 20))
+  (current-user-precedence-groups-cell-id (vector-ref v 21))
+  (current-user-operators-cell-id        (vector-ref v 22))
+  (current-macro-registry-cell-id        (vector-ref v 23)))
+
+;; Track 6 Phase 6: Save/restore all 19 macros registry PARAM VALUES for batch-worker.
+;; Consolidates 19 individual define/parameterize bindings into a single vector.
+;; Used by batch-worker.rkt to save post-prelude state and restore per-file.
+(define (save-macros-registry-snapshot)
+  (vector (current-preparse-registry)
+          (current-spec-store)
+          (current-propagated-specs)
+          (current-ctor-registry)
+          (current-type-meta)
+          (current-subtype-registry)
+          (current-coercion-registry)
+          (current-trait-registry)
+          (current-trait-laws)
+          (current-impl-registry)
+          (current-param-impl-registry)
+          (current-bundle-registry)
+          (current-specialization-registry)
+          (current-capability-registry)
+          (current-property-store)
+          (current-functor-store)
+          (current-user-precedence-groups)
+          (current-user-operators)
+          (current-macro-registry)))
+
+;; Restore macros registry params from a saved vector.
+;; Direct mutation (not parameterize) — caller is responsible for calling
+;; this at the start of each isolation scope (e.g., per-file in batch-worker).
+(define (restore-macros-registry-snapshot! v)
+  (current-preparse-registry       (vector-ref v 0))
+  (current-spec-store              (vector-ref v 1))
+  (current-propagated-specs        (vector-ref v 2))
+  (current-ctor-registry           (vector-ref v 3))
+  (current-type-meta               (vector-ref v 4))
+  (current-subtype-registry        (vector-ref v 5))
+  (current-coercion-registry       (vector-ref v 6))
+  (current-trait-registry          (vector-ref v 7))
+  (current-trait-laws              (vector-ref v 8))
+  (current-impl-registry           (vector-ref v 9))
+  (current-param-impl-registry     (vector-ref v 10))
+  (current-bundle-registry         (vector-ref v 11))
+  (current-specialization-registry (vector-ref v 12))
+  (current-capability-registry     (vector-ref v 13))
+  (current-property-store          (vector-ref v 14))
+  (current-functor-store           (vector-ref v 15))
+  (current-user-precedence-groups  (vector-ref v 16))
+  (current-user-operators          (vector-ref v 17))
+  (current-macro-registry          (vector-ref v 18)))
 
 ;; ========================================
 ;; Schema registry: field information for schema types
