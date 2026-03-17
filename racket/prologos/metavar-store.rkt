@@ -1000,7 +1000,9 @@
   ;; Track 2 Phase 2: Clear constraint status cell ID.
   (current-constraint-status-cell-id #f)
   ;; Track 2 Phase 7: Clear error descriptor cell ID.
-  (current-error-descriptor-cell-id #f))
+  (current-error-descriptor-cell-id #f)
+  ;; Track 6 Phase 1d: Clear unsolved metas cell ID.
+  (current-unsolved-metas-cell-id #f))
 
 ;; Query: all postponed constraints.
 ;; Track 1 Phase 1a: reads from cell (primary) with parameter fallback.
@@ -1101,6 +1103,11 @@
 ;; resolution fails; read by post-fixpoint error sweep.
 (define current-error-descriptor-cell-id (make-parameter #f))
 
+;; Track 6 Phase 1d: Unsolved metas tracking cell.
+;; Maps meta-id → #t (unsolved) | #f (solved). Incrementally maintained
+;; by fresh-meta (add) and solve-meta-core! (remove).
+(define current-unsolved-metas-cell-id (make-parameter #f))
+
 ;; P5b: Multiplicity cell callbacks
 (define current-prop-fresh-mult-cell (make-parameter #f))   ;; (enet source → (values enet* cell-id))
 (define current-prop-mult-cell-write (make-parameter #f))   ;; (enet cell-id value → enet*)
@@ -1178,6 +1185,7 @@
                  [current-hasmethod-cell-map-cell-id #f]
                  [current-constraint-status-cell-id #f]
                  [current-error-descriptor-cell-id #f]
+                 [current-unsolved-metas-cell-id #f]
                  ;; CHAMP boxes + network: #f — reset-meta-store! creates fresh
                  [current-prop-meta-info-box #f]
                  [current-prop-net-box #f]
@@ -1210,9 +1218,17 @@
     ;; Track 6 Phase 1a: id-map is a field of elab-network
     (define id-map-read (current-prop-id-map-read))
     (define id-map-set (current-prop-id-map-set))
-    (set-box! net-box (id-map-set enet*
-                        (champ-insert (id-map-read enet*)
-                                      (prop-meta-id-hash id) id cid))))
+    (define enet** (id-map-set enet*
+                     (champ-insert (id-map-read enet*)
+                                   (prop-meta-id-hash id) id cid)))
+    ;; Track 6 Phase 1d: write to unsolved-metas tracking cell
+    (define write-fn (current-prop-cell-write))
+    (define um-cid (current-unsolved-metas-cell-id))
+    (define enet***
+      (if (and write-fn um-cid)
+          (write-fn enet** um-cid (hasheq id #t))
+          enet**))
+    (set-box! net-box enet***))
   (expr-meta id))
 
 ;; Track 2 Phase 3: Stratified resolution flag.
@@ -1285,7 +1301,11 @@
                    ;; Don't flag bot/top — those are expected lattice states
                    (not (prop-type-bot? cell-val))
                    (not (prop-type-top? cell-val)))
-          (perf-inc-cell-write-mismatch!))))))
+          (perf-inc-cell-write-mismatch!))))
+    ;; Track 6 Phase 1d: mark meta as solved in unsolved-metas tracking cell
+    (define um-cid (current-unsolved-metas-cell-id))
+    (when um-cid
+      (set-box! net-box (write-fn (unbox net-box) um-cid (hasheq id #f))))))
 
 ;; Track 2 Phase 3+4: Stratified resolution loop with action descriptors.
 ;; S0 (type propagation) → S1 (collect ready actions) → S2 (execute) → repeat.
@@ -1858,7 +1878,10 @@
       ;; Track 2 Phase 7: Error descriptor cell (meta-id → no-instance-error).
       (define-values (enet11 ed-cid) (new-cell-fn enet10 (hasheq) merge-error-descriptor-map))
       (current-error-descriptor-cell-id ed-cid)
-      (set-box! nb enet11))))
+      ;; Track 6 Phase 1d: Unsolved metas tracking cell (meta-id → #t/#f).
+      (define-values (enet12 um-cid) (new-cell-fn enet11 (hasheq) merge-hasheq-union))
+      (current-unsolved-metas-cell-id um-cid)
+      (set-box! nb enet12))))
 
 ;; ========================================
 ;; Meta state save/restore for speculative type-checking
@@ -1893,14 +1916,27 @@
 
 ;; List all unsolved metavariable infos.
 ;; Hash removal: Always reads from CHAMP.
+;; Track 6 Phase 1d: Read from unsolved-metas tracking cell when available.
+;; Falls back to CHAMP scan when no cell exists (pre-initialization).
 (define (all-unsolved-metas)
+  (define um-cid (current-unsolved-metas-cell-id))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
   (define mi-box (current-prop-meta-info-box))
-  (champ-fold (unbox mi-box)
-              (lambda (k v acc)
-                (if (eq? (meta-info-status v) 'unsolved)
-                    (cons v acc)
-                    acc))
-              '()))
+  (if (and um-cid net-box read-fn)
+      ;; Cell path: read the tracking hash, filter for #t (unsolved)
+      (let ([um-hash (read-fn (unbox net-box) um-cid)])
+        (for/list ([(mid unsolved?) (in-hash um-hash)]
+                   #:when unsolved?)
+          (let ([v (champ-lookup (unbox mi-box) (prop-meta-id-hash mid) mid)])
+            (if (eq? v 'none) #f v))))
+      ;; Fallback: CHAMP scan (legacy, pre-initialization)
+      (champ-fold (unbox mi-box)
+                  (lambda (k v acc)
+                    (if (eq? (meta-info-status v) 'unsolved)
+                        (cons v acc)
+                        acc))
+                  '())))
 
 ;; ========================================
 ;; Sprint 9: Noise filtering for error display
