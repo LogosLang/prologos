@@ -99,9 +99,17 @@
   (simplify-path (build-path (path-only (syntax-source #'here))
                              ".." "data" "benchmarks" "failures")))
 
+;; Per-file timeout (seconds). Kills a test file that exceeds this limit.
+;; Default 120s is generous (slowest normal tests ~17s; pathological ~50s).
+;; Set to 0 to disable.
+(define per-file-timeout-secs (make-parameter 120))
+
 (define files
   (command-line
    #:program "batch-worker"
+   #:once-each
+   ["--file-timeout" secs "Per-file timeout in seconds (default: 120, 0=disable)"
+    (per-file-timeout-secs (string->number secs))]
    #:args files
    files))
 
@@ -193,7 +201,31 @@
          ;; Capture I/O (don't let test output pollute JSON stream)
          [current-output-port             (open-output-string)]
          [current-error-port              stderr-capture])
-      (dynamic-require abs-file #f)))
+      ;; Per-file timeout: run dynamic-require in a thread, kill on timeout.
+      ;; Thread inherits parameterization, so all param bindings are active.
+      (define timeout (per-file-timeout-secs))
+      (if (and timeout (> timeout 0))
+          (let ()
+            (define done-ch (make-channel))
+            (define worker
+              (thread (λ ()
+                (with-handlers ([exn:fail? (λ (e) (channel-put done-ch (cons 'error e)))])
+                  (dynamic-require abs-file #f)
+                  (channel-put done-ch 'ok)))))
+            (define result (sync/timeout timeout done-ch))
+            (cond
+              [(not result)
+               ;; Timeout — kill the thread and report
+               (kill-thread worker)
+               (set! ok? #f)
+               (set! error-msg
+                     (format "TIMEOUT: file exceeded ~as per-file limit" timeout))]
+              [(and (pair? result) (eq? (car result) 'error))
+               ;; Exception from within the thread
+               (set! ok? #f)
+               (set! error-msg (exn-message (cdr result)))]))
+          ;; No timeout — run directly
+          (dynamic-require abs-file #f))))
 
   (define t1 (current-inexact-monotonic-milliseconds))
   (define wall-ms (inexact->exact (round (- t1 t0))))
