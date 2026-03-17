@@ -33,8 +33,8 @@
 | 6 | batch-worker.rkt → snapshot-based state (19→1 vector + 8 param) | ✅ | commit `25d7b20` — 7154 tests, 208.9s. Per-file timeout: `9a600c3` |
 | 7a | test-support.rkt → network-based isolation | ✅ | commit `92a27b0` — 7 network params added to 5 helpers + prelude block. Shadow: 0 divergences (7154 tests, 203.5s, same 3 ATMS) |
 | 7b | Dual-write elimination: macros.rkt (22 registers + spec propagation) | ✅ | commit `e10f5f3` — in-elaboration? guard pattern (cell-only during elab, param-only outside). sync-macros-cells-to-params! at command end. 7154 tests, 211.9s, 3 ATMS |
-| 7c | Dual-write elimination: warnings (3) + constraints (2) | ⬜ | Mechanical |
-| 7d | Dual-write elimination: global-env.rkt | ⬜ | Mechanical |
+| 7c | Dual-write elimination: warnings (4) + constraints (0) | ✅ | commit `b618c78` — 4 warning emitters use in-elaboration? guard. global-constraints.rkt: `narrow-cell-write!` defined but never called, no dual-writes to eliminate. 7154 tests, 214.9s, 3 ATMS |
+| 7d | Dual-write elimination: global-env.rkt | ⏸️ | Deferred — global-env two-layer architecture: param stores content (lookups read it), cell stores propagator state. Not redundant. Requires lookup→cell migration first. |
 | 8a | Exhaustive cell-reader audit + categorization | ⬜ | Categorize: elaboration / module-loading / other |
 | 8b | Remove `current-macros-in-elaboration?` guard | ⬜ | 23 cell readers → unconditional |
 | 8c | Remove `current-narrow-in-elaboration?` guard | ⬜ | 2 cell readers → unconditional |
@@ -645,8 +645,8 @@ This means batch-worker's per-file restore becomes: swap network box + parameter
 
 **Done when**:
 - [ ] Phase 7b: 23 macros.rkt registry functions write to cells only (parameter write removed)
-- [ ] Phase 7c: 3 warning + 2 constraint registries write to cells only
-- [ ] Phase 7d: global-env dual-write removed
+- [x] Phase 7c: 4 warning emitters → cell-only during elaboration (commit `b618c78`). global-constraints.rkt has no dual-writes (narrow-cell-write! unused).
+- [ ] Phase 7d: global-env dual-write — DEFERRED (param is non-redundant; lookups read from param, not cells)
 - [ ] Full suite passes after each sub-phase
 - [ ] Batch mode passes after each sub-phase
 
