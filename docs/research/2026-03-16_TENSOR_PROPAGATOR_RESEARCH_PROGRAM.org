@@ -1,0 +1,1369 @@
+#+TITLE: Tensor-Aware Propagator Networks with Unitary Evolution
+#+SUBTITLE: A Research Program for Quantum-Like Computation in Prologos
+#+AUTHOR: Prologos Project
+#+DATE: 2026-03-16
+#+STATUS: RESEARCH PROGRAM
+
+* 1. Introduction and Motivation
+
+Prologos's propagator network is a persistent, immutable computation engine where
+cells hold lattice values and propagators are monotone functions that refine
+information toward a fixed point. The Beyond Prolog research program (§6) proposed
+extending this architecture with semiring-parameterized logic programming, where a
+=DistCell= --- a cell holding a mapping from values to semiring weights --- enables
+probabilistic, tropical, and fuzzy reasoning within the same infrastructure.
+
+This document proposes the next step: extending beyond =DistCell= to *tensor-aware*
+cells that hold joint amplitude distributions over multiple variables, enabling
+quantum-like computation. The motivation is threefold.
+
+*First, the modeling opportunity.* A substantial and growing body of research
+applies the mathematical formalism of quantum mechanics --- superposition,
+interference, entanglement, projection --- to model social, economic, and cognitive
+phenomena. Quantum decision theory (Yukalov & Sornette), quantum game theory
+(Eisert, Wilkens, Lewenstein), quantum cognition (Busemeyer & Bruza), and quantum
+finance (Haven & Khrennikov) all demonstrate that Hilbert space probability is a
+more natural framework than classical (Kolmogorovian) probability for systems
+exhibiting contextuality, order effects, and interference. A companion document
+surveys this field in detail. These models require the ability to reason over
+complex-valued amplitude distributions and tensor product state spaces --- exactly
+what a tensor-aware propagator network would provide.
+
+*Second, the architectural fit.* Prologos's existing infrastructure ---
+persistent propagator networks, the Lattice trait hierarchy, ATMS for
+hypothetical reasoning, stratified evaluation, and Galois connections for
+cross-domain bridging --- provides a uniquely suitable substrate for this
+extension. The critical insight, developed below, is that unitary evolution
+(the quantum analog of "computation between observations") can be recovered
+through the same *Layered Recovery Principle* that already governs the
+interaction between monotonic propagation, non-monotonic ATMS control, and
+stratified negation.
+
+*Third, the categorical coherence.* The Beyond Prolog document (§7-8) established
+that Prologos's logic engine should be parameterized by a quantale rather than
+merely a lattice. The same quantale-enriched categorical framework that unifies
+Boolean, probabilistic, tropical, and fuzzy logic programming also subsumes
+quantum-like computation --- one needs only to instantiate the quantale with
+complex-valued weights and non-commutative tensor products. The extension proposed
+here is not an ad hoc addition but a natural instantiation of an already-designed
+generalization.
+
+** 1.1 From DistCell to TensorCell
+
+The =DistCell= design (Beyond Prolog §6.7, stage 4) holds a =Map Value Weight=
+where merge applies pointwise semiring addition. This is sufficient for
+/classical/ probabilistic reasoning --- each value carries an independent weight,
+and the distribution is always separable across variables.
+
+Quantum-like reasoning requires more. When two variables are /entangled/, the
+joint distribution over both variables cannot be factored into independent
+marginals. The state of the composite system is described by a vector in the
+/tensor product/ of the individual Hilbert spaces, and the weights are
+complex-valued amplitudes (not real-valued probabilities). Interference arises
+because amplitudes add before being squared to produce probabilities --- the
+cross-terms in |a + b|² = |a|² + |b|² + 2Re(a*b) are the interference effects
+that classical probability cannot represent.
+
+A =TensorCell= holds a =Map (Tuple Value ...) Complex= --- a joint amplitude
+distribution over multiple variables simultaneously. Its merge function applies
+pointwise addition of complex amplitudes (superposition). Measurement (observation)
+projects the state onto a subspace and applies the Born rule to convert amplitudes
+to probabilities. The result is a cell type that can represent superposition,
+interference, and entanglement within the same propagator infrastructure that
+already handles type inference, session type checking, and relational logic.
+
+** 1.2 Document Structure
+
+This document proceeds as follows. Section 2 establishes the Layered Recovery
+Principle as the architectural foundation, showing how it is already demonstrated
+in three subsystems and how it extends to unitary evolution. Section 3 develops
+the mathematical foundations --- from semirings through quantales to dagger
+compact closed categories. Section 4 presents the TensorCell design in detail.
+Section 5 shows how unitary evolution is recovered as a layered stratum. Section 6
+develops the categorical architecture. Section 7 provides the implementation
+roadmap. Section 8 connects to quantum social and economic models. Section 9
+identifies research questions and open problems. Section 10 collects references.
+
+* 2. Background: The Layered Recovery Principle
+
+The central architectural insight of Prologos's logic engine is that
+non-monotonic behavior need not be /primitive/. Instead, it can be
+*recovered* through carefully layered strata, each monotonic within itself,
+with well-defined transitions between layers. We call this the *Layered
+Recovery Principle*.
+
+** 2.1 The Three-Layer Architecture
+
+The logic engine design document established a three-layer architecture:
+
+#+begin_example
+Layer 3: STRATIFICATION (controlled non-monotonicity)
+    ↓
+Layer 2: ATMS / TRUTH MAINTENANCE (non-monotonic control)
+    ↓
+Layer 1: PROPAGATOR NETWORK (monotonic data plane)
+#+end_example
+
+*Layer 1* is the monotonic foundation. Cells hold lattice values; propagators
+are monotone functions; the network runs to quiescence (fixed point) via
+iterated propagation. Information only grows. The =run-to-quiescence= function
+in =propagator.rkt= implements this as a worklist algorithm over the persistent
+CHAMP-backed network. The BSP (Bulk Synchronous Parallel) variant
+=run-to-quiescence-bsp= enables parallel execution via Jacobi iteration.
+
+*Layer 2* introduces non-monotonic control /without breaking monotonicity of
+the data plane/. The ATMS (=atms.rkt=) wraps the propagator network with
+assumptions, supported values, and nogoods. Each value carries a /support set/
+--- the assumptions that justify it. Multiple contingent values coexist in TMS
+cells, and worldview switching selects which assumptions are currently believed.
+The =atms-amb= operation creates mutually exclusive alternatives, and
+dependency-directed backtracking identifies minimal inconsistent assumption sets.
+Crucially, the propagator network underneath remains monotonic; the ATMS provides
+the /appearance/ of non-monotonicity through contingent truth.
+
+*Layer 3* adds stratified evaluation for negation-as-failure. The =stratify.rkt=
+module computes SCCs (Strongly Connected Components) via Tarjan's algorithm and
+ensures that no negative dependency cycle exists. The =stratified-eval.rkt=
+orchestrator evaluates strata bottom-up, ensuring that each stratum reaches its
+fixed point before the next stratum consults it via negation. Programs without
+negation pay zero overhead.
+
+** 2.2 Demonstration in Three Subsystems
+
+The Layered Recovery Principle is not merely theoretical. It is demonstrated in
+three implemented subsystems:
+
+*Type inference.* The elaborator network (=elaborator-network.rkt=) performs type
+inference via monotonic propagation over a type lattice (=type-lattice.rkt=).
+Metavariables become cells; unification constraints become bidirectional
+propagators. When multiple type-checking strategies are possible (e.g., Church
+fold vs. Scott fold for algebraic types), the speculative elaboration system
+(=elab-speculation.rkt=) uses ATMS-backed fork-try-commit: each alternative forks
+the network (O(1) persistent copy), applies elaboration, and checks for
+contradiction. The first non-contradictory branch wins. Cross-domain propagation
+via Galois connections bridges the type lattice to the multiplicity lattice (for
+QTT) --- =net-add-cross-domain-propagator= in =propagator.rkt= creates
+bidirectional α/γ propagators.
+
+*Session types.* The session type checker (=session-propagators.rkt=) uses the
+propagator network with a session lattice (=session-lattice.rkt=). Each channel
+endpoint has a session cell holding the remaining protocol. Send/receive/choice
+operations decompose protocols via propagators. Duality propagators enforce that
+dual endpoints have compatible sessions. Protocol completeness checking detects
+incomplete protocols (potential deadlocks). The session runtime
+(=session-runtime.rkt=) executes session-typed processes over the persistent
+network, with each channel advancement creating fresh cells rather than mutating.
+
+*Relational logic.* The relation solver (=relations.rkt=) uses propagation for
+constraint solving within a stratum, ATMS for choice points (=atms-amb= for
+alternative clause selection), and stratified evaluation for negation-as-failure.
+Tabling (=tabling.rkt=) provides SLG-style memoization with lattice answer modes,
+and the persistent table store enables speculative evaluation without corruption.
+
+In each case, the pattern is identical: a monotonic core (Layer 1) handles the
+deterministic computation; a non-monotonic control layer (Layer 2) handles choice
+and speculation; a stratified coordination layer (Layer 3) handles operations that
+require prior layers to stabilize. The Galois connection machinery provides
+well-typed transitions between different information domains.
+
+** 2.3 Effect Ordering as Interacting Quantales
+
+The effect ordering system provides a deeper perspective on layered recovery.
+The system can be understood as two quantale structures interacting over quantale
+morphisms:
+
+- The /information quantale/ Q_I tracks the lattice of partial information in
+  cells. Its join (\bigvee) merges information from alternative derivation paths;
+  its tensor (\otimes) combines information within a single derivation.
+- The /control quantale/ Q_C tracks the ordering of effects --- which operations
+  must complete before others may begin. Its join represents nondeterministic
+  choice (ATMS alternatives); its tensor represents sequential composition
+  (stratum ordering).
+
+A /quantale morphism/ φ: Q_C → Q_I maps control decisions to information updates.
+When a stratum boundary is crossed (a control event), the morphism triggers the
+appropriate information-level response (evaluating the next stratum's propagators
+against the now-stable results of the previous stratum).
+
+This two-quantale perspective reveals why the architecture is both principled and
+extensible: adding a new kind of non-monotonic behavior (unitary evolution,
+measurement) amounts to adding a new stratum to Q_C and a new morphism to Q_I.
+The existing machinery handles the coordination.
+
+** 2.4 Why the Principle Extends to Unitary Evolution
+
+Unitary evolution --- the quantum analog of "computation between observations"
+--- is often presented as fundamentally incompatible with monotonic propagation.
+The argument: propagators are monotonic (information only grows), but unitary
+operators /rotate/ information without growing it. A rotation is
+information-preserving but not information-increasing; it does not respect the
+lattice ordering.
+
+This argument is correct at the level of a single stratum. But the Layered
+Recovery Principle dissolves it. The resolution:
+
+1. *Unitary evolution is a stratum, not a propagator.* Just as negation-as-failure
+   is not a monotonic operation within a stratum but is /recovered/ by evaluating
+   strata in the right order, unitary evolution is not a monotonic operation within
+   the information lattice but can be /recovered/ by introducing a unitary stratum
+   between measurement points.
+
+2. *Measurement is the stratum boundary.* A measurement (observation, projection)
+   is the event that triggers the transition from the unitary stratum to the
+   information stratum. Before measurement, the system evolves unitarily (rotating
+   the state vector). At measurement, the state is projected onto an eigenspace,
+   producing a classical probability distribution (via the Born rule) that /is/
+   monotonic information.
+
+3. *The Galois connection bridges the gap.* The transition from amplitude space
+   (complex-valued, pre-measurement) to probability space (real-valued,
+   post-measurement) is a Galois connection. The abstraction function α applies
+   the Born rule (|ψ|²); the concretization function γ embeds classical
+   probabilities as diagonal density matrices. This is structurally identical to
+   how =net-add-cross-domain-propagator= bridges the type lattice to the
+   multiplicity lattice.
+
+4. *ATMS handles measurement outcomes.* Each possible measurement outcome is an
+   ATMS assumption. Different outcomes are mutually exclusive alternatives,
+   created by =atms-amb=. The nogood machinery handles contradictory outcomes.
+   This is structurally identical to how the elaborator handles speculative
+   type checking.
+
+The result: unitary evolution is /recovered/ within the existing architecture by
+adding two new strata (unitary evolution and measurement) and one new Galois
+connection (amplitudes ↔ probabilities), using the same mechanisms that already
+handle type inference, session checking, and relational logic.
+
+* 3. Mathematical Foundations
+
+** 3.1 From Semirings to Quantales
+
+The Beyond Prolog document (§6-7) established the progression from lattices to
+semirings to quantales. We recap the key structures and extend them to the
+complex-valued setting needed for quantum-like computation.
+
+A *semiring* (S, ⊕, ⊗, \bar{0}, \bar{1}) has two binary operations:
+addition ⊕ (with identity \bar{0}) and multiplication ⊗ (with identity \bar{1}).
+Addition is commutative; multiplication distributes over addition. The Beyond
+Prolog document showed how different semiring instantiations yield different modes
+of logic programming:
+
+| Semiring    | ⊕       | ⊗       | Question answered                  |
+|-------------+---------+---------+------------------------------------|
+| Boolean     | ∨       | ∧       | Is there any derivation?           |
+| Probability | +       | ×       | What is the total probability?     |
+| Tropical    | min     | +       | What is the minimum cost?          |
+| Counting    | +       | ×       | How many derivations exist?        |
+| Viterbi     | max     | ×       | What is the most probable path?    |
+| Provenance  | ∪       | ⋈       | Which base facts were used?        |
+
+A *quantale* (Q, ≤, ⊗) is a complete lattice equipped with an associative tensor
+⊗ distributing over arbitrary joins. Quantales subsume both lattices (⊗ = ∧) and
+semirings (≤ is the additive order). The critical distinction: join (\bigvee) merges
+information from /different/ derivation paths; tensor (⊗) combines information
+from the /same/ derivation.
+
+** 3.2 Complex Semirings and Amplitude Spaces
+
+For quantum-like computation, we instantiate the semiring with complex numbers:
+
+| Semiring    | ⊕       | ⊗       | Question answered                  |
+|-------------+---------+---------+------------------------------------|
+| Complex     | +       | ×       | What is the total amplitude?       |
+
+The complex semiring (ℂ, +, ×, 0, 1) is the natural setting for quantum-like
+reasoning. Key properties that distinguish it from the probability semiring:
+
+- *Interference.* Complex addition can be constructive or destructive. If two
+  derivation paths contribute amplitudes a and b to the same conclusion, the
+  total amplitude is a + b, and the probability is |a + b|² = |a|² + |b|² +
+  2Re(a*b). The cross-term 2Re(a*b) is the interference term --- absent in
+  classical probability, where probabilities simply add.
+
+- *Phase.* Complex numbers carry phase (direction in the complex plane). Two
+  amplitudes with opposite phases cancel; two with aligned phases reinforce.
+  Phase is the mechanism by which quantum-like models produce non-classical
+  probability patterns.
+
+- *Unitarity.* Transformations that preserve the total probability (Σ|aᵢ|² = 1)
+  are unitary matrices. These are the "legal moves" between observations ---
+  they rotate the state vector without changing its length.
+
+The amplitude space forms a lattice under the information ordering of
+sub-probability distributions (§3.3), but the /phase/ information is invisible
+to this ordering. This is why unitary evolution does not respect the lattice
+order --- it changes phases (and hence interference patterns) without changing
+the total information content.
+
+** 3.3 Tensor Products of Information Lattices
+
+If cell A holds values from lattice L_A and cell B from lattice L_B, a constraint
+relating both variables lives in the tensor product L_A ⊗ L_B. The tensor product
+of two join-semilattices is the universal recipient of bihomomorphisms ---
+functions that are lattice homomorphisms in each argument separately.
+
+Arntzenius proved that the category *SemiLat* of join-semilattices forms a
+closed symmetric monoidal category. The internal hom A ⊸ B is the semilattice
+of homomorphisms ordered pointwise. This means linear lambda-calculus is a sound
+typed language for defining semilattice homomorphisms --- a connection to
+Prologos's linear types (QTT) that deserves further exploration.
+
+For quantum-like computation, the relevant tensor product is that of Hilbert
+spaces. If system A has basis {|0⟩, |1⟩} and system B has basis {|0⟩, |1⟩},
+the composite system A⊗B has basis {|00⟩, |01⟩, |10⟩, |11⟩}. A state in
+A⊗B is a vector in this 4-dimensional space:
+
+#+begin_example
+|ψ⟩ = α|00⟩ + β|01⟩ + γ|10⟩ + δ|11⟩
+#+end_example
+
+When the state /cannot/ be factored as |ψ_A⟩ ⊗ |ψ_B⟩, the systems are
+*entangled* --- their joint state contains correlations that no product of
+individual states can reproduce. The Bell state (|00⟩ + |11⟩)/√2 is the
+canonical example: measuring A determines B's value with certainty, yet
+neither A nor B individually has a definite value.
+
+For the propagator network, this means a =TensorCell= covering variables A and B
+holds a 4-entry map {|00⟩↦α, |01⟩↦β, |10⟩↦γ, |11⟩↦δ}, and the entanglement
+manifests as the inability to decompose this into independent per-variable cells.
+
+Tensor network contraction methods from physics (Biamonte et al., 2018) provide
+efficient algorithms for evaluating multi-cell constraints through such tensor
+product spaces. These methods represent constraint satisfaction as tensor network
+contraction and have been shown to outperform state-of-the-art solvers on certain
+problem classes (#monotone 1-in-3SAT, #Cubic-Vertex-Cover).
+
+** 3.4 Dagger Categories and Unitary Morphisms
+
+Categorical quantum mechanics (Abramsky & Coecke, 2004) axiomatizes quantum
+theory in terms of dagger compact closed categories. The key structures:
+
+A *dagger category* has a contravariant involution on morphisms: every morphism
+f: A → B has an adjoint f†: B → A, with (f†)† = f and (g ∘ f)† = f† ∘ g†.
+A *unitary* morphism satisfies u† ∘ u = id = u ∘ u†. Unitaries are the
+"reversible" morphisms --- they transform without losing information.
+
+A *dagger compact closed category* additionally has:
+- A symmetric monoidal structure (⊗, I) for parallel composition.
+- Compact closure: every object A has a dual A*, with cups (η: I → A ⊗ A*) and
+  caps (ε: A* ⊗ A → I) satisfying the snake equations.
+- Compatibility: the dagger respects the monoidal structure.
+
+The canonical example is *FdHilb*: finite-dimensional Hilbert spaces and linear
+maps. Objects are Hilbert spaces; morphisms are linear maps; the dagger is the
+adjoint (conjugate transpose); the tensor is the Hilbert space tensor product;
+the dual A* is the conjugate Hilbert space.
+
+For a propagator network, this structure maps as follows:
+- *Objects* (Hilbert spaces) correspond to cell types --- the state spaces of
+  individual cells or tensor products of multiple cells.
+- *Morphisms* (linear maps) correspond to propagators --- transformations of
+  cell values.
+- *Unitary morphisms* correspond to unitary propagators --- reversible
+  transformations that preserve total probability.
+- *The dagger* gives the inverse/adjoint of every propagator, enabling
+  "reverse propagation."
+- *Compact closure* enables bidirectional constraint propagation (running
+  constraints forwards or backwards by "bending wires").
+
+Selinger (2007) proved that the graphical language of dagger compact closed
+categories (string diagrams) is complete for FdHilb: any equation that holds
+for finite-dimensional Hilbert spaces can be proved by diagram manipulation.
+This means a graphical representation of a tensor-aware propagator network
+would have a /complete/ equational theory.
+
+** 3.5 Frobenius Algebras as Merge/Split Operations
+
+A *Frobenius algebra* in a dagger compact closed category is an object equipped
+with a multiplication (merge) μ: A ⊗ A → A and a comultiplication (split)
+δ: A → A ⊗ A satisfying the Frobenius law: (μ ⊗ id) ∘ (id ⊗ δ) = δ ∘ μ =
+(id ⊗ μ) ∘ (δ ⊗ id).
+
+In FdHilb, dagger commutative Frobenius algebras correspond one-to-one with
+orthonormal bases (Coecke, Pavlovic & Vicary, 2012). The multiplication copies
+basis elements: μ(|i⟩ ⊗ |j⟩) = δᵢⱼ|i⟩ (merge = agree-or-contradict). The
+comultiplication broadcasts: δ(|i⟩) = |i⟩ ⊗ |i⟩ (split = copy). For a
+propagator network, this provides the algebraic structure for merge points ---
+where information from multiple sources combines.
+
+The *spider theorem* states that any connected diagram built from a single
+Frobenius algebra depends only on the number of inputs and outputs. A "spider"
+with n inputs and m outputs has a canonical form regardless of internal wiring.
+For propagator networks, this means the /topology/ of merging is irrelevant ---
+only the /arity/ matters. Whether three propagators merge pairwise or all at
+once produces the same result.
+
+*Complementary observables* arise from two Frobenius algebras that interact via
+a bialgebra structure. In quantum mechanics, position and momentum are
+complementary: sharp knowledge of one implies maximal uncertainty about the
+other. In a propagator network, this structure models two incompatible
+constraint domains that interact in a controlled way --- reminiscent of
+the cross-domain propagation via Galois connections that Prologos already
+supports, but with a richer interaction structure.
+
+** 3.6 The CPM Construction: Pure to Mixed Propagation
+
+Not all quantum processes are pure (reversible, unitary). Interaction with an
+environment introduces noise, decoherence, and information loss. The CPM
+(Completely Positive Maps) construction (Selinger, 2007) provides the
+categorical machinery:
+
+Given a dagger compact closed category C (modeling pure processes), *CPM(C)* is
+another dagger compact closed category modeling mixed processes. The functor
+F: C → CPM(C) maps each morphism f to f* ⊗ f (where f* is the conjugate),
+converting amplitudes to probabilities. Objects in CPM(C) are the same as in C,
+but morphisms A → B in CPM(C) are morphisms A ⊗ A* → B ⊗ B* in C that are
+"completely positive" --- they map positive operators to positive operators even
+when tensored with an identity.
+
+Coecke (2008) recast this in terms of *environment structures*: a designated
+"discarding" effect ⊤_A: A → I for each object, representing what is not
+observed. Pure morphisms form a sub-category; mixed morphisms additionally
+interact with the environment.
+
+The CP* construction (Coecke, Heunen & Kissinger) generalizes further: objects
+are "abstract C*-algebras" (dagger Frobenius algebras), unifying quantum
+channels and classical stochastic maps in a single category. Classical systems
+are commutative C*-algebras; quantum systems are noncommutative ones.
+
+For the propagator network, this provides the bridge from ideal propagation
+(fully tracked, reversible) to realistic propagation (partial observation,
+information loss):
+- *Pure propagators* are unitary morphisms in C --- fully reversible, no
+  information loss. These govern evolution between measurements.
+- *Mixed propagators* are morphisms in CPM(C) --- they may lose information,
+  modeling noisy channels, partial observations, or environmental decoherence.
+- *Discarding maps* are what happens when you trace out part of a tensor
+  product --- i.e., marginalization. This connects directly to the
+  =marginalize= operation proposed in Beyond Prolog §6.7.
+- The CP* unification means that *classical cells* (DistCells with real weights)
+  and *quantum cells* (TensorCells with complex amplitudes) coexist in the same
+  network, with classical cells being the commutative special case.
+
+* 4. The TensorCell Design
+
+** 4.1 Cell Hierarchy
+
+The extension from classical to quantum-like cells proceeds through four levels,
+each subsuming the previous:
+
+*** Level 1: DistCell --- Classical Distributions
+
+#+begin_src prologos
+;; A cell holding a classical probability distribution
+;; Map from values to real-valued semiring weights
+type DistCell {V} := Map V Real
+#+end_src
+
+=DistCell= holds a mapping from values to real-valued weights. Merge is
+pointwise semiring addition. This is the design from Beyond Prolog §6.7,
+sufficient for probabilistic databases, Bayesian reasoning, tropical
+optimization, and counting.
+
+*Information ordering:* d₁ ≤ d₂ iff d₁(v) ≤ d₂(v) for all v (pointwise).
+Bottom is the zero distribution. This forms a complete lattice suitable for
+propagation.
+
+*** Level 2: AmplitudeCell --- Single-System Quantum States
+
+#+begin_src prologos
+;; A cell holding a quantum-like amplitude distribution
+;; Map from values to complex-valued weights
+type AmplitudeCell {V} := Map V Complex
+#+end_src
+
+=AmplitudeCell= extends =DistCell= with complex-valued weights. Merge is
+pointwise complex addition (superposition). The probability of a value v is
+|amplitude(v)|² (Born rule).
+
+*Key new capability:* Interference. When two derivation paths contribute
+amplitudes a and b to the same value, the total probability is |a+b|², not
+|a|²+|b|². Destructive interference (a ≈ -b) can make a classically probable
+outcome improbable; constructive interference can amplify rare outcomes.
+
+This level captures most of the quantum cognition literature: order effects,
+conjunction fallacy, disjunction effect, preference reversal. These are all
+single-system phenomena where one agent's mental state is in superposition.
+
+*** Level 3: TensorCell --- Multi-System Entangled States
+
+#+begin_src prologos
+;; A cell holding a joint amplitude distribution over multiple variables
+;; Map from tuples of values to complex weights
+;; This is a state vector in a tensor-product Hilbert space
+type TensorCell {Vs : Vec n Type} := Map (Tuple Vs) Complex
+#+end_src
+
+=TensorCell= holds a joint amplitude distribution over /multiple/ variables
+simultaneously. The key space is the tensor product of individual variable
+spaces. A state in the tensor product may be *entangled* --- non-factorable
+into independent per-variable states.
+
+*Key new capability:* Entanglement. Two agents' belief states, two financial
+instruments' price states, two voters' preference states --- any pair of
+variables can have correlations that no product of marginals can reproduce.
+
+*Dependent typing:* The =Vs : Vec n Type= parameter tracks the dimensionality
+at the type level. A =TensorCell {[Bool Bool]}= is a 4-dimensional state
+space; a =TensorCell {[Bool Bool Bool]}= is 8-dimensional. The dependent type
+ensures dimensional consistency at compile time.
+
+*** Level 4: DensityCell --- Mixed States
+
+#+begin_src prologos
+;; A cell holding a density matrix (mixed state)
+;; Map from pairs of basis elements to complex weights
+;; ρ = Σᵢ pᵢ |ψᵢ⟩⟨ψᵢ|
+type DensityCell {V} := Map (Pair V V) Complex
+#+end_src
+
+=DensityCell= holds a density matrix --- the most general representation of a
+quantum(-like) state, including both pure states and statistical mixtures.
+Diagonal entries ρ(v,v) are probabilities; off-diagonal entries ρ(v,w) are
+coherences (encoding interference capability).
+
+*Key new capability:* Mixed states. When you don't know /which/ pure state a
+system is in, but only a probability distribution over pure states, the density
+matrix encodes this uncertainty. Decoherence (loss of quantum effects through
+environmental interaction) manifests as decay of off-diagonal entries toward
+zero, leaving a classical probability distribution on the diagonal.
+
+This level enables the open quantum systems approach used in cognitive modeling
+(Asano, Khrennikov et al.) where decision-making is modeled as decoherence of
+a mental state --- the GKSL master equation governs the evolution.
+
+** 4.2 Merge Semantics
+
+Each cell level requires a merge function compatible with the Lattice trait:
+
+*** DistCell merge
+Pointwise real addition. d₁ ⊕ d₂ maps each value v to d₁(v) + d₂(v).
+Monotonic under the pointwise ordering.
+
+*** AmplitudeCell merge
+Pointwise complex addition (superposition). a₁ ⊕ a₂ maps each value v to
+a₁(v) + a₂(v). This produces interference: the merged amplitude may be larger
+(constructive) or smaller (destructive) than either input.
+
+The information ordering for amplitudes uses the /sub-distribution/ lattice:
+a₁ ≤ a₂ iff the support of a₁ is a subset of the support of a₂ and the total
+amplitude magnitude of a₁ is at most that of a₂. Under this ordering, merge
+is monotonic: adding more amplitude information (more derivation paths) only
+increases the total.
+
+*** TensorCell merge
+Pointwise complex addition over the tensor product basis. The merge of two
+TensorCells combines amplitude contributions to each basis element. If two
+derivation paths contribute amplitudes to the same joint outcome |v₁,v₂,...⟩,
+they superpose.
+
+The ordering is the pointwise sub-distribution ordering over the tensor product
+basis. Since the tensor product basis is finite (for finite-dimensional systems),
+this is a complete lattice.
+
+*** DensityCell merge
+Convex combination or pointwise addition of density matrices, depending on the
+semantics. For combining evidence from independent sources, pointwise addition
+(followed by renormalization) is appropriate. For representing classical mixture
+of quantum states, convex combination (ρ = p₁ρ₁ + p₂ρ₂) is appropriate.
+
+** 4.3 Tensor Product Structure
+
+The tensor product of two cells A and B produces a new cell whose state space
+is the Cartesian product of basis elements with amplitude given by the product:
+
+#+begin_example
+(A ⊗ B)(|i,j⟩) = A(|i⟩) × B(|j⟩)
+#+end_example
+
+This is the "no entanglement" case --- a product state. Entanglement arises when
+the joint state cannot be expressed as a product.
+
+Operations on tensor products:
+
+*Partial trace (marginalization).* Summing over one subsystem's basis elements:
+tr_B(ρ_{AB}) maps the joint state to a reduced state on A alone. This is the
+quantum analog of marginalization in classical probability. For a TensorCell
+over variables (A,B), tracing out B produces an AmplitudeCell over A.
+
+*Tensor contraction.* More general than partial trace --- contracts a pair of
+indices, potentially connecting two tensor cells. This is the fundamental
+operation of tensor network methods and maps directly to propagator wiring.
+
+*Schmidt decomposition.* Any bipartite pure state |ψ_{AB}⟩ can be written as
+Σᵢ λᵢ|aᵢ⟩|bᵢ⟩ where λᵢ ≥ 0 and {|aᵢ⟩}, {|bᵢ⟩} are orthonormal. The
+Schmidt rank measures entanglement: rank 1 = separable; rank > 1 = entangled.
+For a TensorCell, the Schmidt decomposition provides a compressed representation
+and a measure of entanglement degree.
+
+** 4.4 Trait Instances
+
+The cell hierarchy integrates with Prologos's trait system:
+
+#+begin_src prologos
+;; All cell types implement Lattice via their merge semantics
+impl Lattice (AmplitudeCell V) where (Eq V)
+  bot  := empty-map
+  join := pointwise-complex-add
+  leq  := pointwise-magnitude-leq
+
+;; TensorCell is a Lattice (pointwise over tensor product basis)
+impl Lattice (TensorCell Vs) where (Eq (Tuple Vs))
+  bot  := empty-map
+  join := pointwise-complex-add
+  leq  := pointwise-magnitude-leq
+
+;; Quantale instance: tensor = pointwise complex multiplication
+impl Quantale (AmplitudeCell V) where (Eq V)
+  one := uniform-distribution
+  mul := pointwise-complex-mul
+
+;; Widenable for approximation of high-dimensional spaces
+impl Widenable (TensorCell Vs)
+  widen  := truncate-low-amplitude-entries
+  narrow := restore-from-exact
+#+end_src
+
+The =Widenable= instance is important for practical computation: high-dimensional
+tensor product spaces grow exponentially with the number of variables. Widening
+by truncating entries with amplitude below a threshold provides a controlled
+approximation, analogous to how interval widening jumps to ±∞ to ensure
+convergence.
+
+* 5. Unitary Evolution as a Layered Stratum
+
+** 5.1 The Monotonicity Tension
+
+Standard propagator semantics require monotonicity: if a cell's value is v and
+a propagator writes v', the cell's new value is join(v, v'), which is ≥ v in
+the lattice ordering. Information never decreases.
+
+Unitary evolution does not satisfy this. A unitary operator U applied to a state
+|ψ⟩ produces U|ψ⟩, which has the same norm (total probability) but potentially
+different amplitudes for each basis element. Some amplitudes increase; others
+decrease. The state is /rotated/, not /refined/.
+
+This is directly analogous to the monotonicity tension with negation-as-failure.
+Negation inverts: if a fact is derived, its negation should retract. This violates
+monotonicity within a single stratum. The solution (stratification) is to evaluate
+the positive part to completion /first/, then apply negation against the stable
+result.
+
+** 5.2 The Resolution: A Four-Layer Architecture
+
+The tensor-aware propagator network extends the three-layer architecture with
+a fourth layer:
+
+#+begin_example
+Layer 4: MEASUREMENT (projection, Born rule → classical probabilities)
+    ↓
+Layer 3: UNITARY EVOLUTION (rotations in amplitude space)
+    ↓
+Layer 2: ATMS / TRUTH MAINTENANCE (non-monotonic control)
+    ↓
+Layer 1: MONOTONIC PROPAGATION (lattice joins, constraint refinement)
+#+end_example
+
+The execution model:
+
+1. *Layer 1 (Monotonic propagation).* Classical constraint propagation runs to
+   quiescence. Cells hold lattice values; propagators refine them. This handles
+   all the "classical" parts of the computation: type checking, mode inference,
+   domain constraints.
+
+2. *Layer 2 (ATMS control).* Choice points are introduced via =atms-amb=. Each
+   alternative represents a branch of nondeterministic search. Nogoods prune
+   impossible branches. This handles relational search, speculative elaboration,
+   and (for quantum models) the selection of which unitary evolution to apply.
+
+3. *Layer 3 (Unitary evolution).* After the classical constraints have stabilized
+   (Layer 1 quiescent) and the nondeterministic choices have been made (Layer 2),
+   unitary operators are applied to TensorCells. This is a /single pass/ of
+   unitary evolution --- no iteration, no fixed point, just matrix application.
+   Multiple unitary operators compose (U₂ ∘ U₁) to form the net evolution.
+
+4. *Layer 4 (Measurement).* After unitary evolution completes, measurement
+   projectors are applied. Each measurement outcome is an ATMS assumption.
+   The Born rule converts amplitudes to probabilities. The resulting classical
+   probabilities feed back into Layer 1 for further constraint propagation.
+
+The cycle may repeat: Layer 1 propagates the measurement results, Layer 2 makes
+new choices, Layer 3 applies new unitaries, Layer 4 measures again. This
+corresponds to the standard quantum computing paradigm of interleaved evolution
+and measurement.
+
+** 5.3 Unitary Propagators
+
+A *unitary propagator* is a new propagator type that applies a unitary matrix to
+a TensorCell. Unlike standard propagators (which are monotone functions), unitary
+propagators are /isometries/ --- they preserve the norm but rotate the state.
+
+#+begin_src prologos
+;; A unitary propagator applies a unitary matrix U to a TensorCell
+;; U : Matrix Complex n n where U†U = I
+spec apply-unitary : {n : Nat} -> Matrix Complex n n -> TensorCell n -> TensorCell n
+defn apply-unitary [U cell] (matrix-mul U cell)
+
+;; Composition of unitaries is matrix multiplication
+spec compose-unitary : Matrix Complex n n -> Matrix Complex n n -> Matrix Complex n n
+defn compose-unitary [U1 U2] (matrix-mul U1 U2)
+
+;; The dagger (adjoint) is conjugate transpose
+spec dagger : Matrix Complex n n -> Matrix Complex n n
+defn dagger [U] (matrix-conjugate-transpose U)
+
+;; Tensor product of unitaries for parallel evolution
+spec tensor-unitary : Matrix Complex m m -> Matrix Complex n n
+                   -> Matrix Complex [m * n] [m * n]
+defn tensor-unitary [U1 U2] (matrix-kronecker U1 U2)
+#+end_src
+
+Standard unitary gates from quantum computing map directly:
+
+#+begin_src prologos
+;; Hadamard: creates superposition
+def H : Matrix Complex 2 2 := matrix-from-rows
+  '[[0.7071 0.7071] [0.7071 -0.7071]]
+
+;; Phase gate: adds relative phase
+def S : Matrix Complex 2 2 := matrix-from-rows
+  '[[1.0 0.0] [0.0 (complex 0.0 1.0)]]
+
+;; CNOT: entangling gate
+def CNOT : Matrix Complex 4 4 := matrix-from-rows
+  '[[1 0 0 0] [0 1 0 0] [0 0 0 1] [0 0 1 0]]
+#+end_src
+
+For quantum social science models, the unitary operators would encode:
+- *Preference rotation:* How a decision-maker's belief state evolves over time.
+- *Social influence:* How interaction with another agent rotates one's state.
+- *Entangling operations:* How two agents become correlated through interaction.
+
+** 5.4 Measurement as Projection
+
+Measurement in quantum mechanics is projection onto an eigenspace, followed by
+normalization (the Born rule). In the propagator network:
+
+#+begin_src prologos
+;; Measurement projects onto a subspace and computes probability
+spec measure : {V : Type} -> AmplitudeCell V -> V -> Pair Real (AmplitudeCell V)
+defn measure [cell value]
+  let amplitude := (map-lookup cell value)
+  let probability := (complex-magnitude-squared amplitude)
+  let projected := (singleton-map value (complex 1.0 0.0))
+  (pair probability projected)
+
+;; Marginalization: trace out one subsystem
+spec marginalize : {A B : Type} -> TensorCell [A B] -> AmplitudeCell A
+defn marginalize [joint]
+  ;; Sum |amplitude(a,b)|² over all b for each a
+  (fold-map joint empty-map
+    (fn [(pair (tuple a b) amp) acc]
+      (map-update acc a (complex 0.0 0.0)
+        (fn [current] (complex-add current
+          (complex-mul (complex-conjugate amp) amp))))))
+#+end_src
+
+The measurement operation is the Galois connection between the unitary and
+classical layers:
+
+- *Abstraction α (Born rule):* Maps TensorCell amplitudes to DistCell
+  probabilities via |ψ(v)|². This is a many-to-one map: many different amplitude
+  distributions can produce the same probability distribution.
+- *Concretization γ (embedding):* Maps DistCell probabilities to DensityCell
+  density matrices via the diagonal embedding ρ(v,v) = p(v), ρ(v,w) = 0 for
+  v ≠ w. This embeds classical distributions as "fully decohered" quantum states.
+- *Adjunction:* α(ψ) ≤ d iff ψ ≤ γ(d) holds under the appropriate information
+  orderings.
+
+** 5.5 Integration with ATMS
+
+When a measurement is performed, each possible outcome becomes an ATMS assumption:
+
+#+begin_src racket
+;; Pseudo-code for measurement integration
+(define (measure-tensor-cell atms cell-id basis-values)
+  ;; Create mutually exclusive assumptions for each outcome
+  (define-values (atms* hyps)
+    (atms-amb atms (map symbol->string basis-values)))
+
+  ;; For each outcome, record the post-measurement state
+  (for/fold ([a atms*]) ([hyp hyps] [val basis-values])
+    (define amplitude (tensor-cell-lookup cell-id val))
+    (define probability (complex-magnitude-squared amplitude))
+    ;; Write the collapsed state to the cell under this assumption
+    (atms-write-cell a cell-id
+      (supported-value (singleton-tensor val) (hasheq hyp #t)))))
+#+end_src
+
+This is structurally identical to how =speculation-begin= in =elab-speculation.rkt=
+creates mutually exclusive branches for speculative type checking. The ATMS
+machinery handles:
+- *Mutual exclusion:* Only one measurement outcome can be actual.
+- *Dependency tracking:* Downstream conclusions carry the measurement assumption
+  in their support sets.
+- *Nogood detection:* If a measurement outcome leads to contradiction, it is
+  recorded as a nogood and pruned.
+- *Worldview exploration:* =atms-solve-all= explores all consistent worldviews,
+  each corresponding to a different measurement outcome.
+
+* 6. Categorical Architecture
+
+** 6.1 The Enrichment Base
+
+Prologos's propagator network is naturally a category enriched over a lattice: the
+hom-object between two cells is not a set of morphisms but a lattice element
+measuring "how much" information flows between them. The Beyond Prolog document
+(§7.1) identified this as enrichment over a quantale --- a complete lattice with
+an associative tensor distributing over arbitrary joins.
+
+For tensor-aware propagation, the enrichment base must be extended. The relevant
+quantale is *non-commutative*: the tensor product of two amplitude spaces is
+sensitive to ordering (measuring A then B differs from measuring B then A). This
+connects to Mulvey's (1986) original motivation for quantales as "quantum locales"
+--- non-commutative generalizations of the lattice of open sets of a topological
+space.
+
+The spectrum Max(A) of a C*-algebra A is a quantale whose points correspond to
+irreducible representations (Kruml, Pelletier, Resende, 2003). For
+finite-dimensional quantum systems, this is the quantale of projection lattices.
+The connection to Prologos: each cell type defines a C*-algebra (the algebra of
+observables on that cell's state space), and the quantale of projections provides
+the information ordering.
+
+Stubbe (2013) generalized from single quantales to *quantaloids* --- many-object
+quantales. A quantaloid-enriched category has hom-objects drawn from potentially
+different quantales for different pairs of objects. This is exactly what a
+heterogeneous propagator network requires: type cells are enriched over the type
+lattice, session cells over the session lattice, amplitude cells over the complex
+amplitude quantale, and cross-domain propagators correspond to quantaloid
+morphisms between these enrichment bases.
+
+** 6.2 Dagger Compact Closed Structure
+
+The tensor-aware propagator network lives in a dagger compact closed category
+where:
+
+- *Objects* are cell state spaces: type lattice, session lattice, amplitude
+  space, tensor product space, density matrix space.
+- *Morphisms* are propagators: monotone functions (Layer 1), ATMS operations
+  (Layer 2), unitary operators (Layer 3), projection/measurement (Layer 4).
+- *The dagger* maps each propagator to its adjoint. For unitary propagators,
+  this is the inverse. For measurement propagators, the dagger gives the
+  "preparation" (embedding a classical outcome back into amplitude space).
+- *The tensor product* combines cell state spaces for multi-variable constraints.
+  Two cells A and B can be combined into a TensorCell A⊗B.
+- *Compact closure* provides cups and caps --- the ability to "bend wires" in
+  string diagrams. This corresponds to running a constraint bidirectionally,
+  which is already a fundamental capability of propagator networks (a propagator
+  that refines cell A based on cell B also implicitly constrains B based on A).
+
+The string diagram calculus provides a complete graphical language for reasoning
+about the network. Every valid diagram manipulation corresponds to a valid
+network transformation, and conversely.
+
+** 6.3 Frobenius Structure at Merge Points
+
+When multiple propagators write to the same cell, their contributions are merged
+via the lattice join. For TensorCells, this merge has Frobenius algebra structure:
+
+- *Multiplication* (merge): When two amplitude contributions arrive at the same
+  cell, they are added (superposed). This is the Frobenius multiplication
+  μ: A ⊗ A → A.
+- *Comultiplication* (broadcast): When a cell's value is read by multiple
+  propagators, it is copied to each. This is the Frobenius comultiplication
+  δ: A → A ⊗ A.
+
+The *spider theorem* guarantees that any connected network of merges and broadcasts
+built from a single Frobenius algebra reduces to a single "spider" determined
+only by its number of inputs and outputs. For the propagator network, this means:
+/the order in which propagators write to a cell does not matter/ --- only the
+total set of contributions matters. This is a generalization of the confluence
+property that makes propagator networks deterministic despite nondeterministic
+scheduling.
+
+When two *complementary* Frobenius algebras interact (corresponding to two
+incompatible constraint domains), the bialgebra structure controls their
+interaction. This generalizes the cross-domain propagation via Galois connections
+to a richer algebraic interaction structure.
+
+** 6.4 ZX-Calculus as Rewrite System
+
+The ZX-calculus (Coecke & Duncan, 2008; van de Wetering, 2020) is a complete
+graphical rewrite system for qubit quantum mechanics, built from two families of
+spiders (Z-type and X-type) interacting via complementary Frobenius algebras.
+
+The rewrite rules map to propagator network operations:
+
+| ZX Rule            | Propagator Network Operation              |
+|--------------------+-------------------------------------------|
+| Spider fusion      | Merging two propagators into one           |
+| Bialgebra rule     | Cross-domain interaction                   |
+| Copy rule          | Broadcasting through complementary domain  |
+| Color change       | Basis transformation (Hadamard)            |
+| Hopf rule          | Strong complementarity simplification      |
+
+*Completeness* means any valid equivalence between network configurations can be
+discovered by local rewriting. This opens the possibility of *automated
+optimization*: given a tensor-aware propagator network, apply ZX-calculus rewrites
+to simplify it before execution. The circuit extraction problem (converting
+optimized ZX-diagrams back to executable form) parallels the problem of extracting
+an efficient execution plan from an optimized propagator network.
+
+The PyZX library provides an open-source implementation of ZX-calculus rewriting
+that could serve as a reference for a Prologos-native optimizer.
+
+** 6.5 The CPM Layer
+
+The CPM construction provides the categorical machinery for the measurement
+layer (Layer 4 of the architecture). The key insight: measurement is not a
+separate operation bolted onto the propagator network; it is a /functor/
+from the pure category (TensorCells with unitary propagators) to the mixed
+category (DensityCells with completely positive maps).
+
+The discarding maps ⊤_A: A → I in the environment structure correspond to
+partial trace (marginalization). When a multi-variable TensorCell is observed
+on a subset of its variables, the unobserved variables are "discarded" (traced
+out), producing a reduced state on the observed variables.
+
+This provides the formal foundation for the Galois connection between the
+unitary layer (Layer 3) and the measurement layer (Layer 4):
+
+#+begin_example
+Pure (Layer 3)        CPM functor        Mixed (Layer 4)
+─────────────────     ──────────────>    ──────────────────
+TensorCell            ─────>             DensityCell
+Unitary propagator    ─────>             CP map
+Tensor product        ─────>             Tensor product
+Adjoint (†)           ─────>             Adjoint (†)
+#+end_example
+
+Classical cells (DistCells) embed into the mixed category as commutative
+C*-algebras (diagonal density matrices). This ensures backward compatibility:
+all existing propagator network behavior is a special case of the tensor-aware
+extension.
+
+* 7. Implementation Roadmap
+
+The implementation proceeds in eight phases, each delivering independently
+testable functionality. The phases build on the existing infrastructure
+(propagator network, lattice traits, ATMS, Galois connections) and extend the
+Beyond Prolog probabilistic LP roadmap.
+
+** 7.1 Phase T1: Complex Number Type and Semiring
+
+*Deliverables:*
+- Complex number type with arithmetic operations
+- =Semiring= trait instance for Complex
+- =Lattice= instance for complex-valued distributions (pointwise ordering)
+
+*Dependencies:* None beyond existing trait system.
+
+*Estimated scope:* ~3 library files, ~30 tests.
+
+#+begin_src prologos
+;; in lib/prologos/core/complex.prologos
+type Complex := (complex Real Real)
+
+spec complex-add : Complex -> Complex -> Complex
+spec complex-mul : Complex -> Complex -> Complex
+spec complex-conjugate : Complex -> Complex
+spec complex-magnitude-squared : Complex -> Real
+
+impl Semiring Complex
+  zero := (complex 0.0 0.0)
+  one  := (complex 1.0 0.0)
+  add  := complex-add
+  mul  := complex-mul
+#+end_src
+
+** 7.2 Phase T2: AmplitudeCell
+
+*Deliverables:*
+- =AmplitudeCell= type: Map V Complex
+- Lattice instance with pointwise complex addition merge
+- Basic interference tests
+
+*Dependencies:* Phase T1.
+
+*Estimated scope:* ~2 library files, ~25 tests.
+
+*Key tests:*
+- Two-path interference: amplitudes a, b → probability |a+b|²
+- Destructive interference: a = -b → probability 0
+- Constructive interference: a = b → probability 4|a|²
+- Merge monotonicity under information ordering
+
+** 7.3 Phase T3: TensorCell
+
+*Deliverables:*
+- =TensorCell= type: Map (Tuple Vs) Complex
+- Tensor product construction for combining cells
+- Partial trace (marginalization) operation
+- Schmidt decomposition for entanglement analysis
+
+*Dependencies:* Phase T2.
+
+*Estimated scope:* ~3 library files, ~40 tests.
+
+*Key tests:*
+- Product state: TensorCell factors into independent AmplitudeCells
+- Bell state: TensorCell does NOT factor (entanglement)
+- Partial trace produces correct marginals
+- Schmidt rank correctly identifies entanglement degree
+
+** 7.4 Phase T4: Unitary Propagators
+
+*Deliverables:*
+- Matrix type with complex entries
+- Unitary propagator type in =propagator.rkt=
+- Composition and tensor product of unitary operators
+- Dagger (adjoint) operation
+- Standard gates: Hadamard, Phase, CNOT, Pauli X/Y/Z
+
+*Dependencies:* Phase T3.
+
+*Estimated scope:* ~4 files (1 library, 1 propagator extension, 2 test), ~50 tests.
+
+*Key implementation:* Extend =propagator.rkt= with a new propagator variant that
+applies matrix multiplication rather than lattice join. The unitary propagator is
+/not/ added to the standard worklist; instead, it is fired during the unitary
+stratum (Layer 3) of the four-layer evaluation cycle.
+
+#+begin_src racket
+;; Extension to propagator.rkt (pseudo-code)
+(struct unitary-propagator
+  (matrix        ;; Matrix Complex n n (the unitary operator)
+   input-cell    ;; cell-id (TensorCell to transform)
+   output-cell   ;; cell-id (TensorCell to write result)
+   stratum)      ;; Nat (which unitary stratum this belongs to)
+  #:transparent)
+
+(define (fire-unitary-propagator net uprop)
+  (define input-val (net-cell-read net (unitary-propagator-input-cell uprop)))
+  (define output-val (matrix-mul (unitary-propagator-matrix uprop) input-val))
+  (net-cell-write net (unitary-propagator-output-cell uprop) output-val))
+#+end_src
+
+** 7.5 Phase T5: Measurement Stratum
+
+*Deliverables:*
+- Projection propagators (project TensorCell onto subspace)
+- Born rule implementation (amplitudes → probabilities)
+- ATMS integration for measurement outcomes (each outcome = assumption)
+- Four-layer evaluation cycle: monotonic → ATMS → unitary → measurement
+
+*Dependencies:* Phase T4, existing ATMS.
+
+*Estimated scope:* ~3 files, ~40 tests.
+
+*Key implementation:* The four-layer cycle is orchestrated by a new
+=tensor-aware-solve= function that extends =stratified-solve-goal=:
+
+#+begin_src racket
+;; Orchestration (pseudo-code)
+(define (tensor-aware-solve net goals)
+  ;; Layer 1: Run monotonic propagation to quiescence
+  (define net1 (run-to-quiescence net))
+
+  ;; Layer 2: ATMS choice points (if any)
+  (define net2 (atms-select-worldview net1))
+
+  ;; Layer 3: Apply all pending unitary propagators
+  (define net3 (fire-all-unitary-propagators net2))
+
+  ;; Layer 4: Apply all pending measurements
+  ;; Each measurement creates ATMS assumptions for outcomes
+  (define net4 (fire-all-measurement-propagators net3))
+
+  ;; If new information was produced, repeat
+  (if (net-changed? net4 net)
+      (tensor-aware-solve net4 goals)
+      net4))
+#+end_src
+
+** 7.6 Phase T6: DensityCell and CPM
+
+*Deliverables:*
+- =DensityCell= type: Map (Pair V V) Complex
+- Completely positive map propagators
+- Decoherence modeling (GKSL master equation discretization)
+- Classical-quantum hybrid networks
+
+*Dependencies:* Phase T5.
+
+*Estimated scope:* ~4 files, ~35 tests.
+
+This phase enables the open quantum systems approach used in cognitive modeling.
+The GKSL master equation dρ/dt = -i[H,ρ] + Σ_k(L_k ρ L_k† - ½{L_k†L_k, ρ})
+is discretized as a completely positive map applied to a DensityCell.
+
+** 7.7 Phase T7: ZX Rewrite Engine (Research Phase)
+
+*Deliverables:*
+- ZX diagram representation as a data structure
+- Core rewrite rules (spider fusion, bialgebra, copy, color change)
+- Diagram-to-propagator-network extraction
+- Automated network simplification via rewriting
+
+*Dependencies:* Phase T4.
+
+*Estimated scope:* Research-level; ~6 files, open-ended tests.
+
+This is a research phase --- the deliverable is a prototype, not production
+infrastructure. The goal is to determine whether ZX-calculus optimization
+provides meaningful performance improvements for tensor-aware propagator
+networks.
+
+** 7.8 Phase T8: Surface Syntax
+
+*Deliverables:*
+- =solve-with :semiring complex= for quantum-like queries
+- =^= weight annotation extended to complex values
+- Unitary operator definition syntax
+- Measurement syntax
+- Entanglement construction syntax
+
+*Dependencies:* Phases T5-T6.
+
+*Estimated scope:* Parser extensions, elaborator extensions, ~50 tests.
+
+#+begin_src prologos
+;; Quantum-like decision model in Prologos surface syntax
+defr belief-state [?agent:Agent ?state:(AmplitudeCell Choice)]
+  || "alice" (amplitude-cell
+               (pair "cooperate" (complex 0.6 0.3))
+               (pair "defect"    (complex 0.4 -0.2))) ^1.0
+
+;; Unitary evolution of belief under social influence
+def social-influence : Matrix Complex 2 2 :=
+  (unitary-from-angle 0.3)  ;; rotation by 0.3 radians
+
+;; Query with measurement
+let result := (solve-with :semiring complex
+  (evolve belief-state "alice" social-influence)
+  (measure belief-state "alice" ?outcome))
+#+end_src
+
+* 8. Connection to Quantum Social and Economic Models
+
+A companion document ("Quantum-Like Models for Social, Economic, and Cognitive
+Systems") provides comprehensive background on the research landscape. Here we
+summarize how the TensorCell architecture enables concrete modeling of these
+phenomena.
+
+** 8.1 Decision Modeling
+
+Yukalov-Sornette Quantum Decision Theory decomposes behavioral probability into
+a utility factor (classical) and an attraction factor (quantum interference).
+In the propagator network:
+
+- Each prospect is a basis element in an AmplitudeCell.
+- The decision-maker's state is a superposition of prospects.
+- The attraction factor emerges as the interference term when amplitudes are
+  squared to produce choice probabilities.
+- The Quarter Law (average |q| = 1/4) provides a testable prediction.
+
+#+begin_src prologos
+;; Modeling a decision under uncertainty
+defr prospect-state [?agent:Agent ?state:(AmplitudeCell Prospect)]
+
+;; Interference produces non-classical choice probabilities
+;; p(A) = |amplitude(A)|² + interference_term(A)
+;; where interference_term arises from off-diagonal coherences
+#+end_src
+
+** 8.2 Game-Theoretic Modeling
+
+The Eisert-Wilkens-Lewenstein (EWL) protocol maps directly to TensorCells:
+
+- Two players' strategy spaces form a tensor product: TensorCell [Strategy Strategy].
+- The entangling gate J(γ) is a unitary propagator applied to the joint state.
+- Players' individual strategies U_A, U_B are unitary propagators applied to
+  their respective subsystems.
+- Payoffs are computed by measurement of the final state.
+- Nash equilibrium search is propagation to quiescence under the payoff constraints.
+
+The quantum Prisoner's Dilemma --- where entangled strategies produce a Pareto-
+optimal Nash equilibrium that classical strategies cannot reach --- is expressible
+as a propagator network with TensorCells.
+
+** 8.3 Financial Modeling
+
+Haven's connection between the Black-Scholes equation and the Schrödinger equation
+suggests modeling financial instruments as amplitude states:
+
+- Asset states in superposition until "measured" (traded).
+- The arbitrage parameter ℏ measures market efficiency.
+- Interference between bullish and bearish sentiment produces non-classical
+  price dynamics.
+- The tropical semiring still works for optimization; the complex semiring
+  adds interference effects.
+
+** 8.4 Social Network Modeling
+
+Opinion dynamics via quantum walks:
+
+- Each agent's belief is an AmplitudeCell over opinion options.
+- Social influence is a unitary rotation toward a neighbor's state.
+- Measurement = when an agent must act (vote, purchase, commit).
+- Network-level entanglement models correlated belief updates between connected
+  agents.
+- The Lindblad-Kossakowski equation (implemented via DensityCell) models
+  decoherence as consensus emergence.
+
+** 8.5 Survey and Polling Models
+
+The Wang-Busemeyer QQ equality --- a parameter-free prediction confirmed on
+70+ national surveys --- is naturally expressed as a constraint on an
+AmplitudeCell:
+
+#+begin_src prologos
+;; The QQ equality as a propagator constraint
+;; p(A,B) + p(¬A,¬B) - p(B,A) - p(¬B,¬A) = 0
+;; This is automatically satisfied by any quantum probability model
+;; Violation would indicate the model is not quantum-like
+defr qq-equality [?agent:Agent ?questionA ?questionB]
+  :constraint
+  &> (let pAB := (sequential-probability agent questionA questionB))
+     (let pAnBn := (sequential-probability agent (not questionA) (not questionB)))
+     (let pBA := (sequential-probability agent questionB questionA))
+     (let pBnAn := (sequential-probability agent (not questionB) (not questionA)))
+     (assert-equal (add pAB pAnBn) (add pBA pBnAn))
+#+end_src
+
+* 9. Research Questions and Open Problems
+
+** 9.1 Convergence Guarantees for the Four-Layer Cycle
+
+The monotonic layer converges by Tarski's fixed-point theorem (every monotone
+function on a complete lattice has a least fixed point). The stratified layer
+converges by the stratification guarantee (each stratum is finite). But the
+four-layer cycle (monotonic → ATMS → unitary → measurement → monotonic → ...)
+may not converge if measurements produce information that triggers new unitary
+evolutions that produce new measurements.
+
+*Question:* Under what conditions does the four-layer cycle converge? Is there
+a categorical characterization of convergent tensor-aware propagator networks?
+
+** 9.2 Scheduling and Measurement Order
+
+In quantum mechanics, the order of measurements matters (non-commutative
+projections). In the propagator network, the order in which measurement
+propagators fire may affect the result.
+
+*Question:* How should the propagator scheduler handle measurement ordering?
+Can the ATMS be extended to explore all measurement orderings, or is there a
+canonical ordering derivable from the network topology?
+
+** 9.3 Compositionality
+
+How do tensor-aware sub-networks compose? If two sub-networks share a TensorCell,
+their joint behavior should be well-defined. The compact closed structure provides
+composition via the categorical trace, but the interaction with ATMS worldviews
+and stratification needs analysis.
+
+*Question:* Is there a compositionality theorem for tensor-aware propagator
+networks? Under what conditions can a network be decomposed into independently
+evaluable sub-networks?
+
+** 9.4 Tensor Network Contraction for Performance
+
+Tensor product spaces grow exponentially with the number of variables (2^n for
+n binary variables). Tensor network contraction methods (Biamonte et al., 2018)
+provide efficient algorithms for evaluating certain tensor network structures
+without materializing the full tensor.
+
+*Question:* Can the propagator network topology guide tensor network contraction
+strategies? Can the widening operator for TensorCells (truncating small
+amplitudes) be made systematic via the Widenable trait?
+
+** 9.5 Type-Level Entanglement Tracking
+
+Prologos's dependent type system could track entanglement structure at the type
+level. A =TensorCell {[A B]}= that is guaranteed separable could have a
+different type than one that may be entangled, enabling compile-time verification
+of entanglement requirements.
+
+*Question:* What is the appropriate type-level representation of entanglement?
+Can Schmidt rank be tracked in the type system? Can the fibered category
+structure (Beyond Prolog §7.3) accommodate entanglement as a fiber property?
+
+** 9.6 Connection to Quantum Error Correction
+
+Quantum error correction codes protect information against decoherence by
+encoding logical qubits into physical qubits. The stabilizer formalism
+(Gottesman) has a clean algebraic structure that may connect to the propagator
+network's constraint propagation.
+
+*Question:* Can quantum error correction be expressed as propagator constraints
+on TensorCells? Would the ZX-calculus rewrite engine (Phase T7) enable
+automated discovery of error-correcting codes?
+
+** 9.7 The ZX-Calculus Optimization Question
+
+The ZX-calculus provides a complete rewrite system for qubit quantum mechanics.
+Whether this translates to practical optimization of tensor-aware propagator
+networks is an open question.
+
+*Question:* Does ZX-calculus optimization provide meaningful speedups for the
+specific class of tensor-aware propagator networks that arise from quantum-like
+social/economic models? Or are these models structurally simpler than general
+quantum circuits, rendering ZX optimization unnecessary?
+
+** 9.8 Non-Markovian Extensions
+
+The GKSL master equation assumes Markovian dynamics (no memory effects). Human
+cognition and social systems have strong memory effects. Non-Markovian quantum
+dynamics (Nakajima-Zwanzig, time-convolutionless approaches) are more appropriate
+but more complex.
+
+*Question:* Can non-Markovian dynamics be expressed within the propagator network
+framework? The persistent (immutable) nature of Prologos's propagator network
+means historical states are naturally available --- can this be exploited for
+memory effects?
+
+* 10. References
+
+** Categorical Foundations
+- Abramsky, S. & Coecke, B. (2004). A categorical semantics of quantum protocols. /LICS'04/.
+- Coecke, B. & Duncan, R. (2008/2011). Interacting quantum observables. /New J. Phys./ 13, 043016.
+- Coecke, B. & Kissinger, A. (2017). /Picturing Quantum Processes/. Cambridge UP.
+- Hadzihasanovic, A., Ng, K.F. & Wang, Q. (2018). Two complete axiomatisations of pure-state qubit quantum computing. /LMCS/.
+- Kelly, G.M. (1982). /Basic Concepts of Enriched Category Theory/. Cambridge UP.
+- Lawvere, F.W. (1973). Metric spaces, generalized logic, and closed categories. /Rend. Sem. Mat. Fis. Milano/ 43.
+- Mulvey, C.J. (1986). &. /Rend. Circ. Mat. Palermo/ Suppl. 12, 99-104.
+- Selinger, P. (2007). Dagger compact closed categories and completely positive maps. /ENTCS/ 170, 139-163.
+- van de Wetering, J. (2020). ZX-calculus for the working quantum computer scientist. /arXiv:2012.13966/.
+
+** Quantales and Enriched Categories
+- Hofmann, D., Seal, G.J. & Tholen, W. (2014). /Monoidal Topology/. Cambridge UP.
+- Kruml, D., Pelletier, J.W. & Resende, P. (2003). On quantales and spectra of C*-algebras. /Appl. Cat. Struct./ 11, 543-560.
+- Rosenthal, K.I. (1990). /Quantales and their Applications/. Pitman.
+- Stubbe, I. (2013). An introduction to quantaloid-enriched categories. /Fuzzy Sets and Systems/.
+
+** Propagator Networks
+- Radul, A. (2009). Propagation networks: A flexible and expressive substrate for computation. /PhD thesis, MIT/.
+- Radul, A. & Sussman, G.J. (2009). The art of the propagator. /MIT CSAIL TR-2009-002/.
+- Arntzenius, M. Semilattices and their tensor products. /Blog post/.
+
+** Stratified and Distributed Computation
+- Alvaro, P. & Hellerstein, J.M. (2019). Keeping CALM: When distributed consistency is easy. /arXiv:1901.01930/.
+- Biamonte, J. et al. (2018). Tensor network contraction and the counting of CSPs. /arXiv:1805.00475/.
+- Conway, N. et al. (2012). Logic and lattices for distributed programming. /SoCC'12/.
+- Kuper, L. et al. (2013). LVars: Lattice-based data structures for deterministic parallelism. /FHPC'13/.
+
+** Quantum Social Science (see companion document for full bibliography)
+- Busemeyer, J.R. & Bruza, P.D. (2012). /Quantum Models of Cognition and Decision/. Cambridge UP.
+- Eisert, J., Wilkens, M. & Lewenstein, M. (1999). Quantum games and quantum strategies. /Phys. Rev. Lett./ 83, 3077.
+- Haven, E. & Khrennikov, A. (2013). /Quantum Social Science/. Cambridge UP.
+- Wang, Z. & Busemeyer, J.R. (2013). A quantum question order model supported by empirical tests. /Topics in Cognitive Science/ 5, 689-710.
+- Yukalov, V.I. & Sornette, D. (2011). Decision theory with prospect interference and entanglement. /Theory and Decision/ 70, 283-328.
+
+** Prologos Internal Documents
+- Beyond Prolog: Frontiers for the Prologos Relational Language (2026-03-16).
+- Logic Engine Design: Comprehensive Implementation Guide (2026-02-24).
+- Towards a General Logic Engine on Propagators (2026-02-24).
+- Galois Connections & Abstract Interpretation on the Logic Engine (2026-02-27).
+- Stratified Evaluation for the Logic Engine (2026-02-26).
+- Quantum-Like Models for Social, Economic, and Cognitive Systems (companion, 2026-03-16).
