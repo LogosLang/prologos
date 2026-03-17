@@ -1,0 +1,1013 @@
+;; ========================================================================
+;;
+;;   Track 6 Acceptance File — Driver Simplification + Cleanup
+;;
+;;   STATUS: Phase 0 (Pre-Implementation Baseline)
+;;   Run via: process-file "racket/prologos/examples/2026-03-16-track6-acceptance.prologos"
+;;
+;;   Track 6 is an infrastructure track (no syntax changes). It has two
+;;   workstreams: WS-A (data orientation + TMS retraction) changes how
+;;   speculation save/restore works; WS-B (dual-write elimination + cleanup)
+;;   removes the legacy parameter write path for 28+ registries and
+;;   simplifies the driver's parameterize block.
+;;
+;;   Key consumers affected:
+;;     - Speculation: save-meta-state / restore-meta-state! / with-speculative-rollback
+;;     - Registry lookup: trait instances, type constructors, coercions, subtypes
+;;     - Module loading: batch-worker isolation, per-module env snapshots
+;;     - Definition lifecycle: add / remove / shadow / redefine
+;;     - Elaboration guards: current-macros-in-elaboration?, current-narrow-in-elaboration?
+;;
+;;   Organization: by consumer subsystem (per ACCEPTANCE_FILES.md §2).
+;;   Each section targets a different consumer of the subsystems Track 6 changes.
+;;
+;;   Conventions:
+;;     - Commented-out = pre-existing BUG; annotated with hypothesis
+;;     - Uncommented = must pass today; regression if broken after any phase
+;;     - Union types: `<A | B>` — angle brackets for type-level grouping
+;;     - Uncurried: `spec f A B -> C`, `defn f [x y] body`
+;;     - `[]` for application: `[f x]`, NOT `(f x)`
+;;     - Full prelude — exercise the standard library
+;;     - Nat ONLY for inductive patterns; Int for computation
+;;
+;;   Sections:
+;;     A. Speculation and union types — with-speculative-rollback consumer
+;;     B. Trait resolution and generic dispatch — instance registry consumer
+;;     C. Module loading and qualified access — batch-worker / module cache
+;;     D. Definition lifecycle — add, shadow, chain, failure cleanup
+;;     E. Pattern matching and constructors — constructor registry consumer
+;;     F. Higher-order functions and closures — lookup in nested contexts
+;;     G. Type system depth — dependent types, polymorphism, inference
+;;     H. Relational features — defr/solve registry consumer
+;;     I. Prelude breadth — broad module loading regression net
+;;     J. Pipeline and composition — pipeline operator / compose consumer
+;;     K. Combined stress patterns — compositional creativity
+;;     Z. Uncommented baseline — quick regression check
+;;
+;; ========================================================================
+
+
+ns acceptance::track6
+
+
+;; ========================================================================
+;; SECTION A: SPECULATION AND UNION TYPES
+;; ========================================================================
+;;
+;; Track 6 WS-A (Phases 2–5) replaces the 3-box save/restore with TMS
+;; retraction for speculation rollback. Every expression that triggers
+;; `with-speculative-rollback` is critical here — union type values,
+;; union parameters, nested unions, multi-speculation expressions.
+
+;; --- A1: Union type value bindings ---
+
+def a1-int : <Int | String> := 42
+def a1-str : <Int | String> := "hello"
+a1-int
+a1-str
+
+;; --- A2: Union as function parameter ---
+
+spec accept-union <Int | String> -> Bool
+defn accept-union [_] true
+
+accept-union 42
+accept-union "hi"
+
+;; --- A3: Union-returning functions ---
+
+spec tag-int Int -> <Int | String>
+defn tag-int [x] x
+
+spec tag-str String -> <Int | String>
+defn tag-str [s] s
+
+tag-int 99
+tag-str "tagged"
+
+;; --- A4: Nested unions (multi-level speculation) ---
+
+def a4-deep : <<Int | Bool> | String> := 42
+def a4-str  : <<Int | Bool> | String> := "nested"
+def a4-bool : <<Int | Bool> | String> := true
+
+;; --- A5: Three-way union ---
+
+def a5-int  : <Int | String | Bool> := 42
+def a5-str  : <Int | String | Bool> := "hello"
+def a5-bool : <Int | String | Bool> := true
+
+;; --- A6: Multiple speculation per expression ---
+
+spec multi-spec <Int | String> -> <Int | Bool> -> Int
+defn multi-spec [_ _] 0
+
+multi-spec 42 99
+multi-spec "hello" true
+
+;; --- A7: Union types inside function results ---
+;; This triggers speculation when the return type is checked.
+
+spec wrap-union Int -> <Int | String>
+defn wrap-union [x] x
+
+;; BUG (L3): union-exhaustion-error when binding union-returning function result
+;; to a union-typed def. Hypothesis: speculation tries all branches of the union
+;; result type and exhausts without finding a single winner.
+;; def a7-result : <Int | String> := [wrap-union 42]
+;; a7-result
+
+;; --- A8: Union with Option (speculation + constructor) ---
+
+;; BUG (L3): union type with complex inner type ([Option Int] | String) at def site.
+;; Hypothesis: same union-exhaustion issue as A7.
+;; def a8-some : <[Option Int] | String> := [some 42]
+;; def a8-str  : <[Option Int] | String> := "none-like"
+
+;; --- A9: Speculation with list element types ---
+
+'[1 2 3]
+'["a" "b" "c"]
+'[true false true]
+
+;; --- A10: Chained union defs (each triggers speculation) ---
+
+def a10-v1 : <Int | String> := 1
+def a10-v2 : <Int | String> := "two"
+def a10-v3 : <Int | String> := 3
+def a10-v4 : <Int | String> := "four"
+def a10-v5 : <Int | String> := 5
+
+
+;; ========================================================================
+;; SECTION B: TRAIT RESOLUTION AND GENERIC DISPATCH
+;; ========================================================================
+;;
+;; Trait instances are registered via the macros.rkt dual-write pattern.
+;; Track 6 WS-B removes the parameter side of dual-write. Instance
+;; lookup must continue to work for all registered trait instances.
+
+;; --- B1: Generic arithmetic (Add/Sub/Mul/Div on Int) ---
+
+[+ 3 4]
+[- 10 3]
+[* 6 7]
+[/ 100 4]
+
+;; --- B2: Generic arithmetic (Rat) ---
+
+[+ 1/2 1/3]
+[- 3/4 1/4]
+[* 2/3 3/5]
+[/ 7/8 1/2]
+
+;; --- B3: Chained generic ops (multiple dispatch per expression) ---
+
+[+ [* 2 3] [- 10 4]]
+[* [+ 1 2] [+ 3 4]]
+[+ [* [+ 1 2] [- 5 2]] [/ 100 10]]
+
+;; --- B4: Explicit dict passing (Eq trait) ---
+
+eq-check nat-eq 0N 0N
+eq-check nat-eq 1N 2N
+eq-neq nat-eq 0N 1N
+
+;; --- B5: Explicit dict passing (Ord trait) ---
+
+ord-compare nat-ord 1N 2N
+ord-lt nat-ord 0N 1N
+ord-gt nat-ord 2N 0N
+
+;; --- B6: Int builtins (foreign function registry) ---
+
+int+ 3 4
+int- 10 3
+int* 6 7
+int/ 100 4
+
+;; --- B7: Rat builtins ---
+
+rat+ 1/2 1/3
+rat- 3/4 1/4
+rat* 2/3 3/5
+rat/ 7/8 1/2
+
+;; --- B8: Deeply nested generic dispatch (fan-out) ---
+;; Exercises trait resolution many times in one expression tree.
+
+[+ [+ [+ 1 2] [+ 3 4]] [+ [+ 5 6] [+ 7 8]]]
+;; => 36
+
+;; --- B9: Mixed-type generic sequences ---
+;; Int and Rat in the same file — different trait instances.
+
+def b9-int : Int := [+ 3 4]
+def b9-rat : Rat := [+ 1/2 1/3]
+b9-int
+b9-rat
+
+;; --- B10: Where-clause generics (aspirational) ---
+;; BUG (L3): where-clause dict injection fails at file level.
+;; Hypothesis: where-clause desugaring in macros.rkt relies on elaboration
+;; context that isn't active in file-level preparse.
+
+;; spec double-it {A} A -> A
+;;   where (Add A)
+;; defn double-it [x] [+ x x]
+;;
+;; double-it 21
+;; double-it 1/4
+
+;; --- B11: Trait-constrained with Num bundle (aspirational) ---
+;; BUG (L3): bundle constraints not at file level.
+
+;; spec quadratic {A} A A A A -> A
+;;   where (Num A)
+;; defn quadratic [a b c x]
+;;   [+ [* a [* x x]] [+ [* b x] c]]
+
+
+;; ========================================================================
+;; SECTION C: MODULE LOADING AND QUALIFIED ACCESS
+;; ========================================================================
+;;
+;; Track 6 Phase 6 changes batch-worker.rkt from 26-parameter save/restore
+;; to hybrid (20 cell-based + 7 runtime config). Phase 7 removes dual-write,
+;; so all registry lookups go through cells only. Module loading and
+;; cross-module qualified access are primary consumers.
+
+;; --- C1: Qualified string module access ---
+
+str::length "hello world"
+str::append "foo" "bar"
+
+;; --- C2: Multiple prelude modules used together ---
+;; Each module has its own env snapshot. Exercises parallel module loading.
+
+;; List module:
+length '[1 2 3]
+head '[1 2 3]
+tail '[1 2 3]
+reverse '[1 2 3]
+append '[1 2] '[3 4]
+
+;; Option module:
+some 42
+none
+
+;; Result module:
+ok "success"
+err "failure"
+
+;; --- C3: Deep dependency chains through modules ---
+;; length comes from collections → imports from nat module.
+;; [+] resolves through Add trait → Int instance → foreign int+.
+;; These are multi-hop: our code → prelude → prelude → builtin.
+
+length '[1 2 3 4 5]
+[+ 100 200]
+
+;; --- C4: String ops chain (str:: → char → nat modules) ---
+
+str::length "abcdef"
+str::append "hello" " world"
+
+;; --- C5: Map literals (map module loading) ---
+
+{:name "alice" :age 30}
+{:x 1 :y 2 :z 3}
+
+;; --- C6: Nested list types (list module + recursive type) ---
+
+'['[1 2] '[3 4] '[5 6]]
+
+;; --- C7: Definitions using prelude then extending ---
+;; Verifies that prelude modules are fully loaded before user definitions run.
+
+spec my-length [List Int] -> Nat
+defn my-length
+  | nil         -> zero
+  | cons _ rest -> suc [my-length rest]
+
+my-length '[1 2 3 4]
+
+
+;; ========================================================================
+;; SECTION D: DEFINITION LIFECYCLE
+;; ========================================================================
+;;
+;; Definitions flow through global-env-add (write), global-env-lookup (read),
+;; global-env-remove! (failure cleanup). Track 6 Phase 7 removes the dual-write
+;; path so only cells remain. Track 6 Phase 9 renames current-global-env →
+;; current-prelude-env. The entire definition lifecycle must survive.
+
+;; --- D1: Simple def + reference ---
+
+def d1-val : Int := 42
+d1-val
+
+;; --- D2: spec + defn + invocation ---
+
+spec inc Int -> Int
+defn inc [x] [int+ x 1]
+
+spec dbl Int -> Int
+defn dbl [x] [int* x 2]
+
+spec sqr Int -> Int
+defn sqr [x] [int* x x]
+
+inc 41
+dbl 21
+sqr 6
+
+;; --- D3: Forward reference chain (A → B → C → D) ---
+
+spec chain-a Int -> Int
+defn chain-a [x] [int+ x 1]
+
+spec chain-b Int -> Int
+defn chain-b [x] [chain-a [int* x 2]]
+
+spec chain-c Int -> Int
+defn chain-c [x] [chain-b [int+ x 3]]
+
+spec chain-d Int -> Int
+defn chain-d [x] [chain-c [int- x 1]]
+
+chain-d 10
+;; => chain-c(9) = chain-b(12) = chain-a(24) = 25
+
+;; --- D4: Diamond dependency ---
+
+spec dia-a Int -> Int
+defn dia-a [x] [int+ x 1]
+
+spec dia-b Int -> Int
+defn dia-b [x] [int* [dia-a x] 2]
+
+spec dia-c Int -> Int
+defn dia-c [x] [int+ [dia-a x] 10]
+
+spec dia-d Int -> Int
+defn dia-d [x] [int+ [dia-b x] [dia-c x]]
+
+dia-d 5
+;; => dia-b(5) + dia-c(5) = 12 + 16 = 28
+
+;; --- D5: Definition shadowing prelude name ---
+;; User's `length` should shadow prelude's `length` in later references.
+
+;; my-length already defined in C7 — that exercises shadowing
+
+;; --- D6: Many definitions in sequence (stress env accumulation) ---
+
+spec s1 Int -> Int
+defn s1 [x] [int+ x 1]
+spec s2 Int -> Int
+defn s2 [x] [int+ x 2]
+spec s3 Int -> Int
+defn s3 [x] [int+ x 3]
+spec s4 Int -> Int
+defn s4 [x] [int+ x 4]
+spec s5 Int -> Int
+defn s5 [x] [int+ x 5]
+
+[int+ [s1 0] [int+ [s2 0] [int+ [s3 0] [int+ [s4 0] [s5 0]]]]]
+;; => 1+2+3+4+5 = 15
+
+;; --- D7: Def referencing def (non-function chain) ---
+
+def d7-base : Int := 10
+def d7-step1 : Int := [int+ d7-base 5]
+def d7-step2 : Int := [int* d7-step1 2]
+d7-step2
+;; => (10+5)*2 = 30
+
+;; --- D8: Definition with complex return type ---
+
+spec d8-wrap Int -> [Result Int String]
+defn d8-wrap [x] [ok x]
+
+d8-wrap 42
+
+
+;; ========================================================================
+;; SECTION E: PATTERN MATCHING AND CONSTRUCTORS
+;; ========================================================================
+;;
+;; Pattern matching looks up constructor info through global-env.
+;; Constructor names (zero, suc, nil, cons, some, none, ok, err) are
+;; definitions loaded from prelude modules. All registry lookups change
+;; when dual-write is removed.
+
+;; --- E1: Nat pattern matching ---
+
+spec is-zero Nat -> Bool
+defn is-zero
+  | zero  -> true
+  | suc _ -> false
+
+is-zero 0N
+is-zero 1N
+
+;; --- E2: Option matching ---
+
+spec unwrap-or [Option Int] Int -> Int
+defn unwrap-or
+  | [some x] default -> x
+  | none     default -> default
+
+unwrap-or [some 42] 0
+unwrap-or none 99
+
+;; --- E3: Result matching ---
+
+spec result-to-int [Result Int String] -> Int
+defn result-to-int
+  | ok x  -> x
+  | err _ -> -1
+
+result-to-int [ok 42]
+result-to-int [err "fail"]
+
+;; --- E4: List pattern matching ---
+
+spec safe-head [List Int] -> Int
+defn safe-head
+  | nil      -> 0
+  | cons x _ -> x
+
+safe-head '[10 20 30]
+safe-head '[]
+
+;; --- E5: Nat structural recursion ---
+
+spec nat-pred Nat -> Nat
+defn nat-pred
+  | zero  -> zero
+  | suc k -> k
+
+nat-pred 0N
+nat-pred 3N
+
+;; --- E6: Deep Nat recursion (performance canary) ---
+
+spec b-add Nat Nat -> Nat
+defn b-add
+  | x zero  -> x
+  | x suc k -> suc [b-add x k]
+
+spec nat-sum Nat -> Nat
+defn nat-sum
+  | zero  -> zero
+  | suc k -> b-add [suc k] [nat-sum k]
+
+nat-sum 3N
+;; => 6N
+
+;; --- E7: Nested pattern matching (constructor inside constructor) ---
+;; BUG (L3): type-mismatch-error on nested Option pattern matching.
+;; Hypothesis: multi-arity defn with nested constructor patterns
+;; [some [some x]] fails inference for the inner Option type variable.
+
+;; spec double-option [Option [Option Int]] -> Int
+;; defn double-option
+;;   | [some [some x]] -> x
+;;   | [some none]     -> -1
+;;   | none            -> -2
+;;
+;; double-option [some [some 42]]
+;; double-option [some none]
+;; double-option none
+
+;; --- E8: Classify Nat (multi-branch dispatch) ---
+
+spec classify-nat Nat -> String
+defn classify-nat
+  | zero  -> "zero"
+  | suc _ -> "positive"
+
+classify-nat 0N
+classify-nat 3N
+
+
+;; ========================================================================
+;; SECTION F: HIGHER-ORDER FUNCTIONS AND CLOSURES
+;; ========================================================================
+;;
+;; HOFs look up function definitions at application time. Closures capture
+;; values that were looked up through global-env. Both exercise the
+;; registry lookup path that changes when dual-write is removed.
+
+;; --- F1: map with lambda ---
+
+map [fn [x] [int* x 2]] '[1 2 3]
+map [fn [x] [int+ x 10]] '[1 2 3 4]
+
+;; --- F2: Closure returning function ---
+
+spec make-adder Int -> [Int -> Int]
+defn make-adder [n]
+  [fn [x : Int] [int+ n x]]
+
+[make-adder 10] 32
+[make-adder 100] 1
+
+;; --- F3: Closure capturing two values ---
+
+spec make-linear Int Int -> [Int -> Int]
+defn make-linear [a b]
+  [fn [x : Int] [int+ [int* a x] b]]
+
+[make-linear 2 3] 5
+;; => 13
+
+[make-linear 0 42] 999
+;; => 42
+
+;; --- F4: HOF apply ---
+
+spec apply-fn [Int -> Int] Int -> Int
+defn apply-fn [f x] [f x]
+
+apply-fn inc 41
+apply-fn sqr 6
+apply-fn dbl 21
+
+;; --- F5: Twice (composition through application) ---
+
+spec twice-fn [Int -> Int] Int -> Int
+defn twice-fn [f x] [f [f x]]
+
+twice-fn inc 40
+twice-fn dbl 3
+
+;; --- F6: Map with closure that captures a definition ---
+
+map [fn [x] [sqr [inc x]]] '[1 2 3]
+;; => [4, 9, 16]
+
+;; --- F7: Lambda with type annotation ---
+
+[fn [x : Int] [int+ x 1]] 41
+[fn [x : Int] [int* x x]] 5
+
+
+;; ========================================================================
+;; SECTION G: TYPE SYSTEM DEPTH
+;; ========================================================================
+;;
+;; Type checking resolves types through global-env. Polymorphic functions
+;; create meta-variables that go through save/restore during speculation.
+;; Track 6 changes how meta-state is saved (3→1 box).
+
+;; --- G1: Polymorphic identity ---
+
+spec my-id {A} A -> A
+  :implicits [A]
+defn my-id [x] x
+
+my-id 42
+my-id "hello"
+my-id true
+my-id 1/2
+my-id zero
+
+;; --- G2: Polymorphic const ---
+
+spec my-const {A B} A -> B -> A
+  :implicits [A B]
+defn my-const [a _] a
+
+my-const 42 "ignored"
+my-const true 0
+
+;; --- G3: Lambda with type annotation in various contexts ---
+
+[fn [x : Int] [int+ x 1]] 41
+[fn [x : Int] [int* x x]] 5
+
+;; --- G4: Def with generic arithmetic result ---
+
+def g4a : Int := [+ 3 4]
+[* g4a g4a]
+;; => 49
+
+def g4b : Rat := [+ 1/2 1/3]
+[* g4b g4b]
+;; => 25/36
+
+;; --- G5: Chained defs with generic ops ---
+
+def g5a : Int := 1
+def g5b : Int := [+ g5a 1]
+def g5c : Int := [+ g5b 1]
+def g5d : Int := [+ g5c 1]
+[* g5a [* g5b [* g5c g5d]]]
+;; => 1 * 2 * 3 * 4 = 24
+
+;; --- G6: Polymorphic id applied to union value ---
+
+my-id [tag-int 42]
+my-id [tag-str "poly"]
+
+;; --- G7: Union-returning function consumed by another ---
+;; BUG (L3): inference-failed-error when passing union-typed function result
+;; to another function. Hypothesis: the union type from tag-int/tag-str
+;; doesn't unify with the union parameter of union-consumer at call site.
+
+spec union-consumer <Int | String> -> Bool
+defn union-consumer [_] true
+
+;; union-consumer [tag-int 42]
+;; union-consumer [tag-str "hi"]
+
+
+;; ========================================================================
+;; SECTION H: RELATIONAL FEATURES
+;; ========================================================================
+;;
+;; defr and solve use the macro/registry system for relation registration.
+;; Instance lookup, constraint resolution, and the solve driver all go
+;; through registries that Track 6 migrates.
+
+;; --- H1: Simple facts ---
+
+defr color [?item ?hue]
+  || "apple"  "red"
+     "banana" "yellow"
+     "grape"  "purple"
+
+solve (color "apple" c)
+solve (color fruit "yellow")
+
+;; --- H2: Recursive rules ---
+
+defr edge [?from ?to]
+  || "a" "b"
+     "b" "c"
+     "c" "d"
+
+defr path [?from ?to]
+  &> (edge from to)
+  &> (edge from mid) (path mid to)
+
+solve (path "a" dest)
+
+;; --- H3: Negation-as-failure ---
+
+defr blocked [?node]
+  || "c"
+
+defr reachable [?from ?to]
+  &> (edge from to) (not (blocked to))
+  &> (edge from mid) (not (blocked mid)) (reachable mid to)
+
+solve (reachable "a" dest)
+
+;; --- H4: Anonymous relation ---
+
+solve (rel [?from ?to] &> (edge from mid) (edge mid to))
+
+;; --- H5: solve-one ---
+
+solve-one (path "a" dest)
+
+;; --- H6: is-goal with generic arithmetic ---
+
+defr double-rel [?n ?result]
+  &> (is result [* n 2])
+
+solve (double-rel 5 r)
+
+;; --- H7: guard goal ---
+
+defr positive-edge [?from ?to]
+  &> (edge from to) (guard [gt to "b"])
+
+solve (positive-edge from to)
+
+
+;; ========================================================================
+;; SECTION I: PRELUDE BREADTH — Module Loading Regression Net
+;; ========================================================================
+;;
+;; The prelude loads ~15 modules. Track 6 changes how the batch-worker
+;; isolates per-file state (Phase 6) and how registries are accessed
+;; after dual-write removal (Phase 7). Every prelude module must load.
+
+;; --- I1: Nat ---
+zero
+suc zero
+suc [suc [suc zero]]
+add 2N 3N
+
+;; --- I2: Bool ---
+true
+false
+if true "yes" "no"
+
+;; --- I3: List ---
+'[1 2 3]
+'[true false]
+'["a" "b" "c"]
+length '[1 2 3 4 5]
+
+;; --- I4: Option ---
+some 42
+some "hello"
+some [some 42]
+none
+
+;; --- I5: Result ---
+ok 42
+err "failed"
+
+;; --- I6: Eq ---
+eq-check nat-eq 0N 0N
+eq-neq nat-eq 0N 1N
+
+;; --- I7: Ord ---
+ord-compare nat-ord 1N 2N
+ord-lt nat-ord 0N 1N
+
+;; --- I8: String ---
+str::length "hello"
+str::append "hello" " world"
+
+;; --- I9: Int foreign builtins ---
+int+ 3 4
+int- 10 3
+int* 6 7
+int/ 100 4
+
+;; --- I10: Rat foreign builtins ---
+rat+ 1/2 1/3
+rat* 2/3 3/5
+
+;; --- I11: Generic arithmetic ---
+[+ 3 4]
+[- 10 3]
+[* 6 7]
+[/ 100 4]
+
+;; --- I12: Collection ops ---
+head '[1 2 3]
+tail '[1 2 3]
+reverse '[1 2 3]
+append '[1 2] '[3 4]
+length '[]
+
+
+;; ========================================================================
+;; SECTION J: PIPELINE AND COMPOSITION
+;; ========================================================================
+;;
+;; Pipeline `|>` and `compose` resolve function names through global-env.
+;; They chain multiple definition lookups in sequence — a stress test for
+;; the registry lookup path.
+
+;; --- J1: Two-stage pipeline ---
+
+|> 5 inc dbl
+;; => (5+1)*2 = 12
+
+|> 10 dbl inc
+;; => 10*2+1 = 21
+
+;; --- J2: Three-stage pipeline ---
+
+|> 2 inc dbl sqr
+;; => sqr(dbl(inc(2))) = sqr(6) = 36
+
+;; --- J3: Four-stage pipeline ---
+
+|> 5 inc dbl sqr inc
+;; => inc(sqr(dbl(inc(5)))) = inc(sqr(12)) = inc(144) = 145
+
+;; --- J4: Compose operator ---
+
+compose inc dbl 5
+;; => inc(dbl(5)) = inc(10) = 11
+
+compose dbl inc 5
+;; => dbl(inc(5)) = dbl(6) = 12
+
+;; --- J5: Pipeline with HOF result ---
+
+|> '[1 2 3]
+  [map [fn [x] [int* x 10]]]
+  reverse
+
+;; --- J6: Pipeline with closure ---
+
+spec make-multiplier Int -> [Int -> Int]
+defn make-multiplier [n]
+  [fn [x : Int] [int* n x]]
+
+|> 7 [make-multiplier 3] inc
+;; => 3*7=21, 21+1=22
+
+
+;; ========================================================================
+;; SECTION K: COMBINED STRESS PATTERNS
+;; ========================================================================
+;;
+;; Novel compositional targets that stretch coverage into the spaces
+;; between features. Each exercises multiple consumers simultaneously.
+;; These are the most likely to catch subtle interaction bugs from
+;; Track 6's infrastructure changes.
+
+;; --- K1: Deep application chain (5 definitions deep) ---
+
+[int+ [chain-d 3] [dia-d 2]]
+
+;; --- K2: Generic arithmetic in def, result used by named function ---
+
+def k2x : Int := [+ [* 3 4] [- 10 3]]
+[int+ k2x k2x]
+;; => 19 + 19 = 38
+
+;; --- K3: Closure over generic result, applied in pipeline ---
+
+|> 7 [make-multiplier 3] inc
+;; => 22
+
+;; --- K4: Pattern matching on function result ---
+
+unwrap-or [some 100] -1
+unwrap-or none -1
+
+;; --- K5: Bool combinator composed with Nat predicate ---
+
+spec my-and Bool Bool -> Bool
+defn my-and
+  | true  b  -> b
+  | false _  -> false
+
+my-and [is-zero 0N] [is-zero 0N]
+my-and [is-zero 0N] [is-zero 1N]
+my-and [is-zero 1N] [is-zero 0N]
+
+;; --- K6: List of computed values ---
+
+'[[+ 1 1] [+ 2 2] [+ 3 3]]
+
+;; --- K7: Nested options ---
+
+some [some 42]
+some none
+some [some [some "deep"]]
+
+;; --- K8: Mixed Int and Rat generic ops in sequence ---
+
+[* [+ 1 1] [+ 2 2]]
+[* [+ 1/2 1/2] [+ 1/3 1/3]]
+
+;; --- K9: Relational + functional bridge ---
+
+solve (path "a" "d")
+solve (reachable "a" dest)
+
+;; --- K10: Many-definition fan-in ---
+
+[int+ [s1 1] [int+ [s2 1] [int+ [s3 1] [int+ [s4 1] [s5 1]]]]]
+
+;; --- K11: Nat conversion through definition chain ---
+
+spec nat-to-int Nat -> Int
+defn nat-to-int
+  | zero  -> 0
+  | suc k -> [+ 1 [nat-to-int k]]
+
+nat-to-int 5N
+nat-to-int [add 2N 3N]
+
+;; --- K12: Polymorphic id across multiple types in one sequence ---
+
+my-id 42
+my-id "string"
+my-id true
+my-id 1/2
+my-id [some 42]
+my-id [ok "good"]
+
+;; --- K13: Large list (performance canary) ---
+
+'[1 2 3 4 5 6 7 8 9 10]
+length '[1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20]
+
+;; --- K14: Deeply nested generic ops (8 trait resolutions) ---
+
+[+ [+ [+ 1 2] [+ 3 4]] [+ [+ 5 6] [+ 7 8]]]
+;; => 36
+
+;; --- K15: Speculation stress — many union defs in sequence ---
+;; Each def triggers with-speculative-rollback. In aggregate, tests
+;; that save/restore doesn't leak state between speculations.
+
+def k15a : <Int | String> := 1
+def k15b : <Int | String> := "two"
+def k15c : <Int | String> := 3
+def k15d : <Int | String> := "four"
+def k15e : <Int | String> := 5
+def k15f : <Int | String> := "six"
+def k15g : <Int | String> := 7
+def k15h : <Int | String> := "eight"
+
+;; --- K16: Speculation then trait dispatch (interleaved consumers) ---
+
+def k16-u : <Int | String> := 42
+[+ 1 2]
+def k16-v : <Int | String> := "hi"
+[* 3 4]
+
+;; --- K17: Deep Nat recursion (performance canary for speculation) ---
+;; nat-sum exercises recursive pattern matching + Nat arithmetic.
+;; With TMS retraction, speculation may be triggered at each recursive step.
+
+nat-sum 4N
+;; => 10N
+
+
+;; ========================================================================
+;; SECTION Z: UNCOMMENTED BASELINE — Quick Regression Check
+;; ========================================================================
+;;
+;; Critical must-pass expressions from above. If Section Z passes,
+;; the file is likely healthy.
+
+;; Speculation (A)
+accept-union 42
+accept-union "test"
+multi-spec 1 2
+
+;; Trait dispatch (B)
+[+ 10 20]
+[* 3 4]
+[+ 1/2 1/3]
+
+;; Module loading (C)
+str::length "test"
+length '[1 2 3]
+
+;; Definition lifecycle (D)
+inc 99
+dbl 50
+sqr 7
+chain-d 5
+
+;; Pattern matching (E)
+is-zero 0N
+unwrap-or [some 99] 0
+result-to-int [ok 7]
+
+;; HOFs (F)
+apply-fn inc 41
+[make-adder 5] 10
+
+;; Types (G)
+my-id "baseline"
+my-const 42 false
+
+;; Relational (H)
+solve (color "grape" c)
+
+;; Prelude breadth (I)
+head '[42 43 44]
+reverse '[1 2 3]
+
+;; Pipeline (J)
+|> 10 inc dbl
+compose sqr inc 4
+
+;; Combined (K)
+nat-to-int 3N
+
+
+;; ========================================================================
+;; END OF ACCEPTANCE FILE
+;; ========================================================================
+;;
+;; Phase validation checklist:
+;;   Phase 0:  Run baseline — all uncommented expressions must pass
+;;   Phase 1a: id-map → infra cell — no regression (all sections)
+;;   Phase 1b: meta-info mutable removal — no regression (trivial change)
+;;   Phase 1c: constraint → functional CHAMP — Section A critical (speculation)
+;;   Phase 1d: all-unsolved-metas → infra cell — no regression
+;;   Phase 2:  Speculation stack push — Section A critical (shadow validation)
+;;   Phase 3:  Commit-on-success — Section A critical
+;;   Phase 4:  TMS retraction — Section A, G critical (speculation correctness)
+;;   Phase 5a: meta-info → infra cell — no regression (2→1 box)
+;;   Phase 5b: Retirement gate — ALL sections (belt-and-suspenders removed)
+;;   Phase 6:  batch-worker migration — Section C, I critical (module loading)
+;;   Phase 7:  Dual-write elimination — Section B, E critical (registry lookup)
+;;   Phase 8:  Guard + callback cleanup — all sections
+;;   Phase 9:  Rename — all sections (mechanical, compilation check sufficient)
+;;   Phase 10: Driver simplification — all sections
+;;   Phase 11: PIR — benchmark before/after, graduated criteria
+;;
+;; After each phase: run this file via process-file, verify 0 new failures.
+;; Pre-existing BUG/BLOCKED items do not count as regressions.
