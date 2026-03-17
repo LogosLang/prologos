@@ -33,6 +33,7 @@
 (require "metavar-store.rkt"
          "atms.rkt"
          "propagator.rkt"
+         "elaborator-network.rkt"
          "performance-counters.rkt")
 
 (provide
@@ -209,14 +210,39 @@
      ;; save-meta-state captures the network box, and restore-meta-state! reverts
      ;; all cell contents (including constraint cells). No parameter fallback needed.
      (define saved (save-meta-state))
-     ;; 2. Run the speculation
-     ;; NOTE: Speculation stack push deferred to Phase 6. During belt-and-suspenders
-     ;; (Phases 2-5), network-box restore handles rollback. Pushing the stack now
-     ;; would route cell writes to TMS branches, but without commit-on-success
-     ;; machinery, depth-0 reads would see stale base values after success.
-     (define result (thunk))
+     ;; 2. Run the speculation with TMS stack push (Track 6 Phase 2+3)
+     ;; Push hyp-id onto the speculation stack so cell writes are routed to
+     ;; TMS branches at this depth. On success, commit-on-success promotes
+     ;; branch values to base. On failure, network-box restore handles rollback.
+     ;; Belt-and-suspenders: network-box restore remains the production mechanism;
+     ;; TMS stack push + commit validates that TMS branching is coherent.
+     ;;
+     ;; IMPORTANT: Only push the stack at depth 0 (top-level speculation).
+     ;; Nested speculation (depth > 0) stays on the production path (network-box
+     ;; restore) because the TMS tree model has a read-fallback bug for nested
+     ;; depths (tms-read falls to base instead of checking outer hypotheses).
+     ;; Full nested TMS support is Phase 4 (TMS retraction) scope.
+     (define tms-pushed? (null? (current-speculation-stack)))
+     (define result
+       (if tms-pushed?
+           (parameterize ([current-speculation-stack (list hyp-id)])
+             (thunk))
+           (thunk)))
      (cond
-       [(success? result) result]
+       [(success? result)
+        ;; Track 6 Phase 3: Commit-on-success — promote TMS branch values to base.
+        ;; Only needed when we pushed the TMS stack (depth-0 speculation).
+        ;; All cell writes during the thunk went to TMS branches at hyp-id depth.
+        ;; Now promote them so depth-0 reads see the committed values.
+        ;; The box holds an elab-network; unwrap to prop-network, commit, rewrap.
+        (when tms-pushed?
+          (define net-box (current-prop-net-box))
+          (when net-box
+            (define enet (unbox net-box))
+            (define committed-pnet
+              (net-commit-assumption (elab-network-prop-net enet) hyp-id))
+            (set-box! net-box (struct-copy elab-network enet [prop-net committed-pnet]))))
+        result]
        [else
         ;; 3. Restore meta-state (O(1) for network — includes constraint cells)
         (restore-meta-state! saved)

@@ -86,6 +86,8 @@
  current-speculation-stack
  ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
  net-cell-read-raw
+ ;; Track 6 Phase 2+3: Network-wide TMS commit
+ net-commit-assumption
  ;; Trace data types (Visualization Phase 0)
  (struct-out bsp-round)
  (struct-out cell-diff)
@@ -468,6 +470,26 @@
         ;; Leaf value: promote to base
         (struct-copy tms-cell-value cell-val
           [base branch-val])])]))
+
+;; Track 6 Phase 2+3: Commit an assumption across all TMS cells in the network.
+;; For each cell whose value is a tms-cell-value, applies tms-commit to promote
+;; the assumption's branch value to the base. Non-TMS cells are unaffected.
+;; Returns the updated network.
+(define (net-commit-assumption net assumption-id)
+  (define cells (prop-network-cells net))
+  (define new-cells
+    (champ-fold cells
+      (lambda (cid cell acc)
+        (define v (prop-cell-value cell))
+        (if (tms-cell-value? v)
+            (let ([committed (tms-commit v assumption-id)])
+              (if (eq? committed v)
+                  acc  ;; no change
+                  (champ-insert acc (cell-id-hash cid) cid
+                                (struct-copy prop-cell cell [value committed]))))
+            acc))
+      cells))
+  (struct-copy prop-network net [cells new-cells]))
 
 ;; Merge two TMS cell values (recursive tree merge).
 ;; Per-branch: latest write wins (same assumption can't produce two
