@@ -32,7 +32,7 @@
 | **WS-B** | **Dual-Write Elimination + Cleanup** | | |
 | 6 | batch-worker.rkt → snapshot-based state (19→1 vector + 8 param) | ✅ | commit `25d7b20` — 7154 tests, 208.9s. Per-file timeout: `9a600c3` |
 | 7a | test-support.rkt → network-based isolation | ✅ | commit `92a27b0` — 7 network params added to 5 helpers + prelude block. Shadow: 0 divergences (7154 tests, 203.5s, same 3 ATMS) |
-| 7b | Dual-write elimination: macros.rkt (23) | ⬜ | Mechanical |
+| 7b | Dual-write elimination: macros.rkt (22 registers + spec propagation) | ✅ | commit `e10f5f3` — in-elaboration? guard pattern (cell-only during elab, param-only outside). sync-macros-cells-to-params! at command end. 7154 tests, 211.9s, 3 ATMS |
 | 7c | Dual-write elimination: warnings (3) + constraints (2) | ⬜ | Mechanical |
 | 7d | Dual-write elimination: global-env.rkt | ⬜ | Mechanical |
 | 8a | Exhaustive cell-reader audit + categorization | ⬜ | Categorize: elaboration / module-loading / other |
