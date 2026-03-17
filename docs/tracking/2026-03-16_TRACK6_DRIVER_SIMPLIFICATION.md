@@ -30,7 +30,7 @@
 | 5a | meta-info CHAMP → elab-network field (2→1 box) | ✅ | commit `9358b67` — 7148 tests, 210.5s, acceptance 0 errors |
 | 5b | Belt-and-suspenders retirement gate | ⏸️ | **Blocked**: TMS retraction insufficient — infra cells + meta-info not TMS-managed. See §4 Phase 5b notes |
 | **WS-B** | **Dual-Write Elimination + Cleanup** | | |
-| 6 | batch-worker.rkt → snapshot-based state (19→1 vector + 8 param) | ✅ | commit `25d7b20` — 7154 tests, 208.9s |
+| 6 | batch-worker.rkt → snapshot-based state (19→1 vector + 8 param) | ✅ | commit `25d7b20` — 7154 tests, 208.9s. Per-file timeout: `9a600c3` |
 | 7a | test-support.rkt → network-based isolation | ⬜ | Shadow phase ~7min one-time cost |
 | 7b | Dual-write elimination: macros.rkt (23) | ⬜ | Mechanical |
 | 7c | Dual-write elimination: warnings (3) + constraints (2) | ⬜ | Mechanical |
@@ -41,8 +41,11 @@
 | 8d | Remove callback parameters | ⬜ | Or mark deprecated if edge cases |
 | 9 | `current-global-env` → `current-prelude-env` rename | ⬜ | ~266 references, mechanical |
 | 10 | Driver `parameterize` simplification | ⬜ | ~30 bindings → ~5 |
+| **Post-Phase 10** | **Deferred items (required before PIR)** | | |
+| 5b | Belt-and-suspenders retirement gate | ⏸️ | Blocked on infra cells + meta-info not TMS-managed |
+| BUG | ATMS initialization in test speculation paths | ⬜ | Pre-existing: `with-speculative-rollback: ATMS not initialized` in test-map, test-mixed-map, test-union-types (10 failures across 3 files). Tests call speculation outside `process-command` context. Predates Track 6. |
 | **Final** | | | |
-| 11 | Performance validation + PIR | ⬜ | Graduated criteria: <5% ship, 5–15% investigate, >15% block |
+| 11 | Performance validation + PIR | ⬜ | Graduated criteria: <5% ship, 5–15% investigate, >15% block. **Blocked until 5b + BUG fix resolved.** |
 
 ---
 
