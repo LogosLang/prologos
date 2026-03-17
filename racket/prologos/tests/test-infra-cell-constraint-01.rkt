@@ -74,15 +74,17 @@
     (check-not-false (current-prop-net-box))
     (define enet (unbox (current-prop-net-box)))
     (define cid (current-constraint-cell-id))
-    (check-equal? (elab-cell-read enet cid) '())))
+    ;; Track 6 Phase 1c: constraint store is now a hasheq.
+    (check-equal? (elab-cell-read enet cid) (hasheq))))
 
+;; Track 6 Phase 1c: constraint store is now a hasheq keyed by constraint cid.
 (test-case "constraint cell: add-constraint! cell-primary writes"
   (with-fresh-meta-env
     (define c (add-constraint! (expr-Nat) (expr-Bool) '() "test-cell-primary"))
     (define cell-contents (elab-cell-read (unbox (current-prop-net-box))
                                           (current-constraint-cell-id)))
-    (check-equal? (length cell-contents) 1)
-    (check-eq? (car cell-contents) c)))
+    (check-equal? (hash-count cell-contents) 1)
+    (check-eq? (hash-ref cell-contents (constraint-cid c)) c)))
 
 (test-case "constraint cell: multiple adds accumulate"
   (with-fresh-meta-env
@@ -91,10 +93,10 @@
     (define c3 (add-constraint! (expr-Nat) (expr-Bool) '() "third"))
     (define cell-contents (elab-cell-read (unbox (current-prop-net-box))
                                           (current-constraint-cell-id)))
-    (check-equal? (length cell-contents) 3)
-    (check-eq? (first cell-contents) c1)
-    (check-eq? (second cell-contents) c2)
-    (check-eq? (third cell-contents) c3)))
+    (check-equal? (hash-count cell-contents) 3)
+    (check-eq? (hash-ref cell-contents (constraint-cid c1)) c1)
+    (check-eq? (hash-ref cell-contents (constraint-cid c2)) c2)
+    (check-eq? (hash-ref cell-contents (constraint-cid c3)) c3)))
 
 (test-case "constraint cell: read-constraint-store reads from cell"
   (with-fresh-meta-env
@@ -107,7 +109,7 @@
     (reset-meta-store!)
     (check-not-false (current-constraint-cell-id))
     (check-equal? (elab-cell-read (unbox (current-prop-net-box))
-                                  (current-constraint-cell-id)) '())))
+                                  (current-constraint-cell-id)) (hasheq))))
 
 ;; ========================================
 ;; Phase 1b: Trait/HasMethod/Capability constraint cells

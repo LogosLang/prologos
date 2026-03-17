@@ -64,6 +64,9 @@
  get-wakeup-constraints
  retry-constraints-via-cells!
  reset-constraint-store!
+ ;; Track 6 Phase 1c: functional constraint updates
+ read-constraint-by-cid
+ write-constraint-to-store!
  all-postponed-constraints
  all-failed-constraints
  ;; Sprint 6: Universe level metavariables
@@ -225,8 +228,7 @@
    source    ;; any — debug info (string or constraint-provenance)
    status    ;; 'postponed | 'retrying | 'solved | 'failed
    cell-ids) ;; (listof cell-id) — propagator cells for metas in lhs/rhs (P1-E3a)
-  #:transparent
-  #:mutable)
+  #:transparent)
 
 ;; ========================================
 ;; Sprint 9: Structured provenance for error messages
@@ -579,51 +581,56 @@
 ;; referenced by metas in lhs/rhs.
 (define (add-constraint! lhs rhs ctx source)
   (perf-inc-constraint!)
-  (define c (constraint (gensym 'cst) lhs rhs ctx source 'postponed '()))
-  ;; Track 1 Phase 6c: Cell-only writes (network-everywhere).
+  (define c0 (constraint (gensym 'cst) lhs rhs ctx source 'postponed '()))
+  ;; Collect meta-ids early (needed for wakeup + cell-ids).
+  (define meta-ids (append (collect-meta-ids lhs) (collect-meta-ids rhs)))
+  ;; Propagator path: add unify constraints between cells and compute cell-ids.
+  (define net-box (current-prop-net-box))
+  (define add-unify-fn (current-prop-add-unify-constraint))
+  (define c
+    (if (and net-box add-unify-fn)
+        (let ()
+          (define enet (unbox net-box))
+          (define id-map ((current-prop-id-map-read) enet))
+          (define lhs-metas (extract-shallow-meta-ids lhs))
+          (define rhs-metas (extract-shallow-meta-ids rhs))
+          (define enet*
+            (for*/fold ([net enet])
+                       ([lm (in-list lhs-metas)]
+                        [rm (in-list rhs-metas)])
+              (define lcid (champ-lookup id-map (prop-meta-id-hash lm) lm))
+              (define rcid (champ-lookup id-map (prop-meta-id-hash rm) rm))
+              (if (and (not (eq? lcid 'none)) (not (eq? rcid 'none))
+                       (not (equal? lcid rcid)))
+                  (let-values ([(net* _pid) (add-unify-fn net lcid rcid)])
+                    net*)
+                  net)))
+          (set-box! net-box enet*)
+          ;; P1-E3a: Record cell-ids for all metas in constraint.
+          ;; Track 6 Phase 1c: immutable constraint with cell-ids populated.
+          (define all-cell-ids
+            (for*/list ([mid (in-list meta-ids)]
+                        [cid (in-value (champ-lookup id-map (prop-meta-id-hash mid) mid))]
+                        #:when (not (eq? cid 'none)))
+              cid))
+          (struct-copy constraint c0 [cell-ids (remove-duplicates all-cell-ids eq?)]))
+        c0))
+  ;; Track 6 Phase 1c: write as hash entry keyed by constraint cid.
+  ;; The constraint now has cell-ids populated before being written to store.
   (define cstore-cid (current-constraint-cell-id))
   (define cstore-net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
   (let ([enet (unbox cstore-net-box)])
-    (set-box! cstore-net-box (write-fn enet cstore-cid (list c))))
+    (set-box! cstore-net-box (write-fn enet cstore-cid (hasheq (constraint-cid c) c))))
   ;; Track 2 Phase 2: Write initial 'pending status to cell.
   (write-constraint-status-cell! (constraint-cid c) 'pending)
   ;; Register for wakeup on all mentioned metas.
-  (define meta-ids (append (collect-meta-ids lhs) (collect-meta-ids rhs)))
   (define wr-cid (current-wakeup-registry-cell-id))
   (when (pair? meta-ids)
     (let ([wr-delta
            (for/fold ([acc (hasheq)]) ([id (in-list meta-ids)])
              (hash-set acc id (list c)))])
       (set-box! cstore-net-box (write-fn (unbox cstore-net-box) wr-cid wr-delta))))
-  ;; Propagator path: add unify constraints between cells
-  (define net-box (current-prop-net-box))
-  (define add-unify-fn (current-prop-add-unify-constraint))
-  (when (and net-box add-unify-fn)
-    (define enet (unbox net-box))
-    (define id-map ((current-prop-id-map-read) (unbox net-box)))
-    (define lhs-metas (extract-shallow-meta-ids lhs))
-    (define rhs-metas (extract-shallow-meta-ids rhs))
-    (define enet*
-      (for*/fold ([net enet])
-                 ([lm (in-list lhs-metas)]
-                  [rm (in-list rhs-metas)])
-        (define lcid (champ-lookup id-map (prop-meta-id-hash lm) lm))
-        (define rcid (champ-lookup id-map (prop-meta-id-hash rm) rm))
-        (if (and (not (eq? lcid 'none)) (not (eq? rcid 'none))
-                 (not (equal? lcid rcid)))
-            (let-values ([(net* _pid) (add-unify-fn net lcid rcid)])
-              net*)
-            net)))
-    (set-box! net-box enet*)
-    ;; P1-E3a: Record cell-ids for all metas in constraint for cell-state retry.
-    ;; Uses full collect-meta-ids (not just shallow) to capture nested metas.
-    (define all-cell-ids
-      (for*/list ([mid (in-list meta-ids)]
-                  [cid (in-value (champ-lookup id-map (prop-meta-id-hash mid) mid))]
-                  #:when (not (eq? cid 'none)))
-        cid))
-    (set-constraint-cell-ids! c (remove-duplicates all-cell-ids eq?)))
   c)
 
 ;; Get constraints associated with a metavariable for wakeup.
@@ -633,25 +640,31 @@
 
 ;; Retry postponed constraints that mention the given meta.
 ;; Uses 'retrying guard to prevent infinite re-entrant loops.
+;; Track 6 Phase 1c: functional status updates via write-constraint-to-store!.
 (define (retry-constraints-for-meta! meta-id)
   (perf-inc-constraint-retry!)
   (define retry-fn (current-retry-unify))
   (when retry-fn
     (define constraints (get-wakeup-constraints meta-id))
     (for ([c (in-list constraints)])
-      (when (eq? (constraint-status c) 'postponed)
+      (define c-cid (constraint-cid c))
+      ;; Read fresh from store to get current status.
+      (define current-c (read-constraint-by-cid c-cid))
+      (when (and current-c (eq? (constraint-status current-c) 'postponed))
         ;; Guard against re-entrant retry
-        (set-constraint-status! c 'retrying)
-        (retry-fn c)
-        ;; If still 'retrying after the call, set back to 'postponed
-        (when (eq? (constraint-status c) 'retrying)
-          (set-constraint-status! c 'postponed))))))
+        (write-constraint-to-store! (struct-copy constraint current-c [status 'retrying]))
+        (retry-fn current-c)
+        ;; Read fresh again — retry-fn may have written 'solved/'failed
+        (define post-c (read-constraint-by-cid c-cid))
+        (when (and post-c (eq? (constraint-status post-c) 'retrying))
+          (write-constraint-to-store! (struct-copy constraint post-c [status 'postponed])))))))
 
 ;; P1-E3a: Retry postponed constraints using propagator cell state.
 ;; After run-to-quiescence, checks ALL postponed constraints that have cell-ids.
 ;; A constraint is retried if any of its meta cells has become non-bot
 ;; (i.e., some meta was solved, possibly via transitive propagation).
 ;; This captures transitive wakeups that the legacy wakeup registry misses.
+;; Track 6 Phase 1c: functional status updates via write-constraint-to-store!.
 (define (retry-constraints-via-cells!)
   (define retry-fn (current-retry-unify))
   (define net-box (current-prop-net-box))
@@ -660,6 +673,7 @@
     (define enet (unbox net-box))
     ;; Track 1 Phase 1c: read from cell (primary) with parameter fallback.
     (for ([c (in-list (read-constraint-store))])
+      (define c-cid (constraint-cid c))
       (when (and (eq? (constraint-status c) 'postponed)
                  (not (null? (constraint-cell-ids c))))
         ;; Check if any meta cell has become non-bot (meta solved)
@@ -669,10 +683,12 @@
               (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
         (when any-solved?
           ;; Guard against re-entrant retry (same as legacy path)
-          (set-constraint-status! c 'retrying)
+          (write-constraint-to-store! (struct-copy constraint c [status 'retrying]))
           (retry-fn c)
-          (when (eq? (constraint-status c) 'retrying)
-            (set-constraint-status! c 'postponed)))))))
+          ;; Read fresh from store — retry-fn may have written 'solved/'failed
+          (define post-c (read-constraint-by-cid c-cid))
+          (when (and post-c (eq? (constraint-status post-c) 'retrying))
+            (write-constraint-to-store! (struct-copy constraint post-c [status 'postponed]))))))))
 
 ;; ========================================
 ;; Track 2 Phase 4: Readiness Scan (Stratum 1)
@@ -772,15 +788,19 @@
   (match action
     [(action-retry-constraint c)
      ;; Re-check: constraint may have been resolved by a prior action in this batch.
-     (when (eq? (constraint-status c) 'postponed)
+     ;; Track 6 Phase 1c: read fresh from store for current status.
+     (define c-cid (constraint-cid c))
+     (define current-c (read-constraint-by-cid c-cid))
+     (when (and current-c (eq? (constraint-status current-c) 'postponed))
        (perf-inc-constraint-retry!)
        (define retry-fn (current-retry-unify))
        (when retry-fn
          ;; Guard still present as safety net (structurally dead under stratified loop).
-         (set-constraint-status! c 'retrying)
-         (retry-fn c)
-         (when (eq? (constraint-status c) 'retrying)
-           (set-constraint-status! c 'postponed))))]
+         (write-constraint-to-store! (struct-copy constraint current-c [status 'retrying]))
+         (retry-fn current-c)
+         (define post-c (read-constraint-by-cid c-cid))
+         (when (and post-c (eq? (constraint-status post-c) 'retrying))
+           (write-constraint-to-store! (struct-copy constraint post-c [status 'postponed])))))]
     [(action-resolve-trait dict-id tc-info)
      ;; Re-check: dict meta may have been solved by a prior action.
      (unless (meta-solved? dict-id)
@@ -813,14 +833,34 @@
 ;; Note: WRITES remain cell-only (crash without network = data loss prevention).
 
 ;; Read the constraint store from the cell.
-;; Returns the current list of all constraints.
+;; Track 6 Phase 1c: constraint store is now a hasheq keyed by constraint cid.
+;; Returns the current list of all constraints (hash-values for backward compat).
 (define (read-constraint-store)
   (define cid (current-constraint-cell-id))
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
-      (read-fn (unbox net-box) cid)
+      (hash-values (read-fn (unbox net-box) cid))
       '()))
+
+;; Track 6 Phase 1c: Read a single constraint by its cid from the store.
+(define (read-constraint-by-cid c-cid)
+  (define cid (current-constraint-cell-id))
+  (define net-box (current-prop-net-box))
+  (define read-fn (current-prop-cell-read))
+  (if (and cid net-box read-fn)
+      (hash-ref (read-fn (unbox net-box) cid) c-cid #f)
+      #f))
+
+;; Track 6 Phase 1c: Write a single constraint update to the store (functional).
+;; Merges a single-entry hash — merge-hasheq-union replaces the entry.
+(define (write-constraint-to-store! updated-c)
+  (define cid (current-constraint-cell-id))
+  (define net-box (current-prop-net-box))
+  (define write-fn (current-prop-cell-write))
+  (when (and cid net-box write-fn)
+    (set-box! net-box (write-fn (unbox net-box) cid
+                                (hasheq (constraint-cid updated-c) updated-c)))))
 
 ;; Read trait constraint map from cell.
 ;; Returns hasheq: meta-id → trait-constraint-info.
@@ -1784,12 +1824,13 @@
     ;; id-map is now a field of elab-network, initialized to champ-empty
     ;; by make-elaboration-network — no separate box needed.
     ;; Phase 1a: Create constraint store cell in the unified network.
-    ;; merge-list-append ensures constraints accumulate monotonically.
+    ;; Track 6 Phase 1c: changed from list-cell (merge-list-append) to registry-cell
+    ;; (merge-hasheq-union) keyed by constraint cid. Enables functional status updates.
     (define new-cell-fn (current-prop-new-infra-cell))
     (when new-cell-fn
       (define nb (current-prop-net-box))
       (define enet0 (unbox nb))
-      (define-values (enet1 cstore-cid) (new-cell-fn enet0 '() merge-list-append))
+      (define-values (enet1 cstore-cid) (new-cell-fn enet0 (hasheq) merge-hasheq-union))
       (current-constraint-cell-id cstore-cid)
       ;; Phase 1b: Create registry cells for trait/hasmethod/capability constraints.
       (define-values (enet2 tc-cid) (new-cell-fn enet1 (hasheq) merge-hasheq-union))

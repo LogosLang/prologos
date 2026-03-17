@@ -744,6 +744,7 @@
 ;; calls this callback on each postponed constraint that mentions the meta.
 ;; Retry callback uses unify-core (not unify) to avoid double propagator
 ;; checking — the retry itself is triggered by propagator quiescence.
+;; Track 6 Phase 1c: functional status updates via write-constraint-to-store!.
 (current-retry-unify
  (lambda (c)
    (let ([lhs (zonk-at-depth 0 (constraint-lhs c))]
@@ -751,11 +752,11 @@
      (define result (unify-core (constraint-ctx c) lhs rhs))
      (cond
        [(eq? result #t)
-        (set-constraint-status! c 'solved)
+        (write-constraint-to-store! (struct-copy constraint c [status 'solved]))
         ;; Track 2 Phase 2: dual-write to status cell.
         (write-constraint-status-cell! (constraint-cid c) 'resolved)]
        [(eq? result #f)
-        (set-constraint-status! c 'failed)
+        (write-constraint-to-store! (struct-copy constraint c [status 'failed]))
         ;; Track 2 Phase 2: dual-write to status cell.
         (write-constraint-status-cell! (constraint-cid c) 'resolved)]
        ;; 'postponed: leave status as-is (will be set back to 'postponed

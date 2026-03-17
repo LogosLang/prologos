@@ -102,8 +102,10 @@
                 (elab-cell-write (unbox (current-prop-net-box)) cid solution))
       ;; Now retry via cells — should find the cell is non-bot and retry
       (retry-constraints-via-cells!)
+      ;; Track 6 Phase 1c: read fresh from store for current status
+      (define post-c (read-constraint-by-cid (constraint-cid c)))
       ;; The constraint should now be solved (Nat = Nat)
-      (check-equal? (constraint-status c) 'solved))))
+      (check-equal? (constraint-status post-c) 'solved))))
 
 (test-case "via-cells/skips-when-no-cells-solved"
   (with-fresh-meta-env
@@ -126,25 +128,27 @@
       (unify ctx-empty flex-term (expr-Nat))
       ;; Phase 6e: Read from cell via read-constraint-store (no parameter fallback)
       (define c (car (read-constraint-store)))
-      ;; Manually mark as solved
-      (set-constraint-status! c 'solved)
+      ;; Manually mark as solved (Track 6 Phase 1c: functional update)
+      (write-constraint-to-store! (struct-copy constraint c [status 'solved]))
       ;; Write to cell
       (define cid (car (constraint-cell-ids c)))
       (set-box! (current-prop-net-box)
                 (elab-cell-write (unbox (current-prop-net-box)) cid (expr-Nat)))
       ;; Retry should skip — constraint is already solved
       (retry-constraints-via-cells!)
-      (check-equal? (constraint-status c) 'solved))))
+      (define post-c (read-constraint-by-cid (constraint-cid c)))
+      (check-equal? (constraint-status post-c) 'solved))))
 
 (test-case "via-cells/skips-constraints-without-cell-ids"
   (with-fresh-meta-env
     (define m (fresh-meta ctx-empty (expr-hole) "test"))
     (define c (add-constraint! m (expr-Nat) ctx-empty "test"))
-    ;; Clear cell-ids to simulate legacy constraint
-    (set-constraint-cell-ids! c '())
+    ;; Clear cell-ids to simulate legacy constraint (Track 6 Phase 1c: functional)
+    (write-constraint-to-store! (struct-copy constraint c [cell-ids '()]))
     ;; Retry via cells should skip this constraint
     (retry-constraints-via-cells!)
-    (check-equal? (constraint-status c) 'postponed)))
+    (define post-c (read-constraint-by-cid (constraint-cid c)))
+    (check-equal? (constraint-status post-c) 'postponed)))
 
 ;; ========================================
 ;; Integration tests: solve-meta! triggers both paths
