@@ -27,7 +27,7 @@
 | 1d | `all-unsolved-metas` → infrastructure cell | ✅ | commit `a82e4d2` — 7148 tests, 207.4s, acceptance 0 errors |
 | 2+3 | Speculation stack push + commit-on-success | ✅ | commit `4a08db6` — depth-0 only; 7148 tests, 199.6s, acceptance 0 errors |
 | 4 | TMS retraction (replace network-box restore) | ⬜ | Belt-and-suspenders validation |
-| 5a | meta-info CHAMP → infrastructure cell (2→1 box) | ⬜ | Mechanical — mirrors Phase 1a pattern |
+| 5a | meta-info CHAMP → elab-network field (2→1 box) | ✅ | commit `9358b67` — 7148 tests, 210.5s, acceptance 0 errors |
 | 5b | Belt-and-suspenders retirement gate | ⬜ | **Concrete retirement**: 0 divergences required |
 | **WS-B** | **Dual-Write Elimination + Cleanup** | | |
 | 6 | batch-worker.rkt → hybrid state (20 cell + 7 param) | ⬜ | Network snapshot + parameterize for runtime config |
