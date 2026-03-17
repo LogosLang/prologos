@@ -148,6 +148,7 @@
 
   (define t0 (current-inexact-monotonic-milliseconds))
   (define ok? #t)
+  (define timed-out? #f)
   (define error-msg "")
 
   ;; Capture stderr from the test file
@@ -218,6 +219,7 @@
                ;; Timeout — kill the thread and report
                (kill-thread worker)
                (set! ok? #f)
+               (set! timed-out? #t)
                (set! error-msg
                      (format "TIMEOUT: file exceeded ~as per-file limit" timeout))]
               [(and (pair? result) (eq? (car result) 'error))
@@ -278,7 +280,7 @@
   (define result
     (hasheq 'file (path->string (file-name-from-path (string->path file)))
             'wall_ms wall-ms
-            'status (if ok? "pass" "fail")
+            'status (cond [ok? "pass"] [timed-out? "timeout"] [else "fail"])
             'tests file-tests))
 
   ;; Attach optional fields
