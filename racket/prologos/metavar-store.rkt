@@ -208,8 +208,7 @@
    solution    ;; Expr or #f if unsolved
    constraints ;; (listof any) — empty in Sprint 1, used by Sprint 2
    source)     ;; any — debug info (source location, description string)
-  #:transparent
-  #:mutable)
+  #:transparent)
 
 ;; ========================================
 ;; Sprint 5: Constraint postponement
