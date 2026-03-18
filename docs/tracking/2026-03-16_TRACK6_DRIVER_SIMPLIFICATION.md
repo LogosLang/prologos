@@ -38,7 +38,7 @@
 | 8a | Exhaustive cell-reader audit + categorization | ✅ | 24 macros readers + 2 narrow readers audited. 3 call sites outside elaboration (driver post-compilation, repl :trait/:satisfies) → switched to param reads. |
 | 8b | Remove `current-macros-in-elaboration?` guard | ✅ | commit `6fa6240` — guard removed from macros-cell-read-safe. Net-boxes scoped to process-command parameterize (auto-revert to #f). |
 | 8c | Remove `current-narrow-in-elaboration?` guard | ✅ | commit `6fa6240` — guard removed from narrow-cell-read-safe. Same net-box scoping. |
-| 8d | Remove callback parameters | ⬜ | **Assessed: still active.** All 3 callbacks (retry-trait-resolve, retry-hasmethod-resolve, retry-unify) have active call sites. NOT superseded by reactive propagation. Skip. |
+| 8d | Callback cleanup + dead code removal | ✅ | commit `6793ce5` — immediate resolution paths removed (stratified loop handles), 3 dead functions removed, 2 guard params removed. Callbacks retained as stepping stone; inlining into execute-resolution-actions! scoped to stratified prop-net architecture (Track 7+). Principles annotated (commit `f66809e`). |
 | 9 | `current-global-env` → `current-prelude-env` rename | ✅ | commit `36588ee` — 994 occurrences across 271 files. Zero remaining references. |
 | 10 | Driver `parameterize` simplification | ✅ | Assessed: 13 bindings remain (5 net-boxes, 3 caches, fuel, narrow-constraints, 3 warning resets). All necessary — reduced from ~30 through Phases 7-8. |
 | **Post-Phase 10** | **Deferred items (required before PIR)** | | |
