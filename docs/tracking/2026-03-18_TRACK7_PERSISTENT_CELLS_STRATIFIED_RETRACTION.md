@@ -18,7 +18,9 @@
 | D.1 | Initial design document | ✅ | — | This document |
 | D.2 | External critique + response | ✅ | — | §14; threshold-cell redesign, scanning audit, assumption taxonomy |
 | D.3 | Self-critique (principle alignment) | ✅ | — | §9+§15; T1 resolved (Option A), T2-T6 documented, all tensions addressed |
-| 0 | Performance baseline + acceptance file | ⬜ | — | |
+| 0a | Acceptance file | ✅ | — | 5 bugs discovered; session/relational/speculation coverage |
+| 0b | `process-file` verbose instrumentation | ⬜ | — | Per-command summaries, structured log, timing |
+| 0c | Adversarial constraint graph + baseline capture | ⬜ | — | Synthetic graph: deep chains, wide fan-out, nested speculation |
 | 1 | Persistent registry network infrastructure | ⬜ | L1 (finite registries) | WS-C: separate persistent network for registries |
 | 2 | Registry cell persistence migration | ⬜ | L1 (monotone merge) | WS-C: migrate 24 macros + 3 warning + 2 narrowing cells |
 | 3 | Dual-write elimination | ⬜ | — (no new propagators) | WS-C: remove parameter writes from register functions |
@@ -278,6 +280,96 @@ This is the standard propagator-network approach: instead of polling for readine
 | Module restructuring for callback inlining | Direct resolution calls | WS-B Phase 7 | Low |
 | Mult lattice + cells | QTT in network | WS-A Phase 9 | Low |
 | Type ↔ mult bridge propagators | Cross-domain reasoning | WS-A Phase 9 | Low |
+
+---
+
+## 3b. Design: Phase 0 — Baseline, Instrumentation, Adversarial Graph
+
+### Phase 0a: Acceptance File ✅
+
+**Delivered**: `examples/2026-03-18-track7-acceptance.prologos` (commit `3101ea5`). Exercises session types, process definitions, relational features, speculation interleaved with declarations, registry accumulation stress. 5 L3 bugs discovered (user `data` constructors unbound at file level, `{A}` + multi-arity defn parser crash, match-in-defn-body crash, let-in-match reader failure, `->` in identifiers).
+
+### Phase 0b: `process-file` Verbose Instrumentation
+
+**Goal**: Add a `--verbose` (or parameterized) mode to `process-file` that emits per-command elaboration summaries in a structured format. This is the diagnostic foundation for Phases 7-8 belt-and-suspenders validation and the adversarial benchmark.
+
+**Per-command output** (when verbose):
+
+| Field | Description | Source |
+|-------|-------------|--------|
+| `command-index` | Sequential command number in the file | `process-file` loop counter |
+| `form-summary` | First 80 chars of the source form | Reader output |
+| `metas-created` | Metavariables allocated this command | `perf-inc-meta-created!` (existing) |
+| `metas-solved` | Metavariables solved this command | `perf-inc-meta-solved!` (existing) |
+| `constraints-registered` | Postponed constraints created | `perf-inc-constraint-count!` (existing) |
+| `trait-resolutions` | Trait constraints resolved | `perf-inc-trait-resolve-steps!` (existing) |
+| `prop-firings` | Propagator firings during quiescence | NEW: instrument `run-to-quiescence` |
+| `s1-scan-time-ms` | Time in S1 readiness scanning | NEW: wrap `collect-ready-*` |
+| `s0-quiescence-time-ms` | Time in S0 type propagation | NEW: wrap `run-to-quiescence` |
+| `resolution-cycles` | Iterations of `run-stratified-resolution!` | NEW: count loop iterations |
+| `cell-allocs` | Cells allocated this command | NEW: `perf-inc-cell-alloc!` |
+| `wall-ms` | Total command wall time | `current-inexact-milliseconds` delta |
+
+**Output format**: One JSON object per command to stderr (when `current-verbose-mode` is `#t`). Parseable by the adversarial benchmark harness. Does not affect stdout result output.
+
+```racket
+;; Example output line:
+;; {"cmd":3,"form":"[+ [* 2 3] [- 10 4]]","metas":4,"solved":4,
+;;  "constraints":0,"traits":2,"firings":12,"s1_ms":0.1,"s0_ms":0.3,
+;;  "cycles":1,"cells":6,"wall_ms":1.2}
+```
+
+**Integration**: Add `current-verbose-mode` parameter (default `#f`). `process-file` accepts optional `#:verbose #t`. The acceptance file and adversarial benchmark pass this flag. Normal test runs are unaffected.
+
+**Scope**: Minimal — instrument existing counters + add 4 new timing/counting points. No architectural changes. This is plumbing for Phases 7-10, not a feature.
+
+### Phase 0c: Adversarial Constraint Graph + Baseline Capture
+
+**Goal**: Create a synthetic `.prologos` file that exercises the constraint resolution pipeline under adversarial conditions, and capture baseline performance of the current hand-written loop.
+
+**File**: `examples/2026-03-18-track7-adversarial.prologos`
+
+**Graph structure** (concrete Prologos expressions):
+
+1. **Deep cascading resolution chains (depth 5+)**: Nested trait constraints where resolving one unblocks the next.
+   ```
+   ;; Num Int resolves to: Add Int + Sub Int + Mul Int + Neg Int + Abs Int + FromInt Int
+   ;; Each sub-trait resolution is a separate L2 action.
+   ;; Nesting: [+ [* [- [abs x] [neg y]] z] w] triggers 5+ cascading resolutions.
+   ```
+
+2. **Wide fan-out (20+ constraints per meta)**: A single polymorphic function applied to many different types in one expression, creating many trait constraints that share a meta.
+   ```
+   ;; 20+ independent [+] calls in a list, each creating independent Num constraints
+   ;; but sharing the return-type meta of the enclosing expression.
+   ```
+
+3. **Nested speculation (3+ levels)**: Deeply nested union types that trigger cascading `with-speculative-rollback`.
+   ```
+   ;; def v : <<Int | Bool> | <String | Rat>> := 42
+   ;; Three levels of union → three speculation depths.
+   ```
+
+4. **Cascading resolution feedback**: Trait hierarchy where resolving one instance unblocks another.
+   ```
+   ;; User-defined trait hierarchy: Showable requires Describable requires Eq
+   ;; Resolving Eq Int → dict-meta solved → unblocks Describable Int readiness
+   ;; → Describable Int resolved → unblocks Showable Int readiness
+   ;; (NOTE: requires user-defined traits, blocked by the data-constructor L3 bug.
+   ;;  Use prelude traits: Ord requires Eq. Num requires Add+Sub+Mul+...
+   ;;  These already cascade.)
+   ```
+
+**Baseline capture**: Run the adversarial graph with verbose mode (`#:verbose #t`). Record:
+- Per-command JSON (from Phase 0b instrumentation)
+- Total `resolution-cycles` across all commands
+- Total `prop-firings` across all commands
+- Total `s1-scan-time-ms` (the scanning cost that L1 readiness propagators will eliminate)
+- Total wall time
+
+Store baseline in `data/benchmarks/adversarial-baseline.json`. Phase 8 compares the layered scheduler against this baseline.
+
+**Measurement methodology**: Run 3× and take median (reduce noise). The adversarial graph should be deterministic (no randomness, same constraint ordering every run).
 
 ---
 
