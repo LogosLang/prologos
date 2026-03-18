@@ -86,8 +86,12 @@
 ;; global-env.rkt
 (define ready-global-env              (current-prelude-env))
 (define ready-module-defs-content     (current-module-definitions-content))  ;; Track 6 Phase 7d
-;; Track 7 Phase 1: Persistent registry network
-(define ready-persistent-registry-net (current-persistent-registry-net-box))
+;; Track 7 Phase 6g: Snapshot persistent registry network CONTENTS (not box identity).
+;; Each test file gets a fresh box with the post-prelude network contents,
+;; preventing cross-file leakage via box mutation.
+(define ready-persistent-registry-net-contents
+  (let ([b (current-persistent-registry-net-box)])
+    (and b (unbox b))))
 
 ;; ============================================================
 ;; Phase 2: Run test files with ready state per file
@@ -185,7 +189,9 @@
          ;; global-env.rkt
          [current-prelude-env              ready-global-env]
          [current-module-definitions-content ready-module-defs-content]  ;; Track 6 Phase 7d
-         [current-persistent-registry-net-box ready-persistent-registry-net]  ;; Track 7 Phase 1
+         [current-persistent-registry-net-box
+          (and ready-persistent-registry-net-contents
+               (box ready-persistent-registry-net-contents))]  ;; Track 7 Phase 6g: fresh box per file
          [current-definition-cells-content (hasheq)]   ;; Phase 3a: fresh per-file
          [current-definition-cell-ids      (hasheq)]   ;; Phase 3a: fresh per-file
          [current-definition-dependencies  (hasheq)]   ;; Phase 3b: fresh per-file
