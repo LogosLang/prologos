@@ -410,3 +410,55 @@
   (define action-values (map tagged-entry-value queue))
   (check-not-false (member 'action-A action-values))
   (check-not-false (member 'action-B action-values)))
+
+;; ========================================
+;; 7. eq? identity preservation (correctness + performance guard)
+;; ========================================
+;; These tests guard the invariant that no-op operations return the
+;; same eq? object. This is critical for progress detection in
+;; run-stratified-resolution-pure (eq? enet-s2 enet-s0) and also
+;; a major performance factor (avoids struct allocation on no-op writes).
+
+(test-case "eq? identity: net-cell-write returns same network on no-op"
+  (define net0 (make-prop-network))
+  (define-values (net1 cid)
+    (net-new-cell net0 (expr-Nat) (lambda (old new) (if (eq? old 'type-bot) new old))))
+  ;; Write the same value — merge produces old, should return eq? network
+  (define net2 (net-cell-write net1 cid (expr-Nat)))
+  (check-eq? net2 net1
+    "net-cell-write must return eq? network when value unchanged"))
+
+(test-case "eq? identity: net-cell-replace returns same network on no-op"
+  (define net0 (make-prop-network))
+  (define-values (net1 cid) (net-new-cell net0 'hello (lambda (old new) new)))
+  ;; Replace with same value
+  (define net2 (net-cell-replace net1 cid 'hello))
+  (check-eq? net2 net1
+    "net-cell-replace must return eq? network when value unchanged"))
+
+(test-case "eq? identity: elab-cell-write returns same enet on no-op"
+  (define enet0 (make-elaboration-network))
+  (define-values (enet1 cid) (elab-new-infra-cell enet0 (hasheq) merge-hasheq-union))
+  ;; Write empty hash to a cell that's already empty — merge = union(∅,∅) = ∅
+  (define enet2 (elab-cell-write enet1 cid (hasheq)))
+  (check-eq? enet2 enet1
+    "elab-cell-write must return eq? enet when prop-net unchanged"))
+
+(test-case "eq? identity: elab-cell-replace returns same enet on no-op"
+  (define enet0 (make-elaboration-network))
+  (define-values (enet1 cid) (elab-new-infra-cell enet0 'value-A (lambda (old new) new)))
+  ;; Replace with same value
+  (define enet2 (elab-cell-replace enet1 cid 'value-A))
+  (check-eq? enet2 enet1
+    "elab-cell-replace must return eq? enet when value unchanged"))
+
+(test-case "eq? identity: run-to-quiescence returns same network when already quiescent"
+  (define net0 (make-prop-network))
+  (define-values (net1 cid) (net-new-cell net0 'stable (lambda (old new) old)))
+  ;; Network with no worklist items — already quiescent
+  (define net2 (run-to-quiescence net1))
+  ;; Note: net1 may have propagators from cell creation on worklist,
+  ;; so we run to quiescence first, then check a second run is eq?
+  (define net3 (run-to-quiescence net2))
+  (check-eq? net3 net2
+    "run-to-quiescence must return eq? network when already quiescent"))
