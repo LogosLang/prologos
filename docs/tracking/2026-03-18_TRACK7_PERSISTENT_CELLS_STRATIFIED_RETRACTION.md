@@ -29,7 +29,7 @@
 | 6 | Belt-and-suspenders retirement | ✅ | — (removal, not addition) | WS-B: 6a restore retained (structural state), 6b-c dead code, 6d test fixtures, 6e reads cell-primary, 6f deferred (harmless), 6g batch-worker box-contents snapshot |
 | 7a | Module extraction + callback elimination | ✅ | — (restructuring only) | WS-B: `resolution.rkt` with unified dispatcher; 3 callbacks → 1 executor |
 | 7b | Resolution chain purification | ✅ | — (signature change) | WS-B: pure write chain + solve-meta! sole box boundary; read bridge via parameterize |
-| 8a | Readiness propagators (L1) | ⬜ | L1 (fire once per dep) | WS-B: replace O(total) S1 scanning with per-constraint readiness cells |
+| 8a | Readiness propagators (L1) | 🔄 (audit) | L1 (fire once per dep) | WS-B: scanning audit complete; implementation pending |
 | 8b | Resolution propagators (L2) | ⬜ | L2 (type depth ↓) | WS-B: replace `execute-resolution-actions!` loop with propagators |
 | 8c | Stratified loop elimination | ⬜ | L1+L2 (composed) | WS-B: `run-stratified-resolution!` → layered network quiescence |
 | 9 | QTT multiplicity cells + cross-domain bridges | ⬜ | L1 (3-element lattice) | WS-A: mult lattice in network |
@@ -747,6 +747,56 @@ Constraint status (pending/resolved/failed) is still tracked in the existing con
 **Ordering**: Readiness propagators are tagged as L1 layer. Under the hybrid BSP/Gauss-Seidel scheduler, they fire after S0 reaches quiescence. The ready-queue accumulates during L1's BSP rounds. L2 reads the queue after L1 quiesces. This preserves stratum ordering.
 
 **Belt-and-suspenders**: During Phase 8a, run BOTH the old scanning functions and the ready-queue, assert identical action descriptor sets. **Retirement criteria (D.3 T4)**: Scanning functions removed when: (a) readiness propagators produce identical action descriptor sets for ≥1 full suite run with 0 divergences, AND (b) Phase 8b is implemented (L2 consuming the ready-queue, confirming end-to-end correctness).
+
+#### Phase 8a Prerequisite: Scanning Function Audit (completed)
+
+Line-by-line audit of the 6 `collect-ready-*` functions identifying every readiness condition that L1 propagators must replicate.
+
+**Constraint readiness** (`collect-ready-constraints-via-cells`, line ~666):
+- Scans all constraints in `(read-constraint-store)` (list from cell)
+- Ready when: status == `'postponed` AND non-empty `cell-ids` AND at least one cell non-bot/non-top
+- Produces: `(action-retry-constraint c)`
+
+**Constraint readiness — targeted** (`collect-ready-constraints-for-meta`, line ~682):
+- Scans wakeup registry for the just-solved meta
+- Ready when: status == `'postponed` (no cell-state check — trusts wakeup trigger)
+- Produces: `(action-retry-constraint c)`
+
+**Trait readiness** (`collect-ready-traits-via-cells`, line ~689):
+- Scans `(read-trait-cell-map)` — dict-meta-id → cell-ids
+- Ready when: dict meta NOT solved AND tc-info exists AND at least one type-arg cell non-bot/non-top
+- Produces: `(action-resolve-trait dict-id tc-info)`
+
+**Trait readiness — targeted** (`collect-ready-traits-for-meta`, line ~707):
+- Scans trait wakeup map for the just-solved meta
+- Ready when: dict meta NOT solved AND tc-info exists (no cell-state check)
+- Produces: `(action-resolve-trait dict-id tc-info)`
+
+**HasMethod readiness** (`collect-ready-hasmethods-via-cells`, line ~729):
+- Scans `(read-hasmethod-cell-map)` — hm-meta-id → cell-ids
+- Ready when: hm meta NOT solved AND hm-info exists AND at least one dep cell non-bot/non-top
+- Produces: `(action-resolve-hasmethod hm-id hm-info)`
+
+**HasMethod readiness — targeted** (`collect-ready-hasmethods-for-meta`, line ~717):
+- Scans hasmethod wakeup map for the just-solved meta
+- Ready when: hm meta NOT solved AND hm-info exists (no cell-state check)
+- Produces: `(action-resolve-hasmethod hm-id hm-info)`
+
+**Critical asymmetry in orchestration** (`run-stratified-resolution!`):
+- Constraints: either `-via-cells` OR `-for-meta` (mutually exclusive, based on network availability)
+- Traits and HasMethods: BOTH `-via-cells` AND `-for-meta` ALWAYS called (no mutual exclusion)
+- Reason: cell scan catches transitive propagations; wakeup catches immediate targeted wakeup. Both are fast.
+
+**Readiness lattice**: A dependency cell is "ready" when `(not (prop-type-bot? v)) AND (not (prop-type-top? v))` — i.e., the cell holds a concrete type value, neither unsolved (bot) nor contradicted (top).
+
+**Pre-filter**: `run-retraction-stratum!` (S(-1)) removes retracted-assumption-tagged entries from all scoped cells BEFORE S1 scans. This is the only implicit filtering outside the 6 functions.
+
+**What L1 propagators must replicate**:
+1. Per-constraint fan-in: watch all dependency cells, fire when all non-bot (constraints) or any non-bot (traits/hasmethods)
+2. Unsolved-meta guard: don't fire for already-solved dict/hm metas
+3. Info existence: skip if constraint/trait/hasmethod info was cleared
+4. Assumption tagging: read functions unwrap tags transparently; propagators produce tagged entries
+5. Dual-path assembly: for traits/hasmethods, both cell-driven and wakeup-driven readiness must be captured
 
 ### Phase 8b: Resolution Propagators (L2)
 
