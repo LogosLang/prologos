@@ -152,6 +152,14 @@
  run-retraction-stratum!
  ;; Track 7 Phase 7a: Resolution executor (replaces 3 callback params)
  current-resolution-executor
+ ;; Track 7 Phase 7b: Pure write functions (enet → enet*)
+ write-constraint-to-store-pure
+ write-constraint-status-cell-pure
+ write-error-descriptor-pure
+ solve-meta-core-pure
+ run-stratified-resolution-pure
+ read-constraint-by-cid-pure
+ current-resolution-executor-pure
  ;; Track 6 Phase 1a: id-map access callbacks
  current-prop-id-map-read
  current-prop-id-map-set
@@ -745,6 +753,9 @@
 ;; Callback parameter replaces 3 individual callbacks (breaks circular dep:
 ;; metavar-store → resolution → unify/trait-resolution → metavar-store).
 (define current-resolution-executor (make-parameter #f))
+;; Track 7 Phase 7b: Pure resolution executor (enet action → enet*).
+;; Used by solve-meta! for the pure resolution chain.
+(define current-resolution-executor-pure (make-parameter #f))
 
 ;; Execute a batch of action descriptors.
 (define (execute-resolution-actions! actions)
@@ -791,16 +802,20 @@
 
 ;; Track 6 Phase 1c: Write a single constraint update to the store (functional).
 ;; Merges a single-entry hash — merge-hasheq-union replaces the entry.
-;; Track 7 Phase 4: tag with current assumption (may differ from creation assumption
-;; if status update happens during a different speculation branch).
-(define (write-constraint-to-store! updated-c)
+;; Track 7 Phase 7b: Pure variant — takes/returns enet.
+(define (write-constraint-to-store-pure enet updated-c)
   (define cid (current-constraint-cell-id))
-  (define net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
   (define aid (current-speculation-assumption))
-  (when (and cid net-box write-fn)
-    (set-box! net-box (write-fn (unbox net-box) cid
-                                (hasheq (constraint-cid updated-c) (tagged-entry updated-c aid))))))
+  (if (and cid write-fn)
+      (write-fn enet cid (hasheq (constraint-cid updated-c) (tagged-entry updated-c aid)))
+      enet))
+
+;; Imperative wrapper (for call sites outside the resolution chain).
+(define (write-constraint-to-store! updated-c)
+  (define net-box (current-prop-net-box))
+  (when net-box
+    (set-box! net-box (write-constraint-to-store-pure (unbox net-box) updated-c))))
 
 ;; Read trait constraint map from cell.
 ;; Returns hasheq: meta-id → trait-constraint-info.
@@ -897,14 +912,20 @@
 ;; Track 2 Phase 2: Write a constraint's status to the status cell.
 ;; Dual-writes alongside set-constraint-status! until Phase 3 eliminates
 ;; the struct's mutable status field.
-;; Track 7 Phase 4: tag status with current assumption.
-(define (write-constraint-status-cell! constraint-id status-sym)
+;; Track 7 Phase 7b: Pure variant.
+(define (write-constraint-status-cell-pure enet constraint-id status-sym)
   (define cid (current-constraint-status-cell-id))
-  (define net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
   (define aid (current-speculation-assumption))
-  (when (and cid net-box write-fn)
-    (set-box! net-box (write-fn (unbox net-box) cid (hasheq constraint-id (tagged-entry status-sym aid))))))
+  (if (and cid write-fn)
+      (write-fn enet cid (hasheq constraint-id (tagged-entry status-sym aid)))
+      enet))
+
+;; Imperative wrapper.
+(define (write-constraint-status-cell! constraint-id status-sym)
+  (define net-box (current-prop-net-box))
+  (when net-box
+    (set-box! net-box (write-constraint-status-cell-pure (unbox net-box) constraint-id status-sym))))
 
 ;; Track 2 Phase 7: Read error descriptors from cell.
 ;; Returns hasheq: meta-id → no-instance-error.
@@ -918,14 +939,20 @@
 
 ;; Track 2 Phase 7: Write an error descriptor to the error cell.
 ;; Called by resolution callbacks when resolution fails for a ground constraint.
-;; Track 7 Phase 4: tag error descriptors with current assumption.
-(define (write-error-descriptor! meta-id error)
+;; Track 7 Phase 7b: Pure variant.
+(define (write-error-descriptor-pure enet meta-id error)
   (define cid (current-error-descriptor-cell-id))
-  (define net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
   (define aid (current-speculation-assumption))
-  (when (and cid net-box write-fn)
-    (set-box! net-box (write-fn (unbox net-box) cid (hasheq meta-id (tagged-entry error aid))))))
+  (if (and cid write-fn)
+      (write-fn enet cid (hasheq meta-id (tagged-entry error aid)))
+      enet))
+
+;; Imperative wrapper.
+(define (write-error-descriptor! meta-id error)
+  (define net-box (current-prop-net-box))
+  (when net-box
+    (set-box! net-box (write-error-descriptor-pure (unbox net-box) meta-id error))))
 
 ;; Reset the constraint store (called by reset-meta-store!).
 ;; Clears cell IDs — new cells are created by reset-meta-store! when the network is recreated.
@@ -1334,13 +1361,28 @@
 ;; (if not already inside one). Recursive solve-meta! calls from within
 ;; retries only write the solution — the outer loop handles further rounds.
 ;; Hash removal: Always reads/writes CHAMP meta-info store.
+;; Track 7 Phase 7b: solve-meta! is the SOLE box-writing entry point.
+;; Unboxes enet, calls pure chain, reboxes. The rest of the codebase
+;; (elaboration, type-checking) calls this — it's the interface between
+;; the sequential elaborator and the functional network.
 (define (solve-meta! id solution)
-  (solve-meta-core! id solution)
-  ;; If already inside a stratified resolution loop, defer retries to the
-  ;; outer loop. This eliminates recursive re-entrancy — the call stack is
-  ;; always flat regardless of constraint graph depth.
-  (unless (current-in-stratified-resolution?)
-    (run-stratified-resolution! id)))
+  (define net-box (current-prop-net-box))
+  (define executor (current-resolution-executor-pure))
+  (cond
+    [(and net-box executor (not (current-in-stratified-resolution?)))
+     ;; Full pure chain: solve + stratified resolution
+     (define enet (unbox net-box))
+     (define-values (enet* _) (solve-meta-core-pure enet id solution))
+     (define enet** (run-stratified-resolution-pure enet* id executor))
+     (set-box! net-box enet**)]
+    [net-box
+     ;; Inside stratified resolution — just solve core (pure), rebox
+     (define enet (unbox net-box))
+     (define-values (enet* _) (solve-meta-core-pure enet id solution))
+     (set-box! net-box enet*)]
+    [else
+     ;; Fallback: legacy path (no network)
+     (solve-meta-core! id solution)]))
 
 ;; Core of solve-meta!: write solution to CHAMP + propagator cell.
 ;; No retry logic — that lives in run-stratified-resolution!.
@@ -1398,6 +1440,60 @@
     (define um-cid (current-unsolved-metas-cell-id))
     (when um-cid
       (set-box! net-box (write-fn (unbox net-box) um-cid (hasheq id #f))))))
+
+;; Track 7 Phase 7b: Pure variant of solve-meta-core — takes/returns enet.
+;; Returns (values enet* progress?) where progress? is #t if the meta was solved.
+(define (solve-meta-core-pure enet id solution)
+  (perf-inc-meta-solved!)
+  (define h (prop-meta-id-hash id))
+  (define mi-read (current-prop-meta-info-read))
+  (define mi-set (current-prop-meta-info-set))
+  (define mi-champ (if mi-read (mi-read enet) #f))
+  (define info
+    (and mi-champ
+         (let ([v (champ-lookup mi-champ h id)])
+           (if (eq? v 'none) #f v))))
+  (unless info
+    (error 'solve-meta-core-pure "unknown metavariable: ~a" id))
+  (when (eq? (meta-info-status info) 'solved)
+    (error 'solve-meta-core-pure "metavariable ~a already solved" id))
+  ;; Update meta-info
+  (define updated (meta-info id (meta-info-ctx info) (meta-info-type info)
+                              'solved solution
+                              (meta-info-constraints info) (meta-info-source info)))
+  (define new-mi-champ (champ-insert mi-champ h id updated))
+  (define enet1 (if mi-set (mi-set enet new-mi-champ) enet))
+  ;; Write solution to cell
+  (define write-fn (current-prop-cell-write))
+  (define read-fn (current-prop-cell-read))
+  (define cid (prop-meta-id->cell-id id))
+  (define enet2
+    (if (and write-fn cid)
+        (let ([enet-w (write-fn enet1 cid solution)])
+          ;; P-U2b: Post-write consistency validation
+          (when read-fn
+            (define cell-val (read-fn enet-w cid))
+            (when (and cell-val
+                       (not (equal? cell-val solution))
+                       (not (prop-type-bot? cell-val))
+                       (not (prop-type-top? cell-val)))
+              (perf-inc-cell-write-mismatch!)))
+          ;; Mark meta as solved in unsolved-metas tracking cell
+          (define um-cid (current-unsolved-metas-cell-id))
+          (if um-cid
+              (write-fn enet-w um-cid (hasheq id #f))
+              enet-w))
+        enet1))
+  (values enet2 #t))
+
+;; Track 7 Phase 7b: Pure read of a constraint by its cid from enet.
+(define (read-constraint-by-cid-pure enet c-cid)
+  (define cid (current-constraint-cell-id))
+  (define read-fn (current-prop-cell-read))
+  (if (and cid read-fn)
+      (let ([v (hash-ref (read-fn enet cid) c-cid #f)])
+        (if (tagged-entry? v) (tagged-entry-value v) v))
+      #f))
 
 ;; Track 2 Phase 3+4: Stratified resolution loop with action descriptors.
 ;; S0 (type propagation) → S1 (collect ready actions) → S2 (execute) → repeat.
@@ -1458,6 +1554,56 @@
         (perf-inc-resolution-cycle!)  ;; Track 7 Phase 0b
         (when (unbox progress-box)
           (loop (sub1 fuel) meta-id))))))
+
+;; Track 7 Phase 7b: Pure variant of the stratified resolution loop.
+;; Takes enet, returns enet*. No box reads/writes — all state threaded.
+;; The S1 readiness scan still reads from the box (bridged via with-enet-reads
+;; in resolution.rkt). S0 quiescence uses the pure run-to-quiescence on prop-net.
+;; S2 uses the pure resolution-execute-action-pure (for/fold over actions).
+(define (run-stratified-resolution-pure enet trigger-meta-id resolution-executor)
+  (define run-fn (current-prop-run-quiescence))
+  (define unwrap (current-prop-unwrap-net))
+  (define rewrap (current-prop-rewrap-net))
+  (define has-network? (and run-fn unwrap rewrap))
+  (let loop ([fuel stratified-resolution-fuel]
+             [meta-id trigger-meta-id]
+             [current-enet enet])
+    (if (<= fuel 0)
+        current-enet
+        (let* (;; S(-1): Retraction — run imperatively for now (reads/writes box)
+               ;; TODO: purify retraction stratum in Phase 8
+               [_ (let ([nb (current-prop-net-box)])
+                    (when nb (set-box! nb current-enet))
+                    (run-retraction-stratum!)
+                    (void))]
+               [enet-post-retract (let ([nb (current-prop-net-box)])
+                                    (if nb (unbox nb) current-enet))]
+               ;; S0: Type propagation (quiescence) — pure on prop-net
+               [enet-s0 (if has-network?
+                             (let* ([pnet (unwrap enet-post-retract)]
+                                    [pnet* (run-fn pnet)])
+                               (rewrap enet-post-retract pnet*))
+                             enet-post-retract)]
+               ;; S1: Readiness scan — reads from enet via box bridge
+               [_ (let ([nb (current-prop-net-box)])
+                    (when nb (set-box! nb enet-s0)))]
+               [actions (append
+                         (if has-network?
+                             (collect-ready-constraints-via-cells)
+                             (collect-ready-constraints-for-meta meta-id))
+                         (collect-ready-traits-via-cells)
+                         (collect-ready-traits-for-meta meta-id)
+                         (collect-ready-hasmethods-via-cells)
+                         (collect-ready-hasmethods-for-meta meta-id))]
+               ;; S2: Resolution commitment — pure (for/fold)
+               [enet-s2 (for/fold ([e enet-s0])
+                                  ([action (in-list actions)])
+                           (resolution-executor e action))])
+          (perf-inc-resolution-cycle!)
+          ;; Detect progress: enet changed?
+          (if (eq? enet-s2 enet-s0)
+              enet-s2  ;; No progress — done
+              (loop (sub1 fuel) meta-id enet-s2))))))
 
 ;; P-U3c: Lightweight quiescence flush.
 ;; Runs the propagator network to quiescence if available.

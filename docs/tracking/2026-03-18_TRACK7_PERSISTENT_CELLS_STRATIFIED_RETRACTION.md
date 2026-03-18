@@ -28,7 +28,7 @@
 | 5 | S(-1) retraction stratum | ✅ | L1 (assumption set ↓) | WS-B: `run-retraction-stratum!` cleans 11 scoped cells; belt-and-suspenders with restore |
 | 6 | Belt-and-suspenders retirement | ✅ | — (removal, not addition) | WS-B: 6a restore retained (structural state), 6b-c dead code, 6d test fixtures, 6e reads cell-primary, 6f deferred (harmless), 6g batch-worker box-contents snapshot |
 | 7a | Module extraction + callback elimination | ✅ | — (restructuring only) | WS-B: `resolution.rkt` with unified dispatcher; 3 callbacks → 1 executor |
-| 7b | Resolution chain purification | ⬜ | — (signature change) | WS-B: 6 write + 4 read functions purified to `enet → enet*` (Option A) |
+| 7b | Resolution chain purification | ✅ | — (signature change) | WS-B: pure write chain + solve-meta! sole box boundary; read bridge via parameterize |
 | 8a | Readiness propagators (L1) | ⬜ | L1 (fire once per dep) | WS-B: replace O(total) S1 scanning with per-constraint readiness cells |
 | 8b | Resolution propagators (L2) | ⬜ | L2 (type depth ↓) | WS-B: replace `execute-resolution-actions!` loop with propagators |
 | 8c | Stratified loop elimination | ⬜ | L1+L2 (composed) | WS-B: `run-stratified-resolution!` → layered network quiescence |

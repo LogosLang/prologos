@@ -2123,6 +2123,8 @@
 ;; Replaces 3 individual callbacks (trait, hasmethod, constraint retry)
 ;; with a single dispatcher that calls resolution functions directly.
 (current-resolution-executor resolution-execute-action!)
+;; Track 7 Phase 7b: Pure resolution executor for solve-meta! pure chain.
+(current-resolution-executor-pure resolution-execute-action-pure)
 
 ;; ========================================
 ;; CLI entry point — process .prologos files
