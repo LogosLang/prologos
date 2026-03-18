@@ -43,9 +43,9 @@
 | 10 | Driver `parameterize` simplification | ✅ | Assessed: 13 bindings remain (5 net-boxes, 3 caches, fuel, narrow-constraints, 3 warning resets). All necessary — reduced from ~30 through Phases 7-8. |
 | **Post-Phase 10** | **Deferred items (required before PIR)** | | |
 | 5b | Belt-and-suspenders retirement gate | ⏸️ | Blocked on infra cells + meta-info not TMS-managed |
-| BUG | ATMS initialization in test speculation paths | ⬜ | Pre-existing: `with-speculative-rollback: ATMS not initialized` in test-map, test-mixed-map, test-union-types (10 failures across 3 files). Tests call speculation outside `process-command` context. Predates Track 6. |
+| BUG | ATMS initialization in test speculation paths | ✅ | commit `ebc781e` — lazy ATMS init in `with-speculative-rollback` replaces hard error. Tests using `with-fresh-meta-env` bypass `process-command`; lazy init creates ATMS on demand. **All 7154 tests pass. 0 failures.** |
 | **Final** | | | |
-| 11 | Performance validation + PIR | ⬜ | Graduated criteria: <5% ship, 5–15% investigate, >15% block. **Blocked until 5b + BUG fix resolved.** |
+| 11 | Performance validation + PIR | ⬜ | Graduated criteria: <5% ship, 5–15% investigate, >15% block. BUG fixed (commit `ebc781e`). 5b deferred to Track 7. PIR can proceed noting 5b as open. |
 
 ---
 
