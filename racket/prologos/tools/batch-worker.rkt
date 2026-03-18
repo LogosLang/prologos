@@ -85,6 +85,7 @@
 (define ready-foreign-handler         (current-foreign-handler))
 ;; global-env.rkt
 (define ready-global-env              (current-global-env))
+(define ready-module-defs-content     (current-module-definitions-content))  ;; Track 6 Phase 7d
 
 ;; ============================================================
 ;; Phase 2: Run test files with ready state per file
@@ -181,6 +182,7 @@
          [current-foreign-handler         ready-foreign-handler]
          ;; global-env.rkt
          [current-global-env              ready-global-env]
+         [current-module-definitions-content ready-module-defs-content]  ;; Track 6 Phase 7d
          [current-definition-cells-content (hasheq)]   ;; Phase 3a: fresh per-file
          [current-definition-cell-ids      (hasheq)]   ;; Phase 3a: fresh per-file
          [current-definition-dependencies  (hasheq)]   ;; Phase 3b: fresh per-file

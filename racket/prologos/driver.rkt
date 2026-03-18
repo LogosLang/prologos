@@ -1478,6 +1478,16 @@
      (for ([(k v) (in-hash (module-info-env-snapshot cached))])
        (current-global-env
         (hash-set (current-global-env) k v)))
+     ;; Track 6 Phase 7d: populate module-definitions-content from module-network-ref.
+     ;; The module network is the authoritative source (Track 5); this hasheq is the
+     ;; materialized lookup cache. Belt-and-suspenders: both paths active during validation.
+     (define mnr (module-info-module-network cached))
+     (when mnr
+       (for ([(name cid) (in-hash (module-network-ref-cell-id-map mnr))])
+         (define val (net-cell-read (module-network-ref-prop-net mnr) cid))
+         (unless (eq? val 'infra-bot)
+           (current-module-definitions-content
+            (hash-set (current-module-definitions-content) name val)))))
      cached]
     [else
      ;; 2. Check for circular dependencies
@@ -1683,6 +1693,13 @@
      (for ([(k v) (in-hash mod-env)])
        (current-global-env
         (hash-set (current-global-env) k v)))
+     ;; Track 6 Phase 7d: populate module-definitions-content from module-network-ref.
+     (when mod-module-network
+       (for ([(name cid) (in-hash (module-network-ref-cell-id-map mod-module-network))])
+         (define val (net-cell-read (module-network-ref-prop-net mod-module-network) cid))
+         (unless (eq? val 'infra-bot)
+           (current-module-definitions-content
+            (hash-set (current-module-definitions-content) name val)))))
 
      mi]))
 

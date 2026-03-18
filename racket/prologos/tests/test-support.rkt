@@ -75,6 +75,7 @@
                 prelude-preparse-registry
                 prelude-capability-registry)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-cross-module-deps '()]  ;; Track 5 Phase 4
@@ -113,6 +114,7 @@
 ;; Each call gets a fresh global-env, ns-context, and meta-store for isolation.
 (define (run-ns-last s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-cross-module-deps '()]  ;; Track 5 Phase 4
@@ -138,6 +140,7 @@
 ;; Process a string and return ALL results (list).
 (define (run-ns-all s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-cross-module-deps '()]  ;; Track 5 Phase 4
@@ -168,6 +171,7 @@
 
 (define (run-ns-ws-last s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-cross-module-deps '()]  ;; Track 5 Phase 4
@@ -192,6 +196,7 @@
 
 (define (run-ns-ws-all s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  [current-cross-module-deps '()]  ;; Track 5 Phase 4
@@ -223,6 +228,7 @@
   (define stderr-out (open-output-string))
   (define results
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                    [current-definition-cells-content (hasheq)]  ;; Phase 3a
                    [current-definition-dependencies (hasheq)]  ;; Phase 3b
                    [current-cross-module-deps '()]  ;; Track 5 Phase 4

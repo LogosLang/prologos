@@ -38,6 +38,8 @@
          ;; The alias is provided for documentation clarity; the rename is deferred
          ;; to avoid touching 266 files with a purely mechanical change.
          (rename-out [current-global-env current-prelude-env])
+         ;; Track 6 Phase 7d: Module definitions sourced from module-network-ref
+         current-module-definitions-content
          global-env-lookup-type
          global-env-lookup-value
          global-env-add
@@ -80,6 +82,16 @@
 ;; ========================================
 ;; Populated during module loading. Structurally frozen after prelude load.
 (define current-global-env (make-parameter (hasheq)))
+
+;; ========================================
+;; Module definitions (Track 6 Phase 7d)
+;; ========================================
+;; Persistent hasheq: name → (cons type value) populated from module-network-ref
+;; during module import. Analogous to current-definition-cells-content but for
+;; module/prelude defs. Sourced from Track 5's module network cells — the module
+;; network is the authoritative source; this is the materialized lookup cache.
+;; Persists across commands within a file; reset per-file/per-test.
+(define current-module-definitions-content (make-parameter (hasheq)))
 
 ;; ========================================
 ;; Layer 1: Per-file definitions (Phase 3a)
@@ -196,6 +208,8 @@
      (car cell-entry)]
     [else
      ;; Layer 2: prelude/module definitions
+     ;; Track 6 Phase 7d: belt-and-suspenders — Layer 2 still primary for lookups;
+     ;; current-module-definitions-content populated in parallel for validation.
      (let ([entry (hash-ref (current-global-env) name #f)])
        ;; Track 5 Phase 4: cross-module edge (source is a module, not same-file)
        (when (and entry elab-name)
