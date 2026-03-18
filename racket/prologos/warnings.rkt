@@ -92,26 +92,26 @@
   (void))
 
 ;; Track 7 Phase 2: cell-primary read from persistent registry network.
+;; Track 7 Phase 6e: returns cell content or #f (no parameter fallback).
 (define (warnings-cell-read-safe cid)
   (define prn-box (current-persistent-registry-net-box))
   (if (and cid prn-box)
-      (with-handlers ([exn:fail? (λ (_) 'not-found)])
+      (with-handlers ([exn:fail? (λ (_) #f)])
         (net-cell-read (unbox prn-box) cid))
-      'not-found))
+      #f))
 
-;; Track 3 Phase 4: cell-primary readers for warning accumulators.
-;; Track 7 Phase 4: unwrap tagged entries for consumers.
+;; Track 7 Phase 6e: cell-primary reads with parameter fallback for no-network case.
 (define (read-coercion-warnings)
   (define v (warnings-cell-read-safe (current-coercion-warnings-cell-id)))
-  (if (eq? v 'not-found) (current-coercion-warnings) (unwrap-tagged-list v)))
+  (if v (unwrap-tagged-list v) (current-coercion-warnings)))
 
 (define (read-deprecation-warnings)
   (define v (warnings-cell-read-safe (current-deprecation-warnings-cell-id)))
-  (if (eq? v 'not-found) (current-deprecation-warnings) (unwrap-tagged-list v)))
+  (if v (unwrap-tagged-list v) (current-deprecation-warnings)))
 
 (define (read-capability-warnings)
   (define v (warnings-cell-read-safe (current-capability-warnings-cell-id)))
-  (if (eq? v 'not-found) (current-capability-warnings) (unwrap-tagged-list v)))
+  (if v (unwrap-tagged-list v) (current-capability-warnings)))
 
 ;; ========================================
 ;; Coercion warnings

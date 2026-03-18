@@ -419,8 +419,7 @@
 
 ;; Track 3 Phase 3: cell-primary reader for preparse registry
 (define (read-preparse-registry)
-  (define v (macros-cell-read-safe (current-preparse-registry-cell-id)))
-  (if (eq? v 'not-found) (current-preparse-registry) v))
+  (or (macros-cell-read-safe (current-preparse-registry-cell-id)) (current-preparse-registry)))
 
 ;; ========================================
 ;; Spec store: type signatures for named definitions
@@ -454,16 +453,14 @@
 
 ;; Track 3 Phase 3: cell-primary reader for spec store
 (define (read-spec-store)
-  (define v (macros-cell-read-safe (current-spec-store-cell-id)))
-  (if (eq? v 'not-found) (current-spec-store) v))
+  (or (macros-cell-read-safe (current-spec-store-cell-id)) (current-spec-store)))
 
 (define (lookup-spec name)
   (hash-ref (read-spec-store) name #f))
 
 ;; Track 3 Phase 3: cell-primary reader for propagated specs
 (define (read-propagated-specs)
-  (define v (macros-cell-read-safe (current-propagated-specs-cell-id)))
-  (if (eq? v 'not-found) (current-propagated-specs) v))
+  (or (macros-cell-read-safe (current-propagated-specs-cell-id)) (current-propagated-specs)))
 
 (define (spec-propagated? name)
   (set-member? (read-propagated-specs) name))
@@ -493,14 +490,14 @@
 
 ;; Track 3: Safe cell-primary read helper.
 ;; Track 7 Phase 2: reads from persistent registry network directly.
-;; Returns cell content when the persistent network exists and contains the cell.
-;; Falls back to 'not-found if no network or cell-id (parameter fallback in caller).
+;; Track 7 Phase 6e: returns cell content or #f (no parameter fallback).
+;; Callers provide their own default when #f is returned.
 (define (macros-cell-read-safe cid)
   (define prn-box (current-persistent-registry-net-box))
   (if (and cid prn-box)
-      (with-handlers ([exn:fail? (λ (_) 'not-found)])
+      (with-handlers ([exn:fail? (λ (_) #f)])
         (net-cell-read (unbox prn-box) cid))
-      'not-found))
+      #f))
 
 ;; Cell-id parameters for each registry (set by register-macros-cells!).
 ;; When #f, dual-write is skipped (legacy-only mode).
@@ -747,8 +744,7 @@
 
 ;; Track 3 Phase 1: cell-primary reader
 (define (read-schema-registry)
-  (define v (macros-cell-read-safe (current-schema-registry-cell-id)))
-  (if (eq? v 'not-found) (current-schema-registry) v))
+  (or (macros-cell-read-safe (current-schema-registry-cell-id)) (current-schema-registry)))
 
 (define (lookup-schema name)
   (hash-ref (read-schema-registry) name #f))
@@ -839,8 +835,7 @@
 
 ;; Track 3 Phase 2: cell-primary reader for selection registry
 (define (read-selection-registry)
-  (define v (macros-cell-read-safe (current-selection-registry-cell-id)))
-  (if (eq? v 'not-found) (current-selection-registry) v))
+  (or (macros-cell-read-safe (current-selection-registry-cell-id)) (current-selection-registry)))
 
 (define (lookup-selection name)
   (hash-ref (read-selection-registry) name #f))
@@ -864,8 +859,7 @@
 
 ;; Track 3 Phase 2: cell-primary reader for session registry
 (define (read-session-registry)
-  (define v (macros-cell-read-safe (current-session-registry-cell-id)))
-  (if (eq? v 'not-found) (current-session-registry) v))
+  (or (macros-cell-read-safe (current-session-registry-cell-id)) (current-session-registry)))
 
 (define (lookup-session name)
   (hash-ref (read-session-registry) name #f))
@@ -909,8 +903,7 @@
 
 ;; Track 3 Phase 3: cell-primary reader for strategy registry
 (define (read-strategy-registry)
-  (define v (macros-cell-read-safe (current-strategy-registry-cell-id)))
-  (if (eq? v 'not-found) (current-strategy-registry) v))
+  (or (macros-cell-read-safe (current-strategy-registry-cell-id)) (current-strategy-registry)))
 
 (define (lookup-strategy name)
   (hash-ref (read-strategy-registry) name #f))
@@ -937,8 +930,7 @@
 
 ;; Track 3 Phase 3: cell-primary reader for process registry
 (define (read-process-registry)
-  (define v (macros-cell-read-safe (current-process-registry-cell-id)))
-  (if (eq? v 'not-found) (current-process-registry) v))
+  (or (macros-cell-read-safe (current-process-registry-cell-id)) (current-process-registry)))
 
 (define (lookup-process name)
   (hash-ref (read-process-registry) name #f))
@@ -5684,12 +5676,10 @@
 
 ;; Track 3 Phase 1: cell-primary readers
 (define (read-ctor-registry)
-  (define v (macros-cell-read-safe (current-ctor-registry-cell-id)))
-  (if (eq? v 'not-found) (current-ctor-registry) v))
+  (or (macros-cell-read-safe (current-ctor-registry-cell-id)) (current-ctor-registry)))
 
 (define (read-type-meta)
-  (define v (macros-cell-read-safe (current-type-meta-cell-id)))
-  (if (eq? v 'not-found) (current-type-meta) v))
+  (or (macros-cell-read-safe (current-type-meta-cell-id)) (current-type-meta)))
 
 (define (lookup-ctor name)
   (hash-ref (read-ctor-registry) name #f))
@@ -5733,8 +5723,7 @@
 
 ;; Track 3 Phase 1: cell-primary reader
 (define (read-subtype-registry)
-  (define v (macros-cell-read-safe (current-subtype-registry-cell-id)))
-  (if (eq? v 'not-found) (current-subtype-registry) v))
+  (or (macros-cell-read-safe (current-subtype-registry-cell-id)) (current-subtype-registry)))
 
 (define (subtype-pair? sub-key super-key)
   (hash-ref (read-subtype-registry) (cons sub-key super-key) #f))
@@ -5766,8 +5755,7 @@
 
 ;; Track 3 Phase 1: cell-primary reader
 (define (read-coercion-registry)
-  (define v (macros-cell-read-safe (current-coercion-registry-cell-id)))
-  (if (eq? v 'not-found) (current-coercion-registry) v))
+  (or (macros-cell-read-safe (current-coercion-registry-cell-id)) (current-coercion-registry)))
 
 (define (lookup-coercion sub-key super-key)
   (hash-ref (read-coercion-registry) (cons sub-key super-key) #f))
@@ -5810,8 +5798,7 @@
 
 ;; Track 3 Phase 1: cell-primary reader
 (define (read-capability-registry)
-  (define v (macros-cell-read-safe (current-capability-registry-cell-id)))
-  (if (eq? v 'not-found) (current-capability-registry) v))
+  (or (macros-cell-read-safe (current-capability-registry-cell-id)) (current-capability-registry)))
 
 (define (lookup-capability name)
   (hash-ref (read-capability-registry) name #f))
@@ -5885,8 +5872,7 @@
 
 ;; Track 3 Phase 2: cell-primary reader for trait registry
 (define (read-trait-registry)
-  (define v (macros-cell-read-safe (current-trait-registry-cell-id)))
-  (if (eq? v 'not-found) (current-trait-registry) v))
+  (or (macros-cell-read-safe (current-trait-registry-cell-id)) (current-trait-registry)))
 
 (define (lookup-trait name)
   (hash-ref (read-trait-registry) name #f))
@@ -5907,8 +5893,7 @@
 
 ;; Track 3 Phase 2: cell-primary reader for trait laws
 (define (read-trait-laws)
-  (define v (macros-cell-read-safe (current-trait-laws-cell-id)))
-  (if (eq? v 'not-found) (current-trait-laws) v))
+  (or (macros-cell-read-safe (current-trait-laws-cell-id)) (current-trait-laws)))
 
 (define (lookup-trait-laws name)
   (hash-ref (read-trait-laws) name '()))
@@ -5931,8 +5916,7 @@
 ;; Falls back to the parameter when no network exists (during module loading,
 ;; where instances are registered to the parameter before the network is initialized).
 (define (read-impl-registry)
-  (define v (macros-cell-read-safe (current-impl-registry-cell-id)))
-  (if (eq? v 'not-found) (current-impl-registry) v))
+  (or (macros-cell-read-safe (current-impl-registry-cell-id)) (current-impl-registry)))
 
 (define (register-impl! key entry)
   ;; Duplicate check uses the parameter — it's the persistent cross-command
@@ -6033,8 +6017,7 @@
 
 ;; Track 3 Phase 2: cell-primary reader for parametric impl registry
 (define (read-param-impl-registry)
-  (define v (macros-cell-read-safe (current-param-impl-registry-cell-id)))
-  (if (eq? v 'not-found) (current-param-impl-registry) v))
+  (or (macros-cell-read-safe (current-param-impl-registry-cell-id)) (current-param-impl-registry)))
 
 ;; HKT-4: Overlap detection — warn if a new parametric impl could overlap with existing ones.
 (define (register-param-impl! trait-name entry)
@@ -6117,8 +6100,7 @@
 
 ;; Track 3 Phase 2: cell-primary reader for bundle registry
 (define (read-bundle-registry)
-  (define v (macros-cell-read-safe (current-bundle-registry-cell-id)))
-  (if (eq? v 'not-found) (current-bundle-registry) v))
+  (or (macros-cell-read-safe (current-bundle-registry-cell-id)) (current-bundle-registry)))
 
 (define (lookup-bundle name)
   (hash-ref (read-bundle-registry) name #f))
@@ -6148,8 +6130,7 @@
 
 ;; Track 3 Phase 2: cell-primary reader for specialization registry
 (define (read-specialization-registry)
-  (define v (macros-cell-read-safe (current-specialization-registry-cell-id)))
-  (if (eq? v 'not-found) (current-specialization-registry) v))
+  (or (macros-cell-read-safe (current-specialization-registry-cell-id)) (current-specialization-registry)))
 
 (define (lookup-specialization generic-name type-con)
   (hash-ref (read-specialization-registry) (cons generic-name type-con) #f))
@@ -7182,8 +7163,7 @@
 
 ;; Track 3 Phase 1: cell-primary reader
 (define (read-property-store)
-  (define v (macros-cell-read-safe (current-property-store-cell-id)))
-  (if (eq? v 'not-found) (current-property-store) v))
+  (or (macros-cell-read-safe (current-property-store-cell-id)) (current-property-store)))
 
 (define (lookup-property name)
   (hash-ref (read-property-store) name #f))
@@ -7455,8 +7435,7 @@
 
 ;; Track 3 Phase 1: cell-primary reader
 (define (read-functor-store)
-  (define v (macros-cell-read-safe (current-functor-store-cell-id)))
-  (if (eq? v 'not-found) (current-functor-store) v))
+  (or (macros-cell-read-safe (current-functor-store-cell-id)) (current-functor-store)))
 
 (define (lookup-functor name)
   (hash-ref (read-functor-store) name #f))
@@ -7562,8 +7541,7 @@
 
 ;; Track 3 Phase 3: cell-primary reader for user precedence groups
 (define (read-user-precedence-groups)
-  (define v (macros-cell-read-safe (current-user-precedence-groups-cell-id)))
-  (if (eq? v 'not-found) (current-user-precedence-groups) v))
+  (or (macros-cell-read-safe (current-user-precedence-groups-cell-id)) (current-user-precedence-groups)))
 
 (define (lookup-precedence-group name)
   (or (hash-ref (read-user-precedence-groups) name #f)
@@ -7575,8 +7553,7 @@
 
 ;; Track 3 Phase 3: cell-primary reader for user operators
 (define (read-user-operators)
-  (define v (macros-cell-read-safe (current-user-operators-cell-id)))
-  (if (eq? v 'not-found) (current-user-operators) v))
+  (or (macros-cell-read-safe (current-user-operators-cell-id)) (current-user-operators)))
 
 (define (register-user-operator! sym info)
   (current-user-operators
@@ -8232,8 +8209,7 @@
 
 ;; Track 3 Phase 3: cell-primary reader for macro registry
 (define (read-macro-registry)
-  (define v (macros-cell-read-safe (current-macro-registry-cell-id)))
-  (if (eq? v 'not-found) (current-macro-registry) v))
+  (or (macros-cell-read-safe (current-macro-registry-cell-id)) (current-macro-registry)))
 
 (define (lookup-macro name)
   (hash-ref (read-macro-registry) name #f))

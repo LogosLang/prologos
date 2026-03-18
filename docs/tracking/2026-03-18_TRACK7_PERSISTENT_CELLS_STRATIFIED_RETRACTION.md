@@ -26,7 +26,7 @@
 | 3 | Dual-write elimination | ✅ (3a) | — (no new propagators) | WS-C: 3a done (per-command overhead removed); 3b deferred to Phase 6 (param writes + read fallback retained for seeding + test isolation) |
 | 4 | Assumption-tagged scoped cells | ✅ | L1 (finite assumptions) | WS-B: 14 cells tagged; read functions unwrap; merge-constraint-status-map updated |
 | 5 | S(-1) retraction stratum | ✅ | L1 (assumption set ↓) | WS-B: `run-retraction-stratum!` cleans 11 scoped cells; belt-and-suspenders with restore |
-| 6 | Belt-and-suspenders retirement | 🔄 (6a-d) | — (removal, not addition) | WS-B: 6a finding (restore retained for structural state), 6b-c dead code removed, 6d test fixtures use persistent net; 6e-g pending |
+| 6 | Belt-and-suspenders retirement | 🔄 (6a-e) | — (removal, not addition) | WS-B: 6a finding (restore retained), 6b-c dead code removed, 6d test fixtures, 6e reads cell-primary; 6f-g pending |
 | 7a | Module extraction + callback elimination | ⬜ | — (restructuring only) | WS-B: extract to `resolution.rkt`, remove 3 callback params |
 | 7b | Resolution chain purification | ⬜ | — (signature change) | WS-B: 6 write + 4 read functions purified to `enet → enet*` (Option A) |
 | 8a | Readiness propagators (L1) | ⬜ | L1 (fire once per dep) | WS-B: replace O(total) S1 scanning with per-constraint readiness cells |
