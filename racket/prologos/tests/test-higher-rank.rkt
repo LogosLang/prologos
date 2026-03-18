@@ -36,7 +36,7 @@
 
 ;; Run sexp-mode Prologos code
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -59,7 +59,7 @@
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-module-registry prelude-module-registry]

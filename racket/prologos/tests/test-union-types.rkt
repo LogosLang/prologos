@@ -31,7 +31,7 @@
 ;; Helper
 ;; ========================================
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (process-string s)))
 
@@ -76,14 +76,14 @@
 ;; ========================================
 
 (test-case "union: whnf passes through"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
       (whnf (expr-union (expr-Nat) (expr-Bool)))
       (expr-union (expr-Nat) (expr-Bool)))))
 
 (test-case "union: nf normalizes components"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
       (nf (expr-union (expr-Nat) (expr-Bool)))
@@ -109,7 +109,7 @@
 
 (test-case "unify: Nat | Bool ≡ Nat | Bool"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (check-true
         (unify-ok? (unify ctx-empty
@@ -118,7 +118,7 @@
 
 (test-case "unify: Nat | Bool ≡ Bool | Nat (commutativity)"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (check-true
         (unify-ok? (unify ctx-empty
@@ -127,7 +127,7 @@
 
 (test-case "unify: (Nat | Bool) | Unit ≡ Nat | (Bool | Unit) (associativity)"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (check-true
         (unify-ok? (unify ctx-empty
@@ -136,7 +136,7 @@
 
 (test-case "unify: Nat | Bool ≢ Nat | Unit"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (check-false
         (unify ctx-empty
@@ -145,7 +145,7 @@
 
 (test-case "unify: Nat | Bool ≢ Nat (different cardinality)"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (check-false
         (unify ctx-empty

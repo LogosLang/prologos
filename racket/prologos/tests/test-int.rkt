@@ -256,7 +256,7 @@
 
 ;; Helper to run with clean global env
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (process-string s)))
 
@@ -321,7 +321,7 @@
                 '("OK")))
 
 (test-case "int surface: def + eval"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def x <Int> (int 42))\n(eval x)")])
       (check-equal? (length result) 2)

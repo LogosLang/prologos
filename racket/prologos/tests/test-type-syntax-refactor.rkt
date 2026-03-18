@@ -29,7 +29,7 @@
 ;; Helpers
 ;; ========================================
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (process-string s)))
 

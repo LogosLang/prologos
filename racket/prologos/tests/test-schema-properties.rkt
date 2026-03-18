@@ -40,7 +40,7 @@
                 shared-param-impl-reg
                 shared-schema-reg
                 shared-selection-reg)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -58,7 +58,7 @@
                  [current-selection-registry (hasheq)])
     (install-module-loader!)
     (process-string shared-preamble)
-    (values (current-global-env)
+    (values (current-prelude-env)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -68,7 +68,7 @@
             (current-selection-registry))))
 
 (define (run s)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -83,7 +83,7 @@
 
 ;; Like run, but also returns the schema-registry after processing
 (define (run+registry s)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]

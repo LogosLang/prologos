@@ -604,7 +604,7 @@
 ;; ========================================
 ;; These functions are called from macros.rkt during preparse-expand-all.
 ;; They consume ns/imports/exports forms and have side effects on
-;; current-ns-context, current-global-env, and current-module-registry.
+;; current-ns-context, current-prelude-env, and current-module-registry.
 
 ;; (ns namespace-sym)
 ;; (ns namespace-sym :no-prelude)
@@ -760,7 +760,7 @@
 
 ;; Ensure a module is loaded, returning its module-info (or #f if loader unavailable).
 ;; Always calls load-module (even if cached) so that load-module can import
-;; the module's env-snapshot into the caller's current-global-env.
+;; the module's env-snapshot into the caller's current-prelude-env.
 (define (ensure-module-loaded ns-sym)
   (let ([loader (current-module-loader)])
     (cond

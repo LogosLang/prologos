@@ -24,7 +24,7 @@
 ;; Helper: load a .prologos file via process-file
 (define (run-file filename)
   (define path (build-path here filename))
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
@@ -56,7 +56,7 @@
   (check-true (string-contains? (cadddr results) "type-checked")))
 
 (test-case "e2e-file: session registry populated from file"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
@@ -87,7 +87,7 @@
                  (format "Unexpected error: ~a" r))))
 
 (test-case "e2e-file: offer session + process from file"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]

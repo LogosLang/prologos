@@ -32,7 +32,7 @@
 
 ;; sexp mode (no prelude)
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (car (process-string s))))
 
@@ -47,7 +47,7 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-bundle-reg)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
@@ -60,7 +60,7 @@
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string "(ns test-generic-arith-03)")
-    (values (current-global-env)
+    (values (current-prelude-env)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -69,7 +69,7 @@
             (current-bundle-registry))))
 
 (define (run-ws s)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list lib-dir)]

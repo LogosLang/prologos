@@ -45,7 +45,7 @@
                 shared-param-impl-reg
                 shared-capability-reg
                 shared-subtype-reg)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -73,7 +73,7 @@
 
 ;; Helper: run code and return list of result strings.
 (define (run s)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -90,7 +90,7 @@
 
 ;; Helper: run code, capture env, then run cross-domain bridge.
 (define (run-and-bridge s)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]

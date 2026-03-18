@@ -187,7 +187,7 @@
 
 (test-case "elaboration resolves via namespace"
   ;; Set up: global env has a fully-qualified name
-  (parameterize ([current-global-env
+  (parameterize ([current-prelude-env
                   (hasheq 'prologos::data::nat::add (cons (expr-Nat) (expr-zero)))]
                  [current-module-registry (hasheq)]
                  [current-ns-context
@@ -199,7 +199,7 @@
     (check-equal? result (expr-fvar 'prologos::data::nat::add))))
 
 (test-case "elaboration resolves via alias"
-  (parameterize ([current-global-env
+  (parameterize ([current-prelude-env
                   (hasheq 'prologos::data::nat::add (cons (expr-Nat) (expr-zero)))]
                  [current-module-registry (hasheq)]
                  [current-ns-context
@@ -212,7 +212,7 @@
 
 (test-case "elaboration backward-compatible without ns-context"
   ;; When current-ns-context is #f, old behavior is preserved
-  (parameterize ([current-global-env
+  (parameterize ([current-prelude-env
                   (hasheq 'myname (cons (expr-Nat) (expr-zero)))]
                  [current-ns-context #f])
     (define result (elaborate (surf-var 'myname srcloc-unknown)))

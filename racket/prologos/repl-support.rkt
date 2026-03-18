@@ -23,18 +23,18 @@
 ;; Initialize the REPL env by re-processing module forms at runtime.
 ;; Called from the generated #%module-begin expansion.
 (define (prologos-init-repl-env form-stxs)
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-prelude-env (hasheq)])
     (for ([stx (in-list form-stxs)])
       (define parsed (parse-datum stx))
       (unless (prologos-error? parsed)
         (define result (process-command parsed))
         (void)))
-    (set-box! the-prologos-env (current-global-env))))
+    (set-box! the-prologos-env (current-prelude-env))))
 
 ;; Process a single REPL interaction at runtime.
 (define (prologos-repl-eval form-stx)
   (define saved-env (unbox the-prologos-env))
-  (parameterize ([current-global-env saved-env])
+  (parameterize ([current-prelude-env saved-env])
     (with-handlers
       ([exn:fail? (lambda (e) (displayln (exn-message e)))])
       ;; Pre-parse macro expansion
@@ -61,7 +61,7 @@
            [else
             (define result (process-command parsed))
             ;; Save updated env (process-command may have added definitions)
-            (set-box! the-prologos-env (current-global-env))
+            (set-box! the-prologos-env (current-prelude-env))
             (if (prologos-error? result)
                 (displayln (format-error result))
                 (displayln result))])]))))

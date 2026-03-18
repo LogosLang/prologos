@@ -19,7 +19,7 @@
 
 ;; Helper: run WS-mode string through the full pipeline, return last result
 (define (run-ws s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
@@ -31,7 +31,7 @@
 
 ;; Helper: run WS-mode string and return session entry from registry
 (define (run-ws-get-session s name)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
@@ -105,7 +105,7 @@
 
 (test-case "ws-session: dual of async session"
   (define result
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
@@ -124,7 +124,7 @@
 
 (test-case "ws-session: async send in defproc type-checks"
   (define result
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
@@ -146,7 +146,7 @@
 
 (test-case "ws-session: async recv in defproc type-checks"
   (define result
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]

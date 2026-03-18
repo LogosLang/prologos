@@ -34,7 +34,7 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-preparse-reg)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -47,7 +47,7 @@
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string "(ns test-resolution-confluence)\n")
-    (values (current-global-env)
+    (values (current-prelude-env)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -56,7 +56,7 @@
             (current-preparse-registry))))
 
 (define (run code)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-trait-registry shared-trait-reg]

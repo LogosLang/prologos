@@ -299,7 +299,7 @@ my-length '[1 2 3 4]
 ;;
 ;; Definitions flow through global-env-add (write), global-env-lookup (read),
 ;; global-env-remove! (failure cleanup). Track 6 Phase 7 removes the dual-write
-;; path so only cells remain. Track 6 Phase 9 renames current-global-env →
+;; path so only cells remain. Track 6 Phase 9 renames current-prelude-env →
 ;; current-prelude-env. The entire definition lifecycle must survive.
 
 ;; --- D1: Simple def + reference ---

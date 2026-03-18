@@ -117,7 +117,7 @@
       (simplify-path (build-path here-dir ".." "lib")))
     (define prelude-obs (make-observatory (hasheq 'source "prelude")))
     (define-values (mod-reg trait-reg impl-reg param-impl-reg preparse-reg cap-reg mod-cap-cache)
-      (parameterize ([current-global-env (hasheq)]
+      (parameterize ([current-prelude-env (hasheq)]
                      [current-definition-cells-content (hasheq)]
                      [current-definition-dependencies (hasheq)]
                      [current-ns-context #f]
@@ -205,7 +205,7 @@
     ([exn:fail?
       (lambda (e)
         (set! results (list (prologos-error #f (exn-message e)))))])
-    (parameterize ([current-global-env           (repl-session-global-env session)]
+    (parameterize ([current-prelude-env           (repl-session-global-env session)]
                    [current-definition-cells-content (repl-session-definition-cells session)]
                    [current-definition-dependencies  (repl-session-definition-deps session)]
                    [current-ns-context           (repl-session-ns-context session)]
@@ -223,7 +223,7 @@
       (install-module-loader!)
       (set! results (process-string-ws code))
       ;; Snapshot state back into session (definitions accumulate)
-      (set-repl-session-global-env!           session (current-global-env))
+      (set-repl-session-global-env!           session (current-prelude-env))
       (set-repl-session-ns-context!           session (current-ns-context))
       (set-repl-session-module-registry!      session (current-module-registry))
       (set-repl-session-trait-registry!        session (current-trait-registry))
@@ -539,7 +539,7 @@
       (delete-file tmp-path)
       ;; Capture definition locations, type env, and spec store before parameterize exits
       (set! captured-def-locs (current-definition-locations))
-      (set! captured-type-env (current-global-env))
+      (set! captured-type-env (current-prelude-env))
       (set! captured-spec-store (current-spec-store))
       ;; Visualization Phase 3: capture propagator network trace
       (define net-box (current-prop-net-box))

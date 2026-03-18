@@ -34,7 +34,7 @@
 ;; Keep prelude registries (ctor-registry, type-meta, trait-registry, etc.)
 ;; so that Nat/Bool/etc. constructors and types are available.
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)])
     (process-string s)))

@@ -19,7 +19,7 @@
 
 ;; Helper: run WS-mode string through the full pipeline, return last result
 (define (run-ws s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
@@ -33,7 +33,7 @@
 
 ;; Helper: run WS-mode string and return the session-entry from the registry
 (define (run-ws-get-session s name)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]

@@ -24,13 +24,13 @@
 
 ;; Helper to run with clean global env
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (process-string s)))
 
 ;; Helper: run with namespace system (for prelude access)
 (define (run-ns s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]

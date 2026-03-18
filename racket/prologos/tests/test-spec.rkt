@@ -25,7 +25,7 @@
 ;; Helper
 ;; ========================================
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-propagated-specs (seteq)]

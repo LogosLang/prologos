@@ -41,7 +41,7 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-bundle-reg)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
@@ -54,7 +54,7 @@
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string "(ns test-global-constraints)")
-    (values (current-global-env)
+    (values (current-prelude-env)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -69,7 +69,7 @@
 ;; Helper: run narrowing with constraints
 (define (run-with-constraints func-name args target var-names constraints
                               [bb #f])
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-narrow-search-config default-narrow-search-config]
                  [current-narrow-constraints constraints]
                  [current-bb-state bb])

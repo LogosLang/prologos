@@ -22,7 +22,7 @@
 
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -37,7 +37,7 @@
 ;; sharing the module registry so the second can require the first.
 ;; Returns the results from the second module.
 (define (run-ns-pair s1 s2)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -58,10 +58,10 @@
                           [(not (null? (ns-context-auto-exports ctx)))
                            (reverse (ns-context-auto-exports ctx))]
                           [else '()])]
-               [mi (module-info ns-sym exports (current-global-env) #f (hasheq) (hasheq) (hasheq) (hasheq) #f)])
+               [mi (module-info ns-sym exports (current-prelude-env) #f (hasheq) (hasheq) (hasheq) (hasheq) #f)])
           (register-module! ns-sym mi))))
     ;; Reset for second module
-    (current-global-env (hasheq))
+    (current-prelude-env (hasheq))
     (current-ns-context #f)
     (process-string s2)))
 
@@ -171,7 +171,7 @@
 
 (test-case "auto-export: deftype auto-exports"
   ;; deftype auto-exports. Verify the auto-exports list directly.
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -189,7 +189,7 @@
 
 (test-case "auto-export: library modules work without provide"
   ;; Verify that real library modules (which had provide removed) still export correctly.
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -206,7 +206,7 @@
 
 (test-case "auto-export: private defn- not in auto-exports list"
   ;; Verify that defn- doesn't add to auto-exports.
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]

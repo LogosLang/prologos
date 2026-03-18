@@ -22,7 +22,7 @@
 
 ;; Helper: run sexp-mode pipeline
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
@@ -34,7 +34,7 @@
 
 ;; Helper: run and return session entry
 (define (run-get-session s name)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
@@ -173,7 +173,7 @@
 
 (test-case "e2e sexp: dual of async session"
   (define result
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
@@ -193,7 +193,7 @@
 
 (test-case "e2e sexp: proc-send against async-send type-checks"
   (define result
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
@@ -211,7 +211,7 @@
 
 (test-case "e2e sexp: proc-recv against async-recv type-checks"
   (define result
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]

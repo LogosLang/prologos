@@ -41,7 +41,7 @@
                 shared-param-impl-reg
                 shared-ctor-reg
                 shared-type-meta)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -57,7 +57,7 @@
                  [current-spec-store (hasheq)])
     (install-module-loader!)
     (process-string "(ns test-confluence)")
-    (values (current-global-env)
+    (values (current-prelude-env)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -68,7 +68,7 @@
 
 ;; Helper: extract a definitional tree from a prelude function.
 (define (get-prelude-tree fqn)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ctor-registry shared-ctor-reg]
                  [current-type-meta shared-type-meta])
     (define body (global-env-lookup-value fqn))
@@ -76,7 +76,7 @@
 
 ;; Helper: run sexp code using shared environment.
 (define (run s)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -490,7 +490,7 @@
   (check-true (string-contains? result "nil")))
 
 (test-case "pipeline/get-confluence-class: caches result"
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-confluence-registry (hasheq)]
                  [current-ctor-registry shared-ctor-reg]
                  [current-type-meta shared-type-meta])
@@ -504,7 +504,7 @@
     (check-equal? class2 'confluent)))
 
 (test-case "pipeline/get-confluence-class: unknown for missing function"
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-confluence-registry (hasheq)])
     (define class (get-confluence-class 'no-such-function))
     (check-equal? class 'unknown)))

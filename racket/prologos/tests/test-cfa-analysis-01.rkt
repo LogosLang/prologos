@@ -41,7 +41,7 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-bundle-reg)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
@@ -54,7 +54,7 @@
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string "(ns test-cfa)")
-    (values (current-global-env)
+    (values (current-prelude-env)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -67,7 +67,7 @@
   (if (zero? n) (expr-zero) (expr-suc (peano (- n 1)))))
 
 ;; Helper: run narrowing with CFA active
-;; NOTE: does NOT re-parameterize current-global-env — inherits from caller
+;; NOTE: does NOT re-parameterize current-prelude-env — inherits from caller
 ;; so that definitions added by process-string are visible.
 (define (run-cfa func-name args target var-names)
   (parameterize ([current-narrow-search-config default-narrow-search-config]
@@ -174,7 +174,7 @@
 (test-case "cfa/arity-candidates-binary"
   ;; With the prelude loaded, there should be binary functions (arity 2)
   ;; like add, mul, sub
-  (parameterize ([current-global-env shared-global-env])
+  (parameterize ([current-prelude-env shared-global-env])
     (define candidates (cfa-get-candidates-for-arity 2))
     ;; add and mul should be among the candidates
     (check-true (> (length candidates) 0)
@@ -182,7 +182,7 @@
 
 (test-case "cfa/arity-excludes-ctors"
   ;; Constructors (suc, zero, true, false) should NOT appear as candidates
-  (parameterize ([current-global-env shared-global-env])
+  (parameterize ([current-prelude-env shared-global-env])
     (define candidates (cfa-get-candidates-for-arity 1))
     ;; suc is arity 1 but is a constructor — should not appear
     (check-false (memq 'suc candidates)
@@ -190,7 +190,7 @@
 
 (test-case "cfa/arity-no-match"
   ;; Arity 99 should have no candidates
-  (parameterize ([current-global-env shared-global-env])
+  (parameterize ([current-prelude-env shared-global-env])
     (define candidates (cfa-get-candidates-for-arity 99))
     (check-equal? (length candidates) 0)))
 
@@ -201,7 +201,7 @@
 (test-case "cfa/collect-constraints-prelude"
   ;; Collect constraints from the prelude-loaded global env.
   ;; There should be at least some constraints (from function calls).
-  (parameterize ([current-global-env shared-global-env])
+  (parameterize ([current-prelude-env shared-global-env])
     (define cs (cfa-collect-constraints))
     ;; The constraint list should be non-empty
     ;; (prelude has many function definitions calling other functions)
@@ -212,6 +212,6 @@
 
 (test-case "cfa/analyze-returns-result"
   ;; Full analyze should return a cfa-result
-  (parameterize ([current-global-env shared-global-env])
+  (parameterize ([current-prelude-env shared-global-env])
     (define result (cfa-analyze))
     (check-true (cfa-result? result))))

@@ -33,7 +33,7 @@
 
 ;; Run code and return result strings
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -45,7 +45,7 @@
 
 ;; Process spec and retrieve spec-entry from store
 (define (spec-for name s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -58,7 +58,7 @@
 
 ;; Process code and retrieve property-entry from store
 (define (property-for name s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -71,7 +71,7 @@
 
 ;; Process code and retrieve functor-entry from store
 (define (functor-for name s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -84,7 +84,7 @@
 
 ;; Process code and retrieve trait-meta from registry
 (define (trait-for name s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -329,7 +329,7 @@
   (define output
     (parameterize ([current-error-port (open-output-string)])
       (define results
-        (parameterize ([current-global-env (hasheq)]
+        (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                        [current-spec-store (hasheq)]
                        [current-property-store (hasheq)]
@@ -350,7 +350,7 @@
   ;; defn myid [x] ?? — the body is in a context with x : Nat
   (define output
     (parameterize ([current-error-port (open-output-string)])
-      (parameterize ([current-global-env (hasheq)]
+      (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                      [current-spec-store (hasheq)]
                      [current-property-store (hasheq)]
@@ -373,7 +373,7 @@
 (test-case "typed hole: named ??goal shows correct label"
   (define output
     (parameterize ([current-error-port (open-output-string)])
-      (parameterize ([current-global-env (hasheq)]
+      (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                      [current-spec-store (hasheq)]
                      [current-property-store (hasheq)]
@@ -392,7 +392,7 @@
 (test-case "typed hole: ?? at top-level (no context bindings) omits Context"
   (define output
     (parameterize ([current-error-port (open-output-string)])
-      (parameterize ([current-global-env (hasheq)]
+      (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                      [current-spec-store (hasheq)]
                      [current-property-store (hasheq)]
@@ -415,7 +415,7 @@
 (test-case "typed hole: multi-arg function shows multiple context entries"
   (define output
     (parameterize ([current-error-port (open-output-string)])
-      (parameterize ([current-global-env (hasheq)]
+      (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                      [current-spec-store (hasheq)]
                      [current-property-store (hasheq)]
@@ -437,7 +437,7 @@
 ;; ========================================
 
 (test-case "trait: basic trait has empty laws"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -451,7 +451,7 @@
     (check-equal? (lookup-trait-laws 'Eq) '())))
 
 (test-case "trait: :laws extracted from metadata"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -600,7 +600,7 @@
 ;; ========================================
 
 (test-case "spec: kind refined from :where constraint (HKT)"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -625,7 +625,7 @@
     (check-equal? (cdr a-binder) '(Type 0))))
 
 (test-case "spec: auto-detect from where-only variable"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -649,7 +649,7 @@
 ;; ========================================
 
 (test-case "flatten-property: simple (no includes)"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -669,7 +669,7 @@
     (check-equal? (property-clause-name (cadr clauses)) 'eq-laws/symmetric)))
 
 (test-case "flatten-property: single include"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -694,7 +694,7 @@
     (check-equal? (property-clause-name (cadr clauses)) 'mono/left-id)))
 
 (test-case "flatten-property: transitive includes (3 levels)"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -724,7 +724,7 @@
     (check-equal? (property-clause-name (third clauses)) 'top/t1)))
 
 (test-case "flatten-property: cycle detection"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -742,7 +742,7 @@
       (lambda () (flatten-property 'cycA)))))
 
 (test-case "flatten-property: missing include reference"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -763,7 +763,7 @@
       (lambda () (flatten-property 'does-not-exist)))))
 
 (test-case "flatten-property: holds-expr preserved through flattening"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -782,7 +782,7 @@
     (check-true (pair? (property-clause-forall-binders c)))))
 
 (test-case "flatten-property: multiple includes on same level"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -806,7 +806,7 @@
     (check-equal? (property-clause-name (third clauses)) 'pC/c3)))
 
 (test-case "flatten-property: no clauses, only includes"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -828,7 +828,7 @@
 ;; ========================================
 
 (test-case "spec-properties: returns :properties metadata"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -844,7 +844,7 @@
     (check-equal? (car props) '(sortable-laws Nat))))
 
 (test-case "spec-properties: returns #f when no :properties"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -864,7 +864,7 @@
 ;; ========================================
 
 (test-case "trait-laws-flattened: trait with no :laws"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -877,7 +877,7 @@
     (check-equal? fc '())))
 
 (test-case "trait-laws-flattened: trait with :laws referencing existing property"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -902,7 +902,7 @@
     (check-equal? (property-clause-name (car fc)) 'eq-props/refl)))
 
 (test-case "trait-laws-flattened: trait :laws ref to missing property yields empty"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -924,7 +924,7 @@
 ;; ========================================
 
 (test-case "spec-examples: single example collected"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -941,7 +941,7 @@
     (check-true (list? (car exs)))))
 
 (test-case "spec-examples: multiple examples all collected"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -956,7 +956,7 @@
     (check-equal? (length exs) 2)))
 
 (test-case "spec-examples: no examples returns #f"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -968,7 +968,7 @@
     (check-false (spec-examples 'myg))))
 
 (test-case "spec-examples: example contains => symbol"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -991,7 +991,7 @@
 ;; ========================================
 
 (test-case "spec-doc: returns :doc string"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -1004,7 +1004,7 @@
     (check-equal? (spec-doc 'myf) "Adds one to a Nat")))
 
 (test-case "spec-doc: returns #f when no :doc"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -1016,7 +1016,7 @@
     (check-false (spec-doc 'myg))))
 
 (test-case "spec metadata: :examples + :doc + :properties coexist"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -1037,7 +1037,7 @@
 ;; ========================================
 
 (test-case "spec-deprecated: returns deprecation message"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -1050,7 +1050,7 @@
     (check-equal? (spec-deprecated 'old-fn) "use new-fn instead")))
 
 (test-case "spec-deprecated: boolean flag (no message)"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -1063,7 +1063,7 @@
     (check-equal? (spec-deprecated 'old-fn) #t)))
 
 (test-case "spec-deprecated: returns #f when not deprecated"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -1075,7 +1075,7 @@
     (check-false (spec-deprecated 'new-fn))))
 
 (test-case "deprecated: warning emitted when deprecated function is referenced"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]

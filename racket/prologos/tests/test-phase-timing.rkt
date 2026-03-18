@@ -65,7 +65,7 @@
 (test-case "phase-timing: process-string emits PHASE-TIMINGS to stderr"
   ;; Capture stderr from process-string
   (define err-str
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (with-output-to-string
         (λ ()
@@ -100,7 +100,7 @@
 
 (test-case "phase-timing: multiple commands accumulate"
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-phase-timings pt])
     ;; Process multiple commands — timings accumulate via +

@@ -2946,8 +2946,8 @@
                 (expr-foreign-fn fn-name rkt-proc arity '() marshal-in marshal-out))
 
               ;; Register the type in global-env so the infer case can find it
-              (current-global-env
-               (global-env-add (current-global-env) fn-name full-type foreign-fn-val))
+              (current-prelude-env
+               (global-env-add (current-prelude-env) fn-name full-type foreign-fn-val))
 
               ;; Elaborate capture expressions (they reference variables in scope)
               (define elab-cap-exprs

@@ -13,7 +13,7 @@
 
 ;; Helper: run process-string in a fresh env, discard output
 (define (bench-eval str)
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-prelude-env (hasheq)])
     (with-output-to-string
       (λ ()
         (parameterize ([current-error-port (current-output-port)])
@@ -46,7 +46,7 @@
 ;; 5. Multiple definitions in sequence
 (define b-multi-def
   (bench "elaborate: 5 sequential defs"
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-prelude-env (hasheq)])
       (with-output-to-string
         (λ ()
           (parameterize ([current-error-port (current-output-port)])

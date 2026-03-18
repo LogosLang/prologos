@@ -51,7 +51,7 @@
                 shared-param-impl-reg
                 shared-capability-reg
                 shared-subtype-reg)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -68,7 +68,7 @@
                  [current-capability-registry prelude-capability-registry])
     (install-module-loader!)
     (process-string shared-preamble)
-    (values (current-global-env)
+    (values (current-prelude-env)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)

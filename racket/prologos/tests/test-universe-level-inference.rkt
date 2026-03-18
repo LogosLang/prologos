@@ -88,7 +88,7 @@
 
 (test-case "unify-level/meta-vs-concrete"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (define lm (fresh-level-meta "test"))
       ;; Unify Type(?l) vs Type(0)
@@ -100,7 +100,7 @@
 
 (test-case "unify-level/two-metas"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (define lm1 (fresh-level-meta "a"))
       (define lm2 (fresh-level-meta "b"))
@@ -112,7 +112,7 @@
 
 (test-case "unify-level/lsuc-vs-lsuc"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (define t1 (expr-Type (lsuc (lzero))))
       (define t2 (expr-Type (lsuc (lzero))))
@@ -120,7 +120,7 @@
 
 (test-case "unify-level/mismatch-rejects"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (define t1 (expr-Type (lzero)))
       (define t2 (expr-Type (lsuc (lzero))))
@@ -167,7 +167,7 @@
 
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]

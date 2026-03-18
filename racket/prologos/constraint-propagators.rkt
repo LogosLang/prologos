@@ -215,7 +215,7 @@
 (define (find-fqn-for-local-name local-name)
   (define local-str (symbol->string local-name))
   (define suffix (string-append "::" local-str))
-  (for/or ([(k _v) (in-hash (current-global-env))])
+  (for/or ([(k _v) (in-hash (current-prelude-env))])
     (let ([ks (symbol->string k)])
       (and (string-suffix? ks suffix) k))))
 

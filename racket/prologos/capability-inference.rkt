@@ -26,7 +26,7 @@
          racket/set
          "macros.rkt"         ;; capability-type?, subtype-pair?
          "syntax.rkt"         ;; expr structs
-         "global-env.rkt"     ;; current-global-env
+         "global-env.rkt"     ;; current-prelude-env
          "propagator.rkt"     ;; prop-network, cells, propagators, run-to-quiescence
          "atms.rkt"           ;; ATMS for provenance tracking
          "pretty-print.rkt"   ;; pp-expr for cap-entry->string
@@ -603,7 +603,7 @@
 (struct authority-root-failure (root-name declared missing traces) #:transparent)
 
 ;; Verify that root-name's declared capabilities subsume its inferred closure.
-;; If env is provided, runs inference on it; otherwise uses current-global-env.
+;; If env is provided, runs inference on it; otherwise uses current-prelude-env.
 ;; Returns authority-root-ok or authority-root-failure.
 (define (verify-authority-root root-name [env (global-env-snapshot)])
   ;; Run inference to get the full picture

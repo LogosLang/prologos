@@ -30,7 +30,7 @@
          "macros.rkt"               ;; capability-type?, subtype-pair?
          "type-lattice.rkt"         ;; type-bot, type-top, type-lattice-merge, type-lattice-contradicts?
          "capability-inference.rkt" ;; cap-set, cap-set-bot, cap-set-join, build-call-graph, etc.
-         "global-env.rkt"           ;; current-global-env
+         "global-env.rkt"           ;; current-prelude-env
          "propagator.rkt")          ;; prop-network, net-new-cell, net-add-cross-domain-propagator, etc.
 
 (provide ;; α/γ Galois connection functions

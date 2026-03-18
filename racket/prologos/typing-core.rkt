@@ -413,8 +413,8 @@
                                         '()       ;; includes-names = empty
                                         #f))      ;; srcloc = synthetic
                        ;; Install as type in global-env
-                       (current-global-env
-                        (global-env-add-type-only (current-global-env)
+                       (current-prelude-env
+                        (global-env-add-type-only (current-prelude-env)
                                                   sub-name
                                                   (expr-Type (lzero))))
                        (expr-fvar sub-name))]))]))]

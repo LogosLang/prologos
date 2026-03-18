@@ -49,7 +49,7 @@
                 shared-param-impl-reg
                 shared-capability-reg
                 shared-subtype-reg)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -79,7 +79,7 @@
 ;; Helper: run code and return (values results cap-result)
 ;; Uses current-module-cap-result to capture the inference result.
 (define (run-and-infer s)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -96,7 +96,7 @@
 
 ;; Standard run (for tests that don't need cap-result)
 (define (run s)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -267,7 +267,7 @@
           (string-contains? (exn-message e) "sneaky-fn")
           (string-contains? (exn-message e) "WriteCap")))
    (lambda ()
-     (parameterize ([current-global-env
+     (parameterize ([current-prelude-env
                      ;; Env with two functions:
                      ;; write-fn: declares WriteCap (type + body)
                      ;; sneaky-fn: declares ReadCap but body references write-fn

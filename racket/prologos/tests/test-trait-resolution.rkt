@@ -35,7 +35,7 @@
 ;; via process-file (which auto-detects WS mode from .prologos extension).
 
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (process-string s)))
 
@@ -44,7 +44,7 @@
 
 (define (run-ns s)
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-module-registry prelude-module-registry]
@@ -64,7 +64,7 @@
 ;; but concrete instances are cleared so resolution fails as expected.
 (define (run-ns-bare s)
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-module-registry prelude-module-registry]

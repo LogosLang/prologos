@@ -41,7 +41,7 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-bundle-reg)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
@@ -54,7 +54,7 @@
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string "(ns test-cfa)")
-    (values (current-global-env)
+    (values (current-prelude-env)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -67,7 +67,7 @@
   (if (zero? n) (expr-zero) (expr-suc (peano (- n 1)))))
 
 ;; Helper: run narrowing with CFA active
-;; NOTE: does NOT re-parameterize current-global-env — inherits from caller
+;; NOTE: does NOT re-parameterize current-prelude-env — inherits from caller
 ;; so that definitions added by process-string are visible.
 (define (run-cfa func-name args target var-names)
   (parameterize ([current-narrow-search-config default-narrow-search-config]
@@ -96,7 +96,7 @@
 (test-case "integration/apply-op-add"
   ;; Define apply-op [f x y] := [f x y]
   ;; Query: [apply-op ?f 3N 2N] = 5N → f = add (since 3+2=5)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-trait-registry shared-trait-reg]
@@ -133,7 +133,7 @@
 
 (test-case "integration/apply-op-zero-zero"
   ;; [apply-op ?f 0N 0N] = 0N → both add and mul work (0+0=0, 0*0=0)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-trait-registry shared-trait-reg]
@@ -161,7 +161,7 @@
 (test-case "integration/apply-op-no-match"
   ;; [apply-op ?f 0N 0N] = 1N → no binary Nat function gives 1 from (0,0)
   ;; except suc applied to result of something... but add(0,0)=0, mul(0,0)=0, sub would go negative
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-trait-registry shared-trait-reg]
@@ -191,7 +191,7 @@
 
 (test-case "cfa/caching"
   ;; Verify that current-cfa-result caches the analysis
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-cfa-result #f])
     (define r1 (cfa-ensure-analyzed!))
     (check-true (cfa-result? r1))
@@ -220,7 +220,7 @@
 
 (test-case "cfa/flow-set-unknown-func"
   ;; Query flow set for a function that doesn't exist → empty
-  (parameterize ([current-global-env shared-global-env])
+  (parameterize ([current-prelude-env shared-global-env])
     (define result (cfa-analyze))
     (define fs (cfa-flow-set-for-param result 'nonexistent-function 0))
     (check-true (null? fs))))

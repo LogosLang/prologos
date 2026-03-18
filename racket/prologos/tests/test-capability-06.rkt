@@ -43,7 +43,7 @@
                 shared-param-impl-reg
                 shared-capability-reg
                 shared-subtype-reg)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -71,7 +71,7 @@
 
 ;; Helper: run code and return list of result strings.
 (define (run s)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a: fresh per-test
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
@@ -89,7 +89,7 @@
 
 ;; Helper: run code and capture global-env after execution
 (define (run-capturing-env s)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a: fresh per-test
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]

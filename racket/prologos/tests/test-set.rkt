@@ -20,7 +20,7 @@
 
 ;; Helper to run with clean global env
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (process-string s)))
 
@@ -328,7 +328,7 @@
 ;; ========================================
 
 (test-case "surface: def + eval with Set"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def s <(Set Nat)> (set-insert (set-empty Nat) (suc (suc zero))))\n(eval (set-member? s (suc (suc zero))))")])
       (check-equal? (length result) 2)
@@ -340,7 +340,7 @@
 ;; ========================================
 
 (test-case "surface: defn with Set parameter"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(defn has-zero [s <(Set Nat)>] <Bool> (set-member? s zero))\n(eval (has-zero (set-insert (set-empty Nat) zero)))")])
       (check-equal? (length result) 2)
@@ -370,7 +370,7 @@
 ;; ========================================
 
 (test-case "surface: #{...} literal via def"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def s <(Set Nat)> #{zero (suc zero) (suc (suc zero))})\n(eval (set-size s))")])
       (check-equal? (length result) 2)
@@ -381,7 +381,7 @@
 ;; ========================================
 
 (test-case "surface: set-member? on #{...} literal via def"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def s <(Set Nat)> #{zero (suc zero) (suc (suc zero))})\n(eval (set-member? s (suc zero)))")])
       (check-equal? (length result) 2)
@@ -432,7 +432,7 @@
     (check-true (string-contains? (car result) "1N"))))
 
 (test-case "set-to-list: multi-element set has correct count"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string
                    (string-append

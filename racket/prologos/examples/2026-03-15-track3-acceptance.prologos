@@ -99,7 +99,6 @@ defn my-or [a b]
 
 my-or false true
 my-or true true
-    
 
 spec my-xor Bool Bool -> Bool
 defn my-xor [a b]
@@ -175,11 +174,11 @@ double [suc [suc zero]]
 ;; uncurried signatures.
 
 spec my-id A -> A
-  :implicits A
+  :implicits [A]
 defn my-id [a] a
-  
+
 spec my-const A B -> A
-  :implicits A B
+  :implicits [A B]
 defn my-const [a _] a
 
 my-id zero
@@ -195,19 +194,47 @@ my-const true 42
 ;; return value instead of applying it to `x`. The type becomes
 ;; `[A -> B]` instead of `B`.
 ;;
-;; spec apply {A B : Type} [A -> B] A -> B
-;; defn apply [f x] f x
-;;
-;; spec twice {A : Type} [A -> A] A -> A
-;; defn twice [f x] f [f x]
-;;
-;; spec compose {A B C : Type} [B -> C] [A -> B] A -> C
-;; defn compose [f g x] f [g x]
-;;
-;; apply (fn [x : Nat] suc x) zero
-;; twice (fn [x : Nat] suc x) [suc [suc zero]]
-;; compose suc double [suc zero]
-;; => Expected: 1N, 4N, 3N
+spec apply [A -> B] A -> [A -> B]
+  :implicits [A B]
+defn apply [f x] f x
+
+;; Cannot infer type errors:
+;; apply my-id 5
+
+spec twice [A -> A] A -> [A -> A]
+  :implicits [A]
+defn twice [f x] 
+  f [f x]
+
+spec double Int -> Int
+defn double [x] 
+  [int* x 2]
+
+spec triple Int -> Int
+defn triple [x] 
+  [int+ x [int* x 2]]
+
+double 3
+;; => 6 : Int
+twice double 3
+;; => 12 : Int
+
+triple 5
+;; => 15 : Int
+twice triple 5
+;; => 45 : Int
+
+
+spec compose [B -> C] [A -> B] A -> C
+  :implicits [A B C]
+defn compose [f g x] 
+  f [g x]
+
+
+triple 4
+;; => 12 : Int
+compose double triple 4
+;; => 24 : Int
 
 
 ;; ========================================================================
@@ -218,16 +245,16 @@ my-const true 42
 
 ;; --- C1: Eq via prelude dict (nat-eq) ---
 
-eq-check nat-eq [suc [suc zero]] [suc [suc zero]]
-eq-check nat-eq zero [suc zero]
-eq-neq nat-eq zero [suc zero]
+eq-check nat-eq 2N 2N
+eq-check nat-eq 0N 1N
+eq-neq nat-eq   0N 1N
 
 ;; --- C2: Ord via prelude dict (nat-ord) ---
 
-ord-compare nat-ord [suc zero] [suc [suc zero]]
-ord-compare nat-ord [suc zero] [suc zero]
-ord-lt nat-ord zero [suc zero]
-ord-gt nat-ord [suc [suc zero]] zero
+ord-compare nat-ord 1N 2N
+ord-compare nat-ord 1N 1N
+ord-lt nat-ord 0N 1N
+ord-gt nat-ord 2N 0N
 
 ;; --- C3: Where-clause generics ---
 ;; BUG (L3): where-clause functions define correctly but at call site,

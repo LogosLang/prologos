@@ -31,7 +31,7 @@
 ;; ========================================
 
 (define (run-ns-last s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -84,7 +84,7 @@
 (define (with-prelude-loaded thunk)
   ;; Load a minimal ns module (triggers prelude loading), then run thunk
   ;; while trait registry is still populated.
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]

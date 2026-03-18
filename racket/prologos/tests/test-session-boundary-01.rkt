@@ -30,7 +30,7 @@
 
 ;; Minimal run: no prelude, fresh state per call.
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
@@ -45,7 +45,7 @@
 
 ;; Run with capability declarations pre-loaded
 (define (run-with-caps s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]

@@ -27,7 +27,7 @@
 ;; Helper: process commands and return results list
 ;; ========================================
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (process-string s)))
 
@@ -81,7 +81,7 @@
 ;; ========================================
 
 (test-case "surface: define identity function"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      "(def myid : (-> Nat Nat) (fn (x : Nat) x))"))
@@ -89,7 +89,7 @@
     (check-true (string-contains? (car results) "defined"))))
 
 (test-case "surface: define and use identity"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -100,7 +100,7 @@
     (check-equal? (cadr results) "0N : Nat")))
 
 (test-case "surface: define and check identity"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -114,7 +114,7 @@
 ;; ========================================
 
 (test-case "surface: polymorphic identity"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -126,7 +126,7 @@
     (check-equal? (cadr results) "0N : Nat")))
 
 (test-case "surface: polymorphic identity applied to Bool"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -159,7 +159,7 @@
 ;; ========================================
 
 (test-case "surface: check pair against Sigma"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(check (pair zero refl) : (Sigma (x : Nat) (Eq Nat x zero)))")
@@ -185,7 +185,7 @@
 ;; ========================================
 
 (test-case "surface: chained definitions"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -200,7 +200,7 @@
 ;; ========================================
 
 (test-case "surface: defn simple increment"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -211,7 +211,7 @@
     (check-equal? (cadr results) "1N : Nat")))
 
 (test-case "surface: defn polymorphic id"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -222,7 +222,7 @@
     (check-equal? (cadr results) "1N : Nat")))
 
 (test-case "surface: defn param count mismatch"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                       "(defn f : (-> Nat Nat) [x y] x)"))
@@ -234,14 +234,14 @@
 ;; ========================================
 
 (test-case "surface: implicit eval of bare expression"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string "(suc zero)"))
     (check-equal? (length results) 1)
     (check-equal? (car results) "1N : Nat")))
 
 (test-case "surface: implicit eval of zero"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string "zero"))
     (check-equal? (length results) 1)
@@ -252,14 +252,14 @@
 ;; ========================================
 
 (test-case "surface: boolrec true -> zero"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(eval (boolrec (the (-> Bool (Type 0)) (fn (b : Bool) Nat)) zero (suc zero) true))")
      "0N : Nat")))
 
 (test-case "surface: boolrec false -> 1"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(eval (boolrec (the (-> Bool (Type 0)) (fn (b : Bool) Nat)) zero (suc zero) false))")
@@ -275,21 +275,21 @@
 ;; ========================================
 
 (test-case "surface: let with single binding"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(eval (let ([x : Nat (suc zero)]) x))")
      "1N : Nat")))
 
 (test-case "surface: let with two bindings (sequential)"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(eval (let ([x : Nat (suc zero)] [y : Nat (suc x)]) y))")
      "2N : Nat")))
 
 (test-case "surface: let with computation"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(eval (let ([x : Nat (suc (suc zero))]) (suc x)))")
@@ -300,28 +300,28 @@
 ;; ========================================
 
 (test-case "surface: let := with type evaluates"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(eval (let x : Nat := (suc zero) x))")
      "1N : Nat")))
 
 (test-case "surface: let := bracket with types"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(eval (let (x : Nat := (suc zero) y : Nat := (suc x)) y))")
      "2N : Nat")))
 
 (test-case "surface: let := bracket single binding"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(eval (let (x : Nat := (suc (suc zero))) (suc x)))")
      "3N : Nat")))
 
 (test-case "surface: let := with computation"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(eval (let x : Nat := (suc (suc zero)) (suc x)))")
@@ -332,7 +332,7 @@
 ;; ========================================
 
 (test-case "surface: sibling lets evaluate"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     ;; Sexp-mode: def with sibling let forms
     (define results
@@ -340,7 +340,7 @@
     (check-equal? (second results) "3N : Nat")))
 
 (test-case "surface: three sibling lets"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results
       (run "(def r : Nat (let a : Nat := zero) (let b : Nat := (suc a)) (let c : Nat := (suc b) c))\n(eval r)"))
@@ -351,14 +351,14 @@
 ;; ========================================
 
 (test-case "surface: do with single binding"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(eval (do [x : Nat = (suc zero)] x))")
      "1N : Nat")))
 
 (test-case "surface: do with two bindings"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(eval (do [x : Nat = (suc zero)] [y : Nat = (suc x)] y))")
@@ -369,14 +369,14 @@
 ;; ========================================
 
 (test-case "surface: if true"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(eval (if Nat true zero (suc zero)))")
      "0N : Nat")))
 
 (test-case "surface: if false"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(eval (if Nat false zero (suc zero)))")
@@ -387,7 +387,7 @@
 ;; ========================================
 
 (test-case "surface: defmacro not and use"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-preparse-registry (current-preparse-registry)])
     (define results (process-string
@@ -399,7 +399,7 @@
     (check-equal? (car results) "false : Bool")))
 
 (test-case "surface: defmacro not false"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-preparse-registry (current-preparse-registry)])
     (define results (process-string
@@ -413,7 +413,7 @@
 ;; ========================================
 
 (test-case "surface: deftype simple alias as standalone"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-preparse-registry (current-preparse-registry)])
     ;; Simple alias expands when used as a standalone top-level form
@@ -427,7 +427,7 @@
     (check-equal? (car results) "[Type 0]")))
 
 (test-case "surface: deftype parameterized alias"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-preparse-registry (current-preparse-registry)])
     (define results (process-string
@@ -442,7 +442,7 @@
 ;; ========================================
 
 (test-case "surface: let with if"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-preparse-registry (current-preparse-registry)])
     (check-equal?
@@ -450,7 +450,7 @@
      "1N : Nat")))
 
 (test-case "surface: defn with boolrec"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -468,7 +468,7 @@
 ;; ========================================
 
 (test-case "surface: angle-bracket def"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string "(def one <Nat> (suc zero))"))
     (check-equal? (car results) "one : Nat defined.")))
@@ -482,7 +482,7 @@
    "OK"))
 
 (test-case "surface: angle-bracket defn simple"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -493,7 +493,7 @@
     (check-equal? (cadr results) "2N : Nat")))
 
 (test-case "surface: angle-bracket defn polymorphic"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -506,7 +506,7 @@
     (check-equal? (caddr results) "true : Bool")))
 
 (test-case "surface: angle-bracket let"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(eval (let [x <Nat> (suc zero) y <Nat> (suc x)] y))")
@@ -527,7 +527,7 @@
 ;; ========================================
 
 (test-case "surface: colon defn simple increment"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -538,7 +538,7 @@
     (check-equal? (cadr results) "2N : Nat")))
 
 (test-case "surface: colon defn with arrow param"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -550,7 +550,7 @@
     (check-equal? (caddr results) "2N : Nat")))
 
 (test-case "surface: colon defn polymorphic with {A}"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -563,7 +563,7 @@
     (check-equal? (caddr results) "true : Bool")))
 
 (test-case "surface: colon defn with multiplicity"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -573,7 +573,7 @@
     (check-equal? (cadr results) "1N : Nat")))
 
 (test-case "surface: colon defn multi-arrow type A -> B -> C"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -583,7 +583,7 @@
     (check-equal? (cadr results) "3N : Nat")))
 
 (test-case "surface: colon defn with bare Type"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -607,7 +607,7 @@
    "OK"))
 
 (test-case "surface: untyped fn used in defn body"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -617,14 +617,14 @@
     (check-equal? (cadr results) "1N : Nat")))
 
 (test-case "surface: untyped fn in let binding"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-equal?
      (run-first "(eval (let ([f : (-> Nat Nat) (fn x (suc x))]) (f zero)))")
      "1N : Nat")))
 
 (test-case "surface: untyped multi-arg fn in defn body"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
                      (string-append
@@ -638,7 +638,7 @@
 ;; ========================================
 
 (test-case "surface: data with colon ctor syntax (no params)"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-preparse-registry (current-preparse-registry)])
     (define results (process-string
@@ -650,7 +650,7 @@
     (check-equal? (last results) "OK")))
 
 (test-case "surface: data with colon ctor syntax (parameterized)"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-preparse-registry (current-preparse-registry)])
     (define results (process-string
@@ -666,7 +666,7 @@
     (check-equal? (list-ref results 4) "OK")))
 
 (test-case "surface: data List with colon ctor syntax"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-preparse-registry (current-preparse-registry)])
     (define results (process-string
@@ -685,7 +685,7 @@
 ;; ========================================
 
 (test-case "surface: uncurried arrow Nat Nat -> Nat"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
       (string-append
@@ -695,14 +695,14 @@
     (check-equal? (last results) "OK")))
 
 (test-case "surface: Nat -> Nat unchanged"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
       "(defn id [x <Nat>] <Nat> x)\n(check id <Nat -> Nat>)"))
     (check-equal? (last results) "OK")))
 
 (test-case "surface: grouped HOF [Nat -> Nat] -> Nat"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
       (string-append
@@ -711,7 +711,7 @@
     (check-equal? (last results) "OK")))
 
 (test-case "surface: uncurried A B C -> D"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     ;; 3-arg function: A B C -> D parsed as A -> B -> C -> D
     (define results (process-string
@@ -721,7 +721,7 @@
     (check-equal? (last results) "OK")))
 
 (test-case "surface: A -> B -> C still right-assoc"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
       (string-append
@@ -730,7 +730,7 @@
     (check-equal? (last results) "OK")))
 
 (test-case "surface: [Nat -> Nat] Nat -> Nat grouped param"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define results (process-string
       (string-append

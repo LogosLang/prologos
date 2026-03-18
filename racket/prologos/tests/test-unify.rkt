@@ -21,43 +21,43 @@
 
 (test-case "unify: Nat ≡ Nat"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-true (unify ctx-empty (expr-Nat) (expr-Nat))))))
 
 (test-case "unify: Bool ≡ Bool"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-true (unify ctx-empty (expr-Bool) (expr-Bool))))))
 
 (test-case "unify: Nat ≢ Bool"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-false (unify ctx-empty (expr-Nat) (expr-Bool))))))
 
 (test-case "unify: zero ≡ zero"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-true (unify ctx-empty (expr-zero) (expr-zero))))))
 
 (test-case "unify: true ≢ false"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-false (unify ctx-empty (expr-true) (expr-false))))))
 
 (test-case "unify: Type(0) ≡ Type(0)"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-true (unify ctx-empty (expr-Type (lzero)) (expr-Type (lzero)))))))
 
 (test-case "unify: Type(0) ≢ Type(1)"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-false (unify ctx-empty
                         (expr-Type (lzero))
@@ -69,7 +69,7 @@
 
 (test-case "unify: ?m ≡ Nat solves ?m := Nat"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
     (check-true (unify ctx-empty m (expr-Nat)))
@@ -78,7 +78,7 @@
 
 (test-case "unify: Nat ≡ ?m solves ?m := Nat (symmetric)"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
     (check-true (unify ctx-empty (expr-Nat) m))
@@ -87,7 +87,7 @@
 
 (test-case "unify: ?m1 ≡ ?m2 solves ?m1 := ?m2"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m1 (fresh-meta ctx-empty (expr-Type (lzero)) "a"))
     (define m2 (fresh-meta ctx-empty (expr-Type (lzero)) "b"))
@@ -97,7 +97,7 @@
 
 (test-case "unify: already-solved meta, consistent"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
     (solve-meta! (expr-meta-id m) (expr-Nat))
@@ -105,7 +105,7 @@
 
 (test-case "unify: already-solved meta, conflicting"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
     (solve-meta! (expr-meta-id m) (expr-Nat))
@@ -117,7 +117,7 @@
 
 (test-case "unify: Pi(mw, ?m1, ?m2) ≡ Pi(mw, Nat, Bool) solves both"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m1 (fresh-meta ctx-empty (expr-Type (lzero)) "dom"))
     (define m2 (fresh-meta ctx-empty (expr-Type (lzero)) "cod"))
@@ -129,7 +129,7 @@
 
 (test-case "unify: Sigma(?m1, ?m2) ≡ Sigma(Nat, Bool) solves both"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m1 (fresh-meta ctx-empty (expr-Type (lzero)) "a"))
     (define m2 (fresh-meta ctx-empty (expr-Type (lzero)) "b"))
@@ -141,7 +141,7 @@
 
 (test-case "unify: suc(?m) ≡ suc(zero) solves ?m := zero"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m (fresh-meta ctx-empty (expr-Nat) "test"))
     (check-true (unify ctx-empty
@@ -151,7 +151,7 @@
 
 (test-case "unify: nested suc(?m) ≡ suc(suc(suc(zero)))"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m (fresh-meta ctx-empty (expr-Nat) "test"))
     (check-true (unify ctx-empty
@@ -161,7 +161,7 @@
 
 (test-case "unify: Vec(?m1, ?m2) ≡ Vec(Nat, suc(zero)) solves both"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m1 (fresh-meta ctx-empty (expr-Type (lzero)) "elem"))
     (define m2 (fresh-meta ctx-empty (expr-Nat) "len"))
@@ -173,7 +173,7 @@
 
 (test-case "unify: Fin(?m) ≡ Fin(suc(zero)) solves"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m (fresh-meta ctx-empty (expr-Nat) "bound"))
     (check-true (unify ctx-empty
@@ -183,7 +183,7 @@
 
 (test-case "unify: Eq(?m1, ?m2, ?m3) ≡ Eq(Nat, zero, suc(zero)) solves all"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m1 (fresh-meta ctx-empty (expr-Type (lzero)) "ty"))
     (define m2 (fresh-meta ctx-empty (expr-Nat) "lhs"))
@@ -197,7 +197,7 @@
 
 (test-case "unify: app(?m1, ?m2) ≡ app(fvar(f), fvar(x)) solves both"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m1 (fresh-meta ctx-empty (expr-Type (lzero)) "func"))
     (define m2 (fresh-meta ctx-empty (expr-Type (lzero)) "arg"))
@@ -229,7 +229,7 @@
 
 (test-case "unify: occur check prevents infinite type"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
     (check-false (unify ctx-empty m (expr-Pi 'mw m (expr-Nat)))))))
@@ -251,19 +251,19 @@
 
 (test-case "unify: hole ≡ Nat"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-true (unify ctx-empty (expr-hole) (expr-Nat))))))
 
 (test-case "unify: Nat ≡ hole"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-true (unify ctx-empty (expr-Nat) (expr-hole))))))
 
 (test-case "unify: hole ≡ hole"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-true (unify ctx-empty (expr-hole) (expr-hole))))))
 
@@ -273,7 +273,7 @@
 
 (test-case "unify: Pi ≢ Sigma (head mismatch)"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-false (unify ctx-empty
                         (expr-Pi 'mw (expr-Nat) (expr-Nat))
@@ -281,13 +281,13 @@
 
 (test-case "unify: suc(zero) ≢ zero"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-false (unify ctx-empty (expr-suc (expr-zero)) (expr-zero))))))
 
 (test-case "unify: Pi multiplicity mismatch"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-false (unify ctx-empty
                         (expr-Pi 'm0 (expr-Nat) (expr-Nat))
@@ -299,7 +299,7 @@
 
 (test-case "unify: nested Pi with three metas"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m1 (fresh-meta ctx-empty (expr-Type (lzero)) "a"))
     (define m2 (fresh-meta ctx-empty (expr-Type (lzero)) "b"))
@@ -313,7 +313,7 @@
 
 (test-case "unify: meta chain — whnf resolves solved meta"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m1 (fresh-meta ctx-empty (expr-Type (lzero)) "first"))
     (define m2 (fresh-meta ctx-empty (expr-Type (lzero)) "second"))
@@ -330,13 +330,13 @@
 
 (test-case "unify: bvar(0) ≡ bvar(0)"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-true (unify ctx-empty (expr-bvar 0) (expr-bvar 0))))))
 
 (test-case "unify: fvar(x) ≢ fvar(y)"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-false (unify ctx-empty (expr-fvar 'x) (expr-fvar 'y))))))
 
@@ -346,7 +346,7 @@
 
 (test-case "unify: same unsolved meta"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
     (check-true (unify ctx-empty m m))
@@ -418,7 +418,7 @@
 
 (test-case "unify: (app ?m (bvar 0)) ≡ Nat solves ?m"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
     ;; (app ?m (bvar 0)) on the left, Nat on the right
@@ -435,7 +435,7 @@
 
 (test-case "unify: applied meta with non-pattern args postpones (Sprint 5)"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
     ;; (app ?m zero) — zero is not a bvar, pattern check fails → postpone
@@ -446,7 +446,7 @@
 
 (test-case "unify: applied meta occur check"
   (with-fresh-meta-env
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
     ;; (app ?m (bvar 0)) ≡ (Pi mw ?m Nat) — ?m occurs in rhs

@@ -22,7 +22,7 @@
 
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -37,7 +37,7 @@
 ;; sharing the module registry so the second can require the first.
 ;; Returns the results from the second module.
 (define (run-ns-pair s1 s2)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -58,10 +58,10 @@
                           [(not (null? (ns-context-auto-exports ctx)))
                            (reverse (ns-context-auto-exports ctx))]
                           [else '()])]
-               [mi (module-info ns-sym exports (current-global-env) #f (hasheq) (hasheq) (hasheq) (hasheq) #f)])
+               [mi (module-info ns-sym exports (current-prelude-env) #f (hasheq) (hasheq) (hasheq) (hasheq) #f)])
           (register-module! ns-sym mi))))
     ;; Reset for second module
-    (current-global-env (hasheq))
+    (current-prelude-env (hasheq))
     (current-ns-context #f)
     (process-string s2)))
 

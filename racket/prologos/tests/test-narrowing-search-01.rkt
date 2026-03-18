@@ -41,7 +41,7 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-bundle-reg)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
@@ -54,7 +54,7 @@
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string "(ns test-narrowing-search)")
-    (values (current-global-env)
+    (values (current-prelude-env)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -64,7 +64,7 @@
 
 ;; Run sexp code using shared environment
 (define (run s)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list lib-dir)]
@@ -84,7 +84,7 @@
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result
-    (parameterize ([current-global-env shared-global-env]
+    (parameterize ([current-prelude-env shared-global-env]
                    [current-ns-context shared-ns-context]
                    [current-module-registry shared-module-reg]
                    [current-lib-paths (list lib-dir)]
@@ -109,7 +109,7 @@
 ;; ========================================
 
 (test-case "search/bool: not ?b = true → {b: false}"
-  (parameterize ([current-global-env shared-global-env])
+  (parameterize ([current-prelude-env shared-global-env])
     (define sols
       (run-narrowing-search
        'prologos::data::bool::not
@@ -120,7 +120,7 @@
     (check-true (expr-false? (hash-ref (car sols) 'b)))))
 
 (test-case "search/bool: not ?b = false → {b: true}"
-  (parameterize ([current-global-env shared-global-env])
+  (parameterize ([current-prelude-env shared-global-env])
     (define sols
       (run-narrowing-search
        'prologos::data::bool::not
@@ -131,7 +131,7 @@
     (check-true (expr-true? (hash-ref (car sols) 'b)))))
 
 (test-case "search/nat: add ?x ?y = 0 → 1 solution (0,0)"
-  (parameterize ([current-global-env shared-global-env])
+  (parameterize ([current-prelude-env shared-global-env])
     (define sols
       (run-narrowing-search
        'prologos::data::nat::add
@@ -143,7 +143,7 @@
     (check-true (expr-zero? (hash-ref (car sols) 'y)))))
 
 (test-case "search/nat: add ?x ?y = 1 → 2 solutions"
-  (parameterize ([current-global-env shared-global-env])
+  (parameterize ([current-prelude-env shared-global-env])
     (define sols
       (run-narrowing-search
        'prologos::data::nat::add
@@ -153,7 +153,7 @@
     (check-equal? (length sols) 2)))
 
 (test-case "search/nat: add ?x ?y = 3 → 4 solutions"
-  (parameterize ([current-global-env shared-global-env])
+  (parameterize ([current-prelude-env shared-global-env])
     (define sols
       (run-narrowing-search
        'prologos::data::nat::add
@@ -163,7 +163,7 @@
     (check-equal? (length sols) 4)))
 
 (test-case "search/nat: add (suc ?x) ?y = 3 → 3 solutions"
-  (parameterize ([current-global-env shared-global-env])
+  (parameterize ([current-prelude-env shared-global-env])
     (define target (expr-suc (expr-suc (expr-suc (expr-zero)))))
     (define sols
       (run-narrowing-search
@@ -175,7 +175,7 @@
     (check-equal? (length sols) 3)))
 
 (test-case "search/nat: add zero ?y = 5 → 1 solution (y=5)"
-  (parameterize ([current-global-env shared-global-env])
+  (parameterize ([current-prelude-env shared-global-env])
     (define target (expr-suc (expr-suc (expr-suc (expr-suc (expr-suc (expr-zero)))))))
     (define sols
       (run-narrowing-search

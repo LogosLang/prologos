@@ -49,7 +49,7 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-bundle-reg)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
@@ -62,7 +62,7 @@
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string "(ns test-unified-match)")
-    (values (current-global-env)
+    (values (current-prelude-env)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -72,7 +72,7 @@
 
 ;; Run sexp code using shared environment
 (define (run s)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list lib-dir)]
@@ -92,7 +92,7 @@
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result
-    (parameterize ([current-global-env shared-global-env]
+    (parameterize ([current-prelude-env shared-global-env]
                    [current-ns-context shared-ns-context]
                    [current-module-registry shared-module-reg]
                    [current-lib-paths (list lib-dir)]

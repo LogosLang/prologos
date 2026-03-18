@@ -121,8 +121,8 @@
              (raise-prologos-error (car te))))
          (let ([z-type (zonk-final inferred-type)]
                [z-body (zonk-final body)])
-           (current-global-env
-            (global-env-add (current-global-env) name z-type z-body))
+           (current-prelude-env
+            (global-env-add (current-prelude-env) name z-type z-body))
            (list 'def name (pp-expr z-type)))))]
 
     ;; (def name type body) — annotated path
@@ -147,8 +147,8 @@
                [z-body (zonk-final body)])
            (define z-type (if has-holes? (unsolved-metas-to-holes z-type-raw) z-type-raw))
            ;; Update the global environment for subsequent forms
-           (current-global-env
-            (global-env-add (current-global-env) name z-type z-body))
+           (current-prelude-env
+            (global-env-add (current-prelude-env) name z-type z-body))
            (list 'def name (pp-expr z-type)))))]
 
     ;; (check expr type)
@@ -207,7 +207,7 @@
 (define (expand-prologos-module stx)
   (syntax-parse stx
     [(_ form ...)
-     (parameterize ([current-global-env (hasheq)]
+     (parameterize ([current-prelude-env (hasheq)]
                     [current-preparse-registry (current-preparse-registry)]
                     [current-spec-store (current-spec-store)])
        ;; Pre-parse macro expansion: expand defmacro/let/do/if/deftype

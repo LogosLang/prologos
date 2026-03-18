@@ -34,7 +34,7 @@
 ;; ========================================
 
 (define (run-ns s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -105,7 +105,7 @@
 
 (test-case "check/nat-as-int"
   (check-true
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                   [current-mult-meta-store (make-hasheq)])
      (reset-meta-store!)
@@ -113,7 +113,7 @@
 
 (test-case "check/int-as-rat"
   (check-true
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                   [current-mult-meta-store (make-hasheq)])
      (reset-meta-store!)
@@ -121,7 +121,7 @@
 
 (test-case "check/nat-as-rat-transitive"
   (check-true
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                   [current-mult-meta-store (make-hasheq)])
      (reset-meta-store!)
@@ -129,7 +129,7 @@
 
 (test-case "check/posit8-as-posit16"
   (check-true
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                   [current-mult-meta-store (make-hasheq)])
      (reset-meta-store!)
@@ -137,7 +137,7 @@
 
 (test-case "check/posit8-as-posit32"
   (check-true
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                   [current-mult-meta-store (make-hasheq)])
      (reset-meta-store!)
@@ -145,7 +145,7 @@
 
 (test-case "check/cross-family-rejected"
   (check-false
-   (parameterize ([current-global-env (hasheq)]
+   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                   [current-mult-meta-store (make-hasheq)])
      (reset-meta-store!)

@@ -12,16 +12,15 @@
 ;;;     - Each definition backed by a cell in the propagator network
 ;;;     - Phase 3b: lookups record dependency edges in current-definition-dependencies
 ;;;
-;;;   Layer 2: current-global-env / current-prelude-env (hasheq: name → (cons type value))
+;;;   Layer 2: current-prelude-env (hasheq: name → (cons type value))
 ;;;     - Prelude and module definitions (populated during module loading)
 ;;;     - Structurally frozen after prelude loading: global-env-add doesn't
 ;;;       write here when cell infrastructure is available
 ;;;     - Serves as fallback when definition not found in Layer 1
-;;;     - Phase 3d: aliased as current-prelude-env for clarity; full rename
-;;;       deferred (266 files, 1002 references, purely mechanical)
+;;;     - Track 6 Phase 9: renamed from current-global-env to current-prelude-env
 ;;;
 ;;; The "freeze" is structural: during module loading, parameterize sets
-;;; current-global-env-prop-net-box to #f, so global-env-add falls back to
+;;; current-prelude-env-prop-net-box to #f, so global-env-add falls back to
 ;;; legacy behavior (writes to Layer 2). After module loading returns, the
 ;;; prop-net is set up by process-command's parameterize, so global-env-add
 ;;; writes to Layer 1 + cell. The legacy hasheq stops growing automatically.
@@ -31,13 +30,10 @@
 ;;; Names: global-env-names returns union of both layers.
 ;;;
 
-(provide current-global-env
-         ;; Phase 3d: Alias — current-global-env holds prelude/module definitions
-         ;; (Layer 2). Per-file definitions are in current-definition-cells-content
-         ;; (Layer 1). Use global-env-lookup-* for reads (checks both layers).
-         ;; The alias is provided for documentation clarity; the rename is deferred
-         ;; to avoid touching 266 files with a purely mechanical change.
-         (rename-out [current-global-env current-prelude-env])
+(provide current-prelude-env
+         ;; Track 6 Phase 9: canonical name. Holds prelude/module definitions (Layer 2).
+         ;; Per-file definitions are in current-definition-cells-content (Layer 1).
+         ;; Use global-env-lookup-* for reads (checks both layers).
          ;; Track 6 Phase 7d: Module definitions sourced from module-network-ref
          current-module-definitions-content
          global-env-lookup-type
@@ -51,9 +47,9 @@
          ;; Phase 3a: Per-definition cell infrastructure
          current-definition-cells-content
          current-definition-cell-ids
-         current-global-env-prop-net-box
-         current-global-env-prop-cell-write
-         current-global-env-prop-new-cell
+         current-prelude-env-prop-net-box
+         current-prelude-env-prop-cell-write
+         current-prelude-env-prop-new-cell
          register-global-env-cells!
          ;; Phase 3b: Definition dependency recording
          current-elaborating-name
@@ -81,7 +77,7 @@
 ;; Layer 2: Prelude/module definitions (legacy)
 ;; ========================================
 ;; Populated during module loading. Structurally frozen after prelude load.
-(define current-global-env (make-parameter (hasheq)))
+(define current-prelude-env (make-parameter (hasheq)))
 
 ;; ========================================
 ;; Module definitions (Track 6 Phase 7d)
@@ -104,16 +100,16 @@
 (define current-definition-cell-ids (make-parameter (hasheq)))
 
 ;; Callback parameters for network access (set by driver.rkt).
-(define current-global-env-prop-net-box (make-parameter #f))
-(define current-global-env-prop-cell-write (make-parameter #f))
-(define current-global-env-prop-new-cell (make-parameter #f))
+(define current-prelude-env-prop-net-box (make-parameter #f))
+(define current-prelude-env-prop-cell-write (make-parameter #f))
+(define current-prelude-env-prop-new-cell (make-parameter #f))
 
 ;; Helper: write to per-definition cell in the prop-net.
 ;; Creates a new cell if one doesn't exist for this name.
 (define (definition-cell-write! name entry)
-  (define net-box (current-global-env-prop-net-box))
-  (define write-fn (current-global-env-prop-cell-write))
-  (define new-cell-fn (current-global-env-prop-new-cell))
+  (define net-box (current-prelude-env-prop-net-box))
+  (define write-fn (current-prelude-env-prop-cell-write))
+  (define new-cell-fn (current-prelude-env-prop-new-cell))
   (when (and net-box write-fn)
     (define cid (hash-ref (current-definition-cell-ids) name #f))
     (cond
@@ -132,8 +128,8 @@
 ;; tells global-env-lookup-type/value to return #f (definition invisible).
 ;; Track 5 Phase 2: extracted for failure cleanup consolidation.
 (define (definition-cell-remove! name)
-  (define net-box (current-global-env-prop-net-box))
-  (define write-fn (current-global-env-prop-cell-write))
+  (define net-box (current-prelude-env-prop-net-box))
+  (define write-fn (current-prelude-env-prop-cell-write))
   (when (and net-box write-fn)
     (define cid (hash-ref (current-definition-cell-ids) name #f))
     (when cid
@@ -142,8 +138,8 @@
 ;; Helper: write to a known cell-id in the prop-net.
 ;; Used for param-names and other singleton cells.
 (define (definition-cell-write-named! cell-id entry)
-  (define net-box (current-global-env-prop-net-box))
-  (define write-fn (current-global-env-prop-cell-write))
+  (define net-box (current-prelude-env-prop-net-box))
+  (define write-fn (current-prelude-env-prop-cell-write))
   (when (and net-box write-fn cell-id)
     (set-box! net-box (write-fn (unbox net-box) cell-id entry))))
 
@@ -210,7 +206,7 @@
      ;; Track 6 Phase 7d: module definitions from module-network-ref.
      ;; Fallback to Layer 2 (belt-and-suspenders during migration).
      (define entry (or (hash-ref (current-module-definitions-content) name #f)
-                       (hash-ref (current-global-env) name #f)))
+                       (hash-ref (current-prelude-env) name #f)))
      ;; Track 5 Phase 4: cross-module edge (source is a module, not same-file)
      (when (and entry elab-name)
        (record-cross-module-dep! elab-name name 'module))
@@ -231,7 +227,7 @@
     [else
      ;; Track 6 Phase 7d: module definitions from module-network-ref.
      (define entry (or (hash-ref (current-module-definitions-content) name #f)
-                       (hash-ref (current-global-env) name #f)))
+                       (hash-ref (current-prelude-env) name #f)))
      (and entry (cdr entry))]))
 
 ;; ========================================
@@ -247,7 +243,7 @@
 (define (global-env-add env name type value)
   (define entry (cons type value))
   (cond
-    [(current-global-env-prop-net-box)
+    [(current-prelude-env-prop-net-box)
      ;; Cell path: write to Layer 1 cells (callers discard return)
      (current-definition-cells-content
       (hash-set (current-definition-cells-content) name entry))
@@ -257,7 +253,7 @@
      ;; Legacy path: update parameter AND return new hash (some callers
      ;; compose functionally: (global-env-add (global-env-add ...) ...))
      (define new-env (hash-set env name entry))
-     (current-global-env new-env)
+     (current-prelude-env new-env)
      new-env]))
 
 ;; Pre-register only the type (value = #f) for recursive definitions.
@@ -266,7 +262,7 @@
 (define (global-env-add-type-only env name type)
   (define entry (cons type #f))
   (cond
-    [(current-global-env-prop-net-box)
+    [(current-prelude-env-prop-net-box)
      ;; Cell path: write to Layer 1 cells (callers discard return)
      (current-definition-cells-content
       (hash-set (current-definition-cells-content) name entry))
@@ -275,7 +271,7 @@
     [else
      ;; Legacy path: update parameter AND return new hash
      (define new-env (hash-set env name entry))
-     (current-global-env new-env)
+     (current-prelude-env new-env)
      new-env]))
 
 ;; Remove a definition from both layers on failure.
@@ -292,8 +288,8 @@
   (current-module-definitions-content
    (hash-remove (current-module-definitions-content) name))
   ;; Layer 2: prelude/module env parameter (belt-and-suspenders)
-  (current-global-env
-   (hash-remove (current-global-env) name)))
+  (current-prelude-env
+   (hash-remove (current-prelude-env) name)))
 
 ;; ========================================
 ;; Utilities (merge both layers)
@@ -301,7 +297,7 @@
 
 ;; List all definition names (from all layers)
 (define (global-env-names)
-  (define prelude-keys (hash-keys (current-global-env)))
+  (define prelude-keys (hash-keys (current-prelude-env)))
   (define module-keys (hash-keys (current-module-definitions-content)))
   (define file-keys (hash-keys (current-definition-cells-content)))
   ;; Priority: file-keys > module-keys > prelude-keys
@@ -323,7 +319,7 @@
 ;; Snapshot the current global env (merges all layers).
 ;; Priority: per-file defs > module defs (from module-network-ref) > legacy prelude defs.
 (define (global-env-snapshot)
-  (define base (current-global-env))
+  (define base (current-prelude-env))
   ;; Track 6 Phase 7d: merge module-definitions-content
   (define mod-defs (current-module-definitions-content))
   (define with-mods
@@ -348,7 +344,7 @@
 ;; Recreates cells from current-definition-cells-content (which persists).
 (define (register-global-env-cells! net-box new-cell-fn)
   (when (and net-box new-cell-fn)
-    ;; Note: does NOT set current-global-env-prop-net-box here.
+    ;; Note: does NOT set current-prelude-env-prop-net-box here.
     ;; driver.rkt sets it in process-command's parameterize block so
     ;; it auto-reverts when the command finishes (preventing test leakage).
     (define cells-content (current-definition-cells-content))

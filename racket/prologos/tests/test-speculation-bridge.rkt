@@ -29,7 +29,7 @@
 
 ;; Run a command through the driver (no prelude), suppress stderr.
 (define (run-simple s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-error-port (open-output-nowhere)])
     (process-string s)))

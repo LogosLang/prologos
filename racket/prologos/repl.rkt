@@ -36,7 +36,7 @@
   (displayln ":quit to exit | :env | :load | :type | :expand | :macros | :specs | :instances | :methods | :satisfies")
   (newline)
   ;; Start with empty global env
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-prelude-env (hasheq)])
     (repl-loop)))
 
 (define (repl-loop)

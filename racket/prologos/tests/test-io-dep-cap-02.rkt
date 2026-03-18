@@ -51,7 +51,7 @@
                 shared-param-impl-reg
                 shared-capability-reg
                 shared-subtype-reg)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -79,7 +79,7 @@
 
 ;; Helper: run code and return (values results cap-result)
 (define (run-and-infer s)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -95,7 +95,7 @@
     (values results (current-module-cap-result))))
 
 (define (run s)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -210,7 +210,7 @@
           (string-contains? (exn-message e) "E2004")
           (string-contains? (exn-message e) "FileCap")))
    (lambda ()
-     (parameterize ([current-global-env
+     (parameterize ([current-prelude-env
                      (hash-set
                       (hash-set shared-global-env
                                 'g-fc

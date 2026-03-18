@@ -171,7 +171,7 @@
 ;; ========================================
 
 (test-case "elab: (f x) — single arg with globals"
-  (parameterize ([current-global-env
+  (parameterize ([current-prelude-env
                   (global-env-add (global-env-add (hasheq)
                                    'f (expr-Pi 'mw (expr-Nat) (expr-Nat)) (expr-lam 'mw (expr-Nat) (expr-bvar 0)))
                                    'x (expr-Nat) (expr-zero))])
@@ -179,7 +179,7 @@
                   (expr-app (expr-fvar 'f) (expr-fvar 'x)))))
 
 (test-case "elab: multi-arg app (f a b) -> app(app(fvar f, fvar a), fvar b)"
-  (parameterize ([current-global-env
+  (parameterize ([current-prelude-env
                   (global-env-add
                    (global-env-add
                     (global-env-add (hasheq)

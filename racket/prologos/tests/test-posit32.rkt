@@ -197,7 +197,7 @@
 ;; ========================================
 
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (process-string s)))
 
@@ -218,7 +218,7 @@
                 '("OK")))
 
 (test-case "posit32 surface: def + eval"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def one <Posit32> (posit32 1073741824))\n(eval one)")])
       (check-equal? (length result) 2)
@@ -254,7 +254,7 @@
                 '("[posit32 2147483648] : Posit32")))
 
 (test-case "posit32 surface: defn with Posit32"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(defn p32-double [x <Posit32>] <Posit32>\n  (p32+ x x))\n(eval (p32-double (posit32 1073741824)))")])
       (check-equal? (length result) 2)

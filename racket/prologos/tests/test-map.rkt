@@ -19,7 +19,7 @@
 
 ;; Helper to run with clean global env
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (process-string s)))
 
@@ -237,7 +237,7 @@
     (check-equal? result '("false : Bool"))))
 
 (test-case "surface: def + eval with map"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def m <(Map Keyword Nat)> (map-assoc (map-empty Keyword Nat) :age (suc (suc zero))))\n(eval (map-get m :age))")])
       (check-equal? (length result) 2)
@@ -245,7 +245,7 @@
       (check-equal? (cadr result) "2N : Nat"))))
 
 (test-case "surface: defn with map parameter"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(defn lookup-age [m <(Map Keyword Nat)>] <Nat> (map-get m :age))\n(eval (lookup-age (map-assoc (map-empty Keyword Nat) :age (suc (suc (suc zero))))))")])
       (check-equal? (length result) 2)
@@ -268,7 +268,7 @@
                 '("OK")))
 
 (test-case "surface: map literal via def"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def m <(Map Keyword Nat)> {:x (suc zero)})\n(eval (map-get m :x))")])
       (check-equal? (length result) 2)
@@ -289,7 +289,7 @@
     (check-true (string-contains? (car result) ":x"))))
 
 (test-case "map-keys: multi-entry map has correct count"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string
                    (string-append

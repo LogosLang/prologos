@@ -36,7 +36,7 @@
                 shared-impl-reg
                 shared-param-impl-reg
                 shared-bundle-reg)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
@@ -49,7 +49,7 @@
                  [current-bundle-registry (current-bundle-registry)])
     (install-module-loader!)
     (process-string "(ns test-search-heuristics)")
-    (values (current-global-env)
+    (values (current-prelude-env)
             (current-ns-context)
             (current-module-registry)
             (current-trait-registry)
@@ -63,7 +63,7 @@
 
 ;; Helper: run narrowing with a specific search config
 (define (run-with-config func-name args target var-names config)
-  (parameterize ([current-global-env shared-global-env]
+  (parameterize ([current-prelude-env shared-global-env]
                  [current-narrow-search-config config])
     (run-narrowing-search func-name args target var-names)))
 
@@ -425,7 +425,7 @@
 (test-case "integration/default-config: same as before"
   ;; Default config (source-order, all, no iterative) should match
   ;; the original non-configurable behavior exactly
-  (parameterize ([current-global-env shared-global-env])
+  (parameterize ([current-prelude-env shared-global-env])
     (define sols-default
       (run-narrowing-search
        'prologos::data::nat::add

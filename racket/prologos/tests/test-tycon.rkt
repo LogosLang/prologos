@@ -130,7 +130,7 @@
 
 (test-case "reduction: expr-tycon is already in normal form"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (define tc (expr-tycon 'Map))
       (check-equal? (whnf tc) tc)
@@ -148,7 +148,7 @@
 
 (test-case "typing: expr-tycon PVec has kind Type -> Type"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (define kind (tc:infer '() (expr-tycon 'PVec)))
       ;; Should be (Pi m0 (Type lzero) (Type lzero))
@@ -159,7 +159,7 @@
 
 (test-case "typing: expr-tycon Map has kind Type -> Type -> Type"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (define kind (tc:infer '() (expr-tycon 'Map)))
       ;; Should be (Pi m0 (Type lzero) (Pi m0 (Type lzero) (Type lzero)))
@@ -172,7 +172,7 @@
 
 (test-case "typing: expr-tycon with unknown name returns error"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (define kind (tc:infer '() (expr-tycon 'Unknown)))
       (check-true (expr-error? kind)))))
@@ -183,19 +183,19 @@
 
 (test-case "unify: tycon vs tycon (same name) succeeds"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (check-true (unify ctx-empty (expr-tycon 'PVec) (expr-tycon 'PVec))))))
 
 (test-case "unify: tycon vs tycon (different names) fails"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (check-false (unify ctx-empty (expr-tycon 'PVec) (expr-tycon 'Set))))))
 
 (test-case "unify: meta solves to expr-tycon"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
       (check-true (unify ctx-empty m (expr-tycon 'PVec)))
@@ -208,7 +208,7 @@
 
 (test-case "unify: (PVec Nat) vs (app (tycon PVec) Nat) — normalization"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (check-true (unify ctx-empty
                          (expr-PVec (expr-Nat))
@@ -216,7 +216,7 @@
 
 (test-case "unify: (app ?F Nat) vs (PVec Nat) — HKT meta solving"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "F"))
       (check-true (unify ctx-empty
@@ -227,7 +227,7 @@
 
 (test-case "unify: (app ?F Int) vs (Set Int) — HKT meta solving for Set"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "F"))
       (check-true (unify ctx-empty

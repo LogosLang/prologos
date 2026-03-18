@@ -37,7 +37,7 @@
 
 ;; Run sexp-mode Prologos code
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
@@ -60,7 +60,7 @@
   (call-with-output-file tmp #:exists 'replace
     (lambda (out) (display s out)))
   (define result
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-module-registry prelude-module-registry]
@@ -135,7 +135,7 @@
 
 (test-case "varargs spec: desugar-rest-type basic"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-global-env (hasheq)]
+                 [current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec add-all Nat $rest -> Nat))
@@ -149,7 +149,7 @@
 
 (test-case "varargs spec: mixed fixed + varargs"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-global-env (hasheq)]
+                 [current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec max-of Nat Nat $rest -> Nat))
@@ -162,7 +162,7 @@
 
 (test-case "varargs spec: with implicit binders"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-global-env (hasheq)]
+                 [current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec list-of ($brace-params A) A $rest -> (List A)))
@@ -172,7 +172,7 @@
 
 (test-case "varargs spec: non-variadic has rest-type #f"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-global-env (hasheq)]
+                 [current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (process-spec '(spec id Nat -> Nat))
@@ -181,7 +181,7 @@
 
 (test-case "varargs spec: $rest at start is error"
   (parameterize ([current-spec-store (hasheq)]
-                 [current-global-env (hasheq)]
+                 [current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (check-exn exn:fail?

@@ -210,7 +210,7 @@
 
 ;; Helper to run with clean global env
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (process-string s)))
 
@@ -231,7 +231,7 @@
                 '("OK")))
 
 (test-case "posit8 surface: def + eval"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def one <Posit8> (posit8 64))\n(eval one)")])
       (check-equal? (length result) 2)
@@ -267,7 +267,7 @@
                 '("[posit8 128] : Posit8")))
 
 (test-case "posit8 surface: defn with Posit8"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(defn p8-double [x <Posit8>] <Posit8>\n  (p8+ x x))\n(eval (p8-double (posit8 64)))")])
       (check-equal? (length result) 2)

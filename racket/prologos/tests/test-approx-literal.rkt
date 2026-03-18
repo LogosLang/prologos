@@ -21,7 +21,7 @@
 
 ;; Helper: run through process-string (sexp mode)
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (process-string s)))
 
@@ -116,7 +116,7 @@
                 '("[posit32 1207959552] : Posit32")))
 
 (test-case "approx-literal surface: def with ~N"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def x <Posit32> ~42)\n(eval x)")])
       (check-equal? (length result) 2)
@@ -124,7 +124,7 @@
       (check-equal? (cadr result) "[posit32 1698693120] : Posit32"))))
 
 (test-case "approx-literal surface: ~N in function body"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(defn add42 [x <Posit32>] <Posit32>\n  (p32+ x ~42))\n(eval (add42 ~1))")])
       (check-equal? (length result) 2)

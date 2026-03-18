@@ -74,7 +74,7 @@
                 prelude-param-impl-registry
                 prelude-preparse-registry
                 prelude-capability-registry)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
@@ -90,7 +90,7 @@
                  [current-capability-registry (current-capability-registry)]
                  ;; Track 6 Phase 7a: network isolation (fresh network per call)
                  [current-prop-net-box              #f]
-                 [current-global-env-prop-net-box   #f]
+                 [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
@@ -113,7 +113,7 @@
 ;; Returns the LAST result (like the common run-ns-last pattern).
 ;; Each call gets a fresh global-env, ns-context, and meta-store for isolation.
 (define (run-ns-last s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
@@ -128,7 +128,7 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 6 Phase 7a: network isolation
                  [current-prop-net-box              #f]
-                 [current-global-env-prop-net-box   #f]
+                 [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
@@ -139,7 +139,7 @@
 
 ;; Process a string and return ALL results (list).
 (define (run-ns-all s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
@@ -154,7 +154,7 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 6 Phase 7a: network isolation
                  [current-prop-net-box              #f]
-                 [current-global-env-prop-net-box   #f]
+                 [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
@@ -170,7 +170,7 @@
 ;; This is the path that .prologos files use.
 
 (define (run-ns-ws-last s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
@@ -185,7 +185,7 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 6 Phase 7a: network isolation
                  [current-prop-net-box              #f]
-                 [current-global-env-prop-net-box   #f]
+                 [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
@@ -195,7 +195,7 @@
     (last (process-string-ws s))))
 
 (define (run-ns-ws-all s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
@@ -210,7 +210,7 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 6 Phase 7a: network isolation
                  [current-prop-net-box              #f]
-                 [current-global-env-prop-net-box   #f]
+                 [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
@@ -227,7 +227,7 @@
 (define (run-simple-capture-stderr s)
   (define stderr-out (open-output-string))
   (define results
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                    [current-definition-cells-content (hasheq)]  ;; Phase 3a
                    [current-definition-dependencies (hasheq)]  ;; Phase 3b
@@ -235,7 +235,7 @@
                    [current-error-port stderr-out]
                    ;; Track 6 Phase 7a: network isolation
                    [current-prop-net-box              #f]
-                   [current-global-env-prop-net-box   #f]
+                   [current-prelude-env-prop-net-box   #f]
                    [current-ns-prop-net-box           #f]
                    [current-definition-cell-ids       (hasheq)]
                    [current-module-registry-cell-id   #f]

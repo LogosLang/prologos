@@ -84,7 +84,7 @@
 (define ready-spec-propagation-handler (current-spec-propagation-handler))
 (define ready-foreign-handler         (current-foreign-handler))
 ;; global-env.rkt
-(define ready-global-env              (current-global-env))
+(define ready-global-env              (current-prelude-env))
 (define ready-module-defs-content     (current-module-definitions-content))  ;; Track 6 Phase 7d
 
 ;; ============================================================
@@ -181,13 +181,13 @@
          [current-spec-propagation-handler ready-spec-propagation-handler]
          [current-foreign-handler         ready-foreign-handler]
          ;; global-env.rkt
-         [current-global-env              ready-global-env]
+         [current-prelude-env              ready-global-env]
          [current-module-definitions-content ready-module-defs-content]  ;; Track 6 Phase 7d
          [current-definition-cells-content (hasheq)]   ;; Phase 3a: fresh per-file
          [current-definition-cell-ids      (hasheq)]   ;; Phase 3a: fresh per-file
          [current-definition-dependencies  (hasheq)]   ;; Phase 3b: fresh per-file
          [current-cross-module-deps        '()]         ;; Track 5 Phase 4: fresh per-file
-         [current-global-env-prop-net-box  #f]          ;; Phase 3a: no stale cell writes
+         [current-prelude-env-prop-net-box  #f]          ;; Phase 3a: no stale cell writes
          [current-ns-prop-net-box          #f]          ;; Phase 3c: no stale ns cell writes
          [current-module-registry-cell-id  #f]          ;; Phase 3c: fresh per-file
          [current-ns-context-cell-id       #f]          ;; Phase 3c: fresh per-file

@@ -41,7 +41,7 @@
 
 ;; Process WS-mode and return property from store
 (define (property-for-ws name s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -87,7 +87,7 @@
   (check-true (pair? (property-clause-forall-binders c))))
 
 (test-case "ws property: with :includes"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -115,7 +115,7 @@
     (check-equal? (property-clause-name (cadr clauses)) 'ext-laws/e1)))
 
 (test-case "ws property: empty property (only includes)"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -142,7 +142,7 @@
 ;; that are out of scope for this property hardening work)
 
 (test-case "sexp spec: :properties reference stored"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -157,7 +157,7 @@
     (check-equal? (car props) '(sortable-laws A))))
 
 (test-case "sexp trait: :laws reference stored"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -179,7 +179,7 @@
 ;; ========================================
 
 (test-case "algebraic-laws: file parses and registers all properties"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -197,7 +197,7 @@
     (check-true (property-entry? (lookup-property 'commutative-add-laws)))))
 
 (test-case "algebraic-laws: semigroup-laws has 1 clause"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -213,7 +213,7 @@
     (check-equal? (property-clause-name (car (property-entry-clauses pe))) "associativity")))
 
 (test-case "algebraic-laws: monoid-laws includes semigroup-laws"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -229,7 +229,7 @@
     (check-equal? (length (property-entry-includes pe)) 1)))
 
 (test-case "algebraic-laws: monoid-laws flatten yields 3 clauses"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -248,7 +248,7 @@
     (check-equal? (property-clause-name (third clauses)) 'monoid-laws/right-identity)))
 
 (test-case "algebraic-laws: functor-laws has 2 clauses"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
@@ -265,7 +265,7 @@
     (check-equal? (property-clause-name (second (property-entry-clauses pe))) "composition")))
 
 (test-case "algebraic-laws: commutative-add-laws has 1 clause"
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]

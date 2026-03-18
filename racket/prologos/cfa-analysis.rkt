@@ -107,9 +107,9 @@
 ;; ========================================
 
 ;; cfa-collect-constraints : → (listof cfa-constraint)
-;; Walk all definitions in current-global-env and collect flow constraints.
+;; Walk all definitions in current-prelude-env and collect flow constraints.
 (define (cfa-collect-constraints)
-  (define env (current-global-env))
+  (define env (current-prelude-env))
   (define constraints '())
 
   (define (emit! c) (set! constraints (cons c constraints)))
@@ -258,7 +258,7 @@
 ;; Arity-based fallback: enumerate all function definitions with matching arity.
 ;; Excludes constructors and non-function entries.
 (define (cfa-get-candidates-for-arity target-arity)
-  (define env (current-global-env))
+  (define env (current-prelude-env))
   (for/list ([(name entry) (in-hash env)]
              #:when (cdr entry)  ;; has a value (not type-only)
              #:when (not (lookup-ctor-flexible name))  ;; not a constructor
@@ -271,7 +271,7 @@
 ;; ========================================
 
 ;; cfa-analyze : → cfa-result
-;; Collect constraints from current-global-env and solve via fixpoint.
+;; Collect constraints from current-prelude-env and solve via fixpoint.
 (define (cfa-analyze)
   (define constraints (cfa-collect-constraints))
   (cfa-solve constraints))

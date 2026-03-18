@@ -32,7 +32,7 @@
 ;; Helper: process commands and return results
 ;; ========================================
 (define (run s)
-  (parameterize ([current-global-env (hasheq)]
+  (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (process-string s)))
 
@@ -44,7 +44,7 @@
 
 (define (run-ns s)
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-module-registry prelude-module-registry]
@@ -194,7 +194,7 @@
   ;; the created meta should have meta-source-info, not a bare string.
   ;; Note: maybe-auto-apply-implicits only fires when ALL params are m0.
   (with-fresh-meta-env
-    (parameterize ([current-global-env
+    (parameterize ([current-prelude-env
                     (global-env-add (hasheq) 'test-fn
                       ;; All-implicit: Pi(A :0 Type, B :0 A, Nat)
                       (expr-Pi 'm0 (expr-Type (lzero)) (expr-Pi 'm0 (expr-bvar 0) (expr-Nat)))
@@ -216,7 +216,7 @@
   ;; The meta created should have the name map containing "x" from the lambda binder.
   ;; Note: maybe-auto-apply-implicits only fires when ALL params are m0.
   (with-fresh-meta-env
-    (parameterize ([current-global-env
+    (parameterize ([current-prelude-env
                     (global-env-add (hasheq) 'impl-fn
                       ;; All-implicit: Pi(A :0 Type, B :0 A, Nat)
                       (expr-Pi 'm0 (expr-Type (lzero)) (expr-Pi 'm0 (expr-bvar 0) (expr-Nat)))
@@ -275,7 +275,7 @@
   ;; We need a simpler case that triggers failed constraints
   ;; Let's use a known case: applying a function to wrong implicit type
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)]
+    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-module-registry prelude-module-registry]
