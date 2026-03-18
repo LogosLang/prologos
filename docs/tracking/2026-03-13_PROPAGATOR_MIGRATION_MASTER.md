@@ -315,6 +315,7 @@ Known candidates from Track 7:
 3. `next-meta-id` counter (elab-network field) → monotone cell or structural counter with rollback
 4. 24 macros registry parameters (Phase 3b deferred) → already migrated to persistent cells; parameters retained for module-load-time seeding only
 5. Level/mult/session meta stores (mutable hasheqs) → audit whether these need TMS rollback
+6. **`id-map` accessibility from prop-network layer** (Track 7 Phase 9 finding): `decompose-pi` in `elaborator-network.rkt` operates on the raw `prop-network` inside propagator fire functions. It cannot access the elab-network's `id-map` to look up mult-meta cell-ids for cross-domain bridge wiring. The `elab-add-type-mult-bridge` function exists and works (tested), but the natural call site (`decompose-pi`) is one layer too deep. When Track 8 makes `id-map` a network-level citizen (or accessible from prop-network), the bridge wiring becomes a ~10-line addition to `decompose-pi`: check if Pi's multiplicity is a `mult-meta`, look up its cell-id, wire `elab-add-type-mult-bridge` between the parent type cell and the mult cell.
 
 This audit follows the pattern established by the Track 7 stratified architecture audit (`2026-03-18_STRATIFIED_ARCHITECTURE_AUDIT.md`): classify all state, then design the migration.
 
