@@ -252,21 +252,23 @@ Moved to §Completed Work above. See Track 5 PIR for full review.
 
 **Design document**: TBD — likely lightweight, mostly cleanup tasks.
 
-### Track 7: QTT Multiplicity Cells (P5)
+### Track 7: QTT Multiplicity Cells + TMS Architecture (P5)
 
-**Goal**: Bring QTT multiplicity operations into the elaboration network with cross-domain bridges (type ↔ multiplicity). Architectural unification — the mult lattice (m0 < m1 < mw) is tiny but connecting it to the propagator network enables cross-domain reasoning.
+**Goal**: Two workstreams:
+1. **QTT Multiplicity Cells**: Bring QTT multiplicity operations into the elaboration network with cross-domain bridges (type ↔ multiplicity). The mult lattice (m0 < m1 < mw) is tiny but connecting it to the propagator network enables cross-domain reasoning.
+2. **TMS-Aware Infrastructure + Stratified Prop-Net Architecture**: Extend TMS to support set-like accumulation with per-assumption retraction, enabling belt-and-suspenders retirement (Track 6 Phase 5b blocker). Also: inline callback resolution logic into the stratified loop, replacing imperative callbacks with propagator-driven resolution — stepping stone to stratified propagator networks (see DESIGN_PRINCIPLES.org § "Stratified Propagator Networks").
 
-**Scope**: New `mult-lattice.rkt` module, multiplicity cells in elaboration network, cross-domain bridge propagators.
+**Scope**:
+- WS-A (QTT): New `mult-lattice.rkt` module, multiplicity cells in elaboration network, cross-domain bridge propagators.
+- WS-B (TMS Architecture): Infrastructure cells (constraint store, unsolved-metas) → TMS-aware accumulation with retraction. Structural fields (meta-info, id-map, next-meta-id) → TMS-managed or separate rollback. Callback inlining: move resolution logic from driver.rkt callbacks into `execute-resolution-actions!` directly, breaking circular deps via module restructuring. Belt-and-suspenders retirement gate (Track 6 Phase 5b) as validation.
 
-**Risk**: Low — tiny lattice, well-understood semantics.
+**Risk**: WS-A low (tiny lattice). WS-B medium (TMS accumulation with retraction is new architecture — no existing TMS supports set-like retraction natively).
 
-**Composition synergy**: Cross-domain bridge enables session type ↔ multiplicity propagation. Foundation for the Galois connection architecture described in the Whole-System Migration Thesis.
+**Composition synergy**: Cross-domain bridge enables session type ↔ multiplicity propagation. TMS-aware infrastructure enables full incremental rollback — prerequisite for Track 8 (unification as propagators) where speculation correctness is load-bearing. Stratified prop-net architecture is the foundation for correct-by-construction resolution without defensive scanning.
 
 **Depends on**: Track 6 (clean driver baseline).
 
-**Prerequisite from Track 6**: TMS-aware infrastructure cells + structural state migration (Track 6 Phase 5b blocker). Infrastructure cells (constraint store, unsolved-metas) and elab-network structural fields (meta-info, id-map, next-meta-id) are not TMS-managed, blocking belt-and-suspenders retirement. This should be a prerequisite phase in Track 7 or a standalone mini-track. See `DEFERRED.md` § "TMS-Aware Infrastructure Cells + Structural State" for full analysis.
-
-**Design reference**: `docs/tracking/2026-03-04_PROPAGATOR_MIGRATION_GDE.md` § Track 3 (P5).
+**Design reference**: `docs/tracking/2026-03-04_PROPAGATOR_MIGRATION_GDE.md` § Track 3 (P5). Track 6 Phase 5b blocker analysis. Track 6 Phase 8d audit (callback vestigiality). DESIGN_PRINCIPLES.org § "Stratified Propagator Networks" + DEVELOPMENT_LESSONS.org § "Callbacks Are a Propagator-First Anti-Pattern".
 
 **Design document**: TBD.
 
