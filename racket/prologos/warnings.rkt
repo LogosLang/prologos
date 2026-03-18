@@ -41,9 +41,6 @@
          current-deprecation-warnings-cell-id
          current-capability-warnings-cell-id
          register-warning-cells!
-         ;; Track 6 Phase 7c: elaboration guard for dual-write elimination
-         current-warnings-in-elaboration?
-         sync-warning-cells-to-params!
          ;; Track 3 Phase 4: cell-primary readers
          read-coercion-warnings
          read-deprecation-warnings
@@ -87,23 +84,6 @@
     (current-capability-warnings-cell-id capw-cid)
     (set-box! net-box enet3)))
 
-;; Track 6 Phase 7c: elaboration guard for dual-write elimination.
-;; Set to #t inside process-command's inner parameterize (same scope as macros guard).
-(define current-warnings-in-elaboration? (make-parameter #f))
-
-;; Track 6 Phase 7c: sync cell values back to parameters at end of successful process-command.
-;; Direct cell read bypassing any guard, since this runs after the inner parameterize exits.
-(define (sync-warning-cells-to-params!)
-  (define net-box (current-warnings-prop-net-box))
-  (define read-fn (current-warnings-prop-cell-read))
-  (define (sync! cid param-setter)
-    (when (and cid net-box read-fn)
-      (with-handlers ([exn:fail? void])
-        (param-setter (read-fn (unbox net-box) cid)))))
-  (sync! (current-coercion-warnings-cell-id) current-coercion-warnings)
-  (sync! (current-deprecation-warnings-cell-id) current-deprecation-warnings)
-  (sync! (current-capability-warnings-cell-id) current-capability-warnings))
-
 ;; Track 3 Phase 4: cell-primary read helper for warnings.
 ;; Simpler than macros-cell-read-safe — no elaboration guard needed because
 ;; warning reads only occur inside process-command (driver.rkt).
@@ -143,10 +123,9 @@
 ;; from-str, to-str: strings like "Int", "Posit32"
 (define (emit-coercion-warning! from-str to-str)
   (define w (coercion-warning from-str to-str))
-  ;; Track 6 Phase 7c: cell-only during elaboration; param-only outside.
-  (if (current-warnings-in-elaboration?)
-      (warnings-cell-write! (current-coercion-warnings-cell-id) (list w))
-      (current-coercion-warnings (cons w (current-coercion-warnings)))))
+  (current-coercion-warnings (cons w (current-coercion-warnings)))
+  ;; Phase 2c: dual-write to cell
+  (warnings-cell-write! (current-coercion-warnings-cell-id) (list w)))
 
 ;; Format a coercion warning for display.
 (define (format-coercion-warning w)
@@ -169,10 +148,9 @@
 ;; Emit a deprecation warning.
 (define (emit-deprecation-warning! name msg)
   (define w (deprecation-warning name msg))
-  ;; Track 6 Phase 7c: cell-only during elaboration; param-only outside.
-  (if (current-warnings-in-elaboration?)
-      (warnings-cell-write! (current-deprecation-warnings-cell-id) (list w))
-      (current-deprecation-warnings (cons w (current-deprecation-warnings)))))
+  (current-deprecation-warnings (cons w (current-deprecation-warnings)))
+  ;; Phase 2c: dual-write to cell
+  (warnings-cell-write! (current-deprecation-warnings-cell-id) (list w)))
 
 ;; Format a deprecation warning for display.
 (define (format-deprecation-warning w)
@@ -198,10 +176,9 @@
 ;; Emit a capability warning.
 (define (emit-capability-warning! name mult)
   (define w (capability-warning name mult))
-  ;; Track 6 Phase 7c: cell-only during elaboration; param-only outside.
-  (if (current-warnings-in-elaboration?)
-      (warnings-cell-write! (current-capability-warnings-cell-id) (list w))
-      (current-capability-warnings (cons w (current-capability-warnings)))))
+  (current-capability-warnings (cons w (current-capability-warnings)))
+  ;; Phase 2c: dual-write to cell
+  (warnings-cell-write! (current-capability-warnings-cell-id) (list w)))
 
 ;; Format a capability warning for display.
 (define (format-capability-warning w)
@@ -220,10 +197,9 @@
 ;; Emit a process capability warning.
 (define (emit-process-cap-warning! code name msg)
   (define w (process-cap-warning code name msg))
-  ;; Track 6 Phase 7c: cell-only during elaboration; param-only outside.
-  (if (current-warnings-in-elaboration?)
-      (warnings-cell-write! (current-capability-warnings-cell-id) (list w))
-      (current-capability-warnings (cons w (current-capability-warnings)))))
+  (current-capability-warnings (cons w (current-capability-warnings)))
+  ;; Phase 2c: dual-write to cell (shared with capability warnings)
+  (warnings-cell-write! (current-capability-warnings-cell-id) (list w)))
 
 ;; Format a process capability warning for display.
 (define (format-process-cap-warning w)
