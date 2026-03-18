@@ -17,7 +17,7 @@
  (struct-out perf-counters)
  current-perf-counters
 
- ;; 12 concrete increment macros (zero-cost when current-perf-counters = #f)
+ ;; 12 + 3 concrete increment macros (zero-cost when current-perf-counters = #f)
  perf-inc-unify!
  perf-inc-reduce!
  perf-inc-elaborate!
@@ -30,14 +30,23 @@
  perf-inc-solver-backtrack!
  perf-inc-solver-unify!
  perf-inc-zonk!
+ ;; Track 7 Phase 0b: new counters for per-command instrumentation
+ perf-inc-resolution-cycle!
+ perf-inc-prop-firing!
+ perf-inc-cell-alloc!
 
  ;; Lifecycle
  with-perf-counters
  perf-counters-reset!
  perf-counters->hasheq
+ perf-counters-snapshot
 
  ;; Subprocess reporting
  print-perf-report!
+
+ ;; Track 7 Phase 0b: Per-command verbose output
+ current-verbose-mode
+ emit-verbose-command!
 
  ;; Phase B: Phase-level timing
  (struct-out phase-timings)
@@ -87,7 +96,11 @@
    constraint-retries
    solver-backtracks
    solver-unifies
-   zonk-steps)
+   zonk-steps
+   ;; Track 7 Phase 0b: per-command instrumentation counters
+   resolution-cycles      ;; iterations of run-stratified-resolution! loop
+   prop-firings           ;; propagator firings in run-to-quiescence
+   cell-allocs)           ;; cells allocated via net-new-cell
   #:mutable #:transparent)
 
 ;; Parameter: #f = disabled (default), perf-counters struct = enabled
@@ -149,13 +162,26 @@
   (let ([pc (current-perf-counters)])
     (when pc (set-perf-counters-zonk-steps! pc (add1 (perf-counters-zonk-steps pc))))))
 
+;; Track 7 Phase 0b: new counters for per-command instrumentation
+(define-syntax-rule (perf-inc-resolution-cycle!)
+  (let ([pc (current-perf-counters)])
+    (when pc (set-perf-counters-resolution-cycles! pc (add1 (perf-counters-resolution-cycles pc))))))
+
+(define-syntax-rule (perf-inc-prop-firing!)
+  (let ([pc (current-perf-counters)])
+    (when pc (set-perf-counters-prop-firings! pc (add1 (perf-counters-prop-firings pc))))))
+
+(define-syntax-rule (perf-inc-cell-alloc!)
+  (let ([pc (current-perf-counters)])
+    (when pc (set-perf-counters-cell-allocs! pc (add1 (perf-counters-cell-allocs pc))))))
+
 ;; ============================================================
 ;; Lifecycle
 ;; ============================================================
 
 ;; with-perf-counters: set up fresh counters, run body, return (values result pc)
 (define-syntax-rule (with-perf-counters body ...)
-  (let ([pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0)])
+  (let ([pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)])
     (parameterize ([current-perf-counters pc])
       (let ([result (begin body ...)])
         (values result pc)))))
@@ -173,7 +199,10 @@
   (set-perf-counters-constraint-retries! pc 0)
   (set-perf-counters-solver-backtracks! pc 0)
   (set-perf-counters-solver-unifies! pc 0)
-  (set-perf-counters-zonk-steps! pc 0))
+  (set-perf-counters-zonk-steps! pc 0)
+  (set-perf-counters-resolution-cycles! pc 0)
+  (set-perf-counters-prop-firings! pc 0)
+  (set-perf-counters-cell-allocs! pc 0))
 
 ;; Snapshot to immutable hasheq (for JSON serialization)
 (define (perf-counters->hasheq pc)
@@ -188,7 +217,10 @@
           'constraint_retries (perf-counters-constraint-retries pc)
           'solver_backtracks (perf-counters-solver-backtracks pc)
           'solver_unifies    (perf-counters-solver-unifies pc)
-          'zonk_steps        (perf-counters-zonk-steps pc)))
+          'zonk_steps        (perf-counters-zonk-steps pc)
+          'resolution_cycles (perf-counters-resolution-cycles pc)
+          'prop_firings      (perf-counters-prop-firings pc)
+          'cell_allocs       (perf-counters-cell-allocs pc)))
 
 ;; ============================================================
 ;; Subprocess reporting
@@ -382,3 +414,46 @@
 (define (print-provenance-report! pv)
   (define h (provenance-counters->hasheq pv))
   (eprintf "PROVENANCE-STATS:~a\n" (jsexpr->string h)))
+
+;; ============================================================
+;; Track 7 Phase 0b: Per-command verbose instrumentation
+;;
+;; Emits one JSON line per command to stderr when enabled.
+;; Zero-cost when current-verbose-mode is #f.
+;;
+;; Usage in driver.rkt:
+;;   1. Before process-command: snapshot counters
+;;   2. After process-command: compute delta, emit
+;; ============================================================
+
+;; Parameter: #f = disabled (default), #t = emit per-command JSON
+(define current-verbose-mode (make-parameter #f))
+
+;; Snapshot current counter values as an immutable hasheq.
+;; Used to compute per-command deltas.
+(define (perf-counters-snapshot pc)
+  (if pc (perf-counters->hasheq pc) (hasheq)))
+
+;; Emit a per-command verbose line to stderr.
+;; `cmd-index` is 0-based command number.
+;; `form-summary` is a truncated string of the source form.
+;; `before-snap` and `after-snap` are hasheqs from perf-counters-snapshot.
+;; `wall-ms` is the wall-clock time for this command.
+(define (emit-verbose-command! cmd-index form-summary before-snap after-snap wall-ms)
+  (when (current-verbose-mode)
+    (define (delta key) (- (hash-ref after-snap key 0) (hash-ref before-snap key 0)))
+    (define h
+      (hasheq 'cmd            cmd-index
+              'form           form-summary
+              'metas_created  (delta 'meta_created)
+              'metas_solved   (delta 'meta_solved)
+              'constraints    (delta 'constraint_count)
+              'traits         (delta 'trait_resolve_steps)
+              'prop_firings   (delta 'prop_firings)
+              'res_cycles     (delta 'resolution_cycles)
+              'cell_allocs    (delta 'cell_allocs)
+              'unify_steps    (delta 'unify_steps)
+              'reduce_steps   (delta 'reduce_steps)
+              'wall_ms        (inexact->exact (round (* wall-ms 10))) ;; 0.1ms precision
+              ))
+    (eprintf "VERBOSE:~a\n" (jsexpr->string h))))

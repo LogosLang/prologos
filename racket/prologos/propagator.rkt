@@ -14,6 +14,7 @@
 ;;;
 
 (require "champ.rkt"
+         "performance-counters.rkt"
          racket/future)   ;; for future, touch, processor-count
 
 (provide
@@ -255,6 +256,7 @@
 ;; contradicts?: optional (val → Bool) predicate for contradiction detection
 ;; Returns: (values new-network cell-id)
 (define (net-new-cell net initial-value merge-fn [contradicts? #f])
+  (perf-inc-cell-alloc!)  ;; Track 7 Phase 0b
   (define id (cell-id (prop-network-next-cell-id net)))
   (define cell (prop-cell initial-value champ-empty))
   (define h (cell-id-hash id))
@@ -278,6 +280,7 @@
 ;; contradicts?: optional (val -> Bool) — for descending, typically (lambda (v) (eq? v bot))
 ;; Returns: (values new-network cell-id)
 (define (net-new-cell-desc net top-value meet-fn [contradicts? #f])
+  (perf-inc-cell-alloc!)  ;; Track 7 Phase 0b
   (define id (cell-id (prop-network-next-cell-id net)))
   (define cell (prop-cell top-value champ-empty))
   (define h (cell-id-hash id))
@@ -811,7 +814,9 @@
                                 (prop-id-hash pid) pid)])
        (if (eq? prop 'none)
            (run-to-quiescence-inner net*)
-           (run-to-quiescence-inner ((propagator-fire-fn prop) net*))))]))
+           (begin
+             (perf-inc-prop-firing!)  ;; Track 7 Phase 0b
+             (run-to-quiescence-inner ((propagator-fire-fn prop) net*)))))]))
 
 ;; Inner loop with tracing: returns (cons final-net fired-pids-list).
 (define (run-to-quiescence-inner/traced net)

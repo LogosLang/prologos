@@ -1346,6 +1346,7 @@
         (execute-resolution-actions! actions)
         ;; ── Check for progress ──
         ;; If any new metas were solved during S2, loop for another round.
+        (perf-inc-resolution-cycle!)  ;; Track 7 Phase 0b
         (when (unbox progress-box)
           (loop (sub1 fuel) meta-id))))))
 

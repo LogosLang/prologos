@@ -1422,7 +1422,7 @@
 ;; ========================================
 ;; Process all commands from a file
 ;; ========================================
-(define (process-file path)
+(define (process-file path #:verbose [verbose? #f])
   (define port (open-input-file path))
   ;; Use WS reader for .prologos files, sexp reader otherwise
   (define path-str (if (string? path) path (path->string path)))
@@ -1438,12 +1438,28 @@
   (define mem-before (measure-memory-before))
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
-                   [current-provenance-counters pv])
+                   [current-provenance-counters pv]
+                   [current-verbose-mode verbose?])
       (with-perf-counters
-        (for/list ([surf (in-list surfs)])
+        (for/list ([surf (in-list surfs)]
+                   [cmd-i (in-naturals)])
           (if (prologos-error? surf)
               surf
-              (process-command surf))))))
+              ;; Track 7 Phase 0b: per-command snapshot/delta when verbose
+              (let* ([snap-before (if verbose? (perf-counters-snapshot (current-perf-counters)) #f)]
+                     [t0 (if verbose? (current-inexact-monotonic-milliseconds) 0)]
+                     [result (process-command surf)]
+                     [_ (when verbose?
+                          (define snap-after (perf-counters-snapshot (current-perf-counters)))
+                          (define elapsed (- (current-inexact-monotonic-milliseconds) t0))
+                          ;; Truncate form summary to 80 chars
+                          (define form-str
+                            (let ([s (format "~a" surf)])
+                              (if (> (string-length s) 80)
+                                  (string-append (substring s 0 77) "...")
+                                  s)))
+                          (emit-verbose-command! cmd-i form-str snap-before snap-after elapsed))])
+                result))))))
   ;; Emit formatted error diagnostics to stderr when enabled (test runner integration)
   (when (current-emit-error-diagnostics)
     (for ([r (in-list results)])
