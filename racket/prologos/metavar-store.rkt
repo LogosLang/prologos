@@ -1654,19 +1654,9 @@
           (define pnet (unwrap enet))
           (define pnet* (run-fn pnet))
           (set-box! net-box (rewrap enet pnet*)))
-        ;; ── Stratum 1: Readiness scan (collect action descriptors) ──
-        (define actions
-          (append
-           ;; Constraint readiness (cell-state scan or targeted wakeup).
-           (if has-network?
-               (collect-ready-constraints-via-cells)
-               (collect-ready-constraints-for-meta meta-id))
-           ;; Trait readiness (cell-state scan + targeted wakeup).
-           (collect-ready-traits-via-cells)
-           (collect-ready-traits-for-meta meta-id)
-           ;; HasMethod readiness (cell-state scan + targeted wakeup).
-           (collect-ready-hasmethods-via-cells)
-           (collect-ready-hasmethods-for-meta meta-id)))
+        ;; ── S1/L1: Read ready-queue (Track 7 Phase 8c: scanners removed) ──
+        ;; After S0 quiescence, readiness propagators have populated the ready-queue.
+        (define actions (read-ready-queue-actions (unbox net-box)))
         ;; ── Stratum 2: Resolution commitment (execute actions) ──
         ;; Reset progress box. Any solve-meta-core! calls during S2 set it.
         (set-box! progress-box #f)
@@ -1708,26 +1698,14 @@
                              enet-post-retract)]
                ;; S1/L1: After S0 quiescence, readiness propagators have fired
                ;; and populated the ready-queue. Read queue actions.
-               ;; Also run legacy scanners as belt-and-suspenders (Phase 8c removes).
+               ;; Track 7 Phase 8c: Scanners REMOVED — ready-queue is sole action source.
+               ;; Sync enet to box for ready-queue read (cell reads use box bridge).
                [_ (let ([nb (current-prop-net-box)])
                     (when nb (set-box! nb enet-s0)))]
-               ;; Track 7 Phase 8b: Read ready-queue (populated by L1 propagators during S0)
                [queue-actions (read-ready-queue-actions enet-s0)]
-               ;; Legacy scanners (belt-and-suspenders, removed in Phase 8c)
-               [scanner-actions (append
-                                 (if has-network?
-                                     (collect-ready-constraints-via-cells)
-                                     (collect-ready-constraints-for-meta meta-id))
-                                 (collect-ready-traits-via-cells)
-                                 (collect-ready-traits-for-meta meta-id)
-                                 (collect-ready-hasmethods-via-cells)
-                                 (collect-ready-hasmethods-for-meta meta-id))]
-               ;; Use scanner actions as primary (proven correct), queue as supplement.
-               ;; Phase 8c will switch to queue-only once validated.
-               [all-actions (append scanner-actions queue-actions)]
-               ;; S2: Resolution commitment — pure (for/fold)
+               ;; S2: Resolution commitment — pure (for/fold over queue actions)
                [enet-s2 (for/fold ([e enet-s0])
-                                  ([action (in-list all-actions)])
+                                  ([action (in-list queue-actions)])
                            (resolution-executor e action))])
           (perf-inc-resolution-cycle!)
           ;; Detect progress: enet changed?

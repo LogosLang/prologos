@@ -29,9 +29,9 @@
 | 6 | Belt-and-suspenders retirement | ✅ | — (removal, not addition) | WS-B: 6a restore retained (structural state), 6b-c dead code, 6d test fixtures, 6e reads cell-primary, 6f deferred (harmless), 6g batch-worker box-contents snapshot |
 | 7a | Module extraction + callback elimination | ✅ | — (restructuring only) | WS-B: `resolution.rkt` with unified dispatcher; 3 callbacks → 1 executor |
 | 7b | Resolution chain purification | ✅ | — (signature change) | WS-B: pure write chain + solve-meta! sole box boundary; read bridge via parameterize |
-| 8a | Readiness propagators (L1) | 🔄 | L1 (fire once per dep) | WS-B: audit done; ready-queue + threshold-cell propagators installed; belt-and-suspenders pending |
-| 8b | Resolution propagators (L2) | ✅ | L2 (type depth ↓) | WS-B: ready-queue consumption in pure loop; belt-and-suspenders (scanner + queue) |
-| 8c | Stratified loop elimination | ⬜ | L1+L2 (composed) | WS-B: `run-stratified-resolution!` → layered network quiescence |
+| 8a | Readiness propagators (L1) | ✅ | L1 (fire once per dep) | WS-B: audit done; ready-queue + threshold-cell propagators installed |
+| 8b | Resolution propagators (L2) | ✅ | L2 (type depth ↓) | WS-B: ready-queue consumption in pure loop |
+| 8c | Stratified loop elimination | ✅ | L1+L2 (composed) | WS-B: scanners removed; ready-queue sole action source; loop retained for fuel/progress |
 | 9 | QTT multiplicity cells + cross-domain bridges | ⬜ | L1 (3-element lattice) | WS-A: mult lattice in network |
 | 10 | Performance validation + PIR | ⬜ | — | |
 
