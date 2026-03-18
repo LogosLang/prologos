@@ -2109,9 +2109,15 @@
 ;; unwrap/rewrap callbacks to extract and re-insert the inner prop-network.
 (current-prop-run-quiescence run-to-quiescence)
 (current-prop-unwrap-net elab-network-prop-net)
+;; Track 7 post-fix: rewrap preserves eq? identity when prop-net unchanged.
+;; Critical for progress detection in run-stratified-resolution-pure, which
+;; uses (eq? enet-s2 enet-s0) to detect whether resolution made progress.
+;; Without this, struct-copy always creates a new struct, breaking eq?.
 (current-prop-rewrap-net
  (lambda (enet pnet*)
-   (struct-copy elab-network enet [prop-net pnet*])))
+   (if (eq? pnet* (elab-network-prop-net enet))
+       enet  ;; No change — preserve identity
+       (struct-copy elab-network enet [prop-net pnet*]))))
 
 ;; Phase E1: Install meta-solution callback for propagator-aware merge.
 ;; This allows type-lattice-merge to follow solved metas (read-only) when

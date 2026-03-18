@@ -173,23 +173,32 @@
   (net-cell-read (elab-network-prop-net enet) cid))
 
 ;; Write a type value to a cell (lattice join via merge-fn).
+;; Preserves eq? identity when the write produces no change (critical for
+;; progress detection in run-stratified-resolution-pure).
 (define (elab-cell-write enet cid val)
-  (elab-network
-   (net-cell-write (elab-network-prop-net enet) cid val)
-   (elab-network-cell-info enet)
-   (elab-network-next-meta-id enet)
-   (elab-network-id-map enet)
-   (elab-network-meta-info enet)))
+  (define pnet (elab-network-prop-net enet))
+  (define pnet* (net-cell-write pnet cid val))
+  (if (eq? pnet* pnet)
+      enet  ;; No change — preserve identity
+      (elab-network pnet*
+       (elab-network-cell-info enet)
+       (elab-network-next-meta-id enet)
+       (elab-network-id-map enet)
+       (elab-network-meta-info enet))))
 
 ;; Track 7 post-fix: Replace a cell's value directly, bypassing merge.
 ;; Used by S(-1) retraction to write cleaned values to monotone cells.
+;; Preserves eq? identity when replacement is no-op.
 (define (elab-cell-replace enet cid val)
-  (elab-network
-   (net-cell-replace (elab-network-prop-net enet) cid val)
-   (elab-network-cell-info enet)
-   (elab-network-next-meta-id enet)
-   (elab-network-id-map enet)
-   (elab-network-meta-info enet)))
+  (define pnet (elab-network-prop-net enet))
+  (define pnet* (net-cell-replace pnet cid val))
+  (if (eq? pnet* pnet)
+      enet
+      (elab-network pnet*
+       (elab-network-cell-info enet)
+       (elab-network-next-meta-id enet)
+       (elab-network-id-map enet)
+       (elab-network-meta-info enet))))
 
 ;; Phase 1a: Create an infrastructure cell in the elab-network's prop-net.
 ;; Unlike elab-fresh-meta, this does NOT add cell-info metadata or increment
