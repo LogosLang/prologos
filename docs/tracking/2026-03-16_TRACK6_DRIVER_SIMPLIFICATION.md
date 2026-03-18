@@ -32,9 +32,9 @@
 | **WS-B** | **Dual-Write Elimination + Cleanup** | | |
 | 6 | batch-worker.rkt → snapshot-based state (19→1 vector + 8 param) | ✅ | commit `25d7b20` — 7154 tests, 208.9s. Per-file timeout: `9a600c3` |
 | 7a | test-support.rkt → network-based isolation | ✅ | commit `92a27b0` — 7 network params added to 5 helpers + prelude block. Shadow: 0 divergences (7154 tests, 203.5s, same 3 ATMS) |
-| 7b | Dual-write elimination: macros.rkt (23) | ⬜ | Mechanical |
-| 7c | Dual-write elimination: warnings (3) + constraints (2) | ⬜ | Mechanical |
-| 7d | Dual-write elimination: global-env.rkt | ⬜ | Mechanical |
+| 7b | macros.rkt dual-write: existing pattern correct | ✅ | Reverted `e10f5f3` sync-back pattern (commit `70063b9`). Natural dual-write (param persistence + cell propagation) matches Track 5's `global-env-add` pattern — NOT redundant. |
+| 7c | warnings.rkt dual-write: existing pattern correct | ✅ | Reverted `b618c78` sync-back pattern (commit `70063b9`). Same reasoning as 7b. |
+| 7d | Global-env lookup → module-network-ref cutover | ✅ | commit `cd54a9f` (belt-and-suspenders population), `78bba78` (lookup cutover). `current-module-definitions-content` sourced from Track 5 module-network-ref cells. 250 test files updated. 7154 tests, 2 ATMS. Layer 2 retained as fallback. |
 | 8a | Exhaustive cell-reader audit + categorization | ⬜ | Categorize: elaboration / module-loading / other |
 | 8b | Remove `current-macros-in-elaboration?` guard | ⬜ | 23 cell readers → unconditional |
 | 8c | Remove `current-narrow-in-elaboration?` guard | ⬜ | 2 cell readers → unconditional |
