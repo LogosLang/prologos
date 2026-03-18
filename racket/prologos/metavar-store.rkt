@@ -164,6 +164,8 @@
  ;; Track 7 Phase 8a: Ready-queue + propagator infrastructure
  current-ready-queue-cell-id
  current-prop-add-propagator
+ ;; Track 7 Phase 8b: Ready-queue consumption
+ read-ready-queue-actions
  ;; Track 6 Phase 1a: id-map access callbacks
  current-prop-id-map-read
  current-prop-id-map-set
@@ -1704,26 +1706,47 @@
                                     [pnet* (run-fn pnet)])
                                (rewrap enet-post-retract pnet*))
                              enet-post-retract)]
-               ;; S1: Readiness scan — reads from enet via box bridge
+               ;; S1/L1: After S0 quiescence, readiness propagators have fired
+               ;; and populated the ready-queue. Read queue actions.
+               ;; Also run legacy scanners as belt-and-suspenders (Phase 8c removes).
                [_ (let ([nb (current-prop-net-box)])
                     (when nb (set-box! nb enet-s0)))]
-               [actions (append
-                         (if has-network?
-                             (collect-ready-constraints-via-cells)
-                             (collect-ready-constraints-for-meta meta-id))
-                         (collect-ready-traits-via-cells)
-                         (collect-ready-traits-for-meta meta-id)
-                         (collect-ready-hasmethods-via-cells)
-                         (collect-ready-hasmethods-for-meta meta-id))]
+               ;; Track 7 Phase 8b: Read ready-queue (populated by L1 propagators during S0)
+               [queue-actions (read-ready-queue-actions enet-s0)]
+               ;; Legacy scanners (belt-and-suspenders, removed in Phase 8c)
+               [scanner-actions (append
+                                 (if has-network?
+                                     (collect-ready-constraints-via-cells)
+                                     (collect-ready-constraints-for-meta meta-id))
+                                 (collect-ready-traits-via-cells)
+                                 (collect-ready-traits-for-meta meta-id)
+                                 (collect-ready-hasmethods-via-cells)
+                                 (collect-ready-hasmethods-for-meta meta-id))]
+               ;; Use scanner actions as primary (proven correct), queue as supplement.
+               ;; Phase 8c will switch to queue-only once validated.
+               [all-actions (append scanner-actions queue-actions)]
                ;; S2: Resolution commitment — pure (for/fold)
                [enet-s2 (for/fold ([e enet-s0])
-                                  ([action (in-list actions)])
+                                  ([action (in-list all-actions)])
                            (resolution-executor e action))])
           (perf-inc-resolution-cycle!)
           ;; Detect progress: enet changed?
           (if (eq? enet-s2 enet-s0)
               enet-s2  ;; No progress — done
               (loop (sub1 fuel) meta-id enet-s2))))))
+
+;; Track 7 Phase 8b: Read action descriptors from the ready-queue cell.
+;; Returns a list of unwrapped action descriptors (tagged-entry values).
+;; The ready-queue is a list cell with merge-list-append.
+(define (read-ready-queue-actions enet)
+  (define rq-cid (current-ready-queue-cell-id))
+  (define read-fn (current-prop-cell-read))
+  (if (and rq-cid read-fn)
+      (let ([entries (read-fn enet rq-cid)])
+        (if (list? entries)
+            (map (lambda (e) (if (tagged-entry? e) (tagged-entry-value e) e)) entries)
+            '()))
+      '()))
 
 ;; P-U3c: Lightweight quiescence flush.
 ;; Runs the propagator network to quiescence if available.
