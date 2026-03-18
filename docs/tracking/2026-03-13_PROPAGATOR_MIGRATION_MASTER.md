@@ -24,6 +24,8 @@
 | Track 4 PIR | `docs/tracking/2026-03-16_TRACK4_ATMS_SPECULATION_PIR.md` | Post-implementation review |
 | Track 5 Design | `docs/tracking/2026-03-16_TRACK5_GLOBAL_ENV_DEPENDENCY_EDGES.md` | Global-env consolidation + dependency edges design |
 | Track 5 PIR | `docs/tracking/2026-03-16_TRACK5_GLOBAL_ENV_DEPENDENCY_EDGES_PIR.md` | Post-implementation review |
+| Track 6 Design | `docs/tracking/2026-03-16_TRACK6_DRIVER_SIMPLIFICATION.md` | Driver simplification + cleanup design |
+| Track 6 PIR | `docs/tracking/2026-03-17_TRACK6_DRIVER_SIMPLIFICATION_PIR.md` | Post-implementation review |
 | Propagator Research | `docs/tracking/2026-02-23_LATTICE_PROPAGATOR_RESEARCH.md` | Lattice-theoretic foundations |
 | BSP Parallel | `docs/tracking/2026-02-24_BSP_PARALLEL_PROPAGATOR.md` | Parallel propagation via Bulk Synchronous Parallel |
 | Effectful Propagators | `docs/tracking/2026-03-06_EFFECTFUL_PROPAGATORS_RESEARCH.md` | Side effects in propagator networks |
@@ -138,7 +140,46 @@ Converted `current-global-env` from parameter-primary to a two-layer cell archit
 
 **Result**: Each loaded module has a persistent `module-network-ref` (one cell per definition, lifecycle status cell, materialized snapshot, dep-edges map). `global-env-add` is self-updating — callers never need env-threading wrappers. Cross-module dependency edges record source provenance (`'same-file` vs `'module`). Dual-path validation confirmed 0 cell/hash mismatches across ~1.4M checks before removal. 24 new unit tests. PIR: `2026-03-16_TRACK5_GLOBAL_ENV_DEPENDENCY_EDGES_PIR.md`. 7148 tests, 213.3s.
 
-**Key residual**: TMS-ready `definition-dep-wire!` with propagator wiring (Phase 4c) and staleness propagation (Phase 4d) deferred to LSP scope. `current-global-env` → `current-prelude-env` rename (266 references) deferred to Track 6. Dual-write parameter elimination deferred to Track 6. See §Deferrals.
+**Key residual**: TMS-ready `definition-dep-wire!` with propagator wiring (Phase 4c) and staleness propagation (Phase 4d) deferred to LSP scope.
+
+### Track 6: Driver Simplification + Cleanup
+
+Absorbed deferred work from Tracks 3, 4, and 5. Eliminated transitional scaffolding, completed the architectural cutover from parameter-primary to propagator-primary infrastructure, and achieved the first clean test suite (0 failures).
+
+Two workstreams: **WS-A** (Data Orientation + TMS Retraction, high-risk) executed first, **WS-B** (Cleanup + Lookup Cutover) followed.
+
+| Phase | Description | Status | Key Commits |
+|-------|-------------|--------|-------------|
+| D.1+–D.3 | Design, external critique, self-critique | ✅ | `60f7b77`..`1c63210` |
+| 0 | Acceptance file (278 evals, 0 errors) | ✅ | `7cd1ad6` |
+| 1a | id-map → elab-network field (3→2 box) | ✅ | `9677970` |
+| 1b | meta-info `#:mutable` removal (vestigial) | ✅ | `39421e6` |
+| 1c | Constraint status → functional CHAMP updates | ✅ | `e88c2b2` |
+| 1d | all-unsolved-metas → infrastructure cell | ✅ | `a82e4d2` |
+| 2+3 | Speculation stack push + commit-on-success | ✅ | `4a08db6` |
+| 4 | TMS retraction + nested speculation support | ✅ | `acc76e4` |
+| 5a | meta-info CHAMP → elab-network field (2→1 box) | ✅ | `9358b67` |
+| 5b | Belt-and-suspenders retirement gate | ⏸️ | Deferred to Track 7 (TMS-aware infra cells needed) |
+| 6 | batch-worker → snapshot-based state | ✅ | `25d7b20` |
+| 7a | test-support.rkt network isolation + shadow validation | ✅ | `92a27b0` |
+| 7b-c | Macros/warnings dual-write: assessed as natural persistence+propagation pattern (Track 5 model) | ✅ | `70063b9` (revert of erroneous elimination) |
+| 7d | Module-network-ref lookup cutover (`current-module-definitions-content` as primary) | ✅ | `cd54a9f`, `78bba78` |
+| 8a-c | Elaboration guard removal + net-box scoping | ✅ | `6fa6240` |
+| 8d | Callback cleanup: immediate paths removed, dead functions/params removed | ✅ | `6793ce5` |
+| 9 | Rename `current-global-env` → `current-prelude-env` (994 occurrences, 271 files) | ✅ | `36588ee` |
+| 10 | Parameterize simplification (30→13 bindings) | ✅ | — (assessed: all remaining bindings necessary) |
+| BUG | ATMS lazy init: first clean suite (0 failures) | ✅ | `ebc781e` |
+| 11 | Performance validation + PIR | ✅ | `e43bc9c` |
+
+**Result**: 52 commits, +7540/−1414 lines, 294 files. Save/restore reduced from 3→1 box. Per-command parameterize from ~30→13 bindings. Elaboration guards eliminated. Definition lookups go through `current-module-definitions-content` (sourced from Track 5 module-network-ref cells). Dead code and vestigial callbacks cleaned up. **7154 tests, 0 failures, 235.2s** — first clean suite.
+
+**Key architectural insights**:
+- **Dual-write is persistence + propagation, not redundancy** — parameter writes for macros/warnings registries serve the same role as Track 5's `current-definition-cells-content`. Both writes are needed until cells themselves become persistent.
+- **Stratified propagator networks** — each resolution stratum as a propagator layer with inter-stratum Galois connections. Readiness becomes a cell value, resolution becomes a propagator fire function. Captured in DESIGN_PRINCIPLES.org and DEVELOPMENT_LESSONS.org.
+- **Callbacks are a propagator-first anti-pattern** — resolution logic should be IN the network, not injected via imperative callback parameters.
+- **Lazy initialization > mandatory initialization for correct-by-construction** — the ATMS bug persisted across 5 tracks because `with-speculative-rollback` required explicit init.
+
+**Key residuals**: Phase 5b (belt-and-suspenders retirement gate) → Track 7. Callback inlining (module restructuring) → Track 7. Layer 2 write elimination → low-priority follow-up. PIR: `2026-03-17_TRACK6_DRIVER_SIMPLIFICATION_PIR.md`.
 
 ---
 
@@ -178,21 +219,21 @@ Plus additional cells via `register-*-cells!`:
 | Trait/hasmethod/capability constraints | Cell-primary | ✅ Track 1 |
 | Wakeup registries | Cell-primary | ✅ Track 1 |
 | Instance registry (`read-impl-registry`) | Cell-primary | ✅ Track 2 Phase 1 |
-| 23 macros.rkt registries (schema, ctor, trait, impl, etc.) | Cell-primary (elaboration), parameter (module loading) | ✅ Track 3 Phases 1–3 |
-| Warnings (coercion, deprecation, capability) | Cell-primary | ✅ Track 3 Phase 4 |
-| Narrowing constraints | Cell-primary (elaboration), parameter (direct tests) | ✅ Track 3 Phase 5 |
-| Global environment | Two-layer: cell Layer 1 (per-file), param Layer 2 (prelude/module); `global-env-add` self-updates both | ✅ Track 5 |
-| Module networks | Persistent `module-network-ref` per loaded module; dep-edges with provenance | ✅ Track 5 |
+| 23 macros.rkt registries (schema, ctor, trait, impl, etc.) | Cell-primary (unconditional — no guards), parameter (module loading) | ✅ Track 3 + Track 6 Phase 8 |
+| Warnings (coercion, deprecation, capability) | Cell-primary (unconditional) | ✅ Track 3 + Track 6 Phase 8 |
+| Narrowing constraints | Cell-primary (unconditional) | ✅ Track 3 + Track 6 Phase 8 |
+| Definition lookups | Three-layer: Layer 1 cells (per-file), `current-module-definitions-content` (from module-network-ref), `current-prelude-env` (belt-and-suspenders fallback) | ✅ Track 5 + Track 6 Phase 7d |
+| Module networks | Persistent `module-network-ref` per loaded module; dep-edges with provenance; authoritative source for definition lookups via module-definitions-content | ✅ Track 5 + Track 6 Phase 7d |
 
-**Note**: "Cell-primary" for Track 3 registries means cell reads during elaboration (guarded by `current-macros-in-elaboration?` or `current-narrow-in-elaboration?`), with parameter fallback during module loading. Dual-write continues — parameter writes are NOT removed (blocked by save/restore and batch-worker dependencies; deferred to Track 6). See §Deferrals.
+**Note**: Track 6 removed elaboration guards (`current-macros-in-elaboration?`, `current-narrow-in-elaboration?`). Cell reads are now unconditional — net-box parameters scoped to command parameterize provide structural isolation (auto-revert to `#f` after command). Dual-write continues for macros/warnings registries — parameter writes are persistence, cell writes are propagation (same pattern as Track 5's `global-env-add`). See Track 6 PIR §5.2.
 
 ### Speculation
 
-`with-speculative-rollback` → `save-meta-state`/`restore-meta-state!` (3-box snapshot: network + id-map + meta-info). 4 call sites in `typing-core.rkt`. ATMS hypothesis creation per speculation for error tracking (nogoods recorded on failure). Per-meta TMS cells support assumption-tagged branching with depth-0 fast path (zero overhead at speculation depth 0). Learned-clause pruning via `atms-consistent?` skips branches subsumed by known nogoods. Belt-and-suspenders: network-box restore handles rollback; TMS retraction deferred to Track 6.
+`with-speculative-rollback` → `save-meta-state`/`restore-meta-state!` (1-box snapshot: network only — Track 6 reduced from 3). 4 call sites in `typing-core.rkt`. ATMS hypothesis creation per speculation for error tracking (nogoods recorded on failure). Per-meta TMS cells support assumption-tagged branching with depth-0 fast path (zero overhead at speculation depth 0). Learned-clause pruning via `atms-consistent?` skips branches subsumed by known nogoods. TMS retraction (Track 6 Phases 2+3, 4) replaces network-box restore for value-level branching. Belt-and-suspenders: network-box restore still active for infrastructure cells (Phase 5b blocker → Track 7). Lazy ATMS initialization (Track 6 BUG fix): `with-speculative-rollback` creates ATMS on demand — correct-by-construction regardless of entry path.
 
-### Dirty Flags
+### Dirty Flags / Callbacks
 
-`current-retry-trait-resolve` and `current-retry-unify` still present (14 references in `metavar-store.rkt`). Functionally superseded by stratified quiescence but not yet removed.
+`current-retry-trait-resolve`, `current-retry-hasmethod-resolve`, and `current-retry-unify` — callback parameters present but vestigial. Immediate resolution paths at registration time removed (Track 6 Phase 8d). The stratified quiescence loop (Track 2) is the sole load-bearing resolution mechanism. The callbacks are invoked FROM the loop, not alongside it. Dead functions removed. Callback inlining (replacing indirection with direct calls via module restructuring) scoped to Track 7 as stepping stone toward stratified propagator network architecture.
 
 ---
 
@@ -216,41 +257,15 @@ Moved to §Completed Work above. See Track 5 PIR for full review.
 
 **Key residuals**: TMS-ready `definition-dep-wire!` (Phase 4c) and staleness propagation (Phase 4d) deferred to LSP scope. `current-global-env` → `current-prelude-env` rename deferred to Track 6. Dual-write parameter elimination deferred to Track 6. See §Deferrals.
 
-### Track 6: Driver Simplification + Cleanup
+### Track 6: Driver Simplification + Cleanup — ✅ COMPLETE
 
-**Goal**: With Tracks 3–5 complete, simplify the driver's per-command `parameterize` block, remove dirty flags, complete the TMS retraction pipeline, and clean up vestigial infrastructure.
+Moved to §Completed Work above. See Track 6 PIR for full review.
 
-**Scope**:
-- Simplify per-command parameterize (Migration Sprint Phase 5a–5b)
-- Remove `current-retry-trait-resolve` and `current-retry-unify` dirty flags
-- Remove narrowing constraint parameter workarounds (cells now exist from Track 3 Phase 5)
-- `reset-meta-store!` becomes assumption management rather than wholesale state wipe
-- **Remove dual-write parameter writes** — with Track 5's per-module networks and Track 4's ATMS-based snapshots, `save-meta-state`/`restore-meta-state!` and `batch-worker.rkt` can capture cell content instead of parameters. This is the completion of Track 3's deferred Phase 6.
-- **Remove elaboration guard parameters** — once all contexts (including module loading) have networks, `current-macros-in-elaboration?` and `current-narrow-in-elaboration?` become unnecessary
-- **Complete TMS retraction pipeline** (absorbed from Track 4 Phase 4):
-  1. Speculation stack push — route cell writes to TMS branches during speculation
-  2. Commit-on-success — promote TMS branch values to base on speculation success
-  3. TMS retraction — replace network-box restore with per-cell assumption retraction
-  4. Meta-info CHAMP → write-once registry (remove mutable status/solution fields)
-  5. Reduce `save-meta-state` from 3 boxes to 1 (network only)
+**Key residuals**: Phase 5b (belt-and-suspenders retirement gate) → Track 7. Callback inlining → Track 7. Layer 2 write elimination → low-priority follow-up. See §Deferrals.
 
-**Risk**: Low-to-moderate. The TMS retraction pipeline (from Track 4 Phase 4) touches the speculation hot path and requires careful ordering. The remaining items are straightforward cleanup.
-
-**Track 5 D.3 forward notes** (design concerns for Track 6):
-- **TMS-aware parameterized modules** — module definition cells as TMS cells for multi-context sharing (same module, different assumptions e.g. different parameter contexts in LSP). Track 5 designs API compatibility (`#:tms?` flag on `make-module-network`), Track 6 implements.
-- **Correct-by-construction cross-network consistency** — Track 5's shadow-cell + callback pattern can diverge in multi-invocation contexts (LSP). Track 6 must provide a correct-by-construction mechanism for keeping shadow cells consistent with source module cells, replacing the imperative callback sketch with structural guarantees.
-
-**Depends on**: Tracks 3 ✅, 4 ✅, 5 ✅.
-
-**Design document**: TBD — will need a design doc given the TMS retraction pipeline complexity.
-
-**Absorbed from Track 3 Phase 6**: Parameter write removal for all 28+ registries, plus guard parameter cleanup. This is the final step in the dual-write → cell-only migration path.
-
-**Absorbed from Track 4 Phase 4**: Meta-info simplification, save/restore reduction (3→1 boxes), and the full speculation stack push → commit-on-success → TMS retraction chain. See §Deferrals for rationale.
-
-**Files**: `driver.rkt`, `metavar-store.rkt`, `global-constraints.rkt`, `macros.rkt`, `warnings.rkt`, `batch-worker.rkt`.
-
-**Design document**: TBD — likely lightweight, mostly cleanup tasks.
+**Track 5 D.3 forward notes** (carried forward):
+- **TMS-aware parameterized modules** — module definition cells as TMS cells for multi-context sharing (same module, different assumptions e.g. different parameter contexts in LSP). Track 5 designed API compatibility (`#:tms?` flag on `make-module-network`). Scope: Track 7 or Track 10.
+- **Correct-by-construction cross-network consistency** — Track 5's shadow-cell + callback pattern can diverge in multi-invocation contexts (LSP). Track 10 scope.
 
 ### Track 7: QTT Multiplicity Cells + TMS Architecture (P5)
 
@@ -343,9 +358,9 @@ Track 3 (Cell-Primary Registries) ✅
   │      │
   │      └──→ Track 5 (Global-Env + Per-Module Networks) ✅
   │             │
-  │             └──→ Track 6 (Driver Simplification + Cleanup)    ← next
+  │             └──→ Track 6 (Driver Simplification + Cleanup) ✅
   │                    │
-  │                    └──→ Track 7 (QTT Multiplicity Cells)
+  │                    └──→ Track 7 (QTT Mult Cells + TMS Architecture)    ← next
   │                           │
   │                           └──→ Track 8 (Unification as Propagators)
   │                                  │
@@ -356,18 +371,16 @@ Track 3 (Cell-Primary Registries) ✅
   │                                                │
   Track 5 (dep-edges, module networks) ✅ ─ ─ ─ ─ ┘
   │
-  ├─ ─ ─ Track 3 Phase 6 deferred ─ ─ ─→ Track 6 (parameter write removal,
-  │                                        guard parameter cleanup)
+  ├─ ─ ─ Track 6 Phase 5b ─ ─ ─ ─ ─ ─→ Track 7 (TMS-aware infra cells,
+  │                                       belt-and-suspenders retirement)
   │
-  ├─ ─ ─ Track 4 Phase 4 deferred ─ ─ ─→ Track 6 (meta-info simplification,
-  │                                        save/restore → 1 box, speculation
-  │                                        stack push, TMS retraction)
+  ├─ ─ ─ Track 6 Phase 8d ─ ─ ─ ─ ─ ─→ Track 7 (callback inlining →
+  │                                       stratified prop-net stepping stone)
   │
-  └─ ─ ─ Track 5 deferrals ─ ─ ─ ─ ─ ─→ Track 6 (rename, dual-write removal)
-                                          Track 10 (dep-wire!, staleness propagation)
+  └─ ─ ─ Track 5 deferrals ─ ─ ─ ─ ─ ─→ Track 10 (dep-wire!, staleness propagation)
 ```
 
-Track 6 is now unblocked (Tracks 3, 4, and 5 complete). Track 10 depends on Track 9 (GDE) and Track 5 (already complete). Dashed lines show deferred phases flowing into future tracks.
+Track 7 is now unblocked (Tracks 3–6 complete). Track 10 depends on Track 9 (GDE) and Track 5 (already complete). Dashed lines show deferred phases flowing into future tracks.
 
 ---
 
@@ -375,35 +388,20 @@ Track 6 is now unblocked (Tracks 3, 4, and 5 complete). Track 10 depends on Trac
 
 Active deferrals that affect future track scope:
 
-### Track 3 Phase 6 → Track 6: Dual-Write Parameter Elimination
+### ~~Track 3 Phase 6 → Track 6: Dual-Write Parameter Elimination~~ — RESOLVED
 
-**What**: Removing parameter writes from `register-X!` functions and removing the elaboration guard parameters. Currently all 28+ registries write to both cells and parameters.
+**Resolution**: Track 6 Phase 8b-c removed elaboration guards. Phase 9 completed the rename. Track 6 PIR §5.2 determined that parameter writes for macros/warnings registries are NOT redundant dual-writes — they are the persistent data store (same pattern as Track 5's `global-env-add`). Dual-write continues by design until cells themselves become persistent across commands.
 
-**Why deferred**: Two consumers still depend on parameter reads (third resolved by Track 5):
-1. **`save-meta-state`/`restore-meta-state!`** — captures parameters for speculation rollback. Must migrate to cell-based snapshots (Track 6).
-2. **`batch-worker.rkt`** — captures parameters for worker state isolation. Must migrate to cell-based capture (Track 6).
-3. ~~**Module loading** — runs without a network; parameter IS the correct state. Must gain per-module networks.~~ **Resolved by Track 5**: each loaded module now has a persistent `module-network-ref`.
+### ~~Track 4 Phase 4 → Track 6: Meta-Info Simplification + Full TMS Retraction~~ — RESOLVED
 
-**Impact on Track 6**: Track 6 should include dual-write removal, guard parameter cleanup, and `current-global-env` → `current-prelude-env` rename as explicit scope items.
-
-**Risk if never addressed**: Ongoing conceptual overhead (maintainers must understand dual-write). Every new registry must follow the dual-write pattern. Performance impact is negligible (~1%) but Track 5 showed that redundant parameter updates in the legacy path contribute to overhead.
-
-### Track 4 Phase 4 → Track 6: Meta-Info Simplification + Full TMS Retraction
-
-**What**: Converting meta-info CHAMP to a write-once registry (no mutable status/solution fields), removing id-map and meta-info from `save-meta-state`, reducing save/restore from 3 boxes to 1 (network only), implementing speculation stack push, commit-on-success, and TMS retraction as the sole rollback mechanism.
-
-**Why deferred**: These form a prerequisite chain where each step depends on the prior:
-1. **Speculation stack push** — routes cell writes to TMS branches. But without commit-on-success, depth-0 reads see stale base values after speculation success. (Discovered in Track 4 Phase 2c — caused "already solved" errors.)
-2. **Commit-on-success** (`tms-commit`) — promotes TMS branch values to base on speculation success. Requires TMS retraction to replace network restore (otherwise both mechanisms conflict).
-3. **TMS retraction** — replaces network-box restore with per-cell assumption retraction. Once operational, network snapshots become unnecessary for speculation.
-4. **Remove id-map from save/restore** — after retraction replaces restore, stale cell-ID references from speculation are no longer possible (retraction preserves network structure, only retracting values).
-5. **Remove meta-info from save/restore** — requires `all-unsolved-metas` to scan per-meta TMS cells instead of meta-info CHAMP entries.
-
-**Current state**: Track 4 achieved save/restore 6→3 boxes with belt-and-suspenders (network-box restore + TMS cells coexist). The 3-box pattern works correctly. The depth-0 fast path makes TMS cells zero-overhead for the common case (all 7124 tests).
-
-**Impact on Track 6**: Track 6's scope explicitly includes this work. The full chain (stack push → commit → retraction → 1-box) is a Track 6 deliverable.
-
-**Risk if never addressed**: 3-box save/restore works but is fragile — any new mutable state that participates in speculation must be manually added. TMS retraction eliminates this class of fragility entirely.
+**Resolution**: Track 6 delivered the full chain:
+- Phase 1a: id-map → elab-network field (3→2 box)
+- Phase 1c-d: Constraint status → functional CHAMP; all-unsolved-metas → infrastructure cell
+- Phase 2+3: Speculation stack push + commit-on-success
+- Phase 4: TMS retraction + nested speculation
+- Phase 5a: meta-info CHAMP → elab-network field (2→1 box)
+- **Result**: save/restore reduced from 3→1 box (network only)
+- **Remaining**: Phase 5b blocked — TMS retraction insufficient for infrastructure cells (set-like accumulation). Carried to Track 7.
 
 ### Track 5 Phases 4c–4d → Track 10: TMS-Ready Wiring + Staleness Propagation
 
@@ -415,11 +413,25 @@ Active deferrals that affect future track scope:
 
 **Impact on Track 10**: Track 10 consumes Track 5's dep-edges directly. No intermediate track work needed.
 
-### Track 5 → Track 6: Rename + Dual-Write Removal
+### ~~Track 5 → Track 6: Rename + Dual-Write Removal~~ — RESOLVED
 
-**What**: `current-global-env` → `current-prelude-env` rename (266 references). Mechanical but noisy. Plus removing the dual-write for global-env (cells become sole write target for definition writes).
+**Resolution**: Track 6 Phase 9 completed the rename (994 occurrences, 271 files). Track 6 Phase 7d completed the lookup cutover to `current-module-definitions-content` (sourced from module-network-ref). Layer 2 (`current-prelude-env`) retained as belt-and-suspenders fallback — low-priority removal.
 
-**Why deferred**: The rename is pure cleanup — not blocking any functionality. The dual-write removal depends on Track 6's broader parameter elimination work (save/restore and batch-worker migration).
+### Track 6 Phase 5b → Track 7: Belt-and-Suspenders Retirement Gate
+
+**What**: Removing the belt-and-suspenders network-box restore that coexists with TMS retraction. Currently both mechanisms are active — TMS retraction handles value-level rollback, network-box restore handles infrastructure cells.
+
+**Why deferred**: TMS retraction works for value-level cells but fails for infrastructure cells (constraint store, wakeup registries) that use set-like accumulation. These cells need TMS-aware accumulation with per-assumption retraction — a new TMS capability.
+
+**Impact on Track 7**: Track 7 WS-B explicitly scopes TMS-aware infrastructure cells as the solution.
+
+### Track 6 Phase 8d → Track 7: Callback Inlining + Stratified Prop-Net Architecture
+
+**What**: Replace the 3 callback parameters (`current-retry-trait-resolve`, `current-retry-hasmethod-resolve`, `current-retry-unify`) with direct function calls by restructuring module dependencies. Stepping stone to the full stratified propagator network architecture.
+
+**Why deferred**: The immediate paths are removed and the callbacks are identified as vestigial (Track 6 Phase 8d deep audit). But inlining requires module restructuring to break the circular dep between driver.rkt and metavar-store.rkt. The architectural target (stratified prop-nets) is Track 7+ scope.
+
+**Design reference**: DESIGN_PRINCIPLES.org § "Stratified Propagator Networks", DEVELOPMENT_LESSONS.org § "Callbacks Are a Propagator-First Anti-Pattern", Track 6 PIR §5.6 and §6.4.
 
 ### Migration Sprint Phases 3e, 5a–5b: Deferred from Foundation
 
@@ -432,17 +444,20 @@ Active deferrals that affect future track scope:
 
 ## Performance Baseline
 
-| Milestone | Tests | Files | Time |
-|-----------|-------|-------|------|
-| Pre-migration (2026-03-11) | 6803 | 353 | 208.6s |
-| Post-Migration Sprint Phase 4 | 6826 | 354 | ~200s |
-| Post-Track 1 | 6888 | 358 | 191.4s |
-| Post-Track 2 Phase 9 | 6907 | 359 | 197.6s |
-| Post-Track 3 | 7096 | 370 | 197.6s |
-| Post-Track 4 | 7124 | 371 | 187.1s |
-| Post-Track 5 (current) | 7148 | 372 | 213.3s |
+| Milestone | Tests | Files | Time | Failures |
+|-----------|-------|-------|------|----------|
+| Pre-migration (2026-03-11) | 6803 | 353 | 208.6s | 0 |
+| Post-Migration Sprint Phase 4 | 6826 | 354 | ~200s | 0 |
+| Post-Track 1 | 6888 | 358 | 191.4s | 0 |
+| Post-Track 2 Phase 9 | 6907 | 359 | 197.6s | 0 |
+| Post-Track 3 | 7096 | 370 | 197.6s | 2-3 (ATMS) |
+| Post-Track 4 | 7124 | 371 | 187.1s | 2-3 (ATMS) |
+| Post-Track 5 | 7148 | 372 | 213.3s | 2-3 (ATMS) |
+| **Post-Track 6 (current)** | **7154** | **372** | **235.2s** | **0** |
 
-Migration has been performance-neutral to slightly positive through Track 4. Track 5 added +14% overhead (187.1s→213.3s) from module-network-ref construction per module load and additional parameter updates in `global-env-add`'s legacy path. Still within the 25% threshold. Cumulative from pre-migration: 208.6s→213.3s (+2.3%). The test count increase (6907→7096) between Track 2 and Track 3 is from non-propagator work (WFLE, D4 Provenance, etc.) in the intervening interval. Track 4 achieved a 2.4% speedup (191.6s→187.1s) from reducing save/restore from 6 to 3 boxes. Track 6's dual-write removal should partially offset Track 5's overhead by eliminating redundant parameter writes.
+Migration has been performance-neutral through Track 4. Track 5 added +14% overhead (187.1s→213.3s) from module-network-ref construction per module load. Track 6 added an additional +10% (213.3s→235.2s) from the module-definitions-content population at import time. Cumulative from pre-migration: 208.6s→235.2s (+13%). Still within the 25% threshold. The test count increase (6907→7096) between Track 2 and Track 3 is from non-propagator work (WFLE, D4 Provenance, etc.) in the intervening interval. Track 4 achieved a 2.4% speedup (191.6s→187.1s) from reducing save/restore from 6 to 3 boxes.
+
+**Suite health milestone**: Track 6 achieved the **first clean test suite** — 0 failures. The 2-3 ATMS initialization failures that persisted from Track 3 through Track 5 were fixed by lazy ATMS initialization (3-line fix, commit `ebc781e`). See Track 6 PIR §4.4.
 
 ---
 
