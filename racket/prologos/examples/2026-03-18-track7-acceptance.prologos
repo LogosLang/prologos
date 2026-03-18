@@ -1,0 +1,1023 @@
+;; ========================================================================
+;;
+;;   Track 7 Acceptance File — Persistent Cells + Stratified Retraction
+;;
+;;   STATUS: Phase 0 (Pre-Implementation Baseline)
+;;   Run via: process-file "racket/prologos/examples/2026-03-18-track7-acceptance.prologos"
+;;
+;;   Track 7 is an infrastructure track (no syntax changes). It has three
+;;   workstreams: WS-C (persistent registry cells), WS-B (stratified
+;;   retraction + readiness propagators + resolution purification),
+;;   WS-A (QTT multiplicity cells). Changes affect:
+;;     - Registry persistence: type/trait/ctor/impl registries move to cells
+;;     - Speculation: S(-1) retraction replaces network-box restore
+;;     - Resolution: readiness as propagators, resolution chain purified
+;;     - Scheduling: layered quiescence replaces hand-written loop
+;;
+;;   DESIGN GOAL: Exercise constructs that prior acceptance files have NOT
+;;   covered. Prior tracks (3-6) saturated: union types, basic pattern
+;;   matching, generic arithmetic, list/option/result, relational facts+
+;;   rules, pipelines, closures, module loading, polymorphic id/const.
+;;
+;;   This file explores:
+;;     A. Session types and process language — ENTIRELY UNTESTED at L3
+;;     B. Dependent types with Sigma pairs and indexed families
+;;     C. Linear type annotations and multiplicity reasoning
+;;     D. Capabilities as types
+;;     E. Type aliases and structural definitions
+;;     F. Properties and algebraic laws
+;;     G. Advanced relational: schemas, explain, solve-with
+;;     H. Cross-paradigm composition: functional × relational × process
+;;     I. Stress patterns for persistent registries and cascading resolution
+;;
+;;   Conventions:
+;;     - Commented-out = aspirational or pre-existing BUG (annotated)
+;;     - Uncommented = must pass today; regression if broken after any phase
+;;     - Session types in `session ... end` blocks
+;;     - Process defs with `defproc name : Protocol`
+;;     - `[]` for application, `()` for keywords, `<>` for type-level
+;;     - `{}` for maps and implicit binders
+;;
+;; ========================================================================
+
+
+ns acceptance::track7
+
+
+;; ========================================================================
+;; SECTION A: SESSION TYPES AND PROCESS LANGUAGE
+;; ========================================================================
+;;
+;; Session types and processes are the UNTESTED frontier. Prior acceptance
+;; files have zero coverage. The WS e2e tests (ws-session-e2e-01/02/03)
+;; cover basic send/recv/stop and offer/select, but are tiny standalone
+;; files, not part of a broader acceptance context.
+;;
+;; Track 7 changes the persistent registry network where session type
+;; declarations are stored, and S(-1) retraction could affect session
+;; meta inference.
+
+;; --- A1: Minimal send-only protocol ---
+
+session Ping
+  ! String
+  end
+
+defproc pinger : Ping
+  self ! "ping"
+  stop
+
+;; --- A2: Request-response protocol (send then receive) ---
+
+session ReqResp
+  ! String
+  ? Int
+  end
+
+defproc requester : ReqResp
+  self ! "how many?"
+  count := self ?
+  stop
+
+;; --- A3: Multi-message protocol (interleaved sends and receives) ---
+
+session Handshake
+  ! String
+  ? String
+  ! Int
+  ? Bool
+  end
+
+defproc handshaker : Handshake
+  self ! "hello"
+  greeting := self ?
+  self ! 42
+  accepted := self ?
+  stop
+
+;; --- A4: Offer protocol (external choice — server offers branches) ---
+
+session KeyValueStore
+  &>
+    | :get -> ! String -> ? String -> end
+    | :put -> ! String -> ! String -> end
+    | :del -> ! String -> end
+
+defproc kv-handler : KeyValueStore
+  offer self
+    | :get ->
+        key := self ?
+        self ! "value-for-key"
+        stop
+    | :put ->
+        key := self ?
+        val := self ?
+        stop
+    | :del ->
+        key := self ?
+        stop
+
+;; --- A5: Async protocol (non-blocking send/recv) ---
+
+session AsyncLog
+  !! String
+  !! String
+  !! String
+  end
+
+defproc logger : AsyncLog
+  self !! "event-1"
+  self !! "event-2"
+  self !! "event-3"
+  stop
+
+;; --- A6: Mixed sync/async protocol ---
+
+session MixedIO
+  ! String
+  ?? Int
+  !! Bool
+  ? String
+  end
+
+defproc mixed-client : MixedIO
+  self ! "request"
+  n := self ??
+  self !! true
+  reply := self ?
+  stop
+
+;; --- A7: Session duality ---
+;; The dual of a protocol swaps ! ↔ ?, !! ↔ ??, choose ↔ offer.
+;; If Ping is [! String . end], dual Ping is [? String . end].
+
+dual Ping
+dual ReqResp
+dual AsyncLog
+
+;; --- A8: Strategy declarations ---
+;; Strategies configure the process scheduler.
+
+strategy fair-round-robin
+  :fairness :round-robin
+  :fuel 5000
+
+strategy priority-io
+  :scheduler-io :blocking-ok
+  :fairness :priority
+  :fuel 100000
+
+;; --- A9: Protocol composition stress ---
+;; Multiple session type declarations in one file — tests that the
+;; persistent session registry accumulates correctly across commands.
+
+session Auth
+  ! String
+  ! String
+  ? Bool
+  end
+
+session Stream
+  ? Int
+  ? Int
+  ? Int
+  end
+
+session Heartbeat
+  ! Bool
+  ? Bool
+  end
+
+defproc auth-client : Auth
+  self ! "user"
+  self ! "pass"
+  result := self ?
+  stop
+
+defproc stream-reader : Stream
+  a := self ?
+  b := self ?
+  c := self ?
+  stop
+
+defproc heartbeat-client : Heartbeat
+  self ! true
+  alive := self ?
+  stop
+
+
+;; --- A10: Dependent session types (aspirational) ---
+;; A protocol where the type of the next message depends on a received value.
+
+;; BUG/ASPIRATIONAL: Dependent session types may not be fully wired in WS mode.
+;; Hypothesis: sess-dsend/sess-drecv parse at sexp level but WS syntax for
+;; dependent send `:! name Type` and dependent recv `:? name Type` may not
+;; be connected to the WS reader.
+
+;; session DepCounter
+;;   ?: n Nat
+;;   ! [Vec String n]
+;;   end
+
+
+;; ========================================================================
+;; SECTION B: DEPENDENT TYPES AND SIGMA PAIRS
+;; ========================================================================
+;;
+;; Prior acceptance files exercise polymorphism ({A} A -> A) but NOT
+;; dependent types (Pi with named binders, Sigma pairs, indexed families).
+;; These exercise the type-level registry and unification propagators.
+
+;; --- B1: Sigma pair construction ---
+;; Sigma types <(x : A) * B> represent dependent pairs where B can mention x.
+;; Even without full dependent indexing, they exercise the type-level parser.
+
+;; BUG/ASPIRATIONAL: Sigma types may not be fully wired in WS mode.
+;; Hypothesis: the angle-bracket parser handles Pi `<(x : A) -> B>` but
+;; Sigma `<(x : A) * B>` parsing may have gaps.
+
+;; spec mk-tagged-pair {A} A -> <(x : Type) * x>
+;; defn mk-tagged-pair [v] (pair Int v)
+
+;; --- B2: Existential type as Sigma ---
+;; pack : {A} A -> [A -> String] -> <(x : Type) * [x -> String]>
+
+;; BUG/ASPIRATIONAL: Existential packing requires Sigma + inference.
+;; spec pack-showable {A} A -> [A -> String] -> <(x : Type) * (x * [x -> String])>
+
+;; --- B3: Simple Pair usage (non-dependent Sigma) ---
+;; Pair A B is the non-dependent specialization.
+
+;; BUG (L3): inference failed on bare pair calls.
+;; Hypothesis: pair constructor inference doesn't propagate type args
+;; without explicit annotation.
+;; pair 42 "hello"
+;; fst [pair 1 2]
+;; snd [pair "a" "b"]
+
+
+;; ========================================================================
+;; SECTION C: LINEAR TYPES AND MULTIPLICITY ANNOTATIONS
+;; ========================================================================
+;;
+;; QTT multiplicities (m0 = erased, m1 = linear, mw = unrestricted) are
+;; a core Prologos feature. Track 7 Phase 9 adds mult cells to the
+;; propagator network. Prior acceptance files have ZERO multiplicity tests.
+
+;; --- C1: Erased arguments (type-level only, not used at runtime) ---
+;; The {A} binder in polymorphic specs uses :0 (erased) multiplicity.
+;; This already works implicitly — every generic function uses it.
+
+;; BUG (L3, parser): `{A}` implicit spec + defn crashes parser.
+;; Even single-arg non-pattern defn fails with car #f in parse-reduce.
+;; spec c1-id {A} A -> A
+;;   :implicits [A]
+;; defn c1-id [x] x
+
+;; Workaround: monomorphic identity
+spec c1-id Int -> Int
+defn c1-id [x] x
+
+c1-id 42
+
+;; --- C2: Explicit multiplicity annotation on lambda (aspirational) ---
+;; Linear lambda: `(fn (x :1 Int) body)` means x must be used exactly once.
+;; Unrestricted lambda: `(fn (x :w Int) body)` means x can be used freely.
+
+;; BUG/ASPIRATIONAL: WS syntax for multiplicity annotations on lambda
+;; binders may not be connected. The sexp form `(fn (x :1 Int) body)` is
+;; the internal representation.
+
+;; spec use-once [Int -1> Int]
+;; defn use-once [x] x
+
+;; spec use-freely [Int -w> Int]
+;; defn use-freely [x] [int+ x x]
+
+;; --- C3: Arrow types with multiplicity (aspirational) ---
+;; `-1>` for linear, `-0>` for erased, `-w>` for unrestricted.
+
+;; BUG/ASPIRATIONAL: arrow-with-multiplicity syntax in WS mode.
+;; spec linear-apply [Int -1> Int] -> Int -> Int
+;; defn linear-apply [f x] [f x]
+
+
+;; ========================================================================
+;; SECTION D: CAPABILITY TYPES
+;; ========================================================================
+;;
+;; Capabilities gate access to effects. They're types that flow through
+;; the call graph via propagators. Prior acceptance files have ZERO
+;; capability coverage.
+
+;; --- D1: Capability declarations (aspirational) ---
+;; BUG/ASPIRATIONAL: WS syntax for capability declarations may not parse.
+;; The sexp form exists in test-capability-*.rkt but WS reader may not
+;; handle `capability` as a top-level keyword.
+
+;; capability ReadCap
+;; capability WriteCap
+;; capability NetCap
+
+;; --- D2: Parameterized capability (aspirational) ---
+;; BUG/ASPIRATIONAL: Dependent capabilities `FileCap "/path"` require
+;; capability + dependent type interaction.
+
+;; capability FileCap (p : String)
+
+;; --- D3: Capability-gated function (aspirational) ---
+;; spec read-data {ReadCap} -> String
+;; defn read-data [] "secret data"
+
+
+;; ========================================================================
+;; SECTION E: TYPE ALIASES AND DATA DEFINITIONS
+;; ========================================================================
+;;
+;; Prior acceptance files use `data` for ADTs but haven't tested `type`
+;; aliases or record-like definitions. These exercise different registry
+;; paths (schema vs ctor vs type).
+
+;; --- E1: Type alias ---
+
+;; BUG/ASPIRATIONAL: `type` alias syntax may not be wired at file level.
+;; Hypothesis: `type Foo := T` in WS mode may parse as a data declaration
+;; attempt rather than a simple alias.
+
+;; type Coord := [Pair Int Int]
+;; type Name := String
+;; type Predicate := [Int -> Bool]
+
+;; --- E2: Data declaration with multiple constructors ---
+
+;; BUG (L3): User-defined `data` declarations at file level don't register
+;; their constructors in the global environment. All nullary constructors
+;; (north, south, leaf, red, monday, etc.) are "Unbound variable" at usage
+;; sites. Prelude-defined data types (Nat, Bool, List, Option, Result) work
+;; because they're loaded via module import, not file-level `data`.
+;; Hypothesis: file-level preparse handles `data` differently than module
+;; loading — constructor registration may happen in a scope that doesn't
+;; persist to subsequent commands in the same file.
+
+data Direction
+  | north
+  | south
+  | east
+  | west
+
+;; BUG (L3): constructors north/south/east/west unbound at file level
+;; spec opposite Direction -> Direction
+;; defn opposite
+;;   | north -> south
+;;   | south -> north
+;;   | east  -> west
+;;   | west  -> east
+;;
+;; opposite north
+;; opposite east
+
+;; --- E3: Parameterized data ---
+
+data Tree A
+  | leaf A
+  | branch [Tree A] [Tree A]
+
+;; --- E4: Tree operations ---
+
+;; BUG (L3, parser): `{A}` implicit + multi-arity defn (| patterns) crashes
+;; parser at `parse-defn-with-implicits` → `parse-reduce` with car #f.
+;; Hypothesis: implicit binder propagation into multi-arity defn fails.
+;; This is the same bug as tree-map but with single implicit.
+
+;; spec tree-size {A} [Tree A] -> Int
+;; defn tree-size
+;;   | leaf _       -> 1
+;;   | branch l r   -> [+ [tree-size l] [tree-size r]]
+
+;; Workaround: monomorphic
+;; BUG (L3): leaf/branch constructors unbound at file level (see E2 bug annotation)
+;; spec tree-size [Tree Int] -> Int
+;; defn tree-size
+;;   | leaf _       -> 1
+;;   | branch l r   -> [+ [tree-size l] [tree-size r]]
+;;
+;; tree-size [leaf 42]
+;; tree-size [branch [leaf 1] [leaf 2]]
+;; tree-size [branch [branch [leaf 3] [leaf 4]] [leaf 5]]
+
+;; --- E5: Data interacting with prelude traits ---
+;; A user-defined data type that participates in the trait system.
+
+data Color
+  | red
+  | green
+  | blue
+
+;; BUG (L3): red/green/blue constructors unbound at file level (see E2 bug annotation)
+;; spec color-name Color -> String
+;; defn color-name
+;;   | red   -> "red"
+;;   | green -> "green"
+;;   | blue  -> "blue"
+;;
+;; color-name red
+;; color-name blue
+
+;; --- E6: Nested data (data defined in terms of other data) ---
+;; Pixel uses Color (section E5) and Int.
+
+data Pixel
+  | pixel Color Int Int
+
+;; BUG (L3): pixel constructor unbound at file level (see E2 bug annotation)
+;; spec pixel-color Pixel -> Color
+;; defn pixel-color
+;;   | pixel c _ _ -> c
+;;
+;; color-name [pixel-color [pixel red 10 20]]
+
+;; --- E7: Binary tree with map operation ---
+
+;; BUG (L3, parser): `{A B}` dual-implicit spec + multi-arity defn crashes
+;; parser at `parse-defn-with-implicits` → `parse-reduce` with car #f.
+;; Hypothesis: parser's implicit binder propagation into multi-arity defn
+;; (with `|` patterns) fails when there are two type parameters.
+
+;; spec tree-map {A B} [A -> B] -> [Tree A] -> [Tree B]
+;; defn tree-map
+;;   | f [leaf x]       -> leaf [f x]
+;;   | f [branch l r]   -> branch [tree-map f l] [tree-map f r]
+
+;; Workaround: monomorphic version for testing
+;; BUG (L3): leaf/branch constructors unbound at file level (see E2 bug annotation)
+;; spec tree-map-int [Int -> Int] -> [Tree Int] -> [Tree Int]
+;; defn tree-map-int
+;;   | f [leaf x]       -> leaf [f x]
+;;   | f [branch l r]   -> branch [tree-map-int f l] [tree-map-int f r]
+;;
+;; tree-map-int [fn [x] [int* x 10]] [branch [leaf 1] [branch [leaf 2] [leaf 3]]]
+
+
+;; ========================================================================
+;; SECTION F: RELATIONAL FEATURES — UNEXPLORED TERRITORY
+;; ========================================================================
+;;
+;; Prior acceptance files covered: facts, rules, solve, negation, is-goal,
+;; guard, anonymous rel, solve-one. UNEXPLORED: explain, solve-with,
+;; multi-arity relational dispatch, schemas, relational + session type
+;; interaction.
+
+;; --- F1: Relational with computed is-goals and arithmetic ---
+
+defr pythagorean [?a ?b ?c]
+  &> (is a2 [* a a]) (is b2 [* b b]) (is c2 [* c c])
+     (guard [eq? [+ a2 b2] c2])
+
+;; BUG: is-goals may need all input vars bound; `a`, `b`, `c` are free
+;; here. This may diverge or fail — that's what we want to discover.
+;; solve (pythagorean 3 4 c)
+
+;; --- F2: Nested negation ---
+
+defr safe-node [?n]
+  || "a"
+     "b"
+     "d"
+
+defr danger [?n]
+  || "c"
+     "e"
+
+defr truly-safe [?n]
+  &> (safe-node n) (not (danger n))
+
+solve (truly-safe who)
+
+;; --- F3: Relational with functional bridge ---
+;; Use solve result to drive functional computation.
+
+defr primes-small [?p]
+  || 2
+     3
+     5
+     7
+     11
+     13
+
+;; BUG/ASPIRATIONAL: solve returns list of binding maps; using them
+;; in functional context requires extraction. This may or may not work
+;; depending on how the runtime bridges solve results.
+;; def prime-list := solve (primes-small p)
+
+;; --- F4: explain (provenance/derivation trees) ---
+;; explain works like solve but returns DerivationTree structures
+;; showing HOW each solution was derived.
+
+defr ancestor-e [?x ?y]
+  &> (safe-node x) (safe-node y) (not (= x y))
+
+;; BUG/ASPIRATIONAL: explain may not be wired in WS mode yet.
+;; The sexp form exists in test-atms.rkt.
+;; explain (ancestor-e "a" who)
+
+
+;; ========================================================================
+;; SECTION G: ADVANCED PATTERN MATCHING
+;; ========================================================================
+;;
+;; Prior files exercise basic constructors (zero/suc, nil/cons, some/none).
+;; This section pushes into less-tested territory: guards in patterns,
+;; nested destructuring, wildcard patterns in complex positions.
+
+;; --- G1: Deep Nat pattern (suc (suc (suc ...))) ---
+
+spec classify-depth Nat -> String
+defn classify-depth
+  | zero              -> "zero"
+  | suc zero          -> "one"
+  | suc [suc zero]    -> "two"
+  | suc [suc [suc _]] -> "three-or-more"
+
+classify-depth 0N
+classify-depth 1N
+classify-depth 2N
+classify-depth 5N
+
+;; --- G2: Match expression (mid-body, not top-level defn dispatch) ---
+
+;; BUG (L3, parser): Same {A} + multi-arity/match defn crash.
+;; spec describe-tree {A} [Tree A] -> String
+
+;; BUG (L3, parser): `defn name [t] (match t ...)` — single-arg defn with
+;; match expression in body crashes at parse-defn-new with car #f.
+;; Hypothesis: the parser's defn-body handler doesn't correctly handle
+;; a paren-form (match) as the sole body expression after a bracket-arg.
+;;
+;; spec describe-tree [Tree Int] -> String
+;; defn describe-tree [t]
+;;   (match t
+;;     | leaf _       -> "leaf"
+;;     | branch _ _   -> "branch")
+
+;; Workaround: use multi-arity defn directly (which works)
+;; BUG (L3): leaf/branch constructors unbound at file level (see E2 bug annotation)
+;; spec describe-tree [Tree Int] -> String
+;; defn describe-tree
+;;   | leaf _       -> "leaf"
+;;   | branch _ _   -> "branch"
+;;
+;; describe-tree [leaf 1]
+;; describe-tree [branch [leaf 1] [leaf 2]]
+
+;; --- G3: Pattern matching with result used in computation ---
+
+;; BUG (L3, reader): `let` inside `match` arm fails at reader level.
+;; The nested `(let ... [+ 1 (if ...)])` inside a match arm triggers
+;; "Unexpected token: rbracket" — the reader can't handle the bracket
+;; nesting depth inside an indented match continuation.
+;;
+;; spec tree-depth {A} [Tree A] -> Int
+;; defn tree-depth [t]
+;;   (match t
+;;     | leaf _     -> 0
+;;     | branch l r ->
+;;         (let dl := [tree-depth l]
+;;          dr := [tree-depth r]
+;;          [+ 1 (if [int< dl dr] dr dl)]))
+
+;; --- G4: Pattern matching on user-defined enum (Direction) ---
+
+;; BUG (L3): east/west constructors unbound at file level (see E2 bug annotation)
+;; spec is-horizontal Direction -> Bool
+;; defn is-horizontal
+;;   | east  -> true
+;;   | west  -> true
+;;   | _     -> false
+;;
+;; is-horizontal east
+;; is-horizontal north
+
+;; --- G5: Pattern matching on nested user data ---
+
+;; BUG (L3, parser): Same {A} + multi-arity defn crash.
+;; spec tree-left-leaf {A} [Tree A] -> [Option A]
+
+;; Workaround: monomorphic
+;; BUG (L3): leaf/branch constructors unbound at file level (see E2 bug annotation)
+;; spec tree-left-leaf [Tree Int] -> [Option Int]
+;; defn tree-left-leaf
+;;   | leaf x       -> some x
+;;   | branch l _   -> tree-left-leaf l
+;;
+;; tree-left-leaf [leaf 42]
+;; tree-left-leaf [branch [leaf 1] [leaf 2]]
+;; tree-left-leaf [branch [branch [leaf 99] [leaf 0]] [leaf 7]]
+
+
+;; ========================================================================
+;; SECTION H: CROSS-PARADIGM COMPOSITION
+;; ========================================================================
+;;
+;; The real power of Prologos is composing functional, relational, and
+;; process paradigms. Prior files keep them in separate sections.
+;; This section deliberately mixes them.
+
+;; --- H1: Functional definition used by relational rule ---
+
+spec double Int -> Int
+defn double [x] [* x 2]
+
+defr doubled-pair [?x ?y]
+  &> (is y [double x])
+
+solve (doubled-pair 5 y)
+solve (doubled-pair 7 y)
+
+;; --- H2: Relational facts about session protocol metadata ---
+;; Use the relational system to describe PROPERTIES of protocols.
+
+defr protocol-info [?name ?kind ?msg-count]
+  || "Ping"      "one-way"     1
+     "ReqResp"   "request"     2
+     "Handshake" "multi"       4
+     "Auth"      "request"     3
+     "Stream"    "receive"     3
+     "Heartbeat" "ping-pong"   2
+
+solve (protocol-info name "request" count)
+solve (protocol-info "Handshake" kind count)
+
+;; --- H3: Data definition + trait + relational ---
+
+;; BUG (L3): north/south/east/west constructors unbound at file level (see E2 bug annotation)
+;; spec direction-name Direction -> String
+;; defn direction-name
+;;   | north -> "N"
+;;   | south -> "S"
+;;   | east  -> "E"
+;;   | west  -> "W"
+
+defr compass-opposite [?d1 ?d2]
+  || "N" "S"
+     "S" "N"
+     "E" "W"
+     "W" "E"
+
+solve (compass-opposite "N" opp)
+solve (compass-opposite dir "W")
+
+;; --- H4: Tree traversal result fed to pipeline ---
+
+;; BUG (L3): leaf/branch constructors unbound at file level (see E2 bug annotation)
+;; |> [tree-size [branch [branch [leaf 1] [leaf 2]] [leaf 3]]]
+;;    inc
+;;    double
+
+;; --- H5: Session declaration interleaved with functional definitions ---
+;; Verifies that session registry and function registry coexist.
+
+session Calculator
+  ! Int
+  ! Int
+  ? Int
+  end
+
+spec add-result Int Int -> Int
+defn add-result [a b] [+ a b]
+
+defproc calc-client : Calculator
+  self ! 3
+  self ! 4
+  result := self ?
+  stop
+
+
+;; ========================================================================
+;; SECTION I: PERSISTENT REGISTRY STRESS PATTERNS
+;; ========================================================================
+;;
+;; Track 7 moves registries from per-command parameters to persistent cells.
+;; These patterns stress the accumulation of registry entries across
+;; many top-level commands in a single file.
+
+;; --- I1: Many data declarations in sequence ---
+;; Each registers constructors, schemas, pattern info.
+
+data Weekday
+  | monday | tuesday | wednesday | thursday | friday
+
+data Month
+  | jan | feb | mar | apr | may | jun
+  | jul | aug | sep | oct | nov | dec
+
+data Planet
+  | mercury | venus | earth | mars | jupiter | saturn | uranus | neptune
+
+;; --- I2: Functions on all three enums ---
+
+;; BUG (L3): Weekday/Planet constructors unbound at file level (see E2 bug annotation)
+;; spec is-weekend Weekday -> Bool
+;; defn is-weekend
+;;   | monday    -> false
+;;   | tuesday   -> false
+;;   | wednesday -> false
+;;   | thursday  -> false
+;;   | friday    -> false
+;;
+;; spec is-inner Planet -> Bool
+;; defn is-inner
+;;   | mercury -> true
+;;   | venus   -> true
+;;   | earth   -> true
+;;   | mars    -> true
+;;   | _       -> false
+;;
+;; is-weekend monday
+;; is-weekend friday
+;; is-inner earth
+;; is-inner jupiter
+
+;; --- I3: Cascading trait resolution stress ---
+;; Each [+] triggers: Num A → Add A + Sub A + Mul A + ... resolution.
+;; Deeply nested means cascading L1 readiness → L2 resolution → S0 feedback.
+
+[+ [+ [+ [+ 1 2] [+ 3 4]] [+ [+ 5 6] [+ 7 8]]] [+ [+ [+ 9 10] [+ 11 12]] [+ [+ 13 14] [+ 15 16]]]]
+;; => 136
+
+;; Same for Rat
+[+ [+ 1/2 1/3] [+ 1/4 1/5]]
+
+;; --- I4: Many spec/defn pairs (registry accumulation over 20+ definitions) ---
+
+spec i4-f1 Int -> Int
+defn i4-f1 [x] [+ x 1]
+spec i4-f2 Int -> Int
+defn i4-f2 [x] [+ x 2]
+spec i4-f3 Int -> Int
+defn i4-f3 [x] [+ x 3]
+spec i4-f4 Int -> Int
+defn i4-f4 [x] [+ x 4]
+spec i4-f5 Int -> Int
+defn i4-f5 [x] [+ x 5]
+spec i4-f6 Int -> Int
+defn i4-f6 [x] [+ x 6]
+spec i4-f7 Int -> Int
+defn i4-f7 [x] [+ x 7]
+spec i4-f8 Int -> Int
+defn i4-f8 [x] [+ x 8]
+spec i4-f9 Int -> Int
+defn i4-f9 [x] [+ x 9]
+spec i4-f10 Int -> Int
+defn i4-f10 [x] [+ x 10]
+
+;; Use ALL of them in one expression — exercises 10 registry lookups
+[+ [i4-f1 0] [+ [i4-f2 0] [+ [i4-f3 0] [+ [i4-f4 0] [+ [i4-f5 0] [+ [i4-f6 0] [+ [i4-f7 0] [+ [i4-f8 0] [+ [i4-f9 0] [i4-f10 0]]]]]]]]]]
+;; => 55
+
+;; --- I5: Trait instance after data declaration ---
+;; Register a user trait, implement it, and dispatch.
+;; Exercises: trait registry, impl registry, dict resolution.
+
+;; BUG (L3, parser): User-defined traits with `{A : Type}` + impl with
+;; multi-arity defn crashes parser at `parse-defn-new`.
+;; Hypothesis: trait method desugaring creates implicit binder that
+;; collides with the `{A : Type}` binder, then the impl's defn
+;; inherits the broken implicit metadata.
+;;
+;; trait Describe {A : Type}
+;;   describe : A -> String
+;;
+;; impl Describe Direction
+;;   defn describe
+;;     | north -> "pointing up"
+;;     | south -> "pointing down"
+;;     | east  -> "pointing right"
+;;     | west  -> "pointing left"
+
+;; --- I6: Trait with multiple methods (same crash) ---
+;;
+;; trait Measurable {A : Type}
+;;   measure : A -> Int
+;;   label : A -> String
+;;
+;; impl Measurable Weekday
+;;   defn measure
+;;     | monday    -> 1
+;;     | tuesday   -> 2
+;;     | wednesday -> 3
+;;     | thursday  -> 4
+;;     | friday    -> 5
+;;   defn label [_] "weekday"
+
+
+;; ========================================================================
+;; SECTION J: SPECULATION + INFRASTRUCTURE INTERACTION
+;; ========================================================================
+;;
+;; S(-1) retraction must work correctly with speculation-triggering
+;; expressions. These patterns interleave speculation with session type
+;; declarations and data definitions — a combo never tested before.
+
+;; --- J1: Union type after session declaration ---
+;; Session type registered, then speculation triggered by union.
+
+def j1-val : <Int | String> := 42
+
+;; --- J2: Union type between two data declarations ---
+
+def j2-val : <Int | Bool> := true
+
+;; --- J3: Speculation with user-defined data as union member ---
+
+;; BUG (L3): north constructor unbound at file level (see E2 bug annotation)
+;; def j3-val : <Direction | String> := north
+
+;; BUG/ASPIRATIONAL: union types with user-defined ADTs may not work.
+;; Hypothesis: the speculation machinery may not handle user-defined
+;; types in union position — prior tests only use Int/String/Bool.
+;; If this fails, it's a genuine discovery.
+
+;; --- J4: Speculation interleaved with relational definitions ---
+
+defr j4-color [?c]
+  || "red"
+     "blue"
+
+def j4-u : <Int | String> := "test"
+
+solve (j4-color which)
+
+;; --- J5: Many speculations between session declarations ---
+
+session J5Proto1
+  ! Int
+  end
+
+def j5a : <Int | String> := 1
+def j5b : <Int | String> := "two"
+
+session J5Proto2
+  ? String
+  end
+
+def j5c : <Int | Bool> := true
+
+;; This tests that the persistent session registry and ephemeral
+;; speculation state don't interfere — sessions persist, metas clear.
+
+
+;; ========================================================================
+;; SECTION K: NOVEL COMPOSITIONAL PATTERNS
+;; ========================================================================
+;;
+;; Creative combinations that prior files haven't tried.
+
+;; --- K1: Pipeline over user-defined data ---
+
+;; BUG (L3): leaf/branch constructors + tree-map-int unbound at file level (see E2 bug annotation)
+;; spec tree-double [Tree Int] -> [Tree Int]
+;; defn tree-double [t] [tree-map-int [fn [x] [* x 2]] t]
+;;
+;; |> [branch [leaf 1] [branch [leaf 2] [leaf 3]]]
+;;    tree-double
+;;    tree-size
+
+;; --- K2: Multi-constructor dispatch with functional result ---
+
+;; BUG (L3, reader): `int->str` name parsed as arrow `->` inside angle bracket.
+;; The `>` in `int->str` confuses the reader's angle bracket parser when
+;; it appears in a multi-arity pattern arm with `->` as separator.
+;; Hypothesis: reader's tokenizer doesn't distinguish `->` as identifier
+;; character vs. arrow syntax in this context.
+
+;; spec tree-summarize [Tree Int] -> String
+;; defn tree-summarize
+;;   | leaf x       -> str::append "leaf:" [int->str x]
+;;   | branch _ _   -> "branch"
+
+;; Workaround: use a local helper that doesn't have `->` in its name
+;; BUG (L3): leaf/branch constructors unbound at file level (see E2 bug annotation)
+;; spec tree-tag [Tree Int] -> String
+;; defn tree-tag
+;;   | leaf _       -> "leaf"
+;;   | branch _ _   -> "branch"
+;;
+;; tree-tag [leaf 42]
+;; tree-tag [branch [leaf 1] [leaf 2]]
+
+;; --- K3: Monomorphic identity applied to Int expressions ---
+;; (Polymorphic {A} version crashes parser — see Section C)
+
+c1-id 42
+c1-id [+ 1 2]
+
+;; --- K4: Map over list of user-defined data ---
+
+;; NOTE: Can't quote ADT constructors in list literals.
+;; BUG (L3): red/green/blue + color-name unbound at file level (see E2 bug annotation)
+;; map color-name '[red green blue]
+;; color-name red
+;; color-name green
+;; color-name blue
+
+;; --- K5: Nested map ---
+
+;; BUG (L3): leaf/branch + tree-size unbound at file level (see E2 bug annotation)
+;; map [fn [x] [tree-size x]] '[  [leaf 1]  [branch [leaf 2] [leaf 3]]  ]
+
+;; --- K6: HOF with user-defined type ---
+
+;; BUG (L3, parser): Same {A B} dual-implicit crash as tree-map above.
+;; spec apply-to-tree {A B} [A -> B] -> [Tree A] -> [Tree B]
+;; defn apply-to-tree [f t] [tree-map f t]
+
+;; Workaround: monomorphic
+;; BUG (L3): depends on tree-map-int which uses leaf/branch (see E2 bug annotation)
+;; spec apply-to-tree-int [Int -> Int] -> [Tree Int] -> [Tree Int]
+;; defn apply-to-tree-int [f t] [tree-map-int f t]
+;;
+;; apply-to-tree-int [fn [x] [* x x]] [branch [leaf 3] [leaf 4]]
+
+;; --- K7: Relational querying with many definitions in scope ---
+;; At this point in the file, we have 30+ definitions, 8+ session types,
+;; 5+ data types, 3+ traits. This tests that the registry state is
+;; consistent under heavy accumulation.
+
+defr all-directions [?d]
+  || "N" "S" "E" "W"
+
+solve (all-directions d)
+solve (compass-opposite "E" opp)
+
+;; --- K8: Chained definition references across sections ---
+
+;; BUG: depends on trait dispatch for user-defined Measurable trait.
+;; [+ [tree-size [branch [leaf 1] [leaf 2]]] [measure wednesday]]
+
+;; Substitute: combine tree-size with a pipeline result
+;; BUG (L3): tree-size/leaf/branch unbound at file level (see E2 bug annotation)
+;; [+ [tree-size [branch [leaf 1] [leaf 2]]] [tree-size [branch [leaf 3] [leaf 4]]]]
+;; => 2 + 2 = 4
+
+
+;; ========================================================================
+;; SECTION Z: QUICK REGRESSION CHECK
+;; ========================================================================
+;;
+;; Critical must-pass expressions. If Section Z passes, the file is
+;; likely healthy.
+
+;; Session types (A)
+dual Ping
+dual ReqResp
+
+;; Data + pattern matching (E)
+;; BUG (L3): all user-defined data constructors unbound at file level (see E2 bug annotation)
+;; opposite south
+;; tree-size [branch [leaf 1] [leaf 2]]
+;; color-name green
+
+;; Cross-paradigm (H)
+solve (doubled-pair 3 y)
+solve (protocol-info "Ping" kind count)
+
+;; Registry accumulation (I)
+[+ [i4-f1 0] [i4-f10 0]]
+
+;; Speculation interleave (J)
+j1-val
+j5a
+
+;; Novel composition (K)
+c1-id [+ 10 20]
+;; NOTE: Can't use '[east west north south] — quote treats them as symbols.
+;; BUG (L3): is-horizontal + direction constructors unbound at file level (see E2 bug annotation)
+;; is-horizontal east
+;; is-horizontal west
+;; is-horizontal north
+;; is-horizontal south
+
+
+;; ========================================================================
+;; END OF ACCEPTANCE FILE
+;; ========================================================================
+;;
+;; Phase validation checklist:
+;;   Phase 0:  Run baseline — all uncommented expressions must pass.
+;;             Commented items are known bugs/aspirational; annotate discoveries.
+;;   Phase 1:  Persistent registry network — Section I critical (registry accumulation)
+;;   Phase 2:  Registry cell migration — Sections A, E, I (session + data + trait registries)
+;;   Phase 3:  Dual-write elimination — All sections (every registry lookup changes)
+;;   Phase 4:  Assumption-tagged scoped cells — Section J critical (speculation interleave)
+;;   Phase 5:  S(-1) retraction — Section J critical (scoped cell cleanup)
+;;   Phase 6:  B&S retirement — All sections
+;;   Phase 7a: Module extraction — All sections (callback paths change)
+;;   Phase 7b: Resolution purification — Section I critical (cascading resolution)
+;;   Phase 8a: Readiness propagators — Section I (trait resolution timing)
+;;   Phase 8b: Resolution propagators — Section I (resolution mechanism changes)
+;;   Phase 8c: Loop elimination — ALL sections (scheduling completely changes)
+;;   Phase 9:  QTT mult cells — Section C (multiplicity annotations)
+;;   Phase 10: Performance validation + PIR
+;;
+;; After each phase: run this file via process-file, verify 0 new failures.
+;; Pre-existing BUG/ASPIRATIONAL items do not count as regressions.

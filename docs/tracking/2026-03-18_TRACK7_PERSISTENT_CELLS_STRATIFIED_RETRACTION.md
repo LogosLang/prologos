@@ -1,7 +1,7 @@
 # Track 7: Persistent Registry Cells + Stratified Propagator Network + QTT Multiplicity Cells — Stage 2/3 Design
 
 **Created**: 2026-03-18
-**Status**: DESIGN (Stage 2/3 — awaiting critique)
+**Status**: DESIGN COMPLETE (D.1 + D.2 external critique + D.3 self-critique — ready for Phase 0)
 **Depends on**: Track 3 ✅, Track 4 ✅, Track 5 ✅, Track 6 ✅
 **Enables**: Track 8 (Unification as Propagators), Track 9 (GDE), Track 10 (LSP)
 **Master roadmap**: `2026-03-13_PROPAGATOR_MIGRATION_MASTER.md` Track 7
@@ -15,9 +15,9 @@
 
 | Phase | Description | Status | Termination | Notes |
 |-------|-------------|--------|-------------|-------|
-| D.1 | Initial design document | 🔄 | — | This document |
-| D.2 | External critique | ⬜ | — | |
-| D.3 | Self-critique (principle alignment) | ⬜ | — | |
+| D.1 | Initial design document | ✅ | — | This document |
+| D.2 | External critique + response | ✅ | — | §14; threshold-cell redesign, scanning audit, assumption taxonomy |
+| D.3 | Self-critique (principle alignment) | ✅ | — | §9+§15; T1 resolved (Option A), T2-T6 documented, all tensions addressed |
 | 0 | Performance baseline + acceptance file | ⬜ | — | |
 | 1 | Persistent registry network infrastructure | ⬜ | L1 (finite registries) | WS-C: separate persistent network for registries |
 | 2 | Registry cell persistence migration | ⬜ | L1 (monotone merge) | WS-C: migrate 24 macros + 3 warning + 2 narrowing cells |
@@ -25,7 +25,8 @@
 | 4 | Assumption-tagged scoped cells | ⬜ | L1 (finite assumptions) | WS-B: tag constraint/wakeup/warning writes with assumption IDs |
 | 5 | S(-1) retraction stratum | ⬜ | L1 (assumption set ↓) | WS-B: retraction propagator, cleanup to fixpoint |
 | 6 | Belt-and-suspenders retirement | ⬜ | — (removal, not addition) | WS-B: remove network-box restore (Phase 5b gate) |
-| 7 | Callback inlining + resolution.rkt extraction | ⬜ | — (restructuring only) | WS-B: module restructuring, direct calls |
+| 7a | Module extraction + callback elimination | ⬜ | — (restructuring only) | WS-B: extract to `resolution.rkt`, remove 3 callback params |
+| 7b | Resolution chain purification | ⬜ | — (signature change) | WS-B: 6 write + 4 read functions purified to `enet → enet*` (Option A) |
 | 8a | Readiness propagators (L1) | ⬜ | L1 (fire once per dep) | WS-B: replace O(total) S1 scanning with per-constraint readiness cells |
 | 8b | Resolution propagators (L2) | ⬜ | L2 (type depth ↓) | WS-B: replace `execute-resolution-actions!` loop with propagators |
 | 8c | Stratified loop elimination | ⬜ | L1+L2 (composed) | WS-B: `run-stratified-resolution!` → layered network quiescence |
@@ -40,7 +41,7 @@ Track 7 does NOT deliver:
 
 - **LSP integration** — persistent cells and retraction benefit the LSP, but LSP-specific concerns (file watching, incremental re-elaboration triggers) are Track 10.
 - **Cross-module shadow-cell consistency** — Track 5's shadow-cell pattern is batch-correct. Multi-invocation consistency is Track 10 (LSP).
-- **Persistent definition cells** — definition cells already persist via `current-definition-cells-content` (Track 5 pattern). Track 7 extends this pattern to registries only.
+- **Persistent definition cells** — definition cells already persist via `current-definition-cells-content` (Track 5 pattern). Track 7 extends this pattern to registries only. The asymmetry is principled: **registry cells are per-category** (one cell per registry type — schema, ctor, trait, impl, etc. — 29 total, known statically, allocated once at file init), while **definition cells are per-name** (each `def`, `type`, `defn` gets its own cell — hundreds per file, allocated dynamically as definitions are elaborated). The persistent network is designed for small, static state with stable cell IDs. A growing, dynamic collection of definition cells would make it large and violate that design intent.
 - **GDE minimal diagnoses** — Track 7 builds the propagator infrastructure that GDE will consume (Track 9).
 
 ---
@@ -148,7 +149,7 @@ Track 7 delivers the **full stratified propagator network** — not just readine
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  Layered Network Quiescence (replaces run-stratified-loop!)          │
+│  Layered Network Quiescence (replaces run-stratified-resolution!)     │
 │                                                                       │
 │  S(-1): Retraction Layer                                              │
 │    Watches: believed-assumptions cell                                 │
@@ -224,6 +225,15 @@ Track 7 introduces several propagator patterns beyond the basic "cell A → prop
 | **Stratum propagator** | Tagged S(-1)/S0/L1/L2 | BSP within layer, Gauss-Seidel between layers | Standard layer-tagged propagator. Fires during its layer's BSP round. | All Track 7 propagators |
 | **Threshold propagator** | Cross-layer | Fires at stratum transition (quiescence of lower layer) | Activates when lower layer reaches fixpoint. Used for stratum boundary logic. | S(-1) → S0 transition, L1 → L2 transition |
 
+**Assumption taxonomy** (two uses of assumption IDs, single ID space):
+
+| Kind | Created by | Retracted by | Tags | Trigger |
+|------|-----------|-------------|------|---------|
+| **Speculation assumption** | `with-speculative-rollback` (TMS) | Speculation rollback on failure | Value-level cells (metas) via TMS branches | Speculative branch disbelieved |
+| **Lifecycle assumption** | L1 readiness propagator (channel cell pattern) | L2 resolution propagator after consumption | Channel cell entries (ready-queue actions) | Action consumed by resolver |
+
+Both use the same `make-fresh-assumption!` gensym counter. No collision risk: they live in different cells (TMS-managed meta cells vs. channel cell ready-queue) and are retracted for different reasons (speculation failure vs. consumption). S(-1) handles both uniformly — it scans scoped cells for entries tagged with non-believed assumptions, regardless of assumption kind.
+
 This taxonomy is a starting point. A richer taxonomy — including patterns for distributed/concurrent runtimes, temporal propagators, and higher-order propagators — is deferred to future research (see DEFERRED.md).
 
 ### 2.7 Readiness propagators: O(changed) replaces O(total)
@@ -288,6 +298,12 @@ This is the standard propagator-network approach: instead of polling for readine
 ```
 
 Called once at file start (in `process-file`/`load-module`), not per command. The box is parameterized at file scope — batch-worker's parameterize restores it to the post-prelude snapshot per test file.
+
+**Pipeline checklist (D.3 T6)**: New parameter `current-persistent-registry-net-box` must be added to:
+1. `test-support.rkt` parameterize block
+2. `batch-worker.rkt` save/restore list
+3. `with-fresh-meta-env` if applicable (likely not — registries are not meta-related)
+4. Track 5 PIR lesson: audit that `run-ns-last` test path correctly initializes the persistent network, not just the production path.
 
 **Cell-id stability**: Registry cell-id parameters (`current-schema-registry-cell-id`, etc.) are set once during init, not reset per command. They become file-scoped stable references.
 
@@ -445,22 +461,106 @@ For `merge-list-append` cells: filter list elements similarly.
 
 **Result**: `save-meta-state`/`restore-meta-state!` reduce from 1 box to 0 boxes. Speculation is now fully managed by the TMS + S(-1) architecture.
 
-### Phase 7: Callback Inlining
+### Phase 7: Callback Inlining + Resolution Purification
 
-**Goal**: Replace 3 callback parameters with direct function calls.
+**Goal**: Replace 3 callback parameters with direct, pure function calls. Purify the resolution chain so that all functions from `solve-meta-core` through resolution produce `enet → enet*` (no box writes). This is the "hard thing first" — paying the purification cost here means Phase 8b simply wires pure functions into propagators.
 
-**Module restructuring**: The callbacks exist to break circular deps:
+Sub-phased: 7a (mechanical extraction), 7b (purification of writes and reads).
+
+**Why Option A (full purification) over Option C (hybrid with wrappers)**: The D.3 self-critique initially proposed Option C (pure within L2, box-writing wrappers for legacy). On reflection, Option C perpetuates the imperative pattern — every new call site leans toward the `!`-suffix wrapper, and purity becomes "optional." Imperative patterns that persist become load-bearing; unraveling them later is harder than solving now. Option A makes purity the default and the box the exception (one entry point: `solve-meta!`). Principle alignment: Propagator Statelessness (structural, not discipline), Completeness Over Deferral (solve while context is fresh), Correct by Construction (pure functions can't diverge from the scheduler's copy). Imperativeness for performance, if needed, stays within tight local scopes that maintain data-in → data-out at their contract boundaries.
+
+#### Phase 7a: Module Extraction
+
+**Goal**: Extract resolution logic into `resolution.rkt`, eliminate 3 callback parameters. Imperative signatures preserved — this is the mechanical part.
+
+**The callbacks exist to break circular deps**:
 - `current-retry-unify` (metavar-store ← unify)
 - `current-retry-trait-resolve` (metavar-store ← driver)
 - `current-retry-hasmethod-resolve` (metavar-store ← driver)
 
-**Approach**: Extract resolution logic from driver.rkt into a new `resolution.rkt` module that both metavar-store and driver can import. The resolution functions (`try-monomorphic-resolve`, `try-parametric-resolve`) move from driver.rkt to resolution.rkt. `execute-resolution-actions!` calls them directly.
+**Approach**: Resolution functions (`try-monomorphic-resolve`, `try-parametric-resolve`, and the three resolution callbacks' bodies) move from driver.rkt to `resolution.rkt`. `execute-resolution-actions!` calls them directly. Callback parameters removed.
 
-**Validation**: Remove callback parameters. Any test that previously required callback injection now works through direct imports.
+**Validation**: All tests pass with direct calls. No functional change — same behavior, different module structure.
+
+#### Phase 7b: Resolution Chain Purification
+
+**Goal**: Purify the resolution chain — all functions from `solve-meta-core` through resolution and their reads become `enet → enet*`. `solve-meta!` becomes the sole box-writing entry point.
+
+**Call chain analysis (D.3 T1)**: Box writes occur at exactly 6 boundary functions. Everything below them (`unify-core`, `run-to-quiescence`, `elab-cell-write`, `collect-ready-*`) is already pure. The purification is mechanical: replace `(set-box! net-box (f (unbox net-box) ...))` with `(define enet* (f enet ...))` and thread forward.
+
+**Write-path purification** — functions that write through boxes, purified to `enet → enet*`:
+
+| Function | Current | Purified |
+|----------|---------|----------|
+| `solve-meta-core!` | writes meta-info + cell via box | `(solve-meta-core enet id solution) → enet*` |
+| `write-constraint-to-store!` | writes constraint cell via box | `(write-constraint-to-store enet updated-c) → enet*` |
+| `write-constraint-status-cell!` | writes status cell via box | `(write-constraint-status-cell enet cid status) → enet*` |
+| `write-error-descriptor!` | writes error cell via box | `(write-error-descriptor enet meta-id desc) → enet*` |
+| `execute-resolution-actions!` | imperative loop, box writes | `(execute-resolution-actions enet actions) → enet*` (for/fold) |
+| `run-stratified-resolution!` | loop with box reads/writes | `(run-stratified-resolution enet trigger-meta-id) → enet*` |
+
+**Read-path purification** — functions that read meta solutions through boxes, purified to read from threaded `enet`:
+
+All meta-solution reading funnels through exactly 4 solution-getter functions. No box reading is scattered — all 12 consuming files (`zonk.rkt`, `unify.rkt`, `trait-resolution.rkt`, `typing-core.rkt`, `qtt.rkt`, `reduction.rkt`, etc.) go through these:
+
+| Function | Current | Purified |
+|----------|---------|----------|
+| `meta-solution` | reads cell via `(unbox (current-prop-net-box))` | `(meta-solution-pure enet id) → Expr \| #f` |
+| `meta-solved?` | reads cell via `(unbox (current-prop-net-box))` | `(meta-solved-pure? enet id) → boolean` |
+| `level-meta-solution` | same two-path box pattern | `(level-meta-solution-pure enet id) → level \| #f` |
+| `mult-meta-solution` | same two-path box pattern | `(mult-meta-solution-pure enet id) → mult \| #f` |
+
+**Consuming functions within the resolution chain** get `enet`-accepting variants:
+
+| Function | Used by | Purified |
+|----------|---------|----------|
+| `zonk` | Resolution functions (normalize type-args) | `(zonk-pure enet e) → Expr` — calls `meta-solution-pure` |
+| `zonk-at-depth` | Constraint retry (normalize lhs/rhs) | `(zonk-at-depth-pure enet depth e) → Expr` |
+| `normalize-for-resolution` | Trait/hasmethod resolution | `(normalize-for-resolution-pure enet e) → Expr` |
+| `ground-expr?` (trait-resolution.rkt) | Readiness check in resolution | `(ground-expr-pure? enet e) → boolean` |
+
+**Scope boundary**: Only the resolution chain uses the `-pure` variants. The rest of the codebase (elaboration, type-checking, pretty-printing) continues using the box-reading versions — `solve-meta!` syncs the box before and after the pure chain, so box-reading callers always see consistent state. The pure variants are for code running *within* `run-stratified-resolution` (and later, within L2 propagators) where the threaded `enet` is the source of truth.
+
+**Resolution functions** (in `resolution.rkt`):
+
+```racket
+;; Pure: thread enet through all reads and writes
+(define (resolve-trait-constraint enet dict-meta-id tc-info)
+  (define trait-name (trait-constraint-info-trait-name tc-info))
+  (define type-args
+    (map (λ (e) (normalize-for-resolution-pure enet (zonk-pure enet e)))
+         (trait-constraint-info-type-arg-exprs tc-info)))
+  (cond
+    [(not (andmap (λ (e) (ground-expr-pure? enet e)) type-args)) enet]
+    [(or (try-monomorphic-resolve trait-name type-args)
+         (try-parametric-resolve trait-name type-args))
+     => (λ (dict-expr) (solve-meta-core enet dict-meta-id dict-expr))]
+    [else (write-error-descriptor enet dict-meta-id ...)]))
+
+;; Same pattern for retry-unify-constraint, resolve-hasmethod-constraint
+```
+
+**`solve-meta!` becomes the sole box-writing entry point**:
+
+```racket
+;; solve-meta! is the ONLY box-writing entry point
+(define (solve-meta! id solution)
+  (define net-box (current-prop-net-box))
+  (define enet (unbox net-box))
+  (define enet* (solve-meta-core enet id solution))
+  (define enet** (run-stratified-resolution enet* id))
+  (set-box! net-box enet**))
+```
+
+The rest of the codebase (elaboration, type-checking) calls `solve-meta!` which unboxes, calls the pure chain, and reboxes. This is the single point of impurity — justified because elaboration is inherently sequential (one expression at a time) and the box is the interface between the sequential elaborator and the functional network.
+
+**Validation**: Belt-and-suspenders: compare `enet*` from pure chain against box-mediated result for 1 full suite run. The existing `!`-suffixed functions can temporarily coexist as thin wrappers (`unbox → pure → rebox`) during validation, then be removed or deprecated.
 
 ### Phase 8a: Readiness Propagators (L1)
 
 **Goal**: Replace the 6 O(total) S1 scanning functions with per-constraint fan-in readiness propagators.
+
+**Prerequisite: Scanning function audit**. Before implementing readiness propagators, produce a line-by-line audit of the 6 `collect-ready-*` scanning functions (`collect-ready-constraints-via-cells`, `collect-ready-constraints-for-meta`, `collect-ready-traits-via-cells`, `collect-ready-traits-for-meta`, `collect-ready-hasmethods-via-cells`, `collect-ready-hasmethods-for-meta`). The audit identifies every readiness condition (ground-check, status filter, constraint-type dispatch) that the L1 propagators must replicate. Uncovered conditions are correctness risks in Phase 8c loop elimination.
 
 **New infrastructure**:
 
@@ -472,45 +572,67 @@ For `merge-list-append` cells: filter list elements similarly.
 ;; Lifecycle: channel cell — L1 writes, L2 reads + retracts, S(-1) cleans
 ```
 
-**Fan-in readiness propagator with countdown latch**: One propagator per constraint (NOT per dependency). Uses a countdown latch for O(1) readiness detection:
+**Threshold-cell composition for one-shot readiness**: The readiness detection uses a two-stage propagator composition that guarantees each constraint fires at most once, structurally (via lattice monotonicity) rather than operationally (via runtime guards):
+
+1. **Fan-in propagator** (N deps → 1 threshold cell): Watches all dependency cells. When all are non-⊥, writes `#t` to a per-constraint **threshold cell**.
+2. **Threshold cell** (boolean, one-shot): Merge is `(λ (old new) #t)`. Once ⊤, stays ⊤. This cell transitions exactly once: ⊥ → ⊤.
+3. **Readiness propagator** (1 threshold cell → ready-queue): Watches the threshold cell. Fires on the single ⊥ → ⊤ transition. Writes an assumption-tagged action descriptor to the ready-queue channel cell.
 
 ```racket
 (define (register-trait-constraint-with-readiness! meta-id info dep-cell-ids)
   ;; ... existing registration ...
-  ;; NEW: fan-in readiness propagator watching ALL deps
+
+  ;; Stage 1: Fan-in propagator → threshold cell
+  ;; One boolean threshold cell per constraint. Merge: (λ _ #t) — one-shot.
+  (define-values (net* threshold-cid)
+    (net-new-cell net #f (lambda (old new) #t)))
+
   (define total-deps (length dep-cell-ids))
-  (define ground-count (box 0))  ;; countdown latch
 
   ;; Termination: Level 1 (Tarski). Each dep transitions at most once
-  ;; (⊥ → solved). Fan-in fires at most once per dep per BSP round.
-  ;; Countdown latch: O(1) readiness check (compare count == total).
+  ;; (⊥ → solved). Threshold cell transitions at most once (⊥ → ⊤).
   (net-add-propagator!
     dep-cell-ids  ;; fan-in: ALL deps as inputs
-    (lambda dep-vals
-      ;; Under BSP: fires once per round with all current dep values
-      ;; Count non-bot deps
+    (list threshold-cid)  ;; single output: threshold cell
+    (lambda (net . dep-vals)
       (define n-ground (count (lambda (v) (not (prop-type-bot? v))) dep-vals))
-      (when (and (= n-ground total-deps)
-                 (not (meta-solved? meta-id)))
-        ;; All deps ground — write action to ready-queue channel cell
-        ;; Tagged with fresh assumption for on-network consume pattern
-        (define assumption-id (make-fresh-assumption!))
-        (cell-write! (current-ready-queue-cell-id)
-                     (list (tagged-action assumption-id
-                             (action-resolve-trait meta-id info))))))))
+      (if (= n-ground total-deps)
+          (net-cell-write net threshold-cid #t)
+          net)))
+
+  ;; Stage 2: Readiness propagator (threshold cell → ready-queue)
+  ;; Fires exactly once — when threshold transitions ⊥ → ⊤.
+  ;; The lattice IS the guard: no runtime status checks needed.
+  (net-add-propagator!
+    (list threshold-cid)  ;; single input: threshold cell
+    (list (current-ready-queue-cell-id))  ;; output: ready-queue channel
+    (lambda (net threshold-val)
+      (if threshold-val
+          (let ([assumption-id (make-fresh-assumption!)])
+            (net-cell-write net (current-ready-queue-cell-id)
+                            (list (tagged-action assumption-id
+                                    (action-resolve-trait meta-id info)))))
+          net))))
 ```
 
-**Countdown latch optimization**: In BSP scheduling, the fan-in propagator fires once per round with ALL current dep values. The `count` of non-⊥ values is computed in a single pass. When `count == total-deps`, the constraint is ready. No per-dep tracking needed — the BSP round gives us all inputs simultaneously.
+**Why threshold-cell composition instead of lifecycle state machine?**
 
-For Gauss-Seidel scheduling (fallback), a stateful countdown latch is more efficient: maintain `ground-count` as a box; each dep transition increments it; readiness fires when `ground-count == total-deps`. Either approach is O(1) for the readiness check itself.
+The external critique (C2) identified that the original countdown-latch design could produce duplicate ready-queue entries if the readiness propagator fires again in a subsequent BSP round. Two solutions were considered:
 
-**Propagator count**: 1 fan-in propagator per constraint (not 1 per dependency). For 50 constraints: 50 propagators total, regardless of dependency fan-out. This is the fan-in pattern from §2.6.
+- **Lifecycle state machine**: Track constraint status (pending → ready → queued → resolved). Readiness propagator checks `status != queued` before writing. Operational guarantee — correctness depends on runtime checks.
+- **Threshold-cell composition**: Interpose a boolean cell that transitions once. The lattice enforces the one-shot property. Structural guarantee — correctness is a property of the data, not the code.
+
+The threshold-cell approach is more propagator-first: the guarantee is lattice monotonicity, not a conditional branch. It composes better (threshold cells are observable — "how many constraints are ready?" = count of non-⊥ threshold cells). And it's simpler to implement (one cell + two propagators per constraint, no status tracking for the firing guard).
+
+Constraint status (pending/resolved/failed) is still tracked in the existing constraint-info status field for error reporting and observability, but the ready-queue write guard is structural.
+
+**Propagator count**: 2 propagators + 1 threshold cell per constraint. For 50 constraints: 100 propagators + 50 cells. The threshold cells are trivial (boolean, no TMS). The fan-in propagator count is unchanged (1 per constraint, not 1 per dependency).
 
 **S1 replacement**: Instead of scanning, L1 readiness propagators write to the ready-queue channel cell. S1 disappears as a separate phase — readiness detection is now structural (propagator-driven), not imperative (scan-driven).
 
 **Ordering**: Readiness propagators are tagged as L1 layer. Under the hybrid BSP/Gauss-Seidel scheduler, they fire after S0 reaches quiescence. The ready-queue accumulates during L1's BSP rounds. L2 reads the queue after L1 quiesces. This preserves stratum ordering.
 
-**Belt-and-suspenders**: During Phase 8a, run BOTH the old scanning functions and the ready-queue, assert identical action descriptor sets. Remove scanning functions after validation.
+**Belt-and-suspenders**: During Phase 8a, run BOTH the old scanning functions and the ready-queue, assert identical action descriptor sets. **Retirement criteria (D.3 T4)**: Scanning functions removed when: (a) readiness propagators produce identical action descriptor sets for ≥1 full suite run with 0 divergences, AND (b) Phase 8b is implemented (L2 consuming the ready-queue, confirming end-to-end correctness).
 
 ### Phase 8b: Resolution Propagators (L2)
 
@@ -536,6 +658,8 @@ Layered network quiescence:
 
 **Resolution propagator**: A single propagator that watches the ready-queue channel cell. Its fire function IS the resolution logic. Consumption uses the on-network channel cell pattern (§2.6): after processing each entry, retract its assumption so S(-1) cleans it on the next cycle.
 
+**Implementation note (D.2 C1): snapshot-then-consume**. The resolution propagator must snapshot the ready-queue at the start of its L2 BSP round and process the snapshot, rather than iterating the live cell value. This prevents inconsistency if assumption retraction (within the same fire function) triggers S(-1) cleanup that mutates the cell value under iteration. The snapshot is a simple `let` binding of the cell value before the `for` loop:
+
 ```racket
 (define (install-resolution-propagator! ready-queue-cell-id)
   ;; Termination: Level 2 (well-founded). Each resolution either produces a
@@ -543,21 +667,25 @@ Layered network quiescence:
   ;; depth. Type depth is well-founded → finite resolution chains.
   (net-add-propagator!
     (list ready-queue-cell-id)
-    (lambda (queue-val)
-      (for ([tagged-entry (in-list queue-val)])
+    (lambda (net queue-val)
+      ;; Snapshot: process a frozen copy, not the live cell
+      (define entries (if (list? queue-val) queue-val '()))
+      (for/fold ([net net]) ([tagged-entry (in-list entries)])
         (define action (tagged-action-value tagged-entry))
         (define assumption-id (tagged-action-assumption-id tagged-entry))
         ;; Execute resolution
         (match action
           [(action-retry-constraint c)
-           (retry-unify-constraint! c)]
+           (retry-unify-constraint! net c)]
           [(action-resolve-trait dict-meta-id tc-info)
-           (resolve-trait-constraint! dict-meta-id tc-info)]
+           (resolve-trait-constraint! net dict-meta-id tc-info)]
           [(action-resolve-hasmethod hm-meta-id hm-info)
-           (resolve-hasmethod-constraint! hm-meta-id hm-info)])
+           (resolve-hasmethod-constraint! net hm-meta-id hm-info)])
         ;; Consume: retract the entry's assumption → S(-1) will clean it
-        (retract-assumption! assumption-id)))))
+        (net-retract-assumption net assumption-id)))))
 ```
+
+**Scheduler implementation (D.2 clarification)**: `run-to-layered-quiescence` is a **new function** in `propagator.rkt`, distinct from the existing `run-to-quiescence`. It calls `run-to-quiescence` per-layer. Layers are a new first-class concept in `propagator.rkt`: propagators get a `layer` field (integer: -1, 0, 1, 2), and the scheduler partitions the worklist by layer, processing each in order. The existing `run-to-quiescence` is unchanged and remains available for single-layer use.
 
 **On-network queueing lifecycle**: The ready-queue is a channel cell (§2.6 taxonomy). The full lifecycle:
 1. **L1 (produce)**: Readiness propagator writes a tagged action to the channel cell
@@ -633,7 +761,7 @@ The scheduler processes layers in order, re-entering from the lowest layer when 
 
 **The architectural payoff**: After Phase 8c, constraint resolution is a structural property of the propagator network. Adding a new constraint type (e.g., a new kind of trait constraint, or a narrowing constraint) means adding a readiness propagator (L1) and a resolution propagator (L2). No changes to a hand-written loop. No new scanning function. No new callback. The network handles scheduling, ordering, and termination.
 
-**Belt-and-suspenders**: During Phase 8b, keep `run-stratified-resolution!` as a fallback. Compare its results against layered quiescence for every `solve-meta!` call. Phase 8c removes the fallback after validation.
+**Belt-and-suspenders**: During Phase 8b, keep `run-stratified-resolution!` as a fallback. Compare its results against layered quiescence for every `solve-meta!` call. **Retirement criteria (D.3 T4)**: Phase 8c is the explicit retirement gate. Old path removed when: (a) layered scheduler produces identical results for ≥1 full suite run with 0 divergences, AND (b) adversarial benchmark (Q5) passes.
 
 ---
 
@@ -666,6 +794,8 @@ The scheduler processes layers in order, re-entering from the lowest layer when 
   (lambda (mult-val) mult-val))                           ;; γ: identity
 ```
 
+**Concrete example**: Consider `spec f {A : Type} (x : A) -[m1]-> A`. When the type meta for `A` is solved to `Int`, the bridge propagator fires: `extract-mult-constraint` examines the Pi's multiplicity annotation and returns `m1` (linear). This writes `m1` to the mult cell associated with the usage site. If the type contains an unsolved mult-meta (e.g., `(Pi (x : Int) ?m B)` where `?m` is still `type-bot`), the bridge doesn't fire — the type isn't fully ground. The bridge is unidirectional: type → mult. Mult → type influence flows through the existing QTT checker in `qtt.rkt`, not through bridge propagators.
+
 **Scope**: Multiplicity cells already exist (Track 4 — `elab-fresh-mult-cell`). Track 7 adds the lattice merge function and bridge propagators so that type-level reasoning can inform multiplicity inference.
 
 ---
@@ -682,7 +812,7 @@ The persistent network must survive across commands but be correctly scoped to f
 
 S(-1) must remove exactly the entries tagged with retracted assumptions, no more, no less. Over-retraction loses valid constraints; under-retraction leaves orphaned entries.
 
-**Mitigation**: Belt-and-suspenders comparison against current network-box restore (Phase 6). Existing speculation test suite (Track 4/6) exercises the exact scenarios. Depth-0 fast path ensures zero overhead for the common case.
+**Mitigation**: Belt-and-suspenders comparison against current network-box restore (Phase 6). Existing speculation test suite (Track 4/6) exercises the exact scenarios. Depth-0 fast path ensures zero overhead for the common case. Note: the D.2 external critique suggested targeted retraction (reverse index from assumption → affected cells). With only 14 scoped cells and depth-0 fast path covering ~95% of commands, this is premature optimization. If Phase 10 profiling reveals S(-1) as a hotspot in speculation-heavy workloads, a reverse index can be added as a targeted optimization.
 
 ### Medium risk: Readiness propagator ordering (WS-B Phase 8)
 
@@ -702,11 +832,11 @@ The Gauss-Seidel scheduler across 4 layers (S(-1), S0, L1, L2) with feedback fro
 
 **Mitigation**: The pattern is proven — effect-bridge propagators (Architecture A+D) already use priority-based scheduling within `run-to-quiescence`. Track 7 extends this to 4 explicit layers. The scheduler extension can be validated independently with unit tests before wiring into constraint resolution.
 
-### Low risk: Callback inlining (WS-B Phase 7)
+### Medium risk: Callback inlining + resolution purification (WS-B Phase 7)
 
-Mechanical module restructuring. The resolution functions already exist; they just move to a new module.
+Module restructuring plus resolution chain purification. The resolution functions move to a new module AND are rewritten as pure `enet → enet*` functions. Call chain analysis (D.3 T1) identified exactly 6 boundary functions that need purification — the transformation is mechanical (replace box read/write with threading) but touches many call sites.
 
-**Mitigation**: 3 callback parameters, well-understood call sites. Track 6 Phase 8d deep audit confirmed all are vestigial indirection.
+**Mitigation**: The existing call chain is well-mapped (D.3 T1 analysis). `run-to-quiescence`, `unify-core`, `elab-cell-write` are already pure — purification only affects the 6 boundary functions. Belt-and-suspenders: compare pure chain result against box-mediated result for 1 full suite run. Track 6 Phase 8d deep audit confirmed callbacks are vestigial; the purification is a natural completion of that simplification.
 
 ### Low risk: QTT multiplicity cells (WS-A Phase 9)
 
@@ -823,30 +953,51 @@ The same mathematical structure (stratified fixpoint semantics) underlies both N
 
 ---
 
-## 9. Principle Alignment (D.3 Preview)
+## 9. Principle Alignment (D.3 Self-Critique)
+
+Grounded in: DESIGN_PRINCIPLES.org, DEVELOPMENT_LESSONS.org, DESIGN_METHODOLOGY.org, GÖDEL_COMPLETENESS.org, POST_IMPLEMENTATION_REVIEW.org, Track 4/5/6 PIRs.
+
+### Alignment summary
 
 | Principle | Alignment | Notes |
 |-----------|-----------|-------|
-| Propagator-First Infrastructure | ✅ Strong | Core purpose: cells become the persistent store |
-| Correct by Construction | ✅ Strong | S(-1) stratification, structural scoping, depth-0 fast path |
-| Data Orientation | ✅ Strong | Retraction is data (assumption sets), not imperative cleanup |
+| Propagator-First Infrastructure | ✅ Strong | Core purpose: cells become the persistent store; callbacks → propagators; scans → readiness cells |
+| Stratified Propagator Networks | ✅ Strong | Direct implementation: S(-1)/S0/L1/L2 with BSP/Gauss-Seidel |
+| Correct by Construction | ✅ Strong | Threshold cells (lattice guards fire-once), structural retraction, depth-0 fast path |
+| Data Orientation | ✅ Strong | Action descriptors (free monad), assumption sets, channel cell produce-consume |
+| Gödel Completeness | ✅ Strong | Per-layer termination levels stated; cross-layer composition sound |
+| Propagator Statelessness | ✅ Strong (after D.2+D.3) | D.2: countdown-latch box → threshold cell. D.3: resolution chain purified (Option A, §15 T1) |
 | Decomplection | ✅ Strong | Clean separation: persistent registries vs ephemeral inference state |
-| Simplicity of Foundation | ⚠️ Moderate | Two networks adds complexity; justified by lifecycle separation |
-| First-Class by Default | ✅ Aligned | Ready-queue, assumption sets, retraction descriptors are all first-class |
+| Simplicity of Foundation | ⚠️ Moderate tension | Two networks justified; scaling assumption should be explicit (§15 T2) |
+| First-Class by Default | ⚠️ Partial gap | Constraint status not a cell; acceptable for Track 7, Track 10 concern (§15 T3) |
 
-### Key tensions to address in D.3
+### Resolved tensions (from D.2)
 
-1. **Two-network complexity** — **RESOLVED in D.2 discussion**: Two networks is the right design. Better correctness reasoning, propagator-first, data-oriented, decomplected. Bridge propagators (Galois connections) provide clean cross-network integration. The alternative (one network with selective reset) is harder to reason about and mixes lifecycle concerns.
+1. **Two-network complexity** — **RESOLVED**: Two networks is the right design. Bridge propagators (Galois connections) provide clean cross-network integration. Scaling assumption documented in §15 T2.
 
-2. **Scoped cell tagging overhead**: Every constraint/wakeup/warning write gets an assumption-id field. At depth 0 (no speculation), this is always `#f`. Is the per-write cost measurable? Track 4's depth-0 fast path suggests it's negligible.
+2. **Scoped cell tagging overhead**: Depth-0 fast path: assumption-id is `#f`, negligible. Track 4 precedent confirms.
 
-3. **Readiness propagator count** — **RESOLVED in D.2 discussion**: Fan-in propagators (1 per constraint, not 1 per dependency) reduce count from N×D to N. For 50 constraints: 50 propagators total. Countdown latch optimization: O(1) readiness check. Under BSP scheduling, fires once per round with all current dep values — even more advantageous than Gauss-Seidel.
+3. **Readiness propagator count** — **RESOLVED**: Threshold-cell composition (D.2 revision). 2 propagators + 1 threshold cell per constraint. Fire-once is structural (lattice monotonicity), not operational.
 
-4. **Layered scheduler complexity** — **PARTIALLY RESOLVED in D.2 discussion**: Hybrid BSP/Gauss-Seidel is justified by CALM (monotone intra-stratum = safe for BSP; non-monotone inter-stratum = needs Gauss-Seidel barrier). Correctness follows from stratified fixpoint semantics. Phase 0 adversarial benchmark (Q5) will validate empirically. The scheduler extension can be unit-tested independently before wiring into constraint resolution.
+4. **Layered scheduler complexity** — **RESOLVED**: Hybrid BSP/Gauss-Seidel justified by CALM. Scheduler is a new function in `propagator.rkt` (D.2 clarification). Phase 0 adversarial benchmark validates empirically.
 
-5. **Loop elimination completeness**: After Phase 8c, `run-stratified-resolution!` is gone. Every scenario currently handled by the hand-written loop must be handled by layered quiescence. The risk is edge cases in the loop that aren't exercised by the test suite — need to audit the loop's special-case handling before removal.
+5. **Loop elimination completeness** — **RESOLVED**: Scanning function audit added as Phase 8a prerequisite (D.2). Phase 8c is explicit retirement gate for hand-written loop.
 
-6. **Gödel Completeness per layer**: Each phase in the progress tracker now has a termination guarantee level. Cross-layer feedback (L2→S0) terminates via well-founded measure (type depth × unsolved meta count). See `GÖDEL_COMPLETENESS.org` for the full hierarchy. Fuel retained as defense-in-depth behind the structural argument.
+6. **Gödel Completeness per layer**: Termination levels in progress tracker. Cross-layer feedback: well-founded measure (type depth × unsolved meta count). Fuel retained as defense-in-depth.
+
+### Open tensions (D.3 — see §15 for full analysis)
+
+**T1. Resolution propagator purity** — **RESOLVED (Option A)**: The entire resolution chain is purified in Phase 7. Six boundary functions are made pure (`enet → enet*`); `solve-meta!` is the sole box-writing entry point. See §15 T1 and Phase 7 design.
+
+**T2. Two-network scaling assumption** (Medium priority): The persistent network is justified while it remains small and static (~29 cells). If future tracks grow it, unification into a single network with lifecycle-tagged cells is the migration path. See §15 T2.
+
+**T3. Constraint status as cell value** (Low priority): Constraint status (pending/resolved/failed) remains a struct field, not a cell. Track 10 (LSP) will want to observe constraint lifecycle for real-time diagnostics. See §15 T3.
+
+**T4. Belt-and-suspenders retirement criteria** (Medium priority): Phases 8a and 8b have belt-and-suspenders validation but implicit retirement. Phase 8c should be named as the explicit retirement gate. See §15 T4.
+
+**T5. Acceptance file must exercise multi-command patterns** (Medium priority): Track 7 doesn't add syntax, but changes infrastructure under existing syntax. The acceptance file must test define-then-use across commands. See §15 T5.
+
+**T6. Test infrastructure divergence** (Low priority): Track 5 PIR lesson — `test-support.rkt` parameterize block must include `current-persistent-registry-net-box`. Pipeline checklist (`.claude/rules/pipeline.md` § "New Racket Parameter") covers this, but worth explicit callout in Phase 1. See §15 T6.
 
 ---
 
@@ -854,16 +1005,19 @@ The same mathematical structure (stratified fixpoint semantics) underlies both N
 
 | File | Phase | Changes |
 |------|-------|---------|
-| `metavar-store.rkt` | 1, 4, 5, 8a-c | Persistent network init, assumption tagging, S(-1) stratum, ready-queue, resolution propagator, loop elimination |
+| `metavar-store.rkt` | 1, 4, 5, 7b, 8a-c | Persistent network init, assumption tagging, S(-1) stratum, purified `solve-meta-core`/`run-stratified-resolution`/solution-getters, ready-queue, resolution propagator, loop elimination |
 | `macros.rkt` | 2, 3 | Cell persistence migration, dual-write elimination |
 | `warnings.rkt` | 2, 3, 4 | Cell persistence migration, assumption tagging |
 | `global-constraints.rkt` | 2, 4 | Cell persistence migration, assumption tagging |
-| `driver.rkt` | 1, 3, 7, 8c | Persistent network lifecycle, dual-write removal, callback elimination, solve-meta! simplification |
+| `driver.rkt` | 1, 3, 7a, 8c | Persistent network lifecycle, dual-write removal, callback elimination, solve-meta! simplification |
 | `infra-cell.rkt` | 4, 9 | Assumption-tagged entries, mult lattice merge |
 | `propagator.rkt` | 8b, 8c | Layer-aware propagator tagging, `run-to-layered-quiescence` scheduler |
 | `elaborator-network.rkt` | 5, 8a, 8b, 9 | S(-1) integration, readiness propagators, resolution propagator, mult bridge propagators |
 | `elab-speculation-bridge.rkt` | 4, 5, 6 | Assumption tracking, S(-1) trigger, retire network-box restore |
-| `resolution.rkt` (NEW) | 7 | Extracted resolution logic from driver.rkt |
+| `resolution.rkt` (NEW) | 7a, 7b | Extracted resolution logic (7a); purified to `enet → enet*` (7b) |
+| `zonk.rkt` | 7b | `zonk-pure`, `zonk-at-depth-pure` variants accepting explicit `enet` |
+| `trait-resolution.rkt` | 7b | `ground-expr-pure?` variant accepting explicit `enet` |
+| `unify.rkt` | 7b | `normalize-for-resolution-pure` variant accepting explicit `enet` |
 | `qtt.rkt` | 9 | Mult lattice merge function |
 | `batch-worker.rkt` | 1, 3 | Persistent network snapshot/restore |
 | `test-support.rkt` | 1, 3 | Persistent network isolation |
@@ -874,13 +1028,13 @@ The same mathematical structure (stratified fixpoint semantics) underlies both N
 
 1. **Per-phase**: `racket tools/run-affected-tests.rkt --all` — 0 new failures after each phase
 2. **Acceptance file**: `examples/2026-03-18-track7-acceptance.prologos` — run via `process-file` after each phase
-3. **Adversarial benchmark** (Phase 0): Synthetic constraint graph with deep resolution chains (depth 5+), wide fan-out (20+ constraints per meta), nested speculation (3+ levels), cyclic feedback. Compare hand-written loop vs layered scheduler on iteration count, wall time, correctness.
+3. **Adversarial benchmark** (Phase 0): Synthetic constraint graph with cascading resolution chains (depth 5+, trait→trait→trait), wide fan-out (one meta used by 20+ constraints), nested speculation (3+ levels), cascading resolution feedback (L2 solving metas that unblock further L1 readiness). Compare hand-written loop vs layered scheduler on iteration count, wall time, correctness. Benchmark should use concrete Prologos expressions (e.g., nested `Num` + `Eq` + `Ord` constraints that exercise the full resolution pipeline).
 4. **Belt-and-suspenders**:
    - Phase 2: persistent cell reads vs parameter reads (0 divergences)
    - Phase 5: S(-1) retraction vs network-box restore (identical results)
    - Phase 6: retire network-box restore, verify suite still passes
-4. **Performance**:
-   - Phase 0 baseline: total suite time, per-command cell allocation count
+5. **Performance**:
+   - Phase 0 baseline: total suite time, per-command cell allocation count. **Measurement methodology**: instrument `net-new-cell` / `net-new-cell-desc` with a counter parameter (`current-cell-allocation-count`), capture count per command in a new `perf-inc-cell-alloc!` call. Record per-command overhead breakdown: cell creation, S1 scan time (wrap `collect-ready-*` with `current-inexact-milliseconds`), `run-to-quiescence` time.
    - Phase 3: measure dual-write elimination impact (fewer parameter writes)
    - Phase 8: measure S1 scanning time before vs. after readiness propagators
    - Phase 10: compare against Phase 0 baseline; investigate if >15% regression
@@ -929,15 +1083,17 @@ No off-network clearing. No imperative queue manipulation. The queueing lifecycl
 
 **Resolution**: Yes, 1 box is sufficient. If the same snapshot serves all consumers, 1 box. If different modules need different views in the future, each gets its own box pointing to a different CHAMP subtree — structural sharing makes this cheap. For now, 1 box covers all 29 registry cells atomically.
 
-### Q5: Adversarial benchmark for Phase 0 — **NEW**
+### Q5: Adversarial benchmark for Phase 0 — **NEW, refined in D.2**
 
 Phase 0 should include a synthetic adversarial constraint graph alongside the standard suite baseline:
-- Deep resolution chains (depth 5+, trait→trait→trait)
+- Deep **cascading resolution chains** (depth 5+, trait→trait→trait — e.g., resolving `Num Int` triggers `Add Int` + `Sub Int` + `Mul Int` + `Neg Int` + `Abs Int` + `FromInt Int`)
 - Wide fan-out (one meta used by 20+ constraints)
 - Nested speculation (3+ levels deep)
-- Cyclic feedback (L2 solving metas that enable other L2 constraints)
+- **Cascading resolution feedback** (L2 solving dict-metas that were dependencies of other L2 constraints — e.g., `Ord a` depends on `Eq a`, so resolving `Eq Int` unblocks `Ord Int` readiness in the next L1 round)
 
-Run both the current hand-written loop and the layered scheduler against this graph. Compare iteration counts, wall time, and correctness. This validates the hybrid BSP/Gauss-Seidel scheduler under adversarial conditions.
+Note: "cascading feedback" is not a dependency cycle. True cycles (A depends on B depends on A) indicate type errors. Cascading chains are convergent resolution where each step strictly reduces the set of unsolved constraints.
+
+Run both the current hand-written loop and the layered scheduler against this graph. Compare iteration counts, wall time, and correctness. This validates the hybrid BSP/Gauss-Seidel scheduler under adversarial conditions. Measurement: instrument both paths with propagator firing counts (`perf-inc-prop-fire!`), S1 scan time, and total wall time.
 
 ### Q6: Propagator taxonomy as a design artifact — **NEW**
 
@@ -947,3 +1103,169 @@ The granular taxonomy in §2.6 (transform, fan-in, fan-out, bridge; value, accum
 - **Distributed propagators**: cross-process/cross-node with eventual consistency semantics
 
 This research is deferred (see DEFERRED.md) but the Track 7 taxonomy provides the foundation.
+
+---
+
+## 14. D.2 External Critique Response
+
+External critique received 2026-03-18. This section documents each concern, the grounded response, and design changes (if any).
+
+### C1: Channel Cell Consumption Atomicity — ACCEPTED (implementation note)
+
+**Concern**: What happens if L2 partially consumes the ready-queue before new L1 writes arrive in the same quiescence cycle?
+
+**Response**: The scenario as described **cannot occur** under our Gauss-Seidel inter-stratum scheduling. L1 runs to BSP fixpoint before L2 starts — they are in different strata with a barrier between them (§2.5, steps 1-4). L2 cannot be "mid-consumption" when L1 fires.
+
+The feedback path (L2 → S0 → restart from S(-1) → S0 quiesces → L1 fires → new entries → L2 fires) is well-defined: L2 starts a *fresh* BSP round on each re-entry. It sees the full accumulated queue, not a partial state.
+
+**However**, there is a subtler implementation concern: if L2's resolution propagator iterates the queue list while also retracting assumptions (which may trigger S(-1) and mutate the cell value under iteration), the iteration could see inconsistent state. The safer implementation is snapshot-then-consume.
+
+**Design change**: Added implementation note to Phase 8b (snapshot-then-consume).
+
+### C2: Countdown Latch Under Feedback — ACCEPTED (threshold-cell redesign)
+
+**Concern**: Can a meta cell transition from (partially solved) → (more solved), triggering the readiness propagator again? What prevents duplicate ready-queue entries?
+
+**Response**: Metas do NOT transition from "partially solved" to "more solved" in our architecture. The type lattice is `type-bot < concrete-type < type-top`. Once solved via `solve-meta-core!` (metavar-store.rkt), the cell value is stable. Under TMS, branch retraction can make a meta *appear* unsolved at a particular depth, but readiness propagators use TMS-transparent reads (`net-cell-read`), so they see the base value.
+
+However, the duplicate-firing concern is valid: if all deps are non-⊥ and the readiness propagator fires again in a subsequent BSP round (e.g., after L2 feedback), it would write another action descriptor to the ready-queue. The `(not (meta-solved? meta-id))` guard in the pseudocode handles the post-resolution case but not the window between "action written" and "resolution completed."
+
+**Resolution**: Threshold-cell composition (see revised Phase 8a). Instead of a lifecycle state machine, we compose: fan-in propagator → boolean threshold cell (⊥ → ⊤, one-shot) → readiness propagator → ready-queue. The threshold cell's merge is `(λ (old new) #t)` — once ⊤, stays ⊤. The readiness propagator sees exactly one transition, fires exactly once. The lattice *is* the guard — structural, not operational. No runtime status checks needed for the "fire at most once" guarantee.
+
+Constraint status (pending/resolved/failed) is still tracked for error reporting and observability, but the ready-queue write guard is structural (threshold cell monotonicity), not operational (status check).
+
+**Design change**: Revised Phase 8a with threshold-cell composition.
+
+### C3: Assumption ID Namespaces — ACCEPTED (documentation)
+
+**Concern**: Are queue-entry assumptions the same as speculation assumptions? How does S(-1) know which namespace to clean?
+
+**Response**: Both use the same `make-fresh-assumption!` gensym counter (single ID space), but serve different purposes:
+
+- **Speculation assumptions**: Managed by TMS. Created by `with-speculative-rollback`. Retracted on speculation failure. Tag value-level cells (metas). Retraction trigger: speculation rollback.
+- **Lifecycle assumptions**: Managed by channel cell pattern. Created by L1 readiness propagators. Retracted by L2 after consumption. Tag channel cell entries (ready-queue). Retraction trigger: L2 consumption.
+
+S(-1) retracts both — it scans scoped cells for entries tagged with non-believed assumptions. The mechanisms are the same; the *triggers* differ. No collision risk because they live in different cells (scoped infrastructure cells vs. ready-queue channel cell) and are retracted for different reasons.
+
+**Design change**: Added assumption taxonomy paragraph to §2.6.
+
+### C4: S(-1) Retraction Performance — REJECTED
+
+**Concern**: O(scoped cells × entries per cell) on every retraction is expensive for speculation-heavy elaboration.
+
+**Response**: Our scoped cell count is **14** (8 constraint + 3 wakeup + 3 warning cells). Even with 100 entries per cell, iterating 14 cells × filtering entries is negligible compared to a single `run-to-quiescence` pass over hundreds of meta cells.
+
+The depth-0 fast path means S(-1) is a no-op for ~95% of commands. For the ~5% with speculation, the constant overhead of maintaining a reverse index (assumption → affected cells) on *every* constraint registration would likely *exceed* the savings from targeted retraction on the rare rollback path.
+
+This is premature optimization. Track 4's depth-0 fast path precedent applies: optimize the common case (depth 0 = no-op), accept linear scan on the rare case (14 cells is tiny).
+
+**Design change**: None. Added note to §7 Risk Analysis that targeted retraction can be added as a Phase 10 optimization if profiling reveals S(-1) as a hotspot.
+
+### C5: Definition Cell Asymmetry — REJECTED (principled distinction)
+
+**Concern**: Why don't definition cells move to the persistent registry network?
+
+**Response**: There is a principled distinction:
+
+- **Registry cells are per-category**: One cell per registry type (schema, ctor, trait, impl, ...). 29 total, known statically, allocated once at file init. The persistent network is designed for this: small, static, stable cell IDs.
+- **Definition cells are per-name**: Each defined name (`def x`, `type Foo`, `defn bar`) gets its own cell. Hundreds per file, allocated dynamically as definitions are elaborated. Moving these to the persistent network would make it a large, growing structure — precisely the wrong lifecycle for a "small static network."
+
+The `current-definition-cells-content` hasheq is the right representation for per-name dynamic state. The persistent registry network is the right representation for per-category static state. Two mechanisms for two different data shapes.
+
+**Design change**: Expanded Non-Goals §1 with the principled distinction.
+
+### C6: Loop Elimination Completeness — ACCEPTED (audit prerequisite)
+
+**Concern**: Has the `run-stratified-resolution!` loop been audited for accumulated edge-case handling?
+
+**Response**: The loop itself (metavar-store.rkt lines 1308-1350) is clean — a straightforward S0→S1→S2 cycle with progress-box detection, no accumulated edge cases. However, the 6 `collect-ready-*` scanning functions may have subtle readiness conditions that must be captured by L1 readiness propagators. An audit of these scanning functions should precede Phase 8a implementation.
+
+**Design change**: Added "Audit `collect-ready-*` scanning functions" as a Phase 8a prerequisite.
+
+### C7: Adversarial Benchmark Specificity — ACCEPTED (terminology)
+
+**Concern**: What does "cyclic feedback" mean exactly?
+
+**Response**: In our context, "cyclic feedback" means **cascading resolution chains**: L2 resolves `Eq Int` → solves dict-meta → this meta was a dependency of `Ord Int` → that constraint becomes ready in next L1 round → L2 resolves `Ord Int` → etc. This is cascading resolution, not a cycle in the dependency graph. True dependency cycles (A depends on B depends on A) indicate type errors, not convergent computation.
+
+**Design change**: Sharpened terminology in Q5: "cyclic feedback" → "cascading resolution chains." Added note that the benchmark should use concrete Prologos expressions (nested `Num` + `Eq` + `Ord` constraints).
+
+### C8: Mult Lattice Integration Depth — NOTED (minimal expansion)
+
+**Concern**: Phase 9 cross-domain bridge is underspecified.
+
+**Response**: Phase 9 is intentionally thin — it's the smallest piece of Track 7. `elab-fresh-mult-cell` (Track 4) already creates mult cells. The QTT checker (`qtt.rkt`) already computes multiplicities. The bridge propagator connects what exists: when a type meta is solved to `(Pi (x : A) m B)`, the multiplicity annotation `m` informs the mult cell. If the type contains an unsolved mult-meta, the bridge doesn't fire (type isn't ground). The bridge is unidirectional: type → mult. Mult → type influence goes through the existing QTT checker.
+
+**Design change**: Added one-paragraph concrete example to Phase 9.
+
+### Minor Issues
+
+- **Naming**: Fixed "run-stratified-loop!" → "run-stratified-resolution!" in §2.5 diagram.
+- **Phase 0 measurement**: Added instrumentation methodology (instrument `net-new-cell` with counter parameter, capture per-command allocation counts).
+- **Scheduler location**: Clarified in Phase 8b that `run-to-layered-quiescence` is a new function in `propagator.rkt` that calls `run-to-quiescence` per-layer. Layers are a new first-class concept: propagators get a `layer` field, scheduler partitions worklist by layer.
+
+---
+
+## 15. D.3 Self-Critique: Open Tensions
+
+### T1. Resolution Propagator Purity — RESOLVED (Option A)
+
+**The tension**: DESIGN_PRINCIPLES.org § "Design Invariant: Propagator Statelessness" requires propagators be pure fire functions `net → net`. The L2 resolution propagator calls resolution functions that currently write to the network through `current-prop-net-box` (a mutable box). If `run-to-layered-quiescence` holds the network value while the resolution propagator fires and writes through the box, the scheduler's copy and the box diverge. This is the same class of bug as Track 4's dual-write coherence issue (Track 4 PIR §6.1).
+
+**Resolution: Option A (full purification)**. The entire resolution chain — both writes and reads — is purified in Phase 7b. Call chain analysis shows:
+- **Writes**: Box writes occur at exactly 6 boundary functions. Purification is mechanical.
+- **Reads**: All meta-solution reading funnels through exactly 4 solution-getter functions (`meta-solution`, `meta-solved?`, `level-meta-solution`, `mult-meta-solution`). No box-reading is scattered — all 12 consuming files go through these 4 functions. Creating `enet`-accepting variants of the 4 getters purifies the entire read chain. Consuming functions within the resolution chain (`zonk`, `normalize-for-resolution`, `ground-expr?`) get `-pure` variants that thread `enet`; the rest of the codebase continues using box-reading versions (consistent because `solve-meta!` syncs the box).
+
+Options B (box-synchronized scheduler) and C (hybrid with dual signatures) were considered and rejected. Option B leaves the propagator technically impure — it writes through a side channel, violating the statelessness invariant that makes save/restore, observatory, and speculation correct. Option C perpetuates the imperative pattern — every new call site leans toward the `!`-suffix wrapper, and the pure versions become "optional." Both defer pain that only compounds later.
+
+Option A makes purity the default and the box the exception (one entry point: `solve-meta!`). Principle alignment: Propagator Statelessness (structural, not discipline), Completeness Over Deferral (solve now while context is fresh), Correct by Construction (pure functions can't diverge from the scheduler's network copy).
+
+See Phase 7 design for the full purification plan and function table.
+
+### T2. Two-Network Scaling Assumption (Medium Priority)
+
+**The tension**: DESIGN_PRINCIPLES.org § "Simplicity of Foundation" values minimal foundational constructs. Two separate `prop-network` instances with bridge propagators is more complex than one.
+
+**Current justification**: The persistent network is small (~29 cells) and static (allocated once per file). The elab-network is large (hundreds of meta cells) and ephemeral (cleared per command). Mixing them in one network means either destroy stability (recreate all) or complicate clearing (selective reset).
+
+**Forward-looking concern**: Track 8 (Unification as Propagators), Track 9 (GDE), and Track 10 (LSP) may want unified observation of registry cells and meta cells. Two networks means two scheduler invocations, two quiescence checks, bridge propagators for cross-network communication. If the persistent network grows beyond ~50 cells (e.g., narrowing registries, capability registries, future subsystems), the "small static" argument weakens.
+
+**Scaling assumption (stated explicitly)**: The two-network architecture is correct *while* the persistent network remains small and static. If future tracks need to scale it beyond ~50 cells or require frequent cross-network propagation, the migration path is: unify into a single network with lifecycle-tagged cells (each cell carries a `lifecycle` field: `'persistent` or `'ephemeral`), and `reset-meta-store!` clears only ephemeral cells.
+
+### T3. Constraint Status as Cell Value (Low Priority — Track 10)
+
+**The tension**: DESIGN_PRINCIPLES.org § "First-Class by Default" says constructs should be first-class values. Constraint status (pending/resolved/failed) is currently a field on the `constraint-info` struct in the CHAMP store — not a cell value observable through the network.
+
+**Why acceptable for Track 7**: Constraint status serves error reporting and the scanning functions (which are eliminated by Phase 8a). The threshold cell captures the meaningful transition (not-ready → ready). Resolution outcome is captured by the meta cell (⊥ → solved).
+
+**Why Track 10 cares**: The LSP will want to observe constraint resolution progress for real-time diagnostics (e.g., "3 of 8 trait constraints resolved"). Watching a cell is the propagator-first way to do this; polling struct fields is the anti-pattern.
+
+**Design change**: None for Track 7. Added to DEFERRED.md as a Track 10 prerequisite: promote constraint status to a per-constraint cell value.
+
+### T4. Belt-and-Suspenders Retirement Criteria (Medium Priority)
+
+**The tension**: Track 6 PIR §6.6 warns "belt-and-suspenders needs retirement gate — define concrete retirement criteria upfront."
+
+**Current state**: Phase 6 is the explicit retirement gate for network-box restore (Phase 5b). Phase 8a has belt-and-suspenders (run both scanning and readiness propagators, compare). Phase 8b has belt-and-suspenders (run both hand-written loop and layered scheduler, compare). Neither 8a nor 8b names an explicit retirement gate.
+
+**Design change**: Phase 8c is the explicit retirement gate for both 8a and 8b belt-and-suspenders. Retirement criteria:
+
+- **Phase 8a**: Scanning functions removed when: (a) readiness propagators produce identical action descriptor sets for ≥1 full suite run with 0 divergences, AND (b) Phase 8b is implemented (L2 consuming the ready-queue, confirming end-to-end correctness).
+- **Phase 8b**: Hand-written loop removed when: (a) layered scheduler produces identical results for ≥1 full suite run with 0 divergences, AND (b) adversarial benchmark (Q5) passes.
+
+### T5. Acceptance File Multi-Command Patterns (Medium Priority)
+
+**The tension**: DESIGN_METHODOLOGY.org § "WS-Mode Validation Protocol" requires Level 3 validation via `process-file`. Track 7 doesn't add syntax but changes the infrastructure under existing syntax — persistent cells, layered scheduler, retraction. The risk is that single-expression tests pass but multi-command interaction patterns (define type → define trait → define instance → query) break under the new infrastructure.
+
+**Design change**: Phase 0's acceptance file specification must include:
+
+1. **Multi-form interaction**: Type definition followed by trait definition followed by instance followed by query expression — all in one `.prologos` file, exercising the persistent registry network across "commands" (top-level forms).
+2. **Speculation trigger**: Expression that triggers speculative type-checking (e.g., Church fold, union type), exercising S(-1) retraction of scoped cells.
+3. **Cascading resolution**: Expression requiring nested trait resolution (e.g., `[+ [* 3 4] [- 10 3]]` requiring `Num Int` → `Add Int` + `Sub Int` + `Mul Int`), exercising L1 readiness → L2 resolution → S0 feedback.
+4. **Prelude interaction**: Expressions that use prelude-provided traits and instances, verifying that persistent registry cells initialized during prelude loading are correctly bridged to the per-command elab-network.
+
+### T6. Test Infrastructure Divergence (Low Priority)
+
+**The tension**: Track 5 PIR §6.1 found that `run-ns-last` (test infrastructure) doesn't set up `current-prop-make-network` like production does. Infrastructure changes on write paths must audit both test and production paths.
+
+**Design change**: Phase 1 includes explicit step: update `test-support.rkt`'s parameterize block to include `current-persistent-registry-net-box`. Also update `batch-worker.rkt`'s save/restore list per pipeline checklist (`.claude/rules/pipeline.md` § "New Racket Parameter"). Both are mechanical but high-consequence if missed (Track 5 regression: 45 minutes debugging).
