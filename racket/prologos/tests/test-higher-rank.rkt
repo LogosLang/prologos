@@ -37,6 +37,7 @@
 ;; Run sexp-mode Prologos code
 (define (run s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -59,6 +60,7 @@
     (lambda (out) (display s out)))
   (define result
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-module-registry prelude-module-registry]
                    [current-lib-paths (list prelude-lib-dir)]

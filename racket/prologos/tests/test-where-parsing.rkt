@@ -29,11 +29,13 @@
 ;; ========================================
 
 (define (run s)
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (process-string s)))
 
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]

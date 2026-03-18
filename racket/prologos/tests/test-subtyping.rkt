@@ -35,6 +35,7 @@
 
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -105,6 +106,7 @@
 (test-case "check/nat-as-int"
   (check-true
    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                   [current-mult-meta-store (make-hasheq)])
      (reset-meta-store!)
      (tc:check '() (expr-suc (expr-zero)) (expr-Int)))))
@@ -112,6 +114,7 @@
 (test-case "check/int-as-rat"
   (check-true
    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                   [current-mult-meta-store (make-hasheq)])
      (reset-meta-store!)
      (tc:check '() (expr-int 42) (expr-Rat)))))
@@ -119,6 +122,7 @@
 (test-case "check/nat-as-rat-transitive"
   (check-true
    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                   [current-mult-meta-store (make-hasheq)])
      (reset-meta-store!)
      (tc:check '() (expr-suc (expr-zero)) (expr-Rat)))))
@@ -126,6 +130,7 @@
 (test-case "check/posit8-as-posit16"
   (check-true
    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                   [current-mult-meta-store (make-hasheq)])
      (reset-meta-store!)
      (tc:check '() (expr-posit8 64) (expr-Posit16)))))
@@ -133,6 +138,7 @@
 (test-case "check/posit8-as-posit32"
   (check-true
    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                   [current-mult-meta-store (make-hasheq)])
      (reset-meta-store!)
      (tc:check '() (expr-posit8 64) (expr-Posit32)))))
@@ -140,6 +146,7 @@
 (test-case "check/cross-family-rejected"
   (check-false
    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                   [current-mult-meta-store (make-hasheq)])
      (reset-meta-store!)
      (tc:check '() (expr-suc (expr-zero)) (expr-Posit8)))))

@@ -121,20 +121,23 @@
 
 (test-case "whnf: unsolved meta is stuck"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Nat) "test"))
       (check-equal? (whnf m) m))))
 
 (test-case "whnf: solved meta reduces to solution"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Nat) "test"))
       (solve-meta! (expr-meta-id m) (expr-zero))
       (check-equal? (whnf m) (expr-zero)))))
 
 (test-case "whnf: solved meta with reducible solution"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Nat) "test"))
       ;; Solve to a beta-redex: ((fn [x : Nat] x) zero) → zero
       (solve-meta! (expr-meta-id m)
@@ -144,7 +147,8 @@
 
 (test-case "whnf: nested meta chain"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m1 (fresh-meta ctx-empty (expr-Nat) "first"))
       (define m2 (fresh-meta ctx-empty (expr-Nat) "second"))
       (solve-meta! (expr-meta-id m1) m2)
@@ -157,13 +161,15 @@
 
 (test-case "nf: unsolved meta stays"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Nat) "test"))
       (check-equal? (nf m) m))))
 
 (test-case "nf: solved meta normalizes"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Nat) "test"))
       ;; Solve to a beta-redex
       (solve-meta! (expr-meta-id m)
@@ -177,27 +183,31 @@
 
 (test-case "conv: same unsolved meta equals itself"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Nat) "test"))
       (check-true (conv m m)))))
 
 (test-case "conv: different unsolved metas are unequal"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m1 (fresh-meta ctx-empty (expr-Nat) "a"))
       (define m2 (fresh-meta ctx-empty (expr-Nat) "b"))
       (check-false (conv m1 m2)))))
 
 (test-case "conv: solved meta compared to its solution"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Nat) "test"))
       (solve-meta! (expr-meta-id m) (expr-zero))
       (check-true (conv m (expr-zero))))))
 
 (test-case "conv: unsolved meta vs non-meta"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Nat) "test"))
       (check-false (conv m (expr-zero))))))
 

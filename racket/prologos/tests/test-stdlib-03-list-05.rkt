@@ -23,6 +23,7 @@
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -37,6 +38,7 @@
 ;; Returns the results from the second module.
 (define (run-ns-pair s1 s2)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -170,6 +172,7 @@
 (test-case "auto-export: deftype auto-exports"
   ;; deftype auto-exports. Verify the auto-exports list directly.
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -187,6 +190,7 @@
 (test-case "auto-export: library modules work without provide"
   ;; Verify that real library modules (which had provide removed) still export correctly.
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)])
@@ -203,6 +207,7 @@
 (test-case "auto-export: private defn- not in auto-exports list"
   ;; Verify that defn- doesn't add to auto-exports.
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]

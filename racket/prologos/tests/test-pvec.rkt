@@ -26,12 +26,14 @@
 ;; Compute the lib directory path for namespace loading
 ;; Helper to run with clean global env
 (define (run s)
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (process-string s)))
 
 ;; Helper to run with namespace system (prelude) active
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -283,7 +285,8 @@
 ;; ========================================
 
 (test-case "surface: def + eval with PVec"
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def v <(PVec Nat)> (pvec-push (pvec-empty Nat) (suc (suc zero))))\n(eval (pvec-nth v zero))")])
       (check-equal? (length result) 2)
       (check-true (string-contains? (car result) "v : (PVec Nat) defined"))
@@ -294,7 +297,8 @@
 ;; ========================================
 
 (test-case "surface: defn with PVec parameter"
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(defn first-elem [v <(PVec Nat)>] <Nat> (pvec-nth v zero))\n(eval (first-elem (pvec-push (pvec-empty Nat) (suc (suc (suc zero))))))")])
       (check-equal? (length result) 2)
       (check-equal? (cadr result) "3N : Nat"))))
@@ -321,7 +325,8 @@
 ;; ========================================
 
 (test-case "surface: @[...] literal via def"
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def v <(PVec Nat)> @[zero (suc zero) (suc (suc zero))])\n(eval (pvec-nth v (suc zero)))")])
       (check-equal? (length result) 2)
       (check-equal? (cadr result) "1N : Nat"))))
@@ -332,7 +337,8 @@
 
 (test-case "surface: pvec-nth on @[...] literal via def"
   ;; @[...] literals need checking context to resolve element type metas
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def v <(PVec Nat)> @[zero (suc zero) (suc (suc zero))])\n(eval (pvec-nth v (suc (suc zero))))")])
       (check-equal? (length result) 2)
       (check-equal? (cadr result) "2N : Nat"))))
@@ -382,7 +388,8 @@
     (check-true (string-contains? (car result) "0N"))))
 
 (test-case "pvec-to-list: multi-element vector"
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (let ([result (process-string
                    (string-append
                     "(def v <(PVec Nat)> (pvec-push (pvec-push (pvec-empty Nat) zero) (suc zero)))\n"

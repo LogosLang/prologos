@@ -44,6 +44,7 @@
     #:exists 'truncate)
   (define results
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-module-registry (hasheq)]
                    [current-lib-paths (list lib-dir)]

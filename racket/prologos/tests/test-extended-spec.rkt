@@ -34,6 +34,7 @@
 ;; Run code and return result strings
 (define (run s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -45,6 +46,7 @@
 ;; Process spec and retrieve spec-entry from store
 (define (spec-for name s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -57,6 +59,7 @@
 ;; Process code and retrieve property-entry from store
 (define (property-for name s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -69,6 +72,7 @@
 ;; Process code and retrieve functor-entry from store
 (define (functor-for name s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -81,6 +85,7 @@
 ;; Process code and retrieve trait-meta from registry
 (define (trait-for name s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -325,6 +330,7 @@
     (parameterize ([current-error-port (open-output-string)])
       (define results
         (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                        [current-spec-store (hasheq)]
                        [current-property-store (hasheq)]
                        [current-functor-store (hasheq)]
@@ -345,6 +351,7 @@
   (define output
     (parameterize ([current-error-port (open-output-string)])
       (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                      [current-spec-store (hasheq)]
                      [current-property-store (hasheq)]
                      [current-functor-store (hasheq)]
@@ -367,6 +374,7 @@
   (define output
     (parameterize ([current-error-port (open-output-string)])
       (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                      [current-spec-store (hasheq)]
                      [current-property-store (hasheq)]
                      [current-functor-store (hasheq)]
@@ -385,6 +393,7 @@
   (define output
     (parameterize ([current-error-port (open-output-string)])
       (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                      [current-spec-store (hasheq)]
                      [current-property-store (hasheq)]
                      [current-functor-store (hasheq)]
@@ -407,6 +416,7 @@
   (define output
     (parameterize ([current-error-port (open-output-string)])
       (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                      [current-spec-store (hasheq)]
                      [current-property-store (hasheq)]
                      [current-functor-store (hasheq)]
@@ -428,6 +438,7 @@
 
 (test-case "trait: basic trait has empty laws"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -441,6 +452,7 @@
 
 (test-case "trait: :laws extracted from metadata"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -589,6 +601,7 @@
 
 (test-case "spec: kind refined from :where constraint (HKT)"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -613,6 +626,7 @@
 
 (test-case "spec: auto-detect from where-only variable"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -636,6 +650,7 @@
 
 (test-case "flatten-property: simple (no includes)"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -655,6 +670,7 @@
 
 (test-case "flatten-property: single include"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -679,6 +695,7 @@
 
 (test-case "flatten-property: transitive includes (3 levels)"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -708,6 +725,7 @@
 
 (test-case "flatten-property: cycle detection"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -725,6 +743,7 @@
 
 (test-case "flatten-property: missing include reference"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -745,6 +764,7 @@
 
 (test-case "flatten-property: holds-expr preserved through flattening"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -763,6 +783,7 @@
 
 (test-case "flatten-property: multiple includes on same level"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -786,6 +807,7 @@
 
 (test-case "flatten-property: no clauses, only includes"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -807,6 +829,7 @@
 
 (test-case "spec-properties: returns :properties metadata"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -822,6 +845,7 @@
 
 (test-case "spec-properties: returns #f when no :properties"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -841,6 +865,7 @@
 
 (test-case "trait-laws-flattened: trait with no :laws"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -853,6 +878,7 @@
 
 (test-case "trait-laws-flattened: trait with :laws referencing existing property"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -877,6 +903,7 @@
 
 (test-case "trait-laws-flattened: trait :laws ref to missing property yields empty"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -898,6 +925,7 @@
 
 (test-case "spec-examples: single example collected"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -914,6 +942,7 @@
 
 (test-case "spec-examples: multiple examples all collected"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -928,6 +957,7 @@
 
 (test-case "spec-examples: no examples returns #f"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -939,6 +969,7 @@
 
 (test-case "spec-examples: example contains => symbol"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -961,6 +992,7 @@
 
 (test-case "spec-doc: returns :doc string"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -973,6 +1005,7 @@
 
 (test-case "spec-doc: returns #f when no :doc"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -984,6 +1017,7 @@
 
 (test-case "spec metadata: :examples + :doc + :properties coexist"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -1004,6 +1038,7 @@
 
 (test-case "spec-deprecated: returns deprecation message"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -1016,6 +1051,7 @@
 
 (test-case "spec-deprecated: boolean flag (no message)"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -1028,6 +1064,7 @@
 
 (test-case "spec-deprecated: returns #f when not deprecated"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -1039,6 +1076,7 @@
 
 (test-case "deprecated: warning emitted when deprecated function is referenced"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]

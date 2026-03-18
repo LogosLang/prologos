@@ -29,6 +29,7 @@
 ;; (warnings are appended to the result string by the driver)
 (define (run-with-caps s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-module-registry (hasheq)]

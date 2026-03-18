@@ -197,7 +197,8 @@
 ;; ========================================
 
 (define (run s)
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (process-string s)))
 
 (test-case "posit64 surface: eval literal"
@@ -217,7 +218,8 @@
                 '("OK")))
 
 (test-case "posit64 surface: def + eval"
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def one <Posit64> (posit64 4611686018427387904))\n(eval one)")])
       (check-equal? (length result) 2)
       (check-true (string-contains? (car result) "one : Posit64 defined"))
@@ -252,7 +254,8 @@
                 '("[posit64 9223372036854775808] : Posit64")))
 
 (test-case "posit64 surface: defn with Posit64"
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(defn p64-double [x <Posit64>] <Posit64>\n  (p64+ x x))\n(eval (p64-double (posit64 4611686018427387904)))")])
       (check-equal? (length result) 2)
       (check-equal? (cadr result) "[posit64 5188146770730811392] : Posit64"))))

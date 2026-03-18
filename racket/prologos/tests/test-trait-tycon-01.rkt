@@ -83,6 +83,7 @@
 (test-case "typing: expr-tycon Eq has kind Type -> Type (via extension)"
   (with-fresh-meta-env
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-tycon-arity-extension (hasheq 'Eq 1)])
       (define kind (tc:infer '() (expr-tycon 'Eq)))
       (check-true (expr-Pi? kind))
@@ -93,6 +94,7 @@
 (test-case "typing: expr-tycon From has kind Type -> Type -> Type (via extension)"
   (with-fresh-meta-env
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-tycon-arity-extension (hasheq 'From 2)])
       (define kind (tc:infer '() (expr-tycon 'From)))
       (check-true (expr-Pi? kind))
@@ -107,6 +109,7 @@
 (test-case "unify: (app ?F Nat) vs (app (tycon Eq) Nat) → ?F = Eq"
   (with-fresh-meta-env
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-tycon-arity-extension (hasheq 'Eq 1)])
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "F"))
       (check-true (unify ctx-empty
@@ -130,6 +133,7 @@
                 shared-param-impl-reg
                 shared-tycon-ext)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]

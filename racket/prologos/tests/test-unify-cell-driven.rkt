@@ -30,6 +30,7 @@
 ;; Run without prelude, suppress stderr, return all results.
 (define (run-simple s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-error-port (open-output-nowhere)])
     (process-string s)))
 

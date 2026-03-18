@@ -44,6 +44,7 @@
 ;; Process WS-mode and return functor from store
 (define (functor-for-ws name s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -119,6 +120,7 @@
 (test-case "ws functor: registers as deftype"
   ;; A parameterized functor should auto-register as a deftype
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -142,6 +144,7 @@
 
 (test-case "sexp functor: basic with metadata"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -158,6 +161,7 @@
 
 (test-case "sexp functor: parameterized registers as deftype"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -177,6 +181,7 @@
 
 (test-case "type-functors: file parses and registers functors"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -196,6 +201,7 @@
 
 (test-case "type-functors: Xf has correct params and unfolds"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -218,6 +224,7 @@
 
 (test-case "type-functors: AppResult has :doc metadata"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]

@@ -248,7 +248,8 @@
 ;; ========================================
 
 (define (run s)
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (process-string s)))
 
 (test-case "quire32 surface: type check"
@@ -284,7 +285,8 @@
                 '("[posit32 1375731712] : Posit32")))
 
 (test-case "quire32 surface: def + eval"
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def q <Quire32> (q32-fma q32-zero (posit32 1073741824) (posit32 1073741824)))\n(eval (q32-to q))")])
       (check-equal? (length result) 2)
       (check-true (string-contains? (car result) "q : Quire32 defined"))

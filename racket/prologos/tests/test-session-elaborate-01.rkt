@@ -24,6 +24,7 @@
 ;; Helper: process a string through the full pipeline, return last result
 (define (run s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-module-registry (hasheq)]
@@ -36,6 +37,7 @@
 ;; Helper: run all commands in sequence, preserving state between them
 (define (run-all s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-module-registry (hasheq)]
@@ -101,6 +103,7 @@
 (test-case "defproc elab: send/stop with type-check"
   (define result
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-module-registry (hasheq)]
@@ -124,6 +127,7 @@
 (test-case "dual: Send becomes Recv"
   (define result
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-module-registry (hasheq)]
@@ -139,6 +143,7 @@
 (test-case "dual: Choice becomes Offer"
   (define result
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-module-registry (hasheq)]
@@ -156,6 +161,7 @@
 (test-case "session reference: use previously defined session in process"
   (define result
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-module-registry (hasheq)]
@@ -186,6 +192,7 @@
 (test-case "defproc elab: proc-case with branches"
   (define result
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-module-registry (hasheq)]
@@ -203,6 +210,7 @@
 (test-case "defproc elab: proc-sel"
   (define result
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-module-registry (hasheq)]
@@ -219,6 +227,7 @@
 (test-case "defproc elab: proc-new with par"
   (define result
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-module-registry (hasheq)]

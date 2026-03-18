@@ -30,6 +30,7 @@
 ;; ========================================
 (define (run s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-preparse-registry (current-preparse-registry)])
     (process-string s)))

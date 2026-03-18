@@ -1514,6 +1514,7 @@
      (define mod-capability-reg #f)
      (define mod-module-network #f)
      (parameterize ([current-global-env (hasheq)]
+                    [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                     [current-ns-context #f]
                     [current-meta-store (make-hasheq)]
                     [current-level-meta-store (make-hasheq)]

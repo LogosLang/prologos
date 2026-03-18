@@ -256,7 +256,8 @@
 
 ;; Helper to run with clean global env
 (define (run s)
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (process-string s)))
 
 (test-case "int surface: eval literal"
@@ -320,7 +321,8 @@
                 '("OK")))
 
 (test-case "int surface: def + eval"
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def x <Int> (int 42))\n(eval x)")])
       (check-equal? (length result) 2)
       (check-true (string-contains? (car result) "x : Int defined"))

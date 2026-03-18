@@ -26,6 +26,7 @@
 ;; Uses minimal state (no prelude) — session types use built-in Nat.
 (define (run-last s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
@@ -38,6 +39,7 @@
 ;; Helper: run and return all results
 (define (run-all s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
@@ -203,6 +205,7 @@
 
 (test-case "spawn: process registry populated after defproc"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
@@ -222,6 +225,7 @@
 
 (test-case "spawn: process registry not populated on type-check failure"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]

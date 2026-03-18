@@ -23,6 +23,7 @@
 ;; Helper: run a multi-line sexp-mode string, return last result
 (define (run-last s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
@@ -35,6 +36,7 @@
 ;; Helper: run and return all results
 (define (run-all s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]

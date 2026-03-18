@@ -104,7 +104,8 @@
 
 (test-case "unify-mult/meta-vs-concrete"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define mm (fresh-mult-meta "test"))
       ;; Unify Pi(?m, Nat, Nat) vs Pi(mw, Nat, Nat)
       (define t1 (expr-Pi mm (expr-Nat) (expr-Nat)))
@@ -115,7 +116,8 @@
 
 (test-case "unify-mult/two-metas"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define mm1 (fresh-mult-meta "a"))
       (define mm2 (fresh-mult-meta "b"))
       (define t1 (expr-Pi mm1 (expr-Nat) (expr-Nat)))
@@ -126,14 +128,16 @@
 
 (test-case "unify-mult/ground-match"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define t1 (expr-Pi 'm1 (expr-Nat) (expr-Nat)))
       (define t2 (expr-Pi 'm1 (expr-Nat) (expr-Nat)))
       (check-equal? (unify ctx-empty t1 t2) #t))))
 
 (test-case "unify-mult/ground-mismatch-rejects"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define t1 (expr-Pi 'm0 (expr-Nat) (expr-Nat)))
       (define t2 (expr-Pi 'm1 (expr-Nat) (expr-Nat)))
       (check-equal? (unify ctx-empty t1 t2) #f))))
@@ -146,6 +150,7 @@
 (define (run-ns s)
   (with-fresh-meta-env
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-module-registry prelude-module-registry]
                    [current-lib-paths (list prelude-lib-dir)]

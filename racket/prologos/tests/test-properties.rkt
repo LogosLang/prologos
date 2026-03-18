@@ -83,6 +83,7 @@
    (property ([ty gen:prologos-type])
      (with-fresh-meta-env
        (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                       [current-reduction-fuel (box 50000)])
          (define result (unify '() ty ty))
          (check-true (not (eq? result #f))
@@ -98,6 +99,7 @@
    (property ([ty (gen:prologos-type-depth 0)])
      (with-fresh-meta-env
        (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                       [current-reduction-fuel (box 50000)])
          ;; Create a meta, unify with concrete type
          (define m (fresh-meta '() (expr-Type 0) 'test))
@@ -150,6 +152,7 @@
    (property ([prog gen:well-typed-program])
      (with-fresh-meta-env
        (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                       [current-reduction-fuel (box 50000)])
          (define term (car prog))
          (define z1 (zonk term))

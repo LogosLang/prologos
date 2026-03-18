@@ -35,7 +35,8 @@
 ;; via process-file (which auto-detects WS mode from .prologos extension).
 
 (define (run s)
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (process-string s)))
 
 (define (run-first s) (car (run s)))
@@ -44,6 +45,7 @@
 (define (run-ns s)
   (with-fresh-meta-env
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-module-registry prelude-module-registry]
                    [current-lib-paths (list prelude-lib-dir)]
@@ -63,6 +65,7 @@
 (define (run-ns-bare s)
   (with-fresh-meta-env
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-ns-context #f]
                    [current-module-registry prelude-module-registry]
                    [current-lib-paths (list prelude-lib-dir)]

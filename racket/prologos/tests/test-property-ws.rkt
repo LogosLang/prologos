@@ -42,6 +42,7 @@
 ;; Process WS-mode and return property from store
 (define (property-for-ws name s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -87,6 +88,7 @@
 
 (test-case "ws property: with :includes"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -114,6 +116,7 @@
 
 (test-case "ws property: empty property (only includes)"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -140,6 +143,7 @@
 
 (test-case "sexp spec: :properties reference stored"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -154,6 +158,7 @@
 
 (test-case "sexp trait: :laws reference stored"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -175,6 +180,7 @@
 
 (test-case "algebraic-laws: file parses and registers all properties"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -192,6 +198,7 @@
 
 (test-case "algebraic-laws: semigroup-laws has 1 clause"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -207,6 +214,7 @@
 
 (test-case "algebraic-laws: monoid-laws includes semigroup-laws"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -222,6 +230,7 @@
 
 (test-case "algebraic-laws: monoid-laws flatten yields 3 clauses"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -240,6 +249,7 @@
 
 (test-case "algebraic-laws: functor-laws has 2 clauses"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]
@@ -256,6 +266,7 @@
 
 (test-case "algebraic-laws: commutative-add-laws has 1 clause"
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)]
                  [current-property-store (hasheq)]
                  [current-functor-store (hasheq)]

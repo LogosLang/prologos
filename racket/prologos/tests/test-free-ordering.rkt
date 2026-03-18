@@ -35,6 +35,7 @@
 ;; so that Nat/Bool/etc. constructors and types are available.
 (define (run s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-spec-store (hasheq)])
     (process-string s)))
 

@@ -207,14 +207,14 @@
        (record-cross-module-dep! elab-name name 'same-file))
      (car cell-entry)]
     [else
-     ;; Layer 2: prelude/module definitions
-     ;; Track 6 Phase 7d: belt-and-suspenders — Layer 2 still primary for lookups;
-     ;; current-module-definitions-content populated in parallel for validation.
-     (let ([entry (hash-ref (current-global-env) name #f)])
-       ;; Track 5 Phase 4: cross-module edge (source is a module, not same-file)
-       (when (and entry elab-name)
-         (record-cross-module-dep! elab-name name 'module))
-       (and entry (car entry)))]))
+     ;; Track 6 Phase 7d: module definitions from module-network-ref.
+     ;; Fallback to Layer 2 (belt-and-suspenders during migration).
+     (define entry (or (hash-ref (current-module-definitions-content) name #f)
+                       (hash-ref (current-global-env) name #f)))
+     ;; Track 5 Phase 4: cross-module edge (source is a module, not same-file)
+     (when (and entry elab-name)
+       (record-cross-module-dep! elab-name name 'module))
+     (and entry (car entry))]))
 
 ;; Lookup the value of a global definition
 (define (global-env-lookup-value name)
@@ -229,9 +229,10 @@
      ;; Track 5 Phase 4: same-file edge (already recorded in lookup-type)
      (cdr cell-entry)]
     [else
-     ;; Layer 2: prelude/module definitions
-     (let ([entry (hash-ref (current-global-env) name #f)])
-       (and entry (cdr entry)))]))
+     ;; Track 6 Phase 7d: module definitions from module-network-ref.
+     (define entry (or (hash-ref (current-module-definitions-content) name #f)
+                       (hash-ref (current-global-env) name #f)))
+     (and entry (cdr entry))]))
 
 ;; ========================================
 ;; Writes (per-file → cells, module loading → legacy)
@@ -287,7 +288,10 @@
    (hash-remove (current-definition-cells-content) name))
   ;; Layer 1: cell sentinel (cell stays, value = #f)
   (definition-cell-remove! name)
-  ;; Layer 2: prelude/module env parameter
+  ;; Track 6 Phase 7d: remove from module-definitions-content
+  (current-module-definitions-content
+   (hash-remove (current-module-definitions-content) name))
+  ;; Layer 2: prelude/module env parameter (belt-and-suspenders)
   (current-global-env
    (hash-remove (current-global-env) name)))
 
@@ -295,11 +299,13 @@
 ;; Utilities (merge both layers)
 ;; ========================================
 
-;; List all definition names (from both layers)
+;; List all definition names (from all layers)
 (define (global-env-names)
   (define prelude-keys (hash-keys (current-global-env)))
+  (define module-keys (hash-keys (current-module-definitions-content)))
   (define file-keys (hash-keys (current-definition-cells-content)))
-  (remove-duplicates (append file-keys prelude-keys) eq?))
+  ;; Priority: file-keys > module-keys > prelude-keys
+  (remove-duplicates (append file-keys module-keys prelude-keys) eq?))
 
 ;; Import a module's exported definitions into a global env.
 ;; Takes a qualify-fn that maps (short-name, namespace-sym) → fqn-symbol.
@@ -314,14 +320,22 @@
     (define entry (hash-ref module-env fqn #f))
     (if entry (hash-set e fqn entry) e)))
 
-;; Snapshot the current global env (merges both layers).
-;; Per-file defs shadow prelude defs.
+;; Snapshot the current global env (merges all layers).
+;; Priority: per-file defs > module defs (from module-network-ref) > legacy prelude defs.
 (define (global-env-snapshot)
   (define base (current-global-env))
+  ;; Track 6 Phase 7d: merge module-definitions-content
+  (define mod-defs (current-module-definitions-content))
+  (define with-mods
+    (if (hash-empty? mod-defs)
+        base
+        (for/fold ([env base])
+                  ([(k v) (in-hash mod-defs)])
+          (hash-set env k v))))
   (define file-defs (current-definition-cells-content))
   (if (hash-empty? file-defs)
-      base
-      (for/fold ([env base])
+      with-mods
+      (for/fold ([env with-mods])
                 ([(k v) (in-hash file-defs)])
         (hash-set env k v))))
 

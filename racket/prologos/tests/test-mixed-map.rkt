@@ -29,12 +29,14 @@
 
 ;; Helper to run sexp code with clean global env
 (define (run s)
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (process-string s)))
 
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -94,7 +96,8 @@
 
 (test-case "infer: map-assoc with matching value type -- no widening"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (let* ([m (expr-map-empty (expr-Keyword) (expr-Nat))]
              [m1 (expr-map-assoc m (expr-keyword 'x) (expr-zero))])
         (define ty (tc:infer ctx-empty m1))
@@ -104,7 +107,8 @@
 
 (test-case "infer: map-assoc widens when value type differs"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (let* ([m (expr-map-empty (expr-Keyword) (expr-Nat))]
              [m1 (expr-map-assoc m (expr-keyword 'x) (expr-zero))]
              [m2 (expr-map-assoc m1 (expr-keyword 'y) (expr-string "hello"))])

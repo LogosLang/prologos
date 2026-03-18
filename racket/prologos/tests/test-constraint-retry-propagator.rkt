@@ -82,7 +82,8 @@
 
 (test-case "via-cells/retries-when-meta-solved"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
       (define mid (expr-meta-id m))
       ;; Create applied-meta constraint: (app ?m zero) vs Nat — will postpone
@@ -120,7 +121,8 @@
 
 (test-case "via-cells/skips-already-solved-constraints"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
       (define mid (expr-meta-id m))
       ;; Create and postpone
@@ -156,7 +158,8 @@
 
 (test-case "integration/solve-meta-retries-via-both-paths"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
       (define mid (expr-meta-id m))
       ;; Create applied-meta constraint that will postpone
@@ -172,7 +175,8 @@
 
 (test-case "integration/solve-meta-fails-constraint-via-both-paths"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
       (define mid (expr-meta-id m))
       ;; (app ?m zero) vs Bool
@@ -186,7 +190,8 @@
 
 (test-case "integration/multiple-constraints-different-metas"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m1 (fresh-meta ctx-empty (expr-Type (lzero)) "a"))
       (define m2 (fresh-meta ctx-empty (expr-Type (lzero)) "b"))
       (define mid1 (expr-meta-id m1))
@@ -208,6 +213,7 @@
 (test-case "integration/constraint-postponed-again-on-partial-solve"
   (with-fresh-meta-env
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-retry-unify #f])  ;; disable retry to manually control
       (define m1 (fresh-meta ctx-empty (expr-hole) "a"))
       (define m2 (fresh-meta ctx-empty (expr-hole) "b"))
@@ -242,6 +248,7 @@
 (test-case "cell-ids/cell-reads-reflect-meta-solutions"
   (with-fresh-meta-env
     (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                    [current-retry-unify #f])  ;; manual control
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
       (define mid (expr-meta-id m))

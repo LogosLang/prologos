@@ -32,7 +32,8 @@
 
 ;; sexp mode (no prelude)
 (define (run s)
-  (parameterize ([current-global-env (hasheq)])
+  (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
     (car (process-string s))))
 
 ;; Shared fixture for WS-mode tests (prelude loaded once)
@@ -47,6 +48,7 @@
                 shared-param-impl-reg
                 shared-bundle-reg)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list lib-dir)]

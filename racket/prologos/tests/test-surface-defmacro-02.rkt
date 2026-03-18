@@ -19,6 +19,7 @@
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
@@ -49,6 +50,7 @@
   ;; We verify by checking that the macro works locally (test above)
   ;; but isn't in auto-exports. This is a structural test.
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]

@@ -35,6 +35,7 @@
 ;; Run with minimal state, return last result string
 (define (run s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-module-registry (hasheq)]

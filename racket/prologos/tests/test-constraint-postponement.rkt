@@ -80,7 +80,8 @@
 
 (test-case "wakeup/solving-meta-retries-constraint"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       ;; Create a meta and a postponed constraint: ?m vs Nat
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
       (define mid (expr-meta-id m))
@@ -99,7 +100,8 @@
 
 (test-case "wakeup/constraint-fails-on-retry"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       ;; Create a meta and postpone: (app ?m zero) vs Bool
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
       (define mid (expr-meta-id m))
@@ -118,7 +120,8 @@
 
 (test-case "unify/flex-app-non-pattern-postpones"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
       ;; (app ?m zero) — zero is not a bvar, pattern check fails → postpone
       (define flex-term (expr-app m (expr-zero)))
@@ -126,7 +129,8 @@
 
 (test-case "unify/flex-app-with-bvar-solves"
   (with-fresh-meta-env
-    (parameterize ([current-global-env (hasheq)])
+    (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
       ;; (app ?m (bvar 0)) — bvar is a pattern arg → should solve
       (define flex-term (expr-app m (expr-bvar 0)))
@@ -140,6 +144,7 @@
 ;; Helper: run prologos code with namespace system active
 (define (run-ns s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]

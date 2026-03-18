@@ -25,6 +25,7 @@
 
 (define (run s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-multi-defn-registry (hasheq)])
     (process-string s)))
 

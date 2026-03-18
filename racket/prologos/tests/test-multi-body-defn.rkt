@@ -29,6 +29,7 @@
 
 (define (run s)
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-multi-defn-registry (hasheq)])
     (process-string s)))
 
@@ -114,6 +115,7 @@
 (test-case "multi/internal-names-registered"
   ;; After defining multi-body f, f::1 and f::2 should be in global env
   (parameterize ([current-global-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
                  [current-multi-defn-registry (hasheq)])
     (process-string "(defn f ($pipe [x <Nat>] <Nat> (suc x)) ($pipe [x <Nat> y <Nat>] <Nat> x))")
     (check-not-false (global-env-lookup-type 'f::1))
