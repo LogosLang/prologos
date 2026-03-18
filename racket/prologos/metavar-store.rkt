@@ -135,6 +135,7 @@
  current-prop-cell-write
  current-prop-cell-read
  current-prop-add-unify-constraint
+ current-prop-add-propagator
  install-prop-network-callbacks!
  ;; Phase 1a: Infrastructure cell callback
  current-prop-new-infra-cell
@@ -160,6 +161,9 @@
  run-stratified-resolution-pure
  read-constraint-by-cid-pure
  current-resolution-executor-pure
+ ;; Track 7 Phase 8a: Ready-queue + propagator infrastructure
+ current-ready-queue-cell-id
+ current-prop-add-propagator
  ;; Track 6 Phase 1a: id-map access callbacks
  current-prop-id-map-read
  current-prop-id-map-set
@@ -367,10 +371,43 @@
     (set-box! tc-net-box
               (write-fn (unbox tc-net-box) tcm-cid
                         (hasheq meta-id (tagged-entry (remove-duplicates cell-ids eq?) aid)))))
-  ;; Track 6 Phase 8d: immediate resolution path removed. If all type-args
-  ;; are already ground, the stratified resolution loop (run-stratified-resolution!)
-  ;; will find this constraint ready on its next S1 scan via
-  ;; collect-ready-traits-via-cells. The loop runs after every solve-meta!.
+  ;; Track 7 Phase 8a: Install readiness propagators (threshold-cell composition).
+  ;; Only when we have dep cells AND the propagator-add callback is available.
+  (define add-prop-fn (current-prop-add-propagator))
+  (define new-cell-fn (current-prop-new-infra-cell))
+  (define rq-cid (current-ready-queue-cell-id))
+  (when (and add-prop-fn new-cell-fn rq-cid (not (null? cell-ids)))
+    (define dep-cids (remove-duplicates cell-ids eq?))
+    ;; Stage 1: Threshold cell (boolean, one-shot). Merge: (λ _ #t).
+    (define-values (enet-t threshold-cid)
+      (new-cell-fn (unbox tc-net-box) #f (lambda (old new) #t)))
+    (set-box! tc-net-box enet-t)
+    ;; Stage 2: Fan-in propagator (dep cells → threshold cell).
+    ;; Fires when ANY dep cell is non-bot/non-top (at least one type-arg solved).
+    ;; The resolution function does the full ground-check (andmap ground-expr?).
+    ;; This matches collect-ready-traits-via-cells which uses for/or.
+    (define-values (enet-f _fan-pid)
+      (add-prop-fn (unbox tc-net-box) dep-cids (list threshold-cid)
+        (lambda (pnet)
+          (define any-ground?
+            (for/or ([cid (in-list dep-cids)])
+              (let ([v (net-cell-read pnet cid)])
+                (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
+          (if any-ground?
+              (net-cell-write pnet threshold-cid #t)
+              pnet))))
+    (set-box! tc-net-box enet-f)
+    ;; Stage 3: Readiness propagator (threshold cell → ready-queue).
+    ;; Fires exactly once — when threshold transitions #f → #t.
+    (define-values (enet-r _rdy-pid)
+      (add-prop-fn (unbox tc-net-box) (list threshold-cid) (list rq-cid)
+        (lambda (pnet)
+          (define tv (net-cell-read pnet threshold-cid))
+          (if tv
+              (net-cell-write pnet rq-cid
+                (list (tagged-entry (action-resolve-trait meta-id info) aid)))
+              pnet))))
+    (set-box! tc-net-box enet-r))
   )
 
 ;; Track 1 Phase 2a: read from cell.
@@ -446,8 +483,46 @@
         (set-box! hm-net-box
                   (write-fn (unbox hm-net-box) hcm-cid
                             (hasheq meta-id (tagged-entry (remove-duplicates cell-ids eq?) aid)))))))
-  ;; Track 6 Phase 8d: immediate resolution path removed. The stratified
-  ;; resolution loop handles this via collect-ready-hasmethods-via-cells.
+  ;; Track 7 Phase 8a: Install readiness propagators for hasmethod (same pattern as trait).
+  (define add-prop-fn-hm (current-prop-add-propagator))
+  (define new-cell-fn-hm (current-prop-new-infra-cell))
+  (define rq-cid-hm (current-ready-queue-cell-id))
+  (when (and add-prop-fn-hm new-cell-fn-hm rq-cid-hm hm-net-box id-map-read-fn)
+    (define id-map-hm (id-map-read-fn (unbox hm-net-box)))
+    (define dep-cids-hm
+      (remove-duplicates
+       (for*/list ([dep-id (in-list all-dep-metas)]
+                   [cid (in-value (champ-lookup id-map-hm (prop-meta-id-hash dep-id) dep-id))]
+                   #:when (not (eq? cid 'none)))
+         cid)
+       eq?))
+    (when (not (null? dep-cids-hm))
+      ;; Stage 1: Threshold cell
+      (define-values (enet-t-hm threshold-cid-hm)
+        (new-cell-fn-hm (unbox hm-net-box) #f (lambda (old new) #t)))
+      (set-box! hm-net-box enet-t-hm)
+      ;; Stage 2: Fan-in (any dep non-bot/non-top → threshold)
+      (define-values (enet-f-hm _)
+        (add-prop-fn-hm (unbox hm-net-box) dep-cids-hm (list threshold-cid-hm)
+          (lambda (pnet)
+            (define any-ground?
+              (for/or ([cid (in-list dep-cids-hm)])
+                (let ([v (net-cell-read pnet cid)])
+                  (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
+            (if any-ground?
+                (net-cell-write pnet threshold-cid-hm #t)
+                pnet))))
+      (set-box! hm-net-box enet-f-hm)
+      ;; Stage 3: Readiness propagator (threshold → ready-queue)
+      (define-values (enet-r-hm _2)
+        (add-prop-fn-hm (unbox hm-net-box) (list threshold-cid-hm) (list rq-cid-hm)
+          (lambda (pnet)
+            (define tv (net-cell-read pnet threshold-cid-hm))
+            (if tv
+                (net-cell-write pnet rq-cid-hm
+                  (list (tagged-entry (action-resolve-hasmethod meta-id info) aid)))
+                pnet))))
+      (set-box! hm-net-box enet-r-hm)))
   )
 
 ;; Track 1 Phase 2b: read from cell.
@@ -610,6 +685,39 @@
            (for/fold ([acc (hasheq)]) ([id (in-list meta-ids)])
              (hash-set acc id (list (tagged-entry c aid))))])
       (set-box! cstore-net-box (write-fn (unbox cstore-net-box) wr-cid wr-delta))))
+  ;; Track 7 Phase 8a: Install readiness propagators for constraint retry.
+  (define add-prop-fn-c (current-prop-add-propagator))
+  (define new-cell-fn-c (current-prop-new-infra-cell))
+  (define rq-cid-c (current-ready-queue-cell-id))
+  (define c-cell-ids (constraint-cell-ids c))
+  (when (and add-prop-fn-c new-cell-fn-c rq-cid-c (not (null? c-cell-ids)))
+    (define dep-cids-c (remove-duplicates c-cell-ids eq?))
+    ;; Stage 1: Threshold cell
+    (define-values (enet-t-c threshold-cid-c)
+      (new-cell-fn-c (unbox cstore-net-box) #f (lambda (old new) #t)))
+    (set-box! cstore-net-box enet-t-c)
+    ;; Stage 2: Fan-in (any dep non-bot/non-top → threshold)
+    (define-values (enet-f-c _fc)
+      (add-prop-fn-c (unbox cstore-net-box) dep-cids-c (list threshold-cid-c)
+        (lambda (pnet)
+          (define any-ground?
+            (for/or ([cid (in-list dep-cids-c)])
+              (let ([v (net-cell-read pnet cid)])
+                (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
+          (if any-ground?
+              (net-cell-write pnet threshold-cid-c #t)
+              pnet))))
+    (set-box! cstore-net-box enet-f-c)
+    ;; Stage 3: Readiness propagator (threshold → ready-queue)
+    (define-values (enet-r-c _rc)
+      (add-prop-fn-c (unbox cstore-net-box) (list threshold-cid-c) (list rq-cid-c)
+        (lambda (pnet)
+          (define tv (net-cell-read pnet threshold-cid-c))
+          (if tv
+              (net-cell-write pnet rq-cid-c
+                (list (tagged-entry (action-retry-constraint c) aid)))
+              pnet))))
+    (set-box! cstore-net-box enet-r-c))
   c)
 
 ;; Get constraints associated with a metavariable for wakeup.
@@ -975,7 +1083,9 @@
   ;; Track 2 Phase 7: Clear error descriptor cell ID.
   (current-error-descriptor-cell-id #f)
   ;; Track 6 Phase 1d: Clear unsolved metas cell ID.
-  (current-unsolved-metas-cell-id #f))
+  (current-unsolved-metas-cell-id #f)
+  ;; Track 7 Phase 8a: Clear ready-queue cell ID.
+  (current-ready-queue-cell-id #f))
 
 ;; Query: all postponed constraints.
 ;; Track 1 Phase 1a: reads from cell (primary) with parameter fallback.
@@ -1040,6 +1150,10 @@
 (define current-prop-cell-write (make-parameter #f))        ;; (enet cell-id value → enet*)
 (define current-prop-cell-read (make-parameter #f))         ;; (enet cell-id → value)
 (define current-prop-add-unify-constraint (make-parameter #f))  ;; (enet cid-a cid-b → (values enet* pid))
+;; Track 7 Phase 8a: General propagator addition callback.
+;; (enet input-ids output-ids fire-fn → (values enet* pid))
+;; fire-fn: (prop-network → prop-network)
+(define current-prop-add-propagator (make-parameter #f))
 
 ;; Phase 1a: Infrastructure cell creation callback (set by driver.rkt).
 ;; (enet initial-value merge-fn → (values enet* cell-id))
@@ -1209,6 +1323,12 @@
 ;; Maps meta-id → #t (unsolved) | #f (solved). Incrementally maintained
 ;; by fresh-meta (add) and solve-meta-core! (remove).
 (define current-unsolved-metas-cell-id (make-parameter #f))
+
+;; Track 7 Phase 8a: Ready-queue channel cell for L1 readiness propagators.
+;; Accumulates action descriptors for constraints whose dependencies are ready.
+;; merge-list-append: monotonic accumulation. Channel cell lifecycle:
+;; L1 writes → L2 reads + retracts → S(-1) cleans.
+(define current-ready-queue-cell-id (make-parameter #f))
 
 ;; P5b: Multiplicity cell callbacks
 (define current-prop-fresh-mult-cell (make-parameter #f))   ;; (enet source → (values enet* cell-id))
@@ -2129,7 +2249,10 @@
       ;; Track 6 Phase 1d: Unsolved metas tracking cell (meta-id → #t/#f).
       (define-values (enet12 um-cid) (new-cell-fn enet11 (hasheq) merge-hasheq-union))
       (current-unsolved-metas-cell-id um-cid)
-      (set-box! nb enet12))))
+      ;; Track 7 Phase 8a: Ready-queue channel cell for L1 readiness propagators.
+      (define-values (enet13 rq-cid) (new-cell-fn enet12 '() merge-list-append))
+      (current-ready-queue-cell-id rq-cid)
+      (set-box! nb enet13))))
 
 ;; Track 6 Phase 6: save-base-elaboration-network REMOVED by Track 7 Phase 6.
 ;; Persistent cells now in dedicated persistent registry network.

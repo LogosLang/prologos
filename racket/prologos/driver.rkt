@@ -2041,6 +2041,14 @@
 ;; Phase 1a: Install infrastructure cell creation callback.
 (current-prop-new-infra-cell elab-new-infra-cell)
 
+;; Track 7 Phase 8a: Install general propagator addition callback.
+;; Wraps net-add-propagator to operate on elab-network.
+(current-prop-add-propagator
+ (lambda (enet input-ids output-ids fire-fn)
+   (define pnet (elab-network-prop-net enet))
+   (define-values (pnet* pid) (net-add-propagator pnet input-ids output-ids fire-fn))
+   (values (struct-copy elab-network enet [prop-net pnet*]) pid)))
+
 ;; Track 6 Phase 1a: Install id-map access callbacks.
 (current-prop-id-map-read elab-network-id-map)
 (current-prop-id-map-set elab-network-id-map-set)
