@@ -256,6 +256,10 @@
             (define retracted-pnet
               (net-retract-assumption (elab-network-prop-net enet) hyp-id))
             (set-box! net-box (struct-copy elab-network enet [prop-net retracted-pnet]))))
+        ;; Track 7 Phase 5: Record retraction for S(-1) stratum.
+        ;; S(-1) will clean scoped cell entries tagged with this assumption.
+        ;; Currently belt-and-suspenders alongside restore-meta-state! (Phase 6 retires restore).
+        (record-assumption-retraction! hyp-id)
         ;; 3. Restore meta-state — handles structural state that TMS doesn't cover
         (restore-meta-state! saved)
         ;; Phase D2: Extract sub-failures (failures added during this thunk)

@@ -60,6 +60,7 @@
  unwrap-tagged-hasheq
  unwrap-tagged-list
  unwrap-tagged-hasheq-list
+ hasheq?
  ;; ATMS assumption bridge — Phase 0b
  ;; Struct
  (struct-out infra-state)

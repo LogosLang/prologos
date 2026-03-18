@@ -384,6 +384,9 @@
   (when (not (current-command-atms))
     (current-command-atms (box (atms-empty))))
   (init-speculation-tracking!)
+  ;; Track 7 Phase 5: Initialize retraction tracking for S(-1) stratum.
+  (when (not (current-retracted-assumptions))
+    (current-retracted-assumptions (box (seteq))))
   ;; Track 7 Phase 3: macros/warnings/narrow net-box scoping removed — reads/writes
   ;; go directly to the persistent registry network, not through per-command elab-network.
   ;; prelude-env and ns net-boxes still needed for per-definition cells.

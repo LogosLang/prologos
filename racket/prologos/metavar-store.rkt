@@ -21,6 +21,7 @@
 
 (require racket/list
          racket/match
+         racket/set
          (for-syntax racket/base)
          "syntax.rkt"
          "prelude.rkt"
@@ -148,6 +149,10 @@
  init-persistent-registry-network!
  ;; Track 7 Phase 4: Assumption tagging for scoped cells
  current-speculation-assumption
+ ;; Track 7 Phase 5: S(-1) retraction stratum
+ current-retracted-assumptions
+ record-assumption-retraction!
+ run-retraction-stratum!
  ;; Track 6 Phase 1a: id-map access callbacks
  current-prop-id-map-read
  current-prop-id-map-set
@@ -1083,6 +1088,99 @@
   (define stack (current-speculation-stack))
   (if (pair? stack) (car stack) #f))
 
+;; Track 7 Phase 5: S(-1) Retraction Stratum.
+;; Tracks retracted assumptions and cleans scoped cell entries on demand.
+
+;; Accumulates assumption-ids that have been retracted since the last S(-1) run.
+;; with-speculative-rollback adds to this set on failure.
+;; run-retraction-stratum! consumes and clears it.
+(define current-retracted-assumptions (make-parameter #f))  ;; #f | (box (seteq))
+
+;; Record that an assumption was retracted (called from elab-speculation-bridge).
+(define (record-assumption-retraction! assumption-id)
+  (define box-val (current-retracted-assumptions))
+  (when (and box-val assumption-id)
+    (set-box! box-val (set-add (unbox box-val) assumption-id))))
+
+;; The 14 scoped cell-id parameters. Populated at command start by reset-meta-store!.
+;; S(-1) iterates these to filter retracted entries.
+(define (scoped-cell-ids)
+  (filter values
+    (list (current-constraint-cell-id)
+          (current-trait-constraint-cell-id)
+          (current-trait-cell-map-cell-id)
+          (current-hasmethod-constraint-cell-id)
+          (current-hasmethod-cell-map-cell-id)
+          (current-capability-constraint-cell-id)
+          (current-constraint-status-cell-id)
+          (current-error-descriptor-cell-id)
+          (current-wakeup-registry-cell-id)
+          (current-trait-wakeup-cell-id)
+          (current-hasmethod-wakeup-cell-id)
+          ;; Warning cells are in the persistent network, not the elab-network.
+          ;; They use a different retraction path (Phase 5 note: warnings are
+          ;; per-command parameter-based accumulation, not cell-based retraction).
+          )))
+
+;; Remove entries tagged with retracted assumptions from a hasheq cell value.
+;; For merge-hasheq-union cells: filter by value's assumption-id.
+(define (retract-hasheq-entries h retracted-set)
+  (if (or (not (hash? h)) (zero? (hash-count h)))
+      h
+      (for/fold ([acc (if (hasheq? h) (hasheq) (hash))])
+                ([(k v) (in-hash h)])
+        (if (and (tagged-entry? v)
+                 (tagged-entry-assumption-id v)
+                 (set-member? retracted-set (tagged-entry-assumption-id v)))
+            acc  ;; skip retracted entry
+            (hash-set acc k v)))))
+
+;; Remove entries tagged with retracted assumptions from a hasheq-list cell value.
+;; For merge-hasheq-list-append cells (wakeups): filter list elements per key.
+(define (retract-hasheq-list-entries h retracted-set)
+  (if (or (not (hash? h)) (zero? (hash-count h)))
+      h
+      (for/fold ([acc (hasheq)])
+                ([(k v) (in-hash h)])
+        (define filtered
+          (filter (λ (e)
+                    (not (and (tagged-entry? e)
+                              (tagged-entry-assumption-id e)
+                              (set-member? retracted-set (tagged-entry-assumption-id e)))))
+                  v))
+        (if (null? filtered) acc (hash-set acc k filtered)))))
+
+;; S(-1) retraction stratum: clean scoped cells of retracted entries.
+;; Runs at the START of each run-stratified-resolution! iteration, before S0.
+;; Depth-0 fast path: if no assumptions have been retracted, returns immediately.
+(define (run-retraction-stratum!)
+  (define box-val (current-retracted-assumptions))
+  (when box-val
+    (define retracted (unbox box-val))
+    (unless (set-empty? retracted)
+      ;; Clear the retracted set before processing (prevents re-entrant loops)
+      (set-box! box-val (seteq))
+      ;; Clean all scoped cells
+      (define net-box (current-prop-net-box))
+      (define read-fn (current-prop-cell-read))
+      (define write-fn (current-prop-cell-write))
+      (when (and net-box read-fn write-fn)
+        (for ([cid (in-list (scoped-cell-ids))])
+          (define val (read-fn (unbox net-box) cid))
+          (when (hash? val)
+            ;; Determine cell type: hasheq-list (wakeup) vs hasheq (constraint/status)
+            ;; Wakeup cells have list values; constraint cells have tagged-entry or plain values
+            (define cleaned
+              (if (and (positive? (hash-count val))
+                       (let ([sample (for/first ([(k v) (in-hash val)]) v)])
+                         (list? sample)))
+                  ;; Wakeup cell: filter list elements
+                  (retract-hasheq-list-entries val retracted)
+                  ;; Constraint cell: filter hash values
+                  (retract-hasheq-entries val retracted)))
+            (unless (equal? val cleaned)
+              (set-box! net-box (write-fn (unbox net-box) cid cleaned)))))))))
+
 ;; Track 6 Phase 1a: id-map access callbacks (set by driver.rkt).
 ;; Break circular dep: metavar-store doesn't import elaborator-network.
 (define current-prop-id-map-read (make-parameter #f))   ;; (enet → champ)
@@ -1365,6 +1463,10 @@
     (let loop ([fuel stratified-resolution-fuel]
                [meta-id trigger-meta-id])
       (when (> fuel 0)
+        ;; ── S(-1): Retraction stratum (Track 7 Phase 5) ──
+        ;; Clean scoped cells of entries tagged with retracted assumptions.
+        ;; Depth-0 fast path: no-op when no assumptions have been retracted.
+        (run-retraction-stratum!)
         ;; ── Stratum 0: Type propagation (quiescence) ──
         ;; Run the propagator network so type information flows between
         ;; connected meta cells. This can transitively solve metas.
