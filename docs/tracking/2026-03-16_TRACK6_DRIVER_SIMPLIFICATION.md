@@ -35,10 +35,10 @@
 | 7b | macros.rkt dual-write: existing pattern correct | ✅ | Reverted `e10f5f3` sync-back pattern (commit `70063b9`). Natural dual-write (param persistence + cell propagation) matches Track 5's `global-env-add` pattern — NOT redundant. |
 | 7c | warnings.rkt dual-write: existing pattern correct | ✅ | Reverted `b618c78` sync-back pattern (commit `70063b9`). Same reasoning as 7b. |
 | 7d | Global-env lookup → module-network-ref cutover | ✅ | commit `cd54a9f` (belt-and-suspenders population), `78bba78` (lookup cutover). `current-module-definitions-content` sourced from Track 5 module-network-ref cells. 250 test files updated. 7154 tests, 2 ATMS. Layer 2 retained as fallback. |
-| 8a | Exhaustive cell-reader audit + categorization | ⬜ | Categorize: elaboration / module-loading / other |
-| 8b | Remove `current-macros-in-elaboration?` guard | ⬜ | 23 cell readers → unconditional |
-| 8c | Remove `current-narrow-in-elaboration?` guard | ⬜ | 2 cell readers → unconditional |
-| 8d | Remove callback parameters | ⬜ | Or mark deprecated if edge cases |
+| 8a | Exhaustive cell-reader audit + categorization | ✅ | 24 macros readers + 2 narrow readers audited. 3 call sites outside elaboration (driver post-compilation, repl :trait/:satisfies) → switched to param reads. |
+| 8b | Remove `current-macros-in-elaboration?` guard | ✅ | commit `6fa6240` — guard removed from macros-cell-read-safe. Net-boxes scoped to process-command parameterize (auto-revert to #f). |
+| 8c | Remove `current-narrow-in-elaboration?` guard | ✅ | commit `6fa6240` — guard removed from narrow-cell-read-safe. Same net-box scoping. |
+| 8d | Remove callback parameters | ⬜ | **Assessed: still active.** All 3 callbacks (retry-trait-resolve, retry-hasmethod-resolve, retry-unify) have active call sites. NOT superseded by reactive propagation. Skip. |
 | 9 | `current-global-env` → `current-prelude-env` rename | ⬜ | ~266 references, mechanical |
 | 10 | Driver `parameterize` simplification | ⬜ | ~30 bindings → ~5 |
 | **Post-Phase 10** | **Deferred items (required before PIR)** | | |
