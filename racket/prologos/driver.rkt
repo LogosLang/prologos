@@ -1436,6 +1436,8 @@
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define mem-before (measure-memory-before))
+  ;; Track 7 Phase 1: Initialize persistent registry network (once per file).
+  (init-persistent-registry-network!)
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
                    [current-provenance-counters pv]

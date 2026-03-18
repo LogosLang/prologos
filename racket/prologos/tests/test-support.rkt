@@ -90,6 +90,7 @@
                  [current-capability-registry (current-capability-registry)]
                  ;; Track 6 Phase 7a: network isolation (fresh network per call)
                  [current-prop-net-box              #f]
+                 [current-persistent-registry-net-box #f]  ;; Track 7 Phase 1
                  [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
@@ -128,6 +129,7 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 6 Phase 7a: network isolation
                  [current-prop-net-box              #f]
+                 [current-persistent-registry-net-box #f]  ;; Track 7 Phase 1
                  [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
@@ -154,6 +156,7 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 6 Phase 7a: network isolation
                  [current-prop-net-box              #f]
+                 [current-persistent-registry-net-box #f]  ;; Track 7 Phase 1
                  [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
@@ -185,6 +188,7 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 6 Phase 7a: network isolation
                  [current-prop-net-box              #f]
+                 [current-persistent-registry-net-box #f]  ;; Track 7 Phase 1
                  [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
@@ -210,6 +214,7 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 6 Phase 7a: network isolation
                  [current-prop-net-box              #f]
+                 [current-persistent-registry-net-box #f]  ;; Track 7 Phase 1
                  [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
@@ -235,6 +240,7 @@
                    [current-error-port stderr-out]
                    ;; Track 6 Phase 7a: network isolation
                    [current-prop-net-box              #f]
+                   [current-persistent-registry-net-box #f]  ;; Track 7 Phase 1
                    [current-prelude-env-prop-net-box   #f]
                    [current-ns-prop-net-box           #f]
                    [current-definition-cell-ids       (hasheq)]

@@ -142,6 +142,9 @@
  current-persistent-base-network
  current-prop-reset-network-command-state
  save-base-elaboration-network
+ ;; Track 7 Phase 1: Persistent registry network
+ current-persistent-registry-net-box
+ init-persistent-registry-network!
  ;; Track 6 Phase 1a: id-map access callbacks
  current-prop-id-map-read
  current-prop-id-map-set
@@ -1033,6 +1036,22 @@
 ;; Callback: (elab-network → elab-network) — resets per-command state while
 ;; keeping persistent cells. Set by driver.rkt (breaks circular dep).
 (define current-prop-reset-network-command-state (make-parameter #f))
+
+;; Track 7 Phase 1: Persistent registry network.
+;; Holds a (box prop-network) for registry cells (macros, warnings, narrowing).
+;; Created once at file/prelude start, survives across commands.
+;; Raw prop-network (not elab-network) — registries are simple monotone
+;; accumulators, no TMS/meta/constraint infrastructure needed.
+;; Cell IDs in this network are STABLE file-scoped references.
+(define current-persistent-registry-net-box (make-parameter #f))
+
+;; Track 7 Phase 1: Initialize the persistent registry network.
+;; Lazy: only initializes if not already set. Called from process-file/load-module.
+(define (init-persistent-registry-network!)
+  (unless (current-persistent-registry-net-box)
+    (define make-net (current-prop-make-network))
+    (when make-net
+      (current-persistent-registry-net-box (box (make-net))))))
 
 ;; Track 6 Phase 1a: id-map access callbacks (set by driver.rkt).
 ;; Break circular dep: metavar-store doesn't import elaborator-network.
