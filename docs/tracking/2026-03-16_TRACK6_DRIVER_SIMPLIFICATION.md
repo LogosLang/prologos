@@ -39,8 +39,8 @@
 | 8b | Remove `current-macros-in-elaboration?` guard | ✅ | commit `6fa6240` — guard removed from macros-cell-read-safe. Net-boxes scoped to process-command parameterize (auto-revert to #f). |
 | 8c | Remove `current-narrow-in-elaboration?` guard | ✅ | commit `6fa6240` — guard removed from narrow-cell-read-safe. Same net-box scoping. |
 | 8d | Remove callback parameters | ⬜ | **Assessed: still active.** All 3 callbacks (retry-trait-resolve, retry-hasmethod-resolve, retry-unify) have active call sites. NOT superseded by reactive propagation. Skip. |
-| 9 | `current-global-env` → `current-prelude-env` rename | ⬜ | ~266 references, mechanical |
-| 10 | Driver `parameterize` simplification | ⬜ | ~30 bindings → ~5 |
+| 9 | `current-global-env` → `current-prelude-env` rename | ✅ | commit `36588ee` — 994 occurrences across 271 files. Zero remaining references. |
+| 10 | Driver `parameterize` simplification | ✅ | Assessed: 13 bindings remain (5 net-boxes, 3 caches, fuel, narrow-constraints, 3 warning resets). All necessary — reduced from ~30 through Phases 7-8. |
 | **Post-Phase 10** | **Deferred items (required before PIR)** | | |
 | 5b | Belt-and-suspenders retirement gate | ⏸️ | Blocked on infra cells + meta-info not TMS-managed |
 | BUG | ATMS initialization in test speculation paths | ⬜ | Pre-existing: `with-speculative-rollback: ATMS not initialized` in test-map, test-mixed-map, test-union-types (10 failures across 3 files). Tests call speculation outside `process-command` context. Predates Track 6. |
