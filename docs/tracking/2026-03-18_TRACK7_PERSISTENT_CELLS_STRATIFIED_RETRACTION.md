@@ -24,7 +24,7 @@
 | 1 | Persistent registry network infrastructure | ✅ | L1 (finite registries) | WS-C: `current-persistent-registry-net-box` + `init-persistent-registry-network!` (commit `51a839e`) |
 | 2 | Registry cell persistence migration | ✅ | L1 (monotone merge) | WS-C: 29 cells in persistent prop-network; reads/writes retargeted (commit `51cb896`) |
 | 3 | Dual-write elimination | ✅ (3a) | — (no new propagators) | WS-C: 3a done (per-command overhead removed); 3b deferred to Phase 6 (param writes + read fallback retained for seeding + test isolation) |
-| 4 | Assumption-tagged scoped cells | ⬜ | L1 (finite assumptions) | WS-B: tag constraint/wakeup/warning writes with assumption IDs |
+| 4 | Assumption-tagged scoped cells | ✅ | L1 (finite assumptions) | WS-B: 14 cells tagged; read functions unwrap; merge-constraint-status-map updated |
 | 5 | S(-1) retraction stratum | ⬜ | L1 (assumption set ↓) | WS-B: retraction propagator, cleanup to fixpoint |
 | 6 | Belt-and-suspenders retirement | ⬜ | — (removal, not addition) | WS-B: retire network-box restore, Track 6 base-network, `reset-elab-network-command-state` |
 | 7a | Module extraction + callback elimination | ⬜ | — (restructuring only) | WS-B: extract to `resolution.rkt`, remove 3 callback params |

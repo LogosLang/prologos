@@ -146,6 +146,8 @@
  ;; Track 7 Phase 1: Persistent registry network
  current-persistent-registry-net-box
  init-persistent-registry-network!
+ ;; Track 7 Phase 4: Assumption tagging for scoped cells
+ current-speculation-assumption
  ;; Track 6 Phase 1a: id-map access callbacks
  current-prop-id-map-read
  current-prop-id-map-set
@@ -318,10 +320,12 @@
 ;; Register a trait constraint and build wakeup index for incremental resolution.
 (define (register-trait-constraint! meta-id info)
   ;; Track 1 Phase 6c: Cell-only write (network-everywhere).
+  ;; Track 7 Phase 4: tag with current speculation assumption.
   (define tc-cid (current-trait-constraint-cell-id))
   (define tc-net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
-  (set-box! tc-net-box (write-fn (unbox tc-net-box) tc-cid (hasheq meta-id info)))
+  (define aid (current-speculation-assumption))
+  (set-box! tc-net-box (write-fn (unbox tc-net-box) tc-cid (hasheq meta-id (tagged-entry info aid))))
   ;; Phase C: Build reverse index from type-arg metas → this dict meta
   (define type-arg-metas (extract-shallow-meta-ids-from-list
                            (trait-constraint-info-type-arg-exprs info)))
@@ -334,7 +338,7 @@
   (when (pair? unsolved-ta-metas)
     (let ([tw-delta
            (for/fold ([acc (hasheq)]) ([ta-id (in-list unsolved-ta-metas)])
-             (hash-set acc ta-id (list meta-id)))])
+             (hash-set acc ta-id (list (tagged-entry meta-id aid))))])
       (set-box! tc-net-box (write-fn (unbox tc-net-box) tw-cid tw-delta))))
   ;; P3a: Record cell-ids for type-arg metas for cell-state-driven resolution.
   (define id-map (if (current-prop-id-map-read)
@@ -350,7 +354,7 @@
     (define tcm-cid (current-trait-cell-map-cell-id))
     (set-box! tc-net-box
               (write-fn (unbox tc-net-box) tcm-cid
-                        (hasheq meta-id (remove-duplicates cell-ids eq?)))))
+                        (hasheq meta-id (tagged-entry (remove-duplicates cell-ids eq?) aid)))))
   ;; Track 6 Phase 8d: immediate resolution path removed. If all type-args
   ;; are already ground, the stratified resolution loop (run-stratified-resolution!)
   ;; will find this constraint ready on its next S1 scan via
@@ -390,10 +394,12 @@
 
 (define (register-hasmethod-constraint! meta-id info)
   ;; Track 1 Phase 6c: Cell-only write (network-everywhere).
+  ;; Track 7 Phase 4: tag with current speculation assumption.
   (define hm-cid (current-hasmethod-constraint-cell-id))
   (define hm-net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
-  (set-box! hm-net-box (write-fn (unbox hm-net-box) hm-cid (hasheq meta-id info)))
+  (define aid (current-speculation-assumption))
+  (set-box! hm-net-box (write-fn (unbox hm-net-box) hm-cid (hasheq meta-id (tagged-entry info aid))))
   ;; Phase 1d: Build reverse wakeup index from dependency metas → this hasmethod meta.
   ;; Dependencies are: metas in trait-var-expr + metas in type-arg-exprs.
   (define trait-var-metas (extract-shallow-meta-ids
@@ -410,7 +416,7 @@
   (when (pair? unsolved-dep-metas)
     (let ([hw-delta
            (for/fold ([acc (hasheq)]) ([dep-id (in-list unsolved-dep-metas)])
-             (hash-set acc dep-id (list meta-id)))])
+             (hash-set acc dep-id (list (tagged-entry meta-id aid))))])
       (set-box! hm-net-box (write-fn (unbox hm-net-box) hw-cid hw-delta))))
   ;; Track 2 Phase 6: Record cell-ids for dependency metas (cell-state-driven resolution).
   ;; Mirrors trait-cell-map pattern: enables collect-ready-hasmethods-via-cells.
@@ -427,7 +433,7 @@
       (when hcm-cid
         (set-box! hm-net-box
                   (write-fn (unbox hm-net-box) hcm-cid
-                            (hasheq meta-id (remove-duplicates cell-ids eq?)))))))
+                            (hasheq meta-id (tagged-entry (remove-duplicates cell-ids eq?) aid)))))))
   ;; Track 6 Phase 8d: immediate resolution path removed. The stratified
   ;; resolution loop handles this via collect-ready-hasmethods-via-cells.
   )
@@ -457,10 +463,12 @@
 
 (define (register-capability-constraint! meta-id info)
   ;; Track 1 Phase 6c: Cell-only write (network-everywhere).
+  ;; Track 7 Phase 4: tag with current speculation assumption.
   (define cap-cid (current-capability-constraint-cell-id))
   (define cap-net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
-  (set-box! cap-net-box (write-fn (unbox cap-net-box) cap-cid (hasheq meta-id info))))
+  (define aid (current-speculation-assumption))
+  (set-box! cap-net-box (write-fn (unbox cap-net-box) cap-cid (hasheq meta-id (tagged-entry info aid)))))
 
 ;; Track 1 Phase 2c: read from cell.
 (define (lookup-capability-constraint meta-id)
@@ -573,12 +581,14 @@
           (struct-copy constraint c0 [cell-ids (remove-duplicates all-cell-ids eq?)]))
         c0))
   ;; Track 6 Phase 1c: write as hash entry keyed by constraint cid.
-  ;; The constraint now has cell-ids populated before being written to store.
+  ;; Track 7 Phase 4: tag with current speculation assumption.
   (define cstore-cid (current-constraint-cell-id))
   (define cstore-net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
+  (define aid (current-speculation-assumption))  ;; #f at depth 0
   (let ([enet (unbox cstore-net-box)])
-    (set-box! cstore-net-box (write-fn enet cstore-cid (hasheq (constraint-cid c) c))))
+    (set-box! cstore-net-box (write-fn enet cstore-cid
+                                       (hasheq (constraint-cid c) (tagged-entry c aid)))))
   ;; Track 2 Phase 2: Write initial 'pending status to cell.
   (write-constraint-status-cell! (constraint-cid c) 'pending)
   ;; Register for wakeup on all mentioned metas.
@@ -586,7 +596,7 @@
   (when (pair? meta-ids)
     (let ([wr-delta
            (for/fold ([acc (hasheq)]) ([id (in-list meta-ids)])
-             (hash-set acc id (list c)))])
+             (hash-set acc id (list (tagged-entry c aid))))])
       (set-box! cstore-net-box (write-fn (unbox cstore-net-box) wr-cid wr-delta))))
   c)
 
@@ -792,41 +802,48 @@
 ;; Read the constraint store from the cell.
 ;; Track 6 Phase 1c: constraint store is now a hasheq keyed by constraint cid.
 ;; Returns the current list of all constraints (hash-values for backward compat).
+;; Track 7 Phase 4: unwrap tagged entries for consumers.
 (define (read-constraint-store)
   (define cid (current-constraint-cell-id))
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
-      (hash-values (read-fn (unbox net-box) cid))
+      (hash-values (unwrap-tagged-hasheq (read-fn (unbox net-box) cid)))
       '()))
 
 ;; Track 6 Phase 1c: Read a single constraint by its cid from the store.
+;; Track 7 Phase 4: unwrap tagged entry.
 (define (read-constraint-by-cid c-cid)
   (define cid (current-constraint-cell-id))
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
-      (hash-ref (read-fn (unbox net-box) cid) c-cid #f)
+      (let ([v (hash-ref (read-fn (unbox net-box) cid) c-cid #f)])
+        (if (tagged-entry? v) (tagged-entry-value v) v))
       #f))
 
 ;; Track 6 Phase 1c: Write a single constraint update to the store (functional).
 ;; Merges a single-entry hash — merge-hasheq-union replaces the entry.
+;; Track 7 Phase 4: tag with current assumption (may differ from creation assumption
+;; if status update happens during a different speculation branch).
 (define (write-constraint-to-store! updated-c)
   (define cid (current-constraint-cell-id))
   (define net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
+  (define aid (current-speculation-assumption))
   (when (and cid net-box write-fn)
     (set-box! net-box (write-fn (unbox net-box) cid
-                                (hasheq (constraint-cid updated-c) updated-c)))))
+                                (hasheq (constraint-cid updated-c) (tagged-entry updated-c aid))))))
 
 ;; Read trait constraint map from cell.
 ;; Returns hasheq: meta-id → trait-constraint-info.
+;; Track 7 Phase 4: unwrap tagged entries for consumers.
 (define (read-trait-constraints)
   (define cid (current-trait-constraint-cell-id))
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
-      (read-fn (unbox net-box) cid)
+      (unwrap-tagged-hasheq (read-fn (unbox net-box) cid))
       (hasheq)))
 
 ;; Read hasmethod constraint map from cell.
@@ -836,7 +853,7 @@
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
-      (read-fn (unbox net-box) cid)
+      (unwrap-tagged-hasheq (read-fn (unbox net-box) cid))
       (hasheq)))
 
 ;; Read capability constraint map from cell.
@@ -846,17 +863,18 @@
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
-      (read-fn (unbox net-box) cid)
+      (unwrap-tagged-hasheq (read-fn (unbox net-box) cid))
       (hasheq)))
 
 ;; Read wakeup registry from cell.
 ;; Returns hasheq: meta-id → (listof constraint).
+;; Track 7 Phase 4: unwrap tagged entries in wakeup lists.
 (define (read-wakeup-registry)
   (define cid (current-wakeup-registry-cell-id))
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
-      (read-fn (unbox net-box) cid)
+      (unwrap-tagged-hasheq-list (read-fn (unbox net-box) cid))
       (hasheq)))
 
 ;; Read trait wakeup map from cell.
@@ -866,7 +884,7 @@
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
-      (read-fn (unbox net-box) cid)
+      (unwrap-tagged-hasheq-list (read-fn (unbox net-box) cid))
       (hasheq)))
 
 ;; Phase 7a: Read hasmethod wakeup map from cell.
@@ -876,7 +894,7 @@
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
-      (read-fn (unbox net-box) cid)
+      (unwrap-tagged-hasheq-list (read-fn (unbox net-box) cid))
       (hasheq)))
 
 ;; Phase 7b: Read trait cell-map from cell.
@@ -886,7 +904,7 @@
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
-      (read-fn (unbox net-box) cid)
+      (unwrap-tagged-hasheq (read-fn (unbox net-box) cid))
       (hasheq)))
 
 ;; Track 2 Phase 6: Read hasmethod cell-map from cell.
@@ -896,7 +914,7 @@
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
-      (read-fn (unbox net-box) cid)
+      (unwrap-tagged-hasheq (read-fn (unbox net-box) cid))
       (hasheq)))
 
 ;; Track 2 Phase 2: Read constraint status map from cell.
@@ -906,18 +924,20 @@
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
-      (read-fn (unbox net-box) cid)
+      (unwrap-tagged-hasheq (read-fn (unbox net-box) cid))
       (hasheq)))
 
 ;; Track 2 Phase 2: Write a constraint's status to the status cell.
 ;; Dual-writes alongside set-constraint-status! until Phase 3 eliminates
 ;; the struct's mutable status field.
+;; Track 7 Phase 4: tag status with current assumption.
 (define (write-constraint-status-cell! constraint-id status-sym)
   (define cid (current-constraint-status-cell-id))
   (define net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
+  (define aid (current-speculation-assumption))
   (when (and cid net-box write-fn)
-    (set-box! net-box (write-fn (unbox net-box) cid (hasheq constraint-id status-sym)))))
+    (set-box! net-box (write-fn (unbox net-box) cid (hasheq constraint-id (tagged-entry status-sym aid))))))
 
 ;; Track 2 Phase 7: Read error descriptors from cell.
 ;; Returns hasheq: meta-id → no-instance-error.
@@ -926,17 +946,19 @@
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
   (if (and cid net-box read-fn)
-      (read-fn (unbox net-box) cid)
+      (unwrap-tagged-hasheq (read-fn (unbox net-box) cid))
       (hasheq)))
 
 ;; Track 2 Phase 7: Write an error descriptor to the error cell.
 ;; Called by resolution callbacks when resolution fails for a ground constraint.
+;; Track 7 Phase 4: tag error descriptors with current assumption.
 (define (write-error-descriptor! meta-id error)
   (define cid (current-error-descriptor-cell-id))
   (define net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
+  (define aid (current-speculation-assumption))
   (when (and cid net-box write-fn)
-    (set-box! net-box (write-fn (unbox net-box) cid (hasheq meta-id error)))))
+    (set-box! net-box (write-fn (unbox net-box) cid (hasheq meta-id (tagged-entry error aid))))))
 
 ;; Reset the constraint store (called by reset-meta-store!).
 ;; Clears cell IDs — new cells are created by reset-meta-store! when the network is recreated.
@@ -1053,6 +1075,13 @@
 (define (init-persistent-registry-network!)
   (unless (current-persistent-registry-net-box)
     (current-persistent-registry-net-box (box (make-prop-network)))))
+
+;; Track 7 Phase 4: Get the current speculation assumption ID.
+;; Returns #f at depth 0 (unconditional), or the current hypothesis assumption-id
+;; during speculation. Used to tag scoped cell entries.
+(define (current-speculation-assumption)
+  (define stack (current-speculation-stack))
+  (if (pair? stack) (car stack) #f))
 
 ;; Track 6 Phase 1a: id-map access callbacks (set by driver.rkt).
 ;; Break circular dep: metavar-store doesn't import elaborator-network.

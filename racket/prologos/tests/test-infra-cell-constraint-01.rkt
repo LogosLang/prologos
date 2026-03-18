@@ -84,7 +84,8 @@
     (define cell-contents (elab-cell-read (unbox (current-prop-net-box))
                                           (current-constraint-cell-id)))
     (check-equal? (hash-count cell-contents) 1)
-    (check-eq? (hash-ref cell-contents (constraint-cid c)) c)))
+    ;; Track 7 Phase 4: cell values are tagged-entry; unwrap for comparison
+    (check-eq? (tagged-entry-value (hash-ref cell-contents (constraint-cid c))) c)))
 
 (test-case "constraint cell: multiple adds accumulate"
   (with-fresh-meta-env
@@ -94,9 +95,9 @@
     (define cell-contents (elab-cell-read (unbox (current-prop-net-box))
                                           (current-constraint-cell-id)))
     (check-equal? (hash-count cell-contents) 3)
-    (check-eq? (hash-ref cell-contents (constraint-cid c1)) c1)
-    (check-eq? (hash-ref cell-contents (constraint-cid c2)) c2)
-    (check-eq? (hash-ref cell-contents (constraint-cid c3)) c3)))
+    (check-eq? (tagged-entry-value (hash-ref cell-contents (constraint-cid c1))) c1)
+    (check-eq? (tagged-entry-value (hash-ref cell-contents (constraint-cid c2))) c2)
+    (check-eq? (tagged-entry-value (hash-ref cell-contents (constraint-cid c3))) c3)))
 
 (test-case "constraint cell: read-constraint-store reads from cell"
   (with-fresh-meta-env
@@ -139,8 +140,9 @@
     (define enet (unbox (current-prop-net-box)))
     (define tc-cell (elab-cell-read enet (current-trait-constraint-cell-id)))
     (check-not-false (hash-ref tc-cell 'test-meta-id #f))
+    ;; Track 7 Phase 4: cell values are tagged-entry; unwrap for access
     (check-equal? (trait-constraint-info-trait-name
-                   (hash-ref tc-cell 'test-meta-id))
+                   (tagged-entry-value (hash-ref tc-cell 'test-meta-id)))
                   'Eq)))
 
 (test-case "Phase 1b: hasmethod constraint dual-write"
@@ -154,7 +156,7 @@
     (define hm-cell (elab-cell-read enet (current-hasmethod-constraint-cell-id)))
     (check-not-false (hash-ref hm-cell 'hm-meta #f))
     (check-equal? (hasmethod-constraint-info-method-name
-                   (hash-ref hm-cell 'hm-meta))
+                   (tagged-entry-value (hash-ref hm-cell 'hm-meta)))
                   'eq?)))
 
 (test-case "Phase 1b: capability constraint dual-write"
@@ -168,7 +170,7 @@
     (define cap-cell (elab-cell-read enet (current-capability-constraint-cell-id)))
     (check-not-false (hash-ref cap-cell 'cap-meta #f))
     (check-equal? (capability-constraint-info-cap-name
-                   (hash-ref cap-cell 'cap-meta))
+                   (tagged-entry-value (hash-ref cap-cell 'cap-meta)))
                   'ReadCap)))
 
 (test-case "Phase 1b: multiple trait constraints accumulate in cell"
@@ -180,9 +182,9 @@
     (define enet (unbox (current-prop-net-box)))
     (define tc-cell (elab-cell-read enet (current-trait-constraint-cell-id)))
     (check-equal? (hash-count tc-cell) 3)
-    (check-equal? (trait-constraint-info-trait-name (hash-ref tc-cell 'm1)) 'Eq)
-    (check-equal? (trait-constraint-info-trait-name (hash-ref tc-cell 'm2)) 'Ord)
-    (check-equal? (trait-constraint-info-trait-name (hash-ref tc-cell 'm3)) 'Add)))
+    (check-equal? (trait-constraint-info-trait-name (tagged-entry-value (hash-ref tc-cell 'm1))) 'Eq)
+    (check-equal? (trait-constraint-info-trait-name (tagged-entry-value (hash-ref tc-cell 'm2))) 'Ord)
+    (check-equal? (trait-constraint-info-trait-name (tagged-entry-value (hash-ref tc-cell 'm3))) 'Add)))
 
 (test-case "Phase 1b: registry cells are empty after reset"
   (with-fresh-meta-env

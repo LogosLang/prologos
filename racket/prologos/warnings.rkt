@@ -65,10 +65,13 @@
 
 ;; Helper: write a warning to a list cell in the persistent network.
 ;; Track 7 Phase 2: targets persistent registry network directly.
+;; Track 7 Phase 4: tags each list element with current assumption.
 (define (warnings-cell-write! cid value)
   (define prn-box (current-persistent-registry-net-box))
   (when (and prn-box cid)
-    (set-box! prn-box (net-cell-write (unbox prn-box) cid value))))
+    (define aid (current-speculation-assumption))
+    (define tagged-value (map (λ (w) (tagged-entry w aid)) value))
+    (set-box! prn-box (net-cell-write (unbox prn-box) cid tagged-value))))
 
 ;; Track 7 Phase 2: Initialize warning cells in the persistent registry network.
 ;; Called ONCE from init-persistent-registry-network!.
@@ -96,18 +99,19 @@
         (net-cell-read (unbox prn-box) cid))
       'not-found))
 
-;; Track 3 Phase 4: cell-primary readers for warning accumulators
+;; Track 3 Phase 4: cell-primary readers for warning accumulators.
+;; Track 7 Phase 4: unwrap tagged entries for consumers.
 (define (read-coercion-warnings)
   (define v (warnings-cell-read-safe (current-coercion-warnings-cell-id)))
-  (if (eq? v 'not-found) (current-coercion-warnings) v))
+  (if (eq? v 'not-found) (current-coercion-warnings) (unwrap-tagged-list v)))
 
 (define (read-deprecation-warnings)
   (define v (warnings-cell-read-safe (current-deprecation-warnings-cell-id)))
-  (if (eq? v 'not-found) (current-deprecation-warnings) v))
+  (if (eq? v 'not-found) (current-deprecation-warnings) (unwrap-tagged-list v)))
 
 (define (read-capability-warnings)
   (define v (warnings-cell-read-safe (current-capability-warnings-cell-id)))
-  (if (eq? v 'not-found) (current-capability-warnings) v))
+  (if (eq? v 'not-found) (current-capability-warnings) (unwrap-tagged-list v)))
 
 ;; ========================================
 ;; Coercion warnings

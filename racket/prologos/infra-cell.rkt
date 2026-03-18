@@ -55,6 +55,11 @@
  net-named-cell-ref
  net-named-cell-ref/opt
  net-has-named-cell?
+ ;; Track 7 Phase 4: Assumption-tagged entries for scoped cells
+ (struct-out tagged-entry)
+ unwrap-tagged-hasheq
+ unwrap-tagged-list
+ unwrap-tagged-hasheq-list
  ;; ATMS assumption bridge — Phase 0b
  ;; Struct
  (struct-out infra-state)
@@ -131,8 +136,10 @@
 (define merge-last-write-wins merge-replace)
 
 ;; Track 2 Phase 2: Monotonic hash with per-key status max.
-;; Maps constraint-id → status symbol with lattice: 'pending < 'resolved.
+;; Maps constraint-id → status symbol (or tagged-entry of status) with
+;; lattice: 'pending < 'resolved.
 ;; Once a key reaches 'resolved, it stays 'resolved regardless of new writes.
+;; Track 7 Phase 4: handles tagged-entry values (unwraps for comparison).
 (define (merge-constraint-status-map old new)
   (cond
     [(eq? old 'infra-bot) new]
@@ -141,8 +148,11 @@
      (for/fold ([acc old])
                ([(k v) (in-hash new)])
        (define existing (hash-ref acc k #f))
+       ;; Track 7 Phase 4: unwrap tagged entries for status comparison
+       (define existing-status
+         (if (tagged-entry? existing) (tagged-entry-value existing) existing))
        ;; Monotone: 'resolved wins over 'pending (or absent)
-       (if (eq? existing 'resolved)
+       (if (eq? existing-status 'resolved)
            acc
            (hash-set acc k v)))]))
 
@@ -268,6 +278,48 @@
 ;; Check if a named cell exists.
 (define (net-has-named-cell? names name)
   (hash-has-key? names name))
+
+;; ========================================
+;; Track 7 Phase 4: Assumption-Tagged Entries
+;; ========================================
+;;
+;; Scoped cells (constraints, wakeups, warnings) tag each entry with the
+;; assumption-id under which it was created. At depth 0 (no speculation),
+;; assumption-id is #f (unconditional — always believed).
+;;
+;; Merge functions work unchanged — they accumulate tagged entries.
+;; Read helpers unwrap tags for consumers; S(-1) reads raw tags for retraction.
+
+;; A cell entry tagged with the assumption under which it was created.
+(struct tagged-entry (value assumption-id) #:transparent)
+
+;; Unwrap tagged entries in a hasheq: return hasheq with raw values.
+;; Handles mixed tagged/untagged entries (backward compatibility during migration).
+(define (unwrap-tagged-hasheq h)
+  (if (or (eq? h 'infra-bot) (not (hash? h)) (zero? (hash-count h)))
+      h
+      (for/fold ([acc (if (hasheq? h) (hasheq) (hash))])
+                ([(k v) (in-hash h)])
+        (hash-set acc k (if (tagged-entry? v) (tagged-entry-value v) v)))))
+
+;; Unwrap tagged entries in a list: return list with raw values.
+(define (unwrap-tagged-list lst)
+  (if (or (eq? lst 'infra-bot) (null? lst))
+      lst
+      (map (λ (e) (if (tagged-entry? e) (tagged-entry-value e) e)) lst)))
+
+;; Unwrap tagged entries in a hasheq where values are lists (wakeup cells).
+;; Each list element may be tagged; unwrap them.
+(define (unwrap-tagged-hasheq-list h)
+  (if (or (eq? h 'infra-bot) (not (hash? h)) (zero? (hash-count h)))
+      h
+      (for/fold ([acc (hasheq)])
+                ([(k v) (in-hash h)])
+        (hash-set acc k (if (list? v) (unwrap-tagged-list v) v)))))
+
+;; Helper: check if a hasheq is eq?-based (not equal?-based)
+(define (hasheq? h)
+  (and (hash? h) (immutable? h) (hash-eq? h)))
 
 ;; ========================================
 ;; ATMS Assumption Bridge — Phase 0b
