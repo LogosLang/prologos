@@ -172,13 +172,16 @@
 (define (with-speculative-rollback thunk success? label)
   ;; E3d: count speculation entries
   (perf-inc-speculation!)
-  ;; Phase 4c: ATMS hypothesis is mandatory — init-speculation-tracking! ensures
-  ;; the box always exists. Every speculation branch gets a hypothesis for
-  ;; error derivation chains and nogood recording.
-  (define atms-box (current-command-atms))
-  (unless atms-box
-    (error 'with-speculative-rollback
-           "ATMS not initialized — call init-speculation-tracking! before speculation"))
+  ;; Phase 4c: ATMS hypothesis is mandatory. Lazily initialize if absent
+  ;; (tests using with-fresh-meta-env bypass process-command's init).
+  ;; Track 6 BUG fix: lazy init replaces hard error.
+  (define atms-box
+    (or (current-command-atms)
+        (let ([b (box (atms-empty))])
+          (current-command-atms b)
+          (current-speculation-failures (box '()))
+          (current-context-assumptions (box '()))
+          b)))
   (define-values (_a* hyp-id)
     (let-values ([(a* aid) (atms-assume (unbox atms-box) (string->symbol label) label)])
       (set-box! atms-box a*)
