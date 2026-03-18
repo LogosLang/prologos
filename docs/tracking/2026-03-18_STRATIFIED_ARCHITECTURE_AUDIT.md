@@ -211,7 +211,46 @@ Leverage ATMS nogoods to mark "retracted" constraints. Readers check nogoods bef
 - Pro: Leverages existing ATMS infrastructure
 - Con: Requires integrating nogood semantics with cell reads; potentially expensive filtering
 
-**Recommendation**: Option C (segregated classes) for Track 7 initial scope, with Option A as the long-term architecture. Registries are genuinely permanent — a `def` or `type` doesn't get un-defined during speculation. Constraints and warnings are genuinely per-assumption — a constraint added during a speculative branch should be retracted if the branch fails.
+### 4.4 Option E: Stratified Retraction (S(-1) Stratum) — PREFERRED
+
+**Insight**: Retraction is the dual of aggregation. In NAF-LE, aggregation (count, sum, collect) is non-monotonic because the result depends on the *complete* set of derivations. Stratified negation handles this by computing each stratum to fixpoint before the next stratum observes the aggregate. Retraction has the same structure: removing an entry from a constraint store is non-monotonic, but it's safe when stratified — compute retraction to fixpoint before the monotone strata observe the result.
+
+**Mechanism**: Add a retraction stratum S(-1) that runs *before* S0 (type propagation):
+
+```
+S(-1): Assumption Retraction Stratum
+  • Propagator watches the believed-assumption set
+  • When an assumption is retracted (set shrinks — non-monotone):
+    - Fires cleanup propagators for constraint/wakeup/warning cells
+    - Removes entries tagged with retracted assumptions
+    - Reaches fixpoint (all retracted entries removed)
+  • S0 entry gate: S0 only runs after S(-1) quiesces
+  • Result: S0 sees clean, consistent, monotone-only state
+```
+
+**Why this is preferred**:
+
+1. **Reads are simple** — no per-read filtering (Option A), no overlay merge (Option B), no nogood check (Option D). After S(-1) completes, cells contain only believed entries. All downstream strata read normally.
+
+2. **Non-monotonicity is contained** — retraction is non-monotone but stratified below S0. It completes before propagation begins. This is the same mathematical structure as stratified negation in well-founded semantics — the non-monotone operation is safe because it's in a lower stratum that reaches fixpoint before monotone strata observe its output.
+
+3. **Cost is paid once per retraction event, not once per read** — Options A and D add filtering overhead to every cell read on every stratum cycle. S(-1) does the work once when the assumption set changes, then all subsequent reads are O(1).
+
+4. **Not untested** — this is the dual of the NAF-LE's stratified aggregation, which is already implemented and validated in the relational subsystem. The mathematical foundation (stratified fixpoint semantics) is shared.
+
+5. **Composes with stratified prop-net architecture** — S(-1) is simply the lowest layer in the multi-layer propagator network. The inter-stratum Galois connections apply uniformly: S(-1) fixpoint is the lower adjoint input to S0.
+
+6. **Correct-by-construction** — a constraint can't be "half-retracted" because S(-1) runs to fixpoint. A downstream stratum can't see inconsistent state because it only activates after S(-1) quiesces.
+
+**Implementation sketch**:
+- Constraint/wakeup/warning writes tag entries with the creating assumption ID (cheap: one extra field per entry)
+- S(-1) propagator: watches `believed-assumptions` cell. On change, diffs old vs new, identifies retracted assumptions, removes tagged entries from all scoped cells
+- Cell reads remain unchanged — no filtering needed
+- Registries (24 macros cells) are NOT tagged — they're permanent. Only scoped cells (constraints, warnings, wakeups) participate in S(-1)
+
+**Relationship to other options**: Option C (segregated classes) is still the right *cell classification* — permanent registries vs scoped constraints. Option E (stratified retraction) is the *retraction mechanism* for the scoped class. They compose: C for classification, E for retraction.
+
+**Recommendation**: Option C + E for Track 7. Segregate permanent registries from scoped cells (C), implement stratified retraction for the scoped class (E). This gives correct-by-construction retraction with no read-path overhead, contained non-monotonicity, and alignment with both the propagator-first architecture and the NAF-LE's stratified semantics.
 
 ---
 
@@ -263,39 +302,58 @@ Leverage ATMS nogoods to mark "retracted" constraints. Readers check nogoods bef
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 5.2 Target Architecture (Stratified Prop-Net)
+### 5.2 Target Architecture (Stratified Prop-Net with Retraction Stratum)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │              Stratified Propagator Network                    │
 │                                                               │
-│  ┌──────────── Layer 0: Type Propagation ──────────────┐    │
+│  ┌──────── S(-1): Assumption Retraction Stratum ───────┐    │
+│  │  Watches: believed-assumptions cell                  │    │
+│  │  Fires when: assumption retracted (set shrinks)     │    │
+│  │  Removes: entries tagged with retracted assumptions │    │
+│  │  from constraint, wakeup, and warning cells         │    │
+│  │  NON-MONOTONE — but stratified below S0             │    │
+│  │  Completes to fixpoint before S0 activates          │    │
+│  │  (Dual of NAF-LE's stratified aggregation)          │    │
+│  └─────────────────────────────────────────────────────┘    │
+│         │     Galois connection: S(-1) fixpoint → S0 input   │
+│         ▼                                                     │
+│  ┌──────────── S0: Type Propagation ───────────────────┐    │
 │  │  Meta cells + unification propagators (existing)     │    │
 │  │  Fires when: meta cell value changes                │    │
-│  │  Outputs: solved metas → Layer 1 readiness cells    │    │
+│  │  Sees CLEAN state — retracted entries already gone  │    │
+│  │  Outputs: solved metas → S1 readiness cells         │    │
 │  └─────────────────────────────────────────────────────┘    │
 │         │          Galois connection (upper adjoint)          │
 │         ▼                                                     │
-│  ┌──────────── Layer 1: Readiness Propagators ─────────┐    │
+│  ┌──────────── S1: Readiness Propagators ──────────────┐    │
 │  │  Per-constraint readiness cell (pending → ready)     │    │
-│  │  Propagator: watches dependency cells from Layer 0   │    │
+│  │  Propagator: watches dependency cells from S0        │    │
 │  │  Fires when: all deps non-bot → writes 'ready       │    │
 │  │  NO SCANNING — purely reactive                       │    │
 │  │  Output: ready-queue cell accumulates ready actions  │    │
 │  └─────────────────────────────────────────────────────┘    │
 │         │          Galois connection (upper adjoint)          │
 │         ▼                                                     │
-│  ┌──────────── Layer 2: Resolution Propagators ────────┐    │
+│  ┌──────────── S2: Resolution Propagators ─────────────┐    │
 │  │  Per-action-type resolution propagator               │    │
 │  │  Fires when: ready-queue has entries                 │    │
 │  │  Resolution logic IS the fire function               │    │
-│  │  Output: solve-meta! → perturbs Layer 0             │    │
+│  │  Output: solve-meta! → perturbs S0                  │    │
 │  │  NO CALLBACKS — logic is structural                  │    │
 │  └─────────────────────────────────────────────────────┘    │
 │         │                                                     │
 │         └───── S2 output perturbs S0 (lower adjoint) ──────→│
 │                                                               │
-│  Termination: all readiness cells stable, no new actions     │
+│  Termination: all layers stable, no new actions              │
+│                                                               │
+│  Cell Classification:                                         │
+│    PERMANENT (24 registries) — not tagged, not retractable   │
+│    SCOPED (14 constraint/wakeup/warning) — assumption-tagged │
+│                                                               │
+│  Key invariant: S0+ never sees retracted entries.            │
+│  Non-monotonicity is CONTAINED in S(-1).                     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -368,12 +426,34 @@ Leverage ATMS nogoods to mark "retracted" constraints. Readers check nogoods bef
 
 ## 8. Recommendations for Track 7 Design
 
-1. **Start with callback inlining** — lowest risk, breaks the circular deps that all other changes need to navigate. Module restructuring is the prerequisite for everything else.
+### Preferred Approach: Option C + E (Segregated Cells + Stratified Retraction)
 
-2. **Readiness propagators as the architectural proof-of-concept** — implementing L1 readiness cells for trait constraints demonstrates the stratified prop-net pattern on a well-understood subsystem. If it works for traits, the same pattern applies to constraints and hasmethods.
+The design should target **stratified retraction (S(-1))** as the TMS-aware accumulation mechanism, applied to **segregated scoped cells** (constraints, warnings, wakeups). This is the architecturally complete approach — correct-by-construction, performant, and grounded in the same stratified fixpoint semantics as our NAF-LE implementation.
 
-3. **Segregated cell classes (Option C) for TMS** — don't TMS-ify registries (they're permanent). Focus TMS-aware accumulation on constraints and warnings (the cells that actually participate in speculation).
+**Why stratified retraction over alternatives**:
+- **vs Option A (assumption-tagged reads)**: S(-1) pays the retraction cost once per event; Option A pays filtering cost on every read, every stratum cycle. For a system with 100-fuel resolution loops reading constraint cells dozens of times per cycle, this matters.
+- **vs Option B (overlays)**: Overlays grow monotonically (every retraction adds to the removal set). S(-1) materializes the retraction — the cell is clean after S(-1) quiesces. No growing overhead.
+- **vs Option D (nogood filtering)**: Nogoods require per-read consistency checks against the ATMS. S(-1) does consistency maintenance as a pre-pass; downstream reads are unmodified.
+- **Mathematical grounding**: Retraction is aggregation's dual. Stratified aggregation is proven correct in well-founded semantics. The same correctness argument applies to stratified retraction — it's not a new theory, it's a known structure applied to a dual problem.
 
-4. **Defer persistent registry cells** — this requires a network architecture change (separating persistent from per-command cells) that's larger than Track 7's scope. The current dual-write (param persistence + cell propagation) is the correct pattern until the architecture supports persistent cells.
+### Phased Implementation
 
-5. **Belt-and-suspenders retirement as validation gate** — Phase 5b's blocker is the success criterion for TMS-aware infrastructure cells. If constraints, warnings, and wakeups can be retracted via TMS, the network-box restore becomes unnecessary.
+1. **Cell classification (Option C)** — segregate permanent registries (24 macros cells) from scoped cells (8 constraint, 3 wakeup, 3 warning). Tag scoped cell writes with the creating assumption ID. Permanent cells are unchanged.
+
+2. **S(-1) retraction stratum** — implement the retraction propagator that watches the believed-assumptions cell. When an assumption is retracted, fire cleanup propagators that remove tagged entries from scoped cells. Run S(-1) to fixpoint before S0 activates.
+
+3. **Callback inlining** — module restructuring to replace the 3 resolution callback parameters with direct calls. This breaks the circular deps and prepares the ground for L2 resolution propagators.
+
+4. **Readiness propagators (L1)** — replace the 6 O(total) scanning functions with per-constraint readiness cells. Demonstrates the stratified prop-net pattern on a well-understood subsystem.
+
+5. **Belt-and-suspenders retirement (Phase 5b gate)** — once S(-1) handles retraction for all scoped cells, the network-box restore in `save-meta-state`/`restore-meta-state!` becomes unnecessary. Remove it; save/restore becomes a no-op (all state is TMS-managed).
+
+6. **Defer persistent registry cells** — this requires a network architecture change (separating persistent from per-command cells) that's larger than Track 7's scope. The current dual-write (param persistence + cell propagation) is the correct pattern until the architecture supports persistent cells.
+
+### Key Validation Criteria
+
+- S(-1) retraction produces identical results to current network-box restore (belt-and-suspenders comparison)
+- No orphaned wakeup handlers fire after assumption retraction
+- No retracted constraints appear in `all-failed-constraints` or `all-postponed-constraints`
+- Readiness propagators produce identical action descriptor lists to current scanning functions
+- Full test suite passes with 0 failures at each phase
