@@ -22,8 +22,8 @@
 | 0b | `process-file` verbose instrumentation | ✅ | — | 12-field VERBOSE JSON per command (commit `8b8acfe`); perf-counters 12→15 fields (commit `1056469`) |
 | 0c | Adversarial constraint graph + baseline capture | ✅ | — | First prelude-using comparative benchmark; 54 metas, 29 res-cycles; ~14.3s median; full suite baseline saved (commit `1810d2b`) |
 | 1 | Persistent registry network infrastructure | ✅ | L1 (finite registries) | WS-C: `current-persistent-registry-net-box` + `init-persistent-registry-network!` (commit `51a839e`) |
-| 2 | Registry cell persistence migration | 🔄 | L1 (monotone merge) | WS-C: migrate 24 macros + 3 warning + 2 narrowing cells |
-| 3 | Dual-write elimination | ⬜ | — (no new propagators) | WS-C: remove parameter writes from register functions |
+| 2 | Registry cell persistence migration | ✅ | L1 (monotone merge) | WS-C: 29 cells in persistent prop-network; reads/writes retargeted (commit `51cb896`) |
+| 3 | Dual-write elimination | ✅ (3a) | — (no new propagators) | WS-C: 3a done (per-command overhead removed); 3b deferred to Phase 6 (param writes + read fallback retained for seeding + test isolation) |
 | 4 | Assumption-tagged scoped cells | ⬜ | L1 (finite assumptions) | WS-B: tag constraint/wakeup/warning writes with assumption IDs |
 | 5 | S(-1) retraction stratum | ⬜ | L1 (assumption set ↓) | WS-B: retraction propagator, cleanup to fixpoint |
 | 6 | Belt-and-suspenders retirement | ⬜ | — (removal, not addition) | WS-B: retire network-box restore, Track 6 base-network, `reset-elab-network-command-state` |
@@ -437,28 +437,23 @@ This is the same cross-network bridge pattern Track 5 uses for module→file def
 
 ### Phase 3: Dual-Write Elimination
 
-**Goal**: Remove parameter writes from all `register-*!` functions. Cells are now the sole persistent store.
+**Goal**: Remove per-command overhead from registry cell management. Cells in the persistent network are now the sole runtime store; parameter writes are retained only for module-load-time seeding.
 
-**Changes to 22 macros register functions**: Remove the parameter write line. Each function now writes ONLY to the persistent cell:
+**Phase 3a (delivered)**: Remove per-command cell creation calls and elab-network net-box scoping:
+- `register-macros-cells!`, `register-warning-cells!`, `register-narrow-cells!` calls removed from `process-command` (already no-ops from Phase 2)
+- `current-macros-prop-net-box`, `current-warnings-prop-net-box`, `current-narrow-prop-net-box` scoping removed from `process-command`'s parameterize (reads/writes go directly to persistent network)
 
-```racket
-;; BEFORE:
-(define (register-trait! name meta)
-  (current-trait-registry (hash-set (current-trait-registry) name meta))
-  (macros-cell-write! (current-trait-registry-cell-id) (hasheq name meta)))
+**Phase 3b (deferred to Phase 6)**: Full parameter write removal and read-path simplification. Blocked by two dependencies:
 
-;; AFTER:
-(define (register-trait! name meta)
-  (macros-cell-write! (current-trait-registry-cell-id) (hasheq name meta)))
-```
+1. **Module-load-time seeding**: `macros.rkt` has ~20 register calls at module load time (built-in Nat/Bool/Unit ctors, subtype pairs, etc.) that execute before any persistent network exists. These write to parameters, which `init-macros-cells!` reads to initialize persistent cells. Removing parameter writes from `register-*!` functions would lose these built-in registrations. **Resolution**: Phase 6 will either (a) replay built-in registrations into the persistent network directly, or (b) move built-in registrations to a separate init function that runs after persistent network creation.
 
-**Read functions**: `read-trait-registry` reads from the persistent cell unconditionally. No parameter fallback needed — the cell IS the persistence.
+2. **Test fixture isolation**: `test-support.rkt` sets `[current-persistent-registry-net-box #f]` for test isolation. With this setting, all `macros-cell-read-safe` calls return `'not-found`, and the read-* functions fall back to parameters. Removing the parameter fallback would break ~160 test files. **Resolution**: Phase 6 will update test-support.rkt to initialize a persistent network per test (or per shared fixture), eliminating the need for parameter fallback.
 
-**Parameter elimination**: The 24 macros registry parameters (`current-schema-registry`, `current-ctor-registry`, ...) become unnecessary for persistence. They may be retained temporarily for batch-worker snapshot/restore compatibility, but their writes are removed.
-
-**batch-worker impact**: The batch-worker currently snapshots 24 macros parameters and restores them per test. With persistent cells, the batch-worker instead snapshots/restores `current-persistent-registry-net-box` — one box instead of 24 parameters. This is simpler AND more correct (captures all registry state in one snapshot).
-
-**Module loading**: Module loading accumulates definitions by calling `register-*!` functions during `process-command`. With persistent cells, these writes go directly to the persistent network. The per-file parameterize initializes a fresh persistent network; module loading fills it naturally.
+**What's achieved after Phase 3a**:
+- Per-command overhead reduced: no registry cell creation, no registry net-box scoping
+- Persistent network is the runtime authority for reads and writes during `process-command`
+- Parameters still written (dual-write) but only needed as seeds and test fallback
+- batch-worker already snapshots `current-persistent-registry-net-box` (Phase 1)
 
 ---
 
@@ -568,7 +563,15 @@ For `merge-list-append` cells: filter list elements similarly.
 
 **Changes to `reset-meta-store!`**: Remove the `current-persistent-base-network` branch. Always create a fresh `make-elaboration-network` per command. Registry cell reads come through bridge propagators from the persistent network, not from persisted cells in the elab-network.
 
-**Result**: `save-meta-state`/`restore-meta-state!` reduce from 1 box to 0 boxes. `reset-meta-store!` simplifies from conditional (base-network vs fresh) to unconditional fresh. Speculation is fully managed by TMS + S(-1). Persistence is fully managed by the persistent registry network. The elab-network is purely ephemeral again — the clean architectural state.
+**Phase 3b deferred items** (absorbed into Phase 6):
+
+4. **Parameter write removal from `register-*!` functions**: Remove the `(current-X-registry (hash-set ...))` line from all ~22 register functions. Requires module-load-time built-in registrations to be replayed into the persistent network directly (either a separate init function or a registration queue that replays at network init time).
+
+5. **Parameter fallback removal from `read-*` functions**: Remove the `(if (eq? v 'not-found) (current-X-registry) v)` pattern from all ~24 read functions. The persistent cell becomes the sole read path. Requires `test-support.rkt` to initialize a persistent network in all fixture parameterize blocks (replacing `[current-persistent-registry-net-box #f]` with an initialized network).
+
+6. **batch-worker simplification**: Remove `save-macros-registry-snapshot` / `restore-macros-registry-snapshot!` (24 parameter saves/restores). The `current-persistent-registry-net-box` snapshot already captures all registry state atomically.
+
+**Result**: `save-meta-state`/`restore-meta-state!` reduce from 1 box to 0 boxes. `reset-meta-store!` simplifies from conditional (base-network vs fresh) to unconditional fresh. All 24 macros registry parameters become vestigial (no writes, no reads). Speculation is fully managed by TMS + S(-1). Persistence is fully managed by the persistent registry network. The elab-network is purely ephemeral again — the clean architectural state.
 
 ### Phase 7: Callback Inlining + Resolution Purification
 

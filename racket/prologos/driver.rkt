@@ -375,29 +375,20 @@
 ;; bare symbols (for local use) and as fully-qualified names (for export).
 (define (process-command surf)
   (reset-meta-store!)  ;; clear metavariables from previous command
-  ;; Phase 2a/2b/2c: Create macros registry cells in the fresh network.
-  (register-macros-cells! (current-prop-net-box) (current-prop-new-infra-cell))
-  ;; Phase 2c: Create warning cells in the fresh network.
-  (register-warning-cells! (current-prop-net-box) (current-prop-new-infra-cell))
-  (register-narrow-cells! (current-prop-net-box) (current-prop-new-infra-cell))
-  ;; Phase 3a: Create per-definition cells in the fresh network.
+  ;; Track 7 Phase 3: Registry cells (macros, warnings, narrowing) now live in the
+  ;; persistent registry network — no per-command cell creation needed.
+  ;; Per-definition and namespace cells still created per-command in elab-network.
   (register-global-env-cells! (current-prop-net-box) (current-prop-new-infra-cell))
-  ;; Phase 3c: Create namespace cells in the fresh network.
   (register-namespace-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   ;; Phase D: Initialize ATMS for dependency-directed error tracking.
-  ;; The ATMS box is always available — init-speculation-tracking! creates a
-  ;; fresh ATMS per command. This is cheap (empty ATMS = ~3 hasheq allocations).
   (when (not (current-command-atms))
     (current-command-atms (box (atms-empty))))
   (init-speculation-tracking!)
-  ;; Track 6 Phase 8b-c: elaboration guards removed — cell reads unconditional.
-  ;; Net-box params scoped to parameterize so they auto-revert to #f,
-  ;; preventing stale cell reads between commands.
+  ;; Track 7 Phase 3: macros/warnings/narrow net-box scoping removed — reads/writes
+  ;; go directly to the persistent registry network, not through per-command elab-network.
+  ;; prelude-env and ns net-boxes still needed for per-definition cells.
   (parameterize ([current-prelude-env-prop-net-box (current-prop-net-box)]  ;; Phase 3a: activate cell writes (auto-reverts)
                  [current-ns-prop-net-box (current-prop-net-box)]          ;; Phase 3c: activate ns cell writes (auto-reverts)
-                 [current-macros-prop-net-box (current-prop-net-box)]      ;; Phase 8b: scope macros net-box to command
-                 [current-narrow-prop-net-box (current-prop-net-box)]      ;; Phase 8c: scope narrow net-box to command
-                 [current-warnings-prop-net-box (current-prop-net-box)]    ;; Phase 8b: scope warnings net-box to command
                  [current-nf-cache (make-hash)]         ;; per-command nf memoization
                  [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
                  [current-reduction-fuel (box 1000000)]  ;; 1M step limit
