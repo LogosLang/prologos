@@ -147,43 +147,86 @@ Permanent cells (registries) don't participate in speculation — a `type` defin
 Track 7 delivers the **full stratified propagator network** — not just readiness propagators and retraction, but also resolution propagators and the elimination of the hand-written stratified loop. The complete architecture:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Layered Network Quiescence (replaces run-stratified-loop!) │
-│                                                              │
-│  S(-1): Retraction Layer                                     │
-│    Watches: believed-assumptions cell                        │
-│    Fires: cleanup propagators for scoped cells               │
-│    Non-monotone, contained below S0                          │
-│                                                              │
-│  S0: Type Propagation Layer                                  │
-│    Existing: unification propagators, meta cells             │
-│    Fires: when meta cell values change                       │
-│    Monotone (type lattice)                                   │
-│                                                              │
-│  L1: Readiness Detection Layer                               │
-│    New: per-constraint readiness propagators                 │
-│    Fires: when dependency cells become non-bot               │
-│    Writes: action descriptors to ready-queue cell            │
-│    O(changed), not O(total) — no scanning                    │
-│                                                              │
-│  L2: Resolution Commitment Layer                             │
-│    New: resolution propagator watching ready-queue           │
-│    Fire function IS the resolution logic                     │
-│    Output: solve-meta! → writes to meta cells → perturbs S0 │
-│    No callbacks — logic is structural                        │
-│                                                              │
-│  Gauss-Seidel scheduling:                                    │
-│    S(-1) to fixpoint → S0 to fixpoint → L1 to fixpoint →    │
-│    L2 to fixpoint → if L2 wrote to S0 cells, restart S(-1)  │
-│                                                              │
-│  Termination: quiescence across ALL layers                   │
-│  (replaces fuel counter in hand-written loop)                │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  Layered Network Quiescence (replaces run-stratified-loop!)          │
+│                                                                       │
+│  S(-1): Retraction Layer                                              │
+│    Watches: believed-assumptions cell                                 │
+│    Fires: cleanup propagators for scoped cells                        │
+│    Non-monotone, contained below S0                                   │
+│                                                                       │
+│  S0: Type Propagation Layer                                           │
+│    Existing: unification propagators, meta cells                      │
+│    Fires: when meta cell values change                                │
+│    Monotone (type lattice)                                            │
+│                                                                       │
+│  L1: Readiness Detection Layer                                        │
+│    New: fan-in readiness propagators (1 per constraint)               │
+│    Countdown latch: O(1) readiness check via ground-count             │
+│    Writes: action descriptors to ready-queue channel cell             │
+│    O(changed), not O(total) — no scanning                             │
+│                                                                       │
+│  L2: Resolution Commitment Layer                                      │
+│    New: resolution propagator watching ready-queue                    │
+│    Fire function IS the resolution logic                              │
+│    Output: solve-meta! → writes to meta cells → perturbs S0          │
+│    No callbacks — logic is structural                                 │
+│                                                                       │
+│  Scheduling: Hybrid BSP/Gauss-Seidel                                  │
+│    WITHIN each stratum: BSP (all dirty propagators fire per round)    │
+│    BETWEEN strata: Gauss-Seidel (S(-1)→S0→L1→L2, sequential)         │
+│    Justified by CALM: intra-stratum propagation is monotone (safe     │
+│    for BSP/no coordination). Inter-stratum transitions are non-       │
+│    monotone from the higher stratum's perspective (need coordination  │
+│    = barrier = Gauss-Seidel ordering).                                │
+│    Feedback: if L2 wrote to S0 cells, restart from S(-1)             │
+│                                                                       │
+│  Termination: quiescence across ALL layers                            │
+│  (replaces fuel counter in hand-written loop)                         │
+│                                                                       │
+│  Bridge Propagators (Galois Connection)                               │
+│    Persistent registry network ←→ Elab-network                       │
+│    One-way bridge per registry cell: persistent cell is source,       │
+│    shadow cell in elab-network is target. Created once per command    │
+│    (lazy — fired once on initial sync). Cheaper than recreating 29   │
+│    cells and seeding from parameters.                                 │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-This is the architectural completion of the propagator-first vision for constraint resolution. After Track 7, adding a new constraint type means adding an L1 readiness propagator and an L2 resolution propagator — no loop modifications, no scanning functions, no callbacks.
+This is the architectural completion of the propagator-first vision for constraint resolution. After Track 7, adding a new constraint type means adding an L1 readiness propagator (fan-in) and an L2 resolution propagator — no loop modifications, no scanning functions, no callbacks.
 
-### 2.6 Readiness propagators: O(changed) replaces O(total)
+### 2.6 Propagator Taxonomy
+
+Track 7 introduces several propagator patterns beyond the basic "cell A → propagator → cell B" transform. This taxonomy classifies the granular patterns used across the architecture:
+
+**Structural patterns** (how propagators connect cells):
+
+| Pattern | Inputs | Outputs | Description | Example |
+|---------|--------|---------|-------------|---------|
+| **Transform** | 1 cell | 1 cell | Monotone map between lattice values | Type substitution propagator |
+| **Fan-in** | N cells | 1 cell | Combines N inputs to produce one output. Enables countdown latch optimization: maintain a ground-count per output; each input transition from ⊥ increments count; output fires when `count == N`. O(1) per input change, O(1) readiness check. Under BSP, fires once per round (checking all N inputs in one pass). | L1 readiness propagator |
+| **Fan-out** | 1 cell | N cells | Broadcasts one value to N targets | Shadow cell population from module network |
+| **Bridge** | 1 cell (net A) | 1 cell (net B) | Cross-network Galois connection. Lower adjoint: source → target. Upper adjoint: identity (read-only bridge) or merge (bidirectional). | Persistent registry → elab-network shadow |
+
+**Lifecycle patterns** (how cells participate in state management):
+
+| Pattern | Write | Read | Consume | Description | Example |
+|---------|-------|------|---------|-------------|---------|
+| **Value cell** | Monotone merge | Current value | — | Standard lattice cell. Value only grows. | Meta cell, type cell |
+| **Accumulator cell** | List-append / hash-union | Full collection | S(-1) retraction by assumption | Collects entries tagged with assumptions. Retraction removes non-believed entries. | Constraint store, wakeup index |
+| **Channel cell** | Tagged write (L1) | Read (L2) | Retract assumption (L2) → S(-1) cleanup | Produce-consume pattern. Writer tags entries with fresh assumptions; consumer reads entries and retracts their assumptions; S(-1) cleans retracted entries. All on-network. | Ready-queue between L1 and L2 |
+| **Shadow cell** | Mirror from source (bridge) | Same as source | Follows source lifecycle | Read-only projection of a cell in another network. | Elab-network view of persistent registry cell |
+
+**Scheduling patterns** (how propagators interact with the layered scheduler):
+
+| Pattern | Layer | Scheduling | Description | Example |
+|---------|-------|------------|-------------|---------|
+| **Stratum propagator** | Tagged S(-1)/S0/L1/L2 | BSP within layer, Gauss-Seidel between layers | Standard layer-tagged propagator. Fires during its layer's BSP round. | All Track 7 propagators |
+| **Threshold propagator** | Cross-layer | Fires at stratum transition (quiescence of lower layer) | Activates when lower layer reaches fixpoint. Used for stratum boundary logic. | S(-1) → S0 transition, L1 → L2 transition |
+
+This taxonomy is a starting point. A richer taxonomy — including patterns for distributed/concurrent runtimes, temporal propagators, and higher-order propagators — is deferred to future research (see DEFERRED.md).
+
+### 2.7 Readiness propagators: O(changed) replaces O(total)
 
 The audit (§2.1) identified 6 scanning functions in S1 that iterate all constraints/traits/hasmethods each cycle. The replacement:
 
@@ -248,11 +291,23 @@ Called once at file start (in `process-file`/`load-module`), not per command. Th
 
 **Cell-id stability**: Registry cell-id parameters (`current-schema-registry-cell-id`, etc.) are set once during init, not reset per command. They become file-scoped stable references.
 
-**Integration with existing infrastructure**: The elab-network (per-command) and persistent-registry-network (per-file) are separate `prop-network` instances. Cell reads need to know which network to consult:
-- Registry reads → persistent network
-- Meta/constraint reads → elab-network
+**Integration via bridge propagators**: The elab-network (per-command) and persistent-registry-network (per-file) are separate `prop-network` instances. Rather than routing reads to the correct network via conditionals, we use **bridge propagators** (Galois connections) to project persistent registry values into the elab-network as shadow cells:
 
-The existing `macros-cell-read-safe` and `macros-cell-write!` helpers already reference `current-macros-prop-net-box`. We change this to point to the persistent network box instead of the per-command elab-network box.
+```racket
+;; Per-command: create shadow cells in elab-network bridged from persistent network
+(define (bridge-registries-to-elab!)
+  (for ([persistent-cid (in-list persistent-registry-cell-ids)])
+    (define shadow-cid (net-add-cell! elab-net (cell-read persistent-cid)))
+    (add-bridge-propagator! persistent-cid shadow-cid)))
+```
+
+This means:
+- **Writes** go to the persistent network (via `macros-cell-write!` pointing to persistent net-box)
+- **Reads during elaboration** go through shadow cells in the elab-network (same network as metas — no cross-network routing needed)
+- **Bridge propagators** keep shadows in sync (lazy — only fire when persistent cell changes during the command)
+- **Shadow cells auto-clean** when the elab-network is cleared per command — no explicit cleanup
+
+This is the same cross-network bridge pattern Track 5 uses for module→file definition shadowing. The existing `macros-cell-read-safe` helpers read from the shadow cell in the elab-network, not from the persistent cell directly.
 
 ### Phase 2: Registry Cell Persistence Migration
 
@@ -405,51 +460,55 @@ For `merge-list-append` cells: filter list elements similarly.
 
 ### Phase 8a: Readiness Propagators (L1)
 
-**Goal**: Replace the 6 O(total) S1 scanning functions with per-constraint readiness propagators.
+**Goal**: Replace the 6 O(total) S1 scanning functions with per-constraint fan-in readiness propagators.
 
 **New infrastructure**:
 
-**Ready-queue cell**: Accumulates action descriptors for constraints whose dependencies became ready.
+**Ready-queue channel cell**: A channel cell (see §2.6 taxonomy) that accumulates action descriptors for constraints whose dependencies became ready. Entries are assumption-tagged for on-network produce-consume:
 
 ```racket
 (define current-ready-queue-cell-id (make-parameter #f))
 ;; Merge: list append (monotonic accumulation of ready actions)
+;; Lifecycle: channel cell — L1 writes, L2 reads + retracts, S(-1) cleans
 ```
 
-**Per-constraint readiness propagator**: Created at constraint registration time:
+**Fan-in readiness propagator with countdown latch**: One propagator per constraint (NOT per dependency). Uses a countdown latch for O(1) readiness detection:
 
 ```racket
 (define (register-trait-constraint-with-readiness! meta-id info dep-cell-ids)
   ;; ... existing registration ...
-  ;; NEW: create readiness propagator
-  (for ([dep-cid (in-list dep-cell-ids)])
-    (add-readiness-propagator! dep-cid meta-id info)))
+  ;; NEW: fan-in readiness propagator watching ALL deps
+  (define total-deps (length dep-cell-ids))
+  (define ground-count (box 0))  ;; countdown latch
 
-(define (add-readiness-propagator! dep-cell-id dict-meta-id tc-info)
-  ;; Propagator: when dep-cell becomes non-bot, check if all deps ready
-  ;; If ready, write action descriptor to ready-queue cell
+  ;; Termination: Level 1 (Tarski). Each dep transitions at most once
+  ;; (⊥ → solved). Fan-in fires at most once per dep per BSP round.
+  ;; Countdown latch: O(1) readiness check (compare count == total).
   (net-add-propagator!
-    (list dep-cell-id)
-    (lambda (dep-val)
-      (when (and (not (prop-type-bot? dep-val))
-                 (not (meta-solved? dict-meta-id))
-                 (all-deps-non-bot? dict-meta-id))
+    dep-cell-ids  ;; fan-in: ALL deps as inputs
+    (lambda dep-vals
+      ;; Under BSP: fires once per round with all current dep values
+      ;; Count non-bot deps
+      (define n-ground (count (lambda (v) (not (prop-type-bot? v))) dep-vals))
+      (when (and (= n-ground total-deps)
+                 (not (meta-solved? meta-id)))
+        ;; All deps ground — write action to ready-queue channel cell
+        ;; Tagged with fresh assumption for on-network consume pattern
+        (define assumption-id (make-fresh-assumption!))
         (cell-write! (current-ready-queue-cell-id)
-                     (list (action-resolve-trait dict-meta-id tc-info)))))))
+                     (list (tagged-action assumption-id
+                             (action-resolve-trait meta-id info))))))))
 ```
 
-**S1 replacement**: Instead of scanning, S1 reads from the ready-queue cell:
+**Countdown latch optimization**: In BSP scheduling, the fan-in propagator fires once per round with ALL current dep values. The `count` of non-⊥ values is computed in a single pass. When `count == total-deps`, the constraint is ready. No per-dep tracking needed — the BSP round gives us all inputs simultaneously.
 
-```racket
-;; BEFORE (O(total)):
-(define actions (append (collect-ready-constraints-via-cells) ...))
+For Gauss-Seidel scheduling (fallback), a stateful countdown latch is more efficient: maintain `ground-count` as a box; each dep transition increments it; readiness fires when `ground-count == total-deps`. Either approach is O(1) for the readiness check itself.
 
-;; AFTER (O(ready)):
-(define actions (read-ready-queue))
-(clear-ready-queue!)
-```
+**Propagator count**: 1 fan-in propagator per constraint (not 1 per dependency). For 50 constraints: 50 propagators total, regardless of dependency fan-out. This is the fan-in pattern from §2.6.
 
-**Ordering concern**: Readiness propagators fire during S0 quiescence (they're normal propagators). The ready-queue accumulates during S0. S1 reads the queue. This preserves the stratum ordering — readiness detection (S1) only observes what S0 produced.
+**S1 replacement**: Instead of scanning, L1 readiness propagators write to the ready-queue channel cell. S1 disappears as a separate phase — readiness detection is now structural (propagator-driven), not imperative (scan-driven).
+
+**Ordering**: Readiness propagators are tagged as L1 layer. Under the hybrid BSP/Gauss-Seidel scheduler, they fire after S0 reaches quiescence. The ready-queue accumulates during L1's BSP rounds. L2 reads the queue after L1 quiesces. This preserves stratum ordering.
 
 **Belt-and-suspenders**: During Phase 8a, run BOTH the old scanning functions and the ready-queue, assert identical action descriptor sets. Remove scanning functions after validation.
 
@@ -475,23 +534,37 @@ Layered network quiescence:
          → resolution writes to meta cells → perturbs S0 → cascade continues
 ```
 
-**Resolution propagator**: A single propagator that watches the ready-queue cell. Its fire function IS the resolution logic:
+**Resolution propagator**: A single propagator that watches the ready-queue channel cell. Its fire function IS the resolution logic. Consumption uses the on-network channel cell pattern (§2.6): after processing each entry, retract its assumption so S(-1) cleans it on the next cycle.
 
 ```racket
 (define (install-resolution-propagator! ready-queue-cell-id)
+  ;; Termination: Level 2 (well-founded). Each resolution either produces a
+  ;; concrete dictionary (terminal) or creates metas at strictly smaller type
+  ;; depth. Type depth is well-founded → finite resolution chains.
   (net-add-propagator!
     (list ready-queue-cell-id)
     (lambda (queue-val)
-      (for ([action (in-list queue-val)])
+      (for ([tagged-entry (in-list queue-val)])
+        (define action (tagged-action-value tagged-entry))
+        (define assumption-id (tagged-action-assumption-id tagged-entry))
+        ;; Execute resolution
         (match action
           [(action-retry-constraint c)
-           ;; Direct call — no callback indirection (Phase 7 eliminated callbacks)
            (retry-unify-constraint! c)]
           [(action-resolve-trait dict-meta-id tc-info)
            (resolve-trait-constraint! dict-meta-id tc-info)]
           [(action-resolve-hasmethod hm-meta-id hm-info)
-           (resolve-hasmethod-constraint! hm-meta-id hm-info)])))))
+           (resolve-hasmethod-constraint! hm-meta-id hm-info)])
+        ;; Consume: retract the entry's assumption → S(-1) will clean it
+        (retract-assumption! assumption-id)))))
 ```
+
+**On-network queueing lifecycle**: The ready-queue is a channel cell (§2.6 taxonomy). The full lifecycle:
+1. **L1 (produce)**: Readiness propagator writes a tagged action to the channel cell
+2. **L2 (consume)**: Resolution propagator reads the action, executes resolution, retracts the entry's assumption
+3. **S(-1) (clean)**: On the next cycle, the retraction stratum removes retracted entries from the channel cell
+
+All queueing state lives on the network. No off-network clearing. The channel cell pattern composes naturally with the layered scheduler — production (L1) and consumption (L2) happen in different strata, with S(-1) garbage collection.
 
 **Feedback mechanism**: Resolution may call `solve-meta!`, which writes to a meta cell. This cell write is detected by the network's dirty-flag mechanism — the network is NOT quiescent, so propagation continues. The readiness propagators may fire again (new metas solved → new constraints ready). The cycle continues until the network reaches true quiescence across all layers.
 
@@ -499,14 +572,14 @@ Layered network quiescence:
 
 **Re-entrancy safety**: Currently `current-in-stratified-resolution?` prevents recursive `run-stratified-resolution!` calls when L2 callbacks call `solve-meta!`. With the propagator architecture, this is structural — `solve-meta!` writes to a cell, which triggers S0 propagators within the SAME quiescence run. No re-entrancy because there's no recursive function call; it's all within the network scheduler.
 
-**Stratum ordering within `run-to-quiescence`**: The network scheduler must respect layer ordering:
-1. Fire all S(-1) retraction propagators to fixpoint
-2. Fire all S0 type propagators to fixpoint
-3. Fire all L1 readiness propagators to fixpoint
-4. Fire all L2 resolution propagators to fixpoint
+**Stratum ordering**: The hybrid BSP/Gauss-Seidel scheduler (§2.5) processes layers in order:
+1. Fire all S(-1) retraction propagators to BSP fixpoint
+2. Fire all S0 type propagators to BSP fixpoint
+3. Fire all L1 readiness propagators to BSP fixpoint
+4. Fire all L2 resolution propagators to BSP fixpoint
 5. If any L2 propagator wrote to an S0 cell (meta solution), go back to step 1
 
-This is a **Gauss-Seidel iteration** across layers — the same scheduling pattern used for effect-bridge propagators (Architecture A+D). The network already supports priority-based propagator scheduling; layers are priorities.
+Intra-stratum: BSP (all dirty propagators in the layer fire per round — safe by CALM, as intra-stratum propagation is monotone). Inter-stratum: Gauss-Seidel (each layer reaches fixpoint before the next activates — required because higher strata need lower strata's complete fixpoint).
 
 **Implementation approach**: Tag propagators with a layer identifier when created:
 - S(-1) propagators: layer = -1 (retraction)
@@ -684,15 +757,17 @@ The same mathematical structure (stratified fixpoint semantics) underlies both N
 
 ### Key tensions to address in D.3
 
-1. **Two-network complexity**: Is the lifecycle separation worth the added network management? Alternative: one network with selective reset (clear metas/constraints, preserve registries). Trade-off: simpler management vs. harder to reason about partial reset correctness.
+1. **Two-network complexity** — **RESOLVED in D.2 discussion**: Two networks is the right design. Better correctness reasoning, propagator-first, data-oriented, decomplected. Bridge propagators (Galois connections) provide clean cross-network integration. The alternative (one network with selective reset) is harder to reason about and mixes lifecycle concerns.
 
 2. **Scoped cell tagging overhead**: Every constraint/wakeup/warning write gets an assumption-id field. At depth 0 (no speculation), this is always `#f`. Is the per-write cost measurable? Track 4's depth-0 fast path suggests it's negligible.
 
-3. **Readiness propagator count**: One propagator per constraint × dependency. For a command with 50 constraints averaging 2 dependencies each, that's 100 readiness propagators. Is this within the network's performance envelope? Measure in Phase 0.
+3. **Readiness propagator count** — **RESOLVED in D.2 discussion**: Fan-in propagators (1 per constraint, not 1 per dependency) reduce count from N×D to N. For 50 constraints: 50 propagators total. Countdown latch optimization: O(1) readiness check. Under BSP scheduling, fires once per round with all current dep values — even more advantageous than Gauss-Seidel.
 
-4. **Layered scheduler complexity**: The 4-layer Gauss-Seidel scheduler is new infrastructure in `propagator.rkt`. It must correctly detect cross-layer cell writes and restart from the lowest affected layer. The effect-bridge scheduler is a precedent but was simpler (2 priorities). Is 4-layer scheduling provably correct? The answer should be yes — stratified fixpoint semantics gives us the mathematical foundation — but the implementation must be tested with adversarial constraint graphs.
+4. **Layered scheduler complexity** — **PARTIALLY RESOLVED in D.2 discussion**: Hybrid BSP/Gauss-Seidel is justified by CALM (monotone intra-stratum = safe for BSP; non-monotone inter-stratum = needs Gauss-Seidel barrier). Correctness follows from stratified fixpoint semantics. Phase 0 adversarial benchmark (Q5) will validate empirically. The scheduler extension can be unit-tested independently before wiring into constraint resolution.
 
 5. **Loop elimination completeness**: After Phase 8c, `run-stratified-resolution!` is gone. Every scenario currently handled by the hand-written loop must be handled by layered quiescence. The risk is edge cases in the loop that aren't exercised by the test suite — need to audit the loop's special-case handling before removal.
+
+6. **Gödel Completeness per layer**: Each phase in the progress tracker now has a termination guarantee level. Cross-layer feedback (L2→S0) terminates via well-founded measure (type depth × unsolved meta count). See `GÖDEL_COMPLETENESS.org` for the full hierarchy. Fuel retained as defense-in-depth behind the structural argument.
 
 ---
 
@@ -720,7 +795,8 @@ The same mathematical structure (stratified fixpoint semantics) underlies both N
 
 1. **Per-phase**: `racket tools/run-affected-tests.rkt --all` — 0 new failures after each phase
 2. **Acceptance file**: `examples/2026-03-18-track7-acceptance.prologos` — run via `process-file` after each phase
-3. **Belt-and-suspenders**:
+3. **Adversarial benchmark** (Phase 0): Synthetic constraint graph with deep resolution chains (depth 5+), wide fan-out (20+ constraints per meta), nested speculation (3+ levels), cyclic feedback. Compare hand-written loop vs layered scheduler on iteration count, wall time, correctness.
+4. **Belt-and-suspenders**:
    - Phase 2: persistent cell reads vs parameter reads (0 divergences)
    - Phase 5: S(-1) retraction vs network-box restore (identical results)
    - Phase 6: retire network-box restore, verify suite still passes
@@ -747,27 +823,48 @@ The same mathematical structure (stratified fixpoint semantics) underlies both N
 
 ## 13. Open Questions
 
-### Q1: One persistent network or per-subsystem persistent networks?
+### Q1: One persistent network or per-subsystem persistent networks? — **RESOLVED: Option A**
 
 Option A: One persistent registry network holding all 29 cells.
 Option B: Separate networks per subsystem (macros, warnings, narrowing).
 
-**Tentative**: Option A. 29 cells is small. Subsystem separation adds management overhead without clear benefit. If a subsystem needs different lifecycle semantics, we can split later.
+**Resolution**: Option A. All share similar lifecycle concerns. One network, better correctness reasoning, propagator-first, data-oriented, decomplected. 29 cells is small; subsystem separation adds management overhead without clear benefit.
 
-### Q2: Warning cells — persistent or scoped?
+### Q2: Warning cells — scoped with full observability — **RESOLVED**
 
-Warnings are accumulated per-command and reported at command end. They don't persist across commands. Should they be in the persistent network (accumulated, then read/cleared per command) or the elab-network (current behavior)?
+Warnings are accumulated per-command and reported at command end. They don't persist across commands.
 
-**Tentative**: Scoped (in elab-network) with assumption tagging. Warnings are per-command, not per-file. S(-1) retraction applies to speculative warnings.
+**Resolution**: Scoped (in elab-network) with full assumption-tagged cell treatment. This gives maximum observability: warnings as cell values with assumption tags, provenance (source location, triggering constraint, elaboration phase), and source annotations. The LSP watches warning cells; when entries are added/retracted, it updates diagnostics in real time. This is the same observability architecture as definition cells — the network IS the observable state. The principles check (observability + expressiveness through to end tooling) guided this resolution.
 
-### Q3: Ready-queue consumption semantics
+### Q3: Ready-queue consumption semantics — **RESOLVED: On-network channel cell**
 
-Should the ready-queue cell be consumed (cleared after S1 reads it) or accumulated (S1 reads new entries since last read)?
+**Resolution**: The ready-queue is a **channel cell** (§2.6 taxonomy). The consumption pattern is entirely on-network using assumption-tagged produce-consume:
 
-**Tentative**: Consumed. S1 reads the queue and clears it. S0 on the next iteration may produce new readiness events. Accumulation risks processing stale events.
+1. **L1 (produce)**: Readiness propagator writes a tagged action descriptor to the channel cell
+2. **L2 (consume)**: Resolution propagator reads the action, executes resolution, retracts the entry's assumption
+3. **S(-1) (clean)**: On the next cycle, retraction stratum removes retracted entries
 
-### Q4: Batch-worker persistent network snapshot
+No off-network clearing. No imperative queue manipulation. The queueing lifecycle is structural — write, read, retract, clean — all through existing cell + assumption infrastructure. This pattern will be useful in distributed/concurrent runtime designs (same produce-consume semantics across processes/nodes).
 
-The batch-worker currently snapshots 24+ macros parameters. With persistent cells, it should snapshot the persistent network box. Is one box sufficient?
+### Q4: Batch-worker persistent network snapshot — **RESOLVED: 1 box**
 
-**Tentative**: Yes. The persistent network box contains the CHAMP-based prop-network, which is immutable — the snapshot IS the box dereference. Restoring the box pointer restores all registry state atomically.
+**Resolution**: Yes, 1 box is sufficient. If the same snapshot serves all consumers, 1 box. If different modules need different views in the future, each gets its own box pointing to a different CHAMP subtree — structural sharing makes this cheap. For now, 1 box covers all 29 registry cells atomically.
+
+### Q5: Adversarial benchmark for Phase 0 — **NEW**
+
+Phase 0 should include a synthetic adversarial constraint graph alongside the standard suite baseline:
+- Deep resolution chains (depth 5+, trait→trait→trait)
+- Wide fan-out (one meta used by 20+ constraints)
+- Nested speculation (3+ levels deep)
+- Cyclic feedback (L2 solving metas that enable other L2 constraints)
+
+Run both the current hand-written loop and the layered scheduler against this graph. Compare iteration counts, wall time, and correctness. This validates the hybrid BSP/Gauss-Seidel scheduler under adversarial conditions.
+
+### Q6: Propagator taxonomy as a design artifact — **NEW**
+
+The granular taxonomy in §2.6 (transform, fan-in, fan-out, bridge; value, accumulator, channel, shadow; stratum, threshold) is a starting point. A richer taxonomy should include:
+- **Temporal propagators**: fire after a delay or on a schedule (for reactive/streaming)
+- **Higher-order propagators**: propagators that create/remove other propagators
+- **Distributed propagators**: cross-process/cross-node with eventual consistency semantics
+
+This research is deferred (see DEFERRED.md) but the Track 7 taxonomy provides the foundation.

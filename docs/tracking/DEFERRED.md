@@ -1032,3 +1032,23 @@ issues in the relational subsystem (Phase 7 surface syntax), not WS-specific bug
 - 6c: Contradiction diagnosis view (ATMS nogoods visualization)
 - 6d: Documentation + user guide for the Observatory panel
 - Source: `2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md` Phases 6a-6d
+
+## Propagator Taxonomy — Extended Research
+
+### Richer Taxonomy Beyond Track 7 Foundation
+Track 7 (§2.6) establishes a granular taxonomy of propagator patterns:
+- **Structural**: transform, fan-in, fan-out, bridge
+- **Lifecycle**: value cell, accumulator cell, channel cell, shadow cell
+- **Scheduling**: stratum propagator, threshold propagator
+
+A richer taxonomy should research and design:
+- **Temporal propagators**: fire after a delay or on a schedule (reactive/streaming use cases)
+- **Higher-order propagators**: propagators that create/remove other propagators (meta-propagation)
+- **Distributed propagators**: cross-process/cross-node with eventual consistency semantics (runtime)
+- **Adaptive propagators**: adjust their behavior based on network state (optimization)
+- **Observational propagators**: read-only, for instrumentation/debugging (Observatory integration)
+
+This research informs the distributed/concurrent runtime design and the LSP integration.
+- Source: `2026-03-18_TRACK7_PERSISTENT_CELLS_STRATIFIED_RETRACTION.md` §2.6, §13 Q6
+- Blocked on: Track 7 implementation (establishes the foundation taxonomy)
+- Added: 2026-03-18
