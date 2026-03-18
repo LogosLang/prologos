@@ -33,7 +33,7 @@
 | 8b | Resolution propagators (L2) | ✅ | L2 (type depth ↓) | WS-B: ready-queue consumption in pure loop |
 | 8c | Stratified loop elimination | ✅ | L1+L2 (composed) | WS-B: scanners removed; ready-queue sole action source; loop retained for fuel/progress |
 | 9 | QTT multiplicity cells + cross-domain bridges | ✅ (infra) | L1 (3-element lattice) | WS-A: all infrastructure exists (Track 4); wiring blocked by prop-net/elab-net boundary in decompose-pi (Track 8 scope) |
-| 10 | Performance validation + PIR | 🔄 | — | Benchmarks complete: 0 regression; PIR pending |
+| 10 | Performance validation + PIR | ✅ | — | No regression; PIR: `2026-03-18_TRACK7_PIR.md` |
 
 ---
 
