@@ -74,7 +74,7 @@
 ;; Initializes each cell from the current legacy parameter content.
 (define (register-warning-cells! net-box new-cell-fn)
   (when (and net-box new-cell-fn)
-    (current-warnings-prop-net-box net-box)
+    ;; Track 6 Phase 8b: net-box now set by process-command parameterize
     (define enet0 (unbox net-box))
     (define-values (enet1 cw-cid) (new-cell-fn enet0 (current-coercion-warnings) merge-list-append))
     (current-coercion-warnings-cell-id cw-cid)

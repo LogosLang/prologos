@@ -493,14 +493,13 @@
 (define current-macros-in-elaboration? (make-parameter #f))
 
 ;; Track 3: Safe cell-primary read helper.
-;; Returns cell content when we are inside active elaboration AND the
-;; propagator network exists and contains the cell.
-;; Falls back to 'not-found otherwise (caller should use parameter fallback).
+;; Track 6 Phase 8b: guard removed — cell reads are unconditional.
+;; Returns cell content when the propagator network exists and contains the cell.
+;; Falls back to 'not-found if no network or cell-id (parameter fallback in caller).
 (define (macros-cell-read-safe cid)
-  (define in-elab? (current-macros-in-elaboration?))
   (define net-box (current-macros-prop-net-box))
   (define read-fn (current-macros-prop-cell-read))
-  (if (and in-elab? cid net-box read-fn)
+  (if (and cid net-box read-fn)
       (with-handlers ([exn:fail? (λ (_) 'not-found)])
         (read-fn (unbox net-box) cid))
       'not-found))
@@ -551,8 +550,9 @@
 ;; new-cell-fn: (enet initial-value merge-fn → (values enet* cell-id))
 (define (register-macros-cells! net-box new-cell-fn)
   (when (and net-box new-cell-fn)
-    ;; Install net-box for dual-write access during this command
-    (current-macros-prop-net-box net-box)
+    ;; Track 6 Phase 8b: net-box now set by process-command parameterize
+    ;; (auto-reverts to #f after command, preventing stale cell reads).
+    ;; register-macros-cells! still creates cells in the shared network.
     (define enet0 (unbox net-box))
     ;; Create cells initialized from current registry content
     (define-values (enet1 sr-cid) (new-cell-fn enet0 (current-schema-registry) merge-hasheq-union))

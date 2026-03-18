@@ -97,7 +97,7 @@
 ;; Create narrowing cells in the propagator network.
 (define (register-narrow-cells! net-box new-cell-fn)
   (when (and net-box new-cell-fn)
-    (current-narrow-prop-net-box net-box)
+    ;; Track 6 Phase 8c: net-box now set by process-command parameterize
     (define enet0 (unbox net-box))
     ;; Phase 5a: narrow-constraints — monotonic list accumulator
     (define-values (enet1 nc-cid) (new-cell-fn enet0 (current-narrow-constraints) merge-list-append))
@@ -107,13 +107,11 @@
     (current-narrow-var-constraints-cell-id nvc-cid)
     (set-box! net-box enet2)))
 
-;; Cell-primary read helper for narrowing.
-;; Mirrors macros-cell-read-safe: checks elaboration guard before reading cells.
+;; Track 6 Phase 8c: guard removed — cell reads unconditional.
 (define (narrow-cell-read-safe cid)
-  (define in-elab? (current-narrow-in-elaboration?))
   (define net-box (current-narrow-prop-net-box))
   (define read-fn (current-narrow-prop-cell-read))
-  (if (and in-elab? cid net-box read-fn)
+  (if (and cid net-box read-fn)
       (with-handlers ([exn:fail? (λ (_) 'not-found)])
         (read-fn (unbox net-box) cid))
       'not-found))

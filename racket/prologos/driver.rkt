@@ -390,10 +390,14 @@
   (when (not (current-command-atms))
     (current-command-atms (box (atms-empty))))
   (init-speculation-tracking!)
-  (parameterize ([current-macros-in-elaboration? #t]                        ;; Track 3: cell-primary readers active
-                 [current-narrow-in-elaboration? #t]                       ;; Track 3 Phase 5: narrowing cell readers active
-                 [current-global-env-prop-net-box (current-prop-net-box)]  ;; Phase 3a: activate cell writes (auto-reverts)
+  ;; Track 6 Phase 8b-c: elaboration guards removed — cell reads unconditional.
+  ;; Net-box params scoped to parameterize so they auto-revert to #f,
+  ;; preventing stale cell reads between commands.
+  (parameterize ([current-global-env-prop-net-box (current-prop-net-box)]  ;; Phase 3a: activate cell writes (auto-reverts)
                  [current-ns-prop-net-box (current-prop-net-box)]          ;; Phase 3c: activate ns cell writes (auto-reverts)
+                 [current-macros-prop-net-box (current-prop-net-box)]      ;; Phase 8b: scope macros net-box to command
+                 [current-narrow-prop-net-box (current-prop-net-box)]      ;; Phase 8c: scope narrow net-box to command
+                 [current-warnings-prop-net-box (current-prop-net-box)]    ;; Phase 8b: scope warnings net-box to command
                  [current-nf-cache (make-hash)]         ;; per-command nf memoization
                  [current-whnf-cache (make-hash)]       ;; per-command whnf memoization
                  [current-reduction-fuel (box 1000000)]  ;; 1M step limit
@@ -1288,7 +1292,8 @@
 
 (define (run-post-compilation-inference!)
   ;; Fast path: skip if no capability types exist
-  (when (not (hash-empty? (read-capability-registry)))
+  ;; Track 6 Phase 8b: read from parameter (this runs outside elaboration context)
+  (when (not (hash-empty? (current-capability-registry)))
     (define result (run-capability-inference))
     (current-module-cap-result result)
     ;; Check all entries in the global env for authority roots.
