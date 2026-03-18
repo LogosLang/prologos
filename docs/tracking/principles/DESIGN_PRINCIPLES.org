@@ -362,6 +362,11 @@ code.
 - *Propagator-First Infrastructure* is correct-by-construction applied to
   tooling and infrastructure: derived state is always consistent because
   the network enforces it
+- *Gödel Completeness* is correct-by-construction applied to termination:
+  every computation on the propagator network provably halts, not because
+  of fuel bounds, but because of structural properties (finite lattices,
+  well-founded measures, widening convergence). Non-termination is
+  unrepresentable in the decidable kernel. See [[file:GÖDEL_COMPLETENESS.org][GÖDEL_COMPLETENESS.org]].
 
 * Open Extension, Closed Verification
 
@@ -450,8 +455,16 @@ discovered.
 The existing stratified resolution loop (~run-stratified-resolution!~) is a
 hand-written orchestrator with this pattern partially implemented. The
 callbacks it invokes are vestigial --- the loop itself is the load-bearing
-path. Future work (Track 7+) replaces the hand-written loop with actual
-stratified propagator layers.
+path. Track 7 replaces the hand-written loop with actual stratified
+propagator layers (S(-1), S0, L1, L2) using Gauss-Seidel scheduling
+across layers.
+
+*Termination*: Each stratum terminates individually (Level 1: Tarski
+fixpoint on finite lattice). Cross-stratum feedback terminates via
+well-founded measure (Level 2: type depth decreases per resolution cycle).
+The full layered quiescence terminates as a composition of per-layer
+guarantees. See [[file:GÖDEL_COMPLETENESS.org][GÖDEL_COMPLETENESS.org]] for the hierarchy of termination
+guarantees and the decidability discipline for propagator networks.
 
 ** Relationship to First-Class by Default
 

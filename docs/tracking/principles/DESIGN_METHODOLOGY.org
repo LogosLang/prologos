@@ -182,6 +182,14 @@ This is an iterative cycle:
   Every level of abstraction should have at least one concrete example
   that a reader can trace through.
 
+- *State termination arguments for propagator-hosted computation*: Any
+  design that adds propagators, lattices, or cross-layer interactions
+  must include explicit termination arguments. For each new propagator:
+  which guarantee level (1--5) applies? For cross-layer feedback: what
+  is the well-founded measure that decreases? A design without
+  termination arguments for its propagator components is incomplete.
+  See [[file:GÖDEL_COMPLETENESS.org][GÖDEL_COMPLETENESS.org]].
+
 *** The critique cycle in practice
 
 The Extended Spec Design went through multiple rounds:

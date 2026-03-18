@@ -327,3 +327,38 @@ def process := >> parse validate transform serialize
 ** Block-Form ~|>~ Enables Loop Fusion
 Consecutive ~map~/~filter~ steps in a block-form pipe fuse into a
 single pass when followed by a terminal (~fold~, ~sum~, ~reduce~).
+
+* Propagator Network Conventions
+
+** Termination Argument Convention
+Every new propagator or lattice added to the network must include a
+termination argument in its definition comment. The argument identifies
+which level of the termination guarantee hierarchy applies:
+
+- *Level 1 (Tarski)*: "Finite lattice height /h/; monotone propagator."
+- *Level 2 (Well-founded)*: "Measure /m/ decreases on each step; /m/ is well-founded."
+- *Level 3 (Widening)*: "Concrete domain widened to finite abstract lattice."
+- *Level 4 (Productive)*: "Each observation terminates; overall computation is coinductive."
+- *Level 5 (Fuel)*: "Bounded by fuel; structural argument not available because [reason]."
+
+Example:
+#+begin_src racket
+;; Readiness propagator for trait constraint.
+;; Termination: Level 1 (Tarski). Each dependency cell transitions
+;; at most once (⊥ → solved). This propagator fires at most once per
+;; dependency. Finite dependencies = finite firings.
+(define (add-readiness-propagator! dep-cell-id meta-id tc-info)
+  ...)
+#+end_src
+
+See [[file:GÖDEL_COMPLETENESS.org][GÖDEL_COMPLETENESS.org]] for the full hierarchy and design discipline.
+
+** Layer Tagging Convention
+Propagators must be tagged with their stratum layer at creation time:
+- ~'retraction~ (S(-1)): assumption cleanup propagators
+- ~'propagation~ (S0): type unification, lattice merge propagators
+- ~'readiness~ (L1): constraint readiness detection
+- ~'resolution~ (L2): resolution commitment propagators
+
+The layered scheduler processes propagators in layer order. Untagged
+propagators default to ~'propagation~ (S0) for backward compatibility.

@@ -7,30 +7,30 @@
 **Master roadmap**: `2026-03-13_PROPAGATOR_MIGRATION_MASTER.md` Track 7
 **Audit**: `2026-03-18_STRATIFIED_ARCHITECTURE_AUDIT.md`
 **Prior PIRs**: Track 4 (TMS cell architecture), Track 5 (persistent module networks), Track 6 (stratified prop-net insight, dual-write reframing, context-loss risk)
-**Principle references**: DESIGN_PRINCIPLES.org § "Stratified Propagator Networks", DEVELOPMENT_LESSONS.org § "Callbacks Are a Propagator-First Anti-Pattern"
+**Principle references**: DESIGN_PRINCIPLES.org § "Stratified Propagator Networks", DEVELOPMENT_LESSONS.org § "Callbacks Are a Propagator-First Anti-Pattern", GÖDEL_COMPLETENESS.org (termination guarantee hierarchy)
 
 ---
 
 ## Progress Tracker
 
-| Phase | Description | Status | Notes |
-|-------|-------------|--------|-------|
-| D.1 | Initial design document | 🔄 | This document |
-| D.2 | External critique | ⬜ | |
-| D.3 | Self-critique (principle alignment) | ⬜ | |
-| 0 | Performance baseline + acceptance file | ⬜ | |
-| 1 | Persistent registry network infrastructure | ⬜ | WS-C: separate persistent network for registries |
-| 2 | Registry cell persistence migration | ⬜ | WS-C: migrate 24 macros + 3 warning + 2 narrowing cells |
-| 3 | Dual-write elimination | ⬜ | WS-C: remove parameter writes from register functions |
-| 4 | Assumption-tagged scoped cells | ⬜ | WS-B: tag constraint/wakeup/warning writes with assumption IDs |
-| 5 | S(-1) retraction stratum | ⬜ | WS-B: retraction propagator, cleanup to fixpoint |
-| 6 | Belt-and-suspenders retirement | ⬜ | WS-B: remove network-box restore (Phase 5b gate) |
-| 7 | Callback inlining + resolution.rkt extraction | ⬜ | WS-B: module restructuring, direct calls |
-| 8a | Readiness propagators (L1) | ⬜ | WS-B: replace O(total) S1 scanning with per-constraint readiness cells |
-| 8b | Resolution propagators (L2) | ⬜ | WS-B: replace `execute-resolution-actions!` loop with propagators |
-| 8c | Stratified loop elimination | ⬜ | WS-B: `run-stratified-resolution!` → layered network quiescence |
-| 9 | QTT multiplicity cells + cross-domain bridges | ⬜ | WS-A: mult lattice in network |
-| 10 | Performance validation + PIR | ⬜ | |
+| Phase | Description | Status | Termination | Notes |
+|-------|-------------|--------|-------------|-------|
+| D.1 | Initial design document | 🔄 | — | This document |
+| D.2 | External critique | ⬜ | — | |
+| D.3 | Self-critique (principle alignment) | ⬜ | — | |
+| 0 | Performance baseline + acceptance file | ⬜ | — | |
+| 1 | Persistent registry network infrastructure | ⬜ | L1 (finite registries) | WS-C: separate persistent network for registries |
+| 2 | Registry cell persistence migration | ⬜ | L1 (monotone merge) | WS-C: migrate 24 macros + 3 warning + 2 narrowing cells |
+| 3 | Dual-write elimination | ⬜ | — (no new propagators) | WS-C: remove parameter writes from register functions |
+| 4 | Assumption-tagged scoped cells | ⬜ | L1 (finite assumptions) | WS-B: tag constraint/wakeup/warning writes with assumption IDs |
+| 5 | S(-1) retraction stratum | ⬜ | L1 (assumption set ↓) | WS-B: retraction propagator, cleanup to fixpoint |
+| 6 | Belt-and-suspenders retirement | ⬜ | — (removal, not addition) | WS-B: remove network-box restore (Phase 5b gate) |
+| 7 | Callback inlining + resolution.rkt extraction | ⬜ | — (restructuring only) | WS-B: module restructuring, direct calls |
+| 8a | Readiness propagators (L1) | ⬜ | L1 (fire once per dep) | WS-B: replace O(total) S1 scanning with per-constraint readiness cells |
+| 8b | Resolution propagators (L2) | ⬜ | L2 (type depth ↓) | WS-B: replace `execute-resolution-actions!` loop with propagators |
+| 8c | Stratified loop elimination | ⬜ | L1+L2 (composed) | WS-B: `run-stratified-resolution!` → layered network quiescence |
+| 9 | QTT multiplicity cells + cross-domain bridges | ⬜ | L1 (3-element lattice) | WS-A: mult lattice in network |
+| 10 | Performance validation + PIR | ⬜ | — | |
 
 ---
 

@@ -329,3 +329,28 @@ New features aren't done until they have tests.
 ~docs/spec/grammar.ebnf~ and ~docs/spec/grammar.org~ are canonical and
 must be updated whenever syntax changes. Stale grammar docs cause more
 confusion than no grammar docs.
+
+** State Termination Arguments Explicitly
+When adding a propagator or lattice to the network, state why it
+terminates. "This propagator terminates because the lattice has height 3"
+or "because type depth decreases on each cycle." If you can't state the
+argument, the computation may not terminate. Fuel bounds catch bugs in
+termination arguments; they should not BE the argument. See
+[[file:GÖDEL_COMPLETENESS.org][GÖDEL_COMPLETENESS.org]] for the hierarchy of termination guarantees
+(Levels 1--5) and the discipline for choosing the strongest available.
+
+Discovered during Track 6/7 design: the stratified propagator network's
+layered quiescence raised the question "what guarantees termination when
+L2 feeds back to S0?" The answer required identifying a well-founded
+measure (type depth × unsolved metas). Without stating this explicitly,
+the design would have relied on fuel alone --- missing the structural
+insight that makes the architecture provably decidable.
+
+** Retraction Is Aggregation's Dual
+Both retraction (removing entries from a cell) and aggregation (collecting
+the complete set of derivations) are non-monotonic operations. Both are
+addressed by stratification: compute to fixpoint in a lower stratum
+before the non-monotone operation in a higher stratum observes the result.
+This insight from well-founded logic programming (NAF-LE) directly
+informed the S(-1) retraction stratum design in Track 7. See
+[[file:GÖDEL_COMPLETENESS.org][GÖDEL_COMPLETENESS.org]] § "Application to the Stratified Propagator Network."
