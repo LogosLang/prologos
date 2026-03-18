@@ -716,6 +716,85 @@ Tiny lattice (3 elements). Cross-domain bridges follow the proven session↔effe
 
 ---
 
+## 7b. Expected Performance Characteristics
+
+### Current baseline (post-Track 6)
+
+| Metric | Value | Source |
+|--------|-------|--------|
+| Total suite time | 235.2s | Track 6 Phase 11 |
+| Test count | 7154 | Track 6 Phase 11 |
+| Per-command cell creations | ~29 registry + ~12 infra = ~41 | `register-macros-cells!` + `register-warning-cells!` + `register-narrow-cells!` |
+| Cell creations per suite | ~7154 × 41 ≈ 293K | Estimated from test count × per-command |
+| S1 scanning per `solve-meta!` | O(total constraints) × 6 functions | `collect-ready-*` in metavar-store.rkt |
+| Speculation save/restore | 1 network box + TMS retraction | Track 6 Phases 2+3, 4 |
+
+### Per-phase expected impact
+
+**WS-C: Persistent Registry Cells (Phases 1-3)**
+
+| Operation | Before | After | Change |
+|-----------|--------|-------|--------|
+| Registry cell creation | 29 cells × ~7154 commands ≈ 208K/suite | 29 cells × 1 (per file) ≈ 29/file | ~7000× fewer allocations |
+| Registry cell-id lookup | Parameter read per command | Stable reference (no lookup) | Eliminates parameter overhead |
+| Register write path | Param write + cell write (dual) | Cell write only | 1 write instead of 2 |
+| Parameter write overhead | 24 `hash-set` per registration | 0 | Eliminated |
+| Bridge propagator cost | N/A | 29 bridge propagators per command (fire once) | New cost, but cheaper than 29 cell recreations |
+| batch-worker snapshot | Save/restore 24+ parameters | Save/restore 1 box pointer | Simpler, atomic |
+
+**Net effect**: Significant reduction in per-command overhead. The ~293K cell creations per suite drop to ~29 per file plus bridge propagator wiring. The dual-write elimination removes ~50% of registration write cost. Bridge propagators are lazy (fire once on initial sync) — cheaper than eager cell recreation + parameter seeding.
+
+**WS-B: Stratified Retraction + Stratified Prop-Net (Phases 4-8c)**
+
+| Operation | Before | After | Change |
+|-----------|--------|-------|--------|
+| S1 readiness scan | O(total constraints) × 6 functions per cycle | O(1) ready-queue read | Orders of magnitude for constraint-heavy commands |
+| Readiness detection | Scan all, filter ready | Fan-in propagator fires on dep change | O(changed) not O(total) |
+| Readiness check per constraint | Iterate dep list, check each | Countdown latch: compare `count == N` | O(1) vs O(deps) |
+| Resolution dispatch | Callback indirection (3 parameter reads + guard checks) | Direct function call (Phase 7) → propagator fire (Phase 8b) | Eliminates indirection |
+| Speculation rollback (scoped cells) | Network box restore (copy entire network snapshot) | S(-1) retraction (remove tagged entries from affected cells) | Proportional to speculated entries, not total network size |
+| Speculation depth-0 overhead | Network box save (snapshot entire network) | No-op (no assumptions to track) | Eliminated for common case |
+| Stratified loop fuel | Fixed 100 iterations, checked per cycle | Layered quiescence (structural termination) | Correct by construction |
+| Progress detection | Box read + set per cycle | Dirty-flag on network (structural) | Eliminates box |
+
+**Net effect**: The readiness scan elimination is the biggest win — currently O(total constraints) per `solve-meta!` cycle, which compounds for commands with many constraints. For a command with 50 constraints and 10 resolution cycles, that's 50 × 6 × 10 = 3000 scans. With L1 readiness propagators, it's 50 fan-in propagators that fire O(1) when deps change. The scanning functions become dead code.
+
+S(-1) retraction for speculation is proportional to entries created under the retracted assumption, not to total network size. For a typical speculative branch creating 3-5 constraints, retraction touches 3-5 entries. The current network-box restore copies the entire network snapshot regardless of speculation size.
+
+**WS-A: QTT Multiplicity Cells (Phase 9)**
+
+Minimal performance impact. 3-element lattice, bridge propagators fire at most once per meta solve. The mult cell infrastructure already exists (Track 4); Track 7 adds merge + bridges.
+
+### Performance risk factors
+
+1. **Bridge propagator wiring per command**: 29 bridge propagators created per command. Each is a simple one-input propagator that fires once (initial sync from persistent cell). The cost is ~29 `net-add-propagator!` calls — comparable to the current ~29 `register-macros-cells!` cell creations, but the propagators are simpler (no parameter seeding, no cell-id parameter writes).
+
+2. **Fan-in propagator memory**: One propagator object per constraint. For commands with hundreds of constraints (e.g., complex trait resolution), this is hundreds of propagator objects in the network. The CHAMP-based network handles this efficiently, but measure in Phase 0.
+
+3. **Assumption tagging overhead**: Every scoped cell write gets an assumption-id field. At depth 0 (common case), this is `#f` — a single cons cell added per entry. Track 4's depth-0 fast path precedent suggests negligible overhead.
+
+4. **Layered scheduler overhead**: The 4-layer Gauss-Seidel scheduler iterates layers in order, checking for dirty propagators in each. For layers with no dirty propagators (common for S(-1) at depth 0), the check is O(1). The BSP within each layer is the existing `run-to-quiescence` mechanism — no new overhead within a layer.
+
+5. **Channel cell retraction overhead**: Each consumed ready-queue entry requires an assumption retraction + S(-1) cleanup. For typical commands with 5-20 resolved constraints per solve cycle, this is 5-20 retraction operations. The retraction itself is a set-subtract on the assumption set (O(log n) in CHAMP).
+
+### Performance targets
+
+| Metric | Target | Rationale |
+|--------|--------|-----------|
+| Suite wall time | ≤ 250s (≤ 6% regression from 235.2s) | Track 5's +14% was acceptable; Track 7 adds infrastructure but removes scanning overhead |
+| Per-command overhead | ≤ current (no regression) | Bridge propagators ≤ cell recreation cost |
+| S1 scan elimination | Measurable improvement for constraint-heavy tests | Directly proportional to constraint count |
+| Speculation depth-0 | Zero new overhead | Fast path: no assumptions, S(-1) is no-op |
+| Adversarial benchmark | Layered scheduler ≤ 1.5× hand-written loop | Conservative target; structural advantages may yield improvement |
+
+### Measurement approach
+
+Phase 0 captures the baseline. Each subsequent phase runs the full suite with timing recorded to `timings.jsonl`. Per-file regressions trigger investigation (>2× rolling median AND median >3s). Suite-level regression >15% triggers investigation before proceeding.
+
+The adversarial benchmark (§13 Q5) provides a focused measurement of the scheduler and readiness propagator performance independent of the broader suite.
+
+---
+
 ## 8. Learnings from Prior Tracks Applied Here
 
 ### From Track 6 PIR: Context loss causes architectural divergence
