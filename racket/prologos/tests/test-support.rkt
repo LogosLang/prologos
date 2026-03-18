@@ -30,7 +30,9 @@
          "../pretty-print.rkt"
          "../global-env.rkt"
          "../driver.rkt"
-         "../namespace.rkt")
+         "../namespace.rkt"
+         "../warnings.rkt"           ;; Track 7 Phase 6d: init-warning-cells!
+         "../global-constraints.rkt") ;; Track 7 Phase 6d: init-narrow-cells!
 
 (provide ;; Pre-loaded prelude registries
          prelude-module-registry
@@ -39,6 +41,7 @@
          prelude-param-impl-registry
          prelude-preparse-registry
          prelude-capability-registry
+         prelude-persistent-registry-net-box  ;; Track 7 Phase 6d
          prelude-lib-dir
          ;; Convenience helpers
          run-ns-last
@@ -73,7 +76,8 @@
                 prelude-impl-registry
                 prelude-param-impl-registry
                 prelude-preparse-registry
-                prelude-capability-registry)
+                prelude-capability-registry
+                prelude-persistent-registry-net-box)  ;; Track 7 Phase 6d
   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
@@ -90,7 +94,7 @@
                  [current-capability-registry (current-capability-registry)]
                  ;; Track 6 Phase 7a: network isolation (fresh network per call)
                  [current-prop-net-box              #f]
-                 [current-persistent-registry-net-box #f]  ;; Track 7 Phase 1
+                 [current-persistent-registry-net-box #f]  ;; #f during prelude load; created below
                  [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
@@ -99,12 +103,22 @@
                  [current-defn-param-names-cell-id  #f])
     (install-module-loader!)
     (process-string "(ns prelude-cache)\n")
+    ;; Track 7 Phase 6d: Initialize persistent registry network from post-prelude params.
+    ;; This captures all prelude registrations (traits, impls, ctors, etc.) into
+    ;; persistent cells, so test fixtures can use cell-primary reads without fallback.
+    (init-persistent-registry-network!)
+    (define prn-box (current-persistent-registry-net-box))
+    (when prn-box
+      (init-macros-cells! prn-box)
+      (init-warning-cells! prn-box)
+      (init-narrow-cells! prn-box))
     (values (current-module-registry)
             (current-trait-registry)
             (current-impl-registry)
             (current-param-impl-registry)
             (current-preparse-registry)
-            (current-capability-registry))))
+            (current-capability-registry)
+            (current-persistent-registry-net-box))))
 
 ;; ========================================
 ;; Fast test helpers using cached prelude
@@ -129,7 +143,7 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 6 Phase 7a: network isolation
                  [current-prop-net-box              #f]
-                 [current-persistent-registry-net-box #f]  ;; Track 7 Phase 1
+                 [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
                  [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
@@ -156,7 +170,7 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 6 Phase 7a: network isolation
                  [current-prop-net-box              #f]
-                 [current-persistent-registry-net-box #f]  ;; Track 7 Phase 1
+                 [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
                  [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
@@ -188,7 +202,7 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 6 Phase 7a: network isolation
                  [current-prop-net-box              #f]
-                 [current-persistent-registry-net-box #f]  ;; Track 7 Phase 1
+                 [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
                  [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
@@ -214,7 +228,7 @@
                  [current-param-impl-registry prelude-param-impl-registry]
                  ;; Track 6 Phase 7a: network isolation
                  [current-prop-net-box              #f]
-                 [current-persistent-registry-net-box #f]  ;; Track 7 Phase 1
+                 [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
                  [current-prelude-env-prop-net-box   #f]
                  [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
@@ -240,7 +254,7 @@
                    [current-error-port stderr-out]
                    ;; Track 6 Phase 7a: network isolation
                    [current-prop-net-box              #f]
-                   [current-persistent-registry-net-box #f]  ;; Track 7 Phase 1
+                   [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
                    [current-prelude-env-prop-net-box   #f]
                    [current-ns-prop-net-box           #f]
                    [current-definition-cell-ids       (hasheq)]

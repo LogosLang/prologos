@@ -140,10 +140,9 @@
  install-prop-network-callbacks!
  ;; Phase 1a: Infrastructure cell callback
  current-prop-new-infra-cell
- ;; Track 6 Phase 6: Persistent base network for batch-worker
- current-persistent-base-network
- current-prop-reset-network-command-state
- save-base-elaboration-network
+ ;; Track 6 Phase 6: RETIRED by Track 7 Phase 6 (dead code — never activated)
+ ;; current-persistent-base-network, current-prop-reset-network-command-state,
+ ;; save-base-elaboration-network removed. Persistent cells now in separate network.
  ;; Track 7 Phase 1: Persistent registry network
  current-persistent-registry-net-box
  init-persistent-registry-network!
@@ -1056,14 +1055,10 @@
 ;; (enet initial-value merge-fn → (values enet* cell-id))
 (define current-prop-new-infra-cell (make-parameter #f))
 
-;; Track 6 Phase 6: Persistent base network for batch-worker cell persistence.
-;; When set to an elab-network, reset-meta-store! uses this as the starting
-;; network (resetting per-command fields) instead of creating a fresh network.
-;; This preserves persistent cells (macros registries, etc.) across commands.
-(define current-persistent-base-network (make-parameter #f))
-;; Callback: (elab-network → elab-network) — resets per-command state while
-;; keeping persistent cells. Set by driver.rkt (breaks circular dep).
-(define current-prop-reset-network-command-state (make-parameter #f))
+;; Track 6 Phase 6: current-persistent-base-network and
+;; current-prop-reset-network-command-state REMOVED by Track 7 Phase 6.
+;; These were designed but never activated (always #f). Track 7's persistent
+;; registry network supersedes the base-network pattern.
 
 ;; Track 7 Phase 1: Persistent registry network.
 ;; Holds a (box prop-network) for registry cells (macros, warnings, narrowing).
@@ -2027,12 +2022,8 @@
       (current-unsolved-metas-cell-id um-cid)
       (set-box! nb enet12))))
 
-;; Track 6 Phase 6: Save the current elab-network for batch restoration.
-;; Returns the elab-network value (immutable CHAMP reference) or #f if no network.
-;; Used by batch-worker.rkt to capture post-prelude cell state.
-(define (save-base-elaboration-network)
-  (define nb (current-prop-net-box))
-  (and nb (unbox nb)))
+;; Track 6 Phase 6: save-base-elaboration-network REMOVED by Track 7 Phase 6.
+;; Persistent cells now in dedicated persistent registry network.
 
 ;; ========================================
 ;; Meta state save/restore for speculative type-checking
@@ -2065,6 +2056,12 @@
             #f
             (let ([b (current-prop-meta-info-box)]) (and b (unbox b))))))
 
+;; Track 7 Phase 6a: Network-box restore retained for structural state.
+;; TMS retraction handles cell value branches; S(-1) handles scoped cell entries.
+;; BUT: meta-info CHAMP and id-map are fields of elab-network, NOT TMS cells.
+;; Metas created/solved during speculation need structural rollback.
+;; The network box restore is still the mechanism for structural state until
+;; meta-info and id-map are migrated to TMS-aware cells (future track).
 (define (restore-meta-state! saved)
   ;; All O(1) — swap immutable CHAMP references
   (define net-box (current-prop-net-box))

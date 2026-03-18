@@ -26,7 +26,7 @@
 | 3 | Dual-write elimination | ✅ (3a) | — (no new propagators) | WS-C: 3a done (per-command overhead removed); 3b deferred to Phase 6 (param writes + read fallback retained for seeding + test isolation) |
 | 4 | Assumption-tagged scoped cells | ✅ | L1 (finite assumptions) | WS-B: 14 cells tagged; read functions unwrap; merge-constraint-status-map updated |
 | 5 | S(-1) retraction stratum | ✅ | L1 (assumption set ↓) | WS-B: `run-retraction-stratum!` cleans 11 scoped cells; belt-and-suspenders with restore |
-| 6 | Belt-and-suspenders retirement | ⬜ | — (removal, not addition) | WS-B: retire network-box restore, Track 6 base-network, `reset-elab-network-command-state` |
+| 6 | Belt-and-suspenders retirement | 🔄 (6a-d) | — (removal, not addition) | WS-B: 6a finding (restore retained for structural state), 6b-c dead code removed, 6d test fixtures use persistent net; 6e-g pending |
 | 7a | Module extraction + callback elimination | ⬜ | — (restructuring only) | WS-B: extract to `resolution.rkt`, remove 3 callback params |
 | 7b | Resolution chain purification | ⬜ | — (signature change) | WS-B: 6 write + 4 read functions purified to `enet → enet*` (Option A) |
 | 8a | Readiness propagators (L1) | ⬜ | L1 (fire once per dep) | WS-B: replace O(total) S1 scanning with per-constraint readiness cells |
@@ -557,11 +557,13 @@ For `merge-list-append` cells: filter list elements similarly.
 2. Remove `current-persistent-base-network` usage in `reset-meta-store!` (revert to fresh `make-elaboration-network` per command) → verify identical results
 3. Remove `reset-elab-network-command-state` and `save-base-elaboration-network` → dead code
 
-**Changes to `save-meta-state`**: Remove the network box save. `save-meta-state` becomes a no-op (all state is TMS-managed or retracted by S(-1)).
+**Implementation finding (Phase 6a)**: `restore-meta-state!` CANNOT be fully retired in Track 7. TMS retraction handles cell value branches; S(-1) handles scoped cell entries. But **meta-info CHAMP and id-map are fields of `elab-network`**, not TMS cells. Metas created/solved during speculation need structural rollback that only the network-box restore provides. Full retirement requires making meta-info and id-map TMS-aware — scoped to Track 8 (Unification as Propagators) or a dedicated structural-state-as-cells workstream.
 
-**Changes to `restore-meta-state!`**: Remove the network box restore. Retraction happens through S(-1) and TMS.
+**What IS retired in Phase 6**: The Track 6 base-network pattern (per-command lifecycle, NOT speculation rollback):
 
-**Changes to `reset-meta-store!`**: Remove the `current-persistent-base-network` branch. Always create a fresh `make-elaboration-network` per command. Registry cell reads come through bridge propagators from the persistent network, not from persisted cells in the elab-network.
+**Changes to `reset-meta-store!`**: Remove the `current-persistent-base-network` branch. Always create a fresh `make-elaboration-network` per command. Registry cell reads come from the persistent network, not from persisted cells in the elab-network.
+
+**`save-meta-state` / `restore-meta-state!`**: RETAINED — still needed for structural state (meta-info, id-map) rollback during speculation. Retirement deferred to when meta-info/id-map become TMS-aware cells.
 
 **Phase 3b deferred items** (absorbed into Phase 6):
 
