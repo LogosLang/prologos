@@ -299,9 +299,28 @@ Moved to §Completed Work above. See Track 6 PIR for full review.
 
 **Depends on**: Track 7 (mult cells provide the cross-domain bridge unification needs).
 
-**Design reference**: `docs/tracking/2026-03-04_PROPAGATOR_MIGRATION_GDE.md` § Track 4 (P1-G).
+**Prerequisite: Imperative State Audit (Phase 0)**
 
-**Design document**: TBD — full design required given risk level.
+Track 7 Phase 6a discovered that `restore-meta-state!` cannot be retired because `meta-info` (CHAMP: meta-id → meta-info struct) and `id-map` (CHAMP: meta-id → cell-id) are plain fields of `elab-network`, not TMS-aware cells. Metas created/solved during speculation persist structurally even after TMS retraction. The network-box restore is the only rollback mechanism for this structural state.
+
+Before Track 8 design begins, conduct a **full audit of imperative parameters and structural state** that should migrate to the propagator network. This audit should classify every piece of mutable state by:
+- Current storage mechanism (Racket parameter, elab-network field, box, mutable hash)
+- Lifecycle (per-command, per-file, per-speculation, permanent)
+- Whether it participates in speculation rollback
+- Target: propagator cell (TMS-aware), persistent network cell, or retained as parameter
+
+Known candidates from Track 7:
+1. `meta-info` CHAMP (elab-network field) → per-meta cells or TMS-managed CHAMP
+2. `id-map` CHAMP (elab-network field) → derivable from meta cells (may not need separate storage)
+3. `next-meta-id` counter (elab-network field) → monotone cell or structural counter with rollback
+4. 24 macros registry parameters (Phase 3b deferred) → already migrated to persistent cells; parameters retained for module-load-time seeding only
+5. Level/mult/session meta stores (mutable hasheqs) → audit whether these need TMS rollback
+
+This audit follows the pattern established by the Track 7 stratified architecture audit (`2026-03-18_STRATIFIED_ARCHITECTURE_AUDIT.md`): classify all state, then design the migration.
+
+**Design reference**: `docs/tracking/2026-03-04_PROPAGATOR_MIGRATION_GDE.md` § Track 4 (P1-G). Track 7 Phase 6a finding (commit `0b728b2`).
+
+**Design document**: TBD — full design required given risk level. Imperative state audit as Phase 0.
 
 ### Track 9: General Diagnostic Engine (GDE)
 
