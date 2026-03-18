@@ -214,7 +214,7 @@
   (with-fresh-meta-env
     (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
-                   [current-retry-unify #f])  ;; disable retry to manually control
+                   [current-resolution-executor #f])  ;; Track 7 Phase 7a: disable resolution
       (define m1 (fresh-meta ctx-empty (expr-hole) "a"))
       (define m2 (fresh-meta ctx-empty (expr-hole) "b"))
       ;; Constraint: ?m1 vs ?m2 — both unsolved
@@ -249,7 +249,7 @@
   (with-fresh-meta-env
     (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
-                   [current-retry-unify #f])  ;; manual control
+                   [current-resolution-executor #f])  ;; Track 7 Phase 7a: disable resolution
       (define m (fresh-meta ctx-empty (expr-Type (lzero)) "test"))
       (define mid (expr-meta-id m))
       (define c (add-constraint! m (expr-Nat) ctx-empty "test"))

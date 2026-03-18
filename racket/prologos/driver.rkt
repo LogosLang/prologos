@@ -35,6 +35,7 @@
          "multi-dispatch.rkt"
          "foreign.rkt"
          "trait-resolution.rkt"
+         "resolution.rkt"       ;; Track 7 Phase 7a: unified resolution dispatcher
          "warnings.rkt"
          "relations.rkt"
          "stratified-eval.rkt"
@@ -2118,76 +2119,10 @@
    (and (expr-meta? e)
         (prop-meta-id->cell-id (expr-meta-id e)))))
 
-;; Phase C: Install incremental trait resolution callback.
-;; When a type-arg meta is solved, this callback checks if the associated
-;; trait constraint becomes resolvable (all type-args ground) and if so,
-;; resolves it immediately via the existing monomorphic/parametric lookup.
-(install-trait-resolve-callback!
- (lambda (dict-meta-id tc-info)
-   (define trait-name (trait-constraint-info-trait-name tc-info))
-   (define type-args
-     (map (lambda (e) (normalize-for-resolution (zonk e)))
-          (trait-constraint-info-type-arg-exprs tc-info)))
-   (when (andmap ground-expr? type-args)
-     (define dict-expr
-       (or (try-monomorphic-resolve trait-name type-args)
-           (try-parametric-resolve trait-name type-args)))
-     (if dict-expr
-         (solve-meta! dict-meta-id dict-expr)
-         ;; Track 2 Phase 7: Write error descriptor on resolution failure.
-         ;; The post-fixpoint error sweep reads these instead of re-scanning.
-         (write-error-descriptor! dict-meta-id
-           (build-trait-error dict-meta-id trait-name type-args))))))
-
-;; Phase 1d: Install incremental hasmethod resolution callback.
-;; When a dependency meta (type-arg or trait-var) is solved, this callback checks
-;; if the hasmethod constraint becomes resolvable and if so, resolves it immediately.
-;; This makes hasmethod resolution reactive — no need for explicit batch pass.
-(install-hasmethod-resolve-callback!
- (lambda (meta-id hm-info)
-   ;; Guard: skip if already solved (prevents re-entrant double-solve).
-   ;; Re-entrancy can happen: solving dict-meta → solve-meta! → retry-hasmethod →
-   ;; re-enters this callback → solves meta-id → outer call must not re-solve.
-   (unless (meta-solved? meta-id)
-     (define method-name (hasmethod-constraint-info-method-name hm-info))
-     (define type-args
-       (map (lambda (e) (normalize-for-resolution (zonk e)))
-            (hasmethod-constraint-info-type-arg-exprs hm-info)))
-     (when (andmap ground-expr? type-args)
-       ;; Strategy 1: P (trait var) is already ground
-       (define trait-expr (zonk (hasmethod-constraint-info-trait-var-expr hm-info)))
-       (define known-trait-name (and (ground-expr? trait-expr) (trait-expr->name trait-expr)))
-       ;; Strategy 2: P is not ground — search all traits for the method name
-       (define resolved-trait-name
-         (or known-trait-name
-             (find-trait-with-method method-name type-args)))
-       (when resolved-trait-name
-         (define tm (lookup-trait resolved-trait-name))
-         (when tm
-           (define methods (trait-meta-methods tm))
-           (define method-idx
-             (for/or ([m (in-list methods)] [i (in-naturals)])
-               (and (eq? (trait-method-name m) method-name) i)))
-           (when method-idx
-             ;; Resolve the dict via standard impl resolution
-             (define dict-expr
-               (or (try-monomorphic-resolve resolved-trait-name type-args)
-                   (try-parametric-resolve resolved-trait-name type-args)))
-             (when dict-expr
-               ;; Solve the trait variable P if it's still a meta
-               (define trait-var-expr (hasmethod-constraint-info-trait-var-expr hm-info))
-               (when (and (expr-meta? trait-var-expr)
-                          (not (meta-solved? (expr-meta-id trait-var-expr))))
-                 (solve-meta! (expr-meta-id trait-var-expr) (expr-fvar resolved-trait-name)))
-               ;; Optionally solve the dict meta if present
-               (define dict-meta-id (hasmethod-constraint-info-dict-meta-id hm-info))
-               (when (and dict-meta-id (not (meta-solved? dict-meta-id)))
-                 (solve-meta! dict-meta-id dict-expr))
-               ;; Project the method and solve the evidence meta.
-               ;; Re-check: meta-id may have been solved by re-entrant resolution above.
-               (unless (meta-solved? meta-id)
-                 (define projected (project-method dict-expr tm method-idx))
-                 (solve-meta! meta-id projected))))))))))
+;; Track 7 Phase 7a: Install unified resolution executor from resolution.rkt.
+;; Replaces 3 individual callbacks (trait, hasmethod, constraint retry)
+;; with a single dispatcher that calls resolution functions directly.
+(current-resolution-executor resolution-execute-action!)
 
 ;; ========================================
 ;; CLI entry point — process .prologos files

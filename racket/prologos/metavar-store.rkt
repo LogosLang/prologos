@@ -60,7 +60,7 @@
  (struct-out constraint)
  ;; Vestigial parameters removed in Phase 8 cleanup:
  ;; current-constraint-store, current-wakeup-registry
- current-retry-unify
+ ;; Track 7 Phase 7a: current-retry-unify removed (resolution.rkt direct call)
  add-constraint!
  collect-meta-ids
  get-wakeup-constraints
@@ -103,16 +103,14 @@
  ;; Phase C: Trait constraint tracking + incremental resolution
  (struct-out trait-constraint-info)
  ;; Vestigial: current-trait-constraint-map, current-trait-wakeup-map
- current-retry-trait-resolve
- install-trait-resolve-callback!
+ ;; Track 7 Phase 7a: current-retry-trait-resolve, install-trait-resolve-callback! removed
  register-trait-constraint!
  lookup-trait-constraint
  ;; Vestigial: current-trait-cell-map
  ;; Phase 3a: HasMethod constraint tracking
  (struct-out hasmethod-constraint-info)
  ;; Vestigial: current-hasmethod-constraint-map, current-hasmethod-wakeup-map
- current-retry-hasmethod-resolve
- install-hasmethod-resolve-callback!
+ ;; Track 7 Phase 7a: current-retry-hasmethod-resolve, install-hasmethod-resolve-callback! removed
  register-hasmethod-constraint!
  lookup-hasmethod-constraint
  ;; Phase 4: Capability constraint tracking
@@ -152,6 +150,8 @@
  current-retracted-assumptions
  record-assumption-retraction!
  run-retraction-stratum!
+ ;; Track 7 Phase 7a: Resolution executor (replaces 3 callback params)
+ current-resolution-executor
  ;; Track 6 Phase 1a: id-map access callbacks
  current-prop-id-map-read
  current-prop-id-map-set
@@ -193,7 +193,7 @@
  collect-ready-constraints-via-cells
  collect-ready-traits-via-cells
  collect-ready-hasmethods-via-cells
- execute-resolution-action!
+ ;; Track 7 Phase 7a: execute-resolution-action! moved to resolution.rkt
  execute-resolution-actions!
  ;; P5b: Multiplicity cell callbacks
  current-prop-fresh-mult-cell
@@ -612,23 +612,16 @@
 ;; Retry postponed constraints that mention the given meta.
 ;; Uses 'retrying guard to prevent infinite re-entrant loops.
 ;; Track 6 Phase 1c: functional status updates via write-constraint-to-store!.
+;; Track 7 Phase 7a: uses resolution executor instead of callback.
 (define (retry-constraints-for-meta! meta-id)
   (perf-inc-constraint-retry!)
-  (define retry-fn (current-retry-unify))
-  (when retry-fn
+  (define executor (current-resolution-executor))
+  (when executor
     (define constraints (get-wakeup-constraints meta-id))
     (for ([c (in-list constraints)])
-      (define c-cid (constraint-cid c))
-      ;; Read fresh from store to get current status.
-      (define current-c (read-constraint-by-cid c-cid))
+      (define current-c (read-constraint-by-cid (constraint-cid c)))
       (when (and current-c (eq? (constraint-status current-c) 'postponed))
-        ;; Guard against re-entrant retry
-        (write-constraint-to-store! (struct-copy constraint current-c [status 'retrying]))
-        (retry-fn current-c)
-        ;; Read fresh again — retry-fn may have written 'solved/'failed
-        (define post-c (read-constraint-by-cid c-cid))
-        (when (and post-c (eq? (constraint-status post-c) 'retrying))
-          (write-constraint-to-store! (struct-copy constraint post-c [status 'postponed])))))))
+        (executor (action-retry-constraint current-c))))))
 
 ;; P1-E3a: Retry postponed constraints using propagator cell state.
 ;; After run-to-quiescence, checks ALL postponed constraints that have cell-ids.
@@ -636,15 +629,14 @@
 ;; (i.e., some meta was solved, possibly via transitive propagation).
 ;; This captures transitive wakeups that the legacy wakeup registry misses.
 ;; Track 6 Phase 1c: functional status updates via write-constraint-to-store!.
+;; Track 7 Phase 7a: uses resolution executor instead of callback.
 (define (retry-constraints-via-cells!)
-  (define retry-fn (current-retry-unify))
+  (define executor (current-resolution-executor))
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
-  (when (and retry-fn net-box read-fn)
+  (when (and executor net-box read-fn)
     (define enet (unbox net-box))
-    ;; Track 1 Phase 1c: read from cell (primary) with parameter fallback.
     (for ([c (in-list (read-constraint-store))])
-      (define c-cid (constraint-cid c))
       (when (and (eq? (constraint-status c) 'postponed)
                  (not (null? (constraint-cell-ids c))))
         ;; Check if any meta cell has become non-bot (meta solved)
@@ -653,13 +645,7 @@
             (let ([v (read-fn enet cid)])
               (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
         (when any-solved?
-          ;; Guard against re-entrant retry (same as legacy path)
-          (write-constraint-to-store! (struct-copy constraint c [status 'retrying]))
-          (retry-fn c)
-          ;; Read fresh from store — retry-fn may have written 'solved/'failed
-          (define post-c (read-constraint-by-cid c-cid))
-          (when (and post-c (eq? (constraint-status post-c) 'retrying))
-            (write-constraint-to-store! (struct-copy constraint post-c [status 'postponed]))))))))
+          (executor (action-retry-constraint c)))))))
 
 ;; ========================================
 ;; Track 2 Phase 4: Readiness Scan (Stratum 1)
@@ -755,40 +741,17 @@
 ;; Consumes action descriptors produced by S1 and executes them.
 ;; Each action may produce new cell writes that feed back to S0.
 
-(define (execute-resolution-action! action)
-  (match action
-    [(action-retry-constraint c)
-     ;; Re-check: constraint may have been resolved by a prior action in this batch.
-     ;; Track 6 Phase 1c: read fresh from store for current status.
-     (define c-cid (constraint-cid c))
-     (define current-c (read-constraint-by-cid c-cid))
-     (when (and current-c (eq? (constraint-status current-c) 'postponed))
-       (perf-inc-constraint-retry!)
-       (define retry-fn (current-retry-unify))
-       (when retry-fn
-         ;; Guard still present as safety net (structurally dead under stratified loop).
-         (write-constraint-to-store! (struct-copy constraint current-c [status 'retrying]))
-         (retry-fn current-c)
-         (define post-c (read-constraint-by-cid c-cid))
-         (when (and post-c (eq? (constraint-status post-c) 'retrying))
-           (write-constraint-to-store! (struct-copy constraint post-c [status 'postponed])))))]
-    [(action-resolve-trait dict-id tc-info)
-     ;; Re-check: dict meta may have been solved by a prior action.
-     (unless (meta-solved? dict-id)
-       (define resolve-fn (current-retry-trait-resolve))
-       (when resolve-fn
-         (resolve-fn dict-id tc-info)))]
-    [(action-resolve-hasmethod hm-id hm-info)
-     ;; Re-check: hasmethod meta may have been solved by a prior action.
-     (unless (meta-solved? hm-id)
-       (define resolve-fn (current-retry-hasmethod-resolve))
-       (when resolve-fn
-         (resolve-fn hm-id hm-info)))]))
+;; Track 7 Phase 7a: Resolution action execution via resolution.rkt dispatcher.
+;; Callback parameter replaces 3 individual callbacks (breaks circular dep:
+;; metavar-store → resolution → unify/trait-resolution → metavar-store).
+(define current-resolution-executor (make-parameter #f))
 
 ;; Execute a batch of action descriptors.
 (define (execute-resolution-actions! actions)
-  (for ([a (in-list actions)])
-    (execute-resolution-action! a)))
+  (define executor (current-resolution-executor))
+  (when executor
+    (for ([a (in-list actions)])
+      (executor a))))
 
 ;; ========================================
 ;; Cell-Primary Read Accessors

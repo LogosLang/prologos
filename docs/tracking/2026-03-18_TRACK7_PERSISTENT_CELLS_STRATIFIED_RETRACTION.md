@@ -27,7 +27,7 @@
 | 4 | Assumption-tagged scoped cells | ✅ | L1 (finite assumptions) | WS-B: 14 cells tagged; read functions unwrap; merge-constraint-status-map updated |
 | 5 | S(-1) retraction stratum | ✅ | L1 (assumption set ↓) | WS-B: `run-retraction-stratum!` cleans 11 scoped cells; belt-and-suspenders with restore |
 | 6 | Belt-and-suspenders retirement | ✅ | — (removal, not addition) | WS-B: 6a restore retained (structural state), 6b-c dead code, 6d test fixtures, 6e reads cell-primary, 6f deferred (harmless), 6g batch-worker box-contents snapshot |
-| 7a | Module extraction + callback elimination | ⬜ | — (restructuring only) | WS-B: extract to `resolution.rkt`, remove 3 callback params |
+| 7a | Module extraction + callback elimination | ✅ | — (restructuring only) | WS-B: `resolution.rkt` with unified dispatcher; 3 callbacks → 1 executor |
 | 7b | Resolution chain purification | ⬜ | — (signature change) | WS-B: 6 write + 4 read functions purified to `enet → enet*` (Option A) |
 | 8a | Readiness propagators (L1) | ⬜ | L1 (fire once per dep) | WS-B: replace O(total) S1 scanning with per-constraint readiness cells |
 | 8b | Resolution propagators (L2) | ⬜ | L2 (type depth ↓) | WS-B: replace `execute-resolution-actions!` loop with propagators |

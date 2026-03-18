@@ -57,7 +57,7 @@
 
 (test-case "constraint-store/collect-meta-ids-follows-solved"
   (with-fresh-meta-env
-    (parameterize ([current-retry-unify #f])  ;; disable wakeup for this test
+    (parameterize ([current-resolution-executor #f])  ;; Track 7 Phase 7a: disable resolution
       (define m1 (fresh-meta ctx-empty (expr-hole) "a"))
       (define m2 (fresh-meta ctx-empty (expr-hole) "b"))
       ;; Solve m1 to contain m2

@@ -740,25 +740,6 @@
 ;; ========================================
 ;; Sprint 5: Install constraint retry callback
 ;; ========================================
-;; When solve-meta! solves a metavariable, retry-constraints-for-meta!
-;; calls this callback on each postponed constraint that mentions the meta.
-;; Retry callback uses unify-core (not unify) to avoid double propagator
-;; checking — the retry itself is triggered by propagator quiescence.
-;; Track 6 Phase 1c: functional status updates via write-constraint-to-store!.
-(current-retry-unify
- (lambda (c)
-   (let ([lhs (zonk-at-depth 0 (constraint-lhs c))]
-         [rhs (zonk-at-depth 0 (constraint-rhs c))])
-     (define result (unify-core (constraint-ctx c) lhs rhs))
-     (cond
-       [(eq? result #t)
-        (write-constraint-to-store! (struct-copy constraint c [status 'solved]))
-        ;; Track 2 Phase 2: dual-write to status cell.
-        (write-constraint-status-cell! (constraint-cid c) 'resolved)]
-       [(eq? result #f)
-        (write-constraint-to-store! (struct-copy constraint c [status 'failed]))
-        ;; Track 2 Phase 2: dual-write to status cell.
-        (write-constraint-status-cell! (constraint-cid c) 'resolved)]
-       ;; 'postponed: leave status as-is (will be set back to 'postponed
-       ;; by retry-constraints-for-meta! if still 'retrying)
-       ))))
+;; Track 7 Phase 7a: Constraint retry callback REMOVED.
+;; Logic moved to resolution.rkt (retry-unify-constraint!).
+;; Called directly from resolution-execute-action!, no callback indirection.
