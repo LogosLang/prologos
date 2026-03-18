@@ -41,12 +41,15 @@
          current-deprecation-warnings-cell-id
          current-capability-warnings-cell-id
          register-warning-cells!
+         init-warning-cells!
          ;; Track 3 Phase 4: cell-primary readers
          read-coercion-warnings
          read-deprecation-warnings
          read-capability-warnings)
 
-(require "infra-cell.rkt")  ;; merge-list-append
+(require "infra-cell.rkt"        ;; merge-list-append
+         "propagator.rkt"        ;; Track 7 Phase 2: net-new-cell, net-cell-read, net-cell-write
+         "metavar-store.rkt")    ;; Track 7 Phase 2: current-persistent-registry-net-box
 
 ;; ========================================
 ;; Phase 2c: Propagator-First Migration — Warning Cell Infrastructure
@@ -60,39 +63,37 @@
 (define current-deprecation-warnings-cell-id (make-parameter #f))
 (define current-capability-warnings-cell-id (make-parameter #f))
 
-;; Helper: dual-write a warning to a list cell.
-;; value should be a list with one element — the cell's merge function
-;; (merge-list-append) will append it to existing warnings.
+;; Helper: write a warning to a list cell in the persistent network.
+;; Track 7 Phase 2: targets persistent registry network directly.
 (define (warnings-cell-write! cid value)
-  (define net-box (current-warnings-prop-net-box))
-  (define write-fn (current-warnings-prop-cell-write))
-  (when (and net-box write-fn cid)
-    (set-box! net-box (write-fn (unbox net-box) cid value))))
+  (define prn-box (current-persistent-registry-net-box))
+  (when (and prn-box cid)
+    (set-box! prn-box (net-cell-write (unbox prn-box) cid value))))
 
-;; Create warning cells in the propagator network.
-;; Called per-command after reset-meta-store!, since the network is fresh.
-;; Initializes each cell from the current legacy parameter content.
-(define (register-warning-cells! net-box new-cell-fn)
-  (when (and net-box new-cell-fn)
-    ;; Track 6 Phase 8b: net-box now set by process-command parameterize
-    (define enet0 (unbox net-box))
-    (define-values (enet1 cw-cid) (new-cell-fn enet0 (current-coercion-warnings) merge-list-append))
+;; Track 7 Phase 2: Initialize warning cells in the persistent registry network.
+;; Called ONCE from init-persistent-registry-network!.
+(define (init-warning-cells! prn-box)
+  (when prn-box
+    (define net0 (unbox prn-box))
+    (define-values (net1 cw-cid) (net-new-cell net0 (current-coercion-warnings) merge-list-append))
     (current-coercion-warnings-cell-id cw-cid)
-    (define-values (enet2 dw-cid) (new-cell-fn enet1 (current-deprecation-warnings) merge-list-append))
+    (define-values (net2 dw-cid) (net-new-cell net1 (current-deprecation-warnings) merge-list-append))
     (current-deprecation-warnings-cell-id dw-cid)
-    (define-values (enet3 capw-cid) (new-cell-fn enet2 (current-capability-warnings) merge-list-append))
+    (define-values (net3 capw-cid) (net-new-cell net2 (current-capability-warnings) merge-list-append))
     (current-capability-warnings-cell-id capw-cid)
-    (set-box! net-box enet3)))
+    (set-box! prn-box net3)))
 
-;; Track 3 Phase 4: cell-primary read helper for warnings.
-;; Simpler than macros-cell-read-safe — no elaboration guard needed because
-;; warning reads only occur inside process-command (driver.rkt).
+;; Legacy: per-command warning cell creation.
+;; Track 7 Phase 2: no-op — cells now in persistent network.
+(define (register-warning-cells! net-box new-cell-fn)
+  (void))
+
+;; Track 7 Phase 2: cell-primary read from persistent registry network.
 (define (warnings-cell-read-safe cid)
-  (define net-box (current-warnings-prop-net-box))
-  (define read-fn (current-warnings-prop-cell-read))
-  (if (and cid net-box read-fn)
+  (define prn-box (current-persistent-registry-net-box))
+  (if (and cid prn-box)
       (with-handlers ([exn:fail? (λ (_) 'not-found)])
-        (read-fn (unbox net-box) cid))
+        (net-cell-read (unbox prn-box) cid))
       'not-found))
 
 ;; Track 3 Phase 4: cell-primary readers for warning accumulators

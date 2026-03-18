@@ -1436,8 +1436,13 @@
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define mem-before (measure-memory-before))
-  ;; Track 7 Phase 1: Initialize persistent registry network (once per file).
+  ;; Track 7 Phase 1-2: Initialize persistent registry network + cells (once per file).
   (init-persistent-registry-network!)
+  (define prn-box (current-persistent-registry-net-box))
+  (when prn-box
+    (init-macros-cells! prn-box)
+    (init-warning-cells! prn-box)
+    (init-narrow-cells! prn-box))
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
                    [current-provenance-counters pv]

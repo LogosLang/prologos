@@ -21,7 +21,9 @@
          racket/list
          "interval-domain.rkt"
          "syntax.rkt"
-         "infra-cell.rkt")  ;; Track 3 Phase 5: merge-list-append, merge-last-write-wins
+         "infra-cell.rkt"        ;; Track 3 Phase 5: merge-list-append, merge-last-write-wins
+         "propagator.rkt"        ;; Track 7 Phase 2: net-new-cell, net-cell-read, net-cell-write
+         "metavar-store.rkt")    ;; Track 7 Phase 2: current-persistent-registry-net-box
 
 (provide
  ;; Constraint struct
@@ -45,6 +47,7 @@
  current-narrow-constraints-cell-id
  current-narrow-var-constraints-cell-id
  register-narrow-cells!
+ init-narrow-cells!
  ;; Track 3 Phase 5: cell-primary readers
  read-narrow-constraints
  read-narrow-var-constraints)
@@ -83,33 +86,36 @@
 (define current-narrow-constraints-cell-id (make-parameter #f))
 (define current-narrow-var-constraints-cell-id (make-parameter #f))
 
-;; Helper: write to a narrowing cell.
+;; Track 7 Phase 2: write to narrowing cell in persistent network.
 (define (narrow-cell-write! cid value)
-  (define net-box (current-narrow-prop-net-box))
-  (define write-fn (current-narrow-prop-cell-write))
-  (when (and net-box write-fn cid)
-    (set-box! net-box (write-fn (unbox net-box) cid value))))
+  (define prn-box (current-persistent-registry-net-box))
+  (when (and prn-box cid)
+    (set-box! prn-box (net-cell-write (unbox prn-box) cid value))))
 
-;; Create narrowing cells in the propagator network.
-(define (register-narrow-cells! net-box new-cell-fn)
-  (when (and net-box new-cell-fn)
-    ;; Track 6 Phase 8c: net-box now set by process-command parameterize
-    (define enet0 (unbox net-box))
-    ;; Phase 5a: narrow-constraints — monotonic list accumulator
-    (define-values (enet1 nc-cid) (new-cell-fn enet0 (current-narrow-constraints) merge-list-append))
+;; Track 7 Phase 2: Initialize narrowing cells in the persistent registry network.
+;; Called ONCE from init-persistent-registry-network!.
+(define (init-narrow-cells! prn-box)
+  (when prn-box
+    (define net0 (unbox prn-box))
+    ;; narrow-constraints — monotonic list accumulator
+    (define-values (net1 nc-cid) (net-new-cell net0 (current-narrow-constraints) merge-list-append))
     (current-narrow-constraints-cell-id nc-cid)
-    ;; Phase 5b: narrow-var-constraints — non-monotonic, last-write-wins
-    (define-values (enet2 nvc-cid) (new-cell-fn enet1 (current-narrow-var-constraints) merge-last-write-wins))
+    ;; narrow-var-constraints — non-monotonic, last-write-wins
+    (define-values (net2 nvc-cid) (net-new-cell net1 (current-narrow-var-constraints) merge-last-write-wins))
     (current-narrow-var-constraints-cell-id nvc-cid)
-    (set-box! net-box enet2)))
+    (set-box! prn-box net2)))
 
-;; Track 6 Phase 8c: guard removed — cell reads unconditional.
+;; Legacy: per-command narrowing cell creation.
+;; Track 7 Phase 2: no-op — cells now in persistent network.
+(define (register-narrow-cells! net-box new-cell-fn)
+  (void))
+
+;; Track 7 Phase 2: cell-primary read from persistent registry network.
 (define (narrow-cell-read-safe cid)
-  (define net-box (current-narrow-prop-net-box))
-  (define read-fn (current-narrow-prop-cell-read))
-  (if (and cid net-box read-fn)
+  (define prn-box (current-persistent-registry-net-box))
+  (if (and cid prn-box)
       (with-handlers ([exn:fail? (λ (_) 'not-found)])
-        (read-fn (unbox net-box) cid))
+        (net-cell-read (unbox prn-box) cid))
       'not-found))
 
 ;; Track 3 Phase 5a: cell-primary reader for narrowing constraints

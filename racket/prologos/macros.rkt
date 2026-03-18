@@ -26,7 +26,9 @@
          "errors.rkt"
          "namespace.rkt"
          "global-env.rkt"
-         "infra-cell.rkt")      ;; Phase 2a: merge functions for registry cells
+         "infra-cell.rkt"        ;; Phase 2a: merge functions for registry cells
+         "propagator.rkt"        ;; Track 7 Phase 2: net-new-cell, net-cell-read, net-cell-write for persistent registry
+         "metavar-store.rkt")    ;; Track 7 Phase 2: current-persistent-registry-net-box
 
 (provide ;; Post-parse (layer 2)
          expand-top-level
@@ -358,6 +360,7 @@
          current-macro-registry-cell-id
          macros-cell-write!
          register-macros-cells!
+         init-macros-cells!
          ;; Track 6 Phase 6: Snapshot/restore for batch-worker
          save-macros-cell-ids
          restore-macros-cell-ids!
@@ -489,15 +492,14 @@
 ;; in Phase 8b — cell reads are unconditional (net-box scoped to command parameterize).
 
 ;; Track 3: Safe cell-primary read helper.
-;; Track 6 Phase 8b: guard removed — cell reads are unconditional.
-;; Returns cell content when the propagator network exists and contains the cell.
+;; Track 7 Phase 2: reads from persistent registry network directly.
+;; Returns cell content when the persistent network exists and contains the cell.
 ;; Falls back to 'not-found if no network or cell-id (parameter fallback in caller).
 (define (macros-cell-read-safe cid)
-  (define net-box (current-macros-prop-net-box))
-  (define read-fn (current-macros-prop-cell-read))
-  (if (and cid net-box read-fn)
+  (define prn-box (current-persistent-registry-net-box))
+  (if (and cid prn-box)
       (with-handlers ([exn:fail? (λ (_) 'not-found)])
-        (read-fn (unbox net-box) cid))
+        (net-cell-read (unbox prn-box) cid))
       'not-found))
 
 ;; Cell-id parameters for each registry (set by register-macros-cells!).
@@ -529,83 +531,89 @@
 (define current-user-operators-cell-id (make-parameter #f))
 (define current-macro-registry-cell-id (make-parameter #f))
 
-;; Helper: dual-write a single entry to a registry cell.
+;; Helper: write a single entry to a registry cell in the persistent network.
 ;; value should be a hasheq/hash with just the new entry — the cell's merge
 ;; function (merge-hasheq-union) will union it with existing content.
+;; Track 7 Phase 2: targets the persistent registry network directly.
 (define (macros-cell-write! cid value)
-  (define net-box (current-macros-prop-net-box))
-  (define write-fn (current-macros-prop-cell-write))
-  (when (and net-box write-fn cid)
-    (set-box! net-box (write-fn (unbox net-box) cid value))))
+  (define prn-box (current-persistent-registry-net-box))
+  (when (and prn-box cid)
+    (set-box! prn-box (net-cell-write (unbox prn-box) cid value))))
 
-;; Initialize registry cells in the propagator network.
-;; Called by driver.rkt after reset-meta-store! to create cells initialized
-;; from the current legacy parameter content. Each cell uses merge-hasheq-union
-;; so subsequent register-X! calls accumulate entries monotonically.
-;; net-box: (box elab-network) — the shared network box
-;; new-cell-fn: (enet initial-value merge-fn → (values enet* cell-id))
-(define (register-macros-cells! net-box new-cell-fn)
-  (when (and net-box new-cell-fn)
-    ;; Track 6 Phase 8b: net-box now set by process-command parameterize
-    ;; (auto-reverts to #f after command, preventing stale cell reads).
-    ;; register-macros-cells! still creates cells in the shared network.
-    (define enet0 (unbox net-box))
+;; Track 7 Phase 2: Initialize registry cells in the persistent registry network.
+;; Called ONCE at file/prelude start from init-persistent-registry-network!.
+;; Creates 24 cells initialized from current parameter content. Cell IDs are
+;; STABLE — set once and never reset per command.
+;; prn-box: (box prop-network) — the persistent registry network box
+(define (init-macros-cells! prn-box)
+  (when prn-box
+    (define net0 (unbox prn-box))
     ;; Create cells initialized from current registry content
-    (define-values (enet1 sr-cid) (new-cell-fn enet0 (current-schema-registry) merge-hasheq-union))
+    (define-values (net1 sr-cid) (net-new-cell net0 (current-schema-registry) merge-hasheq-union))
     (current-schema-registry-cell-id sr-cid)
-    (define-values (enet2 cr-cid) (new-cell-fn enet1 (current-ctor-registry) merge-hasheq-union))
+    (define-values (net2 cr-cid) (net-new-cell net1 (current-ctor-registry) merge-hasheq-union))
     (current-ctor-registry-cell-id cr-cid)
-    (define-values (enet3 tm-cid) (new-cell-fn enet2 (current-type-meta) merge-hasheq-union))
+    (define-values (net3 tm-cid) (net-new-cell net2 (current-type-meta) merge-hasheq-union))
     (current-type-meta-cell-id tm-cid)
     ;; subtype/coercion use hash (equal?-based keys), but merge-hasheq-union
     ;; works correctly — hash-set preserves the hash type of the accumulator.
-    (define-values (enet4 st-cid) (new-cell-fn enet3 (current-subtype-registry) merge-hasheq-union))
+    (define-values (net4 st-cid) (net-new-cell net3 (current-subtype-registry) merge-hasheq-union))
     (current-subtype-registry-cell-id st-cid)
-    (define-values (enet5 co-cid) (new-cell-fn enet4 (current-coercion-registry) merge-hasheq-union))
+    (define-values (net5 co-cid) (net-new-cell net4 (current-coercion-registry) merge-hasheq-union))
     (current-coercion-registry-cell-id co-cid)
-    (define-values (enet6 cap-cid) (new-cell-fn enet5 (current-capability-registry) merge-hasheq-union))
+    (define-values (net6 cap-cid) (net-new-cell net5 (current-capability-registry) merge-hasheq-union))
     (current-capability-registry-cell-id cap-cid)
-    (define-values (enet7 ps-cid) (new-cell-fn enet6 (current-property-store) merge-hasheq-union))
+    (define-values (net7 ps-cid) (net-new-cell net6 (current-property-store) merge-hasheq-union))
     (current-property-store-cell-id ps-cid)
-    (define-values (enet8 fs-cid) (new-cell-fn enet7 (current-functor-store) merge-hasheq-union))
+    (define-values (net8 fs-cid) (net-new-cell net7 (current-functor-store) merge-hasheq-union))
     (current-functor-store-cell-id fs-cid)
-    ;; Phase 2b: Trait + instance registry cells
-    (define-values (enet9 tr-cid) (new-cell-fn enet8 (current-trait-registry) merge-hasheq-union))
+    ;; Trait + instance registry cells
+    (define-values (net9 tr-cid) (net-new-cell net8 (current-trait-registry) merge-hasheq-union))
     (current-trait-registry-cell-id tr-cid)
-    (define-values (enet10 tl-cid) (new-cell-fn enet9 (current-trait-laws) merge-hasheq-union))
+    (define-values (net10 tl-cid) (net-new-cell net9 (current-trait-laws) merge-hasheq-union))
     (current-trait-laws-cell-id tl-cid)
-    (define-values (enet11 ir-cid) (new-cell-fn enet10 (current-impl-registry) merge-hasheq-union))
+    (define-values (net11 ir-cid) (net-new-cell net10 (current-impl-registry) merge-hasheq-union))
     (current-impl-registry-cell-id ir-cid)
-    (define-values (enet12 pir-cid) (new-cell-fn enet11 (current-param-impl-registry) merge-hasheq-union))
+    (define-values (net12 pir-cid) (net-new-cell net11 (current-param-impl-registry) merge-hasheq-union))
     (current-param-impl-registry-cell-id pir-cid)
-    (define-values (enet13 br-cid) (new-cell-fn enet12 (current-bundle-registry) merge-hasheq-union))
+    (define-values (net13 br-cid) (net-new-cell net12 (current-bundle-registry) merge-hasheq-union))
     (current-bundle-registry-cell-id br-cid)
     ;; specialization-registry uses hash (equal?-based keys: cons pairs)
-    (define-values (enet14 spr-cid) (new-cell-fn enet13 (current-specialization-registry) merge-hasheq-union))
+    (define-values (net14 spr-cid) (net-new-cell net13 (current-specialization-registry) merge-hasheq-union))
     (current-specialization-registry-cell-id spr-cid)
-    (define-values (enet15 sel-cid) (new-cell-fn enet14 (current-selection-registry) merge-hasheq-union))
+    (define-values (net15 sel-cid) (net-new-cell net14 (current-selection-registry) merge-hasheq-union))
     (current-selection-registry-cell-id sel-cid)
-    (define-values (enet16 sess-cid) (new-cell-fn enet15 (current-session-registry) merge-hasheq-union))
+    (define-values (net16 sess-cid) (net-new-cell net15 (current-session-registry) merge-hasheq-union))
     (current-session-registry-cell-id sess-cid)
-    ;; Phase 2c: Remaining registries
-    (define-values (enet17 pp-cid) (new-cell-fn enet16 (current-preparse-registry) merge-hasheq-union))
+    ;; Remaining registries
+    (define-values (net17 pp-cid) (net-new-cell net16 (current-preparse-registry) merge-hasheq-union))
     (current-preparse-registry-cell-id pp-cid)
-    (define-values (enet18 ss-cid) (new-cell-fn enet17 (current-spec-store) merge-hasheq-union))
+    (define-values (net18 ss-cid) (net-new-cell net17 (current-spec-store) merge-hasheq-union))
     (current-spec-store-cell-id ss-cid)
     ;; propagated-specs is a set (seteq), uses merge-set-union
-    (define-values (enet19 ps-set-cid) (new-cell-fn enet18 (current-propagated-specs) merge-set-union))
+    (define-values (net19 ps-set-cid) (net-new-cell net18 (current-propagated-specs) merge-set-union))
     (current-propagated-specs-cell-id ps-set-cid)
-    (define-values (enet20 strat-cid) (new-cell-fn enet19 (current-strategy-registry) merge-hasheq-union))
+    (define-values (net20 strat-cid) (net-new-cell net19 (current-strategy-registry) merge-hasheq-union))
     (current-strategy-registry-cell-id strat-cid)
-    (define-values (enet21 proc-cid) (new-cell-fn enet20 (current-process-registry) merge-hasheq-union))
+    (define-values (net21 proc-cid) (net-new-cell net20 (current-process-registry) merge-hasheq-union))
     (current-process-registry-cell-id proc-cid)
-    (define-values (enet22 pg-cid) (new-cell-fn enet21 (current-user-precedence-groups) merge-hasheq-union))
+    (define-values (net22 pg-cid) (net-new-cell net21 (current-user-precedence-groups) merge-hasheq-union))
     (current-user-precedence-groups-cell-id pg-cid)
-    (define-values (enet23 op-cid) (new-cell-fn enet22 (current-user-operators) merge-hasheq-union))
+    (define-values (net23 op-cid) (net-new-cell net22 (current-user-operators) merge-hasheq-union))
     (current-user-operators-cell-id op-cid)
-    (define-values (enet24 mr-cid) (new-cell-fn enet23 (current-macro-registry) merge-hasheq-union))
+    (define-values (net24 mr-cid) (net-new-cell net23 (current-macro-registry) merge-hasheq-union))
     (current-macro-registry-cell-id mr-cid)
-    (set-box! net-box enet24)))
+    (set-box! prn-box net24)))
+
+;; Legacy: per-command registry cell creation in the elab-network.
+;; Track 7 Phase 2: RETAINED for belt-and-suspenders — creates cells in the
+;; elab-network alongside the persistent cells. Will be removed in Phase 3
+;; once persistent reads are validated.
+;; net-box: (box elab-network) — the shared network box
+;; new-cell-fn: (enet initial-value merge-fn → (values enet* cell-id))
+(define (register-macros-cells! net-box new-cell-fn)
+  (void)  ;; Track 7 Phase 2: cells now created in persistent network by init-macros-cells!
+  )
 
 ;; Track 6 Phase 6: Save/restore cell IDs for batch-worker network snapshot.
 ;; Returns a vector of 24 cell IDs in a fixed order.

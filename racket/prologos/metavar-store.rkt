@@ -29,7 +29,8 @@
          "performance-counters.rkt"
          "champ.rkt"
          "infra-cell.rkt"   ;; Phase 1a: merge-list-append for constraint cell
-         "global-env.rkt")  ;; Phase 3a: current-definition-cells-content for with-fresh-meta-env
+         "global-env.rkt"   ;; Phase 3a: current-definition-cells-content for with-fresh-meta-env
+         "propagator.rkt")  ;; Track 7 Phase 2: make-prop-network for persistent registry
          ;; NOTE: elaborator-network.rkt and type-lattice.rkt are NOT required
          ;; directly to avoid a circular dependency:
          ;;   metavar-store → elaborator-network → type-lattice → reduction → metavar-store
@@ -1047,11 +1048,11 @@
 
 ;; Track 7 Phase 1: Initialize the persistent registry network.
 ;; Lazy: only initializes if not already set. Called from process-file/load-module.
+;; Uses make-prop-network directly (not make-elaboration-network) — registries
+;; are simple monotone accumulators, no TMS/meta/constraint infrastructure needed.
 (define (init-persistent-registry-network!)
   (unless (current-persistent-registry-net-box)
-    (define make-net (current-prop-make-network))
-    (when make-net
-      (current-persistent-registry-net-box (box (make-net))))))
+    (current-persistent-registry-net-box (box (make-prop-network)))))
 
 ;; Track 6 Phase 1a: id-map access callbacks (set by driver.rkt).
 ;; Break circular dep: metavar-store doesn't import elaborator-network.
