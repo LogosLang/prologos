@@ -45,7 +45,7 @@
 | 5b | Belt-and-suspenders retirement gate | ⏸️ | Blocked on infra cells + meta-info not TMS-managed |
 | BUG | ATMS initialization in test speculation paths | ✅ | commit `ebc781e` — lazy ATMS init in `with-speculative-rollback` replaces hard error. Tests using `with-fresh-meta-env` bypass `process-command`; lazy init creates ATMS on demand. **All 7154 tests pass. 0 failures.** |
 | **Final** | | | |
-| 11 | Performance validation + PIR | ⬜ | Graduated criteria: <5% ship, 5–15% investigate, >15% block. BUG fixed (commit `ebc781e`). 5b deferred to Track 7. PIR can proceed noting 5b as open. |
+| 11 | Performance validation + PIR | ✅ | 235.2s final (+21% vs 194.3s Track 3 baseline; +11% vs 213.3s Track 5 baseline). PIR: `2026-03-17_TRACK6_DRIVER_SIMPLIFICATION_PIR.md`. 17 sections, 52 commits, 0 failures. |
 
 ---
 
