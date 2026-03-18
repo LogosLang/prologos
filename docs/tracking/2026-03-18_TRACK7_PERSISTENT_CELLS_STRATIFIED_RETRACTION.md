@@ -1,4 +1,4 @@
-# Track 7: Persistent Registry Cells + Stratified Retraction + QTT Multiplicity Cells — Stage 2/3 Design
+# Track 7: Persistent Registry Cells + Stratified Propagator Network + QTT Multiplicity Cells — Stage 2/3 Design
 
 **Created**: 2026-03-18
 **Status**: DESIGN (Stage 2/3 — awaiting critique)
@@ -25,8 +25,10 @@
 | 4 | Assumption-tagged scoped cells | ⬜ | WS-B: tag constraint/wakeup/warning writes with assumption IDs |
 | 5 | S(-1) retraction stratum | ⬜ | WS-B: retraction propagator, cleanup to fixpoint |
 | 6 | Belt-and-suspenders retirement | ⬜ | WS-B: remove network-box restore (Phase 5b gate) |
-| 7 | Callback inlining | ⬜ | WS-B: module restructuring, direct calls |
-| 8 | Readiness propagators | ⬜ | WS-B: replace O(total) S1 scanning with per-constraint readiness cells |
+| 7 | Callback inlining + resolution.rkt extraction | ⬜ | WS-B: module restructuring, direct calls |
+| 8a | Readiness propagators (L1) | ⬜ | WS-B: replace O(total) S1 scanning with per-constraint readiness cells |
+| 8b | Resolution propagators (L2) | ⬜ | WS-B: replace `execute-resolution-actions!` loop with propagators |
+| 8c | Stratified loop elimination | ⬜ | WS-B: `run-stratified-resolution!` → layered network quiescence |
 | 9 | QTT multiplicity cells + cross-domain bridges | ⬜ | WS-A: mult lattice in network |
 | 10 | Performance validation + PIR | ⬜ | |
 
@@ -36,10 +38,10 @@
 
 Track 7 does NOT deliver:
 
-- **Full stratified propagator network** — Track 7 implements readiness propagators (L1) and retraction stratum (S(-1)), but does NOT convert S2 resolution into propagators. S2 remains imperative (with callbacks inlined to direct calls). Full L2 resolution propagators are Track 8+ scope.
 - **LSP integration** — persistent cells and retraction benefit the LSP, but LSP-specific concerns (file watching, incremental re-elaboration triggers) are Track 10.
 - **Cross-module shadow-cell consistency** — Track 5's shadow-cell pattern is batch-correct. Multi-invocation consistency is Track 10 (LSP).
 - **Persistent definition cells** — definition cells already persist via `current-definition-cells-content` (Track 5 pattern). Track 7 extends this pattern to registries only.
+- **GDE minimal diagnoses** — Track 7 builds the propagator infrastructure that GDE will consume (Track 9).
 
 ---
 
@@ -140,7 +142,48 @@ The S(-1) stratum handles retraction for **scoped cells** — cells that partici
 
 Permanent cells (registries) don't participate in speculation — a `type` definition isn't created speculatively. Scoped cells (constraints, wakeups, warnings) are created during elaboration and may be created under speculative assumptions. Value cells (metas) already have TMS retraction from Track 4/6.
 
-### 2.5 Readiness propagators: O(changed) replaces O(total)
+### 2.5 The complete stratified propagator network
+
+Track 7 delivers the **full stratified propagator network** — not just readiness propagators and retraction, but also resolution propagators and the elimination of the hand-written stratified loop. The complete architecture:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Layered Network Quiescence (replaces run-stratified-loop!) │
+│                                                              │
+│  S(-1): Retraction Layer                                     │
+│    Watches: believed-assumptions cell                        │
+│    Fires: cleanup propagators for scoped cells               │
+│    Non-monotone, contained below S0                          │
+│                                                              │
+│  S0: Type Propagation Layer                                  │
+│    Existing: unification propagators, meta cells             │
+│    Fires: when meta cell values change                       │
+│    Monotone (type lattice)                                   │
+│                                                              │
+│  L1: Readiness Detection Layer                               │
+│    New: per-constraint readiness propagators                 │
+│    Fires: when dependency cells become non-bot               │
+│    Writes: action descriptors to ready-queue cell            │
+│    O(changed), not O(total) — no scanning                    │
+│                                                              │
+│  L2: Resolution Commitment Layer                             │
+│    New: resolution propagator watching ready-queue           │
+│    Fire function IS the resolution logic                     │
+│    Output: solve-meta! → writes to meta cells → perturbs S0 │
+│    No callbacks — logic is structural                        │
+│                                                              │
+│  Gauss-Seidel scheduling:                                    │
+│    S(-1) to fixpoint → S0 to fixpoint → L1 to fixpoint →    │
+│    L2 to fixpoint → if L2 wrote to S0 cells, restart S(-1)  │
+│                                                              │
+│  Termination: quiescence across ALL layers                   │
+│  (replaces fuel counter in hand-written loop)                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+This is the architectural completion of the propagator-first vision for constraint resolution. After Track 7, adding a new constraint type means adding an L1 readiness propagator and an L2 resolution propagator — no loop modifications, no scanning functions, no callbacks.
+
+### 2.6 Readiness propagators: O(changed) replaces O(total)
 
 The audit (§2.1) identified 6 scanning functions in S1 that iterate all constraints/traits/hasmethods each cycle. The replacement:
 
@@ -360,7 +403,7 @@ For `merge-list-append` cells: filter list elements similarly.
 
 **Validation**: Remove callback parameters. Any test that previously required callback injection now works through direct imports.
 
-### Phase 8: Readiness Propagators
+### Phase 8a: Readiness Propagators (L1)
 
 **Goal**: Replace the 6 O(total) S1 scanning functions with per-constraint readiness propagators.
 
@@ -407,6 +450,117 @@ For `merge-list-append` cells: filter list elements similarly.
 ```
 
 **Ordering concern**: Readiness propagators fire during S0 quiescence (they're normal propagators). The ready-queue accumulates during S0. S1 reads the queue. This preserves the stratum ordering — readiness detection (S1) only observes what S0 produced.
+
+**Belt-and-suspenders**: During Phase 8a, run BOTH the old scanning functions and the ready-queue, assert identical action descriptor sets. Remove scanning functions after validation.
+
+### Phase 8b: Resolution Propagators (L2)
+
+**Goal**: Replace the imperative `execute-resolution-actions!` loop with resolution propagators that fire when the ready-queue has entries.
+
+**Current architecture** (post-Phase 8a):
+```
+S0: run-to-quiescence (propagators fire, readiness propagators populate ready-queue)
+S1: read ready-queue (cell read — O(1))
+S2: execute-resolution-actions! (imperative loop over action descriptors, calls resolution functions)
+    → may call solve-meta! → sets progress-box → outer loop iterates
+```
+
+**Target architecture**:
+```
+Layered network quiescence:
+  S(-1): retraction propagators fire (clean scoped cells)
+  S0:    type propagators fire (solve metas)
+  L1:    readiness propagators fire (populate ready-queue)
+  L2:    resolution propagators fire (consume ready-queue, call resolution logic)
+         → resolution writes to meta cells → perturbs S0 → cascade continues
+```
+
+**Resolution propagator**: A single propagator that watches the ready-queue cell. Its fire function IS the resolution logic:
+
+```racket
+(define (install-resolution-propagator! ready-queue-cell-id)
+  (net-add-propagator!
+    (list ready-queue-cell-id)
+    (lambda (queue-val)
+      (for ([action (in-list queue-val)])
+        (match action
+          [(action-retry-constraint c)
+           ;; Direct call — no callback indirection (Phase 7 eliminated callbacks)
+           (retry-unify-constraint! c)]
+          [(action-resolve-trait dict-meta-id tc-info)
+           (resolve-trait-constraint! dict-meta-id tc-info)]
+          [(action-resolve-hasmethod hm-meta-id hm-info)
+           (resolve-hasmethod-constraint! hm-meta-id hm-info)])))))
+```
+
+**Feedback mechanism**: Resolution may call `solve-meta!`, which writes to a meta cell. This cell write is detected by the network's dirty-flag mechanism — the network is NOT quiescent, so propagation continues. The readiness propagators may fire again (new metas solved → new constraints ready). The cycle continues until the network reaches true quiescence across all layers.
+
+**The progress-box becomes unnecessary**: Currently, `execute-resolution-actions!` sets `progress-box` when `solve-meta!` is called, and the outer loop checks it. With L2 as a propagator, progress is detected structurally — a cell write during L2 means the network isn't quiescent, so `run-to-quiescence` continues. No box, no loop variable.
+
+**Re-entrancy safety**: Currently `current-in-stratified-resolution?` prevents recursive `run-stratified-resolution!` calls when L2 callbacks call `solve-meta!`. With the propagator architecture, this is structural — `solve-meta!` writes to a cell, which triggers S0 propagators within the SAME quiescence run. No re-entrancy because there's no recursive function call; it's all within the network scheduler.
+
+**Stratum ordering within `run-to-quiescence`**: The network scheduler must respect layer ordering:
+1. Fire all S(-1) retraction propagators to fixpoint
+2. Fire all S0 type propagators to fixpoint
+3. Fire all L1 readiness propagators to fixpoint
+4. Fire all L2 resolution propagators to fixpoint
+5. If any L2 propagator wrote to an S0 cell (meta solution), go back to step 1
+
+This is a **Gauss-Seidel iteration** across layers — the same scheduling pattern used for effect-bridge propagators (Architecture A+D). The network already supports priority-based propagator scheduling; layers are priorities.
+
+**Implementation approach**: Tag propagators with a layer identifier when created:
+- S(-1) propagators: layer = -1 (retraction)
+- S0 propagators: layer = 0 (type propagation, unification)
+- L1 propagators: layer = 1 (readiness detection)
+- L2 propagators: layer = 2 (resolution commitment)
+
+The scheduler processes layers in order, re-entering from the lowest layer when a higher layer writes to a lower layer's cells.
+
+### Phase 8c: Stratified Loop Elimination
+
+**Goal**: Remove `run-stratified-resolution!` entirely. The hand-written loop becomes layered network quiescence.
+
+**What disappears**:
+- `run-stratified-resolution!` function (the hand-written S0→S1→S2 loop)
+- `current-in-stratified-resolution?` parameter (re-entrancy guard)
+- `current-stratified-progress-box` parameter (progress detection)
+- `stratified-resolution-fuel` constant (loop fuel)
+- 6 `collect-ready-*` scanning functions (replaced by L1)
+- `execute-resolution-actions!` function (replaced by L2)
+
+**What `solve-meta!` becomes**:
+
+```racket
+;; BEFORE:
+(define (solve-meta! id solution)
+  (solve-meta-core! id solution)
+  (unless (current-in-stratified-resolution?)
+    (run-stratified-resolution! id)))
+
+;; AFTER:
+(define (solve-meta! id solution)
+  (solve-meta-core! id solution)
+  ;; Cell write triggers network propagation automatically.
+  ;; No explicit loop call needed — the network scheduler handles it.
+  (run-layered-quiescence!))
+```
+
+**`run-layered-quiescence!`**: The new entry point that replaces both `run-to-quiescence` (S0 only) and `run-stratified-resolution!` (S0+S1+S2). It runs the full layered scheduler:
+
+```racket
+(define (run-layered-quiescence!)
+  ;; Run the network scheduler with layer priorities:
+  ;; S(-1) → S0 → L1 → L2, re-entering from S(-1) on feedback
+  (define net (unbox (current-prop-net-box)))
+  (define net* (run-to-layered-quiescence net))
+  (set-box! (current-prop-net-box) net*))
+```
+
+**Fuel / termination**: The hand-written loop had explicit fuel (100 iterations). The layered scheduler has the network's native termination: quiescence = no dirty cells across any layer. For pathological cases (infinite solving cycles), the scheduler can track iteration count and bail at a configurable threshold — same semantics, but structural rather than a loop counter.
+
+**The architectural payoff**: After Phase 8c, constraint resolution is a structural property of the propagator network. Adding a new constraint type (e.g., a new kind of trait constraint, or a narrowing constraint) means adding a readiness propagator (L1) and a resolution propagator (L2). No changes to a hand-written loop. No new scanning function. No new callback. The network handles scheduling, ordering, and termination.
+
+**Belt-and-suspenders**: During Phase 8b, keep `run-stratified-resolution!` as a fallback. Compare its results against layered quiescence for every `solve-meta!` call. Phase 8c removes the fallback after validation.
 
 ---
 
@@ -462,6 +616,18 @@ S(-1) must remove exactly the entries tagged with retracted assumptions, no more
 Readiness propagators fire during S0 quiescence. If a readiness propagator writes to the ready-queue before a dependency meta is fully propagated, it may produce a stale action descriptor.
 
 **Mitigation**: Readiness propagators fire AFTER the network reaches quiescence for the triggering write. The ready-queue is read by S1, which runs after S0 quiesces. The stratum ordering guarantees consistency.
+
+### Medium risk: Resolution propagators + loop elimination (WS-B Phase 8b-8c)
+
+Converting `execute-resolution-actions!` from an imperative loop to a propagator changes the control flow of constraint resolution. The re-entrancy semantics change from explicit guards (`current-in-stratified-resolution?`) to structural cell-write detection.
+
+**Mitigation**: Belt-and-suspenders during Phase 8b — run BOTH the hand-written loop and the layered scheduler, compare results. Phase 8c removes the loop only after validation. The existing Track 4/6 speculation test suite exercises the exact re-entrancy scenarios.
+
+### Medium risk: Layered scheduler implementation (WS-B Phase 8b)
+
+The Gauss-Seidel scheduler across 4 layers (S(-1), S0, L1, L2) with feedback from L2→S(-1) is new infrastructure. The scheduler must respect layer ordering and correctly detect when a higher layer's write perturbs a lower layer.
+
+**Mitigation**: The pattern is proven — effect-bridge propagators (Architecture A+D) already use priority-based scheduling within `run-to-quiescence`. Track 7 extends this to 4 explicit layers. The scheduler extension can be validated independently with unit tests before wiring into constraint resolution.
 
 ### Low risk: Callback inlining (WS-B Phase 7)
 
@@ -524,19 +690,24 @@ The same mathematical structure (stratified fixpoint semantics) underlies both N
 
 3. **Readiness propagator count**: One propagator per constraint × dependency. For a command with 50 constraints averaging 2 dependencies each, that's 100 readiness propagators. Is this within the network's performance envelope? Measure in Phase 0.
 
+4. **Layered scheduler complexity**: The 4-layer Gauss-Seidel scheduler is new infrastructure in `propagator.rkt`. It must correctly detect cross-layer cell writes and restart from the lowest affected layer. The effect-bridge scheduler is a precedent but was simpler (2 priorities). Is 4-layer scheduling provably correct? The answer should be yes — stratified fixpoint semantics gives us the mathematical foundation — but the implementation must be tested with adversarial constraint graphs.
+
+5. **Loop elimination completeness**: After Phase 8c, `run-stratified-resolution!` is gone. Every scenario currently handled by the hand-written loop must be handled by layered quiescence. The risk is edge cases in the loop that aren't exercised by the test suite — need to audit the loop's special-case handling before removal.
+
 ---
 
 ## 10. Files Modified
 
 | File | Phase | Changes |
 |------|-------|---------|
-| `metavar-store.rkt` | 1, 4, 5, 8 | Persistent network init, assumption tagging, S(-1) stratum, ready-queue |
+| `metavar-store.rkt` | 1, 4, 5, 8a-c | Persistent network init, assumption tagging, S(-1) stratum, ready-queue, resolution propagator, loop elimination |
 | `macros.rkt` | 2, 3 | Cell persistence migration, dual-write elimination |
 | `warnings.rkt` | 2, 3, 4 | Cell persistence migration, assumption tagging |
 | `global-constraints.rkt` | 2, 4 | Cell persistence migration, assumption tagging |
-| `driver.rkt` | 1, 3, 7 | Persistent network lifecycle, dual-write removal, callback elimination |
+| `driver.rkt` | 1, 3, 7, 8c | Persistent network lifecycle, dual-write removal, callback elimination, solve-meta! simplification |
 | `infra-cell.rkt` | 4, 9 | Assumption-tagged entries, mult lattice merge |
-| `elaborator-network.rkt` | 5, 8, 9 | S(-1) integration, readiness propagators, mult bridge propagators |
+| `propagator.rkt` | 8b, 8c | Layer-aware propagator tagging, `run-to-layered-quiescence` scheduler |
+| `elaborator-network.rkt` | 5, 8a, 8b, 9 | S(-1) integration, readiness propagators, resolution propagator, mult bridge propagators |
 | `elab-speculation-bridge.rkt` | 4, 5, 6 | Assumption tracking, S(-1) trigger, retire network-box restore |
 | `resolution.rkt` (NEW) | 7 | Extracted resolution logic from driver.rkt |
 | `qtt.rkt` | 9 | Mult lattice merge function |
