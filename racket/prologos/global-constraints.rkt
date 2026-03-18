@@ -42,7 +42,6 @@
  current-narrow-prop-net-box
  current-narrow-prop-cell-read
  current-narrow-prop-cell-write
- current-narrow-in-elaboration?
  current-narrow-constraints-cell-id
  current-narrow-var-constraints-cell-id
  register-narrow-cells!
@@ -79,11 +78,8 @@
 (define current-narrow-prop-net-box (make-parameter #f))
 (define current-narrow-prop-cell-write (make-parameter #f))
 (define current-narrow-prop-cell-read (make-parameter #f))
-;; Elaboration guard: only read from cells when inside process-command.
-;; Without this guard, tests that parameterize current-narrow-constraints
-;; directly (without going through the driver) would read stale cell content
-;; instead of the parameterized value.
-(define current-narrow-in-elaboration? (make-parameter #f))
+;; Track 6 Phase 8d: current-narrow-in-elaboration? removed. Guard was eliminated
+;; in Phase 8c — cell reads are unconditional (net-box scoped to command parameterize).
 (define current-narrow-constraints-cell-id (make-parameter #f))
 (define current-narrow-var-constraints-cell-id (make-parameter #f))
 

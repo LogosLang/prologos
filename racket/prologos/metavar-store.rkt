@@ -102,19 +102,17 @@
  (struct-out trait-constraint-info)
  ;; Vestigial: current-trait-constraint-map, current-trait-wakeup-map
  current-retry-trait-resolve
+ install-trait-resolve-callback!
  register-trait-constraint!
  lookup-trait-constraint
- install-trait-resolve-callback!
- retry-traits-via-cells!
  ;; Vestigial: current-trait-cell-map
  ;; Phase 3a: HasMethod constraint tracking
  (struct-out hasmethod-constraint-info)
  ;; Vestigial: current-hasmethod-constraint-map, current-hasmethod-wakeup-map
  current-retry-hasmethod-resolve
+ install-hasmethod-resolve-callback!
  register-hasmethod-constraint!
  lookup-hasmethod-constraint
- install-hasmethod-resolve-callback!
- retry-hasmethod-for-meta!
  ;; Phase 4: Capability constraint tracking
  (struct-out capability-constraint-info)
  ;; Vestigial: current-capability-constraint-map
@@ -349,12 +347,11 @@
     (set-box! tc-net-box
               (write-fn (unbox tc-net-box) tcm-cid
                         (hasheq meta-id (remove-duplicates cell-ids eq?)))))
-  ;; Phase 3d: If all type-args are already ground (no unsolved metas to trigger wakeup),
-  ;; attempt immediate resolution via the callback.
-  (when (null? unsolved-ta-metas)
-    (define resolve-fn (current-retry-trait-resolve))
-    (when resolve-fn
-      (resolve-fn meta-id info))))
+  ;; Track 6 Phase 8d: immediate resolution path removed. If all type-args
+  ;; are already ground, the stratified resolution loop (run-stratified-resolution!)
+  ;; will find this constraint ready on its next S1 scan via
+  ;; collect-ready-traits-via-cells. The loop runs after every solve-meta!.
+  )
 
 ;; Track 1 Phase 2a: read from cell.
 (define (lookup-trait-constraint meta-id)
@@ -427,33 +424,17 @@
         (set-box! hm-net-box
                   (write-fn (unbox hm-net-box) hcm-cid
                             (hasheq meta-id (remove-duplicates cell-ids eq?)))))))
-  ;; Phase 1d: If all deps are already ground (no unsolved metas to trigger wakeup),
-  ;; attempt immediate resolution via the callback.
-  (when (null? unsolved-dep-metas)
-    (define resolve-fn (current-retry-hasmethod-resolve))
-    (when resolve-fn
-      (resolve-fn meta-id info))))
+  ;; Track 6 Phase 8d: immediate resolution path removed. The stratified
+  ;; resolution loop handles this via collect-ready-hasmethods-via-cells.
+  )
 
 ;; Track 1 Phase 2b: read from cell.
 (define (lookup-hasmethod-constraint meta-id)
   (hash-ref (read-hasmethod-constraints) meta-id #f))
 
-;; Phase 1d: Try to resolve hasmethod constraints that reference a just-solved meta.
-;; Called from solve-meta! when a dependency meta is solved. Checks the wakeup
-;; map for any hasmethod constraints referencing this meta, and if all their
-;; dependencies are now ground, triggers resolution via the callback.
-(define (retry-hasmethod-for-meta! meta-id)
-  (define resolve-fn (current-retry-hasmethod-resolve))
-  (when resolve-fn
-    ;; Phase 7a: Read from cell (was direct parameter access).
-    (define wakeup (read-hasmethod-wakeup-map))
-    (define hm-metas (hash-ref wakeup meta-id '()))
-    (for ([hm-id (in-list hm-metas)])
-      (unless (meta-solved? hm-id)
-        ;; Track 1 Phase 2b: read from cell.
-        (define hm-info (hash-ref (read-hasmethod-constraints) hm-id #f))
-        (when hm-info
-          (resolve-fn hm-id hm-info))))))
+;; Track 6 Phase 8d: retry-hasmethod-for-meta! removed (dead code).
+;; The stratified resolution loop handles all hasmethod resolution via
+;; collect-ready-hasmethods-via-cells + collect-ready-hasmethods-for-meta.
 
 ;; ========================================
 ;; Phase 4: Capability constraint tracking
@@ -544,43 +525,9 @@
 ;; Called from solve-meta! when a type-arg meta is solved. Checks the wakeup
 ;; map for any trait constraints referencing this meta, and if all their
 ;; type-args are now ground, triggers resolution via the callback.
-(define (retry-trait-for-meta! meta-id)
-  (define resolve-fn (current-retry-trait-resolve))
-  (when resolve-fn
-    ;; Track 1 Phase 3b: read from cell.
-    (define wakeup (read-trait-wakeup-map))
-    (define dict-metas (hash-ref wakeup meta-id '()))
-    (for ([dict-id (in-list dict-metas)])
-      (unless (meta-solved? dict-id)
-        ;; Track 1 Phase 2a: read from cell.
-        (define tc-info (hash-ref (read-trait-constraints) dict-id #f))
-        (when tc-info
-          (resolve-fn dict-id tc-info))))))
-
-;; P3a: Retry trait resolution using propagator cell state.
-;; After run-to-quiescence, scans ALL trait constraints whose type-arg cells
-;; have become non-bot. This captures transitive propagation that the wakeup
-;; map might miss (e.g., if a type-arg meta was solved indirectly via network).
-(define (retry-traits-via-cells!)
-  (define resolve-fn (current-retry-trait-resolve))
-  (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
-  (when (and resolve-fn net-box read-fn)
-    (define enet (unbox net-box))
-    ;; Phase 7b: Read from cell (was direct parameter access).
-    (define tcm (read-trait-cell-map))
-    (for ([(dict-id cell-ids) (in-hash tcm)])
-      (unless (meta-solved? dict-id)
-        ;; Track 1 Phase 2a: read from cell.
-        (define tc-info (hash-ref (read-trait-constraints) dict-id #f))
-        (when tc-info
-          ;; Check if any type-arg cell has become non-bot
-          (define any-solved?
-            (for/or ([cid (in-list cell-ids)])
-              (let ([v (read-fn enet cid)])
-                (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
-          (when any-solved?
-            (resolve-fn dict-id tc-info)))))))
+;; Track 6 Phase 8d: retry-trait-for-meta! and retry-traits-via-cells! removed
+;; (dead code — never called). The stratified resolution loop handles all trait
+;; resolution via collect-ready-traits-via-cells + collect-ready-traits-for-meta.
 
 ;; Create a postponed constraint, add to global store, register for wakeup.
 ;; Phase 8b: Also adds unify propagators on the network between cells

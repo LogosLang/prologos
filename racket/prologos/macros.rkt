@@ -327,7 +327,6 @@
          qq->datum-expr
          keyword-like-symbol?
          ;; Phase 2a/2b: Propagator-first migration — registry cell infrastructure
-         current-macros-in-elaboration?
          current-macros-prop-net-box
          current-macros-prop-cell-write
          current-macros-prop-cell-read
@@ -486,11 +485,8 @@
 (define current-macros-prop-cell-write (make-parameter #f))
 (define current-macros-prop-cell-read (make-parameter #f))   ;; (enet cell-id → value)
 
-;; Track 3: Elaboration-context guard for cell-primary readers.
-;; Set to #t via parameterize in process-command (driver.rkt). Properly scoped —
-;; reverts to #f when process-command returns. Prevents cell-primary readers
-;; from using stale cell data outside active elaboration (e.g., test assertions).
-(define current-macros-in-elaboration? (make-parameter #f))
+;; Track 6 Phase 8d: current-macros-in-elaboration? removed. Guard was eliminated
+;; in Phase 8b — cell reads are unconditional (net-box scoped to command parameterize).
 
 ;; Track 3: Safe cell-primary read helper.
 ;; Track 6 Phase 8b: guard removed — cell reads are unconditional.
