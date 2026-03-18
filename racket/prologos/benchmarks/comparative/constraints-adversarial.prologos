@@ -1,0 +1,146 @@
+ns benchmarks::comparative::constraints-adversarial
+
+;; ============================================================
+;; Adversarial infrastructure benchmark (Track 7 Phase 0c)
+;; ============================================================
+;;
+;; This is the FIRST comparative benchmark that uses the full prelude.
+;; All existing benchmarks use :no-prelude, skipping prelude loading,
+;; registry cell creation, and the trait/narrowing infrastructure.
+;;
+;; What this stresses (relevant to Track 7):
+;;   1. Prelude loading overhead (creates 29 registry cells)
+;;   2. Per-command cell allocation (bridge propagators in Track 7)
+;;   3. Many small commands (S1 scanning cost: O(total) → O(changed))
+;;   4. Registry accumulation (many defs, types, traits in scope)
+;;   5. Generic arithmetic narrowing (the non-trait fast path)
+;;   6. Polymorphic implicit resolution (meta creation + unification)
+;;   7. Mixed command types (defs, specs, evals — varying cell counts)
+;;
+;; Track 7 infrastructure changes:
+;;   - Persistent registry cells eliminate per-command recreation
+;;   - Bridge propagators replace cell recreation + parameter seeding
+;;   - Readiness propagators replace O(total) scanning
+;;   - This benchmark captures the baseline for ALL of those
+
+;; ── Segment 1: Polymorphic definitions with implicits ──
+;; Each spec/defn pair creates implicit binders → meta allocation + solving
+
+spec id {A : Type} A -> A
+defn id [x] x
+
+spec const {A B : Type} A -> B -> A
+defn const [x y] x
+
+spec flip {A B C : Type} [A -> B -> C] -> B -> A -> C
+defn flip [f b a] [f a b]
+
+spec compose {A B C : Type} [B -> C] -> [A -> B] -> A -> C
+defn compose [f g x] [f [g x]]
+
+spec on {A B C : Type} [B -> B -> C] -> [A -> B] -> A -> A -> C
+defn on [f g x y] [f [g x] [g y]]
+
+spec apply {A B : Type} [A -> B] -> A -> B
+defn apply [f x] [f x]
+
+spec twice {A : Type} [A -> A] -> A -> A
+defn twice [f x] [f [f x]]
+
+spec thrice {A : Type} [A -> A] -> A -> A
+defn thrice [f x] [f [f [f x]]]
+
+;; ── Segment 2: Generic arithmetic (narrowing fast path) ──
+;; Each [+ x y] resolves via narrowing to int+ (concrete Int args).
+;; Tests per-command overhead with registry lookups.
+
+def a1 := [+ 1 2]
+def a2 := [+ 3 4]
+def a3 := [+ 5 6]
+def a4 := [+ 7 8]
+def a5 := [+ 9 10]
+def a6 := [* 12 13]
+def a7 := [+ a1 a2]
+def a8 := [+ a3 a4]
+def a9 := [* [+ a5 a6] [+ a7 a8]]
+def a10 := [+ [* a9 2] [+ a1 [* a2 a3]]]
+
+;; ── Segment 3: Deep arithmetic nesting ──
+;; Single commands with many subexpressions.
+;; Each subexpression narrows independently → many registry lookups per command.
+
+def deep1 := [+ [* [+ 100 [+ 20 30]] [+ 5 [* 2 3]]] [+ [* 10 10] [+ 40 [+ 50 10]]]]
+def deep2 := [+ [* deep1 2] [+ deep1 [+ 1 1]]]
+def deep3 := [+ deep2 [* deep1 deep2]]
+
+;; ── Segment 4: Polymorphic function application ──
+;; Forces implicit resolution: type metas created and solved per call.
+;; Tests unification + meta lifecycle at the propagator cell level.
+
+def d1 := id 42
+def d2 := id true
+def d3 := id "hello"
+def d4 := const 1 true
+def d5 := const "x" 42
+def d6 := flip const false 2
+def d7 := compose id id 7
+def d8 := twice id 99
+def d9 := thrice id 0
+def d10 := compose [fn [x : Int] [int+ x 1]] [fn [y : Int] [int* y 2]] 5
+
+;; ── Segment 5: Equality comparisons (narrowing dispatch) ──
+
+def e1 := [eq? 1 2]
+def e2 := [eq? true false]
+def e3 := [eq? "abc" "def"]
+
+;; ── Segment 6: Pipeline expressions ──
+;; |> chains: each stage creates a new command context.
+
+def p1 := |> 10 [int+ _ 5] [int* _ 2] [int+ _ 3]
+def p2 := |> 100 [int+ _ 1] [int+ _ 2] [int+ _ 3] [int+ _ 4]
+
+;; ── Segment 7: Many small independent commands ──
+;; Tests S1 scanning overhead: each command runs its own resolution cycle.
+;; With O(total) scanning, cost grows with accumulated constraints.
+;; With O(changed) readiness propagators, cost stays constant.
+;; 30 commands with minimal work each — overhead-dominated.
+
+[+ 1 1]
+[+ 2 2]
+[+ 3 3]
+[+ 4 4]
+[+ 5 5]
+[+ 6 6]
+[+ 7 7]
+[+ 8 8]
+[+ 9 9]
+[+ 10 10]
+[* 1 1]
+[* 2 2]
+[* 3 3]
+[* 4 4]
+[* 5 5]
+id 1
+id 2
+id 3
+id true
+id false
+const 1 2
+const true 3
+const "a" false
+flip const 1 2
+flip const true false
+compose id id 1
+compose id id true
+twice id 1
+thrice id 42
+on const id 1 2
+
+;; ── Segment 8: Larger compound expressions ──
+;; Mix of generic arithmetic, polymorphic calls, and comparisons
+;; in single commands — tests elaboration depth within one command.
+
+def mix1 := id [+ [* 3 4] [+ 5 6]]
+def mix2 := const [+ 1 2] [eq? true false]
+def mix3 := compose [fn [x : Int] [int+ x 10]] [fn [y : Int] [int* y 3]] [+ 2 3]
