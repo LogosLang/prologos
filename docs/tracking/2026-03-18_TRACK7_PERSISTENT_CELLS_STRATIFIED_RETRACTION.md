@@ -19,9 +19,9 @@
 | D.2 | External critique + response | ✅ | — | §14; threshold-cell redesign, scanning audit, assumption taxonomy |
 | D.3 | Self-critique (principle alignment) | ✅ | — | §9+§15; T1 resolved (Option A), T2-T6 documented, all tensions addressed |
 | 0a | Acceptance file | ✅ | — | 5 bugs discovered; session/relational/speculation coverage |
-| 0b | `process-file` verbose instrumentation | ⬜ | — | Per-command summaries, structured log, timing |
-| 0c | Adversarial constraint graph + baseline capture | ⬜ | — | Synthetic graph: deep chains, wide fan-out, nested speculation |
-| 1 | Persistent registry network infrastructure | ⬜ | L1 (finite registries) | WS-C: separate persistent network for registries |
+| 0b | `process-file` verbose instrumentation | ✅ | — | 12-field VERBOSE JSON per command (commit `8b8acfe`); perf-counters 12→15 fields (commit `1056469`) |
+| 0c | Adversarial constraint graph + baseline capture | ✅ | — | First prelude-using comparative benchmark; 54 metas, 29 res-cycles; ~14.3s median; full suite baseline saved (commit `1810d2b`) |
+| 1 | Persistent registry network infrastructure | 🔄 | L1 (finite registries) | WS-C: separate persistent network for registries |
 | 2 | Registry cell persistence migration | ⬜ | L1 (monotone merge) | WS-C: migrate 24 macros + 3 warning + 2 narrowing cells |
 | 3 | Dual-write elimination | ⬜ | — (no new propagators) | WS-C: remove parameter writes from register functions |
 | 4 | Assumption-tagged scoped cells | ⬜ | L1 (finite assumptions) | WS-B: tag constraint/wakeup/warning writes with assumption IDs |
