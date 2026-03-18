@@ -26,7 +26,7 @@
 | 3 | Dual-write elimination | ⬜ | — (no new propagators) | WS-C: remove parameter writes from register functions |
 | 4 | Assumption-tagged scoped cells | ⬜ | L1 (finite assumptions) | WS-B: tag constraint/wakeup/warning writes with assumption IDs |
 | 5 | S(-1) retraction stratum | ⬜ | L1 (assumption set ↓) | WS-B: retraction propagator, cleanup to fixpoint |
-| 6 | Belt-and-suspenders retirement | ⬜ | — (removal, not addition) | WS-B: remove network-box restore (Phase 5b gate) |
+| 6 | Belt-and-suspenders retirement | ⬜ | — (removal, not addition) | WS-B: retire network-box restore, Track 6 base-network, `reset-elab-network-command-state` |
 | 7a | Module extraction + callback elimination | ⬜ | — (restructuring only) | WS-B: extract to `resolution.rkt`, remove 3 callback params |
 | 7b | Resolution chain purification | ⬜ | — (signature change) | WS-B: 6 write + 4 read functions purified to `enet → enet*` (Option A) |
 | 8a | Readiness propagators (L1) | ⬜ | L1 (fire once per dep) | WS-B: replace O(total) S1 scanning with per-constraint readiness cells |
@@ -541,17 +541,34 @@ For `merge-list-append` cells: filter list elements similarly.
 
 ### Phase 6: Belt-and-Suspenders Retirement (Phase 5b Gate)
 
-**Goal**: Remove the network-box restore from `save-meta-state`/`restore-meta-state!`.
+**Goal**: Remove transitional persistence mechanisms that are superseded by the persistent registry network (Phases 1-3) and S(-1) retraction (Phase 5).
 
-**Precondition**: With S(-1) retraction handling scoped cells and TMS retraction handling value cells, the network-box snapshot is redundant.
+**Precondition**: With S(-1) retraction handling scoped cells, TMS retraction handling value cells, and the persistent registry network holding registry state, both the network-box snapshot AND the Track 6 base-network pattern become redundant.
 
-**Belt-and-suspenders validation**: Run the full test suite with BOTH mechanisms active, comparing results. Then disable network-box restore and verify identical results.
+**What gets retired**:
+
+1. **Network-box restore** in `save-meta-state`/`restore-meta-state!` — S(-1) retraction + TMS handles rollback.
+
+2. **`current-persistent-base-network`** (Track 6 Phase 6) — the elab-network no longer needs to persist across commands. Registry cells live in the persistent registry network; the elab-network goes back to being fully per-command (fresh each time via `make-elaboration-network`).
+
+3. **`reset-elab-network-command-state`** (Track 6 Phase 6) — the selective-reset function that preserved cell values while clearing propagators/metas/id-map. No longer needed when `reset-meta-store!` creates a fresh elab-network per command.
+
+4. **`save-base-elaboration-network`** — no base network to save.
+
+**Why these are safe to retire together**: Track 6's base-network pattern was transitional — it kept registry cells alive across commands by *not destroying the elab-network*. Track 7 replaces this with a cleaner separation: persistent state in the persistent registry network, ephemeral state in a fresh-per-command elab-network. The base-network pattern mixed lifecycle concerns (persistent registry cells + ephemeral meta cells in one network, requiring selective reset). The two-network architecture decomplects them.
+
+**Belt-and-suspenders validation**: Run the full test suite with BOTH mechanisms active, comparing results. Then:
+1. Disable network-box restore in `restore-meta-state!` → verify identical results
+2. Remove `current-persistent-base-network` usage in `reset-meta-store!` (revert to fresh `make-elaboration-network` per command) → verify identical results
+3. Remove `reset-elab-network-command-state` and `save-base-elaboration-network` → dead code
 
 **Changes to `save-meta-state`**: Remove the network box save. `save-meta-state` becomes a no-op (all state is TMS-managed or retracted by S(-1)).
 
 **Changes to `restore-meta-state!`**: Remove the network box restore. Retraction happens through S(-1) and TMS.
 
-**Result**: `save-meta-state`/`restore-meta-state!` reduce from 1 box to 0 boxes. Speculation is now fully managed by the TMS + S(-1) architecture.
+**Changes to `reset-meta-store!`**: Remove the `current-persistent-base-network` branch. Always create a fresh `make-elaboration-network` per command. Registry cell reads come through bridge propagators from the persistent network, not from persisted cells in the elab-network.
+
+**Result**: `save-meta-state`/`restore-meta-state!` reduce from 1 box to 0 boxes. `reset-meta-store!` simplifies from conditional (base-network vs fresh) to unconditional fresh. Speculation is fully managed by TMS + S(-1). Persistence is fully managed by the persistent registry network. The elab-network is purely ephemeral again — the clean architectural state.
 
 ### Phase 7: Callback Inlining + Resolution Purification
 
