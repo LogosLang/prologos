@@ -292,6 +292,28 @@ do.
 Corollary: when deferral /is/ necessary, it must be immediately tracked
 in ~DEFERRED.md~. Deferred work that isn't tracked is abandoned work.
 
+** Callbacks Are a Propagator-First Anti-Pattern
+
+When a subsystem injects behavior across module boundaries via callback
+parameters, it's a sign that the behavior belongs in the propagator
+network, not outside it. Callback parameters are:
+- Not correct-by-construction (they can be ~#f~; every call site must guard)
+- Not data-oriented (the callback is an opaque function, not inspectable data)
+- Not propagator-first (the callback fires imperatively, not through cell state)
+
+The alternative: make the triggering condition a cell, and the response a
+propagator that fires when the cell reaches the ready state. The module
+boundary problem disappears because the propagator captures its closure at
+registration time (in the module that has the resolution logic) and fires
+at the appropriate stratum (in the network's scheduler).
+
+Discovered during Track 6 Phase 8d: three callback parameters existed to
+break circular dependencies between ~metavar-store.rkt~ and ~driver.rkt~.
+Deep audit revealed them vestigial --- the stratified resolution loop was
+the load-bearing path. The pattern: when you find callbacks in a propagator-
+based system, ask whether the callback's trigger should be a cell and its
+behavior a propagator.
+
 ** Let Pain Drive Design
 Don't add features until they're needed. Every deferred item in
 ~DEFERRED.md~ was deferred because the pain wasn't yet sufficient to

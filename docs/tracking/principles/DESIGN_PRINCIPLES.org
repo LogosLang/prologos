@@ -333,6 +333,11 @@ relying on vigilance to avoid it. This applies at every level:
   type error, not a runtime crash
 - *Infrastructure*: propagator networks ensure derived state is always
   consistent with source state; no explicit invalidation discipline needed
+- *Resolution*: stratified propagator networks make constraint readiness
+  and resolution structurally emergent --- a constraint's readiness propagator
+  fires when its dependencies become ground, rather than requiring a scan
+  loop to discover it. Callbacks and defensive scanning are symptoms of
+  resolution logic that lives outside the network.
 - *Concurrency*: linearity prevents data races; session types prevent
   protocol violations; capability types prevent unauthorized access
 
@@ -412,6 +417,42 @@ Even for non-monotonic cases, the design pattern of /monotonic layers with
 ATMS-backed retraction/ often applies. This recovers non-monotonic behavior
 within the propagator paradigm rather than stepping outside it.
 
+** Stratified Propagator Networks
+
+When a system requires non-trivial control flow over propagation ---
+resolution that depends on quiescence, constraint retry that depends on
+readiness, actions that perturb state at a higher stratum --- the design
+pattern is /stratified propagator networks/, not imperative orchestration.
+
+Each stratum is a propagator layer with its own lattice:
+- Stratum 0: base propagation (type unification, lattice merges)
+- Stratum 1: readiness detection (constraint cells whose dependencies are ground)
+- Stratum 2: resolution commitment (trait lookup, unification retry)
+
+Inter-stratum edges use the same Galois connection pattern as cross-domain
+bridges (session→effect, module→file). Stratum /n+1/ activates only after
+stratum /n/ reaches quiescence. Changes from stratum /n+1/ perturb stratum
+/n/, restarting the cascade. The layered recovery principle ensures the
+non-monotonicity of perturbation is recovered through structural ordering.
+
+This pattern replaces:
+- *Callback parameters* that inject resolution logic across module boundaries
+- *Scan loops* that iterate constraint stores to find ready constraints
+- *Immediate paths* that eagerly resolve at registration time
+- *Wakeup indices* that manually track which constraints depend on which metas
+
+All of these are symptoms of resolution logic living /outside/ the propagator
+network. Stratified propagator networks bring resolution /into/ the network,
+making readiness and resolution structurally emergent rather than imperatively
+discovered.
+
+*Provenance*: Discovered during Track 6 Phase 8d analysis (2026-03-17).
+The existing stratified resolution loop (~run-stratified-resolution!~) is a
+hand-written orchestrator with this pattern partially implemented. The
+callbacks it invokes are vestigial --- the loop itself is the load-bearing
+path. Future work (Track 7+) replaces the hand-written loop with actual
+stratified propagator layers.
+
 ** Relationship to First-Class by Default
 
 This principle is the infrastructure-facing corollary of [[*First-Class by Default][First-Class by
@@ -431,6 +472,7 @@ component was designed to provide.
 | Diagnostic set | Recompute on save | Cell per form; elaboration changes propagate |
 | Module exports | Snapshot at load time | Cell per module; re-export propagates |
 | Completion cache | Rebuild periodically | Cell per namespace; imports propagate |
+| Constraint resolution | Callback + scan loop | Readiness cell per constraint; resolution propagator fires when ready |
 
 * Data Orientation
 
@@ -474,7 +516,18 @@ interpret actions =
 #+end_example
 
 The action descriptors form a /free algebra/ over the effect signature. The
-interpreter is the /fold/ that evaluates the algebra. This separation yields:
+interpreter is the /fold/ that evaluates the algebra.
+
+The next step beyond action descriptors: make /readiness itself/ a cell value.
+Rather than scanning constraint stores to collect action descriptors, a
+readiness propagator watches each constraint's dependency cells and transitions
+a readiness cell from ~pending~ to ~ready~ when all dependencies are ground.
+The action descriptor is the cell value; the interpreter reads ready cells
+rather than scanning for them. This eliminates the imperative scan loop and
+makes the resolution pipeline fully propagator-driven (see [[*Stratified Propagator Networks][Stratified
+Propagator Networks]] under Propagator-First Infrastructure).
+
+This separation yields:
 
 1. *Inspectability*: the worklist is data --- it can be logged, counted,
    visualized in the observatory, validated for confluence
