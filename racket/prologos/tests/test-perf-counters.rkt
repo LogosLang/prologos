@@ -70,8 +70,8 @@
   (check-equal? (hash-ref h 'infer_steps) 1)
   (check-equal? (hash-ref h 'elaborate_steps) 0)
   (check-equal? (hash-ref h 'zonk_steps) 0)
-  ;; All 12 keys present
-  (check-equal? (length (hash-keys h)) 12))
+  ;; All 15 keys present (12 original + 3 Track 7 Phase 0b)
+  (check-equal? (length (hash-keys h)) 15))
 
 ;; ============================================================
 ;; with-perf-counters scoping
@@ -124,7 +124,7 @@
   (define t1-off (current-inexact-monotonic-milliseconds))
   (define off-ms (- t1-off t0-off))
   ;; Enabled
-  (define pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0))
+  (define pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
   (define t0-on (current-inexact-monotonic-milliseconds))
   (parameterize ([current-perf-counters pc])
     (for ([_ (in-range 1000000)])
