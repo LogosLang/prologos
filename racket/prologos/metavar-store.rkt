@@ -133,6 +133,7 @@
  current-prop-make-network
  current-prop-fresh-meta
  current-prop-cell-write
+ current-prop-cell-replace
  current-prop-cell-read
  current-prop-add-unify-constraint
  current-prop-add-propagator
@@ -151,6 +152,9 @@
  current-retracted-assumptions
  record-assumption-retraction!
  run-retraction-stratum!
+ retract-hasheq-entries
+ retract-hasheq-list-entries
+ scoped-cell-ids
  ;; Track 7 Phase 7a: Resolution executor (replaces 3 callback params)
  current-resolution-executor
  ;; Track 7 Phase 7b: Pure write functions (enet → enet*)
@@ -1150,6 +1154,7 @@
 (define current-prop-make-network (make-parameter #f))      ;; (→ elab-network)
 (define current-prop-fresh-meta (make-parameter #f))        ;; (enet ctx type source → (values enet* cell-id))
 (define current-prop-cell-write (make-parameter #f))        ;; (enet cell-id value → enet*)
+(define current-prop-cell-replace (make-parameter #f))      ;; (enet cell-id value → enet*) — bypass merge
 (define current-prop-cell-read (make-parameter #f))         ;; (enet cell-id → value)
 (define current-prop-add-unify-constraint (make-parameter #f))  ;; (enet cid-a cid-b → (values enet* pid))
 ;; Track 7 Phase 8a: General propagator addition callback.
@@ -1264,8 +1269,12 @@
       ;; Clean all scoped cells
       (define net-box (current-prop-net-box))
       (define read-fn (current-prop-cell-read))
-      (define write-fn (current-prop-cell-write))
-      (when (and net-box read-fn write-fn)
+      ;; Track 7 post-fix: use cell-replace (bypass merge) for retraction.
+      ;; Retraction is non-monotone — writing a cleaned value via merge-based
+      ;; write would union it back with the old value, restoring retracted entries.
+      ;; cell-replace sets the cell value directly, enqueuing dependents.
+      (define replace-fn (current-prop-cell-replace))
+      (when (and net-box read-fn replace-fn)
         (for ([cid (in-list (scoped-cell-ids))])
           (define val (read-fn (unbox net-box) cid))
           (when (hash? val)
@@ -1280,7 +1289,7 @@
                   ;; Constraint cell: filter hash values
                   (retract-hasheq-entries val retracted)))
             (unless (equal? val cleaned)
-              (set-box! net-box (write-fn (unbox net-box) cid cleaned)))))))))
+              (set-box! net-box (replace-fn (unbox net-box) cid cleaned)))))))))
 
 ;; Track 6 Phase 1a: id-map access callbacks (set by driver.rkt).
 ;; Break circular dep: metavar-store doesn't import elaborator-network.
@@ -1358,10 +1367,12 @@
 (define (prop-type-top? v) (eq? v 'type-top))
 
 ;; Install network operation callbacks. Called once at startup from driver.rkt.
-(define (install-prop-network-callbacks! make-net fresh-m cell-w cell-r add-unify)
+(define (install-prop-network-callbacks! make-net fresh-m cell-w cell-r add-unify
+                                        #:cell-replace [cell-repl #f])
   (current-prop-make-network make-net)
   (current-prop-fresh-meta fresh-m)
   (current-prop-cell-write cell-w)
+  (current-prop-cell-replace cell-repl)
   (current-prop-cell-read cell-r)
   (current-prop-add-unify-constraint add-unify))
 

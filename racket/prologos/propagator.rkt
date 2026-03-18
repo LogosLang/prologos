@@ -34,6 +34,7 @@
  net-new-cell
  net-cell-read
  net-cell-write
+ net-cell-replace  ;; Track 7 post-fix: bypass merge for S(-1) retraction
  ;; Propagator operations
  net-add-propagator
  ;; Threshold propagators (Phase 2.5b)
@@ -367,6 +368,38 @@
              [contradicted?
               (and (not (eq? cfn 'none))   ;; cell has a contradicts? fn
                    (cfn merged))]          ;; the merged value is contradictory
+             [net* (struct-copy prop-network net
+                     [cells new-cells]
+                     [worklist new-wl])])
+        (if contradicted?
+            (struct-copy prop-network net* [contradiction cid])
+            net*))))
+
+;; Replace a cell's value directly, bypassing the merge function.
+;; Used by S(-1) retraction to write cleaned values to monotone cells.
+;; Retraction is a non-monotone operation — stratification makes it safe
+;; (S(-1) fires before S0; S0 reaches a new fixpoint afterwards).
+;; Semantics: identical to net-cell-write except no merge-fn application.
+;; Still enqueues dependents, checks contradiction, and returns unchanged
+;; network if new-val equals old (termination guarantee).
+;; No TMS wrapping — retraction operates on raw accumulated cell values.
+(define (net-cell-replace net cid new-val)
+  (define cells (prop-network-cells net))
+  (define h (cell-id-hash cid))
+  (define cell (champ-lookup cells h cid))
+  (when (eq? cell 'none)
+    (error 'net-cell-replace "unknown cell: ~a" cid))
+  (define old-val (prop-cell-value cell))
+  (if (equal? new-val old-val)
+      net  ;; No change — return same network
+      (let* ([new-cell (struct-copy prop-cell cell [value new-val])]
+             [new-cells (champ-insert cells h cid new-cell)]
+             [deps (champ-keys (prop-cell-dependents cell))]
+             [new-wl (append deps (prop-network-worklist net))]
+             [cfn (champ-lookup (prop-network-contradiction-fns net) h cid)]
+             [contradicted?
+              (and (not (eq? cfn 'none))
+                   (cfn new-val))]
              [net* (struct-copy prop-network net
                      [cells new-cells]
                      [worklist new-wl])])

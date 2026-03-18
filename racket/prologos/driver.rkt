@@ -2036,7 +2036,8 @@
  elab-fresh-meta
  elab-cell-write
  elab-cell-read
- elab-add-unify-constraint)
+ elab-add-unify-constraint
+ #:cell-replace elab-cell-replace)
 
 ;; Phase 1a: Install infrastructure cell creation callback.
 (current-prop-new-infra-cell elab-new-infra-cell)

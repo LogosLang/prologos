@@ -35,6 +35,7 @@
  elab-fresh-meta
  elab-cell-read
  elab-cell-write
+ elab-cell-replace  ;; Track 7 post-fix: bypass merge for S(-1) retraction
  elab-cell-info-ref
  ;; Constraints
  elab-add-unify-constraint
@@ -175,6 +176,16 @@
 (define (elab-cell-write enet cid val)
   (elab-network
    (net-cell-write (elab-network-prop-net enet) cid val)
+   (elab-network-cell-info enet)
+   (elab-network-next-meta-id enet)
+   (elab-network-id-map enet)
+   (elab-network-meta-info enet)))
+
+;; Track 7 post-fix: Replace a cell's value directly, bypassing merge.
+;; Used by S(-1) retraction to write cleaned values to monotone cells.
+(define (elab-cell-replace enet cid val)
+  (elab-network
+   (net-cell-replace (elab-network-prop-net enet) cid val)
    (elab-network-cell-info enet)
    (elab-network-next-meta-id enet)
    (elab-network-id-map enet)
