@@ -247,6 +247,12 @@ Subsequent unifications of the same type reuse cached sub-cells.
 (elaborator-network.rkt:407-444) ALREADY exists for exactly this purpose. PUnify
 extends it from a utility to the primary unification mechanism.
 
+**Refinement**: Option C is further refined with a **lattice-first architecture**
+(§5.5) — a type constructor descriptor registry that formalizes the recursive
+sum-of-products structure, providing generic decomposition/reconstruction and
+compositional monotonicity guarantees. This is a design discipline over Option C's
+mechanics, not a different option — the runtime operations are identical.
+
 **Pros**:
 - Incremental migration — types don't need to change representation upfront
 - On-demand allocation — cells only created when actually needed for unification
@@ -255,13 +261,15 @@ extends it from a utility to the primary unification mechanism.
 - Low initial overhead — 80% of unify calls hit fast-path and never create cells
 - Compatible with existing TMS infrastructure (cells are TMS-tracked)
 - Natural fit for the existing two-network architecture
+- Lattice-first framing gives compositional correctness and design vocabulary
 
 **Cons**:
 - Doesn't achieve "types are cells from birth" (that's a later migration)
 - Still has AST→cell conversion cost on first decomposition
 - Decomposition registry must survive across commands for cross-command types
 
-**Verdict**: Best risk/reward ratio. Uses proven patterns. Incremental.
+**Verdict**: Best risk/reward ratio. Uses proven patterns. Incremental. Lattice
+framing aligns with propagator-first principles and enables compositional reasoning.
 
 ### Option D: Hybrid — Eager for Metas, Lazy for Structure
 
@@ -411,7 +419,257 @@ sub-cell holds the OPENED body (substituted with fresh fvar). This means:
 This is a subtle invariant: the `cell-decomps` registry returns the same sub-cells
 (with the same fvar substitution) on cache hit. Correctness depends on this.
 
-### 5.5 Interaction with Existing Infrastructure
+### 5.5 Lattice-First Architecture: Recursive Sum-of-Products
+
+The type lattice for propagator cells is not a flat lattice — it is a **recursive
+sum-of-products lattice**. Recognizing this formally and building the implementation
+around it provides compositional correctness, a single source of structural truth,
+and the design vocabulary for composing with future propagator infrastructure.
+
+#### 5.5.1 The Lattice Structure
+
+```
+TypeLattice = Lifted(FlatLattice(Atom) ⊔ Σ_{tag ∈ Tags} ∏_{i=1..arity(tag)} L_i)
+
+where:
+  Atom       = {Nat, Bool, Int, String, Type(n), tycon(name), fvar(x), ...}
+  Tags       = {Pi, Sigma, App, Eq, Vec, Fin, Pair, Lam, PVec, Set, Map}
+  L_i        = TypeLattice for most components
+               MultLattice for Pi's multiplicity component
+               (dependent on prior components for binder codomains)
+  Lifted(L)  = {⊥} ∪ L ∪ {⊤}  (type-bot and type-top)
+```
+
+Each constructor tag gives a **product lattice** over its components. The overall
+type is a **sum lattice** (tagged disjoint union) over tags. The `Lifted` wrapper
+adds `type-bot` (no information, fresh meta) and `type-top` (contradiction).
+
+**This structure already exists implicitly** in three places:
+- `type-lattice.rkt`: `try-unify-pure` recursively decomposes by tag (~170 lines)
+- `unify.rkt`: `classify-whnf-problem` classifies by tag (~150 lines)
+- `elaborator-network.rkt`: `maybe-decompose` creates sub-cells by tag (~100 lines)
+
+All three encode the same structural knowledge independently. The lattice-first
+design unifies them.
+
+#### 5.5.2 Type Constructor Descriptor Registry
+
+A single registration site for all compound type structure:
+
+```racket
+(struct type-ctor-desc
+  (tag            ; symbol: 'Pi, 'Sigma, 'App, 'Eq, ...
+   arity          ; natural: number of sub-components
+   extract-fn     ; (AST-value → (list component ...))
+   reconstruct-fn ; ((list cell-value ...) → AST-value)
+   component-lattices  ; (list (merge-fn contradicts?) ...)
+   binder-depth   ; natural: how many components are under a binder (0 for App, 1 for Pi/Sigma)
+   ))
+```
+
+Example registrations:
+
+```racket
+(register-type-ctor! 'Pi
+  #:arity 3  ;; mult, domain, codomain
+  #:extract (λ (v) (list (expr-Pi-mult v) (expr-Pi-domain v) (expr-Pi-codomain v)))
+  #:reconstruct (λ (cs) (expr-Pi (first cs) (second cs) (third cs)))
+  #:component-lattices (list mult-lattice type-lattice type-lattice)
+  #:binder-depth 1)  ;; codomain is under a binder
+
+(register-type-ctor! 'App
+  #:arity 2  ;; func, arg
+  #:extract (λ (v) (list (expr-app-func v) (expr-app-arg v)))
+  #:reconstruct (λ (cs) (expr-app (first cs) (second cs)))
+  #:component-lattices (list type-lattice type-lattice)
+  #:binder-depth 0)
+
+(register-type-ctor! 'Eq
+  #:arity 3  ;; type, lhs, rhs
+  #:extract (λ (v) (list (expr-Eq-type v) (expr-Eq-lhs v) (expr-Eq-rhs v)))
+  #:reconstruct (λ (cs) (expr-Eq (first cs) (second cs) (third cs)))
+  #:component-lattices (list type-lattice type-lattice type-lattice)
+  #:binder-depth 0)
+```
+
+#### 5.5.3 Generic Operations Derived From Descriptors
+
+All three currently-independent implementations collapse into generic operations
+parameterized by the descriptor:
+
+**Generic decomposition** (replaces `maybe-decompose` + per-tag cases):
+```
+generic-decompose(net, cell, value):
+  tag = type-constructor-tag(value)
+  desc = lookup-type-ctor-desc(tag)
+  if not desc: return net  ;; atom, no decomposition
+  components = desc.extract-fn(value)
+  (net*, sub-cells) = get-or-create-sub-cells(net, cell, tag, components)
+  return net*
+```
+
+**Generic reconstruction** (replaces `make-pi-reconstructor`, `make-app-reconstructor`, ...):
+```
+generic-reconstructor(parent-cell, desc, sub-cells):
+  fire(net):
+    values = map(net-cell-read, sub-cells)
+    if any type-bot: return net  ;; wait
+    if any type-top: return net-cell-write(net, parent-cell, type-top)
+    return net-cell-write(net, parent-cell, desc.reconstruct-fn(values))
+```
+
+**Generic merge** (replaces `try-unify-pure` recursive cases):
+```
+generic-type-merge(v1, v2):
+  tag1, tag2 = type-constructor-tag(v1), type-constructor-tag(v2)
+  if tag1 ≠ tag2: return type-top  ;; sum lattice: different summands → ⊤
+  desc = lookup-type-ctor-desc(tag1)
+  cs1, cs2 = desc.extract-fn(v1), desc.extract-fn(v2)
+  merged = zipWith(component-merge, desc.component-lattices, cs1, cs2)
+  if any ⊤: return type-top
+  return desc.reconstruct-fn(merged)
+```
+
+#### 5.5.4 What This Gives Us
+
+**Single source of structural truth.** Adding a new compound type (which we do
+periodically — PVec, Set, Map were recent additions) requires ONE descriptor
+registration. The pipeline exhaustiveness checklist (`.claude/rules/pipeline.md`)
+currently requires touching 14 files for a new AST node; the descriptor registry
+reduces the compound-type-specific surface to one registration site.
+
+**Compositional monotonicity.** Product lattice monotonicity: if each component
+merge is monotone, the product merge is automatically monotone (standard theorem).
+The only per-component proof obligation is that `type-lattice-merge` and
+`mult-lattice-merge` are monotone — already established. The recursive/compound
+case is handled by the generic product construction. No hand-verification of
+170 lines of `try-unify-pure` needed.
+
+**Design vocabulary for Track 8 second half.** When multiplicity and level domains
+come onto the network, a Pi cell's multiplicity sub-cell is naturally a product
+lattice component — the Pi descriptor says "my first component is a MultLattice
+cell." Cross-domain propagation becomes projection into a different component
+lattice, not a bespoke bridge. Session types, capabilities, and future domains
+follow the same pattern.
+
+**Galois connection between representations.** The flat type lattice (current
+`type-lattice-merge` over AST values) and the tree-structured type lattice
+(cell-trees with sub-cells) are connected by a Galois connection:
+- α : Tree → AST (fold the tree back into a flat AST — the reconstructor)
+- γ : AST → Tree (unfold an AST into sub-cells — the decomposer)
+Recognizing this formally means the on-demand decomposition (Option C) IS the
+γ injection into the tree lattice, applied lazily. And reconstruction IS α.
+
+**Lattice-indexed families for dependent types.** Pi's codomain lattice depends
+on the domain value (the opened binder). The descriptor's `binder-depth` field
+marks which components are under binders, and the decomposition machinery
+creates fresh fvars for opening. This is the lattice-indexed family from the
+lattice catalog (§ Lattice-Indexed Families) made concrete.
+
+#### 5.5.5 What This Does NOT Give Us
+
+**Performance differences.** The descriptor lookup adds one hash lookup per
+decomposition (~343 Pi cases → ~17µs total). The generic lambda dispatch is
+equivalent to the current match clause dispatch. The runtime operations are
+identical to ad-hoc Option C — the lattice framing is a design discipline,
+not a different execution path.
+
+**Level unification.** Levels (36% of classifications) are numeric lattice
+operations, not tree-structured. They stay imperative. The descriptor registry
+covers compound types only.
+
+**Union unification.** Unions have variable width (not fixed arity per tag).
+The sum-of-products model doesn't directly cover them. Unions are rare (~0%)
+and stay as a special case.
+
+### 5.6 Performance Cost Analysis: Grounded Numbers
+
+Moving structural decomposition from inline recursion to cell-tree propagators
+has a concrete, measurable cost. This section provides the grounded analysis.
+
+#### 5.6.1 Cost of a Single Cell
+
+`net-new-cell` (propagator.rkt:259) performs:
+- 1 `cell-id` struct allocation
+- 1 `prop-cell` struct allocation (value + champ-empty dependents)
+- 2-3 `champ-insert` operations (cells, merge-fns, optionally contradiction-fns)
+- 1-2 `struct-copy prop-network` (13-field struct, shallow copy)
+- For TMS cells: +1 `tms-cell-value` struct allocation
+
+**Total per cell**: ~4-5 allocations + 2-3 CHAMP inserts + 1-2 struct-copies.
+
+#### 5.6.2 Cost of a Cell Write
+
+`net-cell-write` (propagator.rkt:342) performs:
+- 2-3 `champ-lookup` operations (cell, merge-fn, optionally contradiction-fn)
+- 1 `merge-fn` call (the lattice join)
+- 1 `equal?` check (old vs merged — for compound types, walks the AST)
+- If changed: 1 `struct-copy prop-cell`, 1 `champ-insert`, worklist append
+
+#### 5.6.3 Current Inline Cost vs Cell-Tree Cost Per Pi Decomposition
+
+**Current (inline recursion)**:
+- 3 struct field accesses (O(1) each — direct accessor, ~1ns)
+- 1 `gensym` + 2 `zonk-at-depth` + 2 `open-expr` walks
+- 2 recursive `unify-core` calls (continues on call stack)
+- **No CHAMP operations. No cell creation. No prop-network struct-copy.**
+
+**Cell-tree (on-demand decomposition)**:
+- `get-or-create-sub-cells` × 2: 4-6 new cells, 2 registry lookups + 2 inserts
+- `elab-add-unify-constraint` × 2: 2 propagator creations, 4 cell reads
+- 2 reconstructor propagators
+- ~12-20 CHAMP operations, ~8-12 prop-network struct-copies total
+
+#### 5.6.4 Aggregate Cost Estimate
+
+For the acceptance file (163 commands, 1,904 classifications):
+
+| Classification | Count | New Cells | New Propagators | CHAMP Ops |
+|---------------|-------|-----------|-----------------|-----------|
+| level (36%)   | ~686  | 0         | 0               | 0         |
+| ok (14%)      | ~267  | 0         | 0               | 0         |
+| flex-rigid (24%) | ~457 | 0-457  | 0               | ~900      |
+| pi (18%)      | ~343  | ~1,400    | ~1,400          | ~5,000    |
+| binder (6%)   | ~114  | ~450      | ~450            | ~1,700    |
+| sub (3%)      | ~57   | ~230      | ~230            | ~850      |
+| **Total**     | 1,904 | **~2,100-2,500** | **~2,100** | **~8,500** |
+
+At measured per-operation costs:
+- 2,500 cell creations × ~600ns each: **~1.5ms**
+- 8,500 CHAMP operations × ~300ns each: **~2.6ms**
+- 4,000 prop-network struct-copies × ~200ns each: **~0.8ms**
+- 2,100 propagator fire cycles × ~500ns each: **~1.1ms**
+- Worklist scheduling overhead: **~2-5ms**
+
+**Total estimated overhead: ~8-11ms per acceptance file run** (0.05-0.06% of 17.9s).
+
+This is well within the 10% regression budget. The 80% fast-path (zero cells)
+is the key enabler — only 20% of unify calls create any cells at all.
+
+#### 5.6.5 Memory Cost
+
+Per cell: ~200-300 bytes (cell-id, prop-cell, CHAMP entries, TMS wrapper).
+2,500 cells × 250 bytes = **~625KB** additional per file.
+Current working set: ~5-15MB. This is ~4-6% increase — negligible.
+
+#### 5.6.6 Compensating Factors
+
+**Shallower `equal?` checks.** Currently `net-cell-write` calls `(equal? merged
+old-val)` which for compound types walks the full AST tree. With cell-trees,
+leaf cells hold atoms — `equal?` becomes pointer comparison. This partially
+offsets the CHAMP overhead.
+
+**Reduced `try-unify-pure` recursion.** The current `make-structural-unify-propagator`
+calls `type-lattice-merge` → `try-unify-pure` which does deep recursive structural
+comparison. With cell-trees, this recursion is replaced by shallow per-component
+merge at each cell level. The total work is similar but distributed differently.
+
+**Memoized decomposition.** The `cell-decomps` registry means repeated unifications
+against the same compound type (e.g., the prelude's `map` function type unified
+in multiple call sites) reuse cached sub-cells. Currently each unification does
+fresh structural recursion. For types unified multiple times, cell-trees amortize.
+
+### 5.7 Interaction with Existing Infrastructure (formerly §5.5)
 
 **TMS/Speculation**: Cell-tree nodes are regular TMS cells → speculation works.
 When `save-meta-state` snapshots, cell-tree state is included. `restore-meta-state!`
@@ -433,18 +691,34 @@ operates on the per-command elab-network only.
 
 ## 6. Implementation Phases
 
-### Phase 1: Unify-Propagator Infrastructure
+### Phase 1: Type Constructor Descriptor Registry + Unify-Propagator Infrastructure
 
-**What**: Create the `unify-propagator` function signature, the `pair-decomps`
-dedup check for unification pairs, and the dispatch-to-propagator bridge.
+**What**: Create the `type-ctor-desc` registry (§5.5.2), the generic decomposition
+and reconstruction machinery (§5.5.3), and the `unify-propagator` function that
+dispatches through descriptors rather than hardcoded match clauses.
 
-**Files**: `unify.rkt`, `elaborator-network.rkt`
+**Files**: New `type-ctor-registry.rkt`, `unify.rkt`, `elaborator-network.rkt`
 
-**Approach**: Add a `current-punify-enabled?` parameter (default #f). When enabled,
-`unify-core` delegates to `unify-via-propagator`. When disabled, existing code runs.
-This is the A/B toggle for regression testing.
+**Deliverables**:
+1. `type-ctor-desc` struct and `register-type-ctor!` / `lookup-type-ctor-desc`
+2. Descriptor registrations for all 11 compound type tags (Pi, Sigma, App, Eq,
+   Vec, Fin, Pair, Lam, PVec, Set, Map)
+3. `generic-decompose` and `generic-reconstruct` parameterized by descriptor
+4. `current-punify-enabled?` parameter (default #f) as A/B toggle
+5. When enabled, `unify-core` delegates to `unify-via-propagator` which uses
+   the generic machinery; when disabled, existing code runs unchanged
 
-**Test**: All 7214 tests pass with toggle OFF. Toggle ON + run a small subset.
+**Approach**: The descriptor table is the single source of structural truth.
+`make-structural-unify-propagator` (elaborator-network.rkt:889) and
+`try-unify-pure` (type-lattice.rkt:168) both become thin wrappers around
+generic operations. This is a refactoring gate — all subsequent phases operate
+through descriptors, not hardcoded per-tag cases.
+
+**Test**: All tests pass with toggle OFF. Toggle ON + run structural decomp tests
+(`test-structural-decomp.rkt`) and a subset of the acceptance file.
+
+**Benchmark**: `bench-ab.rkt` with toggle OFF must show no regression (refactoring
+should not change behavior). Toggle ON: establish new baseline.
 
 ### Phase 2: flex-rigid as Cell Write
 
@@ -459,25 +733,33 @@ This is mostly removing indirection.
 
 ### Phase 3: Pi Decomposition as Sub-Cells
 
-**What**: For `pi` classification (18%), use `get-or-create-sub-cells` to create
-domain and codomain sub-cells. Add `unify-propagator` for each sub-goal pair.
+**What**: For `pi` classification (18%), `generic-decompose` uses the Pi descriptor
+to create mult, domain, and codomain sub-cells via `get-or-create-sub-cells`.
+`generic-reconstruct` adds the reconstructor propagator. Unify-propagators are
+added for each sub-goal pair.
 
-**Key**: This is where the recursive `unify-core` calls become propagator additions.
+**Key**: This is where recursive `unify-core` calls become propagator additions.
 The domain and codomain sub-goals are scheduled on the worklist, not the call stack.
+The Pi descriptor's `binder-depth: 1` ensures codomain opening with fresh fvar.
 
 **Test**: Pi decomposition micro-benchmarks (bench-type-unify.rkt: pi-d5, pi-d10, pi-d20).
 
-### Phase 4: Sigma/Lambda Decomposition
+### Phase 4: Sigma/Lambda/Remaining Compound Types
 
-**What**: Same pattern as Phase 3 for `binder` classification (6%).
+**What**: Enable descriptors for Sigma, Lam, App, Eq, Vec, Fin, Pair, PVec, Set,
+Map. With the generic machinery from Phase 1 and the pattern proven in Phase 3,
+this is descriptor registration + test verification, not new structural code.
 
-**Test**: Binder micro-benchmarks.
+**Key difference from ad-hoc approach**: No per-tag `decompose-sigma`, `decompose-app`,
+etc. functions needed. Each tag's descriptor drives the generic operations.
 
-### Phase 5: App Decomposition (rigid-rigid)
+**Test**: Binder micro-benchmarks. App decomposition micro-benchmarks.
 
-**What**: For `sub` classification (3%), decompose app into fn-cell + arg-cell.
+### Phase 5: (removed — merged into Phase 4 via generic descriptors)
 
-**Test**: App decomposition micro-benchmarks.
+Phases 3-5 in the original design were separate because each tag required its own
+decomposition code. With the descriptor registry, once Pi works (Phase 3), remaining
+tags are registration + testing (Phase 4). This is the pipeline-reduction payoff.
 
 ### Phase 6: Fast-Path Preservation
 
@@ -490,9 +772,15 @@ for cases that don't need it.
 ### Phase 7: Callback Elimination
 
 **What**: Remove `current-prop-cell-write`, `current-prop-cell-read`,
-`current-prop-has-contradiction?` callbacks. Replace with direct cell operations.
+`current-prop-has-contradiction?` callbacks. Replace with direct cell operations
+through the descriptor-generic machinery.
 
-**Depends**: Phases 2-5 complete (all decomposition paths use cells).
+**Depends**: Phases 2-4 complete (all decomposition paths use cells via descriptors).
+
+**Key**: The descriptor registry means `unify.rkt` no longer needs to know about
+the propagator network's internal API — it operates through descriptors that
+encapsulate the structural knowledge. Callbacks were the bridge between the
+algorithmic unifier and the network; descriptors make them unnecessary.
 
 ### Phase 8: Occurs Check as Cycle Detection
 
@@ -616,7 +904,13 @@ Should there be a limit on cell-tree depth? Current max recursive depth is 5
 **Recommendation**: No limit initially. The existing fuel mechanism in prop-network
 provides a safety net. Monitor max depth in profiling.
 
-### Q4: `pair-decomps` Symmetry
+### Q4: Descriptor Indirection Cost — RESOLVED (negligible)
+
+One hash lookup per decomposition to find the descriptor. At ~343 Pi
+classifications per file, that's ~17µs total. Racket's JIT handles the
+lambda dispatch through struct accessors as well as match clause dispatch.
+
+### Q5: `pair-decomps` Symmetry
 
 `unify(A, B)` and `unify(B, A)` should not create duplicate propagators. The
 `pair-decomps` registry should be order-insensitive.
@@ -649,6 +943,7 @@ provides a safety net. Monitor max depth in profiling.
 
 | File | Role in PUnify |
 |------|---------------|
+| `type-ctor-registry.rkt` | **NEW** — Type constructor descriptor table, generic decompose/reconstruct |
 | `unify.rkt` | Primary target — classifier + dispatcher + fire function |
 | `elaborator-network.rkt` | `get-or-create-sub-cells`, decomposition registry, cell creation |
 | `metavar-store.rkt` | `solve-meta!`, meta-info management, callback parameters |
