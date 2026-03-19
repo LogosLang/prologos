@@ -281,32 +281,30 @@ solve (link ?from ?to)
 
 
 ;; --- B6: defr with | clause-form (pattern-matching clauses) ---
-;; BUG (DEFERRED): defr with | pattern -> body form silently fails
-;; to register the relation. solve then errors with "Unknown relation".
-;; This is a WS wiring gap — the | clause form works for defn but
-;; not for defr. Exercising here to catch when it gets fixed.
+;; FIXED: defr with | clause form now supports literal patterns in params.
+;; Literal values (ints, strings, bools) desugar to fresh vars + implicit = goals.
 
-;; defr classify-sign [?n ?label]
-;;   | 0 ?label -> (= ?label "zero")
-;;   | ?n ?label -> (guard [int-lt 0 n]) &> (= ?label "positive")
-;;   | ?n ?label -> (guard [int-lt n 0]) &> (= ?label "negative")
+defr classify-sign [?n ?label]
+  | [0 ?label] &> (= label "zero")
+  | [?n ?label] &> (guard [int-lt 0 n]) (= label "positive")
+  | [?n ?label] &> (guard [int-lt n 0]) (= label "negative")
 
-;; solve (classify-sign 5 ?label)
-;; Expected: [{:n_ 5, :label "positive"}]
+solve (classify-sign 5 ?label)
+;; Expected: [{:label "positive", ...}]
 
-;; solve (classify-sign 0 ?label)
-;; Expected: [{:n_ 0, :label "zero"}]
+solve (classify-sign 0 ?label)
+;; Expected: [{:label "zero", ...}]
 
-;; defr rgb [?color ?r ?g ?b]
-;;   | "red"   ?r ?g ?b -> (= ?r 255) &> (= ?g 0) &> (= ?b 0)
-;;   | "green" ?r ?g ?b -> (= ?r 0) &> (= ?g 255) &> (= ?b 0)
-;;   | "blue"  ?r ?g ?b -> (= ?r 0) &> (= ?g 0) &> (= ?b 255)
+defr color-hex [?name ?hex]
+  | ["red" ?hex] &> (= hex "#FF0000")
+  | ["green" ?hex] &> (= hex "#00FF00")
+  | ["blue" ?hex] &> (= hex "#0000FF")
 
-;; solve (rgb "red" ?r ?g ?b)
-;; Expected: [{:color_ "red", :r 255, :g 0, :b 0}]
+solve (color-hex "red" ?hex)
+;; Expected: [{:hex "#FF0000", ...}]
 
-;; solve (rgb ?color ?r ?g ?b)
-;; Expected: all three color entries
+solve (color-hex ?name "#00FF00")
+;; Expected: [{:name "green", ...}]
 
 
 ;; ========================================================================

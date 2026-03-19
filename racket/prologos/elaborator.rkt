@@ -3003,27 +3003,69 @@
 ;; ========================================
 ;; Elaborate a defr variant (Phase 7)
 ;; ========================================
-;; Each variant has params (list of (name . mode) pairs) and body (list of clauses/facts).
-;; The params are symbolic (not expressions), so we pass them through.
-;; The body elements need elaboration in a relational env where param names
-;; resolve to expr-logic-var nodes (not de Bruijn bvars).
+;; Each variant has params (list of (name . mode) pairs or (#:literal . value) for pattern params).
+;; Variable params (name . mode) create logic vars in the relational env.
+;; Literal params (#:literal . value) are desugared: a fresh logic var is generated,
+;; and an implicit (= freshvar literal) unification goal is prepended to the body.
 (define (elaborate-defr-variant v env depth)
   (match v
     [(surf-defr-variant params body loc)
-     ;; Build relational env from params: name → expr-logic-var
+     ;; Separate variable params from literal pattern params.
+     ;; For literals, generate fresh var names and collect implicit unify goals.
+     (define-values (converted-params implicit-goals)
+       (for/fold ([cparams '()] [goals '()])
+                 ([p (in-list params)])
+         (cond
+           [(and (pair? p) (eq? (car p) '#:literal))
+            ;; Literal pattern param: generate fresh var, add implicit = goal
+            (define fresh-name (gensym '_pat))
+            (define literal-val (cdr p))
+            (define literal-expr
+              (cond [(exact-integer? literal-val) (surf-int-lit literal-val loc)]
+                    [(string? literal-val) (surf-string literal-val loc)]
+                    [(boolean? literal-val) (if literal-val (surf-true loc) (surf-false loc))]
+                    [else (prologos-error loc (format "unsupported literal pattern: ~a" literal-val))]))
+            (values (cons (cons fresh-name 'free) cparams)
+                    (cons (surf-unify (surf-var fresh-name loc) literal-expr loc) goals))]
+           [else
+            ;; Normal (name . mode) pair
+            (values (cons p cparams) goals)])))
+     (define final-params (reverse converted-params))
+     (define implicit-unify-goals (reverse implicit-goals))
+
+     ;; Build relational env from converted params: name → expr-logic-var
      (define rel-env
-       (for/hasheq ([p (in-list params)])
+       (for/hasheq ([p (in-list final-params)])
          (define name (car p))
          (define mode (or (cdr p) 'free))
          (values name (expr-logic-var name mode))))
+
+     ;; Prepend implicit unification goals to body.
+     ;; If body has clauses, wrap implicit goals into each clause.
+     ;; If body is empty, create a clause from the implicit goals alone.
+     (define augmented-body
+       (cond
+         [(null? implicit-unify-goals) body]
+         [(null? body)
+          ;; No body — create a clause from just the implicit goals
+          (list (surf-clause implicit-unify-goals loc))]
+         [else
+          ;; Prepend implicit goals into each clause in body
+          (for/list ([b (in-list body)])
+            (cond
+              [(surf-clause? b)
+               (surf-clause (append implicit-unify-goals (surf-clause-goals b))
+                            (surf-clause-srcloc b))]
+              [else b]))]))
+
      (let ([elab-body
             (parameterize ([current-relational-env rel-env]
                            [current-relational-fallback? #t])
-              (for/list ([b (in-list body)])
+              (for/list ([b (in-list augmented-body)])
                 (elaborate b env depth)))])
        (define first-err (findf prologos-error? elab-body))
        (if first-err first-err
-           (expr-defr-variant params elab-body)))]
+           (expr-defr-variant final-params elab-body)))]
     [_ (prologos-error srcloc-unknown (format "Invalid defr variant: ~a" v))]))
 
 ;; ========================================

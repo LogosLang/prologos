@@ -4935,8 +4935,11 @@
     [else
      (cons sym #f)]))
 
-;; Parse relational params: a bracket-delimited list of possibly mode-annotated names.
-;; Returns list of (name . mode) pairs.
+;; Parse relational params: a bracket-delimited list of possibly mode-annotated names
+;; or literal pattern values.
+;; Returns list of (name . mode) pairs for variables, or (#:literal . value) for literals.
+;; Literal params are used in multi-arity defr | variants where clause heads
+;; include pattern matching on concrete values (e.g., | [0 ?label] &> ...).
 (define (parse-rel-params params-stx loc)
   (define parts
     (let ([d (if (syntax? params-stx) (syntax->list params-stx) #f)])
@@ -4952,8 +4955,15 @@
        (cond
          [(symbol? sym)
           (extract-mode-annotation sym)]
+         ;; Literal patterns: numbers, strings, booleans
+         [(exact-integer? sym)
+          (cons '#:literal sym)]
+         [(string? sym)
+          (cons '#:literal sym)]
+         [(boolean? sym)
+          (cons '#:literal sym)]
          [else
-          (prologos-error loc (format "defr: expected symbol in params, got ~a" sym))]))]))
+          (prologos-error loc (format "defr: expected symbol or literal in params, got ~a" sym))]))]))
 
 ;; Parse the body portion of a defr variant.
 ;; Body is a flat list of tokens that may contain $facts-sep and $clause-sep sentinels.
