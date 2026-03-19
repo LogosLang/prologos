@@ -161,25 +161,42 @@
 ;; with a fresh fvar via open-expr. This ensures meta solutions have correct
 ;; de Bruijn indices — open-expr automatically decrements higher bvar indices.
 
+;; PUnify profiling: recursive depth tracking for unify-core
+(define current-unify-depth (make-parameter 0))
+
 (define (unify-core ctx t1 t2)
   (perf-inc-unify!)
-  ;; Pre-WHNF: try app-vs-app decomposition on the raw (zonked) terms.
-  ;; This is critical for correctness with metavariables: when both sides
-  ;; are applications (e.g., (app List ?m) vs (app List B)), decomposing
-  ;; BEFORE WHNF avoids unfolding definitions, which would push unsolved
-  ;; metas under binders and cause de Bruijn index mismatches in solutions.
-  (let ([z1 (zonk-at-depth 0 t1)]
-        [z2 (zonk-at-depth 0 t2)])
-    ;; Fast path: structurally identical after zonk (no WHNF needed)
-    (cond
-      [(equal? z1 z2) #t]
-      ;; Pre-WHNF app-vs-app: try decomposing applications before reducing.
-      ;; If func heads are the same fvar, decompose without unfolding.
-      [(and (expr-app? z1) (expr-app? z2)
-            (let ([f1 (spine-head z1)] [f2 (spine-head z2)])
-              (and f1 f2 (equal? f1 f2))))
-       (unify-spine ctx z1 z2)]
-      [else (unify-whnf ctx z1 z2)])))
+  (define up (current-unify-profile))
+  (define depth (current-unify-depth))
+  (define t0 (if up (current-inexact-monotonic-milliseconds) 0))
+  (define result
+    (parameterize ([current-unify-depth (add1 depth)])
+      ;; Pre-WHNF: try app-vs-app decomposition on the raw (zonked) terms.
+      ;; This is critical for correctness with metavariables: when both sides
+      ;; are applications (e.g., (app List ?m) vs (app List B)), decomposing
+      ;; BEFORE WHNF avoids unfolding definitions, which would push unsolved
+      ;; metas under binders and cause de Bruijn index mismatches in solutions.
+      (let ([z1 (zonk-at-depth 0 t1)]
+            [z2 (zonk-at-depth 0 t2)])
+        ;; Fast path: structurally identical after zonk (no WHNF needed)
+        (cond
+          [(equal? z1 z2) #t]
+          ;; Pre-WHNF app-vs-app: try decomposing applications before reducing.
+          ;; If func heads are the same fvar, decompose without unfolding.
+          [(and (expr-app? z1) (expr-app? z2)
+                (let ([f1 (spine-head z1)] [f2 (spine-head z2)])
+                  (and f1 f2 (equal? f1 f2))))
+           (unify-spine ctx z1 z2)]
+          [else (unify-whnf ctx z1 z2)]))))
+  ;; Profile: accumulate timing only at depth 0 (avoid double-counting recursive calls)
+  (when (and up (= depth 0))
+    (let ([elapsed-us (inexact->exact (round (* (- (current-inexact-monotonic-milliseconds) t0) 1000)))])
+      (uprof-add-wall-us! elapsed-us)))
+  ;; Profile: track max recursive depth
+  (when up (uprof-update-max-depth! (add1 depth)))
+  ;; Profile: count postponements
+  (when (and up (eq? result 'postponed)) (uprof-inc-postpone!))
+  result)
 
 ;; Compare application spines without WHNF (preserves meta depth)
 (define (spine-head e)
@@ -221,129 +238,157 @@
 ;; DOES perform: struct field reads (pure), flatten-union (pure).
 
 (define (classify-whnf-problem a b)
-  (cond
-    ;; Fast path: structurally identical
-    [(equal? a b) '(ok)]
+  (define result
+    (cond
+      ;; Fast path: structurally identical
+      [(equal? a b) '(ok)]
 
-    ;; Holes: wildcards
-    [(expr-hole? a) '(ok)]
-    [(expr-hole? b) '(ok)]
-    [(expr-typed-hole? a) '(ok)]
-    [(expr-typed-hole? b) '(ok)]
+      ;; Holes: wildcards
+      [(expr-hole? a) '(ok)]
+      [(expr-hole? b) '(ok)]
+      [(expr-typed-hole? a) '(ok)]
+      [(expr-typed-hole? b) '(ok)]
 
-    ;; Same unsolved meta
-    [(and (expr-meta? a) (expr-meta? b)
-          (eq? (expr-meta-id a) (expr-meta-id b)))
-     '(ok)]
+      ;; Same unsolved meta
+      [(and (expr-meta? a) (expr-meta? b)
+            (eq? (expr-meta-id a) (expr-meta-id b)))
+       '(ok)]
 
-    ;; Meta on left/right
-    [(expr-meta? a) (list 'flex-rigid (expr-meta-id a) b)]
-    [(expr-meta? b) (list 'flex-rigid (expr-meta-id b) a)]
+      ;; Meta on left/right
+      [(expr-meta? a) (list 'flex-rigid (expr-meta-id a) b)]
+      [(expr-meta? b) (list 'flex-rigid (expr-meta-id b) a)]
 
-    ;; --- Structural decomposition ---
+      ;; --- Structural decomposition ---
 
-    ;; Pi vs Pi
-    [(and (expr-Pi? a) (expr-Pi? b))
-     (list 'pi
-           (expr-Pi-mult a) (expr-Pi-mult b)
-           (expr-Pi-domain a) (expr-Pi-domain b)
-           (expr-Pi-codomain a) (expr-Pi-codomain b))]
+      ;; Pi vs Pi
+      [(and (expr-Pi? a) (expr-Pi? b))
+       (list 'pi
+             (expr-Pi-mult a) (expr-Pi-mult b)
+             (expr-Pi-domain a) (expr-Pi-domain b)
+             (expr-Pi-codomain a) (expr-Pi-codomain b))]
 
-    ;; Sigma vs Sigma
-    [(and (expr-Sigma? a) (expr-Sigma? b))
-     (list 'binder
-           (expr-Sigma-fst-type a) (expr-Sigma-fst-type b)
-           (expr-Sigma-snd-type a) (expr-Sigma-snd-type b))]
+      ;; Sigma vs Sigma
+      [(and (expr-Sigma? a) (expr-Sigma? b))
+       (list 'binder
+             (expr-Sigma-fst-type a) (expr-Sigma-fst-type b)
+             (expr-Sigma-snd-type a) (expr-Sigma-snd-type b))]
 
-    ;; suc vs suc
-    [(and (expr-suc? a) (expr-suc? b))
-     (list 'sub (list (cons (expr-suc-pred a) (expr-suc-pred b))))]
+      ;; suc vs suc
+      [(and (expr-suc? a) (expr-suc? b))
+       (uprof-inc-sub-suc!)
+       (list 'sub (list (cons (expr-suc-pred a) (expr-suc-pred b))))]
 
-    ;; nat-val vs nat-val
-    [(and (expr-nat-val? a) (expr-nat-val? b))
-     (if (= (expr-nat-val-n a) (expr-nat-val-n b)) '(ok) '(conv))]
+      ;; nat-val vs nat-val
+      [(and (expr-nat-val? a) (expr-nat-val? b))
+       (if (= (expr-nat-val-n a) (expr-nat-val-n b)) '(ok) (begin (uprof-inc-sub-nat!) '(conv)))]
 
-    ;; Cross-repr: nat-val(0) vs zero
-    [(and (expr-nat-val? a) (expr-zero? b))
-     (if (= (expr-nat-val-n a) 0) '(ok) '(conv))]
-    [(and (expr-zero? a) (expr-nat-val? b))
-     (if (= (expr-nat-val-n b) 0) '(ok) '(conv))]
+      ;; Cross-repr: nat-val(0) vs zero
+      [(and (expr-nat-val? a) (expr-zero? b))
+       (uprof-inc-sub-nat!)
+       (if (= (expr-nat-val-n a) 0) '(ok) '(conv))]
+      [(and (expr-zero? a) (expr-nat-val? b))
+       (uprof-inc-sub-nat!)
+       (if (= (expr-nat-val-n b) 0) '(ok) '(conv))]
 
-    ;; Cross-repr: nat-val(n>0) vs suc(X)
-    [(and (expr-nat-val? a) (> (expr-nat-val-n a) 0) (expr-suc? b))
-     (list 'sub (list (cons (expr-nat-val (- (expr-nat-val-n a) 1)) (expr-suc-pred b))))]
-    [(and (expr-suc? a) (expr-nat-val? b) (> (expr-nat-val-n b) 0))
-     (list 'sub (list (cons (expr-suc-pred a) (expr-nat-val (- (expr-nat-val-n b) 1)))))]
+      ;; Cross-repr: nat-val(n>0) vs suc(X)
+      [(and (expr-nat-val? a) (> (expr-nat-val-n a) 0) (expr-suc? b))
+       (uprof-inc-sub-nat!)
+       (list 'sub (list (cons (expr-nat-val (- (expr-nat-val-n a) 1)) (expr-suc-pred b))))]
+      [(and (expr-suc? a) (expr-nat-val? b) (> (expr-nat-val-n b) 0))
+       (uprof-inc-sub-nat!)
+       (list 'sub (list (cons (expr-suc-pred a) (expr-nat-val (- (expr-nat-val-n b) 1)))))]
 
-    ;; Cross-repr: nat-val(0) vs suc(_) — fail
-    [(and (expr-nat-val? a) (= (expr-nat-val-n a) 0) (expr-suc? b)) '(conv)]
-    [(and (expr-suc? a) (expr-nat-val? b) (= (expr-nat-val-n b) 0)) '(conv)]
+      ;; Cross-repr: nat-val(0) vs suc(_) — fail
+      [(and (expr-nat-val? a) (= (expr-nat-val-n a) 0) (expr-suc? b))
+       (uprof-inc-sub-nat!) '(conv)]
+      [(and (expr-suc? a) (expr-nat-val? b) (= (expr-nat-val-n b) 0))
+       (uprof-inc-sub-nat!) '(conv)]
 
-    ;; tycon vs tycon (HKT): same name = equal
-    [(and (expr-tycon? a) (expr-tycon? b))
-     (if (eq? (expr-tycon-name a) (expr-tycon-name b)) '(ok) '(conv))]
+      ;; tycon vs tycon (HKT): same name = equal
+      [(and (expr-tycon? a) (expr-tycon? b))
+       (if (eq? (expr-tycon-name a) (expr-tycon-name b)) '(ok) '(conv))]
 
-    ;; --- HKT normalization: retry after normalizing built-in types ---
-    [(and (normalizable-builtin? a) (expr-app? b))
-     (list 'retry (normalize-for-resolution a) b)]
-    [(and (expr-app? a) (normalizable-builtin? b))
-     (list 'retry a (normalize-for-resolution b))]
-    [(and (normalizable-builtin? a) (normalizable-builtin? b))
-     (list 'retry (normalize-for-resolution a) (normalize-for-resolution b))]
-    [(and (normalizable-builtin? a) (flex-app? b))
-     (list 'retry (normalize-for-resolution a) b)]
-    [(and (flex-app? a) (normalizable-builtin? b))
-     (list 'retry a (normalize-for-resolution b))]
+      ;; --- HKT normalization: retry after normalizing built-in types ---
+      [(and (normalizable-builtin? a) (expr-app? b))
+       (list 'retry (normalize-for-resolution a) b)]
+      [(and (expr-app? a) (normalizable-builtin? b))
+       (list 'retry a (normalize-for-resolution b))]
+      [(and (normalizable-builtin? a) (normalizable-builtin? b))
+       (list 'retry (normalize-for-resolution a) (normalize-for-resolution b))]
+      [(and (normalizable-builtin? a) (flex-app? b))
+       (list 'retry (normalize-for-resolution a) b)]
+      [(and (flex-app? a) (normalizable-builtin? b))
+       (list 'retry a (normalize-for-resolution b))]
 
-    ;; app vs app (rigid-rigid)
-    [(and (expr-app? a) (expr-app? b))
-     (list 'sub (list (cons (expr-app-func a) (expr-app-func b))
-                       (cons (expr-app-arg a) (expr-app-arg b))))]
+      ;; app vs app (rigid-rigid)
+      [(and (expr-app? a) (expr-app? b))
+       (uprof-inc-sub-app!)
+       (list 'sub (list (cons (expr-app-func a) (expr-app-func b))
+                         (cons (expr-app-arg a) (expr-app-arg b))))]
 
-    ;; Applied meta (flex-app) — one side is app headed by unsolved meta
-    [(flex-app? a) (list 'flex-app a b)]
-    [(flex-app? b) (list 'flex-app b a)]
+      ;; Applied meta (flex-app) — one side is app headed by unsolved meta
+      [(flex-app? a) (list 'flex-app a b)]
+      [(flex-app? b) (list 'flex-app b a)]
 
-    ;; Eq vs Eq
-    [(and (expr-Eq? a) (expr-Eq? b))
-     (list 'sub (list (cons (expr-Eq-type a) (expr-Eq-type b))
-                       (cons (expr-Eq-lhs a) (expr-Eq-lhs b))
-                       (cons (expr-Eq-rhs a) (expr-Eq-rhs b))))]
+      ;; Eq vs Eq
+      [(and (expr-Eq? a) (expr-Eq? b))
+       (uprof-inc-sub-eq!)
+       (list 'sub (list (cons (expr-Eq-type a) (expr-Eq-type b))
+                         (cons (expr-Eq-lhs a) (expr-Eq-lhs b))
+                         (cons (expr-Eq-rhs a) (expr-Eq-rhs b))))]
 
-    ;; Vec vs Vec
-    [(and (expr-Vec? a) (expr-Vec? b))
-     (list 'sub (list (cons (expr-Vec-elem-type a) (expr-Vec-elem-type b))
-                       (cons (expr-Vec-length a) (expr-Vec-length b))))]
+      ;; Vec vs Vec
+      [(and (expr-Vec? a) (expr-Vec? b))
+       (uprof-inc-sub-vec!)
+       (list 'sub (list (cons (expr-Vec-elem-type a) (expr-Vec-elem-type b))
+                         (cons (expr-Vec-length a) (expr-Vec-length b))))]
 
-    ;; Fin vs Fin
-    [(and (expr-Fin? a) (expr-Fin? b))
-     (list 'sub (list (cons (expr-Fin-bound a) (expr-Fin-bound b))))]
+      ;; Fin vs Fin
+      [(and (expr-Fin? a) (expr-Fin? b))
+       (uprof-inc-sub-fin!)
+       (list 'sub (list (cons (expr-Fin-bound a) (expr-Fin-bound b))))]
 
-    ;; lam vs lam
-    [(and (expr-lam? a) (expr-lam? b))
-     (list 'binder
-           (expr-lam-type a) (expr-lam-type b)
-           (expr-lam-body a) (expr-lam-body b))]
+      ;; lam vs lam
+      [(and (expr-lam? a) (expr-lam? b))
+       (list 'binder
+             (expr-lam-type a) (expr-lam-type b)
+             (expr-lam-body a) (expr-lam-body b))]
 
-    ;; pair vs pair
-    [(and (expr-pair? a) (expr-pair? b))
-     (list 'sub (list (cons (expr-pair-fst a) (expr-pair-fst b))
-                       (cons (expr-pair-snd a) (expr-pair-snd b))))]
+      ;; pair vs pair
+      [(and (expr-pair? a) (expr-pair? b))
+       (uprof-inc-sub-pair!)
+       (list 'sub (list (cons (expr-pair-fst a) (expr-pair-fst b))
+                         (cons (expr-pair-snd a) (expr-pair-snd b))))]
 
-    ;; Type vs Type (universe levels)
-    [(and (expr-Type? a) (expr-Type? b))
-     (list 'level (expr-Type-level a) (expr-Type-level b))]
+      ;; Type vs Type (universe levels)
+      [(and (expr-Type? a) (expr-Type? b))
+       (list 'level (expr-Type-level a) (expr-Type-level b))]
 
-    ;; Union vs Union
-    [(and (expr-union? a) (expr-union? b))
-     (list 'union (flatten-union a) (flatten-union b))]
+      ;; Union vs Union
+      [(and (expr-union? a) (expr-union? b))
+       (list 'union (flatten-union a) (flatten-union b))]
 
-    ;; ann: strip annotation and retry
-    [(expr-ann? a) (list 'retry (expr-ann-term a) b)]
-    [(expr-ann? b) (list 'retry a (expr-ann-term b))]
+      ;; ann: strip annotation and retry
+      [(expr-ann? a) (list 'retry (expr-ann-term a) b)]
+      [(expr-ann? b) (list 'retry a (expr-ann-term b))]
 
-    ;; Fallback: conv-nf for atoms/neutrals
-    [else '(conv)]))
+      ;; Fallback: conv-nf for atoms/neutrals
+      [else '(conv)]))
+  ;; Profile: count the top-level classification tag
+  (when (current-unify-profile)
+    (match (car result)
+      ['ok          (uprof-inc-ok!)]
+      ['conv        (uprof-inc-conv!)]
+      ['flex-rigid  (uprof-inc-flex-rigid!)]
+      ['flex-app    (uprof-inc-flex-app!)]
+      ['sub         (uprof-inc-sub!)]
+      ['pi          (uprof-inc-pi!)]
+      ['binder      (uprof-inc-binder!)]
+      ['level       (uprof-inc-level!)]
+      ['union       (uprof-inc-union!)]
+      ['retry       (uprof-inc-retry!)]
+      [_ (void)]))
+  result)
 
 ;; ========================================
 ;; P-U1a: Unification Dispatcher

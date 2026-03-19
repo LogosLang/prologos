@@ -78,7 +78,35 @@
  ;; Track 4 Phase 5: Speculation pruning counter
  perf-inc-speculation-pruned!
  provenance-counters->hasheq
- print-provenance-report!)
+ print-provenance-report!
+
+ ;; PUnify: Type-level unification profiling
+ (struct-out unify-profile)
+ make-unify-profile
+ current-unify-profile
+ uprof-inc-ok!
+ uprof-inc-conv!
+ uprof-inc-flex-rigid!
+ uprof-inc-flex-app!
+ uprof-inc-sub!
+ uprof-inc-pi!
+ uprof-inc-binder!
+ uprof-inc-level!
+ uprof-inc-union!
+ uprof-inc-retry!
+ uprof-inc-sub-app!
+ uprof-inc-sub-suc!
+ uprof-inc-sub-nat!
+ uprof-inc-sub-eq!
+ uprof-inc-sub-vec!
+ uprof-inc-sub-fin!
+ uprof-inc-sub-pair!
+ uprof-add-wall-us!
+ uprof-update-max-depth!
+ uprof-inc-postpone!
+ unify-profile->hasheq
+ unify-profile-total-classifications
+ print-unify-profile-report!)
 
 ;; ============================================================
 ;; Counter struct: 12 mutable fields
@@ -414,6 +442,156 @@
 (define (print-provenance-report! pv)
   (define h (provenance-counters->hasheq pv))
   (eprintf "PROVENANCE-STATS:~a\n" (jsexpr->string h)))
+
+;; ============================================================
+;; PUnify: Type-level unification profiling
+;;
+;; Counts classification cases from classify-whnf-problem to
+;; determine where type-level unification time is spent.
+;; Zero-cost when current-unify-profile is #f.
+;;
+;; Usage:
+;;   (parameterize ([current-unify-profile (make-unify-profile)])
+;;     ... run program ...
+;;     (print-unify-profile-report! (current-unify-profile)))
+;; ============================================================
+
+(struct unify-profile
+  (;; Classification counts (one per classify-whnf-problem result tag)
+   ok-count              ;; '(ok) — equal, wildcard, same meta
+   conv-count            ;; '(conv) — structural mismatch, fallback
+   flex-rigid-count      ;; flex-rigid — bare meta vs concrete
+   flex-app-count        ;; flex-app — applied meta (Miller pattern)
+   sub-count             ;; 'sub — structural decomposition (app, suc, Eq, Vec, Fin, pair)
+   pi-count              ;; 'pi — Pi decomposition (binder)
+   binder-count          ;; 'binder — Sigma/lam decomposition (binder)
+   level-count           ;; 'level — universe level unification
+   union-count           ;; 'union — union component unification
+   retry-count           ;; 'retry — HKT normalization / annotation strip
+   ;; Decomposition sub-counts (what 'sub decomposes)
+   sub-app-count         ;; app-vs-app rigid-rigid
+   sub-suc-count         ;; suc-vs-suc
+   sub-nat-count         ;; nat-val cross-repr
+   sub-eq-count          ;; Eq-vs-Eq
+   sub-vec-count         ;; Vec-vs-Vec
+   sub-fin-count         ;; Fin-vs-Fin
+   sub-pair-count        ;; pair-vs-pair
+   ;; Timing (wall-clock microseconds in unify-core)
+   unify-wall-us         ;; accumulated wall-clock µs
+   ;; Call depth tracking
+   max-depth             ;; deepest recursive unify-core call chain observed
+   postpone-count        ;; times unify returned 'postponed
+   )
+  #:mutable #:transparent)
+
+(define (make-unify-profile)
+  (unify-profile 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
+
+(define current-unify-profile (make-parameter #f))
+
+;; Increment macros — zero-cost when current-unify-profile is #f
+(define-syntax-rule (uprof-inc-ok!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-ok-count! up (add1 (unify-profile-ok-count up))))))
+(define-syntax-rule (uprof-inc-conv!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-conv-count! up (add1 (unify-profile-conv-count up))))))
+(define-syntax-rule (uprof-inc-flex-rigid!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-flex-rigid-count! up (add1 (unify-profile-flex-rigid-count up))))))
+(define-syntax-rule (uprof-inc-flex-app!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-flex-app-count! up (add1 (unify-profile-flex-app-count up))))))
+(define-syntax-rule (uprof-inc-sub!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-sub-count! up (add1 (unify-profile-sub-count up))))))
+(define-syntax-rule (uprof-inc-pi!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-pi-count! up (add1 (unify-profile-pi-count up))))))
+(define-syntax-rule (uprof-inc-binder!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-binder-count! up (add1 (unify-profile-binder-count up))))))
+(define-syntax-rule (uprof-inc-level!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-level-count! up (add1 (unify-profile-level-count up))))))
+(define-syntax-rule (uprof-inc-union!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-union-count! up (add1 (unify-profile-union-count up))))))
+(define-syntax-rule (uprof-inc-retry!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-retry-count! up (add1 (unify-profile-retry-count up))))))
+;; Decomposition sub-counts
+(define-syntax-rule (uprof-inc-sub-app!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-sub-app-count! up (add1 (unify-profile-sub-app-count up))))))
+(define-syntax-rule (uprof-inc-sub-suc!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-sub-suc-count! up (add1 (unify-profile-sub-suc-count up))))))
+(define-syntax-rule (uprof-inc-sub-nat!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-sub-nat-count! up (add1 (unify-profile-sub-nat-count up))))))
+(define-syntax-rule (uprof-inc-sub-eq!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-sub-eq-count! up (add1 (unify-profile-sub-eq-count up))))))
+(define-syntax-rule (uprof-inc-sub-vec!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-sub-vec-count! up (add1 (unify-profile-sub-vec-count up))))))
+(define-syntax-rule (uprof-inc-sub-fin!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-sub-fin-count! up (add1 (unify-profile-sub-fin-count up))))))
+(define-syntax-rule (uprof-inc-sub-pair!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-sub-pair-count! up (add1 (unify-profile-sub-pair-count up))))))
+;; Timing
+(define-syntax-rule (uprof-add-wall-us! us)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-unify-wall-us! up (+ (unify-profile-unify-wall-us up) us)))))
+;; Depth tracking
+(define-syntax-rule (uprof-update-max-depth! d)
+  (let ([up (current-unify-profile)])
+    (when up (when (> d (unify-profile-max-depth up))
+               (set-unify-profile-max-depth! up d)))))
+(define-syntax-rule (uprof-inc-postpone!)
+  (let ([up (current-unify-profile)])
+    (when up (set-unify-profile-postpone-count! up (add1 (unify-profile-postpone-count up))))))
+
+(define (unify-profile->hasheq up)
+  (hasheq 'ok           (unify-profile-ok-count up)
+          'conv         (unify-profile-conv-count up)
+          'flex_rigid   (unify-profile-flex-rigid-count up)
+          'flex_app     (unify-profile-flex-app-count up)
+          'sub          (unify-profile-sub-count up)
+          'pi           (unify-profile-pi-count up)
+          'binder       (unify-profile-binder-count up)
+          'level        (unify-profile-level-count up)
+          'union        (unify-profile-union-count up)
+          'retry        (unify-profile-retry-count up)
+          'sub_app      (unify-profile-sub-app-count up)
+          'sub_suc      (unify-profile-sub-suc-count up)
+          'sub_nat      (unify-profile-sub-nat-count up)
+          'sub_eq       (unify-profile-sub-eq-count up)
+          'sub_vec      (unify-profile-sub-vec-count up)
+          'sub_fin      (unify-profile-sub-fin-count up)
+          'sub_pair     (unify-profile-sub-pair-count up)
+          'unify_wall_us (unify-profile-unify-wall-us up)
+          'max_depth    (unify-profile-max-depth up)
+          'postpone     (unify-profile-postpone-count up)))
+
+(define (print-unify-profile-report! up)
+  (define h (unify-profile->hasheq up))
+  (eprintf "UNIFY-PROFILE:~a\n" (jsexpr->string h)))
+
+(define (unify-profile-total-classifications up)
+  (+ (unify-profile-ok-count up)
+     (unify-profile-conv-count up)
+     (unify-profile-flex-rigid-count up)
+     (unify-profile-flex-app-count up)
+     (unify-profile-sub-count up)
+     (unify-profile-pi-count up)
+     (unify-profile-binder-count up)
+     (unify-profile-level-count up)
+     (unify-profile-union-count up)
+     (unify-profile-retry-count up)))
 
 ;; ============================================================
 ;; Track 7 Phase 0b: Per-command verbose instrumentation
