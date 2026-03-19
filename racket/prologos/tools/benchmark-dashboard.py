@@ -391,17 +391,6 @@ def build_suite_overview():
             dpg.bind_item_theme(trend_l, make_line_theme(PINK))
             dpg.configure_item(trend_l, show=False)
 
-            # Regression annotations (only for suite runs)
-            suite_set = set(suite_run_indices)
-            for idx, regs in regression_map.items():
-                if idx in suite_set:
-                    si = suite_run_indices.index(idx)
-                    worst = max(regs, key=lambda r: r["delta_pct"])
-                    dpg.add_plot_annotation(
-                        label=f"+{worst['delta_pct']:.0f}%",
-                        default_value=(float(si), runs[idx]["total_wall_ms"] / 1000.0),
-                        color=RED, offset=(0, -20), parent="suite_plot")
-
             # X-axis tick labels: sequential run numbers
             _set_suite_xticks(xs)
 
@@ -843,7 +832,9 @@ def reload_data():
         suite_threshold = max(1, int(max_fc * 0.5))
         suite_run_indices = [i for i, r in enumerate(runs)
                             if r.get("file_count", 0) >= suite_threshold
-                            and r.get("total_tests", 0) > 0]
+                            and r.get("total_tests", 0) > 0
+                            and not any(res.get("status") == "timeout"
+                                        for res in r.get("results", []))]
     else:
         suite_run_indices = []
     if current_breakdown_idx < 0 or current_breakdown_idx >= len(runs):
