@@ -6090,9 +6090,52 @@
     (parse-error loc "match requires scrutinee and at least one arm" #f))
   (define scrutinee (parse-datum (car args)))
   (if (prologos-error? scrutinee) scrutinee
-      (let ([arms (parse-match-pattern-arms (cdr args) loc)])
-        (if (prologos-error? arms) arms
-            (surf-match-patterns scrutinee arms loc)))))
+      ;; Handle WS-mode flat $pipe form:
+      ;;   (match scrutinee $pipe pat1 -> body1 $pipe pat2 -> body2)
+      ;; Split remaining args on $pipe boundaries into grouped arm lists.
+      (let* ([rest (cdr args)]
+             [arm-stxs (split-match-arms-on-pipe rest)])
+        (let ([arms (parse-match-pattern-arms arm-stxs loc)])
+          (if (prologos-error? arms) arms
+              (surf-match-patterns scrutinee arms loc))))))
+
+;; Split match arm tokens on $pipe boundaries.
+;; If the tokens contain flat $pipe separators, group them:
+;;   ($pipe pat1 -> body1 $pipe pat2 -> body2) → ((pat1 -> body1) (pat2 -> body2))
+;; If tokens are already grouped sub-lists (sexp mode or WS grouped mode),
+;; return as-is.
+(define (split-match-arms-on-pipe stxs)
+  (define (is-pipe? s)
+    (let ([d (if (syntax? s) (syntax-e s) s)])
+      (eq? d '$pipe)))
+  ;; Check if any top-level element is a flat $pipe symbol
+  (define has-flat-pipe?
+    (ormap is-pipe? stxs))
+  (cond
+    [has-flat-pipe?
+     ;; Split on $pipe boundaries, group each segment into a sub-list
+     (define groups '())
+     (define current '())
+     (for ([s (in-list stxs)])
+       (cond
+         [(is-pipe? s)
+          (when (pair? current)
+            (set! groups (cons (reverse current) groups)))
+          (set! current '())]
+         [else
+          (set! current (cons s current))]))
+     (when (pair? current)
+       (set! groups (cons (reverse current) groups)))
+     (reverse groups)]
+    ;; Also handle grouped form: (($pipe pat -> body) ($pipe pat -> body))
+    [(and (pair? stxs)
+          (let ([first (car stxs)])
+            (define d (if (syntax? first) (syntax-e first) first))
+            (and (list? d) (pair? d)
+                 (eq? (let ([h (car d)]) (if (syntax? h) (syntax-e h) h)) '$pipe))))
+     ;; Already grouped — return as-is (parse-match-pattern-arm handles $pipe stripping)
+     stxs]
+    [else stxs]))
 
 (define (parse-match-pattern-arms arm-stxs loc)
   (define result
@@ -6107,8 +6150,11 @@
 (define (parse-match-pattern-arm arm-stx loc)
   (define d (stx->datum arm-stx))
   (define parts
-    (if (syntax? arm-stx) (syntax->list arm-stx)
-        (if (list? d) (map (lambda (x) (datum->syntax #f x)) d) #f)))
+    (cond
+      [(syntax? arm-stx) (syntax->list arm-stx)]
+      [(list? d) (map (lambda (x) (datum->syntax #f x)) d)]
+      [(list? arm-stx) (map (lambda (x) (datum->syntax #f x)) arm-stx)]
+      [else #f]))
   (unless parts
     (parse-error loc "match arm must be a list" #f))
 

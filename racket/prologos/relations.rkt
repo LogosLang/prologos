@@ -49,6 +49,9 @@
  current-is-eval-fn
  ;; NAF oracle (set by wf-engine.rkt for well-founded semantics)
  current-naf-oracle
+ ;; Solver internals (for run-solve-goal in reduction.rkt)
+ solve-single-goal
+ walk*
  ;; Execution
  solve-goal
  explain-goal
@@ -243,6 +246,37 @@
     [(expr-logic-var? t) (expr-logic-var-name t)]
     [else t]))
 
+;; Deep-normalize an AST term for the runtime solver.
+;; Recursively converts constructor applications to lists so unify-terms can decompose them.
+;; Logic vars → symbols, (expr-app f a) chains → flat lists, everything else ground.
+(define (normalize-term-deep t)
+  (cond
+    [(expr-logic-var? t)
+     ;; Strip mode prefix (?/+/-) if present — mode is metadata, not identity
+     (let* ([name (expr-logic-var-name t)]
+            [s (symbol->string name)])
+       (if (and (> (string-length s) 1)
+                (memv (string-ref s 0) '(#\? #\+ #\-)))
+           (string->symbol (substring s 1))
+           name))]
+    [(expr-app? t)
+     (define-values (head args) (uncurry-app-rel t))
+     (cons (normalize-term-deep head)
+           (map normalize-term-deep args))]
+    [(expr-goal-app? t)
+     ;; goal-app name: use keyword to distinguish from variable symbols.
+     ;; Keywords are not symbols, so unify-terms treats them as ground.
+     (cons (string->keyword (symbol->string (expr-goal-app-name t)))
+           (map normalize-term-deep (expr-goal-app-args t)))]
+    [else t]))
+
+;; Uncurry a chain of expr-app: (app (app f a1) a2) → (values f (list a1 a2))
+(define (uncurry-app-rel e)
+  (let loop ([e e] [acc '()])
+    (cond
+      [(expr-app? e) (loop (expr-app-func e) (cons (expr-app-arg e) acc))]
+      [else (values e acc)])))
+
 ;; Convert an AST goal expression to a goal-desc struct.
 ;; All logic variables are normalized to plain symbols for the runtime solver.
 (define (expr->goal-desc g)
@@ -251,8 +285,10 @@
      (goal-desc 'app (list (expr-goal-app-name g)
                            (map normalize-term (expr-goal-app-args g))))]
     [(expr-unify-goal? g)
-     (goal-desc 'unify (list (normalize-term (expr-unify-goal-lhs g))
-                             (normalize-term (expr-unify-goal-rhs g))))]
+     ;; Deep-normalize unify terms so constructor applications become lists
+     ;; that unify-terms can structurally decompose.
+     (goal-desc 'unify (list (normalize-term-deep (expr-unify-goal-lhs g))
+                             (normalize-term-deep (expr-unify-goal-rhs g))))]
     [(expr-is-goal? g)
      (goal-desc 'is (list (normalize-term (expr-is-goal-var g))
                           (expr-is-goal-expr g)))]
@@ -541,7 +577,7 @@
        (when (symbol? a) (hash-set! vars a #t)))]
     [(unify)
      (for ([a (in-list args)])
-       (when (symbol? a) (hash-set! vars a #t)))]
+       (collect-solver-term-vars a vars))]
     [(is)
      (when (symbol? (car args)) (hash-set! vars (car args) #t))
      ;; Also collect logic vars from the expression AST
@@ -555,6 +591,13 @@
      (collect-logic-vars-in-expr (car args) vars)
      (when (pair? (cdr args))
        (collect-ast-vars (cadr args) vars))]
+    [else (void)]))
+
+;; Recursively collect variable symbols from a solver term (symbol or list tree).
+(define (collect-solver-term-vars term vars)
+  (cond
+    [(symbol? term) (hash-set! vars term #t)]
+    [(list? term) (for ([t (in-list term)]) (collect-solver-term-vars t vars))]
     [else (void)]))
 
 ;; Apply a substitution to a goal-desc, resolving variables to their bindings.

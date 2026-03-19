@@ -1,0 +1,548 @@
+;; ========================================================================
+;;
+;;   PUnify Acceptance File — Structural Unification as Propagators
+;;
+;;   STATUS: Phase 0 (Pre-Implementation Baseline)
+;;   Run via: process-file "racket/prologos/examples/2026-03-19-punify-acceptance.prologos"
+;;
+;;   PUnify is split into two parts:
+;;     Part 1: Surface wiring + baseline (this file's primary scope)
+;;     Part 2: Cell-tree architecture (separate session)
+;;
+;;   This file serves three purposes:
+;;     1. Validate = wiring through the full pipeline (canary)
+;;     2. Exercise resolved language design decisions (aspirational)
+;;     3. Broad regression net for existing features
+;;
+;;   Conventions:
+;;     - Commented-out = aspirational or known-broken (annotated BUG/BLOCKED)
+;;     - Uncommented = must pass today; regression if broken after any phase
+;;     - Each solve block is standalone for per-command verbose isolation
+;;     - [] for functional, () for relational keywords, <> for type-level
+;;     - Constructors defined locally (not in prelude) for structural tests
+;;
+;;   Sections:
+;;     A. Relational = (Prolog-inspired structural unification) — MUST WORK
+;;     B. Existing relational features (defr, solve, ||, &>) — MUST WORK
+;;     C. Three-operator vocabulary (=, is, #=) — ASPIRATIONAL
+;;     D. Expression-context = — ASPIRATIONAL
+;;     E. Term decomposition ('[\?f | \?args]) — ASPIRATIONAL
+;;     F. Type-level = — ASPIRATIONAL
+;;     G. Broad regression canary — MUST WORK
+;;     Z. Phase validation checklist
+;;
+;; ========================================================================
+
+ns acceptance::punify
+
+;; ========================================================================
+;; DATA TYPE DEFINITIONS
+;; ========================================================================
+;;
+;; Constructors needed for Prolog-style structural unification tests.
+;; These give us named structure (not just lists/pairs) for testing
+;; shared-variable propagation through constructor arguments.
+
+data Triple A B C := triple A B C
+
+data Tree {A : Type}
+  leaf : A
+  node : [Tree A] -> [Tree A]
+
+data Outer A B C := outer A B C
+data Inner A B := inner A B
+
+data Matrix A := matrix A A
+data Row A B := row A B
+
+data Edge A := edge A A
+;; BUG (L3): [List [Edge A]] in data constructor position not recognized as type
+;; data Graph A := graph [List [Edge A]]
+data Graph A := graph A
+
+data Env K V R := env K V R
+
+data EvenOdd {A : Type}
+  even : A
+  odd : A
+
+data Copy A := copy A A
+
+;; ========================================================================
+;; SECTION A: Relational = (Prolog-Inspired) — MUST WORK TODAY
+;; ========================================================================
+;;
+;; Direct translations of Prolog structural unification examples.
+;; Tests shared-variable constraint propagation through solve blocks.
+;; These exercise the core unification that PUnify's cell-trees will handle.
+;;
+;; Source: docs/standups/standup-2026-03-18.org (Prolog examples)
+
+;; --- A1: Basic constructor unification ---
+;; Prolog: pair(X, Y) = pair(1, 2)
+
+solve (= [triple ?x ?y ?z] [triple 1 2 3])
+;; Expected: [{:x 1 :y 2 :z 3}]
+
+;; --- A2: Nested constructor unification ---
+;; Prolog: f(A, g(A, B)) = f(1, g(X, 2))
+
+solve (= [triple ?a [inner ?a ?b] ?c] [triple 1 [inner ?x 2] 3])
+;; Expected: ?a=1, ?x=1, ?b=2, ?c=3
+
+;; --- A3: Constraint propagation through shared variables ---
+;; Prolog: f(A, g(A, B), h(B, C), i(C, A)) = f(1, g(X, 2), h(Y, 3), i(Z, W))
+;; Shared vars A, B, C act as wires connecting different positions.
+
+;; BUG (L3): 4-element constructor needed — using nested triples
+solve
+  (= [triple ?a [inner ?a ?b] [inner ?b ?c]]
+     [triple 1  [inner ?x 2]  [inner ?y 3]])
+;; Expected: ?a=1, ?b=2, ?c=3, ?x=1, ?y=2
+
+;; --- A4: Circular constraint chain ---
+;; Prolog: p(A, B, C, D) = p(X, X, Y, Y), p(A, B, C, D) = p(1, W, W, Z)
+;; All vars collapse to the same value through chained sharing.
+
+solve (rel [?a ?b ?c ?x ?y ?w]
+  &> (= [triple a b c] [triple x x y])
+     (= [triple a b c] [triple 1 w w]))
+;; Expected: ?a=1, ?b=1, ?c=1, ?x=1, ?y=1, ?w=1
+
+;; --- A5: Diamond pattern — two paths must agree ---
+;; Prolog: diamond(top(X), left(X, A), right(X, B), bottom(A, B, Y))
+;;       = diamond(top(1), left(L, 2), right(R, 3), bottom(2, 3, Y))
+
+solve
+  (= [triple [inner ?x ?a] [inner ?x ?b] [triple ?a ?b ?y]]
+     [triple [inner 1 2]   [inner ?r 3]  [triple 2 3 ?y2]])
+;; Expected: ?x=1, ?a=2, ?b=3, ?r=1, ?y=?y2
+
+;; --- A6: Nested sharing — inner structure constrains outer ---
+;; Prolog: outer(inner(A,B), inner(B,C), inner(C,A))
+;;       = outer(inner(1,X), inner(X,Y), inner(Y,Z))
+
+solve
+  (= [outer [inner ?a ?b] [inner ?b ?c] [inner ?c ?a]]
+     [outer [inner 1 ?x]  [inner ?x ?y] [inner ?y ?z]])
+;; Expected: ?a=1, ?b=1, ?c=1, ?x=1, ?y=1, ?z=1
+
+;; --- A7: Non-trivial propagation (not all same) ---
+;; Prolog: triple(A,B,C) = triple(f(X), g(X,Y), h(Y))
+;;         triple(A,B,C) = triple(f(1), g(1,2), h(Z))
+;; Two separate = goals with shared vars across them.
+
+solve (rel [?a ?b ?c ?x ?y ?z]
+  &> (= [triple a b c] [triple [leaf x] [inner x y] [leaf y]])
+     (= [triple a b c] [triple [leaf 1] [inner 1 2]  [leaf z]]))
+;; Expected: ?a=[leaf 1], ?b=[inner 1 2], ?c=[leaf 2], ?x=1, ?y=2, ?z=2
+
+;; --- A8: Structure copying via shared variables ---
+;; Prolog: copy(Original, Duplicate) = copy(tree(L,R), tree(L,R)),
+;;         Original = tree(leaf(1), node(2, leaf(3)))
+;; Shared L, R mean Duplicate gets same structure as Original.
+
+solve (rel [?original ?duplicate ?l ?r]
+  &> (= [copy original duplicate] [copy [node l r] [node l r]])
+     (= original [node [leaf 1] [node [leaf 2] [leaf 3]]]))
+;; Expected: ?duplicate = [node [leaf 1] [node [leaf 2] [leaf 3]]]
+
+;; --- A9: Mutual recursion structure ---
+;; Prolog: even(A, odd(B, even(C, odd(D, nil))))
+;;       = even(X, odd(X, even(Y, odd(Y, nil))))
+
+;; BUG (L3): Need heterogeneous even/odd nesting — using nested inners
+solve (rel [?a ?b ?c ?d ?x ?y]
+  &> (= [inner a [inner b [inner c [inner d 0]]]]
+        [inner x [inner x [inner y [inner y 0]]]])
+     (= a 10)
+     (= c 20))
+;; Expected: ?a=10, ?b=10, ?c=20, ?d=20, ?x=10, ?y=20
+
+;; --- A10: Graph edge bidirectional constraint ---
+;; Prolog: graph([edge(A,B), edge(B,C), edge(C,A)])
+;;       = graph([edge(1,X), edge(X,Y), edge(Y,1)])
+
+;; BUG (L3): List of constructors in solve — may need list unification support
+;; (solve
+;;   (= [graph '[  [edge ?a ?b] [edge ?b ?c] [edge ?c ?a]  ]]
+;;      [graph '[  [edge 1 ?x]  [edge ?x ?y] [edge ?y 1]   ]]))
+;; Expected: ?a=1, ?b=?x, ?c=1, ?y=1
+
+;; --- A11: Substitution / environment lookup ---
+;; Prolog: subst(var(X), env(X, Val, _), Val)
+;;       = subst(var(foo), env(foo, 42, nil), R)
+;; The self-hosting-relevant pattern: variable lookup in an environment.
+
+solve
+  (= [triple ?x [env ?x ?val ?rest] ?val]
+     [triple "foo" [env "foo" 42 "nil"] ?r])
+;; Expected: ?x="foo", ?val=42, ?r=42
+
+;; --- A12: Palindrome structure constraint ---
+;; Prolog: palindrome([A,B,C,B,A]) = palindrome([1,2,X,Y,Z])
+;; Symmetry: shared vars enforce A=Z, B=Y.
+
+;; Using a 5-element nested structure to model the palindrome
+solve
+  (= [triple ?a [triple ?b ?c ?b] ?a]
+     [triple 1  [triple 2  ?x 2]  1])
+;; Expected: ?a=1, ?b=2, ?c=?x
+
+;; --- A13: Bidirectional — info flows both directions ---
+;; Classic Prolog pattern where solving one side informs the other.
+
+solve
+  (= [inner [leaf ?x] [leaf ?y]]
+     [inner [leaf 42]  [leaf ?x]])
+;; Expected: ?x=42, ?y=42
+
+;; --- A14: Multiple independent constraints, same solve ---
+;; Tests that multiple (= ...) goals in one solve all contribute.
+
+solve (rel [?a ?b ?c]
+  &> (= a 1)
+     (= b 2)
+     (= c [inner a b]))
+;; Expected: ?a=1, ?b=2, ?c=[inner 1 2]
+
+
+;; ========================================================================
+;; SECTION B: Existing Relational Features — MUST WORK TODAY
+;; ========================================================================
+;;
+;; Exercises defr/solve infrastructure that must not regress.
+;; Overlaps with relational-demo.prologos but is self-contained.
+
+;; --- B1: Fact-block relation ---
+
+defr color [?name ?hex]
+  || "red"   "#ff0000"
+     "green" "#00ff00"
+     "blue"  "#0000ff"
+
+solve (color "red" ?hex)
+;; Expected: [{:hex "#ff0000"}]
+
+solve (color ?name "#0000ff")
+;; Expected: [{:name "blue"}]
+
+;; --- B2: Rule-based relation (transitive closure) ---
+
+defr link [?from ?to]
+  || "a" "b"
+     "b" "c"
+     "c" "d"
+
+defr reachable [?from ?to]
+  &> (link from to)
+  &> (link from mid) (reachable mid to)
+
+solve (reachable "a" ?to)
+;; Expected: [{:to "b"} {:to "c"} {:to "d"}]
+
+solve (reachable ?from "d")
+;; Expected: [{:from "c"} {:from "b"} {:from "a"}]
+
+;; --- B3: Unification goal inside rule ---
+
+defr same-start [?x ?y]
+  &> (link x mid1) (link y mid2) (= mid1 mid2)
+
+solve (same-start ?x ?y)
+;; Expected: pairs that share a common next-hop
+
+;; --- B4: Negation-as-failure ---
+
+defr not-linked-to-d [?x]
+  &> (link x _) (not (reachable x "d"))
+
+;; "d" reaches nothing (no outgoing links), so not-linked-to-d may be empty
+;; or contain "d" depending on whether we check outgoing links
+;; The key test is that `not` doesn't crash.
+
+;; --- B5: Bidirectional querying ---
+;; Same relation, different bound variables — the power of logic programming.
+
+solve (link "b" ?to)
+;; Expected: [{:to "c"}]
+
+solve (link ?from "c")
+;; Expected: [{:from "b"}]
+
+solve (link ?from ?to)
+;; Expected: all 3 link facts
+
+
+;; ========================================================================
+;; SECTION C: Three-Operator Vocabulary — ASPIRATIONAL
+;; ========================================================================
+;;
+;; Side-by-side examples of =, is, #= (§1.1 of design doc).
+;; These demonstrate the resolved language design.
+
+;; --- C1: = is structural (function name is just a symbol) ---
+;; (= [f x] ?r) in relational context: ?r = the TERM, not evaluated
+;;
+;; BLOCKED: = on function application as term binding not yet wired
+;;
+;; (solve (= [int+ 3 4] ?r))
+;; Expected: ?r = '[int+ 3 4]  (the term, NOT 7)
+
+;; --- C2: is evaluates then binds ---
+;; (is ?r [f x]) evaluates [f x], binds result
+;;
+;; BLOCKED: `is` goal not yet wired in relational context
+;;
+;; (solve (is ?r [int+ 3 4]))
+;; Expected: ?r = 7
+
+;; --- C3: #= narrows through function definitions ---
+;; (#= [f ?x] val) drives evaluation backwards
+;;
+;; BLOCKED: #= operator not yet defined
+;;
+;; (solve (#= [int+ ?x 4] 7))
+;; Expected: ?x = 3
+
+;; --- C4: Constructor vs function distinction ---
+;; Constructors: structural under all three operators.
+;; Functions: structural under =, evaluated under is, narrowed under #=.
+;;
+;; (solve (= [leaf 42] ?r))
+;; Expected: ?r = [leaf 42]  (constructor — structural)
+;;
+;; (solve (= [int+ 3 4] ?r))
+;; Expected: ?r = '[int+ 3 4]  (function — term, not evaluated)
+;;
+;; (solve (is ?r [int+ 3 4]))
+;; Expected: ?r = 7  (function — evaluated)
+
+
+;; ========================================================================
+;; SECTION D: Expression-Context = — ASPIRATIONAL
+;; ========================================================================
+;;
+;; §1.3.2 of design doc: evaluate-then-unify, bidirectional binding.
+
+;; --- D1: Simple destructuring ---
+;; Expression-context = evaluates RHS, then unifies structurally.
+;;
+;; BLOCKED: expression-context = not yet wired
+;;
+;; def my-pair := [inner 1 2]
+;; (= [inner x y] my-pair)
+;; [int+ x y]
+;; Expected: 3
+
+;; --- D2: Bidirectional binding (unique capability vs match) ---
+;; Both sides have unknowns — neither match nor def can do this.
+;;
+;; BLOCKED: expression-context = not yet wired
+;;
+;; (= [inner ?x 2] [inner 1 ?y])
+;; [int+ ?x ?y]
+;; Expected: 3  (?x=1, ?y=2)
+
+;; --- D3: Quote overrides evaluation in expression context ---
+;; Quote-controls-evaluation principle (§1.2).
+;;
+;; BLOCKED: expression-context = + quote interaction not yet wired
+;;
+;; (= '[int+ 3 4] ?term)
+;; ;; ?term = '[int+ 3 4]  (the term, not 7)
+
+;; --- D4: Failure case — structural mismatch → type error ---
+;; BLOCKED: expression-context = not yet wired
+;;
+;; (= [inner x y] [triple 1 2 3])
+;; Expected: type error (inner vs triple)
+
+
+;; ========================================================================
+;; SECTION E: Term Decomposition — ASPIRATIONAL
+;; ========================================================================
+;;
+;; §1.5 of design doc: '[?f | ?args] syntax for application destructuring.
+
+;; --- E1: List destructuring with | ---
+;; BLOCKED: quoted list | destructuring not yet wired
+;;
+;; (solve (= '[1 2 3] '[?h | ?t]))
+;; Expected: ?h = 1, ?t = '[2 3]
+
+;; --- E2: Application term destructuring (quoted) ---
+;; BLOCKED: application | destructuring not yet wired
+;;
+;; (solve (= '[int+ 3 4] '[?f | ?args]))
+;; Expected: ?f = int+, ?args = '[3 4]
+
+;; --- E3: Deeper decomposition ---
+;; BLOCKED: application | destructuring not yet wired
+;;
+;; (solve (= '[foo a b c] '[?f ?first | ?rest]))
+;; Expected: ?f = foo, ?first = a, ?rest = '[b c]
+
+
+;; ========================================================================
+;; SECTION F: Type-Level = — ASPIRATIONAL
+;; ========================================================================
+;;
+;; §1.3.3 of design doc: equality constraints in specs.
+
+;; --- F1: Type equality constraint ---
+;; BLOCKED: = in spec/type position not yet wired
+;;
+;; spec coerce {A B : Type} (= A B) -> A -> B
+;; defn coerce [x] x
+;;
+;; [coerce 42]
+;; Expected: 42 (A and B unified to Int)
+
+
+;; ========================================================================
+;; SECTION G: Broad Regression Canary — MUST WORK TODAY
+;; ========================================================================
+;;
+;; Standard features that must not regress from pipeline changes.
+;; These are the safety net.
+
+;; --- G1: Pattern matching with multi-arity defn ---
+
+spec is-zero Int -> Bool
+defn is-zero
+  | 0 -> true
+  | _ -> false
+
+is-zero 0
+;; Expected: true
+
+is-zero 42
+;; Expected: false
+
+;; --- G2: Generic arithmetic via traits ---
+
++ 3 4
+;; Expected: 7
+
+* 5 6
+;; Expected: 30
+
+- 10 3
+;; Expected: 7
+
+;; --- G3: Pipeline ---
+
+|> 5 [int+ _ 3] [int* _ 2]
+;; Expected: 16
+
+;; --- G4: Closures and partial application ---
+
+spec make-adder Int -> <Int -> Int>
+defn make-adder [n] [fn [x : Int] [int+ n x]]
+
+def add5 := [make-adder 5]
+
+add5 10
+;; Expected: 15
+
+;; --- G5: List operations ---
+
+head '[1 2 3]
+;; Expected: (some 1)
+
+tail '[1 2 3]
+;; Expected: (some '[2 3])
+
+length '[1 2 3]
+;; Expected: 3
+
+;; --- G6: Option operations ---
+
+;; BUG (pre-existing): head returns Option with unresolved metas, match can't infer type
+;; (match [head '[1 2 3]]
+;;   | (some x) -> [int+ x 100]
+;;   | none -> 0)
+;; Expected: 101
+
+;; --- G7: Map literals and access ---
+
+def my-map := {:name "alice" :age 30}
+
+my-map.name
+;; Expected: "alice"
+
+my-map.age
+;; Expected: 30
+
+;; --- G8: Bool operations ---
+
+and true true
+;; Expected: true
+
+or false true
+;; Expected: true
+
+not false
+;; Expected: true
+
+;; --- G9: String operations ---
+
+str::length "hello"
+;; Expected: 5
+
+;; --- G10: Nat arithmetic (inductive, not Int) ---
+
+;; BUG: nat+ is not a prelude function — use generic + or nat-add
+;; nat+ 2N 3N
+;; Expected: 5N
+[+ 2N 3N]
+;; Expected: 5N
+
+;; --- G11: Trait definition and instance ---
+
+trait Describable {A : Type}
+  describe : A -> String
+
+;; BUG (L3): user-defined trait dispatch may not work — known gap from audit-06
+;; instance Describable Int
+;;   defn describe
+;;     | 0 -> "zero"
+;;     | _ -> "nonzero"
+;;
+;; [describe 0]
+;; Expected: "zero"
+;;
+;; [describe 42]
+;; Expected: "nonzero"
+
+;; BUG: eq? trait method not in prelude scope — use int-eq for now
+[int-eq 1 1]
+;; Expected: true
+
+[int-eq 1 2]
+;; Expected: false
+
+
+;; ========================================================================
+;; SECTION Z: Phase Validation Checklist
+;; ========================================================================
+;;
+;; Phase 0b: Run baseline — Sections A, B, G must pass (uncommented)
+;;           Sections C, D, E, F are aspirational (commented out)
+;;           Catalog failures as BUG annotations with hypotheses
+;;
+;; Phase 0a (= wiring): Driven by Phase 0b failures.
+;;           Expect: Section A fully passing, Section C partially.
+;;
+;; Phase 0d (adversarial): Written AFTER acceptance is clean.
+;;           Separate file: benchmarks/comparative/punify-adversarial.prologos
+;;
+;; Phase 0c (baseline): bench-ab.rkt on adversarial, 15+ runs.
+;;
+;; Part 2 phases (1-9): Cell-tree architecture.
+;;           Each phase: run this file, confirm no regressions.
+;;           Aspirational sections uncommented as capabilities land.
+;;
+;; After each phase: run via process-file, verify 0 new failures.
+;; Pre-existing BUG/BLOCKED items do not count as regressions.

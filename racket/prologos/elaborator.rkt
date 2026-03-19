@@ -680,7 +680,22 @@
       ;; `(...)` contains logic variables by default. To reference a global value
       ;; inside a relational goal, use `[...]` (functional expression) or `is`.
       [(current-relational-fallback?)
-       (expr-logic-var name 'free)]
+       ;; Strip mode prefix (?/+/-) so ?hex → hex, +x → x, etc.
+       ;; Mode annotations are metadata, not part of the identifier.
+       (let* ([s (symbol->string name)]
+              [stripped (if (and (> (string-length s) 1)
+                                (memv (string-ref s 0) '(#\? #\+ #\-)))
+                           (string->symbol (substring s 1))
+                           name)]
+              [mode (if (and (> (string-length s) 1)
+                             (memv (string-ref s 0) '(#\? #\+ #\-)))
+                        (case (string-ref s 0)
+                          [(#\?) 'free]
+                          [(#\+) 'ground]
+                          [(#\-) 'output]
+                          [else 'free])
+                        'free)])
+         (expr-logic-var stripped mode))]
       ;; Own-namespace definition takes priority over imports (including prelude).
       ;; This ensures `def map ...` in `ns foo` resolves to `foo::map`, not the
       ;; prelude's `prologos::data::list::map`.
@@ -2524,9 +2539,19 @@
 
     ;; rel — anonymous relation
     [(surf-rel params clauses loc)
+     ;; Build relational env from params: name → expr-logic-var
+     ;; Same as defr variant elaboration — ensures ?x in clause body
+     ;; resolves to (expr-logic-var 'x 'free), not (expr-logic-var '?x 'free).
+     (define rel-env
+       (for/hasheq ([p (in-list params)])
+         (define name (if (pair? p) (car p) p))
+         (define mode (if (pair? p) (or (cdr p) 'free) 'free))
+         (values name (expr-logic-var name mode))))
      (let ([elab-clauses
             (for/list ([c (in-list clauses)])
-              (elaborate c env depth))])
+              (parameterize ([current-relational-env rel-env]
+                             [current-relational-fallback? #t])
+                (elaborate c env depth)))])
        (define first-err (findf prologos-error? elab-clauses))
        (if first-err first-err
            (expr-rel params elab-clauses)))]

@@ -160,6 +160,73 @@
       [(expr-logic-var? e*) (expr-logic-var-name e*)]
       [else e*])))
 
+;; Strip mode prefix (?, +, -) from a logic variable name symbol.
+;; ?x → x, +y → y, -z → z, foo → foo
+(define (strip-mode-prefix sym)
+  (define s (symbol->string sym))
+  (if (and (> (string-length s) 1)
+           (memv (string-ref s 0) '(#\? #\+ #\-)))
+      (string->symbol (substring s 1))
+      sym))
+
+;; Deep-normalize an elaborated AST expression into the solver's flat representation.
+;; Logic vars → symbols, constructor apps → lists, ground terms → themselves.
+;; The solver uses: symbols for vars, lists for compound terms, everything else ground.
+;;
+;; expr-app is curried: (expr-app (expr-app f a1) a2) → uncurry to (list f' a1' a2')
+(define (normalize-ast-to-solver-term expr)
+  (cond
+    [(expr-logic-var? expr) (strip-mode-prefix (expr-logic-var-name expr))]
+    ;; Curried application → uncurry to flat list
+    [(expr-app? expr)
+     (define-values (head args) (uncurry-app expr))
+     (cons (normalize-ast-to-solver-term head)
+           (map normalize-ast-to-solver-term args))]
+    ;; Goal-app (relation call as term) — use keyword to keep constructor ground
+    [(expr-goal-app? expr)
+     (cons (string->keyword (symbol->string (expr-goal-app-name expr)))
+           (map normalize-ast-to-solver-term (expr-goal-app-args expr)))]
+    ;; Everything else is ground: expr-int, expr-string, expr-fvar, expr-keyword, etc.
+    [else expr]))
+
+;; Uncurry a chain of expr-app nodes into (values head-expr (list arg1 arg2 ...))
+(define (uncurry-app e)
+  (let loop ([e e] [acc '()])
+    (cond
+      [(expr-app? e) (loop (expr-app-func e) (cons (expr-app-arg e) acc))]
+      [else (values e acc)])))
+
+;; Collect all logic variable names from a deeply-nested AST expression.
+;; Returns a list of symbols (may contain duplicates — caller should deduplicate).
+(define (collect-deep-logic-vars expr)
+  (cond
+    [(expr-logic-var? expr) (list (strip-mode-prefix (expr-logic-var-name expr)))]
+    [(expr-app? expr)
+     (append (collect-deep-logic-vars (expr-app-func expr))
+             (collect-deep-logic-vars (expr-app-arg expr)))]
+    [(expr-goal-app? expr)
+     (append-map collect-deep-logic-vars (expr-goal-app-args expr))]
+    [(expr-unify-goal? expr)
+     (append (collect-deep-logic-vars (expr-unify-goal-lhs expr))
+             (collect-deep-logic-vars (expr-unify-goal-rhs expr)))]
+    [else '()]))
+
+;; Convert a solver term back to a Prologos AST expression.
+;; Handles compound terms (lists) by reconstructing curried expr-app.
+(define (solver-term->prologos-expr v)
+  (cond
+    [(and (pair? v) (not (null? v)))
+     ;; Compound term: (func arg1 arg2 ...) → curried expr-app chain
+     ;; Keywords at head are constructor names — convert back to expr-fvar
+     (define head (car v))
+     (define func (if (keyword? head)
+                      (expr-fvar (string->symbol (keyword->string head)))
+                      (solver-term->prologos-expr head)))
+     (define args (map solver-term->prologos-expr (cdr v)))
+     (foldl (lambda (a f) (expr-app f a)) func args)]
+    [(symbol? v) (expr-fvar v)]  ;; Unresolved logic var
+    [else v]))  ;; Already an AST expression
+
 ;; Convert solver answer maps (list of hasheq) back to a Prologos expression.
 ;; Each answer is a hasheq mapping query variable names (symbols) to ground values.
 ;; Returns a Prologos List of Maps: '[(map :x val1 :y val2), ...]
@@ -190,7 +257,16 @@
 ;; If it's a symbol (unresolved logic var), return it as an fvar.
 (define (ground->prologos-expr v)
   (cond
+    [(keyword? v) (expr-fvar (string->symbol (keyword->string v)))]
     [(symbol? v) (expr-fvar v)]
+    ;; Compound solver term (list): reconstruct as curried expr-app
+    [(and (pair? v) (not (null? v)))
+     (define head (car v))
+     (define func (if (keyword? head)
+                      (expr-fvar (string->symbol (keyword->string head)))
+                      (ground->prologos-expr head)))
+     (define args (map ground->prologos-expr (cdr v)))
+     (foldl (lambda (a f) (expr-app f a)) func args)]
     ;; Already an AST expression
     [(or (expr-zero? v) (expr-suc? v) (expr-nat-val? v) (expr-true? v) (expr-false? v)
          (expr-string? v) (expr-int? v) (expr-keyword? v) (expr-fvar? v)
@@ -466,6 +542,32 @@
        (parameterize ([current-is-eval-fn nf])
          (stratified-solve-goal config store temp-name goal-args query-vars)))
      (answers->prologos-expr answers query-vars '())]
+    [(expr-unify-goal? goal*)
+     ;; Inline = goal: normalize both sides to solver representation,
+     ;; collect query vars, run unification, format answer.
+     (define lhs (expr-unify-goal-lhs goal*))
+     (define rhs (expr-unify-goal-rhs goal*))
+     (define norm-lhs (normalize-ast-to-solver-term lhs))
+     (define norm-rhs (normalize-ast-to-solver-term rhs))
+     ;; Collect all logic vars from both sides (deduplicated, order-preserving)
+     (define all-vars (collect-deep-logic-vars goal*))
+     (define query-vars
+       (let loop ([vs all-vars] [seen (hasheq)] [acc '()])
+         (cond
+           [(null? vs) (reverse acc)]
+           [(hash-ref seen (car vs) #f) (loop (cdr vs) seen acc)]
+           [else (loop (cdr vs) (hash-set seen (car vs) #t) (cons (car vs) acc))])))
+     (define goal-desc-val (goal-desc 'unify (list norm-lhs norm-rhs)))
+     (define store (current-relation-store))
+     (define answers
+       (parameterize ([current-is-eval-fn nf])
+         (solve-single-goal config store goal-desc-val (hasheq) 0)))
+     ;; Deep-walk and convert solver term values back to AST for display
+     (define converted-answers
+       (for/list ([ans (in-list answers)])
+         (for/hasheq ([qv (in-list query-vars)])
+           (values qv (solver-term->prologos-expr (walk* ans qv))))))
+     (answers->prologos-expr converted-answers query-vars '())]
     ;; If the goal is not yet reduced to a goal-app, return the expression unchanged
     [else (expr-solve goal*)]))
 
@@ -3371,7 +3473,7 @@
     [(expr-clause gs) (expr-clause (map nf gs))]
     [(expr-fact-block rs) (expr-fact-block (map nf rs))]
     [(expr-fact-row ts) (expr-fact-row (map nf ts))]
-    [(expr-goal-app nm as) (expr-goal-app (nf nm) (map nf as))]
+    [(expr-goal-app nm as) (expr-goal-app nm (map nf as))]  ;; nm is a symbol, not an expr
     [(expr-unify-goal l r) (expr-unify-goal (nf l) (nf r))]
     [(expr-is-goal v ex) (expr-is-goal (nf v) (nf ex))]
     [(expr-not-goal g) (expr-not-goal (nf g))]
