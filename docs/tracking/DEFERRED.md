@@ -1061,15 +1061,11 @@ Discovered during PUnify Phase 0a acceptance testing (2026-03-19). These are
 deeper issues that prevent certain composition points from working. Each item
 is commented out in `examples/2026-03-19-punify-acceptance.prologos`.
 
-### `defr` with `|` clause-form doesn't register relations (HIGH PRIORITY)
-- `defr name [params] | pattern -> body &> body` silently fails to register the relation — `solve` then errors with "Unknown relation"
-- The `|` pattern-match clause form works for `defn` but not `defr`
-- Only the `||` fact form and single `&>` conjunction form currently work for `defr`
-- This blocks pattern-dispatched relational definitions, which are the natural syntax for multi-clause relations with different structural patterns
-- Root cause: likely in parser.rkt or elaborator.rkt — the `|` form inside `defr` doesn't hit the relation registration path
-- Workaround: use `||` for facts, `&>` for single-clause conjunctions. For multi-pattern dispatch, use guards instead of pattern matching.
-- Source: acceptance file §B6, benchmarks/comparative/solve-adversarial.prologos
-- Added: 2026-03-19
+### ~~`defr` with `|` clause-form doesn't register relations~~ — RESOLVED (commit `490a4e3`)
+- Root cause was `parse-rel-params` rejecting non-symbol elements (literals) in param lists.
+  `defr |` with all-variable params always worked; only literal patterns (ints, strings, bools) failed.
+- Fix: `parse-rel-params` now accepts literals as `(#:literal . value)` tags; `elaborate-defr-variant`
+  desugars them to fresh logic vars + implicit `=` goals. Acceptance file §B6 now passes.
 
 ### Module-path (`::`) resolution in defr clauses
 - `str::concat` (and likely other `ns::fn` references) unbound inside `defr` clause bodies when used in `is` goals
