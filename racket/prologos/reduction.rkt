@@ -39,7 +39,9 @@
 
 (provide whnf nf nf-whnf conv conv-nf
          current-nf-cache current-whnf-cache
-         current-reduction-fuel current-nat-value-cache)
+         current-reduction-fuel current-nat-value-cache
+         ;; Solver normalization (for benchmarks + PUnify)
+         normalize-ast-to-solver-term)
 
 ;; ========================================
 ;; Helpers for building Prologos List values in reduction

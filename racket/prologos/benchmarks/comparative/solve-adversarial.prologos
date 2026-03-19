@@ -1,0 +1,281 @@
+ns benchmarks::comparative::solve-adversarial
+
+;; ============================================================
+;; Adversarial unification & solve benchmark (PUnify baseline)
+;; ============================================================
+;;
+;; Establishes the performance baseline for solver-level unification,
+;; which PUnify (propagator-based unification) replaces.
+;; Run with bench-ab.rkt for A/B comparison across code versions:
+;;
+;;   racket tools/bench-ab.rkt benchmarks/comparative/solve-adversarial.prologos --runs 15
+;;
+;; What this stresses:
+;;   1. Structural unification via `=` in solve blocks
+;;   2. Backtracking across many facts in defr
+;;   3. Multi-goal conjunction in inline rel
+;;   4. Variable freshening + substitution growth
+;;   5. Mixed is + = goals (functional evaluation inside relations)
+;;   6. Narrowing via `#=` (definitional tree extraction + search)
+;;   7. Constructor-heavy terms (deep/wide nesting)
+;;   8. Many small solve blocks (per-command solve overhead)
+;;   9. Prelude constructor unification (some/none/pair)
+;;  10. solve-one (first-answer cutoff)
+
+;; ── S1: Simple structural unification ──
+;; Baseline: trivial `=` in solve. Measures per-solve overhead.
+
+solve (= ?x 42)
+solve (= ?x "hello")
+solve (= ?a ?b)
+solve (= [pair ?x ?y] [pair 1 2])
+solve (= [some ?v] [some 99])
+
+;; ── S2: Deep constructor terms ──
+;; Stresses recursive decomposition in unify-terms.
+
+solve (= [some [some [some ?x]]] [some [some [some 42]]])
+solve (= [pair [pair ?a ?b] [pair ?c ?d]] [pair [pair 1 2] [pair 3 4]])
+solve (= [pair [some ?x] [pair ?y [some ?z]]] [pair [some 10] [pair 20 [some 30]]])
+
+;; Triple-nested pairs
+solve (= [pair [pair [pair ?a ?b] ?c] ?d]
+         [pair [pair [pair 1 2] 3] 4])
+
+;; ── S3: Nat unification (inductive constructors) ──
+;; Unifying Peano naturals: deeply nested suc chains.
+
+solve (= ?n 0N)
+solve (= ?n 5N)
+solve (= [suc [suc ?n]] [suc [suc 3N]])
+solve (= [suc [suc [suc [suc ?n]]]] [suc [suc [suc [suc 0N]]]])
+
+;; ── S4: Fact-heavy relations (backtracking) ──
+;; Many facts → linear scan, tests backtracking cost.
+
+defr color [?name ?hex]
+  || "red"      "#FF0000"
+     "green"    "#00FF00"
+     "blue"     "#0000FF"
+     "yellow"   "#FFFF00"
+     "cyan"     "#00FFFF"
+     "magenta"  "#FF00FF"
+     "white"    "#FFFFFF"
+     "black"    "#000000"
+     "orange"   "#FFA500"
+     "purple"   "#800080"
+     "pink"     "#FFC0CB"
+     "brown"    "#A52A2A"
+
+;; Hit first clause
+solve (color "red" ?hex)
+
+;; Hit last clause
+solve (color "brown" ?hex)
+
+;; Query all colors
+solve (color ?name ?hex)
+
+;; ── S5: Multi-goal conjunction (inline rel) ──
+;; Relations with multiple `=` goals per clause body.
+
+solve (rel [?r ?g ?b]
+  (= ?r 255) (= ?g 255) (= ?b 255))
+
+solve (rel [?r ?g ?b]
+  (= ?r 0) (= ?g 128) (= ?b 255))
+
+;; 5-way conjunction
+solve (rel [?a ?b ?c ?d ?e]
+  (= ?a 1) (= ?b 2) (= ?c 3) (= ?d 4) (= ?e 5))
+
+;; 8-way conjunction
+solve (rel [?a ?b ?c ?d ?e ?f ?g ?h]
+  (= ?a "a") (= ?b "b") (= ?c "c") (= ?d "d")
+  (= ?e "e") (= ?f "f") (= ?g "g") (= ?h "h"))
+
+;; ── S6: is-goal (evaluate-then-bind) ──
+;; Tests functional evaluation inside relational context.
+
+solve (is ?x [int+ 10 20])
+solve (is ?y [int* 6 7])
+
+;; Multiple is + unify goals
+solve (rel [?a2 ?b2 ?sum]
+  (is ?a2 [int* 3 3])
+  (is ?b2 [int* 4 4])
+  (is ?sum [int+ ?a2 ?b2]))
+
+;; Chain of is-goals
+solve (rel [?v1 ?v2 ?v3 ?v4]
+  (is ?v1 [int+ 1 2])
+  (is ?v2 [int* ?v1 3])
+  (is ?v3 [int+ ?v2 10])
+  (is ?v4 [int* ?v3 2]))
+
+;; ── S7: Constructor unification with prelude types ──
+;; Tests Option/Pair constructors through the solver.
+
+solve (= [some ?x] [some 42])
+solve (= [pair ?a ?b] [pair "hello" "world"])
+solve (= none none)
+
+;; Nested prelude constructors
+solve (= [some [pair ?x ?y]] [some [pair 1 2]])
+solve (= [pair [some ?a] none] [pair [some 99] none])
+
+;; ── S8: Many small solve blocks (per-command overhead) ──
+;; Each solve is an independent command — measures per-command setup cost.
+
+solve (= ?a 1)
+solve (= ?b 2)
+solve (= ?c 3)
+solve (= ?d 4)
+solve (= ?e 5)
+solve (= ?f 6)
+solve (= ?g 7)
+solve (= ?h 8)
+solve (= ?i 9)
+solve (= ?j 10)
+solve (= ?k 11)
+solve (= ?l 12)
+solve (= ?m 13)
+solve (= ?n 14)
+solve (= ?o 15)
+solve (= ?p 16)
+solve (= ?q 17)
+solve (= ?r 18)
+solve (= ?s 19)
+solve (= ?t 20)
+
+;; ── S9: Narrowing via #= ──
+;; Tests definitional tree extraction + narrowing search.
+
+spec flip-bool Bool -> Bool
+defn flip-bool
+  | true  -> false
+  | false -> true
+
+[flip-bool true] #= false
+[flip-bool ?b] #= true
+
+;; Narrowing on Bool — flip-bool is single-arity single-body
+[flip-bool ?b] #= true
+[flip-bool ?a] #= false
+
+;; ── S10: solve-one (first-answer cutoff) ──
+;; Tests that solve-one doesn't enumerate all answers.
+
+solve-one (color "red" ?hex)
+solve-one (color ?name ?hex)
+solve-one (= [pair ?x ?y] [pair 1 2])
+solve-one (= ?x 42)
+
+;; ── S11: Shared variables across goals ──
+;; Tests substitution propagation between goals.
+
+solve (rel [?x ?y ?z]
+  (= ?x ?y) (= ?y ?z) (= ?z 42))
+
+solve (rel [?a ?b ?c ?d]
+  (= ?a [pair ?b ?c])
+  (= ?b [some ?d])
+  (= ?d 99))
+
+;; Transitive chain through constructors
+solve (rel [?x ?y ?z ?w]
+  (= [pair ?x ?y] [pair 1 ?z])
+  (= [pair ?z ?w] [pair 2 3]))
+
+;; ── S12: Repeated solve over same relation ──
+;; Tests if per-relation setup cost is amortized.
+
+solve (color "red" ?h1)
+solve (color "blue" ?h2)
+solve (color "green" ?h3)
+solve (color "yellow" ?h4)
+solve (color "cyan" ?h5)
+solve (color "magenta" ?h6)
+solve (color "white" ?h7)
+solve (color "black" ?h8)
+solve (color "orange" ?h9)
+solve (color "purple" ?h10)
+
+;; ── S13: Named defr with &> conjunction ──
+;; Tests the defr clause form with explicit conjunction.
+
+defr compute-sum [?a ?b ?result]
+  &> (is result [int+ a b])
+
+defr compute-prod [?a ?b ?result]
+  &> (is result [int* a b])
+
+solve (compute-sum 3 4 ?result)
+solve (compute-prod 6 7 ?result)
+
+;; Chained relation calls
+defr compute-both [?a ?b ?sum ?prod]
+  &> (is sum [int+ a b]) (is prod [int* a b])
+
+solve (compute-both 5 3 ?sum ?prod)
+
+;; Guard + is conjunction
+defr safe-double [?n ?result]
+  &> (guard [int-lt 0 n]) (is result [int* n 2])
+
+solve (safe-double 5 ?result)
+
+;; Multi-goal &> with guard + is
+defr positive-double [?n ?result]
+  &> (guard [int-lt 0 n])
+     (is result [int* n 2])
+
+solve (positive-double 7 ?result)
+
+;; Wide conjunction: 5 is-goals in sequence
+defr five-computations [?a ?r1 ?r2 ?r3 ?r4 ?r5]
+  &> (is r1 [int+ a 1])
+     (is r2 [int+ a 2])
+     (is r3 [int+ a 3])
+     (is r4 [int+ a 4])
+     (is r5 [int+ a 5])
+
+solve (five-computations 10 ?r1 ?r2 ?r3 ?r4 ?r5)
+
+;; &> with unification goals
+defr pair-builder [?x ?y ?result]
+  &> (= result [pair x y])
+
+solve (pair-builder 1 2 ?result)
+
+;; Chain of named relations calling each other via &>
+defr add-ten [?n ?result]
+  &> (is result [int+ n 10])
+
+defr add-twenty [?n ?result]
+  &> (add-ten n mid) (add-ten mid result)
+
+solve (add-twenty 5 ?result)
+
+;; ── S14: Complex inline relations ──
+;; Larger inline rels with mixed goal types.
+
+;; 6-variable relation with is + unify
+solve (rel [?x ?y ?z ?sum ?prod ?label]
+  (= ?x 3)
+  (= ?y 4)
+  (is ?z [int+ ?x ?y])
+  (is ?sum [int+ ?x [int+ ?y ?z]])
+  (is ?prod [int* ?x ?y])
+  (= ?label "computed"))
+
+;; Constructor building via is + unify
+solve (rel [?inner ?outer]
+  (is ?inner [int+ 10 20])
+  (= ?outer [pair ?inner [some ?inner]]))
+
+;; Wide variable fan-out: one source binds many
+solve (rel [?src ?a ?b ?c ?d ?e]
+  (= ?src 42)
+  (= ?a ?src) (= ?b ?src) (= ?c ?src)
+  (= ?d ?src) (= ?e ?src))

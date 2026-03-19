@@ -49,9 +49,13 @@
  current-is-eval-fn
  ;; NAF oracle (set by wf-engine.rkt for well-founded semantics)
  current-naf-oracle
- ;; Solver internals (for run-solve-goal in reduction.rkt)
+ ;; Solver internals (for run-solve-goal in reduction.rkt + benchmarks)
  solve-single-goal
+ solve-goals
+ walk
  walk*
+ unify-terms
+ normalize-term-deep
  ;; Execution
  solve-goal
  explain-goal
