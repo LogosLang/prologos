@@ -1,0 +1,55 @@
+#+TITLE: Standup — 2026-03-19
+#+DATE: 2026-03-19
+
+* Yesterday (since 2026-03-18 standup)
+
+** Track 7 Implementation (COMPLETE — 21 phases, 21 commits)
+- Phases 1-8c implemented in single session
+  - Phase 1: persistent registry network (~51a839e~)
+  - Phase 2: 29 cells migrated to persistent prop-network (~51cb896~)
+  - Phase 3a: per-command cell creation removed (~5c7b8b1~)
+  - Phase 4: 14 scoped cells tagged with assumption IDs (~6d5b718~)
+  - Phase 5: S(-1) retraction stratum (~059b702~)
+  - Phase 6a-g: 7 sub-phases — dead code, test fixtures, read simplification, batch-worker fix (~0b728b2~, ~7fec375~, ~1004984~)
+  - Phase 7a: resolution.rkt + unified dispatcher (~03dc34c~)
+  - Phase 7b: resolution chain purification, enet → enet* (~2c2142e~)
+  - Phase 8a: readiness propagators with threshold-cell composition (~bd8fe71~)
+  - Phase 8b: ready-queue consumption (~4afb2ad~)
+  - Phase 8c: scanner retirement (~d2f6470~)
+  - Phase 9: QTT mult infra confirmed; bridge wiring → Track 8 (~41ef882~)
+  - Phase 10: performance validation + PIR (~97b9cee~, ~803f304~)
+
+** Track 7 PIR + Post-Fix Work
+- PIR comprehensive rewrite: 148 → 380+ lines, all 16 methodology questions (~a2f583a~)
+- S(-1) retraction bug discovered by PIR-driven tests: merge-based write was no-op for monotone cells. Fix: ~net-cell-replace~ (~2b6b576~)
+  - *55 new tests* (39 retraction + 16 readiness propagator)
+  - PIR → tests → bug → fix chain: strongest validation of PIR methodology to date
+- eq? identity preservation: investigation of CHAMP invariant found unnecessary struct allocation. Fix: check ~(eq? pnet* pnet)~ before constructing new elab-network. *Result: 235.2s → 181.2s (-23%)* (~5dd5d68~, ~8dfcb12~)
+- Dailies and PIR updated with learnings throughout (~d13a951~, ~ff4bb88~, ~f4d13af~)
+
+** Track 8 Design Preparation
+- Master roadmap: Track 7 complete, Track 8 prerequisites documented (~cd0822c~, ~38cc952~, ~6816bdc~)
+- Comprehensive propagator infrastructure audit (~4eff690~):
+  - 100+ state items inventoried across 14 files
+  - 8 cross-domain bridges mapped
+  - Cell-tree unification vision sketched
+  - Prioritized migration table (P1/P2/P3/DEFER)
+  - Option C recommended: two-network + domain tags
+- Discussion: unification as native propagator construct (cell-trees, CHAMP structural sharing)
+- Discussion: narrowing system effectiveness (JIT monomorphization, room for improvement)
+- User's Prolog structural unification examples captured in standup notes
+
+** Metrics
+- Test suite: 7209 tests, 374 files, *181.2s* (fastest ever, -23% from Track 6 baseline)
+- Track 7 total: 37 commits (21 implementation + 7 design + 9 post-fix/docs)
+- Session: ~14 hours wall clock
+
+* Today
+
+** Track 8 Design
+- Run measurement microbenchmarks from audit §B (unification profile, CHAMP traversal, callback overhead)
+- Begin Stage 2/3 design document for Track 8
+- Wire ~=~ operator through WS-mode pipeline (Phase 0 prerequisite)
+
+* Blockers
+- None
