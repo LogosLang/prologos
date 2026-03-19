@@ -543,9 +543,13 @@
           (define field-name (read-ident-chars! tok))
           (token 'nil-dot-key (string->symbol (string-append ":" field-name))
                  ln cl ps (+ 2 (string-length field-name)))]
+         [(and (char? next) (char=? next #\=))
+          ;; #= — narrowing operator
+          (tok-read! tok) ; consume =
+          (token 'symbol '|#=| ln cl ps 2)]
          [else
           (error 'prologos-reader
-                 "~a:~a:~a: # must be followed by { (Set literal), . (nil-safe access), or :keyword"
+                 "~a:~a:~a: # must be followed by { (Set literal), . (nil-safe access), #= (narrowing), or :keyword"
                  (tokenizer-source tok) ln (+ cl 1))])]
 
       ;; Tilde — LSeq literal ~[ or approximate literal prefix ~42, ~3/7
@@ -1701,7 +1705,8 @@
         [(null? es) #f]
         [(and (syntax? (car es))
               (symbol? (syntax-e (car es)))
-              (eq? (syntax-e (car es)) '=)
+              (or (eq? (syntax-e (car es)) '=)
+                  (eq? (syntax-e (car es)) '|#=|))
               (> i 0))  ;; not first element
          i]
         [else (loop (cdr es) (+ i 1))])))

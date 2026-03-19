@@ -60,7 +60,7 @@
     Quire32 q32-zero q32-fma q32-to
     Quire64 q64-zero q64-fma q64-to
     ;; Generic arithmetic operators
-    + - * / < <= > >= = mod negate abs
+    + - * / < <= > >= = |#=| mod negate abs
     Symbol symbol-lit
     Keyword Char String
     Map map-empty map-assoc map-get nil-safe-get nil? map-dissoc map-size map-has-key? map-keys map-vals
@@ -2743,6 +2743,22 @@
                ;; No ?-variables: desugar to eq-check (Eq trait, returns Bool)
                (or (check-arity '= args 2 loc)
                    (parse-datum `(eq-check ,(car args) ,(cadr args)))))])]
+
+       ;; (#= lhs rhs) — explicit narrowing operator
+       ;; Always produces narrowing regardless of context.
+       ;; In relational context: treated as a narrowing goal.
+       ;; In functional context: same as = with ?-variables.
+       [(|#=|)
+        (or (check-arity '|#=| args 2 loc)
+            (let*-values
+              ([(qvars cmap) (collect-narrow-vars+constraints
+                              (car args) (cadr args))]
+               [(lhs) (parse-datum (rewrite-constrained-vars (car args)))]
+               [(rhs) (parse-datum (rewrite-constrained-vars (cadr args)))])
+              (if (or (prologos-error? lhs) (prologos-error? rhs))
+                  (or (and (prologos-error? lhs) lhs)
+                      rhs)
+                  (surf-narrow lhs rhs qvars loc cmap))))]
 
        ;; (is var [expr]) — functional eval in relational context
        [(is)

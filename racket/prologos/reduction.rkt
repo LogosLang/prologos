@@ -568,6 +568,17 @@
          (for/hasheq ([qv (in-list query-vars)])
            (values qv (solver-term->prologos-expr (walk* ans qv))))))
      (answers->prologos-expr converted-answers query-vars '())]
+    [(expr-is-goal? goal*)
+     ;; Inline is goal: evaluate expr, bind to var, return single-answer list.
+     (define var-node (expr-is-goal-var goal*))
+     (define is-expr (expr-is-goal-expr goal*))
+     (define var-name
+       (cond [(expr-logic-var? var-node) (strip-mode-prefix (expr-logic-var-name var-node))]
+             [(symbol? var-node) (strip-mode-prefix var-node)]
+             [else (gensym 'is-var)]))
+     (define result (nf is-expr))
+     (define answer (hasheq var-name result))
+     (answers->prologos-expr (list answer) (list var-name) '())]
     ;; If the goal is not yet reduced to a goal-app, return the expression unchanged
     [else (expr-solve goal*)]))
 
@@ -628,6 +639,46 @@
                    (define pval (if val (ground->prologos-expr val) (expr-fvar 'none)))
                    (champ-insert c (equal-hash-code key) key pval))])
            (expr-app (expr-fvar 'some) (expr-champ champ-val))))]
+    [(expr-unify-goal? goal*)
+     ;; Inline = goal for solve-one: unify, return first answer or none.
+     (define lhs (expr-unify-goal-lhs goal*))
+     (define rhs (expr-unify-goal-rhs goal*))
+     (define norm-lhs (normalize-ast-to-solver-term lhs))
+     (define norm-rhs (normalize-ast-to-solver-term rhs))
+     (define all-vars (collect-deep-logic-vars goal*))
+     (define query-vars
+       (let loop ([vs all-vars] [seen (hasheq)] [acc '()])
+         (cond
+           [(null? vs) (reverse acc)]
+           [(hash-ref seen (car vs) #f) (loop (cdr vs) seen acc)]
+           [else (loop (cdr vs) (hash-set seen (car vs) #t) (cons (car vs) acc))])))
+     (define goal-desc-val (goal-desc 'unify (list norm-lhs norm-rhs)))
+     (define store (current-relation-store))
+     (define answers
+       (parameterize ([current-is-eval-fn nf])
+         (solve-single-goal config store goal-desc-val (hasheq) 0)))
+     (if (null? answers)
+         (expr-fvar 'none)
+         (let* ([first-ans (car answers)]
+                [champ-val
+                 (for/fold ([c champ-empty])
+                           ([qv (in-list query-vars)])
+                   (define val (solver-term->prologos-expr (walk* first-ans qv)))
+                   (define key (expr-keyword qv))
+                   (champ-insert c (equal-hash-code key) key val))])
+           (expr-app (expr-fvar 'some) (expr-champ champ-val))))]
+    [(expr-is-goal? goal*)
+     ;; Inline is goal for solve-one: evaluate expr, return (some {:var result}).
+     (define var-node (expr-is-goal-var goal*))
+     (define is-expr (expr-is-goal-expr goal*))
+     (define var-name
+       (cond [(expr-logic-var? var-node) (strip-mode-prefix (expr-logic-var-name var-node))]
+             [(symbol? var-node) (strip-mode-prefix var-node)]
+             [else (gensym 'is-var)]))
+     (define result (nf is-expr))
+     (define key (expr-keyword var-name))
+     (define champ-val (champ-insert champ-empty (equal-hash-code key) key result))
+     (expr-app (expr-fvar 'some) (expr-champ champ-val))]
     [else (expr-solve-one goal*)]))
 
 ;; Run explain for a goal expression, returning a Prologos list of answer maps.
