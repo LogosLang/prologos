@@ -52,64 +52,119 @@ this could be very efficient.
 
 ---
 
-* 1. Language Design: The ~=~ Operator
+* 1. Language Design: The Unification Operator Family
 
-** 1.1 Current State
+** 1.1 Three-Operator Vocabulary — DECIDED
 
-~=~ is reserved for the ~unify~ operation (grammar.ebnf, prologos-syntax.md).
-In relational contexts (~solve~, ~defr~), ~=~ creates a unification goal
-between two terms. Outside relational contexts, ~=~ is not currently wired.
+Prologos uses three operators for equality/matching/constraint, each
+operating at a distinct level:
 
-** 1.2 Semantics by Context
+| Operator | Level | Semantics | Prolog analog |
+|----------+-------+-----------+---------------|
+| ~=~ | Syntactic | Structural term unification | ~=~ |
+| ~is~ | Semantic | Evaluate-then-bind | ~is~ |
+| ~#=~ | Constraint | FL-narrowing (Curry-style) | CLP(FD) ~#=~ |
 
-| Context | Syntax | Semantics | Failure | Evaluation |
-|---------+--------+-----------+---------+------------|
-| *Relational* | ~(= a b)~ inside ~solve~/~defr~ | Logic unification goal | Backtrack (Prolog-style) | Narrow-to-unify (Curry-style) |
-| *Expression* | ~(= pattern expr)~ in body | Structural assertion + bind | Hard type error | Evaluate-then-unify |
-| *Type-level* | ~(= T1 T2)~ in spec/type position | Type equality constraint | Type error | No evaluation (types are values) |
-| *Quoted* | ~(= 'term ?x)~ | Term structure match | Per context | No evaluation (quote prevents) |
+Each operator does exactly one thing. No context-sensitivity within a
+given operator — the operator name tells you the evaluation strategy.
 
-*** 1.2.1 Relational Context (existing, to be validated)
+~#=~ is read as "is constrained to be equal to" (CLP(FD) lineage).
+It is visually distinct from ~=~ — the ~#~ prefix is bold and clearly
+signals "something different is here." ~=.~ was considered but rejected
+as too subtle (the dot is easy to miss in code review).
 
-Inside ~solve~ and ~defr~ blocks, ~=~ is a unification goal. Variables
+*WS reader note*: ~#=~ must be tokenized as a single two-character
+token, not ~#~ followed by ~=~. Confirm no conflict with future
+~#~-prefixed reader macros (currently: ~#t~, ~#f~ from Racket heritage,
+not user-facing in WS mode).
+
+** 1.2 The Quote-Controls-Evaluation Principle — DECIDED
+
+Quote (~'~) is the boundary between value-world and term-world, in
+any context. It is not the enclosing form that determines whether
+subexpressions are evaluated — it is the presence or absence of quote.
+
+| Expression | Relational context | Expression context |
+|------------+--------------------+--------------------|
+| ~(= [f x y] ?r)~ | Term structure (relational default) | Evaluate ~[f x y]~, bind result |
+| ~(= '[f x y] ?r)~ | Term structure (quote redundant) | Term structure (quote prevents eval) |
+
+Relational context (~solve~, ~defr~) is /implicitly structural/ —
+everything is already in term-world. Expression context is /implicitly
+evaluating/ — quote is the opt-in to term-world.
+
+This is consistent with how quote works in the Lisp tradition: it
+suspends evaluation. The ~=~ operator's meaning doesn't change; the
+evaluation strategy of its operands does.
+
+** 1.3 ~=~ Semantics by Context
+
+*** 1.3.1 Relational Context — DECIDED
+
+Inside ~solve~ and ~defr~ blocks, ~=~ is pure structural term
+unification. Everything is a term, nothing evaluates. Variables
 prefixed with ~?~ are logic variables. Failure triggers backtracking.
-FL narrowing drives evaluation as needed.
+
+All terms — constructors, function applications, lambdas — are treated
+as /syntactic structure/ under bare ~=~. A function application
+~[map inc ?xs]~ is a 3-element term with head ~map~, not a call.
 
 #+begin_src prologos
-;; Basic relational unification
+;; Structural unification — constructor
 (solve [?X ?Y]
   (= [pair ?X ?Y] [pair 1 2]))
 ;; ?X = 1, ?Y = 2
+
+;; Structural unification — function name is just a symbol
+(solve [?result]
+  (= [map inc ?xs] ?result))
+;; ?result = '[map inc ?xs]  (the TERM, not evaluated)
+
+;; Use `is` to evaluate in relational context
+(solve [?result]
+  (is ?result [map inc '[1 2 3]]))
+;; ?result = '[2 3 4]  (evaluated)
+
+;; Use `#=` to narrow through function definitions
+(solve [?x]
+  (#= [add ?x 3] 5))
+;; ?x = 2  (narrowed: add must be invertible)
 #+end_src
 
-*** 1.2.2 Expression Context (NEW)
+*** 1.3.2 Expression Context — DECIDED
 
-In expression context, ~=~ is a structural assertion that introduces
-bindings. It evaluates the right-hand side, then unifies structurally
-with the left-hand pattern. Bindings from the pattern scope over the
-continuation (lexical scope, same as ~let~).
+In expression context, ~=~ evaluates both sides, then unifies
+structurally. Bindings scope over the rest of the enclosing block
+(same as ~let~).
 
 #+begin_src prologos
-;; Expression-level destructuring assertion
+;; Evaluate-then-unify — destructuring
 def result := [compute-pair 42]
 (= [pair x y] result)
 ;; x and y now in scope, bound to pair components
 [+ x y]
+
+;; Quote overrides evaluation — structural binding
+(= '[map inc ?xs] ?term)
+;; ?term = '[map inc ?xs]  (the term, not evaluated)
+;; Same behavior as relational context
 #+end_src
 
-*Failure is a hard type error* — if ~result~ is not a pair, or the
-structure doesn't match, it's a static error. Rationale: in expression
-context, ~=~ is an assertion ("these must be equal"), not a question
-("are these equal?"). For speculative matching, use ~match~.
+*Failure is a hard type error* — if the structure doesn't match, it's
+a static error. ~=~ in expression context is an assertion ("these must
+be equal"), not a question. For speculative matching, use ~match~.
 
-*Evaluation strategy*: evaluate-then-unify. Both sides are evaluated
-to values before unification. ~[foo 42] = ?x~ evaluates ~[foo 42]~
-first, then binds ~?x~ to the result.
+*Bidirectional binding* is the unique capability vs ~match~: both sides
+can have unknowns. ~(= [pair ?x 2] [pair 1 ?y])~ binds both ~?x=1~
+and ~?y=2~. Neither ~match~ nor ~def~ can do this. This is
+/experimental/ — bidirectional pattern matching in functional contexts
+is underexplored in the literature. The acceptance file (§3.2) should
+exercise this heavily to determine whether it composes well in practice.
 
-*** 1.2.3 Type-Level Context (NEW)
+*** 1.3.3 Type-Level Context — DECIDED
 
 In type positions (~spec~, angle brackets), ~=~ asserts type equality.
-This is analogous to Haskell's ~~~ constraint or Coq's ~eq~.
+Analogous to Haskell's ~~~ constraint or Coq's ~eq~.
 
 #+begin_src prologos
 ;; Type equality constraint
@@ -117,108 +172,151 @@ spec coerce {A B : Type} (= A B) -> A -> B
 defn coerce [x] x
 #+end_src
 
-*** 1.2.4 Quoted Context
+** 1.4 ~=~ on Constructors vs Functions — DECIDED
 
-Quote (~'~) prevents evaluation. ~(= '[foo 42] ?x)~ binds ~?x~ to the
-term structure ~[foo 42]~, not the result of calling ~foo~. Useful in
-macro contexts and metaprogramming.
+The constructor/function distinction determines ~=~ behavior:
 
-** 1.3 Open Design Questions
+| Head symbol | Under ~=~ | Under ~is~ | Under ~#=~ |
+|-------------+-----------+------------+------------|
+| Constructor | Structural decomposition (cell-tree) | N/A (constructors don't evaluate) | Structural decomposition |
+| Function | Term binding (relational) / evaluate-then-bind (expression) | Evaluate, bind result | Narrow through definition |
+| Trait method | Same as function | Evaluate via dispatch | Narrow via instances |
 
-*** Q1: Binding Scope in Expression Context
+This distinction is compile-time (constructors from ~type~ declarations,
+functions from ~defn~). Cell-tree unification handles constructors
+natively (each argument is a cell). Function applications under bare ~=~
+are opaque terms (relational) or evaluated (expression).
 
-~(= [pair x y] expr)~ introduces ~x~ and ~y~. What's their scope?
+** 1.5 Term Decomposition with ~|~ — DECIDED
 
-*Proposed*: Same as ~let~ — bindings scope over the rest of the enclosing
-block. ~=~ in expression context is sugar for a ~let~ with pattern
-matching on the left. But unlike ~let~, ~=~ can have unknowns on BOTH
-sides — ~(= [pair ?x 2] [pair 1 ?y])~ binds both ~?x=1~ and ~?y=2~.
-
-*Shadowing*: follows standard lexical shadowing. Inner ~=~ bindings
-shadow outer ~def~/~defn~ bindings, per Prologos scoping rules.
-
-*** Q2: Distinguishing FL-Narrowing ~=~ from Expression ~=~
-
-In FL narrowing, ~=~ drives partial evaluation (Curry-style). In
-expression context, ~=~ fully evaluates both sides.
-
-*Option A*: Context determines semantics. Inside ~solve~/~defr~, ~=~
-is narrowing-capable. Outside, it's evaluate-then-unify. Logic
-variables (~?x~) can appear in both contexts but with different
-evaluation strategies.
-
-*Option B*: Separate operators. ~=~ for expression unification,
-~=.~ (or ~narrow~) for FL narrowing. Explicit disambiguation.
-
-*Option C*: Unified semantics with evaluation annotation. ~=~ always
-unifies. ~[eval expr]~ or ~#[expr]~ forces evaluation before unification.
-Without annotation, ~=~ treats function application as term structure
-(narrowing-capable). With annotation, it evaluates first.
-
-*Discussion*: Option A is simplest but relies on context to disambiguate,
-which may confuse users. Option B is explicit but adds syntax. Option C
-is most general but the annotation syntax adds cognitive load.
-
-*Leaning*: Option A with a clear rule — if you're inside a relational
-context (~solve~, ~defr~, ~defr~ body), ~=~ narrows. Everywhere else,
-it evaluates. This matches user intent: relational blocks are where you
-do logic programming; expression blocks are where you do functional
-programming.
-
-*** Q3: ~=~ on Functions
-
-What does ~(= [foo 42] ?x)~ mean?
-
-- In expression context (Option A): evaluate ~[foo 42]~, bind result to ~?x~.
-- In relational context: ~[foo 42]~ is a term. If ~foo~ is a defined
-  function, narrowing evaluates it as needed. If ~foo~ is a constructor,
-  it's structural.
-
-Distinction between constructor application and function application is
-important. Constructors build structure; functions compute values.
-PUnify's cell-tree unification handles constructors naturally (each
-constructor argument is a cell). Function calls require evaluation
-before unification (or narrowing during unification).
-
-*** Q4: Multi-Way Constraints
-
-~=~ can constrain multiple variables simultaneously:
+Application terms can be decomposed using the ~|~ (head/rest) separator
+inside quoted forms. This is the same mechanism as list destructuring
+with ~'[?head | ?tail]~, operating on application structure:
 
 #+begin_src prologos
+;; List destructuring (existing design)
+(= '[1 2 3] '[?h | ?t])           ;; ?h = 1, ?t = '[2 3]
+
+;; Application term destructuring (same mechanism)
+(= '[map inc ?xs] '[?f | ?args])  ;; ?f = map, ?args = '[inc ?xs]
+
+;; Deeper decomposition
+(= '[foo a b c] '[?f ?first | ?rest])  ;; ?f = foo, ?first = a, ?rest = '[b c]
+#+end_src
+
+The quote is required — ~'[?f | ?args]~ decomposes a quoted application
+term. Without quote, ~[?f | ?args]~ would be interpreted as function
+application (calling ~?f~). This follows the quote-controls-evaluation
+principle: quote means "I'm working with term structure."
+
+This subsumes Prolog's ~=..~ (univ) operator. Where Prolog needs a
+separate built-in (~foo(a,b) =.. [foo, a, b]~), Prologos handles it
+through regular ~=~ with quoted term patterns.
+
+*Design note*: ~|~ in this position means head/rest (same connotation
+as list ~[H|T]~ in Prolog/Erlang). The three uses of ~|~ in Prologos
+are syntactically disjoint: union types (~<Int | String>~), multi-arity
+clauses (~defn foo | pat -> body~), and head/rest in quoted forms
+(~'[?h | ?t]~).
+
+** 1.6 Multi-Way Constraints — DECIDED
+
+Under PUnify, multiple ~=~ constraints sharing variables propagate
+information in parallel through the cell-tree. The fixpoint solver
+runs all constraints to quiescence — sequential vs parallel ordering
+is irrelevant when the data structure (shared cells) handles it.
+
+#+begin_src prologos
+;; Shared variables propagate through cell-tree
 (= [triple ?a ?b ?c] [triple [f ?x] [g ?x ?y] [h ?y]])
 (= [triple ?a ?b ?c] [triple [f 1]  [g 1 2]   [h ?z]])
+;; Cell sharing: ?x is the SAME cell in [f ?x] and [g ?x ?y]
+;; Solving ?x=1 from equation 2 propagates to equation 1 automatically
 ;; Result: ?a=[f 1], ?b=[g 1 2], ?c=[h 2], ?x=1, ?y=2, ?z=2
 #+end_src
 
-This is the Prolog "non-trivial propagation" pattern. The cell-tree
-design handles this naturally: shared metas (~?x~ appears in both
-~[f ?x]~ and ~[g ?x ?y]~) are the same cell, so solving ~?x=1~ from
-the second equation propagates to the first.
+In both relational and expression context, PUnify's cell-sharing means
+information flows the instant it's available. No special sequencing logic.
 
-*Design question*: In expression context, how do multiple ~=~ assertions
-interact? Are they sequentially evaluated (each ~=~ constrains further),
-or simultaneously (all constraints solved together)?
+** 1.7 Error Reporting as Provenance Collection — DECIDED
 
-*Proposed*: Sequential in expression context (each ~=~ triggers
-immediate propagation). Simultaneous in relational context (all goals
-collected, then solved). This matches the user's mental model: expression
-code is imperative/sequential; relational code is declarative/simultaneous.
-
-*** Q5: Failure Detection and Error Quality
-
-When ~=~ fails in expression context, the error should be actionable:
+In the propagator world, contradictions are data, not exceptions.
+When ~=~ fails (structural mismatch), the system does not throw
+immediately. Instead, it records the contradiction with full cell
+provenance (which constraint wrote what, from which source location)
+and continues collecting. All contradictions are surfaced together:
 
 #+begin_src
-Type error: structural unification failed
-  Left:  [pair Int String]
-  Right: [pair Int Bool]
-  Mismatch at position 2: String ≠ Bool
-  Source: line 42, column 3
+Type error: contradictory constraints
+  Constraint 1 (line 5):  ?x = Int    (from: (= [pair ?x Bool] ...))
+  Constraint 2 (line 8):  ?x = String (from: (= [pair ?x String] ...))
+  Cell: meta-42 at position [0] in pair
 #+end_src
 
-The cell-tree design provides position information naturally — the
-contradiction occurs at a specific cell in the tree. The challenge is
-mapping cell positions back to source locations.
+This is strictly better than sequential error reporting — the user
+sees the full conflict, not just "expected X, got Y" from whichever
+constraint fired second. If a sequencing-dependent error surfaces,
+that signals an architectural unsoundness in the prop-network design,
+which is valuable diagnostic information (but not a user-facing concern).
+
+** 1.8 Binding Scope — DECIDED
+
+~(= [pair x y] expr)~ introduces ~x~ and ~y~ scoping over the rest
+of the enclosing block (same as ~let~). Follows standard lexical
+shadowing. Unlike ~let~, ~=~ can have unknowns on BOTH sides —
+~(= [pair ?x 2] [pair 1 ?y])~ binds both ~?x=1~ and ~?y=2~.
+
+** 1.9 Open Design Questions
+
+*** Q1: Dynamic Relations — OPEN (leaning no)
+
+Prolog's ~assert~/~retract~ for runtime clause modification does not
+map naturally to Prologos. The functional-logic approach is
+data-as-arguments: relations query data structures, not mutable
+global clause databases.
+
+#+begin_src prologos
+;; Instead of assert(parent(tom, bob)):
+def parents := '{[pair "tom" "bob"] [pair "tom" "liz"]}
+
+defr ancestor [?x ?y ?facts]
+  | (member [pair ?x ?y] ?facts)
+  | (member [pair ?x ?z] ?facts) (ancestor ?z ?y ?facts)
+#+end_src
+
+This is more functional, compositional, and testable. Different fact
+databases for different queries, no global mutable state.
+
+Current leaning: do not support Prolog-style dynamic predicates.
+Revisit if a compelling use case emerges that data-as-arguments
+cannot serve.
+
+*** Q2: Source Mapping and Cell Provenance — OPEN
+
+Every cell write needs source location provenance for error reporting
+and self-hosting. Two options:
+
+- *Per-node annotation*: each cell-tree node carries its source location.
+  Simpler, but makes cells larger.
+- *Separate provenance map*: ~cell-id → source-location~ in a side table.
+  Leaner cells, but adds indirection.
+
+Tension: self-hosting story wants rich per-node provenance; performance
+story wants lean cells. Needs measurement (cell count × annotation cost
+vs map lookup cost). Deferred to deeper exploration.
+
+*** Q3: ~=~ in Guard Position — OPEN
+
+Can ~=~ appear in pattern match guards?
+
+#+begin_src prologos
+defn foo
+  | x (= [pair a b] x) -> [+ a b]
+  | x -> 0
+#+end_src
+
+Powerful but adds complexity to the pattern compiler.
+Defer to post-PUnify if needed.
 
 ---
 
