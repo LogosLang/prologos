@@ -1052,3 +1052,62 @@ This research informs the distributed/concurrent runtime design and the LSP inte
 - Source: `2026-03-18_TRACK7_PERSISTENT_CELLS_STRATIFIED_RETRACTION.md` §2.6, §13 Q6
 - Blocked on: Track 7 implementation (establishes the foundation taxonomy)
 - Added: 2026-03-18
+
+---
+
+## Relational/Unification — PUnify Surface Gaps
+
+Discovered during PUnify Phase 0a acceptance testing (2026-03-19). These are
+deeper issues that prevent certain composition points from working. Each item
+is commented out in `examples/2026-03-19-punify-acceptance.prologos`.
+
+### Module-path (`::`) resolution in defr clauses
+- `str::concat` (and likely other `ns::fn` references) unbound inside `defr` clause bodies when used in `is` goals
+- Root cause: `::` module-path lookup doesn't resolve in the relational elaboration context — the relational fallback path in `elaborate-var` doesn't search module registries
+- Affects: `is` goals in `defr` that call module-qualified functions
+- Workaround: use prelude-exported names (e.g., `concat` if available) instead of `ns::fn` paths
+- Source: acceptance file §H4, §K2
+- Added: 2026-03-19
+
+### solve-one type inference in defn body
+- `solve-one` used inside a `defn` body (functional context) returns `_` type, causing downstream type inference failures
+- `solve` works in the same position — only `solve-one` affected
+- Root cause: `solve-one` returns `<Option Map>` but the elaborator doesn't propagate this type through `def` binding inference
+- Workaround: use `solve` and take the first result, or use explicit type annotation
+- Source: acceptance file §J (commented tests)
+- Added: 2026-03-19
+
+### `=` with prelude constructors in defr body
+- Using prelude constructors (some/none) in `=` unification goals inside `defr` clause bodies fails — constructor names collide or don't resolve correctly in the solver's flat representation
+- Root cause: prelude constructor names need the same keyword-based ground representation in the solver that goal-app names now use
+- Workaround: works in standalone `solve` blocks (§L passes), fails only inside `defr`
+- Source: acceptance file §K (commented tests)
+- Added: 2026-03-19
+
+### Parameterized types in data constructor arguments
+- `data Box A := box [List A]` fails with not-a-type-error — the type checker doesn't recognize `[List A]` as a valid type when `A` is a type parameter in constructor position
+- Root cause: constructor argument elaboration doesn't fully expand parameterized type applications
+- Workaround: use a simple type parameter (`data Box A := box A`) and instantiate at use site
+- Source: acceptance file §G (Graph type simplified)
+- Added: 2026-03-19
+
+### `eq?` trait method not in prelude scope
+- The `Eq` trait's `eq?` method isn't directly callable from prelude — only `int-eq`, `str-eq`, etc. are available
+- Root cause: trait method dispatch for `eq?` requires explicit trait resolution that isn't wired through the prelude auto-import
+- Workaround: use concrete equality functions (`int-eq`, `str-eq`, `nat-eq`)
+- Source: acceptance file §M (stress tests)
+- Added: 2026-03-19
+
+### head + match inference failure
+- `[head '[1 2 3]]` followed by pattern match on the result fails type inference — `head` returns `<Option A>` but the polymorphic `A` doesn't unify with the list element type in the match context
+- Pre-existing issue, not introduced by PUnify
+- Workaround: explicit type annotation on the `head` call result
+- Source: acceptance file §G6
+- Added: 2026-03-19
+
+### Narrowing limited to constructor-based patterns
+- Functions defined with Int literal patterns (e.g., `defn classify | 0 -> "zero" | _ -> "nonzero"`) compile to `boolrec+int-eq` form, which `extract-definitional-tree` cannot invert for narrowing
+- This is a design limitation: narrowing via definitional trees requires constructor-based pattern matching (Bool, Nat, user-defined ADTs)
+- Not a bug — but should be documented as a known limitation in narrowing documentation
+- Source: acceptance file §I (narrowing tests use Bool/Nat patterns only)
+- Added: 2026-03-19
