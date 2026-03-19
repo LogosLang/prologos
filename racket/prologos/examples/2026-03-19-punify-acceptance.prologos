@@ -280,6 +280,35 @@ solve (link ?from ?to)
 ;; Expected: all 3 link facts
 
 
+;; --- B6: defr with | clause-form (pattern-matching clauses) ---
+;; BUG (DEFERRED): defr with | pattern -> body form silently fails
+;; to register the relation. solve then errors with "Unknown relation".
+;; This is a WS wiring gap — the | clause form works for defn but
+;; not for defr. Exercising here to catch when it gets fixed.
+
+;; defr classify-sign [?n ?label]
+;;   | 0 ?label -> (= ?label "zero")
+;;   | ?n ?label -> (guard [int-lt 0 n]) &> (= ?label "positive")
+;;   | ?n ?label -> (guard [int-lt n 0]) &> (= ?label "negative")
+
+;; solve (classify-sign 5 ?label)
+;; Expected: [{:n_ 5, :label "positive"}]
+
+;; solve (classify-sign 0 ?label)
+;; Expected: [{:n_ 0, :label "zero"}]
+
+;; defr rgb [?color ?r ?g ?b]
+;;   | "red"   ?r ?g ?b -> (= ?r 255) &> (= ?g 0) &> (= ?b 0)
+;;   | "green" ?r ?g ?b -> (= ?r 0) &> (= ?g 255) &> (= ?b 0)
+;;   | "blue"  ?r ?g ?b -> (= ?r 0) &> (= ?g 0) &> (= ?b 255)
+
+;; solve (rgb "red" ?r ?g ?b)
+;; Expected: [{:color_ "red", :r 255, :g 0, :b 0}]
+
+;; solve (rgb ?color ?r ?g ?b)
+;; Expected: all three color entries
+
+
 ;; ========================================================================
 ;; SECTION C: Three-Operator Vocabulary — ASPIRATIONAL
 ;; ========================================================================
