@@ -1,0 +1,582 @@
+#+TITLE: PUnify: Structural Unification as Propagators — Design Document
+#+SUBTITLE: Cell-Tree Unification for Prologos
+#+AUTHOR: The Prologos Project
+#+DATE: 2026-03-19
+#+STATUS: DESIGN (Stage 1 — exploration and language design)
+#+OPTIONS: toc:3
+
+* Summary
+
+PUnify replaces the current algorithmic unification (pattern-matching
+fire function inside bidirectional propagators) with /structural
+unification/: types are represented as trees of cells from the start,
+and unification is connecting two cell-trees at their roots, letting
+propagation flow through CHAMP-backed persistent data structures.
+
+This is an independent track from Track 8 (imperative state migration).
+PUnify depends on Track 7's infrastructure (persistent cells, S(-1)
+retraction, pure resolution chain) but not on Track 8's other work.
+
+The key bet: CHAMP structural sharing means comparing two cell-trees
+that share common subtrees is O(diff), not O(size). For real programs
+where most unifications involve types that share significant structure,
+this could be very efficient.
+
+* Progress Tracker
+
+| Phase | Description | Status | Notes |
+|-------+-------------+--------+-------|
+| D.1 | Design document (this) | 🔄 | Language design + architecture |
+| D.2 | External critique | ⬜ | |
+| D.3 | Self-critique | ⬜ | |
+| 0a | ~=~ operator: full pipeline wiring | ⬜ | Reader → parser → elaborator → type checker |
+| 0b | Acceptance file (relational, expression, type-level, antagonist) | ⬜ | Modeled on Prolog examples + Prologos-native patterns |
+| 0c | Microbenchmark baseline (current unification) | ⬜ | Unification profile + decomposition metrics |
+| 1 | Cell-tree infrastructure | ⬜ | cell-tree struct, allocation, traversal |
+| 2 | Cell-tree unification core | ⬜ | connect, propagate, contradiction |
+| 3 | Occurs check as cycle detection | ⬜ | Network topology check |
+| 4 | Migration of decompose-pi/sigma/app | ⬜ | Lazy decomposition → cell-tree |
+| 5 | Zonk simplification | ⬜ | Tree traversal replaces recursive zonk |
+| 6 | ground-expr? as fan-in readiness | ⬜ | |
+| 7 | Error message quality | ⬜ | Cell-tree → source location provenance |
+| 8 | Performance comparison | ⬜ | A/B: current vs cell-tree on acceptance + antagonist |
+| 9 | Performance validation + PIR | ⬜ | |
+
+* Non-Goals
+
+- Track 8 imperative state migration (meta-info TMS, callback elimination)
+- Layered scheduler (~run-to-layered-quiescence~)
+- Reduction as propagators
+- GDE / minimal diagnoses (Track 9)
+- LSP integration (Track 10)
+
+---
+
+* 1. Language Design: The ~=~ Operator
+
+** 1.1 Current State
+
+~=~ is reserved for the ~unify~ operation (grammar.ebnf, prologos-syntax.md).
+In relational contexts (~solve~, ~defr~), ~=~ creates a unification goal
+between two terms. Outside relational contexts, ~=~ is not currently wired.
+
+** 1.2 Semantics by Context
+
+| Context | Syntax | Semantics | Failure | Evaluation |
+|---------+--------+-----------+---------+------------|
+| *Relational* | ~(= a b)~ inside ~solve~/~defr~ | Logic unification goal | Backtrack (Prolog-style) | Narrow-to-unify (Curry-style) |
+| *Expression* | ~(= pattern expr)~ in body | Structural assertion + bind | Hard type error | Evaluate-then-unify |
+| *Type-level* | ~(= T1 T2)~ in spec/type position | Type equality constraint | Type error | No evaluation (types are values) |
+| *Quoted* | ~(= 'term ?x)~ | Term structure match | Per context | No evaluation (quote prevents) |
+
+*** 1.2.1 Relational Context (existing, to be validated)
+
+Inside ~solve~ and ~defr~ blocks, ~=~ is a unification goal. Variables
+prefixed with ~?~ are logic variables. Failure triggers backtracking.
+FL narrowing drives evaluation as needed.
+
+#+begin_src prologos
+;; Basic relational unification
+(solve [?X ?Y]
+  (= [pair ?X ?Y] [pair 1 2]))
+;; ?X = 1, ?Y = 2
+#+end_src
+
+*** 1.2.2 Expression Context (NEW)
+
+In expression context, ~=~ is a structural assertion that introduces
+bindings. It evaluates the right-hand side, then unifies structurally
+with the left-hand pattern. Bindings from the pattern scope over the
+continuation (lexical scope, same as ~let~).
+
+#+begin_src prologos
+;; Expression-level destructuring assertion
+def result := [compute-pair 42]
+(= [pair x y] result)
+;; x and y now in scope, bound to pair components
+[+ x y]
+#+end_src
+
+*Failure is a hard type error* — if ~result~ is not a pair, or the
+structure doesn't match, it's a static error. Rationale: in expression
+context, ~=~ is an assertion ("these must be equal"), not a question
+("are these equal?"). For speculative matching, use ~match~.
+
+*Evaluation strategy*: evaluate-then-unify. Both sides are evaluated
+to values before unification. ~[foo 42] = ?x~ evaluates ~[foo 42]~
+first, then binds ~?x~ to the result.
+
+*** 1.2.3 Type-Level Context (NEW)
+
+In type positions (~spec~, angle brackets), ~=~ asserts type equality.
+This is analogous to Haskell's ~~~ constraint or Coq's ~eq~.
+
+#+begin_src prologos
+;; Type equality constraint
+spec coerce {A B : Type} (= A B) -> A -> B
+defn coerce [x] x
+#+end_src
+
+*** 1.2.4 Quoted Context
+
+Quote (~'~) prevents evaluation. ~(= '[foo 42] ?x)~ binds ~?x~ to the
+term structure ~[foo 42]~, not the result of calling ~foo~. Useful in
+macro contexts and metaprogramming.
+
+** 1.3 Open Design Questions
+
+*** Q1: Binding Scope in Expression Context
+
+~(= [pair x y] expr)~ introduces ~x~ and ~y~. What's their scope?
+
+*Proposed*: Same as ~let~ — bindings scope over the rest of the enclosing
+block. ~=~ in expression context is sugar for a ~let~ with pattern
+matching on the left. But unlike ~let~, ~=~ can have unknowns on BOTH
+sides — ~(= [pair ?x 2] [pair 1 ?y])~ binds both ~?x=1~ and ~?y=2~.
+
+*Shadowing*: follows standard lexical shadowing. Inner ~=~ bindings
+shadow outer ~def~/~defn~ bindings, per Prologos scoping rules.
+
+*** Q2: Distinguishing FL-Narrowing ~=~ from Expression ~=~
+
+In FL narrowing, ~=~ drives partial evaluation (Curry-style). In
+expression context, ~=~ fully evaluates both sides.
+
+*Option A*: Context determines semantics. Inside ~solve~/~defr~, ~=~
+is narrowing-capable. Outside, it's evaluate-then-unify. Logic
+variables (~?x~) can appear in both contexts but with different
+evaluation strategies.
+
+*Option B*: Separate operators. ~=~ for expression unification,
+~=.~ (or ~narrow~) for FL narrowing. Explicit disambiguation.
+
+*Option C*: Unified semantics with evaluation annotation. ~=~ always
+unifies. ~[eval expr]~ or ~#[expr]~ forces evaluation before unification.
+Without annotation, ~=~ treats function application as term structure
+(narrowing-capable). With annotation, it evaluates first.
+
+*Discussion*: Option A is simplest but relies on context to disambiguate,
+which may confuse users. Option B is explicit but adds syntax. Option C
+is most general but the annotation syntax adds cognitive load.
+
+*Leaning*: Option A with a clear rule — if you're inside a relational
+context (~solve~, ~defr~, ~defr~ body), ~=~ narrows. Everywhere else,
+it evaluates. This matches user intent: relational blocks are where you
+do logic programming; expression blocks are where you do functional
+programming.
+
+*** Q3: ~=~ on Functions
+
+What does ~(= [foo 42] ?x)~ mean?
+
+- In expression context (Option A): evaluate ~[foo 42]~, bind result to ~?x~.
+- In relational context: ~[foo 42]~ is a term. If ~foo~ is a defined
+  function, narrowing evaluates it as needed. If ~foo~ is a constructor,
+  it's structural.
+
+Distinction between constructor application and function application is
+important. Constructors build structure; functions compute values.
+PUnify's cell-tree unification handles constructors naturally (each
+constructor argument is a cell). Function calls require evaluation
+before unification (or narrowing during unification).
+
+*** Q4: Multi-Way Constraints
+
+~=~ can constrain multiple variables simultaneously:
+
+#+begin_src prologos
+(= [triple ?a ?b ?c] [triple [f ?x] [g ?x ?y] [h ?y]])
+(= [triple ?a ?b ?c] [triple [f 1]  [g 1 2]   [h ?z]])
+;; Result: ?a=[f 1], ?b=[g 1 2], ?c=[h 2], ?x=1, ?y=2, ?z=2
+#+end_src
+
+This is the Prolog "non-trivial propagation" pattern. The cell-tree
+design handles this naturally: shared metas (~?x~ appears in both
+~[f ?x]~ and ~[g ?x ?y]~) are the same cell, so solving ~?x=1~ from
+the second equation propagates to the first.
+
+*Design question*: In expression context, how do multiple ~=~ assertions
+interact? Are they sequentially evaluated (each ~=~ constrains further),
+or simultaneously (all constraints solved together)?
+
+*Proposed*: Sequential in expression context (each ~=~ triggers
+immediate propagation). Simultaneous in relational context (all goals
+collected, then solved). This matches the user's mental model: expression
+code is imperative/sequential; relational code is declarative/simultaneous.
+
+*** Q5: Failure Detection and Error Quality
+
+When ~=~ fails in expression context, the error should be actionable:
+
+#+begin_src
+Type error: structural unification failed
+  Left:  [pair Int String]
+  Right: [pair Int Bool]
+  Mismatch at position 2: String ≠ Bool
+  Source: line 42, column 3
+#+end_src
+
+The cell-tree design provides position information naturally — the
+contradiction occurs at a specific cell in the tree. The challenge is
+mapping cell positions back to source locations.
+
+---
+
+* 2. Architecture: Cell-Tree Unification
+
+** 2.1 Current Architecture
+
+1. ~elab-add-unify-constraint~ creates a bidirectional propagator between two cells
+2. The propagator's fire function calls the unification algorithm (pattern matching, structural decomposition)
+3. For compound types (Pi, Sigma, App), ~decompose-pi/sigma/app~ creates sub-cells and wires unify propagators between corresponding sub-cells
+4. 123 call sites to ~unify*~ across 11 files
+
+The decomposition already creates cell trees lazily. PUnify makes the
+tree primary rather than emergent.
+
+** 2.2 Cell-Tree Representation
+
+A cell-tree is a persistent tree of cells where:
+- Each node is a cell (may be bot, ground value, or constructor-tagged with children)
+- The tree unfolds lazily as structure is learned
+- CHAMP structural sharing across trees means shared subtrees are pointer-equal
+
+#+begin_src
+cell-tree for Pi(x : Nat, Vec Nat x):
+  root: cell [tag: Pi]
+  children:
+    [0] domain: cell [value: Nat]     ;; ground leaf
+    [1] mult:   cell [value: m1]      ;; ground leaf
+    [2] codom:  cell [tag: Vec]       ;; subtree
+      children:
+        [0] elem: cell [value: Nat]
+        [1] len:  cell [value: x]     ;; variable (meta cell)
+#+end_src
+
+A fresh meta ~?A~ starts as a single cell (tag unknown, no children).
+When ~?A~ is unified with ~Pi(Nat, Vec Nat x)~, the cell learns its
+tag (Pi) and its children unfold.
+
+** 2.3 Unification as Tree Connection
+
+Unifying two cell-trees:
+1. Read both root cells
+2. If one is bot (unknown meta): write the other's value to it
+3. If both have the same constructor tag: recursively unify children
+4. If constructor tags differ: contradiction (type error)
+5. If one has a tag and the other is bot: write tag to bot, unfold children, recursively unify
+
+This is the same algorithm as current unification, but the data
+structure IS the algorithm. No separate fire function with pattern
+matching — the tree structure guides decomposition naturally.
+
+** 2.4 Shared Metas as Wires
+
+The Prolog "wires" pattern:
+#+begin_src
+?- f(A, g(A, B), h(B, C)) = f(1, g(X, 2), h(Y, 3))
+#+end_src
+
+In cell-tree form:
+#+begin_src
+Tree 1:                    Tree 2:
+  f                          f
+  ├── A-cell ─────────────── 1-cell        (A = 1)
+  ├── g                      g
+  │   ├── A-cell ─────────── X-cell        (A = X)
+  │   └── B-cell ─────────── 2-cell        (B = 2)
+  └── h                      h
+      ├── B-cell ─────────── Y-cell        (B = Y)
+      └── C-cell ─────────── 3-cell        (C = 3)
+#+end_src
+
+The critical insight: A-cell appears TWICE in Tree 1 (positions [0] and
+[1][0]). It's the SAME cell — not a copy. When A-cell is solved to 1
+(from position [0]), the solution is immediately visible at position
+[1][0], which then propagates to X-cell. This is constraint propagation
+through shared variables — and it happens automatically through cell
+read/write, no special wiring needed.
+
+** 2.5 Occurs Check as Cycle Detection
+
+Current: recursive AST traversal checking if a meta-id appears in an expression.
+
+Cell-tree: occurs check becomes cycle detection in the cell graph.
+~(= ?A [f ?A])~ would attempt to make A-cell a child of itself (through
+the f-node). This creates a cycle: ~A-cell → f-node → A-cell~.
+
+Detection: when connecting cell-trees, check whether the target cell is
+an ancestor of the source in the tree. If so, occurs check fails.
+
+*Design question*: How expensive is ancestry checking? For shallow trees
+(depth 2-3, typical for most types), it's trivial. For deep trees
+(the antagonist patterns), it could be O(depth). Worth measuring.
+
+** 2.6 Zonk Simplification
+
+Current: 3 zonk functions (intermediate, final, level) that recursively
+traverse expressions, substituting solved metas.
+
+Cell-tree: zonking is tree traversal — read each cell's value. If the
+cell has a constructor tag and children, recursively read children. If
+the cell is ground, return the value. If the cell is bot (unsolved meta),
+return the meta placeholder (intermediate zonk) or default (final zonk).
+
+The distinction between intermediate and final zonk becomes a cell-read
+strategy:
+- *Intermediate*: read cell, return bot as-is (preserve unsolved metas)
+- *Final*: read cell, default bot to lzero/mw (apply defaults)
+
+This may simplify the 3 zonk variants into 1 parameterized traversal.
+
+** 2.7 ground-expr? as Fan-In Readiness
+
+Current: recursive AST traversal checking for unsolved metas.
+
+Cell-tree: ~ground-expr?~ is "are all cells in this tree non-bot?"
+This is exactly the fan-in readiness check from Track 7 Phase 8a.
+A readiness propagator watching all cells in the tree fires when
+the tree is fully ground.
+
+This means ~ground-expr?~ goes from an O(n) traversal per call to
+an O(1) cell read (the readiness cell). For hot-path functions that
+call ~ground-expr?~ thousands of times per command, this could be
+a significant win.
+
+** 2.8 Speculation and Cell-Trees
+
+TMS branching operates on individual cells. Cell-tree unification
+creates trees of cells. When a speculation branch creates new cells
+(tree unfolding under an assumption), those cells are tagged with the
+assumption.
+
+On retraction:
+- TMS retraction handles value cells (meta solutions)
+- S(-1) retraction handles scoped cells (constraints, wakeups)
+- Cell-tree nodes created under speculation need either TMS or S(-1)
+
+*Proposed*: Cell-tree nodes are value cells (they hold lattice values —
+bot, constructor tags, ground values). TMS retraction handles them
+naturally. No special cell-tree rollback needed — the same mechanism
+that handles meta cells handles tree cells.
+
+---
+
+* 3. Acceptance File Design
+
+** 3.1 Section A: Relational ~=~ (Prolog-Inspired)
+
+Translated from Prolog examples. Tests constraint propagation through
+shared variables in ~solve~ blocks.
+
+Patterns:
+- Transitive chains (A=B, B=C → A=C)
+- Diamond (two paths must agree)
+- Circular (A=B, B=A with additional constraints)
+- Structure copying (shared variables mean solving one side solves other)
+- Failure detection (incompatible constraints → contradiction)
+
+** 3.2 Section B: Expression ~=~ (Destructuring)
+
+Tests ~=~ in expression context as structural assertion + binding.
+
+Patterns:
+- Simple destructuring: ~(= [pair x y] [make-pair 1 2])~
+- Nested destructuring: ~(= [triple [pair a b] c [pair d e]] expr)~
+- Bidirectional: ~(= [pair ?x 2] [pair 1 ?y])~ → ?x=1, ?y=2
+- Failure: ~(= [pair x y] [triple 1 2 3])~ → type error
+
+** 3.3 Section C: Type-Level ~=~
+
+Tests type equality constraints in specs.
+
+Patterns:
+- Simple equality: ~(= A B)~ in constraint position
+- Computed equality: ~(= [List A] [List B])~ → A = B
+- With dependent types: Pi type decomposition
+
+** 3.4 Section D: Quoted / Structural
+
+Tests term-level unification (quoted forms).
+
+** 3.5 Section E: Antagonist Patterns
+
+Designed to stress both unification approaches:
+
+- *Deep nesting* (10+ levels): types nested 10+ constructors deep
+- *Wide fan-out* (50+ shared variables): one meta appears in 50+ positions
+- *Diamond constraints* (convergence): multiple paths to same variable
+- *Cyclic attempt* (occurs check): ~?A = [f ?A]~ and deep variants
+- *Cascading chains* (50+ variables): A=B, B=C, ..., Y=Z, Z=1 → all = 1
+- *Contradiction propagation*: incompatible constraints through long chains
+- *Mixed depth*: some branches shallow (ground), some deep (nested metas)
+
+Performance targets: PUnify should be ≤ 1.5× current on simple patterns
+and potentially faster on deep structural patterns (where CHAMP sharing
+pays off).
+
+---
+
+* 4. Microbenchmark Plan
+
+** 4.1 Current Unification Profile (Phase 0c)
+
+Instrument ~unify*~ and ~elab-add-unify-constraint~ to capture:
+- Call count per command
+- Classification: meta-vs-ground, meta-vs-meta, compound-vs-compound
+- Decomposition depth (how many levels of decompose-pi/sigma/app)
+- Cell allocations per unification
+- Wall time in fire function (algorithmic logic vs cell operations)
+
+** 4.2 A/B Comparison (Phase 8)
+
+Run both implementations on the acceptance file:
+- Same programs, same expected results
+- Compare: total propagator firings, cell allocations, wall time
+- Statistical rigor: use ~bench-ab.rkt~ with 10+ runs, Mann-Whitney U
+
+** 4.3 Micro-Benchmarks (Phase 8)
+
+Use ~bench-micro.rkt~ for function-level comparison:
+- Single unification: meta-vs-ground, 1 level, 3 levels, 5 levels
+- Occurs check: shallow (depth 1) vs deep (depth 10)
+- ground-expr? on ground tree vs partially-solved tree
+- Zonk traversal: current recursive vs cell-tree traversal
+
+---
+
+* 5. Migration Path
+
+** 5.1 What Changes
+
+| Component | Current | PUnify | Migration |
+|-----------+---------+--------+-----------|
+| Type representation | expr structs (AST) | Cell-trees (prop-network) | Gradual — cell-trees coexist with AST |
+| Unification | ~make-unify-propagator~ fire function | Tree connection + propagation | Replace fire function internals |
+| Decomposition | ~decompose-pi/sigma/app~ (lazy, on-demand) | Tree unfolding (lazy, on cell write) | Migrate decompose functions |
+| Occurs check | Recursive AST traversal | Cycle detection in cell graph | New implementation |
+| Zonk | 3 recursive functions | Tree traversal (read cells) | Simplify to 1 parameterized traversal |
+| ground-expr? | Recursive AST traversal | Fan-in readiness cell | New implementation + Track 7 infrastructure |
+| Error messages | AST-based mismatch reporting | Cell-position-based reporting | New provenance wiring |
+
+** 5.2 What Stays
+
+- ~elab-add-unify-constraint~ API (callers don't change)
+- TMS/S(-1) retraction (handles cell-tree nodes like any other cell)
+- Stratified resolution (constraints, traits, hasmethods — unchanged)
+- Persistent registry network (unchanged)
+- Pure resolution chain (unchanged — cell-tree is internal to S0)
+
+** 5.3 Coexistence Strategy
+
+During implementation, both approaches coexist:
+- Belt-and-suspenders: run both, compare results
+- Toggle: ~current-use-cell-tree-unify?~ parameter
+- Gradual: migrate one type constructor at a time (Pi first, then Sigma, then App, ...)
+
+---
+
+* 6. Performance Budget
+
+| Metric | Current | Target | Rationale |
+|--------+---------+--------+-----------|
+| Cells per meta | 1 (+ lazy decomposition) | ~3-5 (tree depth) | Cell-tree unfolds on demand |
+| Unify propagators per constraint | 1 (bidirectional) | 1 per tree level | More propagators but simpler fire functions |
+| ground-expr? cost | O(n) traversal | O(1) cell read | Fan-in readiness |
+| Zonk cost | O(n) recursive | O(n) tree traversal | Similar asymptotic, different constant |
+| Occurs check cost | O(n) AST traversal | O(depth) ancestry check | Better for shallow, similar for deep |
+| Suite time | 181.2s | ≤ 200s (≤ 10% regression) | Allow overhead for richer infrastructure |
+
+---
+
+* 7. Risk Analysis
+
+** High risk: Cell allocation overhead
+
+Cell-trees create more cells than current approach. For 50 metas with
+average tree depth 3, that's ~150 cells vs ~50. CHAMP handles this
+(designed for hundreds of cells), but measure.
+
+*Mitigation*: lazy unfolding — only create child cells when structure
+is learned. A meta that's unified with a ground value never unfolds.
+
+** Medium risk: Fire function simplification may not materialize
+
+The current fire function does pattern matching + decomposition.
+Cell-tree's "connect and propagate" still needs constructor tag
+comparison. The simplification may be more conceptual than practical.
+
+*Mitigation*: microbenchmark the fire function overhead before and after.
+
+** Medium risk: Error message quality regression
+
+Current error messages reference AST positions directly. Cell-tree
+errors need cell-to-source mapping. If this mapping is lossy, error
+quality degrades.
+
+*Mitigation*: cell-info metadata (already in elab-network) can carry
+source locations. Extend with tree-position information.
+
+** Low risk: Speculation interaction
+
+Cell-tree nodes are standard value cells. TMS retraction handles them.
+No special machinery needed.
+
+*Mitigation*: the 55 Track 7 post-fix tests for retraction exercise
+the exact mechanisms.
+
+---
+
+* 8. Dependencies and Ordering
+
+** Depends on (all complete)
+
+- Track 7: persistent cells, S(-1) retraction, pure resolution chain
+- Track 7 post-fix: retraction correctness (net-cell-replace), identity preservation
+
+** Does NOT depend on
+
+- Track 8: meta-info TMS, callback elimination, mult/level/session migration
+- Track 9: GDE
+- Track 10: LSP
+
+** Enables
+
+- Track 8: cell-tree unification simplifies the id-map accessibility problem
+  (cell-trees manage their own sub-cells; id-map is less central)
+- Track 9: cell-tree provenance provides natural GDE integration points
+- Track 10: cell-tree observation gives LSP per-position type information
+
+---
+
+* 9. Open Questions
+
+** Q1: Lazy vs Eager Tree Creation — OPEN
+
+Should cell-trees be created eagerly (allocate full tree when type
+structure is known) or lazily (unfold on demand during unification)?
+
+Lazy matches current behavior (decompose-on-demand). Eager enables
+fan-in readiness from the start. Measure the cell allocation cost
+to decide.
+
+** Q2: CHAMP Layout for Cell-Trees — OPEN
+
+Option A: Constructor-tagged n-ary trees (mirrors AST).
+Option B: Path-indexed cells (paths as CHAMP keys).
+
+Option A is more natural. Option B may compose better with CHAMP
+internals. Need microbenchmark data.
+
+** Q3: ~=~ in Guard Position — OPEN
+
+Can ~=~ appear in pattern match guards?
+
+#+begin_src prologos
+defn foo
+  | x (= [pair a b] x) -> [+ a b]
+  | x -> 0
+#+end_src
+
+This is powerful but adds complexity to the pattern compiler.
+Defer to post-PUnify if needed.
