@@ -24,22 +24,35 @@ this could be very efficient.
 
 * Progress Tracker
 
+Two-part implementation (§3). Part 1 = surface wiring + baseline.
+Part 2 = cell-tree architecture (separate session).
+
+** Part 1: Surface Wiring + Baseline
+
 | Phase | Description | Status | Notes |
 |-------+-------------+--------+-------|
-| D.1 | Design document (this) | 🔄 | Language design + architecture |
+| D.1 | Design document (this) | 🔄 | Language design resolved (§1), architecture sketched (§6) |
 | D.2 | External critique | ⬜ | |
 | D.3 | Self-critique | ⬜ | |
-| 0a | ~=~ operator: full pipeline wiring | ⬜ | Reader → parser → elaborator → type checker |
-| 0b | Acceptance file (relational, expression, type-level, antagonist) | ⬜ | Modeled on Prolog examples + Prologos-native patterns |
-| 0c | Microbenchmark baseline (current unification) | ⬜ | Unification profile + decomposition metrics |
+| 0b | Acceptance file | ⬜ | §4: sections A-G, diagnostic-first |
+| 0b.1 | Run acceptance, catalog failures | ⬜ | Failures drive implementation phases |
+| 0a | ~=~ pipeline wiring (driven by failures) | ⬜ | Reader → parser → elaborator → type checker |
+| 0d | Adversarial benchmark | ⬜ | §5: ~benchmarks/comparative/~, scaled-up stress patterns |
+| 0c | Baseline current unification | ⬜ | ~bench-ab.rkt~ on adversarial, 15+ runs |
+
+** Part 2: Cell-Tree Architecture (separate session)
+
+| Phase | Description | Status | Notes |
+|-------+-------------+--------+-------|
+| D.1+ | Architecture design refinement | ⬜ | Informed by Part 1 baseline data |
 | 1 | Cell-tree infrastructure | ⬜ | cell-tree struct, allocation, traversal |
 | 2 | Cell-tree unification core | ⬜ | connect, propagate, contradiction |
 | 3 | Occurs check as cycle detection | ⬜ | Network topology check |
 | 4 | Migration of decompose-pi/sigma/app | ⬜ | Lazy decomposition → cell-tree |
 | 5 | Zonk simplification | ⬜ | Tree traversal replaces recursive zonk |
-| 6 | ground-expr? as fan-in readiness | ⬜ | |
-| 7 | Error message quality | ⬜ | Cell-tree → source location provenance |
-| 8 | Performance comparison | ⬜ | A/B: current vs cell-tree on acceptance + antagonist |
+| 6 | ground-expr? as fan-in readiness | ⬜ | Track 7 Phase 8a infrastructure |
+| 7 | Error message quality | ⬜ | Tier 1 provenance (propagator srcloc) |
+| 8 | Performance comparison | ⬜ | A/B: current vs cell-tree on adversarial |
 | 9 | Performance validation + PIR | ⬜ | |
 
 * Non-Goals
@@ -472,64 +485,228 @@ that handles meta cells handles tree cells.
 
 ---
 
-* 3. Acceptance File Design
+* 3. Two-Part Implementation Strategy
 
-** 3.1 Section A: Relational ~=~ (Prolog-Inspired)
+This track is split into two discrete design/implementation sessions:
 
-Translated from Prolog examples. Tests constraint propagation through
-shared variables in ~solve~ blocks.
+*Part 1: Surface wiring + baseline*
+1. Write acceptance file (Phase 0b — diagnostic instrument)
+2. Run it — catalog passes, failures, errors
+3. Wire/fix ~=~ pipeline based on failures
+4. Write adversarial benchmark (separate file, ~bench-ab.rkt~ compatible)
+5. Baseline current unification performance with statistical rigor
 
-Patterns:
-- Transitive chains (A=B, B=C → A=C)
-- Diamond (two paths must agree)
-- Circular (A=B, B=A with additional constraints)
-- Structure copying (shared variables mean solving one side solves other)
-- Failure detection (incompatible constraints → contradiction)
+*Part 2: Cell-tree architecture* (separate session, after Part 1)
+6. Return to architecture design (§2, §9) informed by baseline data
+7. Implement cell-tree unification (Phases 1-7)
+8. A/B comparison: current vs cell-tree on same adversarial benchmarks
+9. Performance validation + PIR
 
-** 3.2 Section B: Expression ~=~ (Destructuring)
+The same tracking document holds context throughout both parts.
 
-Tests ~=~ in expression context as structural assertion + binding.
+Rationale: the acceptance file is a diagnostic instrument — we WANT it
+to break, because the breaks tell us where to focus. Getting ~=~ fully
+wired and baselined before committing to cell-tree architecture gives
+us concrete data (not just intuition) to design against.
 
-Patterns:
-- Simple destructuring: ~(= [pair x y] [make-pair 1 2])~
-- Nested destructuring: ~(= [triple [pair a b] c [pair d e]] expr)~
-- Bidirectional: ~(= [pair ?x 2] [pair 1 ?y])~ → ?x=1, ?y=2
-- Failure: ~(= [pair x y] [triple 1 2 3])~ → type error
+* 4. Acceptance File Design
 
-** 3.3 Section C: Type-Level ~=~
+Location: ~racket/prologos/examples/2026-03-19-punify-acceptance.prologos~
 
-Tests type equality constraints in specs.
+The acceptance file serves three purposes:
+1. Validate ~=~ wiring through the full pipeline (canary)
+2. Exercise resolved language design decisions (aspirational sections)
+3. Broad regression net for existing features
 
-Patterns:
-- Simple equality: ~(= A B)~ in constraint position
-- Computed equality: ~(= [List A] [List B])~ → A = B
-- With dependent types: Pi type decomposition
+Conventions (same as prior tracks):
+- Uncommented = must pass today; regression if broken after any phase
+- Commented out = aspirational or known-broken (annotated with reason)
+- Each pattern in its own ~solve~ block for per-command verbose isolation
 
-** 3.4 Section D: Quoted / Structural
+** 4.1 Section A: Relational ~=~ — Prolog-Inspired (MUST WORK TODAY)
 
-Tests term-level unification (quoted forms).
+Direct translations of Prolog structural unification examples into
+Prologos ~solve~ blocks. These exercise shared-variable constraint
+propagation — the core of what PUnify's cell-trees will handle.
 
-** 3.5 Section E: Antagonist Patterns
+Translated from examples in ~docs/standups/standup-2026-03-18.org~:
 
-Designed to stress both unification approaches:
+| Pattern | Prolog Source | Tests |
+|---------+---------------+-------|
+| Constraint propagation through shared vars | ~f(A,g(A,B),h(B,C),i(C,A))~ | Shared vars act as wires |
+| Circular constraint chain | ~p(A,B,C,D) = p(X,X,Y,Y)~ | All vars collapse to same value |
+| Diamond pattern | ~diamond(top(X),left(X,A),right(X,B),...)~ | Two paths must agree |
+| Nested sharing | ~outer(inner(A,B),inner(B,C),inner(C,A))~ | Inner constrains outer |
+| Cross-referencing lists | ~[pair(A,B),pair(B,C),pair(C,A)]~ | List of structs with shared vars |
+| Non-trivial propagation | Two separate ~=~ goals sharing vars | Two-equation system |
+| Structure copying | ~copy(Original,Duplicate) = copy(tree(..),tree(L,R))~ | Variable sharing = implicit copy |
+| Mutual recursion structure | ~even/odd~ alternating nesting | Alternating pattern variables |
+| Graph edge constraints | ~graph([edge(A,B),edge(B,C),edge(C,A)])~ | Cyclic graph consistency |
+| Substitution/env lookup | ~subst(var(X),env(X,Val,_),Val)~ | Self-hosting-relevant pattern |
+| Palindrome structure | ~palindrome([A,B,C,B,A])~ | Symmetry via shared vars |
+| Bidirectional list zipper | ~zip([A,B,C],[X,Y,Z],Zipped)~ | Three-way constraint |
+| Transpose constraint | ~matrix(row(A,B),row(C,D))~ | 2D structure constraints |
 
-- *Deep nesting* (10+ levels): types nested 10+ constructors deep
-- *Wide fan-out* (50+ shared variables): one meta appears in 50+ positions
-- *Diamond constraints* (convergence): multiple paths to same variable
-- *Cyclic attempt* (occurs check): ~?A = [f ?A]~ and deep variants
-- *Cascading chains* (50+ variables): A=B, B=C, ..., Y=Z, Z=1 → all = 1
-- *Contradiction propagation*: incompatible constraints through long chains
-- *Mixed depth*: some branches shallow (ground), some deep (nested metas)
+Each pattern as a standalone ~eval (solve ...)~ with expected results
+in comments. Use type definitions (via ~type~) for constructors where
+needed (pair, triple, tree, etc.).
 
-Performance targets: PUnify should be ≤ 1.5× current on simple patterns
-and potentially faster on deep structural patterns (where CHAMP sharing
-pays off).
+** 4.2 Section B: Existing Relational Features (MUST WORK TODAY)
+
+Exercises existing relational infrastructure that must not regress:
+
+- ~defr~ with fact blocks (~||~) and rule clauses (~&>~)
+- ~solve~ queries with multiple solutions
+- Recursive relations (transitive closure, like the course prereqs)
+- Unification goals ~(= x y)~ inside ~solve~/~defr~
+- Negation-as-failure ~(not (goal))~
+- Mode annotations (~?~, ~+~, ~-~)
+- Bidirectional querying (same relation, different bound vars)
+
+These overlap with ~relational-demo.prologos~ but are self-contained
+here for regression detection.
+
+** 4.3 Section C: Three-Operator Vocabulary (ASPIRATIONAL — commented)
+
+Side-by-side examples showing ~=~ vs ~is~ vs ~#=~:
+
+#+begin_src prologos
+;; = : structural term (function name is just a symbol)
+;; eval (solve [?r] (= [add 3 4] ?r))
+;; Expected: ?r = '[add 3 4]  (the TERM, not evaluated)
+
+;; is : evaluate-then-bind
+;; eval (solve [?r] (is ?r [int+ 3 4]))
+;; Expected: ?r = 7
+
+;; #= : narrow through function definition
+;; eval (solve [?x] (#= [int+ ?x 4] 7))
+;; Expected: ?x = 3
+#+end_src
+
+Uncommented as each operator is wired. ~is~ may already partially work
+in relational context.
+
+** 4.4 Section D: Expression-Context ~=~ (ASPIRATIONAL — commented)
+
+The evaluate-then-unify semantics, bidirectional binding, and quote
+override:
+
+- Simple destructuring: ~(= [pair x y] some-pair-value)~
+- Bidirectional: ~(= [pair ?x 2] [pair 1 ?y])~ → ~?x=1~, ~?y=2~
+- Quote in expression context: ~(= '[map inc xs] ?term)~
+  — structural binding, not evaluation
+- Chained ~=~: multiple assertions building up bindings sequentially
+- Failure case: structural mismatch → type error
+
+All commented. Uncommented as expression-context ~=~ is wired.
+
+** 4.5 Section E: Term Decomposition (ASPIRATIONAL — commented)
+
+The ~'[?f | ?args]~ syntax:
+
+#+begin_src prologos
+;; List destructuring (existing design)
+;; eval (solve [?h ?t] (= '[1 2 3] '[?h | ?t]))
+;; Expected: ?h = 1, ?t = '[2 3]
+
+;; Application term destructuring (same mechanism, quoted)
+;; eval (solve [?f ?args] (= '[map inc xs] '[?f | ?args]))
+;; Expected: ?f = map, ?args = '[inc xs]
+
+;; Deeper decomposition
+;; eval (solve [?f ?first ?rest] (= '[foo a b c] '[?f ?first | ?rest]))
+;; Expected: ?f = foo, ?first = a, ?rest = '[b c]
+#+end_src
+
+** 4.6 Section F: Type-Level ~=~ (ASPIRATIONAL — commented)
+
+Equality constraints in specs:
+
+#+begin_src prologos
+;; spec coerce {A B : Type} (= A B) -> A -> B
+;; defn coerce [x] x
+#+end_src
+
+** 4.7 Section G: Broad Regression Canary (MUST WORK TODAY)
+
+Standard Prologos features unrelated to ~=~ wiring, confirming no
+regressions from pipeline changes:
+
+- Prelude imports (~ns~ with default prelude)
+- Pattern matching (~defn~ with multi-arity dispatch)
+- Generic arithmetic (~+~, ~-~, ~*~ via traits)
+- Pipeline (~|>~)
+- Closures (~fn~, partial application with ~_~)
+- List/Option/Result operations
+- Trait definitions and instances
+- Map literals and dot-access
+- Module loading (at least one ~use~ statement)
+
+These serve the same role as the "broad safety net" in prior acceptance
+files.
+
+* 5. Adversarial Benchmark Design
+
+Location: ~benchmarks/comparative/punify-adversarial.prologos~
+
+Written AFTER the acceptance file is clean. Lives in ~benchmarks/comparative/~
+for ~bench-ab.rkt~ measurement with statistical rigor (Mann-Whitney U,
+10+ runs). The acceptance file has a lightweight version of each pattern
+for correctness; the adversarial benchmark has scaled-up versions for
+performance.
+
+** 5.1 Stress Patterns
+
+| Pattern | Scale | What It Stresses |
+|---------+-------+------------------|
+| Deep nesting | 10-20 levels | Constructor decomposition depth |
+| Wide fan-out | 50+ shared vars | One meta in many positions |
+| Cascading chains | 50+ variables | A=B, B=C, ..., Z=1 → all = 1 |
+| Diamond convergence | Multiple paths to same var | Multi-path consistency |
+| Occurs check | Depth 1, 5, 10 | Cycle detection at varying depths |
+| Many small unifications | 100+ independent ~(= ?x val)~ | Per-unification overhead |
+| Contradiction propagation | Long chains with failure | Failure detection speed |
+| Mixed depth | Shallow + deep branches | Asymmetric tree comparison |
+| Structure copying (large) | Tree with 20+ leaves | Shared-variable copying |
+| Real-world-like | Polymorphic function types | Typical elaboration patterns |
+
+** 5.2 Measurement
+
+Each pattern isolated as a standalone ~solve~ or sequence of definitions
+so ~process-file #:verbose #t~ gives per-command metrics (12 fields:
+metas, constraints, prop_firings, cell_allocs, unify_steps, wall_ms, etc.).
+
+Run via ~bench-ab.rkt~:
+#+begin_src shell
+racket tools/bench-ab.rkt benchmarks/comparative/punify-adversarial.prologos --runs 15
+#+end_src
+
+Baseline captured BEFORE any PUnify cell-tree work. Compared after
+with ~--ref HEAD~N~.
+
+** 5.3 Performance Targets
+
+| Metric | Target |
+|--------+--------|
+| PUnify on simple patterns | ≤ 1.5× current |
+| PUnify on deep structural | ≤ 1.0× current (potential win) |
+| PUnify on wide fan-out | ≤ 1.0× current (CHAMP sharing) |
+| Suite regression | ≤ 10% (200s budget) |
 
 ---
 
 * 4. Microbenchmark Plan
 
-** 4.1 Current Unification Profile (Phase 0c)
+** 5.4 Micro-Benchmarks (Part 2, Phase 8)
+
+Use ~bench-micro.rkt~ for function-level comparison (Part 2 scope):
+- Single unification: meta-vs-ground, 1 level, 3 levels, 5 levels
+- Occurs check: shallow (depth 1) vs deep (depth 10)
+- ground-expr? on ground tree vs partially-solved tree
+- Zonk traversal: current recursive vs cell-tree traversal
+
+** 5.5 Unification Profile Instrumentation (Part 1, Phase 0c)
 
 Instrument ~unify*~ and ~elab-add-unify-constraint~ to capture:
 - Call count per command
@@ -538,24 +715,12 @@ Instrument ~unify*~ and ~elab-add-unify-constraint~ to capture:
 - Cell allocations per unification
 - Wall time in fire function (algorithmic logic vs cell operations)
 
-** 4.2 A/B Comparison (Phase 8)
-
-Run both implementations on the acceptance file:
-- Same programs, same expected results
-- Compare: total propagator firings, cell allocations, wall time
-- Statistical rigor: use ~bench-ab.rkt~ with 10+ runs, Mann-Whitney U
-
-** 4.3 Micro-Benchmarks (Phase 8)
-
-Use ~bench-micro.rkt~ for function-level comparison:
-- Single unification: meta-vs-ground, 1 level, 3 levels, 5 levels
-- Occurs check: shallow (depth 1) vs deep (depth 10)
-- ground-expr? on ground tree vs partially-solved tree
-- Zonk traversal: current recursive vs cell-tree traversal
+This instrumentation is Part 1 scope — it establishes the profile that
+Part 2 (cell-tree architecture) designs against.
 
 ---
 
-* 5. Migration Path
+* 6. Migration Path (Part 2 scope)
 
 ** 5.1 What Changes
 
@@ -586,7 +751,7 @@ During implementation, both approaches coexist:
 
 ---
 
-* 6. Performance Budget
+* 7. Performance Budget (Part 2 scope)
 
 | Metric | Current | Target | Rationale |
 |--------+---------+--------+-----------|
@@ -599,7 +764,7 @@ During implementation, both approaches coexist:
 
 ---
 
-* 7. Risk Analysis
+* 8. Risk Analysis (Part 2 scope)
 
 ** High risk: Cell allocation overhead
 
@@ -637,7 +802,7 @@ the exact mechanisms.
 
 ---
 
-* 8. Dependencies and Ordering
+* 9. Dependencies and Ordering
 
 ** Depends on (all complete)
 
@@ -659,7 +824,7 @@ the exact mechanisms.
 
 ---
 
-* 9. Open Questions
+* 10. Open Questions (Part 2 scope)
 
 ** Q1: Lazy vs Eager Tree Creation — OPEN
 
