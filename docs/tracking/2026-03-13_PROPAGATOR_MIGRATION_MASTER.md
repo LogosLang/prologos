@@ -403,6 +403,8 @@ This audit follows the pattern established by the Track 7 stratified architectur
 
 **Design document**: TBD — full design required. Should address: server lifecycle, file watcher integration, incremental vs full re-elaboration heuristics, diagnostic batching/debouncing, and the composition of all Track 1–9 infrastructure.
 
+**Early design notes**: `docs/tracking/2026-03-19_TRACK10_DESIGN_NOTES.org` — two-tier provenance architecture (Tier 1: creation-time srcloc on propagators, always-on; Tier 2: write-log for debug/proof/audit, toggled), constraint-graph debugger vision for VSCode, PUnify cell-tree integration for visual type debugging. Captured during PUnify D.1 language design exploration.
+
 **Forward design notes** (from Track 5 D.3 principle alignment review):
 - **First-class module network data** — module networks should be treated as first-class pure data, enabling reuse and composition. The CHAMP-based `prop-network` is already immutable/persistent, supporting this. Design for module networks as composable data structures, not just caching artifacts.
 - **Data-oriented invalidation** — use invalidation descriptors interpreted at explicit control boundaries rather than imperative "iterate and write" patterns.

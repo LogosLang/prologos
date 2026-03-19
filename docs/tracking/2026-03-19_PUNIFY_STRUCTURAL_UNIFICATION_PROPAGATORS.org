@@ -291,19 +291,31 @@ Current leaning: do not support Prolog-style dynamic predicates.
 Revisit if a compelling use case emerges that data-as-arguments
 cannot serve.
 
-*** Q2: Source Mapping and Cell Provenance — OPEN
+*** Q2: Source Mapping and Cell Provenance — RESOLVED (scoped to PUnify)
 
-Every cell write needs source location provenance for error reporting
-and self-hosting. Two options:
+Full provenance architecture is a Track 10 concern — see
+~docs/tracking/2026-03-19_TRACK10_DESIGN_NOTES.org~ for the two-tier
+design (Tier 1: creation-time propagator srcloc, always-on; Tier 2:
+write-log for debug/proof/audit, toggled).
 
-- *Per-node annotation*: each cell-tree node carries its source location.
-  Simpler, but makes cells larger.
-- *Separate provenance map*: ~cell-id → source-location~ in a side table.
-  Leaner cells, but adds indirection.
+*PUnify's specific contribution*: cell-trees provide natural visual
+structure for constraint-graph debugging. Each cell-tree IS a type tree
+— the LSP debugger can render unification as two trees being overlaid,
+with contradictions highlighted at the mismatch point. This is richer
+than the current flat-cell model where type structure is implicit.
 
-Tension: self-hosting story wants rich per-node provenance; performance
-story wants lean cells. Needs measurement (cell count × annotation cost
-vs map lookup cost). Deferred to deeper exploration.
+*PUnify implementation decision*: adopt Tier 1 (propagator-creation
+srcloc) from the start. When cell-tree unification creates sub-cell
+propagators during tree unfolding, each propagator records its source
+location. This costs one CHAMP entry per propagator — negligible, since
+we're already allocating the propagator. PUnify does NOT need Tier 2
+(write logging) for its own correctness; Tier 2 is Track 10 scope.
+
+*Cell-tree nodes stay lean*: no per-node source annotation. Provenance
+flows through propagator srclocs (Tier 1), not cell metadata. This
+keeps the hot-path cell operations (read, write, merge, CHAMP comparison)
+as fast as possible — aligned with the performance bet that PUnify
+must win.
 
 *** Q3: ~=~ in Guard Position — OPEN
 

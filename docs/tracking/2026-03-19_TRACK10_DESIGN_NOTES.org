@@ -1,0 +1,170 @@
+#+TITLE: Track 10 Design Notes: Provenance, Observability, and the Constraint-Graph Debugger
+#+SUBTITLE: Early Design Exploration for LSP Integration
+#+AUTHOR: The Prologos Project
+#+DATE: 2026-03-19
+#+STATUS: NOTES (exploratory — pre-design)
+
+* Summary
+
+These are early design notes for Track 10 (LSP Integration), captured
+during PUnify language design discussions. They address a cross-cutting
+concern: how provenance information flows through the propagator network
+and who consumes it.
+
+The central insight: the propagator network's topology IS the provenance
+structure. The network is the sum of its computation — cells contain
+monotone information, propagators connect them, and the graph of
+connections IS the derivation. Even strata boundaries (retraction,
+sequencing) have known sources and sinks with transformations between.
+
+* Provenance Consumers
+
+Four consumers with different requirements:
+
+| Consumer | Needs | When known | Latency |
+|----------+-------+------------+---------|
+| Error reporting | Which constraints conflict, from which source locations | After the fact | Immediate |
+| Proof/audit | Full derivation chain: axioms → rules → conclusions | Known upfront | Batch |
+| Self-hosting compiler | Source mapping: AST node → elaborated type → evidence | Known upfront | Batch |
+| LSP constraint-graph debugger | Full topology + write history + stepping | Known upfront (debug session) | Interactive |
+
+Error reporting needs provenance retroactively (didn't know we'd error).
+The other three know upfront that they need it.
+
+* Two-Tier Provenance Architecture
+
+** Tier 1: Creation-Time Provenance (always on, negligible cost)
+
+When a propagator is created (via ~elab-add-unify-constraint~ or
+similar), record ~propagator-id → srcloc~ in a CHAMP map on the
+elab-network. We're already creating the propagator struct; adding
+one field to the creation record is negligible.
+
+On error:
+- We know which cell has the contradiction (~type-top~ write)
+- We know which propagators feed into that cell (network topology)
+- Each propagator maps to a source location (creation-time record)
+- Error message: "Conflicting constraints from line 5 and line 8"
+
+Cost: one CHAMP entry per propagator created. O(constraints) per command.
+Propagators are already allocated; this adds ~one pointer per propagator.
+
+This tier is *always available* — no toggle needed for error reporting.
+
+** Tier 2: Write-Log Provenance (toggled, for debug/proof/audit/LSP)
+
+When enabled, every cell write records:
+- ~cell-id~
+- ~old-value~
+- ~new-value~
+- ~propagator-id~ (which propagator caused this write)
+- ~logical-clock~ (monotone counter for ordering)
+
+Stored in an append-only log (vector, not CHAMP — sequential, not
+associative).
+
+Cost: one append per propagator firing. Thousands per command.
+Only enabled when opted in.
+
+Toggle mechanisms:
+#+begin_src prologos
+;; Language-level opt-in
+ns my-module :provenance    ;; enable Tier 2 for this module
+
+;; Tool-level: LSP sends "start debug session" → enables Tier 2
+;; Proof mode: implicit Tier 2 enablement
+#+end_src
+
+** Tier 3 (Speculative): Structural Provenance from Network Topology
+
+The propagator network's topology may be directly extractable as a
+proof — the chain of firings from axioms (user constraints) to
+conclusions (solved metas) is a derivation tree.
+
+If the network has clean derivation structure (no circular reasoning,
+no redundant paths), then: Tier 1 + topology = proof extraction,
+without explicit logging.
+
+Track 7's stratified resolution helps: strata give natural ordering.
+But not guaranteed for all proof shapes. Needs investigation.
+
+* LSP Constraint-Graph Debugger Vision
+
+The user's vision: a VSCode panel showing the entire constraint graph,
+not just a step-debugger. Interactive exploration of *why* types have
+the values they do.
+
+** What it needs
+
+1. *Network topology* — cells and connections (always available from prop-network)
+2. *Current cell values* — available from cell reads
+3. *Write history* — Tier 2 log
+4. *Source mapping* — Tier 1 (propagator → srcloc) + elaborator AST → cell mapping
+5. *Stepping/replay* — deterministic replay of propagator firings
+
+Items 1-2 are free. Item 4 is Tier 1 (free). Items 3 and 5 need Tier 2.
+
+** Deterministic Replay
+
+If we record the propagator firing order (Tier 2 log), we can replay
+elaboration step-by-step in the LSP:
+
+- "This propagator fired, wrote Int to cell 42"
+- "Which triggered this other propagator..."
+- Animated constraint graph showing information flow
+
+Requires elaboration to be fully deterministic (which it should be,
+given Track 7's pure resolution chain). Replay cost is "re-elaborate
+the command" — for LSP debugging, sub-100ms is fine.
+
+** PUnify Integration
+
+Cell-tree unification makes the graph particularly regular:
+- Each cell-tree IS a visual tree
+- Unification is two trees being overlaid
+- Contradictions highlighted at the first mismatch point
+- Users can see *which part* of which type conflicts
+
+This is a natural fit for the debugger: instead of abstract cell IDs,
+the user sees type structure (pair, function arrow, etc.) with constraint
+flow arrows between corresponding positions.
+
+* Current Infrastructure Status (re: provenance)
+
+- ~elab-cell-info~ has a ~source~ field (any type) — exists but rarely populated
+- ~srcloc~ struct exists (~file~, ~line~, ~col~, ~span~) in ~source-location.rkt~
+- Source location NOT systematically threaded through cell creation
+- Propagator creation does NOT record srcloc
+- No write logging infrastructure exists
+
+Tier 1 is a modest addition to the existing infrastructure. Tier 2
+is new infrastructure.
+
+* Relationship to Other Tracks
+
+- *PUnify*: cell-trees provide natural visual structure for the debugger.
+  PUnify's Q2 (source mapping) reduces to: does PUnify adopt Tier 1
+  (propagator-creation srcloc) from the start? (Answer: yes, if
+  available, but PUnify can proceed without it.)
+- *Track 8*: imperative state migration provides more state flowing
+  through the network, making the debugger view more complete.
+- *Track 9 (GDE)*: minimal diagnoses provide the "why" explanations
+  that the debugger surfaces. GDE consumes Tier 1 provenance.
+- *Track 10 (LSP)*: this IS Track 10. These notes are pre-design for
+  the provenance/observability aspect of LSP integration.
+
+* Open Questions
+
+1. *Serialization format* for Tier 2 log data — needs to be
+   transmittable to VSCode extension. JSON? Binary protocol?
+2. *Tier 2 memory budget* — for long files with many commands, the
+   write log could grow large. Ring-buffer (fixed-size circular) vs
+   unbounded log?
+3. *Cross-command provenance* — persistent registry cells span
+   commands. How does the debugger show inter-command constraint flow?
+4. *Interaction with speculation* — TMS branches create alternative
+   constraint graphs. How does the debugger show "this branch was
+   explored and rejected"?
+5. *Granularity* — per-cell write log vs per-propagator firing log?
+   The cell view answers "what happened to this cell?" The propagator
+   view answers "what did this constraint contribute?"
