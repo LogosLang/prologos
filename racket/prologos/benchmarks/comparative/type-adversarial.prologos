@@ -1,0 +1,235 @@
+ns benchmarks::comparative::type-adversarial
+
+;; ============================================================
+;; Adversarial type-level unification benchmark (PUnify baseline)
+;; ============================================================
+;;
+;; Exercises the TYPE-LEVEL unifier (unify.rkt), NOT the solver
+;; (relations.rkt). PUnify replaces the type-level unifier's
+;; fire function and decomposition with cell-tree operations.
+;;
+;; Run with bench-ab.rkt for A/B comparison:
+;;   racket tools/bench-ab.rkt --runs 15 benchmarks/comparative/type-adversarial.prologos
+;;
+;; What this stresses:
+;;   1. flex-rigid: implicit type argument inference (24% of classifications)
+;;   2. Pi decomposition: function type checking (18%)
+;;   3. universe levels: Type₀ vs Type₁ (36%)
+;;   4. structural equality: identical types (14%)
+;;   5. binder decomposition: Sigma/lambda (6%)
+;;   6. app rigid-rigid: applied type constructors (3%)
+;;   7. zonk: meta substitution traversal
+;;   8. trait resolution: implicit dispatch (triggers unification)
+;;   9. polymorphic instantiation: many metas per call
+;;  10. real-world patterns: list/option/result pipelines
+
+;; ── T1: Simple function definitions (flex-rigid baseline) ──
+;; Each defn with spec creates metas for implicit type args.
+
+spec id {A : Type} A -> A
+defn id [x] x
+
+spec const {A B : Type} A -> B -> A
+defn const [x y] x
+
+spec flip {A B C : Type} <A -> B -> C> -> B -> A -> C
+defn flip [f b a] [f a b]
+
+;; ── T2: Polymorphic application chains ──
+;; Each application infers type args via flex-rigid unification.
+
+[id 42]
+[id "hello"]
+[id true]
+[const 42 "ignored"]
+[const "kept" 99]
+
+;; Nested polymorphic calls — forces Pi decomposition at each level
+[id [id [id 42]]]
+[const [id 1] [id 2]]
+
+;; ── T3: Higher-order function types ──
+;; Pi decomposition chains: domain/codomain at multiple levels.
+
+spec apply {A B : Type} <A -> B> -> A -> B
+defn apply [f x] [f x]
+
+spec compose {A B C : Type} <B -> C> -> <A -> B> -> A -> C
+defn compose [g f x] [g [f x]]
+
+[apply [fn [x : Int] [int+ 1 x]] 5]
+[compose [fn [x : Int] [int* 2 x]] [fn [x : Int] [int+ 3 x]] 10]
+
+;; ── T4: Prelude-heavy expressions (trait resolution + unification) ──
+;; Trait dispatch resolves Add/Mul/Eq instances via type unification.
+
+[+ 1 2]
+[* 3 4]
+[- 10 5]
+[eq? 42 42]
+[eq? "hello" "hello"]
+
+;; Numeric chains — each operation infers types
+[+ [* 3 4] [- 10 [+ 1 2]]]
+[* [+ 1 2] [+ 3 4]]
+
+;; ── T5: List operations (polymorphic, trait-constrained) ──
+;; map/filter/fold force inference of element types through Pi decomposition.
+
+def xs := '[1 2 3 4 5]
+[map [fn [x : Int] [int+ x 1]] xs]
+[filter [fn [x : Int] [int-lt 0 x]] xs]
+[length xs]
+
+;; Nested list operations — inference chains
+[map [fn [x : Int] [int* x 2]] [map [fn [x : Int] [int+ x 1]] xs]]
+
+;; ── T6: Option/Result types (constructor unification) ──
+
+def opt := [some 42]
+[map-option [fn [x : Int] [int+ x 1]] opt]
+
+def r := [ok 42]
+
+;; ── T7: Pair operations (Sigma decomposition) ──
+
+def p := [pair 1 "hello"]
+[fst p]
+[snd p]
+
+;; Nested pairs
+def np := [pair [pair 1 2] [pair 3 4]]
+[fst [fst np]]
+[snd [snd np]]
+
+;; ── T8: Pattern matching dispatch (Pi + flex-rigid) ──
+;; Multi-arity defn creates branch types that unify against arguments.
+
+spec safe-div Int -> Int -> <Int | String>
+defn safe-div
+  | _ 0 -> [right "division by zero"]
+  | a b -> [left [int/ a b]]
+
+[safe-div 10 2]
+[safe-div 10 0]
+
+;; ── T9: Pipeline chains (compose + Pi decomposition) ──
+;; Each |> step infers the function's type against the accumulator.
+
+|> 5 [fn [x : Int] [int+ x 3]] [fn [x : Int] [int* x 2]] [fn [x : Int] [int+ x 1]]
+|> '[1 2 3] [fn [xs : [List Int]] [map [fn [x : Int] [int+ x 10]] xs]] length
+
+;; ── T10: Nat induction (structural decomposition + levels) ──
+
+spec nat-to-int Nat -> Int
+defn nat-to-int
+  | zero    -> 0
+  | [suc n] -> [int+ 1 [nat-to-int n]]
+
+[nat-to-int 0N]
+[nat-to-int 5N]
+[nat-to-int 10N]
+
+;; ── T11: Many small definitions (per-command unification overhead) ──
+;; Mirrors the S8 pattern from solve-adversarial but in type-checking.
+
+def v01 := 1
+def v02 := 2
+def v03 := 3
+def v04 := 4
+def v05 := 5
+def v06 := 6
+def v07 := 7
+def v08 := 8
+def v09 := 9
+def v10 := 10
+def v11 := "a"
+def v12 := "b"
+def v13 := "c"
+def v14 := "d"
+def v15 := "e"
+def v16 := true
+def v17 := false
+def v18 := '[1 2 3]
+def v19 := [some 42]
+def v20 := none
+
+;; ── T12: String operations (prelude + inference) ──
+
+[str-length "hello world"]
+[str-append "hello " "world"]
+
+;; ── T13: Mixed trait use (inference across multiple traits) ──
+
+[+ [* 2 3] [- 10 4]]
+[eq? [+ 1 2] [- 5 2]]
+
+;; ── T14: Deep function nesting (flex-rigid depth stress) ──
+
+spec wrap-int Int -> [Option Int]
+defn wrap-int [n] [some n]
+
+spec unwrap-or [Option Int] -> Int -> Int
+defn unwrap-or
+  | [some x] _ -> x
+  | none     d -> d
+
+[unwrap-or [wrap-int 42] 0]
+[unwrap-or none 99]
+[unwrap-or [wrap-int [int+ 10 20]] [int- 50 10]]
+
+;; ── T15: Wide polymorphic instantiation ──
+;; Functions with many type parameters stress flex-rigid in bulk.
+
+spec triple {A B C : Type} A -> B -> C -> <A * <B * C>>
+defn triple [a b c] [pair a [pair b c]]
+
+[triple 1 "hello" true]
+[triple [some 1] '[1 2] false]
+
+;; ── T16: Recursive function types (Pi chains through recursion) ──
+
+spec sum-list [List Int] -> Int
+defn sum-list
+  | '[] -> 0
+  | '[?x | ?xs] -> [int+ x [sum-list xs]]
+
+[sum-list '[1 2 3 4 5]]
+[sum-list '[]]
+[sum-list '[100]]
+
+;; ── T17: Complex return types (union + option + pair) ──
+
+spec classify Int -> <String | Int>
+defn classify
+  | 0 -> [right "zero"]
+  | n -> [left n]
+
+[classify 0]
+[classify 42]
+[classify [int+ 1 2]]
+
+;; ── T18: Multi-argument trait dispatch ──
+
+[eq? [pair 1 2] [pair 1 2]]
+[eq? [some 42] [some 42]]
+[eq? none none]
+
+;; ── T19: Heavy prelude integration ──
+;; Exercises full prelude: numeric traits, list ops, option ops.
+
+|> '[10 20 30 40 50]
+   [fn [xs : [List Int]] [map [fn [x : Int] [int+ x 5]] xs]]
+   [fn [xs : [List Int]] [filter [fn [x : Int] [int-lt 20 x]] xs]]
+   length
+
+;; ── T20: Final stress — combine all patterns ──
+
+spec complex-pipeline [List Int] -> Int -> <Int | String>
+defn complex-pipeline
+  | '[] _ -> [right "empty"]
+  | xs n  -> [left [int+ [sum-list xs] [int* n 2]]]
+
+[complex-pipeline '[1 2 3] 10]
+[complex-pipeline '[] 5]
+[complex-pipeline '[100] 0]
