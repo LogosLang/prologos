@@ -11,20 +11,40 @@
 
 ## 1. Purpose and Scope
 
-PUnify Part 2 replaces the **algorithmic pattern-matching unifier** (`unify.rkt`) with
-**cell-tree structures** on the propagator network. This is the first half of Track 8
-(the second half migrates remaining imperative state: mult bridges, id-map, etc.).
+PUnify Part 2 replaces **both unification systems** with **cell-tree structures** on
+the propagator network, using a shared domain-agnostic constructor descriptor registry.
+This is the first half of Track 8 (the second half migrates remaining imperative
+state: mult bridges, id-map, etc.).
 
-**What changes**: The `classify-whnf-problem` dispatcher and its decomposition logic
-become propagator operations on cell-trees rather than recursive Racket function calls.
+**Two systems, one infrastructure**:
+- **System 1** (type-level, `unify.rkt`): 37-case classifier, propagator-integrated,
+  handles metas, de Bruijn, compound types → cell-tree with type constructor descriptors
+- **System 2** (solver-level, `relations.rkt`): 5-case flat substitution, DFS
+  backtracking → cell-tree with data constructor descriptors, DFS search retained
 
-**What doesn't change**: The 10 classification categories themselves, the three-valued
-result semantics (#t / 'postponed / #f), the de Bruijn handling, and the solver-level
-unification in `relations.rkt` (System 2 — flat substitution, independent of PUnify).
+**What changes**:
+- System 1: `classify-whnf-problem` dispatcher and decomposition logic become
+  propagator operations on cell-trees via type constructor descriptors
+- System 2: `unify-terms` (15 lines, 5 cases) migrates to cell-tree operations
+  via data constructor descriptors; DFS backtracking and `solve-goals` preserved
+- Both systems share the same `ctor-registry.rkt` and generic decompose/reconstruct
 
-**Success criterion**: The type-adversarial benchmark (17.9s baseline) does not regress
-by more than 10%. The full test suite (7214 tests, ~183s) stays green. Classification
-distribution is unchanged (level 36%, flex-rigid 24%, pi 18%, ok 14%, binder 6%, sub 3%).
+**What doesn't change**: The 10 type-level classification categories, the three-valued
+result semantics, de Bruijn handling, DFS search strategy in the solver, WHNF reduction,
+and level unification (numeric lattice, not tree-structured).
+
+**Why both systems**: Part 1 benchmarking revealed that the adversarial benchmarks
+stress System 2, while the original Part 2 design targeted System 1. This
+benchmark/architecture disconnect is resolved by scoping both systems into Part 2 —
+the descriptor registry validates its genericity by serving two domains, and our
+benchmarks now measure what our architecture changes.
+
+**Success criteria**:
+- Type-adversarial benchmark (17.9s baseline) does not regress by more than 10%
+- Solve-adversarial benchmark (14.3s baseline) does not regress by more than 10%
+- Full test suite (7214 tests, ~183s) stays green
+- Type-level classification distribution unchanged
+- Solver-level: prelude constructor unification works in `defr` contexts (currently broken)
 
 ---
 
@@ -197,6 +217,43 @@ they should), and cells ARE TMS-tracked (Track 4 established this), then migrati
 meta solutions from CHAMP to cells automatically gets TMS retraction. This is a
 qualitative win — one of the architectural motivations.
 
+### 2.6 System 2: Solver-Level Unification (`relations.rkt`)
+
+The solver uses a completely separate, simpler unification system:
+
+**`unify-terms`** (relations.rkt:434-449): 5-case flat substitution unifier:
+```
+unify-terms(t1, t2, subst):
+  t1' = walk(t1, subst)    ;; follow substitution chains
+  t2' = walk(t2, subst)
+  cond:
+    equal?(t1', t2') → subst            ;; identical after walk
+    symbol?(t1')     → extend(subst, t1', t2')  ;; bind logic var
+    symbol?(t2')     → extend(subst, t2', t1')  ;; bind logic var
+    (list? t1') ∧ (list? t2') →
+      foldl unify-terms over zip(t1', t2')       ;; structural recursion on lists
+    else → #f                                     ;; failure
+```
+
+**`walk`** (lines 415-422): Substitution chain following with `eq?` cycle detection.
+**`walk*`** (lines 425-430): Deep resolution — walks all sub-terms for output.
+**`normalize-term-deep`** (lines 255-274): AST → solver term bridge. Converts
+Prologos AST to flat list/symbol representation for the solver.
+
+**Key differences from System 1**:
+- No occurs check (can create infinite terms silently)
+- No compound type decomposition beyond flat lists (prelude constructors fail)
+- No constraint postponement — unification either succeeds now or fails
+- No interaction with the propagator network — pure substitution map
+- No de Bruijn indices — solver terms use named symbols
+- DFS backtracking via `solve-goals`/`solve-single-goal` (not propagator worklist)
+
+**`solve-goals`** (lines 458-467): Conjunction solver — folds goals left-to-right,
+threading substitution. **`solve-app-goal`** (lines 683-751): Relation lookup with
+fresh variable renaming (α-renaming per clause attempt).
+
+---
+
 ### 3.8 Callback Elimination
 
 **From Track 8 audit**: 6+ callback parameters (`current-prop-cell-write`,
@@ -205,6 +262,48 @@ unify.rkt and the propagator network. These are an indirection layer that adds
 complexity and prevents the type checker from being a direct propagator participant.
 
 **Target**: Cell-tree operations are native propagator operations — no callbacks needed.
+
+### 3.9 System 2: No Occurs Check
+
+**Current**: `unify-terms` blindly extends the substitution without checking if the
+variable being bound appears in the term. `(unify X (cons 1 X) {})` silently creates
+an infinite substitution chain. `walk*` may loop or produce garbage.
+
+**Target**: Cell-tree unification gets occurs check for free — cycle detection is
+checking cell-pointer reachability (§3.4). Data constructor cells share this mechanism.
+
+### 3.10 System 2: No Compound Type Decomposition
+
+**Current**: `unify-terms` only decomposes flat lists (Racket `list?`). Prologos data
+constructors like `(some 42)`, `(cons 1 (cons 2 nil))`, `(pair "a" 3)` are normalized
+to list representation by `normalize-term-deep`, but compound types with nested structure
+beyond flat lists fail. Prelude constructor unification in `defr` contexts is broken.
+
+**Target**: Data constructor descriptors enable structural decomposition of any registered
+constructor — `(some X)` decomposes into a `some`-tagged cell with one sub-cell.
+The same generic decompose/reconstruct from §5.5.3 handles both systems.
+
+### 3.11 System 2: No Constraint Postponement
+
+**Current**: `unify-terms` either succeeds or fails immediately. There is no analog to
+`flex-app` postponement — if a logic variable hasn't been bound yet and the other side
+is a compound term, the solver must bind eagerly (losing the constraint relationship).
+
+**Target**: Cell-tree unification naturally supports partial information — a logic variable
+is a cell at `⊥`. When the other side is a compound term, decomposition creates sub-cells
+and installs propagators. The constraint is live on the network and fires when the variable
+is eventually bound. This enables constraint-logic-programming patterns within `defr`.
+
+### 3.12 System 2: AST→Solver Term Bridge Fragility
+
+**Current**: `normalize-term-deep` (relations.rkt:255-274) converts Prologos AST to flat
+list/symbol solver terms. `solver-term->prologos-expr` and `ground->prologos-expr` convert
+back. These bridges are fragile — new AST node types require manual extension in both
+directions, and mismatches produce opaque runtime errors.
+
+**Target**: Data constructor descriptors provide the same `extract-fn`/`reconstruct-fn`
+interface for both directions. The bridge becomes: decompose AST via descriptor → create
+cells → reconstruct AST via descriptor. No separate normalize/denormalize functions needed.
 
 ---
 
@@ -452,91 +551,148 @@ adds `type-bot` (no information, fresh meta) and `type-top` (contradiction).
 All three encode the same structural knowledge independently. The lattice-first
 design unifies them.
 
-#### 5.5.2 Type Constructor Descriptor Registry
+**Existing validation**: System 3 (`term-lattice.rkt` + `narrowing.rkt`) already
+implements this exact pattern for FL narrowing: `term-ctor(tag, sub-cells)` where
+sub-cells are cell-ids, `term-merge` as the lattice join, `term-walk` for variable
+resolution through cells. PUnify brings Systems 1 and 2 toward System 3's model —
+the architecture is proven, not speculative.
 
-A single registration site for all compound type structure:
+#### 5.5.2 Domain-Agnostic Constructor Descriptor Registry
+
+A single registration site for all compound structure — **both type constructors
+(System 1) and data constructors (System 2)**. The file is `ctor-registry.rkt`
+(not `type-ctor-registry.rkt`) to reflect the domain-agnostic scope.
 
 ```racket
-(struct type-ctor-desc
-  (tag            ; symbol: 'Pi, 'Sigma, 'App, 'Eq, ...
+(struct ctor-desc
+  (tag            ; symbol: 'Pi, 'Sigma, 'App, 'cons, 'some, 'suc, ...
    arity          ; natural: number of sub-components
    extract-fn     ; (AST-value → (list component ...))
    reconstruct-fn ; ((list cell-value ...) → AST-value)
    component-lattices  ; (list (merge-fn contradicts?) ...)
    binder-depth   ; natural: how many components are under a binder (0 for App, 1 for Pi/Sigma)
+   domain         ; symbol: 'type or 'data — which system owns this
    ))
 ```
 
-Example registrations:
+**Type constructor registrations** (System 1):
 
 ```racket
-(register-type-ctor! 'Pi
+(register-ctor! 'Pi
   #:arity 3  ;; mult, domain, codomain
   #:extract (λ (v) (list (expr-Pi-mult v) (expr-Pi-domain v) (expr-Pi-codomain v)))
   #:reconstruct (λ (cs) (expr-Pi (first cs) (second cs) (third cs)))
   #:component-lattices (list mult-lattice type-lattice type-lattice)
-  #:binder-depth 1)  ;; codomain is under a binder
+  #:binder-depth 1  ;; codomain is under a binder
+  #:domain 'type)
 
-(register-type-ctor! 'App
+(register-ctor! 'App
   #:arity 2  ;; func, arg
   #:extract (λ (v) (list (expr-app-func v) (expr-app-arg v)))
   #:reconstruct (λ (cs) (expr-app (first cs) (second cs)))
   #:component-lattices (list type-lattice type-lattice)
-  #:binder-depth 0)
+  #:binder-depth 0
+  #:domain 'type)
 
-(register-type-ctor! 'Eq
+(register-ctor! 'Eq
   #:arity 3  ;; type, lhs, rhs
   #:extract (λ (v) (list (expr-Eq-type v) (expr-Eq-lhs v) (expr-Eq-rhs v)))
   #:reconstruct (λ (cs) (expr-Eq (first cs) (second cs) (third cs)))
   #:component-lattices (list type-lattice type-lattice type-lattice)
-  #:binder-depth 0)
+  #:binder-depth 0
+  #:domain 'type)
 ```
+
+**Data constructor registrations** (System 2):
+
+```racket
+(register-ctor! 'cons
+  #:arity 2  ;; head, tail
+  #:extract (λ (v) (list (second v) (third v)))  ;; from '(cons h t)
+  #:reconstruct (λ (cs) (list 'cons (first cs) (second cs)))
+  #:component-lattices (list term-lattice term-lattice)
+  #:binder-depth 0
+  #:domain 'data)
+
+(register-ctor! 'some
+  #:arity 1  ;; inner
+  #:extract (λ (v) (list (second v)))  ;; from '(some x)
+  #:reconstruct (λ (cs) (list 'some (first cs)))
+  #:component-lattices (list term-lattice)
+  #:binder-depth 0
+  #:domain 'data)
+
+(register-ctor! 'suc
+  #:arity 1  ;; predecessor
+  #:extract (λ (v) (list (second v)))  ;; from '(suc n)
+  #:reconstruct (λ (cs) (list 'suc (first cs)))
+  #:component-lattices (list term-lattice)
+  #:binder-depth 0
+  #:domain 'data)
+
+(register-ctor! 'pair
+  #:arity 2  ;; fst, snd
+  #:extract (λ (v) (list (second v) (third v)))
+  #:reconstruct (λ (cs) (list 'pair (first cs) (second cs)))
+  #:component-lattices (list term-lattice term-lattice)
+  #:binder-depth 0
+  #:domain 'data)
+```
+
+**Key insight**: Data constructor descriptors use the same generic
+decompose/reconstruct/merge from §5.5.3. The `domain` field distinguishes which
+lattice family to use for component cells (type-lattice vs term-lattice), but the
+infrastructure is shared. Adding a new data constructor is one registration, not a
+new case in `unify-terms` + `normalize-term-deep` + `ground->prologos-expr`.
 
 #### 5.5.3 Generic Operations Derived From Descriptors
 
-All three currently-independent implementations collapse into generic operations
+All three currently-independent implementations (for System 1) plus the fragile
+normalize/denormalize bridge (for System 2) collapse into generic operations
 parameterized by the descriptor:
 
-**Generic decomposition** (replaces `maybe-decompose` + per-tag cases):
+**Generic decomposition** (replaces `maybe-decompose` + per-tag cases + `normalize-term-deep`):
 ```
 generic-decompose(net, cell, value):
-  tag = type-constructor-tag(value)
-  desc = lookup-type-ctor-desc(tag)
+  tag = constructor-tag(value)   ;; works for both type and data constructors
+  desc = lookup-ctor-desc(tag)
   if not desc: return net  ;; atom, no decomposition
   components = desc.extract-fn(value)
   (net*, sub-cells) = get-or-create-sub-cells(net, cell, tag, components)
   return net*
 ```
 
-**Generic reconstruction** (replaces `make-pi-reconstructor`, `make-app-reconstructor`, ...):
+**Generic reconstruction** (replaces `make-pi-reconstructor`, `make-app-reconstructor`,
+... + `ground->prologos-expr`):
 ```
 generic-reconstructor(parent-cell, desc, sub-cells):
   fire(net):
     values = map(net-cell-read, sub-cells)
-    if any type-bot: return net  ;; wait
-    if any type-top: return net-cell-write(net, parent-cell, type-top)
+    if any ⊥: return net  ;; wait for more info
+    if any ⊤: return net-cell-write(net, parent-cell, ⊤)  ;; contradiction
     return net-cell-write(net, parent-cell, desc.reconstruct-fn(values))
 ```
 
-**Generic merge** (replaces `try-unify-pure` recursive cases):
+**Generic merge** (replaces `try-unify-pure` recursive cases + `unify-terms` list case):
 ```
-generic-type-merge(v1, v2):
-  tag1, tag2 = type-constructor-tag(v1), type-constructor-tag(v2)
-  if tag1 ≠ tag2: return type-top  ;; sum lattice: different summands → ⊤
-  desc = lookup-type-ctor-desc(tag1)
+generic-merge(v1, v2):
+  tag1, tag2 = constructor-tag(v1), constructor-tag(v2)
+  if tag1 ≠ tag2: return ⊤  ;; sum lattice: different summands → contradiction
+  desc = lookup-ctor-desc(tag1)
   cs1, cs2 = desc.extract-fn(v1), desc.extract-fn(v2)
   merged = zipWith(component-merge, desc.component-lattices, cs1, cs2)
-  if any ⊤: return type-top
+  if any ⊤: return ⊤
   return desc.reconstruct-fn(merged)
 ```
 
 #### 5.5.4 What This Gives Us
 
-**Single source of structural truth.** Adding a new compound type (which we do
-periodically — PVec, Set, Map were recent additions) requires ONE descriptor
-registration. The pipeline exhaustiveness checklist (`.claude/rules/pipeline.md`)
-currently requires touching 14 files for a new AST node; the descriptor registry
-reduces the compound-type-specific surface to one registration site.
+**Single source of structural truth.** Adding a new compound type OR data constructor
+requires ONE descriptor registration. The pipeline exhaustiveness checklist
+(`.claude/rules/pipeline.md`) currently requires touching 14 files for a new AST node;
+the descriptor registry reduces the compound-type-specific surface to one registration
+site. For data constructors, the current triple of `normalize-term-deep` +
+`solver-term->prologos-expr` + `ground->prologos-expr` collapses to one descriptor.
 
 **Compositional monotonicity.** Product lattice monotonicity: if each component
 merge is monotone, the product merge is automatically monotone (standard theorem).
@@ -691,28 +847,30 @@ operates on the per-command elab-network only.
 
 ## 6. Implementation Phases
 
-### Phase 1: Type Constructor Descriptor Registry + Unify-Propagator Infrastructure
+### Phase 1: Constructor Descriptor Registry + Generic Infrastructure
 
-**What**: Create the `type-ctor-desc` registry (§5.5.2), the generic decomposition
+**What**: Create the `ctor-desc` registry (§5.5.2), the generic decomposition
 and reconstruction machinery (§5.5.3), and the `unify-propagator` function that
 dispatches through descriptors rather than hardcoded match clauses.
 
-**Files**: New `type-ctor-registry.rkt`, `unify.rkt`, `elaborator-network.rkt`
+**Files**: New `ctor-registry.rkt`; modified `unify.rkt`, `elaborator-network.rkt`, `relations.rkt`
 
 **Deliverables**:
-1. `type-ctor-desc` struct and `register-type-ctor!` / `lookup-type-ctor-desc`
-2. Descriptor registrations for all 11 compound type tags (Pi, Sigma, App, Eq,
-   Vec, Fin, Pair, Lam, PVec, Set, Map)
-3. `generic-decompose` and `generic-reconstruct` parameterized by descriptor
-4. `current-punify-enabled?` parameter (default #f) as A/B toggle
-5. When enabled, `unify-core` delegates to `unify-via-propagator` which uses
+1. `ctor-desc` struct and `register-ctor!` / `lookup-ctor-desc`
+2. Type constructor registrations for all 11 compound type tags (Pi, Sigma, App,
+   Eq, Vec, Fin, Pair, Lam, PVec, Set, Map) — domain `'type`
+3. Data constructor registrations for core prelude types (cons, nil, some, none,
+   suc, zero, pair, ok, err) — domain `'data`
+4. `generic-decompose` and `generic-reconstruct` parameterized by descriptor
+5. `current-punify-enabled?` parameter (default #f) as A/B toggle
+6. When enabled, `unify-core` delegates to `unify-via-propagator` which uses
    the generic machinery; when disabled, existing code runs unchanged
 
 **Approach**: The descriptor table is the single source of structural truth.
 `make-structural-unify-propagator` (elaborator-network.rkt:889) and
 `try-unify-pure` (type-lattice.rkt:168) both become thin wrappers around
-generic operations. This is a refactoring gate — all subsequent phases operate
-through descriptors, not hardcoded per-tag cases.
+generic operations. This is a refactoring gate — all subsequent phases (for
+both System 1 and System 2) operate through descriptors, not hardcoded per-tag cases.
 
 **Test**: All tests pass with toggle OFF. Toggle ON + run structural decomp tests
 (`test-structural-decomp.rkt`) and a subset of the acceptance file.
@@ -720,7 +878,7 @@ through descriptors, not hardcoded per-tag cases.
 **Benchmark**: `bench-ab.rkt` with toggle OFF must show no regression (refactoring
 should not change behavior). Toggle ON: establish new baseline.
 
-### Phase 2: flex-rigid as Cell Write
+### Phase 2: flex-rigid as Cell Write (System 1)
 
 **What**: Replace `solve-flex-rigid` → `solve-meta!` with `cell-write` to the
 meta's existing propagator cell. Remove the callback indirection.
@@ -731,7 +889,7 @@ This is mostly removing indirection.
 
 **Test**: flex-rigid micro-benchmarks. Type-adversarial baseline.
 
-### Phase 3: Pi Decomposition as Sub-Cells
+### Phase 3: Pi Decomposition as Sub-Cells (System 1)
 
 **What**: For `pi` classification (18%), `generic-decompose` uses the Pi descriptor
 to create mult, domain, and codomain sub-cells via `get-or-create-sub-cells`.
@@ -744,7 +902,7 @@ The Pi descriptor's `binder-depth: 1` ensures codomain opening with fresh fvar.
 
 **Test**: Pi decomposition micro-benchmarks (bench-type-unify.rkt: pi-d5, pi-d10, pi-d20).
 
-### Phase 4: Sigma/Lambda/Remaining Compound Types
+### Phase 4: Sigma/Lambda/Remaining Compound Types (System 1)
 
 **What**: Enable descriptors for Sigma, Lam, App, Eq, Vec, Fin, Pair, PVec, Set,
 Map. With the generic machinery from Phase 1 and the pattern proven in Phase 3,
@@ -755,40 +913,78 @@ etc. functions needed. Each tag's descriptor drives the generic operations.
 
 **Test**: Binder micro-benchmarks. App decomposition micro-benchmarks.
 
-### Phase 5: (removed — merged into Phase 4 via generic descriptors)
+### Phase 5: Data Constructor Cell-Trees (System 2)
 
-Phases 3-5 in the original design were separate because each tag required its own
-decomposition code. With the descriptor registry, once Pi works (Phase 3), remaining
-tags are registration + testing (Phase 4). This is the pipeline-reduction payoff.
+**What**: Migrate `unify-terms` to use cell-tree operations via data constructor
+descriptors. Logic variables become cells (analogous to metas in System 1). The
+DFS search strategy and `solve-goals` conjunction solver are preserved.
+
+**Sub-phases**:
+
+**5a: Solver cell infrastructure.** Create a solver-specific prop-network (or
+per-branch prop-network clone) for cell-tree unification within solve contexts.
+Logic variables get cells at `term-bot`. `walk` becomes `net-cell-read` with
+chain following through cell values.
+
+**5b: Data constructor decomposition.** `unify-terms` dispatches through
+`lookup-ctor-desc` for compound terms. `(cons 1 xs)` vs `(cons 2 ys)` becomes:
+decompose both via `cons` descriptor → unify head sub-cells → unify tail sub-cells.
+Generic merge handles tag mismatch (cons vs nil → ⊤).
+
+**5c: DFS backtracking with cell state.** Each `solve-app-goal` clause attempt
+needs an isolated cell state — if a clause fails, cell writes from that branch
+must not persist. Two strategies:
+- **Copy-on-branch**: Clone the prop-network at each branch point. Cheap because
+  CHAMP is persistent/immutable — "clone" is O(1) pointer copy.
+- **TMS worlds**: Use TMS assumption tagging to mark per-branch writes. Retract
+  on failure. More aligned with long-term ATMS vision but higher complexity.
+- **Recommended**: Copy-on-branch for Phase 5. The immutable prop-network struct
+  makes this natural — just pass different networks to different branches.
+
+**5d: Bridge retirement.** Remove `normalize-term-deep`, `solver-term->prologos-expr`,
+and `ground->prologos-expr`. Solver operates on AST nodes directly via descriptors.
+`walk*` (deep resolution for output) becomes "read cell-tree, reconstruct via
+descriptors."
+
+**Test**: solve-adversarial.prologos baseline must not regress >10%. Acceptance file
+§B (user-defined relations), §D (guards), §H (is-goal), §K (mixed rel/functional),
+§L (prelude constructor unification) — §L is the key unlock (currently broken).
+
+**Benchmark**: `bench-ab.rkt` on solve-adversarial. `bench-solve-pipeline.rkt` for
+micro-level comparison.
 
 ### Phase 6: Fast-Path Preservation
 
 **What**: Ensure the 80% fast-path (pre-WHNF spine comparison, identical-pointer)
-still bypasses the propagator machinery entirely. Cell-tree overhead must be zero
-for cases that don't need it.
+still bypasses the propagator machinery entirely for System 1. For System 2, ensure
+simple ground-term equality (`equal?` after walk) still short-circuits without
+cell creation.
 
 **Test**: ok-classification micro-benchmarks. Full suite timing.
 
-### Phase 7: Callback Elimination
+### Phase 7: Callback Elimination (System 1)
 
 **What**: Remove `current-prop-cell-write`, `current-prop-cell-read`,
 `current-prop-has-contradiction?` callbacks. Replace with direct cell operations
 through the descriptor-generic machinery.
 
-**Depends**: Phases 2-4 complete (all decomposition paths use cells via descriptors).
+**Depends**: Phases 2-4 complete (all System 1 decomposition paths use cells via descriptors).
 
 **Key**: The descriptor registry means `unify.rkt` no longer needs to know about
 the propagator network's internal API — it operates through descriptors that
 encapsulate the structural knowledge. Callbacks were the bridge between the
 algorithmic unifier and the network; descriptors make them unnecessary.
 
-### Phase 8: Occurs Check as Cycle Detection
+### Phase 8: Occurs Check as Cycle Detection (Both Systems)
 
-**What**: Replace AST-walking `occurs-check-meta` with cell-tree cycle detection.
+**What**: Replace AST-walking `occurs-check-meta` (System 1) with cell-tree cycle
+detection. Add occurs check to System 2 (currently missing — §3.9). Both share the
+same cell-pointer reachability check.
 
-**Test**: Occurs check micro-benchmarks.
+**Test**: Occurs check micro-benchmarks. Regression test for infinite-term prevention
+in solver.
 
-### Phase 9: Zonk Simplification
+### Phase 9: Zonk Simplification (System 1)
 
 **What**: Final zonk becomes "read cell-tree, return value." Intermediate zonk
 reads cell values (may be type-bot for unsolved metas).
@@ -803,9 +999,14 @@ reads cell values (may be type-bot for unsolved metas).
   No cell-tree benefit. Stays imperative.
 - **Union unification**: Rare (~0%). Low priority.
 - **HKT normalization** (retry): Rare. Stays as preprocessing.
-- **Solver unification** (relations.rkt): System 2, flat substitution. Independent.
+- **DFS search strategy** (`solve-goals`, `solve-app-goal`): The conjunction solver
+  and clause-level backtracking are preserved. PUnify replaces the unification
+  substrate, not the search strategy. (ATMS-world search is a future track.)
+- **NAF and cut**: `not` goals and `cut` in the solver are search-level, not
+  unification-level. Unchanged.
 - **WHNF reduction**: Still called before classification. Unchanged.
 - **De Bruijn infrastructure**: `zonk-at-depth`, `open-expr`, `subst` — preserved.
+- **`is` goal evaluation**: Expression evaluation in solver stays as-is.
 
 ---
 
@@ -814,15 +1015,18 @@ reads cell values (may be type-bot for unsolved metas).
 | Metric | Baseline | Target | Hard Limit |
 |--------|----------|--------|------------|
 | Type-adversarial | 17.9s | ≤19.7s (10%) | ≤21.5s (20%) |
+| Solve-adversarial | 14.3s | ≤15.7s (10%) | ≤17.2s (20%) |
 | Full suite | 183s | ≤200s (10%) | ≤220s (20%) |
 | Cell allocation/cmd | ~82 | ≤100 | ≤120 |
 | Unify wall time % | 10% | ≤12% | ≤15% |
 
-**Per-phase budget**: Each phase must not regress type-adversarial by more than 2%.
-Cumulative budget is 10%. If Phase N exceeds 2%, investigate before Phase N+1.
+**Per-phase budget**: Phases 1-4 (System 1) must not regress type-adversarial by
+more than 2% each. Phase 5 (System 2) must not regress solve-adversarial by more
+than 2% per sub-phase. Cumulative budget is 10% for each benchmark.
 
 **Measurement**: `bench-ab.rkt --runs 10 --ref HEAD~1` after each phase.
-`profile-unify.rkt` for classification distribution stability.
+`profile-unify.rkt` for classification distribution stability (System 1).
+`bench-solve-pipeline.rkt` for solver micro-benchmarks (System 2).
 
 ---
 
@@ -869,6 +1073,44 @@ Cell-tree state is on the propagator network, which has TMS-based retraction.
 
 **Mitigation**: Track 4 already established TMS retraction for per-meta cells.
 PUnify's cell-tree nodes use the same TMS infrastructure.
+
+### MEDIUM: DFS Backtracking with Cell State (System 2)
+
+**Risk**: The DFS solver backtracks by discarding substitutions from failed branches.
+With cell-trees, failed branches have written cell values that must be retracted.
+If cell state leaks between branches, the solver produces incorrect results.
+
+**Mitigation**: Copy-on-branch strategy (Phase 5c). CHAMP-based prop-network is
+persistent/immutable — "cloning" is O(1) struct-copy. Each branch gets its own
+network; on failure, the branch's network is simply discarded. On success, the
+branch's network replaces the parent. This is analogous to the current substitution-
+threading pattern (`foldl unify-terms` passing subst through) — just with a richer
+data structure.
+
+**Detection**: solve-adversarial benchmark (14.3s baseline, 0.3% CV) is the primary
+regression detector. Add specific backtracking-intensive tests in Phase 5.
+
+### MEDIUM: `normalize-term-deep` Bridge During Migration (System 2)
+
+**Risk**: Phase 5 must incrementally migrate from flat substitution to cell-trees.
+During migration, some paths use the old `normalize-term-deep` bridge while others
+use descriptors. Mixed representations can cause subtle failures.
+
+**Mitigation**: Phase 5a establishes the cell infrastructure alongside the existing
+substitution. Phase 5b adds descriptor-based unification as an alternative path with
+a toggle (like `current-punify-enabled?`). Phase 5d retires the bridge only after
+all paths are migrated. The toggle ensures we can always fall back.
+
+### LOW: Per-Branch Cell Allocation Pressure (System 2)
+
+**Risk**: DFS solver may explore many branches (e.g., 5-hop×5 join = 3125 branches
+in benchmarks). Each branch creates cells. Total cell allocation could be much higher
+than System 1's ~2,500 cells.
+
+**Mitigation**: Copy-on-branch shares structure — cells created in parent branches
+are shared (CHAMP structural sharing). Only delta cells from each branch are new
+allocations. For ground-term unification (the common case in the solver), the fast-
+path short-circuits with zero cell creation.
 
 ### LOW: Error Message Regression
 
@@ -943,14 +1185,18 @@ lambda dispatch through struct accessors as well as match clause dispatch.
 
 | File | Role in PUnify |
 |------|---------------|
-| `type-ctor-registry.rkt` | **NEW** — Type constructor descriptor table, generic decompose/reconstruct |
-| `unify.rkt` | Primary target — classifier + dispatcher + fire function |
+| `ctor-registry.rkt` | **NEW** — Domain-agnostic constructor descriptor table, generic decompose/reconstruct |
+| `unify.rkt` | System 1 target — classifier + dispatcher + fire function |
+| `relations.rkt` | System 2 target — `unify-terms`, `walk`, `solve-goals`, DFS solver |
 | `elaborator-network.rkt` | `get-or-create-sub-cells`, decomposition registry, cell creation |
 | `metavar-store.rkt` | `solve-meta!`, meta-info management, callback parameters |
 | `propagator.rkt` | `net-new-cell`, `net-add-propagator`, worklist, quiescence |
+| `term-lattice.rkt` | Existing System 3 cell-tree pattern — model for PUnify design |
 | `performance-counters.rkt` | `unify-profile` instrumentation |
 | `tools/profile-unify.rkt` | Classification distribution monitoring |
 | `tools/bench-ab.rkt` | A/B regression testing |
-| `benchmarks/micro/bench-type-unify.rkt` | Per-operation micro-benchmarks |
-| `benchmarks/comparative/type-adversarial.prologos` | End-to-end benchmark (17.9s baseline) |
+| `benchmarks/micro/bench-type-unify.rkt` | Per-operation micro-benchmarks (System 1) |
+| `benchmarks/micro/bench-solve-pipeline.rkt` | Per-operation micro-benchmarks (System 2) |
+| `benchmarks/comparative/type-adversarial.prologos` | End-to-end benchmark — System 1 (17.9s baseline) |
+| `benchmarks/comparative/solve-adversarial.prologos` | End-to-end benchmark — System 2 (14.3s baseline) |
 | `examples/2026-03-19-punify-acceptance.prologos` | Acceptance file (169 cmds, 0 errors) |
