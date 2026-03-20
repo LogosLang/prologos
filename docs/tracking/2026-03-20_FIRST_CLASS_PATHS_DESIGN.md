@@ -12,7 +12,7 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Acceptance file | ⬜ | |
+| 0 | Acceptance file | ✅ | Baseline passes with 0 errors |
 | 1 | AST node + surface syntax | ⬜ | |
 | 2 | Parser: path literal production | ⬜ | |
 | 3 | Reader integration: dot-to-path | ⬜ | |

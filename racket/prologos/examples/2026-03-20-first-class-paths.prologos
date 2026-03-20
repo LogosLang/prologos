@@ -1,0 +1,298 @@
+ns acceptance::first-class-paths
+
+;; ========================================================================
+;;
+;;   First-Class Path Values — Acceptance File
+;;   Phase 0 (Pre-Implementation — aspirational + baseline canary)
+;;
+;;   Run via: process-file "racket/prologos/examples/2026-03-20-first-class-paths.prologos"
+;;
+;;   Design doc: docs/tracking/2026-03-20_FIRST_CLASS_PATHS_DESIGN.md
+;;
+;;   This file exercises:
+;;     - Existing dot-access baseline (§A)
+;;     - Path literals #p(...) (§B)
+;;     - get-in / update-in with path values (§C)
+;;     - Path combinators and destructuring (§D)
+;;     - Broadcast .*field syntax (§E)
+;;     - Key renaming ^ syntax (§F)
+;;     - Cross-feature composition (§G)
+;;     - Broad regression canary (§H)
+;;
+;;   Conventions:
+;;     - Commented-out = aspirational (requires implementation)
+;;     - Uncommented = must pass today; regression if broken after any phase
+;;     - [PHASE N] annotations mark which phase unlocks each section
+;;
+;; ========================================================================
+
+
+;; ========================================================================
+;; §A — EXISTING DOT-ACCESS BASELINE (must pass now)
+;; ========================================================================
+;;
+;; These exercise the current dot-access, postfix index, and get-in/update-in
+;; in sexp mode. They must continue passing through all phases.
+
+;; A1: Simple dot-access on maps
+def user := {:name "Alice" :age 30 :role "admin"}
+user.name       ;; => "Alice"
+user.age        ;; => 30
+
+;; A2: Keyword dot-access (.:key prefix form)
+.:name user     ;; => "Alice"
+
+;; A3: Chained dot-access on nested maps
+def nested := {:a {:b {:c 42}}}
+nested.a.b.c    ;; => 42
+
+;; A4: Postfix indexing on lists
+def xs := '[10 20 30]
+xs[0]           ;; => 10
+xs[2]           ;; => 30
+
+;; A5: Dot-access on expression result
+[map-assoc user :role "superadmin"].role   ;; => "superadmin"
+
+;; A6: Nil-safe access
+def maybe-user := {:name "Bob"}
+;; ASPIRATIONAL — nil-safe on missing key
+;; maybe-user#.address#.zip   ;; => nil
+
+
+;; ========================================================================
+;; §B — PATH LITERALS (aspirational) [PHASE 1-3]
+;; ========================================================================
+;;
+;; Path literals as first-class values via #p(...) syntax.
+;; Colon optional inside #p(...) — all identifiers are implicitly keys.
+
+;; B1: Simple path literal
+;; def p1 := #p(name)
+
+;; B2: Deep path literal
+;; def p2 := #p(address.zip)
+
+;; B3: Deep path literal (colon form also accepted)
+;; def p3 := #p(:address.zip)
+
+;; B4: Branching path
+;; def p4 := #p(address.{zip city})
+
+;; B5: Wildcard path
+;; def p5 := #p(address.*)
+
+;; B6: Globstar path
+;; def p6 := #p(address.**)
+
+;; B7: Path is a value — can be bound and referenced
+;; def my-path := #p(name)
+;; my-path   ;; => #p(name)
+
+
+;; ========================================================================
+;; §C — GET-IN / UPDATE-IN WITH PATH VALUES (aspirational) [PHASE 4-6]
+;; ========================================================================
+;;
+;; Using first-class path values with get-in and update-in.
+
+def deep-map := {:a {:b {:c 99}}}
+
+;; C1: get-in with static path literal (inlines to chained map-get)
+;; [get-in deep-map #p(a.b.c)]   ;; => 99
+
+;; C2: get-in with bound path variable (dynamic path)
+;; def path-abc := #p(a.b.c)
+;; [get-in deep-map path-abc]    ;; => 99
+
+;; C3: update-in with static path
+;; [update-in deep-map #p(a.b.c) [int+ _ 1]]   ;; => {:a {:b {:c 100}}}
+
+;; C4: update-in with bound path variable
+;; def up-path := #p(a.b.c)
+;; [update-in deep-map up-path [int+ _ 1]]      ;; => {:a {:b {:c 100}}}
+
+;; C5: get-in with branching path — returns sub-map of matched keys
+;; def user2 := {:name "Alice" :age 30 :email "a@b.com"}
+;; [get-in user2 #p({name email})]   ;; => {:name "Alice" :email "a@b.com"}
+
+;; C6: get-in with inline keyword path (WS fix — currently broken)
+;; [get-in deep-map :a.b.c]     ;; => 99  (requires preparse fix)
+
+;; C7: Path passed to a higher-order function
+;; def records := '[{:x 1 :y 10}, {:x 2 :y 20}, {:x 3 :y 30}]
+;; [map [fn [r] [get-in r #p(x)]] records]   ;; => '[1 2 3]
+
+;; C8: get-in on schema-typed value
+;; schema Point :x Int :y Int
+;; def origin : Point := {:x 0 :y 0}
+;; [get-in origin #p(x)]        ;; => 0
+
+
+;; ========================================================================
+;; §D — PATH COMBINATORS + DESTRUCTURING (aspirational) [PHASE 7]
+;; ========================================================================
+;;
+;; Pure Prologos path combinators and pattern matching on paths.
+
+;; D1: path-append — concatenate two paths
+;; def pa := [path-append #p(a) #p(b.c)]
+;; [get-in {:a {:b {:c 42}}} pa]   ;; => 42
+
+;; D2: path-depth
+;; [path-depth #p(a.b.c)]         ;; => 3
+;; [path-depth #p(name)]          ;; => 1
+
+;; D3: path-head / path-tail
+;; [path-head #p(a.b.c)]          ;; => #p(a)
+;; [path-tail #p(a.b.c)]          ;; => #p(b.c)
+
+;; D4: path-leaf?
+;; [path-leaf? #p(name)]           ;; => true
+;; [path-leaf? #p(a.b)]            ;; => false
+
+;; D5: path-segments — decompose to keyword list
+;; [path-segments #p(a.b.c)]       ;; => '[:a :b :c]
+
+;; D6: path-from-segments — construct from keyword list
+;; [path-from-segments '[:a :b]]   ;; => #p(a.b)
+
+;; D7: Path destructuring in match
+;; spec describe-path Path -> String
+;; defn describe-path
+;;   | #p(single)     -> "leaf path"
+;;   | #p(head . rest) -> "deep path"
+
+;; D8: Path destructuring — extract head
+;; (match #p(a.b.c)
+;;   | #p(h . _) -> h)             ;; => #p(a) or :a
+
+
+;; ========================================================================
+;; §E — BROADCAST SYNTAX .*field (aspirational) [PHASE 7b]
+;; ========================================================================
+;;
+;; Maps a path extraction over every element in a collection.
+
+;; NOTE: heterogeneous map lists hit a QTT multiplicity bug (known limitation).
+;; Use homogeneous maps for baseline canary.
+;; def people := '[{:name "Alice" :age 30}, {:name "Bob" :age 25}, {:name "Carol" :age 35}]
+
+;; E1: Simple broadcast — extract single field from all elements
+;; people.*name                    ;; => '["Alice" "Bob" "Carol"]
+
+;; E2: Broadcast with numeric field
+;; people.*age                     ;; => '[30 25 35]
+
+;; E3: Deep broadcast on nested structures
+;; def employees := '[{:name "Alice" :address {:zip 97403 :city "Eugene"}}, {:name "Bob" :address {:zip 10001 :city "NYC"}}]
+;; employees.*address.zip          ;; => '[97403 10001]
+;; employees.*address.city         ;; => '["Eugene" "NYC"]
+
+;; E4: Broadcast with branching
+;; employees.*address.{zip city}   ;; => '[{:zip 97403 :city "Eugene"} {:zip 10001 :city "NYC"}]
+
+;; E5: Broadcast on solver results
+;; def solutions := [solve (fresh [x y] (eq? [+ x y] 10) (eq? [- x y] 2))]
+;; solutions.*x                    ;; => all x-values from solutions
+
+
+;; ========================================================================
+;; §F — KEY RENAMING ^ SYNTAX (aspirational) [PHASE 7c]
+;; ========================================================================
+;;
+;; Rename keys in projection results — SQL SELECT ... AS equivalent.
+
+;; Aspirational api-user (heterogeneous nested maps — QTT bug blocks this today):
+;; def api-user := {:user-name "Pete" :id 1234 :address {:zip 12345 :city "Springfield"}}
+;; Baseline api-user for canary (homogeneous string map):
+def api-user := {:user-name "Pete" :id "1234" :address-city "Springfield"}
+
+;; F1: Simple rename (uses aspirational api-user)
+;; api-user.{user-name^name id^userId}
+;; => {:name "Pete" :userId 1234}
+
+;; F2: Deep path with rename on leaf (uses aspirational api-user)
+;; api-user.{user-name^name address.city^location}
+;; => {:name "Pete" :location "Springfield"}
+
+;; F3: Branching with partial renames (uses aspirational api-user)
+;; api-user.{user-name^name address.{zip city^loc}}
+;; => {:name "Pete" :zip 12345 :loc "Springfield"}
+
+;; F4: Rename in get-in with path literal (works with baseline api-user)
+;; [get-in api-user #p(user-name^name)]
+;; => {:name "Pete"}
+
+;; F5: Rename NOT allowed in update-in (should be a parse error)
+;; [update-in api-user #p(user-name^name) str::upper]   ;; PARSE ERROR
+
+;; F6: Broadcast + rename composition
+;; def users := '[{:user-name "A" :id 1}, {:user-name "B" :id 2}]
+;; users.*{user-name^name id}
+;; => '[{:name "A" :id 1} {:name "B" :id 2}]
+
+
+;; ========================================================================
+;; §G — CROSS-FEATURE COMPOSITION (aspirational) [PHASE 6+]
+;; ========================================================================
+;;
+;; Combining paths with other language features.
+
+;; G1: Path in pipeline
+;; |> deep-map [get-in _ #p(a.b.c)] [int+ _ 1]   ;; => 100
+
+;; G2: Path with partial application
+;; def extract-name := [get-in _ #p(name)]
+;; [map extract-name people]       ;; => '["Alice" "Bob" "Carol"]
+
+;; G3: Path as argument to function
+;; spec extract-field {A : Type} [List A] Path -> [List A]
+;; defn extract-field [xs p]
+;;   [map [fn [x] [get-in x p]] xs]
+;; [extract-field people #p(name)] ;; => '["Alice" "Bob" "Carol"]
+
+;; G4: Broadcast in pipeline
+;; |> employees .*address.zip [map [int+ _ 100] _]  ;; => '[97503 10101]
+
+;; G5: update-in + get-in round-trip
+;; def m := {:a {:b 5}}
+;; def p := #p(a.b)
+;; [get-in [update-in m p [int* _ 2]] p]  ;; => 10
+
+;; G6: Selection with path literal (schema-aware)
+;; schema Address :street String :city String :zip Int
+;; schema User :name String :address Address
+;; selection ShippingZip from User :requires [#p(address.zip)]
+
+
+;; ========================================================================
+;; §H — BROAD REGRESSION CANARY (must pass now)
+;; ========================================================================
+;;
+;; Basic language features that must not regress.
+
+;; H1: Arithmetic
+[+ 1 2]        ;; => 3
+[* 6 7]        ;; => 42
+
+;; H2: Map operations
+def m := {:a 1 :b 2 :c 3}
+[map-get m :a]        ;; => 1
+[map-assoc m :d 4].d  ;; => 4
+
+;; H3: List operations
+def ys := '[1 2 3 4 5]
+[head ys]             ;; => (some 1)
+[length ys]           ;; => 5N
+
+;; H4: Higher-order functions
+[map [fn [x : Int] [int+ x 10]] '[1 2 3]]  ;; => '[11 12 13]
+
+;; H5: Boolean logic
+[and true true]       ;; => true
+[or false true]       ;; => true
+[not false]           ;; => true
+
+;; H6: String operations
+[str::append "hello" " world"]   ;; => "hello world"
