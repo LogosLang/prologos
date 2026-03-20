@@ -359,9 +359,27 @@ Known candidates from Track 7:
 
 This audit follows the pattern established by the Track 7 stratified architecture audit (`2026-03-18_STRATIFIED_ARCHITECTURE_AUDIT.md`): classify all state, then design the migration.
 
-**Design reference**: `docs/tracking/2026-03-04_PROPAGATOR_MIGRATION_GDE.md` § Track 4 (P1-G). Track 7 Phase 6a finding (commit `0b728b2`).
+**Callback Elimination: Dependency Graph, Not Flat List** (PUnify PIR §16.3)
 
-**Design document**: TBD — full design required given risk level. Imperative state audit as Phase 0.
+The 12 callback parameters in `metavar-store.rkt` are not uniformly eliminable — they form a dependency hierarchy where leaf/branch callbacks peeled off across prior tracks, but root callbacks require coordinated restructuring:
+
+| Layer | Callbacks | Eliminated By | Why It Worked |
+|-------|-----------|---------------|---------------|
+| Leaf | Scanning callbacks (3) | Track 7 Phase 7a | Self-contained in `process-command` |
+| Branch | `current-prop-has-contradiction?` | PUnify Phase 7 | Unification-specific; dead after cell-tree migration |
+| Root | `current-prop-cell-read` (48 sites), `current-prop-cell-write` (15 sites) | **Track 8 second half** | Serve entire elaboration pipeline — typing, reduction, zonk, all registries, speculation |
+
+The root callbacks exist because of a circular dependency: `metavar-store.rkt` provides meta infrastructure that `elab-network.rkt` needs, while `elab-network.rkt` provides cell-read/write that `metavar-store.rkt` needs. Runtime callback injection breaks the cycle.
+
+**Recommended elimination path**: Extract cell-operation API into a `cell-ops.rkt` module importable by both. `elab-cell-read`/`elab-cell-write` are thin wrappers — unwrap `elab-network` to get `prop-network`, call `net-cell-read`/`net-cell-write`. This connects to id-map accessibility (§Track 7 Phase 9 deferral) — both require the same elab-network unwrapping refactor.
+
+**Coordination requirement**: Cell-ops extraction + id-map migration + mult bridge elimination must happen together. Each alone moves indirection rather than removing it.
+
+See `docs/tracking/2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org` §5.2 for full analysis with three candidate approaches.
+
+**Design reference**: `docs/tracking/2026-03-04_PROPAGATOR_MIGRATION_GDE.md` § Track 4 (P1-G). Track 7 Phase 6a finding (commit `0b728b2`). PUnify PIR §16.3 (commit `c72c133`).
+
+**Design document**: TBD — full design required given risk level. Imperative state audit as Phase 0. Audit complete: `docs/tracking/2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org`.
 
 ### Track 9: General Diagnostic Engine (GDE)
 
