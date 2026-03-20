@@ -105,7 +105,7 @@ dispatcher. For each structural case:
 **App** (lines 323-327): Decompose `(expr-app f1 a1)` vs `(expr-app f2 a2)` into
 `(unify f1 f2) ∧ (unify a1 a2)`.
 
-### 2.4 State Mutation: `solve-meta!` (metavar-store.rkt:1523-1575)
+### 2.4 State Mutation: `solve-meta!` (metavar-store.rkt:1501-1575)
 
 When flex-rigid solves a meta:
 1. Increment perf counter
@@ -175,8 +175,8 @@ separately measured. Need micro-benchmark data for WHNF cost.
 
 ### 3.4 Occurs Check → Cycle Detection
 
-**Current**: `occurs-check-meta` (line 103-127 in unify.rkt) walks the AST to check
-if meta `id` appears in `term`. Linear in term size.
+**Current**: `occurs?` (unify.rkt:109-120) walks the AST to check if meta `id`
+appears in `term`. Linear in term size.
 
 **Target**: In cell-tree, cycle detection is checking if following cell pointers
 creates a cycle. O(depth) with a visited set, potentially O(1) with cell identity.
@@ -281,7 +281,7 @@ beyond flat lists fail. Prelude constructor unification in `defr` contexts is br
 
 **Target**: Data constructor descriptors enable structural decomposition of any registered
 constructor — `(some X)` decomposes into a `some`-tagged cell with one sub-cell.
-The same generic decompose/reconstruct from §5.5.3 handles both systems.
+The same generic decompose/reconstruct from §5.6.3 handles both systems.
 
 ### 3.11 System 2: No Constraint Postponement
 
@@ -343,11 +343,11 @@ existing `get-or-create-sub-cells` pattern from `elaborator-network.rkt`.
 Subsequent unifications of the same type reuse cached sub-cells.
 
 **Key insight**: The `get-or-create-sub-cells` + decomposition registry pattern
-(elaborator-network.rkt:407-444) ALREADY exists for exactly this purpose. PUnify
+(elaborator-network.rkt:428-444) ALREADY exists for exactly this purpose. PUnify
 extends it from a utility to the primary unification mechanism.
 
 **Refinement**: Option C is further refined with a **lattice-first architecture**
-(§5.5) — a type constructor descriptor registry that formalizes the recursive
+(§5.6) — a type constructor descriptor registry that formalizes the recursive
 sum-of-products structure, providing generic decomposition/reconstruction and
 compositional monotonicity guarantees. This is a design discipline over Option C's
 mechanics, not a different option — the runtime operations are identical.
@@ -418,8 +418,8 @@ use on-demand creation... we should investigate how that would fit this design."
 
 | Existing Pattern | Location | PUnify Analog |
 |-----------------|----------|---------------|
-| `get-or-create-sub-cells` | elaborator-network.rkt:407-444 | Pi/Sigma/App decomposition |
-| `identify-sub-cell` with meta lookup | elaborator-network.rkt:407-422 | Meta cells reused across decompositions |
+| `get-or-create-sub-cells` | elaborator-network.rkt:428-444 | Pi/Sigma/App decomposition |
+| `identify-sub-cell` with meta lookup | elaborator-network.rkt:407-426 | Meta cells reused across decompositions |
 | `cell-decomps` registry | prop-network struct | Cache: "has this cell been decomposed?" |
 | `pair-decomps` registry | prop-network struct | Cache: "have these two cells been unified?" |
 | Session continuation cells | session-propagators.rkt:107-144 | Codomain cells (opened under binder) |
@@ -500,7 +500,58 @@ adds NEW propagators to the network. The worklist schedules them. This enables:
 - **Incremental**: Partial solutions propagate immediately
 - **Retractable**: TMS can retract cell values during speculation
 
-### 5.4 Handling De Bruijn Indices Under Binders
+### 5.4 Termination Argument
+
+Per DESIGN_METHODOLOGY.md §3 ("State termination arguments for propagator-hosted
+computation"), any design adding propagators must include explicit termination
+arguments with guarantee levels per GÖDEL_COMPLETENESS.md.
+
+**`unify-propagator` termination: Level 1 (Tarski fixpoint)**
+
+Each `unify-propagator` watches two cells and fires when either changes. On each
+firing, it reads both cell values, classifies, and either:
+- Does nothing (ok, both-⊥) — net unchanged, no new firings
+- Writes to a meta-cell (flex-rigid) — the meta cell moves from ⊥ toward a concrete
+  value on the type lattice. Monotone: metas never un-solve.
+- Creates sub-cells and adds new unify-propagators (pi, binder, sub) — this is the
+  recursive case.
+
+**Why the recursive case terminates**: Each decomposition step reduces the **AST depth**
+of the cell values being unified. Pi decomposition produces domain and codomain, each
+strictly smaller than the Pi term. App decomposition produces func and arg, each
+strictly smaller than the App. Since AST depth is a natural number, this well-founded
+measure decreases at each decomposition step. At depth 0, values are atoms or metas —
+no further decomposition is possible. The maximum observed recursive depth is 5 (from
+profiling); pathological types could be deeper but are always finite (no infinite types
+in the system — checked by `occurs?`).
+
+**Why the meta-write case terminates**: The type lattice is finite for any given
+unification problem (finite number of metas, finite number of type constructors in
+scope). Each meta-cell transition (⊥ → concrete value) is monotone and irreversible.
+The number of metas is bounded (448 created per acceptance run, from profiling).
+Therefore, at most 448 flex-rigid firings can occur before all metas are solved.
+Each solving may wake downstream propagators, but those propagators either:
+(a) classify as `ok` (no further work), or (b) decompose (depth decreases), or
+(c) solve another meta (bounded count decreases). The product of
+`(metas remaining × max depth)` is a well-founded measure that decreases on every
+non-trivial firing.
+
+**Level and union cases**: Level unification stays imperative (not a propagator).
+Union unification is rare (~0%) and bounded by the finite union width.
+
+**Cross-stratum interaction**: `unify-propagator` operates within a single stratum
+(the base propagation stratum S0). It does not interact with higher strata (constraint
+resolution, trait resolution). The stratified quiescence mechanism from Track 2/7
+ensures that S0 reaches fixpoint before higher strata activate. Changes from higher
+strata (e.g., resolving a trait that reveals a concrete type for a meta) may trigger
+new `unify-propagator` firings at S0, but the same Tarski fixpoint applies —
+the perturbation moves cells monotonically forward.
+
+**Guarantee**: Level 1 (Tarski fixpoint on finite lattice). No fuel mechanism
+needed for correctness, though the existing fuel limit in `prop-network` provides
+a safety net for implementation bugs.
+
+### 5.5 Handling De Bruijn Indices Under Binders
 
 **Current approach** (works, preserve):
 ```racket
@@ -518,14 +569,14 @@ sub-cell holds the OPENED body (substituted with fresh fvar). This means:
 This is a subtle invariant: the `cell-decomps` registry returns the same sub-cells
 (with the same fvar substitution) on cache hit. Correctness depends on this.
 
-### 5.5 Lattice-First Architecture: Recursive Sum-of-Products
+### 5.6 Lattice-First Architecture: Recursive Sum-of-Products
 
 The type lattice for propagator cells is not a flat lattice — it is a **recursive
 sum-of-products lattice**. Recognizing this formally and building the implementation
 around it provides compositional correctness, a single source of structural truth,
 and the design vocabulary for composing with future propagator infrastructure.
 
-#### 5.5.1 The Lattice Structure
+#### 5.6.1 The Lattice Structure
 
 ```
 TypeLattice = Lifted(FlatLattice(Atom) ⊔ Σ_{tag ∈ Tags} ∏_{i=1..arity(tag)} L_i)
@@ -557,7 +608,7 @@ sub-cells are cell-ids, `term-merge` as the lattice join, `term-walk` for variab
 resolution through cells. PUnify brings Systems 1 and 2 toward System 3's model —
 the architecture is proven, not speculative.
 
-#### 5.5.2 Domain-Agnostic Constructor Descriptor Registry
+#### 5.6.2 Domain-Agnostic Constructor Descriptor Registry
 
 A single registration site for all compound structure — **both type constructors
 (System 1) and data constructors (System 2)**. The file is `ctor-registry.rkt`
@@ -640,12 +691,12 @@ A single registration site for all compound structure — **both type constructo
 ```
 
 **Key insight**: Data constructor descriptors use the same generic
-decompose/reconstruct/merge from §5.5.3. The `domain` field distinguishes which
+decompose/reconstruct/merge from §5.6.3. The `domain` field distinguishes which
 lattice family to use for component cells (type-lattice vs term-lattice), but the
 infrastructure is shared. Adding a new data constructor is one registration, not a
 new case in `unify-terms` + `normalize-term-deep` + `ground->prologos-expr`.
 
-#### 5.5.3 Generic Operations Derived From Descriptors
+#### 5.6.3 Generic Operations Derived From Descriptors
 
 All three currently-independent implementations (for System 1) plus the fragile
 normalize/denormalize bridge (for System 2) collapse into generic operations
@@ -685,7 +736,7 @@ generic-merge(v1, v2):
   return desc.reconstruct-fn(merged)
 ```
 
-#### 5.5.4 What This Gives Us
+#### 5.6.4 What This Gives Us
 
 **Single source of structural truth.** Adding a new compound type OR data constructor
 requires ONE descriptor registration. The pipeline exhaustiveness checklist
@@ -722,7 +773,7 @@ marks which components are under binders, and the decomposition machinery
 creates fresh fvars for opening. This is the lattice-indexed family from the
 lattice catalog (§ Lattice-Indexed Families) made concrete.
 
-#### 5.5.5 What This Does NOT Give Us
+#### 5.6.5 What This Does NOT Give Us
 
 **Performance differences.** The descriptor lookup adds one hash lookup per
 decomposition (~343 Pi cases → ~17µs total). The generic lambda dispatch is
@@ -738,12 +789,12 @@ covers compound types only.
 The sum-of-products model doesn't directly cover them. Unions are rare (~0%)
 and stay as a special case.
 
-### 5.6 Performance Cost Analysis: Grounded Numbers
+### 5.7 Performance Cost Analysis: Grounded Numbers
 
 Moving structural decomposition from inline recursion to cell-tree propagators
 has a concrete, measurable cost. This section provides the grounded analysis.
 
-#### 5.6.1 Cost of a Single Cell
+#### 5.7.1 Cost of a Single Cell
 
 `net-new-cell` (propagator.rkt:259) performs:
 - 1 `cell-id` struct allocation
@@ -754,7 +805,7 @@ has a concrete, measurable cost. This section provides the grounded analysis.
 
 **Total per cell**: ~4-5 allocations + 2-3 CHAMP inserts + 1-2 struct-copies.
 
-#### 5.6.2 Cost of a Cell Write
+#### 5.7.2 Cost of a Cell Write
 
 `net-cell-write` (propagator.rkt:342) performs:
 - 2-3 `champ-lookup` operations (cell, merge-fn, optionally contradiction-fn)
@@ -762,7 +813,7 @@ has a concrete, measurable cost. This section provides the grounded analysis.
 - 1 `equal?` check (old vs merged — for compound types, walks the AST)
 - If changed: 1 `struct-copy prop-cell`, 1 `champ-insert`, worklist append
 
-#### 5.6.3 Current Inline Cost vs Cell-Tree Cost Per Pi Decomposition
+#### 5.7.3 Current Inline Cost vs Cell-Tree Cost Per Pi Decomposition
 
 **Current (inline recursion)**:
 - 3 struct field accesses (O(1) each — direct accessor, ~1ns)
@@ -776,7 +827,7 @@ has a concrete, measurable cost. This section provides the grounded analysis.
 - 2 reconstructor propagators
 - ~12-20 CHAMP operations, ~8-12 prop-network struct-copies total
 
-#### 5.6.4 Aggregate Cost Estimate
+#### 5.7.4 Aggregate Cost Estimate
 
 For the acceptance file (163 commands, 1,904 classifications):
 
@@ -802,13 +853,13 @@ At measured per-operation costs:
 This is well within the 10% regression budget. The 80% fast-path (zero cells)
 is the key enabler — only 20% of unify calls create any cells at all.
 
-#### 5.6.5 Memory Cost
+#### 5.7.5 Memory Cost
 
 Per cell: ~200-300 bytes (cell-id, prop-cell, CHAMP entries, TMS wrapper).
 2,500 cells × 250 bytes = **~625KB** additional per file.
 Current working set: ~5-15MB. This is ~4-6% increase — negligible.
 
-#### 5.6.6 Compensating Factors
+#### 5.7.6 Compensating Factors
 
 **Shallower `equal?` checks.** Currently `net-cell-write` calls `(equal? merged
 old-val)` which for compound types walks the full AST tree. With cell-trees,
@@ -825,7 +876,7 @@ against the same compound type (e.g., the prelude's `map` function type unified
 in multiple call sites) reuse cached sub-cells. Currently each unification does
 fresh structural recursion. For types unified multiple times, cell-trees amortize.
 
-### 5.7 Interaction with Existing Infrastructure (formerly §5.5)
+### 5.8 Interaction with Existing Infrastructure
 
 **TMS/Speculation**: Cell-tree nodes are regular TMS cells → speculation works.
 When `save-meta-state` snapshots, cell-tree state is included. `restore-meta-state!`
@@ -843,14 +894,99 @@ registration with a native propagator that does the same thing automatically.
 **Registry Cells**: Persistent registry network (Track 3/7) is unaffected. PUnify
 operates on the per-command elab-network only.
 
+### 5.9 Design Principle Tensions and Conscious Trade-offs
+
+#### 5.9.1 Ephemeral State and Propagator Justification
+
+DESIGN_PRINCIPLES.md § "When Not To Use Propagators" identifies propagators as the
+wrong choice when *"the structure is ephemeral and single-use (per-command scratch
+space)"*. Cell-trees ARE per-command: types are elaborated fresh each command and the
+elab-network is reset by `reset-elab-network-command-state` (§10, Q2). This warrants
+explicit justification for why propagators are still the right tool here.
+
+**Why cell-trees justify propagator overhead despite being per-command**:
+
+1. **Cross-domain dependency within a command**. A single command's elaboration involves
+   multiple interacting domains: type unification, trait constraint resolution, meta
+   solving, and stratified quiescence. Cell-trees participate in all of these. When a
+   `unify-propagator` solves a meta, it wakes trait resolution propagators (stratum L1)
+   which may solve other metas, which wake further unify-propagators. This cross-domain
+   interaction is the composition argument from DESIGN_PRINCIPLES — even within a single
+   command's lifetime, the synergy of composing multiple propagator-backed structures
+   exceeds what isolated mutable stores provide.
+
+2. **TMS retraction during speculation**. Within a single command, speculative
+   type-checking (`save-meta-state`/`restore-meta-state!`) may execute multiple
+   try-and-backtrack cycles. Cell-tree state on TMS-tracked cells gets clean retraction
+   for free. The current non-TMS-tracked meta-info CHAMP requires manual snapshot/restore
+   — the very fragility that PUnify aims to eliminate (§3.7). The "ephemeral" lifetime
+   doesn't remove the need for retraction within that lifetime.
+
+3. **Fan-in within a command**. A meta appearing in multiple type positions gets
+   constrained from multiple sources during a single command's elaboration. With AST
+   unification, each constraint is processed sequentially. With cell-trees, constraints
+   from independent unification sites propagate to the same meta-cell — the propagator
+   worklist handles ordering. This is the fan-in capability that justifies propagators
+   even for short-lived state.
+
+4. **The precedent**: The elab-network is already per-command and already uses propagator
+   cells for metas, constraints, and structural decomposition. Cell-trees extend the
+   existing per-command propagator infrastructure; they don't introduce a new category
+   of ephemeral propagator use. The real design question is not "should per-command state
+   use propagators?" (already answered yes by Track 2/4/7) but "should unification
+   decomposition participate in the existing per-command propagator network?" — and the
+   composition argument makes this clearly yes.
+
+The DESIGN_PRINCIPLES caution about ephemeral state targets a different scenario:
+standalone scratch computations with no dependency tracking needs. Cell-trees are
+ephemeral in lifetime but richly connected in dependency structure.
+
+#### 5.9.2 Investment vs. Pain: The 4.8% Question
+
+DEVELOPMENT_LESSONS.md § "Let Pain Drive Design" advises: *"Don't add features until
+they're needed."* The profiling data (§2, acceptance file) shows type-level structural
+unification targets represent ~4.8% of total wall time. The performance case for
+cell-trees is objectively weak.
+
+**This design is a conscious architectural investment, not a pain-driven response.**
+We state this explicitly rather than disguising it as performance optimization:
+
+1. **The investment case**: Cell-trees are enabling infrastructure for Track 8 second
+   half (mult/level/session domain migration), Track 9 (GDE error provenance via
+   cell-tree dependency chains), and the long-term retirement of `restore-meta-state!`.
+   The descriptor registry serves as the architectural foundation for PUnify Part 3
+   (ATMS-world solver), which requires cell-tree unification as a stable substrate.
+   Building cell-trees now — while the unification architecture is fresh in context —
+   is cheaper than building them later when the context must be re-acquired.
+
+2. **The pain that does exist** (even if small in %-of-wall-time):
+   - Three independent encodings of the same structural knowledge (~420 lines total)
+     that must be kept in sync. This is maintenance pain, not performance pain.
+   - Solver unification of prelude constructors is **currently broken** (§3.10). This
+     is user-visible pain that the descriptor registry directly fixes.
+   - Speculation fragility: meta-info not TMS-tracked (§3.7) causes subtle bugs.
+     This is correctness pain that cell-trees directly address.
+   - The `normalize-term-deep` / `ground->prologos-expr` bridge is fragile and requires
+     manual extension for every new AST node type (§3.12). This is extension pain.
+
+3. **The Completeness Over Deferral argument**: DEVELOPMENT_LESSONS.md also says *"When
+   you have the clarity, the vision, and the full context — finish the work now."* The
+   PUnify design work (Parts 1-3) has created the fullest context for unification
+   architecture we've had. Deferring cell-tree implementation to "when the pain is
+   sufficient" means re-acquiring this context later. The "Let Pain Drive Design"
+   principle and "Completeness Over Deferral" are in tension here; we resolve it by
+   noting that multiple concrete pains (broken prelude unification, speculation
+   fragility, bridge fragility, triple encoding) exist alongside the forward-looking
+   investment.
+
 ---
 
 ## 6. Implementation Phases
 
 ### Phase 1: Constructor Descriptor Registry + Generic Infrastructure
 
-**What**: Create the `ctor-desc` registry (§5.5.2), the generic decomposition
-and reconstruction machinery (§5.5.3), and the `unify-propagator` function that
+**What**: Create the `ctor-desc` registry (§5.6.2), the generic decomposition
+and reconstruction machinery (§5.6.3), and the `unify-propagator` function that
 dispatches through descriptors rather than hardcoded match clauses.
 
 **Files**: New `ctor-registry.rkt`; modified `unify.rkt`, `elaborator-network.rkt`, `relations.rkt`
@@ -1200,3 +1336,67 @@ lambda dispatch through struct accessors as well as match clause dispatch.
 | `benchmarks/comparative/type-adversarial.prologos` | End-to-end benchmark — System 1 (17.9s baseline) |
 | `benchmarks/comparative/solve-adversarial.prologos` | End-to-end benchmark — System 2 (14.3s baseline) |
 | `examples/2026-03-19-punify-acceptance.prologos` | Acceptance file (169 cmds, 0 errors) |
+
+---
+
+## 13. Design Critique Record
+
+### D.3 Self-Critique (2026-03-19)
+
+Cross-referenced against `DESIGN_PRINCIPLES.md`, `DESIGN_METHODOLOGY.md`,
+`DEVELOPMENT_LESSONS.md`, and `PATTERNS_AND_CONVENTIONS.md`. Grounding audit
+verified 10 code references against codebase (7/10 accurate, 2 minor line shifts,
+1 function name corrected).
+
+**Gaps identified and addressed in this revision**:
+
+| Gap | Principle Source | Resolution |
+|-----|-----------------|------------|
+| No termination argument for `unify-propagator` | DESIGN_METHODOLOGY §3: "State termination arguments" | Added §5.4: Level 1 Tarski fixpoint, AST-depth well-founded measure |
+| Ephemeral-state tension unaddressed | DESIGN_PRINCIPLES § "When Not To Use Propagators" | Added §5.9.1: cross-domain dependency, TMS retraction, fan-in, precedent arguments |
+| Performance case weak, not acknowledged as trade-off | DEVELOPMENT_LESSONS § "Let Pain Drive Design" | Added §5.9.2: explicit investment-vs-pain framing with concrete pain inventory |
+| `occurs-check-meta` wrong function name | Grounding audit | Corrected to `occurs?` (§3.4) |
+| Line number inaccuracies (3 instances) | Grounding audit | Corrected §2.4, §5.2 table, §5.1 |
+
+**Alignments confirmed** (no action needed):
+- Propagator-First Infrastructure: core motivation, well-aligned
+- Correct by Construction: TMS retraction, decomposition caching — structural guarantees
+- Decomplection: three independent encodings → one descriptor registry
+- Data Orientation: cells as data vs recursive calls as control flow
+- First-Class by Default: type structure observable on the propagator network
+- Completeness Over Deferral: both Systems 1 and 2 in scope rather than deferring System 2
+- Phase-Gated Implementation: 9 phases with sub-phases, clear A/B toggle strategy
+
+**Open for D.2 (external critique)**: The design is ready for adversarial external
+review. The three areas most likely to yield productive critique:
+1. The termination argument for deeply-nested or pathological types (§5.4)
+2. The copy-on-branch strategy for DFS backtracking (Phase 5c) — interaction with
+   the future ATMS-world transition (Part 3)
+3. The migration strategy during Phase 5 (mixed old-bridge + new-descriptor paths)
+
+---
+
+## 14. Progress Tracker
+
+| Phase | Description | Status | Notes |
+|-------|------------|--------|-------|
+| 0a | Core wiring (constructors, modes, `is`, `=`) | ✅ | `32d62c6`, `3e04907`, `34a5690` |
+| 0b | `defr \|` literal pattern fix | ✅ | `490a4e3` |
+| 0c | Acceptance file (169 cmds) | ✅ | Extended across 0a-0b |
+| 0d | Adversarial benchmarks (3-tier) | ✅ | `76eb5d2` |
+| 0e | Type-level unification profiling | ✅ | `364d043` |
+| D.1 | Design document (this file) | ✅ | `b12a891`, `349c9d2`, `bf0d21f` |
+| D.3 | Self-critique and alignment check | ✅ | This section |
+| D.2 | External critique | ⬜ | Ready for review |
+| 1 | Constructor descriptor registry | ⬜ | |
+| 2 | flex-rigid as cell write (System 1) | ⬜ | |
+| 3 | Pi decomposition as sub-cells (System 1) | ⬜ | |
+| 4 | Remaining compound types (System 1) | ⬜ | |
+| 5a | Solver cell infrastructure (System 2) | ⬜ | |
+| 5b | Data constructor decomposition (System 2) | ⬜ | |
+| 5c | DFS copy-on-branch (System 2) | ⬜ | |
+| 5d | Bridge retirement (System 2) | ⬜ | |
+| 6 | Fast-path preservation | ⬜ | |
+| 7 | Callback elimination (System 1) | ⬜ | |
+| 8 | Occurs check as cycle detection | ⬜ | |
+| 9 | Zonk simplification (System 1) | ⬜ | |
