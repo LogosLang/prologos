@@ -1534,7 +1534,7 @@ risk analysis, methodology alignment, and implementation suggestions.
 | D.1 | Design document (this file) | ✅ | `b12a891`, `349c9d2`, `bf0d21f` |
 | D.3 | Self-critique and alignment check | ✅ | This section |
 | D.2 | External critique | ✅ | Accepted 10 improvements, pushed back 7, addressed 5 questions |
-| 1 | Constructor descriptor registry | ⬜ | |
+| 1 | Constructor descriptor registry | ✅ | `4a0567e` — fresh implementation after revert; 12 type + 9 data descriptors, generic merge/decompose wired |
 | 2 | flex-rigid as cell write (System 1) | ⬜ | |
 | 3 | Pi decomposition as sub-cells (System 1) | ⬜ | |
 | 4 | Remaining compound types (System 1) | ⬜ | |
