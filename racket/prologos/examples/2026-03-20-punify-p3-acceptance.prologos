@@ -39,7 +39,8 @@ ns acceptance::punify-p3
 
 data Color | red | green | blue
 data Shape | circle Nat | rect Nat Nat | triangle Nat Nat Nat
-;; BROKEN at L3 — generic data type parameters not wired
+;; LANGUAGE LIMITATION — parameterized ADTs: constructor field types not resolved
+;; against type params (elaboration issue, not WS bug)
 ;; data Tree A | leaf A | node [Tree A] [Tree A]
 
 
@@ -274,26 +275,26 @@ def cfg : Config := {:host "api.example.com" :port 443N :debug true}
 ;; Selections declare field-level access policies over schemas.
 
 ;; --- E1: Basic selection (requires subset of fields) ---
-;; BROKEN at L3 — selection :requires parsing not wired for WS vectors
+;; FIXED — selection preparse now flattens WS-grouped kv-pairs
 
-;; selection NameOnly from Person
-;;   :requires [:name]
-;;
-;; selection ContactInfo from Person
-;;   :requires [:name :address]
+selection NameOnly from Person
+  :requires [:name]
+
+selection ContactInfo from Person
+  :requires [:name :address]
 
 ;; --- E2: Deep path selection ---
-;; BROKEN at L3 — :address.zip path inside selection vector
+;; FIXED — reconstitute-selection-paths handles $dot-access chains
 
-;; selection ZipOnly from Person
-;;   :requires [:address.zip]
+selection ZipOnly from Person
+  :requires [:address.zip]
 
 ;; --- E3: Selection composition via :includes ---
-;; BROKEN at L3
+;; FIXED — flatten + reconstitute handles :includes vector args
 
-;; selection Extended from Person
-;;   :includes [ContactInfo]
-;;   :requires [:age]
+selection Extended from Person
+  :includes [ContactInfo]
+  :requires [:age]
 
 ;; --- E4: Selection with :provides ---
 ;; ASPIRATIONAL — :provides declares what the selection exposes
@@ -435,10 +436,10 @@ origin.y
 ;; ;; => 5N
 
 ;; --- G5: Keyword dot-access ---
-;; BROKEN at L3 — $dot-key not wired in preparse/elaborator
+;; FIXED — $dot-key now handled in rewrite-dot-access fold-left
 
-;; user.:name
-;; ;; => "alice"
+user.:name
+;; => "alice"
 
 ;; --- G6: Nil-safe dot-access ---
 ;; ASPIRATIONAL — #. short-circuits on nil
@@ -499,9 +500,10 @@ m[:c]
 ;; ;; => 25N
 
 ;; --- G12: Path algebra — get-in ---
-;; BROKEN at L3 — :a.b.c path syntax in get-in not parsed correctly
+;; ASPIRATIONAL — :a.b.c auto-desugars to nested map-get before get-in sees it;
+;; needs path-descriptor syntax or quoting to prevent premature desugaring.
+;; Also: nested map literals without annotation hit inference limitation.
 
-;; BROKEN at L3 — nested map literals cause multiplicity error
 ;; def deep := {:a {:b {:c 42}}}
 ;;
 ;; (get-in deep :a.b.c)
@@ -796,7 +798,9 @@ solve (double-parent "alice" child val)
 
 ;; --- L1: Pattern matching with multi-arity defn ---
 
-;; BROKEN at L3 — match on ADT with fields produces type-mismatch
+;; LANGUAGE LIMITATION — multi-arity defn counts constructor fields as separate args
+;; (e.g., | circle r -> counts as arity 2, not 1 with destructuring).
+;; match-style also produces type-mismatch during reduce/desugar.
 ;; spec area Shape -> Int
 ;; defn area [s]
 ;;   match s
@@ -867,7 +871,7 @@ def add5 := [make-adder 5]
 ;; => 15
 
 ;; --- L9: Narrowing (existing, unaffected by Part 3) ---
-;; BROKEN at L3 — #= narrowing in solve returns nil
+;; LANGUAGE LIMITATION — #= narrowing in solve returns nil (narrowing engine gap)
 
 ;; solve (#= [not true] result)
 ;; ;; => [{:result false}]

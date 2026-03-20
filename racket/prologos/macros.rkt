@@ -2228,6 +2228,51 @@
                item
                (list item)))))
 
+;; Reconstitute $dot-access chains inside selection vector args into dot-path symbols.
+;; The WS reader splits :address.zip into (:address ($dot-access zip)), but the
+;; selection parser expects :address.zip as a single keyword-like symbol.
+;; This walks the flattened arg list, finds vector args (lists following :requires etc.),
+;; and reconstitutes each element that contains $dot-access back into a dot-path keyword.
+(define (reconstitute-selection-paths items)
+  (let loop ([remaining items] [acc '()])
+    (cond
+      [(null? remaining) (reverse acc)]
+      ;; Any list that isn't a $dot-access sentinel is a vector arg — reconstitute its elements.
+      ;; The vector may start with a keyword like (:address ($dot-access zip)),
+      ;; so we can't exclude keyword-starting lists.
+      [(and (pair? (car remaining))
+            (list? (car remaining))
+            (not (and (symbol? (caar remaining))
+                      (let ([s (symbol->string (caar remaining))])
+                        (and (> (string-length s) 1)
+                             (char=? (string-ref s 0) #\$))))))
+       (loop (cdr remaining)
+             (cons (reconstitute-path-list (car remaining)) acc))]
+      [else
+       (loop (cdr remaining) (cons (car remaining) acc))])))
+
+;; Reconstitute a single vector arg list: each element may be
+;; a keyword :name, or a sequence (:address ($dot-access zip)) → :address.zip
+(define (reconstitute-path-list items)
+  (let loop ([remaining items] [acc '()])
+    (cond
+      [(null? remaining) (reverse acc)]
+      ;; A keyword followed by ($dot-access field) chains — reconstitute
+      [(and (keyword-like-symbol? (car remaining))
+            (pair? (cdr remaining))
+            (let ([next (cadr remaining)])
+              (and (pair? next) (eq? (car next) '$dot-access))))
+       ;; Collect all consecutive $dot-access segments
+       (define base-str (symbol->string (car remaining)))
+       (define-values (path-str rest)
+         (let collect ([r (cdr remaining)] [segs (list base-str)])
+           (if (and (pair? r) (pair? (car r)) (eq? (caar r) '$dot-access))
+               (collect (cdr r) (append segs (list (symbol->string (cadar r)))))
+               (values (string-join segs ".") r))))
+       (loop rest (cons (string->symbol path-str) acc))]
+      [else
+       (loop (cdr remaining) (cons (car remaining) acc))])))
+
 (define (preparse-expand-all stxs)
   ;; ============================================================
   ;; Pass -1: Process ns/imports declarations FIRST
@@ -2609,9 +2654,29 @@
          ;; Actual field checking is done in typing-core.rkt via schema registry lookups.
          (define type-def `(def ,schema-name : (Type 0) (Type 0)))
          (cons (datum->syntax #f type-def stx) acc)]
-        ;; ---- Selection declaration — pass through to parser/elaborator (Phase 2b) ----
+        ;; ---- Selection declaration — flatten WS-grouped kv-pairs, then pass through ----
         [(and (pair? datum) (eq? head 'selection))
-         (cons stx acc)]
+         ;; WS reader produces: (selection Name from Schema (:requires (:name :age)) ...)
+         ;; Parser expects:      (selection Name from Schema :requires (:name :age) ...)
+         ;; Sexp input is already flat: (selection Name from Schema :requires (:name :age) ...)
+         ;; Only flatten+reconstitute when WS grouping is detected.
+         (if (and (list? datum) (>= (length datum) 4))
+             (let* ([prefix (list 'selection (second datum) (third datum) (fourth datum))]
+                    [rest-ws (list-tail datum 4)]
+                    ;; Detect WS grouping: if first rest element is a list starting with
+                    ;; a keyword, it's WS-wrapped; if it's a bare keyword, already flat.
+                    [ws-grouped? (and (pair? rest-ws)
+                                      (pair? (car rest-ws))
+                                      (symbol? (caar rest-ws))
+                                      (keyword-like-symbol? (caar rest-ws)))]
+                    [flattened (if ws-grouped?
+                                   (flatten-ws-kv-pairs rest-ws)
+                                   rest-ws)]
+                    ;; Reconstitute $dot-access chains inside vector args into dot-paths
+                    [reconstituted (reconstitute-selection-paths flattened)]
+                    [new-datum (append prefix reconstituted)])
+               (cons (datum->syntax #f new-datum stx) acc))
+             (cons stx acc))]
         ;; ---- Session type declaration — desugar WS-mode body to sexp form (Phase S1d) ----
         [(and (pair? datum) (eq? head 'session))
          (when (and (list? datum) (>= (length datum) 2) (symbol? (cadr datum)))
@@ -4902,6 +4967,20 @@
                 (let* ([key (cadr (car elems))]
                        [target (car acc)]
                        [wrapped `(get ,target ,key)])
+                  (loop (cdr elems) (cons wrapped (cdr acc)))))]
+           [(dot-key? (car elems))
+            (if (null? acc)
+                (loop (cdr elems) (cons (car elems) acc))
+                (let* ([kw (cadr (car elems))]
+                       [target (car acc)]
+                       [wrapped `(map-get ,target ,kw)])
+                  (loop (cdr elems) (cons wrapped (cdr acc)))))]
+           [(nil-dot-key? (car elems))
+            (if (null? acc)
+                (loop (cdr elems) (cons (car elems) acc))
+                (let* ([kw (cadr (car elems))]
+                       [target (car acc)]
+                       [wrapped `(nil-safe-get ,target ,kw)])
                   (loop (cdr elems) (cons wrapped (cdr acc)))))]
            [else
             (loop (cdr elems) (cons (car elems) acc))])))
