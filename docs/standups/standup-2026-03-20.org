@@ -1,0 +1,61 @@
+#+TITLE: Standup — 2026-03-20
+#+DATE: 2026-03-20
+
+* Yesterday (since 2026-03-19 standup)
+
+** PUnify Parts 1-2: Implementation Complete (47 commits)
+- Part 1: Surface wiring, acceptance file (169 cmds), 3-tier benchmarks, type-level profiler
+  - 80% fast-path rate, 36% level, 24% flex-rigid, 18% pi classification
+  - Solver adversarial baseline: 14.3s median, 0.3% CV
+- Part 2: Cell-tree architecture — 9 phases implemented
+  - Constructor descriptor registry: 12 type + 9 data descriptors (~ctor-registry.rkt~)
+  - Pi/Sigma/Lam/compound decomposition as sub-cells on prop-network
+  - Solver cell infrastructure with polymorphic ~walk~/~walk*~/~unify-terms~
+  - Fast-path preserved (80%), callback elimination, occurs check, zonk verified
+  - Phase 5d (bridge retirement) deferred to Part 3 Phase 0
+
+** PUnify Parts 1-2 PIR (~c72c133~)
+- 20-section comprehensive review with 6-PIR meta-analysis
+- 5 concrete process recommendations implemented (~593be03~):
+  - Pipeline.md: two-context audit checklist
+  - Workflow.md: lessons distillation check + "Watching" subsection
+  - PIR template: mandatory §10 Lessons Distilled
+  - DESIGN_PRINCIPLES.org: "Propagators as Universal Computational Substrate"
+- PIR §15.2 testing gap closure: 94 new tests across 3 files (~b31c119~)
+  - Found 5 parity bugs with punify ON (head, map, Pair, match, Vec)
+
+** PUnify Phase -1: Parametric Trait Resolution Fix (~7a90f6c~)
+- Root cause: punify dispatch solved metas at cell level but never called ~solve-meta!~
+- Fix: ~punify-bridge-cell-solves!~ detects cell-solved/CHAMP-unsolved metas, bridges gap
+- 3 false-positive KNOWN-BUG tests reclassified; 2 real bugs flipped to passing
+
+** Cell & Propagator Allocation Audit (~f7bd03d~)
+- ~struct-copy prop-network~ (13-field copy) is dominant allocation cost
+- 6 optimization opportunities identified preserving pure data-in/data-out
+- Incremental GC: network IS provenance trail; understand patterns before committing
+- HIGH-PRIORITY entry added to DEFERRED.md (~436c1ca~)
+
+** Part 3 Design: Multiverse Multiplexer Overhaul (uncommitted)
+- Deep overhaul grounded in Logic Engine Design Phases 4-7, Track 7 taxonomy, Narrowing Design, solver.rkt
+- 18 sections, removed ~cut~, added categorical composition, deep tabling treatment
+- Awaiting review
+
+** Metrics
+- Test suite: 7308 tests, 377 files, ~183s, all pass
+- 60+ commits in interval
+- Performance: 175.9s (fastest ever) → 183.2s (post Phase -1 fix)
+
+* Today
+
+** Part 3 Design Review
+- Review overhauled Part 3 design document
+- Commit design doc after review
+
+** Implementation Planning
+- Decide next implementation track: Part 3 vs allocation efficiency vs Track 8 second half
+- Triage DEFERRED.md for newly-unblocked items
+
+** Open Items
+- 5 L3 parser bugs from acceptance file (preparse/parser level)
+- 5 punify parity bugs (head, map, Pair, match, Vec) — must fix before Part 3 flips default
+- bench-zonk.rkt staleness

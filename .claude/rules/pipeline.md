@@ -51,6 +51,14 @@ When adding a field to an existing struct:
 3. Check `trace-serialize.rkt` and any other reflection-based consumers
 4. If the struct is in `prop-network` or `elab-network`, modules like `session-propagators.rkt` and `trace-serialize.rkt` that import by struct linklet will fail if not recompiled
 
+## Known Coupling: Meta Resolution Pipeline
+
+Any code path that solves a meta variable at the propagator cell level **must also call `solve-meta!`** to trigger the stratified resolution chain (trait resolution, hasmethod, constraint retries). The propagator network and the imperative resolution system are fundamentally coupled: cell-level solutions are invisible to the resolution loop until `solve-meta!` bridges them into the `meta-info` CHAMP.
+
+PUnify Phase -1 (commit `7a90f6c`) discovered this when `punify-dispatch-sub/pi/binder` solved metas via structural-unify-propagators but never called `solve-meta!`, causing parametric trait constraints (e.g., `Seqable ?A` where `?A` = `List`) to go unresolved. The fix (`punify-bridge-cell-solves!`) detects cell-solved/CHAMP-unsolved metas after each dispatch + quiescence and bridges the gap.
+
+**Rule**: Any alternative unification or solving path that writes to meta cells must ensure `solve-meta!` fires for each newly-solved meta. This coupling persists until Track 8 module restructuring decouples cell writes from resolution triggering.
+
 ## New Pattern Kind
 
 When adding a new pattern kind to the pattern compiler:
