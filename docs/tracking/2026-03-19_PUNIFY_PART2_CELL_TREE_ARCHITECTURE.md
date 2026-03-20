@@ -1536,7 +1536,7 @@ risk analysis, methodology alignment, and implementation suggestions.
 | D.2 | External critique | ✅ | Accepted 10 improvements, pushed back 7, addressed 5 questions |
 | 1 | Constructor descriptor registry | ✅ | `4a0567e` — fresh implementation after revert; 12 type + 9 data descriptors, generic merge/decompose wired |
 | 2 | flex-rigid as cell write (System 1) | ✅ | 67f1388 — direct contradiction check, callback indirection removed |
-| 3 | Pi decomposition as sub-cells (System 1) | ⬜ | |
+| 3 | Pi decomposition as sub-cells (System 1) | ✅ | 52e6230 — propagator-based Pi decomposition with binder opening |
 | 4 | Remaining compound types (System 1) | ⬜ | |
 | 5a | Solver cell infrastructure (System 2) | ⬜ | |
 | 5b | Data constructor decomposition (System 2) | ⬜ | |
