@@ -1545,4 +1545,4 @@ risk analysis, methodology alignment, and implementation suggestions.
 | 6 | Fast-path preservation | ✅ | Verification: 80% fast-path rate confirmed (9530 calls, 1905 classified). No code changes — fast-path precedes PUnify dispatch in both systems |
 | 7 | Callback elimination (System 1) | ✅ | `74abfff` — current-prop-has-contradiction? replaced with direct punify-has-contradiction? in all 4 sites, callback setup removed from driver.rkt |
 | 8 | Occurs check as cycle detection | ✅ | `4eafae1` — solver-term-occurs? added to both hasheq and solver-env paths; System 1 unchanged (Q4: remains pre-solve-meta guard) |
-| 9 | Zonk simplification (System 1) | ⬜ | |
+| 9 | Zonk simplification (System 1) | ✅ | Verification: zonk already reads cell-tree via meta-solution → current-prop-cell-read → net-cell-read. Track 6 installed this path; PUnify inherits it. No code changes needed. 7214 tests pass, 175.9s |
