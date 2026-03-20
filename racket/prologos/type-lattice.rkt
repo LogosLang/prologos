@@ -30,7 +30,8 @@
          "syntax.rkt"
          "reduction.rkt"       ;; whnf (read-only)
          "zonk.rkt"            ;; zonk-at-depth (read-only)
-         "substitution.rkt")   ;; open-expr (read-only)
+         "substitution.rkt"    ;; open-expr (read-only)
+         "ctor-registry.rkt")  ;; PUnify Phase 1: descriptor-driven structural merge
 
 (provide type-bot type-top type-bot? type-top?
          type-lattice-merge
@@ -241,10 +242,6 @@
               (define snd (try-unify-pure snd-a snd-b))
               (and snd (expr-Sigma fst (expr-Sigma-snd-type a)))))]
 
-      ;; suc vs suc
-      [(and (expr-suc? a) (expr-suc? b))
-       (define pred (try-unify-pure (expr-suc-pred a) (expr-suc-pred b)))
-       (and pred (expr-suc pred))]
       ;; nat-val vs nat-val
       [(and (expr-nat-val? a) (expr-nat-val? b))
        (and (= (expr-nat-val-n a) (expr-nat-val-n b)) a)]
@@ -256,35 +253,7 @@
       [(and (expr-tycon? a) (expr-tycon? b))
        (and (eq? (expr-tycon-name a) (expr-tycon-name b)) a)]
 
-      ;; app vs app: unify func + arg
-      [(and (expr-app? a) (expr-app? b))
-       (define func (try-unify-pure (expr-app-func a) (expr-app-func b)))
-       (and func
-            (let ([arg (try-unify-pure (expr-app-arg a) (expr-app-arg b))])
-              (and arg (expr-app func arg))))]
-
-      ;; Eq vs Eq
-      [(and (expr-Eq? a) (expr-Eq? b))
-       (define ty (try-unify-pure (expr-Eq-type a) (expr-Eq-type b)))
-       (and ty
-            (let ([lhs (try-unify-pure (expr-Eq-lhs a) (expr-Eq-lhs b))])
-              (and lhs
-                   (let ([rhs (try-unify-pure (expr-Eq-rhs a) (expr-Eq-rhs b))])
-                     (and rhs (expr-Eq ty lhs rhs))))))]
-
-      ;; Vec vs Vec
-      [(and (expr-Vec? a) (expr-Vec? b))
-       (define et (try-unify-pure (expr-Vec-elem-type a) (expr-Vec-elem-type b)))
-       (and et
-            (let ([len (try-unify-pure (expr-Vec-length a) (expr-Vec-length b))])
-              (and len (expr-Vec et len))))]
-
-      ;; Fin vs Fin
-      [(and (expr-Fin? a) (expr-Fin? b))
-       (define bound (try-unify-pure (expr-Fin-bound a) (expr-Fin-bound b)))
-       (and bound (expr-Fin bound))]
-
-      ;; lam vs lam: unify types and bodies
+      ;; lam vs lam: kept for binder + mult handling (genericized in later phase)
       [(and (expr-lam? a) (expr-lam? b))
        (define ty (try-unify-pure (expr-lam-type a) (expr-lam-type b)))
        (and ty
@@ -294,13 +263,6 @@
               (define body (try-unify-pure body-a body-b))
               (and body (expr-lam (expr-lam-mult a) ty (expr-lam-body a)))))]
 
-      ;; pair vs pair
-      [(and (expr-pair? a) (expr-pair? b))
-       (define fst (try-unify-pure (expr-pair-fst a) (expr-pair-fst b)))
-       (and fst
-            (let ([snd (try-unify-pure (expr-pair-snd a) (expr-pair-snd b))])
-              (and snd (expr-pair fst snd))))]
-
       ;; Type vs Type: level equality (structural, no level-meta solving)
       [(and (expr-Type? a) (expr-Type? b))
        (and (equal? (expr-Type-level a) (expr-Type-level b)) a)]
@@ -309,31 +271,26 @@
       [(and (expr-union? a) (expr-union? b))
        (try-unify-pure-unions a b)]
 
-      ;; PVec vs PVec
-      [(and (expr-PVec? a) (expr-PVec? b))
-       (define et (try-unify-pure (expr-PVec-elem-type a) (expr-PVec-elem-type b)))
-       (and et (expr-PVec et))]
-
-      ;; Set vs Set
-      [(and (expr-Set? a) (expr-Set? b))
-       (define et (try-unify-pure (expr-Set-elem-type a) (expr-Set-elem-type b)))
-       (and et (expr-Set et))]
-
-      ;; Map vs Map
-      [(and (expr-Map? a) (expr-Map? b))
-       (define kt (try-unify-pure (expr-Map-k-type a) (expr-Map-k-type b)))
-       (and kt
-            (let ([vt (try-unify-pure (expr-Map-v-type a) (expr-Map-v-type b))])
-              (and vt (expr-Map kt vt))))]
-
       ;; ann: strip (should not survive WHNF, but handle defensively)
       [(expr-ann? a) (try-unify-pure (expr-ann-term a) b)]
       [(expr-ann? b) (try-unify-pure a (expr-ann-term b))]
 
-      ;; Fallback: structural equality for all atoms/neutrals
-      ;; (bvar, fvar, zero, true, false, refl, Nat, Bool, etc.)
-      ;; equal? already covered above; reaching here means incompatible
-      [else #f])))
+      ;; --- Generic descriptor-driven structural merge (PUnify Phase 1) ---
+      ;; Handles all registered type constructors with binder-depth 0:
+      ;; suc, app, Eq, Vec, Fin, pair, PVec, Set, Map.
+      ;; Replaces 9 per-tag hardcoded cases with a single descriptor-driven dispatch.
+      ;; Pi and Sigma are handled above (binder + mult-meta complications).
+      ;; Lam is handled above (binder + mult handling).
+      [else
+       (define desc-a (ctor-tag-for-value a))
+       (cond
+         [(and desc-a
+               (eq? (ctor-desc-domain desc-a) 'type)
+               (= (ctor-desc-binder-depth desc-a) 0)
+               ((ctor-desc-recognizer-fn desc-a) b))
+          ;; Same constructor, no binders — generic component-wise merge
+          (generic-merge a b #:type-merge try-unify-pure #:domain 'type)]
+         [else #f])])))
 
 ;; ========================================
 ;; Union type pure unification

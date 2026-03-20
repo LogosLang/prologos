@@ -30,7 +30,8 @@
          "substitution.rkt"
          "zonk.rkt"
          "source-location.rkt"
-         "performance-counters.rkt")
+         "performance-counters.rkt"
+         "ctor-registry.rkt")  ;; PUnify Phase 1: current-punify-enabled? toggle
 
 (provide unify unify-ok? occurs?
          ;; Backward-compat alias (unify* = unify after P1-G7)

@@ -22,7 +22,8 @@
          "mult-lattice.rkt"
          "prelude.rkt"       ;; P5c: mult-meta? for Pi mult extraction
          "champ.rkt"
-         "syntax.rkt")
+         "syntax.rkt"
+         "ctor-registry.rkt") ;; PUnify Phase 1: descriptor-driven decomposition
 
 (provide
  ;; Core structs
@@ -382,22 +383,16 @@
 
 ;; Classify expression by head constructor.
 ;; Returns a symbol tag for decomp-registry, or #f for atoms/non-compound.
+;; PUnify Phase 1: driven by the constructor descriptor registry.
 (define (type-constructor-tag e)
   (cond
     [(type-bot? e) #f]
     [(type-top? e) #f]
-    [(expr-Pi? e)    'Pi]
-    [(expr-app? e)   'app]
-    [(expr-Sigma? e) 'Sigma]
-    [(expr-Eq? e)    'Eq]
-    [(expr-Vec? e)   'Vec]
-    [(expr-PVec? e)  'PVec]
-    [(expr-Set? e)   'Set]
-    [(expr-Map? e)   'Map]
-    [(expr-pair? e)  'pair]
-    [(expr-suc? e)   'suc]
-    [(expr-lam? e)   'lam]
-    [else #f]))
+    [else
+     (define desc (ctor-tag-for-value e))
+     (and desc
+          (eq? (ctor-desc-domain desc) 'type)
+          (ctor-desc-tag desc))]))
 
 ;; Create or reuse a sub-cell for a decomposed component expression.
 ;; - Bare meta (expr-meta id): reuse the meta's existing propagator cell
@@ -850,8 +845,69 @@
       (make-lam-reconstructor cell-b mult-b type-b body-b)))
   (net-pair-decomp-insert net6 pair-key))
 
+;; ========================================
+;; PUnify Phase 1: Generic descriptor-driven decomposition
+;; ========================================
+
+;; Generic reconstructor: reads all sub-cells and rebuilds via descriptor.
+;; Works for any registered type constructor with binder-depth 0.
+;; Termination: Level 1 (Tarski). Fires when sub-cells change; reconstructed
+;; value = desc.reconstruct-fn(sub-values). If all sub-values unchanged,
+;; net-cell-write is a no-op. Finite cells = finite firings.
+(define (make-generic-reconstructor parent-cell sub-cells desc)
+  (lambda (net)
+    (define vals (map (λ (sc) (net-cell-read net sc)) sub-cells))
+    (cond
+      [(ormap type-bot? vals) net]  ;; wait for more info
+      [(ormap type-top? vals)
+       (net-cell-write net parent-cell type-top)]
+      [else
+       (net-cell-write net parent-cell
+                       ((ctor-desc-reconstruct-fn desc) vals))])))
+
+;; Generic decompose for registered type constructors with binder-depth 0.
+;; Replaces per-tag decompose-app, decompose-eq, decompose-vec, decompose-map,
+;; decompose-pair, decompose-1 (for PVec/Set/suc) with a single descriptor-driven
+;; implementation. Pi/Sigma/lam keep their existing decomposers (binder + mult handling).
+(define (decompose-generic net cell-a cell-b va vb unified pair-key desc)
+  (define tag (ctor-desc-tag desc))
+  (define recog (ctor-desc-recognizer-fn desc))
+  (define extract (ctor-desc-extract-fn desc))
+  ;; Per-side sources: use original value if it matches, else unified
+  (define src-a (if (recog va) va unified))
+  (define src-b (if (recog vb) vb unified))
+  ;; Extract components
+  (define comps-a (extract src-a))
+  (define comps-b (extract src-b))
+  ;; Get or create sub-cells for each side
+  (define-values (net1 subs-a) (get-or-create-sub-cells net cell-a tag comps-a))
+  (define-values (net2 subs-b) (get-or-create-sub-cells net1 cell-b tag comps-b))
+  ;; Add structural-unify propagators for each component pair
+  (define net3
+    (for/fold ([n net2])
+              ([sa (in-list subs-a)]
+               [sb (in-list subs-b)])
+      (if (equal? sa sb)
+          n
+          (let-values ([(n* _pid) (net-add-propagator n
+                                    (list sa sb) (list sa sb)
+                                    (make-structural-unify-propagator sa sb))])
+            n*))))
+  ;; Add generic reconstructors for each side
+  (define-values (net4 _p1)
+    (net-add-propagator net3 subs-a (list cell-a)
+      (make-generic-reconstructor cell-a subs-a desc)))
+  (define-values (net5 _p2)
+    (net-add-propagator net4 subs-b (list cell-b)
+      (make-generic-reconstructor cell-b subs-b desc)))
+  ;; Register pair as decomposed
+  (net-pair-decomp-insert net5 pair-key))
+
 ;; Dispatch to constructor-specific decomposer if unified value is compound.
 ;; Checks pair-decomps registry to avoid duplicate decomposition.
+;; PUnify Phase 1: simple no-binder types (app, Eq, Vec, Fin, pair, PVec, Set,
+;; Map, suc) use generic descriptor-driven decompose. Pi/Sigma/lam retain
+;; their existing decomposers for binder + mult handling.
 (define (maybe-decompose net cell-a cell-b va vb unified)
   (define tag (type-constructor-tag unified))
   (cond
@@ -862,21 +918,16 @@
        [(net-pair-decomp? net pair-key) net]  ;; Already decomposed for this pair
        [else
         (case tag
+          ;; Binder + mult types: keep existing decomposers
           [(Pi)    (decompose-pi    net cell-a cell-b va vb unified pair-key)]
-          [(app)   (decompose-app   net cell-a cell-b va vb unified pair-key)]
           [(Sigma) (decompose-sigma net cell-a cell-b va vb unified pair-key)]
-          [(Eq)    (decompose-eq    net cell-a cell-b va vb unified pair-key)]
-          [(Vec)   (decompose-vec   net cell-a cell-b va vb unified pair-key)]
-          [(PVec)  (decompose-1     net cell-a cell-b va vb unified pair-key
-                     'PVec expr-PVec? expr-PVec-elem-type expr-PVec)]
-          [(Set)   (decompose-1     net cell-a cell-b va vb unified pair-key
-                     'Set expr-Set? expr-Set-elem-type expr-Set)]
-          [(Map)   (decompose-map   net cell-a cell-b va vb unified pair-key)]
-          [(pair)  (decompose-pair  net cell-a cell-b va vb unified pair-key)]
-          [(suc)   (decompose-1     net cell-a cell-b va vb unified pair-key
-                     'suc expr-suc? expr-suc-pred expr-suc)]
           [(lam)   (decompose-lam   net cell-a cell-b va vb unified pair-key)]
-          [else net])])]))
+          ;; All other registered types: generic descriptor-driven decompose
+          [else
+           (define desc (lookup-ctor-desc tag #:domain 'type))
+           (if (and desc (= (ctor-desc-binder-depth desc) 0))
+               (decompose-generic net cell-a cell-b va vb unified pair-key desc)
+               net)])])]))
 
 ;; Structural unify propagator: replacement for make-unify-propagator.
 ;; Same merge logic, but after writing unified values, triggers structural
