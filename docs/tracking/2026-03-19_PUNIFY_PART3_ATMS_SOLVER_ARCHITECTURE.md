@@ -183,15 +183,19 @@ Track 2/7 established stratified quiescence:
 
 | Component | Status | What's Missing |
 |-----------|--------|----------------|
-| ATMS data structure | ✅ Complete | — |
-| TMS-branched cells | ✅ Complete | — |
-| Speculation framework | ✅ Complete | N-ary extension (currently binary) |
+| ATMS data structure | ✅ Complete | `atms.rkt` — persistent, pure-value, all ops |
+| TMS-branched cells | ✅ Complete | Recursive CHAMP tree, O(d) read/write |
+| Speculation framework | ✅ Complete | N-ary extension needed (currently binary) |
+| Worldview enumeration | ✅ Partial | `atms-solve-all` does Cartesian product over amb groups + consistency filter |
+| GDE diagnosis | ✅ Partial | `atms-minimal-diagnoses` (greedy hitting-set), `atms-conflict-graph` |
+| WF NAF oracle | ✅ Complete | `wf-engine.rkt` — bilattice-based, 3-valued (succeed/fail/defer) |
+| Infra assumption cells | ✅ Complete | `infra-cell.rkt` — tagged entries, assumed writes, believed reads |
 | Cell-tree unification | 🔄 Part 2 | Data constructor descriptors + solver cells |
 | Clause-as-assumption | ❌ New | Map clause selection to `atms-amb` |
 | Goal-as-propagator | ❌ New | Map conjunction to propagator scheduling |
 | Tabling | ❌ New | SLG resolution for termination + memoization |
-| NAF + ATMS interaction | ❌ New | Stratified negation in multi-world context |
-| Solution enumeration | ❌ New | Extract surviving worlds as answer stream |
+| NAF + ATMS worlds | ❌ New | Bilattice NAF in multi-world context (existing oracle is single-world) |
+| Solution enumeration | 🔄 Extend | `atms-solve-all` exists; need bridge to logic variable cells |
 
 ---
 
@@ -458,9 +462,15 @@ first solution.
 
 ### Phase 3: Solution Enumeration
 
-**What**: Implement `enumerate-consistent-worldviews` for `solve` (all solutions)
-and `solve-one` (first solution). Extract logic variable bindings from each
-consistent world by reading cells under that worldview.
+**What**: Bridge `atms-solve-all` (which already enumerates consistent worldviews
+via Cartesian product over amb groups + consistency filtering) to logic variable
+cells. For each consistent worldview, read all logic variable cells under that
+worldview to extract bindings. Implement `solve-one` as early-exit variant.
+
+**Existing**: `atms-solve-all` (atms.rkt:265) already computes the Cartesian product
+of amb-groups, filters for consistency, and reads a goal cell. The gap is bridging
+from the ATMS's cell-key-based reads to the propagator network's cell-id-based reads
+for logic variable cells.
 
 **Test**: `solve` returns all solutions for multi-clause relations. Order matches
 DFS order (backward compatibility).
@@ -482,8 +492,15 @@ SLG completion tests from XSB literature.
 
 ### Phase 5: Cut and NAF in ATMS Context
 
-**What**: Implement `cut` as nogood injection. Implement `not` as stratified
-observation of ATMS world state.
+**What**: Implement `cut` as nogood injection. Extend the existing WF NAF oracle
+(`wf-engine.rkt`: `make-wf-naf-oracle`, bilattice-based, 3-valued succeed/fail/defer)
+to operate in multi-world ATMS context. Currently the oracle returns a single answer
+per predicate; in ATMS-world context, the answer may differ per worldview.
+
+**Existing**: The WF engine already has bilattice tracking, SCC-based stratification
+analysis (`preds-with-negation`), and a `current-naf-oracle` parameter. The extension
+is making the oracle worldview-aware — consulting the bilattice under each worldview
+rather than globally.
 
 **Test**: Cut semantics match Prolog. NAF with tabling produces correct WFS answers.
 
@@ -676,8 +693,10 @@ search model IS propagators + ATMS.
 |------|---------------|
 | `solver-propagators.rkt` | **NEW** — Goal-as-propagator framework |
 | `relations.rkt` | Primary target — DFS solver → ATMS solver |
-| `atms.rkt` | ATMS data structure (existing, may need extensions) |
-| `speculation.rkt` | Speculation framework (extend for N-ary) |
+| `atms.rkt` | ATMS data structure (existing: amb, nogoods, solve-all, diagnoses) |
+| `elab-speculation-bridge.rkt` | Speculation framework (extend for N-ary) |
+| `wf-engine.rkt` | Well-founded NAF oracle (existing: bilattice, 3-valued) |
+| `infra-cell.rkt` | Infrastructure cells with assumption tagging |
 | `ctor-registry.rkt` | Constructor descriptors (from Part 2) |
 | `propagator.rkt` | TMS cells, worklist, quiescence |
 | `resolution.rkt` | Stratified resolution loop |
