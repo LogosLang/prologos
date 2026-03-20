@@ -19,8 +19,9 @@
 | 4 | Elaboration: path-aware get-in/update-in | ⬜ | |
 | 5 | Type system: Path type + get-in typing | ⬜ | |
 | 6 | Reduction: path-based navigation | ⬜ | |
-| 7 | Path combinators (library) | ⬜ | |
+| 7 | Path combinators + destructuring | ⬜ | |
 | 7b | Broadcast syntax `.*field` | ⬜ | |
+| 7c | Key renaming `^` syntax | ⬜ | |
 | 8 | Lens layer (future) | ⬜ | Out of scope |
 
 ---
@@ -416,7 +417,91 @@ This design keeps the foreign layer minimal (4 functions for structural access) 
 - Specter navigators are functions (dynamic composition). Our paths are **values** (data). This matches Prologos's homoiconicity principle — paths are data you can inspect, serialize, and reason about, not opaque function compositions.
 - Specter's `transform` preserves collection type (vector stays vector). Our `update-in` does this naturally via immutable CHAMP operations — no special handling needed.
 
-### 3.11 Interaction with Existing Features
+### 3.11 Key Renaming with `^` (Projection Syntax)
+
+Path selections can rename keys in the output map using `^`:
+
+```prologos
+def user := {:user-name "Pete" :id 1234 :address {:zip 12345 :city "Springfield"}}
+
+;; Select and rename keys
+user.{user-name^userName id^userID address.city^location}
+;; => {:userName "Pete" :userID 1234 :location "Springfield"}
+```
+
+The `^` reads as "as" — analogous to SQL's `SELECT user_name AS userName`. The rename applies to the **leaf** of the path: `address.city^location` extracts the value at `:address.city` and places it under `:location` in the result map.
+
+**Syntax within path contexts:**
+
+```
+segment^rename       ;; rename a simple field
+deep.path^rename     ;; rename the leaf of a deep path
+```
+
+**Interaction with branching:**
+
+```prologos
+user.{user-name^name address.{zip city^loc}}
+;; => {:name "Pete" :zip 12345 :loc "Springfield"}
+```
+
+The `^` is per-branch-leaf. Branches without `^` retain their original key name.
+
+**Interaction with path literals:**
+
+```prologos
+#p(user-name^userName)           ;; path with rename annotation
+#p(address.{zip city^loc})       ;; branching with partial renames
+```
+
+**Scope of renaming:** Renaming is a **projection** operation — it applies to `get-in` and `selection`, NOT to `update-in`. `update-in` modifies a value at a path in-place; renaming the key would be semantically incoherent there. This is enforced at parse time.
+
+**Pipeline placement:**
+- `^` is recognized by the path parser inside path contexts (selections, `#p(...)`, `get-in` keyword args)
+- `^` is NOT in `ident-start?` or `ident-continue?` in the reader, so no identifier collision
+- The parser produces path segments annotated with optional renames: `(segment keyword rename-keyword-or-#f)`
+- Elaboration emits `map-assoc` with the renamed key when a rename is present
+
+**Sexp equivalent:**
+
+```scheme
+;; user.{user-name^userName id^userID}
+;; parses to path branches with renames:
+;; ((#:user-name . #:userName) (#:id . #:userID))
+(get-in user (path :user-name^userName :id^userID))
+```
+
+### 3.12 Path Destructuring in Pattern Matching
+
+Paths participate in pattern matching like any first-class value:
+
+```prologos
+(match p
+  | #p(head . rest) -> ...     ;; decompose: first segment + remaining path
+  | #p(a.b)         -> ...     ;; match exact 2-segment path
+  | #p(_)           -> ...     ;; match any single-segment path
+  | #p(_ . _)       -> ...     ;; match any path with 2+ segments
+)
+```
+
+This is more ergonomic than `path-head`/`path-tail` for routing on path structure. The function combinators retain their place for composition (`path-append` in a `fold`, `path-depth` as a predicate).
+
+**Implementation:** A new pattern kind in the pattern compiler. The path pattern `#p(head . rest)` desugars to matching on the internal segments list, piggybacking on existing list pattern machinery. Requires updates to `pattern-is-simple-flat?`, `compile-match-tree`, and the narrowing handlers per the pipeline checklist for new pattern kinds.
+
+**Phase:** Part of Phase 7 (path combinators), since it requires the `Path` type and `expr-path` AST node from earlier phases.
+
+### 3.13 `map-path` Implementation Note
+
+The broadcast `.*field` desugars to `map-path`. The initial implementation should desugar `map-path` to `map` + lambda rather than introducing a distinct primitive:
+
+```prologos
+;; map-path as sugar
+[map-path records #p(name)]  ≡  [map [fn [x] [get-in x #p(name)]] records]
+```
+
+This avoids a new reduction rule and leverages existing `map` infrastructure. Promotion to a distinct primitive (for fusion optimizations, e.g., fusing consecutive `map-path` calls) is deferred until profiling shows a need.
+
+### 3.14 Interaction with Existing Features
 
 **Dot-access (`user.name`):** Unchanged. Single-field access continues to desugar to `map-get`. This is the lightweight, ergonomic form for the common case.
 
@@ -491,7 +576,9 @@ Write `examples/2026-03-20-first-class-paths.prologos` exercising:
 - Path literals (simple, deep, branching, wildcard)
 - `get-in`/`update-in` with path variables
 - Path passed to higher-order functions
-- Path combinators
+- Path combinators and destructuring
+- Broadcast `.*field` syntax
+- Key renaming `^` syntax
 - Existing dot-access still working
 
 ### Phase 1: AST Nodes + Surface Syntax (S)
@@ -529,17 +616,26 @@ Write `examples/2026-03-20-first-class-paths.prologos` exercising:
 - Integration tests: runtime navigation via path variables
 - L3 acceptance file validation
 
-### Phase 7: Path Combinators (M, Library)
+### Phase 7: Path Combinators + Destructuring (M, Library)
 - Foreign primitives: `path-segments`, `path-from-segments`, `path-branch-count`, `path-branch`
 - Pure Prologos combinators in `prologos.core.path`: `path-append`, `path-head`, `path-tail`, `path-depth`, `path-leaf?`, `path-reverse`, `path-starts-with?`, `path-get`, `map-path`
-- Tests for composition and round-tripping
+- Path destructuring pattern kind: `#p(head . rest)` desugars to list pattern on segments
+- Update `pattern-is-simple-flat?`, `compile-match-tree`, narrowing handlers
+- Tests for composition, round-tripping, and pattern matching on paths
 
 ### Phase 7b: Broadcast Syntax `.*field` (M)
 - Reader: `$broadcast-access` sentinel when `.*` followed by `ident-continue?`
-- Preparse: `rewrite-dot-access` handles `$broadcast-access` → `(map-path target path)`
+- Preparse: `rewrite-dot-access` handles `$broadcast-access` → desugar to `[map [fn [x] [get-in x path]] target]`
 - Deep broadcast: absorb subsequent `$dot-access` sentinels into the path
 - Type: `List (Map K V)` + path → `List T` where T is the reached type
 - Tests: L1 sexp, L2 WS, L3 acceptance file
+
+### Phase 7c: Key Renaming `^` Syntax (M)
+- Parser: recognize `^` within path contexts as rename annotation on leaf segment
+- Path segment representation extended: `(keyword . rename-keyword-or-#f)`
+- Elaboration: emit `map-assoc` with renamed key when rename is present
+- Scoped to `get-in` and `selection` only — parse error if used in `update-in`
+- Tests: renaming in simple paths, deep paths, branching paths, error on update-in
 
 ### Phase 8: Lens Layer (Future, Out of Scope)
 Deferred. When/if desired:
@@ -616,3 +712,6 @@ The key change in macros.rkt preparse: when processing `get-in` or `update-in`, 
 | Branch lookups are parallelizable | Branching paths (`#p(address.{zip city})`) produce independent lookups on immutable data. Currently sequential at elaboration; the propagator network could parallelize them in future. |
 | Lenses deferred, not rejected | Lenses compose beautifully but require significant type machinery (especially with dependent types). First-class paths provide the foundation; lenses can be built on top as a library. |
 | Path combinators: thin foreign + pure Prologos | 4 foreign primitives for structural access (`path-segments`, `path-from-segments`, `path-branch-count`, `path-branch`), all composition logic in pure Prologos. Users can extend freely. |
+| `^` for key renaming in projections | Analogous to SQL `AS`. Applies to leaf of path; scoped to `get-in`/`selection` (not `update-in`). `^` is unused in reader, no collision. |
+| Path destructuring via pattern matching | `#p(head . rest)` desugars to list pattern on segments. More ergonomic than `path-head`/`path-tail` for routing on path structure; combinator functions remain for composition contexts. |
+| `map-path` as sugar over `map` + lambda | Start with desugar, not a distinct primitive. Promote to primitive only if fusion optimization is needed later. Avoids premature abstraction. |
