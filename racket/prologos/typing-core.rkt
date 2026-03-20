@@ -1168,6 +1168,10 @@
     [(expr-Keyword) (expr-Type (lzero))]
     [(expr-keyword _) (expr-Keyword)]
 
+    ;; ---- Path type and literals ----
+    [(expr-Path) (expr-Type (lzero))]
+    [(expr-path _) (expr-Path)]
+
     ;; ---- Char type and literals ----
     [(expr-Char) (expr-Type (lzero))]
     [(expr-char _) (expr-Char)]

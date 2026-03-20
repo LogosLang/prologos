@@ -1723,6 +1723,10 @@
     ;; ---- Keyword type and literal ----
     [(surf-keyword-type loc)
      (expr-Keyword)]
+
+    ;; ---- Path type ----
+    [(surf-path-type loc)
+     (expr-Path)]
     [(surf-keyword name loc)
      (expr-keyword name)]
 

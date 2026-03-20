@@ -3370,6 +3370,10 @@
     [(expr-Keyword) e]
     [(expr-keyword _) e]
 
+    ;; Path normalization
+    [(expr-Path) e]
+    [(expr-path _) e]
+
     ;; Char normalization
     [(expr-Char) e]
     [(expr-char _) e]

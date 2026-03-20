@@ -995,6 +995,9 @@
     ;; Keyword
     [(expr-Keyword) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-keyword _) (tu (expr-Keyword) (zero-usage n))]
+    ;; Path
+    [(expr-Path) (tu (expr-Type (lzero)) (zero-usage n))]
+    [(expr-path _) (tu (expr-Path) (zero-usage n))]
     ;; Char
     [(expr-Char) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-char _) (tu (expr-Char) (zero-usage n))]

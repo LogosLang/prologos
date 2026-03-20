@@ -190,6 +190,8 @@
  ;; Keyword surface forms
  (struct-out surf-keyword-type)
  (struct-out surf-keyword)
+ ;; Path surface forms
+ (struct-out surf-path-type)
  ;; Char surface forms
  (struct-out surf-char-type)
  (struct-out surf-char)
@@ -784,6 +786,7 @@
 ;; ========================================
 (struct surf-keyword-type (srcloc) #:transparent)          ; Keyword type
 (struct surf-keyword (name srcloc) #:transparent)          ; keyword literal, name is a symbol
+(struct surf-path-type (srcloc) #:transparent)             ; Path type
 
 ;; ========================================
 ;; Char type and literal
