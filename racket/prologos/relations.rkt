@@ -22,7 +22,8 @@
          "solver.rkt"
          "provenance.rkt"
          "syntax.rkt"
-         "performance-counters.rkt")
+         "performance-counters.rkt"
+         "ctor-registry.rkt")
 
 (provide
  ;; Core structs
@@ -80,6 +81,100 @@
 ;;   'fail — treat `not p` as false (backtrack)
 ;;   'defer — treat `not p` as unknown (skip this clause)
 (define current-naf-oracle (make-parameter #f))
+
+;; ========================================
+;; PUnify Phase 5a: Solver Cell Infrastructure
+;; ========================================
+
+;; Solver environment: replaces hasheq substitution when punify is enabled.
+;; pnet: prop-network (persistent, immutable — threaded functionally like subst)
+;; var-cells: hasheq(symbol → cell-id) — maps logic var names to their cells
+(struct solver-env (pnet var-cells) #:transparent)
+
+;; Sentinel value for unbound solver cells.
+(define SOLVER-TERM-BOT (gensym 'solver-term-bot))
+
+;; Merge function for solver cells: a simple flat lattice.
+;; ⊥ + x = x, x + ⊥ = x, x + x = x, x + y = contradiction.
+(define (solver-term-merge old new)
+  (cond
+    [(eq? old SOLVER-TERM-BOT) new]
+    [(eq? new SOLVER-TERM-BOT) old]
+    [(equal? old new) old]
+    [else 'solver-contradiction]))
+
+;; Contradiction detector for solver cells.
+(define (solver-contradiction? val)
+  (eq? val 'solver-contradiction))
+
+;; Create an empty solver environment.
+(define (make-solver-env)
+  (solver-env (make-prop-network) (hasheq)))
+
+;; Ensure a variable has a cell, creating one at SOLVER-TERM-BOT if needed.
+(define (solver-ensure-var env name)
+  (if (hash-has-key? (solver-env-var-cells env) name)
+      env
+      (let-values ([(pnet cid) (net-new-cell (solver-env-pnet env)
+                                              SOLVER-TERM-BOT
+                                              solver-term-merge
+                                              solver-contradiction?)])
+        (solver-env pnet (hash-set (solver-env-var-cells env) name cid)))))
+
+;; Walk a term in a solver-env: read cell value, follow variable chains.
+(define (solver-walk env term)
+  (cond
+    [(symbol? term)
+     (define cid (hash-ref (solver-env-var-cells env) term #f))
+     (if cid
+         (let ([val (net-cell-read (solver-env-pnet env) cid)])
+           (if (eq? val SOLVER-TERM-BOT)
+               term  ;; unbound
+               (if (eq? val term) term (solver-walk env val))))
+         term)]  ;; not a known var — ground atom
+    [else term]))
+
+;; Deep-walk: resolve all variables transitively in a solver-env.
+(define (solver-walk* env term)
+  (define resolved (solver-walk env term))
+  (cond
+    [(list? resolved)
+     (map (lambda (t) (solver-walk* env t)) resolved)]
+    [else resolved]))
+
+;; Unify two terms using solver cells.
+;; Returns updated solver-env or #f on failure.
+(define (solver-unify-terms t1 t2 env)
+  ;; Auto-create cells for any symbol arguments
+  (define env1 (if (symbol? t1) (solver-ensure-var env t1) env))
+  (define env2 (if (symbol? t2) (solver-ensure-var env1 t2) env1))
+  (define v1 (solver-walk env2 t1))
+  (define v2 (solver-walk env2 t2))
+  (cond
+    [(equal? v1 v2) env2]
+    [(symbol? v1)
+     ;; v1 is an unbound var — write v2 to its cell
+     (define env3 (solver-ensure-var env2 v1))
+     (define cid (hash-ref (solver-env-var-cells env3) v1))
+     (define new-pnet (net-cell-write (solver-env-pnet env3) cid v2))
+     (if (net-contradiction? new-pnet)
+         #f
+         (solver-env new-pnet (solver-env-var-cells env3)))]
+    [(symbol? v2)
+     (define env3 (solver-ensure-var env2 v2))
+     (define cid (hash-ref (solver-env-var-cells env3) v2))
+     (define new-pnet (net-cell-write (solver-env-pnet env3) cid v1))
+     (if (net-contradiction? new-pnet)
+         #f
+         (solver-env new-pnet (solver-env-var-cells env3)))]
+    [(and (list? v1) (list? v2) (= (length v1) (length v2)))
+     (let loop ([ts1 v1] [ts2 v2] [e env2])
+       (cond
+         [(null? ts1) e]
+         [else
+          (define e* (solver-unify-terms (car ts1) (car ts2) e))
+          (if e* (loop (cdr ts1) (cdr ts2) e*) #f)]))]
+    [else #f]))
 
 ;; ========================================
 ;; Core structs
@@ -411,9 +506,10 @@
 (define DEFAULT-DEPTH-LIMIT 100)
 
 ;; Walk a substitution to fully resolve a term.
-;; subst: hasheq mapping variable names (symbols) to values or other var names
+;; subst: hasheq or solver-env (PUnify Phase 5a dispatches on type)
 (define (walk subst term)
   (cond
+    [(solver-env? subst) (solver-walk subst term)]
     [(symbol? term)
      (define val (hash-ref subst term #f))
      (if val
@@ -423,30 +519,35 @@
 
 ;; Deeply walk a term, resolving all variables transitively.
 (define (walk* subst term)
-  (define resolved (walk subst term))
   (cond
-    [(list? resolved)
-     (map (lambda (t) (walk* subst t)) resolved)]
-    [else resolved]))
+    [(solver-env? subst) (solver-walk* subst term)]
+    [else
+     (define resolved (walk subst term))
+     (cond
+       [(list? resolved)
+        (map (lambda (t) (walk* subst t)) resolved)]
+       [else resolved])]))
 
 ;; Unify two terms under a substitution.
-;; Returns updated substitution or #f on failure.
+;; Returns updated substitution (hasheq or solver-env) or #f on failure.
 (define (unify-terms t1 t2 subst)
   (perf-inc-solver-unify!)
-  (define v1 (walk subst t1))
-  (define v2 (walk subst t2))
-  (cond
-    [(equal? v1 v2) subst]
-    [(symbol? v1) (hash-set subst v1 v2)]
-    [(symbol? v2) (hash-set subst v2 v1)]
-    [(and (list? v1) (list? v2) (= (length v1) (length v2)))
-     (let loop ([ts1 v1] [ts2 v2] [s subst])
-       (cond
-         [(null? ts1) s]
-         [else
-          (define s* (unify-terms (car ts1) (car ts2) s))
-          (if s* (loop (cdr ts1) (cdr ts2) s*) #f)]))]
-    [else #f]))
+  (if (solver-env? subst)
+      (solver-unify-terms t1 t2 subst)
+      (let ([v1 (walk subst t1)]
+            [v2 (walk subst t2)])
+        (cond
+          [(equal? v1 v2) subst]
+          [(symbol? v1) (hash-set subst v1 v2)]
+          [(symbol? v2) (hash-set subst v2 v1)]
+          [(and (list? v1) (list? v2) (= (length v1) (length v2)))
+           (let loop ([ts1 v1] [ts2 v2] [s subst])
+             (cond
+               [(null? ts1) s]
+               [else
+                (define s* (unify-terms (car ts1) (car ts2) s))
+                (if s* (loop (cdr ts1) (cdr ts2) s*) #f)]))]
+          [else #f]))))
 
 ;; Solve a list of goals under a substitution, returning all solutions.
 ;; config: solver-config
@@ -820,9 +921,13 @@
         goal-args))
 
   ;; Use DFS solver for all queries — handles both facts and clauses
-  ;; with proper unification of ground args
-  (let* ([top-goal (goal-desc 'app (list goal-name effective-args))]
-         [solutions (solve-goals config store (list top-goal) (hasheq) 0)])
+  ;; with proper unification of ground args.
+  ;; PUnify Phase 5a: use solver-env (cell-based) when punify enabled.
+  (let* ([initial-subst (if (current-punify-enabled?)
+                            (make-solver-env)
+                            (hasheq))]
+         [top-goal (goal-desc 'app (list goal-name effective-args))]
+         [solutions (solve-goals config store (list top-goal) initial-subst 0)])
     ;; Project query variables from each solution
     (for/list ([subst (in-list solutions)])
       (for/hasheq ([qv (in-list query-vars)])
