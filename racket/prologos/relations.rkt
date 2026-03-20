@@ -167,13 +167,38 @@
      (if (net-contradiction? new-pnet)
          #f
          (solver-env new-pnet (solver-env-var-cells env3)))]
-    [(and (list? v1) (list? v2) (= (length v1) (length v2)))
-     (let loop ([ts1 v1] [ts2 v2] [e env2])
-       (cond
-         [(null? ts1) e]
-         [else
-          (define e* (solver-unify-terms (car ts1) (car ts2) e))
-          (if e* (loop (cdr ts1) (cdr ts2) e*) #f)]))]
+    [(and (list? v1) (list? v2))
+     ;; PUnify Phase 5b: descriptor-aware decomposition for compound terms.
+     ;; If both have a recognized constructor tag, decompose via descriptor.
+     ;; Otherwise fall back to pairwise list unification.
+     (define tag1 (and (pair? v1) (let ([h (car v1)]) (and (symbol? h) h))))
+     (define tag2 (and (pair? v2) (let ([h (car v2)]) (and (symbol? h) h))))
+     (define desc1 (and tag1 (lookup-ctor-desc tag1 #:domain 'data)))
+     (define desc2 (and tag2 (lookup-ctor-desc tag2 #:domain 'data)))
+     (cond
+       [(and desc1 desc2 (eq? tag1 tag2))
+        ;; Same constructor — decompose sub-components via descriptor
+        (define cs1 ((ctor-desc-extract-fn desc1) v1))
+        (define cs2 ((ctor-desc-extract-fn desc2) v2))
+        (let loop ([c1s cs1] [c2s cs2] [e env2])
+          (cond
+            [(null? c1s) e]
+            [else
+             (define e* (solver-unify-terms (car c1s) (car c2s) e))
+             (if e* (loop (cdr c1s) (cdr c2s) e*) #f)]))]
+       [(and desc1 desc2)
+        ;; Different constructors — structural mismatch
+        #f]
+       [else
+        ;; Fallback: pairwise list unification for non-descriptor terms
+        (if (= (length v1) (length v2))
+            (let loop ([ts1 v1] [ts2 v2] [e env2])
+              (cond
+                [(null? ts1) e]
+                [else
+                 (define e* (solver-unify-terms (car ts1) (car ts2) e))
+                 (if e* (loop (cdr ts1) (cdr ts2) e*) #f)]))
+            #f)])]
     [else #f]))
 
 ;; ========================================
