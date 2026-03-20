@@ -402,6 +402,18 @@
     [(expr-map-fold-entries f init map) (format "[map-fold-entries ~a ~a ~a]" (pp-expr f names) (pp-expr init names) (pp-expr map names))]
     [(expr-map-filter-entries pred map) (format "[map-filter-entries ~a ~a]" (pp-expr pred names) (pp-expr map names))]
     [(expr-map-map-vals f map) (format "[map-map-vals ~a ~a]" (pp-expr f names) (pp-expr map names))]
+    ;; Path values
+    [(expr-path branches)
+     (define (pp-branch segs)
+       (string-join (for/list ([s (in-list segs)])
+                      (cond [(expr-keyword? s) (symbol->string (expr-keyword-name s))]
+                            [(expr-symbol? s) (symbol->string (expr-symbol-name s))]
+                            [else "?"]))
+                    "."))
+     (if (= (length branches) 1)
+         (format "#p(~a)" (pp-branch (car branches)))
+         (format "#p(~a)" (string-join (map pp-branch branches) " | ")))]
+    [(expr-Path) "Path"]
     [(expr-pvec-nth v i) (format "[pvec-nth ~a ~a]" (pp-expr v names) (pp-expr i names))]
     [(expr-pvec-update v i x) (format "[pvec-update ~a ~a ~a]" (pp-expr v names) (pp-expr i names) (pp-expr x names))]
     [(expr-pvec-length v) (format "[pvec-length ~a]" (pp-expr v names))]
@@ -1043,6 +1055,9 @@
     [(expr-map-fold-entries f init map) (or (uses-bvar0? f) (uses-bvar0? init) (uses-bvar0? map))]
     [(expr-map-filter-entries pred map) (or (uses-bvar0? pred) (uses-bvar0? map))]
     [(expr-map-map-vals f map) (or (uses-bvar0? f) (uses-bvar0? map))]
+    ;; Path values — no bound variables
+    [(expr-path _) #f]
+    [(expr-Path) #f]
     [(expr-pvec-nth v i) (or (uses-bvar0? v) (uses-bvar0? i))]
     [(expr-pvec-update v i x) (or (uses-bvar0? v) (uses-bvar0? i) (uses-bvar0? x))]
     [(expr-pvec-length v) (uses-bvar0? v)]

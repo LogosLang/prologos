@@ -141,6 +141,8 @@
  (struct-out expr-map-size) (struct-out expr-map-has-key)
  (struct-out expr-map-keys) (struct-out expr-map-vals)
  (struct-out expr-get) (struct-out expr-get-in) (struct-out expr-update-in)
+ ;; Path (first-class path values)
+ (struct-out expr-path) (struct-out expr-Path)
  ;; Set (persistent hash set)
  (struct-out expr-Set) (struct-out expr-hset)
  (struct-out expr-set-empty) (struct-out expr-set-insert)
@@ -592,6 +594,10 @@
 ;; Path algebra operations
 (struct expr-get-in (target paths) #:transparent)             ; get-in : M → paths → V
 (struct expr-update-in (target paths fn) #:transparent)       ; update-in : M → paths → (V → V) → M
+
+;; First-class path values
+(struct expr-path (branches) #:transparent)                   ; path literal: branches = list of (listof expr-keyword|expr-symbol)
+(struct expr-Path () #:transparent)                           ; Path type (ground, unparameterized)
 
 ;; ========================================
 ;; Set (persistent hash set, backed by CHAMP with #t sentinel)

@@ -257,6 +257,10 @@
     [(expr-map-filter-entries pred map) (expr-map-filter-entries (zonk pred) (zonk map))]
     [(expr-map-map-vals f map) (expr-map-map-vals (zonk f) (zonk map))]
 
+    ;; Path values (ground — no metas)
+    [(expr-path _) e]
+    [(expr-Path) e]
+
     ;; Transient Builders
     [(expr-transient c) (expr-transient (zonk c))]
     [(expr-persist c) (expr-persist (zonk c))]
@@ -693,6 +697,10 @@
     [(expr-map-filter-entries pred map) (expr-map-filter-entries (zonk-at-depth depth pred) (zonk-at-depth depth map))]
     [(expr-map-map-vals f map) (expr-map-map-vals (zonk-at-depth depth f) (zonk-at-depth depth map))]
 
+    ;; Path values (ground)
+    [(expr-path _) e]
+    [(expr-Path) e]
+
     ;; Transient Builders
     [(expr-transient c) (expr-transient (zonk-at-depth depth c))]
     [(expr-persist c) (expr-persist (zonk-at-depth depth c))]
@@ -1102,6 +1110,10 @@
     [(expr-map-fold-entries f init map) (expr-map-fold-entries (default-metas f) (default-metas init) (default-metas map))]
     [(expr-map-filter-entries pred map) (expr-map-filter-entries (default-metas pred) (default-metas map))]
     [(expr-map-map-vals f map) (expr-map-map-vals (default-metas f) (default-metas map))]
+
+    ;; Path values (ground)
+    [(expr-path _) e]
+    [(expr-Path) e]
 
     ;; Transient Builders
     [(expr-transient c) (expr-transient (default-metas c))]

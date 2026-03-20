@@ -272,6 +272,10 @@
     [(expr-map-filter-entries pred map) (expr-map-filter-entries (shift delta cutoff pred) (shift delta cutoff map))]
     [(expr-map-map-vals f map) (expr-map-map-vals (shift delta cutoff f) (shift delta cutoff map))]
 
+    ;; Path values (no free variables — branches are keywords/symbols)
+    [(expr-path _) e]
+    [(expr-Path) e]
+
     ;; Transient Builders (all non-binding)
     [(expr-transient c) (expr-transient (shift delta cutoff c))]
     [(expr-persist c) (expr-persist (shift delta cutoff c))]
@@ -717,6 +721,10 @@
     [(expr-map-fold-entries f init map) (expr-map-fold-entries (subst k s f) (subst k s init) (subst k s map))]
     [(expr-map-filter-entries pred map) (expr-map-filter-entries (subst k s pred) (subst k s map))]
     [(expr-map-map-vals f map) (expr-map-map-vals (subst k s f) (subst k s map))]
+
+    ;; Path values (no free variables)
+    [(expr-path _) e]
+    [(expr-Path) e]
 
     ;; Transient Builders (all non-binding)
     [(expr-transient c) (expr-transient (subst k s c))]

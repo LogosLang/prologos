@@ -549,6 +549,9 @@
       [(and (expr-union? a) (expr-union? b))
        (list 'union (flatten-union a) (flatten-union b))]
 
+      ;; Path vs Path (ground type, no sub-goals)
+      [(and (expr-Path? a) (expr-Path? b)) '(ok)]
+
       ;; ann: strip annotation and retry
       [(expr-ann? a) (list 'retry (expr-ann-term a) b)]
       [(expr-ann? b) (list 'retry a (expr-ann-term b))]
@@ -690,6 +693,7 @@
     [(expr-Map _ _) "3:Map"]
     [(expr-PVec _) "3:PVec"]
     [(expr-Set _) "3:Set"]
+    [(expr-Path) "3:Path"]
     [(expr-TVec _) "3:TVec"]
     [(expr-TMap _ _) "3:TMap"]
     [(expr-TSet _) "3:TSet"]
