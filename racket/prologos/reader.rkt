@@ -547,9 +547,20 @@
           ;; #= — narrowing operator
           (tok-read! tok) ; consume =
           (token 'symbol '|#=| ln cl ps 2)]
+         [(and (char? next) (char=? next #\p)
+               (let ([c3 (peek-char (tokenizer-port tok) 1)])
+                 (and (char? c3) (char=? c3 #\())))
+          ;; #p( — path literal: read contents as a path, emit (path :contents)
+          (tok-read! tok) ; consume p
+          (tok-read! tok) ; consume (
+          ;; Read path segments until matching )
+          ;; In path mode: dots separate segments, {} for branching, : optional prefix
+          (define segments (read-path-literal-contents! tok))
+          (define span (+ 3 (car segments)))  ;; #p( + contents span
+          (token 'path-literal (cdr segments) ln cl ps span)]
          [else
           (error 'prologos-reader
-                 "~a:~a:~a: # must be followed by { (Set literal), . (nil-safe access), #= (narrowing), or :keyword"
+                 "~a:~a:~a: # must be followed by { (Set literal), . (nil-safe access), p( (path literal), #= (narrowing), or :keyword"
                  (tokenizer-source tok) ln (+ cl 1))])]
 
       ;; Tilde — LSeq literal ~[ or approximate literal prefix ~42, ~3/7
@@ -926,6 +937,35 @@
 
 (define (parser-peek-type p)
   (token-type (parser-peek p)))
+
+;; --- Path literal reader ---
+;; Reads contents of #p(...) — path segments separated by dots.
+;; Colons on identifiers are optional (stripped if present).
+;; Returns (cons total-char-count path-string) where path-string
+;; is the raw text between the parens (to be parsed by the path parser).
+(define (read-path-literal-contents! tok)
+  (define chars '())
+  (define count 0)
+  (let loop ()
+    (define c (tok-peek tok))
+    (cond
+      [(eof-object? c)
+       (error 'prologos-reader "unexpected EOF inside #p(...)")]
+      [(char=? c #\))
+       (tok-read! tok)  ; consume closing paren
+       (set! count (+ count 1))
+       (cons count (list->string (reverse chars)))]
+      [(char-whitespace? c)
+       (tok-read! tok)
+       (set! count (+ count 1))
+       ;; whitespace inside #p() is a separator (for branching syntax in future)
+       (set! chars (cons c chars))
+       (loop)]
+      [else
+       (tok-read! tok)
+       (set! count (+ count 1))
+       (set! chars (cons c chars))
+       (loop)])))
 
 ;; Make a syntax object from a datum with source location
 (define (make-stx datum source line col pos span)
@@ -1447,6 +1487,26 @@
     [(eq? tt 'hash-lbrace)
      ;; #{ ... } — Set literal
      (parse-set-literal-form p)]
+    [(eq? tt 'path-literal)
+     ;; #p(...) — path literal: token value is raw string "address.zip"
+     ;; Convert to (path :address.zip) sexp form for the parser
+     (define d (parser-next! p)) ; consume path-literal token
+     (define raw-str (token-value d))
+     (define src (parser-source p))
+     ;; Parse the raw string into keyword-dotted form(s)
+     ;; Strip leading : if present, then prepend : to make keyword-like symbol
+     (define cleaned (if (and (> (string-length raw-str) 0)
+                              (char=? (string-ref raw-str 0) #\:))
+                         (substring raw-str 1)
+                         raw-str))
+     (define kw-sym (string->symbol (string-append ":" cleaned)))
+     (make-stx (list (make-stx 'path src
+                                (token-line d) (token-col d) (token-pos d) 4)
+                      (make-stx kw-sym src
+                                (token-line d) (token-col d) (token-pos d)
+                                (token-span d)))
+               src (token-line d) (token-col d) (token-pos d)
+               (token-span d))]
     [(eq? tt 'quote)
      ;; 'expr — quote operator
      (define d (parser-next! p)) ; consume '
