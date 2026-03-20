@@ -20,6 +20,7 @@
 | 5 | Type system: Path type + get-in typing | ⬜ | |
 | 6 | Reduction: path-based navigation | ⬜ | |
 | 7 | Path combinators (library) | ⬜ | |
+| 7b | Broadcast syntax `.*field` | ⬜ | |
 | 8 | Lens layer (future) | ⬜ | Out of scope |
 
 ---
@@ -39,13 +40,18 @@ Paths in Prologos currently exist at two disconnected levels that interfere with
 ### What we want
 
 ```prologos
-;; Paths as first-class values
-def p := #p(:address.zip)
+;; Paths as first-class values (colon optional inside #p)
+def p := #p(address.zip)
 [get-in user p]                    ;; works — p is a value
 [update-in user p [int+ _ 1]]     ;; works
 
 ;; Composition
-def full := [path-append #p(:address) #p(:zip)]
+def full := [path-append #p(address) #p(zip)]
+
+;; Broadcast: map a path over a collection
+def records := '[{:name "Alice" :age 30}, {:name "Bob" :age 25}]
+records.*name                      ;; => '["Alice" "Bob"]
+records.*address.zip               ;; => deep broadcast
 
 ;; Path in higher-order context
 [map [fn [p] [get-in user p]] paths]
@@ -92,11 +98,12 @@ Paths as function pairs `(get, set)` with algebraic composition. Well-studied th
 ### 3.1 Path Literal Syntax
 
 ```
-#p(:address.zip)         ;; deep path: 2 segments
-#p(:name)                ;; simple: 1 segment
-#p(:address.*)           ;; wildcard
-#p(:address.**)          ;; globstar
-#p(:address.{zip city})  ;; branching (multiple paths)
+#p(address.zip)          ;; deep path: 2 segments (canonical — no colon)
+#p(name)                 ;; simple: 1 segment
+#p(address.*)            ;; wildcard
+#p(address.**)           ;; globstar
+#p(address.{zip city})   ;; branching (multiple paths)
+#p(:address.zip)         ;; also accepted — colon is optional inside #p(...)
 ```
 
 The `#p(...)` reader syntax is chosen because:
@@ -105,9 +112,11 @@ The `#p(...)` reader syntax is chosen because:
 - Parenthesized body uses existing path grammar from selections
 - Clearly distinguishes path literals from keyword symbols
 
-**Sexp equivalent:** `(path :address.zip)` — a special form recognized by the parser.
+**Colon is optional:** Inside `#p(...)`, all identifiers are implicitly key segments. The `:` prefix is accepted for consistency with keyword syntax used elsewhere in the language, but the canonical form omits it for conciseness. The reader strips leading `:` from segments during parsing.
 
-**WS equivalent:** `#p(:address.zip)` — the reader produces the sexp form.
+**Sexp equivalent:** `(path :address.zip)` — a special form recognized by the parser. In sexp mode, the colon is retained for consistency with keyword conventions.
+
+**WS equivalent:** `#p(address.zip)` — the reader produces the sexp form.
 
 ### 3.2 AST Nodes
 
@@ -241,26 +250,173 @@ This dual behavior gives us both static type safety (for literal paths) and dyna
    [_ (expr-get-in t p)])]  ;; stuck if path isn't concrete
 ```
 
-### 3.8 Path Combinators (Library Layer)
+### 3.8 Broadcast Path Syntax (`.*field`)
 
-Implemented in Prologos itself (not Racket-side), as library functions:
+**Syntax:** `collection.*field` — maps a path extraction over every element in a collection.
 
 ```prologos
-;; Path append — concatenate two paths
-spec path-append Path Path -> Path
-;; Implementation: foreign function or macro that concatenates branch segments
+def records := '[{:name "Alice" :age 30}, {:name "Bob" :age 25}]
+records.*name                ;; => '["Alice" "Bob"]
+records.*age                 ;; => '[30 25]
 
-;; Path length
-spec path-length Path -> Int
+;; Deep broadcast
+def users := '[{:name "A" :address {:zip 97403}}, {... :address {:zip 10001}}]
+users.*address.zip           ;; => '[97403 10001]
 
-;; Path head/tail
-spec path-head Path -> Path    ;; first segment
-spec path-tail Path -> Path    ;; remaining segments
+;; Broadcast with branching
+users.*address.{zip city}    ;; => '[{:zip 97403 :city ...} ...]
+
+;; Broadcast on solver results
+def solutions := [solve (fresh [x y] (eq? [+ x y] 10))]
+solutions.*x                 ;; => all x-values from solution maps
 ```
 
-These are thin wrappers around the `expr-path` structure. They can be implemented as foreign functions (Racket-side) that destructure and reconstruct `expr-path` nodes.
+**Reader mechanics:** The reader already handles `.` as a delimiter and `*` as `ident-start?`. When the reader encounters `.*` followed by an identifier character, it emits a new sentinel `$broadcast-access`:
 
-### 3.9 Interaction with Existing Features
+```
+records.*name → records ($broadcast-access name)
+records.*address.zip → records ($broadcast-access address) ($dot-access zip)
+```
+
+**Disambiguation from wildcard `.*`:**
+- `.*` followed by `ident-continue?` character → broadcast (`$broadcast-access`)
+- `.*` followed by whitespace/delimiter/nothing → wildcard (existing behavior in path contexts)
+- Single character lookahead, unambiguous
+
+**Desugaring:** `rewrite-dot-access` handles `$broadcast-access` by wrapping in `map-path`:
+
+```racket
+;; ($broadcast-access field) on target
+;; → (map-path target #p(field))
+;; which reduces to (map (fn ($x) (map-get $x :field)) target)
+```
+
+For deep broadcast (`records.*address.zip`), subsequent `$dot-access` sentinels are absorbed into the path:
+
+```racket
+;; records ($broadcast-access address) ($dot-access zip)
+;; → (map-path records #p(address.zip))
+```
+
+**Type:** If `target : List (Map K V)` and the path reaches type `T`, then `target.*path : List T`. For `target : List (Schema S)`, the field type is looked up from the schema. Type errors if the collection element type doesn't support the path.
+
+**`map-path` primitive:** A new built-in that maps a path extraction over a collection:
+
+```prologos
+spec map-path {A B : Type} [List A] Path -> [List B]
+;; where B is the type reached by the path within A
+```
+
+This is more principled than desugaring to `map` + anonymous function — it preserves the path as a value for potential optimization (e.g., the reducer can fuse multiple `map-path` calls).
+
+**Identifier restriction:** `*`-prefixed identifiers (e.g., `*foo` as a variable name) would become ambiguous after a dot. Since nothing in the codebase uses `*`-prefixed identifiers, restricting `*identifier` after `.` to mean broadcast is safe. Bare `*foo` (not after a dot) remains a valid identifier.
+
+### 3.9 Path Combinators (Pure Prologos)
+
+Path combinators are implemented in Prologos itself, with a thin foreign function layer for structural operations on the `expr-path` value.
+
+**Foreign primitives (Racket-side, minimal):**
+
+```prologos
+;; Decompose a path into its keyword segments
+foreign path-segments : Path -> [List Keyword]
+
+;; Construct a path from keyword segments
+foreign path-from-segments : [List Keyword] -> Path
+
+;; Number of branches in a branching path
+foreign path-branch-count : Path -> Int
+
+;; Extract the nth branch as a single-branch path
+foreign path-branch : Path -> Int -> Path
+```
+
+**Pure Prologos combinators (library `prologos.core.path`):**
+
+```prologos
+;; Append two single-branch paths
+spec path-append Path Path -> Path
+defn path-append [p1 p2]
+  [path-from-segments [list-append [path-segments p1] [path-segments p2]]]
+
+;; First segment as a single-segment path
+spec path-head Path -> Path
+defn path-head [p]
+  [path-from-segments [list [head [path-segments p]]]]
+
+;; All segments after the first
+spec path-tail Path -> Path
+defn path-tail [p]
+  [path-from-segments [tail [path-segments p]]]
+
+;; Depth (number of segments)
+spec path-depth Path -> Int
+defn path-depth [p]
+  [length [path-segments p]]
+
+;; Is this a single-segment (leaf) path?
+spec path-leaf? Path -> Bool
+defn path-leaf? [p]
+  [eq? [path-depth p] 1]
+
+;; Reverse a path
+spec path-reverse Path -> Path
+defn path-reverse [p]
+  [path-from-segments [reverse [path-segments p]]]
+
+;; Check if a path starts with a prefix
+spec path-starts-with? Path Path -> Bool
+defn path-starts-with? [p prefix]
+  [list-starts-with? [path-segments p] [path-segments prefix]]
+
+;; Apply a path to a map (equivalent to get-in with a path value)
+spec path-get {A : Type} A Path -> A
+defn path-get [target p]
+  [get-in target p]
+
+;; Map a path over a collection (broadcast)
+spec map-path {A B : Type} [List A] Path -> [List B]
+defn map-path [xs p]
+  [map [fn [x] [get-in x p]] xs]
+```
+
+This design keeps the foreign layer minimal (4 functions for structural access) and puts all composition logic in user-space Prologos. Users can extend with their own combinators.
+
+### 3.10 Lessons from Specter (Prior Art)
+
+[Specter](https://github.com/redplanetlabs/specter) is a Clojure library for navigating and transforming nested data. Its core abstraction — **navigators** that compose into paths — validates several of our design choices and suggests future directions.
+
+**Validated by Specter:**
+- First-class paths that compose are the right abstraction level
+- The `select`/`transform` duality (our `get-in`/`update-in`) is proven at scale
+- Broadcast over collections (Specter's `ALL`, our `.*`) is the most-used navigator — essential, not optional
+- Static path compilation (our elaboration-time inlining) matches Specter's "compiled paths" performance strategy
+
+**Specter concepts mapped to Prologos:**
+
+| Specter Navigator | Prologos Equivalent | Status |
+|-------------------|---------------------|--------|
+| `keypath` | `#p(field)` | In scope |
+| `ALL` | `.*field` broadcast | In scope (Phase 7b) |
+| `MAP-VALS` | `.*` on map (all values) | In scope |
+| `MAP-KEYS` | Future: `.*:` or path combinator | Deferred |
+| `FIRST`, `LAST` | `[0]`, `[-1]` postfix indexing | Exists |
+| `filterer` | Future: predicate paths | Deferred |
+| `walker` | `.**` globstar | Exists (in selections) |
+| `if-path` | Future: conditional navigation | Deferred |
+| `collect-one` | Future: context collection | Deferred |
+| `must` | `#.field` nil-safe access | Exists |
+
+**Design-for-future from Specter:**
+1. **Conditional navigation (`if-path`):** Paths that branch based on predicates mid-traversal. The `Path` type should be extensible to support predicate segments (e.g., `#p(users.[age > 30].name)`) without breaking the current design.
+2. **Context collection (`collect-one`):** Gathering values during traversal for use in transforms. Powerful for complex update-in patterns. Can be added as a combinator later.
+3. **Protocol paths:** Type-aware navigation for heterogeneous collections. Our schema system + trait dispatch could enable this naturally — a path navigator that dispatches on the element's schema type.
+
+**What we intentionally differ from Specter on:**
+- Specter navigators are functions (dynamic composition). Our paths are **values** (data). This matches Prologos's homoiconicity principle — paths are data you can inspect, serialize, and reason about, not opaque function compositions.
+- Specter's `transform` preserves collection type (vector stays vector). Our `update-in` does this naturally via immutable CHAMP operations — no special handling needed.
+
+### 3.11 Interaction with Existing Features
 
 **Dot-access (`user.name`):** Unchanged. Single-field access continues to desugar to `map-get`. This is the lightweight, ergonomic form for the common case.
 
@@ -373,10 +529,17 @@ Write `examples/2026-03-20-first-class-paths.prologos` exercising:
 - Integration tests: runtime navigation via path variables
 - L3 acceptance file validation
 
-### Phase 7: Path Combinators (S, Library)
-- `path-append`, `path-length`, `path-head`, `path-tail` as foreign functions
-- Library module `prologos.core.path`
-- Tests for composition
+### Phase 7: Path Combinators (M, Library)
+- Foreign primitives: `path-segments`, `path-from-segments`, `path-branch-count`, `path-branch`
+- Pure Prologos combinators in `prologos.core.path`: `path-append`, `path-head`, `path-tail`, `path-depth`, `path-leaf?`, `path-reverse`, `path-starts-with?`, `path-get`, `map-path`
+- Tests for composition and round-tripping
+
+### Phase 7b: Broadcast Syntax `.*field` (M)
+- Reader: `$broadcast-access` sentinel when `.*` followed by `ident-continue?`
+- Preparse: `rewrite-dot-access` handles `$broadcast-access` → `(map-path target path)`
+- Deep broadcast: absorb subsequent `$dot-access` sentinels into the path
+- Type: `List (Map K V)` + path → `List T` where T is the reached type
+- Tests: L1 sexp, L2 WS, L3 acceptance file
 
 ### Phase 8: Lens Layer (Future, Out of Scope)
 Deferred. When/if desired:
@@ -445,7 +608,11 @@ The key change in macros.rkt preparse: when processing `get-in` or `update-in`, 
 | Decision | Rationale |
 |----------|-----------|
 | `#p(...)` syntax over bare `:a.b.c` auto-promotion | Explicit > implicit. Bare `:a.b.c` continues as ergonomic shorthand (desugars to `map-get`). Path promotion only when the user wants a value. |
+| Colon optional inside `#p(...)` | Inside a path literal, everything is implicitly a key segment. `:` is accepted but not required. Canonical form is `#p(address.zip)`. |
 | Unparameterized `Path` type | Path doesn't know what it navigates — types come from the application site (`get-in m p`). Phantom typing can be added later without breaking changes. |
 | Static path inlining at elaboration | Zero-cost abstraction: literal paths compile away to the same chained `map-get` as today. Only dynamic paths (variables) pay the `expr-get-in` cost at reduction. |
+| `.*field` for broadcast | Mirrors Specter's `ALL` navigator — the most-used pattern. Syntax is concise, disambiguable from wildcard `.*` by single-char lookahead, and composes with deep paths (`.*address.zip`). |
+| Paths as values, not functions | Differs from Specter's navigator-as-function approach. Paths are inspectable data, matching Prologos's homoiconicity principle. Lens/optic function pairs can be built on top. |
+| Branch lookups are parallelizable | Branching paths (`#p(address.{zip city})`) produce independent lookups on immutable data. Currently sequential at elaboration; the propagator network could parallelize them in future. |
 | Lenses deferred, not rejected | Lenses compose beautifully but require significant type machinery (especially with dependent types). First-class paths provide the foundation; lenses can be built on top as a library. |
-| Path combinators as foreign functions | Paths are Racket structs (`expr-path`) — manipulation requires Racket-side code. A thin foreign function layer is cleaner than trying to implement path operations in pure Prologos. |
+| Path combinators: thin foreign + pure Prologos | 4 foreign primitives for structural access (`path-segments`, `path-from-segments`, `path-branch-count`, `path-branch`), all composition logic in pure Prologos. Users can extend freely. |
