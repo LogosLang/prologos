@@ -1544,5 +1544,5 @@ risk analysis, methodology alignment, and implementation suggestions.
 | 5d | Bridge retirement (System 2) | ⏸️ | Deferred — bridges still serve non-punify default path; retire when punify becomes default |
 | 6 | Fast-path preservation | ✅ | Verification: 80% fast-path rate confirmed (9530 calls, 1905 classified). No code changes — fast-path precedes PUnify dispatch in both systems |
 | 7 | Callback elimination (System 1) | ✅ | `74abfff` — current-prop-has-contradiction? replaced with direct punify-has-contradiction? in all 4 sites, callback setup removed from driver.rkt |
-| 8 | Occurs check as cycle detection | ⬜ | |
+| 8 | Occurs check as cycle detection | ✅ | `4eafae1` — solver-term-occurs? added to both hasheq and solver-env paths; System 1 unchanged (Q4: remains pre-solve-meta guard) |
 | 9 | Zonk simplification (System 1) | ⬜ | |
