@@ -186,7 +186,11 @@ constraint solving and don't benefit from propagation. Keep imperative.
 These exist solely to break circular module dependencies
 (metavar-store ↔ elaborator-network ↔ type-lattice ↔ reduction ↔ metavar-store).
 Track 8 should resolve the circular dependency through module
-restructuring, eliminating all callbacks.
+restructuring, eliminating all callbacks. However, these are /not/
+uniformly eliminable — see §5.2.1 for the dependency graph analysis
+showing that leaf/branch callbacks peeled off across Tracks 6-7 and
+PUnify, while root callbacks (=cell-read=/=cell-write=, 48+15 call
+sites) require coordinated module restructuring with id-map migration.
 
 * Layer 2: Cross-Domain Bridge Analysis
 
@@ -446,6 +450,87 @@ Make =meta-info=, =id-map=, and =next-meta-id= TMS-aware. This enables:
 
 Resolve the circular module dependency. Inline all 12 callback
 parameters. Direct function calls throughout.
+
+*** 5.2.1 Callbacks Are a Dependency Graph, Not a Flat List
+
+PUnify Parts 1-2 PIR (§16.3) revealed that callback elimination is
+/not/ a uniform task. The 12 callbacks form a dependency hierarchy:
+
+- *Leaf callbacks* (easy): scanning callbacks (Track 7 eliminated 3→0).
+  Used in one context (=process-command= scanning loop). Self-contained,
+  straightforward to inline.
+
+- *Branch callbacks* (moderate): =current-prop-has-contradiction?=
+  (PUnify Phase 7). Domain-specific — only the old unification path
+  needed it. When PUnify replaced unification with cell-tree
+  propagators, the check became dead code.
+
+- *Root callbacks* (hard): =current-prop-cell-read= (48 call sites in
+  metavar-store.rkt) and =current-prop-cell-write= (15 sites). These
+  serve the *entire elaboration pipeline* — =meta-solution=,
+  =solve-meta!=, all registry readers, speculation snapshot/retraction,
+  typing, reduction, zonk. Their elimination is not a single-track task.
+
+The cross-track pattern is *layered peeling*:
+
+| Track   | Eliminated                          | Why It Worked                     |
+|---------+-------------------------------------+-----------------------------------|
+| Track 6 | Identified callbacks as anti-pattern | Introduced =install-prop-network-callbacks!= |
+| Track 7 | Scanning callbacks (3→0)            | Self-contained in =process-command= |
+| PUnify  | =current-prop-has-contradiction?=   | Unification-specific; dead after cell-tree migration |
+| Track 8 | =current-prop-cell-read/write=      | *Requires module graph restructuring* |
+
+*** 5.2.2 The Circular Dependency
+
+#+begin_example
+metavar-store.rkt  ←needs cell operations←  elab-network.rkt
+      ↑                                            |
+      └────── provides meta infrastructure to ─────┘
+#+end_example
+
+=metavar-store.rkt= defines the meta/constraint/registry state that
+=elab-network.rkt= needs. But =elab-network.rkt= defines the
+=elab-cell-read=/=elab-cell-write= functions that =metavar-store.rkt=
+needs to access cells. Runtime callback injection breaks this cycle.
+
+*** 5.2.3 Elimination Paths
+
+Three candidate approaches (analyzed during PUnify PIR §16.3 discussion):
+
+*Option 1: Module graph restructuring (recommended).* Extract
+cell-operation API from =elab-network.rkt= into a =cell-ops.rkt= that
+both modules can import. =elab-cell-read= and =elab-cell-write= are
+thin wrappers — they unwrap the =elab-network= struct to get the inner
+=prop-network=, then call =net-cell-read=/=net-cell-write=. If the
+unwrapping (and =id-map= access) were factored into an independent
+module, =metavar-store.rkt= could import directly. /This connects to
+id-map accessibility (§5.1) — both require the same restructuring./
+
+*Option 2: Explicit network threading.* Pass the network through function
+arguments instead of reading from =(current-prop-net-box)=.
+Eliminates parameterized indirection but adds parameter pollution
+across dozens of call sites in elaborator, typing-core, solver.
+
+*Option 3: Module merge.* Combine =metavar-store.rkt= and
+=elab-network.rkt=. Eliminates cycle by definition but creates a ~3000+
+line monolith.
+
+*** 5.2.4 Coordination Requirement
+
+The root callbacks resist piecemeal elimination because they depend on
+three concurrent changes:
+
+1. *Cell-ops extraction* — factor =net-cell-read=/=net-cell-write=
+   wrappers into an importable module
+2. *id-map migration* — make meta-id → cell-id mapping independently
+   accessible (§5.1)
+3. *Mult bridge elimination* — remove the indirection layer that
+   prevents direct prop-net access
+
+Each piece creates value only when done together. Doing one without the
+others just moves the indirection rather than removing it. This is
+Track 8 second-half scope — after meta-info TMS-awareness (§5.1) and
+cell-tree unification (§5.3) establish the foundation.
 
 ** 5.3 Priority 1: Unification as Native Construct
 
