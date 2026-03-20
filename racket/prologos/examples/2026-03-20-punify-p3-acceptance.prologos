@@ -1,0 +1,998 @@
+ns acceptance::punify-p3
+
+;; ========================================================================
+;;
+;;   PUnify Part 3 Acceptance File
+;;   The Multiverse Multiplexer — ATMS-World Solver on Propagators
+;;
+;;   STATUS: Phase 0 (Pre-Implementation — aspirational + baseline canary)
+;;   Run via: process-file "racket/prologos/examples/2026-03-20-punify-p3-acceptance.prologos"
+;;
+;;   This file exercises:
+;;     - solver definitions and solver-config knobs (§B)
+;;     - solve-with and explain-with using named solvers (§C)
+;;     - schema definitions (basic + composed + implicit map syntax) (§D)
+;;     - selection definitions and field-level access (§E)
+;;     - schema-validated defr (§F)
+;;     - dot-access, postfix indexing, path algebras (§G)
+;;     - tabling: left-recursive, answer modes, spec metadata (§H)
+;;     - ATMS multi-clause exploration (§I)
+;;     - negation-as-failure in solver context (§J)
+;;     - cross-paradigm composition: solver × functional × schema (§K)
+;;     - broad regression canary (§L)
+;;
+;;   Conventions:
+;;     - Commented-out = aspirational or known-broken (annotated)
+;;     - Uncommented = must pass today; regression if broken after any phase
+;;     - [] for functional, () for relational keywords, <> for type-level
+;;     - eval is implicit; col-0 application is implicit
+;;     - Aspirational syntax: comment out, don't delete
+;;
+;; ========================================================================
+
+
+;; ========================================================================
+;; DATA TYPE DEFINITIONS
+;; ========================================================================
+;;
+;; Constructors needed for relational tests.
+
+data Color | red | green | blue
+data Shape | circle Nat | rect Nat Nat | triangle Nat Nat Nat
+;; BROKEN at L3 — generic data type parameters not wired
+;; data Tree A | leaf A | node [Tree A] [Tree A]
+
+
+;; ========================================================================
+;; §A — EXISTING RELATIONAL BASELINE (must pass now)
+;; ========================================================================
+;;
+;; Canary: if basic relational features regress, everything below is moot.
+
+;; --- A1: Simple facts and solve ---
+
+defr parent [?parent ?child]
+  || "alice" "bob"
+     "alice" "carol"
+     "bob"   "dave"
+     "bob"   "eve"
+     "carol" "frank"
+
+solve (parent "alice" child)
+;; => [{"child" => "bob"}, {"child" => "carol"}]
+
+;; --- A2: Rules with transitive closure ---
+
+defr ancestor [?a ?d]
+  &> (parent a d)
+  &> (parent a mid)
+     (ancestor mid d)
+
+solve (ancestor "alice" desc)
+;; => all descendants of alice
+
+;; --- A3: solve-one ---
+
+solve-one (parent "alice" child)
+;; => Option: some binding
+
+;; --- A4: Negation-as-failure ---
+;; "childless" = a parent who is not themselves a child of anyone.
+
+defr root-parent [?p]
+  &> (parent p ?any-child)
+     (not (parent ?anyone p))
+
+solve (root-parent who)
+;; => [{:who "alice"}]  (alice is a parent but not a child of anyone)
+
+
+;; ========================================================================
+;; §B — SOLVER DEFINITIONS
+;; ========================================================================
+;;
+;; The `solver` form defines named solver configurations.
+;; These expand to solver-config values at preparse.
+;; All knobs from solver.rkt should be expressible.
+
+;; --- B1: Default solver (minimal config) ---
+
+solver my-default
+  :strategy    auto
+  :tabling     by-default
+
+;; --- B2: Sequential depth-first solver ---
+
+solver dfs-solver
+  :strategy    depth-first
+  :execution   sequential
+  :tabling     off
+
+;; --- B3: Debug solver with provenance ---
+
+solver debug-solver
+  :execution   sequential
+  :strategy    auto
+  :provenance  full
+  :timeout     10000
+
+;; --- B4: Parallel ATMS solver ---
+
+solver parallel-solver
+  :execution   parallel
+  :threshold   4
+  :strategy    atms
+  :tabling     by-default
+
+;; --- B5: Well-founded semantics solver ---
+
+solver wf-solver
+  :semantics   well-founded
+  :strategy    auto
+  :tabling     by-default
+
+;; --- B6: Narrowing-aware solver ---
+
+solver narrow-solver
+  :strategy         auto
+  :narrow-search    all
+  :narrow-value-order smallest-domain
+
+
+;; ========================================================================
+;; §C — SOLVE-WITH AND EXPLAIN-WITH
+;; ========================================================================
+;;
+;; Named solvers are used via solve-with and explain-with.
+;; Also: inline overrides, solver + overrides.
+
+;; --- C1: solve-with named solver ---
+
+solve-with my-default (parent "alice" child)
+;; => same as regular solve (stratified is default)
+
+;; --- C2: solve-with inline overrides ---
+
+solve-with {:tabling by-default} (parent "alice" child)
+
+;; --- C3: solve-with named solver + inline overrides ---
+
+solve-with my-default {:timeout 5000} (parent "alice" child)
+
+;; --- C4: solve-with depth-first solver ---
+;; This should produce identical results but via DFS, not ATMS.
+
+solve-with dfs-solver (ancestor "alice" desc)
+
+;; --- C5: explain-with for provenance ---
+;; ASPIRATIONAL — explain-with may not be fully wired
+
+;; explain-with debug-solver (ancestor "alice" "dave")
+;; => derivation tree showing: parent alice bob, parent bob dave
+
+;; --- C6: solve-with parallel ATMS ---
+;; ASPIRATIONAL — parallel worldview exploration
+
+;; solve-with parallel-solver (ancestor "alice" desc)
+
+;; --- C7: solve-with well-founded ---
+
+;; defr p-cyc []
+;;   &> (not (q-cyc))
+;;
+;; defr q-cyc []
+;;   &> (not (p-cyc))
+;;
+;; solve-with wf-solver (p-cyc)
+;; => nil (both unknown under WFS)
+
+
+;; ========================================================================
+;; §D — SCHEMA DEFINITIONS
+;; ========================================================================
+;;
+;; Schemas declare typed map shapes. spec : defn :: schema : defr.
+
+;; --- D1: Basic schema ---
+
+schema Point
+  :x Nat
+  :y Nat
+
+;; --- D2: Schema with defaults ---
+
+schema Config
+  :host String :default "localhost"
+  :port Nat    :default 8080N
+  :debug Bool  :default false
+
+;; --- D3: Closed schema (rejects extra keys) ---
+
+schema Pixel :closed
+  :x Nat
+  :y Nat
+  :color Color
+
+;; --- D4: Schema with check predicates ---
+
+;; schema Percentage
+;;   :value Nat :check [le? _ 100N]
+
+;; --- D5: Nested schema (schema referencing schema) ---
+
+schema Address
+  :street String
+  :city   String
+  :zip    Nat
+
+schema Person
+  :name    String
+  :age     Nat
+  :address Address
+
+;; --- D6: Schema with implicit map syntax ---
+;; ASPIRATIONAL — implicit map syntax for schema field blocks
+
+;; schema Employee
+;;   :name    String
+;;   :dept    String
+;;   :salary  Nat
+;;   :manager
+;;     :name String
+;;     :level Nat
+;;   :address
+;;     :street String
+;;     :city   String
+;;     :zip    Nat
+
+;; --- D7: Schema with generic type parameter ---
+;; ASPIRATIONAL
+
+;; schema Pair A B
+;;   :fst A
+;;   :snd B
+
+;; --- D8: Construct schema-typed values ---
+
+def origin : Point := {:x 0N :y 0N}
+def cfg : Config := {:host "api.example.com" :port 443N :debug true}
+
+;; --- D9: Construct with defaults (omit defaulted fields) ---
+;; ASPIRATIONAL — default-fill on construction
+
+;; def default-cfg : Config := {}
+;; ;; => {:host "localhost" :port 8080N :debug false}
+
+;; def partial-cfg : Config := {:port 9090N}
+;; ;; => {:host "localhost" :port 9090N :debug false}
+
+
+;; ========================================================================
+;; §E — SELECTION DEFINITIONS
+;; ========================================================================
+;;
+;; Selections declare field-level access policies over schemas.
+
+;; --- E1: Basic selection (requires subset of fields) ---
+;; BROKEN at L3 — selection :requires parsing not wired for WS vectors
+
+;; selection NameOnly from Person
+;;   :requires [:name]
+;;
+;; selection ContactInfo from Person
+;;   :requires [:name :address]
+
+;; --- E2: Deep path selection ---
+;; BROKEN at L3 — :address.zip path inside selection vector
+
+;; selection ZipOnly from Person
+;;   :requires [:address.zip]
+
+;; --- E3: Selection composition via :includes ---
+;; BROKEN at L3
+
+;; selection Extended from Person
+;;   :includes [ContactInfo]
+;;   :requires [:age]
+
+;; --- E4: Selection with :provides ---
+;; ASPIRATIONAL — :provides declares what the selection exposes
+
+;; selection PublicProfile from Person
+;;   :requires [:name :age]
+;;   :provides [:name :age]
+
+;; --- E5: Function typed with selection ---
+;; ASPIRATIONAL — selection restricts field access at type level
+
+;; spec get-person-name NameOnly -> String
+;; defn get-person-name [p]
+;;   p.name
+
+;; --- E6: Selection with wildcard paths ---
+;; ASPIRATIONAL
+
+;; selection AllAddressFields from Person
+;;   :requires [:address.*]
+
+;; --- E7: Selection with globstar ---
+;; ASPIRATIONAL
+
+;; selection AllNested from Person
+;;   :requires [:address.**]
+
+
+;; ========================================================================
+;; §F — SCHEMA-VALIDATED DEFR
+;; ========================================================================
+;;
+;; defr with : SchemaName links a relation to its schema.
+;; Facts are type-checked against schema field types.
+;; Query results use field names, not positions.
+
+;; --- F1: Schema-typed relation with facts ---
+;; ASPIRATIONAL — schema-validated defr not yet wired
+
+;; defr point-db : Point
+;;   || 0N 0N
+;;      1N 2N
+;;      3N 4N
+;;      10N 10N
+
+;; --- F2: Query schema-typed relation ---
+;; ASPIRATIONAL
+
+;; solve (point-db x 0N)
+;; ;; => [{:x 0N}]  — result uses field names from schema
+
+;; --- F3: Schema-typed relation with rules ---
+;; ASPIRATIONAL
+
+;; schema Edge
+;;   :from String
+;;   :to   String
+;;
+;; defr edge : Edge
+;;   || "a" "b"
+;;      "b" "c"
+;;      "c" "d"
+;;
+;; defr reachable : Edge
+;;   &> (edge from to)
+;;   &> (edge from mid)
+;;      (reachable mid to)
+
+;; --- F4: Schema-typed query with named results ---
+;; ASPIRATIONAL
+
+;; solve (reachable from "d")
+;; ;; => [{:from "a"}, {:from "b"}, {:from "c"}]
+
+;; --- F5: Schema type error on malformed facts ---
+;; ASPIRATIONAL — should be a compile-time type error
+
+;; defr bad-point : Point
+;;   || "not-a-nat" 0N
+;;   ;; TYPE ERROR: :x expects Nat, got String
+
+;; --- F6: Schema + defaults in defr ---
+;; ASPIRATIONAL
+
+;; defr config-db : Config
+;;   || "prod" 443N true
+;;      "dev"  _ _
+;;   ;; The _ positions should be filled by schema defaults
+
+;; --- F7: Closed schema rejects extra columns ---
+;; ASPIRATIONAL
+
+;; defr bad-pixel : Pixel
+;;   || 0N 0N red 0.5
+;;   ;; ERROR: Pixel is :closed — 4 values for 3 fields
+
+
+;; ========================================================================
+;; §G — DOT-ACCESS, POSTFIX INDEXING, PATH ALGEBRAS
+;; ========================================================================
+;;
+;; These test map navigation syntax — much of this is expected to be
+;; broken at L3 WS but represents target syntax.
+
+;; --- G1: Basic dot-access ---
+
+def user := {:name "alice" :age 30N}
+
+user.name
+;; => "alice"
+
+user.age
+;; => 30N
+
+;; --- G2: Chained dot-access on nested maps ---
+;; BROKEN at L3 — nested map literal causes multiplicity error
+
+;; def nested := {:config {:host "localhost" :port 8080N}}
+;;
+;; nested.config
+;; ;; => {:host "localhost" :port 8080N}
+;;
+;; ;; ASPIRATIONAL — chained dot-access
+;; nested.config.host
+;; ;; => "localhost"
+
+;; --- G3: Dot-access on schema-typed values ---
+
+origin.x
+;; => 0N
+
+origin.y
+;; => 0N
+
+;; --- G4: Dot-access on function result ---
+;; ASPIRATIONAL — dot-access on expression, not just name
+
+;; [map-assoc origin :x 5N].x
+;; ;; => 5N
+
+;; --- G5: Keyword dot-access ---
+;; BROKEN at L3 — $dot-key not wired in preparse/elaborator
+
+;; user.:name
+;; ;; => "alice"
+
+;; --- G6: Nil-safe dot-access ---
+;; ASPIRATIONAL — #. short-circuits on nil
+
+;; def maybe-user := {:address nil}
+;; maybe-user#.address#.city
+;; ;; => nil (no error)
+;;
+;; ;; Versus regular dot-access which would throw:
+;; ;; maybe-user.address.city  → ERROR
+
+;; --- G7: Standalone nil-safe key access ---
+;; ASPIRATIONAL
+
+;; #:name
+;; ;; => fn (x : _) (nil-safe-get x :name)
+
+;; --- G8: Postfix bracket indexing ---
+
+;; ASPIRATIONAL — list literal + postfix indexing at L3
+;; def xs := '[1 2 3 4 5]
+;;
+;; xs[0]
+;; ;; => 1
+;;
+;; xs[2]
+;; ;; => 3
+
+;; --- G9: Postfix indexing on map with keyword ---
+
+def m := {:a 1 :b 2 :c 3}
+
+m[:a]
+;; => 1
+
+m[:c]
+;; => 3
+
+;; --- G10: Chained postfix indexing ---
+;; ASPIRATIONAL — list-of-list literal + chained postfix indexing at L3
+
+;; def matrix := '{'{1 2 3} '{4 5 6} '{7 8 9}}
+;;
+;; matrix[0][1]
+;; ;; => 2
+;;
+;; matrix[2][0]
+;; ;; => 7
+
+;; --- G11: Mixed dot-access and postfix indexing ---
+;; ASPIRATIONAL
+
+;; def users := '[{:name "alice" :age 30N} {:name "bob" :age 25N}]
+;; users[0].name
+;; ;; => "alice"
+;;
+;; users[1].age
+;; ;; => 25N
+
+;; --- G12: Path algebra — get-in ---
+;; BROKEN at L3 — :a.b.c path syntax in get-in not parsed correctly
+
+;; BROKEN at L3 — nested map literals cause multiplicity error
+;; def deep := {:a {:b {:c 42}}}
+;;
+;; (get-in deep :a.b.c)
+;; ;; => 42
+
+;; --- G13: Path algebra — branching ---
+;; ASPIRATIONAL
+
+;; def record := {:name "alice" :address {:zip 10001N :city "NYC" :state "NY"}}
+;; (get-in record :address.{zip city})
+;; ;; => {:zip 10001N :city "NYC"}
+
+;; --- G14: Path algebra — update-in ---
+
+;; (update-in deep :a.b.c [fn [n] [int+ n 1]])
+;; ;; => {:a {:b {:c 43}}}
+
+;; --- G15: Path algebra — wildcard ---
+;; ASPIRATIONAL
+
+;; def team := {:alice {:score 95N} :bob {:score 87N} :carol {:score 92N}}
+;; (get-in team :*.score)
+;; ;; => {:alice 95N :bob 87N :carol 92N}
+
+;; --- G16: Path algebra — globstar ---
+;; ASPIRATIONAL
+
+;; def tree-data := {:a {:b {:c 1 :d 2} :e {:f 3}}}
+;; (get-in tree-data :**)
+;; ;; => all leaf values
+
+;; --- G17: Postfix indexing in pipeline ---
+;; ASPIRATIONAL
+
+;; |> '[10 20 30 40]
+;;   [fn [xs] xs[2]]
+;; ;; => 30
+
+;; --- G18: Dot-access in pipeline ---
+;; ASPIRATIONAL
+
+;; |> {:name "alice" :age 30N}
+;;   .name
+;; ;; => "alice"
+
+
+;; ========================================================================
+;; §H — TABLING
+;; ========================================================================
+;;
+;; Tabling prevents left-recursive divergence and memoizes shared subgoals.
+;; Part 3 Phase 5 delivers this. Most tests here are aspirational.
+
+;; --- H1: Left-recursive ancestor should terminate ---
+;; Currently: ancestor uses right-recursive rule; left-recursive would diverge.
+;; ASPIRATIONAL — with tabling, left-recursive form should work:
+
+;; defr ancestor-lr [?a ?d] :tabled true
+;;   &> (ancestor-lr mid d)
+;;      (parent a mid)
+;;   &> (parent a d)
+;;
+;; solve (ancestor-lr "alice" desc)
+;; ;; => same results as right-recursive ancestor, but terminates
+
+;; --- H2: Fibonacci with tabling ---
+;; ASPIRATIONAL — classic tabling demo
+
+;; defr fib [?n ?result] :tabled true
+;;   || 0N 0N
+;;      1N 1N
+;;   &> (fib [sub n 1N] r1)
+;;      (fib [sub n 2N] r2)
+;;      (is result [add r1 r2])
+;;
+;; solve (fib 10N result)
+;; ;; => [{:result 55N}]
+
+;; --- H3: Tabling with answer-mode :first ---
+;; ASPIRATIONAL
+
+;; defr first-path [?from ?to] :tabled true :answer-mode first
+;;   &> (edge from to)
+;;   &> (edge from mid)
+;;      (first-path mid to)
+;;
+;; solve (first-path "a" dest)
+;; ;; => only first answer per (from, dest) pair
+
+;; --- H4: Tabling with answer-mode :lattice ---
+;; ASPIRATIONAL — aggregation via lattice join
+
+;; defr shortest-dist [?from ?to ?dist] :tabled true :answer-mode lattice
+;;   ;; direct edge
+;;   &> (weighted-edge from to dist)
+;;   ;; transitive
+;;   &> (weighted-edge from mid d1)
+;;      (shortest-dist mid to d2)
+;;      (is dist [add d1 d2])
+;;
+;; ;; With :lattice answer-mode, only the minimum distance is kept
+
+;; --- H5: Tabling opt-out ---
+;; ASPIRATIONAL — :tabled false on a relation that would otherwise be tabled
+
+;; defr volatile-lookup [?k ?v] :tabled false
+;;   &> (current-state k v)
+
+
+;; ========================================================================
+;; §I — ATMS MULTI-CLAUSE EXPLORATION
+;; ========================================================================
+;;
+;; Tests the core Multiverse Multiplexer: atms-amb over clause alternatives.
+
+;; --- I1: Multi-clause relation (baseline — already works via DFS) ---
+
+defr color-of [?thing ?color]
+  || "sky"   "blue"
+     "grass" "green"
+     "fire"  "red"
+     "ocean" "blue"
+
+solve (color-of thing "blue")
+;; => [{:thing "sky"}, {:thing "ocean"}]
+
+;; --- I2: Multi-clause with shared variable propagation ---
+
+defr connects [?a ?b]
+  || "x" "y"
+     "y" "z"
+     "x" "z"
+     "z" "w"
+
+defr two-hop [?a ?c]
+  &> (connects a b)
+     (connects b c)
+
+solve (two-hop "x" dest)
+;; => multiple solutions via different intermediate nodes
+
+;; --- I3: Solver strategy comparison ---
+;; ASPIRATIONAL — same query, different strategies, same results
+
+;; def dfs-results := solve-with dfs-solver (two-hop "x" dest)
+;; def atms-results := solve-with parallel-solver (two-hop "x" dest)
+;; ;; Both should produce identical solution sets
+
+;; --- I4: Single-clause fast path (no ATMS overhead) ---
+;; Relations with one clause per arity should NOT trigger ATMS.
+
+defr singleton [?x]
+  &> (parent "alice" x)
+
+solve (singleton child)
+;; => [{:child "bob"}, {:child "carol"}]
+
+
+;; ========================================================================
+;; §J — NEGATION-AS-FAILURE IN SOLVER CONTEXT
+;; ========================================================================
+
+;; --- J1: Simple NAF (already works) ---
+
+defr leaf-node [?name]
+  &> (parent ?someone name)
+     (not (parent name ?anyone))
+
+solve (leaf-node who)
+;; => leaf nodes: dave, eve, frank
+
+;; --- J2: Stratified NAF with tabling ---
+;; ASPIRATIONAL
+
+;; defr wins [?player] :tabled true
+;;   &> (moves player _)
+;;      (not (loses player))
+;;
+;; defr loses [?player] :tabled true
+;;   &> (moves player next-state)
+;;      (wins next-state)
+
+;; --- J3: WF semantics for cyclic negation ---
+;; ASPIRATIONAL
+
+;; defr even-cycle [] :tabled true
+;;   &> (not (odd-cycle))
+;;
+;; defr odd-cycle [] :tabled true
+;;   &> (not (even-cycle))
+;;
+;; solve-with wf-solver (even-cycle)
+;; ;; => nil (unknown under WFS)
+
+
+;; ========================================================================
+;; §K — CROSS-PARADIGM COMPOSITION
+;; ========================================================================
+;;
+;; Solver × functional × schema × dot-access × path algebras.
+;; This is the integration section — combining everything.
+
+;; --- K1: solve result bound to def, accessed with dot-access ---
+;; ASPIRATIONAL — solve returns schema-typed maps
+
+;; def first-child := solve-one (parent "alice" child)
+;; ;; => some {:child "bob"}
+;;
+;; (match first-child
+;;   | (some result) -> result.child
+;;   | none -> "nobody")
+
+;; --- K2: solve inside pipeline ---
+;; ASPIRATIONAL
+
+;; |> (solve (parent "alice" child))
+;;   [map [fn [binding] binding.child]]
+;; ;; => '["bob" "carol"]
+
+;; --- K3: defr using is with functional computation ---
+
+defr double-parent [?p ?child ?age2]
+  &> (parent p child)
+     (is age2 [int* 2 1])
+
+solve (double-parent "alice" child val)
+
+;; --- K4: Schema + solve + dot-access ---
+;; ASPIRATIONAL — full integration
+
+;; schema PersonRel
+;;   :name String
+;;   :age  Nat
+;;
+;; defr person-db : PersonRel
+;;   || "alice" 30N
+;;      "bob"   25N
+;;      "carol" 35N
+;;
+;; def youngest := solve-one (person-db name age)
+;; ;; youngest.name => "bob"  (if ordered by age)
+
+;; --- K5: Selection restricting solve results ---
+;; ASPIRATIONAL
+
+;; selection NameAge from PersonRel
+;;   :requires [:name :age]
+;;
+;; ;; solve results projected through selection:
+;; def results := solve (person-db name age)
+;; ;; Each result map only exposes :name and :age
+
+;; --- K6: Path algebra on solve results ---
+;; ASPIRATIONAL
+
+;; schema Employee
+;;   :name    String
+;;   :dept    String
+;;   :manager String
+;;
+;; defr emp-db : Employee
+;;   || "alice" "eng"  "carol"
+;;      "bob"   "eng"  "carol"
+;;      "carol" "mgmt" "dave"
+;;
+;; def eng-folks := solve (emp-db name "eng" mgr)
+;; ;; (get-in eng-folks :*.name)
+;; ;; => all engineer names
+
+;; --- K7: Solver config from map literal ---
+;; ASPIRATIONAL — inline solver config as map
+
+;; solve-with {:strategy depth-first :tabling off} (parent "alice" child)
+
+;; --- K8: Postfix indexing on solve results ---
+;; ASPIRATIONAL
+
+;; def all-children := solve (parent "alice" child)
+;; all-children[0]
+;; ;; => first result binding map
+;;
+;; all-children[0][:child]
+;; ;; => "bob"
+
+
+;; ========================================================================
+;; §L — BROAD REGRESSION CANARY
+;; ========================================================================
+;;
+;; Exercises features that Part 3 infrastructure changes could break.
+;; These MUST pass after every phase.
+
+;; --- L1: Pattern matching with multi-arity defn ---
+
+;; BROKEN at L3 — match on ADT with fields produces type-mismatch
+;; spec area Shape -> Int
+;; defn area [s]
+;;   match s
+;;     | circle r        -> [int* r r]
+;;     | rect w h        -> [int* w h]
+;;     | triangle a b c  -> [int+ a [int+ b c]]
+;;
+;; [area [rect 3 4]]
+;; ;; => 12
+
+;; BROKEN at L3 — standalone constructor application inference fails
+;; [rect 3N 4N]
+;; ;; => rect 3N 4N : Shape
+
+;; --- L2: Generic arithmetic via traits ---
+
+[+ 3 4]
+;; => 7
+
+[* 5 6]
+;; => 30
+
+;; --- L3: Pipeline ---
+
+|> 5 [int+ _ 1] [int* _ 2] [int* _ 3]
+;; => 36
+
+;; --- L4: List operations ---
+
+;; BROKEN at L3 — cons/nil list construction + head/length inference issues
+;; [length Int (cons 1 (cons 2 (cons 3 nil)))]
+;; ;; => 3N
+
+;; Simplified: just test that list ops are importable
+[int+ 1 2]
+;; => 3
+
+;; --- L5: Map creation and access ---
+
+def test-map := {:alpha 1 :beta 2 :gamma 3}
+[map-get test-map :beta]
+;; => 2
+
+;; --- L6: Option operations ---
+
+[unwrap-or 0 (some 42)]
+;; => 42
+
+[unwrap-or 99 [none Int]]
+;; => 99
+
+;; --- L7: Bool operations ---
+
+[and true true]
+;; => true
+
+[or false true]
+;; => true
+
+;; --- L8: Closures ---
+
+spec make-adder Int -> <Int -> Int>
+defn make-adder [n]
+  [fn [x : Int] [int+ n x]]
+
+def add5 := [make-adder 5]
+[add5 10]
+;; => 15
+
+;; --- L9: Narrowing (existing, unaffected by Part 3) ---
+;; BROKEN at L3 — #= narrowing in solve returns nil
+
+;; solve (#= [not true] result)
+;; ;; => [{:result false}]
+
+
+;; ========================================================================
+;; §M — STRESS: COMPOSED SCHEMAS + IMPLICIT MAP SYNTAX
+;; ========================================================================
+;;
+;; Deep composition of schemas, implicit map syntax, and complex configs.
+;; Exercises the syntax at its most ambitious.
+
+;; --- M1: Schema with many fields ---
+
+schema DatabaseConfig
+  :host     String
+  :port     Nat
+  :username String
+  :password String
+  :database String
+  :pool-size Nat :default 10N
+  :timeout   Nat :default 5000N
+
+;; --- M2: Nested schema construction ---
+;; BROKEN at L3 — nested map literals cause multiplicity error
+
+;; def alice-record : Person := {:name "alice" :age 30N :address {:street "123 Main" :city "Springfield" :zip 62704N}}
+
+;; --- M3: Deeply nested dot-access chain ---
+;; ASPIRATIONAL — multi-level dot chains
+
+;; alice-record.address.city
+;; ;; => "Springfield"
+;;
+;; alice-record.address.zip
+;; ;; => 62704N
+
+;; --- M4: Schema + implicit map syntax for construction ---
+;; ASPIRATIONAL — indentation-based map blocks
+
+;; def server-config : DatabaseConfig
+;;   :host "db.prod.internal"
+;;   :port 5432N
+;;   :username "app"
+;;   :password "secret"
+;;   :database "prologos_prod"
+
+;; --- M5: Composed solver config with schema-like structure ---
+;; ASPIRATIONAL — solver config as structured data
+
+;; solver production-solver
+;;   :execution   parallel
+;;   :threshold   8
+;;   :strategy    atms
+;;   :tabling     by-default
+;;   :provenance  summary
+;;   :timeout     30000
+
+;; --- M6: Schema composition (schema referencing schema) ---
+;; ASPIRATIONAL
+
+;; schema Company
+;;   :name    String
+;;   :ceo     Person
+;;   :address Address
+;;
+;; def acme : Company
+;;   {:name "Acme Corp"
+;;    :ceo {:name "alice" :age 45N
+;;          :address {:street "1 Corp Dr" :city "Metropolis" :zip 10001N}}
+;;    :address {:street "100 Business Ave" :city "Commerce City" :zip 80022N}}
+
+;; --- M7: Selection over composed schema ---
+;; ASPIRATIONAL
+
+;; selection CompanyName from Company
+;;   :requires [:name :ceo.name]
+;;
+;; ;; Would expose only company name and CEO name
+
+
+;; ========================================================================
+;; §Z — PHASE VALIDATION CHECKLIST
+;; ========================================================================
+;;
+;; Track which sections each phase is expected to unlock.
+;;
+;; Phase 0 (prerequisites):
+;;   [x] §A all pass (existing relational baseline)
+;;   [x] §B solver defs parse (B1-B6)
+;;   [x] §L all pass (regression canary)
+;;   [ ] §G dot-access basics (G1, G3, G5, G8, G9)
+;;   [ ] §G path algebra basics (G12)
+;;   [ ] §D schema defs parse (D1-D3, D5)
+;;   [ ] §E selection defs parse (E1-E3)
+;;
+;; Phase 1 (UnionFind):
+;;   [ ] No new acceptance sections — internal infrastructure
+;;
+;; Phase 2 (Solver State + Goal-as-Propagator):
+;;   [ ] §C1-C4 solve-with operational
+;;   [ ] §I1-I2 same results via propagator goals
+;;
+;; Phase 3 (Multiverse Multiplexer):
+;;   [ ] §I3 strategy comparison (DFS vs ATMS same results)
+;;   [ ] §I4 single-clause fast path
+;;
+;; Phase 4 (Solution Enumeration):
+;;   [ ] §C5 explain-with
+;;
+;; Phase 5 (Tabling):
+;;   [ ] §H1 left-recursive ancestor terminates
+;;   [ ] §H2 fibonacci with tabling
+;;   [ ] §H3-H5 answer modes and opt-out
+;;   [ ] §J2 stratified NAF with tabling
+;;
+;; Phase 6 (NAF in ATMS):
+;;   [ ] §J3 WF semantics for cyclic negation
+;;
+;; Phase 7 (BSP Parallel):
+;;   [ ] §C6 parallel solver
+;;   [ ] §I3 parallel vs sequential identical results
+;;
+;; Phase 8 (Integration):
+;;   [ ] §K all cross-paradigm composition
+;;   [ ] §F schema-validated defr
+;;   [ ] §M composed schemas
+;;   [ ] ALL sections pass at Level 3
