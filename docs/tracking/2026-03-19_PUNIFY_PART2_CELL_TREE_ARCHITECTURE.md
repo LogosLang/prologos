@@ -1542,7 +1542,7 @@ risk analysis, methodology alignment, and implementation suggestions.
 | 5b | Data constructor decomposition (System 2) | ✅ | `988af5c` — descriptor-aware decompose in solver-unify-terms, tag mismatch detection |
 | 5c | DFS copy-on-branch (System 2) | ✅ | N/A — functional threading of solver-env provides backtracking isolation inherently (no copy needed) |
 | 5d | Bridge retirement (System 2) | ⏸️ | Deferred — bridges still serve non-punify default path; retire when punify becomes default |
-| 6 | Fast-path preservation | ⬜ | |
+| 6 | Fast-path preservation | ✅ | Verification: 80% fast-path rate confirmed (9530 calls, 1905 classified). No code changes — fast-path precedes PUnify dispatch in both systems |
 | 7 | Callback elimination (System 1) | ⬜ | |
 | 8 | Occurs check as cycle detection | ⬜ | |
 | 9 | Zonk simplification (System 1) | ⬜ | |
