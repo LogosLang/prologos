@@ -442,7 +442,13 @@ PUnify's stated goal is replacing algorithmic unification with structural (cell-
 
 4. **The real prize is Part 3**: PUnify Parts 1–2 are infrastructure for Part 3's ATMS-world solver. The DFS solver is the architectural bottleneck for relational programming; cell-tree unification is the substrate that enables ATMS-driven exploration. Parts 1–2 are necessary but not sufficient — the user-visible payoff comes with Part 3.
 
-**Honest assessment**: The performance case for PUnify is weak (the design doc's D.3 self-critique says this explicitly). The architectural case is strong. This is a conscious trade-off: investing in infrastructure that enables future capabilities (ATMS solver, LSP, GDE) at the cost of ~12h implementation time with no performance regression. The risk is that Part 3 doesn't materialize, leaving PUnify as infrastructure investment without payoff.
+**Honest assessment**: The performance case for PUnify is narrow — it affects 12.8% of unification calls, and the suite got faster. But framing PUnify as "infrastructure investment contingent on future payoff" fundamentally mischaracterizes the project.
+
+Prologos is an exploration project. The central thesis — now codified in DESIGN_PRINCIPLES.org as "Propagators as Universal Computational Substrate" — is that propagator networks can unify type inference, constraint solving, logic programming, and incremental compilation under a single architectural model. PUnify is not contingent infrastructure; it is a direct test of this thesis. Cell-tree unification is the propagator architecture applied to its most fundamental operation.
+
+If cell-tree unification had proved structurally inferior to algorithmic unification, that would be a genuine discovery — a mapping of the architecture's limits. It didn't: it's performance-neutral, architecturally cleaner, and enables capabilities (ATMS solver, LSP observability, GDE provenance) that the algorithmic approach cannot provide. The branch succeeded.
+
+The question was never "will this pay off?" but "will we learn something valuable?" PUnify answered yes on both counts: the descriptor registry validates domain-agnostic decomposition, the polymorphic dispatch pattern validates surgical migration, and the verification phases confirm that prior Track 6 infrastructure already satisfies downstream requirements. Every branch explored — including the ones that turned out to be free (Phase 5c backtracking, Phase 9 zonk) — produced knowledge about where the architecture's strengths lie.
 
 ---
 
@@ -569,3 +575,20 @@ Based on the 6-PIR meta-analysis:
 4. **Strengthen acceptance file methodology**: Aspirational sections (commented-out target syntax) should be standard for feature tracks, serving as "definition of done."
 
 5. **Monitor PIR-to-principles flow**: After each PIR, explicitly check: have lessons been distilled into DEVELOPMENT_LESSONS.org / PATTERNS_AND_CONVENTIONS.org / DESIGN_METHODOLOGY.org? If not, the PIR lifecycle is incomplete.
+
+---
+
+## Appendix B: Lessons Distilled
+
+| Lesson | Distilled To | Status |
+|--------|-------------|--------|
+| Two-context audit for new parameters | `.claude/rules/pipeline.md` — New Racket Parameter section | Done (this commit) |
+| Lessons Distilled as mandatory PIR section | `POST_IMPLEMENTATION_REVIEW.org` — PIR template §10 | Done (this commit) |
+| Lessons distillation check when creating dailies | `.claude/rules/workflow.md` — new bullet after "Open next working day interval" | Done (this commit) |
+| Propagators as Universal Computational Substrate | `DESIGN_PRINCIPLES.org` — new top-level principle | Done (this commit) |
+| PIR §20 reframing: exploration, not contingency | This PIR §20 | Done (this commit) |
+| Design critique changes designs (not just validates) | DEVELOPMENT_LESSONS.org | Pending — needs distillation |
+| Acceptance files as primary bug-finding tool (4 PIRs) | DEVELOPMENT_LESSONS.org | Pending — needs distillation |
+| Phase 1 is where design happens (5 tracks) | DEVELOPMENT_LESSONS.org | Pending — pattern well-established, should be codified |
+| Functional threading provides free backtracking | PATTERNS_AND_CONVENTIONS.org | Pending — Racket-specific pattern worth capturing |
+| Polymorphic dispatch for surgical migration | PATTERNS_AND_CONVENTIONS.org | Pending — reusable technique |

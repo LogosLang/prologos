@@ -31,6 +31,17 @@ When adding a new Racket parameter, immediately add entries in ALL applicable lo
 
 Missing any one causes intermittent failures that are difficult to diagnose — batch worker isolation failures, speculation leaks, or test pollution.
 
+### Two-Context Audit
+
+When adding a new parameter, callback, or cell infrastructure, verify behavior in ALL execution contexts:
+
+1. **Elaboration context** (inside `process-command`): network active, cells valid, callbacks installed
+2. **Module-loading context** (outside `process-command`): no network, parameter-only, `register-*-cells!` not yet called
+3. **`run-ns-last` test path**: minimal `parameterize`, no network factory — diverges from production `process-file`/`process-string`
+4. **`batch-worker.rkt`**: snapshot/restore cycle — verify the parameter survives the save/restore round-trip
+
+Every track from 3 through 8 has hit this boundary. Track 3: elaboration guards. Track 5: `run-ns-last` divergence. Track 6: net-box scoping. Track 7: module-load-time registration. Track 8/PUnify: callback scope spans both contexts. The elaboration/module-loading boundary is the permanent architectural seam — infrastructure that works in one context but not the other produces intermittent, hard-to-diagnose failures.
+
 ## New Struct Field
 
 When adding a field to an existing struct:

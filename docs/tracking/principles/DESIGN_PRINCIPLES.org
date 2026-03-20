@@ -380,6 +380,61 @@ cannot break existing guarantees. This is achieved through:
 - Monotonic constraint propagation (type inference only accumulates information)
 - Capability security (authority cannot be forged, only delegated; see [[file:CAPABILITY_SECURITY.md][Capability Security]])
 
+* Propagators as Universal Computational Substrate
+
+Prologos is an /exploration project/. The central thesis is that propagator
+networks --- as described by Radul and Sussman, extended by Forbus and de
+Kleer --- constitute a universal computational substrate capable of
+unifying type inference, constraint solving, logic programming, session
+verification, and incremental compilation under a single architectural
+model.
+
+This thesis is not contingent. It is the reason this project exists.
+
+Every avenue in the design space must be explored. Declining to pursue
+an architectural possibility because "it might not pay off" or "the
+performance case is weak" is antithetical to the project's purpose.
+The value of exploration is not limited to the branches that succeed:
+
+- *A refutation is a discovery*: if propagator-driven unification
+  proves structurally inferior to algorithmic unification, that is a
+  genuine contribution --- a result that others navigating this design
+  space can use. Map the dragons.
+
+- *Failure is forward motion*: a failed branch constrains the search
+  space. It tells us where the architecture's limits are and redirects
+  attention to branches that remain open. We fail forward, adjust our
+  approach, and descend other branches.
+
+- *The fixpoint is the starting point*: "Propagators as a Universal
+  Computational Substrate" is our greatest fixpoint. We begin there and
+  work outward, meeting the rest of the world with what we discover.
+  If a specific propagator application (cell-tree unification, ATMS
+  solver, propagator-driven narrowing) encounters a genuine limit, we
+  mark it and explore adjacent branches in the design space.
+
+- *Completeness over caution*: the design space is rich. We owe it
+  thoroughness. An unexplored branch is a missed opportunity for
+  learning. Timidity in exploration is the only failure mode that
+  produces no knowledge.
+
+This principle supersedes performance arguments, effort estimates, and
+risk assessments when evaluating whether to pursue an architectural
+direction. The question is not "will this pay off?" but "will we learn
+something valuable?" The answer is always yes.
+
+** Relationship to Other Principles
+
+- *Propagator-First Infrastructure* is the /practical application/ of
+  this thesis: default to propagator cells because we are exploring
+  what happens when everything is on the network.
+- *First-Class by Default* shares the same philosophy: make it
+  first-class not because you need it today, but because unexplored
+  composition is unexplored capability.
+- *Correct by Construction* provides the safety net: propagator
+  networks with finite lattices and well-founded measures guarantee
+  termination, so exploration cannot produce unsound divergence.
+
 * Propagator-First Infrastructure
 
 When building internal infrastructure --- caches, indices, registries,

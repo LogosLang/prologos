@@ -196,6 +196,21 @@ why it matters, and how to apply it in the future.]
 
 ## 9. Key Files
 [Quick reference table: file paths and their roles.]
+
+## 10. Lessons Distilled
+[MANDATORY. For each lesson from §6 and each meta-pattern from cross-
+referencing, record whether and where it was distilled:
+
+| Lesson | Distilled To | Status |
+|--------|-------------|--------|
+| Two-context audit needed | pipeline.md checklist | Done (commit xyz) |
+| Design critique changes designs | DEVELOPMENT_LESSONS.org | Pending |
+| (none yet) | PATTERNS_AND_CONVENTIONS.org | — |
+
+If no lessons were promoted to principles documents, state why. An
+empty "Lessons Distilled" section is a signal that the PIR lifecycle
+is incomplete --- lessons that stay only in the PIR are lessons that
+will not be encountered during future work.]
 #+end_src
 
 ** Format Principles
