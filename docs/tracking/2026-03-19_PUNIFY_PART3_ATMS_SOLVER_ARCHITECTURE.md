@@ -672,6 +672,21 @@ search model IS propagators + ATMS.
 - Track 7 complete (two-network architecture, stratified resolution)
 - Track 4 complete (TMS/ATMS infrastructure)
 
+**Part 2 → Part 3 handoff — bridge retirement (deferred from Part 2 Phase 5d)**:
+Part 2 deferred Phase 5d (bridge retirement) because `normalize-term-deep`,
+`solver-term->prologos-expr`, and `ground->prologos-expr` still serve the default
+non-punify solver path. Part 3's ATMS solver replaces the entire DFS search layer,
+making these bridges obsolete. Bridge retirement should occur as part of Part 3's
+Phase 0 (setup/prerequisites), once `current-punify-enabled?` becomes the System 2
+default. Specifically:
+- `normalize-term-deep` (relations.rkt:256-275) — AST→flat-list conversion for
+  solver terms. With cell-trees, the solver operates on AST nodes directly via
+  descriptors. Remove once all solver paths use cell-trees.
+- `solver-term->prologos-expr` (reduction.rkt:218-230) — flat-list→AST reconstruction
+  preserving logic vars. Replace with cell-tree read + descriptor `reconstruct-fn`.
+- `ground->prologos-expr` (reduction.rkt:260-277) — flat-list→AST reconstruction for
+  ground terms. Same replacement strategy as `solver-term->prologos-expr`.
+
 **Does NOT depend on**:
 - Track 8 second half (mult bridges, id-map migration)
 - Track 9 (GDE)
@@ -711,6 +726,7 @@ search model IS propagators + ATMS.
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
+| 0 | Bridge retirement (from Part 2 5d) | ⬜ | Remove normalize-term-deep, solver-term->prologos-expr, ground->prologos-expr once punify is default |
 | 1 | Goal-as-propagator framework | ⬜ | |
 | 2 | N-ary ATMS clause exploration | ⬜ | |
 | 3 | Solution enumeration | ⬜ | |
