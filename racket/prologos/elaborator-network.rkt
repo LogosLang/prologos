@@ -22,8 +22,7 @@
          "mult-lattice.rkt"
          "prelude.rkt"       ;; P5c: mult-meta? for Pi mult extraction
          "champ.rkt"
-         "syntax.rkt"
-         "ctor-registry.rkt")
+         "syntax.rkt")
 
 (provide
  ;; Core structs
@@ -383,18 +382,22 @@
 
 ;; Classify expression by head constructor.
 ;; Returns a symbol tag for decomp-registry, or #f for atoms/non-compound.
-;; Phase 1 (PUnify): dispatches through ctor-registry for type-domain descriptors.
-;; Lattice extrema (type-bot, type-top) are not constructors and return #f.
 (define (type-constructor-tag e)
   (cond
     [(type-bot? e) #f]
     [(type-top? e) #f]
-    [else
-     (define tag (ctor-tag-for-value e))
-     ;; Only return tags in the 'type domain (data constructors are System 2)
-     (and tag
-          (let ([desc (lookup-ctor-desc tag)])
-            (and desc (eq? (ctor-desc-domain desc) 'type) tag)))]))
+    [(expr-Pi? e)    'Pi]
+    [(expr-app? e)   'app]
+    [(expr-Sigma? e) 'Sigma]
+    [(expr-Eq? e)    'Eq]
+    [(expr-Vec? e)   'Vec]
+    [(expr-PVec? e)  'PVec]
+    [(expr-Set? e)   'Set]
+    [(expr-Map? e)   'Map]
+    [(expr-pair? e)  'pair]
+    [(expr-suc? e)   'suc]
+    [(expr-lam? e)   'lam]
+    [else #f]))
 
 ;; Create or reuse a sub-cell for a decomposed component expression.
 ;; - Bare meta (expr-meta id): reuse the meta's existing propagator cell

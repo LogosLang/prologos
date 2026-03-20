@@ -127,7 +127,7 @@
        (define term
          (let loop ([n n])
            (if (zero? n) (expr-zero) (expr-suc (loop (sub1 n))))))
-       (define pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
+       (define pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
        (parameterize ([current-perf-counters pc])
          (tc:infer ctx-empty term))
        ;; Total heartbeats should be bounded by O(n²)
