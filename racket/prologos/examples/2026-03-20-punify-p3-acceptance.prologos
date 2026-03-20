@@ -197,21 +197,21 @@ solve-with dfs-solver (ancestor "alice" desc)
 ;; --- D1: Basic schema ---
 
 schema Point
-  :x Nat
-  :y Nat
+  :x Int
+  :y Int
 
 ;; --- D2: Schema with defaults ---
 
 schema Config
   :host String :default "localhost"
-  :port Nat    :default 8080N
+  :port Int    :default 8080
   :debug Bool  :default false
 
 ;; --- D3: Closed schema (rejects extra keys) ---
 
 schema Pixel :closed
-  :x Nat
-  :y Nat
+  :x Int
+  :y Int
   :color Color
 
 ;; --- D4: Schema with check predicates ---
@@ -224,27 +224,27 @@ schema Pixel :closed
 schema Address
   :street String
   :city   String
-  :zip    Nat
+  :zip    Int
 
 schema Person
   :name    String
-  :age     Nat
+  :age     Int
   :address Address
 
 ;; --- D6: Schema with implicit map syntax ---
-;; ASPIRATIONAL — implicit map syntax for schema field blocks
+;; FIXED — nested fields auto-generate sub-schemas (e.g., Employee__manager)
 
-;; schema Employee
-;;   :name    String
-;;   :dept    String
-;;   :salary  Nat
-;;   :manager
-;;     :name String
-;;     :level Nat
-;;   :address
-;;     :street String
-;;     :city   String
-;;     :zip    Nat
+schema Employee
+  :name    String
+  :dept    String
+  :salary  Int
+  :manager
+    :name String
+    :level Int
+  :address
+    :street String
+    :city   String
+    :zip    Int
 
 ;; --- D7: Schema with generic type parameter ---
 ;; ASPIRATIONAL
@@ -255,17 +255,17 @@ schema Person
 
 ;; --- D8: Construct schema-typed values ---
 
-def origin : Point := {:x 0N :y 0N}
-def cfg : Config := {:host "api.example.com" :port 443N :debug true}
+def origin : Point  := {:x 0 :y 0}
+def cfg    : Config := {:host "api.example.com" :port 443 :debug true}
 
 ;; --- D9: Construct with defaults (omit defaulted fields) ---
 ;; ASPIRATIONAL — default-fill on construction
 
 ;; def default-cfg : Config := {}
-;; ;; => {:host "localhost" :port 8080N :debug false}
+;; ;; => {:host "localhost" :port 8080 :debug false}
 
-;; def partial-cfg : Config := {:port 9090N}
-;; ;; => {:host "localhost" :port 9090N :debug false}
+;; def partial-cfg : Config := {:port 9090}
+;; ;; => {:host "localhost" :port 9090 :debug false}
 
 
 ;; ========================================================================
@@ -335,16 +335,16 @@ selection Extended from Person
 ;; ASPIRATIONAL — schema-validated defr not yet wired
 
 ;; defr point-db : Point
-;;   || 0N 0N
-;;      1N 2N
-;;      3N 4N
-;;      10N 10N
+;;   || 0 0
+;;      1 2
+;;      3 4
+;;      10 10
 
 ;; --- F2: Query schema-typed relation ---
 ;; ASPIRATIONAL
 
-;; solve (point-db x 0N)
-;; ;; => [{:x 0N}]  — result uses field names from schema
+;; solve (point-db x 0)
+;; ;; => [{:x 0}]  — result uses field names from schema
 
 ;; --- F3: Schema-typed relation with rules ---
 ;; ASPIRATIONAL
@@ -373,14 +373,14 @@ selection Extended from Person
 ;; ASPIRATIONAL — should be a compile-time type error
 
 ;; defr bad-point : Point
-;;   || "not-a-nat" 0N
-;;   ;; TYPE ERROR: :x expects Nat, got String
+;;   || "not-a-int" 0
+;;   ;; TYPE ERROR: :x expects Int, got String
 
 ;; --- F6: Schema + defaults in defr ---
 ;; ASPIRATIONAL
 
 ;; defr config-db : Config
-;;   || "prod" 443N true
+;;   || "prod" 443 true
 ;;      "dev"  _ _
 ;;   ;; The _ positions should be filled by schema defaults
 
@@ -401,39 +401,39 @@ selection Extended from Person
 
 ;; --- G1: Basic dot-access ---
 
-def user := {:name "alice" :age 30N}
+def user := {:name "alice" :age 30}
 
 user.name
 ;; => "alice"
 
 user.age
-;; => 30N
+;; => 30
 
 ;; --- G2: Chained dot-access on nested maps ---
-;; BROKEN at L3 — nested map literal causes multiplicity error
+;; WORKS with homogeneous inner map types. Heterogeneous (mixed Int/String)
+;; hits QTT multiplicity bug — use schema-typed nested maps instead.
 
-;; def nested := {:config {:host "localhost" :port 8080N}}
-;;
-;; nested.config
-;; ;; => {:host "localhost" :port 8080N}
-;;
-;; ;; ASPIRATIONAL — chained dot-access
-;; nested.config.host
-;; ;; => "localhost"
+def nested := {:config {:host "localhost" :port "8080"}}
+
+nested.config
+;; => {:host "localhost" :port "8080"}
+
+nested.config.host
+;; => "localhost"
 
 ;; --- G3: Dot-access on schema-typed values ---
 
 origin.x
-;; => 0N
+;; => 0
 
 origin.y
-;; => 0N
+;; => 0
 
 ;; --- G4: Dot-access on function result ---
-;; ASPIRATIONAL — dot-access on expression, not just name
+;; WORKS — dot-access chains on expression results (plain maps, not schema-typed)
 
-;; [map-assoc origin :x 5N].x
-;; ;; => 5N
+[map-assoc user :role "admin"].role
+;; => "admin"
 
 ;; --- G5: Keyword dot-access ---
 ;; FIXED — $dot-key now handled in rewrite-dot-access fold-left
@@ -458,15 +458,15 @@ user.:name
 ;; ;; => fn (x : _) (nil-safe-get x :name)
 
 ;; --- G8: Postfix bracket indexing ---
+;; WORKS — list postfix indexing at L3
 
-;; ASPIRATIONAL — list literal + postfix indexing at L3
-;; def xs := '[1 2 3 4 5]
-;;
-;; xs[0]
-;; ;; => 1
-;;
-;; xs[2]
-;; ;; => 3
+def xs := '[1 2 3 4 5]
+
+xs[0]
+;; => 1
+
+xs[2]
+;; => 3
 
 ;; --- G9: Postfix indexing on map with keyword ---
 
@@ -478,16 +478,20 @@ m[:a]
 m[:c]
 ;; => 3
 
-;; --- G10: Chained postfix indexing ---
-;; ASPIRATIONAL — list-of-list literal + chained postfix indexing at L3
+m.b
+;; => 2
 
-;; def matrix := '{'{1 2 3} '{4 5 6} '{7 8 9}}
-;;
-;; matrix[0][1]
-;; ;; => 2
-;;
-;; matrix[2][0]
-;; ;; => 7
+
+;; --- G10: Chained postfix indexing ---
+;; WORKS — chained postfix indexing on nested lists
+
+def matrix := (cons '[1 2 3] (cons '[4 5 6] (cons '[7 8 9] nil)))
+
+matrix[0][1]
+;; => 2
+
+matrix[2][0]
+;; => 7
 
 ;; --- G11: Mixed dot-access and postfix indexing ---
 ;; ASPIRATIONAL
@@ -545,9 +549,11 @@ m[:c]
 ;; --- G18: Dot-access in pipeline ---
 ;; ASPIRATIONAL
 
-;; |> {:name "alice" :age 30N}
-;;   .name
-;; ;; => "alice"
+;; |> {:name "alice" :age 30}
+;;   :name
+;; => "alice"
+
+;; :name {:name "alice" :age 30}
 
 
 ;; ========================================================================
@@ -846,18 +852,18 @@ def test-map := {:alpha 1 :beta 2 :gamma 3}
 
 ;; --- L6: Option operations ---
 
-[unwrap-or 0 (some 42)]
+unwrap-or 0 (some 42)
 ;; => 42
 
-[unwrap-or 99 [none Int]]
+unwrap-or 99 [none Int]
 ;; => 99
 
 ;; --- L7: Bool operations ---
 
-[and true true]
+and true true
 ;; => true
 
-[or false true]
+or false true
 ;; => true
 
 ;; --- L8: Closures ---

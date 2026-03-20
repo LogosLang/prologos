@@ -30,17 +30,17 @@
 ;; ========================================
 
 (test-case "schema-registry/parse-empty-fields"
-  (define fields (parse-schema-fields '() #f))
+  (define-values (fields _subs) (parse-schema-fields '() #f))
   (check-equal? fields '()))
 
 (test-case "schema-registry/parse-single-field"
-  (define fields (parse-schema-fields '(:name String) #f))
+  (define-values (fields _subs) (parse-schema-fields '(:name String) #f))
   (check-equal? (length fields) 1)
   (check-equal? (schema-field-keyword (car fields)) 'name)
   (check-equal? (schema-field-type-datum (car fields)) 'String))
 
 (test-case "schema-registry/parse-multiple-fields"
-  (define fields (parse-schema-fields '(:name String :age Nat :active Bool) #f))
+  (define-values (fields _subs) (parse-schema-fields '(:name String :age Nat :active Bool) #f))
   (check-equal? (length fields) 3)
   (check-equal? (schema-field-keyword (first fields)) 'name)
   (check-equal? (schema-field-type-datum (first fields)) 'String)
@@ -51,7 +51,7 @@
 
 (test-case "schema-registry/parse-compound-type"
   ;; (List Nat) as a compound type datum
-  (define fields (parse-schema-fields '(:items (List Nat)) #f))
+  (define-values (fields _subs) (parse-schema-fields '(:items (List Nat)) #f))
   (check-equal? (length fields) 1)
   (check-equal? (schema-field-keyword (car fields)) 'items)
   (check-equal? (schema-field-type-datum (car fields)) '(List Nat)))

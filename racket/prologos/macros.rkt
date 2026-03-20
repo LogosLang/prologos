@@ -752,29 +752,69 @@
 ;; Parse schema field pairs from a datum list.
 ;; Input: (:name String :age Nat) → list of schema-field
 ;; Handles both simple types (Nat, String) and compound types ((List Nat)).
-(define (parse-schema-fields field-pairs srcloc)
-  (let loop ([pairs field-pairs] [fields '()])
-    (cond
-      [(null? pairs) (reverse fields)]
-      [(null? (cdr pairs))
-       (error 'schema
-              (format "schema field ~a is missing a type" (car pairs)))]
-      [else
-       (define kw-datum (car pairs))
-       (define type-datum (cadr pairs))
-       ;; Validate keyword: must be a keyword-like symbol (starts with ':')
-       (unless (keyword-like-symbol? kw-datum)
+;; Parse schema fields. Returns (values fields auto-sub-schema-names).
+;; auto-sub-schema-names is a list of symbols for inline nested schemas that
+;; were auto-generated (and registered) during parsing. The caller should
+;; emit type definitions for these in Pass 2.
+(define (parse-schema-fields field-pairs srcloc [parent-name #f])
+  (define auto-subs '())
+  (define fields
+    (let loop ([pairs field-pairs] [fields '()])
+      (cond
+        [(null? pairs) (reverse fields)]
+        [(null? (cdr pairs))
          (error 'schema
-                (format "expected a keyword field name (e.g., :name), got ~a" kw-datum)))
-       ;; Strip the leading ':' for storage
-       (define kw-name
-         (let ([s (symbol->string kw-datum)])
-           (string->symbol (substring s 1))))
-       ;; Consume optional :default val and :check pred after the type
-       (define-values (default-val check-pred rest)
-         (parse-field-properties (cddr pairs)))
-       (loop rest
-             (cons (schema-field kw-name type-datum default-val check-pred) fields))])))
+                (format "schema field ~a is missing a type" (car pairs)))]
+        [else
+         (define kw-datum (car pairs))
+         ;; Validate keyword: must be a keyword-like symbol (starts with ':')
+         (unless (keyword-like-symbol? kw-datum)
+           (error 'schema
+                  (format "expected a keyword field name (e.g., :name), got ~a" kw-datum)))
+         ;; Strip the leading ':' for storage
+         (define kw-name
+           (let ([s (symbol->string kw-datum)])
+             (string->symbol (substring s 1))))
+         (define type-datum (cadr pairs))
+         ;; Check if this is an inline nested schema: the "type" is a list starting
+         ;; with a keyword (e.g., (:name String)) — collect all consecutive sub-field
+         ;; lists as the nested schema's fields.
+         (cond
+           [(and (pair? type-datum)
+                 (keyword-like-symbol? (car type-datum)))
+            ;; Inline nested schema: collect consecutive sub-field lists
+            ;; Each sub-field is a list like (:name String) from the flattened form
+            (define-values (sub-field-lists rest)
+              (let collect ([remaining (cdr pairs)] [subs '()])
+                (if (and (pair? remaining)
+                         (pair? (car remaining))
+                         (keyword-like-symbol? (caar remaining)))
+                    (collect (cdr remaining) (cons (car remaining) subs))
+                    (values (reverse subs) remaining))))
+            ;; Flatten the sub-field lists into kv pairs
+            (define sub-flat (apply append sub-field-lists))
+            ;; Generate a name for the auto-schema
+            (define sub-name
+              (string->symbol
+               (format "~a__~a"
+                       (or parent-name (and srcloc (if (symbol? srcloc) srcloc "anon")) "anon")
+                       kw-name)))
+            ;; Recursively parse sub-fields (may generate further nested subs)
+            (define-values (sub-fields sub-auto-subs) (parse-schema-fields sub-flat srcloc sub-name))
+            (set! auto-subs (append auto-subs sub-auto-subs (list sub-name)))
+            ;; Register the auto-generated sub-schema
+            (register-schema! sub-name (schema-entry sub-name sub-fields #f #f))
+            (loop rest
+                  (cons (schema-field kw-name sub-name #f #f) fields))]
+           [else
+            ;; Normal field: keyword followed by type datum
+            ;; Consume optional :default val and :check pred after the type
+            (define-values (default-val check-pred rest)
+              (parse-field-properties (cddr pairs)))
+            (loop rest
+                  (cons (schema-field kw-name type-datum default-val check-pred) fields))])])))
+  (values fields auto-subs))
+
 
 ;; Parse optional field-level properties after a field's type datum.
 ;; Returns (values default-val check-pred remaining-pairs).
@@ -2330,7 +2370,7 @@
              (if (and (pair? after-name) (eq? (car after-name) ':closed))
                  (values #t (cdr after-name))
                  (values #f after-name)))
-           (define flds (parse-schema-fields fpairs #f))
+           (define-values (flds _auto-subs) (parse-schema-fields fpairs #f sname))
            (register-schema! sname (schema-entry sname flds closed? #f)))]
         [(selection)
          ;; Pre-register selection name so known-type-name? recognizes it during spec processing
@@ -2636,7 +2676,8 @@
                (values #t (cdr after-name))
                (values #f after-name)))
          ;; Parse and register schema fields — qualify user-defined type names
-         (define fields-raw (parse-schema-fields field-pairs (syntax->datum stx)))
+         (define-values (fields-raw auto-sub-schemas)
+           (parse-schema-fields field-pairs (syntax->datum stx) schema-name))
          (define ns-ctx (current-ns-context))
          (define fields
            (if ns-ctx
@@ -2652,8 +2693,13 @@
          ;; Emit schema name as an opaque type in global-env (same pattern as data types).
          ;; The def form (def Name : (Type 0) (Type 0)) creates an fvar with Type 0 type.
          ;; Actual field checking is done in typing-core.rkt via schema registry lookups.
+         ;; First emit type defs for any auto-generated sub-schemas
+         (define sub-defs
+           (for/list ([sub-name (in-list auto-sub-schemas)])
+             (datum->syntax #f `(def ,sub-name : (Type 0) (Type 0)) stx)))
          (define type-def `(def ,schema-name : (Type 0) (Type 0)))
-         (cons (datum->syntax #f type-def stx) acc)]
+         (define all-defs (append sub-defs (list (datum->syntax #f type-def stx))))
+         (append (reverse all-defs) acc)]
         ;; ---- Selection declaration — flatten WS-grouped kv-pairs, then pass through ----
         [(and (pair? datum) (eq? head 'selection))
          ;; WS reader produces: (selection Name from Schema (:requires (:name :age)) ...)
