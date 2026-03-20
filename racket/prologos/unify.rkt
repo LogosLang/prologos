@@ -136,6 +136,66 @@
        (net-contradiction? (elab-network-prop-net (unbox net-box)))))
 
 ;; ========================================
+;; PUnify Phase 3: Pi decomposition as sub-cells
+;; ========================================
+;; Replaces recursive unify-core calls for Pi domains/codomains with
+;; propagator additions. Domain and codomain sub-goals become cells
+;; connected by structural-unify-propagators. Mult unification stays
+;; imperative. Codomain uses fresh fvar for binder opening (same as
+;; the imperative path).
+;;
+;; Returns #t (success) or #f (contradiction detected).
+
+(define (punify-dispatch-pi m1 m2 dom-a dom-b cod-a cod-b)
+  ;; Mult unification stays imperative — separate lattice
+  (and (unify-mult m1 m2)
+       (let ([net-box (current-prop-net-box)])
+         (cond
+           [(not net-box)
+            ;; No network — shouldn't happen with PUnify enabled, but defensive
+            #f]
+           [else
+            (define enet (unbox net-box))
+            (define pnet (elab-network-prop-net enet))
+            ;; Domain sub-cells: identify-sub-cell reuses meta cells when possible
+            (define-values (pnet1 dom-a-cid) (identify-sub-cell pnet dom-a))
+            (define-values (pnet2 dom-b-cid) (identify-sub-cell pnet1 dom-b))
+            ;; Domain unify-propagator (skip if same cell — e.g., shared meta)
+            (define-values (pnet3 _pid1)
+              (if (equal? dom-a-cid dom-b-cid)
+                  (values pnet2 #f)
+                  (net-add-propagator pnet2
+                    (list dom-a-cid dom-b-cid)
+                    (list dom-a-cid dom-b-cid)
+                    (make-structural-unify-propagator dom-a-cid dom-b-cid))))
+            ;; Open codomains with fresh fvar for correct de Bruijn handling
+            (define x (expr-fvar (gensym 'punify-pi)))
+            (define opened-cod-a (open-expr (zonk-at-depth 1 cod-a) x))
+            (define opened-cod-b (open-expr (zonk-at-depth 1 cod-b) x))
+            ;; Codomain sub-cells
+            (define-values (pnet4 cod-a-cid) (identify-sub-cell pnet3 opened-cod-a))
+            (define-values (pnet5 cod-b-cid) (identify-sub-cell pnet4 opened-cod-b))
+            ;; Codomain unify-propagator
+            (define-values (pnet6 _pid2)
+              (if (equal? cod-a-cid cod-b-cid)
+                  (values pnet5 #f)
+                  (net-add-propagator pnet5
+                    (list cod-a-cid cod-b-cid)
+                    (list cod-a-cid cod-b-cid)
+                    (make-structural-unify-propagator cod-a-cid cod-b-cid))))
+            ;; Run quiescence — fires all newly-added propagators
+            (define pnet7 (run-to-quiescence pnet6))
+            ;; Rewrap and rebox
+            (set-box! net-box
+              (elab-network pnet7
+                (elab-network-cell-info enet)
+                (elab-network-next-meta-id enet)
+                (elab-network-id-map enet)
+                (elab-network-meta-info enet)))
+            ;; Check contradiction
+            (not (net-contradiction? pnet7))]))))
+
+;; ========================================
 ;; Solve a bare (unapplied) metavariable
 ;; ========================================
 ;; P-U2a: After solve-meta!, check propagator network for contradictions.
@@ -433,14 +493,17 @@
     ;; Pi: mult unification (special) + domain + binder-opened codomain
     ;; Codomain uses zonk-at-depth(1, ...) + open-expr for correct de Bruijn indices.
     ;; P-U3c: flush network between domain and codomain for transitive propagation.
+    ;; PUnify Phase 3: propagator-based decomposition when enabled.
     [(list 'pi m1 m2 dom-a dom-b cod-a cod-b)
-     (and (unify-mult m1 m2)
-          (unify-core ctx dom-a dom-b)
-          (begin (maybe-flush-network!)
-            (let ([x (expr-fvar (gensym 'unify))])
-              (unify-core ctx
-                     (open-expr (zonk-at-depth 1 cod-a) x)
-                     (open-expr (zonk-at-depth 1 cod-b) x)))))]
+     (if (current-punify-enabled?)
+         (punify-dispatch-pi m1 m2 dom-a dom-b cod-a cod-b)
+         (and (unify-mult m1 m2)
+              (unify-core ctx dom-a dom-b)
+              (begin (maybe-flush-network!)
+                (let ([x (expr-fvar (gensym 'unify))])
+                  (unify-core ctx
+                         (open-expr (zonk-at-depth 1 cod-a) x)
+                         (open-expr (zonk-at-depth 1 cod-b) x))))))]
     ;; Sigma/lam: first component + binder-opened second
     ;; P-U3c: flush network between first and second for transitive propagation.
     [(list 'binder fst-a fst-b snd-a snd-b)

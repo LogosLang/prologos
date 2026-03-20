@@ -71,7 +71,9 @@
  ;; P5c: Cross-domain bridge (type ↔ multiplicity)
  elab-add-type-mult-bridge
  ;; Phase 4c: Structural decomposition support
- current-structural-meta-lookup)
+ current-structural-meta-lookup
+ ;; PUnify Phase 3: sub-cell creation for Pi decomposition
+ identify-sub-cell)
 
 ;; ========================================
 ;; Structs
