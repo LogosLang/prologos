@@ -316,9 +316,10 @@ Part 2's D.2 external critique expanded the design from System 1 only to both Sy
 |------|-----------|----------|
 | Bridge functions retained | Serve non-punify default path | Part 3 Phase 0, DEFERRED.md |
 | `bench-zonk.rkt` stale | Pre-dates propagator migration; not blocking | DEFERRED.md |
-| No `punify-enabled? #t` integration test | Toggle defaults to #f; Part 3 will flip | Part 3 scope |
+| No `punify-enabled? #t` integration test | **CLOSED** (Appendix B): 24 tests added (commit `b31c119`) | ~~Part 3 scope~~ |
 | `current-prop-cell-read`/`write` callbacks | Serve entire pipeline; elimination is Track 8 | Track 8 second half |
-| System 2 cell path untested in integration | Verified at unit level; Part 3 flips default | Part 3 scope |
+| System 2 cell path untested in integration | Partially closed: type-level tested, solver needs WS harness | Part 3 scope |
+| 5 parity bugs with punify ON | **NEW** (Appendix B): head, map, pair, match, Vec fail | Must fix before Part 3 default flip |
 
 ---
 
@@ -326,7 +327,7 @@ Part 2's D.2 external critique expanded the design from System 1 only to both Sy
 
 1. **Re-read the final design doc before implementing Phase 1**: The revert cost ~1h and was entirely avoidable. When a design doc has undergone D.2 + D.3 critique rounds that materially changed the design, the final version must be loaded before writing code. This is now a firm process rule.
 
-2. **Add a `punify-enabled? #t` integration test as a Phase 9 deliverable**: Instead of only verifying that the default path works, Phase 9 should have verified that the punify path produces correct results on a representative test subset. This would catch integration issues before Part 3's default flip.
+2. **Add a `punify-enabled? #t` integration test as a Phase 9 deliverable**: Instead of only verifying that the default path works, Phase 9 should have verified that the punify path produces correct results on a representative test subset. This would catch integration issues before Part 3's default flip. **Update (Appendix B)**: This gap was closed post-PIR. 24 integration tests added; 5 parity bugs found — exactly the pattern predicted.
 
 3. **Update micro-benchmarks alongside infrastructure changes**: `bench-zonk.rkt` broke silently because no one ran it during PUnify. A pre-implementation step should be "run all micro-benchmarks and fix any that fail." This prevents benchmark staleness from accumulating.
 
@@ -578,7 +579,56 @@ Based on the 6-PIR meta-analysis:
 
 ---
 
-## Appendix B: Lessons Distilled
+## Appendix B: PIR §15.2 Testing Gap Closure — Outcome (2026-03-20)
+
+**Motivation**: §3, §9.3, §10.4, §15.2 identified testing gaps. Track 7's PIR-driven testing found the S(-1) retraction bug — same "PIR → tests → bug → fix" cycle targeted here.
+
+### New Test Files (commit `b31c119`)
+
+| File | Tests | Coverage Gap Closed |
+|------|-------|-------------------|
+| `test-ctor-registry.rkt` | 40 | §3: ctor-registry.rkt (571 lines) had zero unit tests |
+| `test-solver-occurs.rkt` | 30 | §10.4: no test exercised `solver-term-occurs?` |
+| `test-punify-integration.rkt` | 24 | §9.3/§15.2: zero integration tests with `current-punify-enabled? #t` |
+| **Total** | **94** | Suite: 7096 → 7308 tests (377 files), 186.5s |
+
+### Bugs Found
+
+**5 parity bugs in punify toggle-on path** — constructs that work with `current-punify-enabled? #f` but fail with `#t`:
+
+| Construct | Code | Likely Root Cause |
+|-----------|------|-------------------|
+| `head` (list) | `[head '[1 2 3]]` | Implicit type arg resolution for prelude library functions |
+| `map` (higher-order) | `[map [fn [x : Int] [int+ x 1]] '[1 2 3]]` | Same: prelude polymorphic dispatch |
+| `Pair` constructor | `(def p : [Pair Int Bool] := [pair 42 true])` | Compound constructor with implicit type args |
+| Pattern matching | `(match [some 42] \| [some x] -> x \| none -> 0)` | Match elaboration under cell-tree dispatch |
+| `Vec` type | `(def v : [Vec Int 0N] := vnil)` | Multi-parameter compound type |
+
+**Passing constructs** (9 tests): implicit arg solving, type annotations, polymorphic application, higher-order Pi decomposition, nested Pi (Pi of Pi), Option type, trait method dispatch (`[+ 1 2]`), check command, def with inference. Also: Result type, nested Option.
+
+**Pattern**: The failing constructs all involve prelude library functions with implicit type arguments or multi-parameter constructors. Simple user-defined polymorphic functions work correctly with the toggle on. The cell-tree dispatch paths (`punify-dispatch-pi`, `punify-dispatch-binder`, `punify-dispatch-sub`) handle direct Pi/Sigma/App decomposition correctly but break when combined with the prelude's implicit arg resolution machinery.
+
+**Impact**: Since the toggle defaults to `#f`, no user-facing behavior is affected. But these 5 bugs **must be fixed before Part 3 flips the default**. The tests document current (broken) behavior with `check-true (prologos-error? ...)` — when fixed, flip to `check-false`.
+
+### Test Design Insights
+
+1. **`generic-merge` operates on term-lattice values, not raw Racket atoms**: Initial test design assumed `term-merge` on raw values like `1` or `"hello"` would produce expected results. In fact, raw atoms fall through to `term-top` (absorbing element). The merge is designed for the narrowing/solver context where values are `term-bot`/`term-top`/`term-var`/`term-ctor` structs.
+
+2. **Solver relational syntax (`defr`) is WS-native**: The `defr` form with `||` fact rows and `|` variant syntax requires `process-file` (WS mode), not `process-string` (sexp mode). Integration tests for the cell-based solver path need either `process-string-ws` or `process-file` with a temp-file approach (as in `test-relational-e2e.rkt`).
+
+3. **`current-punify-enabled?` is defined in `ctor-registry.rkt`**: Not re-exported through `macros.rkt` — requires explicit `(only-in "../ctor-registry.rkt" current-punify-enabled?)` import.
+
+### Updated Technical Debt Table (§14)
+
+| Item | Status After Testing |
+|------|---------------------|
+| No `punify-enabled? #t` integration test | **CLOSED**: 24 tests in `test-punify-integration.rkt` |
+| System 2 cell path untested in integration | Partially closed: type-level paths tested; solver path needs WS-mode harness |
+| 5 parity bugs when toggle ON | **NEW DEBT**: Must fix before Part 3 default flip |
+
+---
+
+## Appendix C: Lessons Distilled
 
 | Lesson | Distilled To | Status |
 |--------|-------------|--------|
