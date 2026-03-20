@@ -48,6 +48,7 @@
  solve-meta!
  meta-solved?
  meta-solution
+ meta-info-solved?
  meta-lookup
  reset-meta-store!
  all-unsolved-metas
@@ -1790,6 +1791,21 @@
      (if (not mi-box) #f  ;; No meta store initialized
          (let ([v (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id)])
            (and (not (eq? v 'none)) (meta-info-solution v))))]))
+
+;; Check if meta-info CHAMP says this meta is solved.
+;; Unlike meta-solved? (which reads the propagator cell), this reads the CHAMP status.
+;; Used by punify-bridge-cell-solves! to detect metas that were solved by propagators
+;; but not yet reflected in the meta-info CHAMP (and thus haven't triggered resolution).
+(define (meta-info-solved? id)
+  (define mi-read (current-prop-meta-info-read))
+  (define net-box (current-prop-net-box))
+  (define mi-champ
+    (cond
+      [(and mi-read net-box) (mi-read (unbox net-box))]
+      [else (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))]))
+  (and mi-champ
+       (let ([v (champ-lookup mi-champ (prop-meta-id-hash id) id)])
+         (and (not (eq? v 'none)) (eq? (meta-info-status v) 'solved)))))
 
 ;; Retrieve the full meta-info struct, or #f if unknown.
 ;; Track 6 Phase 5a: reads from elab-network meta-info when available, else box.

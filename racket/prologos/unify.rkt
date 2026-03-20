@@ -135,6 +135,23 @@
        (net-contradiction? (elab-network-prop-net (unbox net-box)))))
 
 ;; ========================================
+;; PUnify Phase -1: Bridge cell-solved metas to solve-meta!
+;; ========================================
+;; After punify dispatch + quiescence, metas may be solved at the propagator
+;; cell level but NOT reflected in the meta-info CHAMP. This means solve-meta!
+;; was never called, so stratified resolution (trait resolution, hasmethod,
+;; constraint retries) never fires. This bridge detects such metas and calls
+;; solve-meta! to trigger resolution.
+
+(define (punify-bridge-cell-solves! exprs)
+  (for ([e (in-list exprs)])
+    (when (expr-meta? e)
+      (define id (expr-meta-id e))
+      (define sol (meta-solution id))
+      (when (and sol (not (meta-info-solved? id)))
+        (solve-meta! id sol)))))
+
+;; ========================================
 ;; PUnify Phase 3: Pi decomposition as sub-cells
 ;; ========================================
 ;; Replaces recursive unify-core calls for Pi domains/codomains with
@@ -191,8 +208,10 @@
                 (elab-network-next-meta-id enet)
                 (elab-network-id-map enet)
                 (elab-network-meta-info enet)))
-            ;; Check contradiction
-            (not (net-contradiction? pnet7))]))))
+            ;; Bridge cell-solved metas to solve-meta! for trait resolution
+            (punify-bridge-cell-solves! (list dom-a dom-b opened-cod-a opened-cod-b))
+            ;; Check contradiction (may have new contradictions from resolution)
+            (not (punify-has-contradiction?))]))))
 
 ;; ========================================
 ;; PUnify Phase 4: Binder (Sigma/Lam) decomposition as sub-cells
@@ -238,7 +257,10 @@
          (elab-network-next-meta-id enet)
          (elab-network-id-map enet)
          (elab-network-meta-info enet)))
-     (not (net-contradiction? pnet7))]))
+     ;; Bridge cell-solved metas to solve-meta! for trait resolution
+     (punify-bridge-cell-solves! (list fst-a fst-b opened-snd-a opened-snd-b))
+     ;; Check contradiction (may have new contradictions from resolution)
+     (not (punify-has-contradiction?))]))
 
 ;; ========================================
 ;; PUnify Phase 4: Multi-goal (sub) decomposition as sub-cells
@@ -274,7 +296,10 @@
          (elab-network-next-meta-id enet)
          (elab-network-id-map enet)
          (elab-network-meta-info enet)))
-     (not (net-contradiction? pnet*))]))
+     ;; Bridge cell-solved metas to solve-meta! for trait resolution
+     (punify-bridge-cell-solves! (append (map car goals) (map cdr goals)))
+     ;; Check contradiction (may have new contradictions from resolution)
+     (not (punify-has-contradiction?))]))
 
 ;; ========================================
 ;; Solve a bare (unapplied) metavariable

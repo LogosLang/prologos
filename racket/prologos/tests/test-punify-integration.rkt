@@ -158,50 +158,57 @@
   (check-false (prologos-error? (run-last code))))
 
 ;; ========================================
-;; Suite 1b: Known punify-ON parity failures (BUG TRACKER)
+;; Suite 1b: Previously-broken parity tests (FIXED)
 ;;
-;; These tests PASS with punify OFF but FAIL with punify ON.
-;; They document bugs found during PIR §15.2 testing gap closure.
-;; Each test asserts the CURRENT (broken) behavior: error with ON.
-;; When the bug is fixed, the test will fail — flip check-true → check-false.
+;; These tests were broken with punify ON due to missing solve-meta!
+;; bridge in punify-dispatch-sub/pi/binder. Fixed by Phase -1:
+;; punify-bridge-cell-solves! now triggers stratified resolution
+;; after cell-level meta solves during quiescence.
 ;; ========================================
 
-(test-case "KNOWN-BUG: list head — implicit type arg fails with punify ON"
-  ;; [head '[1 2 3]] works OFF, errors ON.
-  ;; Likely: implicit type arg resolution for prelude functions interacts
-  ;; badly with cell-tree dispatch path.
+(test-case "parity: list head — implicit type arg with punify ON"
+  ;; Was KNOWN-BUG: punify-dispatch-sub solved ?A at cell level
+  ;; but never called solve-meta!, so trait resolution never fired.
   (define code "(ns t) [head '[1 2 3]]")
   (define on-result (run-last code))
   (define off-result (run-off-last code))
-  ;; ON: currently errors (BUG — should succeed like OFF)
-  (check-true (prologos-error? on-result))
-  ;; OFF: works correctly
+  (check-false (prologos-error? on-result))
   (check-false (prologos-error? off-result)))
 
-(test-case "KNOWN-BUG: map with lambda — prelude polymorphic dispatch fails ON"
+(test-case "parity: map with lambda — prelude polymorphic dispatch ON"
+  ;; Was KNOWN-BUG: same root cause as head — Seqable/Reducible trait
+  ;; constraints need solve-meta! → stratified resolution to resolve.
   (define code "(ns t) [map [fn [x : Int] [int+ x 1]] '[1 2 3]]")
   (define on-result (run-last code))
-  ;; ON: currently errors (BUG)
-  (check-true (prologos-error? on-result)))
+  (check-false (prologos-error? on-result)))
 
-(test-case "KNOWN-BUG: pair type — compound constructor fails ON"
-  ;; Pair/pair from prelude uses implicit type args; cell-tree doesn't handle it
+;; ========================================
+;; Suite 1c: Fixture-gap tests (fail with BOTH ON and OFF)
+;;
+;; These were initially classified as KNOWN-BUG punify tests but
+;; actually fail regardless of the toggle. They're fixture issues:
+;; Pair/vnil are not in the shared test prelude env; match [some 42]
+;; has a separate parsing issue with the pattern syntax in sexp mode.
+;; Kept as regression canaries — if they start passing, something changed.
+;; ========================================
+
+(test-case "fixture-gap: pair type — errors both ON and OFF"
   (define code "(ns t) (def p : [Pair Int Bool] := [pair 42 true])")
-  (define on-result (run-last code))
-  ;; ON: currently errors (BUG)
-  (check-true (prologos-error? on-result)))
+  ;; Fails both ways — Pair/pair not in prelude fixture
+  (check-true (prologos-error? (run-last code)))
+  (check-true (prologos-error? (run-off-last code))))
 
-(test-case "KNOWN-BUG: pattern matching — option match fails ON"
+(test-case "fixture-gap: option match — errors both ON and OFF"
   (define code "(ns t) (match [some 42] | [some x] -> x | none -> 0)")
-  (define on-result (run-last code))
-  ;; ON: currently errors (BUG)
-  (check-true (prologos-error? on-result)))
+  ;; Fails both ways — sexp-mode match syntax issue
+  (check-true (prologos-error? (run-last code)))
+  (check-true (prologos-error? (run-off-last code))))
 
-(test-case "KNOWN-BUG: Vec type — compound sub-cell fails ON"
+(test-case "fixture-gap: Vec type — errors both ON and OFF"
   (define code "(ns t) (def v : [Vec Int 0N] := vnil)")
-  (define on-result (run-last code))
-  ;; ON: currently errors (BUG)
-  (check-true (prologos-error? on-result)))
+  ;; Fails both ways — vnil not in prelude fixture
+  (check-true (prologos-error? (run-last code)))
+  (check-true (prologos-error? (run-off-last code))))
 
 (test-case "parity: Result type — compound constructor"
   (define code "(ns t) (def x : [Result Int String] := [ok 42])")
