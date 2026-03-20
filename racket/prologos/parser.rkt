@@ -1963,6 +1963,19 @@
                   (surf-map-vals m loc))))]
 
        ;; ---- Path algebra operations ----
+
+       ;; path: (path :address.zip) — first-class path literal
+       ;; Produces surf-path with parsed branches.
+       [(path)
+        (cond
+          [(null? args)
+           (parse-error loc "path requires at least one argument: (path :field.sub)" #f)]
+          [else
+           (define raw-args (map (lambda (a) (if (syntax? a) (syntax->datum a) a)) args))
+           (define branches (validate-selection-paths raw-args "path" loc))
+           (if (prologos-error? branches) branches
+               (surf-path branches loc))])]
+
        ;; get-in: (get-in target path-spec)
        ;; path-spec is parsed as selection paths, e.g., :address.zip or :address.{zip city}
        [(get-in)
@@ -1972,14 +1985,25 @@
           [else
            (define target (parse-datum (car args)))
            (if (prologos-error? target) target
-               ;; Parse remaining args as path items — use syntax->datum (deep)
-               ;; to match how selection parsing works (see parse-selection line 2886)
-               (let ([paths (validate-selection-paths
-                              (map (lambda (a) (if (syntax? a) (syntax->datum a) a))
-                                   (cdr args))
-                              "get-in" loc)])
-                 (if (prologos-error? paths) paths
-                     (surf-get-in target paths loc))))])]
+               ;; Check if path arg is a (path ...) form or a variable — parse as expression
+               (let* ([rest (cdr args)]
+                      [first-rest-datum (let ([a (car rest)])
+                                          (if (syntax? a) (syntax->datum a) a))])
+                 (if (and (= (length rest) 1)
+                          (or (and (pair? first-rest-datum) (eq? (car first-rest-datum) 'path))
+                              (and (symbol? first-rest-datum)
+                                   (not (keyword-like-symbol? first-rest-datum)))))
+                     ;; Single arg that is a (path ...) form or a variable — parse as expr
+                     (let ([path-expr (parse-datum (car rest))])
+                       (if (prologos-error? path-expr) path-expr
+                           (surf-get-in target (list path-expr) loc)))
+                     ;; Otherwise: parse remaining args as path items (existing behavior)
+                     (let ([paths (validate-selection-paths
+                                    (map (lambda (a) (if (syntax? a) (syntax->datum a) a))
+                                         rest)
+                                    "get-in" loc)])
+                       (if (prologos-error? paths) paths
+                           (surf-get-in target paths loc))))))])]
 
        ;; update-in: (update-in target path-spec fn-expr)
        ;; path-spec is parsed as selection paths, fn-expr is the update function
@@ -1991,18 +2015,29 @@
            (define target (parse-datum (car args)))
            (if (prologos-error? target) target
                ;; Split: last arg is fn, everything in between is path-spec
-               ;; path-items are from (cdr args) excluding the last element
                (let* ([rest (cdr args)]
                       [fn-arg (last rest)]
                       [path-args (reverse (cdr (reverse rest)))]  ;; drop last from rest
                       [fn-expr (parse-datum fn-arg)])
                  (if (prologos-error? fn-expr) fn-expr
-                     (let ([paths (validate-selection-paths
-                                    (map (lambda (a) (if (syntax? a) (syntax->datum a) a))
-                                         path-args)
-                                    "update-in" loc)])
-                       (if (prologos-error? paths) paths
-                           (surf-update-in target paths fn-expr loc))))))])]
+                     ;; Check if path arg is a (path ...) form or a variable
+                     (let ([first-path-datum (let ([a (car path-args)])
+                                               (if (syntax? a) (syntax->datum a) a))])
+                       (if (and (= (length path-args) 1)
+                                (or (and (pair? first-path-datum) (eq? (car first-path-datum) 'path))
+                                    (and (symbol? first-path-datum)
+                                         (not (keyword-like-symbol? first-path-datum)))))
+                           ;; Single (path ...) or variable — parse as expression
+                           (let ([path-expr (parse-datum (car path-args))])
+                             (if (prologos-error? path-expr) path-expr
+                                 (surf-update-in target (list path-expr) fn-expr loc)))
+                           ;; Otherwise: existing keyword path parsing
+                           (let ([paths (validate-selection-paths
+                                          (map (lambda (a) (if (syntax? a) (syntax->datum a) a))
+                                               path-args)
+                                          "update-in" loc)])
+                             (if (prologos-error? paths) paths
+                                 (surf-update-in target paths fn-expr loc))))))))])]
 
        ;; ---- Set type and operations ----
        ;; (Set A)
