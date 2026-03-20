@@ -123,12 +123,11 @@
       [else #f])))
 
 ;; ========================================
-;; PUnify Phase 2: Direct network contradiction check
+;; Direct network contradiction check (Phase 2, promoted Phase 7)
 ;; ========================================
-;; Replaces the callback indirection (current-prop-has-contradiction?) with
-;; direct access to the propagator network. When PUnify is enabled, we read
-;; the elab-network from current-prop-net-box and check net-contradiction?
-;; directly, bypassing the callback layer.
+;; Direct access to the propagator network for contradiction checking.
+;; Returns #f when no network is present (safe for test contexts).
+;; Phase 7: now the sole contradiction check path — callback eliminated.
 
 (define (punify-has-contradiction?)
   (define net-box (current-prop-net-box))
@@ -294,16 +293,12 @@
     ;; Solve!
     [else
      (solve-meta! id rhs)
-     ;; P-U2a: Post-solve contradiction check via propagator network.
+     ;; Post-solve contradiction check via propagator network.
      ;; solve-meta! writes to cell + runs quiescence, which may trigger
      ;; transitive propagation that reveals inconsistencies.
-     ;; PUnify Phase 2: direct network access replaces callback indirection.
-     (if (current-punify-enabled?)
-         (if (punify-has-contradiction?) #f #t)
-         (let ([check-fn (current-prop-has-contradiction?)])
-           (if (and check-fn (check-fn))
-               #f
-               #t)))]))
+     ;; Phase 7: direct network access (punify-has-contradiction? handles
+     ;; no-network case by returning #f).
+     (if (punify-has-contradiction?) #f #t)]))
 
 ;; ========================================
 ;; Core Unification
@@ -784,14 +779,9 @@
     [else
      ;; Solve by inversion: construct lambda abstraction
      (solve-meta! id (invert-args args rhs))
-     ;; P-U2a: Post-solve contradiction check (same as solve-flex-rigid)
-     ;; PUnify Phase 2: direct network access replaces callback indirection.
-     (if (current-punify-enabled?)
-         (if (punify-has-contradiction?) #f #t)
-         (let ([check-fn (current-prop-has-contradiction?)])
-           (if (and check-fn (check-fn))
-               #f
-               #t)))]))
+     ;; Post-solve contradiction check (same as solve-flex-rigid).
+     ;; Phase 7: direct network access.
+     (if (punify-has-contradiction?) #f #t)]))
 
 ;; Construct a lambda abstraction that, when applied to the original arguments,
 ;; produces the RHS.
@@ -930,20 +920,13 @@
   (define result (unify-core ctx t1 t2))
   ;; Post-unification consistency check with propagator network.
   ;; Quiescence already ran inside solve-meta! (if any metas were solved).
-  ;; PUnify Phase 2: direct network access replaces callback indirection.
-  (define (check-contradiction)
-    (if (current-punify-enabled?)
-        (punify-has-contradiction?)
-        (let ([check-fn (current-prop-has-contradiction?)])
-          (and check-fn (check-fn)))))
+  ;; Phase 7: direct network access via punify-has-contradiction? (returns #f
+  ;; when no network is present, safe for test contexts).
   (cond
     ;; No network (test context): pass through result unchanged.
-    ;; PUnify path always has a network; legacy path checks callback presence.
-    [(and (not (current-punify-enabled?))
-          (not (current-prop-has-contradiction?)))
-     result]
+    [(not (current-prop-net-box)) result]
     ;; If unify-core said #t or 'postponed but network has contradiction → downgrade to #f
-    [(and (not (eq? result #f)) (check-contradiction)) #f]
+    [(and (not (eq? result #f)) (punify-has-contradiction?)) #f]
     ;; If unify-core returned 'postponed, check if quiescence resolved
     ;; the constraint via transitive propagation. If the most recent constraint
     ;; added during this call was solved by retry-via-cells, upgrade to #t.

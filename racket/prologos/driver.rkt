@@ -2094,13 +2094,10 @@
 (current-prop-fresh-level-cell elab-fresh-level-cell)
 (current-prop-fresh-sess-cell elab-fresh-sess-cell)
 
-;; P1-G2: Install contradiction check callback
-(current-prop-has-contradiction?
- (lambda ()
-   (define net-box (current-prop-net-box))
-   (and net-box
-        (let ([enet (unbox net-box)])
-          (net-contradiction? (elab-network-prop-net enet))))))
+;; P1-G2: Contradiction check callback removed (PUnify Phase 7).
+;; unify.rkt now uses punify-has-contradiction? directly via current-prop-net-box,
+;; bypassing the callback indirection. The parameter definition remains in
+;; metavar-store.rkt for backward compatibility but is no longer set here.
 
 ;; Phase E2: Install propagator-driven constraint wakeup.
 ;; When solve-meta! writes to a cell, the propagator network is run to
