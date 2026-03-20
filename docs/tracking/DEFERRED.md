@@ -13,6 +13,19 @@ Deferral".
 
 ---
 
+## HIGH PRIORITY: Propagator/Cell Allocation Efficiency Track
+
+### Design Track for Efficient Prop/Cell Allocation
+- **Audit complete**: `docs/tracking/2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md` (commit `f7bd03d`)
+- **Thesis**: Any even modest gains in allocation efficiency will have disproportionate effect across the entire infrastructure — every part of the system creates cells and propagators at scale
+- **Key findings**: `struct-copy prop-network` (13-field copy) is dominant cost; 25 call sites; 6 optimization opportunities identified preserving pure data-in/data-out contract
+- **Top 3 optimizations**: (1) mutable worklist/fuel in quiescence loop, (2) field-group struct splitting (hot/warm/cold), (3) batch cell registration via existing transient CHAMP builder
+- **Incremental GC**: Future consideration — network IS the provenance trail; understand provenance patterns before committing to self-GC work
+- **Next step**: Create design document from audit, scope implementation phases, benchmark before/after
+- **Not blocked on anything** — can be implemented independently of PUnify or Track 8
+
+---
+
 ## Numerics Tower
 
 ### Phase 4: Float32/Float64
