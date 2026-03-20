@@ -1538,10 +1538,10 @@ risk analysis, methodology alignment, and implementation suggestions.
 | 2 | flex-rigid as cell write (System 1) | ✅ | 67f1388 — direct contradiction check, callback indirection removed |
 | 3 | Pi decomposition as sub-cells (System 1) | ✅ | 52e6230 — propagator-based Pi decomposition with binder opening |
 | 4 | Remaining compound types (System 1) | ✅ | bc05b08 — binder (Sigma/Lam) + sub (App/Eq/Vec/etc) |
-| 5a | Solver cell infrastructure (System 2) | ⬜ | |
-| 5b | Data constructor decomposition (System 2) | ⬜ | |
-| 5c | DFS copy-on-branch (System 2) | ⬜ | |
-| 5d | Bridge retirement (System 2) | ⬜ | |
+| 5a | Solver cell infrastructure (System 2) | ✅ | `9800410` — solver-env struct, polymorphic walk/walk*/unify-terms dispatch, auto cell creation |
+| 5b | Data constructor decomposition (System 2) | ✅ | `988af5c` — descriptor-aware decompose in solver-unify-terms, tag mismatch detection |
+| 5c | DFS copy-on-branch (System 2) | ✅ | N/A — functional threading of solver-env provides backtracking isolation inherently (no copy needed) |
+| 5d | Bridge retirement (System 2) | ⏸️ | Deferred — bridges still serve non-punify default path; retire when punify becomes default |
 | 6 | Fast-path preservation | ⬜ | |
 | 7 | Callback elimination (System 1) | ⬜ | |
 | 8 | Occurs check as cycle detection | ⬜ | |
