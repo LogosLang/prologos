@@ -196,6 +196,88 @@
             (not (net-contradiction? pnet7))]))))
 
 ;; ========================================
+;; PUnify Phase 4: Binder (Sigma/Lam) decomposition as sub-cells
+;; ========================================
+;; Same pattern as Pi but without mult: first component + binder-opened second.
+
+(define (punify-dispatch-binder fst-a fst-b snd-a snd-b)
+  (define net-box (current-prop-net-box))
+  (cond
+    [(not net-box) #f]
+    [else
+     (define enet (unbox net-box))
+     (define pnet (elab-network-prop-net enet))
+     ;; First component sub-cells
+     (define-values (pnet1 fst-a-cid) (identify-sub-cell pnet fst-a))
+     (define-values (pnet2 fst-b-cid) (identify-sub-cell pnet1 fst-b))
+     (define-values (pnet3 _pid1)
+       (if (equal? fst-a-cid fst-b-cid)
+           (values pnet2 #f)
+           (net-add-propagator pnet2
+             (list fst-a-cid fst-b-cid)
+             (list fst-a-cid fst-b-cid)
+             (make-structural-unify-propagator fst-a-cid fst-b-cid))))
+     ;; Open second components with fresh fvar
+     (define x (expr-fvar (gensym 'punify-binder)))
+     (define opened-snd-a (open-expr (zonk-at-depth 1 snd-a) x))
+     (define opened-snd-b (open-expr (zonk-at-depth 1 snd-b) x))
+     ;; Second component sub-cells
+     (define-values (pnet4 snd-a-cid) (identify-sub-cell pnet3 opened-snd-a))
+     (define-values (pnet5 snd-b-cid) (identify-sub-cell pnet4 opened-snd-b))
+     (define-values (pnet6 _pid2)
+       (if (equal? snd-a-cid snd-b-cid)
+           (values pnet5 #f)
+           (net-add-propagator pnet5
+             (list snd-a-cid snd-b-cid)
+             (list snd-a-cid snd-b-cid)
+             (make-structural-unify-propagator snd-a-cid snd-b-cid))))
+     ;; Quiescence + rebox + contradiction check
+     (define pnet7 (run-to-quiescence pnet6))
+     (set-box! net-box
+       (elab-network pnet7
+         (elab-network-cell-info enet)
+         (elab-network-next-meta-id enet)
+         (elab-network-id-map enet)
+         (elab-network-meta-info enet)))
+     (not (net-contradiction? pnet7))]))
+
+;; ========================================
+;; PUnify Phase 4: Multi-goal (sub) decomposition as sub-cells
+;; ========================================
+;; For App, Eq, Vec, Fin, Pair, suc, etc. — creates cells for each
+;; goal pair and connects with structural-unify-propagators.
+
+(define (punify-dispatch-sub goals)
+  (define net-box (current-prop-net-box))
+  (cond
+    [(not net-box) #f]
+    [else
+     (define enet (unbox net-box))
+     (define pnet (elab-network-prop-net enet))
+     ;; Create cells + propagators for each goal pair
+     (define pnet-final
+       (for/fold ([n pnet])
+                 ([g (in-list goals)])
+         (define-values (n1 a-cid) (identify-sub-cell n (car g)))
+         (define-values (n2 b-cid) (identify-sub-cell n1 (cdr g)))
+         (if (equal? a-cid b-cid)
+             n2
+             (let-values ([(n3 _pid) (net-add-propagator n2
+                                       (list a-cid b-cid)
+                                       (list a-cid b-cid)
+                                       (make-structural-unify-propagator a-cid b-cid))])
+               n3))))
+     ;; Quiescence + rebox + contradiction check
+     (define pnet* (run-to-quiescence pnet-final))
+     (set-box! net-box
+       (elab-network pnet*
+         (elab-network-cell-info enet)
+         (elab-network-next-meta-id enet)
+         (elab-network-id-map enet)
+         (elab-network-meta-info enet)))
+     (not (net-contradiction? pnet*))]))
+
+;; ========================================
 ;; Solve a bare (unapplied) metavariable
 ;; ========================================
 ;; P-U2a: After solve-meta!, check propagator network for contradictions.
@@ -487,9 +569,12 @@
     [(list 'sub goals)
      ;; P-U3c: For multi-goal decomposition, flush network between goals
      ;; to propagate transitive constraints from earlier goals to later ones.
-     (for/and ([g (in-list goals)])
-       (begin0 (unify-core ctx (car g) (cdr g))
-               (maybe-flush-network!)))]
+     ;; PUnify Phase 4: propagator-based decomposition when enabled.
+     (if (current-punify-enabled?)
+         (punify-dispatch-sub goals)
+         (for/and ([g (in-list goals)])
+           (begin0 (unify-core ctx (car g) (cdr g))
+                   (maybe-flush-network!))))]
     ;; Pi: mult unification (special) + domain + binder-opened codomain
     ;; Codomain uses zonk-at-depth(1, ...) + open-expr for correct de Bruijn indices.
     ;; P-U3c: flush network between domain and codomain for transitive propagation.
@@ -506,13 +591,16 @@
                          (open-expr (zonk-at-depth 1 cod-b) x))))))]
     ;; Sigma/lam: first component + binder-opened second
     ;; P-U3c: flush network between first and second for transitive propagation.
+    ;; PUnify Phase 4: propagator-based decomposition when enabled.
     [(list 'binder fst-a fst-b snd-a snd-b)
-     (and (unify-core ctx fst-a fst-b)
-          (begin (maybe-flush-network!)
-            (let ([x (expr-fvar (gensym 'unify))])
-              (unify-core ctx
-                     (open-expr (zonk-at-depth 1 snd-a) x)
-                     (open-expr (zonk-at-depth 1 snd-b) x)))))]
+     (if (current-punify-enabled?)
+         (punify-dispatch-binder fst-a fst-b snd-a snd-b)
+         (and (unify-core ctx fst-a fst-b)
+              (begin (maybe-flush-network!)
+                (let ([x (expr-fvar (gensym 'unify))])
+                  (unify-core ctx
+                         (open-expr (zonk-at-depth 1 snd-a) x)
+                         (open-expr (zonk-at-depth 1 snd-b) x))))))]
     [(list 'level l1 l2) (unify-level l1 l2)]
     [(list 'union cs-a cs-b) (unify-union-components ctx cs-a cs-b)]
     [(list 'retry a* b*) (unify-whnf ctx a* b*)]))
