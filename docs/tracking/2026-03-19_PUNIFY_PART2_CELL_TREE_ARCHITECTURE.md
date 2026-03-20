@@ -594,6 +594,14 @@ Each constructor tag gives a **product lattice** over its components. The overal
 type is a **sum lattice** (tagged disjoint union) over tags. The `Lifted` wrapper
 adds `type-bot` (no information, fresh meta) and `type-top` (contradiction).
 
+**Implementation note**: The formal sum-of-products structure provides compositional
+monotonicity guarantees and design vocabulary for cross-domain composition (Track 8).
+The implementation dispatches by tag equality, which is the correct realization of the
+sum lattice's join: same summand → component-wise product merge; different summands → ⊤.
+The formalization is not over-specified — it proves that per-component monotonicity
+implies product monotonicity structurally, eliminating the need to hand-verify
+`try-unify-pure`'s ~170 lines of recursive decomposition for each new compound type.
+
 **This structure already exists implicitly** in three places:
 - `type-lattice.rkt`: `try-unify-pure` recursively decomposes by tag (~170 lines)
 - `unify.rkt`: `classify-whnf-problem` classifies by tag (~150 lines)
@@ -618,6 +626,7 @@ A single registration site for all compound structure — **both type constructo
 (struct ctor-desc
   (tag            ; symbol: 'Pi, 'Sigma, 'App, 'cons, 'some, 'suc, ...
    arity          ; natural: number of sub-components
+   recognizer-fn  ; (AST-value → boolean) — is this value of this constructor?
    extract-fn     ; (AST-value → (list component ...))
    reconstruct-fn ; ((list cell-value ...) → AST-value)
    component-lattices  ; (list (merge-fn contradicts?) ...)
@@ -709,7 +718,15 @@ generic-decompose(net, cell, value):
   desc = lookup-ctor-desc(tag)
   if not desc: return net  ;; atom, no decomposition
   components = desc.extract-fn(value)
+  ;; Handle binder components: open under fresh fvar
+  ;; (get-or-create-sub-cells does NOT open binders — caller's responsibility)
+  if desc.binder-depth > 0:
+    x = gensym('punify)
+    for i in [desc.arity - desc.binder-depth .. desc.arity):
+      components[i] = open-expr(zonk-at-depth(1, components[i]), x)
   (net*, sub-cells) = get-or-create-sub-cells(net, cell, tag, components)
+  ;; fvar x is captured in the cell-decomps registry via the opened component
+  ;; values — cache hit returns the same opened sub-cells with the same fvar
   return net*
 ```
 
@@ -983,6 +1000,39 @@ We state this explicitly rather than disguising it as performance optimization:
 
 ## 6. Implementation Phases
 
+### Phase Dependency DAG
+
+```
+Phase 1 (registry) ──┬──→ Phase 2 ──→ Phase 3 ──→ Phase 4 ──┬──→ Phase 7 (callback elim)
+                     │                                       │
+                     └──→ Phase 5a ──→ Phase 5b ──→ Phase 5c ──→ Phase 5d
+                                                              │
+Phase 6 (fast-path) ◄────────────────────────────────────────┘ (after 4 AND 5d)
+Phase 8 (occurs check) ◄─────────────────────────────────────┘ (after 4 AND 5d)
+Phase 9 (zonk) ◄──── Phase 4 only (System 1)
+```
+
+System 1 path (Phases 2-4, 7, 9) and System 2 path (Phase 5a-5d) diverge after
+Phase 1 and reconverge at Phases 6 and 8. This enables parallel development if
+resources allow.
+
+### Per-Phase Completion Criteria
+
+Every phase is complete when ALL of the following hold:
+1. All tests pass (`run-affected-tests.rkt --all`)
+2. Primary benchmark within per-phase budget (≤2% regression)
+3. Classification distribution unchanged (±1%) via `profile-unify.rkt`
+4. Cell allocation within budget (`perf-inc-cell-alloc!` counter)
+5. Propagator count within budget (`perf-inc-prop-alloc!` counter — added Phase 1)
+6. Acceptance file runs with 0 errors
+7. No new test failures in `data/benchmarks/failures/`
+
+**Rollback protocol**: If a phase regresses its primary benchmark by >5% and
+the regression cannot be resolved within the phase scope, rollback to the
+pre-phase commit and document the failure mode. The `current-punify-enabled?`
+toggle provides immediate rollback without code reversion for Phases 1-4.
+For Phase 5, the solver A/B toggle provides the same safety.
+
 ### Phase 1: Constructor Descriptor Registry + Generic Infrastructure
 
 **What**: Create the `ctor-desc` registry (§5.6.2), the generic decomposition
@@ -992,15 +1042,23 @@ dispatches through descriptors rather than hardcoded match clauses.
 **Files**: New `ctor-registry.rkt`; modified `unify.rkt`, `elaborator-network.rkt`, `relations.rkt`
 
 **Deliverables**:
-1. `ctor-desc` struct and `register-ctor!` / `lookup-ctor-desc`
-2. Type constructor registrations for all 11 compound type tags (Pi, Sigma, App,
+1. `ctor-desc` struct with `recognizer-fn` field: `(AST-value → boolean)` for safe
+   dispatch (wraps struct predicates for types, list-tag checks for data constructors)
+2. `register-ctor!` with `validate-ctor-desc!` at registration: verifies
+   `(= (length (extract-fn sample)) arity)`, roundtrip `(equal? (reconstruct-fn (extract-fn v)) v)`,
+   and `(= (length component-lattices) arity)`
+3. `lookup-ctor-desc` for dispatch
+4. Type constructor registrations for all 11 compound type tags (Pi, Sigma, App,
    Eq, Vec, Fin, Pair, Lam, PVec, Set, Map) — domain `'type`
-3. Data constructor registrations for core prelude types (cons, nil, some, none,
+5. Data constructor registrations for core prelude types (cons, nil, some, none,
    suc, zero, pair, ok, err) — domain `'data`
-4. `generic-decompose` and `generic-reconstruct` parameterized by descriptor
-5. `current-punify-enabled?` parameter (default #f) as A/B toggle
-6. When enabled, `unify-core` delegates to `unify-via-propagator` which uses
+6. `generic-decompose` and `generic-reconstruct` parameterized by descriptor
+7. `current-punify-enabled?` parameter (default #f) as A/B toggle
+8. When enabled, `unify-core` delegates to `unify-via-propagator` which uses
    the generic machinery; when disabled, existing code runs unchanged
+9. `cell-tree->sexp` debugging utility (recursive cell-tree → S-expression conversion)
+10. `perf-inc-prop-alloc!` counter in `performance-counters.rkt`
+11. `bench-descriptor.rkt` micro-benchmarks: lookup, extract, reconstruct, decompose, merge
 
 **Approach**: The descriptor table is the single source of structural truth.
 `make-structural-unify-propagator` (elaborator-network.rkt:889) and
@@ -1070,17 +1128,52 @@ Generic merge handles tag mismatch (cons vs nil → ⊤).
 **5c: DFS backtracking with cell state.** Each `solve-app-goal` clause attempt
 needs an isolated cell state — if a clause fails, cell writes from that branch
 must not persist. Two strategies:
-- **Copy-on-branch**: Clone the prop-network at each branch point. Cheap because
-  CHAMP is persistent/immutable — "clone" is O(1) pointer copy.
+- **Copy-on-branch**: Clone the prop-network at each branch point. `struct-copy`
+  of the 13-field prop-network is ~13 pointer copies (~50ns). CHAMP maps inside
+  are structurally shared — only delta cells from each branch are new allocations.
 - **TMS worlds**: Use TMS assumption tagging to mark per-branch writes. Retract
   on failure. More aligned with long-term ATMS vision but higher complexity.
-- **Recommended**: Copy-on-branch for Phase 5. The immutable prop-network struct
-  makes this natural — just pass different networks to different branches.
+- **Recommended**: Copy-on-branch for Phase 5. This is explicitly **interim
+  infrastructure** — Part 3 (ATMS-world solver) replaces the entire DFS search
+  layer, retiring copy-on-branch entirely.
+
+**Live-branch analysis**: The DFS solver uses `append-map` over substitution
+results (`solve-goals`, relations.rkt:458-467). This is depth-first: one branch
+is fully explored before the next begins. At any given moment, only O(depth)
+branches are live on the call stack. For the 5-hop×5 benchmark (3125 total
+exploration paths), peak concurrent branches = 5 (the recursion depth). Each
+live branch holds ~10 cells delta → ~50 concurrent cells, not 31,250. Past
+branches' networks are garbage-collected as `append-map` returns.
+
+**Worklist draining**: Branch points occur at goal boundaries (`solve-app-goal`
+tries each matching clause). Before branching, each goal's unification runs to
+quiescence (the unify-propagator fires, decomposition completes, worklist
+drains). The branch receives a quiescent network with empty worklist. This
+matches the current pattern: `unify-terms` runs to completion within each
+clause attempt before the next attempt begins.
 
 **5d: Bridge retirement.** Remove `normalize-term-deep`, `solver-term->prologos-expr`,
 and `ground->prologos-expr`. Solver operates on AST nodes directly via descriptors.
 `walk*` (deep resolution for output) becomes "read cell-tree, reconstruct via
 descriptors."
+
+Explicit responsibility mapping (verified against codebase):
+```
+normalize-term-deep (relations.rkt:256-275) — 4 cases:
+  1. expr-logic-var mode-stripping (?/+/-) → resolved at cell creation time
+  2. expr-app → cons-list flattening      → descriptor extract-fn for App
+  3. expr-goal-app → keyword conversion    → descriptor for goal-app tag
+  4. passthrough (atoms)                   → no conversion needed
+
+ground->prologos-expr — reconstructs list→AST:
+  1. list→expr-app chain                  → descriptor reconstruct-fn for App
+  2. keyword→expr-goal-app                → descriptor reconstruct-fn for goal-app
+  3. cell value resolution (walk*)        → read-cell-tree traversal via cell-tree->sexp
+
+solver-term->prologos-expr — same as ground but preserves logic vars:
+  1. symbol→expr-logic-var               → cell reference (cell at type-bot = unresolved)
+  2. list reconstruction                  → descriptor reconstruct-fn
+```
 
 **Test**: solve-adversarial.prologos baseline must not regress >10%. Acceptance file
 §B (user-defined relations), §D (guards), §H (is-goal), §K (mixed rel/functional),
@@ -1091,12 +1184,29 @@ micro-level comparison.
 
 ### Phase 6: Fast-Path Preservation
 
-**What**: Ensure the 80% fast-path (pre-WHNF spine comparison, identical-pointer)
-still bypasses the propagator machinery entirely for System 1. For System 2, ensure
-simple ground-term equality (`equal?` after walk) still short-circuits without
-cell creation.
+**What**: Ensure the 80% fast-path still bypasses the propagator machinery entirely
+for System 1. For System 2, ensure simple ground-term equality (`equal?` after walk)
+still short-circuits without cell creation.
 
-**Test**: ok-classification micro-benchmarks. Full suite timing.
+**Fast-path survival analysis** (verified against unify.rkt:179-190):
+
+The current fast-path is `(equal? z1 z2)` on zonked (not WHNF-reduced) terms —
+Racket's structural `equal?`, not pointer `eq?`. After cell-tree migration:
+- Cell values ARE AST nodes (until decomposed). Two independently-constructed
+  but structurally-identical types have different cell-ids but identical cell
+  values. `equal?` on cell values still matches.
+- The fast-path *precedes* decomposition — it's the "don't decompose at all" path.
+  Cell-tree migration changes what happens during decomposition, not before it.
+- The second fast-path (spine-head comparison for App-vs-App before WHNF) also
+  survives: it reads cell values and compares spine heads.
+
+**Expected preservation**: The 80% fast-path rate should hold because the fast-path
+tests cell values (AST nodes), not cell structure (cell-ids). Monitoring plan:
+measure fast-path hit rate via `profile-unify.rkt` before and after each phase.
+Alert threshold: if fast-path rate drops below 70%, investigate before proceeding.
+
+**Test**: ok-classification micro-benchmarks. Fast-path hit rate measurement.
+Full suite timing.
 
 ### Phase 7: Callback Elimination (System 1)
 
@@ -1155,6 +1265,7 @@ reads cell values (may be type-bot for unsolved metas).
 | Full suite | 183s | ≤200s (10%) | ≤220s (20%) |
 | Cell allocation/cmd | ~82 | ≤100 | ≤120 |
 | Unify wall time % | 10% | ≤12% | ≤15% |
+| Propagators/cmd | ~200 (est.) | ≤400 | ≤600 |
 
 **Per-phase budget**: Phases 1-4 (System 1) must not regress type-adversarial by
 more than 2% each. Phase 5 (System 2) must not regress solve-adversarial by more
@@ -1367,12 +1478,47 @@ verified 10 code references against codebase (7/10 accurate, 2 minor line shifts
 - Completeness Over Deferral: both Systems 1 and 2 in scope rather than deferring System 2
 - Phase-Gated Implementation: 9 phases with sub-phases, clear A/B toggle strategy
 
-**Open for D.2 (external critique)**: The design is ready for adversarial external
-review. The three areas most likely to yield productive critique:
-1. The termination argument for deeply-nested or pathological types (§5.4)
-2. The copy-on-branch strategy for DFS backtracking (Phase 5c) — interaction with
-   the future ATMS-world transition (Part 3)
-3. The migration strategy during Phase 5 (mixed old-bridge + new-descriptor paths)
+### D.2 External Critique (2026-03-19)
+
+Comprehensive external review covering structural gaps, technical critique,
+risk analysis, methodology alignment, and implementation suggestions.
+
+**Accepted and applied to this revision**:
+
+| Critique Point | Resolution |
+|---------------|------------|
+| Missing phase dependency DAG | Added DAG before §6 showing Phase 1→2→3→4→7, Phase 1→5a→5b→5c→5d, Phase 6/8 after 4+5d |
+| No per-phase completion criteria | Added 7-item checklist + rollback protocol (>5% regression trigger) |
+| Phase 1 deliverables underspecified | Expanded to 11 items: added `recognizer-fn`, `validate-ctor-desc!`, `cell-tree->sexp`, `perf-inc-prop-alloc!`, `bench-descriptor.rkt` |
+| `ctor-desc` missing recognizer field | Added `recognizer-fn` field to struct definition |
+| Lattice formalization needs clarification | Added note: lattice is design vocabulary over standard propagator ops, not new runtime machinery |
+| Binder-opening pseudocode missing | Added explicit pseudocode in §5.6.3 `generic-decompose` for binder-depth handling |
+| Copy-on-branch memory analysis missing | Added live-branch analysis: O(depth) not O(total-paths), worklist draining at goal boundaries |
+| Bridge retirement responsibilities unclear | Added per-case mapping: all 4 `normalize-term-deep` cases → descriptor equivalents |
+| Fast-path survival unargued | Added analysis: `equal?` on cell values (AST nodes) survives; 80% rate preserved; 70% alert threshold |
+| No propagator count metric | Added to §8 performance budget: baseline ~200, target ≤400, hard limit ≤600 |
+
+**Pushed back with grounded reasoning**:
+
+| Critique Point | Pushback Rationale |
+|---------------|-------------------|
+| "Lattice formalization is aspirational" | The lattice IS the existing cell+propagator infrastructure with explicit vocabulary — not new runtime machinery. `term-lattice.rkt` already implements exactly this pattern. |
+| "Copy-on-branch allocates full network per branch" | `struct-copy` on 13-field prop-network is ~50ns (13 pointer copies). CHAMP sharing means delta-only allocation. Not "full network" copies. |
+| "Bridge retirement is too aggressive for Phase 5d" | Phase 5d retirement is restricted to System 2 only (4 cases in `normalize-term-deep`). System 1 bridge retirement happens at Phase 7. Each is narrow and testable. |
+| "Interim infrastructure (both paths) is untested" | The A/B toggle strategy from Track 7 is proven — `use-cell-primary-registry` ran both paths for 37 commits. Same pattern here. |
+| "Registry corruption needs formal invariants" | `validate-ctor-desc!` (accepted above) plus the descriptor registry is append-only (registered at module load, never mutated during elaboration). Append-only registries don't need corruption recovery. |
+| "GÖDEL_COMPLETENESS Level 1 insufficient" | Level 1 (Tarski fixpoint on finite lattice) is correct for PUnify. Level 2 (well-founded measure + SCC) is for trait resolution, which is a separate system. The levels are independent. |
+| "Should micro-benchmark generic-decompose early" | Accepted `bench-descriptor.rkt` in Phase 1 (see above) but pushed back on "should micro-benchmark the registry lookup" — one hash lookup at ~343 invocations is ~17µs total, below measurement noise. |
+
+**Clarification questions addressed**:
+
+| Question | Answer |
+|----------|--------|
+| Q1: How does lazy cell creation interact with TMS retraction? | On retraction, cells are invalidated (value → ⊥), not deleted. Decomposition cache (`cell-decomps`) entries persist as dead entries. `pair-decomps` propagators see ⊥ and stop — standard propagator monotonicity. |
+| Q2: What happens if two types unify to the same meta? | `identify-sub-cell` (elaborator-network.rkt:456-467) merges cells. This is the existing pattern for meta reuse — PUnify doesn't change it, just routes through it more often. |
+| Q3: How does copy-on-branch interact with constraint postponement? | System 2 currently has zero postponements (profiling data). Part 3 (ATMS-world) replaces DFS entirely, so postponement semantics become moot. For PUnify, the solver remains DFS with ground-term fast-path. |
+| Q4: Occurs check — cell-tree cycle vs logical cycle? | `occurs?` (unify.rkt:109-120) checks meta-in-term, not cell-tree cycles. Cell-trees are acyclic by construction (decomposition creates children, never back-edges). The occurs check remains a pre-solve-meta guard. |
+| Q5: Zonk semantics with cell indirection? | Zonk reads cell values, which are AST nodes — same as reading meta solutions today. The indirection is: meta → cell → AST value (vs current meta → CHAMP → AST value). `zonk-meta` already calls `lookup-meta-solution`; that function gains a cell-read path. |
 
 ---
 
@@ -1387,7 +1533,7 @@ review. The three areas most likely to yield productive critique:
 | 0e | Type-level unification profiling | ✅ | `364d043` |
 | D.1 | Design document (this file) | ✅ | `b12a891`, `349c9d2`, `bf0d21f` |
 | D.3 | Self-critique and alignment check | ✅ | This section |
-| D.2 | External critique | ⬜ | Ready for review |
+| D.2 | External critique | ✅ | Accepted 10 improvements, pushed back 7, addressed 5 questions |
 | 1 | Constructor descriptor registry | ⬜ | |
 | 2 | flex-rigid as cell write (System 1) | ⬜ | |
 | 3 | Pi decomposition as sub-cells (System 1) | ⬜ | |
