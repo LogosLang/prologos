@@ -1967,14 +1967,21 @@
        ;; path: (path :address.zip) — first-class path literal
        ;; Produces surf-path with parsed branches.
        [(path)
+        ;; Disambiguate: (path :key.sub) is a first-class path literal,
+        ;; but (path "hello") is the IO Path constructor — fall through.
+        (define first-raw (and (pair? args)
+                               (let ([a (car args)])
+                                 (if (syntax? a) (syntax->datum a) a))))
         (cond
-          [(null? args)
-           (parse-error loc "path requires at least one argument: (path :field.sub)" #f)]
-          [else
+          [(and (pair? args)
+                (or (keyword? first-raw)
+                    (keyword-like-symbol? first-raw)))
            (define raw-args (map (lambda (a) (if (syntax? a) (syntax->datum a) a)) args))
            (define branches (validate-selection-paths raw-args "path" loc))
            (if (prologos-error? branches) branches
-               (surf-path branches loc))])]
+               (surf-path branches loc))]
+          ;; Not a path literal — fall through to normal application (e.g., IO Path constructor)
+          [else (parse-application head-stx args loc)])]
 
        ;; get-in: (get-in target path-spec)
        ;; path-spec is parsed as selection paths, e.g., :address.zip or :address.{zip city}

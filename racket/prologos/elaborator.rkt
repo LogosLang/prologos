@@ -1849,6 +1849,19 @@
        (if (prologos-error? em) em
            (expr-map-vals em)))]
 
+    ;; path literal: #p(address.zip) → expr-path with elaborated segments
+    [(surf-path branches loc)
+     (expr-path
+      (for/list ([branch (in-list branches)])
+        (for/list ([seg (in-list branch)])
+          (cond
+            [(keyword? seg)
+             (expr-keyword (string->symbol (keyword->string seg)))]
+            [(and (symbol? seg) (memq seg '(* **)))
+             (expr-symbol seg)]
+            [else
+             (expr-keyword seg)]))))]
+
     ;; get-in: desugar to chained map-get calls
     ;; Single path:   (get-in m :a.b.c) → (map-get (map-get (map-get m :a) :b) :c)
     ;; Multiple paths: (get-in m :a.{b c}) → {kw-b (map-get (map-get m :a) :b)
@@ -1856,36 +1869,54 @@
     [(surf-get-in target paths loc)
      (let ([et (elaborate target env depth)])
        (if (prologos-error? et) et
-           (let ()
-             ;; Path segments are Racket keywords (#:zip); expr-keyword takes symbols
-             (define (seg->kw seg)
-               (expr-keyword (string->symbol (keyword->string seg))))
-             ;; Build a chained map-get for a single path
-             (define (path->chain base segs)
-               (foldl (lambda (seg acc)
-                        (expr-map-get acc (seg->kw seg)))
-                      base segs))
-             (cond
-               ;; Single path → return the leaf value
-               [(= (length paths) 1)
-                (path->chain et (car paths))]
-               ;; Multiple paths → build a map literal {leaf-key value ...}
-               [else
-                ;; Create fresh metas for the map literal's key/value types
-                (define km (fresh-meta ctx-empty (expr-hole)
-                             (meta-source-info loc 'map-key-type "key type of get-in projection" #f (env->name-stack env))))
-                (define vm (fresh-meta ctx-empty (expr-hole)
-                             (meta-source-info loc 'map-val-type "value type of get-in projection" #f (env->name-stack env))))
-                (let build-map ([remaining paths]
-                                [result (expr-map-empty km vm)])
-                  (cond
-                    [(null? remaining) result]
-                    [else
-                     (define path (car remaining))
-                     (define leaf-key (last path))  ;; last segment is the map key
-                     (define chain (path->chain et path))
-                     (build-map (cdr remaining)
-                                (expr-map-assoc result (seg->kw leaf-key) chain))]))]))))]
+           ;; Check if the path argument is an expression (surf-path, surf-var, etc.)
+           ;; vs raw keyword lists from selection-style parsing
+           (cond
+             ;; Single path arg that is an expression (surf-path or variable)
+             [(and (= (length paths) 1) (not (list? (car paths))))
+              (define elab-path (elaborate (car paths) env depth))
+              (if (prologos-error? elab-path) elab-path
+                  ;; Static path (literal expr-path): inline to chained map-get
+                  (if (expr-path? elab-path)
+                      (let ()
+                        (define branch (car (expr-path-branches elab-path)))
+                        (foldl (lambda (seg acc) (expr-map-get acc seg))
+                               et branch))
+                      ;; Dynamic path (variable): emit expr-get-in for runtime dispatch
+                      (expr-get-in et elab-path)))]
+             ;; Raw keyword lists (original behavior)
+             [else
+              (let ()
+                ;; Path segments are Racket keywords (#:zip); expr-keyword takes symbols
+                (define (seg->kw seg)
+                  (expr-keyword (string->symbol (keyword->string seg))))
+                ;; Build a chained map-get for a single path
+                (define (path->chain base segs)
+                  (foldl (lambda (seg acc)
+                           (expr-map-get acc (seg->kw seg)))
+                         base segs))
+                (cond
+                  ;; Single path → return the leaf value
+                  [(= (length paths) 1)
+                   (path->chain et (car paths))]
+                  ;; Multiple paths → build a map literal {leaf-key value ...}
+                  [else
+                   ;; Create fresh metas for the map literal's key/value types
+                   (define km (fresh-meta ctx-empty (expr-hole)
+                                (meta-source-info loc 'map-key-type "key type of get-in projection" #f (env->name-stack env))))
+                   (define vm (fresh-meta ctx-empty (expr-hole)
+                                (meta-source-info loc 'map-val-type "value type of get-in projection" #f (env->name-stack env))))
+                   (let build-map ([remaining paths]
+                                   [result (expr-map-empty km vm)])
+                     (cond
+                       [(null? remaining) result]
+                       [else
+                        (define path (car remaining))
+                        (define leaf-key (last path))  ;; last segment is the map key
+                        (define chain (path->chain et path))
+                        (build-map (cdr remaining)
+                                   (expr-map-assoc result (seg->kw leaf-key) chain))]
+                     ))]))])))]
 
     ;; update-in: desugar to nested map-get + map-assoc
     ;; (update-in m :a.b.c f) →
@@ -1903,20 +1934,44 @@
          [(not (= (length paths) 1))
           (parse-error loc "update-in requires exactly one path (no branching)" #f)]
          [else
-          (let ([segs (car paths)])
-            ;; Path segments are Racket keywords (#:zip); expr-keyword takes symbols
-            (define (seg->kw seg)
-              (expr-keyword (string->symbol (keyword->string seg))))
-            ;; Build the nested update structure
-            (define (build-update base segs)
-              (cond
-                [(null? segs) (expr-app ef base)]  ;; leaf: apply fn
-                [else
-                 (define key (car segs))
-                 (define sub-val (expr-map-get base (seg->kw key)))
-                 (define updated (build-update sub-val (cdr segs)))
-                 (expr-map-assoc base (seg->kw key) updated)]))
-            (build-update et segs))]))]
+          ;; Check if path is an expression (surf-path, variable) vs raw keyword list
+          (define first-path (car paths))
+          (cond
+            ;; Expression path (surf-path or variable)
+            [(not (list? first-path))
+             (define elab-path (elaborate first-path env depth))
+             (if (prologos-error? elab-path) elab-path
+                 ;; Static path: inline to nested map-get + map-assoc
+                 (if (expr-path? elab-path)
+                     (let ()
+                       (define segs (car (expr-path-branches elab-path)))
+                       (define (build-update base segs)
+                         (cond
+                           [(null? segs) (expr-app ef base)]
+                           [else
+                            (define key (car segs))
+                            (define sub-val (expr-map-get base key))
+                            (define updated (build-update sub-val (cdr segs)))
+                            (expr-map-assoc base key updated)]))
+                       (build-update et segs))
+                     ;; Dynamic path: emit expr-update-in for runtime
+                     (expr-update-in et elab-path ef)))]
+            ;; Raw keyword list (original behavior)
+            [else
+             (let ([segs first-path])
+               ;; Path segments are Racket keywords (#:zip); expr-keyword takes symbols
+               (define (seg->kw seg)
+                 (expr-keyword (string->symbol (keyword->string seg))))
+               ;; Build the nested update structure
+               (define (build-update base segs)
+                 (cond
+                   [(null? segs) (expr-app ef base)]  ;; leaf: apply fn
+                   [else
+                    (define key (car segs))
+                    (define sub-val (expr-map-get base (seg->kw key)))
+                    (define updated (build-update sub-val (cdr segs)))
+                    (expr-map-assoc base (seg->kw key) updated)]))
+               (build-update et segs))])]))]
 
     ;; ---- Set type and operations ----
     [(surf-set-type a loc)
