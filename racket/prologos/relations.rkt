@@ -153,20 +153,24 @@
   (cond
     [(equal? v1 v2) env2]
     [(symbol? v1)
-     ;; v1 is an unbound var — write v2 to its cell
-     (define env3 (solver-ensure-var env2 v1))
-     (define cid (hash-ref (solver-env-var-cells env3) v1))
-     (define new-pnet (net-cell-write (solver-env-pnet env3) cid v2))
-     (if (net-contradiction? new-pnet)
-         #f
-         (solver-env new-pnet (solver-env-var-cells env3)))]
+     ;; v1 is an unbound var — occurs check then write
+     (if (solver-term-occurs? env2 v1 v2) #f
+         (let ()
+           (define env3 (solver-ensure-var env2 v1))
+           (define cid (hash-ref (solver-env-var-cells env3) v1))
+           (define new-pnet (net-cell-write (solver-env-pnet env3) cid v2))
+           (if (net-contradiction? new-pnet)
+               #f
+               (solver-env new-pnet (solver-env-var-cells env3)))))]
     [(symbol? v2)
-     (define env3 (solver-ensure-var env2 v2))
-     (define cid (hash-ref (solver-env-var-cells env3) v2))
-     (define new-pnet (net-cell-write (solver-env-pnet env3) cid v1))
-     (if (net-contradiction? new-pnet)
-         #f
-         (solver-env new-pnet (solver-env-var-cells env3)))]
+     (if (solver-term-occurs? env2 v2 v1) #f
+         (let ()
+           (define env3 (solver-ensure-var env2 v2))
+           (define cid (hash-ref (solver-env-var-cells env3) v2))
+           (define new-pnet (net-cell-write (solver-env-pnet env3) cid v1))
+           (if (net-contradiction? new-pnet)
+               #f
+               (solver-env new-pnet (solver-env-var-cells env3)))))]
     [(and (list? v1) (list? v2))
      ;; PUnify Phase 5b: descriptor-aware decomposition for compound terms.
      ;; If both have a recognized constructor tag, decompose via descriptor.
@@ -530,6 +534,16 @@
 ;; Default depth limit for DFS search
 (define DEFAULT-DEPTH-LIMIT 100)
 
+;; PUnify Phase 8: Occurs check for the DFS solver (System 2).
+;; Prevents infinite terms from unify(X, f(X)).
+;; Works with both hasheq and solver-env via polymorphic `walk`.
+(define (solver-term-occurs? subst var term)
+  (let check ([t (walk subst term)])
+    (cond
+      [(eq? t var) #t]
+      [(list? t) (for/or ([elem (in-list t)]) (check (walk subst elem)))]
+      [else #f])))
+
 ;; Walk a substitution to fully resolve a term.
 ;; subst: hasheq or solver-env (PUnify Phase 5a dispatches on type)
 (define (walk subst term)
@@ -563,8 +577,10 @@
             [v2 (walk subst t2)])
         (cond
           [(equal? v1 v2) subst]
-          [(symbol? v1) (hash-set subst v1 v2)]
-          [(symbol? v2) (hash-set subst v2 v1)]
+          [(symbol? v1)
+           (if (solver-term-occurs? subst v1 v2) #f (hash-set subst v1 v2))]
+          [(symbol? v2)
+           (if (solver-term-occurs? subst v2 v1) #f (hash-set subst v2 v1))]
           [(and (list? v1) (list? v2) (= (length v1) (length v2)))
            (let loop ([ts1 v1] [ts2 v2] [s subst])
              (cond
