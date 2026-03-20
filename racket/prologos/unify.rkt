@@ -31,7 +31,9 @@
          "zonk.rkt"
          "source-location.rkt"
          "performance-counters.rkt"
-         "ctor-registry.rkt")  ;; PUnify Phase 1: current-punify-enabled? toggle
+         "ctor-registry.rkt"        ;; PUnify Phase 1: current-punify-enabled? toggle
+         "propagator.rkt"           ;; PUnify Phase 2: direct network access
+         "elaborator-network.rkt")  ;; PUnify Phase 2: elab-network-prop-net
 
 (provide unify unify-ok? occurs?
          ;; Backward-compat alias (unify* = unify after P1-G7)
@@ -121,6 +123,19 @@
       [else #f])))
 
 ;; ========================================
+;; PUnify Phase 2: Direct network contradiction check
+;; ========================================
+;; Replaces the callback indirection (current-prop-has-contradiction?) with
+;; direct access to the propagator network. When PUnify is enabled, we read
+;; the elab-network from current-prop-net-box and check net-contradiction?
+;; directly, bypassing the callback layer.
+
+(define (punify-has-contradiction?)
+  (define net-box (current-prop-net-box))
+  (and net-box
+       (net-contradiction? (elab-network-prop-net (unbox net-box)))))
+
+;; ========================================
 ;; Solve a bare (unapplied) metavariable
 ;; ========================================
 ;; P-U2a: After solve-meta!, check propagator network for contradictions.
@@ -140,10 +155,13 @@
      ;; P-U2a: Post-solve contradiction check via propagator network.
      ;; solve-meta! writes to cell + runs quiescence, which may trigger
      ;; transitive propagation that reveals inconsistencies.
-     (define check-fn (current-prop-has-contradiction?))
-     (if (and check-fn (check-fn))
-         #f   ;; Propagator network detected contradiction
-         #t)]))
+     ;; PUnify Phase 2: direct network access replaces callback indirection.
+     (if (current-punify-enabled?)
+         (if (punify-has-contradiction?) #f #t)
+         (let ([check-fn (current-prop-has-contradiction?)])
+           (if (and check-fn (check-fn))
+               #f
+               #t)))]))
 
 ;; ========================================
 ;; Core Unification
@@ -616,10 +634,13 @@
      ;; Solve by inversion: construct lambda abstraction
      (solve-meta! id (invert-args args rhs))
      ;; P-U2a: Post-solve contradiction check (same as solve-flex-rigid)
-     (define check-fn (current-prop-has-contradiction?))
-     (if (and check-fn (check-fn))
-         #f
-         #t)]))
+     ;; PUnify Phase 2: direct network access replaces callback indirection.
+     (if (current-punify-enabled?)
+         (if (punify-has-contradiction?) #f #t)
+         (let ([check-fn (current-prop-has-contradiction?)])
+           (if (and check-fn (check-fn))
+               #f
+               #t)))]))
 
 ;; Construct a lambda abstraction that, when applied to the original arguments,
 ;; produces the RHS.
@@ -758,11 +779,20 @@
   (define result (unify-core ctx t1 t2))
   ;; Post-unification consistency check with propagator network.
   ;; Quiescence already ran inside solve-meta! (if any metas were solved).
-  (define check-fn (current-prop-has-contradiction?))
+  ;; PUnify Phase 2: direct network access replaces callback indirection.
+  (define (check-contradiction)
+    (if (current-punify-enabled?)
+        (punify-has-contradiction?)
+        (let ([check-fn (current-prop-has-contradiction?)])
+          (and check-fn (check-fn)))))
   (cond
-    [(not check-fn) result]  ;; No network (test context) → pass through
+    ;; No network (test context): pass through result unchanged.
+    ;; PUnify path always has a network; legacy path checks callback presence.
+    [(and (not (current-punify-enabled?))
+          (not (current-prop-has-contradiction?)))
+     result]
     ;; If unify-core said #t or 'postponed but network has contradiction → downgrade to #f
-    [(and (not (eq? result #f)) (check-fn)) #f]
+    [(and (not (eq? result #f)) (check-contradiction)) #f]
     ;; If unify-core returned 'postponed, check if quiescence resolved
     ;; the constraint via transitive propagation. If the most recent constraint
     ;; added during this call was solved by retry-via-cells, upgrade to #t.
