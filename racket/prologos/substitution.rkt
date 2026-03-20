@@ -275,6 +275,11 @@
     ;; Path values (no free variables — branches are keywords/symbols)
     [(expr-path _) e]
     [(expr-Path) e]
+    ;; Dynamic path operations (sub-expressions may have free vars)
+    [(expr-get-in target paths)
+     (expr-get-in (shift delta cutoff target) (shift delta cutoff paths))]
+    [(expr-update-in target paths fn)
+     (expr-update-in (shift delta cutoff target) (shift delta cutoff paths) (shift delta cutoff fn))]
 
     ;; Transient Builders (all non-binding)
     [(expr-transient c) (expr-transient (shift delta cutoff c))]
@@ -725,6 +730,11 @@
     ;; Path values (no free variables)
     [(expr-path _) e]
     [(expr-Path) e]
+    ;; Dynamic path operations
+    [(expr-get-in target paths)
+     (expr-get-in (subst k s target) (subst k s paths))]
+    [(expr-update-in target paths fn)
+     (expr-update-in (subst k s target) (subst k s paths) (subst k s fn))]
 
     ;; Transient Builders (all non-binding)
     [(expr-transient c) (expr-transient (subst k s c))]

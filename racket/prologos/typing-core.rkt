@@ -1171,6 +1171,19 @@
     ;; ---- Path type and literals ----
     [(expr-Path) (expr-Type (lzero))]
     [(expr-path _) (expr-Path)]
+    ;; Dynamic path operations
+    [(expr-get-in target paths)
+     (define _tt (infer ctx target))
+     (define _pt (infer ctx paths))
+     ;; Result type is a fresh meta (dynamic paths can't be statically resolved)
+     (fresh-meta ctx-empty (expr-hole)
+       (meta-source-info #f 'get-in-result "result type of dynamic get-in" #f '()))]
+    [(expr-update-in target paths fn)
+     (define tt (infer ctx target))
+     (define _pt (infer ctx paths))
+     (define _ft (infer ctx fn))
+     ;; update-in returns same type as target
+     tt]
 
     ;; ---- Char type and literals ----
     [(expr-Char) (expr-Type (lzero))]

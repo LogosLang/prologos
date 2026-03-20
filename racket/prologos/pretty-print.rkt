@@ -414,6 +414,10 @@
          (format "#p(~a)" (pp-branch (car branches)))
          (format "#p(~a)" (string-join (map pp-branch branches) " | ")))]
     [(expr-Path) "Path"]
+    [(expr-get-in target paths)
+     (format "[get-in ~a ~a]" (pp-expr target names) (pp-expr paths names))]
+    [(expr-update-in target paths fn)
+     (format "[update-in ~a ~a ~a]" (pp-expr target names) (pp-expr paths names) (pp-expr fn names))]
     [(expr-pvec-nth v i) (format "[pvec-nth ~a ~a]" (pp-expr v names) (pp-expr i names))]
     [(expr-pvec-update v i x) (format "[pvec-update ~a ~a ~a]" (pp-expr v names) (pp-expr i names) (pp-expr x names))]
     [(expr-pvec-length v) (format "[pvec-length ~a]" (pp-expr v names))]
@@ -1058,6 +1062,8 @@
     ;; Path values — no bound variables
     [(expr-path _) #f]
     [(expr-Path) #f]
+    [(expr-get-in target paths) (or (uses-bvar0? target) (uses-bvar0? paths))]
+    [(expr-update-in target paths fn) (or (uses-bvar0? target) (uses-bvar0? paths) (uses-bvar0? fn))]
     [(expr-pvec-nth v i) (or (uses-bvar0? v) (uses-bvar0? i))]
     [(expr-pvec-update v i x) (or (uses-bvar0? v) (uses-bvar0? i) (uses-bvar0? x))]
     [(expr-pvec-length v) (uses-bvar0? v)]

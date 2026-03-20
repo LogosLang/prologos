@@ -3373,6 +3373,33 @@
     ;; Path normalization
     [(expr-Path) e]
     [(expr-path _) e]
+    ;; Dynamic path operations — reduce target/path, then navigate
+    [(expr-get-in target paths)
+     (define nt (nf target))
+     (define np (nf paths))
+     (cond
+       ;; Static path on concrete target: walk segments
+       [(and (expr-path? np) (pair? (expr-path-branches np)))
+        (define segs (car (expr-path-branches np)))
+        (foldl (lambda (seg acc) (nf (expr-map-get acc seg))) nt segs)]
+       [else (expr-get-in nt np)])]
+    [(expr-update-in target paths fn)
+     (define nt (nf target))
+     (define np (nf paths))
+     (define nf-fn (nf fn))
+     (cond
+       [(and (expr-path? np) (pair? (expr-path-branches np)))
+        (define segs (car (expr-path-branches np)))
+        (define (build base segs)
+          (cond
+            [(null? segs) (nf (expr-app nf-fn base))]
+            [else
+             (define key (car segs))
+             (define sub (nf (expr-map-get base key)))
+             (define updated (build sub (cdr segs)))
+             (expr-map-assoc base key updated)]))
+        (build nt segs)]
+       [else (expr-update-in nt np nf-fn)])]
 
     ;; Char normalization
     [(expr-Char) e]

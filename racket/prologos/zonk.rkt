@@ -260,6 +260,10 @@
     ;; Path values (ground — no metas)
     [(expr-path _) e]
     [(expr-Path) e]
+    [(expr-get-in target paths)
+     (expr-get-in (zonk target) (zonk paths))]
+    [(expr-update-in target paths fn)
+     (expr-update-in (zonk target) (zonk paths) (zonk fn))]
 
     ;; Transient Builders
     [(expr-transient c) (expr-transient (zonk c))]
@@ -700,6 +704,10 @@
     ;; Path values (ground)
     [(expr-path _) e]
     [(expr-Path) e]
+    [(expr-get-in target paths)
+     (expr-get-in (zonk-at-depth depth target) (zonk-at-depth depth paths))]
+    [(expr-update-in target paths fn)
+     (expr-update-in (zonk-at-depth depth target) (zonk-at-depth depth paths) (zonk-at-depth depth fn))]
 
     ;; Transient Builders
     [(expr-transient c) (expr-transient (zonk-at-depth depth c))]
@@ -1114,6 +1122,10 @@
     ;; Path values (ground)
     [(expr-path _) e]
     [(expr-Path) e]
+    [(expr-get-in target paths)
+     (expr-get-in (default-metas target) (default-metas paths))]
+    [(expr-update-in target paths fn)
+     (expr-update-in (default-metas target) (default-metas paths) (default-metas fn))]
 
     ;; Transient Builders
     [(expr-transient c) (expr-transient (default-metas c))]

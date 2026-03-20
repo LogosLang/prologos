@@ -998,6 +998,24 @@
     ;; Path
     [(expr-Path) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-path _) (tu (expr-Path) (zero-usage n))]
+    ;; Dynamic path operations
+    [(expr-get-in target paths)
+     (let ([r1 (inferQ ctx target)]
+           [r2 (inferQ ctx paths)])
+       (match* (r1 r2)
+         [((tu _ u1) (tu _ u2))
+          (tu (fresh-meta ctx-empty (expr-hole)
+                (meta-source-info #f 'get-in-result "result type of dynamic get-in" #f '()))
+              (add-usage u1 u2))]
+         [(_ _) (tu-error)]))]
+    [(expr-update-in target paths fn)
+     (let ([r1 (inferQ ctx target)]
+           [r2 (inferQ ctx paths)]
+           [r3 (inferQ ctx fn)])
+       (match* (r1 r2 r3)
+         [((tu t1 u1) (tu _ u2) (tu _ u3))
+          (tu t1 (add-usage u1 (add-usage u2 u3)))]
+         [(_ _ _) (tu-error)]))]
     ;; Char
     [(expr-Char) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-char _) (tu (expr-Char) (zero-usage n))]
