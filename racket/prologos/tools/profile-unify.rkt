@@ -119,7 +119,7 @@
 (define (profile-file path)
   (define up (make-unify-profile))
   (define pt (phase-timings 0 0 0 0 0 0 0))
-  (define pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
+  (define pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
   (define t0 (current-inexact-monotonic-milliseconds))
   (define results
     (parameterize ([current-unify-profile up]

@@ -34,6 +34,7 @@
  perf-inc-resolution-cycle!
  perf-inc-prop-firing!
  perf-inc-cell-alloc!
+ perf-inc-prop-alloc!
 
  ;; Lifecycle
  with-perf-counters
@@ -128,7 +129,8 @@
    ;; Track 7 Phase 0b: per-command instrumentation counters
    resolution-cycles      ;; iterations of run-stratified-resolution! loop
    prop-firings           ;; propagator firings in run-to-quiescence
-   cell-allocs)           ;; cells allocated via net-new-cell
+   cell-allocs            ;; cells allocated via net-new-cell
+   prop-allocs)           ;; propagators allocated via net-add-propagator
   #:mutable #:transparent)
 
 ;; Parameter: #f = disabled (default), perf-counters struct = enabled
@@ -203,13 +205,17 @@
   (let ([pc (current-perf-counters)])
     (when pc (set-perf-counters-cell-allocs! pc (add1 (perf-counters-cell-allocs pc))))))
 
+(define-syntax-rule (perf-inc-prop-alloc!)
+  (let ([pc (current-perf-counters)])
+    (when pc (set-perf-counters-prop-allocs! pc (add1 (perf-counters-prop-allocs pc))))))
+
 ;; ============================================================
 ;; Lifecycle
 ;; ============================================================
 
 ;; with-perf-counters: set up fresh counters, run body, return (values result pc)
 (define-syntax-rule (with-perf-counters body ...)
-  (let ([pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)])
+  (let ([pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)])
     (parameterize ([current-perf-counters pc])
       (let ([result (begin body ...)])
         (values result pc)))))
@@ -230,7 +236,8 @@
   (set-perf-counters-zonk-steps! pc 0)
   (set-perf-counters-resolution-cycles! pc 0)
   (set-perf-counters-prop-firings! pc 0)
-  (set-perf-counters-cell-allocs! pc 0))
+  (set-perf-counters-cell-allocs! pc 0)
+  (set-perf-counters-prop-allocs! pc 0))
 
 ;; Snapshot to immutable hasheq (for JSON serialization)
 (define (perf-counters->hasheq pc)
@@ -248,7 +255,8 @@
           'zonk_steps        (perf-counters-zonk-steps pc)
           'resolution_cycles (perf-counters-resolution-cycles pc)
           'prop_firings      (perf-counters-prop-firings pc)
-          'cell_allocs       (perf-counters-cell-allocs pc)))
+          'cell_allocs       (perf-counters-cell-allocs pc)
+          'prop_allocs       (perf-counters-prop-allocs pc)))
 
 ;; ============================================================
 ;; Subprocess reporting
