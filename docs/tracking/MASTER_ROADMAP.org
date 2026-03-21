@@ -38,13 +38,24 @@ Audits) are defined.
 | Track 6 | Driver simplification + cleanup | [[file:2026-03-17_TRACK6_DRIVER_SIMPLIFICATION_PIR.md][PIR]] | Parameterize 30→13, callback elimination, first clean suite |
 | Track 7 | Persistent registry cells + stratified retraction | [[file:2026-03-18_TRACK7_PIR.md][PIR]] | 29 persistent cells, S(−1) retraction, readiness propagators, pure resolution |
 
-*** Active Track
+*** Pending Tracks
 
 | Track | Description | Status | Design/Audit |
 |-------+-------------+--------+--------------|
-| Track 8 | Infrastructure audit → design | Audit complete, design pending | [[file:2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.md][Audit (2026-03-18)]] |
+| Track 8 | Infrastructure migration (imperative state → propagator cells) | Audit complete, design pending | [[file:2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.md][Audit (2026-03-18)]] |
+| Track 9 | General Diagnostic Engine (GDE) — multi-hypothesis conflict analysis | Not started | Depends on Track 8 |
+| Track 10 | LSP Integration — incremental re-elaboration, live diagnostics | Not started | Depends on Track 9 |
 
 Track 8 is a dependency for CIU Series Tracks 3–5 and may benefit BSP-LE.
+
+*Note on PUnify*: PUnify Parts 1–2 originated as the first half of Track
+8's scope (cell-tree unification for the type-level and solver-level
+systems). The scope was large enough that it was broken out as an
+independent effort with its own design documents and PIR. PUnify's
+cell-tree infrastructure is now a prerequisite for BSP-LE Track 2 (ATMS
+Solver). Track 8's remaining scope focuses on the second half:
+imperative state migration, callback elimination, and module
+restructuring.
 
 ** 2. BSP-LE  — /The Logic Engine, realized on propagators/
 
@@ -103,24 +114,30 @@ any Series.
 | First-Class Paths | 2026-03-20 | [[file:2026-03-20_FIRST_CLASS_PATHS_DESIGN.md][Design]] | — | Phases 0–7c: 14-file pipeline, broadcast ~.*field~, renaming ~^~. Phase 8 (Lens) deferred. |
 | First-Class Traits | 2026-03-09 | [[file:2026-03-09_FIRST_CLASS_TRAITS_STAGE3_DESIGN.md][Design]] | [[file:2026-03-09_FIRST_CLASS_TRAITS_PIR.md][PIR]] | All 11 sub-phases: trait/impl/bundle/spec/defn/schema surface syntax. |
 | FL Narrowing | 2026-03-07 | [[file:2026-03-07_FL_NARROWING_DESIGN.md][Design (.org)]] | [[file:2026-03-08_FL_NARROWING_PIR.md][PIR]] | Definitional trees, residuation-first, term lattice. |
+| Narrowing + Abstract Interp | 2026-03-07 | [[file:2026-03-07_NARROWING_ABSTRACT_INTERPRETATION_DESIGN.md][Design]] | — | All phases ✅: DT extraction, term lattice, narrowing propagator. |
 | IO Implementation | 2026-03-05 | [[file:2026-03-05_IO_IMPLEMENTATION_DESIGN.md][Design]] | [[file:2026-03-06_IO_IMPLEMENTATION_PIR.md][PIR]] | IO-A through IO-J: file, net, session IO. |
+| Effectful Computation (A+D) | 2026-03-07 | [[file:2026-03-07_ARCHITECTURE_AD_IMPLEMENTATION_DESIGN.md][Design]] | [[file:2026-03-07_ARCHITECTURE_AD_PIR.md][PIR]] | AD-A through AD-F: effect position lattice, Galois bridge, effect ordering, executor, ATMS branching. |
 | Session Types | 2026-03-03 | [[file:2026-03-03_SESSION_TYPE_DESIGN.md][Design]] | [[file:2026-03-04_SESSION_TYPE_PIR.md][PIR]] | Protocol types, duality, propagator-based session checking. |
 | Explain / Provenance | 2026-03-14 | [[file:2026-03-14_EXPLAIN_PROVENANCE_DESIGN.md][Design]] | — | All 7 phases complete: derivation trees for relational queries. |
 | Well-Founded LE | 2026-03-14 | [[file:2026-03-14_WELL_FOUNDED_LOGIC_ENGINE_DESIGN.md][Design]] | [[file:2026-03-14_WFLE_PIR.md][PIR]] | Bilattice oracle, WF-NAF, 3-valued negation. |
-| PUnify Parts 1–2 | 2026-03-19 | [[file:2026-03-19_PUNIFY_STRUCTURAL_UNIFICATION_PROPAGATORS.org][P1 Design]], [[file:2026-03-19_PUNIFY_PART2_CELL_TREE_ARCHITECTURE.md][P2 Design]] | [[file:2026-03-19_PUNIFY_PARTS1_2_PIR.md][PIR]] | Cell-tree unification, descriptor registry, polymorphic solver dispatch. |
+| Propagator Visualization | 2026-03-12 | [[file:2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md][Design]] | — | Phases 0–5c ✅: trace capture, JSON serialization, LSP handler, WebView graph, timeline slider. 5d + 6a-6d deferred. |
+| PUnify Parts 1–2 | 2026-03-19 | [[file:2026-03-19_PUNIFY_STRUCTURAL_UNIFICATION_PROPAGATORS.org][P1 Design]], [[file:2026-03-19_PUNIFY_PART2_CELL_TREE_ARCHITECTURE.md][P2 Design]] | [[file:2026-03-19_PUNIFY_PARTS1_2_PIR.md][PIR]] | Cell-tree unification, descriptor registry, polymorphic solver dispatch. Breakout from Track 8 first half. |
 
-* Standalone Design Documents (Not Yet Tracked as Series/Tracks)
+* Standalone Design Documents (Not Yet Implemented / Future Scope)
 
-These design documents exist but are not currently scoped into active
-work. They may be promoted to Tracks when their prerequisites are met.
+Design documents that exist but are not currently scoped into active
+work. They may be promoted to Tracks when their prerequisites are met
+or the project roadmap reaches them.
 
 | Document | Status | Notes |
 |----------+--------+-------|
-| [[file:2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md][Propagator Visualization]] | Stage 2-3 design | Phases 5d, 6a-6d deferred (DEFERRED.md) |
-| [[file:2026-03-07_ARCHITECTURE_AD_IMPLEMENTATION_DESIGN.md][Effectful Computation (Architecture A+D)]] | Design complete, not started | 16 sub-phases; not blocked |
-| [[file:2026-03-19_TRACK10_DESIGN_NOTES.md][Track 10 Design Notes (Provenance)]] | Notes only | Two-tier provenance, LSP integration |
+| [[file:2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md][Capabilities as Types]] | Design complete, not started | Capability hierarchy, QTT enforcement, ATMS provenance |
+| [[file:2026-03-05_IO_LIBRARY_DESIGN_V2.md][IO Library V2]] | Design/research | Extended IO: Bytes type, binary IO, SQLite FFI |
+| [[file:2026-03-01_1200_IO_LIBRARY_DESIGN.md][IO Library V1]] | Superseded by V2 | Original IO design |
+| [[file:2026-03-19_TRACK10_DESIGN_NOTES.md][Track 10 Design Notes (Provenance)]] | Notes only | Two-tier provenance, LSP integration; scoped under Propagator Migration Track 10 |
+| [[file:2026-03-06_1400_RELATIONAL_FACT_DESIGN.md][Relational Fact Design]] | Design discussion | Captured from mobile session |
 | [[file:2026-03-03_PATH_ALGEBRA_DESIGN.md][Path Algebra]] | Superseded | Extended by First-Class Paths |
-| [[file:2026-03-02_2200_SCHEMA_SELECTION_DESIGN.md][Schema/Selection]] | Complete | Implemented as part of First-Class Traits |
+| [[file:2026-03-02_2200_SCHEMA_SELECTION_DESIGN.md][Schema/Selection]] | Implemented | Part of First-Class Traits |
 
 * Audits
 
