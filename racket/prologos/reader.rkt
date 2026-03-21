@@ -118,7 +118,8 @@
            (char=? c #\')
            (char=? c #\/)    ; qualified names
            (char=? c #\=)    ; for => and similar
-           (char=? c #\$)))) ; for $-prefixed identifiers
+           (char=? c #\$)    ; for $-prefixed identifiers
+           (char=? c #\^)))) ; for key^rename in path contexts
 
 (define (delimiter? c)
   (and (char? c)

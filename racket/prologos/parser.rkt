@@ -3266,14 +3266,20 @@
 (define (validate-selection-paths items clause-name loc)
   (define (parse-path-string s)
     ;; s is the string after stripping leading ':', e.g. "address.zip", "address.*"
+    ;; Segments may contain ^ for key renaming: "name^alias" → (cons #:name #:alias)
     (define segments (string-split s "."))
     (for/list ([seg (in-list segments)])
       (cond
         [(string=? seg "*")  '*]
         [(string=? seg "**") '**]
         [(string=? seg "")
-         ;; Empty segment from trailing dot — shouldn't happen in final paths
          (parse-error loc (format "selection :~a: empty path segment in ~a" clause-name s) #f)]
+        [(let ([parts (string-split seg "^")])
+           (and (= (length parts) 2) parts))
+         => (lambda (parts)
+              ;; Key renaming: "name^alias" → (cons #:name #:alias)
+              (cons (string->keyword (car parts))
+                    (string->keyword (cadr parts))))]
         [else (string->keyword seg)])))
   (define (brace-params? x)
     (and (pair? x) (or (eq? (car x) '$brace-params)
@@ -3281,6 +3287,7 @@
                              (eq? (syntax-e (car x)) '$brace-params)))))
   (define (path-segments->prefix-string segs)
     ;; Convert path segments (#:a #:b) back to prefix string "a.b"
+    ;; Rename pairs (cons #:a #:b) → "a^b"
     ;; Note: can't use (keyword? seg) here — shadowed by parser's own keyword?
     ;; which checks Prologos keywords. Path segments from string->keyword are
     ;; Racket keywords; wildcard segments are symbols '* / '**.
@@ -3289,6 +3296,7 @@
         (cond
           [(eq? seg '*)   "*"]
           [(eq? seg '**)  "**"]
+          [(pair? seg) (string-append (keyword->string (car seg)) "^" (keyword->string (cdr seg)))]
           [else (keyword->string seg)])))
     ;; Join with "." separator (no racket/string dependency)
     (if (null? parts) ""

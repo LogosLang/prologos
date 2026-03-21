@@ -202,32 +202,24 @@ nested-maps.*a.b                   ;; => '[100 200 300]
 ;;
 ;; Rename keys in projection results — SQL SELECT ... AS equivalent.
 
-;; Aspirational api-user (heterogeneous nested maps — QTT bug blocks this today):
-;; def api-user := {:user-name "Pete" :id 1234 :address {:zip 12345 :city "Springfield"}}
 ;; Baseline api-user for canary (homogeneous string map):
 def api-user := {:user-name "Pete" :id "1234" :address-city "Springfield"}
 
-;; F1: Simple rename (uses aspirational api-user)
+;; F1: Simple rename via get-in branching path
+[get-in api-user :user-name^name :id^userId]
+;; => {:name "Pete" :userId "1234"}
+
+;; F2: Rename with no-rename mix
+[get-in api-user :user-name^name :address-city]
+;; => {:name "Pete" :address-city "Springfield"}
+
+;; F3: Dot-access branching with ^ — deferred (reader needs brace-expansion awareness)
 ;; api-user.{user-name^name id^userId}
-;; => {:name "Pete" :userId 1234}
 
-;; F2: Deep path with rename on leaf (uses aspirational api-user)
-;; api-user.{user-name^name address.city^location}
-;; => {:name "Pete" :location "Springfield"}
+;; F4: Rename NOT allowed in update-in (should be a parse error)
+;; [update-in api-user :user-name^name str::upper]   ;; PARSE ERROR
 
-;; F3: Branching with partial renames (uses aspirational api-user)
-;; api-user.{user-name^name address.{zip city^loc}}
-;; => {:name "Pete" :zip 12345 :loc "Springfield"}
-
-;; F4: Rename in get-in with path literal (works with baseline api-user)
-;; [get-in api-user #p(user-name^name)]
-;; => {:name "Pete"}
-
-;; F5: Rename NOT allowed in update-in (should be a parse error)
-;; [update-in api-user #p(user-name^name) str::upper]   ;; PARSE ERROR
-
-;; F6: Broadcast + rename composition
-;; def users := '[{:user-name "A" :id 1}, {:user-name "B" :id 2}]
+;; F5: Broadcast + rename composition — deferred (needs broadcast + get-in fusion)
 ;; users.*{user-name^name id}
 ;; => '[{:name "A" :id 1} {:name "B" :id 2}]
 

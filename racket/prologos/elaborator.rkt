@@ -1891,13 +1891,22 @@
              ;; Raw keyword lists (original behavior)
              [else
               (let ()
-                ;; Path segments are Racket keywords (#:zip); expr-keyword takes symbols
-                (define (seg->kw seg)
-                  (expr-keyword (string->symbol (keyword->string seg))))
+                ;; Path segments are Racket keywords (#:zip) or rename pairs (cons #:name #:alias).
+                ;; For navigation, use the original key; for result map keys, use the rename if present.
+                (define (seg->nav-kw seg)
+                  ;; Navigation key — the actual field to look up
+                  (if (pair? seg)
+                      (expr-keyword (string->symbol (keyword->string (car seg))))
+                      (expr-keyword (string->symbol (keyword->string seg)))))
+                (define (seg->result-kw seg)
+                  ;; Result key — renamed key if present, otherwise original
+                  (if (pair? seg)
+                      (expr-keyword (string->symbol (keyword->string (cdr seg))))
+                      (expr-keyword (string->symbol (keyword->string seg)))))
                 ;; Build a chained map-get for a single path
                 (define (path->chain base segs)
                   (foldl (lambda (seg acc)
-                           (expr-map-get acc (seg->kw seg)))
+                           (expr-map-get acc (seg->nav-kw seg)))
                          base segs))
                 (cond
                   ;; Single path → return the leaf value
@@ -1916,10 +1925,10 @@
                        [(null? remaining) result]
                        [else
                         (define path (car remaining))
-                        (define leaf-key (last path))  ;; last segment is the map key
+                        (define leaf-seg (last path))  ;; last segment — may have rename
                         (define chain (path->chain et path))
                         (build-map (cdr remaining)
-                                   (expr-map-assoc result (seg->kw leaf-key) chain))]
+                                   (expr-map-assoc result (seg->result-kw leaf-seg) chain))]
                      ))]))])))]
 
     ;; update-in: desugar to nested map-get + map-assoc
@@ -1937,6 +1946,10 @@
          ;; update-in only makes sense for a single path
          [(not (= (length paths) 1))
           (parse-error loc "update-in requires exactly one path (no branching)" #f)]
+         ;; Key renaming (^) is not allowed in update-in
+         [(and (list? (car paths))
+               (ormap pair? (car paths)))
+          (parse-error loc "update-in does not support key renaming (^)" #f)]
          [else
           ;; Check if path is an expression (surf-path, variable) vs raw keyword list
           (define first-path (car paths))
