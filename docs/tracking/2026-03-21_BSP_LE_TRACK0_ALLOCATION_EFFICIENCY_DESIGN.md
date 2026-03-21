@@ -1,7 +1,7 @@
 # BSP-LE Track 0: Propagator Allocation Efficiency — Stage 3 Design
 
 **Date**: 2026-03-21
-**Status**: Draft (D.1 — awaiting critique)
+**Status**: Draft (D.2 — incorporating external critique)
 **Parent**: BSP-LE Series ([Master Roadmap](2026-03-21_BSP_LE_MASTER.md))
 **Audit**: [Cell & Propagator Allocation Audit](2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md) (commit `f7bd03d`)
 **Prerequisite**: None — unblocked, first in implementation order
@@ -13,14 +13,19 @@
 
 | # | Phase | Description | Status | Commit | Notes |
 |---|-------|-------------|--------|--------|-------|
-| 0 | Acceptance + baselines | Micro-benchmarks + A/B baselines | ⬜ | | Establish pre-optimization numbers |
+| 0 | Acceptance + baselines | Micro-benchmarks + A/B + memory baselines | ⬜ | | Establish pre-optimization numbers |
 | 1 | eq?-first fast path | `net-cell-write` fixpoint check | ⬜ | | Quick win, no architectural change |
-| 2 | Merge identity audit | All merge functions return identical input on no-change | ⬜ | | Enables eq?-only fixpoint check |
-| 3 | Mutable worklist/fuel | Box-based worklist inside quiescence loop | ⬜ | | Highest per-iteration win |
-| 4 | Field-group struct split | prop-network → hot/warm/cold inner structs | ⬜ | | Largest total impact, biggest change surface |
-| 5 | Batch cell registration | Transient CHAMP for multi-cell setup | ⬜ | | Eliminates dead intermediate networks |
-| 6 | Propagator input batching | Transient CHAMP for multi-input registration | ⬜ | | Follow-on to Phase 5 pattern |
-| 7 | Verification + A/B | Full suite + comparative benchmarks | ⬜ | | Quantify total improvement |
+| 2 | Merge identity audit | All merge functions return identical input on no-change | ⬜ | | Enables eq?-only fixpoint; includes ctor-registry generators |
+| 3 | Struct split + mutable worklist | Combined: hot/warm/cold split + box-based worklist | ⬜ | | Landed together — drain pattern requires 2-field hot struct |
+| 3a | Struct-copy site classification | Classify 25 sites by hot/warm/cold group | ⬜ | | Design deliverable before code changes |
+| 3b | Inner struct definitions + accessor macros | Define hot/warm/cold structs + zero-cost macro wrappers | ⬜ | | Compatibility layer: `(prop-network-cells net)` macro |
+| 3c | Mutable worklist/fuel + hot struct | Box-based worklist, drain-and-clear on 2-field hot | ⬜ | | Per-iteration allocation → zero |
+| 3d | Warm-group cell write | `net-cell-write` copies only warm group | ⬜ | | Per-cell-write: 13-field → 2-field |
+| 3e | Cold-group allocation ops | `net-new-cell`/`net-add-propagator` copy cold group | ⬜ | | Allocation-time only |
+| 3f | Remove accessor macros | Replace wrappers with direct inner-struct access | ⬜ | | Cleanup after all sites migrated |
+| 4 | Batch cell registration | Transient CHAMP + next-cell-id range pre-allocation | ⬜ | | Eliminates dead intermediate networks |
+| 5 | Propagator input batching | Transient CHAMP for multi-input registration | ⬜ | | Follow-on to Phase 4 pattern |
+| 6 | Verification + A/B | Full suite + comparative benchmarks + memory | ⬜ | | Target: ≤180s suite (10-20% improvement) |
 
 ---
 
@@ -66,7 +71,9 @@ The phases are ordered by the audit's priority ranking, with adjustments for dep
 
 3. **Per-command verbose**: Run a representative module with `process-file #:verbose #t` and capture `cell_allocs` and `prop_firings` per command as a profile.
 
-4. **Acceptance file**: Not a `.prologos` file — this Track is infrastructure-only. Instead, the acceptance criterion is: **full test suite passes with identical results, and A/B benchmarks show measurable improvement**.
+4. **Memory baseline**: `(collect-garbage 'major)` + `(current-memory-use)` before and after processing a representative module. Establishes retained-memory baseline — the persistent CHAMP structure means old intermediate networks may be retained by closures or parameters.
+
+5. **Acceptance file**: Not a `.prologos` file — this Track is infrastructure-only. Instead, the acceptance criterion is: **full test suite passes with identical results, and A/B benchmarks show measurable improvement**.
 
 ### Phase 1: eq?-First Fast Path in Cell Write
 
@@ -91,7 +98,7 @@ The phases are ordered by the audit's priority ranking, with adjustments for dep
 - `merge-hasheq-union` (infra-cell.rkt)
 - `merge-hasheq-list-append` (infra-cell.rkt)
 - `merge-list-append` (infra-cell.rkt)
-- Any merge functions created by PUnify (ctor-registry descriptors)
+- PUnify ctor-registry merge functions: `make-ctor-merge` in `ctor-registry.rkt` generates merge functions from descriptor specs. Audit the *generator*, not each generated instance — verify that `make-ctor-merge` produces functions that return the identical input on no-change.
 
 **Pattern**: For each merge function `f(old, new)`:
 ```
@@ -104,111 +111,150 @@ only if genuinely new → return fresh value
 
 **Deliverable**: Per-merge-function test cases verifying identity preservation. Any merge function that creates fresh values on no-change is fixed.
 
-### Phase 3: Mutable Worklist/Fuel in Quiescence Loop
+### Phase 3: Combined Struct Split + Mutable Worklist
 
-**Goal**: Replace per-iteration `struct-copy prop-network` in `run-to-quiescence-inner` with mutable boxes for worklist and fuel.
+**Why combined**: The mutable worklist pattern requires a drain-and-clear after each propagator fire — clearing the struct's worklist field via `struct-copy`. On the flat 13-field struct, this drain-and-clear is a 13-field copy per fire, which defeats the purpose. With the struct split, the drain-and-clear copies only the 2-field hot group. Landing these together means the mutable worklist optimization is effective from the start.
 
-**File**: `propagator.rkt` lines ~835-852
+#### Phase 3a: Struct-Copy Site Classification
 
-**Design**:
-```racket
-(define (run-to-quiescence-inner net)
-  (define wl (box (prop-network-worklist net)))
-  (define remaining-fuel (box (prop-network-fuel net)))
-  (let loop ([net (struct-copy prop-network net [worklist '()] [fuel 0])])
-    ;; net now has empty worklist/zero fuel — worklist/fuel live in boxes
-    (cond
-      [(prop-network-contradiction net) (finalize net wl remaining-fuel)]
-      [(<= (unbox remaining-fuel) 0) (finalize net wl remaining-fuel)]
-      [(null? (unbox wl)) (finalize net wl remaining-fuel)]
-      [else
-       (define pid (car (unbox wl)))
-       (set-box! wl (cdr (unbox wl)))
-       (set-box! remaining-fuel (sub1 (unbox remaining-fuel)))
-       (define prop (champ-lookup (prop-network-propagators net) pid))
-       (if (eq? prop 'none)
-           (loop net)
-           (let ([net* ((propagator-fire-fn prop) net)])
-             ;; propagator may have added to worklist via net-cell-write
-             ;; those additions went into the struct's worklist field
-             ;; drain them into our mutable box
-             (set-box! wl (append (prop-network-worklist net*) (unbox wl)))
-             (loop (struct-copy prop-network net* [worklist '()]))))])))
+**Goal**: Classify all 25 `struct-copy prop-network` sites in `propagator.rkt` by which fields they actually modify.
 
-(define (finalize net wl fuel)
-  (struct-copy prop-network net
-    [worklist (unbox wl)]
-    [fuel (unbox fuel)]))
-```
+**Output**: A table mapping each call site (file, line, function) to the field group it touches (hot, warm, cold, or multiple). This classification IS the design work of the struct split — the struct definitions are trivial in comparison.
 
-**Key subtlety**: Propagator fire functions call `net-cell-write`, which appends dependents to the network's worklist field. After each fire, we drain the struct's worklist into our mutable box and clear the struct's worklist. This way, fire functions don't need to know about the mutable box — they write to the struct as normal.
+**Expected distribution** (from audit §9.2):
+- Hot-only (worklist, fuel): `run-to-quiescence-inner` worklist pop
+- Warm-only (cells, contradiction): `net-cell-write`, `net-cell-replace`
+- Cold-only (merge-fns, propagators, etc.): `net-new-cell`, `net-add-propagator`
+- Multiple: some sites may touch both warm and cold (e.g., cell allocation touches cells + merge-fns)
 
-**Pre-requisite audit**: Verify no propagator fire function reads `prop-network-worklist` or `prop-network-fuel`. Search for all call sites of these accessors. Expected: only `run-to-quiescence-inner` and `run-to-quiescence-bsp` read them.
+#### Phase 3b: Inner Struct Definitions + Accessor Macros
 
-**Measurement**: Eliminates ~50 struct-copies per command (one per worklist iteration). Re-run Phase 0 micro-benchmarks.
+**Goal**: Define the three inner structs and a zero-cost compatibility layer.
 
-**Risk**: Moderate. The drain-and-clear pattern must correctly handle propagators that add new work during their firing. Test with adversarial networks that create cascading worklist additions.
-
-### Phase 4: Field-Group Struct Split
-
-**Goal**: Split `prop-network` from a flat 13-field struct into nested hot/warm/cold groups.
-
-**Design**:
 ```racket
 (struct prop-net-hot (worklist fuel) #:transparent)
-
 (struct prop-net-warm (cells contradiction) #:transparent)
-
 (struct prop-net-cold (merge-fns contradiction-fns widen-fns
                        propagators next-cell-id next-prop-id
                        cell-decomps pair-decomps cell-dirs)
   #:transparent)
-
 (struct prop-network (hot warm cold) #:transparent)
 ```
 
-**Mutation profiles**:
-- **Hot** (every worklist iteration): `worklist`, `fuel` → 2-field copy
-- **Warm** (every cell write with change): `cells`, `contradiction` → 2-field copy
-- **Cold** (only at allocation time): 9 fields → shared by pointer during iteration
+**Accessor macros** (Option A from critique — zero-cost, compile-time inlined):
+```racket
+(define-syntax-rule (prop-network-cells net)
+  (prop-net-warm-cells (prop-network-warm net)))
+(define-syntax-rule (prop-network-worklist net)
+  (prop-net-hot-worklist (prop-network-hot net)))
+;; ... etc for all 13 fields
+```
 
-**Impact**: After Phase 3 (mutable worklist), the hot group is no longer copied per-iteration. The warm group drops from 13-field to 2-field per cell-write. Cold fields are never copied during the quiescence loop.
+These preserve existing call-site syntax. Migration is: define macros, verify tests pass, then incrementally migrate sites to direct inner-struct access.
 
-**Sub-phases**:
-- **4a**: Define new inner structs. Create accessor compatibility layer (macros or wrapper functions that access `(prop-net-warm-cells (prop-network-warm net))` via `(prop-network-cells net)`).
-- **4b**: Update `net-cell-write` — only copies warm group.
-- **4c**: Update `net-new-cell` and `net-add-propagator` — copies cold group (allocation-time operations).
-- **4d**: Update all remaining `struct-copy prop-network` sites (25 total in propagator.rkt) to copy only the relevant group.
-- **4e**: Remove compatibility layer if all sites are migrated.
+#### Phase 3c: Mutable Worklist/Fuel + Hot Struct
 
-**Risk**: Largest change surface (25 struct-copy sites + all field accessors). Mechanical but tedious. Compatibility wrappers (4a) allow incremental migration with the test suite passing at each sub-phase.
+**Goal**: Replace per-iteration struct-copy with mutable boxes for worklist/fuel.
 
-**Measurement**: Field-copy savings. Re-run Phase 0 micro-benchmarks. Expected: ~2600 fewer field copies per command (audit §10 estimate).
+```racket
+(define (run-to-quiescence-inner net)
+  (define wl (box (prop-net-hot-worklist (prop-network-hot net))))
+  (define remaining-fuel (box (prop-net-hot-fuel (prop-network-hot net))))
+  ;; Strip hot group once — worklist/fuel live in boxes now
+  (define net0 (struct-copy prop-network net
+                  [hot (prop-net-hot '() 0)]))
+  (let loop ([net net0])
+    (cond
+      [(prop-net-warm-contradiction (prop-network-warm net))
+       (finalize net wl remaining-fuel)]
+      [(<= (unbox remaining-fuel) 0)
+       (finalize net wl remaining-fuel)]
+      [(null? (unbox wl))
+       (finalize net wl remaining-fuel)]
+      [else
+       (define pid (car (unbox wl)))
+       (set-box! wl (cdr (unbox wl)))
+       (set-box! remaining-fuel (sub1 (unbox remaining-fuel)))
+       (define prop (champ-lookup (prop-net-cold-propagators
+                                    (prop-network-cold net)) pid))
+       (if (eq? prop 'none)
+           (loop net)
+           (let ([net* ((propagator-fire-fn prop) net)])
+             ;; Drain: fire function added to hot.worklist via net-cell-write
+             ;; Move those entries to our mutable box, clear hot struct
+             (set-box! wl (append (prop-net-hot-worklist
+                                    (prop-network-hot net*))
+                                  (unbox wl)))
+             (loop (struct-copy prop-network net*
+                     [hot (prop-net-hot '() 0)]))))])))
 
-### Phase 5: Batch Cell Registration
+(define (finalize net wl fuel)
+  (struct-copy prop-network net
+    [hot (prop-net-hot (unbox wl) (unbox fuel))]))
+```
+
+The drain-and-clear now copies only the 2-field hot struct — not the full 13-field network. This is the key reason Phases 3 and 4 must land together.
+
+**Pre-requisite audit** (must complete before implementation):
+1. **Direct accessor grep**: Search for `prop-network-worklist` and `prop-network-fuel` across the entire codebase. Expected: only `run-to-quiescence-inner`, `run-to-quiescence-bsp`, and network construction/finalization.
+2. **Indirect access check**: Verify that no propagator fire function calls any helper that reads worklist or fuel. Fire functions should only call `net-cell-read`/`net-cell-write`/`net-add-propagator`.
+3. **Recursive quiescence check**: Verify no fire function calls `run-to-quiescence` recursively (which would read fuel from the struct).
+4. **Contingency**: If any fire function reads worklist or fuel, the mutable-box approach needs revision. Fallback: keep worklist/fuel in the hot struct but benefit from the 2-field copy (still a win over 13-field, just not zero-allocation).
+
+#### Phase 3d: Warm-Group Cell Write
+
+**Goal**: `net-cell-write` copies only the warm group (cells + contradiction).
+
+After the struct split, a cell write that changes a value needs to update only `prop-net-warm` (2 fields), not the full network. The cold group (merge-fns, propagators, etc.) is shared by pointer.
+
+#### Phase 3e: Cold-Group Allocation Ops
+
+**Goal**: `net-new-cell` and `net-add-propagator` copy only the cold group when they need to update merge-fns, propagators, or ID counters.
+
+#### Phase 3f: Remove Accessor Macros
+
+**Goal**: After all 25 struct-copy sites and all field accessor call sites are migrated to use inner structs directly, remove the compatibility macros.
+
+**Risk**: Largest change surface in the Track. Mitigated by:
+- 3a classification before any code changes
+- 3b macros enabling incremental migration with passing tests at each sub-phase
+- Each sub-phase independently testable
+
+**BSP loop note**: Phase 3c optimizes the serial (Gauss-Seidel) loop. The BSP loop (`run-to-quiescence-bsp`) has a different worklist pattern — it collects per-round propagator sets. An analogous optimization for the BSP loop (mutable round buffer) should be designed as part of BSP-LE Track 4 (BSP Pipeline). The struct split (3b-3e) benefits both loops equally.
+
+### Phase 4: Batch Cell Registration
 
 **Goal**: Use transient CHAMP for multi-cell setup in `register-global-env-cells!` and similar batch operations.
 
 **File**: `global-env.rkt` lines ~345-360, `elaborator-network.rkt` (initial network setup)
 
+**next-cell-id strategy**: Pre-allocate a range of IDs rather than incrementing per-cell. The cold struct's `next-cell-id` is incremented by N once, and IDs `start..start+N-1` are used in the batch loop. This means one cold-struct copy instead of N.
+
 **Design**:
 ```racket
 (define (batch-register-cells net cell-specs)
   ;; cell-specs: (listof (list name initial-val merge-fn contradicts?))
-  (define tcells (champ-transient (prop-network-cells (prop-network-warm net))))
-  (define tmerge (champ-transient (prop-net-cold-merge-fns (prop-network-cold net))))
+  (define N (length cell-specs))
+  (define cold (prop-network-cold net))
+  (define start-id (prop-net-cold-next-cell-id cold))
+  ;; Pre-allocate ID range
+  (define tcells (champ-transient (prop-net-warm-cells (prop-network-warm net))))
+  (define tmerge (champ-transient (prop-net-cold-merge-fns cold)))
   (define tcontra (champ-transient ...))
-  (for ([spec (in-list cell-specs)])
+  (for ([spec (in-list cell-specs)]
+        [i (in-naturals)])
     (match-define (list name init merge contra?) spec)
-    (define cid (next-cell-id ...))
+    (define cid (cell-id (+ start-id i)))
     (tchamp-insert! tcells cid (prop-cell init '()))
     (tchamp-insert! tmerge cid merge)
     (when contra? (tchamp-insert! tcontra cid contra?)))
   ;; Single freeze + single struct construction
-  (define new-warm (struct-copy prop-net-warm ...
+  (define new-warm (struct-copy prop-net-warm (prop-network-warm net)
     [cells (tchamp-freeze tcells)]))
-  (define new-cold (struct-copy prop-net-cold ...
-    [merge-fns (tchamp-freeze tmerge)] ...))
+  (define new-cold (struct-copy prop-net-cold cold
+    [merge-fns (tchamp-freeze tmerge)]
+    [next-cell-id (+ start-id N)]
+    ...))
   (struct-copy prop-network net [warm new-warm] [cold new-cold]))
 ```
 
@@ -216,19 +262,19 @@ only if genuinely new → return fresh value
 
 **Risk**: Low. The transient CHAMP infrastructure is already implemented and tested (champ.rkt:497-544). The batch pattern is a straightforward application.
 
-### Phase 6: Propagator Input Batching
+### Phase 5: Propagator Input Batching
 
 **Goal**: Use transient CHAMP for multi-input propagator registration in `net-add-propagator`.
 
 **File**: `propagator.rkt` line ~696
 
-**Design**: Same pattern as Phase 5 — convert cells CHAMP to transient, register all input dependencies, freeze once.
+**Design**: Same pattern as Phase 4 — convert cells CHAMP to transient, register all input dependencies, freeze once.
 
 **Savings**: For propagators with N inputs, saves N-1 intermediate CHAMP tries. Small per-propagator win but accumulates across 15+ propagators per command.
 
-**Risk**: Low. Follow-on to Phase 5 pattern.
+**Risk**: Low. Follow-on to Phase 4 pattern.
 
-### Phase 7: Verification + A/B Comparison
+### Phase 6: Verification + A/B Comparison
 
 **Deliverables**:
 1. Full test suite (7308+ tests, all pass)
@@ -237,7 +283,8 @@ only if genuinely new → return fresh value
    - `bench-micro.rkt benchmarks/micro/bench-alloc.rkt` — per-operation improvement
    - Solver adversarial benchmark — should not regress
 3. Per-command verbose comparison: `cell_allocs` and `prop_firings` unchanged (semantics preserved), wall-time reduced
-4. Suite time target: measurable improvement from current ~200s baseline
+4. **Memory comparison**: `(collect-garbage 'major)` + `(current-memory-use)` on representative module, compared to Phase 0 baseline. Verify mutable boxes don't prevent GC of intermediate states.
+5. **Suite time target**: ≤180s (10-20% improvement from ~200s baseline). Based on audit estimates: ~148 struct-copies + 2600 field-copy savings per command, over hundreds of commands per module load.
 
 ---
 
@@ -245,13 +292,15 @@ only if genuinely new → return fresh value
 
 | # | Decision | Resolution | Rationale |
 |---|----------|------------|-----------|
-| D1 | Optimization ordering | eq? fast path → merge audit → mutable worklist → struct split → batch registration | Dependencies: merge audit enables eq?-only; struct split compounds with mutable worklist |
-| D2 | Worklist/fuel mutability | Mutable boxes inside pure loop, finalize at exit | Preserves pure data-in/data-out contract; invisible to callers |
+| D1 | Optimization ordering | eq? fast path → merge audit → combined struct split + mutable worklist → batch registration | Dependencies: merge audit enables eq?-only; struct split and mutable worklist must land together (drain pattern requires 2-field hot struct) |
+| D2 | Worklist/fuel mutability | Mutable boxes inside pure loop, drain-and-clear on 2-field hot struct, finalize at exit | Preserves pure data-in/data-out contract; drain pattern cheap with 2-field struct |
 | D3 | Struct split granularity | Three groups: hot (2), warm (2), cold (9) | Matches mutation frequency analysis from audit §9.2 |
-| D4 | Compatibility layer for struct split | Wrapper accessors during migration, removed after | Enables incremental migration with passing tests at each step |
-| D5 | Batch registration API | `batch-register-cells` taking a list of specs | Clean API; existing transient CHAMP infrastructure |
-| D6 | GC / dead propagator cleanup | Deferred (audit §12 recommendation) | Allocation efficiency first; provenance value needs analysis |
-| D7 | BSP quiescence loop | Not modified in this Track | Same optimizations apply; BSP loop benefits from struct split |
+| D4 | Compatibility layer | Zero-cost `define-syntax-rule` macros during migration (Option A from critique) | Compile-time inlined; preserves call-site syntax; removed after full migration |
+| D5 | Struct-copy site classification | Required deliverable (Phase 3a) before any code changes | The classification IS the design work of the split; prevents ad-hoc decisions |
+| D6 | Batch registration ID strategy | Pre-allocate range: increment `next-cell-id` by N once | One cold-struct copy instead of N; IDs `start..start+N-1` |
+| D7 | GC / dead propagator cleanup | Deferred (audit §12 recommendation) | Allocation efficiency first; provenance value needs analysis |
+| D8 | BSP quiescence loop | Not modified in this Track; analogous optimization deferred to BSP-LE Track 4 | Struct split benefits both loops; mutable worklist is serial-specific |
+| D9 | Worklist data structure | `list` with `append` (current) | Adequate for typical 1-3 dependents per cell; deque optimization deferred unless profiling shows otherwise |
 
 ---
 
@@ -259,14 +308,14 @@ only if genuinely new → return fresh value
 
 | Phase | Micro-benchmark | A/B Comparison | Suite |
 |-------|-----------------|----------------|-------|
-| 0 | Establish baselines | Establish baselines | Pass (baseline) |
+| 0 | Establish baselines (timing + memory) | Establish baselines | Pass (baseline) |
 | 1 | `net-cell-write` improvement | — | Pass (no behavioral change) |
-| 2 | Merge identity tests | — | Pass (no behavioral change) |
-| 3 | `run-to-quiescence` improvement | A/B vs Phase 0 | Pass |
-| 4 | All benchmarks improvement | A/B vs Phase 3 | Pass at each sub-phase |
-| 5 | `batch-register-cells` benchmark | — | Pass |
-| 6 | `net-add-propagator` improvement | — | Pass |
-| 7 | All benchmarks final | A/B vs Phase 0 (total improvement) | Pass |
+| 2 | Merge identity tests (incl. ctor-registry) | — | Pass (no behavioral change) |
+| 3a | — (classification deliverable, no code) | — | — |
+| 3b-3f | All benchmarks improvement | A/B vs Phase 0 | Pass at each sub-phase |
+| 4 | `batch-register-cells` benchmark | — | Pass |
+| 5 | `net-add-propagator` improvement | — | Pass |
+| 6 | All benchmarks final + memory comparison | A/B vs Phase 0 (total: ≤180s target) | Pass |
 
 **Performance regression detection**: After each phase, the test suite must pass and no A/B benchmark may regress beyond noise (p < 0.05 on Mann-Whitney U test).
 
@@ -276,14 +325,15 @@ only if genuinely new → return fresh value
 
 | File | Phases | Changes |
 |------|--------|---------|
-| `propagator.rkt` | 1, 3, 4, 6 | eq? fast path, mutable worklist, struct split, input batching |
+| `propagator.rkt` | 1, 3a-3f, 5 | eq? fast path, struct split, mutable worklist, input batching |
 | `champ.rkt` | — | No changes (transient infrastructure already exists) |
-| `elaborator-network.rkt` | 4, 5 | Struct accessor updates, batch registration API |
-| `global-env.rkt` | 5 | `register-global-env-cells!` uses batch API |
+| `elaborator-network.rkt` | 3b, 4 | Struct accessor updates, batch registration API |
+| `global-env.rkt` | 4 | `register-global-env-cells!` uses batch API |
 | `type-lattice.rkt` | 2 | Merge identity verification/fix |
 | `mult-lattice.rkt` | 2 | Merge identity verification/fix |
 | `session-lattice.rkt` | 2 | Merge identity verification/fix |
 | `infra-cell.rkt` | 2 | Merge identity verification/fix |
+| `ctor-registry.rkt` | 2 | Merge generator identity verification |
 | New: `benchmarks/micro/bench-alloc.rkt` | 0 | Allocation micro-benchmarks |
 
 ---
@@ -304,11 +354,12 @@ only if genuinely new → return fresh value
 
 | Optimization | Struct-copies saved/cmd | CHAMP allocs saved/cmd | Notes |
 |---|---|---|---|
-| Phase 1-2: eq?-first + merge identity | 0 (fewer false changes → fewer downstream copies) | 0 | Enables phases 3-4 |
-| Phase 3: Mutable worklist/fuel | ~50 | 0 | Per-iteration elimination |
-| Phase 4: Field-group splitting | ~2600 field-copy savings | 0 | Copy width reduction |
-| Phase 5: Batch registration (50 cells) | ~98 | ~200 | One-time per command |
-| Phase 6: Input batching | 0 | ~15 | Small per-propagator win |
+| Phase 1-2: eq?-first + merge identity | 0 (fewer false changes → fewer downstream copies) | 0 | Enables Phase 3 |
+| Phase 3: Struct split + mutable worklist | ~50 per-iteration + 2600 field-copy savings | 0 | Combined: zero allocation per iteration + 2-field cell-writes |
+| Phase 4: Batch registration (50 cells) | ~98 | ~200 | One-time per command |
+| Phase 5: Input batching | 0 | ~15 | Small per-propagator win |
 | **Combined** | **~148 struct-copies + 2600 field-copy savings** | **~215** | + equal? elimination |
 
-Phases 3+4 compound: if both applied, the worklist loop does **zero struct allocation** per iteration (Phase 3 eliminates hot copies, Phase 4 means cell-writes only copy the 2-field warm group).
+Phase 3 delivers both the struct split and mutable worklist as a combined change. The worklist loop does **zero struct allocation** per iteration (mutable boxes for hot group; cell-writes copy only the 2-field warm group).
+
+**Suite time target**: ≤180s (10-20% improvement from ~200s baseline). ~74K struct-copies and ~1.3M field-copy savings across a representative module load (~500 commands).
