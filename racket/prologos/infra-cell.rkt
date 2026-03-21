@@ -88,6 +88,7 @@
   (cond
     [(eq? old 'infra-bot) new]
     [(eq? new 'infra-bot) old]
+    [(zero? (hash-count new)) old]  ;; Identity preservation: empty new → return old
     [else
      (for/fold ([acc old])
                ([(k v) (in-hash new)])
@@ -100,6 +101,7 @@
   (cond
     [(eq? old 'infra-bot) new]
     [(eq? new 'infra-bot) old]
+    [(zero? (hash-count new)) old]  ;; Identity preservation: empty new → return old
     [else
      (for/fold ([acc old])
                ([(k v) (in-hash new)])
@@ -111,6 +113,7 @@
   (cond
     [(eq? old 'infra-bot) new]
     [(eq? new 'infra-bot) old]
+    [(null? new) old]  ;; Identity preservation: empty new → return old
     [else (append old new)]))
 
 ;; Monotonic set union: for propagated-specs, visited sets.
@@ -119,6 +122,7 @@
   (cond
     [(eq? old 'infra-bot) new]
     [(eq? new 'infra-bot) old]
+    [(set-empty? new) old]  ;; Identity preservation: empty new → return old
     [else (set-union old new)]))
 
 ;; Non-monotonic replacement: latest value wins.
@@ -145,6 +149,7 @@
   (cond
     [(eq? old 'infra-bot) new]
     [(eq? new 'infra-bot) old]
+    [(zero? (hash-count new)) old]  ;; Identity preservation: empty new → return old
     [else
      (for/fold ([acc old])
                ([(k v) (in-hash new)])
@@ -164,6 +169,7 @@
   (cond
     [(eq? old 'infra-bot) new]
     [(eq? new 'infra-bot) old]
+    [(zero? (hash-count new)) old]  ;; Identity preservation: empty new → return old
     [else
      (for/fold ([acc old])
                ([(k v) (in-hash new)])
