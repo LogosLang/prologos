@@ -1,0 +1,479 @@
+#+TITLE: Work Structure
+#+SUBTITLE: How We Organize, Scope, and Connect Units of Work
+#+AUTHOR: The Prologos Project
+#+DATE: 2026-03-21
+
+* Purpose
+
+This document codifies the hierarchy of work units that has emerged from
+practice across the Prologos project. It is a companion to
+[[file:DESIGN_METHODOLOGY.org][DESIGN_METHODOLOGY.org]] (which describes /how we design/) and
+[[file:POST_IMPLEMENTATION_REVIEW.org][POST_IMPLEMENTATION_REVIEW.org]] (which describes /how we review/).
+This document describes /how we organize/ — the structural containers
+that give shape to the five design stages and make large-scale efforts
+tractable.
+
+The structure described here is /descriptive/: it captures patterns that
+emerged organically from real work (Propagator Migration Tracks 1–7,
+PUnify Parts 1–3, First-Class Paths, Collection Interface Unification,
+the Logic Engine, the FL Narrowing system). Its codification serves to
+make the implicit explicit — so that new work can be scoped correctly
+from the start, rather than discovering the right structure mid-flight.
+
+* 1. The Work Unit Hierarchy
+
+#+begin_example
+  Series
+    └── Track
+          ├── Phase
+          │     └── Sub-phase (a, b, c, ...)
+          └── Part (overflow for large Tracks)
+                └── Phase
+                      └── Sub-phase
+#+end_example
+
+Each level has a distinct character, artifact type, and completion
+criterion. The hierarchy is not rigid — not every effort requires a
+Series, and not every Track needs Parts. But the levels are well-defined
+enough that the right scoping decision is usually clear.
+
+** 1.1 Series
+
+A /Series/ is a *thesis-driven collection of related Tracks* that
+collectively realize an architectural vision. It is the largest unit of
+work we organize around.
+
+*** Character
+
+A Series has:
+- A *thesis*: a one-sentence architectural claim that all Tracks serve.
+- A *convergence criterion*: the thesis is either realized or shown to
+  be wrong.
+- A *Master Roadmap*: a living document that tracks completed Tracks,
+  active Tracks, and the dependency graph between them.
+- A *shared vocabulary*: concepts and terms that all Tracks in the Series
+  use consistently.
+
+A Series is NOT a timeline or a schedule. Tracks within a Series may be
+pursued in different orders depending on what is unblocked and what
+has the highest leverage. The Master Roadmap captures dependencies,
+not deadlines.
+
+*** Example: Propagator Migration
+
+- *Thesis*: "Every piece of mutable state that participates in
+  type-checking flows through one unified propagator network, making
+  the compiler a transparent proof object."
+- *Master Roadmap*: =2026-03-13_PROPAGATOR_MIGRATION_MASTER.md=
+- *Tracks*: Foundation Sprint, Track 1 (Cell-Primary Constraints),
+  Track 2 (Reactive Resolution), Track 3 (Cell-Primary Registries),
+  Track 4 (ATMS Speculation), Track 5 (Global-Env Dependencies),
+  Track 6 (Driver Simplification), Track 7 (Persistent Cells +
+  Stratified Retraction), Track 8 (Infrastructure Audit — active).
+- *Convergence*: All ~42 propagator-natural state sites on the network;
+  =restore-meta-state!= retired; elaboration context fully
+  network-hosted.
+
+*** Artifacts
+
+| Artifact | Location | Role |
+|----------+----------+------|
+| Master Roadmap | =docs/tracking/YYYY-MM-DD_SERIES_MASTER.md= | Living document: thesis, completed Tracks, dependency graph |
+| Origin Documents | Listed in the Master Roadmap | Research, audits, earlier design work that motivated the Series |
+
+*** When to Create a Series
+
+Create a Series when:
+- Multiple Tracks are needed to realize a single architectural vision.
+- The Tracks share infrastructure, vocabulary, and ordering constraints.
+- The work will span weeks or months across multiple sessions.
+
+Do NOT create a Series for a single Track, even a large one with Parts.
+The distinguishing feature is /multiple independently-designable Tracks/
+serving a /shared thesis/.
+
+** 1.2 Track
+
+A /Track/ is a *Stage 3 design document suitable for implementation*.
+It is the primary unit of planned work — scoped enough to have a clear
+completion criterion, substantial enough to warrant a phased design.
+
+*** Character
+
+A Track has:
+- A *design document*: a Stage 3 artifact with problem statement, gap
+  analysis, target architecture, phased implementation roadmap, design
+  decisions table, test strategy, and key files list.
+- A *progress tracker*: a table at the top of the design document with
+  per-phase status (not started / in progress / done / blocked), commit
+  hashes, and notes.
+- An *acceptance file*: a =.prologos= file written as Phase 0, exercising
+  the target syntax and behavior. Sections are uncommented as phases
+  complete.
+- A *PIR*: a Post-Implementation Review written after completion (see
+  [[file:POST_IMPLEMENTATION_REVIEW.org][POST_IMPLEMENTATION_REVIEW.org]]).
+
+*** Phase and Sub-phase
+
+Tracks are subdivided into *Phases* (numbered: 0, 1, 2, ...) and
+*Sub-phases* (lettered: a, b, c, ...).
+
+- A *Phase* is a coherent chunk of work that delivers a testable,
+  committable result. Phases encode architectural dependencies — Phase 2
+  may depend on Phase 1's infrastructure. Getting the phase ordering
+  right is an architectural act, not a scheduling act.
+- A *Sub-phase* breaks a Phase into smaller commits when the Phase is
+  too large for a single pass. Sub-phases within a Phase share a goal
+  but produce distinct testable artifacts.
+
+*** Parts
+
+When a Track's scope grows beyond what one design document can hold
+with clarity, it is broken into *Parts*. Each Part gets its own Stage 3
+design document but shares the Track's thesis and acceptance file.
+
+Parts are an overflow mechanism, not a planning tool. The need for Parts
+usually becomes apparent during Stage 3 design iteration — if the design
+document exceeds ~15 phases or the scope clearly decomposes into
+distinct architectural sub-problems, Parts are warranted.
+
+- *Example*: PUnify (Propagator-Based Unification) grew to three Parts:
+  Part 1 (surface wiring + baselines), Part 2 (cell-tree architecture),
+  Part 3 (ATMS solver architecture). Each Part has its own design doc,
+  progress tracker, and PIR. They share a single acceptance file
+  (=solve-adversarial.prologos=) and a shared benchmark suite.
+
+*** Artifacts
+
+| Artifact | Location | Role |
+|----------+----------+------|
+| Design document | =docs/tracking/YYYY-MM-DD_TOPIC_DESIGN.md= | Stage 3 artifact: problem, architecture, phases, decisions |
+| Progress tracker | Top of design document | Per-phase status, commits, notes |
+| Acceptance file | =examples/YYYY-MM-DD-feature.prologos= | Phase 0 deliverable: executable specification |
+| PIR | =docs/tracking/YYYY-MM-DD_TOPIC_PIR.md= | Stage 5 artifact: what was built, what was learned |
+
+*** When to Create a Track
+
+Create a Track when:
+- The work has 3+ Phases with genuine dependencies between them.
+- The scope warrants a design document (not just a one-off fix).
+- The work adds or modifies user-facing syntax, core infrastructure, or
+  cross-cutting concerns.
+
+Do NOT create a Track for:
+- A single bug fix (just fix it and commit).
+- A cleanup or refactoring that fits in one session without design.
+- Research or exploration (use a research document in =docs/research/=).
+
+** 1.3 Relationship Between Levels
+
+#+begin_example
+  Series = thesis + {Track_1, Track_2, ..., Track_n}
+  Track  = design_doc + {Phase_0, Phase_1, ..., Phase_m}
+  Phase  = goal + {Sub-phase_a, Sub-phase_b, ...}
+  Part   = Track ÷ k (when k phases > clarity threshold)
+#+end_example
+
+Not every level is always present:
+
+| Scenario | Structure |
+|----------+-----------|
+| Bug fix | No structure (commit directly) |
+| Single feature | Track only |
+| Large feature | Track with Parts |
+| Architectural vision | Series with multiple Tracks |
+
+* 2. Audits: The Bridge from Observation to Action
+
+** 2.1 What an Audit Is
+
+An /Audit/ is a *systematic inventory of current state against
+principles or requirements*. It produces concrete findings that directly
+scope subsequent Tracks.
+
+Audits are Stage 2 design artifacts — they perform the "Research
+Refinement and Gap Analysis" described in [[file:DESIGN_METHODOLOGY.org][DESIGN_METHODOLOGY.org]] §Stage
+2. But they are distinctive enough to name as a first-class work unit
+because of how reliably they drive Track creation.
+
+*** Character
+
+An Audit has:
+- A *scope*: what is being audited (a subsystem, an interface, a
+  principle's adherence).
+- A *lens*: the principles, requirements, or expectations against which
+  the current state is measured.
+- *Findings*: concrete, numbered items describing gaps, violations, or
+  opportunities.
+- *Recommendations*: what to do about the findings (often: "create a
+  Track for X").
+
+An Audit is NOT a design document. It does not propose solutions in
+detail — it identifies problems. The solutions belong in the Track
+that the Audit motivates.
+
+** 2.2 The Audit → Track Pipeline
+
+Every significant Track in the project's history has been preceded by
+an Audit:
+
+| Audit | Track(s) it motivated |
+|-------+-----------------------|
+| Pipeline Audit (2026-03-11) | Foundation Sprint, Tracks 1–7 |
+| Track 8 Infrastructure Audit (2026-03-18) | Track 8 design direction |
+| Collection Interface Audit (2026-03-20) | Collection Unification Design |
+| Cell/Propagator Allocation Audit (2026-03-20) | Efficiency Track (pending) |
+| Stratified Architecture Audit (Track 7 D.2) | S(−1) retraction + readiness propagators |
+
+The pattern is robust: *audit first, then design, then implement*. An
+Audit-less Track risks solving the wrong problem or underscoping the
+real one.
+
+** 2.3 Forward Audits vs. Retrospective Audits (PIRs)
+
+There are two kinds of systematic review, and they serve different
+purposes:
+
+| Aspect | Forward Audit | Retrospective Audit (PIR) |
+|--------+---------------+---------------------------|
+| Timing | Before implementation | After implementation |
+| Question | "What's wrong / missing?" | "What did we learn?" |
+| Output | Findings → Track scope | Lessons → principles / DEFERRED.md |
+| Artifact | =YYYY-MM-DD_TOPIC_AUDIT.md= | =YYYY-MM-DD_TOPIC_PIR.md= |
+
+PIRs have consistently functioned as retrospective audits in practice.
+Track 7's PIR found the S(−1) retraction bug (no unit tests → tests
+→ bug → fix). PUnify's PIR found 5 parity bugs. Two consecutive PIRs
+surfacing real bugs through honest self-assessment validates the
+methodology: PIRs are not paperwork — they are a testing and discovery
+mechanism.
+
+** 2.4 Artifacts
+
+| Artifact | Location | Role |
+|----------+----------+------|
+| Audit document | =docs/tracking/YYYY-MM-DD_TOPIC_AUDIT.md= | Findings, principle violations, recommendations |
+
+* 3. Cross-Track Requirements
+
+** 3.1 The Pattern
+
+When one Track depends on infrastructure that another Track will build,
+the dependency should be declared explicitly with a *Cross-Track
+Requirements section* in the dependent Track's design document.
+
+This pattern emerged with the Collection Interface Unification Design
+(§6: "Track 8 Requirements"), which captures exactly what collection
+dispatch needs from Track 8's propagator migration (callback elimination,
+id-map accessibility, module restructuring). The section serves two
+purposes:
+
+1. *Informs the provider Track's priorities.* Track 8 can read the
+   requirements section and prioritize accordingly.
+2. *Documents why the dependent Track defers certain phases.* The
+   pre/post split in the Collection Interface Design (Phases 0/1/4 now;
+   T1–T4 after Track 8) is justified by explicit requirements.
+
+** 3.2 Format
+
+A Cross-Track Requirements section contains:
+
+| Requirement | Provider Track component | Why this is needed |
+|-------------+-------------------------+--------------------|
+| Description of what's needed | Which phase/component provides it | What breaks without it |
+
+This makes the dependency concrete and verifiable: when the provider
+Track completes the relevant phase, the dependent Track can proceed.
+
+** 3.3 Series Coherence
+
+Cross-Track Requirements are how a Series maintains coherence. Without
+explicit dependencies, Tracks within a Series drift — each becomes
+self-contained and the shared thesis fragments. With explicit
+dependencies, the Master Roadmap's dependency graph stays grounded in
+concrete technical needs.
+
+* 4. Acceptance Files as Executable Specifications
+
+** 4.1 Beyond Testing
+
+Acceptance files (=.prologos= files written as Track Phase 0) have
+evolved beyond their testing origin. They now serve as:
+
+- *Executable specifications*: the file IS the spec — what passes is
+  what works, what's commented out is what's aspirational.
+- *Progress instruments*: section-by-section uncommenting tracks progress
+  more reliably than prose status updates. Each phase knows which
+  acceptance sections it should unlock.
+- *Regression canaries*: run the acceptance file before AND after each
+  phase to catch regressions in existing functionality.
+- *Living documentation*: the acceptance file is often the best
+  user-facing demonstration of how a feature works, written in the
+  actual syntax users will use.
+
+** 4.2 The Acceptance File Protocol
+
+1. *Write Phase 0* (acceptance file) before any implementation.
+2. Include both working expressions (baseline canary) and commented-out
+   aspirational expressions (target behavior).
+3. After each Phase, run the acceptance file. The Phase is not DONE until
+   its expected acceptance sections pass at Level 3 (=process-file=).
+4. The Track is not DONE until the acceptance file runs with 0 errors and
+   all aspirational expressions are uncommented.
+
+See [[file:DESIGN_METHODOLOGY.org][DESIGN_METHODOLOGY.org]] § "WS-Mode Validation Protocol" for the
+three-level validation details.
+
+* 5. Mapping to the Five Design Stages
+
+The work structure maps onto the five stages from [[file:DESIGN_METHODOLOGY.org][DESIGN_METHODOLOGY.org]]
+as follows:
+
+| Stage | Work Unit(s) | Artifacts |
+|-------+--------------+-----------|
+| Stage 1: Deep Research | Research documents | =docs/research/TOPIC.{org,md}= |
+| Stage 2: Refinement + Gap Analysis | Audits | =docs/tracking/YYYY-MM-DD_TOPIC_AUDIT.md= |
+| Stage 3: Design Iteration | Tracks (+ Parts, if needed) | Design docs with progress trackers |
+| Stage 4: Implementation | Phases and Sub-phases | Commits, tests, acceptance file sections |
+| Stage 5: Composition + Extension | PIRs, capstone demos | PIR doc, =.prologos= demo, principles updates |
+
+A Series spans all five stages across multiple Tracks. The Master
+Roadmap is a Stage 3+ artifact that evolves as Tracks complete.
+
+#+begin_example
+  Stage 1         Stage 2         Stage 3          Stage 4         Stage 5
+  ┌─────────┐    ┌──────────┐    ┌───────────┐    ┌───────────┐    ┌──────┐
+  │ Research │───►│  Audit   │───►│  Track    │───►│  Phases   │───►│ PIR  │
+  │          │    │          │    │  design   │    │  a, b, c  │    │      │
+  └─────────┘    └──────────┘    └───────────┘    └───────────┘    └──────┘
+                                       │
+                                  (if too large)
+                                       │
+                                  ┌───────────┐
+                                  │  Parts    │
+                                  │  1, 2, 3  │
+                                  └───────────┘
+#+end_example
+
+The pipeline is not always linear. Design issues discovered during
+Stage 4 may trigger a return to Stage 3 (design iteration). PIR
+findings (Stage 5) may trigger new Audits (Stage 2) for the next Track.
+This feedback is expected and healthy — the pipeline is iterative, not
+waterfall.
+
+* 6. Design Critique as Collaborative Design
+
+Stage 3 (Design Iteration) in [[file:DESIGN_METHODOLOGY.org][DESIGN_METHODOLOGY.org]] describes the
+critique cycle: draft, critique, respond, repeat. Practice has shown
+this cycle to be more than quality assurance — it is a /design
+mechanism/.
+
+Five instances across the project demonstrate the pattern:
+
+| Track | Draft (D.1) | Critique finding | Overhaul (D.2+) |
+|-------+-------------+------------------+-----------------|
+| Track 7 | Scanning-based readiness | External critique: 8 concerns | Threshold-cell composition, resolution purity |
+| Track 7 D.3 | Option B (state-passing) | Self-critique: 6 tensions | Option A (pure network transforms) |
+| PUnify D.2 | Type-level only | Critique: solver should be in scope | Cell-tree + solver cell infrastructure |
+| PUnify Part 3 | Initial design | Critique: connect to 4 prior art docs | Multiverse Multiplexer, 18-section overhaul |
+| Collection Interface D.1 | Elaboration-time dispatch patches | Critique: "patch not principle" | Propagator-resolved trait dispatch |
+
+In every case, the design /after/ critique is materially different from
+the design /before/ critique — not merely refined, but architecturally
+restructured. The critique rounds are not overhead to be minimized; they
+are the mechanism by which the design converges to the right solution.
+
+*Implication for work structure*: Budget for at least one full critique
+round (D.1 → critique → D.2) as part of any Track's design phase.
+Tracks that skip the critique cycle tend to produce designs that are
+later identified as "patches" rather than principled solutions. The
+Collection Interface case is the clearest illustration: D.1 (elaboration-
+time dispatch) was architecturally the wrong approach; D.2 (propagator-
+resolved trait dispatch) required recognizing that the problem was an
+instance of the same phase-separation gap that an entire Series
+(Propagator Migration) was built to dissolve.
+
+* 7. Filing Conventions
+
+** 7.1 Naming
+
+| Artifact type | Pattern | Example |
+|---------------+---------+---------|
+| Research | =docs/research/YYYY-MM-DD_TOPIC.{org,md}= | =2026-03-21_PROPAGATOR_NETWORK_TAXONOMY.org= |
+| Audit | =docs/tracking/YYYY-MM-DD_TOPIC_AUDIT.md= | =2026-03-20_COLLECTION_INTERFACE_AUDIT.md= |
+| Track design | =docs/tracking/YYYY-MM-DD_TOPIC_DESIGN.md= | =2026-03-20_FIRST_CLASS_PATHS_DESIGN.md= |
+| Master roadmap | =docs/tracking/YYYY-MM-DD_SERIES_MASTER.md= | =2026-03-13_PROPAGATOR_MIGRATION_MASTER.md= |
+| PIR | =docs/tracking/YYYY-MM-DD_TOPIC_PIR.md= | =2026-03-18_TRACK7_PIR.md= |
+| Acceptance file | =examples/YYYY-MM-DD-feature.prologos= | =2026-03-20-first-class-paths.prologos= |
+| Principles | =docs/tracking/principles/TOPIC.org= | =DESIGN_METHODOLOGY.org= |
+| Standup | =docs/standups/standup-YYYY-MM-DD.org= | =standup-2026-03-21.org= |
+| Dailies | =docs/tracking/standups/YYYY-MM-DD_dailies.md= | =2026-03-21_dailies.md= |
+
+** 7.2 Canonical Format
+
+- =.org= is canonical for principles and research documents (structured
+  prose, code blocks, tables, export support).
+- =.md= is used for tracking documents (design docs, audits, PIRs,
+  dailies) because they are created and updated frequently during
+  implementation sessions.
+- When both =.org= and =.md= exist for the same document, the =.org= is
+  canonical and the =.md= is a generated artifact. See
+  =.claude/rules/workflow.md= § "=.org= files are canonical."
+
+* 8. Checklists
+
+** 8.1 Starting a New Series
+
+1. Identify the architectural thesis (one sentence).
+2. Conduct an initial Audit scoping the problem space.
+3. Draft a Master Roadmap listing anticipated Tracks, dependencies, and
+   origin documents.
+4. Create the first Track (often: the foundation or infrastructure
+   Track).
+
+** 8.2 Starting a New Track
+
+1. Check DEFERRED.md for items newly unblocked by this Track's scope.
+2. Write the Stage 3 design document (problem, architecture, phases,
+   decisions, test strategy, key files).
+3. Write the acceptance file (Phase 0) — executable specification of
+   target behavior.
+4. If the Track belongs to a Series, add a Cross-Track Requirements
+   section for any dependencies on other Tracks.
+5. Submit for design critique (Stage 3 cycle: draft → critique →
+   respond → repeat).
+
+** 8.3 Completing a Track
+
+1. All phases DONE (progress tracker fully green).
+2. Acceptance file runs with 0 errors, all aspirational sections
+   uncommented.
+3. Full test suite passes with no regressions.
+4. DEFERRED.md updated with any deferred items.
+5. PIR written (see [[file:POST_IMPLEMENTATION_REVIEW.org][POST_IMPLEMENTATION_REVIEW.org]]).
+6. If the Track belongs to a Series, update the Master Roadmap.
+7. Dailies updated with completion entry and commit hash.
+
+** 8.4 When to Escalate
+
+| Situation | Action |
+|-----------+--------|
+| A Track grows beyond ~15 phases | Split into Parts |
+| Multiple Tracks are needed for one vision | Create a Series |
+| Implementation reveals a design flaw | Return to Stage 3 (design iteration) |
+| A Phase uncovers a gap in a different Track | Add a Cross-Track Requirement |
+| A PIR surfaces real bugs | Fix them immediately; update DEFERRED.md for structural issues |
+
+* 9. Provenance
+
+This document codifies patterns that emerged organically from:
+- Propagator Migration Series (Tracks 1–7, 2026-03-11 through 2026-03-18)
+- PUnify Parts 1–3 (2026-03-19 through present)
+- First-Class Path Values (2026-03-20)
+- Collection Interface Unification (2026-03-20)
+- FL Narrowing (2026-03-07 through 2026-03-08)
+- Logic Engine Design (2026-02-23 through 2026-03-01)
+
+The naming of "Series," "Track," "Audit," and the formalization of
+Cross-Track Requirements and the Audit → Track pipeline were made
+explicit on 2026-03-21. The underlying practices were already in use.
