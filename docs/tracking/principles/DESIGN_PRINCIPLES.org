@@ -202,8 +202,14 @@ premature opacity (foreclosed capabilities requiring architectural rework).
 When designing any abstraction, prefer the interface that serves the widest
 range of use cases without sacrificing correctness. Concretely:
 
-- Seq (lazy sequence) as the universal collection abstraction --- all
-  collections convert through ~LSeq~ as a hub type
+- Seq as the universal iteration protocol --- every collection type
+  implements ~Seq~ with native, efficient operations (~first~, ~rest~,
+  ~empty?~).  ~LSeq~ is a specific lazy sequence type, not a mandatory
+  intermediary.  Generic operations dispatch through ~Seq~ (or
+  ~Functor~ for structure-preserving map) directly to per-type
+  implementations.  Syntactic sugar (~xs[0]~, ~xs.*field~) generates
+  trait constraints (~Indexed~, ~Keyed~, ~Seq~) resolved on the
+  propagator network --- not constructor-specific dispatch
 - Traits over concrete types --- ~Foldable~ over ~List~-specific folds
 - Bundles over supertraits --- composition over inheritance
 - Union types over separate sum types when the domain calls for openness
