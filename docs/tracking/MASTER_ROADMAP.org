@@ -82,7 +82,7 @@ restructuring.
 | Item | Status |
 |------+--------|
 | PUnify Parts 1–2 (cell-tree unification) | ✅ Complete ([[file:2026-03-19_PUNIFY_PARTS1_2_PIR.md][PIR]]) |
-| PUnify Cleanup (bridge retirement, 5 parity bugs) | ⬜ Pending |
+| PUnify Cleanup (bridge retirement, 5 parity bugs — see [[file:2026-03-19_PUNIFY_PARTS1_2_PIR.md][PIR §15.2]]) | ⬜ Pending |
 
 ** CIU (Collection Interface Unification)  — /All collection dispatch through traits on the propagator network/
 
@@ -191,16 +191,64 @@ Key high-priority deferred items now absorbed into Series:
 - Allocation efficiency → BSP-LE Track 0
 - =restore-meta-state!= retirement → Propagator Migration Track 8
 
+* Current Implementation Order
+
+The following sequence reflects the current prioritization, informed by
+dependency analysis and leverage:
+
+#+begin_example
+  1. PUnify Cleanup          (pre-Series: 5 parity bugs + bridge retirement)
+  2. BSP-LE Track 0          (Allocation Efficiency — benefits all subsequent work)
+  3. CIU Track 0             (Trait Hierarchy Audit — Stage 2, pre-Track 8)
+  4. PM Track 8              (Propagator Infrastructure — informed by CIU Track 0)
+  5. CIU Track 0 revisit     (post-Track 8 design calibration)
+  6. CIU Tracks 1–5          (implementation on Track 8 infrastructure)
+  7. BSP-LE Tracks 1–5       (logic engine on Track 8 infrastructure)
+#+end_example
+
+*Rationale*:
+
+- *Allocation efficiency first*: Every subsequent Track creates cells and
+  propagators at scale. The audit identified ~11 allocations per cell
+  creation; fixing this means all later benchmarks are representative
+  and infrastructure overhead doesn't mask algorithmic issues.
+
+- *CIU Track 0 before Track 8*: The trait hierarchy audit examines the
+  collection dispatch design space against principles and identifies what
+  the propagator infrastructure must provide. Its output feeds directly
+  into Track 8's priorities (callback elimination, id-map accessibility,
+  module restructuring). CIU Track 0 is design work — it does not need
+  Track 8 infrastructure.
+
+- *CIU Track 0 revisit after Track 8*: Track 8 changes the design
+  landscape. Constraints that seemed fundamental pre-Track 8 (e.g.,
+  =surf-get= can't generate trait constraints due to callback
+  indirection) may dissolve. A lightweight re-audit before CIU Track 1
+  calibrates the design against what Track 8 actually delivered, rather
+  than committing to a pre-Track 8 plan that may no longer be optimal.
+
+- *BSP-LE Tracks 1–5 after Track 8*: BSP-LE can technically proceed
+  independently, but Track 8's module restructuring and callback
+  elimination simplify the ATMS solver integration. Sequencing BSP-LE
+  after Track 8 avoids building workarounds that Track 8 would retire.
+
+Steps 6 and 7 are not strictly sequential — CIU and BSP-LE Tracks can
+interleave based on priority and what's unblocked.
+
 * Cross-Series Dependencies
 
 #+begin_example
-  Propagator Migration (Track 8)
-       │
-       ├──→ CIU Tracks 3, 4, 5 (trait-dispatched access/iteration/union)
-       │
-       └──→ BSP-LE (may benefit from callback elimination + module restructuring)
+  PUnify Cleanup ──→ BSP-LE Track 0 (Allocation)
+                           │
+  CIU Track 0 ────────────┼──→ PM Track 8 ──→ CIU Track 0 revisit
+  (pre-T8 audit)           │   (informed by    (post-T8 calibration)
+                           │    CIU + alloc)         │
+                           │                         ├──→ CIU Tracks 1–5
+                           │                         │
+                           └─────────────────────────┴──→ BSP-LE Tracks 1–5
 #+end_example
 
-Track 8 is the critical path for post-design-phase work in CIU. BSP-LE
-can proceed independently but Track 8 improvements may simplify
-implementation.
+Track 8 is the critical path for post-design-phase work in both CIU
+and BSP-LE. CIU Track 0 (pre-Track 8) and BSP-LE Track 0 (allocation
+efficiency) inform Track 8's design; CIU Tracks 1–5 and BSP-LE Tracks
+1–5 depend on Track 8's delivery.
