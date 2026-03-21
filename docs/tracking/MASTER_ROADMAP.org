@@ -17,7 +17,7 @@ Audits) are defined.
 
 * Active Series
 
-** 1. Propagator Migration  — /Bringing elaboration state onto the propagator network/
+** Propagator Migration  — /Bringing elaboration state onto the propagator network/
 
 | | |
 |------------------+------|
@@ -29,22 +29,22 @@ Audits) are defined.
 
 | Track | Description | PIR | Key Result |
 |-------+-------------+-----+------------|
-| Foundation | Cell abstraction, 42 state sites migrated | — | Dual-write cells for all propagator-natural state |
-| Track 1 | Cell-primary constraint tracking | [[file:2026-03-12_TRACK1_CELL_PRIMARY_PIR.md][PIR]] | Cells are single source of truth for constraints |
-| Track 2 | Reactive resolution (stratified quiescence) | — | S0→S1→S2 replaces batch post-passes |
-| Track 3 | Cell-primary registries (28 readers) | [[file:2026-03-16_TRACK3_CELL_PRIMARY_REGISTRIES_PIR.md][PIR]] | All computation reads are cell-primary |
-| Track 4 | ATMS speculation (per-meta TMS cells) | [[file:2026-03-16_TRACK4_ATMS_SPECULATION_PIR.md][PIR]] | Learned-clause pruning, save/restore 6→3 boxes |
-| Track 5 | Global-env consolidation + dependency edges | [[file:2026-03-16_TRACK5_GLOBAL_ENV_DEPENDENCY_EDGES_PIR.md][PIR]] | Per-module persistent networks, cross-module dep edges |
-| Track 6 | Driver simplification + cleanup | [[file:2026-03-17_TRACK6_DRIVER_SIMPLIFICATION_PIR.md][PIR]] | Parameterize 30→13, callback elimination, first clean suite |
-| Track 7 | Persistent registry cells + stratified retraction | [[file:2026-03-18_TRACK7_PIR.md][PIR]] | 29 persistent cells, S(−1) retraction, readiness propagators, pure resolution |
+| [[file:2026-03-11_1800_PROPAGATOR_FIRST_MIGRATION.md][Foundation]] | Cell abstraction, 42 state sites migrated | — | Dual-write cells for all propagator-natural state |
+| [[file:2026-03-12_TRACK1_CONSTRAINT_CELL_PRIMARY.md][Track 1]] | Cell-primary constraint tracking | [[file:2026-03-12_TRACK1_CELL_PRIMARY_PIR.md][PIR]] | Cells are single source of truth for constraints |
+| [[file:2026-03-13_TRACK2_REACTIVE_RESOLUTION_DESIGN.md][Track 2]] | Reactive resolution (stratified quiescence) | — | S0→S1→S2 replaces batch post-passes |
+| [[file:2026-03-13_TRACK3_CELL_PRIMARY_REGISTRIES.md][Track 3]] | Cell-primary registries (28 readers) | [[file:2026-03-16_TRACK3_CELL_PRIMARY_REGISTRIES_PIR.md][PIR]] | All computation reads are cell-primary |
+| [[file:2026-03-16_TRACK4_ATMS_SPECULATION.md][Track 4]] | ATMS speculation (per-meta TMS cells) | [[file:2026-03-16_TRACK4_ATMS_SPECULATION_PIR.md][PIR]] | Learned-clause pruning, save/restore 6→3 boxes |
+| [[file:2026-03-16_TRACK5_GLOBAL_ENV_DEPENDENCY_EDGES.md][Track 5]] | Global-env consolidation + dependency edges | [[file:2026-03-16_TRACK5_GLOBAL_ENV_DEPENDENCY_EDGES_PIR.md][PIR]] | Per-module persistent networks, cross-module dep edges |
+| [[file:2026-03-16_TRACK6_DRIVER_SIMPLIFICATION.md][Track 6]] | Driver simplification + cleanup | [[file:2026-03-17_TRACK6_DRIVER_SIMPLIFICATION_PIR.md][PIR]] | Parameterize 30→13, callback elimination, first clean suite |
+| [[file:2026-03-18_TRACK7_PERSISTENT_CELLS_STRATIFIED_RETRACTION.md][Track 7]] | Persistent registry cells + stratified retraction | [[file:2026-03-18_TRACK7_PIR.md][PIR]] | 29 persistent cells, S(−1) retraction, readiness propagators, pure resolution |
 
 *** Pending Tracks
 
 | Track | Description | Status | Design/Audit |
 |-------+-------------+--------+--------------|
-| Track 8 | Infrastructure migration (imperative state → propagator cells) | Audit complete, design pending | [[file:2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.md][Audit (2026-03-18)]] |
+| Track 8 | Infrastructure migration (imperative state → propagator cells) | Audit complete, design pending | [[file:2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org][Audit]] |
 | Track 9 | General Diagnostic Engine (GDE) — multi-hypothesis conflict analysis | Not started | Depends on Track 8 |
-| Track 10 | LSP Integration — incremental re-elaboration, live diagnostics | Not started | Depends on Track 9 |
+| Track 10 | LSP Integration — incremental re-elaboration, live diagnostics | Not started | [[file:2026-03-19_TRACK10_DESIGN_NOTES.org][Early notes]]; depends on Track 9 |
 
 Track 8 is a dependency for CIU Series Tracks 3–5 and may benefit BSP-LE.
 
@@ -57,7 +57,7 @@ Solver). Track 8's remaining scope focuses on the second half:
 imperative state migration, callback elimination, and module
 restructuring.
 
-** 2. BSP-LE  — /The Logic Engine, realized on propagators/
+** BSP-LE  — /The Logic Engine, realized on propagators/
 
 | | |
 |------------------+------|
@@ -84,7 +84,7 @@ restructuring.
 | PUnify Parts 1–2 (cell-tree unification) | ✅ Complete ([[file:2026-03-19_PUNIFY_PARTS1_2_PIR.md][PIR]]) |
 | PUnify Cleanup (bridge retirement, 5 parity bugs) | ⬜ Pending |
 
-** 3. CIU (Collection Interface Unification)  — /All collection dispatch through traits on the propagator network/
+** CIU (Collection Interface Unification)  — /All collection dispatch through traits on the propagator network/
 
 | | |
 |------------------+------|
@@ -112,8 +112,8 @@ any Series.
 | Track | Date | Design | PIR | Key Result |
 |-------+------+--------+-----+------------|
 | First-Class Paths | 2026-03-20 | [[file:2026-03-20_FIRST_CLASS_PATHS_DESIGN.md][Design]] | — | Phases 0–7c: 14-file pipeline, broadcast ~.*field~, renaming ~^~. Phase 8 (Lens) deferred. |
-| First-Class Traits | 2026-03-09 | [[file:2026-03-09_FIRST_CLASS_TRAITS_STAGE3_DESIGN.md][Design]] | [[file:2026-03-09_FIRST_CLASS_TRAITS_PIR.md][PIR]] | All 11 sub-phases: trait/impl/bundle/spec/defn/schema surface syntax. |
-| FL Narrowing | 2026-03-07 | [[file:2026-03-07_FL_NARROWING_DESIGN.md][Design (.org)]] | [[file:2026-03-08_FL_NARROWING_PIR.md][PIR]] | Definitional trees, residuation-first, term lattice. |
+| First-Class Traits | 2026-03-09 | [[file:2026-03-09_FIRST_CLASS_TRAITS_STAGE3_DESIGN.md][Design]] | [[file:2026-03-09_FIRST_CLASS_TRAITS_PIR.org][PIR]] | All 11 sub-phases: trait/impl/bundle/spec/defn/schema surface syntax. |
+| FL Narrowing | 2026-03-07 | [[file:../research/2026-03-07_FL_NARROWING_DESIGN.org][Design]] | [[file:2026-03-08_FL_NARROWING_PIR.md][PIR]] | Definitional trees, residuation-first, term lattice. |
 | Narrowing + Abstract Interp | 2026-03-07 | [[file:2026-03-07_NARROWING_ABSTRACT_INTERPRETATION_DESIGN.md][Design]] | — | All phases ✅: DT extraction, term lattice, narrowing propagator. |
 | IO Implementation | 2026-03-05 | [[file:2026-03-05_IO_IMPLEMENTATION_DESIGN.md][Design]] | [[file:2026-03-06_IO_IMPLEMENTATION_PIR.md][PIR]] | IO-A through IO-J: file, net, session IO. |
 | Effectful Computation (A+D) | 2026-03-07 | [[file:2026-03-07_ARCHITECTURE_AD_IMPLEMENTATION_DESIGN.md][Design]] | [[file:2026-03-07_ARCHITECTURE_AD_PIR.md][PIR]] | AD-A through AD-F: effect position lattice, Galois bridge, effect ordering, executor, ATMS branching. |
@@ -134,7 +134,7 @@ or the project roadmap reaches them.
 | [[file:2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md][Capabilities as Types]] | Design complete, not started | Capability hierarchy, QTT enforcement, ATMS provenance |
 | [[file:2026-03-05_IO_LIBRARY_DESIGN_V2.md][IO Library V2]] | Design/research | Extended IO: Bytes type, binary IO, SQLite FFI |
 | [[file:2026-03-01_1200_IO_LIBRARY_DESIGN.md][IO Library V1]] | Superseded by V2 | Original IO design |
-| [[file:2026-03-19_TRACK10_DESIGN_NOTES.md][Track 10 Design Notes (Provenance)]] | Notes only | Two-tier provenance, LSP integration; scoped under Propagator Migration Track 10 |
+| [[file:2026-03-19_TRACK10_DESIGN_NOTES.org][Track 10 Design Notes (Provenance)]] | Notes only | Two-tier provenance, LSP integration; scoped under Propagator Migration Track 10 |
 | [[file:2026-03-06_1400_RELATIONAL_FACT_DESIGN.md][Relational Fact Design]] | Design discussion | Captured from mobile session |
 | [[file:2026-03-03_PATH_ALGEBRA_DESIGN.md][Path Algebra]] | Superseded | Extended by First-Class Paths |
 | [[file:2026-03-02_2200_SCHEMA_SELECTION_DESIGN.md][Schema/Selection]] | Implemented | Part of First-Class Traits |
@@ -148,7 +148,7 @@ or the project roadmap reaches them.
 | [[file:2026-03-10_WS_MODE_AUDIT.md][WS-Mode Audit]] | 2026-03-10 | ✅ | Three-level WS validation protocol |
 | [[file:2026-03-11_GENERIC_NUMERICS_AUDIT.md][Generic Numerics Audit]] | 2026-03-11 | ✅ | Numeric trait instances |
 | [[file:2026-03-18_STRATIFIED_ARCHITECTURE_AUDIT.md][Stratified Architecture Audit]] | 2026-03-18 | ✅ | Track 7 S(−1) retraction design |
-| [[file:2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.md][Track 8 Infrastructure Audit]] | 2026-03-18 | ✅ | Track 8 design direction |
+| [[file:2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org][Track 8 Infrastructure Audit]] | 2026-03-18 | ✅ | Track 8 design direction |
 | [[file:2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md][Cell/Propagator Allocation Audit]] | 2026-03-20 | ✅ | BSP-LE Track 0 (Allocation Efficiency) |
 | [[file:2026-03-20_COLLECTION_INTERFACE_AUDIT.md][Collection Interface Audit]] | 2026-03-20 | ✅ | CIU Series |
 
