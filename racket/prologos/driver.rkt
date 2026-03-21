@@ -1893,7 +1893,12 @@
         local-name))
 
   ;; Build a type sexp from the tokens: (Nat -> Nat -> Bool) → (-> Nat (-> Nat Bool))
-  (define type-sexp (foreign-type-tokens->sexp type-tokens))
+  ;; Pre-process: replace Path with $foreign-Path in tokens, since Path is not a parser atom
+  ;; (it conflicts with prologos::data::path's data Path declaration).
+  ;; $foreign-Path is handled in the parser as surf-path-type.
+  (define processed-tokens
+    (map (lambda (t) (if (eq? t 'Path) '$foreign-Path t)) type-tokens))
+  (define type-sexp (foreign-type-tokens->sexp processed-tokens))
 
   ;; Parse and elaborate the type
   (reset-meta-store!)
@@ -1992,12 +1997,21 @@
      ;; Expand multi-token non-final segments (uncurried syntax).
      ;; (Nat Nat -> Bool) splits to ((Nat Nat) Bool), expand to (Nat Nat Bool).
      ;; Last segment stays as-is (multi-token = type application like List Nat).
+     ;; IMPORTANT: Only expand segments that were multi-token in the source, not
+     ;; sub-lists that represent type applications (e.g., [List Keyword] from WS reader).
+     ;; split-on-arrow marks multi-token segments with a 'multi-token property.
      (define expanded
        (let ([non-final (drop-right parts 1)]
              [final     (last parts)])
          (append
-          (append-map (lambda (p) (if (list? p) p (list p))) non-final)
-          (list final))))
+          (append-map (lambda (p)
+                        (if (multi-token-segment? p)
+                            (multi-token-list-elements p)  ;; multi-token uncurried: expand
+                            (list p))) ;; single token or type application: keep as-is
+                      non-final)
+          (list (if (multi-token-segment? final)
+                    (multi-token-list-elements final)
+                    final)))))
      (define (build parts)
        (cond
          [(= (length parts) 1) (car parts)]
@@ -2012,19 +2026,25 @@
   (let loop ([toks tokens] [current '()] [segments '()])
     (cond
       [(null? toks)
-       (reverse (cons (if (= (length current) 1)
-                          (car current)
-                          (reverse current))
-                      segments))]
-      [(eq? (car toks) '->)
-       (loop (cdr toks)
-             '()
-             (cons (if (= (length current) 1)
+       (define seg (if (= (length current) 1)
                        (car current)
-                       (reverse current))
-                   segments))]
+                       (mark-multi-token (reverse current))))
+       (reverse (cons seg segments))]
+      [(eq? (car toks) '->)
+       (define seg (if (= (length current) 1)
+                       (car current)
+                       (mark-multi-token (reverse current))))
+       (loop (cdr toks) '() (cons seg segments))]
       [else
        (loop (cdr toks) (cons (car toks) current) segments)])))
+
+;; Mark multi-token segments to distinguish from type application sub-lists.
+;; Uses a simple property list approach — adds a 'multi-token tag as first element
+;; that foreign-type-tokens->sexp can detect.
+(struct multi-token-list (elements) #:transparent)
+
+(define (mark-multi-token lst) (multi-token-list lst))
+(define (multi-token-segment? x) (multi-token-list? x))
 
 ;; Auto-install on module load
 (install-module-loader!)

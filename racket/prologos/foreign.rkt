@@ -79,6 +79,8 @@
     [(Unit)   (void)]
     [(Char)   (char->rkt-char val)]
     [(String) (string->rkt-string val)]
+    ;; Passthrough types: the Prologos IR value IS the Racket value
+    [(Path Keyword Passthrough) val]
     [else
      (define type-str (symbol->string base-type))
      (if (string-prefix? type-str "Opaque:")
@@ -117,6 +119,8 @@
     [(Unit)   (expr-unit)]
     [(Char)   (expr-char val)]
     [(String) (expr-string val)]
+    ;; Passthrough types: result is already a Prologos IR value
+    [(Path Keyword Passthrough) val]
     [else
      (define type-str (symbol->string base-type))
      (if (string-prefix? type-str "Opaque:")
@@ -142,7 +146,11 @@
     [(expr-Rat)    'Rat]
     [(expr-Char)   'Char]
     [(expr-String) 'String]
-    [_ (error 'foreign "Unsupported foreign type component: ~a" e)]))
+    ;; Passthrough types: Path, Keyword — Racket functions operate on IR values directly
+    [(expr-Path) 'Path]
+    [(expr-Keyword) 'Keyword]
+    ;; Any other type: passthrough (the Racket function handles IR values directly)
+    [_ 'Passthrough]))
 
 ;; Parse a Prologos core type expression into a marshalling descriptor.
 ;; Returns (cons arg-base-types return-base-type) where arg-base-types

@@ -1,0 +1,27 @@
+ns prologos::core::path
+
+require [prologos::data::list :as list :refer [List]]
+
+;; ========================================
+;; First-Class Path Combinators
+;; Foreign primitives + pure Prologos combinators for path introspection.
+;; ========================================
+
+;; --- Foreign primitives (passthrough marshalling) ---
+
+foreign racket "prologos/path-ops" [path-segments :as segments : Path -> [List Keyword]]
+foreign racket "prologos/path-ops" [path-from-segments :as from-segments : [List Keyword] -> Path]
+foreign racket "prologos/path-ops" [path-branch-count :as branch-count : Path -> Int]
+foreign racket "prologos/path-ops" [path-depth :as depth : Path -> Int]
+foreign racket "prologos/path-ops" [path-head :as head : Path -> Keyword]
+foreign racket "prologos/path-ops" [path-tail :as tail : Path -> Path]
+
+;; --- Pure Prologos combinators (types inferred from foreign primitives) ---
+
+defn leaf? [p] [int-eq [depth p] 1]
+
+defn path-append [p1 p2]
+  [from-segments [list::append [segments p1] [segments p2]]]
+
+defn path-reverse [p]
+  [from-segments [list::reverse [segments p]]]

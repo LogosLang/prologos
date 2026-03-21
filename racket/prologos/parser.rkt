@@ -529,8 +529,9 @@
     [(q64-zero) (surf-quire64-zero loc)]
     [(Symbol) (surf-symbol-type loc)]
     [(Keyword) (surf-keyword-type loc)]
-    ;; Note: Path is NOT a parser atom — it conflicts with prologos::data::path's Path data type.
-    ;; The expr-Path IR type is inferred for path literals; explicit annotation isn't needed yet.
+    ;; Path is NOT a parser atom — conflicts with prologos::data::path's data Path.
+    ;; Foreign type declarations use $foreign-Path sentinel (mapped in handle-foreign-decl).
+    [($foreign-Path) (surf-path-type loc)]
     [(Char) (surf-char-type loc)]
     [(String) (surf-string-type loc)]
     [(Type)   (surf-type #f loc)]     ;; bare Type → infer level (Sprint 6)
