@@ -1,0 +1,189 @@
+#+TITLE: Prologos Master Roadmap
+#+SUBTITLE: Single Source of Truth for All Planned, Active, and Completed Work
+#+AUTHOR: The Prologos Project
+#+DATE: 2026-03-21
+
+* Purpose
+
+This document is the top-level index into all organized work in Prologos.
+It tracks active Series, standalone Tracks, and completed efforts — with
+links to detailed design documents, PIRs, audits, and Master Roadmaps.
+
+Consult this document to answer: "What's in flight? What's next? Where is
+the design for X?"
+
+See [[file:principles/WORK_STRUCTURE.org][WORK_STRUCTURE.org]] for how work units (Series, Tracks, Phases,
+Audits) are defined.
+
+* Active Series
+
+** 1. Propagator Migration  — /Bringing elaboration state onto the propagator network/
+
+| | |
+|------------------+------|
+| *Master Roadmap* | [[file:2026-03-13_PROPAGATOR_MIGRATION_MASTER.md][2026-03-13_PROPAGATOR_MIGRATION_MASTER.md]] |
+| *Thesis*         | Every piece of mutable state that participates in type-checking flows through one unified propagator network. |
+| *Status*         | Tracks 1–7 complete. Track 8 audit complete, design pending. |
+
+*** Completed Tracks
+
+| Track | Description | PIR | Key Result |
+|-------+-------------+-----+------------|
+| Foundation | Cell abstraction, 42 state sites migrated | — | Dual-write cells for all propagator-natural state |
+| Track 1 | Cell-primary constraint tracking | [[file:2026-03-12_TRACK1_CELL_PRIMARY_PIR.md][PIR]] | Cells are single source of truth for constraints |
+| Track 2 | Reactive resolution (stratified quiescence) | — | S0→S1→S2 replaces batch post-passes |
+| Track 3 | Cell-primary registries (28 readers) | [[file:2026-03-16_TRACK3_CELL_PRIMARY_REGISTRIES_PIR.md][PIR]] | All computation reads are cell-primary |
+| Track 4 | ATMS speculation (per-meta TMS cells) | [[file:2026-03-16_TRACK4_ATMS_SPECULATION_PIR.md][PIR]] | Learned-clause pruning, save/restore 6→3 boxes |
+| Track 5 | Global-env consolidation + dependency edges | [[file:2026-03-16_TRACK5_GLOBAL_ENV_DEPENDENCY_EDGES_PIR.md][PIR]] | Per-module persistent networks, cross-module dep edges |
+| Track 6 | Driver simplification + cleanup | [[file:2026-03-17_TRACK6_DRIVER_SIMPLIFICATION_PIR.md][PIR]] | Parameterize 30→13, callback elimination, first clean suite |
+| Track 7 | Persistent registry cells + stratified retraction | [[file:2026-03-18_TRACK7_PIR.md][PIR]] | 29 persistent cells, S(−1) retraction, readiness propagators, pure resolution |
+
+*** Active Track
+
+| Track | Description | Status | Design/Audit |
+|-------+-------------+--------+--------------|
+| Track 8 | Infrastructure audit → design | Audit complete, design pending | [[file:2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.md][Audit (2026-03-18)]] |
+
+Track 8 is a dependency for CIU Series Tracks 3–5 and may benefit BSP-LE.
+
+** 2. BSP-LE  — /The Logic Engine, realized on propagators/
+
+| | |
+|------------------+------|
+| *Master Roadmap* | [[file:2026-03-21_BSP_LE_MASTER.md][2026-03-21_BSP_LE_MASTER.md]] |
+| *Thesis*         | Choice points are ATMS assumptions, conjunction is worklist scheduling, backtracking is nogood accumulation, tabling is cell quiescence, parallel exploration is BSP. |
+| *Status*         | Series inception. All Tracks pending. |
+| *Origin*         | [[file:2026-02-24_LOGIC_ENGINE_DESIGN.org][Logic Engine Design (Phases 4–7)]], [[file:2026-03-19_PUNIFY_PART3_ATMS_SOLVER_ARCHITECTURE.md][PUnify Part 3 (Multiverse Multiplexer)]] |
+
+*** Tracks
+
+| Track | Description | Status | Depends On |
+|-------+-------------+--------+------------|
+| 0 | Allocation Efficiency | ⬜ | — (unblocked, [[file:2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md][Audit]]) |
+| 1 | UnionFind (persistent disjoint sets) | ⬜ | Track 0 |
+| 2 | ATMS Solver (Multiverse Multiplexer) | ⬜ | Track 0 |
+| 3 | Tabling (SLG memoization) | ⬜ | Track 2 |
+| 4 | BSP Pipeline (Kan extension architecture) | ⬜ | Track 3 |
+| 5 | Solver Language | ⬜ | All previous |
+
+*** Prerequisites
+
+| Item | Status |
+|------+--------|
+| PUnify Parts 1–2 (cell-tree unification) | ✅ Complete ([[file:2026-03-19_PUNIFY_PARTS1_2_PIR.md][PIR]]) |
+| PUnify Cleanup (bridge retirement, 5 parity bugs) | ⬜ Pending |
+
+** 3. CIU (Collection Interface Unification)  — /All collection dispatch through traits on the propagator network/
+
+| | |
+|------------------+------|
+| *Master Roadmap* | [[file:2026-03-21_CIU_MASTER.md][2026-03-21_CIU_MASTER.md]] |
+| *Thesis*         | Syntactic sugar generates trait constraints resolved on the propagator network — not constructor-specific dispatch. User-defined collections participate in all syntax automatically. |
+| *Status*         | Series inception. Track 0 next. |
+| *Origin*         | [[file:2026-03-20_COLLECTION_INTERFACE_AUDIT.md][Collection Interface Audit]], [[file:2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md][Unification Design]] |
+
+*** Tracks
+
+| Track | Description | Status | Pre/Post Track 8 |
+|-------+-------------+--------+------------------|
+| 0 | Trait Hierarchy Design (deep Stage 2) | ⬜ | Pre |
+| 1 | Seq Protocol (Seq-as-trait, native instances, LSeq demotion) | ⬜ | Pre |
+| 2 | Syntactic Sugar Normalization (dot-brace, ground-expr? fix) | ⬜ | Pre |
+| 3 | Trait-Dispatched Access (~surf-get~ generates constraints) | ⬜ | Post Track 8 |
+| 4 | Trait-Dispatched Iteration (broadcast via Seq) | ⬜ | Post Track 8 |
+| 5 | Union-Aware Dispatch | ⬜ | Post Track 8 |
+
+* Completed Standalone Tracks (not part of a Series)
+
+These are Tracks that were independently scoped and completed outside of
+any Series.
+
+| Track | Date | Design | PIR | Key Result |
+|-------+------+--------+-----+------------|
+| First-Class Paths | 2026-03-20 | [[file:2026-03-20_FIRST_CLASS_PATHS_DESIGN.md][Design]] | — | Phases 0–7c: 14-file pipeline, broadcast ~.*field~, renaming ~^~. Phase 8 (Lens) deferred. |
+| First-Class Traits | 2026-03-09 | [[file:2026-03-09_FIRST_CLASS_TRAITS_STAGE3_DESIGN.md][Design]] | [[file:2026-03-09_FIRST_CLASS_TRAITS_PIR.md][PIR]] | All 11 sub-phases: trait/impl/bundle/spec/defn/schema surface syntax. |
+| FL Narrowing | 2026-03-07 | [[file:2026-03-07_FL_NARROWING_DESIGN.md][Design (.org)]] | [[file:2026-03-08_FL_NARROWING_PIR.md][PIR]] | Definitional trees, residuation-first, term lattice. |
+| IO Implementation | 2026-03-05 | [[file:2026-03-05_IO_IMPLEMENTATION_DESIGN.md][Design]] | [[file:2026-03-06_IO_IMPLEMENTATION_PIR.md][PIR]] | IO-A through IO-J: file, net, session IO. |
+| Session Types | 2026-03-03 | [[file:2026-03-03_SESSION_TYPE_DESIGN.md][Design]] | [[file:2026-03-04_SESSION_TYPE_PIR.md][PIR]] | Protocol types, duality, propagator-based session checking. |
+| Explain / Provenance | 2026-03-14 | [[file:2026-03-14_EXPLAIN_PROVENANCE_DESIGN.md][Design]] | — | All 7 phases complete: derivation trees for relational queries. |
+| Well-Founded LE | 2026-03-14 | [[file:2026-03-14_WELL_FOUNDED_LOGIC_ENGINE_DESIGN.md][Design]] | [[file:2026-03-14_WFLE_PIR.md][PIR]] | Bilattice oracle, WF-NAF, 3-valued negation. |
+| PUnify Parts 1–2 | 2026-03-19 | [[file:2026-03-19_PUNIFY_STRUCTURAL_UNIFICATION_PROPAGATORS.org][P1 Design]], [[file:2026-03-19_PUNIFY_PART2_CELL_TREE_ARCHITECTURE.md][P2 Design]] | [[file:2026-03-19_PUNIFY_PARTS1_2_PIR.md][PIR]] | Cell-tree unification, descriptor registry, polymorphic solver dispatch. |
+
+* Standalone Design Documents (Not Yet Tracked as Series/Tracks)
+
+These design documents exist but are not currently scoped into active
+work. They may be promoted to Tracks when their prerequisites are met.
+
+| Document | Status | Notes |
+|----------+--------+-------|
+| [[file:2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md][Propagator Visualization]] | Stage 2-3 design | Phases 5d, 6a-6d deferred (DEFERRED.md) |
+| [[file:2026-03-07_ARCHITECTURE_AD_IMPLEMENTATION_DESIGN.md][Effectful Computation (Architecture A+D)]] | Design complete, not started | 16 sub-phases; not blocked |
+| [[file:2026-03-19_TRACK10_DESIGN_NOTES.md][Track 10 Design Notes (Provenance)]] | Notes only | Two-tier provenance, LSP integration |
+| [[file:2026-03-03_PATH_ALGEBRA_DESIGN.md][Path Algebra]] | Superseded | Extended by First-Class Paths |
+| [[file:2026-03-02_2200_SCHEMA_SELECTION_DESIGN.md][Schema/Selection]] | Complete | Implemented as part of First-Class Traits |
+
+* Audits
+
+| Audit | Date | Status | Motivated |
+|-------+------+--------+-----------|
+| [[file:../research/2026-03-11_PROPAGATOR_FIRST_PIPELINE_AUDIT.md][Pipeline Audit]] | 2026-03-11 | ✅ | Propagator Migration Foundation + Tracks 1–7 |
+| [[file:2026-03-03_LE_SUBSYSTEM_AUDIT.md][LE Subsystem Audit]] | 2026-03-03 | ✅ | Logic Engine Design |
+| [[file:2026-03-10_WS_MODE_AUDIT.md][WS-Mode Audit]] | 2026-03-10 | ✅ | Three-level WS validation protocol |
+| [[file:2026-03-11_GENERIC_NUMERICS_AUDIT.md][Generic Numerics Audit]] | 2026-03-11 | ✅ | Numeric trait instances |
+| [[file:2026-03-18_STRATIFIED_ARCHITECTURE_AUDIT.md][Stratified Architecture Audit]] | 2026-03-18 | ✅ | Track 7 S(−1) retraction design |
+| [[file:2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.md][Track 8 Infrastructure Audit]] | 2026-03-18 | ✅ | Track 8 design direction |
+| [[file:2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md][Cell/Propagator Allocation Audit]] | 2026-03-20 | ✅ | BSP-LE Track 0 (Allocation Efficiency) |
+| [[file:2026-03-20_COLLECTION_INTERFACE_AUDIT.md][Collection Interface Audit]] | 2026-03-20 | ✅ | CIU Series |
+
+* Research Documents
+
+See =docs/research/= for the full set. Key recent research:
+
+| Document | Date | Relevance |
+|----------+------+-----------|
+| [[file:../research/2026-03-21_PROPAGATOR_NETWORK_TAXONOMY.org][Propagator Network Taxonomy]] | 2026-03-21 | Cross-disciplinary classification of propagator architecture |
+| [[file:../research/2026-03-21_CATEGORICAL_STRUCTURE_FIVE_SYSTEMS.org][Categorical Structure of Five Systems]] | 2026-03-21 | Precise categorical characterization of each subsystem |
+| [[file:../research/2026-03-13_LAYERED_RECOVERY_CATEGORICAL_ANALYSIS.org][Layered Recovery Categorical Analysis]] | 2026-03-13 | Opfibration framework for layered recovery principle |
+| [[file:../research/2026-03-16_NEXT_GEN_LOGIC_PROGRAMMING.org][Next-Gen Logic Programming]] | 2026-03-16 | Survey: tabling, constraints, parallelism in modern LP |
+| [[file:../research/2026-03-07_PROPAGATORS_AS_MODEL_CHECKERS.org][Propagators as Model Checkers]] | 2026-03-07 | Verification via propagator infrastructure |
+| [[file:../research/2026-03-14_FORMAL_MODELING_ON_PROPAGATORS.org][Formal Modeling on Propagators]] | 2026-03-14 | Formal methods perspective on the architecture |
+
+* Principles Documents
+
+These are the design cornerstones that all work builds against:
+
+| Document | Scope |
+|----------+-------|
+| [[file:principles/DESIGN_METHODOLOGY.org][DESIGN_METHODOLOGY.org]] | Five design stages, critique cycles, WS validation protocol |
+| [[file:principles/DESIGN_PRINCIPLES.org][DESIGN_PRINCIPLES.org]] | Language design principles: decomplection, traits, propagators, Seq |
+| [[file:principles/WORK_STRUCTURE.org][WORK_STRUCTURE.org]] | How we organize work: Series, Tracks, Audits, Phases |
+| [[file:principles/POST_IMPLEMENTATION_REVIEW.org][POST_IMPLEMENTATION_REVIEW.org]] | PIR methodology: 16 questions, template, anti-patterns |
+| [[file:principles/DEVELOPMENT_LESSONS.org][DEVELOPMENT_LESSONS.org]] | Accumulated lessons from implementation |
+| [[file:principles/PATTERNS_AND_CONVENTIONS.org][PATTERNS_AND_CONVENTIONS.org]] | Naming, Nat vs Int, coding conventions |
+| [[file:principles/LANGUAGE_VISION.org][LANGUAGE_VISION.org]] | Language vision and identity |
+| [[file:principles/ERGONOMICS.org][ERGONOMICS.org]] | Ergonomics principles and selective disclosure |
+| [[file:principles/RELATIONAL_LANGUAGE_VISION.org][RELATIONAL_LANGUAGE_VISION.org]] | Three-layer model for relational programming |
+
+* Deferred Work
+
+See [[file:DEFERRED.md][DEFERRED.md]] for the single source of truth on deferred items.
+Last consolidated sweep: 2026-03-20.
+
+Key high-priority deferred items now absorbed into Series:
+- =Seq= as proper trait → CIU Track 0/1
+- Allocation efficiency → BSP-LE Track 0
+- =restore-meta-state!= retirement → Propagator Migration Track 8
+
+* Cross-Series Dependencies
+
+#+begin_example
+  Propagator Migration (Track 8)
+       │
+       ├──→ CIU Tracks 3, 4, 5 (trait-dispatched access/iteration/union)
+       │
+       └──→ BSP-LE (may benefit from callback elimination + module restructuring)
+#+end_example
+
+Track 8 is the critical path for post-design-phase work in CIU. BSP-LE
+can proceed independently but Track 8 improvements may simplify
+implementation.
