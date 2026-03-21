@@ -356,7 +356,7 @@
        (tms-write old-val (current-speculation-stack) new-val)]
       [else new-val]))
   (define merged (merge-fn old-val actual-new-val))
-  (if (equal? merged old-val)
+  (if (or (eq? merged old-val) (equal? merged old-val))
       net  ;; No change — return same network (critical for termination)
       (let* ([new-cell (struct-copy prop-cell cell [value merged])]
              [new-cells (champ-insert cells h cid new-cell)]
@@ -1097,7 +1097,7 @@
     (if (eq? widen-entry 'none)
         merged
         ((car widen-entry) old-val merged)))
-  (if (equal? final-val old-val)
+  (if (or (eq? final-val old-val) (equal? final-val old-val))
       net  ;; No change — critical for termination
       (let* ([new-cell (struct-copy prop-cell cell [value final-val])]
              [new-cells (champ-insert cells h cid new-cell)]
