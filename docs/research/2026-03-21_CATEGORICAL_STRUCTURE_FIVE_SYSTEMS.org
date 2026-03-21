@@ -1,0 +1,672 @@
+#+TITLE: Categorical Structure of Five Propagator Systems: A Critical Re-Examination
+#+SUBTITLE: Against Overgeneralization — What Each System Actually Is
+#+AUTHOR: The Prologos Project
+#+DATE: 2026-03-21
+
+* Abstract
+
+The Propagator Network Taxonomy (2026-03-21) characterized the most general
+category of Prologos's layered recovery implementations as "bifibrations over a
+stratification poset, enriched in a quantale of lattice values." The earlier
+Layered Recovery Categorical Analysis (2026-03-13) was more careful, identifying
+opfibrations with cleavage as the common structure across three systems, with
+quantale enrichment as optional.
+
+We argue that /both/ characterizations overgeneralize. The bifibration claim
+attributes structure that none of the five systems genuinely inhabit. Even the
+opfibration framing, while categorically well-motivated for System III (the type
+checker), stretches uncomfortably over the other four. Each system has a precise
+categorical structure that is /less/ than an opfibration — and the differences
+are informative, not incidental.
+
+This document examines each system independently, grounding the analysis in the
+actual implementation, and identifies the minimal categorical structure that
+honestly characterizes each.
+
+* 1. Methodology: What Counts as "Inhabiting" a Category
+
+A system "inhabits" a categorical structure when:
+
+1. The objects and morphisms of the category correspond to /implemented/ data
+   structures and transitions (not aspirational or potential ones).
+2. The functorial laws (composition, identity) are /enforced/ by the
+   implementation, not merely compatible with it.
+3. The additional structure (enrichment, fibration, etc.) is /load-bearing/ — the
+   system would break if that structure were removed.
+
+A system that is /compatible/ with a categorical structure but does not /use/ it
+is not characterized by that structure. The powerset lattice ℘(H) is compatible
+with quantale enrichment (intersection as tensor), but if the system never
+composes sets, the quantale is not load-bearing.
+
+We apply this criterion strictly. The result is that the five systems span a
+range of categorical complexity, from a simple well-founded chain (NAF-LE) to a
+genuine stratified opfibration (the type checker).
+
+* 2. System I: NAF-LE (Stratified Negation-as-Failure)
+
+** 2.1 What the Implementation Does
+
+The stratified evaluator (=stratified-eval.rkt=) works in two phases:
+
+1. /Preprocessing/: =stratify= (in =stratify.rkt=) computes a topological sort
+   of the predicate dependency graph, grouping predicates into strata. Negative
+   edges (=\not P=) force the dependent predicate into a /higher/ stratum.
+
+2. /Evaluation/: =stratified-solve-multi= iterates through strata bottom-up. For
+   each stratum, it forces evaluation of all predicates via the DFS solver. The
+   DFS solver (=relations.rkt=) is the actual engine; stratification merely
+   controls /when/ negation is evaluated.
+
+The DFS solver operates on substitutions, not on sets of ground atoms. Each
+stratum does not produce an "interpretation" (a subset of the Herbrand base)
+that is passed to the next — it produces /solutions/ (substitution bindings)
+cached in a relation store. Negation checks whether a goal has /any/ solutions,
+which is a set-membership question on the cache.
+
+** 2.2 Claimed Structure: Opfibration over Well-Ordered Base
+
+The earlier analysis (§1.1.3 of the 2026-03-13 document) models NAF-LE as a
+Grothendieck opfibration:
+
+- Base B = {0, 1, ..., n} (strata as a linear order)
+- Fiber F(k) = ℘(H_k) (powerset of stratum-k ground atoms)
+- Transition functor: F(k→k+1) carries lfp to negation initialization
+
+** 2.3 What the System Actually Is
+
+The opfibration framing is /aspirational/. The implementation lacks the
+categorical structure it attributes:
+
+1. *No fibers exist as categories.* Each "stratum" is not a category with
+   objects and morphisms — it is a set of predicates evaluated by the DFS solver.
+   The solver does not distinguish strata; it evaluates goals and caches results.
+   Stratification is a /scheduling discipline/ on the solver, not a fiber
+   decomposition.
+
+2. *No transition functors.* There is no explicit function F(k) → F(k+1). The
+   only "transition" is that stratum k's facts are cached before stratum k+1's
+   negation-of-failure checks query the cache. This is a /temporal ordering/, not
+   a functor between categories.
+
+3. *No opcartesian lifts.* The concept of a lift (a universal factorization
+   through the projection) has no counterpart. There is nothing to lift.
+
+4. *Information flow is unidirectional and implicit.* Lower strata do not "push"
+   results to higher strata. Higher strata /pull/ results by querying the cache.
+   There is no active transport mechanism.
+
+** 2.4 Precise Categorical Structure
+
+#+begin_quote
+*NAF-LE is a well-founded chain of Kleene iterations sharing a mutable cache.*
+#+end_quote
+
+Formally:
+
+- Let $C$ be the relation cache (a mutable hash from predicate names to answer
+  lists).
+- Let $S = (s_0, s_1, \ldots, s_n)$ be the stratification (a linear order of
+  predicate groups).
+- For each stratum $s_k$, the evaluation is a function $\text{eval}_k : C \to C$
+  that queries $C$ for lower-stratum results and adds stratum-$k$ results.
+- The composition $\text{eval}_n \circ \cdots \circ \text{eval}_1 \circ
+  \text{eval}_0$ is the stratified evaluation.
+
+This is a /sequential composition of endomorphisms on a shared state/. It has
+the structure of a *free category* (a path in a directed graph) — the simplest
+possible categorical structure. The well-foundedness comes from the acyclicity of
+the dependency graph, not from a fibration base.
+
+The non-monotonicity (NAF) is localized: $\text{eval}_k$ is monotone when
+restricted to stratum-$k$ predicates (it only adds facts), but the /negation
+check/ within $\text{eval}_k$ is non-monotone with respect to the /global/ cache
+(more facts in $C$ from lower strata can cause fewer derived facts at stratum
+$k$).
+
+** 2.5 Why Not an Opfibration
+
+The opfibration framing requires:
+- A projection functor $p : E \to B$ that is a genuine functor
+- Opcartesian morphisms with a universal property
+
+NAF-LE has:
+- A scheduling order (the strata)
+- A shared mutable cache
+
+The gap is fundamental: an opfibration organizes a /total/ category into
+fibers with principled transport between them. NAF-LE has no total category to
+organize. The strata are not sub-categories; they are scheduling priorities.
+
+** 2.6 Enrichment
+
+None. The cache is a plain hash table. The powerset lattice structure (℘(H)) is
+present in theory but not load-bearing: the cache does not perform lattice
+operations (it appends answers, it does not join them).
+
+* 3. System II: WF-LE (Well-Founded Semantics)
+
+** 3.1 What the Implementation Does
+
+The well-founded engine (=wf-engine.rkt=) operates as an iterative loop:
+
+1. Create a /bilattice variable/ per predicate participating in negation.
+2. Loop (bounded by $10 + 2N$ iterations):
+   a. Construct a NAF oracle from the current bilattice state.
+   b. Probe all negation-participating predicates via the DFS solver.
+   c. Update bilattice variables based on probe results.
+   d. Check if the bilattice has stabilized.
+3. Run the actual query with the final oracle.
+
+Bilattice values: =false= (definitely not derivable), =true= (definitely
+derivable), =unknown= (status not yet determined), =contradiction= (top).
+
+** 3.2 Claimed Structure
+
+Not explicitly analyzed in the earlier documents, but the taxonomy document
+(§13.3) frames it as an instance of layered recovery with "delayed negation
+until variables are sufficiently ground."
+
+** 3.3 What the System Actually Is
+
+#+begin_quote
+*WF-LE is an iterative approximation on a product of flat bilattice domains,
+with a non-monotone oracle coupling.*
+#+end_quote
+
+Formally:
+
+- Let $B = \prod_{p \in \text{neg-preds}} \mathbf{4}$ be the product of Belnap
+  four-valued lattices, one per negation-participating predicate. $\mathbf{4}$ =
+  \{false, unknown, true, contradiction\} with the knowledge ordering
+  ($\text{false}, \text{true} < \text{unknown} < \text{contradiction}$, with
+  $\bot = $ the initial state before any probing).
+
+  However, the /implementation/ uses a simpler structure: bilattice variables
+  start at =unknown= and may move to =true= or =false= (or stay =unknown=).
+  The knowledge ordering collapses to a flat three-valued domain with
+  =unknown= as bottom.
+
+- The iteration $\phi : B \to B$ is:
+  1. Construct oracle $O(b)$ from bilattice state $b$.
+  2. For each predicate $p$: probe $p$ under oracle $O(b)$, obtaining a
+     certainty $c_p \in \{\text{definite}, \text{unknown}\}$.
+  3. Update $b_p$ based on $c_p$ and whether $p$ had any solutions.
+
+- The fixpoint $b^* = \phi^k(\bot)$ is the well-founded model (when it exists
+  within the iteration bound).
+
+** 3.4 Categorical Character
+
+This is an *Approximation Fixpoint Theory (AFT) computation* in the sense of
+Denecker, Marek, and Truszczyński. The bilattice $B$ is the precision lattice;
+the iteration $\phi$ is the approximating operator; stabilization is the
+(approximate) fixpoint.
+
+Categorically, this is a *Kleene chain in a product lattice*, with a
+non-functorial side-channel (the oracle). The oracle is non-functorial because
+it is constructed /from/ the bilattice state (not transported along a morphism)
+and fed /into/ the DFS solver (which operates in a different domain — substitutions,
+not bilattice values).
+
+The system is *not* an opfibration because:
+- There is no base category. The iteration index $k$ is not a base; it is a
+  step counter.
+- There are no fibers. Each iteration step operates on the same bilattice $B$.
+- There is no transport between strata; there is /overwriting/ of bilattice
+  cells.
+
+** 3.5 Relationship to AFT
+
+The closest categorical framing is the one Heyninck et al. (2025) give for AFT:
+a functor between the bilattice $L^2$ (viewed as a category of approximation
+pairs) and the original lattice $L$. In Prologos, $L$ = the Herbrand
+interpretations, $L^2$ = the bilattice state, and the functor is the probing
+operation. This is more modest than an opfibration — it is a *parametrized
+endomorphism* with a non-monotone coupling.
+
+** 3.6 Enrichment
+
+The bilattice $\mathbf{4}$ is a bilattice (two lattice orderings: truth and
+knowledge). In principle, bilattice structure is richer than a single lattice.
+However, the implementation uses only the knowledge ordering (to detect
+stabilization) and the truth ordering (to read the oracle). The full bilattice
+algebra (meet, join, negation, conflation) is not exercised. The enrichment is
+/available/ but not /load-bearing/.
+
+* 4. System III: The Type Checker (Stratified Quiescence)
+
+** 4.1 What the Implementation Does
+
+The type checker's constraint resolution loop (=metavar-store.rkt= lines
+1654–1724) is the only system with genuine stratified structure:
+
+#+begin_example
+loop (fuel ≤ 100):
+  S(-1): Retraction — read retracted-assumptions set; for each scoped cell,
+         remove tagged entries; write via net-cell-replace (NOT merge).
+  S0:    Propagation — run propagator network to quiescence. All cell writes
+         are monotone (lattice merge). Unification, decomposition,
+         reconstruction propagators all fire here.
+  S1:    Readiness — threshold propagators detect which constraints are
+         ready to retry. Populates a ready-queue cell with action descriptors.
+  S2:    Resolution — execute actions from the ready-queue: trait resolution,
+         hasmethod resolution, constraint retry. Each action calls solve-meta!
+         to commit solutions. Sets progress flag for next loop iteration.
+  check: If S2 network ≡ S0 network (no progress), exit. Else loop.
+#+end_example
+
+** 4.2 Claimed Structure: Opfibration with Optional Quantale Enrichment
+
+The 2026-03-13 analysis (§1.3) identifies this as a three-stratum opfibration
+with mixed enrichment:
+- Fiber T (type lattice): quantale (substitution composition)
+- Fiber R (readiness): join-semilattice
+- Fiber A (actions): free monoid
+
+** 4.3 Assessment: This IS an Opfibration (with Caveats)
+
+Of the five systems, System III is the only one that genuinely inhabits the
+opfibration structure. The key evidence:
+
+1. *Fibers are distinct categories.* S0 operates on propagator-network cells
+   (type lattice, multiplicity lattice, session lattice). S1 operates on the
+   ready-queue cell (a list of action descriptors). S2 operates on the resolution
+   engine (imperative trait/hasmethod lookups). These are categorically different
+   domains with different objects and morphisms.
+
+2. *Transition functors exist.* S0→S1 is explicit: quiescence triggers threshold
+   propagators that read cell states and write readiness signals. S1→S2 is
+   explicit: action descriptors are consumed and dispatched to the resolution
+   engine. S2→S0 (the loop-back) is the progress detection mechanism.
+
+3. *The base poset is genuine.* \{-1, 0, 1, 2\} with the natural ordering is
+   enforced by the implementation: S(-1) runs before S0, S0 before S1, S1
+   before S2. Within one loop iteration, this ordering is strict.
+
+4. *Opcartesian lifts are approximately satisfied.* Given the fixpoint of S0, the
+   readiness signals at S1 are /deterministic/ (threshold propagators are pure
+   functions of cell state). Given the ready-queue at S1, the resolution actions
+   at S2 are deterministic (under the non-overlapping instance invariant). So the
+   lifts are canonical.
+
+** 4.4 Caveats and Honest Limitations
+
+1. *The loop complicates the picture.* A true opfibration has a base category
+   with a /fixed/ structure. The type checker /loops/ — it re-enters S(-1) after
+   S2. This means the base is not a simple poset \{-1, 0, 1, 2\} but rather
+   \{-1, 0, 1, 2\}^{\leq 100} — up to 100 iterations of the cycle.
+   Categorically, this is an opfibration over a well-founded /spiral/, not a
+   simple chain.
+
+   More precisely: the base is a category $B_n = [4] \times [n]$ where $[4]
+   = \{-1, 0, 1, 2\}$ is the stratum ordering and $[n]$ is the iteration count.
+   The morphisms include both within-iteration transitions (stratum advancement)
+   and between-iteration transitions (loop-back). This is a truncated cylinder,
+   not a linear order. But truncation at the fuel limit makes it well-founded.
+
+2. *S(-1) is genuinely non-monotone.* =net-cell-replace= bypasses the merge
+   function, /decreasing/ cell values. This violates the standard opfibration
+   assumption that transitions between fibers are monotone-except-at-one-barrier.
+   In fact, S(-1) is a /second/ non-monotone transition (in addition to the
+   S2→S0 resolution commitment). The two non-monotone transitions are at
+   /different/ ends of the cycle: S(-1) cleans before propagation; S2 commits
+   after propagation.
+
+3. *Quantale enrichment in Fiber T is present but questionable.* The 2026-03-13
+   analysis claims substitution composition is a load-bearing quantale operation.
+   However, in the actual implementation, substitution composition happens
+   /inside/ the unification propagator (an internal operation), not as an
+   algebraic operation /on/ the lattice that the stratification structure
+   inspects. The stratification controller checks whether cell values changed
+   (=eq?= on network structs) — it does not compose substitutions. The quantale
+   is internal to S0's propagators, not visible at the inter-fiber level.
+
+   Compare with System II (effect order), where the cross-domain bridge /is/ a
+   quantale morphism — it preserves sequential composition across domains. In
+   System III, no inter-fiber transition inspects or preserves composition.
+
+** 4.5 Precise Categorical Structure
+
+#+begin_quote
+*System III is a stratified Kleene iteration over a product of complete lattices,
+with two non-monotone barriers (retraction and resolution commitment), organized
+as an opfibration over a well-founded cylindrical base $[4] \times [n]$.*
+#+end_quote
+
+The enrichment is:
+- Fiber S(-1): none (retraction is set-subtraction, which is not a lattice
+  operation)
+- Fiber S0: complete lattice (type lattice × multiplicity lattice × session
+  lattice × ...). The merge is lattice join. No load-bearing quantale structure
+  at the inter-fiber level.
+- Fiber S1: join-semilattice (ready-queue cell, monotonically accumulating
+  action descriptors)
+- Fiber S2: free monoid of resolution actions (executed imperatively)
+
+The inter-fiber transitions:
+- S(-1) → S0: non-monotone (retraction decreases cell values)
+- S0 → S1: monotone abstraction (cell states → readiness signals)
+- S1 → S2: monotone (ready-queue → action dispatch)
+- S2 → S(-1): non-monotone (resolution may generate new metas → new assumptions
+  → retraction in next iteration)
+
+This is a *two-barrier opfibration*, which departs from the standard definition
+(which permits at most one barrier). The standard result (§2.5 of the 2026-03-13
+analysis) that the stratified fixpoint equals the direct fixpoint assumes a
+single barrier. With two barriers, confluence depends on the /interaction/
+between retraction and resolution — which is why the non-overlapping instance
+invariant /and/ the assumption-tagging discipline are both needed.
+
+* 5. System IV: Effect System (QTT + Session Types)
+
+** 5.1 What the Implementation Does
+
+QTT (=qtt.rkt=) and session types (=session-propagators.rkt=) are implemented
+as /parallel, independent subsystems/ within the same elaboration pass:
+
+- *QTT*: A recursive type-checking function (=inferQ=, =checkQ=) that threads
+  usage contexts (plain Racket lists) through the AST. QTT does not use the
+  propagator network — it is a pure functional computation that produces usage
+  annotations alongside type judgments.
+
+- *Session types*: Propagator network cells with =session-lattice-merge=. Session
+  operations (send, recv, select, offer, stop) decompose session cells into
+  continuation cells. Duality propagators enforce that dual endpoints have dual
+  protocols.
+
+- *Cross-domain bridge*: Declarative constraints (=session-constraint= structs)
+  that link channel usage (QTT multiplicity) to session protocol expectations.
+  These are /checked/ during type-checking, not /propagated/ via the network.
+
+** 5.2 Claimed Structure: Quantale-Enriched Fibers with Galois Connection
+
+The 2026-03-13 analysis (§1.2) attributes rich structure:
+- Session lattice and effect position lattice as effect quantales
+- Cross-domain Galois connection (α, γ) : S ⇌ E as a quantale morphism
+- Five-layer architecture with effect execution as the non-monotone barrier
+
+** 5.3 Assessment: The Galois Connection Is Aspirational, Not Implemented
+
+The 2026-03-13 analysis describes a /designed/ architecture, not the current
+implementation. In practice:
+
+1. *No α or γ propagators exist.* There are no propagators that read a session
+   cell and write to a QTT cell, or vice versa. The bridge is checked
+   declaratively after elaboration, not propagated during it.
+
+2. *QTT is not on the propagator network.* Usage contexts are threaded
+   imperatively through the type checker. They do not live in cells; they are not
+   subject to merge operations; they do not participate in the fixpoint
+   computation.
+
+3. *The five-layer architecture is a design-phase decomposition.* The actual
+   implementation runs session propagators as part of S0 (the general
+   propagator quiescence stratum) and checks QTT constraints separately.
+
+** 5.4 Precise Categorical Structure
+
+#+begin_quote
+*System IV consists of two independent domains: (a) a monotone propagator network
+on session lattice cells (a sub-opfibration of System III's S0 fiber), and (b) a
+functional traversal producing usage annotations (a plain functor from AST to
+usage contexts). The two domains interact via post-hoc constraint checking, not
+via a categorical bridge.*
+#+end_quote
+
+The session-type subsystem, taken alone, is a *traced monoidal category*:
+- Objects: session types (lattice elements)
+- Morphisms: session operations (send, recv, etc.)
+- Trace: the feedback loop where duality propagators enforce consistency between
+  dual endpoints
+- Monoidal structure: parallel session composition
+
+This is categorically richer than a bare opfibration fiber (it has genuine
+monoidal structure from parallel sessions), but it does not involve stratification
+or cross-domain bridges. It is a /single-stratum propagator network/ embedded in
+System III's S0.
+
+The QTT subsystem, taken alone, is a *functor* from the category of typing
+derivations to the category of usage annotations (a semiring module over the
+multiplicity semiring \{0, 1, ω\}). This is well-studied categorically
+(Atkey 2018, McBride 2016).
+
+The /absence/ of a live Galois connection means:
+- No quantale morphism between the domains is load-bearing
+- No bifibration structure is inhabited
+- The two systems are categorically /disjoint/, coupled only by post-hoc
+  validation
+
+** 5.5 Enrichment
+
+- Session lattice: potentially a quantale (protocol continuation as tensor), but
+  the implementation does not compose session types — it decomposes them (send →
+  continuation). Decomposition is the /inverse/ of composition. The quantale
+  structure is compatible but not exercised in the forward direction.
+- QTT: the multiplicity semiring \{0, 1, ω\} is a quantale (with × as tensor
+  and + as join). This IS load-bearing — usage scaling ($k \cdot m$) and
+  addition ($m_1 + m_2$) are essential to QTT's function. But this enrichment
+  is internal to the QTT functor, not visible at the inter-system level.
+
+* 6. System V: Stratified Retraction (S(-1), Track 7)
+
+** 6.1 What the Implementation Does
+
+S(-1) retraction (=metavar-store.rkt= lines 1207–1293) is a /cleanup phase/
+that runs before each propagation cycle:
+
+1. Read =current-retracted-assumptions= (a box containing a set of assumption
+   IDs).
+2. For each of 11 scoped infrastructure cells, remove entries tagged with any
+   retracted assumption.
+3. Write cleaned values via =net-cell-replace= (bypassing merge).
+
+Retraction is triggered when S2 resolution discovers that a previous assumption
+(e.g., a speculative trait resolution) is invalid. The assumption ID is added to
+the retraction set, and the next S(-1) pass cleans all cells.
+
+** 6.2 Claimed Structure
+
+The taxonomy document (§13.6) frames retraction as "the dual of NAF: retractions
+at the lowest level, effects propagate upward."
+
+** 6.3 Assessment: S(-1) Is Not a Standalone System
+
+S(-1) is not an independent system — it is a /phase/ of System III. It has no
+standalone categorical identity because:
+
+1. *It depends on S2.* Retraction is triggered by resolution commitment (S2).
+   Without S2, there is nothing to retract.
+2. *It modifies S0's cells.* The retracted cells are the same cells that S0
+   propagators operate on. S(-1) and S0 share a state space.
+3. *It has no independent fixpoint.* S(-1) runs once per loop iteration; there
+   is no iteration within S(-1).
+
+** 6.4 Precise Categorical Structure
+
+#+begin_quote
+*S(-1) is a non-monotone endomorphism on the state space of S0, parameterized by
+a retraction set. It is the lower barrier of System III's two-barrier
+opfibration.*
+#+end_quote
+
+Formally: $\text{retract}_R : \text{Net} \to \text{Net}$ where $R$ is the set
+of retracted assumptions and $\text{Net}$ is the propagator network state.
+$\text{retract}_R$ is:
+
+- *Idempotent*: applying it twice with the same $R$ gives the same result.
+- *Anti-monotone with respect to $R$*: a /larger/ retraction set produces a
+  /smaller/ (less informative) network.
+- *Non-monotone with respect to Net*: it can /decrease/ cell values.
+
+This is closest to a *retraction* in the topological sense (a continuous map
+$r : X \to A$ where $A \subseteq X$ and $r|_A = \text{id}_A$). The "clean"
+cells are the retract $A$; the "tagged" entries are the excess that gets
+collapsed.
+
+** 6.5 The Assumption-Tagging Discipline
+
+The assumption-tagging discipline (=tagged-entry= structs with assumption IDs)
+is a /simplified JTMS/ (Justification-based Truth Maintenance System):
+
+- Each tagged entry has a single justification (the assumption ID).
+- Retraction is justification withdrawal.
+- Unlike a full JTMS, there is no cascading (removing a tagged entry does not
+  trigger further removals of entries that depended on it). This is because the
+  scoped cells store /flat/ tagged entries, not justification chains.
+
+Categorically, this is a *presheaf on a Boolean algebra of assumption sets*:
+each cell's value is indexed by which assumptions are believed. Retracting an
+assumption restricts the presheaf to the sub-Boolean-algebra excluding that
+assumption. This is the same presheaf structure identified in the ATMS analysis
+(§4 of the 2026-03-13 document), but vastly simpler — single assumptions rather
+than compound worldviews.
+
+* 7. Comparative Summary
+
+** 7.1 Categorical Structures
+
+| System | Precise Structure | Overgeneralized As |
+|--------+-------------------+--------------------|
+| I: NAF-LE | Sequential composition of endomorphisms on shared cache, indexed by well-founded stratum order | Opfibration over well-ordered base |
+| II: WF-LE | Iterative Kleene chain on product of flat bilattice domains, with non-functorial oracle coupling | Layered recovery instance (vague) |
+| III: Type Checker | Two-barrier opfibration over cylindrical base $[4] \times [n]$, with mixed fiber enrichment | Opfibration with quantale enrichment |
+| IV: QTT + Sessions | Two independent domains: traced monoidal category (sessions) ∥ semiring-module functor (QTT) | Quantale-enriched fibers with Galois connection |
+| V: S(-1) Retraction | Non-monotone endomorphism (retraction in topological sense); phase of System III | Standalone stratified retraction system |
+
+** 7.2 What the Bifibration Claim Gets Wrong
+
+The taxonomy document's claim that all five systems inhabit "bifibrations over a
+stratification poset, enriched in a quantale of lattice values" overgeneralizes
+in four specific ways:
+
+1. *Bifibration requires both cartesian and opcartesian lifts.* Cartesian lifts
+   (downward information flow from higher strata to lower) exist only in System
+   III, and only in the loop-back form (S2 progress → re-enter S(-1)). Systems
+   I, II, and V have /no/ downward information flow. System IV has no strata.
+   The correct term for System III is /opfibration with a loop/, not bifibration.
+
+2. *Quantale enrichment is not load-bearing in any system at the inter-fiber
+   level.* System II's session quantale is a design intent, not an implemented
+   bridge. System III's substitution quantale is internal to S0's propagators.
+   Systems I, II (as implemented), and V have no quantale structure. Enrichment
+   is /available/ in some fibers but never /used/ by the stratification
+   mechanism.
+
+3. *Systems I, II, and V are not fibered.* A Grothendieck (op)fibration requires
+   a projection functor and a total category organized into fibers. NAF-LE has a
+   sequential schedule on a shared cache. WF-LE has an iterative loop on a
+   product lattice. S(-1) is an endomorphism. None of these have the structure
+   of a total category with a projection.
+
+4. *"Stratification poset" conflates scheduling with categorical structure.*
+   NAF-LE's strata are scheduling priorities computed by topological sort. WF-LE
+   has no strata (it iterates on a flat product). System III's strata are genuine
+   categorical structure (different domains at each level). Using the same term
+   "stratification" for all of these obscures the fundamental differences.
+
+** 7.3 What the Opfibration Framing Gets Right (for System III)
+
+The earlier analysis (2026-03-13) was more careful and substantially correct for
+System III. The opfibration framing captures:
+
+- The four-level base poset \{-1, 0, 1, 2\}
+- The distinct fiber domains (retraction, type lattice, readiness, resolution)
+- The monotone transitions S0→S1→S2
+- The non-monotone barrier (originally: one at S2; we add S(-1) as a second)
+
+The main correction is recognizing two barriers instead of one, and the
+cylindrical (looping) base instead of a simple chain.
+
+** 7.4 Structural Complexity Ranking
+
+From simplest to most complex:
+
+1. *NAF-LE*: Sequential endomorphism composition (free category on a chain)
+2. *S(-1)*: Parameterized non-monotone endomorphism (topological retraction)
+3. *WF-LE*: Iterative approximation on product bilattice (AFT computation)
+4. *QTT + Sessions*: Parallel independent domains (traced monoidal ∥ functor)
+5. *Type Checker*: Two-barrier opfibration on cylindrical base (genuine
+   stratified structure)
+
+* 8. Implications for Future Design
+
+** 8.1 Track 8 Will Create the Structures That Don't Exist Yet
+
+Track 8 (propagator infrastructure migration) intends to bring more elaboration
+state onto the propagator network. If QTT usage contexts become propagator cells,
+and cross-domain bridges become active propagators:
+
+- System IV would gain a genuine Galois connection (α/γ propagators between QTT
+  cells and session cells)
+- The combined system would approach a bifibration (downward flow from session
+  constraints to QTT requirements, upward flow from QTT solutions to session
+  satisfaction)
+- Quantale enrichment could become load-bearing if the bridge preserves
+  composition
+
+The current analysis provides the /baseline/: here is what each system actually
+is today, so we can measure what Track 8 adds.
+
+** 8.2 The Honest Category for the Whole System
+
+If we want a single categorical structure that honestly covers all five systems
+/as implemented/, it is:
+
+#+begin_quote
+*A stratified Kleene iteration with two non-monotone barriers, operating on a
+product of domain-specific complete lattices, with independent subsystems
+(sessions, QTT) coupled via post-hoc constraint checking.*
+#+end_quote
+
+This is less elegant than "bifibration enriched in a quantale" but it is
+accurate. The loss of elegance is the cost of honesty.
+
+** 8.3 The Overgeneralization Risk
+
+Claiming a structure that the system does not inhabit creates two risks:
+
+1. *False confidence in properties.* If we believe the system is an opfibration,
+   we may assume it has the fixpoint-equivalence property (§2.5 of the 2026-03-13
+   analysis). But that theorem requires conditions (single barrier, opcartesian
+   lifts) that System III does not fully satisfy.
+
+2. *Obscuring the real architecture.* If every system is "an opfibration," the
+   genuinely distinctive structure of the type checker is lost. System III's
+   stratified quiescence is architecturally novel; calling it the same thing as
+   NAF-LE's trivial scheduling robs it of its specificity.
+
+The remedy is to use categorical language /precisely/: attribute only the
+structure that is genuinely load-bearing, and name the structures that are
+/aspirational/ as such.
+
+* 9. References
+
+- Denecker, Marek, Truszczyński. "Approximations, Stable Operators, Well-Founded
+  Fixpoints and Applications in Nonmonotonic Reasoning." 2000.
+- Heyninck et al. "A Category-Theoretic Perspective on Higher-Order
+  Approximation Fixpoint Theory." TPLP, 2025. arXiv:2502.09234.
+- Joyal, Street, Verity. "Traced Monoidal Categories." MSCS 6(3), 1996.
+- Turkenburg et al. "Comparing Functional Abstractions by Fibrations." CALCO,
+  2023.
+- Atkey. "Syntax and Semantics of Quantitative Type Theory." LICS, 2018.
+- McBride. "I Got Plenty o' Nuttin'." 2016.
+- Cousot, Cousot. "Abstract Interpretation: A Unified Lattice Model." 1977.
+- Radul. "Propagation Networks." PhD thesis, MIT, 2009.
+- De Kleer. "An Assumption-Based TMS." Artificial Intelligence 28(2), 1986.
+- Doyle. "A Truth Maintenance System." Artificial Intelligence 12(3), 1979.
+- Fitting. "Bilattices and the Semantics of Logic Programming." JLP 11, 1991.
+- Haiman. "Feedback, Trace, and Fixed-Point Semantics." RAIRO-ITA 36(2), 2002.
+
+* 10. Provenance
+
+This analysis was prompted by the observation that the Propagator Network
+Taxonomy (2026-03-21) claims "bifibrations over a stratification poset, enriched
+in a quantale of lattice values" as the most general category for all five
+layered recovery instances. The earlier Layered Recovery Categorical Analysis
+(2026-03-13) was more careful (opfibration with cleavage, optional enrichment)
+but still overgeneralizes for Systems I, II, and V.
+
+The present document grounds each system's categorical structure in the /actual
+implementation/ (=stratified-eval.rkt=, =wf-engine.rkt=, =metavar-store.rkt=,
+=session-propagators.rkt=, =qtt.rkt=) rather than in idealized abstractions.
