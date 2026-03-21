@@ -1,0 +1,58 @@
+#+TITLE: Standup — 2026-03-21
+#+DATE: 2026-03-21
+
+* Yesterday (since 2026-03-20 standup)
+
+** First-Class Path Values — Design + Phases 0-7c
+- Stage 3 design doc: ~docs/tracking/2026-03-20_FIRST_CLASS_PATHS_DESIGN.md~
+- Phase 0: Acceptance file (26 results, 0 errors)
+- Phases 1-6: Full 14-file pipeline for ~expr-path~, ~expr-get-in~, ~expr-update-in~
+  - Static paths compile away (zero runtime cost via elaborator inlining)
+  - Dynamic paths survive as ~expr-get-in~ in reduction
+  - ~Path~ type deferred — conflicts with IO ~prologos::data::path~
+- Phase 7a: path-ops.rkt (6 Racket-side ops), ~lib/prologos/core/path.prologos~ (3 combinators)
+  - Foreign compound type bug: ~multi-token-list~ wrapper for ~[List Keyword]~ disambiguation
+- Phase 7b: Broadcast ~.*field~ syntax — full 13-file pipeline for ~expr-broadcast-get~
+  - Pivoted from map+lambda desugaring to dedicated AST node (inference gap with untyped lambda)
+  - Deep broadcast chaining: ~.*a.b~ -> broadcast-get with ~[:a :b]~
+- Phase 7c: Key renaming ~^~ syntax — ~[get-in m :x^a :y^b]~ -> ~{:a 1 :b 2}~
+- Final: 33 acceptance results, 0 errors, 7308 tests pass
+
+** QTT Fix: expr-union in inferQ (~08fa7d1~)
+- Missing ~expr-union~ case in qtt.rkt caused "Multiplicity violation" on heterogeneous maps
+- 7-line fix following existing type-former pattern
+
+** Collection Interface Audit (~e632dce~)
+- 10 findings, 5 principle violations across 8 principles documents
+- Root cause: phase separation between compile-time traits and runtime constructor dispatch
+
+** Collection Interface Unification Design (~d6a149d~, overhauled ~e7227f2~)
+- First version rejected as "patch not principle" — elaboration-time dispatch approach
+- Overhaul: Propagator-resolved trait dispatch (post-Track 8)
+  - ~surf-get~ generates Indexed/Keyed constraints, propagator network resolves dicts
+  - Seq with efficient dispatch — LSeq as specific lazy type, not mandatory intermediary
+  - Pre-Track 8 (ground-expr? fix, dot-brace) vs post-Track 8 (T1-T4)
+  - §6 Track 8 Requirements informing Track 8's priorities
+
+** Categorical Re-Examination of Five Propagator Systems (~5cb97ad~)
+- Research doc: ~docs/research/2026-03-21_CATEGORICAL_STRUCTURE_FIVE_SYSTEMS.org~
+- Taxonomy's "bifibrations enriched in quantale" claim is overgeneralization
+- Only System III (type checker) genuinely inhabits opfibration structure
+  - NAF-LE: sequential endomorphism composition on shared cache
+  - WF-LE: iterative Kleene chain on product bilattice (AFT)
+  - Type checker: two-barrier opfibration over cylindrical base [4]x[n]
+  - QTT + Sessions: two independent domains (traced monoidal || functor)
+  - S(-1) Retraction: non-monotone endomorphism, phase of System III
+
+** Metrics
+- 7308 tests, 377 files, ~247.5s (full suite)
+- 12 commits in interval: ~26233d9~ through ~5cb97ad~
+
+* Today
+
+
+* Roadmap/Notes
+** Collection Interface Design — awaiting user critique
+** Part 3 Design — awaiting review
+** Track 8 — audit complete, design next
+** Allocation efficiency track — audit complete, unblocked
