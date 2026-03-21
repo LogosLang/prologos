@@ -1178,6 +1178,12 @@
      ;; Result type is a fresh meta (dynamic paths can't be statically resolved)
      (fresh-meta ctx-empty (expr-hole)
        (meta-source-info #f 'get-in-result "result type of dynamic get-in" #f '()))]
+    [(expr-broadcast-get target fields)
+     (define _tt (infer ctx target))
+     ;; fields are keyword literals — no sub-expressions to infer
+     ;; Result type: [List V] where V is resolved at reduction time
+     (fresh-meta ctx-empty (expr-hole)
+       (meta-source-info #f 'broadcast-get-result "result type of broadcast-get" #f '()))]
     [(expr-update-in target paths fn)
      (define tt (infer ctx target))
      (define _pt (infer ctx paths))

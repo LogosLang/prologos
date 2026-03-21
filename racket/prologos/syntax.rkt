@@ -140,7 +140,7 @@
  (struct-out expr-map-get) (struct-out expr-nil-safe-get) (struct-out expr-map-dissoc)
  (struct-out expr-map-size) (struct-out expr-map-has-key)
  (struct-out expr-map-keys) (struct-out expr-map-vals)
- (struct-out expr-get) (struct-out expr-get-in) (struct-out expr-update-in)
+ (struct-out expr-get) (struct-out expr-get-in) (struct-out expr-update-in) (struct-out expr-broadcast-get)
  ;; Path (first-class path values)
  (struct-out expr-path) (struct-out expr-Path)
  ;; Set (persistent hash set)
@@ -594,6 +594,7 @@
 ;; Path algebra operations
 (struct expr-get-in (target paths) #:transparent)             ; get-in : M → paths → V
 (struct expr-update-in (target paths fn) #:transparent)       ; update-in : M → paths → (V → V) → M
+(struct expr-broadcast-get (target fields) #:transparent)     ; broadcast-get : [List M] → keywords → [List V]
 
 ;; First-class path values
 (struct expr-path (branches) #:transparent)                   ; path literal: branches = list of (listof expr-keyword|expr-symbol)

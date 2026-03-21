@@ -1977,6 +1977,13 @@
                     (expr-map-assoc base (seg->kw key) updated)]))
                (build-update et segs))])]))]
 
+    ;; broadcast-get: map field extraction over a list
+    ;; (broadcast-get target :f1 :f2) → maps nested map-get over each element
+    [(surf-broadcast-get target fields loc)
+     (let ([et (elaborate target env depth)])
+       (if (prologos-error? et) et
+           (expr-broadcast-get et (map expr-keyword fields))))]
+
     ;; ---- Set type and operations ----
     [(surf-set-type a loc)
      (let ([ea (elaborate a env depth)])

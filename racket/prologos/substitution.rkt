@@ -280,6 +280,8 @@
      (expr-get-in (shift delta cutoff target) (shift delta cutoff paths))]
     [(expr-update-in target paths fn)
      (expr-update-in (shift delta cutoff target) (shift delta cutoff paths) (shift delta cutoff fn))]
+    [(expr-broadcast-get target fields)
+     (expr-broadcast-get (shift delta cutoff target) fields)]
 
     ;; Transient Builders (all non-binding)
     [(expr-transient c) (expr-transient (shift delta cutoff c))]
@@ -735,6 +737,8 @@
      (expr-get-in (subst k s target) (subst k s paths))]
     [(expr-update-in target paths fn)
      (expr-update-in (subst k s target) (subst k s paths) (subst k s fn))]
+    [(expr-broadcast-get target fields)
+     (expr-broadcast-get (subst k s target) fields)]
 
     ;; Transient Builders (all non-binding)
     [(expr-transient c) (expr-transient (subst k s c))]

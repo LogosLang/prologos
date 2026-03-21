@@ -64,7 +64,7 @@
     Symbol symbol-lit
     Keyword Char String
     Map map-empty map-assoc map-get nil-safe-get nil? map-dissoc map-size map-has-key? map-keys map-vals
-    get get-in update-in
+    get get-in update-in broadcast-get
     Set set-empty set-insert set-member? set-delete set-size set-union set-intersect set-diff set-to-list
     PVec pvec-empty pvec-push pvec-nth pvec-update pvec-length pvec-pop pvec-concat pvec-slice pvec-to-list pvec-from-list pvec-fold pvec-map pvec-filter
     set-fold set-filter
@@ -2014,6 +2014,26 @@
                                     "get-in" loc)])
                        (if (prologos-error? paths) paths
                            (surf-get-in target paths loc))))))])]
+
+       ;; broadcast-get: (broadcast-get target :field1 :field2 ...)
+       ;; Maps field access over a list — produced by .*field broadcast syntax
+       [(broadcast-get)
+        (cond
+          [(< (length args) 2)
+           (parse-error loc "broadcast-get requires target and at least one field" #f)]
+          [else
+           (define target (parse-datum (car args)))
+           (if (prologos-error? target) target
+               (let ([fields (map (lambda (a)
+                                    (define d (if (syntax? a) (syntax->datum a) a))
+                                    (cond
+                                      [(keyword? d) (string->symbol (keyword->string d))]
+                                      [(and (symbol? d) (keyword-like-symbol? d))
+                                       (string->symbol (substring (symbol->string d) 1))]
+                                      [else (parse-error loc (format "broadcast-get field must be a keyword, got: ~a" d) d)]))
+                                  (cdr args))])
+                 (if (ormap prologos-error? fields) (findf prologos-error? fields)
+                     (surf-broadcast-get target fields loc))))])]
 
        ;; update-in: (update-in target path-spec fn-expr)
        ;; path-spec is parsed as selection paths, fn-expr is the update function

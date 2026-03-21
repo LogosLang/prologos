@@ -629,6 +629,13 @@
             (define field-name (read-ident-chars! tok))
             (token 'dot-key (string->symbol (string-append ":" field-name))
                    ln cl ps (+ 2 (string-length field-name)))]
+           ;; .*ident → broadcast-access token (map path over collection)
+           [(and (char? c2) (char=? c2 #\*)
+                 (char? c3) (ident-continue? c3))
+            (tok-read! tok) (tok-read! tok) ; consume . and *
+            (define field-name (read-ident-chars! tok))
+            (token 'broadcast-access (string->symbol field-name)
+                   ln cl ps (+ 2 (string-length field-name)))]
            ;; .ident → dot-access token
            [(and (char? c2) (ident-start? c2))
             (tok-read! tok) ; consume .
@@ -1615,6 +1622,16 @@
      (define sp (token-span t))
      (make-stx (list (make-stx '$dot-key src ln cl ps 0)
                      (make-stx (token-value t) src ln (+ cl 1) (+ ps 1) (- sp 1)))
+               src ln cl ps sp)]
+    [(eq? tt 'broadcast-access)
+     ;; .*field — produce ($broadcast-access field) sentinel for preparse macro
+     (define t (parser-next! p))
+     (define ln (token-line t))
+     (define cl (token-col t))
+     (define ps (token-pos t))
+     (define sp (token-span t))
+     (make-stx (list (make-stx '$broadcast-access src ln cl ps 0)
+                     (make-stx (token-value t) src ln (+ cl 2) (+ ps 2) (- sp 2)))
                src ln cl ps sp)]
     [(eq? tt 'nil-dot-access)
      ;; #.field — produce ($nil-dot-access field) sentinel for preparse macro

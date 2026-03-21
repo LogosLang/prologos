@@ -3400,6 +3400,53 @@
              (expr-map-assoc base key updated)]))
         (build nt segs)]
        [else (expr-update-in nt np nf-fn)])]
+    [(expr-broadcast-get target fields)
+     ;; Reduce target, then map nested map-get over each list element
+     (define nt (nf target))
+     (define (extract-field elem fields)
+       ;; Apply chained map-get for each field keyword
+       (foldl (lambda (fld acc) (nf (expr-map-get acc fld))) elem fields))
+     ;; Check if expression is a nil (any form)
+     (define (list-nil? e)
+       (or (expr-nil? e)
+           (and (expr-fvar? e)
+                (let ([s (symbol->string (expr-fvar-name e))])
+                  (or (string=? s "nil")
+                      (and (>= (string-length s) 5)
+                           (string-suffix? s "::nil")))))
+           ;; (nil A) — nil with type arg
+           (and (expr-app? e)
+                (expr-fvar? (expr-app-func e))
+                (let ([s (symbol->string (expr-fvar-name (expr-app-func e)))])
+                  (or (string=? s "nil")
+                      (and (>= (string-length s) 5)
+                           (string-suffix? s "::nil")))))))
+     ;; Try to destructure as cons cell, returns (values head tail) or #f
+     (define (list-cons? e)
+       (and (expr-app? e)
+            (expr-app? (expr-app-func e))
+            (let ([inner (expr-app-func (expr-app-func e))])
+              (define (cons-fvar? v)
+                (and (expr-fvar? v)
+                     (let ([s (symbol->string (expr-fvar-name v))])
+                       (or (string=? s "cons")
+                           (and (>= (string-length s) 6)
+                                (string-suffix? s "::cons"))))))
+              (or (cons-fvar? inner)
+                  ;; typed cons: ((cons A) x) xs
+                  (and (expr-app? inner) (cons-fvar? (expr-app-func inner)))))))
+     ;; Walk the list structure, applying field extraction to each element
+     (define (map-over lst)
+       (cond
+         [(list-nil? lst) lst]
+         [(list-cons? lst)
+          (define head-elem (expr-app-arg (expr-app-func lst)))
+          (define tail-lst (expr-app-arg lst))
+          (define extracted (extract-field head-elem fields))
+          (expr-app (expr-app (expr-fvar 'cons) extracted) (map-over tail-lst))]
+         ;; Can't reduce further — return as-is
+         [else (expr-broadcast-get lst fields)]))
+     (map-over nt)]
 
     ;; Char normalization
     [(expr-Char) e]

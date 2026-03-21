@@ -4936,11 +4936,15 @@
 (define (postfix-index? x)
   (and (list? x) (= (length x) 2) (eq? (car x) '$postfix-index)))
 
+;; Check if a datum element is a ($broadcast-access field) sentinel
+(define (broadcast-access? x)
+  (and (list? x) (= (length x) 2) (eq? (car x) '$broadcast-access)))
+
 ;; Is this element any kind of access sentinel?
 (define (access-sentinel? x)
   (or (dot-access? x) (dot-key? x)
       (nil-dot-access? x) (nil-dot-key? x)
-      (postfix-index? x)))
+      (postfix-index? x) (broadcast-access? x)))
 
 ;; Unified rewrite for ALL access sentinels in a flat datum list.
 ;; Handles: $dot-access, $dot-key, $nil-dot-access, $nil-dot-key, $postfix-index
@@ -5028,6 +5032,34 @@
                        [target (car acc)]
                        [wrapped `(nil-safe-get ,target ,kw)])
                   (loop (cdr elems) (cons wrapped (cdr acc)))))]
+           [(broadcast-access? (car elems))
+            (if (null? acc)
+                ;; No target yet — standalone broadcast, keep as-is
+                (loop (cdr elems) (cons (car elems) acc))
+                ;; Broadcast: consume target + collect subsequent dot-access for deep path
+                (let* ([field (cadr (car elems))]
+                       [target (car acc)])
+                  ;; Collect subsequent $dot-access sentinels for deep broadcast
+                  (define-values (deep-fields remaining)
+                    (let collect ([r (cdr elems)] [fields '()])
+                      (if (and (pair? r) (dot-access? (car r)))
+                          (collect (cdr r) (cons (cadr (car r)) fields))
+                          (values (reverse fields) r))))
+                  ;; Build the chained map-get body: x.field.sub1.sub2...
+                  (define all-fields (cons field deep-fields))
+                  (define body
+                    (foldl (lambda (f acc)
+                             `(map-get ,acc ,(string->symbol
+                                              (string-append ":" (symbol->string f)))))
+                           '$broadcast-var
+                           all-fields))
+                  ;; Desugar to (broadcast-get target :field1 :field2 ...) — a form
+                  ;; the parser handles, avoiding the map+lambda inference gap.
+                  (define kw-fields
+                    (map (lambda (f) (string->symbol (string-append ":" (symbol->string f))))
+                         all-fields))
+                  (define wrapped `(broadcast-get ,target ,@kw-fields))
+                  (loop remaining (cons wrapped (cdr acc)))))]
            [else
             (loop (cdr elems) (cons (car elems) acc))])))
      ;; If result is a single-element list, unwrap it

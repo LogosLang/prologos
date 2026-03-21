@@ -176,23 +176,22 @@ def deep-map := {:a {:b {:c 99}}}
 
 ;; NOTE: heterogeneous map lists hit a QTT multiplicity bug (known limitation).
 ;; Use homogeneous maps for baseline canary.
-;; def people := '[{:name "Alice" :age 30}, {:name "Bob" :age 25}, {:name "Carol" :age 35}]
 
 ;; E1: Simple broadcast — extract single field from all elements
-;; people.*name                    ;; => '["Alice" "Bob" "Carol"]
+def scores := '[{:x 1 :y 10} {:x 2 :y 20} {:x 3 :y 30}]
+scores.*x                          ;; => '[1 2 3]
 
-;; E2: Broadcast with numeric field
-;; people.*age                     ;; => '[30 25 35]
+;; E2: Broadcast with different field
+scores.*y                          ;; => '[10 20 30]
 
 ;; E3: Deep broadcast on nested structures
-;; def employees := '[{:name "Alice" :address {:zip 97403 :city "Eugene"}}, {:name "Bob" :address {:zip 10001 :city "NYC"}}]
-;; employees.*address.zip          ;; => '[97403 10001]
-;; employees.*address.city         ;; => '["Eugene" "NYC"]
+def nested-maps := '[{:a {:b 100}} {:a {:b 200}} {:a {:b 300}}]
+nested-maps.*a.b                   ;; => '[100 200 300]
 
-;; E4: Broadcast with branching
+;; E4: Broadcast with branching — deferred (needs branch extraction in reduction)
 ;; employees.*address.{zip city}   ;; => '[{:zip 97403 :city "Eugene"} {:zip 10001 :city "NYC"}]
 
-;; E5: Broadcast on solver results
+;; E5: Broadcast on solver results — deferred (needs solver integration)
 ;; def solutions := [solve (fresh [x y] (eq? [+ x y] 10) (eq? [- x y] 2))]
 ;; solutions.*x                    ;; => all x-values from solutions
 

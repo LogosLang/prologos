@@ -212,6 +212,7 @@
  (struct-out surf-map-vals)
  (struct-out surf-get) (struct-out surf-get-in)
  (struct-out surf-update-in)
+ (struct-out surf-broadcast-get)
  ;; Path surface forms
  (struct-out surf-path)
  ;; Set surface forms
@@ -817,6 +818,7 @@
 (struct surf-map-vals (m srcloc) #:transparent)            ; (map-vals m)
 (struct surf-get-in (target paths srcloc) #:transparent)   ; (get-in target path-spec) — paths is list of parsed paths
 (struct surf-update-in (target paths fn-expr srcloc) #:transparent) ; (update-in target path-spec fn)
+(struct surf-broadcast-get (target fields srcloc) #:transparent)   ; (broadcast-get target :f1 :f2 ...) → map+get over list
 
 ;; First-class path literal
 (struct surf-path (branches srcloc) #:transparent)         ; #p(a.b.c) — branches = list of (listof keyword|symbol)
