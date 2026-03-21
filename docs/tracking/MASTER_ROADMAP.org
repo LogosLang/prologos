@@ -97,7 +97,7 @@ restructuring.
 
 | Track | Description | Status | Pre/Post Track 8 |
 |-------+-------------+--------+------------------|
-| 0 | Trait Hierarchy Design (deep Stage 2) | ⬜ | Pre |
+| 0 | Trait Hierarchy Design (deep Stage 2) | ✅ [[file:2026-03-21_CIU_TRACK0_TRAIT_HIERARCHY_AUDIT.md][Audit]] | Pre |
 | 1 | Seq Protocol (Seq-as-trait, native instances, LSeq demotion) | ⬜ | Pre |
 | 2 | Syntactic Sugar Normalization (dot-brace, ground-expr? fix) | ⬜ | Pre |
 | 3 | Trait-Dispatched Access (~surf-get~ generates constraints) | ⬜ | Post Track 8 |
