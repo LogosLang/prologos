@@ -1,7 +1,7 @@
 # BSP-LE Track 0: Propagator Allocation Efficiency — Stage 3 Design
 
 **Date**: 2026-03-21
-**Status**: Draft (D.2 — incorporating external critique)
+**Status**: Draft (D.3 — self-critique + principles alignment)
 **Parent**: BSP-LE Series ([Master Roadmap](2026-03-21_BSP_LE_MASTER.md))
 **Audit**: [Cell & Propagator Allocation Audit](2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md) (commit `f7bd03d`)
 **Prerequisite**: None — unblocked, first in implementation order
@@ -67,11 +67,17 @@ The phases are ordered by the audit's priority ranking, with adjustments for dep
    - `run-to-quiescence`: synthetic network of 100 cells, 50 propagators, run to fixpoint
    - Each benchmark: warmup + 30 samples with GC between, reporting mean/median/stddev/CV
 
-2. **A/B baseline**: `bench-ab.rkt benchmarks/comparative/ --runs 15` — capture current wall-time distributions for the 10 comparative programs + solver adversarial.
+2. **Change/no-change ratio**: Instrument `net-cell-write` to count how many calls result in actual changes vs. no-ops (the `equal? merged old-val` path). This validates the "~80% no-change" claim from the audit — if the actual ratio is lower, Phase 2's case for making merge functions identity-preserving is stronger.
 
-3. **Per-command verbose**: Run a representative module with `process-file #:verbose #t` and capture `cell_allocs` and `prop_firings` per command as a profile.
+3. **A/B baseline**: `bench-ab.rkt benchmarks/comparative/ --runs 15` — capture current wall-time distributions for the 10 comparative programs + solver adversarial.
 
-4. **Memory baseline**: `(collect-garbage 'major)` + `(current-memory-use)` before and after processing a representative module. Establishes retained-memory baseline — the persistent CHAMP structure means old intermediate networks may be retained by closures or parameters.
+4. **Per-command verbose**: Run two representative workloads with `process-file #:verbose #t`:
+   - **Prelude load** (heavy definition registration, many cells, moderate propagation): a `.prologos` file that imports the full prelude + several library modules.
+   - **Solver adversarial** (`benchmarks/comparative/constraints-adversarial.prologos`): many small commands, heavy propagation per command, stress-tests the quiescence loop.
+
+   Capture `cell_allocs` and `prop_firings` per command as profiles for both workloads.
+
+5. **Memory baseline**: `(collect-garbage 'major)` + `(current-memory-use)` before and after processing each representative workload. Establishes retained-memory baseline — the persistent CHAMP structure means old intermediate networks may be retained by closures or parameters.
 
 5. **Acceptance file**: Not a `.prologos` file — this Track is infrastructure-only. Instead, the acceptance criterion is: **full test suite passes with identical results, and A/B benchmarks show measurable improvement**.
 
@@ -220,6 +226,12 @@ After the struct split, a cell write that changes a value needs to update only `
 - 3b macros enabling incremental migration with passing tests at each sub-phase
 - Each sub-phase independently testable
 
+**Scope boundary — `elab-network`**: This Track optimizes `prop-network` internals. The `elab-network` wrapper (5 fields) also has `struct-copy` overhead — every `elab-cell-write` wraps `net-cell-write`'s result in a new `elab-network`. This is a smaller cost (5 fields vs 13→2) and Track 8 Part B's cell-ops extraction will restructure the elab-network layer. Optimizing `elab-network` is out of scope for this Track.
+
+**Pipeline checklist (Phase 3f)**: The `.claude/rules/pipeline.md` "New Struct Field" checklist applies to Phase 3b (adding inner struct fields). Phase 3f (removing accessor macros) requires verifying that all pattern-match and accessor sites have been migrated. Run `raco make driver.rkt` to recompile all transitive dependents after struct changes — stale `.zo` caches cause "expected N fields" errors.
+
+**Phase 3c observable state note**: The `net0` network passed to propagator fire functions has an empty worklist and zero fuel in its hot group (the real values live in mutable boxes). If any code inspects `prop-network-fuel` on a network mid-quiescence, it sees 0 instead of the actual remaining fuel. The pre-requisite audit (items 1-3) should catch any such code, but this scenario is explicitly flagged: the observable state of the network during iteration differs from the logical state.
+
 **BSP loop note**: Phase 3c optimizes the serial (Gauss-Seidel) loop. The BSP loop (`run-to-quiescence-bsp`) has a different worklist pattern — it collects per-round propagator sets. An analogous optimization for the BSP loop (mutable round buffer) should be designed as part of BSP-LE Track 4 (BSP Pipeline). The struct split (3b-3e) benefits both loops equally.
 
 ### Phase 4: Batch Cell Registration
@@ -304,7 +316,24 @@ After the struct split, a cell write that changes a value needs to update only `
 
 ---
 
-## 4. Test Strategy
+## 4. WS Impact
+
+None. This Track is infrastructure-only — no user-facing syntax changes, no new AST nodes, no parser/reader modifications. All changes are internal to `propagator.rkt` and the cell allocation pipeline.
+
+---
+
+## 5. Cross-Track Requirements (Provided to Other Tracks)
+
+| Capability | Consumer Track | Phase |
+|------------|---------------|-------|
+| Faster propagator substrate (all operations) | PM Track 8, CIU, BSP-LE | All phases |
+| Batch cell registration API | PM Track 8 Part A3 (mult/level/session cells) | Phase 4 |
+| Struct split (hot/warm/cold) | BSP-LE Track 4 (BSP Pipeline — warm/cold sharing) | Phase 3b |
+| Mutable worklist pattern | BSP-LE Track 4 (analogous BSP round buffer) | Phase 3c |
+
+---
+
+## 6. Test Strategy
 
 | Phase | Micro-benchmark | A/B Comparison | Suite |
 |-------|-----------------|----------------|-------|
@@ -321,7 +350,7 @@ After the struct split, a cell write that changes a value needs to update only `
 
 ---
 
-## 5. Key Files
+## 7. Key Files
 
 | File | Phases | Changes |
 |------|--------|---------|
@@ -338,7 +367,7 @@ After the struct split, a cell write that changes a value needs to update only `
 
 ---
 
-## 6. Risk Assessment
+## 8. Risk Assessment
 
 | Risk | Probability | Impact | Mitigation |
 |------|-------------|--------|------------|
@@ -350,7 +379,7 @@ After the struct split, a cell write that changes a value needs to update only `
 
 ---
 
-## 7. Expected Impact (from Audit §10)
+## 9. Expected Impact (from Audit §10)
 
 | Optimization | Struct-copies saved/cmd | CHAMP allocs saved/cmd | Notes |
 |---|---|---|---|
