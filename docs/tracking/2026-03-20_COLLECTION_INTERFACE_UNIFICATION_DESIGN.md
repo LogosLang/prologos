@@ -1,10 +1,12 @@
 # Collection Interface Unification — Stage 2/3 Design Document
 
 **Date**: 2026-03-20
-**Status**: Draft — awaiting critique
-**Scope**: Close the gap between collection trait abstractions and compiler dispatch
-**Prerequisite**: Collection traits (Seqable, Buildable, Foldable, Reducible, Indexed, Keyed, Setlike) exist and are instanced; generic-ops pipeline works; first-class path values landed
+**Status**: Draft — design discussion in progress
+**Scope**: Principled collection dispatch via Seq with efficient trait resolution on propagator network
+**Prerequisite**: Collection traits exist and are instanced; Track 7 propagator infrastructure complete; Track 8 audit complete
+**Depends on**: Track 8 (propagator migration) for full implementation
 **Audit**: `docs/tracking/2026-03-20_COLLECTION_INTERFACE_AUDIT.md` (commit `e632dce`)
+**Track 8 Audit**: `docs/tracking/2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.md`
 **Supersedes**: None (extends collection-traits + generic-ops infrastructure)
 
 ---
@@ -14,33 +16,44 @@
 | # | Phase | Description | Status | Commit | Notes |
 |---|-------|-------------|--------|--------|-------|
 | 0 | Acceptance file | Baseline canary + aspirational tests | ⬜ | | Extend existing first-class-paths acceptance |
-| 1 | `ground-expr?` union fix | Add explicit `expr-union` case | ⬜ | | Immediate completeness fix |
-| 2a | `expr-get` → Indexed dispatch | Elaboration-time: infer collection type, dispatch to `idx-nth` | ⬜ | | Core architectural change |
-| 2b | `expr-get` → Keyed dispatch | Elaboration-time: `Map` key access through `kv-get` | ⬜ | | |
-| 2c | `expr-get` typing unification | `infer` for `expr-get` uses trait-resolved types | ⬜ | | |
-| 3 | Broadcast generalization | `.*field` works on PVec, Set, any Seqable | ⬜ | | |
-| 4 | Dot-brace path expansion | `.{field1 field2}` reader syntax | ⬜ | | Reader + preparse |
-| 5 | Union-aware trait dispatch | Trait methods resolve when all union members implement the trait | ⬜ | | Design-heavy; may defer |
-| 6 | Open-map value typing | Design decision on unschema'd map access return type | ⬜ | | Design discussion |
+| 1 | `ground-expr?` union fix | Add explicit `expr-union` case | ⬜ | | Immediate completeness fix (pre-Track 8) |
+| 4 | Dot-brace path expansion | `.{field1 field2}` reader syntax | ⬜ | | Reader + preparse; independent of dispatch redesign |
+| — | Track 8 dependency | Propagator-resolved trait dispatch infrastructure | ⬜ | | See §6: Track 8 Requirements |
+| T1 | Trait-dispatched indexing | `xs[0]` generates Indexed/Keyed constraint; propagator resolves dict | ⬜ | | Post-Track 8 |
+| T2 | Trait-dispatched broadcast | `xs.*field` iterates via Seq; propagator resolves dict | ⬜ | | Post-Track 8 |
+| T3 | Union-aware trait dispatch | Trait methods resolve on union types | ⬜ | | Post-Track 8 |
+| T4 | Efficient Seq dispatch | `gmap`/`gfilter` dispatch to native collection ops, not LSeq intermediary | ⬜ | | Post-Track 8 |
+| D1 | Open-map value typing | Design decision on unschema'd map access return type | ⬜ | | Design discussion |
 
 ---
 
 ## 1. Problem Statement
 
-The collection trait system in Prologos is well-designed at the library level: `Seqable`, `Buildable`, `Foldable`, `Reducible`, `Indexed`, `Keyed`, and `Setlike` exist with instances for `List`, `PVec`, `Set`, and `Map`. Generic operations (`gmap`, `gfilter`, `gfold`, etc.) use the `Seqable → LSeq → Buildable` pipeline correctly.
+### Two Tiers of Collection Dispatch
 
-However, the **compiler layer** bypasses these traits for all syntactic sugar operations:
+The collection trait system in Prologos has the right abstractions at the library level: `Seqable`, `Buildable`, `Foldable`, `Reducible`, `Indexed`, `Keyed`, `Setlike`, and `Seq` exist with instances for `List`, `PVec`, `Set`, and `Map`.
 
-- **Postfix indexing** (`xs[0]`): `surf-get` elaborates to `expr-get`, which pattern-matches on concrete constructors (`expr-champ`, `expr-rrb`, cons-chain) in `reduction.rkt` lines 2093–2122.
-- **Dot-access** (`m.field`): Hardcoded to `expr-map-get`, which dispatches on `expr-champ` directly.
-- **Broadcast** (`xs.*field`): `expr-broadcast-get` walks only cons/nil list structure (lines 3403–3449). PVec and Set produce stuck terms.
-- **get-in / update-in**: Hardcoded to `expr-map-get` chains for navigation.
+But there are **two tiers** of dispatch that don't talk to each other:
 
-This creates a **two-tier system**: generic library functions work on any collection; syntactic sugar works only on specific concrete types. A user-defined type implementing `Indexed` gets `gfold` for free but NOT `xs[0]` — violating the Most Generalizable Interface principle.
+**Tier 1 — Library generic operations** (`gmap`, `gfilter`, `gfold`, etc.): Use trait-dispatched dicts. `gfold` calls `$foldable A B f z xs` — the dict IS the native implementation. `Foldable List` dispatches to List's `foldr`; `Foldable PVec` dispatches to RRB-tree traversal. No intermediaries for fold/reduce. However, `gmap` and `gfilter` still go through the `Seqable → LSeq → Buildable` pipeline — converting to a lazy sequence, transforming, converting back. This works but introduces an intermediary form where efficient dispatch should suffice.
+
+**Tier 2 — Syntactic sugar** (`xs[0]`, `m.field`, `xs.*field`, `get-in`): Bypasses traits entirely. `surf-get` elaborates to `expr-get`, which pattern-matches on concrete constructors (`expr-champ`, `expr-rrb`, cons-chain) in reduction.rkt. `expr-broadcast-get` walks only cons/nil list structure. A user-defined type implementing `Indexed` gets `gfold` for free but NOT `xs[0]`.
+
+### The Vision: Seq with Efficient Dispatch
+
+The target architecture is that **every collection type implements `Seq`** (analogous to Clojure's `ISeq`) and dispatches to type-specific implementations. The `Seq` dict bundles `first`/`rest`/`empty?` — three operations that any sequential type can provide natively. When `gmap` operates on a PVec, it should dispatch through PVec's native Seq implementation, not convert to LSeq and back.
+
+This means:
+- `Seq` is the universal iteration protocol — the "hub" that all collection operations go through
+- Each collection provides its own `Seq` instance with efficient, native implementations
+- `LSeq` becomes a specific lazy sequence type that also implements `Seq`, but it is NOT a mandatory intermediary
+- Syntactic sugar (`xs[0]`, `xs.*field`) dispatches through `Indexed`/`Keyed`/`Seq` traits, not constructor pattern-matching
 
 ### Root Cause: Phase Separation
 
-Traits are compile-time constraints that generate dictionary parameters. The elaborator resolves `Indexed C` to a concrete dict and threads it as a lambda parameter. But `surf-get` elaborates directly to `expr-get` — an AST node that carries no dict and dispatches by constructor pattern-matching at runtime. The trait system is structurally disconnected from the syntactic sugar pipeline.
+Why doesn't this work today? The trait system operates at **compile time** — the elaborator resolves `Indexed PVec` to a concrete dict and threads it as a lambda parameter. But `surf-get` elaborates to `expr-get`, an AST node with no dict that relies on constructor pattern-matching at runtime. The trait system is structurally disconnected from the syntactic sugar pipeline.
+
+This phase separation is the same architectural boundary that Tracks 1–7 of the propagator migration have been systematically dissolving. Trait resolution is already a propagator event — readiness propagators watch type cells, and when a type becomes ground, resolution propagators fire and write dict solutions. The collection dispatch problem is another instance of the same gap.
 
 ### What We Want
 
@@ -49,22 +62,22 @@ Traits are compile-time constraints that generate dictionary parameters. The ela
 def xs := @[10 20 30]     ;; PVec
 xs[0]                      ;; => 10 (via Indexed dispatch, not hardcoded expr-rrb)
 
-;; Any Seqable gets broadcast
+;; Any Seqable gets broadcast, dispatching through Seq
 def scores := @[{:x 1} {:x 2} {:x 3}]   ;; PVec of Maps
-scores.*x                  ;; => @[1 2 3] (not stuck)
+scores.*x                  ;; => @[1 2 3] (via Seq iteration, not cons/nil walking)
 
 ;; Branching dot-access
 def user := {:name "Alice" :age 30 :email "a@b.com"}
 user.{name email}          ;; => {:name "Alice" :email "a@b.com"}
 
-;; Schema-typed maps get precise field types
-schema Point :x Int :y Int
-def p : Point := {:x 0 :y 0}
-p[0]                       ;; type error — Point is Keyed, not Indexed (correct)
+;; gmap dispatches through native Seq, not LSeq intermediary
+[gmap [int+ _ 1] @[10 20 30]]   ;; PVec's native Seq, not to-seq/from-seq
 
-;; Open-world maps: access is untyped (dynamic)
-def m := {:a 1 :b "hello"}
-m.a                        ;; => 1 : _ (dynamic, not union)
+;; User-defined collection types participate in all syntax
+;; (after implementing Indexed or Seq)
+impl Indexed MyVec
+  idx-nth := ...
+;; Then: my-vec[0] works automatically
 ```
 
 ---
@@ -73,75 +86,121 @@ m.a                        ;; => 1 : _ (dynamic, not union)
 
 ### What We Have
 
-| Component | Status | Location |
-|-----------|--------|----------|
-| Trait definitions (Indexed, Keyed, Setlike, Seqable, etc.) | Complete | `lib/prologos/core/collection-traits.prologos` |
-| Trait instances (List, PVec, Set, Map) | Complete | respective data modules |
-| Generic ops pipeline (gmap, gfilter, gfold, etc.) | Complete | `lib/prologos/core/generic-ops.prologos` |
-| Trait resolution + dict threading | Complete | `trait-resolution.rkt`, `elaborator.rkt` |
-| `expr-get` AST node + typing | Complete (but hardcoded) | `syntax.rkt`, `typing-core.rkt` |
-| `expr-broadcast-get` AST node | Complete (List-only) | 13-file pipeline |
-| `get-in` / `update-in` with paths | Complete (Map-only) | elaborator + reduction |
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Trait definitions (Indexed, Keyed, Seq, Seqable, etc.) | Complete | `lib/prologos/core/collection-traits.prologos` |
+| Trait instances for built-in collections | Complete | List, PVec, Set, Map |
+| `Seq` dict type + accessors (`seq-first`, `seq-rest`, `seq-empty?`) | Complete | Universal sequence interface |
+| `Foldable`/`Reducible` with efficient dispatch | Complete | Dict IS the native fold; no intermediary |
+| `gmap`/`gfilter` via LSeq intermediary | Working but not ideal | `Seqable → LSeq → Buildable` pipeline |
+| Trait resolution as propagator events | Complete (Track 7) | Readiness → resolution propagators fire when types ground |
+| Reactive constraint resolution | Complete (Track 7) | Stratified quiescence, ready-queue, threshold-cells |
+| Cell-tree unification infrastructure | In progress (PUnify) | Cell-tree decomposition for compound types |
+| `expr-get` (postfix indexing) | Hardcoded constructor dispatch | `reduction.rkt` lines 2093–2122 |
+| `expr-broadcast-get` | List-only cons/nil walking | `reduction.rkt` lines 3403–3449 |
+| `get-in`/`update-in` | Map-only `expr-map-get` chains | `elaborator.rkt`, `reduction.rkt` |
 | Schema narrowing for `map-get` | Complete | `typing-core.rkt` lines 1284–1296 |
-| `ground-expr?` for union types | Missing `expr-union` case | `trait-resolution.rkt` line 82 |
+| `ground-expr?` union case | Missing (fragile default) | `trait-resolution.rkt` line 82 |
 | Dot-brace `.{...}` reader token | Missing entirely | `reader.rkt` |
 | Union-aware trait resolution | Not implemented | `trait-resolution.rkt` |
 
 ### What's Missing
 
-1. **Elaboration bridge**: `surf-get` → trait-dispatched call (instead of `expr-get`)
-2. **Broadcast collection abstraction**: `to-seq` conversion before field extraction
-3. **`.{...}` tokenization**: Reader does not recognize dot-brace
-4. **Union trait dispatch**: `trait-resolution.rkt` has no `expr-union` handling
-5. **Open-map typing policy**: Whether unschema'd maps return `_` or full union
+1. **Trait constraint generation for syntactic sugar**: `xs[0]` should generate an `Indexed` constraint, not elaborate to a dict-free `expr-get`
+2. **Propagator-resolved dict flow to dispatch sites**: The resolved dict needs to reach the point where indexing/broadcast actually executes
+3. **Seq-based iteration for broadcast and gmap/gfilter**: Replace cons/nil walking and LSeq intermediary with Seq dispatch
+4. **`.{...}` tokenization**: Reader does not recognize dot-brace (independent of dispatch redesign)
+5. **Union-aware trait dispatch**: `trait-resolution.rkt` has no `expr-union` handling
+6. **Open-map typing policy**: Whether unschema'd maps return `_` or full union
 
 ---
 
-## 3. Design Space (Evaluated Options)
+## 3. Target Architecture: Propagator-Resolved Trait Dispatch
 
-### Option A: Elaboration-Time Trait Dispatch (Selected)
+### The Key Insight
 
-When `surf-get` is encountered, the elaborator:
-1. Infers the collection type
-2. If it implements `Indexed`, elaborates to `[idx-nth $dict coll key]`
-3. If it implements `Keyed`, elaborates to `[kv-get $dict coll key]`
-4. If type is unsolved meta, falls back to current `expr-get`
+Trait resolution is already a propagator event in the current architecture. When the elaborator encounters `[gfold $foldable f z xs]`, it generates a trait constraint `Foldable C` where `C` is the collection type constructor. A readiness propagator watches the type cell for `C`. When `C` becomes ground (e.g., solved to `List`), the readiness propagator fires, the resolution propagator looks up `impl Foldable List`, and writes the dict to the dict meta cell. The elaborated code receives the resolved dict through normal meta solution.
 
-**Pros**: Zero runtime overhead — dict is resolved at compile time. Existing trait infrastructure does all the work. `expr-get` becomes a fallback for genuinely ambiguous cases only. New collection types implementing `Indexed` get postfix indexing for free.
+**The same mechanism should drive all collection dispatch.** When `xs[0]` is elaborated:
 
-**Cons**: Requires type information at elaboration time (available — `infer` already runs). Fallback to `expr-get` for unsolved metas means the old constructor-matching code stays as a safety net.
+1. The elaborator generates a trait constraint: `Indexed C` (where `C` is the type constructor of `xs`)
+2. A readiness propagator watches the type cell for `xs`
+3. When the type is solved (e.g., `PVec Int`), the propagator fires and resolves `Indexed PVec`
+4. The dict is written to a meta cell
+5. The elaborated code becomes `[idx-nth $dict xs key]` — a normal trait method call
+6. Reduction applies the dict to the arguments — no constructor pattern-matching needed
 
-### Option B: Runtime Reified Dict Dispatch (Rejected)
+This is not a new mechanism. It's the *existing* trait resolution mechanism applied to a new site. The only change is that `surf-get` generates a trait constraint instead of elaborating to a dict-free `expr-get`.
 
-Modify `expr-get` in reduction.rkt to look up and call trait dicts at runtime.
+### Seq as the Universal Iteration Protocol
 
-**Pros**: No elaboration changes.
+For broadcast (`xs.*field`) and generic mapping/filtering, the `Seq` dict provides the universal iteration interface:
 
-**Cons**: Requires reifying trait dicts into runtime values (major architectural change). The trait system is compile-time — this would fundamentally alter its semantics. Performance overhead from runtime dict lookup on every index operation.
+```prologos
+;; Seq S bundles three operations:
+;;   first  : S A → Option A
+;;   rest   : S A → S A
+;;   empty? : S A → Bool
+```
 
-**Verdict**: Option A aligns with the existing trait architecture. Traits are compile-time; elaboration is where dispatch decisions belong.
+Every collection type implements `Seq` with native, efficient operations:
+- `Seq List`: `first` = head, `rest` = tail, `empty?` = nil check
+- `Seq PVec`: `first` = rrb-get 0, `rest` = rrb-drop 1, `empty?` = rrb-count = 0
+- `Seq Set`: `first`/`rest`/`empty?` on the underlying hash iteration
 
-### Option C: Broadcast via `gmap` Desugaring (Rejected)
+When broadcast encounters `xs.*field`:
+1. The elaborator generates a `Seqable C` constraint (or resolves a `Seq` dict directly)
+2. The resolved dict provides `first`/`rest`/`empty?` for the actual collection type
+3. Broadcast iterates via these operations — efficient, type-specific, no cons/nil assumption
+4. Result collection type is determined by a `Buildable` constraint (preserves PVec → PVec, etc.)
 
-Desugar `xs.*field` to `[gmap [fn [x] x.field] xs]`.
+### Eliminating the LSeq Intermediary
 
-**Pros**: Minimal new code.
+The current `gmap` pipeline: `to-seq → lseq-map → from-seq`. This converts to LSeq (thunk-based lazy cells), maps over the lazy sequence, then converts back.
 
-**Cons**: Inference fails — `gmap` with an untyped lambda `[fn [x] [map-get x :field]]` can't constrain `x`'s type. This was attempted during Phase 7b and abandoned in favor of the dedicated `expr-broadcast-get` node. The inference gap is fundamental: `map-get` doesn't generate type constraints on its first argument.
+The target: `gmap` dispatches through `Seq` directly. Each collection's `Seq` instance provides native iteration. No conversion to/from LSeq unless the user explicitly wants laziness.
 
-### Option D: Broadcast via Seqable Conversion (Selected)
+```prologos
+;; Current (LSeq intermediary):
+spec gmap {A B} {C : Type -> Type} [Seqable C] -> [Buildable C] -> [A -> B] -> [C A] -> [C B]
+defn gmap [$seq $build f xs]
+  Buildable-from-seq $build B [lseq-map A B f [$seq A xs]]
 
-In reduction, convert the target to a list via `Seqable.to-seq` (or directly match PVec/Set structure alongside cons/nil), then apply field extraction.
+;; Target (Seq-based efficient dispatch):
+spec gmap {A B} {C : Type -> Type} [Seq C] -> [Buildable C] -> [A -> B] -> [C A] -> [C B]
+defn gmap [$seq-dict $build f xs]
+  ;; iterate via seq-first/seq-rest/seq-empty?, build via from-seq
+  ;; OR: each collection provides a native fmap via Functor
+  ...
+```
 
-**Pros**: Straightforward. PVec and Set already implement `Seqable`. Can be done incrementally — add PVec/Set pattern-matching to the existing cons/nil walker in reduction.rkt.
+The exact formulation depends on whether `Functor` (which gives native `fmap`) or `Seq + Buildable` (which gives generic iteration + reconstruction) is the right abstraction for map. Both are already defined as traits. The principled choice: **`Functor` for structure-preserving map** (PVec → PVec), **`Seq + Buildable` for cross-type transformation** (PVec → List).
 
-**Cons**: Reduction-level approach (not elaboration-time). But broadcast is inherently a runtime operation — the target's length is dynamic, so reduction is the correct phase.
+### How This Relates to Track 8
 
-**Pragmatic approach**: In Phase 3, extend the reduction walker to recognize `expr-rrb` (PVec) and `expr-set` (Set) alongside cons/nil. This is simpler than threading a `Seqable` dict through broadcast. A future enhancement could use `to-seq` for user-defined Seqable types.
+Track 8 is about bringing the remaining elaboration state onto the propagator network. The collection interface needs Track 8 for one critical reason:
+
+**When the type cell for a collection is solved, the trait constraint must fire and resolve the dict.** This already works for explicit trait constraints (e.g., `where (Foldable C)`). But for *implicit* constraints generated by syntactic sugar, the elaborator currently doesn't generate constraints at all — it produces a dict-free `expr-get`. Making `surf-get` generate trait constraints that flow through the propagator network is the architectural change.
+
+Specifically, this design needs:
+
+1. **Constraint generation at `surf-get`/`surf-broadcast-get` sites** — the elaborator emits `Indexed C` or `Seq C` constraints
+2. **Dict meta cells for the resolved dicts** — the resolution propagator writes here
+3. **The elaborated code references the dict meta** — just like any other trait method call
+4. **Reduction applies the dict** — standard function application, no constructor dispatch
+
+Items 1–3 use the *existing* readiness/resolution propagator infrastructure from Track 7. Item 4 is already how trait method calls work. The gap is that `surf-get` currently short-circuits this mechanism.
+
+Track 8's contributions that enable this:
+- **Callback elimination + module restructuring** (§5.2): Makes trait resolution directly callable from elaboration sites without indirection
+- **Cell-tree unification** (§5.3): May improve type solving speed, making types ground sooner and trait constraints resolvable earlier
+- **`id-map` accessibility** (§5.1): Enables cross-domain propagation that may be needed for Indexed/Keyed dict cells
 
 ---
 
-## 4. Detailed Design
+## 4. Immediate Work (Pre-Track 8)
+
+These phases are independent of the propagator-resolved dispatch redesign and can land now.
 
 ### Phase 0: Acceptance File Extension
 
@@ -150,220 +209,52 @@ Extend `examples/2026-03-20-first-class-paths.prologos` with a new section `§I 
 ```prologos
 ;; §I — COLLECTION INTERFACE UNIFICATION
 
-;; I1: PVec indexing (already works via expr-get, but should use Indexed)
+;; I1: PVec indexing (works today via expr-get, should use Indexed post-Track 8)
 def pv := @[10 20 30]
 pv[0]               ;; => 10
 pv[2]               ;; => 30
 
-;; I2: Broadcast on PVec (currently stuck — Phase 3 target)
+;; I2: Broadcast on PVec (currently stuck — target for post-Track 8)
 ;; def pv-maps := @[{:x 1} {:x 2} {:x 3}]
-;; pv-maps.*x       ;; => @[1 2 3] or '[1 2 3]
+;; pv-maps.*x       ;; => @[1 2 3]
 
-;; I3: Dot-brace expansion (currently not tokenized — Phase 4 target)
+;; I3: Dot-brace expansion (Phase 4 — independent of dispatch redesign)
 ;; def u := {:name "Alice" :age 30 :email "a@b.com"}
 ;; u.{name email}   ;; => {:name "Alice" :email "a@b.com"}
-```
 
-Run before and after each phase. Phase isn't done until acceptance section passes.
+;; I4: gmap without LSeq intermediary (target for post-Track 8)
+;; [gmap [int+ _ 1] @[10 20 30]]   ;; => @[11 21 31] via native PVec Seq
+```
 
 ### Phase 1: `ground-expr?` Union Fix
 
 **File**: `trait-resolution.rkt` line 82
 
-**Change**: Add explicit `expr-union` case before the conservative default:
+Add explicit `expr-union` case before the conservative default:
 
 ```racket
 [(expr-union l r) (and (ground-expr? l) (ground-expr? r))]
 ```
 
-Currently falls to `[_ #t]` — happens to be correct (conservative) but fragile. The explicit case is correct and makes the function self-documenting.
-
-**Verification**: Run full test suite. No behavioral change expected (conservative default already returned `#t`).
-
-### Phase 2: `expr-get` via Trait Dispatch
-
-This is the core architectural change. It has three sub-phases.
-
-#### Phase 2a: `surf-get` → Indexed Dispatch
-
-**File**: `elaborator.rkt` (lines ~1801–1806)
-
-**Current behavior**:
-```racket
-[(surf-get coll key loc)
- (let ([ec (elaborate coll env depth)]
-       [ek (elaborate key env depth)])
-   (cond [(prologos-error? ec) ec]
-         [(prologos-error? ek) ek]
-         [else (expr-get ec ek)]))]
-```
-
-**New behavior**:
-```racket
-[(surf-get coll key loc)
- (let ([ec (elaborate coll env depth)]
-       [ek (elaborate key env depth)])
-   (cond
-     [(prologos-error? ec) ec]
-     [(prologos-error? ek) ek]
-     [else
-      ;; Try to resolve collection type for trait dispatch
-      (define coll-ty (whnf (infer ctx-current ec)))
-      (cond
-        ;; Schema/Selection — delegate to map-get (schema narrowing)
-        [(and (expr-fvar? coll-ty)
-              (or (lookup-schema-by-name (expr-fvar-name coll-ty))
-                  (lookup-selection-by-name (expr-fvar-name coll-ty))))
-         (expr-map-get ec ek)]
-        ;; Map K V — use kv-get through Keyed trait
-        ;; (Phase 2b — for now, delegate to expr-map-get)
-        [(expr-Map? coll-ty)
-         (expr-map-get ec ek)]
-        ;; Fallback: expr-get (constructor dispatch in reduction)
-        [else (expr-get ec ek)])]))]
-```
-
-Phase 2a adds the dispatch skeleton without changing behavior — every branch produces the same result as today. This validates the type-inference + dispatch structure.
-
-**Key insight**: We infer the collection type at elaboration time. This is already available — `infer` runs during elaboration. The question is whether the type is solved at this point. For concrete collections (`'[1 2 3]`, `@[1 2 3]`), it is. For polymorphic parameters, it may be an unsolved meta — the `expr-get` fallback handles this.
-
-#### Phase 2b: Map Access via Keyed
-
-Once Phase 2a validates the dispatch skeleton, change the `Map` branch:
-
-```racket
-;; Map K V — use Keyed.kv-get
-;; kv-get : {K V} -> (Keyed Map) -> Map K V -> K -> Option V
-;; For backward compatibility, unwrap the Option (maps currently return V, not Option V)
-[(expr-Map? coll-ty)
- ;; For now, keep expr-map-get — schema narrowing depends on it
- ;; Phase 2b focuses on ensuring the dispatch point exists;
- ;; full Keyed delegation requires Option-unwrapping wrapper
- (expr-map-get ec ek)]
-```
-
-**Design tension**: The current `expr-map-get` returns `V` directly. The `Keyed` trait's `kv-get` returns `Option V`. This is a semantic difference — `map-get` on a missing key currently errors at reduction; `kv-get` returns `none`. We should NOT change the behavior of `m.field` or `m[key]` to return `Option` without careful design discussion.
-
-**Decision**: Phase 2b keeps `expr-map-get` for maps. The Keyed trait dispatch is available for explicit `[kv-get dict m :key]` calls. The syntactic sugar `m.field` and `m[key]` continue to return `V` directly (not wrapped in `Option`), preserving backward compatibility and schema narrowing.
-
-**Future**: When we want `m[key]` to return `Option V` (safer semantics), that's a separate design decision affecting every map-access site in the language.
-
-#### Phase 2c: Typing Unification
-
-**File**: `typing-core.rkt` (lines ~1238–1259)
-
-Currently, `expr-get` typing hardcodes `PVec A`, `Map K V`, `List A`, Schema, Selection. If Phase 2a dispatches some cases to `idx-nth` or `kv-get`, the typing for those calls goes through the normal trait-method typing path (already implemented).
-
-The `expr-get` typing case narrows to handle only the fallback cases where elaboration couldn't resolve the type:
-
-```racket
-[(expr-get coll key)
- ;; This case now only fires for:
- ;; 1. Unsolved meta collection types (elaboration couldn't resolve)
- ;; 2. Backward compatibility with pre-Phase 2 elaborated code
- (let ([tc (whnf (infer ctx coll))])
-   (match tc
-     ;; PVec A → Int/Nat → A
-     [(expr-PVec a)
-      (if (or (check ctx key (expr-Nat)) (check ctx key (expr-Int))) a (expr-error))]
-     ;; Map K V → K → V
-     [(expr-Map kt vt)
-      (if (check ctx key kt) vt (expr-error))]
-     ;; Schema/Selection — delegate to map-get
-     [(expr-fvar name)
-      #:when (or (lookup-schema-by-name name) (lookup-selection-by-name name))
-      (infer ctx (expr-map-get coll key))]
-     ;; List A → Int/Nat → A
-     [(expr-app f a)
-      #:when (equal? f (list-type-fvar))
-      (if (or (check ctx key (expr-Nat)) (check ctx key (expr-Int))) a (expr-error))]
-     ;; Union type → try resolving each branch
-     [(expr-union l r)
-      ;; If both branches support indexing, return the union of result types
-      (let ([tl (infer-get-result l key ctx)]
-            [tr (infer-get-result r key ctx)])
-        (if (and (not (expr-error? tl)) (not (expr-error? tr)))
-            (build-union-type (list tl tr))
-            (expr-error)))]
-     [_ (expr-error)]))]
-```
-
-The `expr-union` case in typing is a stepping stone toward Phase 5 (union-aware trait dispatch). It addresses the `movie.genres[0]` issue: when `map-get` returns a union type, postfix indexing should still work if the union members all support it.
-
-### Phase 3: Broadcast Generalization
-
-**File**: `reduction.rkt` (lines 3403–3449)
-
-**Current**: `expr-broadcast-get` walks only cons/nil structure via `list-nil?` and `list-cons?` helpers.
-
-**New**: Add `expr-rrb` (PVec) and `expr-set` (Set) recognition alongside the existing list walker:
-
-```racket
-[(expr-broadcast-get target fields)
- (define nt (nf target))
- (define (extract-field elem fields)
-   (foldl (lambda (fld acc) (nf (expr-map-get acc fld))) elem fields))
-
- ;; Existing list walkers (unchanged)
- (define (list-nil? e) ...)
- (define (list-cons? e) ...)
-
- ;; NEW: PVec → convert to list, then walk
- (define (pvec->list-elements e)
-   (and (expr-rrb? e)
-        (let ([r (expr-rrb-rrb e)])
-          (for/list ([i (in-range (rrb-count r))])
-            (rrb-get r i)))))
-
- ;; NEW: Set → convert to list, then walk
- (define (set->list-elements e)
-   (and (expr-set? e)
-        (hash-set-values (expr-set-hs e))))
-
- (cond
-   ;; PVec: extract elements, map, rebuild as list
-   [(pvec->list-elements nt)
-    => (lambda (elems)
-         (define results (map (lambda (e) (extract-field (nf e) fields)) elems))
-         (foldr (lambda (x acc) (expr-app (expr-app (expr-fvar 'cons) x) acc))
-                (expr-fvar 'nil) results))]
-   ;; Set: extract elements, map, rebuild as list
-   [(set->list-elements nt)
-    => (lambda (elems)
-         (define results (map (lambda (e) (extract-field (nf e) fields)) elems))
-         (foldr (lambda (x acc) (expr-app (expr-app (expr-fvar 'cons) x) acc))
-                (expr-fvar 'nil) results))]
-   ;; List: existing cons/nil walker
-   [else (map-over nt)])]
-```
-
-**Return type question**: When broadcasting over a PVec, should the result be a PVec or a List? For now, return a List (consistent with current behavior where broadcast returns cons-chain). A future enhancement could use `Buildable.from-seq` to preserve the input collection type.
-
-**Typing**: `expr-broadcast-get` already returns a fresh meta. No typing changes needed — the meta unifies with the actual result type during type checking.
+Currently falls to `[_ #t]` — happens to be correct but fragile. The explicit case makes the function self-documenting and prepares for union-aware trait dispatch.
 
 ### Phase 4: Dot-Brace Path Expansion
 
 **Goal**: `m.{name age}` as syntactic sugar for branching `get-in`.
 
+This is pure reader/preparse work — no dispatch changes, no trait involvement. It desugars entirely to existing `get-in` + keyword path syntax.
+
 #### WS Impact
 
-1. **Reader** (`reader.rkt`): New token type `dot-lbrace` for `.{` (no space between dot and brace). The reader must distinguish:
-   - `m.{name age}` → `dot-lbrace` token (branching access)
-   - `m .{name age}` → separate `dot` + `lbrace` tokens (not dot-brace)
-   - `{:a 1}` → `lbrace` token (map literal, no preceding dot)
+1. **Reader** (`reader.rkt`): New token type `dot-lbrace` for `.{` (no space between dot and brace). Distinguishes from map literals by requiring no space after `.` — same convention as `.*` (broadcast).
 
-2. **Preparse** (`macros.rkt`): `$dot-lbrace` sentinel rewrites to `(get-in target :name :age)` — reuses existing branching `get-in` path syntax. Key renaming (`^`) inside braces works naturally because `validate-selection-paths` already handles `^`.
+2. **Preparse** (`macros.rkt`): `$dot-lbrace` sentinel rewrites to `(get-in target :field1 :field2 ...)`. Key renaming (`^`) inside braces works naturally because `validate-selection-paths` already handles `^`.
 
-3. **No new AST node**: Dot-brace desugars entirely at preparse level to existing `get-in` + keyword path syntax. No parser/elaborator/typing changes.
-
-4. **Keyword/delimiter conflicts**: `.{` uses `{` which is the map literal delimiter. The reader distinguishes by requiring no space after `.` — same convention as `.*` (broadcast). The reader is already position-aware for dot-token handling.
+3. **No new AST node**: Desugars at preparse level. No parser/elaborator/typing changes.
 
 #### Reader Changes
 
 ```racket
-;; In the dot-token handler:
-;; After recognizing '.' followed by an identifier (dot-access),
-;; add a check for '.' followed by '{' (dot-lbrace)
 (define (read-dot-token ...)
   (cond
     [(char=? next #\{)
@@ -381,160 +272,210 @@ The `expr-union` case in typing is a stepping stone toward Phase 5 (union-aware 
 
 #### Preparse Rewriting
 
-In `rewrite-dot-access` or a companion function:
-
 ```
 $dot-lbrace target field1 field2 ...
 → (get-in target :field1 :field2 ...)
 ```
 
-This is the same expansion that `[get-in m :name :age]` already does — branching multi-path access returning a sub-map.
-
-**With renaming**: `m.{name^n age^a}` → `(get-in m :name^n :age^a)` — works because `validate-selection-paths` already splits on `^`.
-
-### Phase 5: Union-Aware Trait Dispatch
-
-**Goal**: When `x : <Int | String>` and both `Int` and `String` implement trait `T`, then `[t-method x]` resolves.
-
-This is the most architecturally significant phase. Current trait resolution (`trait-resolution.rkt`) has no mechanism for union types.
-
-#### Design
-
-When `resolve-trait-constraints!` encounters a constraint like `Show <Int | String>`:
-
-1. Decompose the union into its members: `Int`, `String`
-2. Check if ALL members have an impl for the trait
-3. If yes, generate a **dispatch wrapper** that pattern-matches on the runtime value:
-   ```racket
-   ;; Generated: Show <Int | String> dict
-   (lambda [x]
-     (match x
-       [(? int?) (show-Int-dict x)]
-       [(? string?) (show-String-dict x)]))
-   ```
-4. If any member lacks an impl, the constraint fails (as today)
-
-**Design concern**: This generates runtime dispatch code from compile-time type information. The trait system is currently pure compile-time (elaboration resolves all dicts). Introducing runtime dispatch for union types is a qualitative change.
-
-**Pragmatic scoping**: For Phase 5, limit union-aware dispatch to the `expr-get` typing case (Phase 2c) — when a union-typed collection is indexed, try each branch. Full union-aware trait dispatch (arbitrary traits on union types) is a larger design decision and may be deferred.
-
-### Phase 6: Open-Map Value Typing
-
-**Goal**: Decide the return type of `map-get` on an open-world (unschema'd) heterogeneous map.
-
-This is a **design philosophy question**, not an implementation question.
-
-#### Options
-
-**Option A — Status quo (union)**: `{:a 1 :b "hello"}` has type `Map Keyword <Int | String>`. Accessing `:a` returns `<Int | String>`. Precise but requires narrowing/match to use the value.
-
-**Option B — Dynamic (`_`)**: `{:a 1 :b "hello"}` has type `Map Keyword _`. Accessing any key returns `_` (dynamic/inferred). More usable but loses type safety for map values.
-
-**Option C — Schema-first**: Keep union typing for unschema'd maps (precise, push users toward schemas for usability). Schema'd maps return precise per-field types (already implemented).
-
-**Recommendation**: Option C (schema-first). The union type is correct — it accurately reflects that `:a` and `:b` have different value types. The usability gap is a feature: it nudges users toward `schema` declarations for maps they access heavily. The `schema` system already provides exact per-field narrowing. Open-world maps are for dynamic/exploratory code where type safety is less critical; schemas are for structured data where it matters.
-
-This is a design discussion, not a code change.
+**With renaming**: `m.{name^n age^a}` → `(get-in m :name^n :age^a)`.
 
 ---
 
-## 5. Design Decisions
+## 5. Post-Track 8 Work: Propagator-Resolved Collection Dispatch
+
+These phases require Track 8 infrastructure and represent the principled solution.
+
+### Phase T1: Trait-Dispatched Indexing
+
+**Prerequisite**: Track 8 callback elimination + module restructuring
+
+**Change**: `surf-get` generates a trait constraint instead of elaborating to `expr-get`.
+
+```
+surf-get coll key
+  → infer type of coll
+  → if type implements Indexed: generate Indexed constraint, elaborate to [idx-nth $dict coll key]
+  → if type implements Keyed: generate Keyed constraint, elaborate to [kv-get $dict coll key]
+  → if Schema/Selection: preserve expr-map-get (schema narrowing)
+  → if type is unsolved meta: generate deferred constraint (propagator will resolve when type arrives)
+  → fallback: expr-get (backward compat during migration)
+```
+
+The "unsolved meta" case is the critical one. Today it falls to `expr-get` with constructor dispatch. With propagator infrastructure, it generates a constraint that fires when the meta is solved. The readiness propagator watches the type cell; when ground, the resolution propagator resolves `Indexed` or `Keyed` and writes the dict. The elaborated code is already wired to read from the dict meta cell.
+
+**`expr-get` becomes vestigial.** Once all dispatch goes through trait constraints, `expr-get` serves only as a backward-compatibility fallback. It can be deprecated and eventually removed.
+
+**Design tension — `kv-get` returns `Option V`**: The current `expr-map-get` returns `V` directly. `Keyed.kv-get` returns `Option V`. For syntactic sugar (`m.field`, `m[key]`), we should preserve the current `V` semantics. Options:
+- Keep `expr-map-get` for Map dot-access (schema narrowing depends on it)
+- Or: `kv-get!` variant that unwraps or errors (sugar-specific)
+- This is a separate design decision; Phase T1 can preserve current Map behavior while converting List/PVec to trait dispatch
+
+### Phase T2: Trait-Dispatched Broadcast
+
+**Prerequisite**: Track 8 + Phase T1 pattern established
+
+**Change**: `surf-broadcast-get` generates a `Seq` (or `Seqable`) constraint on the target collection.
+
+```
+surf-broadcast-get target fields
+  → generate Seq constraint on target's type constructor
+  → elaborate to: iterate via seq-first/seq-rest/seq-empty?, apply map-get chain per element
+  → result collection: generate Buildable constraint for output reconstruction
+```
+
+With the Seq dict resolved by propagator, broadcast iterates any collection type using the native `first`/`rest`/`empty?` operations. No cons/nil pattern-matching. No hardcoded PVec/Set recognition.
+
+**Result type preservation**: With a `Buildable` constraint on the output, broadcast over a PVec produces a PVec (not a List). The `Buildable` dict provides `from-seq`/`empty-coll`/`conj` for the target type.
+
+### Phase T3: Union-Aware Trait Dispatch
+
+**Prerequisite**: Track 8 infrastructure
+
+When `resolve-trait-constraints!` encounters a constraint like `Indexed <PVec | List>`:
+
+1. Decompose the union into its members
+2. Check if ALL members have an impl for the trait
+3. If yes, generate a runtime dispatch wrapper using the per-member dicts
+4. If any member lacks an impl, the constraint fails
+
+This addresses the `movie.genres[0]` issue: when `map-get` on a heterogeneous map returns a union type, postfix indexing should still work if all union members support `Indexed`.
+
+**Design concern**: This generates runtime dispatch code from compile-time type information. The trait system is currently pure compile-time. Introducing runtime dispatch for union types is a qualitative change that needs careful design review.
+
+### Phase T4: Efficient Seq Dispatch for gmap/gfilter
+
+**Prerequisite**: Phases T1–T2 establishing the pattern
+
+Replace the `Seqable → LSeq → Buildable` pipeline in `gmap`/`gfilter` with direct `Seq`-based dispatch:
+
+```prologos
+;; Target: Seq-based dispatch
+spec gmap {A B} {C : Type -> Type} [Seq C] -> [Buildable C] -> [A -> B] -> [C A] -> [C B]
+defn gmap [$seq-dict $build f xs]
+  ;; Iterate via seq-first/seq-rest/seq-empty? using native collection ops
+  ;; Build result via Buildable (preserves collection type)
+  ...
+```
+
+Or, for structure-preserving map, use `Functor` directly:
+
+```prologos
+spec gmap {A B} {F : Type -> Type} [Functor F] -> [A -> B] -> [F A] -> [F B]
+defn gmap [$functor f xs]
+  fmap $functor f xs   ;; native fmap for each collection type
+```
+
+The choice between `Seq + Buildable` and `Functor` depends on whether we want `gmap` to always preserve collection type (`Functor`) or allow cross-type transformation (`Seq + Buildable`). Both can coexist:
+- `fmap` (Functor): structure-preserving, type-preserving
+- `gmap` (Seq + Buildable): generic, may change collection type
+- `LSeq` operations: explicit laziness when the user wants it
+
+**LSeq's role**: LSeq becomes a specific collection type that implements `Seq` (with lazy evaluation semantics), not a mandatory intermediary in the pipeline. Users choose LSeq when they want laziness; the default path uses efficient direct dispatch.
+
+---
+
+## 6. Track 8 Requirements
+
+This section captures what the collection interface design needs from Track 8, to inform Track 8's priorities.
+
+| Requirement | Track 8 Component | Why |
+|-------------|-------------------|-----|
+| Trait constraints from `surf-get` must resolve via propagator | Existing readiness/resolution propagators (Track 7) | The mechanism exists; `surf-get` just needs to generate the right constraints |
+| Dict meta cells accessible at dispatch sites | `id-map` accessibility (§5.1) | Dict metas need to be readable from the elaboration site that consumes them |
+| Trait resolution callable from elaborator without callback indirection | Callback elimination (§5.2) | `surf-get` needs to emit constraints that go through the resolution pipeline directly |
+| Type cells solved before dispatch-site elaboration completes | Cell-tree unification (§5.3) | Faster type solving means trait constraints resolve sooner, reducing deferred-dispatch cases |
+| Module restructuring enables direct trait lookups | Module graph restructuring (§5.2.3 Option 1) | `elaborator.rkt` needs to call trait resolution functions without circular dependency |
+
+**Key observation**: Most of this is already built. Track 7 established readiness propagators, resolution propagators, and the stratified quiescence loop. The collection dispatch problem doesn't need *new* propagator infrastructure — it needs the *existing* infrastructure to be reachable from `surf-get` elaboration sites, which is exactly what Track 8's callback elimination and module restructuring deliver.
+
+---
+
+## 7. Design Decisions
 
 | # | Decision | Resolution | Rationale |
 |---|----------|------------|-----------|
-| D1 | Dispatch phase for `expr-get` | Elaboration-time (Option A) | Traits are compile-time; elaboration is where dispatch belongs |
-| D2 | `m.field` returns `V` or `Option V` | `V` (direct) | Backward compatibility; `Option` wrapping is a separate design choice |
-| D3 | Broadcast return type | List (match current behavior) | PVec-preserving broadcast is a future enhancement via Buildable |
-| D4 | Dot-brace implementation level | Reader + preparse (no new AST) | Desugars to existing `get-in` — no parser/elaborator changes needed |
-| D5 | Union trait dispatch scope | Limited to `expr-get` typing (Phase 2c) | Full union dispatch is architecturally significant; scope to immediate need |
-| D6 | Open-map value type | Schema-first (Option C) | Union is correct; schema provides usability; nudges toward structured data |
-| D7 | `expr-get` fallback | Keep constructor-matching as fallback | Unsolved metas and backward compatibility require it |
+| D1 | Collection dispatch mechanism | Propagator-resolved trait constraints | Dissolves phase separation; uses existing Track 7 infrastructure; user-extensible |
+| D2 | Iteration protocol | Seq (ISeq-style) with efficient per-type dispatch | Every collection implements Seq natively; LSeq is a specific lazy type, not a mandatory hub |
+| D3 | `m.field` returns `V` or `Option V` | `V` (direct) for sugar; `Option V` for explicit `kv-get` | Backward compatibility; schema narrowing depends on direct `V` |
+| D4 | Broadcast result type | Preserve input collection type via Buildable | PVec broadcast → PVec; List broadcast → List |
+| D5 | Dot-brace implementation level | Reader + preparse (no new AST) | Desugars to existing `get-in`; independent of dispatch redesign |
+| D6 | Union trait dispatch | Runtime dispatch wrapper when all union members impl trait | Qualitative change; needs design review; scoped narrowly at first |
+| D7 | Open-map value type | Schema-first — see §8 | Union is correct for unschema'd; schema provides per-field narrowing |
+| D8 | LSeq's role | Specific lazy collection type, not mandatory intermediary | `gmap`/`gfilter` go through Seq or Functor; LSeq for explicit laziness |
+| D9 | Implementation timing | Pre-Track 8: Phases 0, 1, 4. Post-Track 8: Phases T1–T4 | Full solution requires propagator infrastructure Track 8 delivers |
 
 ---
 
-## 6. Phase Dependencies
+## 8. Open-Map Value Typing (Design Discussion)
 
-```
-Phase 0 (acceptance) ← independent, do first
-Phase 1 (ground-expr?) ← independent, small fix
-Phase 2a (dispatch skeleton) ← depends on: nothing
-Phase 2b (Keyed dispatch) ← depends on: 2a
-Phase 2c (typing unification) ← depends on: 2a
-Phase 3 (broadcast) ← independent of Phase 2 (different AST node)
-Phase 4 (dot-brace) ← independent of Phases 2-3 (reader/preparse only)
-Phase 5 (union dispatch) ← depends on: 2c
-Phase 6 (open-map typing) ← design discussion, no code dependency
-```
+**Question**: What should `map-get` return on an open-world (unschema'd) heterogeneous map?
 
-Parallelizable: Phases 1, 3, and 4 are independent and can proceed in any order.
-Critical path: Phase 0 → 2a → 2b → 2c → 5.
+**Option A — Status quo (union)**: `{:a 1 :b "hello"}` has type `Map Keyword <Int | String>`. Accessing `:a` returns `<Int | String>`. Precise but requires narrowing/match to use.
+
+**Option B — Dynamic (`_`)**: `{:a 1 :b "hello"}` has type `Map Keyword _`. Accessing any key returns `_`. More usable but loses type safety.
+
+**Option C — Schema-first**: Keep union typing for unschema'd maps. Schema'd maps return precise per-field types (already implemented). The usability gap nudges users toward `schema` for structured data.
+
+**Recommendation**: Option C. The union type is correct — it reflects reality. The `schema` system provides the ergonomic path. Open-world maps are for dynamic/exploratory code; schemas are for typed data.
+
+This is a design philosophy decision, not a code change.
 
 ---
 
-## 7. Key Files
+## 9. Relationship to Principles
 
-| File | Phases | Changes |
-|------|--------|---------|
-| `trait-resolution.rkt` | 1, 5 | `ground-expr?` union case; union-aware dispatch |
-| `elaborator.rkt` | 2a, 2b | `surf-get` dispatch skeleton |
-| `typing-core.rkt` | 2c | `expr-get` union branch in `infer` |
-| `reduction.rkt` | 3 | PVec/Set recognition in `expr-broadcast-get` |
-| `reader.rkt` | 4 | `dot-lbrace` token type |
-| `macros.rkt` | 4 | `$dot-lbrace` sentinel → `get-in` rewriting |
-| `examples/2026-03-20-first-class-paths.prologos` | 0, all | Acceptance file extension |
+| Principle | Current Status | After Pre-Track 8 | After Post-Track 8 |
+|-----------|---------------|--------------------|--------------------|
+| Collections decoupled from backends | **VIOLATED** | No change | **Compliant** — dispatch through traits |
+| Most Generalizable Interface | **VIOLATED** | No change | **Compliant** — Seq/Indexed/Keyed are the interfaces |
+| Seq with efficient dispatch | Partial (Foldable yes, gmap no) | No change | **Compliant** — all ops through native Seq |
+| Traits over concrete types | **VIOLATED** | No change | **Compliant** — no constructor pattern-matching |
+| Open extension, closed verification | Partial | No change | **Compliant** — user types get `[n]` and `.*` |
+| Propagator-first infrastructure | Partial (traits yes, sugar no) | No change | **Compliant** — sugar generates constraints on network |
 
 ---
 
-## 8. Test Strategy
+## 10. Key Files
 
-### Per-Phase Testing
+| File | Pre-Track 8 | Post-Track 8 |
+|------|-------------|--------------|
+| `trait-resolution.rkt` | Phase 1: `ground-expr?` union case | T3: union-aware dispatch |
+| `reader.rkt` | Phase 4: `dot-lbrace` token | — |
+| `macros.rkt` | Phase 4: `$dot-lbrace` → `get-in` | — |
+| `elaborator.rkt` | — | T1: `surf-get` generates trait constraints |
+| `typing-core.rkt` | — | T1: `expr-get` fallback narrows; union indexing |
+| `reduction.rkt` | — | T1: `expr-get` becomes vestigial; T2: broadcast via Seq dict |
+| `generic-ops.prologos` | — | T4: `gmap`/`gfilter` via Seq, not LSeq |
+| `collection-traits.prologos` | — | T4: possibly extend Seq instances |
+| `examples/2026-03-20-first-class-paths.prologos` | Phase 0: §I section | T1–T4: uncomment aspirational tests |
 
-| Phase | Level 1 (sexp) | Level 2 (WS string) | Level 3 (WS file) |
-|-------|----------------|---------------------|--------------------|
+---
+
+## 11. Test Strategy
+
+### Pre-Track 8
+
+| Phase | Level 1 | Level 2 | Level 3 |
+|-------|---------|---------|---------|
 | 1 | Full suite (no behavioral change) | N/A | N/A |
-| 2a | `expr-get` dispatch skeleton | `xs[0]` on List/PVec | Acceptance file §I |
-| 2b | Map access through dispatch | `m.field` variants | Acceptance file §I |
-| 2c | Union-typed indexing | `movie.genres[0]` | Acceptance file §U |
-| 3 | PVec broadcast | `@[{:x 1}].*x` | Acceptance file §I, §U |
 | 4 | N/A (preparse only) | `m.{name age}` | Acceptance file §I |
-| 5 | Union trait resolution | `<Int\|String>` Show | Acceptance file §I |
 
-### Regression Strategy
+### Post-Track 8
 
-- Full test suite after each phase (7308+ tests)
-- Acceptance file after each phase (0 errors baseline)
-- Benchmark comparison after Phases 2a and 3 (these touch hot paths)
+| Phase | Level 1 | Level 2 | Level 3 |
+|-------|---------|---------|---------|
+| T1 | `expr-get` via Indexed/Keyed | `xs[0]` on PVec | Acceptance §I, §U |
+| T2 | PVec/Set broadcast | `@[{:x 1}].*x` | Acceptance §I, §U |
+| T3 | Union trait resolution | `movie.genres[0]` | Acceptance §U |
+| T4 | gmap without LSeq | `[gmap f @[...]]` | Benchmark comparison |
 
----
-
-## 9. Risks and Mitigations
-
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| Type inference at elaboration too slow for `surf-get` | Performance regression on index-heavy code | Profile; fallback to `expr-get` if inference returns unsolved meta |
-| PVec broadcast changes result type expectations | Downstream code expects List from broadcast | Document; broadcast always returns List for now |
-| Dot-brace conflicts with map literal syntax | Parser ambiguity | `.{` requires no space after dot; same convention as `.*` |
-| Union dispatch generates runtime code from compile-time info | Architectural precedent | Scope to `expr-get` typing only; design review before generalizing |
-| Schema narrowing breaks under trait dispatch | Type regression for schema-typed maps | Phase 2a preserves `expr-map-get` for Schema/Selection types |
+Benchmark comparison required after T1 and T4 — these change hot paths.
 
 ---
 
-## 10. Relationship to Principles
+## 12. Deferred / Out of Scope
 
-| Principle | Current Status | After Implementation |
-|-----------|---------------|---------------------|
-| Collections decoupled from backends (§Decomplection) | **VIOLATED** | Compliant — `xs[0]` dispatches through Indexed |
-| Most Generalizable Interface | **VIOLATED** | Compliant — `get` uses widest applicable trait |
-| Seq as Universal Hub (§Collection Conventions) | Partial | Improved — broadcast uses Seqable for PVec/Set |
-| Traits over concrete types | **VIOLATED** | Compliant — syntactic sugar goes through traits |
-| Open extension, closed verification | Partial | Compliant — new Indexed types get `[n]` syntax |
-
----
-
-## 11. Deferred / Out of Scope
-
-- **Full Keyed dispatch for `m.field`**: Currently `m.field` → `expr-map-get` for schema narrowing. Full `Keyed` dispatch (returning `Option V`) requires a design decision on whether dot-access semantics change.
-- **Broadcast preserving collection type**: `@[...]*field` returns List, not PVec. Preserving the input type requires threading `Buildable` through broadcast — future enhancement.
-- **User-defined Seqable in broadcast**: Phase 3 hardcodes PVec/Set recognition. User-defined `Seqable` types in broadcast requires `to-seq` at reduction time (needs reified trait dicts).
-- **Lens/Optics layer**: Composable get/set pairs as a library on top of paths. Orthogonal to this track.
-- **`get-in` on mixed-collection paths**: `get-in` navigating through alternating Maps and PVecs (e.g., `m.users[0].name`). Requires Indexed + Keyed dispatch at each path segment. Future enhancement building on Phase 2.
+- **Lens/Optics layer**: Composable get/set pairs as a library on top of paths and traits. Orthogonal.
+- **`get-in` on mixed-collection paths**: `m.users[0].name` navigating Maps and PVecs. Builds on T1 (Indexed + Keyed at each path segment).
+- **Transducer fusion**: `gmap f >> gfilter p` as a single pass. Builds on T4 (Seq-based ops).
+- **Parallel collection operations**: BSP-style parallel map/fold. Depends on propagator parallelism (Track 8 §4.5).
