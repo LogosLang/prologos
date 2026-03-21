@@ -287,3 +287,75 @@ def ys := '[1 2 3 4 5]
 
 ;; H6: String operations
 [str::append "hello" " world"]   ;; => "hello world"
+
+
+
+;; ========================================================================
+;; § U - USERS TESTS
+;; ========================================================================
+
+
+defn now [] "today"
+
+defn env [var]
+    | _ -> "localhost/db-path"
+    
+
+def app-config
+  :name "MyApp"
+  :date [now]   ;; date is computed dynamically
+  :version "1.0.0"
+  :server
+    :host "localhost"
+    :port 8080
+    :ssl
+      :enabled true
+      :cert-path "/etc/ssl/cert.pem"
+  :database
+    :url [env "DATABASE_URL"]
+    :pool-size 10
+  :features @[:auth :logging :caching]
+  :admins
+    -
+      :name "Alice"
+      :role :super
+    -
+      :name "Bob"
+      :role :regular
+
+      
+;; KNOWN: "Could not infer type" — reader flattening bug: `-` list items with
+;; multi-line key blocks treat continuation lines as nested forms instead of
+;; sibling key-value pairs. Tracked separately from path feature.
+def admins
+  :admins
+    - :name "Alice"
+      :role :super
+    - :name "Bob"
+      :role :regular
+
+
+
+def movie
+  :title "Inception"
+  :director "Christopher Nolan"
+  :year 2010
+  :genres @[:sci-fi :thriller]
+
+movie.genres[0]
+;; KNOWN: "Could not infer type" — map-get on union-valued map returns union type;
+;; postfix index `get` can't dispatch on `Int | (PVec Keyword) | String`.
+;; Needs schema-based narrowing or explicit type annotation.
+
+
+
+
+def genres := '[:sci-fi :thriller]
+
+genres[0]
+;; => :sci-fi ✅
+
+def other-genres := @[:comedy :drama]
+
+other-genres[0]
+;; => :comedy ✅

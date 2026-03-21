@@ -203,6 +203,13 @@
          [((tu _ u1) (tu _ u2) (tu _ u3))
           (tu (expr-Type (lzero)) (add-usage u1 (add-usage u2 u3)))]
          [(_ _ _) (tu-error)]))]
+    [(expr-union l r)
+     (let ([rl (inferQ ctx l)]
+           [rr (inferQ ctx r)])
+       (match* (rl rr)
+         [((tu _ u1) (tu _ u2))
+          (tu (expr-Type (lzero)) (add-usage u1 u2))]
+         [(_ _) (or (and (tu-error? rl) rl) (and (tu-error? rr) rr) (tu-error))]))]
 
     ;; ---- Suc: usage from the argument ----
     [(expr-suc e1)
