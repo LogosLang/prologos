@@ -1,7 +1,7 @@
 # PM Track 8: Propagator Infrastructure Migration — Stage 3 Design
 
 **Date**: 2026-03-21
-**Status**: Draft (D.2 — external critique incorporated)
+**Status**: Draft (D.3 — self-critique + principles alignment)
 **Parent**: Propagator Migration Series ([Master Roadmap](2026-03-13_PROPAGATOR_MIGRATION_MASTER.md))
 **Audit**: [Track 8 Infrastructure Audit](2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org)
 **Informed by**: [CIU Track 0 Trait Hierarchy Audit](2026-03-21_CIU_TRACK0_TRAIT_HIERARCHY_AUDIT.md), [Allocation Audit](2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md)
@@ -199,6 +199,8 @@ Option 2 is more granular and aligns with Track 7's assumption-tagging disciplin
 Option 2 is simplest for Part A — it unblocks mult bridge wiring immediately. Option 3 is the principled solution that Part B will deliver. Part A can use Option 2 as a stepping stone.
 
 **Lifecycle** (D.2 critique item): `id-map` is a live reference, not a snapshot. It grows during elaboration as `elab-fresh-meta` creates new meta-to-cell mappings. The parameter reads the current elab-network's id-map CHAMP at the time of the read — same semantics as all other elab-network field reads during propagation (propagator fire functions unbox `current-prop-net-box` to get the current elab-network). Not a pure snapshot.
+
+**Two-context audit** (D.3, per pipeline.md): The `current-id-map` parameter must be verified in both elaboration context (inside `process-command`, network active) and module-loading context (outside `process-command`, no network). In the module-loading context, `id-map` may not exist yet. The parameter should default to `#f` or empty CHAMP, with readers guarding appropriately.
 
 **Files**: `elaborator-network.rkt`, `metavar-store.rkt`, `propagator.rkt` (if adding field)
 
@@ -543,7 +545,13 @@ Per [GÖDEL_COMPLETENESS.org](../principles/GÖDEL_COMPLETENESS.org), every comp
 
 **The "ambiguous" case** (multiple matching instances): The α function returns `type-bot` (unresolved) when disambiguation is needed. The post-quiescence check detects unresolved trait constraints and either reports an error or escalates to S2 commitment. This mirrors the session bridge's handling of `type-bot` in `check-type-constraints` (line 336: "no type info yet, skip").
 
-**Files**: New `trait-resolution-bridge.rkt` (following `session-type-bridge.rkt` structure), `elaborator.rkt` (constraint emission), `metavar-store.rkt` (bridge creation)
+**Critical: `solve-meta!` re-entrancy** (D.3 self-critique): The current `solve-meta!` (metavar-store.rkt) triggers the stratified resolution chain — it writes to `meta-info`, then calls resolution functions that may trigger further `solve-meta!` calls. If a C1 bridge propagator's α function calls `solve-meta!` during S0 propagation, this could re-enter the stratified loop from within a propagator fire function.
+
+**Resolution**: C1's α function does NOT call `solve-meta!`. It writes the dict value to the dict cell via `net-cell-write` — a pure network operation. The propagator network handles the consequences (dependent propagators fire, including any that would have been triggered by `solve-meta!`). The `solve-meta!` function must be refactored as part of C1: its "write to meta-info + trigger resolution" behavior splits into (a) cell write (done by the bridge propagator) and (b) resolution triggering (done by the network's dependency graph). This is the architectural change that makes Part C work — resolution is driven by the network, not by `solve-meta!`'s imperative chain.
+
+This refactoring is not a new phase — it's internal to C1's implementation. The bridge α function replaces `solve-meta!`'s resolution triggering with cell writes; the propagator network replaces the imperative chain with dependency-driven propagation.
+
+**Files**: New `trait-resolution-bridge.rkt` (following `session-type-bridge.rkt` structure), `elaborator.rkt` (constraint emission), `metavar-store.rkt` (bridge creation, `solve-meta!` refactoring)
 
 ### Phase C2: Hasmethod Resolution as Bridge Propagators
 
@@ -737,7 +745,8 @@ Cost model:
 | Performance regression from trait dispatch vs. hardcoded dispatch | Low | Medium | A/B benchmarks; `expr-get` fallback preserves performance for known types |
 | C1 α function needs access to trait instance registry from propagator fire context | Medium | Medium | Registry is already a persistent cell (Track 7); `cell-read` from fire fn via cell-ops |
 | C1-C3 bridge propagators increase cell/propagator count per command | Low | Low | Mitigated by CHAMP Performance owner-ID transients + BSP-LE Track 0 struct split |
-| Memo cache staleness under interleaved resolution (C1-C3 in S0) | Medium | High | Option D (disable caching during S0); Track 9 provides principled solution |
+| Memo cache staleness under interleaved resolution (C1-C3 in S0) | Medium | High | Option E (solve-meta counter); Track 9 provides principled solution |
+| C1 `solve-meta!` re-entrancy: bridge α triggering stratified loop from within S0 | High | High | α function writes to dict cell only (no `solve-meta!`); `solve-meta!` refactored as part of C1 to split cell-write from loop-triggering |
 
 ---
 
@@ -797,3 +806,37 @@ Part B5's `surf-get` should follow this: during elaboration, collect `trait-cons
 ### Capability-Type Bridge → Bidirectional α/γ Template
 
 `cap-type-bridge.rkt` demonstrates the full Galois adjunction (α∘γ∘α = α, γ∘α∘γ = γ) for cases where bidirectional flow is needed. If future trait resolution requires reverse flow (e.g., a dict constraint refining the type), the cap-type-bridge provides the template for upgrading unidirectional trait bridges to bidirectional ones.
+
+---
+
+## 12. Principles Alignment (D.3 Self-Critique)
+
+### Strongly Aligned
+
+| Principle | How Track 8 Serves It |
+|-----------|-----------------------|
+| **Propagators as Universal Substrate** | Track 8 explores constraint resolution as the next domain on the propagator network. The central thesis in action. |
+| **Propagator-First Infrastructure** | Part A: meta-info, id-map, mult/level/session → network citizens. Part B: callbacks → direct cell-ops. Part C: resolution → bridge propagators. Callbacks and scan loops are symptoms of resolution outside the network (DESIGN_PRINCIPLES §Stratified Propagator Networks) — Part C eliminates them. |
+| **Correct by Construction** | Part A: TMS-based speculation replaces imperative snapshot (structural rollback). Part C: constraints resolve when dependencies are ground — structurally emergent, not imperatively discovered. Resolution is a property of the network topology, not a property maintained by a scan loop. |
+| **The Most Generalizable Interface** | Part B: HKT `impl` + sugar constraint generation enables `xs[0]` to dispatch through `Indexed` (the most general interface) rather than hardcoded `expr-rrb`. |
+| **Decomplection** | Part C decouples constraint *readiness detection* from constraint *resolution execution*. Currently both are in the imperative loop. After Part C, readiness is implicit in the bridge propagator firing (the type cell becoming ground IS the readiness signal); resolution is the α function producing the dict value. Decoupled by the network architecture. |
+| **Open Extension, Closed Verification** | HKT `impl` enables open extension (users add `impl Seq MyCollection`). Verification remains closed (non-overlapping invariant, type-depth admissibility). |
+| **First-Class by Default** | Part C makes constraint resolution a first-class participant in the propagator network. Bridge propagators are observable, composable, retractable. Currently resolution is an opaque imperative loop. After Part C, resolution state is visible in cells — any tool (observatory, LSP, debugger) can observe which constraints are pending, resolved, or failed. |
+| **Data Orientation** | C1's α function IS the data-oriented replacement for the imperative resolution callback. The α function is a pure data transformation (type-val → dict-val). The imperative `resolve-trait-constraint!` is an effect-in-control-flow (lookup + `solve-meta!` + loop triggering). Part C replaces effects-in-control-flow with data-in-cells. |
+| **Gödel Completeness** | Termination arguments stated for all Part C propagators (§Gödel Completeness section). Level 1 for individual bridges; Level 2 for feedback loops; Level 5 fuel as defense-in-depth. |
+| **Layered Recovery** | Part C's simplified loop (S0 with bridges + rare S2) is the layered recovery principle applied: monotone reasoning (S0 bridges) to fixpoint, then non-monotone commitment (S2) at the barrier. |
+
+### Honest Tensions
+
+| Principle | Tension |
+|-----------|---------|
+| **Correct by Construction** | Memo cache correctness (Option D/E) is NOT correct-by-construction. It relies on timing discipline (disable during S0) or generation stamping. Track 9 (reduction as propagators) is the correct-by-construction answer. Acknowledged as a within-scope compromise. |
+| **Simplicity of Foundation** | Part C adds bridge propagators per constraint, increasing network size. For a command with 20 trait constraints, that's 20 additional propagators + 20 additional cells. The trade-off: simpler control flow (no S1, reduced S2) at the cost of larger network. Measurement in C6 determines whether the trade-off is favorable. |
+
+### Network Size Growth (D.3 finding)
+
+Part C creates one bridge propagator + one dict cell per trait/hasmethod/deferred constraint. For a typical command with ~15 trait constraints + ~5 hasmethod constraints + ~10 deferred constraints, that's ~30 additional propagators and ~30 additional cells per command. The existing network for a typical command has ~50 cells and ~20 propagators (type metas + unification). Part C roughly doubles the network size.
+
+This is the same scale increase that Track 7 introduced (29 persistent registry cells + readiness propagators). Track 7's measurements showed no performance regression from the additional cells. The CHAMP Performance work (owner-ID transients, value-only fast path) makes cell operations cheaper, mitigating the size increase.
+
+Measurement in Phase C6 will determine if the network size growth affects wall-time within the ≤250s budget.
