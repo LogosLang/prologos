@@ -1,7 +1,7 @@
 # PM Track 8: Propagator Infrastructure Migration — Stage 3 Design
 
 **Date**: 2026-03-21
-**Status**: Draft (D.3 — self-critique + principles alignment)
+**Status**: Draft (D.4 — unified vision revision: all elaboration on the network)
 **Parent**: Propagator Migration Series ([Master Roadmap](2026-03-13_PROPAGATOR_MIGRATION_MASTER.md))
 **Audit**: [Track 8 Infrastructure Audit](2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org)
 **Informed by**: [CIU Track 0 Trait Hierarchy Audit](2026-03-21_CIU_TRACK0_TRAIT_HIERARCHY_AUDIT.md), [Allocation Audit](2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md)
@@ -18,20 +18,21 @@
 | A0 | Acceptance file | Baseline canary + aspirational tests | ✅ | `68d1e7a` | 16 results 0 errors. §A baseline, §B-C commented out |
 | A1 | Meta-info TMS-awareness | `meta-info` CHAMP → TMS-managed field | ✅ | `249bb2b` | Per-entry assumption tagging. 6 read sites unwrap. S(-1) retracts. 7330 tests 243.8s |
 | A2 | Id-map accessibility | `id-map` accessible from prop-net layer | ✅ | (Track 6) | Already delivered by Track 6 Phase 1a: `current-prop-id-map-read` + `prop-meta-id->cell-id`. Confirmed accessible from prop fire functions. |
-| A3 | Mult/Level/Session on elab-network | Merge CHAMP boxes into elab-network cells | ⬜ | | Per-meta domain cells. Acceptance §A: cross-domain still works |
-| A4 | `restore-meta-state!` retirement | Replace box snapshot with TMS rollback | ⬜ | | Depends on A1-A3. Acceptance §A: Church fold + all speculation tests |
-| A5 | Resolution state simplification | Remove imperative flags | ⬜ | | Low-risk cleanup |
-| — | **Part B: HKT Resolution + Module Restructuring** | | | | |
+| A3 | Mult/Level/Session on elab-network | Merge CHAMP boxes into elab-network cells | ✅ | | A3a `85d5f96` (mult), A3b `898159f` (level), A3c `8e1ffab` (session), A3d `6e26d38` (mult bridge in decompose-pi) |
+| A4 | `restore-meta-state!` retirement | Partial: retained (belt-and-suspenders with tagged CHAMPs) | ✅ | `474f006`, `9c05dbd` | A4b: id-map also tagged. Full retirement blocked by timing gap: S(-1) deferred, elaborator needs synchronous cleanup between speculation branches. |
+| A5 | Resolution state simplification | Remove progress box; retain re-entrancy guard | ✅ | `4049908` | progress-box removed (dead code); re-entrancy flag retained (load-bearing). 7330 tests 238.8s |
+| — | **Part B: Elaboration on the Network** | | | | |
 | B0 | Module graph analysis | Map circular deps, design extraction | ⬜ | | |
-| B1 | Cell-ops extraction | Factor cell operations into importable module | ⬜ | | Breaks metavar-store ↔ elab-network cycle |
-| B2 | Root callback elimination | Inline `cell-read`/`cell-write` (63 sites) | ⬜ | | Depends on B1. Sub-phases B2a-B2d |
-| B2e | Macros parameter write cleanup | Remove 24 dual-writes; cell-only writes after B2 | ⬜ | | Natural cleanup once cell reads are universal |
-| B2f | Accumulate-during-quiescence | Owner-ID transient threading through cell-ops for quiescence loop | ⬜ | | Depends on B1-B2. See [CHAMP Performance](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) §Accumulate |
+| B1 | Cell-ops + worldview-aware reads | Factor cell ops with ATMS worldview filtering | ⬜ | | The architectural change: reads filter by believed assumptions |
+| B1b | `restore-meta-state!` full retirement | Worldview-aware reads make synchronous restore unnecessary | ⬜ | | Consequence of B1. S(-1) becomes GC, not correctness |
+| B2 | Root callback elimination | Inline `cell-read`/`cell-write` (63 sites) via cell-ops | ⬜ | | Depends on B1. Sub-phases B2a-B2d |
+| B2e | Macros parameter write cleanup | Remove 24 dual-writes; cell-only writes after B2 | ⬜ | | |
+| B2f | Accumulate-during-quiescence | Owner-ID transient threading through cell-ops | ⬜ | | Depends on B1-B2. See [CHAMP Performance](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) |
 | B3 | HKT `impl` registration | `impl Seq List` works and registers in trait system | ⬜ | | Depends on B2. **Acceptance §B: uncomment `impl` lines** |
-| B4 | HKT trait resolution on propagator network | Readiness propagators resolve HKT constraints | ⬜ | | Depends on B3. **Acceptance §B: uncomment `my-first` spec/defn** |
+| B4 | HKT trait resolution on network | Resolution via cross-domain bridge propagators | ⬜ | | Depends on B3. **Acceptance §B: uncomment `my-first` spec/defn** |
 | B5 | Sugar constraint generation | `surf-get` generates Indexed/Keyed constraints | ⬜ | | Depends on B4. **Acceptance §B: uncomment user-defined Indexed** |
-| B6 | Verification + benchmarks | Full suite + A/B comparison + acceptance | ⬜ | | All §A-B sections pass |
-| — | **Part C: All Constraint Resolution as Propagators** | | | | |
+| B6 | Verification + benchmarks | Full suite + A/B comparison + acceptance | ⬜ | | All §A-B pass |
+| — | **Part C: The Phase Boundary Dissolves** | | | | |
 | C0 | Bridge convergence prototype | Manual trait bridge on test network; measure depth-2/3 firing count | ⬜ | | Validates core assumption. Can run alongside Part A |
 | C1 | Trait resolution as cross-domain bridges | `net-add-cross-domain-propagator` for trait constraints in S0 | ⬜ | | **Acceptance §C: uncomment gfold + bridge resolution** |
 | C2 | Hasmethod resolution as bridges | `net-add-cross-domain-propagator` for hasmethod in S0 | ⬜ | | Same bridge pattern as C1 |
@@ -59,27 +60,35 @@ Seven tracks systematically migrated elaboration state onto the propagator netwo
 
 ### What Remains
 
-Three categories of work remain, corresponding to three Parts:
+Three categories of work remain, corresponding to three Parts. The unifying vision: **bring all elaboration onto the propagator network, dissolving the boundary between elaboration and propagation, so that the phase separation between compile-time trait resolution and runtime dispatch disappears.**
 
-**Part A — Infrastructure migration**: The elab-network's structural fields (`meta-info`, `id-map`, `next-meta-id`) are not TMS-managed. `restore-meta-state!` still exists as a box-snapshot mechanism. Mult/level/session meta stores are separate CHAMP boxes, not cells in the elab-network. This prevents clean speculation rollback and cross-domain bridges.
+**Part A — Infrastructure migration** (COMPLETE): Assumption-tagged CHAMP entries for all structural state. S(-1) retraction for value cleanup. `restore-meta-state!` simplified to belt-and-suspenders. Cross-domain mult bridges wired.
 
-**Part B — HKT resolution + module restructuring**: 12 callback parameters exist to break circular module dependencies. The root callbacks (`cell-read`/`cell-write`, 63 sites) prevent `surf-get` from generating trait constraints that flow through the propagator network. And `impl` doesn't work for HKT traits — the critical gap identified by CIU Track 0 (F-6). Without HKT resolution, the CIU vision (trait-dispatched collection access) is structurally impossible.
+**Part B — Elaboration on the Network**: The fundamental architectural change. Currently, elaboration is an imperative AST walk that *calls into* the propagator network (via callbacks and box operations). After Part B, elaboration state — meta lifecycle, speculation, constraint emission — *lives in* the network. Reads are worldview-aware (the ATMS worldview filters retracted entries automatically). Callbacks dissolve (cell-ops provides direct access). `restore-meta-state!` is fully retired (worldview-aware reads make retracted speculation state invisible without synchronous restore). HKT `impl` resolution is a natural consequence: when all trait state is on the network with worldview-aware access, `impl Seq List` resolves through the same mechanism as `impl Eq Nat`.
 
-**Part C — All constraint resolution as propagators**: The stratified quiescence loop (S0→S1→S2) dissolves into the propagator network for all monotone operations. Trait constraints, hasmethod checks, and deferred constraints become S0 propagators that fire when their dependencies are ground. The loop persists only for genuinely non-monotone commitment. This eliminates the ordering fragility between type inference and trait resolution that surfaced in the CIU acceptance file — constraints resolve in the same S0 pass as type solving, not on a subsequent loop iteration.
+**Part C — The Phase Boundary Dissolves**: Trait resolution is not a separate "compile-time phase" running in a stratified loop. It's propagation in the same network, with the same ATMS worldview management, using the same cross-domain bridge pattern (session-type-bridge.rkt). The stratified loop (S0→S1→S2) simplifies because monotone resolution happens within S0 as bridge propagators. The "phase separation" between type inference and trait resolution — the root cause of the CIU acceptance file issues — dissolves because both are propagation in the same S0 pass.
+
+### The Unified Vision
+
+The three Parts form a progression:
+- Part A: the *data* is on the network (tagged CHAMPs, TMS cells)
+- Part B: the *operations* are on the network (worldview-aware reads, ATMS-managed speculation, direct cell-ops)
+- Part C: the *control flow* is on the network (resolution as bridge propagators, not as imperative loop iterations)
+
+After all three Parts, the elaborator is a thin driver that walks the AST and emits constraints into the propagator network. Type inference, trait resolution, constraint checking, and speculation are all propagation events within the same network, managed by the same ATMS, observed through the same worldview. The "compile-time / runtime" phase separation is replaced by a single propagation phase where constraints resolve as soon as their dependencies are ground — which is exactly what runtime dispatch does, just at compile time.
 
 ### Why This Order
 
 Part A is prerequisite for Part B:
-- `id-map` accessibility (A2) is needed for the cell-ops extraction (B1)
-- TMS-aware meta-info (A1) is needed for clean speculation in the restructured module graph
-- `restore-meta-state!` retirement (A4) simplifies the state model that B1-B2 must preserve
+- Assumption tagging (A1-A4b) is the foundation for worldview-aware reads (B1)
+- TMS cells and tagged CHAMPs provide the data model that B1's cell-ops API exposes
 
 Part B is prerequisite for Part C:
-- HKT `impl` registration (B3) provides the instances that Part C's resolution propagators look up
-- Callback elimination (B2) provides the direct call paths that resolution propagators use
-- Module restructuring (B1) provides the import structure that resolution propagators need
+- Worldview-aware reads (B1) make ATMS-managed speculation the universal model (no restore-meta-state!)
+- Callback elimination (B2) provides direct call paths for bridge propagators
+- HKT `impl` (B3-B4) provides the instances that resolution bridges look up
 
-Part A is plumbing (changes how the system works). Part B adds capabilities (changes what the system can do). Part C is the architectural capstone (unifies type inference and constraint resolution under a single propagator-driven model).
+Part B delivers capabilities (HKT traits work, speculation is clean). Part C delivers the architectural capstone (the phase boundary dissolves).
 
 ---
 
@@ -116,11 +125,13 @@ persistent-registry-net-box    elab-network (per-command)
                                  14 scoped infra cells (unchanged)
                                  ───────────────────
                                  Removed:
-                                   restore-meta-state! (→ TMS rollback)
+                                   restore-meta-state! (→ worldview-aware reads)
                                    mult/level/session CHAMP boxes (→ cells)
-                                   12 callback parameters (→ direct calls)
+                                   12 callback parameters (→ direct cell-ops)
                                  Added:
+                                   Worldview-aware CHAMP reads (ATMS-managed)
                                    HKT impl registration in trait system
+                                   Trait resolution as cross-domain bridge propagators
                                    surf-get generates Indexed/Keyed constraints
 ```
 
@@ -251,7 +262,15 @@ Option 2 is simplest for Part A — it unblocks mult bridge wiring immediately. 
 
 ---
 
-## 4. Part B: HKT Resolution + Module Restructuring
+## 4. Part B: Elaboration on the Network
+
+### The Architectural Change
+
+Part B transforms the relationship between elaboration and propagation. Currently, elaboration is an imperative AST walk that *calls into* the propagator network through callback parameters. The network is a tool that elaboration uses. After Part B, elaboration state *lives in* the network. The network is the substrate that elaboration operates within.
+
+The key mechanism: **worldview-aware reads**. When any code reads a meta-info entry, an id-map entry, or a CHAMP store value, the read checks the current ATMS worldview. Entries tagged with retracted assumptions are invisible — not because S(-1) cleaned them, but because the *read* filters them. This makes speculation cleanup automatic: retract an assumption, and all state created under that assumption vanishes from all subsequent reads. No `restore-meta-state!`, no synchronous cleanup, no timing gaps.
+
+This is the same mechanism the TMS cells already use for type values — a TMS-cell read under a given worldview returns only the value from the matching branch. Part B extends this mechanism from "type cell values" to "all structural state" (meta-info, id-map, mult, level, session, infrastructure cells).
 
 ### Phase B0: Module Graph Analysis
 
@@ -268,30 +287,39 @@ metavar-store.rkt ←needs cell ops← elaborator-network.rkt
 
 The audit recommended: extract cell-operation API into a `cell-ops.rkt` that both can import.
 
-### Phase B1: Cell-Ops Extraction
+### Phase B1: Cell-Ops Extraction with Worldview-Aware Reads
 
-**Goal**: Extract `elab-cell-read`, `elab-cell-write`, `elab-cell-replace`, and `id-map` access into a standalone `cell-ops.rkt` module.
+**Goal**: Extract cell operations into a standalone `cell-ops.rkt` module. The API is **worldview-aware**: all reads filter by the current ATMS worldview. This is the architectural change that makes `restore-meta-state!` retirement possible.
 
 **Design** (D.2 critique: dual API): `cell-ops.rkt` provides two API surfaces:
 
 **Pure API** (for propagator fire functions — take network, return network):
-- `cell-read : elab-network → cell-id → value`
-- `cell-write : elab-network → cell-id → value → elab-network`
+**Pure API** (for propagator fire functions — take network, return network):
+- `cell-read : elab-network → cell-id → value` — **worldview-aware**: filters tagged entries by current ATMS worldview
+- `cell-write : elab-network → cell-id → value → elab-network` — tags entries with current speculation assumption
 - `cell-replace : elab-network → cell-id → value → elab-network`
-- `meta-id->cell-id : elab-network → meta-id → cell-id`
+- `meta-id->cell-id : elab-network → meta-id → cell-id` — **worldview-aware**: retracted id-map entries are invisible
+- `meta-info-read : elab-network → meta-id → meta-info` — **worldview-aware**: retracted meta-info entries are invisible
+- `meta-info-write : elab-network → meta-id → meta-info → elab-network` — tags with current assumption
 
 **Boxed API** (for elaboration code — read/mutate current-prop-net-box):
-- `cell-read! : cell-id → value`
+- `cell-read! : cell-id → value` — worldview-aware
 - `cell-write! : cell-id → value → void`
-- `cell-replace! : cell-id → value → void`
+- `meta-lookup! : meta-id → meta-info` — worldview-aware
 
-The pure API is what propagator fire functions use internally (they receive `net` and return `net*`). The boxed API is what elaboration code uses (convenience wrappers around the box). B2f's transient threading operates on the pure API — the transient parameter is threaded through `cell-write`, not through the box.
+**Worldview-aware read mechanism**: Every tagged-entry read checks whether the entry's assumption-id is in the current ATMS worldview's believed set. If not (retracted or in a different branch), the entry is invisible (returns `#f` or `type-bot`). This is the same mechanism TMS cells use for type values, extended to all structural state.
+
+The worldview check is O(1): `(set-member? believed-set assumption-id)`. The believed set is the ATMS's current worldview (maintained by `with-speculative-rollback`'s assumption push/pop). At depth-0 (no speculation), all untagged entries are visible (fast path).
+
+**Consequence: `restore-meta-state!` retirement.** With worldview-aware reads, entries from retracted speculation branches are automatically invisible to subsequent reads. No synchronous restore needed. The timing gap that blocked A4's full retirement disappears: the second speculation branch's reads filter the first branch's tagged entries by worldview, regardless of whether S(-1) has run. S(-1) becomes a garbage-collection pass (cleaning entries that will never be visible again), not a correctness mechanism.
 
 No circular dependency — `cell-ops.rkt` depends only on `propagator.rkt` and `elab-network struct definitions` (which can be factored into a separate types module if needed).
 
-**Design-for note — accumulate-during-quiescence pattern** (from [CHAMP Performance Design](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) §Accumulate-During-Quiescence): After B2 eliminates callbacks, the quiescence loop can thread an owner-ID transient through `cell-write` — enabling in-place cell mutation during quiescence with O(modified-nodes) freeze at exit. The `cell-ops.rkt` API should accommodate an optional transient parameter (or a thread-local `current-quiescence-transient` parameter) so this pattern can be implemented as a follow-on without re-designing the API. This is the highest-value application of the owner-ID transient infrastructure (CHAMP Performance Phases 4-6).
+**Design-for note — accumulate-during-quiescence pattern** (from [CHAMP Performance Design](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) §Accumulate-During-Quiescence): The `cell-ops.rkt` API accommodates an optional transient parameter for owner-ID transient threading during quiescence.
 
-**Files**: New `cell-ops.rkt`; `metavar-store.rkt` (replace callback calls); `elaborator-network.rkt` (delegate)
+**Design-for note — worldview threading**: The current ATMS worldview (believed assumption set) is threaded via `(current-speculation-stack)`. The `cell-ops` API reads the stack to determine the worldview. No additional parameter needed — the existing `parameterize` in `with-speculative-rollback` provides the worldview context.
+
+**Files**: New `cell-ops.rkt`; `metavar-store.rkt` (replace callback calls + worldview-aware reads); `elaborator-network.rkt` (delegate)
 
 ### Phase B2: Root Callback Elimination
 
@@ -409,11 +437,11 @@ surf-get coll key
 
 ---
 
-## 5. Part C: All Constraint Resolution as Propagators
+## 5. Part C: The Phase Boundary Dissolves
 
 ### Thesis
 
-The stratified quiescence loop (S0→S1→S2, iterated with fuel) dissolves into the propagator network for all monotone operations. The loop persists only for genuinely non-monotone commitment (ambiguous instance selection). This is the architectural capstone of the Propagator Migration Series — the type checker becomes a single propagator network where trait constraints, hasmethod checks, and deferred constraints are propagators alongside type unification.
+The "phase separation" between compile-time trait resolution and runtime dispatch — the root cause of the CIU acceptance file issues — dissolves. Trait resolution is not a separate compile-time phase running in a stratified loop. It's propagation in the same network, with the same ATMS worldview management, using the same cross-domain bridge pattern. The stratified quiescence loop (S0→S1→S2) simplifies because monotone resolution happens within S0 as bridge propagators. The type checker becomes a single propagator network where type inference, trait resolution, and constraint checking are all propagation events — just like runtime dispatch resolves through the same trait system, just at compile time.
 
 ### Existing Infrastructure: Cross-Domain Bridge Propagators
 
