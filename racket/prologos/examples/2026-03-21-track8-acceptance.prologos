@@ -1,0 +1,94 @@
+ns track8
+;; PM Track 8 Acceptance File
+;; Each section corresponds to a Track 8 Part.
+;; Commented-out expressions are aspirational — uncomment as phases deliver.
+
+;; ================================================================
+;; §A — Part A: Infrastructure Migration (regression canary)
+;; ================================================================
+
+;; A1: Speculation rollback — Church folds should still work
+;; These exercise speculative type checking (Church fold attempts,
+;; union types) which depends on save/restore-meta-state!
+;; After A1-A4, TMS rollback replaces box snapshots.
+
+def church-two := [fn [f : <Int -> Int>] [fn [x : Int] [f [f x]]]]
+def church-result := [church-two [fn [y : Int] [int+ y 1]] 0]
+;; => 2
+
+;; A1: Union type elaboration (speculation over branches)
+def mixed := {:a 1 :b "hello"}
+;; Should elaborate with union value type <Int | String>
+
+;; A3: Cross-domain constraints — existing trait resolution
+;; These use non-HKT traits which should work throughout all phases
+[int+ 3 4]         ;; => 7 (Add Int resolves)
+[int* 3 4]         ;; => 12 (Mul Int resolves)
+[int-eq 3 3]       ;; => true (Eq Int resolves)
+
+;; Basic collection operations (regression canary)
+def xs := '[1 2 3]
+[head xs]           ;; => 1
+[tail xs]           ;; => '[2 3]
+[length xs]         ;; => 3
+
+;; PVec operations
+def pv := @[10 20 30]
+pv[0]               ;; => 10 (currently via expr-get, post-Track 8 via Indexed)
+pv[2]               ;; => 30
+
+;; Map operations
+def m := {:name "Alice" :age 30}
+m.name              ;; => "Alice"
+m.age               ;; => 30
+
+;; ================================================================
+;; §B — Part B: HKT Resolution + Module Restructuring
+;; ================================================================
+
+;; B3: HKT impl registration
+;; These require impl for HKT traits to work.
+;; Uncomment when B3 delivers.
+
+;; impl Seq List          ;; Seq is a HKT trait (Type -> Type)
+;; impl Indexed PVec      ;; Indexed is a HKT trait
+;; impl Keyed Map         ;; Keyed is a HKT trait
+
+;; B4: HKT trait resolution on propagator network
+;; These require B3 + B4 (readiness propagator resolves HKT constraint)
+;; Uncomment when B4 delivers.
+
+;; spec my-first {A} {C : Type -> Type} [Seq C] -> [C A] -> A
+;; defn my-first [$seq xs]
+;;   seq-first $seq xs
+
+;; B5: Sugar constraint generation
+;; surf-get generates Indexed/Keyed constraints instead of expr-get
+;; Uncomment when B5 delivers.
+
+;; ;; User-defined collection implementing Indexed
+;; ;; After B5, my-vec[0] should work via Indexed dispatch
+;; ;; (aspirational — requires user-defined impl Indexed)
+
+;; ================================================================
+;; §C — Part C: Propagator-Driven Constraint Resolution
+;; ================================================================
+
+;; C1: Trait resolution via bridge propagators in S0
+;; These test that trait constraints resolve within a single S0 pass
+;; (no S1→S2 cycle needed for deterministic instances)
+;; Uncomment when C1 delivers.
+
+;; [gfold [fn [acc : Int] [fn [x : Int] [int+ acc x]]] 0 @[1 2 3]]
+;; ;; => 6 — Foldable PVec resolves via bridge propagator
+
+;; C1 depth-2: Nested trait resolution
+;; Resolving an outer trait triggers resolving an inner trait
+;; Uncomment when C1 delivers + depth-2 verified in C0 prototype.
+
+;; ;; (aspirational — requires Seq + Indexed both resolving in same S0 pass)
+
+;; C4: S1 verification pass finds nothing
+;; After C1-C3, all constraints should be resolved by bridges.
+;; The S1 verification pass confirms no constraints escaped bridge coverage.
+;; (verified by test suite, not by acceptance file expressions)
