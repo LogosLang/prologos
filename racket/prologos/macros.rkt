@@ -1710,6 +1710,12 @@
     ;; The code inside is raw Racket, not Prologos surface syntax
     [(and (pair? datum) (eq? (car datum) '$foreign-block))
      datum]
+    ;; Track 8 B3: $brace-params — opaque during preparse.
+    ;; Contents are parsed later by parse-brace-param-list when consumed
+    ;; by trait/data/spec processing. Do NOT recursively expand — the ->
+    ;; inside brace params is a kind annotation, not a function arrow.
+    [(and (pair? datum) (eq? (car datum) '$brace-params))
+     datum]
     ;; List form — check head symbol for macros
     [(and (pair? datum) (symbol? (car datum)))
      (define entry (hash-ref reg (car datum) #f))
