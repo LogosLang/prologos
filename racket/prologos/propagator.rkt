@@ -896,45 +896,87 @@
         final)))
 
 ;; Inner loop: no tracing.
+;; BSP-LE Track 0 Phase 3c: mutable worklist/fuel drain pattern.
+;; Strip hot fields into mutable boxes before the loop. Propagator fire
+;; functions write new dependents to the network's worklist via net-cell-write;
+;; we drain those into the mutable box after each fire. Zero struct-copy
+;; per iteration for worklist/fuel management.
 (define (run-to-quiescence-inner net)
+  ;; Fast path: nothing to do — return same object (eq? identity).
   (cond
     [(prop-network-contradiction net) net]
     [(<= (prop-network-fuel net) 0) net]
     [(null? (prop-network-worklist net)) net]
-    [else
-     (let* ([pid (car (prop-network-worklist net))]
-            [rest (cdr (prop-network-worklist net))]
-            [net* (struct-copy prop-network net
-                    [hot (struct-copy prop-net-hot (prop-network-hot net)
-                           [worklist rest]
-                           [fuel (sub1 (prop-network-fuel net))])])]
-            [prop (champ-lookup (prop-network-propagators net*)
-                                (prop-id-hash pid) pid)])
+    [else (run-to-quiescence-drain net)]))
+
+;; Mutable drain loop — only entered when there IS work to do.
+(define (run-to-quiescence-drain net)
+  (define wl (box (prop-network-worklist net)))
+  (define remaining-fuel (box (prop-network-fuel net)))
+  ;; Strip worklist/fuel from network — propagators see an empty worklist.
+  ;; net-cell-write appends new dependents to the network's own worklist field;
+  ;; we drain those into the box after each fire.
+  (define net0 (struct-copy prop-network net
+                 [hot (prop-net-hot '() 0)]))
+  (define (finalize n)
+    ;; Reconstitute the hot fields from the mutable boxes.
+    (struct-copy prop-network n
+      [hot (prop-net-hot (unbox wl) (unbox remaining-fuel))]))
+  (let loop ([net net0])
+    (cond
+      [(prop-network-contradiction net) (finalize net)]
+      [(<= (unbox remaining-fuel) 0) (finalize net)]
+      [(null? (unbox wl)) (finalize net)]
+      [else
+       (define pid (car (unbox wl)))
+       (set-box! wl (cdr (unbox wl)))
+       (set-box! remaining-fuel (sub1 (unbox remaining-fuel)))
+       (define prop (champ-lookup (prop-network-propagators net)
+                                   (prop-id-hash pid) pid))
        (if (eq? prop 'none)
-           (run-to-quiescence-inner net*)
-           (begin
+           (loop net)
+           (let ([net* ((propagator-fire-fn prop) net)])
              (perf-inc-prop-firing!)  ;; Track 7 Phase 0b
-             (run-to-quiescence-inner ((propagator-fire-fn prop) net*)))))]))
+             ;; Drain: fire fn may have added to net*'s worklist via net-cell-write.
+             ;; Move those new entries into our mutable box.
+             (define new-wl-entries (prop-network-worklist net*))
+             (unless (null? new-wl-entries)
+               (set-box! wl (append new-wl-entries (unbox wl))))
+             ;; Clear net*'s worklist so it doesn't accumulate across iterations.
+             (loop (struct-copy prop-network net*
+                     [hot (prop-net-hot '() 0)]))))])))
 
 ;; Inner loop with tracing: returns (cons final-net fired-pids-list).
+;; Same mutable worklist/fuel drain pattern as run-to-quiescence-inner.
 (define (run-to-quiescence-inner/traced net)
-  (let loop ([net net] [fired '()])
+  (define wl (box (prop-network-worklist net)))
+  (define remaining-fuel (box (prop-network-fuel net)))
+  (define net0 (struct-copy prop-network net
+                 [hot (prop-net-hot '() 0)]))
+  (define (finalize n fired)
+    (cons (struct-copy prop-network n
+            [hot (prop-net-hot (unbox wl) (unbox remaining-fuel))])
+          (reverse fired)))
+  (let loop ([net net0] [fired '()])
     (cond
-      [(prop-network-contradiction net) (cons net (reverse fired))]
-      [(<= (prop-network-fuel net) 0) (cons net (reverse fired))]
-      [(null? (prop-network-worklist net)) (cons net (reverse fired))]
+      [(prop-network-contradiction net) (finalize net fired)]
+      [(<= (unbox remaining-fuel) 0) (finalize net fired)]
+      [(null? (unbox wl)) (finalize net fired)]
       [else
-       (let* ([pid (car (prop-network-worklist net))]
-              [rest (cdr (prop-network-worklist net))]
-              [net* (struct-copy prop-network net
-                      [hot (struct-copy prop-net-hot (prop-network-hot net)
-                             [worklist rest]
-                             [fuel (sub1 (prop-network-fuel net))])])]
-              [prop (champ-lookup (prop-network-propagators net*)
-                                  (prop-id-hash pid) pid)])
-         (if (eq? prop 'none)
-             (loop net* fired)
-             (loop ((propagator-fire-fn prop) net*) (cons pid fired))))])))
+       (define pid (car (unbox wl)))
+       (set-box! wl (cdr (unbox wl)))
+       (set-box! remaining-fuel (sub1 (unbox remaining-fuel)))
+       (define prop (champ-lookup (prop-network-propagators net)
+                                   (prop-id-hash pid) pid))
+       (if (eq? prop 'none)
+           (loop net fired)
+           (let ([net* ((propagator-fire-fn prop) net)])
+             (define new-wl-entries (prop-network-worklist net*))
+             (unless (null? new-wl-entries)
+               (set-box! wl (append new-wl-entries (unbox wl))))
+             (loop (struct-copy prop-network net*
+                     [hot (prop-net-hot '() 0)])
+                   (cons pid fired))))])))
 
 ;; ========================================
 ;; Scheduler: BSP / Jacobi (Parallel-Ready) (Phase 2.5a)
