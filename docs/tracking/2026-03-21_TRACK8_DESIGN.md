@@ -15,30 +15,30 @@
 | # | Phase | Description | Status | Commit | Notes |
 |---|-------|-------------|--------|--------|-------|
 | — | **Part A: Infrastructure Migration** | | | | |
-| A0 | Acceptance file | Baseline canary + aspirational tests | ⬜ | | |
-| A1 | Meta-info TMS-awareness | `meta-info` CHAMP → TMS-managed field | ⬜ | | Enables `restore-meta-state!` retirement |
+| A0 | Acceptance file | Baseline canary + aspirational tests | ✅ | `68d1e7a` | 16 results 0 errors. §A baseline, §B-C commented out |
+| A1 | Meta-info TMS-awareness | `meta-info` CHAMP → TMS-managed field | ⬜ | | Enables `restore-meta-state!` retirement. Acceptance §A: Church fold still works |
 | A2 | Id-map accessibility | `id-map` accessible from prop-net layer | ⬜ | | Unblocks mult bridge wiring |
-| A3 | Mult/Level/Session on elab-network | Merge CHAMP boxes into elab-network cells | ⬜ | | Per-meta domain cells |
-| A4 | `restore-meta-state!` retirement | Replace box snapshot with TMS rollback | ⬜ | | Depends on A1-A3 |
+| A3 | Mult/Level/Session on elab-network | Merge CHAMP boxes into elab-network cells | ⬜ | | Per-meta domain cells. Acceptance §A: cross-domain still works |
+| A4 | `restore-meta-state!` retirement | Replace box snapshot with TMS rollback | ⬜ | | Depends on A1-A3. Acceptance §A: Church fold + all speculation tests |
 | A5 | Resolution state simplification | Remove imperative flags | ⬜ | | Low-risk cleanup |
 | — | **Part B: HKT Resolution + Module Restructuring** | | | | |
 | B0 | Module graph analysis | Map circular deps, design extraction | ⬜ | | |
 | B1 | Cell-ops extraction | Factor cell operations into importable module | ⬜ | | Breaks metavar-store ↔ elab-network cycle |
 | B2 | Root callback elimination | Inline `cell-read`/`cell-write` (63 sites) | ⬜ | | Depends on B1. Sub-phases B2a-B2d |
 | B2e | Macros parameter write cleanup | Remove 24 dual-writes; cell-only writes after B2 | ⬜ | | Natural cleanup once cell reads are universal |
-| B2f | Accumulate-during-quiescence | Owner-ID transient threading through cell-ops for quiescence loop | ⬜ | | Depends on B1-B2. Zero CHAMP allocation on hot path. See [CHAMP Performance](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) §Accumulate |
-| B3 | HKT `impl` registration | `impl Seq List` works and registers in trait system | ⬜ | | Depends on B2 (needs direct trait-resolution access) |
-| B4 | HKT trait resolution on propagator network | Readiness propagators resolve HKT constraints | ⬜ | | Depends on B3 |
-| B5 | Sugar constraint generation | `surf-get` generates Indexed/Keyed constraints | ⬜ | | Depends on B4; validates CIU vision |
-| B6 | Verification + benchmarks | Full suite + A/B comparison + acceptance | ⬜ | | |
+| B2f | Accumulate-during-quiescence | Owner-ID transient threading through cell-ops for quiescence loop | ⬜ | | Depends on B1-B2. See [CHAMP Performance](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) §Accumulate |
+| B3 | HKT `impl` registration | `impl Seq List` works and registers in trait system | ⬜ | | Depends on B2. **Acceptance §B: uncomment `impl` lines** |
+| B4 | HKT trait resolution on propagator network | Readiness propagators resolve HKT constraints | ⬜ | | Depends on B3. **Acceptance §B: uncomment `my-first` spec/defn** |
+| B5 | Sugar constraint generation | `surf-get` generates Indexed/Keyed constraints | ⬜ | | Depends on B4. **Acceptance §B: uncomment user-defined Indexed** |
+| B6 | Verification + benchmarks | Full suite + A/B comparison + acceptance | ⬜ | | All §A-B sections pass |
 | — | **Part C: All Constraint Resolution as Propagators** | | | | |
-| C0 | Bridge convergence prototype | Manual trait bridge on test network; measure depth-2/3 firing count | ⬜ | | Validates core assumption before C1-C4. If >100 firings for depth-2, redesign needed |
-| C1 | Trait resolution as cross-domain bridges | `net-add-cross-domain-propagator` for trait constraints in S0 | ⬜ | | Uses session-type-bridge pattern. No new mechanism needed |
+| C0 | Bridge convergence prototype | Manual trait bridge on test network; measure depth-2/3 firing count | ⬜ | | Validates core assumption. Can run alongside Part A |
+| C1 | Trait resolution as cross-domain bridges | `net-add-cross-domain-propagator` for trait constraints in S0 | ⬜ | | **Acceptance §C: uncomment gfold + bridge resolution** |
 | C2 | Hasmethod resolution as bridges | `net-add-cross-domain-propagator` for hasmethod in S0 | ⬜ | | Same bridge pattern as C1 |
-| C3 | Constraint retry as threshold propagators | Deferred constraints watch dependency cells via existing threshold | ⬜ | | Replaces imperative S2 polling with demand-driven firing |
-| C4 | S2 scope reduction + S1 elimination | S1 vestigial; S2 handles only ambiguous cases | ⬜ | | Stratified loop: S0 (with bridges) + rare S2 |
-| C5 | Layered scheduler (optimization) | Priority-ordered worklist for S0 propagators | ⬜ | | Right Kan demand-driven quiescence. Optimization, not correctness requirement |
-| C6 | Verification + benchmarks | Resolution cycle count, fuel consumption, ordering stability, memo cache | ⬜ | | Target: fewer iterations, same results |
+| C3 | Constraint retry as threshold propagators | Deferred constraints watch dependency cells via existing threshold | ⬜ | | Replaces imperative S2 polling |
+| C4 | S2 scope reduction + S1 verification pass | S1 as no-op verification; S2 handles only ambiguous | ⬜ | | **Acceptance §C: uncomment depth-2 nesting** |
+| C5 | Layered scheduler (optimization) | Priority-ordered worklist for S0 propagators | ⬜ | | Right Kan demand-driven quiescence |
+| C6 | Verification + benchmarks | Resolution cycles, fuel, ordering, memo cache, depth-2/3 | ⬜ | | All §A-C pass. ≤250s suite, ≤15% per-command |
 
 ---
 
