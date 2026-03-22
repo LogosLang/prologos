@@ -1021,7 +1021,13 @@
 ;; ========================================
 (define (pattern-var? x)
   (and (symbol? x)
-       (not (eq? x '$angle-type))  ; reader sentinel, not a pattern variable
+       (not (eq? x '$angle-type))       ; reader sentinel, not a pattern variable
+       (not (eq? x '$brace-params))     ; Track 8 B3: reader sentinel for implicit brace params
+       (not (eq? x '$foreign-block))    ; reader sentinel for foreign escape blocks
+       (not (eq? x '$dot-access))       ; reader sentinel for dot access
+       (not (eq? x '$nil-dot-access))   ; reader sentinel for nil-safe dot access
+       (not (eq? x '$postfix-index))    ; reader sentinel for postfix indexing
+       (not (eq? x '$broadcast-access)) ; reader sentinel for broadcast access
        (let ([s (symbol->string x)])
          (and (> (string-length s) 1)
               (char=? (string-ref s 0) #\$)))))
