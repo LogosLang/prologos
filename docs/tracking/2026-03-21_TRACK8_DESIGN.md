@@ -878,6 +878,22 @@ Part B5's `surf-get` should follow this: during elaboration, collect `trait-cons
 | **Correct by Construction** | Memo cache correctness (Option D/E) is NOT correct-by-construction. It relies on timing discipline (disable during S0) or generation stamping. Track 9 (reduction as propagators) is the correct-by-construction answer. Acknowledged as a within-scope compromise. |
 | **Simplicity of Foundation** | Part C adds bridge propagators per constraint, increasing network size. For a command with 20 trait constraints, that's 20 additional propagators + 20 additional cells. The trade-off: simpler control flow (no S1, reduced S2) at the cost of larger network. Measurement in C6 determines whether the trade-off is favorable. |
 
+### D.4 Self-Critique: Prior Design Failed to Apply Principles
+
+The D.1–D.3 design treated `restore-meta-state!` partial retirement as an acceptable outcome. The "belt-and-suspenders" framing (TMS + S(-1) for values, synchronous restore for structure) rationalized keeping an imperative mechanism alongside the propagator infrastructure.
+
+This was a failure to steadfastly apply three load-bearing principles:
+
+1. **Propagator-First Infrastructure** (§Stratified Propagator Networks): "Callbacks and scan loops are symptoms of resolution logic living outside the network." The imperative save/restore pattern IS a callback-like mechanism for state management. If the state is on the network (which A1-A4b achieved), the network's own mechanisms (ATMS worldviews, TMS retraction) should handle it. Designing a "belt-and-suspenders" workaround instead of making the network's mechanisms sufficient was a failure to trust the architecture.
+
+2. **Data Orientation**: "Effects become first-class descriptions of intent, interpreted at explicit control boundaries." The box-snapshot mechanism makes speculation cleanup an *effect* (swap the box), not *data* (read the worldview). Worldview-aware reads make cleanup a data property: the read checks the worldview, and retracted entries are structurally invisible. No effect needed.
+
+3. **Correct by Construction**: "Prefer designs where correctness is a structural property of the architecture, not maintained by discipline." The belt-and-suspenders timing — S(-1) runs at loop start, restore runs synchronously — is maintained by *timing discipline*, not structural properties. The A4 failure (ghost metas between retraction and S(-1)) was a direct consequence of timing-dependent correctness. Worldview-aware reads make correctness structural: the read either sees the entry (in worldview) or doesn't (retracted). No timing matters.
+
+**The D.3 principles alignment check listed these principles but failed to challenge the workaround.** It asked "does this principle apply?" but not "does this design *violate* this principle?" The D.4 revision applies the principles: worldview-aware reads are propagator-first (reads through the network's ATMS), data-oriented (worldview is data, not an effect), and correct-by-construction (visibility is structural, not timing-dependent).
+
+**Lesson for future PIRs and alignment checks**: When a principles check lists alignment without challenging workarounds, the check is cosmetic. The question must be: "does this design VIOLATE this principle, and if so, is the violation *necessary* or a failure of imagination?"
+
 ### Network Size Growth (D.3 finding)
 
 Part C creates one bridge propagator + one dict cell per trait/hasmethod/deferred constraint. For a typical command with ~15 trait constraints + ~5 hasmethod constraints + ~10 deferred constraints, that's ~30 additional propagators and ~30 additional cells per command. The existing network for a typical command has ~50 cells and ~20 propagators (type metas + unification). Part C roughly doubles the network size.
