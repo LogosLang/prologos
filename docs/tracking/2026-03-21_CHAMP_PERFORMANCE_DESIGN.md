@@ -13,11 +13,11 @@
 
 | # | Phase | Description | Status | Commit | Notes |
 |---|-------|-------------|--------|--------|-------|
-| 0 | Baselines + acceptance tests | CHAMP-specific micro-benchmarks + `test-champ-owner-id.rkt` | ⬜ | | Benchmarks + acceptance test exercising all CHAMP operations as regression canary |
-| 1 | `vector-copy!` for array ops | Replace manual loop in `vec-insert`/`vec-remove` with memcpy | ⬜ | | Low-risk, mechanical. Addresses F-3 |
-| 2 | `eq?`-first key comparison | Parameterized key-eq? with `eq?` fast path | ⬜ | | Addresses F-1. Propagator CHAMPs use `eq?`; user maps keep `equal?` |
-| 3 | Value-only update fast path | Return same node when new value `eq?` old value | ⬜ | | Addresses F-4. Compounds with Track 0 Phase 1 (eq?-first in net-cell-write) |
-| 4 | Owner-ID node structure | Add `edit` field to `champ-node`; pipeline.md struct checklist | ⬜ | | Addresses F-5. Codebase-wide grep for champ-node struct-copy/match |
+| 0 | Baselines + acceptance tests | CHAMP-specific micro-benchmarks + `test-champ-owner-id.rkt` | ✅ | `c3e1b37` | 8 §A tests. Transient N=2: 95.5μs (600× persistent). Key baseline. |
+| 1 | `vector-copy!` for array ops | Replace manual loop in `vec-insert`/`vec-remove` with memcpy | ✅ | `57e052d` | 7321 tests 234.5s. vec-insert/vec-remove/vec-remove-insert-node |
+| 2 | `eq?`-first key comparison | `(or (eq? ...) (equal? ...))` in all 6 key comparison sites | ✅ | `57e052d` | lookup, insert, delete, collision-lookup, collision-insert, collision-delete |
+| 3 | Value-only update fast path | Return same node when new value `eq?` old value | ✅ | `57e052d` | Propagates through ALL trie levels. §B tests (3) uncommented. 7324 tests 234.7s |
+| 4 | Owner-ID node structure | Add `edit` field to `champ-node`; pipeline.md struct checklist | ✅ | `1fd5eff` | 12 constructor sites. No external struct-copy/match. 232.5s (no regression) |
 | 5 | Owner-ID transient operations | In-place insert + delete + insert-join for owned nodes | ⬜ | | Addresses F-5. All three mutation operations, not just insert |
 | 6 | Owner-ID freeze | O(modified nodes) freeze — walk + clear edit, not full rebuild | ⬜ | | Completes owner-ID transient. Old freeze was O(N log N); new is O(modified paths × depth) |
 | 7 | Verification + A/B | Micro-benchmarks, suite regression, BSP-LE Track 0 Phase 5 revisit | ⬜ | | Target: measurable wall-time improvement on full suite |

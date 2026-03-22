@@ -122,95 +122,93 @@
 ;; ========================================
 ;; Uncomment after Phase 5 implements owner-ID transients.
 
-;; (test-case "C1: owner-ID transient insert + freeze"
-;;   (define m (make-test-map 50))
-;;   (define-values (node edit size) (champ-transient-owned m))
-;;   ;; Insert 10 new keys
-;;   (define size-box (box size))
-;;   (define final-node
-;;     (for/fold ([n node]) ([i (in-range 50 60)])
-;;       (define-values (n* added?) (tchamp-insert-owned! n size-box i i (* i i) edit))
-;;       (when added? (set-box! size-box (add1 (unbox size-box))))
-;;       n*))
-;;   (define m2 (tchamp-freeze-owned final-node (unbox size-box) edit))
-;;   (check-equal? (champ-size m2) 60)
-;;   (check-equal? (champ-lookup m2 55 55) (* 55 55))
-;;   ;; Original unchanged
-;;   (check-equal? (champ-size m) 50))
+(test-case "C1: owner-ID transient insert + freeze"
+  (define m (make-test-map 50))
+  (define-values (node edit size) (champ-transient-owned m))
+  ;; Insert 10 new keys — size-box is updated internally by tchamp-insert-owned!
+  (define size-box (box size))
+  (define final-node
+    (for/fold ([n node]) ([i (in-range 50 60)])
+      (define-values (n* added?) (tchamp-insert-owned! n size-box i i (* i i) edit))
+      n*))
+  (define m2 (tchamp-freeze-owned final-node (unbox size-box) edit))
+  (check-equal? (champ-size m2) 60)
+  (check-equal? (champ-lookup m2 55 55) (* 55 55))
+  ;; Original unchanged
+  (check-equal? (champ-size m) 50))
 
-;; (test-case "C2: owner-ID transient delete"
-;;   (define m (make-test-map 50))
-;;   (define-values (node edit size) (champ-transient-owned m))
-;;   (define size-box (box size))
-;;   (define-values (n* removed?) (tchamp-delete-owned! node size-box 25 25 edit))
-;;   (when removed? (set-box! size-box (sub1 (unbox size-box))))
-;;   (define m2 (tchamp-freeze-owned n* (unbox size-box) edit))
-;;   (check-equal? (champ-size m2) 49)
-;;   (check-equal? (champ-lookup m2 25 25) 'none))
+(test-case "C2: owner-ID transient delete"
+  (define m (make-test-map 50))
+  (define-values (node edit size) (champ-transient-owned m))
+  (define size-box (box size))
+  (define-values (n* removed?) (tchamp-delete-owned! node size-box 25 25 edit))
+  (define m2 (tchamp-freeze-owned n* (unbox size-box) edit))
+  (check-equal? (champ-size m2) 49)
+  (check-equal? (champ-lookup m2 25 25) 'none))
 
-;; (test-case "C3: owner-ID transient insert-join"
-;;   (define (sum-merge old new) (+ old new))
-;;   (define m (champ-insert champ-empty 42 'k 10))
-;;   (define-values (node edit size) (champ-transient-owned m))
-;;   (define size-box (box size))
-;;   (define-values (n* added?) (tchamp-insert-join-owned! node size-box 42 'k 5 sum-merge edit))
-;;   (define m2 (tchamp-freeze-owned n* (unbox size-box) edit))
-;;   (check-equal? (champ-lookup m2 42 'k) 15))
+(test-case "C3: owner-ID transient insert-join"
+  (define (sum-merge old new) (+ old new))
+  (define m (champ-insert champ-empty 42 'k 10))
+  (define-values (node edit size) (champ-transient-owned m))
+  (define size-box (box size))
+  (define-values (n* added?) (tchamp-insert-join-owned! node size-box 42 'k 5 sum-merge edit))
+  (define m2 (tchamp-freeze-owned n* (unbox size-box) edit))
+  (check-equal? (champ-lookup m2 42 'k) 15))
 
 ;; ========================================
 ;; §D — Mixed Persistent + Transient (Phase 5)
 ;; ========================================
 
-;; (test-case "D1: two concurrent transients don't interfere"
-;;   (define m (make-test-map 50))
-;;   (define-values (n1 e1 s1) (champ-transient-owned m))
-;;   (define-values (n2 e2 s2) (champ-transient-owned m))
-;;   ;; Insert different keys into each
-;;   (define sb1 (box s1))
-;;   (define sb2 (box s2))
-;;   (define-values (n1* _) (tchamp-insert-owned! n1 sb1 100 100 'a e1))
-;;   (define-values (n2* __) (tchamp-insert-owned! n2 sb2 200 200 'b e2))
-;;   (define m1 (tchamp-freeze-owned n1* (add1 (unbox sb1)) e1))
-;;   (define m2 (tchamp-freeze-owned n2* (add1 (unbox sb2)) e2))
-;;   ;; Each has its own insert but not the other's
-;;   (check-equal? (champ-lookup m1 100 100) 'a)
-;;   (check-equal? (champ-lookup m1 200 200) 'none)
-;;   (check-equal? (champ-lookup m2 200 200) 'b)
-;;   (check-equal? (champ-lookup m2 100 100) 'none))
+(test-case "D1: two concurrent transients don't interfere"
+  (define m (make-test-map 50))
+  (define-values (n1 e1 s1) (champ-transient-owned m))
+  (define-values (n2 e2 s2) (champ-transient-owned m))
+  ;; Insert different keys into each
+  (define sb1 (box s1))
+  (define sb2 (box s2))
+  (define-values (n1* _) (tchamp-insert-owned! n1 sb1 100 100 'a e1))
+  (define-values (n2* __) (tchamp-insert-owned! n2 sb2 200 200 'b e2))
+  (define m1 (tchamp-freeze-owned n1* (unbox sb1) e1))
+  (define m2 (tchamp-freeze-owned n2* (unbox sb2) e2))
+  ;; Each has its own insert but not the other's
+  (check-equal? (champ-lookup m1 100 100) 'a)
+  (check-equal? (champ-lookup m1 200 200) 'none)
+  (check-equal? (champ-lookup m2 200 200) 'b)
+  (check-equal? (champ-lookup m2 100 100) 'none))
 
 ;; ========================================
 ;; §E — Freeze Invariant (Phase 6)
 ;; ========================================
 
-;; (test-case "E1: after freeze, no node has active edit"
-;;   (define m (make-test-map 50))
-;;   (define-values (node edit size) (champ-transient-owned m))
-;;   (define sb (box size))
-;;   ;; Modify several paths
-;;   (define n*
-;;     (for/fold ([n node]) ([i (in-range 50 60)])
-;;       (define-values (n** _) (tchamp-insert-owned! n sb i i (* i i) edit))
-;;       n**))
-;;   (define frozen (tchamp-freeze-owned n* (unbox sb) edit))
-;;   ;; Walk all nodes and verify no edit field matches any active token
-;;   (check-true (champ-all-persistent? frozen)
-;;               "all nodes should have edit=#f after freeze"))
+(test-case "E1: after freeze, no node has active edit"
+  (define m (make-test-map 50))
+  (define-values (node edit size) (champ-transient-owned m))
+  (define sb (box size))
+  ;; Modify several paths
+  (define n*
+    (for/fold ([n node]) ([i (in-range 50 60)])
+      (define-values (n** _) (tchamp-insert-owned! n sb i i (* i i) edit))
+      n**))
+  (define frozen (tchamp-freeze-owned n* (unbox sb) edit))
+  ;; Walk all nodes and verify no edit field matches any active token
+  (check-true (champ-all-persistent? frozen)
+              "all nodes should have edit=#f after freeze"))
 
 ;; ========================================
 ;; §F — Post-Freeze Copy Semantics (Phase 6)
 ;; ========================================
 
-;; (test-case "F1: post-freeze transient on frozen map copies, not mutates"
-;;   (define m (make-test-map 50))
-;;   (define-values (n1 e1 s1) (champ-transient-owned m))
-;;   (define sb1 (box s1))
-;;   (define-values (n1* _) (tchamp-insert-owned! n1 sb1 100 100 'first e1))
-;;   (define frozen (tchamp-freeze-owned n1* (add1 s1) e1))
-;;   ;; Now create a NEW transient from the frozen map
-;;   (define-values (n2 e2 s2) (champ-transient-owned frozen))
-;;   (define sb2 (box s2))
-;;   (define-values (n2* __) (tchamp-insert-owned! n2 sb2 200 200 'second e2))
-;;   (define frozen2 (tchamp-freeze-owned n2* (add1 s2) e2))
-;;   ;; frozen should NOT see the second insert
-;;   (check-equal? (champ-lookup frozen 200 200) 'none)
-;;   (check-equal? (champ-lookup frozen2 200 200) 'second))
+(test-case "F1: post-freeze transient on frozen map copies, not mutates"
+  (define m (make-test-map 50))
+  (define-values (n1 e1 s1) (champ-transient-owned m))
+  (define sb1 (box s1))
+  (define-values (n1* _) (tchamp-insert-owned! n1 sb1 100 100 'first e1))
+  (define frozen (tchamp-freeze-owned n1* (unbox sb1) e1))
+  ;; Now create a NEW transient from the frozen map
+  (define-values (n2 e2 s2) (champ-transient-owned frozen))
+  (define sb2 (box s2))
+  (define-values (n2* __) (tchamp-insert-owned! n2 sb2 200 200 'second e2))
+  (define frozen2 (tchamp-freeze-owned n2* (unbox sb2) e2))
+  ;; frozen should NOT see the second insert
+  (check-equal? (champ-lookup frozen 200 200) 'none)
+  (check-equal? (champ-lookup frozen2 200 200) 'second))

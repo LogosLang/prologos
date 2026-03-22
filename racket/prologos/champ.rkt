@@ -23,14 +23,21 @@
          champ-entries
          champ-equal?
          champ-insert-join
-         ;; Transient builder
+         ;; Transient builder (hash-table-based, legacy)
          (struct-out tchamp-root)
          champ-transient
          tchamp-insert!
          tchamp-delete!
          tchamp-freeze
          tchamp-size*
-         tchamp-lookup)
+         tchamp-lookup
+         ;; Owner-ID transient (Phase 5: in-place mutation with ownership tracking)
+         champ-transient-owned
+         tchamp-insert-owned!
+         tchamp-delete-owned!
+         tchamp-insert-join-owned!
+         tchamp-freeze-owned
+         champ-all-persistent?)
 
 (require racket/vector)
 
@@ -580,6 +587,295 @@
 (define (tchamp-lookup troot hash key)
   (define entry (hash-ref (tchamp-root-entries troot) key #f))
   (if entry (cdr entry) 'none))
+
+;; ========================================
+;; Owner-ID Transient (CHAMP Performance Phase 5)
+;; ========================================
+;;
+;; In-place mutation with ownership tracking. Each node's `edit` field
+;; is either #f (persistent/shared) or a gensym (owned by a specific
+;; transient). Owned nodes are mutated in place; shared nodes are
+;; path-copied and stamped with the current edit token.
+;;
+;; Key invariant: a persistent reference must never observe a mutation
+;; made through a transient. This is guaranteed by:
+;; 1. Edit tokens are gensyms — globally unique, never recycled.
+;; 2. Persistent nodes have edit=#f, which never matches any gensym.
+;; 3. Freeze clears edit on ALL owned nodes on ALL reachable paths.
+
+;; Create an owned transient from a persistent map.
+;; Returns: (values root-node edit-token size)
+;; No conversion — the trie itself IS the transient. The root node's
+;; edit is #f (persistent); first insert will path-copy it and stamp
+;; with the edit token. Subsequent inserts to the same path mutate in place.
+;;
+;; CRITICAL: The returned root node must NOT be wrapped in champ-root
+;; and exposed as a persistent value while the transient is active.
+(define (champ-transient-owned root)
+  (define edit (gensym 'champ-edit))
+  (values (champ-root-node root) edit (champ-root-size root)))
+
+;; Ensure a node is owned: if shared, path-copy and stamp with edit.
+(define (ensure-owned node edit)
+  (if (eq? (champ-node-edit node) edit)
+      node  ;; already owned
+      (champ-node (champ-node-datamap node)
+                   (champ-node-nodemap node)
+                   (vector-copy (champ-node-content node))
+                   edit)))
+
+;; Owner-ID transient insert.
+;; size-box: (box nat) — updated when a new key is added.
+;; Returns: (values node added?)
+(define (tchamp-insert-owned! node size-box hash key val edit)
+  (tnode-insert! node hash key val 0 edit size-box))
+
+(define (tnode-insert! node hash key val level edit size-box)
+  (cond
+    [(champ-collision? node)
+     ;; Collision nodes: fall back to persistent insert (rare path)
+     (collision-insert node hash key val)]
+    [else
+     (define seg (hash-segment hash level))
+     (define bit (segment-bit seg))
+     (define dm (champ-node-datamap node))
+     (define nm (champ-node-nodemap node))
+     (define arr (champ-node-content node))
+     (cond
+       ;; Data entry at this position
+       [(not (zero? (bitwise-and dm bit)))
+        (define idx (data-index dm bit))
+        (define entry (vector-ref arr idx))
+        (define existing-key (de-key entry))
+        (cond
+          ;; Same key: update value
+          [(or (eq? existing-key key) (equal? existing-key key))
+           (define existing-val (de-val entry))
+           (cond
+             [(eq? val existing-val)
+              ;; Same value — no mutation needed
+              (values node #f)]
+             [else
+              ;; Different value — mutate in place if owned
+              (define owned (ensure-owned node edit))
+              (define oarr (champ-node-content owned))
+              (vector-set! oarr idx (make-de hash key val))
+              (values owned #f)])]
+          ;; Different key: create sub-node
+          [else
+           (define existing-hash (de-hash entry))
+           (define sub-node (merge-two existing-hash existing-key (de-val entry)
+                                       hash key val (+ level 1)))
+           ;; Remove data entry, add node entry
+           (define new-dm (bitwise-and dm (bitwise-not bit)))
+           (define new-nm (bitwise-ior nm bit))
+           (define owned (ensure-owned node edit))
+           (define oarr (champ-node-content owned))
+           ;; Need to restructure: remove data at idx, insert node at new position
+           ;; Since we're owned, we can rebuild the content vector in place
+           (define new-arr (vec-remove-insert-node oarr idx
+                                                    (data-index new-dm bit)
+                                                    (node-index new-dm new-nm bit)
+                                                    sub-node
+                                                    dm))
+           (set-box! size-box (add1 (unbox size-box)))
+           (values (champ-node new-dm new-nm new-arr edit) #t)])]
+       ;; Child node at this position
+       [(not (zero? (bitwise-and nm bit)))
+        (define idx (node-index dm nm bit))
+        (define child (vector-ref arr idx))
+        (define-values (new-child added?) (tnode-insert! child hash key val (+ level 1) edit size-box))
+        (if (eq? new-child child)
+            (values node #f)
+            (let ([owned (ensure-owned node edit)])
+              (vector-set! (champ-node-content owned) idx new-child)
+              (values owned added?)))]
+       ;; Empty: add data entry
+       [else
+        (define owned (ensure-owned node edit))
+        (define new-dm (bitwise-ior dm bit))
+        (define idx (data-index new-dm bit))
+        (define new-arr (vec-insert (champ-node-content owned) idx (make-de hash key val)))
+        (set-box! size-box (add1 (unbox size-box)))
+        (values (champ-node new-dm nm new-arr edit) #t)])]))
+
+;; Owner-ID transient delete.
+;; size-box: (box nat) — updated when a key is removed.
+;; Returns: (values node removed?)
+(define (tchamp-delete-owned! node size-box hash key edit)
+  (tnode-delete! node hash key 0 edit size-box))
+
+(define (tnode-delete! node hash key level edit size-box)
+  (cond
+    [(champ-collision? node)
+     (collision-delete node key)]
+    [else
+     (define seg (hash-segment hash level))
+     (define bit (segment-bit seg))
+     (define dm (champ-node-datamap node))
+     (define nm (champ-node-nodemap node))
+     (define arr (champ-node-content node))
+     (cond
+       [(not (zero? (bitwise-and dm bit)))
+        (define idx (data-index dm bit))
+        (define entry (vector-ref arr idx))
+        (cond
+          [(or (eq? (de-key entry) key) (equal? (de-key entry) key))
+           (define new-dm (bitwise-and dm (bitwise-not bit)))
+           (if (and (zero? new-dm) (zero? nm))
+               (begin (set-box! size-box (sub1 (unbox size-box)))
+                      (values #f #t))
+               (let* ([owned (ensure-owned node edit)]
+                      [new-arr (vec-remove (champ-node-content owned) idx)])
+                 (set-box! size-box (sub1 (unbox size-box)))
+                 (values (champ-node new-dm nm new-arr edit) #t)))]
+          [else (values node #f)])]
+       [(not (zero? (bitwise-and nm bit)))
+        (define idx (node-index dm nm bit))
+        (define child (vector-ref arr idx))
+        (define-values (new-child removed?) (tnode-delete! child hash key (+ level 1) edit size-box))
+        (cond
+          [(not removed?) (values node #f)]
+          [(not new-child)
+           (define new-nm (bitwise-and nm (bitwise-not bit)))
+           (if (and (zero? dm) (zero? new-nm))
+               (values #f #t)
+               (let* ([owned (ensure-owned node edit)]
+                      [new-arr (vec-remove (champ-node-content owned) idx)])
+                 (values (champ-node dm new-nm new-arr edit) #t)))]
+          [else
+           (define owned (ensure-owned node edit))
+           (vector-set! (champ-node-content owned) idx new-child)
+           (values owned #t)])]
+       [else (values node #f)])]))
+
+;; Owner-ID transient insert-join (merge on collision).
+;; join-fn: (old-val new-val → merged-val)
+;; Returns: (values node added?)
+(define (tchamp-insert-join-owned! node size-box hash key val join-fn edit)
+  (tnode-insert-join! node hash key val join-fn 0 edit size-box))
+
+(define (tnode-insert-join! node hash key val join-fn level edit size-box)
+  (cond
+    [(champ-collision? node)
+     ;; Fall back to persistent for collision nodes (rare)
+     (define entries (champ-collision-entries node))
+     (let loop ([es entries] [acc '()])
+       (cond
+         [(null? es)
+          (set-box! size-box (add1 (unbox size-box)))
+          (values (champ-collision hash (cons (cons key val) entries)) #t)]
+         [(let ([ek (caar es)]) (or (eq? ek key) (equal? ek key)))
+          (values (champ-collision hash
+                    (append (reverse acc) (cons (cons key (join-fn (cdar es) val)) (cdr es))))
+                  #f)]
+         [else (loop (cdr es) (cons (car es) acc))]))]
+    [else
+     (define seg (hash-segment hash level))
+     (define bit (segment-bit seg))
+     (define dm (champ-node-datamap node))
+     (define nm (champ-node-nodemap node))
+     (define arr (champ-node-content node))
+     (cond
+       [(not (zero? (bitwise-and dm bit)))
+        (define idx (data-index dm bit))
+        (define entry (vector-ref arr idx))
+        (define existing-key (de-key entry))
+        (cond
+          [(or (eq? existing-key key) (equal? existing-key key))
+           (define merged (join-fn (de-val entry) val))
+           (define existing-val (de-val entry))
+           (if (eq? merged existing-val)
+               (values node #f)
+               (let ([owned (ensure-owned node edit)])
+                 (vector-set! (champ-node-content owned) idx (make-de hash key merged))
+                 (values owned #f)))]
+          [else
+           ;; Different key at same position: promote to sub-node
+           (define existing-hash (de-hash entry))
+           (define sub-node (merge-two existing-hash existing-key (de-val entry)
+                                       hash key val (+ level 1)))
+           (define new-dm (bitwise-and dm (bitwise-not bit)))
+           (define new-nm (bitwise-ior nm bit))
+           (define new-arr (vec-remove-insert-node arr idx
+                                                    (data-index new-dm bit)
+                                                    (node-index new-dm new-nm bit)
+                                                    sub-node dm))
+           (set-box! size-box (add1 (unbox size-box)))
+           (values (champ-node new-dm new-nm new-arr edit) #t)])]
+       [(not (zero? (bitwise-and nm bit)))
+        (define idx (node-index dm nm bit))
+        (define child (vector-ref arr idx))
+        (define-values (new-child added?)
+          (tnode-insert-join! child hash key val join-fn (+ level 1) edit size-box))
+        (if (eq? new-child child)
+            (values node #f)
+            (let ([owned (ensure-owned node edit)])
+              (vector-set! (champ-node-content owned) idx new-child)
+              (values owned added?)))]
+       [else
+        (define owned (ensure-owned node edit))
+        (define new-dm (bitwise-ior dm bit))
+        (define idx (data-index new-dm bit))
+        (define new-arr (vec-insert (champ-node-content owned) idx (make-de hash key val)))
+        (set-box! size-box (add1 (unbox size-box)))
+        (values (champ-node new-dm nm new-arr edit) #t)])]))
+
+;; ========================================
+;; Owner-ID Freeze (CHAMP Performance Phase 6)
+;; ========================================
+;;
+;; Walk the trie and clear edit on all owned nodes. O(modified nodes).
+;; After freeze, all reachable nodes have edit=#f — the trie is fully persistent.
+
+(define (tchamp-freeze-owned node size edit)
+  (champ-root (freeze-node node edit) size))
+
+(define (freeze-node node edit)
+  (cond
+    [(champ-collision? node) node]  ;; collision nodes have no edit field
+    [(not (eq? (champ-node-edit node) edit))
+     node]  ;; shared — already persistent, skip
+    [else
+     ;; Owned — clear edit, recurse into children
+     (define arr (champ-node-content node))
+     (define nm (champ-node-nodemap node))
+     (define dm (champ-node-datamap node))
+     (define new-arr
+       (if (zero? nm)
+           arr  ;; no children — just clear edit on this node
+           (let ([copy (vector-copy arr)])
+             (define data-count (popcount dm))
+             (define total-count (vector-length arr))
+             (for ([i (in-range data-count total-count)])
+               (define child (vector-ref arr i))
+               (when (and (champ-node? child)
+                          (eq? (champ-node-edit child) edit))
+                 (vector-set! copy i (freeze-node child edit))))
+             copy)))
+     (champ-node (champ-node-datamap node)
+                  (champ-node-nodemap node)
+                  new-arr
+                  #f)]))  ;; clear edit → persistent
+
+;; Invariant checker: verify all nodes in a champ-root have edit=#f.
+;; Used by acceptance tests (§E) to verify freeze completeness.
+(define (champ-all-persistent? root)
+  (node-all-persistent? (champ-root-node root)))
+
+(define (node-all-persistent? node)
+  (cond
+    [(champ-collision? node) #t]
+    [(not (eq? (champ-node-edit node) #f)) #f]
+    [else
+     (define arr (champ-node-content node))
+     (define dm (champ-node-datamap node))
+     (define data-count (popcount dm))
+     (for/and ([i (in-range data-count (vector-length arr))])
+       (define child (vector-ref arr i))
+       (if (champ-node? child)
+           (node-all-persistent? child)
+           #t))]))
 
 ;; ========================================
 ;; Module tests
