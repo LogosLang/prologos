@@ -169,7 +169,7 @@
  current-resolution-executor-pure
  ;; Track 7 Phase 8a: Ready-queue + propagator infrastructure
  current-ready-queue-cell-id
- current-prop-add-propagator
+ current-prop-add-propagator  ;; STUB — Track 8 B2: replaced by direct elab-add-propagator
  ;; Track 7 Phase 8b: Ready-queue consumption
  read-ready-queue-actions
  ;; Track 6 Phase 1a: id-map access callbacks
@@ -396,11 +396,10 @@
               (elab-cell-write (unbox tc-net-box) tcm-cid
                                (hasheq meta-id (tagged-entry (remove-duplicates cell-ids eq?) aid)))))
   ;; Track 7 Phase 8a: Install readiness propagators (threshold-cell composition).
-  ;; Only when we have dep cells AND the propagator-add callback is available.
-  (define add-prop-fn (current-prop-add-propagator))
+  ;; Track 8 B2: direct elab-add-propagator instead of current-prop-add-propagator callback.
   (define rq-cid (current-ready-queue-cell-id))
   ;; Track 8 B2d: direct elab-new-infra-cell instead of current-prop-new-infra-cell callback.
-  (when (and add-prop-fn rq-cid (not (null? cell-ids)))
+  (when (and rq-cid (not (null? cell-ids)))
     (define dep-cids (remove-duplicates cell-ids eq?))
     ;; Stage 1: Threshold cell (boolean, one-shot). Merge: (λ _ #t).
     (define-values (enet-t threshold-cid)
@@ -411,7 +410,7 @@
     ;; The resolution function does the full ground-check (andmap ground-expr?).
     ;; This matches collect-ready-traits-via-cells which uses for/or.
     (define-values (enet-f _fan-pid)
-      (add-prop-fn (unbox tc-net-box) dep-cids (list threshold-cid)
+      (elab-add-propagator (unbox tc-net-box) dep-cids (list threshold-cid)
         (lambda (pnet)
           (define any-ground?
             (for/or ([cid (in-list dep-cids)])
@@ -424,7 +423,7 @@
     ;; Stage 3: Readiness propagator (threshold cell → ready-queue).
     ;; Fires exactly once — when threshold transitions #f → #t.
     (define-values (enet-r _rdy-pid)
-      (add-prop-fn (unbox tc-net-box) (list threshold-cid) (list rq-cid)
+      (elab-add-propagator (unbox tc-net-box) (list threshold-cid) (list rq-cid)
         (lambda (pnet)
           (define tv (net-cell-read pnet threshold-cid))
           (if tv
@@ -510,11 +509,11 @@
                   (elab-cell-write (unbox hm-net-box) hcm-cid
                                    (hasheq meta-id (tagged-entry (remove-duplicates cell-ids eq?) aid)))))))
   ;; Track 7 Phase 8a: Install readiness propagators for hasmethod (same pattern as trait).
-  (define add-prop-fn-hm (current-prop-add-propagator))
+  ;; Track 8 B2: direct elab-add-propagator instead of current-prop-add-propagator callback.
   (define rq-cid-hm (current-ready-queue-cell-id))
   ;; Track 8 B2b: direct elab-network-id-map instead of id-map-read-fn callback.
   ;; Track 8 B2d: direct elab-new-infra-cell instead of current-prop-new-infra-cell callback.
-  (when (and add-prop-fn-hm rq-cid-hm hm-net-box)
+  (when (and rq-cid-hm hm-net-box)
     (define id-map-hm (elab-network-id-map (unbox hm-net-box)))
     (define dep-cids-hm
       (remove-duplicates
@@ -531,7 +530,7 @@
       (set-box! hm-net-box enet-t-hm)
       ;; Stage 2: Fan-in (any dep non-bot/non-top → threshold)
       (define-values (enet-f-hm _)
-        (add-prop-fn-hm (unbox hm-net-box) dep-cids-hm (list threshold-cid-hm)
+        (elab-add-propagator (unbox hm-net-box) dep-cids-hm (list threshold-cid-hm)
           (lambda (pnet)
             (define any-ground?
               (for/or ([cid (in-list dep-cids-hm)])
@@ -543,7 +542,7 @@
       (set-box! hm-net-box enet-f-hm)
       ;; Stage 3: Readiness propagator (threshold → ready-queue)
       (define-values (enet-r-hm _2)
-        (add-prop-fn-hm (unbox hm-net-box) (list threshold-cid-hm) (list rq-cid-hm)
+        (elab-add-propagator (unbox hm-net-box) (list threshold-cid-hm) (list rq-cid-hm)
           (lambda (pnet)
             (define tv (net-cell-read pnet threshold-cid-hm))
             (if tv
@@ -716,11 +715,11 @@
       ;; Track 8 B2d: direct elab-cell-write.
       (set-box! cstore-net-box (elab-cell-write (unbox cstore-net-box) wr-cid wr-delta))))
   ;; Track 7 Phase 8a: Install readiness propagators for constraint retry.
-  (define add-prop-fn-c (current-prop-add-propagator))
+  ;; Track 8 B2: direct elab-add-propagator instead of current-prop-add-propagator callback.
   (define rq-cid-c (current-ready-queue-cell-id))
   (define c-cell-ids (constraint-cell-ids c))
   ;; Track 8 B2d: direct elab-new-infra-cell instead of current-prop-new-infra-cell callback.
-  (when (and add-prop-fn-c rq-cid-c (not (null? c-cell-ids)))
+  (when (and rq-cid-c (not (null? c-cell-ids)))
     (define dep-cids-c (remove-duplicates c-cell-ids eq?))
     ;; Stage 1: Threshold cell
     (define-values (enet-t-c threshold-cid-c)
@@ -728,7 +727,7 @@
     (set-box! cstore-net-box enet-t-c)
     ;; Stage 2: Fan-in (any dep non-bot/non-top → threshold)
     (define-values (enet-f-c _fc)
-      (add-prop-fn-c (unbox cstore-net-box) dep-cids-c (list threshold-cid-c)
+      (elab-add-propagator (unbox cstore-net-box) dep-cids-c (list threshold-cid-c)
         (lambda (pnet)
           (define any-ground?
             (for/or ([cid (in-list dep-cids-c)])
@@ -740,7 +739,7 @@
     (set-box! cstore-net-box enet-f-c)
     ;; Stage 3: Readiness propagator (threshold → ready-queue)
     (define-values (enet-r-c _rc)
-      (add-prop-fn-c (unbox cstore-net-box) (list threshold-cid-c) (list rq-cid-c)
+      (elab-add-propagator (unbox cstore-net-box) (list threshold-cid-c) (list rq-cid-c)
         (lambda (pnet)
           (define tv (net-cell-read pnet threshold-cid-c))
           (if tv
@@ -1185,9 +1184,10 @@
 (define current-prop-cell-read (make-parameter #f))         ;; (enet cell-id → value)
 (define current-prop-add-unify-constraint (make-parameter #f))  ;; (enet cid-a cid-b → (values enet* pid))
 ;; Track 7 Phase 8a: General propagator addition callback.
+;; Track 8 B2: REPLACED by direct elab-add-propagator calls. STUB — no longer consulted.
 ;; (enet input-ids output-ids fire-fn → (values enet* pid))
 ;; fire-fn: (prop-network → prop-network)
-(define current-prop-add-propagator (make-parameter #f))
+(define current-prop-add-propagator (make-parameter #f))  ;; STUB — no longer consulted
 
 ;; Phase 1a: Infrastructure cell creation callback (set by driver.rkt).
 ;; (enet initial-value merge-fn → (values enet* cell-id))
@@ -1421,13 +1421,12 @@
 ;; Propagator quiescence callbacks (set by driver.rkt).
 ;; Track 8 B2b: current-prop-run-quiescence REPLACED by direct run-to-quiescence call.
 ;; Track 8 B2b: current-prop-unwrap-net REPLACED by direct elab-network-prop-net accessor.
-;; current-prop-rewrap-net: (elab-network prop-network → elab-network) — still a callback
-;;   (rewrap requires struct-copy on elab-network with the new prop-net; type-lattice-free
-;;    but retained as callback since no direct setter exists in elab-network-types.rkt).
-;; Parameters retained as stubs; current-prop-rewrap-net still set by driver.rkt.
+;; Track 8 B2: current-prop-rewrap-net REPLACED by direct elab-network-rewrap call.
+;;   elab-network-rewrap is now re-exported from cell-ops.rkt (via elab-network-types.rkt).
+;; All three parameters retained as stubs; driver.rkt may still set them but they are not consulted.
 (define current-prop-run-quiescence (make-parameter #f))   ;; STUB — no longer consulted
 (define current-prop-unwrap-net (make-parameter #f))       ;; STUB — no longer consulted
-(define current-prop-rewrap-net (make-parameter #f))
+(define current-prop-rewrap-net (make-parameter #f))       ;; STUB — no longer consulted
 
 ;; Inline type-lattice predicates (avoid requiring type-lattice.rkt).
 ;; type-bot and type-top are sentinel symbols — see type-lattice.rkt.
@@ -1734,8 +1733,8 @@
   (parameterize ([current-in-stratified-resolution? #t])
     (define net-box (current-prop-net-box))
     ;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net instead of callbacks.
-    (define has-network?
-      (and net-box (current-prop-rewrap-net)))
+    ;; Track 8 B2: direct elab-network-rewrap; removed current-prop-rewrap-net guard.
+    (define has-network? net-box)
     (let loop ([fuel stratified-resolution-fuel]
                [meta-id trigger-meta-id])
       (when (> fuel 0)
@@ -1747,12 +1746,12 @@
         ;; Run the propagator network so type information flows between
         ;; connected meta cells. This can transitively solve metas.
         ;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net instead of callbacks.
+        ;; Track 8 B2: direct elab-network-rewrap instead of current-prop-rewrap-net callback.
         (when has-network?
-          (define rewrap (current-prop-rewrap-net))
           (define enet (unbox net-box))
           (define pnet (elab-network-prop-net enet))
           (define pnet* (run-to-quiescence pnet))
-          (set-box! net-box (rewrap enet pnet*)))
+          (set-box! net-box (elab-network-rewrap enet pnet*)))
         ;; ── S1/L1: Read ready-queue (Track 7 Phase 8c: scanners removed) ──
         ;; After S0 quiescence, readiness propagators have populated the ready-queue.
         (define actions (read-ready-queue-actions (unbox net-box)))
@@ -1772,9 +1771,9 @@
 ;; in resolution.rkt). S0 quiescence uses the pure run-to-quiescence on prop-net.
 ;; S2 uses the pure resolution-execute-action-pure (for/fold over actions).
 ;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net instead of callbacks.
+;; Track 8 B2: direct elab-network-rewrap instead of current-prop-rewrap-net callback.
 (define (run-stratified-resolution-pure enet trigger-meta-id resolution-executor)
-  (define rewrap (current-prop-rewrap-net))
-  (define has-network? (and rewrap #t))
+  (define has-network? #t)
   (let loop ([fuel stratified-resolution-fuel]
              [meta-id trigger-meta-id]
              [current-enet enet])
@@ -1790,10 +1789,11 @@
                                     (if nb (unbox nb) current-enet))]
                ;; S0: Type propagation (quiescence) — pure on prop-net
                ;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net.
+               ;; Track 8 B2: direct elab-network-rewrap instead of rewrap callback.
                [enet-s0 (if has-network?
                              (let* ([pnet (elab-network-prop-net enet-post-retract)]
                                     [pnet* (run-to-quiescence pnet)])
-                               (rewrap enet-post-retract pnet*))
+                               (elab-network-rewrap enet-post-retract pnet*))
                              enet-post-retract)]
                ;; S1/L1: After S0 quiescence, readiness propagators have fired
                ;; and populated the ready-queue. Read queue actions.
@@ -1831,14 +1831,14 @@
 ;; This is cheaper than solve-meta!'s full flush because it skips constraint
 ;; retry and trait resolution — those are only needed after meta state changes.
 ;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net instead of callbacks.
+;; Track 8 B2: direct elab-network-rewrap instead of current-prop-rewrap-net callback.
 (define (maybe-flush-network!)
   (define net-box (current-prop-net-box))
-  (define rewrap (current-prop-rewrap-net))
-  (when (and net-box rewrap)
+  (when net-box
     (define enet (unbox net-box))
     (define pnet (elab-network-prop-net enet))
     (define pnet* (run-to-quiescence pnet))
-    (set-box! net-box (rewrap enet pnet*))))
+    (set-box! net-box (elab-network-rewrap enet pnet*))))
 
 ;; Check if a metavariable has been solved.
 ;; Hash removal: Propagator cell (primary), CHAMP meta-info (fallback).

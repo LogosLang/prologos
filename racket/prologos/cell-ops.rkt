@@ -47,6 +47,8 @@
  elab-cell-replace
  elab-new-infra-cell
  elab-cell-info-ref
+ elab-network-rewrap
+ elab-add-propagator
  ;; Worldview-aware elab-network operations
  elab-cell-read-worldview
  elab-meta-info-read-worldview

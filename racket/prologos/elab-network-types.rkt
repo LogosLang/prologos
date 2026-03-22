@@ -36,7 +36,10 @@
  elab-cell-write
  elab-cell-replace
  elab-new-infra-cell
- elab-cell-info-ref)
+ elab-cell-info-ref
+ ;; Track 8 B2: rewrap-net (replace prop-net in elab-network)
+ elab-network-rewrap
+ elab-add-propagator)
 
 ;; ========================================
 ;; Struct Definitions
@@ -159,3 +162,15 @@
 ;; Retrieve cell metadata, or 'none if unknown.
 (define (elab-cell-info-ref enet cid)
   (champ-lookup (elab-network-cell-info enet) (cell-id-hash cid) cid))
+
+;; Track 8 B2: Replace prop-net inside an elab-network.
+;; Used after run-to-quiescence to rewrap the updated prop-net.
+(define (elab-network-rewrap enet pnet)
+  (struct-copy elab-network enet [prop-net pnet]))
+
+;; Track 8 B2: Add a propagator to the elab-network's prop-net.
+;; Returns (values elab-network* prop-id).
+(define (elab-add-propagator enet input-ids output-ids fire-fn)
+  (define pnet (elab-network-prop-net enet))
+  (define-values (pnet* pid) (net-add-propagator pnet input-ids output-ids fire-fn))
+  (values (elab-network-rewrap enet pnet*) pid))
