@@ -23,7 +23,8 @@
          "prelude.rkt"       ;; P5c: mult-meta? for Pi mult extraction
          "champ.rkt"
          "syntax.rkt"
-         "ctor-registry.rkt") ;; PUnify Phase 1: descriptor-driven decomposition
+         "ctor-registry.rkt"        ;; PUnify Phase 1: descriptor-driven decomposition
+         "elab-network-types.rkt")  ;; Track 8 B2: struct defs extracted to break cycle
 
 (provide
  ;; Core structs

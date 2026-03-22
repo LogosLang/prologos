@@ -21,12 +21,8 @@
 
 (require "propagator.rkt"
          "infra-cell.rkt"
-         "champ.rkt")
-;; Track 8 B2: elaborator-network.rkt CANNOT be imported here — real cycle:
-;;   cell-ops → elaborator-network → type-lattice → reduction → metavar-store → cell-ops
-;; The callbacks in metavar-store.rkt break this cycle by injecting elab-network
-;; operations at runtime via driver.rkt. B2 eliminates callbacks by extracting
-;; elab-network struct definitions into a separate types module.
+         "champ.rkt"
+         "elab-network-types.rkt")  ;; Track 8 B2: no cycle (types module has no transitive deps)
 
 (provide
  ;; Worldview-aware CHAMP reads
@@ -36,7 +32,19 @@
  tagged-entry
  tagged-entry?
  tagged-entry-value
- tagged-entry-assumption-id)
+ tagged-entry-assumption-id
+ ;; Track 8 B2: Re-export elab-network types + operations
+ (struct-out elab-network)
+ (struct-out elab-cell-info)
+ (struct-out contradiction-info)
+ elab-network-id-map-set
+ elab-network-meta-info-set
+ make-elaboration-network
+ reset-elab-network-command-state
+ ;; Worldview-aware elab-network operations
+ elab-cell-read-worldview
+ elab-meta-info-read-worldview
+ elab-id-map-read-worldview)
 
 ;; ========================================
 ;; Worldview-Aware Reads
@@ -76,3 +84,32 @@
     [(not (tagged-entry? raw)) raw]
     [(worldview-visible? raw) (tagged-entry-value raw)]
     [else #f]))  ;; tagged entry from invisible branch
+
+;; ========================================
+;; Worldview-Aware Elab-Network Operations
+;; ========================================
+;; Track 8 B2: These replace the callback-based reads in metavar-store.rkt.
+;; Each reads from the elab-network struct field and applies worldview filtering.
+
+;; Read a cell value from an elab-network. TMS-transparent (uses net-cell-read
+;; which already applies TMS worldview via current-speculation-stack).
+(define (elab-cell-read-worldview enet cid)
+  (net-cell-read (elab-network-prop-net enet) cid))
+
+;; Read meta-info for a meta-id from the elab-network, with worldview filtering.
+;; Returns the meta-info struct if visible, or #f.
+(define (elab-meta-info-read-worldview enet meta-id)
+  (define mi-champ (elab-network-meta-info enet))
+  (champ-lookup-worldview mi-champ (meta-id-hash meta-id) meta-id))
+
+;; Read cell-id for a meta-id from the elab-network's id-map, with worldview filtering.
+;; Returns the cell-id if visible, or #f.
+(define (elab-id-map-read-worldview enet meta-id)
+  (define id-champ (elab-network-id-map enet))
+  (champ-lookup-worldview id-champ (meta-id-hash meta-id) meta-id))
+
+;; Hash helper for meta-id CHAMP lookups.
+;; Meta-ids are gensyms; hashed via eq-hash-code (same as metavar-store.rkt).
+;; Defined locally to avoid importing metavar-store.rkt (cycle).
+(define (meta-id-hash id)
+  (eq-hash-code id))
