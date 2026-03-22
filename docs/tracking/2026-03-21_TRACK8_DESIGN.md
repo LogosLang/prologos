@@ -30,8 +30,8 @@
 | B2f | Accumulate-during-quiescence | Owner-ID transient threading through cell-ops | ⏸️ | `251f8a7` | DEFERRED post-C: Phase 0 instrumentation shows 0 prop_firings on process-file path; test path has N=3-8 changes/run (too low for transient payoff). Re-evaluate after Part C adds bridge propagators. |
 | B3 | HKT `impl` registration | `impl Seq List` works and registers in trait system | ✅ | `ac25508` | Parser fixes: pattern-var exclusion, brace-params opacity, implicit Pi wrapping. HKT trait def + impl registration work. |
 | B4 | HKT trait resolution on network | Existing resolution handles HKT natively | ✅ | `a08fd1c` | No code changes needed. normalize-for-resolution + expr->impl-key-str already handle tycon keys. 3 tests added. Known: sexp kind datum mismatch. |
-| B5 | Sugar constraint generation | `surf-get` generates Indexed/Keyed constraints | ⬜ | | Depends on B4. **Acceptance §B: uncomment user-defined Indexed** |
-| B6 | Verification + benchmarks | Full suite + A/B comparison + acceptance | ⬜ | | All §A-B pass |
+| B5 | Sugar constraint generation | `surf-get` generates Indexed/Keyed constraints | → CIU T3 | | TRANSFERRED to CIU Track 3 (Phase 1). Track 8 delivered the infrastructure (B3/B4 + C1); content change belongs in CIU. |
+| B6 | Verification + benchmarks | Full suite + A/B comparison + acceptance | ✅ | | Subsumed by C6. 7343 tests, 228.2s, all pass. CIU acceptance sections remain for CIU Track 3. |
 | — | **Part C: The Phase Boundary Dissolves** | | | | |
 | C0 | Bridge convergence prototype | Manual trait bridge on test network; measure depth-2/3 firing count | ✅ | `d86304d` | Depth 1: 4 firings, Depth 2: 8-10, Depth 3: 18. All well within thresholds. Core assumption validated. |
 | C1 | Trait resolution as bridge propagators | Bridge fire fn in S0 via `elab-add-propagator` + enet box sync | ✅ | `e6d8901` | Uses `resolve-trait-constraint-pure` from resolution.rkt. Readiness propagators retained as fallback. 7343 tests 232.7s. |

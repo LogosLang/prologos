@@ -156,17 +156,41 @@ Track 0 (Trait Hierarchy Design)
 
 ### Track 3: Trait-Dispatched Access
 
-**Prerequisite**: Track 8 (Propagator Migration Series) — callback elimination, module restructuring
+**Prerequisite**: Track 8 Part C (COMPLETE) — bridge propagators resolve traits in S0
 
-**Source**: Origin design phases T1 + Track 0 decisions on Keyed semantics
+**Source**: Origin design phases T1 + Track 0 decisions on Keyed semantics + Track 8 B5 (transferred)
 
-**Scope**:
-- `surf-get` generates `Indexed C` or `Keyed C` trait constraints (instead of elaborating to dict-free `expr-get`)
-- Propagator network resolves the dict via existing readiness/resolution infrastructure
-- Elaborated code becomes `[idx-nth $dict coll key]` or `[kv-get $dict coll key]` — normal trait method calls
-- `expr-get` retained as backward-compatibility fallback during migration, then deprecated
-- Schema narrowing preserved for Map dot-access (special-cased or via schema-aware Keyed instance)
+**Infrastructure delivered by Track 8**:
+- B3/B4: HKT `impl` registration and resolution WORKS (`impl Indexed List` → key `List--Indexed` → resolved via readiness propagators or bridge propagators)
+- C1-C3: Resolution bridge propagators fire during S0 quiescence — traits, hasmethods, and constraint retries resolve within the same pass that solves types
+- Cell-ops + worldview-aware reads provide direct CHAMP access from elaboration sites
+- Module restructuring (elab-network-types.rkt) enables direct trait lookups without callback indirection
+
+**Track 3 Scope** (absorbs Track 8 B5):
+
+**Phase 0: Convert manual dicts to `impl` syntax**
+- Convert `def List--Indexed--dict` to `impl Indexed List` in `lib/prologos/core/list.prologos`
+- Convert `def PVec--Indexed--dict` to `impl Indexed PVec` in `lib/prologos/core/pvec.prologos`
+- Convert manual Keyed dicts for Map similarly
+- Verify registration via existing HKT resolution machinery (B3/B4)
+
+**Phase 1: `surf-get` constraint generation**
+- `surf-get` checks if the collection type's constructor has an `Indexed` impl (registry cell read during elaboration)
+- If found: generate `Indexed C` trait constraint + elaborate to `[idx-nth $dict coll key]`
+- If Keyed: generate `Keyed C` trait constraint + elaborate to `[kv-get $dict coll key]`
+- If Schema/Selection: preserve `expr-map-get` (schema narrowing)
+- If unsolved meta: generate deferred constraint (bridge propagator fires when type arrives)
+- Fallback: `expr-get` (backward compat during migration)
+
+**Phase 2: `get-in` + path dispatch**
 - Mixed-collection `get-in` paths: each segment generates its own trait constraint
+- `m.users[0].name` → Keyed at segment 1, Indexed at segment 2, Keyed at segment 3
+- Path segments as heterogeneous constraint sequences
+
+**Phase 3: Verification + `expr-get` deprecation**
+- All `xs[0]` tests pass via trait dispatch
+- `expr-get` constructor matching in `reduction.rkt` becomes vestigial
+- Performance benchmark: trait dispatch overhead vs constructor pattern-matching
 
 **Key architectural change**: The elaborator *generates constraints* rather than *producing dispatch nodes*. The propagator network resolves them. Reduction applies resolved dicts via normal function application. Constructor pattern-matching in `reduction.rkt` becomes vestigial.
 
@@ -205,16 +229,20 @@ Track 0 (Trait Hierarchy Design)
 
 ## Cross-Series Dependencies
 
-### Propagator Migration Series (Track 8)
+### Propagator Migration Series (Track 8) — DELIVERED
 
-CIU Tracks 3-5 require Track 8 infrastructure. Specific requirements (from origin design §6):
+CIU Tracks 3-5 required Track 8 infrastructure. **All requirements are now met.**
 
-| CIU Requirement | Track 8 Component | Why |
-|-----------------|-------------------|-----|
-| Trait constraints from `surf-get` resolve via propagator | Existing readiness/resolution propagators (Track 7) | Mechanism exists; needs to be reachable from `surf-get` sites |
-| Dict meta cells accessible at dispatch sites | `id-map` accessibility (§5.1) | Dict metas must be readable from elaboration sites |
-| Trait resolution callable without callback indirection | Callback elimination (§5.2) | Direct constraint emission from elaborator |
-| Module restructuring enables direct trait lookups | Module graph restructuring (§5.2.3) | `elaborator.rkt` ↔ `trait-resolution.rkt` circular dep |
+| CIU Requirement | Track 8 Delivery | Status |
+|-----------------|-------------------|--------|
+| Trait constraints resolve via propagator | C1-C3: Bridge propagators in S0 (`e6d8901`, `467d318`) | ✅ |
+| HKT `impl` registration + resolution | B3/B4: Parser fixes + readiness propagator resolution (`ac25508`, `a08fd1c`) | ✅ |
+| Dict meta cells accessible at dispatch sites | A2 (Track 6): `id-map` accessible from prop-net layer | ✅ |
+| Trait resolution without callback indirection | B2: 14/23 callbacks eliminated; cell-ops direct access (`58b2f5c`) | ✅ |
+| Module restructuring for direct trait lookups | B2a: elab-network-types.rkt extraction (`340c2bc`) | ✅ |
+| Worldview-aware reads for speculation-safe dispatch | B1: cell-ops.rkt with worldview-visible? (`fa76f00`) | ✅ |
+
+**CIU Tracks 3-5 are now UNBLOCKED by Track 8.**
 
 ### BSP-LE Series
 
