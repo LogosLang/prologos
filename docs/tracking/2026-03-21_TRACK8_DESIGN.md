@@ -1,7 +1,7 @@
 # PM Track 8: Propagator Infrastructure Migration — Stage 3 Design
 
 **Date**: 2026-03-21
-**Status**: Draft (D.1.1 — Part C added; awaiting critique)
+**Status**: Draft (D.2 — external critique incorporated)
 **Parent**: Propagator Migration Series ([Master Roadmap](2026-03-13_PROPAGATOR_MIGRATION_MASTER.md))
 **Audit**: [Track 8 Infrastructure Audit](2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org)
 **Informed by**: [CIU Track 0 Trait Hierarchy Audit](2026-03-21_CIU_TRACK0_TRAIT_HIERARCHY_AUDIT.md), [Allocation Audit](2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md)
@@ -147,6 +147,8 @@ Option 2 is more granular and aligns with Track 7's assumption-tagging disciplin
 
 **Key constraint**: `meta-info` is read by `meta-solution`, `ground-expr?`, and `solve-meta!` — all hot-path operations. The TMS tagging must not add measurable overhead to reads. The current `champ-lookup` is O(log₃₂ n); adding a tag check is O(1) per lookup. Acceptable.
 
+**Tag lifecycle** (D.2 critique item): Tags do NOT accumulate. In our architecture, `net-commit-assumption` (propagator.rkt) promotes tagged entries to unconditional (depth-0) on speculation success. S(−1) retraction cleans entries tagged with retracted assumptions. So after 10 speculation attempts with 8 retracted: 2 committed entries (untagged), 0 retracted entries (cleaned), 0 stale tags. Commit is a monotone operation (promoting conditional → unconditional) within the `with-speculative-rollback` path.
+
 **Files**: `metavar-store.rkt` (meta-info access), `elab-speculation-bridge.rkt` (save/restore), `elaborator-network.rkt` (struct definition)
 
 ### Phase A2: Id-Map Accessibility
@@ -162,6 +164,8 @@ Option 2 is more granular and aligns with Track 7's assumption-tagging disciplin
 
 Option 2 is simplest for Part A — it unblocks mult bridge wiring immediately. Option 3 is the principled solution that Part B will deliver. Part A can use Option 2 as a stepping stone.
 
+**Lifecycle** (D.2 critique item): `id-map` is a live reference, not a snapshot. It grows during elaboration as `elab-fresh-meta` creates new meta-to-cell mappings. The parameter reads the current elab-network's id-map CHAMP at the time of the read — same semantics as all other elab-network field reads during propagation (propagator fire functions unbox `current-prop-net-box` to get the current elab-network). Not a pure snapshot.
+
 **Files**: `elaborator-network.rkt`, `metavar-store.rkt`, `propagator.rkt` (if adding field)
 
 ### Phase A3: Mult/Level/Session on Elab-Network
@@ -176,7 +180,7 @@ Option 2 is simplest for Part A — it unblocks mult bridge wiring immediately. 
 - **A3a**: Mult cells on elab-network. `elab-fresh-mult-cell` already exists (Track 4) — wire it into `elab-fresh-meta`. Remove `current-mult-meta-champ-box`.
 - **A3b**: Level cells on elab-network. Similar to A3a.
 - **A3c**: Session cells on elab-network. Similar but more complex — session cells have their own lattice and decomposition.
-- **A3d**: Wire cross-domain bridges. `decompose-pi` can now create mult bridge propagators (A2 provided id-map access).
+- **A3d**: Wire cross-domain bridges. `decompose-pi` can now create mult bridge propagators (A2 provided id-map access). **Note** (D.2 critique): `decompose-pi` is a propagator fire function — it creates bridges mid-quiescence. This is safe: `net-add-propagator` enqueues newly created propagators on the worklist immediately (`[worklist (cons pid ...)]`), so bridge propagators fire in the current S0 pass. If input cells already have non-bottom values, the bridge produces output immediately. Same mechanism the session-type bridge relies on.
 
 **Files**: `metavar-store.rkt`, `elaborator-network.rkt`, `qtt.rkt` (mult reads), `session-propagators.rkt`
 
@@ -194,7 +198,7 @@ Option 2 is simplest for Part A — it unblocks mult bridge wiring immediately. 
 3. `current-mult-meta-champ-box` — covered by A3a
 4. `current-level-meta-champ-box` — covered by A3b
 5. `current-sess-meta-champ-box` — covered by A3c
-6. `current-speculation-failures` — diagnostic, not constraint-like (can be excluded or handled separately)
+6. `current-speculation-failures` — diagnostic only (error messages, not constraints). **Resolution** (D.2 critique): remains as a separate box, cleared on speculation commit/retract alongside the assumption. Not TMS-tagged — adding tagging overhead for purely diagnostic data has zero correctness benefit.
 
 **Files**: `elab-speculation-bridge.rkt`, `metavar-store.rkt`, `batch-worker.rkt`, `test-support.rkt`
 
@@ -231,13 +235,22 @@ The audit recommended: extract cell-operation API into a `cell-ops.rkt` that bot
 
 **Goal**: Extract `elab-cell-read`, `elab-cell-write`, `elab-cell-replace`, and `id-map` access into a standalone `cell-ops.rkt` module.
 
-**Design**: `cell-ops.rkt` provides:
-- `cell-read : net-box → cell-id → value`
-- `cell-write : net-box → cell-id → value → void`
-- `cell-replace : net-box → cell-id → value → void`
-- `meta-id->cell-id : net-box → meta-id → cell-id`
+**Design** (D.2 critique: dual API): `cell-ops.rkt` provides two API surfaces:
 
-All read from `(current-prop-net-box)` and unwrap elab-network → prop-network. No circular dependency — `cell-ops.rkt` depends only on `propagator.rkt` and `elab-network struct definitions` (which can be factored into a separate types module if needed).
+**Pure API** (for propagator fire functions — take network, return network):
+- `cell-read : elab-network → cell-id → value`
+- `cell-write : elab-network → cell-id → value → elab-network`
+- `cell-replace : elab-network → cell-id → value → elab-network`
+- `meta-id->cell-id : elab-network → meta-id → cell-id`
+
+**Boxed API** (for elaboration code — read/mutate current-prop-net-box):
+- `cell-read! : cell-id → value`
+- `cell-write! : cell-id → value → void`
+- `cell-replace! : cell-id → value → void`
+
+The pure API is what propagator fire functions use internally (they receive `net` and return `net*`). The boxed API is what elaboration code uses (convenience wrappers around the box). B2f's transient threading operates on the pure API — the transient parameter is threaded through `cell-write`, not through the box.
+
+No circular dependency — `cell-ops.rkt` depends only on `propagator.rkt` and `elab-network struct definitions` (which can be factored into a separate types module if needed).
 
 **Design-for note — accumulate-during-quiescence pattern** (from [CHAMP Performance Design](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) §Accumulate-During-Quiescence): After B2 eliminates callbacks, the quiescence loop can thread an owner-ID transient through `cell-write` — enabling in-place cell mutation during quiescence with O(modified-nodes) freeze at exit. The `cell-ops.rkt` API should accommodate an optional transient parameter (or a thread-local `current-quiescence-transient` parameter) so this pattern can be implemented as a follow-on without re-designing the API. This is the highest-value application of the owner-ID transient infrastructure (CHAMP Performance Phases 4-6).
 
@@ -282,6 +295,8 @@ All read from `(current-prop-net-box)` and unwrap elab-network → prop-network.
 
 **Threading approach** (Option A — same pattern as Track 0 Phase 3c mutable worklist): The owned-transient cells reference is held as a local mutable in the quiescence loop, NOT stored in the `prop-network` struct. `cell-ops.cell-write` reads the transient from a thread-local parameter `(current-quiescence-transient)`. Fire functions are unaware of the transient — they call `cell-write` normally; the transient threading is internal to the quiescence infrastructure.
 
+**Cells created during quiescence** (D.2 critique): If `net-new-cell` creates a cell during quiescence (e.g., `decompose-pi` creating sub-cells), the new cell exists in the persistent cells CHAMP but not in the transient (which was forked from the pre-creation state). `cell-read` through the transient must fall back to the persistent base for cells not in the transient. `cell-write` through the transient inserts the new cell as a new entry (the owner-ID `tchamp-insert-owned!` handles absent keys by adding them). The cold CHAMP (merge functions, contradiction functions) is separate and persistent — always has the new cell's merge function. This works but must be verified with tests covering mid-quiescence cell creation.
+
 **Impact**: BSP-LE Track 0 measured 0ms GC during quiescence (from the mutable worklist). B2f extends this to the cells CHAMP — the last remaining source of per-cell-write allocation in the quiescence loop. Combined with CHAMP Performance's owner-ID transients (16× faster than hash-table transients), this is the path to the wall-time improvement that Track 0 targeted.
 
 **Files**: `propagator.rkt` (quiescence loop), `cell-ops.rkt` (transient-aware cell-write), `champ.rkt` (owner-ID transient API — already implemented)
@@ -299,6 +314,8 @@ All read from `(current-prop-net-box)` and unwrap elab-network → prop-network.
 4. **Instance store**: The trait instance registry (`current-trait-impl-registry` or equivalent persistent cell) must store HKT instances keyed by `(trait-name, constructor-name)`.
 
 **This is the architecturally novel phase.** Non-HKT resolution keys on `(trait-name, concrete-type)`. HKT resolution keys on `(trait-name, type-constructor)`. The type constructor must be extracted from the solved type: `PVec Int` → constructor is `PVec`. This extraction already happens in `expr->impl-key-str` (trait-resolution.rkt) for non-HKT types — it needs to handle constructor extraction for compound types.
+
+**Constructor extraction boundary** (D.2 critique): B3 supports extraction of the outermost type application head: `(expr-app f args)` → `f`. This covers `PVec Int` → `PVec`, `Map String Int` → `Map`, `Result (List Int) String` → `Result`. B3 does NOT support partially-applied constructors (`Map String` as `Type → Type`). Partial application is a separate type-system feature listed in Deferred (Map HKT partial application). Test cases must explicitly verify the supported forms and document the unsupported boundary.
 
 **Files**: `elaborator.rkt`, `trait-resolution.rkt`, `metavar-store.rkt` (registry cells)
 
@@ -337,6 +354,8 @@ surf-get coll key
   → if type is unsolved meta: generate deferred constraint
     (readiness propagator fires when type arrives)
   → fallback: expr-get (backward compat during migration)
+
+**Fallback selection** (D.2 critique): Option 1 — compile-time registry check. `surf-get` reads the persistent impl registry cell (Track 7) to check whether the type's constructor has an `impl Indexed`. This is a cell read during elaboration, not a resolution — checking registry existence, not resolving a constraint. If the registry has the impl, generate the constraint. If not, fall back to `expr-get`. No error-path performance concern (Option 2) and no behavioral split (Option 3).
 ```
 
 **This is a validation phase, not a new mechanism.** B3 and B4 provide the infrastructure; B5 wires it into the existing `surf-get` elaboration site. The actual change to `elaborator.rkt` is small — replace `(expr-get ec ek)` with constraint generation + dict-dispatched method call.
@@ -383,6 +402,8 @@ The stratified quiescence loop (S0→S1→S2, iterated with fuel) dissolves into
 | Infrastructure | `net-add-cross-domain-propagator` | `net-add-cross-domain-propagator` (same) |
 
 This means Part C is NOT inventing a new mechanism. It's applying the session-type-bridge pattern to a new domain.
+
+**Structural difference from session bridge** (D.2 critique): The session bridge has clean unidirectional flow — session domain to type domain, no feedback. Trait resolution bridges create an *indirect* feedback loop within the type domain: type cell solves → trait bridge fires → dict cell populated → dict used in elaborated code → new type unification constraints fire → may solve more type cells → may trigger more trait bridges. This cycle lives within the propagator network (not through elaboration — the elaborated code is already wired before quiescence). The propagator network handles cycles via Kleene iteration and the no-change guard (finite lattice height ensures termination). For depth-2 resolution (`Seq (List Int)` — resolving Seq triggers resolving List's Indexed), the cycle is ~6 propagator firings within a single S0 pass. C6 must include depth-2 and depth-3 cycle test cases to verify convergence.
 
 ### Categorical Motivation: Kan Extensions
 
@@ -487,7 +508,7 @@ The threshold propagator reads all dependency cells, checks if all are ground, a
 
 **What moves to S0 (as bridge propagators)**: All deterministic trait resolution (C1), all hasmethod resolution (C2), all constraint retry (C3).
 
-**What's eliminated**: S1 (readiness detection) — with bridge propagators resolving in S0, readiness is implicit in the propagator firing. The ready-queue cell and readiness propagators (Track 7 Phase 8) become vestigial.
+**S1 becomes a no-op verification pass** (D.2 critique): Rather than eliminating S1 entirely, convert it to a verification pass that checks whether any constraints that should have been resolved by bridge propagators are still unresolved. If S1 finds unresolved constraints, it's a bug in bridge coverage — not a reason to fall through to S2. This is a safety net during migration: catches missing bridge types without breaking anything. Once all constraint types are verified covered, S1 can be fully eliminated in a future cleanup.
 
 **What remains in S2**: Only genuinely non-monotone commitment — ambiguous instance selection. The α function returns `type-bot` for ambiguous cases; the post-quiescence check escalates these to S2.
 
@@ -514,15 +535,22 @@ loop (fuel ≤ 100):
 
 **Implementation**: The mutable worklist from Track 0 Phase 3c becomes a priority queue (or vector of per-priority lists). `net-cell-write` enqueues dependents at their tagged priority level.
 
+**Open questions** (D.2 critique — to be resolved at C5 implementation time):
+- Priority assignment: static (type unification = high, bridges = medium) or dynamic (based on dependency analysis)?
+- Interleaving behavior: when a high-priority propagator enqueues both high and medium priority work, does the scheduler finish all high-priority before touching medium, or interleave?
+- Data structure: multiple flat lists (one per priority) vs priority queue? Interacts with Track 0 Phase 3c's mutable worklist boxes.
+
 **Files**: `propagator.rkt` (priority worklist), `elaborator-network.rkt` (priority tagging)
 
 ### Memo Cache Correctness Under Interleaved Resolution
 
 Part C's interleaved resolution (C1-C3 firing in S0 alongside type propagation) introduces a correctness concern: reduction memo caches (`current-whnf-cache`, `current-nf-cache`, `current-nat-value-cache`) assume referential transparency, but reduction depends on meta solutions. A cache entry computed before a trait dict is resolved may be stale after resolution.
 
-**Within-Track-8 solution (Option D)**: Disable memo caches during S0 propagation. Enable only during zonk (final reduction pass, all metas solved). The boundary is principled: "caching is valid only when the meta-solution context is final." During S0, the context is in flux; during zonk, it's final.
+**Option D — Disable caching during S0**: `(current-reduction-caching-enabled?)` parameter, `#f` during quiescence, `#t` during zonk. The boundary is principled: "caching is valid only when the meta-solution context is final." Simple, correct, but potentially expensive if uncached S0 reduction is a hot path.
 
-Implementation: `(current-reduction-caching-enabled?)` parameter, `#f` during `run-to-layered-quiescence`, `#t` during `zonk-final`. Cache lookups check the parameter; cache writes are gated.
+**Option E — Generation-stamped cache** (D.2 critique): Each cache entry is tagged with the elab-network's structural identity (`eq?` on the network struct — Track 7 introduced this for progress detection). On lookup, if current network is `eq?` to the tagged identity, the entry is valid. If not (a meta was solved, changing the network), the entry is stale and must be recomputed. Cost: one `eq?` per cache lookup. Avoids the blanket disable of Option D while providing correct invalidation without per-reduction dependency tracking.
+
+**Recommendation**: Try Option E first (lower performance risk). Fall back to Option D if Option E's per-lookup overhead is measurable. C6 should benchmark both.
 
 **Principled long-term solution (Track 9)**: Reduction results as propagator cells with dependency-tracked invalidation. When a meta that a reduction depends on is solved, the reduction cell automatically recomputes. No memo cache needed — the propagator network IS the cache. See [Track 9: Reduction as Propagators](2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md) for the full vision.
 
@@ -533,9 +561,11 @@ Implementation: `(current-reduction-caching-enabled?)` parameter, `#f` during `r
 - Full test suite — identical results (behavioral parity)
 - Resolution cycle count: measure fuel consumption before/after. Target: significant reduction in loop iterations (fewer S0→S1→S2 cycles)
 - Ordering stability: test cases with nested constraints that depend on resolution order
-- **Memo cache correctness**: test cases exercising reduction before/after resolution within S0
+- **Memo cache correctness**: test cases exercising reduction before/after resolution within S0; benchmark Option D vs Option E
+- **Trait resolution cycle depth**: test cases with depth-2 (Seq of List) and depth-3 (nested compound trait resolution) verifying convergence within single S0 pass
 - A/B benchmarks: wall-time improvement from fewer resolution cycles
-- Acceptance file: all CIU aspirational sections pass at Level 3
+- Acceptance file: all CIU aspirational sections pass at Level 3; Part C-specific acceptance for bridge resolution independent of CIU
+- **Performance budget**: suite ≤250s (8% tolerance from 232s baseline); per-command elaboration ≤15% increase. If Part C's bridge propagators add overhead exceeding savings from fewer loop iterations, C5 (layered scheduler) becomes mandatory rather than optional.
 
 ---
 
