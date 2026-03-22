@@ -360,9 +360,9 @@
   ;; Track 7 Phase 4: tag with current speculation assumption.
   (define tc-cid (current-trait-constraint-cell-id))
   (define tc-net-box (current-prop-net-box))
-  (define write-fn (current-prop-cell-write))
   (define aid (current-speculation-assumption))
-  (set-box! tc-net-box (write-fn (unbox tc-net-box) tc-cid (hasheq meta-id (tagged-entry info aid))))
+  ;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
+  (set-box! tc-net-box (elab-cell-write (unbox tc-net-box) tc-cid (hasheq meta-id (tagged-entry info aid))))
   ;; Phase C: Build reverse index from type-arg metas → this dict meta
   (define type-arg-metas (extract-shallow-meta-ids-from-list
                            (trait-constraint-info-type-arg-exprs info)))
@@ -376,7 +376,8 @@
     (let ([tw-delta
            (for/fold ([acc (hasheq)]) ([ta-id (in-list unsolved-ta-metas)])
              (hash-set acc ta-id (list (tagged-entry meta-id aid))))])
-      (set-box! tc-net-box (write-fn (unbox tc-net-box) tw-cid tw-delta))))
+      ;; Track 8 B2d: direct elab-cell-write.
+      (set-box! tc-net-box (elab-cell-write (unbox tc-net-box) tw-cid tw-delta))))
   ;; P3a: Record cell-ids for type-arg metas for cell-state-driven resolution.
   ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
   (define id-map (if tc-net-box
@@ -390,19 +391,20 @@
   ;; Phase 7b: Cell-only write for trait-cell-map (removed dual-write to parameter).
   (when (not (null? cell-ids))
     (define tcm-cid (current-trait-cell-map-cell-id))
+    ;; Track 8 B2d: direct elab-cell-write.
     (set-box! tc-net-box
-              (write-fn (unbox tc-net-box) tcm-cid
-                        (hasheq meta-id (tagged-entry (remove-duplicates cell-ids eq?) aid)))))
+              (elab-cell-write (unbox tc-net-box) tcm-cid
+                               (hasheq meta-id (tagged-entry (remove-duplicates cell-ids eq?) aid)))))
   ;; Track 7 Phase 8a: Install readiness propagators (threshold-cell composition).
   ;; Only when we have dep cells AND the propagator-add callback is available.
   (define add-prop-fn (current-prop-add-propagator))
-  (define new-cell-fn (current-prop-new-infra-cell))
   (define rq-cid (current-ready-queue-cell-id))
-  (when (and add-prop-fn new-cell-fn rq-cid (not (null? cell-ids)))
+  ;; Track 8 B2d: direct elab-new-infra-cell instead of current-prop-new-infra-cell callback.
+  (when (and add-prop-fn rq-cid (not (null? cell-ids)))
     (define dep-cids (remove-duplicates cell-ids eq?))
     ;; Stage 1: Threshold cell (boolean, one-shot). Merge: (λ _ #t).
     (define-values (enet-t threshold-cid)
-      (new-cell-fn (unbox tc-net-box) #f (lambda (old new) #t)))
+      (elab-new-infra-cell (unbox tc-net-box) #f (lambda (old new) #t)))
     (set-box! tc-net-box enet-t)
     ;; Stage 2: Fan-in propagator (dep cells → threshold cell).
     ;; Fires when ANY dep cell is non-bot/non-top (at least one type-arg solved).
@@ -468,9 +470,9 @@
   ;; Track 7 Phase 4: tag with current speculation assumption.
   (define hm-cid (current-hasmethod-constraint-cell-id))
   (define hm-net-box (current-prop-net-box))
-  (define write-fn (current-prop-cell-write))
   (define aid (current-speculation-assumption))
-  (set-box! hm-net-box (write-fn (unbox hm-net-box) hm-cid (hasheq meta-id (tagged-entry info aid))))
+  ;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
+  (set-box! hm-net-box (elab-cell-write (unbox hm-net-box) hm-cid (hasheq meta-id (tagged-entry info aid))))
   ;; Phase 1d: Build reverse wakeup index from dependency metas → this hasmethod meta.
   ;; Dependencies are: metas in trait-var-expr + metas in type-arg-exprs.
   (define trait-var-metas (extract-shallow-meta-ids
@@ -488,7 +490,8 @@
     (let ([hw-delta
            (for/fold ([acc (hasheq)]) ([dep-id (in-list unsolved-dep-metas)])
              (hash-set acc dep-id (list (tagged-entry meta-id aid))))])
-      (set-box! hm-net-box (write-fn (unbox hm-net-box) hw-cid hw-delta))))
+      ;; Track 8 B2d: direct elab-cell-write.
+      (set-box! hm-net-box (elab-cell-write (unbox hm-net-box) hw-cid hw-delta))))
   ;; Track 2 Phase 6: Record cell-ids for dependency metas (cell-state-driven resolution).
   ;; Mirrors trait-cell-map pattern: enables collect-ready-hasmethods-via-cells.
   ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
@@ -502,15 +505,16 @@
     (when (not (null? cell-ids))
       (define hcm-cid (current-hasmethod-cell-map-cell-id))
       (when hcm-cid
+        ;; Track 8 B2d: direct elab-cell-write.
         (set-box! hm-net-box
-                  (write-fn (unbox hm-net-box) hcm-cid
-                            (hasheq meta-id (tagged-entry (remove-duplicates cell-ids eq?) aid)))))))
+                  (elab-cell-write (unbox hm-net-box) hcm-cid
+                                   (hasheq meta-id (tagged-entry (remove-duplicates cell-ids eq?) aid)))))))
   ;; Track 7 Phase 8a: Install readiness propagators for hasmethod (same pattern as trait).
   (define add-prop-fn-hm (current-prop-add-propagator))
-  (define new-cell-fn-hm (current-prop-new-infra-cell))
   (define rq-cid-hm (current-ready-queue-cell-id))
   ;; Track 8 B2b: direct elab-network-id-map instead of id-map-read-fn callback.
-  (when (and add-prop-fn-hm new-cell-fn-hm rq-cid-hm hm-net-box)
+  ;; Track 8 B2d: direct elab-new-infra-cell instead of current-prop-new-infra-cell callback.
+  (when (and add-prop-fn-hm rq-cid-hm hm-net-box)
     (define id-map-hm (elab-network-id-map (unbox hm-net-box)))
     (define dep-cids-hm
       (remove-duplicates
@@ -521,8 +525,9 @@
        eq?))
     (when (not (null? dep-cids-hm))
       ;; Stage 1: Threshold cell
+      ;; Track 8 B2d: direct elab-new-infra-cell.
       (define-values (enet-t-hm threshold-cid-hm)
-        (new-cell-fn-hm (unbox hm-net-box) #f (lambda (old new) #t)))
+        (elab-new-infra-cell (unbox hm-net-box) #f (lambda (old new) #t)))
       (set-box! hm-net-box enet-t-hm)
       ;; Stage 2: Fan-in (any dep non-bot/non-top → threshold)
       (define-values (enet-f-hm _)
@@ -576,9 +581,9 @@
   ;; Track 7 Phase 4: tag with current speculation assumption.
   (define cap-cid (current-capability-constraint-cell-id))
   (define cap-net-box (current-prop-net-box))
-  (define write-fn (current-prop-cell-write))
   (define aid (current-speculation-assumption))
-  (set-box! cap-net-box (write-fn (unbox cap-net-box) cap-cid (hasheq meta-id (tagged-entry info aid)))))
+  ;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
+  (set-box! cap-net-box (elab-cell-write (unbox cap-net-box) cap-cid (hasheq meta-id (tagged-entry info aid)))))
 
 ;; Track 1 Phase 2c: read from cell.
 (define (lookup-capability-constraint meta-id)
@@ -695,11 +700,11 @@
   ;; Track 7 Phase 4: tag with current speculation assumption.
   (define cstore-cid (current-constraint-cell-id))
   (define cstore-net-box (current-prop-net-box))
-  (define write-fn (current-prop-cell-write))
   (define aid (current-speculation-assumption))  ;; #f at depth 0
+  ;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
   (let ([enet (unbox cstore-net-box)])
-    (set-box! cstore-net-box (write-fn enet cstore-cid
-                                       (hasheq (constraint-cid c) (tagged-entry c aid)))))
+    (set-box! cstore-net-box (elab-cell-write enet cstore-cid
+                                              (hasheq (constraint-cid c) (tagged-entry c aid)))))
   ;; Track 2 Phase 2: Write initial 'pending status to cell.
   (write-constraint-status-cell! (constraint-cid c) 'pending)
   ;; Register for wakeup on all mentioned metas.
@@ -708,17 +713,18 @@
     (let ([wr-delta
            (for/fold ([acc (hasheq)]) ([id (in-list meta-ids)])
              (hash-set acc id (list (tagged-entry c aid))))])
-      (set-box! cstore-net-box (write-fn (unbox cstore-net-box) wr-cid wr-delta))))
+      ;; Track 8 B2d: direct elab-cell-write.
+      (set-box! cstore-net-box (elab-cell-write (unbox cstore-net-box) wr-cid wr-delta))))
   ;; Track 7 Phase 8a: Install readiness propagators for constraint retry.
   (define add-prop-fn-c (current-prop-add-propagator))
-  (define new-cell-fn-c (current-prop-new-infra-cell))
   (define rq-cid-c (current-ready-queue-cell-id))
   (define c-cell-ids (constraint-cell-ids c))
-  (when (and add-prop-fn-c new-cell-fn-c rq-cid-c (not (null? c-cell-ids)))
+  ;; Track 8 B2d: direct elab-new-infra-cell instead of current-prop-new-infra-cell callback.
+  (when (and add-prop-fn-c rq-cid-c (not (null? c-cell-ids)))
     (define dep-cids-c (remove-duplicates c-cell-ids eq?))
     ;; Stage 1: Threshold cell
     (define-values (enet-t-c threshold-cid-c)
-      (new-cell-fn-c (unbox cstore-net-box) #f (lambda (old new) #t)))
+      (elab-new-infra-cell (unbox cstore-net-box) #f (lambda (old new) #t)))
     (set-box! cstore-net-box enet-t-c)
     ;; Stage 2: Fan-in (any dep non-bot/non-top → threshold)
     (define-values (enet-f-c _fc)
@@ -770,11 +776,11 @@
 ;; This captures transitive wakeups that the legacy wakeup registry misses.
 ;; Track 6 Phase 1c: functional status updates via write-constraint-to-store!.
 ;; Track 7 Phase 7a: uses resolution executor instead of callback.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (retry-constraints-via-cells!)
   (define executor (current-resolution-executor))
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
-  (when (and executor net-box read-fn)
+  (when (and executor net-box)
     (define enet (unbox net-box))
     (for ([c (in-list (read-constraint-store))])
       (when (and (eq? (constraint-status c) 'postponed)
@@ -782,7 +788,7 @@
         ;; Check if any meta cell has become non-bot (meta solved)
         (define any-solved?
           (for/or ([cid (in-list (constraint-cell-ids c))])
-            (let ([v (read-fn enet cid)])
+            (let ([v (elab-cell-read enet cid)])
               (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
         (when any-solved?
           (executor (action-retry-constraint c)))))))
@@ -795,17 +801,17 @@
 
 ;; Scan postponed constraints via cell state, return ready ones as descriptors.
 ;; Production path: checks which constraints have non-bot meta cells.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (collect-ready-constraints-via-cells)
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
   (cond
-    [(and net-box read-fn)
+    [net-box
      (define enet (unbox net-box))
      (for*/list ([c (in-list (read-constraint-store))]
                  #:when (and (eq? (constraint-status c) 'postponed)
                              (not (null? (constraint-cell-ids c))))
                  #:when (for/or ([cid (in-list (constraint-cell-ids c))])
-                          (let ([v (read-fn enet cid)])
+                          (let ([v (elab-cell-read enet cid)])
                             (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
        (action-retry-constraint c))]
     [else '()]))
@@ -818,11 +824,11 @@
     (action-retry-constraint c)))
 
 ;; Scan trait constraints via cell state, return ready ones as descriptors.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (collect-ready-traits-via-cells)
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
   (cond
-    [(and net-box read-fn)
+    [net-box
      (define enet (unbox net-box))
      (define tcm (read-trait-cell-map))
      (for*/list ([(dict-id cell-ids) (in-hash tcm)]
@@ -830,7 +836,7 @@
                  [tc-info (in-value (hash-ref (read-trait-constraints) dict-id #f))]
                  #:when tc-info
                  #:when (for/or ([cid (in-list cell-ids)])
-                          (let ([v (read-fn enet cid)])
+                          (let ([v (elab-cell-read enet cid)])
                             (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
        (action-resolve-trait dict-id tc-info))]
     [else '()]))
@@ -858,11 +864,11 @@
 ;; Track 2 Phase 6: Scan hasmethod constraints via cell state.
 ;; Symmetric to collect-ready-traits-via-cells — reads hasmethod-cell-map
 ;; and checks whether any dependency cells have non-bot values.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (collect-ready-hasmethods-via-cells)
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
   (cond
-    [(and net-box read-fn)
+    [net-box
      (define enet (unbox net-box))
      (define hcm (read-hasmethod-cell-map))
      (for*/list ([(hm-id cell-ids) (in-hash hcm)]
@@ -870,7 +876,7 @@
                  [hm-info (in-value (hash-ref (read-hasmethod-constraints) hm-id #f))]
                  #:when hm-info
                  #:when (for/or ([cid (in-list cell-ids)])
-                          (let ([v (read-fn enet cid)])
+                          (let ([v (elab-cell-read enet cid)])
                             (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
        (action-resolve-hasmethod hm-id hm-info))]
     [else '()]))
@@ -913,34 +919,34 @@
 ;; Track 6 Phase 1c: constraint store is now a hasheq keyed by constraint cid.
 ;; Returns the current list of all constraints (hash-values for backward compat).
 ;; Track 7 Phase 4: unwrap tagged entries for consumers.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (read-constraint-store)
   (define cid (current-constraint-cell-id))
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
-  (if (and cid net-box read-fn)
-      (hash-values (unwrap-tagged-hasheq (read-fn (unbox net-box) cid)))
+  (if (and cid net-box)
+      (hash-values (unwrap-tagged-hasheq (elab-cell-read (unbox net-box) cid)))
       '()))
 
 ;; Track 6 Phase 1c: Read a single constraint by its cid from the store.
 ;; Track 7 Phase 4: unwrap tagged entry.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (read-constraint-by-cid c-cid)
   (define cid (current-constraint-cell-id))
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
-  (if (and cid net-box read-fn)
-      (let ([v (hash-ref (read-fn (unbox net-box) cid) c-cid #f)])
+  (if (and cid net-box)
+      (let ([v (hash-ref (elab-cell-read (unbox net-box) cid) c-cid #f)])
         (if (tagged-entry? v) (tagged-entry-value v) v))
       #f))
 
 ;; Track 6 Phase 1c: Write a single constraint update to the store (functional).
 ;; Merges a single-entry hash — merge-hasheq-union replaces the entry.
 ;; Track 7 Phase 7b: Pure variant — takes/returns enet.
+;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
 (define (write-constraint-to-store-pure enet updated-c)
   (define cid (current-constraint-cell-id))
-  (define write-fn (current-prop-cell-write))
   (define aid (current-speculation-assumption))
-  (if (and cid write-fn)
-      (write-fn enet cid (hasheq (constraint-cid updated-c) (tagged-entry updated-c aid)))
+  (if cid
+      (elab-cell-write enet cid (hasheq (constraint-cid updated-c) (tagged-entry updated-c aid)))
       enet))
 
 ;; Imperative wrapper (for call sites outside the resolution chain).
@@ -952,105 +958,105 @@
 ;; Read trait constraint map from cell.
 ;; Returns hasheq: meta-id → trait-constraint-info.
 ;; Track 7 Phase 4: unwrap tagged entries for consumers.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (read-trait-constraints)
   (define cid (current-trait-constraint-cell-id))
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
-  (if (and cid net-box read-fn)
-      (unwrap-tagged-hasheq (read-fn (unbox net-box) cid))
+  (if (and cid net-box)
+      (unwrap-tagged-hasheq (elab-cell-read (unbox net-box) cid))
       (hasheq)))
 
 ;; Read hasmethod constraint map from cell.
 ;; Returns hasheq: meta-id → hasmethod-constraint-info.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (read-hasmethod-constraints)
   (define cid (current-hasmethod-constraint-cell-id))
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
-  (if (and cid net-box read-fn)
-      (unwrap-tagged-hasheq (read-fn (unbox net-box) cid))
+  (if (and cid net-box)
+      (unwrap-tagged-hasheq (elab-cell-read (unbox net-box) cid))
       (hasheq)))
 
 ;; Read capability constraint map from cell.
 ;; Returns hasheq: meta-id → capability-constraint-info.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (read-capability-constraints)
   (define cid (current-capability-constraint-cell-id))
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
-  (if (and cid net-box read-fn)
-      (unwrap-tagged-hasheq (read-fn (unbox net-box) cid))
+  (if (and cid net-box)
+      (unwrap-tagged-hasheq (elab-cell-read (unbox net-box) cid))
       (hasheq)))
 
 ;; Read wakeup registry from cell.
 ;; Returns hasheq: meta-id → (listof constraint).
 ;; Track 7 Phase 4: unwrap tagged entries in wakeup lists.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (read-wakeup-registry)
   (define cid (current-wakeup-registry-cell-id))
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
-  (if (and cid net-box read-fn)
-      (unwrap-tagged-hasheq-list (read-fn (unbox net-box) cid))
+  (if (and cid net-box)
+      (unwrap-tagged-hasheq-list (elab-cell-read (unbox net-box) cid))
       (hasheq)))
 
 ;; Read trait wakeup map from cell.
 ;; Returns hasheq: meta-id → (listof dict-meta-id).
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (read-trait-wakeup-map)
   (define cid (current-trait-wakeup-cell-id))
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
-  (if (and cid net-box read-fn)
-      (unwrap-tagged-hasheq-list (read-fn (unbox net-box) cid))
+  (if (and cid net-box)
+      (unwrap-tagged-hasheq-list (elab-cell-read (unbox net-box) cid))
       (hasheq)))
 
 ;; Phase 7a: Read hasmethod wakeup map from cell.
 ;; Returns hasheq: meta-id → (listof hasmethod-meta-id).
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (read-hasmethod-wakeup-map)
   (define cid (current-hasmethod-wakeup-cell-id))
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
-  (if (and cid net-box read-fn)
-      (unwrap-tagged-hasheq-list (read-fn (unbox net-box) cid))
+  (if (and cid net-box)
+      (unwrap-tagged-hasheq-list (elab-cell-read (unbox net-box) cid))
       (hasheq)))
 
 ;; Phase 7b: Read trait cell-map from cell.
 ;; Returns hasheq: dict-meta-id → (listof cell-id).
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (read-trait-cell-map)
   (define cid (current-trait-cell-map-cell-id))
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
-  (if (and cid net-box read-fn)
-      (unwrap-tagged-hasheq (read-fn (unbox net-box) cid))
+  (if (and cid net-box)
+      (unwrap-tagged-hasheq (elab-cell-read (unbox net-box) cid))
       (hasheq)))
 
 ;; Track 2 Phase 6: Read hasmethod cell-map from cell.
 ;; Returns hasheq: hasmethod-meta-id → (listof cell-id).
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (read-hasmethod-cell-map)
   (define cid (current-hasmethod-cell-map-cell-id))
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
-  (if (and cid net-box read-fn)
-      (unwrap-tagged-hasheq (read-fn (unbox net-box) cid))
+  (if (and cid net-box)
+      (unwrap-tagged-hasheq (elab-cell-read (unbox net-box) cid))
       (hasheq)))
 
 ;; Track 2 Phase 2: Read constraint status map from cell.
 ;; Returns hasheq: constraint-id → 'pending | 'resolved.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (read-constraint-status-map)
   (define cid (current-constraint-status-cell-id))
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
-  (if (and cid net-box read-fn)
-      (unwrap-tagged-hasheq (read-fn (unbox net-box) cid))
+  (if (and cid net-box)
+      (unwrap-tagged-hasheq (elab-cell-read (unbox net-box) cid))
       (hasheq)))
 
 ;; Track 2 Phase 2: Write a constraint's status to the status cell.
 ;; Dual-writes alongside set-constraint-status! until Phase 3 eliminates
 ;; the struct's mutable status field.
 ;; Track 7 Phase 7b: Pure variant.
+;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
 (define (write-constraint-status-cell-pure enet constraint-id status-sym)
   (define cid (current-constraint-status-cell-id))
-  (define write-fn (current-prop-cell-write))
   (define aid (current-speculation-assumption))
-  (if (and cid write-fn)
-      (write-fn enet cid (hasheq constraint-id (tagged-entry status-sym aid)))
+  (if cid
+      (elab-cell-write enet cid (hasheq constraint-id (tagged-entry status-sym aid)))
       enet))
 
 ;; Imperative wrapper.
@@ -1061,23 +1067,23 @@
 
 ;; Track 2 Phase 7: Read error descriptors from cell.
 ;; Returns hasheq: meta-id → no-instance-error.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (read-error-descriptors)
   (define cid (current-error-descriptor-cell-id))
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
-  (if (and cid net-box read-fn)
-      (unwrap-tagged-hasheq (read-fn (unbox net-box) cid))
+  (if (and cid net-box)
+      (unwrap-tagged-hasheq (elab-cell-read (unbox net-box) cid))
       (hasheq)))
 
 ;; Track 2 Phase 7: Write an error descriptor to the error cell.
 ;; Called by resolution callbacks when resolution fails for a ground constraint.
 ;; Track 7 Phase 7b: Pure variant.
+;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
 (define (write-error-descriptor-pure enet meta-id error)
   (define cid (current-error-descriptor-cell-id))
-  (define write-fn (current-prop-cell-write))
   (define aid (current-speculation-assumption))
-  (if (and cid write-fn)
-      (write-fn enet cid (hasheq meta-id (tagged-entry error aid)))
+  (if cid
+      (elab-cell-write enet cid (hasheq meta-id (tagged-entry error aid)))
       enet))
 
 ;; Imperative wrapper.
@@ -1288,16 +1294,15 @@
       ;; Clear the retracted set before processing (prevents re-entrant loops)
       (set-box! box-val (seteq))
       ;; Clean all scoped cells
-      (define net-box (current-prop-net-box))
-      (define read-fn (current-prop-cell-read))
+      ;; Track 8 B2d: direct elab-cell-read/elab-cell-replace instead of callbacks.
       ;; Track 7 post-fix: use cell-replace (bypass merge) for retraction.
       ;; Retraction is non-monotone — writing a cleaned value via merge-based
       ;; write would union it back with the old value, restoring retracted entries.
       ;; cell-replace sets the cell value directly, enqueuing dependents.
-      (define replace-fn (current-prop-cell-replace))
-      (when (and net-box read-fn replace-fn)
+      (define net-box (current-prop-net-box))
+      (when net-box
         (for ([cid (in-list (scoped-cell-ids))])
-          (define val (read-fn (unbox net-box) cid))
+          (define val (elab-cell-read (unbox net-box) cid))
           (when (hash? val)
             ;; Determine cell type: hasheq-list (wakeup) vs hasheq (constraint/status)
             ;; Wakeup cells have list values; constraint cells have tagged-entry or plain values
@@ -1310,7 +1315,7 @@
                   ;; Constraint cell: filter hash values
                   (retract-hasheq-entries val retracted)))
             (unless (equal? val cleaned)
-              (set-box! net-box (replace-fn (unbox net-box) cid cleaned)))))
+              (set-box! net-box (elab-cell-replace (unbox net-box) cid cleaned)))))
         ;; Track 8 Phase A1: Also retract tagged meta-info entries from elab-network.
         ;; meta-info is a struct field (not a cell), so we operate on the elab-network directly.
         ;; Track 8 B2b: direct elab-network-meta-info / elab-network-meta-info-set instead of callbacks.
@@ -1529,11 +1534,11 @@
      (define enet2 (elab-network-id-map-set enet1
                       (champ-insert (elab-network-id-map enet1) h id id-map-entry)))
      ;; Track 6 Phase 1d: write to unsolved-metas tracking cell
-     (define write-fn (current-prop-cell-write))
+     ;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
      (define um-cid (current-unsolved-metas-cell-id))
      (define enet3
-       (if (and write-fn um-cid)
-           (write-fn enet2 um-cid (hasheq id #t))
+       (if um-cid
+           (elab-cell-write enet2 um-cid (hasheq id #t))
            enet2))
      (set-box! net-box enet3)]
     [else
@@ -1630,24 +1635,22 @@
      (define mi-box (current-prop-meta-info-box))
      (when mi-box (set-box! mi-box new-mi-champ))])
   ;; Propagator path: write to cell
-  (define write-fn (current-prop-cell-write))
-  (when (and net-box write-fn)
+  ;; Track 8 B2d: direct elab-cell-write/elab-cell-read instead of callbacks.
+  (when net-box
     (define cid (prop-meta-id->cell-id id))
     (when cid
-      (set-box! net-box (write-fn (unbox net-box) cid solution))
+      (set-box! net-box (elab-cell-write (unbox net-box) cid solution))
       ;; P-U2b: Post-write consistency validation.
-      (define read-fn (current-prop-cell-read))
-      (when read-fn
-        (define cell-val (read-fn (unbox net-box) cid))
-        (when (and cell-val
-                   (not (equal? cell-val solution))
-                   (not (prop-type-bot? cell-val))
-                   (not (prop-type-top? cell-val)))
-          (perf-inc-cell-write-mismatch!))))
+      (define cell-val (elab-cell-read (unbox net-box) cid))
+      (when (and cell-val
+                 (not (equal? cell-val solution))
+                 (not (prop-type-bot? cell-val))
+                 (not (prop-type-top? cell-val)))
+        (perf-inc-cell-write-mismatch!)))
     ;; Track 6 Phase 1d: mark meta as solved in unsolved-metas tracking cell
     (define um-cid (current-unsolved-metas-cell-id))
     (when um-cid
-      (set-box! net-box (write-fn (unbox net-box) um-cid (hasheq id #f))))))
+      (set-box! net-box (elab-cell-write (unbox net-box) um-cid (hasheq id #f))))))
 
 ;; Track 7 Phase 7b: Pure variant of solve-meta-core — takes/returns enet.
 ;; Returns (values enet* progress?) where progress? is #t if the meta was solved.
@@ -1684,34 +1687,32 @@
   ;; Track 8 B2b: direct elab-network-meta-info-set instead of mi-set callback.
   (define enet1 (elab-network-meta-info-set enet new-mi-champ))
   ;; Write solution to cell
-  (define write-fn (current-prop-cell-write))
-  (define read-fn (current-prop-cell-read))
+  ;; Track 8 B2d: direct elab-cell-write/elab-cell-read instead of callbacks.
   (define cid (prop-meta-id->cell-id id))
   (define enet2
-    (if (and write-fn cid)
-        (let ([enet-w (write-fn enet1 cid solution)])
+    (if cid
+        (let ([enet-w (elab-cell-write enet1 cid solution)])
           ;; P-U2b: Post-write consistency validation
-          (when read-fn
-            (define cell-val (read-fn enet-w cid))
-            (when (and cell-val
-                       (not (equal? cell-val solution))
-                       (not (prop-type-bot? cell-val))
-                       (not (prop-type-top? cell-val)))
-              (perf-inc-cell-write-mismatch!)))
+          (define cell-val (elab-cell-read enet-w cid))
+          (when (and cell-val
+                     (not (equal? cell-val solution))
+                     (not (prop-type-bot? cell-val))
+                     (not (prop-type-top? cell-val)))
+            (perf-inc-cell-write-mismatch!))
           ;; Mark meta as solved in unsolved-metas tracking cell
           (define um-cid (current-unsolved-metas-cell-id))
           (if um-cid
-              (write-fn enet-w um-cid (hasheq id #f))
+              (elab-cell-write enet-w um-cid (hasheq id #f))
               enet-w))
         enet1))
   (values enet2 #t))
 
 ;; Track 7 Phase 7b: Pure read of a constraint by its cid from enet.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (read-constraint-by-cid-pure enet c-cid)
   (define cid (current-constraint-cell-id))
-  (define read-fn (current-prop-cell-read))
-  (if (and cid read-fn)
-      (let ([v (hash-ref (read-fn enet cid) c-cid #f)])
+  (if cid
+      (let ([v (hash-ref (elab-cell-read enet cid) c-cid #f)])
         (if (tagged-entry? v) (tagged-entry-value v) v))
       #f))
 
@@ -1814,11 +1815,11 @@
 ;; Track 7 Phase 8b: Read action descriptors from the ready-queue cell.
 ;; Returns a list of unwrapped action descriptors (tagged-entry values).
 ;; The ready-queue is a list cell with merge-list-append.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (read-ready-queue-actions enet)
   (define rq-cid (current-ready-queue-cell-id))
-  (define read-fn (current-prop-cell-read))
-  (if (and rq-cid read-fn)
-      (let ([entries (read-fn enet rq-cid)])
+  (if rq-cid
+      (let ([entries (elab-cell-read enet rq-cid)])
         (if (list? entries)
             (map (lambda (e) (if (tagged-entry? e) (tagged-entry-value e) e)) entries)
             '()))
@@ -1841,15 +1842,15 @@
 
 ;; Check if a metavariable has been solved.
 ;; Hash removal: Propagator cell (primary), CHAMP meta-info (fallback).
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (meta-solved? id)
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
   (cond
-    [(and net-box read-fn)
+    [net-box
      ;; Propagator path: check cell value
      (define cid (prop-meta-id->cell-id id))
      (and cid
-          (let ([v (read-fn (unbox net-box) cid)])
+          (let ([v (elab-cell-read (unbox net-box) cid)])
             (and (not (prop-type-bot? v)) (not (prop-type-top? v)))))]
     [else
      ;; CHAMP path (test context without network)
@@ -1860,15 +1861,15 @@
 
 ;; Retrieve the solution of a metavariable, or #f if unsolved/unknown.
 ;; Hash removal: Propagator cell (primary), CHAMP meta-info (fallback).
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (meta-solution id)
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
   (cond
-    [(and net-box read-fn)
+    [net-box
      ;; Propagator path: read cell value
      (define cid (prop-meta-id->cell-id id))
      (and cid
-          (let ([v (read-fn (unbox net-box) cid)])
+          (let ([v (elab-cell-read (unbox net-box) cid)])
             (and (not (prop-type-bot? v)) (not (prop-type-top? v)) v)))]
     [else
      ;; CHAMP path (test context without network)
@@ -1960,23 +1961,23 @@
   (define tagged-solution (if aid (tagged-entry solution aid) solution))
   (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id tagged-solution))
   ;; Track 4 Phase 3: Write to propagator level cell
+  ;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
   (define net-box (current-prop-net-box))
-  (define write-fn (current-prop-cell-write))
-  (when (and net-box write-fn)
+  (when net-box
     ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
     (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
     (when (and cid (not (eq? cid 'none)))
       (define enet (unbox net-box))
-      (set-box! net-box (write-fn enet cid solution)))))
+      (set-box! net-box (elab-cell-write enet cid solution)))))
 
 ;; Check if a level metavariable has been solved.
 ;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
 ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (level-meta-solved? id)
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
   (cond
-    [(and net-box read-fn)
+    [net-box
      (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
@@ -1988,7 +1989,7 @@
                         [else raw]))
         (and v (not (eq? v 'unsolved)))]
        [else
-        (define v (read-fn (unbox net-box) cid))
+        (define v (elab-cell-read (unbox net-box) cid))
         (not (eq? v 'unsolved))])]
     [else
      ;; Track 8 B1: worldview-aware read
@@ -2002,11 +2003,11 @@
 ;; Retrieve the solution of a level metavariable, or #f if unsolved/unknown.
 ;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
 ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (level-meta-solution id)
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
   (cond
-    [(and net-box read-fn)
+    [net-box
      (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
@@ -2018,7 +2019,7 @@
                         [else raw]))
         (and v (not (eq? v 'unsolved)) v)]
        [else
-        (define v (read-fn (unbox net-box) cid))
+        (define v (elab-cell-read (unbox net-box) cid))
         (and (not (eq? v 'unsolved)) v)])]
     [else
      ;; Track 8 B1: worldview-aware read
@@ -2103,6 +2104,7 @@
   (define tagged-solution (if aid (tagged-entry solution aid) solution))
   (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id tagged-solution))
   ;; P5b: Write to propagator mult cell
+  ;; Note: current-prop-mult-cell-write is kept (separate mult-cell write callback, not a general cell-write).
   (define net-box (current-prop-net-box))
   (define write-fn (current-prop-mult-cell-write))
   (when (and net-box write-fn)
@@ -2115,11 +2117,11 @@
 ;; Check if a mult metavariable has been solved.
 ;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
 ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (mult-meta-solved? id)
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
   (cond
-    [(and net-box read-fn)
+    [net-box
      (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
@@ -2131,7 +2133,7 @@
                         [else raw]))
         (and v (not (eq? v 'unsolved)))]
        [else
-        (define v (read-fn (unbox net-box) cid))
+        (define v (elab-cell-read (unbox net-box) cid))
         (and (not (eq? v 'mult-bot)) (not (eq? v 'unsolved)))])]
     [else
      ;; Track 8 B1: worldview-aware read
@@ -2145,11 +2147,11 @@
 ;; Retrieve the solution of a mult metavariable, or #f if unsolved/unknown.
 ;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
 ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (mult-meta-solution id)
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
   (cond
-    [(and net-box read-fn)
+    [net-box
      (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
@@ -2161,7 +2163,7 @@
                         [else raw]))
         (and v (not (eq? v 'unsolved)) v)]
        [else
-        (define v (read-fn (unbox net-box) cid))
+        (define v (elab-cell-read (unbox net-box) cid))
         (and (not (eq? v 'mult-bot)) (not (eq? v 'unsolved)) v)])]
     [else
      ;; Track 8 B1: worldview-aware read
@@ -2242,23 +2244,23 @@
   (define tagged-solution (if aid (tagged-entry solution aid) solution))
   (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id tagged-solution))
   ;; Track 4 Phase 3: Write to propagator session cell
+  ;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
   (define net-box (current-prop-net-box))
-  (define write-fn (current-prop-cell-write))
-  (when (and net-box write-fn)
+  (when net-box
     ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
     (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
     (when (and cid (not (eq? cid 'none)))
       (define enet (unbox net-box))
-      (set-box! net-box (write-fn enet cid solution)))))
+      (set-box! net-box (elab-cell-write enet cid solution)))))
 
 ;; Check if a sess metavariable has been solved.
 ;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
 ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (sess-meta-solved? id)
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
   (cond
-    [(and net-box read-fn)
+    [net-box
      (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
@@ -2270,7 +2272,7 @@
                         [else raw]))
         (and v (not (eq? v 'unsolved)))]
        [else
-        (define v (read-fn (unbox net-box) cid))
+        (define v (elab-cell-read (unbox net-box) cid))
         (not (eq? v 'unsolved))])]
     [else
      ;; Track 8 B1: worldview-aware read
@@ -2284,11 +2286,11 @@
 ;; Retrieve the solution of a sess metavariable, or #f if unsolved/unknown.
 ;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
 ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (sess-meta-solution id)
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
   (cond
-    [(and net-box read-fn)
+    [net-box
      (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
@@ -2300,7 +2302,7 @@
                         [else raw]))
         (and v (not (eq? v 'unsolved)) v)]
        [else
-        (define v (read-fn (unbox net-box) cid))
+        (define v (elab-cell-read (unbox net-box) cid))
         (and (not (eq? v 'unsolved)) v)])]
     [else
      ;; Track 8 B1: worldview-aware read
@@ -2478,19 +2480,19 @@
 ;; Hash removal: Always reads from CHAMP.
 ;; Track 6 Phase 1d: Read from unsolved-metas tracking cell when available.
 ;; Falls back to CHAMP scan when no cell exists (pre-initialization).
+;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 (define (all-unsolved-metas)
   (define um-cid (current-unsolved-metas-cell-id))
   (define net-box (current-prop-net-box))
-  (define read-fn (current-prop-cell-read))
   ;; Track 6 Phase 5a: read meta-info from elab-network when available
   ;; Track 8 B2b: direct elab-network-meta-info instead of current-prop-meta-info-read callback.
   (define mi-champ
     (if net-box
         (elab-network-meta-info (unbox net-box))
         (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))))
-  (if (and um-cid net-box read-fn)
+  (if (and um-cid net-box)
       ;; Cell path: read the tracking hash, filter for #t (unsolved)
-      (let ([um-hash (read-fn (unbox net-box) um-cid)])
+      (let ([um-hash (elab-cell-read (unbox net-box) um-cid)])
         (for/list ([(mid unsolved?) (in-hash um-hash)]
                    #:when unsolved?)
           ;; Track 8 A1: unwrap tagged-entry
