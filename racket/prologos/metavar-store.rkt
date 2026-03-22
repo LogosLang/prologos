@@ -204,7 +204,7 @@
  write-error-descriptor!
  ;; Track 2 Phase 3: Stratified resolution (progress box is internal)
  current-in-stratified-resolution?
- current-stratified-progress-box
+ ;; Track 8 A5: current-stratified-progress-box removed (dead code)
  ;; Track 2 Phase 4: Action descriptors
  (struct-out action-retry-constraint)
  (struct-out action-resolve-trait)
@@ -1524,10 +1524,9 @@
 ;; to the outer stratified loop. Prevents recursive re-entrancy.
 (define current-in-stratified-resolution? (make-parameter #f))
 
-;; Track 2 Phase 3: Progress box for the stratified loop.
-;; Contains a box (or #f). When set, solve-meta-core! writes #t to the box
-;; to signal that progress was made during the current S2 round.
-(define current-stratified-progress-box (make-parameter #f))
+;; Track 8 Phase A5: current-stratified-progress-box REMOVED.
+;; The pure variant (run-stratified-resolution-pure) uses eq? identity
+;; detection instead. The imperative variant that used this box is dead code.
 
 ;; Track 2 Phase 3: Maximum iterations for the S0→S1→S2 loop.
 ;; The CALM theorem guarantees convergence for monotone operations, but
@@ -1567,10 +1566,7 @@
 ;; No retry logic — that lives in run-stratified-resolution!.
 (define (solve-meta-core! id solution)
   (perf-inc-meta-solved!)
-  ;; Track 2 Phase 3: Signal to the stratified loop that progress was made.
-  (define progress-box (current-stratified-progress-box))
-  (when progress-box
-    (set-box! progress-box #t))
+  ;; Track 8 A5: progress-box signal removed (pure variant uses eq? instead)
   (define h (prop-meta-id-hash id))
   ;; Track 6 Phase 5a: Read meta-info from elab-network when available, else box
   (define mi-read (current-prop-meta-info-read))
@@ -1697,10 +1693,11 @@
 ;;
 ;; `trigger-meta-id` is the meta that was just solved, used for targeted
 ;; wakeup in the test fallback path and trait/hasmethod scans.
+;; Track 8 A5: Dead code — imperative variant superseded by run-stratified-resolution-pure.
+;; Retained for reference; progress-box removed.
 (define (run-stratified-resolution! trigger-meta-id)
   (define progress-box (box #f))
-  (parameterize ([current-in-stratified-resolution? #t]
-                 [current-stratified-progress-box progress-box])
+  (parameterize ([current-in-stratified-resolution? #t])
     (define net-box (current-prop-net-box))
     (define has-network?
       (and net-box (current-prop-run-quiescence)
