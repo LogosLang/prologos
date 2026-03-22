@@ -223,6 +223,8 @@ The audit recommended: extract cell-operation API into a `cell-ops.rkt` that bot
 
 All read from `(current-prop-net-box)` and unwrap elab-network → prop-network. No circular dependency — `cell-ops.rkt` depends only on `propagator.rkt` and `elab-network struct definitions` (which can be factored into a separate types module if needed).
 
+**Design-for note — accumulate-during-quiescence pattern** (from [CHAMP Performance Design](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) §Accumulate-During-Quiescence): After B2 eliminates callbacks, the quiescence loop can thread an owner-ID transient through `cell-write` — enabling in-place cell mutation during quiescence with O(modified-nodes) freeze at exit. The `cell-ops.rkt` API should accommodate an optional transient parameter (or a thread-local `current-quiescence-transient` parameter) so this pattern can be implemented as a follow-on without re-designing the API. This is the highest-value application of the owner-ID transient infrastructure (CHAMP Performance Phases 4-6).
+
 **Files**: New `cell-ops.rkt`; `metavar-store.rkt` (replace callback calls); `elaborator-network.rkt` (delegate)
 
 ### Phase B2: Root Callback Elimination
@@ -388,6 +390,7 @@ Track 8 provides the following to downstream Series:
 | HKT trait resolution on network | Tracks 3-5 (trait-dispatched dispatch) | — | B4 |
 | Sugar constraint generation | Track 3 (surf-get Indexed/Keyed) | — | B5 |
 | Callback elimination | All (cleaner elaboration paths) | Track 2 (ATMS solver integration) | B2 |
+| `cell-ops.rkt` API shaped for transient threading | — | — (CHAMP Performance follow-on) | B1 |
 | Module restructuring | All (elaborator ↔ trait-resolution access) | — | B1 |
 | TMS-clean speculation | — | Track 2 (worldview management) | A4 |
 
