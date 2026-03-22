@@ -1787,19 +1787,10 @@
         (if (tagged-entry? v) (tagged-entry-value v) v))
       #f))
 
-;; Track 2 Phase 3+4: Stratified resolution loop with action descriptors.
-;; S0 (type propagation) → S1 (collect ready actions) → S2 (execute) → repeat.
-;;
-;; Phase 4 change: S1 and S2 are now separate. S1 produces action descriptors
-;; (data), S2 executes them. This enables inspectability, testability, and
-;; ordering control per the free monad / semi-naive evaluation design.
-;;
-;; The loop terminates when S1 produces no actions (fixpoint) or fuel exhausted.
-;;
-;; `trigger-meta-id` is the meta that was just solved, used for targeted
-;; wakeup in the test fallback path and trait/hasmethod scans.
-;; Track 8 A5: Dead code — imperative variant superseded by run-stratified-resolution-pure.
-;; Retained for reference; progress-box removed.
+;; Imperative variant of the stratified resolution loop.
+;; Track 8 A5: Mostly dead code — superseded by run-stratified-resolution-pure.
+;; Track 8 C4: S0 now includes bridge propagator resolution (C1-C3).
+;; Retained as fallback for test paths that use the imperative executor.
 (define (run-stratified-resolution! trigger-meta-id)
   (define progress-box (box #f))
   (parameterize ([current-in-stratified-resolution? #t])
@@ -1839,11 +1830,19 @@
 
 ;; Track 7 Phase 7b: Pure variant of the stratified resolution loop.
 ;; Takes enet, returns enet*. No box reads/writes — all state threaded.
-;; The S1 readiness scan still reads from the box (bridged via with-enet-reads
-;; in resolution.rkt). S0 quiescence uses the pure run-to-quiescence on prop-net.
-;; S2 uses the pure resolution-execute-action-pure (for/fold over actions).
-;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net instead of callbacks.
-;; Track 8 B2: direct elab-network-rewrap instead of current-prop-rewrap-net callback.
+;;
+;; Track 8 C1-C3: Bridge propagators now resolve traits, hasmethods, and
+;; constraint retries DURING S0 quiescence. The S1→S2 readiness→action path
+;; remains as fallback: if bridges resolved the constraint, the S2 action
+;; finds meta-solved? = #t and is a no-op. The loop naturally terminates
+;; faster (fewer S2-driven state changes → fewer iterations).
+;;
+;; Post-C4 architecture:
+;;   S(-1): retraction (unchanged)
+;;   S0: quiescence — type propagation + bridge propagator resolution
+;;   S1: read ready-queue (verification: bridges should have handled most)
+;;   S2: execute remaining actions (mostly no-ops; only ambiguous cases need S2)
+;;   progress? → loop or done
 (define (run-stratified-resolution-pure enet trigger-meta-id resolution-executor)
   (define has-network? #t)
   (let loop ([fuel stratified-resolution-fuel]
