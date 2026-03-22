@@ -28,7 +28,7 @@
 | B2 | Root callback elimination | Inline callbacks via cell-ops + elab-network-types | ✅ | `58b2f5c` | 14/23 replaced. 9 remaining: 5 domain-injection (lattice fns), 3 legacy (fallback boxes), 1 state (net-box). These are architecturally correct as injection points, not structural callbacks. |
 | B2e | Macros parameter write cleanup | Remove 24 dual-writes; cell-only writes after B2 | ⏸️ | | DEFERRED: module-load-time reads still use parameter fallback. Removing dual-writes breaks module loading context. |
 | B2f | Accumulate-during-quiescence | Owner-ID transient threading through cell-ops | ⬜ | | Depends on B1-B2. See [CHAMP Performance](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) |
-| B3 | HKT `impl` registration | `impl Seq List` works and registers in trait system | ⬜ | | Depends on B2. **Acceptance §B: uncomment `impl` lines** |
+| B3 | HKT `impl` registration | `impl Seq List` works and registers in trait system | ✅ | `ac25508` | Parser fixes: pattern-var exclusion, brace-params opacity, implicit Pi wrapping. HKT trait def + impl registration work. |
 | B4 | HKT trait resolution on network | Resolution via cross-domain bridge propagators | ⬜ | | Depends on B3. **Acceptance §B: uncomment `my-first` spec/defn** |
 | B5 | Sugar constraint generation | `surf-get` generates Indexed/Keyed constraints | ⬜ | | Depends on B4. **Acceptance §B: uncomment user-defined Indexed** |
 | B6 | Verification + benchmarks | Full suite + A/B comparison + acceptance | ⬜ | | All §A-B pass |
