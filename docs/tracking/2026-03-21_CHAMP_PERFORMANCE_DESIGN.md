@@ -18,9 +18,9 @@
 | 2 | `eq?`-first key comparison | `(or (eq? ...) (equal? ...))` in all 6 key comparison sites | ✅ | `57e052d` | lookup, insert, delete, collision-lookup, collision-insert, collision-delete |
 | 3 | Value-only update fast path | Return same node when new value `eq?` old value | ✅ | `57e052d` | Propagates through ALL trie levels. §B tests (3) uncommented. 7324 tests 234.7s |
 | 4 | Owner-ID node structure | Add `edit` field to `champ-node`; pipeline.md struct checklist | ✅ | `1fd5eff` | 12 constructor sites. No external struct-copy/match. 232.5s (no regression) |
-| 5 | Owner-ID transient operations | In-place insert + delete + insert-join for owned nodes | ⬜ | | Addresses F-5. All three mutation operations, not just insert |
-| 6 | Owner-ID freeze | O(modified nodes) freeze — walk + clear edit, not full rebuild | ⬜ | | Completes owner-ID transient. Old freeze was O(N log N); new is O(modified paths × depth) |
-| 7 | Verification + A/B | Micro-benchmarks, suite regression, BSP-LE Track 0 Phase 5 revisit | ⬜ | | Target: measurable wall-time improvement on full suite |
+| 5 | Owner-ID transient operations | In-place insert + delete + insert-join for owned nodes | ✅ | `ce5a4df` | All 3 operations + ensure-owned. §C-D tests (4) pass |
+| 6 | Owner-ID freeze | O(modified nodes) freeze — walk + clear edit, not full rebuild | ✅ | `ce5a4df` | freeze-node + champ-all-persistent? invariant checker. §E-F tests (2) pass. 7330 tests 234.7s |
+| 7 | Verification + A/B | Owner-ID benchmarks + BSP-LE Track 0 Phase 5 rehabilitated | ✅ | `cfcead4` | N=2: 95.5→6.0μs (16×). net-add-propagator now uses owner-ID. Suite 232.9s (neutral). |
 
 ---
 
