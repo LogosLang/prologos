@@ -22,6 +22,11 @@
 (require "propagator.rkt"
          "infra-cell.rkt"
          "champ.rkt")
+;; Track 8 B2: elaborator-network.rkt CANNOT be imported here — real cycle:
+;;   cell-ops → elaborator-network → type-lattice → reduction → metavar-store → cell-ops
+;; The callbacks in metavar-store.rkt break this cycle by injecting elab-network
+;; operations at runtime via driver.rkt. B2 eliminates callbacks by extracting
+;; elab-network struct definitions into a separate types module.
 
 (provide
  ;; Worldview-aware CHAMP reads
