@@ -37,7 +37,8 @@
 | C2 | Hasmethod resolution as bridges | `net-add-cross-domain-propagator` for hasmethod in S0 | ⬜ | | Same bridge pattern as C1 |
 | C3 | Constraint retry as threshold propagators | Deferred constraints watch dependency cells via existing threshold | ⬜ | | Replaces imperative S2 polling |
 | C4 | S2 scope reduction + S1 verification pass | S1 as no-op verification; S2 handles only ambiguous | ⬜ | | **Acceptance §C: uncomment depth-2 nesting** |
-| C5 | Layered scheduler (optimization) | Priority-ordered worklist for S0 propagators | ⬜ | | Right Kan demand-driven quiescence |
+| C5a | Scheduling model evaluation | Benchmark Gauss-Seidel vs BSP-sequential vs BSP+transient | ⬜ | | Data-driven decision on default scheduler for post-Part-C network |
+| C5b | Priority scheduling (optimization) | Priority-ordered rounds/worklist based on C5a winner | ⬜ | | Right Kan demand-driven quiescence applied to winning scheduler |
 | C6 | Verification + benchmarks | Resolution cycles, fuel, ordering, memo cache, depth-2/3 | ⬜ | | All §A-C pass. ≤250s suite, ≤15% per-command |
 
 ---
@@ -478,7 +479,7 @@ Per [GÖDEL_COMPLETENESS.org](../principles/GÖDEL_COMPLETENESS.org), every comp
 | C2 | Hasmethod bridge (α) | Level 1 (Tarski) | Same as C1 — fires once per type cell grounding. Boolean result (has/hasn't method). |
 | C3 | Constraint retry threshold | Level 1 (Tarski) | Multi-cell threshold fires when ALL dependency cells are ground. Each cell transitions at most once. Threshold fires at most once. |
 | C4 | S2 (ambiguous commitment) | Level 2 + Level 5 | Non-overlapping invariant prevents ambiguity for most traits. Rare ambiguous cases: type depth decreases per resolution cycle (Level 2). Fuel retained as defense-in-depth (Level 5). |
-| C5 | Layered scheduler | Same as underlying propagators | Scheduling order doesn't affect termination — only affects convergence speed. The propagator network terminates regardless of firing order (confluence from lattice properties). |
+| C5a/b | Scheduling model + priority | Same as underlying propagators | Scheduling order doesn't affect termination — only affects convergence speed. CALM theorem: monotone + commutative merge = confluent regardless of order. |
 
 **The critical argument**: C1's feedback loop. When a trait bridge resolves `Indexed PVec` and writes the dict, the dict may be used in elaborated code that generates new type constraints (e.g., the dict's method types contain type parameters that need unification). These new type cells may trigger new trait bridges. The well-founded measure is: the sum of type depths across all unsolved trait constraints decreases on each resolution cycle. This is the same Level 2 argument currently used for L2→S0 feedback — Part C moves it from "across strata" to "within S0," but the mathematical argument is unchanged.
 
@@ -603,19 +604,34 @@ loop (fuel ≤ 100):
 
 **Files**: `metavar-store.rkt` (simplified loop), `resolution.rkt` (S2 reduced to ambiguous cases)
 
-### Phase C5: Layered Scheduler (Optimization)
+### Phase C5a: Scheduling Model Evaluation
 
-**Goal**: Optimize the quiescence loop with priority-ordered propagator scheduling.
+**Goal**: Data-driven decision on the default quiescence scheduler for the post-Part-C network.
 
-**Note**: C1-C4 work within the existing flat S0 quiescence loop (proven by the session-type bridge precedent). C5 is an optimization that improves scheduling efficiency, not a correctness requirement.
+The production path currently uses Gauss-Seidel (serial, one propagator at a time). The BSP scheduler (`run-to-quiescence-bsp`) exists but is unused in production. Part C increases the network size (~100+ propagators per command with bridges). The question: does BSP scheduling + owner-ID transient accumulation outperform Gauss-Seidel + persistent writes at this scale?
 
-**Design**: Propagators tagged with priority. The worklist drains higher-priority propagators first. Type unification propagators (highest priority) fire before resolution bridges (medium) fire before readiness detection (lowest, now vestigial).
+**Benchmark candidates**:
+1. **Gauss-Seidel** (current default): serial firing, persistent CHAMP writes per propagator
+2. **BSP-sequential**: BSP rounds with serial firing within each round, persistent writes
+3. **BSP-sequential + transient**: BSP rounds with owner-ID transient accumulation per round — all writes within a round mutate the transient in place, freeze once at round end
 
-**Right Kan refinement**: The scheduler interleaves type propagation with resolution bridge firing — when a type cell becomes ground, its dependent resolution bridge fires immediately in the same pass, before other type propagators. This is demand-driven quiescence: resolution happens as soon as demanded information is available.
+**Measurement**: Wall-time, GC pressure, round count, fuel consumption. Representative workloads: prelude load, adversarial benchmark, CIU acceptance file.
 
-**Implementation**: The mutable worklist from Track 0 Phase 3c becomes a priority queue (or vector of per-priority lists). `net-cell-write` enqueues dependents at their tagged priority level.
+**Decision criterion**: If BSP+transient is faster (wall-time) or lower GC (pressure) without regression on chain-heavy workloads (where Gauss-Seidel converges in fewer iterations than Jacobi/BSP), switch default. Otherwise keep Gauss-Seidel.
 
-**Open questions** (D.2 critique — to be resolved at C5 implementation time):
+**Note**: The CALM theorem guarantees all three produce identical results. This is purely a performance decision, not a correctness decision.
+
+**Files**: `propagator.rkt` (scheduler selection), `benchmarks/micro/bench-alloc.rkt` (scheduling benchmarks)
+
+### Phase C5b: Priority Scheduling (Optimization)
+
+**Goal**: Add priority-ordered scheduling to whichever scheduler wins C5a.
+
+**Design**: Propagators tagged with priority. The scheduler drains higher-priority propagators first. Type unification propagators (highest priority) fire before resolution bridges (medium) fire before readiness detection (lowest, now vestigial).
+
+**Right Kan refinement**: The scheduler interleaves type propagation with resolution bridge firing — when a type cell becomes ground, its dependent resolution bridge fires immediately, before other type propagators. This is demand-driven quiescence: resolution happens as soon as demanded information is available.
+
+**Open questions** (D.2 critique — to be resolved at C5b implementation time):
 - Priority assignment: static (type unification = high, bridges = medium) or dynamic (based on dependency analysis)?
 - Interleaving behavior: when a high-priority propagator enqueues both high and medium priority work, does the scheduler finish all high-priority before touching medium, or interleave?
 - Data structure: multiple flat lists (one per priority) vs priority queue? Interacts with Track 0 Phase 3c's mutable worklist boxes.
@@ -707,7 +723,8 @@ Cost model:
 | C2 | Hasmethod bridge resolves in S0 | — | Full suite regression |
 | C3 | Constraint retry fires on ground dependencies | Multi-dependency constraint | Full suite regression |
 | C4 | S1 eliminated, S2 reduced: loop iterations measured | — | Fuel consumption comparison |
-| C5 | Layered scheduler: priority ordering verified | — | A/B benchmarks (optimization over C1-C4) |
+| C5a | Gauss-Seidel vs BSP-sequential vs BSP+transient | — | A/B benchmarks on post-Part-C network |
+| C5b | Priority scheduling on C5a winner | — | Demand-driven quiescence A/B benchmarks |
 | C6 | Full suite, ordering stability, memo cache, benchmarks | — | All CIU aspirational sections |
 
 ---
