@@ -30,7 +30,13 @@
  ;; Network construction (no type-lattice dependency)
  make-elaboration-network
  ;; Network reset for command lifecycle
- reset-elab-network-command-state)
+ reset-elab-network-command-state
+ ;; Track 8 B2c: Cell operations (no type-lattice dependency)
+ elab-cell-read
+ elab-cell-write
+ elab-cell-replace
+ elab-new-infra-cell
+ elab-cell-info-ref)
 
 ;; ========================================
 ;; Struct Definitions
@@ -104,3 +110,52 @@
    (elab-network-next-meta-id enet)
    (elab-network-id-map enet)
    (elab-network-meta-info enet)))
+
+;; ========================================
+;; Cell Operations (Track 8 B2c)
+;; ========================================
+;; These have NO type-lattice dependency — pure prop-network + struct operations.
+;; Extracted from elaborator-network.rkt to break callback dependency.
+
+;; Read a cell's current type value.
+(define (elab-cell-read enet cid)
+  (net-cell-read (elab-network-prop-net enet) cid))
+
+;; Write a type value to a cell (lattice join via merge-fn).
+;; Preserves eq? identity when the write produces no change.
+(define (elab-cell-write enet cid val)
+  (define pnet (elab-network-prop-net enet))
+  (define pnet* (net-cell-write pnet cid val))
+  (if (eq? pnet* pnet)
+      enet
+      (elab-network pnet*
+       (elab-network-cell-info enet)
+       (elab-network-next-meta-id enet)
+       (elab-network-id-map enet)
+       (elab-network-meta-info enet))))
+
+;; Replace a cell's value directly, bypassing merge.
+;; Used by S(-1) retraction.
+(define (elab-cell-replace enet cid val)
+  (define pnet (elab-network-prop-net enet))
+  (define pnet* (net-cell-replace pnet cid val))
+  (if (eq? pnet* pnet)
+      enet
+      (elab-network pnet*
+       (elab-network-cell-info enet)
+       (elab-network-next-meta-id enet)
+       (elab-network-id-map enet)
+       (elab-network-meta-info enet))))
+
+;; Create an infrastructure cell (not a metavariable — no cell-info or meta counter).
+(define (elab-new-infra-cell enet initial-value merge-fn)
+  (define net (elab-network-prop-net enet))
+  (define-values (net* cid) (net-new-cell net initial-value merge-fn))
+  (values
+   (elab-network net* (elab-network-cell-info enet) (elab-network-next-meta-id enet)
+                 (elab-network-id-map enet) (elab-network-meta-info enet))
+   cid))
+
+;; Retrieve cell metadata, or 'none if unknown.
+(define (elab-cell-info-ref enet cid)
+  (champ-lookup (elab-network-cell-info enet) (cell-id-hash cid) cid))

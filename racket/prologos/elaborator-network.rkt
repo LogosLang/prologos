@@ -121,52 +121,9 @@
    cid))
 
 ;; Read a cell's current type value.
-(define (elab-cell-read enet cid)
-  (net-cell-read (elab-network-prop-net enet) cid))
-
-;; Write a type value to a cell (lattice join via merge-fn).
-;; Preserves eq? identity when the write produces no change (critical for
-;; progress detection in run-stratified-resolution-pure).
-(define (elab-cell-write enet cid val)
-  (define pnet (elab-network-prop-net enet))
-  (define pnet* (net-cell-write pnet cid val))
-  (if (eq? pnet* pnet)
-      enet  ;; No change — preserve identity
-      (elab-network pnet*
-       (elab-network-cell-info enet)
-       (elab-network-next-meta-id enet)
-       (elab-network-id-map enet)
-       (elab-network-meta-info enet))))
-
-;; Track 7 post-fix: Replace a cell's value directly, bypassing merge.
-;; Used by S(-1) retraction to write cleaned values to monotone cells.
-;; Preserves eq? identity when replacement is no-op.
-(define (elab-cell-replace enet cid val)
-  (define pnet (elab-network-prop-net enet))
-  (define pnet* (net-cell-replace pnet cid val))
-  (if (eq? pnet* pnet)
-      enet
-      (elab-network pnet*
-       (elab-network-cell-info enet)
-       (elab-network-next-meta-id enet)
-       (elab-network-id-map enet)
-       (elab-network-meta-info enet))))
-
-;; Phase 1a: Create an infrastructure cell in the elab-network's prop-net.
-;; Unlike elab-fresh-meta, this does NOT add cell-info metadata or increment
-;; the meta counter — infra-cells are not metavariables.
-;; Returns (values elab-network* cell-id).
-(define (elab-new-infra-cell enet initial-value merge-fn)
-  (define net (elab-network-prop-net enet))
-  (define-values (net* cid) (net-new-cell net initial-value merge-fn))
-  (values
-   (elab-network net* (elab-network-cell-info enet) (elab-network-next-meta-id enet)
-                 (elab-network-id-map enet) (elab-network-meta-info enet))
-   cid))
-
-;; Retrieve cell metadata, or 'none if unknown.
-(define (elab-cell-info-ref enet cid)
-  (champ-lookup (elab-network-cell-info enet) (cell-id-hash cid) cid))
+;; Track 8 B2c: elab-cell-read, elab-cell-write, elab-cell-replace,
+;; elab-new-infra-cell, elab-cell-info-ref moved to elab-network-types.rkt.
+;; Imported above and re-exported in the provide block.
 
 ;; ========================================
 ;; Unification Propagator

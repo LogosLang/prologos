@@ -41,6 +41,12 @@
  elab-network-meta-info-set
  make-elaboration-network
  reset-elab-network-command-state
+ ;; Track 8 B2c: Cell operations (extracted from elaborator-network.rkt)
+ elab-cell-read
+ elab-cell-write
+ elab-cell-replace
+ elab-new-infra-cell
+ elab-cell-info-ref
  ;; Worldview-aware elab-network operations
  elab-cell-read-worldview
  elab-meta-info-read-worldview
