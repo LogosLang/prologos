@@ -2182,10 +2182,14 @@
 (current-resolution-executor resolution-execute-action!)
 ;; Track 7 Phase 7b: Pure resolution executor for solve-meta! pure chain.
 (current-resolution-executor-pure resolution-execute-action-pure)
-;; Track 8 C1-C3: Resolution bridge propagators — traits, hasmethods, and
-;; constraint retries resolve during S0 quiescence, bypassing S1→S2 path.
-(current-trait-resolution-bridge-fn (make-trait-resolution-bridge-fire-fn))
-(current-hasmethod-resolution-bridge-fn (make-hasmethod-resolution-bridge-fire-fn))
+;; Track 8D: Pure resolution bridge factories — traits and hasmethods resolve
+;; during S0 quiescence via pure (pnet → pnet) fire functions. No enet-box.
+;; Each factory captures registry cell IDs at module level, then produces
+;; per-constraint fire functions at registration time.
+(current-trait-resolution-bridge-fn (make-pure-trait-bridge-factory))
+(current-hasmethod-resolution-bridge-fn (make-pure-hasmethod-bridge-factory))
+;; Track 8 C3: Constraint retry bridge — still uses legacy pattern (enet-box).
+;; Pure constraint retry requires propagator-based unification (BSP-LE Track 2).
 (current-constraint-retry-bridge-fn (make-constraint-retry-bridge-fire-fn))
 
 ;; ========================================

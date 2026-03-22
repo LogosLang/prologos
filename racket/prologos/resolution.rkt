@@ -40,9 +40,9 @@
          make-trait-resolution-bridge-fire-fn
          make-hasmethod-resolution-bridge-fire-fn
          make-constraint-retry-bridge-fire-fn
-         ;; Track 8D: Pure bridge fire functions (pnet → pnet, no enet-box)
-         make-pure-trait-bridge-fire-fn
-         make-pure-hasmethod-bridge-fire-fn)
+         ;; Track 8D: Pure bridge factories (return (pnet → pnet) fire functions)
+         make-pure-trait-bridge-factory
+         make-pure-hasmethod-bridge-factory)
 
 ;; ========================================
 ;; Constraint Retry (extracted from unify.rkt module-level callback)
@@ -412,7 +412,17 @@
        (not (prop-type-bot? v))
        (not (prop-type-top? v))))
 
-;; Pure trait resolution bridge.
+;; Pure trait resolution bridge FACTORY.
+;; Returns a factory function: (trait-name dict-cell-id dep-cell-ids → (pnet → pnet))
+;; The factory captures registry cell IDs at creation time (from driver.rkt).
+;; Each call produces a per-constraint fire function that reads cells directly.
+(define (make-pure-trait-bridge-factory)
+  (define impl-reg-cid (current-impl-registry-cell-id))
+  (define param-impl-reg-cid (current-param-impl-registry-cell-id))
+  (lambda (trait-name dict-cell-id dep-cell-ids)
+    (make-pure-trait-bridge-fire-fn trait-name dict-cell-id dep-cell-ids impl-reg-cid param-impl-reg-cid)))
+
+;; Pure trait resolution bridge fire function.
 ;; Closed over: trait-name, dict-cell-id, dep-cell-ids, impl-registry-cell-id.
 ;; Fire function: pnet → pnet (pure).
 (define (make-pure-trait-bridge-fire-fn trait-name dict-cell-id dep-cell-ids impl-reg-cid param-impl-reg-cid)
@@ -474,10 +484,18 @@
                        (net-cell-write pnet dict-cell-id dict-expr)
                        pnet)])])])])])))
 
-;; Pure hasmethod resolution bridge.
-;; More complex: must find which trait owns the method, resolve the dict,
-;; then project the method. For now, delegates to the existing pure function
-;; via with-enet-reads (transitional — will be fully purified in a follow-up).
+;; Pure hasmethod resolution bridge FACTORY.
+;; Returns a factory: (method-name meta-cell-id trait-var-cell-id dict-meta-cell-id dep-cell-ids → (pnet → pnet))
+(define (make-pure-hasmethod-bridge-factory)
+  (define trait-reg-cid (current-trait-registry-cell-id))
+  (define impl-reg-cid (current-impl-registry-cell-id))
+  (define param-impl-reg-cid (current-param-impl-registry-cell-id))
+  (lambda (method-name meta-cell-id trait-var-cell-id dict-meta-cell-id dep-cell-ids)
+    (make-pure-hasmethod-bridge-fire-fn method-name meta-cell-id trait-var-cell-id
+                                         dict-meta-cell-id dep-cell-ids
+                                         trait-reg-cid impl-reg-cid param-impl-reg-cid)))
+
+;; Pure hasmethod resolution bridge fire function.
 (define (make-pure-hasmethod-bridge-fire-fn method-name meta-cell-id trait-var-cell-id
                                             dict-meta-cell-id dep-cell-ids
                                             trait-reg-cid impl-reg-cid param-impl-reg-cid)

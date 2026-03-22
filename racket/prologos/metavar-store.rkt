@@ -437,10 +437,10 @@
                 (list (tagged-entry (action-resolve-trait meta-id info) aid)))
               pnet))))
     (set-box! tc-net-box enet-r))
-  ;; Track 8 C1: Resolution bridge propagator (resolves in S0, bypassing S1→S2).
-  ;; When the bridge callback is available and dep cells exist, install a bridge
-  ;; propagator that watches the same dep-cids. The bridge fire function syncs
-  ;; the enet box, calls the resolution function, and returns the updated pnet.
+  ;; Track 8D: Pure resolution bridge propagator (resolves in S0, NO enet-box).
+  ;; The bridge-fn callback is a FACTORY: given trait-name, dict-cell-id, dep-cell-ids,
+  ;; and registry cell IDs, it returns a pure (pnet → pnet) fire function that reads
+  ;; cells directly from the prop-network. No unbox, no set-box!, no enet-rewrap.
   ;; The existing readiness propagators remain as fallback — if the bridge resolves
   ;; the dict, the readiness action becomes a no-op (meta already solved).
   (define bridge-fn (current-trait-resolution-bridge-fn))
@@ -449,10 +449,14 @@
     ;; The dict-meta's cell receives the resolved dict expression.
     (define dict-cell-id (prop-meta-id->cell-id meta-id))
     (when dict-cell-id
+      ;; Track 8D: Call factory to produce a pure fire function for this constraint.
+      ;; The fire function is a closure over trait-name, dict-cell-id, dep-cell-ids,
+      ;; and registry cell IDs. It reads cells directly — no box access.
+      (define fire-fn (bridge-fn (trait-constraint-info-trait-name info)
+                                  dict-cell-id dep-cids))
       (define-values (enet-bridge _bridge-pid)
         (elab-add-propagator (unbox tc-net-box) dep-cids (list dict-cell-id)
-          (lambda (pnet)
-            (bridge-fn pnet meta-id info dep-cids))))
+          fire-fn))
       (set-box! tc-net-box enet-bridge)))
   )
 
@@ -483,16 +487,16 @@
 ;; Injected from driver.rkt to break circular dependency (same pattern as trait resolve).
 (define current-retry-hasmethod-resolve (make-parameter #f))
 
-;; Track 8 C1: Trait resolution bridge callback.
-;; Signature: (prop-network dict-meta-id trait-constraint-info (listof cell-id) → prop-network)
-;; When set, register-trait-constraint! installs a bridge propagator that resolves
-;; traits during S0 quiescence (bypassing the S1→S2 readiness→action path).
-;; The fire function syncs the box, calls resolution, returns updated pnet.
+;; Track 8D: Trait resolution bridge FACTORY callback.
+;; Signature: (trait-name dict-cell-id (listof dep-cell-id) → (pnet → pnet))
+;; When set, register-trait-constraint! calls the factory at registration time
+;; to produce a pure fire function for each constraint. The fire function reads
+;; cells directly — no enet-box access.
 ;; Injected from driver.rkt (breaks metavar-store → trait-resolution cycle).
 (define current-trait-resolution-bridge-fn (make-parameter #f))
 
-;; Track 8 C2: Hasmethod resolution bridge callback. Same pattern as C1.
-;; Signature: (prop-network meta-id hasmethod-constraint-info (listof cell-id) → prop-network)
+;; Track 8D: Hasmethod resolution bridge FACTORY callback.
+;; Signature: (method-name meta-cell-id trait-var-cell-id dict-meta-cell-id (listof dep-cell-id) → (pnet → pnet))
 (define current-hasmethod-resolution-bridge-fn (make-parameter #f))
 
 ;; Track 8 C3: Constraint retry bridge callback.
@@ -591,8 +595,8 @@
                   (list (tagged-entry (action-resolve-hasmethod meta-id info) aid)))
                 pnet))))
       (set-box! hm-net-box enet-r-hm)))
-  ;; Track 8 C2: Hasmethod resolution bridge propagator (resolves in S0).
-  ;; Same pattern as trait bridge in register-trait-constraint!.
+  ;; Track 8D: Pure hasmethod resolution bridge propagator (resolves in S0, NO enet-box).
+  ;; Same factory pattern as trait bridge.
   (define hm-bridge-fn (current-hasmethod-resolution-bridge-fn))
   (when (and hm-bridge-fn hm-net-box)
     (define id-map-br (elab-network-id-map (unbox hm-net-box)))
@@ -607,10 +611,21 @@
       ;; The hasmethod meta's cell receives the projected method expression.
       (define hm-cell-id (prop-meta-id->cell-id meta-id))
       (when hm-cell-id
+        ;; Track 8D: Call factory to produce a pure fire function.
+        ;; Captures: method-name, meta-cell-id, trait-var-cell-id, dict-meta-cell-id,
+        ;; dep-cell-ids, and registry cell IDs.
+        (define trait-var-cell-id
+          (let ([tv-expr (hasmethod-constraint-info-trait-var-expr info)])
+            (and (expr-meta? tv-expr) (prop-meta-id->cell-id (expr-meta-id tv-expr)))))
+        (define dict-meta-cell-id
+          (let ([dm-id (hasmethod-constraint-info-dict-meta-id info)])
+            (and dm-id (prop-meta-id->cell-id dm-id))))
+        (define fire-fn (hm-bridge-fn (hasmethod-constraint-info-method-name info)
+                                       hm-cell-id trait-var-cell-id dict-meta-cell-id
+                                       dep-cids-br))
         (define-values (enet-hm-bridge _hm-bridge-pid)
           (elab-add-propagator (unbox hm-net-box) dep-cids-br (list hm-cell-id)
-            (lambda (pnet)
-              (hm-bridge-fn pnet meta-id info dep-cids-br))))
+            fire-fn))
         (set-box! hm-net-box enet-hm-bridge))))
   )
 
