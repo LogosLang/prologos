@@ -38,7 +38,7 @@
 | C2 | Hasmethod resolution as bridge propagators | Same bridge pattern as C1 | ✅ | `e6d8901` | Uses `resolve-hasmethod-constraint-pure`. Injected via `current-hasmethod-resolution-bridge-fn`. |
 | C3 | Constraint retry as bridge propagators | Postponed constraints retry during S0 via bridge fire fn | ✅ | `467d318` | Same enet-box-sync pattern as C1/C2. Status guard: only retries 'postponed. 7343 tests 230.3s. |
 | C4 | S2 scope reduction + S1 verification pass | Loop comments updated; bridges reduce S2 to safety net | ✅ | `40760fb` | 228.2s (4.5s faster). Loop structure unchanged — bridges naturally make S2 no-ops. |
-| C5a | Scheduling model evaluation | Benchmark Gauss-Seidel vs BSP-sequential vs BSP+transient | ⏸️ | | DEFERRED: Bridge prop_firings = 12 per file; Gauss-Seidel sufficient. BSP only helps at N>>100. Re-evaluate when BSP-LE adds more propagation. |
+| C5a | Scheduling model evaluation | Gauss-Seidel vs BSP A/B on 13 comparative benchmarks | ✅ | `cc62e11` | GS 6280.9ms vs BSP 6330.4ms (1.008×). Within noise. GS confirmed as default. |
 | C5b | Priority scheduling (optimization) | Priority-ordered rounds/worklist based on C5a winner | ⏸️ | | DEFERRED: Depends on C5a. |
 | C6 | Verification + benchmarks | Full suite pass, performance within budget | ✅ | | 7343 tests, 228.2s (≤250s budget met). 1.9% faster than pre-bridge 232.7s. C0 convergence validated. |
 | C7 | B2f re-evaluation | Re-run quiescence instrumentation; decide on transient accumulation | ✅ | | Post-C: 5924-6067 writes total, dominated by prelude loading. Bridge prop_firings = 12 (N<10 per command). **B2f NOT justified** — same conclusion as pre-C. |
