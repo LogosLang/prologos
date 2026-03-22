@@ -25,7 +25,7 @@
 | B0 | Module graph analysis | Map circular deps, design extraction | ⬜ | | |
 | B1 | Cell-ops + worldview-aware reads | Factor cell ops with ATMS worldview filtering | ✅ | `fa76f00` | cell-ops.rkt created. worldview-visible? filters by speculation stack. All CHAMP reads worldview-aware. |
 | B1b | `restore-meta-state!` full retirement | Worldview-aware reads make synchronous restore unnecessary | ✅ | `fa76f00` | THIRD attempt succeeds. save/restore REMOVED from with-speculative-rollback. S(-1) is GC only. |
-| B2 | Root callback elimination | Inline callbacks via cell-ops + elab-network-types | 🔄 | | B2a `340c2bc` structs, B2c `f636494` cell-ops, B2b+d 11/23 replaced. 12 remaining (type-lattice deps). |
+| B2 | Root callback elimination | Inline callbacks via cell-ops + elab-network-types | ✅ | `58b2f5c` | 14/23 replaced. 9 remaining: 5 domain-injection (lattice fns), 3 legacy (fallback boxes), 1 state (net-box). These are architecturally correct as injection points, not structural callbacks. |
 | B2e | Macros parameter write cleanup | Remove 24 dual-writes; cell-only writes after B2 | ⬜ | | |
 | B2f | Accumulate-during-quiescence | Owner-ID transient threading through cell-ops | ⬜ | | Depends on B1-B2. See [CHAMP Performance](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) |
 | B3 | HKT `impl` registration | `impl Seq List` works and registers in trait system | ⬜ | | Depends on B2. **Acceptance §B: uncomment `impl` lines** |
