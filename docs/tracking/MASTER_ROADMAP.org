@@ -23,7 +23,7 @@ Audits) are defined.
 |------------------+------|
 | *Master Roadmap* | [[file:2026-03-13_PROPAGATOR_MIGRATION_MASTER.md][2026-03-13_PROPAGATOR_MIGRATION_MASTER.md]] |
 | *Thesis*         | Every piece of mutable state that participates in type-checking flows through one unified propagator network. |
-| *Status*         | Tracks 1–7 complete. Track 8 D.1 design complete, awaiting critique. |
+| *Status*         | Tracks 1–7 complete. Track 8 D.3 design complete (3 Parts: A infrastructure, B HKT + modules, C propagator-driven constraints). Implementation starting. |
 
 *** Completed Tracks
 
@@ -42,7 +42,7 @@ Audits) are defined.
 
 | Track | Description | Status | Design/Audit |
 |-------+-------------+--------+--------------|
-| Track 8 | Infrastructure migration (imperative state → propagator cells) | D.1 design complete, awaiting critique | [[file:2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org][Audit]], [[file:2026-03-21_TRACK8_DESIGN.md][Design D.1]] |
+| Track 8 | Infrastructure migration + HKT resolution + propagator-driven constraints | D.3 complete (3 Parts, 20 phases). Implementation next. | [[file:2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org][Audit]], [[file:2026-03-21_TRACK8_DESIGN.md][Design D.3]] |
 | Track 9 | Reduction as Propagators — dependency-tracked reduction, memo caches as cells | Stage 1 research | [[file:2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md][Research note]]; depends on Track 8 Part C |
 | Track 10 | General Diagnostic Engine (GDE) — multi-hypothesis conflict analysis | Not started | Depends on Track 8 |
 | Track 11 | LSP Integration — incremental re-elaboration, live diagnostics | Not started | [[file:2026-03-19_TRACK10_DESIGN_NOTES.org][Early notes]]; depends on Track 9 + Track 10 |
@@ -206,7 +206,7 @@ dependency analysis and leverage:
   2. BSP-LE Track 0          (Allocation Efficiency)                          ✅ (PIR 00a873f)
   2b. CHAMP Performance       (Owner-ID transients — standalone)              ✅ (PIR b748e5d)
   3. CIU Track 0             (Trait Hierarchy Audit)                          ✅ (commit f62fc06)
-  4. PM Track 8              (Propagator Infrastructure — D.1 complete)       ← Design critique next
+  4. PM Track 8              (Propagator Infrastructure — D.3 complete)       ← Implementation starting
   5. CIU Track 0 revisit     (post-Track 8 design calibration)
   6. CIU Tracks 1–5          (implementation on Track 8 infrastructure)
   7. BSP-LE Tracks 1–5       (logic engine on Track 8 infrastructure)
