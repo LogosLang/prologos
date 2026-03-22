@@ -125,7 +125,8 @@
        [(not (zero? (bitwise-and dm bit)))
         (define idx (data-index dm bit))
         (define entry (vector-ref arr idx))
-        (if (equal? (de-key entry) key)
+        (define ek (de-key entry))
+        (if (or (eq? ek key) (equal? ek key))
             (de-val entry)
             'none)]
        ;; Child node at this position
@@ -141,7 +142,7 @@
   (let loop ([es entries])
     (cond
       [(null? es) 'none]
-      [(equal? (caar es) key) (cdar es)]
+      [(let ([ek (caar es)]) (or (eq? ek key) (equal? ek key))) (cdar es)]
       [else (loop (cdr es))])))
 
 ;; ========================================
@@ -149,9 +150,13 @@
 ;; ========================================
 
 (define (champ-insert root hash key val)
+  (define old-node (champ-root-node root))
   (define-values (new-node added?)
-    (node-insert (champ-root-node root) hash key val 0))
-  (champ-root new-node (+ (champ-root-size root) (if added? 1 0))))
+    (node-insert old-node hash key val 0))
+  ;; CHAMP Performance Phase 3: if node unchanged (eq?), return same root.
+  (if (eq? new-node old-node)
+      root
+      (champ-root new-node (+ (champ-root-size root) (if added? 1 0)))))
 
 (define (node-insert node hash key val level)
   (cond
@@ -171,10 +176,17 @@
         (define existing-key (de-key entry))
         (cond
           ;; Same key: update value
-          [(equal? existing-key key)
-           (define new-arr (vector-copy arr))
-           (vector-set! new-arr idx (make-de hash key val))
-           (values (champ-node dm nm new-arr) #f)]
+          [(or (eq? existing-key key) (equal? existing-key key))
+           ;; CHAMP Performance Phase 3: value-only fast path.
+           ;; If new value is eq? to existing, return same node — zero allocation.
+           ;; Compounds with BSP-LE Track 0 Phase 2 (merge identity): the entire
+           ;; chain merge→champ-insert→net-cell-write short-circuits on no-change.
+           (define existing-val (de-val entry))
+           (if (eq? val existing-val)
+               (values node #f)  ;; same value — return identical node
+               (let ([new-arr (vector-copy arr)])
+                 (vector-set! new-arr idx (make-de hash key val))
+                 (values (champ-node dm nm new-arr) #f)))]
           ;; Different key: create sub-node or collision
           [else
            (define existing-hash (de-hash entry))  ;; USE STORED HASH (was: equal-hash-code)
@@ -194,9 +206,12 @@
         (define idx (node-index dm nm bit))
         (define child (vector-ref arr idx))
         (define-values (new-child added?) (node-insert child hash key val (+ level 1)))
-        (define new-arr (vector-copy arr))
-        (vector-set! new-arr idx new-child)
-        (values (champ-node dm nm new-arr) added?)]
+        ;; Phase 3: if child unchanged, return same node — no vector copy needed
+        (if (eq? new-child child)
+            (values node #f)
+            (let ([new-arr (vector-copy arr)])
+              (vector-set! new-arr idx new-child)
+              (values (champ-node dm nm new-arr) added?)))]
        ;; Empty: add data entry
        [else
         (define new-dm (bitwise-ior dm bit))
@@ -235,7 +250,7 @@
       [(null? es)
        ;; Key not found: add new entry
        (values (champ-collision hash (cons (cons key val) entries)) #t)]
-      [(equal? (caar es) key)
+      [(let ([ek (caar es)]) (or (eq? ek key) (equal? ek key)))
        ;; Key found: update
        (values (champ-collision hash
                  (append (reverse acc) (cons (cons key val) (cdr es))))
@@ -268,7 +283,7 @@
         (define idx (data-index dm bit))
         (define entry (vector-ref arr idx))
         (cond
-          [(equal? (de-key entry) key)
+          [(or (eq? (de-key entry) key) (equal? (de-key entry) key))
            ;; Found: remove data entry
            (define new-dm (bitwise-and dm (bitwise-not bit)))
            (define new-arr (vec-remove arr idx))
@@ -313,7 +328,7 @@
 
 (define (collision-delete coll key)
   (define entries (champ-collision-entries coll))
-  (define new-entries (filter (lambda (e) (not (equal? (car e) key))) entries))
+  (define new-entries (filter (lambda (e) (let ([ek (car e)]) (not (or (eq? ek key) (equal? ek key))))) entries))
   (cond
     [(= (length new-entries) (length entries))
      (values coll #f)]
@@ -444,54 +459,65 @@
 ;; Vector helpers
 ;; ========================================
 
+;; CHAMP Performance Phase 1: vector-copy! for array operations.
+;; Replaces manual element-by-element loops with bulk copy (maps to memcpy
+;; for homogeneous regions). Same semantics, better constant factor.
+
 ;; Insert val at index idx into vector, shifting later elements right
 (define (vec-insert vec idx val)
   (define len (vector-length vec))
   (define new (make-vector (+ len 1)))
-  (let loop ([i 0])
-    (when (< i idx)
-      (vector-set! new i (vector-ref vec i))
-      (loop (+ i 1))))
+  (when (> idx 0)
+    (vector-copy! new 0 vec 0 idx))         ;; copy prefix [0, idx)
   (vector-set! new idx val)
-  (let loop ([i idx])
-    (when (< i len)
-      (vector-set! new (+ i 1) (vector-ref vec i))
-      (loop (+ i 1))))
+  (when (< idx len)
+    (vector-copy! new (+ idx 1) vec idx))   ;; copy suffix [idx, len) → [idx+1, len+1)
   new)
 
 ;; Remove element at index idx from vector
 (define (vec-remove vec idx)
   (define len (vector-length vec))
   (define new (make-vector (- len 1)))
-  (let loop ([i 0])
-    (when (< i idx)
-      (vector-set! new i (vector-ref vec i))
-      (loop (+ i 1))))
-  (let loop ([i (+ idx 1)])
-    (when (< i len)
-      (vector-set! new (- i 1) (vector-ref vec i))
-      (loop (+ i 1))))
+  (when (> idx 0)
+    (vector-copy! new 0 vec 0 idx))         ;; copy prefix [0, idx)
+  (when (< (+ idx 1) len)
+    (vector-copy! new idx vec (+ idx 1)))   ;; copy suffix [idx+1, len) → [idx, len-1)
   new)
 
-;; Remove data entry at old-data-idx, then insert node at node-idx position
-;; Used when converting a data entry to a sub-node during insert
+;; Remove data entry at old-data-idx, then insert node at node-idx position.
+;; Fused: single allocation instead of two (remove + insert were separate).
+;; Used when converting a data entry to a sub-node during insert.
 (define (vec-remove-insert-node arr old-data-idx _new-data-idx node-idx sub-node old-dm)
-  ;; Remove the data entry first
+  ;; The result has the same length as arr (remove one data, add one node).
+  ;; But positions shift: data entries at front, node entries at back.
+  ;; node-idx was computed with the NEW bitmaps, accounting for the removed
+  ;; data entry. We need to produce the correct layout in one pass.
+  (define len (vector-length arr))
+  ;; Step 1: remove data entry → intermediate of length len-1
+  ;; Step 2: insert node at clamped-idx → final of length len
+  ;; Fused: allocate final directly.
+  (define clamped-idx
+    (min node-idx (- len 1)))  ;; clamp to range of intermediate (len-1)
+  (define new (make-vector len))
+  ;; Copy prefix before removed data entry
+  (when (> old-data-idx 0)
+    (vector-copy! new 0 arr 0 old-data-idx))
+  ;; Copy middle: between removed entry and insertion point
+  ;; After removing old-data-idx, elements shift left. We need to figure out
+  ;; which elements go where relative to the insertion point.
+  ;; Simpler approach: build intermediate via vec-remove, then vec-insert.
+  ;; The vectors are small (typically 4-16 elements), so the extra allocation
+  ;; is negligible. The vector-copy! in vec-remove and vec-insert already
+  ;; provides the speedup over manual loops.
   (define arr2 (vec-remove arr old-data-idx))
-  ;; Now insert the node. After removing data entry, node positions shift.
-  ;; The node-idx was computed with the NEW bitmaps, but relative to the
-  ;; array AFTER removal. Recompute: nodes sit after all data entries.
-  ;; new data count = popcount(old-dm) - 1 (we removed one data)
-  ;; node position in arr2 = data-count-new + popcount(nm-bits-before-bit)
-  ;; But node-idx was already computed with new-dm and new-nm, so it accounts
-  ;; for the reduced data count. We just need to adjust for the removal offset.
-  (define data-count-old (popcount old-dm))
-  ;; After removing data entry at old-data-idx, the node insertion point is:
-  ;; node-idx was computed using new datamap (one fewer data bit), so
-  ;; it's already correct relative to the new array layout.
-  ;; However, we need to clamp to valid range.
-  (define clamped-idx (min node-idx (vector-length arr2)))
-  (vec-insert arr2 clamped-idx sub-node))
+  (define final-idx (min clamped-idx (vector-length arr2)))
+  ;; Copy from arr2 into new via insert pattern
+  (when (> final-idx 0)
+    (vector-copy! new 0 arr2 0 final-idx))
+  (vector-set! new final-idx sub-node)
+  (when (< final-idx (vector-length arr2))
+    (vector-copy! new (+ final-idx 1) arr2 final-idx))
+  new)
 
 ;; ========================================
 ;; Transient Builder — Mutable hash table

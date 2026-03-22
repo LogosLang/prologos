@@ -98,24 +98,24 @@
 ;; ========================================
 ;; Uncomment after Phase 3 implements value-only fast path.
 
-;; (test-case "B1: same-value insert returns eq? node"
-;;   (define m (champ-insert champ-empty 42 'k 10))
-;;   (define m2 (champ-insert m 42 'k 10))
-;;   (check-eq? m m2 "value-only update should return identical root"))
+(test-case "B1: same-value insert returns eq? node"
+  (define m (champ-insert champ-empty 42 'k 10))
+  (define m2 (champ-insert m 42 'k 10))
+  (check-eq? m m2 "value-only update should return identical root"))
 
-;; (test-case "B2: different-value insert returns new node"
-;;   (define m (champ-insert champ-empty 42 'k 10))
-;;   (define m2 (champ-insert m 42 'k 20))
-;;   (check-not-eq? m m2)
-;;   (check-equal? (champ-lookup m2 42 'k) 20))
+(test-case "B2: different-value insert returns new node"
+  (define m (champ-insert champ-empty 42 'k 10))
+  (define m2 (champ-insert m 42 'k 20))
+  (check-not-eq? m m2)
+  (check-equal? (champ-lookup m2 42 'k) 20))
 
-;; (test-case "B3: chain of same-value updates all return eq?"
-;;   (define m (make-test-map 100))
-;;   ;; Re-insert every key with the same value
-;;   (define m2
-;;     (for/fold ([acc m]) ([i (in-range 100)])
-;;       (champ-insert acc i i (* i i))))
-;;   (check-eq? m m2 "100 same-value updates should return identical root"))
+(test-case "B3: chain of same-value updates all return eq?"
+  (define m (make-test-map 100))
+  ;; Re-insert every key with the same value
+  (define m2
+    (for/fold ([acc m]) ([i (in-range 100)])
+      (champ-insert acc i i (* i i))))
+  (check-eq? m m2 "100 same-value updates should return identical root"))
 
 ;; ========================================
 ;; §C — Owner-ID Transient Operations (Phase 5)
