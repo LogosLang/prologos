@@ -70,7 +70,7 @@ restructuring.
 
 | Track | Description | Status | Depends On |
 |-------+-------------+--------+------------|
-| 0 | Allocation Efficiency | ✅ [[file:2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md][Design]] [[file:2026-03-21_BSP_LE_TRACK0_PIR.md][PIR]] | — ([[file:2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md][Audit]]) |
+| 0 | Allocation Efficiency | ✅ [[file:2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md][Design]] [[file:2026-03-21_BSP_LE_TRACK0_PIR.md][PIR]] + [[file:2026-03-21_CHAMP_PERFORMANCE_DESIGN.md][CHAMP]] [[file:2026-03-21_CHAMP_PERFORMANCE_PIR.md][CHAMP PIR]] | — ([[file:2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md][Audit]], [[file:2026-03-21_CHAMP_PERFORMANCE_AUDIT.md][CHAMP Audit]]) |
 | 1 | UnionFind (persistent disjoint sets) | ⬜ | Track 0 |
 | 2 | ATMS Solver (Multiverse Multiplexer) | ⬜ | Track 0 |
 | 3 | Tabling (SLG memoization) | ⬜ | Track 2 |
@@ -122,6 +122,8 @@ any Series.
 | Well-Founded LE | 2026-03-14 | [[file:2026-03-14_WELL_FOUNDED_LOGIC_ENGINE_DESIGN.md][Design]] | [[file:2026-03-14_WFLE_PIR.md][PIR]] | Bilattice oracle, WF-NAF, 3-valued negation. |
 | Propagator Visualization | 2026-03-12 | [[file:2026-03-12_PROPAGATOR_VISUALIZATION_DESIGN.md][Design]] | — | Phases 0–5c ✅: trace capture, JSON serialization, LSP handler, WebView graph, timeline slider. 5d + 6a-6d deferred. |
 | PUnify Parts 1–2 | 2026-03-19 | [[file:2026-03-19_PUNIFY_STRUCTURAL_UNIFICATION_PROPAGATORS.org][P1 Design]], [[file:2026-03-19_PUNIFY_PART2_CELL_TREE_ARCHITECTURE.md][P2 Design]] | [[file:2026-03-19_PUNIFY_PARTS1_2_PIR.md][PIR]] | Cell-tree unification, descriptor registry, polymorphic solver dispatch. Breakout from Track 8 first half. |
+| BSP-LE Track 0 | 2026-03-21 | [[file:2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md][Design]] | [[file:2026-03-21_BSP_LE_TRACK0_PIR.md][PIR]] | hot/warm/cold struct split, mutable worklist, batch API. GC eliminated on hot path; wall-time neutral. |
+| CHAMP Performance | 2026-03-21 | [[file:2026-03-21_CHAMP_PERFORMANCE_DESIGN.md][Design]] | [[file:2026-03-21_CHAMP_PERFORMANCE_PIR.md][PIR]] | Owner-ID transients (16× faster at N=2), eq?-first, value-only fast path. Track 0 Phase 5 rehabilitated. |
 
 * Standalone Design Documents (Not Yet Implemented / Future Scope)
 
@@ -131,7 +133,6 @@ or the project roadmap reaches them.
 
 | Document | Status | Notes |
 |----------+--------+-------|
-| [[file:2026-03-21_CHAMP_PERFORMANCE_DESIGN.md][CHAMP Performance]] | D.1 design, [[file:2026-03-21_CHAMP_PERFORMANCE_AUDIT.md][Audit]] | Owner-ID transients, eq?-first keys, vector-copy!. Addresses the actual bottleneck from BSP-LE Track 0 |
 | [[file:2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md][Capabilities as Types]] | Design complete, not started | Capability hierarchy, QTT enforcement, ATMS provenance |
 | [[file:2026-03-05_IO_LIBRARY_DESIGN_V2.md][IO Library V2]] | Design/research | Extended IO: Bytes type, binary IO, SQLite FFI |
 | [[file:2026-03-01_1200_IO_LIBRARY_DESIGN.md][IO Library V1]] | Superseded by V2 | Original IO design |
@@ -200,7 +201,8 @@ dependency analysis and leverage:
 
 #+begin_example
   1. PUnify Cleanup          (pre-Series: 5 parity bugs + bridge retirement)  ← NEXT
-  2. BSP-LE Track 0          (Allocation Efficiency)                          ✅ (commit 210d80d, PIR 00a873f)
+  2. BSP-LE Track 0          (Allocation Efficiency)                          ✅ (PIR 00a873f)
+  2b. CHAMP Performance       (Owner-ID transients — standalone)              ✅ (PIR b748e5d)
   3. CIU Track 0             (Trait Hierarchy Audit)                          ✅ (commit f62fc06)
   4. PM Track 8              (Propagator Infrastructure — D.1 complete)       ← Design critique next
   5. CIU Track 0 revisit     (post-Track 8 design calibration)
