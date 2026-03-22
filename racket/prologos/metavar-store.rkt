@@ -378,8 +378,9 @@
              (hash-set acc ta-id (list (tagged-entry meta-id aid))))])
       (set-box! tc-net-box (write-fn (unbox tc-net-box) tw-cid tw-delta))))
   ;; P3a: Record cell-ids for type-arg metas for cell-state-driven resolution.
-  (define id-map (if (current-prop-id-map-read)
-                     ((current-prop-id-map-read) (unbox tc-net-box))
+  ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
+  (define id-map (if tc-net-box
+                     (elab-network-id-map (unbox tc-net-box))
                      champ-empty))
   (define cell-ids
     (for*/list ([ta-id (in-list type-arg-metas)]
@@ -490,9 +491,9 @@
       (set-box! hm-net-box (write-fn (unbox hm-net-box) hw-cid hw-delta))))
   ;; Track 2 Phase 6: Record cell-ids for dependency metas (cell-state-driven resolution).
   ;; Mirrors trait-cell-map pattern: enables collect-ready-hasmethods-via-cells.
-  (define id-map-read-fn (current-prop-id-map-read))
-  (when (and hm-net-box id-map-read-fn)
-    (define id-map (id-map-read-fn (unbox hm-net-box)))
+  ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
+  (when hm-net-box
+    (define id-map (elab-network-id-map (unbox hm-net-box)))
     (define cell-ids
       (for*/list ([dep-id (in-list all-dep-metas)]
                   [cid (in-value (champ-lookup id-map (prop-meta-id-hash dep-id) dep-id))]
@@ -508,8 +509,9 @@
   (define add-prop-fn-hm (current-prop-add-propagator))
   (define new-cell-fn-hm (current-prop-new-infra-cell))
   (define rq-cid-hm (current-ready-queue-cell-id))
-  (when (and add-prop-fn-hm new-cell-fn-hm rq-cid-hm hm-net-box id-map-read-fn)
-    (define id-map-hm (id-map-read-fn (unbox hm-net-box)))
+  ;; Track 8 B2b: direct elab-network-id-map instead of id-map-read-fn callback.
+  (when (and add-prop-fn-hm new-cell-fn-hm rq-cid-hm hm-net-box)
+    (define id-map-hm (elab-network-id-map (unbox hm-net-box)))
     (define dep-cids-hm
       (remove-duplicates
        (for*/list ([dep-id (in-list all-dep-metas)]
@@ -664,7 +666,8 @@
     (if (and net-box add-unify-fn)
         (let ()
           (define enet (unbox net-box))
-          (define id-map ((current-prop-id-map-read) enet))
+          ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
+          (define id-map (elab-network-id-map enet))
           (define lhs-metas (extract-shallow-meta-ids lhs))
           (define rhs-metas (extract-shallow-meta-ids rhs))
           (define enet*
@@ -1145,12 +1148,13 @@
 ;; Track 6 Phase 5a: DEPRECATED — meta-info CHAMP moves into elab-network struct.
 ;; Retained for fallback in contexts without a network (test isolation).
 (define current-prop-meta-info-box (make-parameter #f))
-;; Track 6 Phase 5a: Callback parameters for meta-info access through elab-network.
-;; Breaks circular dependency: metavar-store.rkt → elaborator-network.rkt.
-;; Installed by driver.rkt. When available, meta-info lives in the elab-network
-;; struct (captured/restored with the network snapshot → 2→1 box).
-(define current-prop-meta-info-read (make-parameter #f))  ;; (elab-network → champ)
-(define current-prop-meta-info-set (make-parameter #f))   ;; (elab-network champ → elab-network)
+;; Track 8 B2b: current-prop-meta-info-read and current-prop-meta-info-set REPLACED
+;; by direct calls to elab-network-meta-info (struct accessor) and
+;; elab-network-meta-info-set (functional setter), both available via cell-ops.rkt
+;; → elab-network-types.rkt. No circular dependency — types module has no transitive deps.
+;; Parameters retained as stubs to avoid breaking driver.rkt installs until those are cleaned.
+(define current-prop-meta-info-read (make-parameter #f))  ;; STUB — no longer consulted
+(define current-prop-meta-info-set (make-parameter #f))   ;; STUB — no longer consulted
 
 ;; Phase B: Auxiliary meta CHAMP boxes (level, mult, session).
 ;; Each stores id → 'unsolved | solution. Included in save/restore for
@@ -1166,7 +1170,9 @@
 ;; Callback parameters for network operations.
 ;; These are set by install-prop-network-callbacks! (called from driver.rkt)
 ;; to break the circular dependency with elaborator-network.rkt.
-(define current-prop-make-network (make-parameter #f))      ;; (→ elab-network)
+;; Track 8 B2b: current-prop-make-network REPLACED by direct make-elaboration-network call.
+;; Parameter retained as stub to avoid breaking driver.rkt install call.
+(define current-prop-make-network (make-parameter #f))      ;; STUB — no longer consulted
 (define current-prop-fresh-meta (make-parameter #f))        ;; (enet ctx type source → (values enet* cell-id))
 (define current-prop-cell-write (make-parameter #f))        ;; (enet cell-id value → enet*)
 (define current-prop-cell-replace (make-parameter #f))      ;; (enet cell-id value → enet*) — bypass merge
@@ -1307,14 +1313,12 @@
               (set-box! net-box (replace-fn (unbox net-box) cid cleaned)))))
         ;; Track 8 Phase A1: Also retract tagged meta-info entries from elab-network.
         ;; meta-info is a struct field (not a cell), so we operate on the elab-network directly.
-        (define mi-read (current-prop-meta-info-read))
-        (define mi-set (current-prop-meta-info-set))
-        (when (and mi-read mi-set)
-          (define enet (unbox net-box))
-          (define mi-champ (mi-read enet))
-          (define cleaned-mi (retract-hasheq-entries mi-champ retracted))
-          (unless (equal? mi-champ cleaned-mi)
-            (set-box! net-box (mi-set (unbox net-box) cleaned-mi))))
+        ;; Track 8 B2b: direct elab-network-meta-info / elab-network-meta-info-set instead of callbacks.
+        (define enet-a1 (unbox net-box))
+        (define mi-champ (elab-network-meta-info enet-a1))
+        (define cleaned-mi (retract-hasheq-entries mi-champ retracted))
+        (unless (equal? mi-champ cleaned-mi)
+          (set-box! net-box (elab-network-meta-info-set (unbox net-box) cleaned-mi)))
         ;; Track 8 Phase A3a: Retract tagged mult-meta entries from CHAMP box.
         (define mult-box (current-mult-meta-champ-box))
         (when mult-box
@@ -1338,19 +1342,19 @@
             (set-box! sess-box cleaned-sess)))
         ;; Track 8 Phase A4b: Retract tagged id-map entries.
         ;; id-map is a struct field of elab-network, not a cell.
-        (define id-map-read-fn (current-prop-id-map-read))
-        (define id-map-set-fn (current-prop-id-map-set))
-        (when (and id-map-read-fn id-map-set-fn)
-          (define enet-for-idmap (unbox net-box))
-          (define id-champ (id-map-read-fn enet-for-idmap))
-          (define cleaned-id (retract-hasheq-entries id-champ retracted))
-          (unless (equal? id-champ cleaned-id)
-            (set-box! net-box (id-map-set-fn (unbox net-box) cleaned-id))))))))
+        ;; Track 8 B2b: direct elab-network-id-map / elab-network-id-map-set instead of callbacks.
+        (define enet-a4b (unbox net-box))
+        (define id-champ (elab-network-id-map enet-a4b))
+        (define cleaned-id (retract-hasheq-entries id-champ retracted))
+        (unless (equal? id-champ cleaned-id)
+          (set-box! net-box (elab-network-id-map-set (unbox net-box) cleaned-id)))))))
 
-;; Track 6 Phase 1a: id-map access callbacks (set by driver.rkt).
-;; Break circular dep: metavar-store doesn't import elaborator-network.
-(define current-prop-id-map-read (make-parameter #f))   ;; (enet → champ)
-(define current-prop-id-map-set (make-parameter #f))    ;; (enet champ → enet)
+;; Track 8 B2b: current-prop-id-map-read and current-prop-id-map-set REPLACED
+;; by direct calls to elab-network-id-map (struct accessor) and
+;; elab-network-id-map-set (functional setter), both available via cell-ops.rkt.
+;; Parameters retained as stubs to avoid breaking driver.rkt installs until those are cleaned.
+(define current-prop-id-map-read (make-parameter #f))   ;; STUB — no longer consulted
+(define current-prop-id-map-set (make-parameter #f))    ;; STUB — no longer consulted
 
 ;; Phase 1a: Cell ID for the constraint store cell (set by reset-meta-store!).
 ;; When #f, falls back to legacy parameter-based storage.
@@ -1410,11 +1414,14 @@
 (define current-prop-has-contradiction? (make-parameter #f))  ;; (→ boolean)
 
 ;; Propagator quiescence callbacks (set by driver.rkt).
-;; current-prop-run-quiescence: (prop-network → prop-network) — runs scheduler.
-;; current-prop-unwrap-net: (elab-network → prop-network) — extract inner net.
-;; current-prop-rewrap-net: (elab-network prop-network → elab-network) — rewrap.
-(define current-prop-run-quiescence (make-parameter #f))
-(define current-prop-unwrap-net (make-parameter #f))
+;; Track 8 B2b: current-prop-run-quiescence REPLACED by direct run-to-quiescence call.
+;; Track 8 B2b: current-prop-unwrap-net REPLACED by direct elab-network-prop-net accessor.
+;; current-prop-rewrap-net: (elab-network prop-network → elab-network) — still a callback
+;;   (rewrap requires struct-copy on elab-network with the new prop-net; type-lattice-free
+;;    but retained as callback since no direct setter exists in elab-network-types.rkt).
+;; Parameters retained as stubs; current-prop-rewrap-net still set by driver.rkt.
+(define current-prop-run-quiescence (make-parameter #f))   ;; STUB — no longer consulted
+(define current-prop-unwrap-net (make-parameter #f))       ;; STUB — no longer consulted
 (define current-prop-rewrap-net (make-parameter #f))
 
 ;; Inline type-lattice predicates (avoid requiring type-lattice.rkt).
@@ -1434,14 +1441,14 @@
 
 ;; Look up cell-id for a meta-id in the prop id-map. Returns cell-id or #f.
 ;; Track 6 Phase 1a: Reads from elab-network id-map field (was: separate box).
+;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
 (define (prop-meta-id->cell-id id)
   (define net-box (current-prop-net-box))
-  (define id-map-read (current-prop-id-map-read))
-  (and net-box id-map-read
+  (and net-box
        ;; Track 8 Phase B1: Worldview-aware id-map read.
        ;; Entries tagged with assumptions not on the current speculation stack
        ;; are invisible (from sibling branches). No retraction set check needed.
-       (champ-lookup-worldview (id-map-read (unbox net-box)) (prop-meta-id-hash id) id)))
+       (champ-lookup-worldview (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id)))
 
 ;; ========================================
 ;; Hash removal: Test isolation macro
@@ -1501,12 +1508,12 @@
   (define info (meta-info id ctx type 'unsolved #f '() source))
   (define h (prop-meta-id-hash id))
   ;; Track 6 Phase 5a: Write meta-info to elab-network when available, else box fallback
-  (define mi-read (current-prop-meta-info-read))
-  (define mi-set (current-prop-meta-info-set))
+  ;; Track 8 B2b: direct elab-network-meta-info/elab-network-meta-info-set/elab-network-id-map/
+  ;; elab-network-id-map-set instead of current-prop-meta-info-read/set/id-map-read/set callbacks.
   (define net-box (current-prop-net-box))
   (define fresh-fn (current-prop-fresh-meta))
   (cond
-    [(and net-box fresh-fn mi-read mi-set)
+    [(and net-box fresh-fn)
      ;; Network path: meta-info lives in elab-network struct
      ;; Track 8 Phase A1: Tag meta-info entry with current speculation assumption.
      ;; At depth-0 (no speculation): aid=#f → raw entry (no wrapper).
@@ -1514,15 +1521,13 @@
      (define aid (current-speculation-assumption))
      (define tagged-info (if aid (tagged-entry info aid) info))
      (define enet (unbox net-box))
-     (define enet0 (mi-set enet (champ-insert (mi-read enet) h id tagged-info)))
+     (define enet0 (elab-network-meta-info-set enet (champ-insert (elab-network-meta-info enet) h id tagged-info)))
      (define-values (enet1 cid) (fresh-fn enet0 ctx type source))
      ;; Track 6 Phase 1a: id-map is a field of elab-network
-     (define id-map-read (current-prop-id-map-read))
-     (define id-map-set (current-prop-id-map-set))
      ;; Track 8 Phase A4b: Tag id-map entry with speculation assumption.
      (define id-map-entry (if aid (tagged-entry cid aid) cid))
-     (define enet2 (id-map-set enet1
-                      (champ-insert (id-map-read enet1) h id id-map-entry)))
+     (define enet2 (elab-network-id-map-set enet1
+                      (champ-insert (elab-network-id-map enet1) h id id-map-entry)))
      ;; Track 6 Phase 1d: write to unsolved-metas tracking cell
      (define write-fn (current-prop-cell-write))
      (define um-cid (current-unsolved-metas-cell-id))
@@ -1588,12 +1593,11 @@
   ;; Track 8 A5: progress-box signal removed (pure variant uses eq? instead)
   (define h (prop-meta-id-hash id))
   ;; Track 6 Phase 5a: Read meta-info from elab-network when available, else box
-  (define mi-read (current-prop-meta-info-read))
-  (define mi-set (current-prop-meta-info-set))
+  ;; Track 8 B2b: direct elab-network-meta-info / elab-network-meta-info-set instead of callbacks.
   (define net-box (current-prop-net-box))
   (define mi-champ
-    (if (and mi-read net-box)
-        (mi-read (unbox net-box))
+    (if net-box
+        (elab-network-meta-info (unbox net-box))
         (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))))
   ;; Track 8 B1: worldview-aware read + re-tag on solve
   (define raw-entry
@@ -1620,8 +1624,8 @@
   (define new-mi-champ (champ-insert mi-champ h id tagged-updated))
   ;; Track 6 Phase 5a: Write back to elab-network or box
   (cond
-    [(and mi-set net-box)
-     (set-box! net-box (mi-set (unbox net-box) new-mi-champ))]
+    [net-box
+     (set-box! net-box (elab-network-meta-info-set (unbox net-box) new-mi-champ))]
     [else
      (define mi-box (current-prop-meta-info-box))
      (when mi-box (set-box! mi-box new-mi-champ))])
@@ -1647,12 +1651,11 @@
 
 ;; Track 7 Phase 7b: Pure variant of solve-meta-core — takes/returns enet.
 ;; Returns (values enet* progress?) where progress? is #t if the meta was solved.
+;; Track 8 B2b: direct elab-network-meta-info / elab-network-meta-info-set instead of callbacks.
 (define (solve-meta-core-pure enet id solution)
   (perf-inc-meta-solved!)
   (define h (prop-meta-id-hash id))
-  (define mi-read (current-prop-meta-info-read))
-  (define mi-set (current-prop-meta-info-set))
-  (define mi-champ (if mi-read (mi-read enet) #f))
+  (define mi-champ (elab-network-meta-info enet))
   ;; Track 8 B1: worldview-aware read — unwrap for status check.
   (define raw-entry
     (and mi-champ
@@ -1678,7 +1681,8 @@
   (define aid (or entry-aid (current-speculation-assumption)))
   (define tagged-updated (if aid (tagged-entry updated aid) updated))
   (define new-mi-champ (champ-insert mi-champ h id tagged-updated))
-  (define enet1 (if mi-set (mi-set enet new-mi-champ) enet))
+  ;; Track 8 B2b: direct elab-network-meta-info-set instead of mi-set callback.
+  (define enet1 (elab-network-meta-info-set enet new-mi-champ))
   ;; Write solution to cell
   (define write-fn (current-prop-cell-write))
   (define read-fn (current-prop-cell-read))
@@ -1728,9 +1732,9 @@
   (define progress-box (box #f))
   (parameterize ([current-in-stratified-resolution? #t])
     (define net-box (current-prop-net-box))
+    ;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net instead of callbacks.
     (define has-network?
-      (and net-box (current-prop-run-quiescence)
-           (current-prop-unwrap-net) (current-prop-rewrap-net)))
+      (and net-box (current-prop-rewrap-net)))
     (let loop ([fuel stratified-resolution-fuel]
                [meta-id trigger-meta-id])
       (when (> fuel 0)
@@ -1741,13 +1745,12 @@
         ;; ── Stratum 0: Type propagation (quiescence) ──
         ;; Run the propagator network so type information flows between
         ;; connected meta cells. This can transitively solve metas.
+        ;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net instead of callbacks.
         (when has-network?
-          (define run-fn (current-prop-run-quiescence))
-          (define unwrap (current-prop-unwrap-net))
           (define rewrap (current-prop-rewrap-net))
           (define enet (unbox net-box))
-          (define pnet (unwrap enet))
-          (define pnet* (run-fn pnet))
+          (define pnet (elab-network-prop-net enet))
+          (define pnet* (run-to-quiescence pnet))
           (set-box! net-box (rewrap enet pnet*)))
         ;; ── S1/L1: Read ready-queue (Track 7 Phase 8c: scanners removed) ──
         ;; After S0 quiescence, readiness propagators have populated the ready-queue.
@@ -1767,11 +1770,10 @@
 ;; The S1 readiness scan still reads from the box (bridged via with-enet-reads
 ;; in resolution.rkt). S0 quiescence uses the pure run-to-quiescence on prop-net.
 ;; S2 uses the pure resolution-execute-action-pure (for/fold over actions).
+;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net instead of callbacks.
 (define (run-stratified-resolution-pure enet trigger-meta-id resolution-executor)
-  (define run-fn (current-prop-run-quiescence))
-  (define unwrap (current-prop-unwrap-net))
   (define rewrap (current-prop-rewrap-net))
-  (define has-network? (and run-fn unwrap rewrap))
+  (define has-network? (and rewrap #t))
   (let loop ([fuel stratified-resolution-fuel]
              [meta-id trigger-meta-id]
              [current-enet enet])
@@ -1786,9 +1788,10 @@
                [enet-post-retract (let ([nb (current-prop-net-box)])
                                     (if nb (unbox nb) current-enet))]
                ;; S0: Type propagation (quiescence) — pure on prop-net
+               ;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net.
                [enet-s0 (if has-network?
-                             (let* ([pnet (unwrap enet-post-retract)]
-                                    [pnet* (run-fn pnet)])
+                             (let* ([pnet (elab-network-prop-net enet-post-retract)]
+                                    [pnet* (run-to-quiescence pnet)])
                                (rewrap enet-post-retract pnet*))
                              enet-post-retract)]
                ;; S1/L1: After S0 quiescence, readiness propagators have fired
@@ -1826,15 +1829,14 @@
 ;; No-op when: no network, no quiescence function, or worklist already empty.
 ;; This is cheaper than solve-meta!'s full flush because it skips constraint
 ;; retry and trait resolution — those are only needed after meta state changes.
+;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net instead of callbacks.
 (define (maybe-flush-network!)
   (define net-box (current-prop-net-box))
-  (define run-fn (current-prop-run-quiescence))
-  (define unwrap (current-prop-unwrap-net))
   (define rewrap (current-prop-rewrap-net))
-  (when (and net-box run-fn unwrap rewrap)
+  (when (and net-box rewrap)
     (define enet (unbox net-box))
-    (define pnet (unwrap enet))
-    (define pnet* (run-fn pnet))
+    (define pnet (elab-network-prop-net enet))
+    (define pnet* (run-to-quiescence pnet))
     (set-box! net-box (rewrap enet pnet*))))
 
 ;; Check if a metavariable has been solved.
@@ -1879,12 +1881,12 @@
 ;; Unlike meta-solved? (which reads the propagator cell), this reads the CHAMP status.
 ;; Used by punify-bridge-cell-solves! to detect metas that were solved by propagators
 ;; but not yet reflected in the meta-info CHAMP (and thus haven't triggered resolution).
+;; Track 8 B2b: direct elab-network-meta-info instead of current-prop-meta-info-read callback.
 (define (meta-info-solved? id)
-  (define mi-read (current-prop-meta-info-read))
   (define net-box (current-prop-net-box))
   (define mi-champ
     (cond
-      [(and mi-read net-box) (mi-read (unbox net-box))]
+      [net-box (elab-network-meta-info (unbox net-box))]
       [else (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))]))
   (and mi-champ
        (let ([v (unwrap-meta-info (champ-lookup mi-champ (prop-meta-id-hash id) id))])
@@ -1892,12 +1894,12 @@
 
 ;; Retrieve the full meta-info struct, or #f if unknown.
 ;; Track 6 Phase 5a: reads from elab-network meta-info when available, else box.
+;; Track 8 B2b: direct elab-network-meta-info instead of current-prop-meta-info-read callback.
 (define (meta-lookup id)
-  (define mi-read (current-prop-meta-info-read))
   (define net-box (current-prop-net-box))
   (define mi-champ
-    (if (and mi-read net-box)
-        (mi-read (unbox net-box))
+    (if net-box
+        (elab-network-meta-info (unbox net-box))
         (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))))
   (if (not mi-champ) #f
       ;; Track 8 A1: unwrap tagged-entry
@@ -1929,13 +1931,12 @@
     (define-values (enet* cid) (fresh-fn enet source))
     (set-box! net-box enet*)
     ;; Record mapping: level-meta-id → cell-id in the prop id-map
-    (define id-map-read (current-prop-id-map-read))
-    (define id-map-set (current-prop-id-map-set))
-    (when (and net-box id-map-read id-map-set)
+    ;; Track 8 B2b: direct elab-network-id-map / elab-network-id-map-set instead of callbacks.
+    (when net-box
       ;; Track 8 Phase A4b: Tag id-map entry with speculation assumption.
       (define id-map-entry-lm (if aid (tagged-entry cid aid) cid))
-      (set-box! net-box (id-map-set (unbox net-box)
-                          (champ-insert (id-map-read (unbox net-box))
+      (set-box! net-box (elab-network-id-map-set (unbox net-box)
+                          (champ-insert (elab-network-id-map (unbox net-box))
                                         (prop-meta-id-hash id) id id-map-entry-lm)))))
   (level-meta id))
 
@@ -1962,22 +1963,21 @@
   (define net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
   (when (and net-box write-fn)
-    (define id-map-read-fn (current-prop-id-map-read))
-    (define cid (and net-box id-map-read-fn
-                     (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id)))
+    ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
+    (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
     (when (and cid (not (eq? cid 'none)))
       (define enet (unbox net-box))
       (set-box! net-box (write-fn enet cid solution)))))
 
 ;; Check if a level metavariable has been solved.
 ;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
+;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
 (define (level-meta-solved? id)
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
-  (define id-map-read-fn (current-prop-id-map-read))
   (cond
-    [(and net-box read-fn id-map-read-fn)
-     (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
+    [(and net-box read-fn)
+     (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
         ;; Track 8 B1: worldview-aware read
@@ -2001,13 +2001,13 @@
 
 ;; Retrieve the solution of a level metavariable, or #f if unsolved/unknown.
 ;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
+;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
 (define (level-meta-solution id)
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
-  (define id-map-read-fn (current-prop-id-map-read))
   (cond
-    [(and net-box read-fn id-map-read-fn)
-     (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
+    [(and net-box read-fn)
+     (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
         ;; Track 8 B1: worldview-aware read
@@ -2074,13 +2074,12 @@
     (define-values (enet* cid) (fresh-fn enet source))
     (set-box! net-box enet*)
     ;; Record mapping: mult-meta-id → cell-id in the prop id-map
-    (define id-map-read (current-prop-id-map-read))
-    (define id-map-set (current-prop-id-map-set))
-    (when (and net-box id-map-read id-map-set)
+    ;; Track 8 B2b: direct elab-network-id-map / elab-network-id-map-set instead of callbacks.
+    (when net-box
       ;; Track 8 Phase A4b: Tag id-map entry with speculation assumption.
       (define id-map-entry-mm (if aid (tagged-entry cid aid) cid))
-      (set-box! net-box (id-map-set (unbox net-box)
-                          (champ-insert (id-map-read (unbox net-box))
+      (set-box! net-box (elab-network-id-map-set (unbox net-box)
+                          (champ-insert (elab-network-id-map (unbox net-box))
                                         (prop-meta-id-hash id) id id-map-entry-mm)))))
   (mult-meta id))
 
@@ -2107,22 +2106,21 @@
   (define net-box (current-prop-net-box))
   (define write-fn (current-prop-mult-cell-write))
   (when (and net-box write-fn)
-    (define id-map-read-fn (current-prop-id-map-read))
-    (define cid (and net-box id-map-read-fn
-                     (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id)))
+    ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
+    (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
     (when (and (not (eq? cid 'none)) cid)
       (define enet (unbox net-box))
       (set-box! net-box (write-fn enet cid solution)))))
 
 ;; Check if a mult metavariable has been solved.
 ;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
+;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
 (define (mult-meta-solved? id)
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
-  (define id-map-read-fn (current-prop-id-map-read))
   (cond
-    [(and net-box read-fn id-map-read-fn)
-     (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
+    [(and net-box read-fn)
+     (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
         ;; Track 8 B1: worldview-aware read
@@ -2146,13 +2144,13 @@
 
 ;; Retrieve the solution of a mult metavariable, or #f if unsolved/unknown.
 ;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
+;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
 (define (mult-meta-solution id)
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
-  (define id-map-read-fn (current-prop-id-map-read))
   (cond
-    [(and net-box read-fn id-map-read-fn)
-     (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
+    [(and net-box read-fn)
+     (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
         ;; Track 8 B1: worldview-aware read
@@ -2215,13 +2213,12 @@
     (define-values (enet* cid) (fresh-fn enet source))
     (set-box! net-box enet*)
     ;; Record mapping: sess-meta-id → cell-id in the prop id-map
-    (define id-map-read (current-prop-id-map-read))
-    (define id-map-set (current-prop-id-map-set))
-    (when (and net-box id-map-read id-map-set)
+    ;; Track 8 B2b: direct elab-network-id-map / elab-network-id-map-set instead of callbacks.
+    (when net-box
       ;; Track 8 Phase A4b: Tag id-map entry with speculation assumption.
       (define id-map-entry-sm (if aid (tagged-entry cid aid) cid))
-      (set-box! net-box (id-map-set (unbox net-box)
-                          (champ-insert (id-map-read (unbox net-box))
+      (set-box! net-box (elab-network-id-map-set (unbox net-box)
+                          (champ-insert (elab-network-id-map (unbox net-box))
                                         (prop-meta-id-hash id) id id-map-entry-sm)))))
   (sess-meta id))
 
@@ -2248,22 +2245,21 @@
   (define net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
   (when (and net-box write-fn)
-    (define id-map-read-fn (current-prop-id-map-read))
-    (define cid (and net-box id-map-read-fn
-                     (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id)))
+    ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
+    (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
     (when (and cid (not (eq? cid 'none)))
       (define enet (unbox net-box))
       (set-box! net-box (write-fn enet cid solution)))))
 
 ;; Check if a sess metavariable has been solved.
 ;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
+;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
 (define (sess-meta-solved? id)
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
-  (define id-map-read-fn (current-prop-id-map-read))
   (cond
-    [(and net-box read-fn id-map-read-fn)
-     (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
+    [(and net-box read-fn)
+     (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
         ;; Track 8 B1: worldview-aware read
@@ -2287,13 +2283,13 @@
 
 ;; Retrieve the solution of a sess metavariable, or #f if unsolved/unknown.
 ;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
+;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
 (define (sess-meta-solution id)
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
-  (define id-map-read-fn (current-prop-id-map-read))
   (cond
-    [(and net-box read-fn id-map-read-fn)
-     (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
+    [(and net-box read-fn)
+     (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
         ;; Track 8 B1: worldview-aware read
@@ -2378,13 +2374,13 @@
         (current-level-meta-champ-box (box champ-empty))
         (current-mult-meta-champ-box (box champ-empty))
         (current-sess-meta-champ-box (box champ-empty))))
-  ;; Propagator network: only when callbacks available
-  (define make-net (current-prop-make-network))
-  (when make-net
+  ;; Propagator network: Track 8 B2b — always available (make-elaboration-network is a direct call).
+  ;; No longer gated on current-prop-make-network callback.
+  (let ()
     (define net-box (current-prop-net-box))
     (if net-box
-        (set-box! net-box (make-net))
-        (current-prop-net-box (box (make-net))))
+        (set-box! net-box (make-elaboration-network))
+        (current-prop-net-box (box (make-elaboration-network))))
     ;; id-map is now a field of elab-network, initialized to champ-empty
     ;; by make-elaboration-network — no separate box needed.
     ;; Phase 1a: Create constraint store cell in the unified network.
@@ -2454,13 +2450,14 @@
 ;; Track 6 Phase 5a: 2→1 box — meta-info is now a field of elab-network.
 ;; When callbacks are available, only the network box needs save/restore.
 ;; Fallback: 2-box for legacy/test contexts without callbacks.
+;; Track 8 B2b: meta-info always lives in elab-network (direct accessor), so slot 2 is always #f.
 (define (save-meta-state)
   (define net-box (current-prop-net-box))
-  (define mi-read (current-prop-meta-info-read))
   (list 'prop
         (and net-box (unbox net-box))
-        ;; When meta-info lives in elab-network, slot 2 is #f (not needed)
-        (if mi-read
+        ;; Slot 2: #f when meta-info lives in elab-network (Track 8 B2b: always the case now).
+        ;; Legacy fallback (no network) still captured for test contexts.
+        (if net-box
             #f
             (let ([b (current-prop-meta-info-box)]) (and b (unbox b))))))
 
@@ -2489,10 +2486,10 @@
   (define net-box (current-prop-net-box))
   (define read-fn (current-prop-cell-read))
   ;; Track 6 Phase 5a: read meta-info from elab-network when available
-  (define mi-read (current-prop-meta-info-read))
+  ;; Track 8 B2b: direct elab-network-meta-info instead of current-prop-meta-info-read callback.
   (define mi-champ
-    (if (and mi-read net-box)
-        (mi-read (unbox net-box))
+    (if net-box
+        (elab-network-meta-info (unbox net-box))
         (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))))
   (if (and um-cid net-box read-fn)
       ;; Cell path: read the tracking hash, filter for #t (unsolved)
