@@ -174,9 +174,9 @@
   #:transparent)
 (struct prop-network (hot warm cold) #:transparent)
 
-;; Compatibility accessor macros — zero-cost (compile-time inlined).
-;; Preserves the old (prop-network-cells net) API across all 17 consumer files.
-;; These will be removed in Phase 3f after all sites are migrated to direct access.
+;; Stable accessor macros — zero-cost (compile-time inlined).
+;; Public API for reading prop-network fields. Decouples consumers from
+;; the hot/warm/cold inner struct layout. 18 files use these accessors.
 (define-syntax-rule (prop-network-worklist net)
   (prop-net-hot-worklist (prop-network-hot net)))
 (define-syntax-rule (prop-network-fuel net)

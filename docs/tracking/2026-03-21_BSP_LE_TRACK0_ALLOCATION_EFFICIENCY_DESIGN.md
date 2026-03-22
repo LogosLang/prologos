@@ -13,16 +13,16 @@
 
 | # | Phase | Description | Status | Commit | Notes |
 |---|-------|-------------|--------|--------|-------|
-| 0 | Acceptance + baselines | Micro-benchmarks + A/B + memory baselines | ⬜ | | Establish pre-optimization numbers |
-| 1 | eq?-first fast path | `net-cell-write` fixpoint check | ⬜ | | Quick win, no architectural change |
-| 2 | Merge identity audit | All merge functions return identical input on no-change | ⬜ | | Enables eq?-only fixpoint; includes ctor-registry generators |
-| 3 | Struct split + mutable worklist | Combined: hot/warm/cold split + box-based worklist | ⬜ | | Landed together — drain pattern requires 2-field hot struct |
-| 3a | Struct-copy site classification | Classify 25 sites by hot/warm/cold group | ⬜ | | Design deliverable before code changes |
-| 3b | Inner struct definitions + accessor macros | Define hot/warm/cold structs + zero-cost macro wrappers | ⬜ | | Compatibility layer: `(prop-network-cells net)` macro |
-| 3c | Mutable worklist/fuel + hot struct | Box-based worklist, drain-and-clear on 2-field hot | ⬜ | | Per-iteration allocation → zero |
-| 3d | Warm-group cell write | `net-cell-write` copies only warm group | ⬜ | | Per-cell-write: 13-field → 2-field |
-| 3e | Cold-group allocation ops | `net-new-cell`/`net-add-propagator` copy cold group | ⬜ | | Allocation-time only |
-| 3f | Remove accessor macros | Replace wrappers with direct inner-struct access | ⬜ | | Cleanup after all sites migrated |
+| 0 | Acceptance + baselines | Micro-benchmarks + A/B + memory baselines | ✅ | `8c4da4a` | cell-alloc 0.42μs, cell-write 0.27/0.09μs, struct-copy 0.03μs |
+| 1 | eq?-first fast path | `net-cell-write` fixpoint check | ✅ | `19274b5` | Both net-cell-write and net-cell-write-widen. 7308 tests pass 232s |
+| 2 | Merge identity audit | All merge functions return identical input on no-change | ✅ | `7e8875b` | 13/17 non-preserving; 6 fixed in infra-cell.rkt; 4 already OK; 7 structural (unfixable) |
+| 3 | Struct split + mutable worklist | Combined: hot/warm/cold split + box-based worklist | 🔄 | | Landed together — drain pattern requires 2-field hot struct |
+| 3a | Struct-copy site classification | Classify 25 sites by hot/warm/cold group | ✅ | `a5de346` | 6 hot, 4 warm, 6 cold, 4 w+h, 2 w+c, 1 all. Fire fns safe. |
+| 3b | Inner struct definitions + accessor macros | Define hot/warm/cold structs + zero-cost macro wrappers | ✅ | `bfe8e4f` | hot(2)/warm(2)/cold(9). 29 sites in propagator.rkt + 4 external files. 7308 tests 240.5s |
+| 3c | Mutable worklist/fuel + hot struct | Box-based worklist, drain-and-clear on 2-field hot | ✅ | `7a94274` | Drain pattern + eq? identity. Serial + traced. 7308 tests 238.2s |
+| 3d | Warm-group cell write | `net-cell-write` copies only warm group | ✅ | `bfe8e4f` | Already achieved by Phase 3b migration — warm+hot only, cold shared |
+| 3e | Cold-group allocation ops | `net-new-cell`/`net-add-propagator` copy cold group | ✅ | `bfe8e4f` | Already achieved by Phase 3b migration — warm+cold only, hot untouched |
+| 3f | Accessor macros → stable API | Retain macros as public API; remove "compatibility" framing | ✅ | | Macros decouple 18 consumer files from inner struct layout — keeping them IS the right design |
 | 4 | Batch cell registration | Transient CHAMP + next-cell-id range pre-allocation | ⬜ | | Eliminates dead intermediate networks |
 | 5 | Propagator input batching | Transient CHAMP for multi-input registration | ⬜ | | Follow-on to Phase 4 pattern |
 | 6 | Verification + A/B | Full suite + comparative benchmarks + memory | ⬜ | | Target: ≤180s suite (10-20% improvement) |
