@@ -13,13 +13,13 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Acceptance file baseline | ⬜ | |
-| 1 | Registry cells (P0) | ⬜ | impl, trait, param-impl |
-| 2 | Value-threaded reads (P1a) | ⬜ | zonk, meta-solved?, ground-expr? |
-| 3 | Pure α/γ bridges (P1b) | ⬜ | C1-C3 rewrite |
-| 4 | Callback retirement (P2) | ⬜ | 6 symptomatic callbacks |
-| 5 | Action descriptors (P3) | ⬜ | solve-meta! returns data |
-| 6 | Speculation value-threading (P4) | ⬜ | commit/retract without box |
+| 1 | Registry cells | ⬜ | impl, trait, param-impl as cells |
+| 3 | Pure α/γ bridges | ⬜ | C1-C3 rewrite — read cells directly, no zonk |
+| 4 | Callback retirement | ⬜ | 6 symptomatic callbacks |
 | 7 | Verification + benchmarks | ⬜ | |
+| — | *Deferred: Phase 2 (zonk-from-net)* | — | Incremental improvement, not foundation |
+| — | *Deferred: Phase 5 (action descriptors)* | — | Cold-path cleanup |
+| — | *Deferred: Phase 6 (speculation threading)* | — | Depends on Phase 5 |
 
 ---
 
@@ -123,36 +123,69 @@ Bridge fire functions (target):
   (net-cell-write net result-cell-id result))
 ```
 
-### 3.3 The Key Insight: Read Functions Accept Network
+### 3.3 The Key Insight: Metas Already Have Cells — `zonk` Should Read Them Directly
 
-The technical linchpin is **Finding 2**: read functions (`zonk`, `meta-solved?`, `ground-expr?`) are coupled to the box via `current-prop-net-box`. This prevents pure fire functions.
+The initial design proposed adding optional `net` parameters to `zonk`/`meta-solved?` so they read from a network value instead of the box. But a deeper analysis reveals a better path:
 
-The fix: each read function gains an optional network argument. When provided, reads from the argument. When absent, falls back to box (backward compat during migration).
+**Each meta already has its own cell on the prop-network.** That's how type inference works — `solve-meta!` writes the solution to the meta's cell via `net-cell-write`. The meta-info CHAMP is the *registration record* (cell ID, type, constraints). The *solution* is the cell value.
 
-```racket
-;; Before:
-(define (meta-solved? id)
-  (define mi (unwrap-meta-info id))  ;; reads from box
-  (and mi (meta-info-solution mi)))
+This means `zonk` in a bridge fire function context doesn't need meta-info at all for solution lookup. It needs:
+1. **id-map**: meta-id → cell-id (to find the cell)
+2. **net-cell-read**: cell-id → value (to read the solution)
 
-;; After:
-(define (meta-solved? id [net #f])
-  (define mi (if net
-                 (meta-info-from-net net id)  ;; reads from network value
-                 (unwrap-meta-info id)))      ;; fallback: reads from box
-  (and mi (meta-info-solution mi)))
-```
+Both are already available on the `prop-network` that the fire function receives. The id-map is on `elab-network` (struct field), but it could be a cell. Or — simpler — the bridge propagator is installed with the cell IDs of its dependencies at registration time. It doesn't need to look up cell IDs dynamically because it already knows them.
 
-Once all callers in bridge fire functions pass the network, the fallback path becomes dead code for bridges. The bridge fire function is now pure:
+**This eliminates the `zonk` threading problem entirely.** The bridge α function doesn't call `zonk`. It reads dependency cells directly:
 
 ```racket
-(lambda (net dep-cids result-cid)
-  (define type-args (map (lambda (e) (zonk-from-net net e)) ...))
-  (when (andmap (lambda (e) (ground-expr? e net)) type-args)
-    (define impl-reg (net-cell-read net impl-registry-cid))
-    (define result (lookup-impl-from impl-reg ...))
-    (net-cell-write net result-cid result)))
+;; Bridge α function for trait resolution:
+;; dep-cells are the type-arg meta cells (known at registration time)
+;; impl-reg-cell is the impl registry cell (Phase 1)
+;; result-cell is the dict-meta cell
+(lambda (net)
+  (define type-arg-vals (map (lambda (cid) (net-cell-read net cid)) dep-cell-ids))
+  ;; Check: all ground? (no expr-meta in values)
+  (when (andmap ground-expr-value? type-arg-vals)
+    (define impl-reg (net-cell-read net impl-registry-cell-id))
+    (define result (lookup-impl-from-hash impl-reg trait-name type-arg-vals))
+    (if result
+        (net-cell-write net dict-meta-cell-id result)
+        net)))
 ```
+
+No `zonk`. No `meta-solved?`. No box. No `with-enet-reads`. The fire function reads cells and writes cells — pure `net → net`.
+
+**What `zonk` threading is still needed for**: The S2 fallback path and direct elaboration calls still use `zonk` through the box. Phase 2 adds a `zonk-from-net` variant for those callers that want to migrate incrementally. But bridges bypass `zonk` entirely.
+
+### 3.4 `ground-expr-value?` vs `ground-expr?`
+
+The current `ground-expr?` checks whether an expression contains `expr-meta` nodes. In a bridge context, we're reading cell values — if a meta is solved, the cell value IS the solution (not an `expr-meta`). If unsolved, the cell value is `'nothing` or the bottom lattice element.
+
+So the bridge doesn't need `ground-expr?` — it checks whether cell values are solutions (not bottom). This is a cell-level check, not an expression-level check. The bridge naturally avoids firing until all dependencies have solutions, because `net-cell-read` returns bottom for unsolved cells, and the α function checks for non-bottom before proceeding.
+
+Even better: the bridge propagator is registered with dependency cell IDs. The propagator network only fires it when a dependency cell changes. So the bridge won't even be invoked until at least one dependency has a new value.
+
+### 3.5 Phase 5 Reframing: Hot Path vs Cold Path
+
+The original Phase 5 proposed transforming `solve-meta!` into action descriptors. But with bridges reading cells directly (§3.3), the bridge path IS the hot path and it's already data-oriented — pure `net → net`, no `solve-meta!` at all.
+
+`solve-meta!` remains on the cold path:
+- S2 fallback (safety net, rarely fires now)
+- Direct elaboration calls (type checker solving ground metas)
+- Module-load-time registration (no network)
+
+Transforming the cold path to descriptors is valuable (inspectability, testability, no re-entrancy) but not load-bearing for the Completeness correction. **Phase 5 is reclassified from P3 to deferred** — it's cleanup, not foundation. The foundation is Phases 1-3.
+
+### 3.6 Revised Priority Stack
+
+| Priority | Phase | Architectural Impact |
+|----------|-------|---------------------|
+| **Foundation** | Phase 1 (registry cells) | Registries on network; bridges can watch |
+| **Foundation** | Phase 3 (pure α/γ bridges) | Correctness of resolution infrastructure |
+| **Cleanup** | Phase 4 (callback retirement) | Falls out of Phase 3 |
+| **Improvement** | Phase 2 (zonk-from-net) | Incremental migration for non-bridge callers |
+| **Deferred** | Phase 5 (action descriptors) | Cold-path improvement |
+| **Deferred** | Phase 6 (speculation threading) | Depends on Phase 5 |
 
 ---
 
@@ -179,48 +212,71 @@ Extend the existing Track 8 acceptance file or create `examples/2026-03-22-track
 - Composition: ✓ bridge propagators can now watch registry cells
 - Completeness: ✓ registration-triggered re-resolution becomes possible
 
-### Phase 2: Value-Threaded Reads (P1a)
+### Phase 2: Value-Threaded Reads (P1a) — RECLASSIFIED: Improvement, not foundation
 
-**What**: Add optional `net` parameter to core read functions: `zonk`, `zonk-at-depth`, `meta-solved?`, `meta-solution`, `ground-expr?`, `normalize-for-resolution`.
+**Revised scope**: Per §3.3, bridge fire functions don't need `zonk` — they read cells directly. Phase 2 is now an *incremental improvement* for non-bridge callers (S2 fallback, direct elaboration), not a foundation phase.
 
-**Files**: `zonk.rkt`, `metavar-store.rkt`, `reduction.rkt` (for normalize).
+**What**: Add `zonk-from-net` as a separate function (not optional parameter — cleaner API) that reads meta solutions from cell values via `net-cell-read` instead of from the box.
 
-**Strategy**: Optional parameter with `#f` default. When `#f`, uses existing box path (backward compat). When provided, reads from network value. This enables incremental migration — callers switch one at a time.
+**Files**: `zonk.rkt` (new `zonk-from-net`), `metavar-store.rkt` (new `meta-solved-from-net?`).
 
-**The `zonk` challenge**: `zonk` is recursive and calls `meta-solution`, which reads from the box. The network argument must be threaded through the recursion. This is the bulk of Phase 2 work.
+**When**: After Phase 3 proves bridges work without `zonk`. Can be deferred if S2 fallback path is acceptable as-is.
 
-**Test**: Write a test that calls `zonk` with an explicit network argument (no box in scope) and verifies correct results.
-
-**Principles check**:
-- Data Orientation: ✓ reads decoupled from box
-- Decomplection: ✓ computation separated from access mechanism
-- Completeness: ✓ foundational — enables all subsequent phases
-
-### Phase 3: Pure α/γ Bridges (P1b)
-
-**What**: Rewrite C1-C3 bridge fire functions to use `net-add-cross-domain-propagator` with pure α/γ functions. No `enet-box`. No `set-box!`.
-
-**Depends on**: Phase 1 (registry cells) + Phase 2 (value-threaded reads).
-
-**Files**: `resolution.rkt` (new bridge factories), `metavar-store.rkt` (bridge installation).
-
-**α function** (dependency cells → resolution result):
-1. Read dependency cells (type-arg metas) from network
-2. `zonk` with network argument (Phase 2)
-3. `ground-expr?` with network argument (Phase 2)
-4. Read impl-registry cell (Phase 1)
-5. Lookup matching impl → return resolved dict expression
-
-**γ function** (resolution result → dict-meta cell):
-1. Read resolution result cell
-2. If resolved: write dict expression to dict-meta cell
-
-**Test**: The existing `test-trait-resolution-bridge.rkt` tests should pass with the rewritten bridges. Add tests that verify no `enet-box` is in scope during bridge firing.
+**Test**: Call `zonk-from-net` with a prop-network containing solved metas. Verify correct results with no box in scope.
 
 **Principles check**:
-- Propagator-First: ✓ bridges are pure network operations
-- Correct-by-Construction: ✓ no box write-back discipline needed
-- Completeness: ✓ Part C's promise finally delivered
+- Data Orientation: ✓ reads decoupled from box for callers that opt in
+- Decomplection: ✓ clean separation between cell-reading and box-reading paths
+
+### Phase 3: Pure α/γ Bridges (P1b) — FOUNDATION
+
+**What**: Rewrite C1-C3 bridge fire functions as pure `net → net` propagators that read dependency cells directly (no `zonk`, no `meta-solved?`, no box). Uses `net-add-cross-domain-propagator` pattern or equivalent single-propagator with multiple input cells.
+
+**Depends on**: Phase 1 (registry cells).
+
+**Does NOT depend on**: Phase 2 (zonk threading) — per §3.3, bridges read cells directly.
+
+**Files**: `resolution.rkt` (new bridge factories), `metavar-store.rkt` (bridge installation), possibly `constraint-propagators.rkt` (if registration logic moves).
+
+**Bridge fire function pattern** (§3.3):
+```racket
+(lambda (net)
+  ;; Read dependency cells (type-arg metas — cell IDs known at registration)
+  (define type-arg-vals (map (lambda (cid) (net-cell-read net cid)) dep-cell-ids))
+  ;; All solved? (cell values are solutions, not expr-meta)
+  (when (andmap resolved-cell-value? type-arg-vals)
+    ;; Read impl registry cell (Phase 1)
+    (define impl-reg (net-cell-read net impl-registry-cell-id))
+    ;; Pure hash lookup — no parameter, no box
+    (define result (lookup-impl-from-hash impl-reg trait-name type-arg-vals))
+    (if result
+        (net-cell-write net dict-meta-cell-id result)
+        net)))
+```
+
+**Key design decisions**:
+1. **Cell IDs captured at registration time**: When a trait constraint is registered, we know the dependency meta cell IDs and the dict-meta cell ID. These are closed over in the bridge propagator. No dynamic id-map lookup needed.
+2. **`resolved-cell-value?` replaces `ground-expr?`**: Cell values are either solutions (ground expressions) or bottom (unsolved). No need for expression-level groundness check — just check for non-bottom.
+3. **`lookup-impl-from-hash` is pure**: Takes the registry hash (read from cell), trait name, type arg values. Returns dict expression or `#f`. No parameter access, no box.
+4. **No `zonk`**: Cell values ARE the zonked solutions. The propagator network maintains zonked values in cells — `solve-meta!` writes the solution directly. Recursive zonking (meta → solution → meta → solution) is handled by the propagator network's cascading write semantics.
+
+**Cascading resolution**: When bridge A resolves dict-meta-1, that cell write may wake bridge B whose dependency includes dict-meta-1. Bridge B fires, reads the now-solved cell, resolves dict-meta-2. This is transitive resolution via propagation — no `solve-meta!` chain, no re-entrancy.
+
+**Hasmethod bridge**: Same pattern but with an additional step — first resolve which trait contains the method (read from trait-registry cell), then resolve the dict via impl-registry cell, then project the method. Three cell reads, one cell write.
+
+**Constraint retry bridge**: Read constraint cell, read dependency cells, if all ground → re-attempt unification as pure `net → net` (structural unify already works on `prop-network`).
+
+**Test**:
+1. Existing `test-trait-resolution-bridge.rkt` tests pass
+2. New test: bridge fires with no `current-prop-net-box` in scope (parameter is `#f`) — proves no box dependency
+3. Cascading resolution: constraint A depends on meta that depends on constraint B. B resolves first → A resolves via propagation cascade.
+
+**Principles check**:
+- Propagator-First: ✓ bridges are pure network operations — read cells, write cells
+- Data Orientation: ✓ fire function is pure `net → net`
+- Correct-by-Construction: ✓ no box write-back, no discipline required
+- Composition: ✓ bridges compose with registry cells — new impl triggers re-resolution
+- Completeness: ✓ the phase boundary genuinely dissolves
 
 ### Phase 4: Callback Retirement (P2)
 
@@ -238,32 +294,11 @@ Extend the existing Track 8 acceptance file or create `examples/2026-03-22-track
 
 **Note**: `run-quiescence`, `unwrap-net`, and `rewrap-net` may need to remain if `solve-meta!` still uses the box path for non-bridge callers. Evaluate after Phase 3.
 
-### Phase 5: Action Descriptors (P3)
+### Phase 5: Action Descriptors (P3) — DEFERRED
 
-**What**: `solve-meta!` returns action descriptors instead of executing side effects. The quiescence loop interprets descriptors.
+**Revised assessment**: Per §3.5, bridges (Phase 3) handle the hot path as pure α/γ — no `solve-meta!` involved. Phase 5 transforms the *cold path* (S2 fallback, direct elaboration calls) into descriptors. Valuable for inspectability and testability, but not load-bearing for the Completeness correction.
 
-**This is the most architecturally significant phase.** It transforms the re-entrant `solve-meta! → resolve → solve-meta! → ...` chain into a data-oriented worklist.
-
-**Descriptor types**:
-```racket
-(struct action-solve-meta (meta-id value) #:transparent)
-(struct action-resolve-trait (dict-meta-id tc-info) #:transparent)
-(struct action-resolve-hasmethod (meta-id hm-info) #:transparent)
-(struct action-retry-constraint (constraint) #:transparent)
-```
-
-**Interpretation loop**: After quiescence, collect descriptors from action cells. Apply each. If new descriptors generated, iterate. Fixpoint when no new descriptors.
-
-**Benefits**:
-- Inspectable: descriptors can be logged, counted, visualized
-- Testable: resolution logic unit-tested with mock descriptors
-- No re-entrancy: interpretation loop controls ordering
-- Totality: fuel limits on interpretation loop (not per-call)
-
-**Principles check**:
-- Data Orientation: ✓ effects as descriptions at boundaries
-- First-Class by Default: ✓ actions are data
-- Correct-by-Construction: ✓ re-entrancy impossible
+**Deferred until**: After CIU Track 3, when the cold path's behavior under new trait dispatch reveals whether descriptor transformation is needed for correctness or only for observability.
 
 ### Phase 6: Speculation Value-Threading (P4)
 
@@ -292,51 +327,63 @@ None — Track 8D is purely infrastructure. No user-facing syntax changes.
 
 ## 6. Risk Analysis
 
-### High Risk: Phase 2 (zonk threading)
+### Medium Risk: Phase 3 (pure α/γ bridges)
 
-`zonk` is one of the most-called functions in the codebase. Adding a network argument that threads through recursion touches many call sites. Strategy: optional parameter with fallback ensures backward compat — no big-bang migration.
+The §3.3 insight eliminates `zonk` from bridges, dramatically reducing risk. The remaining risk is in the registration-time capture of dependency cell IDs and the `lookup-impl-from-hash` pure function. Both are well-constrained.
 
-### Medium Risk: Phase 5 (action descriptors)
+**Specific risk**: Cell values for solved metas may not always be fully zonked — if meta A's solution contains `expr-meta B`, and B is later solved, A's cell value may be stale. The propagator network handles this via cascading writes, but bridge fire functions reading A's cell see the pre-cascade value. **Mitigation**: The existing readiness propagator pattern checks that ALL dependency cells are ground before firing. Bridges should do the same — only fire when all dependency cell values contain no `expr-meta` nodes.
 
-Replacing `solve-meta!` with descriptors is a significant architectural change. The re-entrant chain (`solve-meta! → resolve → solve-meta!`) is deeply embedded. The descriptor approach requires the interpretation loop to handle the same re-entrancy patterns that `solve-meta!` handles implicitly.
+### Low Risk: Phase 1 (registry cells)
 
-**Mitigation**: The "pure" variants (`solve-meta-core-pure`) already exist from Track 7. The descriptor approach builds on these — instead of `solve-meta-core-pure` writing to an enet, it returns a descriptor. The interpretation loop applies descriptors sequentially.
+Accumulative merge, existing cell infrastructure. The only subtlety is merge conflict detection (duplicate impl keys).
 
-### Low Risk: Phases 1, 3, 4, 6, 7
+### Low Risk: Phase 4 (callback retirement)
 
-Registry cells are straightforward (accumulative merge, existing cell infrastructure). α/γ bridges are well-understood (session-type-bridge template). Callback retirement falls out of earlier phases. Speculation threading is mechanical once the box is no longer needed.
+Mechanical — falls out of Phase 3.
+
+### Deferred Risk: Phase 2 (zonk-from-net), Phase 5 (descriptors), Phase 6 (speculation)
+
+These phases no longer gate the Completeness correction. Risk is bounded by deferral.
 
 ---
 
-## 7. Dependency Graph
+## 7. Dependency Graph (Revised)
 
 ```
 Phase 0 ──→ Phase 1 (registry cells)
               ↓
-             Phase 2 (value-threaded reads)
+             Phase 3 (pure α/γ bridges) ←── requires P1 only
               ↓
-             Phase 3 (pure α/γ bridges) ←── requires P1 + P2
-              ↓
-             Phase 4 (callback retirement) ←── requires P3
-              ↓
-             Phase 5 (action descriptors) ←── can run parallel to P4
-              ↓
-             Phase 6 (speculation threading) ←── requires P5
+             Phase 4 (callback retirement) ←── falls out of P3
               ↓
              Phase 7 (verification)
+
+             [Deferred]
+             Phase 2 (zonk-from-net) ←── independent, incremental improvement
+             Phase 5 (action descriptors) ←── cold-path cleanup
+             Phase 6 (speculation threading) ←── requires P5
 ```
 
-Phase 5 is the most independent — it can be designed and prototyped in parallel with Phases 3-4, since it changes a different part of the pipeline (the `solve-meta!` chain vs. the bridge fire functions).
+**Core path**: 0 → 1 → 3 → 4 → 7. Four foundation phases. The §3.3 insight (bridges read cells directly, no zonk) removed Phase 2 from the critical path.
 
 ---
 
 ## 8. Success Criteria
 
-1. Zero `enet-box` access in bridge fire functions (C1-C3 rewritten as pure α/γ)
-2. Registry cells exist and bridge propagators watch them
-3. `zonk`, `meta-solved?`, `ground-expr?` callable with explicit network argument (no box required)
-4. `solve-meta!` returns action descriptors (no re-entrant side effects)
-5. 6 symptomatic callbacks eliminated
+### Foundation (must deliver)
+1. Zero `enet-box` access in bridge fire functions — C1-C3 rewritten as pure `net → net`
+2. Impl/trait/param-impl registry cells exist on the propagator network
+3. Bridge propagators read registry and dependency cells directly — no `zonk`, no `meta-solved?`, no box
+4. Cascading resolution works: constraint A → meta → constraint B chain resolves via propagation
+5. Bridge fire functions callable with `current-prop-net-box` = `#f` (proves no box dependency)
 6. All 7343+ tests pass
 7. Suite time within 10% of baseline (228.2s)
 8. Acceptance file passes at Level 3
+
+### Cleanup (should deliver)
+9. 6 symptomatic callbacks reduced (3 bridge-fn callbacks eliminated; unwrap/rewrap/quiescence evaluated)
+
+### Deferred (not in this track)
+10. `zonk-from-net` for non-bridge callers (Phase 2)
+11. Action descriptors for `solve-meta!` cold path (Phase 5)
+12. Speculation value-threading (Phase 6)
