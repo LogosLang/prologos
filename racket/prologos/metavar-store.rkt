@@ -1316,7 +1316,14 @@
           (define mult-champ (unbox mult-box))
           (define cleaned-mult (retract-hasheq-entries mult-champ retracted))
           (unless (equal? mult-champ cleaned-mult)
-            (set-box! mult-box cleaned-mult)))))))
+            (set-box! mult-box cleaned-mult)))
+        ;; Track 8 Phase A3b: Retract tagged level-meta entries from CHAMP box.
+        (define level-box (current-level-meta-champ-box))
+        (when level-box
+          (define level-champ (unbox level-box))
+          (define cleaned-level (retract-hasheq-entries level-champ retracted))
+          (unless (equal? level-champ cleaned-level)
+            (set-box! level-box cleaned-level)))))))
 
 ;; Track 6 Phase 1a: id-map access callbacks (set by driver.rkt).
 ;; Break circular dep: metavar-store doesn't import elaborator-network.
@@ -1877,7 +1884,10 @@
 (define (fresh-level-meta source)
   (define id (gensym 'lvl))
   (define box (current-level-meta-champ-box))
-  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id 'unsolved))
+  ;; Track 8 Phase A3b: Tag level entry with current speculation assumption.
+  (define aid (current-speculation-assumption))
+  (define entry (if aid (tagged-entry 'unsolved aid) 'unsolved))
+  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id entry))
   ;; Track 4 Phase 3: Allocate level cell on propagator network if available
   (define net-box (current-prop-net-box))
   (define fresh-fn (current-prop-fresh-level-cell))
@@ -1899,14 +1909,20 @@
 ;; Track 4 Phase 3: Also writes to propagator TMS cell if available.
 (define (solve-level-meta! id solution)
   (define box (current-level-meta-champ-box))
-  (define status
+  ;; Track 8 A3b: unwrap tagged-entry for status check
+  (define raw-entry
     (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
       (if (eq? v 'none) #f v)))
+  (define status (if (tagged-entry? raw-entry) (tagged-entry-value raw-entry) raw-entry))
+  (define entry-aid (if (tagged-entry? raw-entry) (tagged-entry-assumption-id raw-entry) #f))
   (unless status
     (error 'solve-level-meta! "unknown level-meta: ~a" id))
   (when (not (eq? status 'unsolved))
     (error 'solve-level-meta! "level-meta ~a already solved" id))
-  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution))
+  ;; Track 8 A3b: re-tag with original or current assumption
+  (define aid (or entry-aid (current-speculation-assumption)))
+  (define tagged-solution (if aid (tagged-entry solution aid) solution))
+  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id tagged-solution))
   ;; Track 4 Phase 3: Write to propagator level cell
   (define net-box (current-prop-net-box))
   (define write-fn (current-prop-cell-write))
@@ -1929,19 +1945,21 @@
      (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
-        ;; Not in id-map — fallback to CHAMP
+        ;; Track 8 A3b: unwrap tagged-entry
         (define box (current-level-meta-champ-box))
-        (define v (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (and (not (eq? v 'none)) (not (eq? v 'unsolved)))]
+        (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+        (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
+        (and (not (eq? v 'none)) (not (eq? v #f)) (not (eq? v 'unsolved)))]
        [else
         (define v (read-fn (unbox net-box) cid))
         (not (eq? v 'unsolved))])]
     [else
-     ;; No network — CHAMP fallback
+     ;; Track 8 A3b: unwrap tagged-entry
      (define box (current-level-meta-champ-box))
-     (define v
+     (define raw
        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
          (if (eq? r 'none) #f r)))
+     (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
      (and v (not (eq? v 'unsolved)))]))
 
 ;; Retrieve the solution of a level metavariable, or #f if unsolved/unknown.
@@ -1955,19 +1973,21 @@
      (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
-        ;; Not in id-map — fallback to CHAMP
+        ;; Track 8 A3b: unwrap tagged-entry
         (define box (current-level-meta-champ-box))
-        (define v (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (and (not (eq? v 'none)) (not (eq? v 'unsolved)) v)]
+        (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+        (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
+        (and (not (eq? v 'none)) (not (eq? v #f)) (not (eq? v 'unsolved)) v)]
        [else
         (define v (read-fn (unbox net-box) cid))
         (and (not (eq? v 'unsolved)) v)])]
     [else
-     ;; No network — CHAMP fallback
+     ;; Track 8 A3b: unwrap tagged-entry
      (define box (current-level-meta-champ-box))
-     (define v
+     (define raw
        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
          (if (eq? r 'none) #f r)))
+     (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
      (and v (not (eq? v 'unsolved)) v)]))
 
 ;; Zonk a level: follow solved level-metas, leave unsolved in place.
