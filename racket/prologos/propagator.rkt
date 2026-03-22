@@ -24,7 +24,25 @@
  ;; Core structs
  (struct-out prop-cell)
  (struct-out propagator)
+ ;; Network struct — split into hot/warm/cold inner structs (BSP-LE Track 0 Phase 3b)
+ (struct-out prop-net-hot)
+ (struct-out prop-net-warm)
+ (struct-out prop-net-cold)
  (struct-out prop-network)
+ ;; Compatibility accessors — zero-cost macros preserving old API
+ prop-network-cells
+ prop-network-propagators
+ prop-network-worklist
+ prop-network-next-cell-id
+ prop-network-next-prop-id
+ prop-network-fuel
+ prop-network-contradiction
+ prop-network-merge-fns
+ prop-network-contradiction-fns
+ prop-network-widen-fns
+ prop-network-cell-decomps
+ prop-network-pair-decomps
+ prop-network-cell-dirs
  ;; Hash helpers (for CHAMP keying)
  cell-id-hash
  prop-id-hash
@@ -144,21 +162,47 @@
 ;;   Per-pair dedup: prevents duplicate sub-propagators between the same pair. (Phase 4c)
 ;; cell-dirs: champ-root : cell-id → 'ascending | 'descending
 ;;   Direction registry for cells. Absent entries default to 'ascending. (WFLE Phase 1)
-(struct prop-network
-  (cells
-   propagators
-   worklist
-   next-cell-id
-   next-prop-id
-   fuel
-   contradiction
-   merge-fns
-   contradiction-fns
-   widen-fns
-   cell-decomps
-   pair-decomps
-   cell-dirs)
+;; BSP-LE Track 0 Phase 3b: Split prop-network into hot/warm/cold inner structs.
+;; Hot: mutated every worklist iteration (worklist, fuel)
+;; Warm: mutated per cell-write (cells, contradiction)
+;; Cold: mutated only at allocation/setup time (all other fields)
+(struct prop-net-hot (worklist fuel) #:transparent)
+(struct prop-net-warm (cells contradiction) #:transparent)
+(struct prop-net-cold (merge-fns contradiction-fns widen-fns
+                       propagators next-cell-id next-prop-id
+                       cell-decomps pair-decomps cell-dirs)
   #:transparent)
+(struct prop-network (hot warm cold) #:transparent)
+
+;; Compatibility accessor macros — zero-cost (compile-time inlined).
+;; Preserves the old (prop-network-cells net) API across all 17 consumer files.
+;; These will be removed in Phase 3f after all sites are migrated to direct access.
+(define-syntax-rule (prop-network-worklist net)
+  (prop-net-hot-worklist (prop-network-hot net)))
+(define-syntax-rule (prop-network-fuel net)
+  (prop-net-hot-fuel (prop-network-hot net)))
+(define-syntax-rule (prop-network-cells net)
+  (prop-net-warm-cells (prop-network-warm net)))
+(define-syntax-rule (prop-network-contradiction net)
+  (prop-net-warm-contradiction (prop-network-warm net)))
+(define-syntax-rule (prop-network-merge-fns net)
+  (prop-net-cold-merge-fns (prop-network-cold net)))
+(define-syntax-rule (prop-network-contradiction-fns net)
+  (prop-net-cold-contradiction-fns (prop-network-cold net)))
+(define-syntax-rule (prop-network-widen-fns net)
+  (prop-net-cold-widen-fns (prop-network-cold net)))
+(define-syntax-rule (prop-network-propagators net)
+  (prop-net-cold-propagators (prop-network-cold net)))
+(define-syntax-rule (prop-network-next-cell-id net)
+  (prop-net-cold-next-cell-id (prop-network-cold net)))
+(define-syntax-rule (prop-network-next-prop-id net)
+  (prop-net-cold-next-prop-id (prop-network-cold net)))
+(define-syntax-rule (prop-network-cell-decomps net)
+  (prop-net-cold-cell-decomps (prop-network-cold net)))
+(define-syntax-rule (prop-network-pair-decomps net)
+  (prop-net-cold-pair-decomps (prop-network-cold net)))
+(define-syntax-rule (prop-network-cell-dirs net)
+  (prop-net-cold-cell-dirs (prop-network-cold net)))
 
 ;; ========================================
 ;; Trace Data Types (Visualization Phase 0)
@@ -233,19 +277,18 @@
 ;; Create an empty propagator network.
 ;; fuel: maximum number of propagator firings before run-to-quiescence stops.
 (define (make-prop-network [fuel 1000000])
-  (prop-network champ-empty    ;; cells
-                champ-empty    ;; propagators
-                '()            ;; worklist
-                0              ;; next-cell-id
-                0              ;; next-prop-id
-                fuel           ;; fuel
-                #f             ;; no contradiction
-                champ-empty    ;; merge-fns
-                champ-empty    ;; contradiction-fns
-                champ-empty    ;; widen-fns
-                champ-empty    ;; cell-decomps (Phase 4c)
-                champ-empty    ;; pair-decomps (Phase 4c)
-                champ-empty))  ;; cell-dirs (WFLE Phase 1)
+  (prop-network
+   (prop-net-hot '() fuel)           ;; hot: worklist, fuel
+   (prop-net-warm champ-empty #f)    ;; warm: cells, contradiction
+   (prop-net-cold champ-empty        ;; cold: merge-fns
+                  champ-empty        ;;   contradiction-fns
+                  champ-empty        ;;   widen-fns
+                  champ-empty        ;;   propagators
+                  0                  ;;   next-cell-id
+                  0                  ;;   next-prop-id
+                  champ-empty        ;;   cell-decomps
+                  champ-empty        ;;   pair-decomps
+                  champ-empty)))     ;;   cell-dirs
 
 ;; ========================================
 ;; Cell Operations
@@ -263,15 +306,18 @@
   (define h (cell-id-hash id))
   (define net*
     (struct-copy prop-network net
-      [cells (champ-insert (prop-network-cells net) h id cell)]
-      [merge-fns (champ-insert (prop-network-merge-fns net) h id merge-fn)]
-      [next-cell-id (+ 1 (prop-network-next-cell-id net))]))
+      [warm (struct-copy prop-net-warm (prop-network-warm net)
+              [cells (champ-insert (prop-network-cells net) h id cell)])]
+      [cold (struct-copy prop-net-cold (prop-network-cold net)
+              [merge-fns (champ-insert (prop-network-merge-fns net) h id merge-fn)]
+              [next-cell-id (+ 1 (prop-network-next-cell-id net))])]))
   (values
    (if contradicts?
        (struct-copy prop-network net*
-         [contradiction-fns
-          (champ-insert (prop-network-contradiction-fns net*)
-                        h id contradicts?)])
+         [cold (struct-copy prop-net-cold (prop-network-cold net*)
+                 [contradiction-fns
+                  (champ-insert (prop-network-contradiction-fns net*)
+                                h id contradicts?)])])
        net*)
    id))
 
@@ -287,16 +333,19 @@
   (define h (cell-id-hash id))
   (define net*
     (struct-copy prop-network net
-      [cells (champ-insert (prop-network-cells net) h id cell)]
-      [merge-fns (champ-insert (prop-network-merge-fns net) h id meet-fn)]
-      [cell-dirs (champ-insert (prop-network-cell-dirs net) h id 'descending)]
-      [next-cell-id (+ 1 (prop-network-next-cell-id net))]))
+      [warm (struct-copy prop-net-warm (prop-network-warm net)
+              [cells (champ-insert (prop-network-cells net) h id cell)])]
+      [cold (struct-copy prop-net-cold (prop-network-cold net)
+              [merge-fns (champ-insert (prop-network-merge-fns net) h id meet-fn)]
+              [cell-dirs (champ-insert (prop-network-cell-dirs net) h id 'descending)]
+              [next-cell-id (+ 1 (prop-network-next-cell-id net))])]))
   (values
    (if contradicts?
        (struct-copy prop-network net*
-         [contradiction-fns
-          (champ-insert (prop-network-contradiction-fns net*)
-                        h id contradicts?)])
+         [cold (struct-copy prop-net-cold (prop-network-cold net*)
+                 [contradiction-fns
+                  (champ-insert (prop-network-contradiction-fns net*)
+                                h id contradicts?)])])
        net*)
    id))
 
@@ -369,10 +418,14 @@
               (and (not (eq? cfn 'none))   ;; cell has a contradicts? fn
                    (cfn merged))]          ;; the merged value is contradictory
              [net* (struct-copy prop-network net
-                     [cells new-cells]
-                     [worklist new-wl])])
+                     [warm (struct-copy prop-net-warm (prop-network-warm net)
+                             [cells new-cells])]
+                     [hot (struct-copy prop-net-hot (prop-network-hot net)
+                            [worklist new-wl])])])
         (if contradicted?
-            (struct-copy prop-network net* [contradiction cid])
+            (struct-copy prop-network net*
+              [warm (struct-copy prop-net-warm (prop-network-warm net*)
+                      [contradiction cid])])
             net*))))
 
 ;; Replace a cell's value directly, bypassing the merge function.
@@ -401,10 +454,14 @@
               (and (not (eq? cfn 'none))
                    (cfn new-val))]
              [net* (struct-copy prop-network net
-                     [cells new-cells]
-                     [worklist new-wl])])
+                     [warm (struct-copy prop-net-warm (prop-network-warm net)
+                             [cells new-cells])]
+                     [hot (struct-copy prop-net-hot (prop-network-hot net)
+                            [worklist new-wl])])])
         (if contradicted?
-            (struct-copy prop-network net* [contradiction cid])
+            (struct-copy prop-network net*
+              [warm (struct-copy prop-net-warm (prop-network-warm net*)
+                      [contradiction cid])])
             net*))))
 
 ;; ========================================
@@ -544,7 +601,9 @@
                                 (struct-copy prop-cell cell [value committed]))))
             acc))
       cells))
-  (struct-copy prop-network net [cells new-cells]))
+  (struct-copy prop-network net
+    [warm (struct-copy prop-net-warm (prop-network-warm net)
+            [cells new-cells])]))
 
 ;; Track 6 Phase 4: Retract an assumption from a TMS cell value.
 ;; Removes the branch for assumption-id, reverting to the state before
@@ -579,7 +638,9 @@
                                 (struct-copy prop-cell cell [value retracted]))))
             acc))
       cells))
-  (struct-copy prop-network net [cells new-cells]))
+  (struct-copy prop-network net
+    [warm (struct-copy prop-net-warm (prop-network-warm net)
+            [cells new-cells])]))
 
 ;; Merge two TMS cell values (recursive tree merge).
 ;; Per-branch: latest write wins (same assumption can't produce two
@@ -706,11 +767,14 @@
                             [dependents new-deps]))))))
   (values
    (struct-copy prop-network net
-     [cells new-cells]
-     [propagators (champ-insert (prop-network-propagators net) ph pid prop)]
-     [next-prop-id (+ 1 (prop-network-next-prop-id net))]
+     [warm (struct-copy prop-net-warm (prop-network-warm net)
+             [cells new-cells])]
+     [cold (struct-copy prop-net-cold (prop-network-cold net)
+             [propagators (champ-insert (prop-network-propagators net) ph pid prop)]
+             [next-prop-id (+ 1 (prop-network-next-prop-id net))])]
      ;; Schedule initial firing
-     [worklist (cons pid (prop-network-worklist net))])
+     [hot (struct-copy prop-net-hot (prop-network-hot net)
+            [worklist (cons pid (prop-network-worklist net))])])
    pid))
 
 ;; ========================================
@@ -841,8 +905,9 @@
      (let* ([pid (car (prop-network-worklist net))]
             [rest (cdr (prop-network-worklist net))]
             [net* (struct-copy prop-network net
-                    [worklist rest]
-                    [fuel (sub1 (prop-network-fuel net))])]
+                    [hot (struct-copy prop-net-hot (prop-network-hot net)
+                           [worklist rest]
+                           [fuel (sub1 (prop-network-fuel net))])])]
             [prop (champ-lookup (prop-network-propagators net*)
                                 (prop-id-hash pid) pid)])
        (if (eq? prop 'none)
@@ -862,8 +927,9 @@
        (let* ([pid (car (prop-network-worklist net))]
               [rest (cdr (prop-network-worklist net))]
               [net* (struct-copy prop-network net
-                      [worklist rest]
-                      [fuel (sub1 (prop-network-fuel net))])]
+                      [hot (struct-copy prop-net-hot (prop-network-hot net)
+                             [worklist rest]
+                             [fuel (sub1 (prop-network-fuel net))])])]
               [prop (champ-lookup (prop-network-propagators net*)
                                   (prop-id-hash pid) pid)])
          (if (eq? prop 'none)
@@ -969,8 +1035,9 @@
               [n (length pids)]
               ;; 2. Clear worklist and decrease fuel
               [snapshot (struct-copy prop-network net
-                         [worklist '()]
-                         [fuel (- (prop-network-fuel net) n)])]
+                          [hot (struct-copy prop-net-hot (prop-network-hot net)
+                                 [worklist '()]
+                                 [fuel (- (prop-network-fuel net) n)])])]
               ;; 3. Fire all propagators against snapshot
               [all-writes (executor snapshot pids)]
               ;; 4. Bulk-merge writes into snapshot
@@ -1055,8 +1122,9 @@
 (define (net-set-widen-point net cid widen-fn narrow-fn)
   (define h (cell-id-hash cid))
   (struct-copy prop-network net
-    [widen-fns (champ-insert (prop-network-widen-fns net)
-                              h cid (cons widen-fn narrow-fn))]))
+    [cold (struct-copy prop-net-cold (prop-network-cold net)
+            [widen-fns (champ-insert (prop-network-widen-fns net)
+                                     h cid (cons widen-fn narrow-fn))])]))
 
 ;; Check if a cell is a widening point.
 (define (net-widen-point? net cid)
@@ -1108,10 +1176,14 @@
               (and (not (eq? cfn 'none))
                    (cfn final-val))]
              [net* (struct-copy prop-network net
-                     [cells new-cells]
-                     [worklist new-wl])])
+                     [warm (struct-copy prop-net-warm (prop-network-warm net)
+                             [cells new-cells])]
+                     [hot (struct-copy prop-net-hot (prop-network-hot net)
+                            [worklist new-wl])])])
         (if contradicted?
-            (struct-copy prop-network net* [contradiction cid])
+            (struct-copy prop-network net*
+              [warm (struct-copy prop-net-warm (prop-network-warm net*)
+                      [contradiction cid])])
             net*))))
 
 ;; Internal: run one phase of widening fixpoint iteration.
@@ -1126,8 +1198,9 @@
      (let* ([pid (car (prop-network-worklist net))]
             [rest (cdr (prop-network-worklist net))]
             [net* (struct-copy prop-network net
-                    [worklist rest]
-                    [fuel (sub1 (prop-network-fuel net))])]
+                    [hot (struct-copy prop-net-hot (prop-network-hot net)
+                           [worklist rest]
+                           [fuel (sub1 (prop-network-fuel net))])])]
             [prop (champ-lookup (prop-network-propagators net*)
                                 (prop-id-hash pid) pid)])
        (if (eq? prop 'none)
@@ -1161,7 +1234,9 @@
               ([cid (in-list (champ-keys wfns))])
       (define h (cell-id-hash cid))
       (champ-insert m h cid (lambda (old new) new))))
-  (struct-copy prop-network net [merge-fns new-mfns]))
+  (struct-copy prop-network net
+    [cold (struct-copy prop-net-cold (prop-network-cold net)
+            [merge-fns new-mfns])]))
 
 ;; Internal: run one phase of narrowing iteration.
 ;; Strategy: fire propagators against a snapshot where widening-point cells
@@ -1176,8 +1251,9 @@
      (let* ([pid (car (prop-network-worklist net))]
             [rest (cdr (prop-network-worklist net))]
             [net* (struct-copy prop-network net
-                    [worklist rest]
-                    [fuel (sub1 (prop-network-fuel net))])]
+                    [hot (struct-copy prop-net-hot (prop-network-hot net)
+                           [worklist rest]
+                           [fuel (sub1 (prop-network-fuel net))])])]
             [prop (champ-lookup (prop-network-propagators net*)
                                 (prop-id-hash pid) pid)])
        (if (eq? prop 'none)
@@ -1231,11 +1307,14 @@
                                                (and (not (eq? cfn 'none))
                                                     (cfn narrowed))]
                                               [n* (struct-copy prop-network n
-                                                    [cells new-cells]
-                                                    [worklist new-wl])])
+                                                    [warm (struct-copy prop-net-warm (prop-network-warm n)
+                                                            [cells new-cells])]
+                                                    [hot (struct-copy prop-net-hot (prop-network-hot n)
+                                                           [worklist new-wl])])])
                                          (if contradicted?
                                              (struct-copy prop-network n*
-                                               [contradiction cid])
+                                               [warm (struct-copy prop-net-warm (prop-network-warm n*)
+                                                       [contradiction cid])])
                                              n*)))))))])
              (run-narrow-phase net**))))]))
 
@@ -1271,7 +1350,8 @@
              (champ-keys (prop-network-propagators net)))
            (define net-with-wl
              (struct-copy prop-network net
-               [worklist all-prop-ids]))
+               [hot (struct-copy prop-net-hot (prop-network-hot net)
+                      [worklist all-prop-ids])]))
            (define narrowed (run-narrow-phase net-with-wl))
            ;; Check if narrowing changed anything by comparing cell values
            (if (equal? (prop-network-cells narrowed)
@@ -1312,10 +1392,11 @@
 ;; sub-cells: (listof cell-id)
 (define (net-cell-decomp-insert net cid tag sub-cells)
   (struct-copy prop-network net
-    [cell-decomps
-     (champ-insert (prop-network-cell-decomps net)
-                   (cell-id-hash cid) cid
-                   (cons tag sub-cells))]))
+    [cold (struct-copy prop-net-cold (prop-network-cold net)
+            [cell-decomps
+             (champ-insert (prop-network-cell-decomps net)
+                           (cell-id-hash cid) cid
+                           (cons tag sub-cells))])]))
 
 ;; Check if a cell pair has already been decomposed.
 (define (net-pair-decomp? net key)
@@ -1325,9 +1406,10 @@
 ;; Register a cell pair as decomposed.
 (define (net-pair-decomp-insert net key)
   (struct-copy prop-network net
-    [pair-decomps
-     (champ-insert (prop-network-pair-decomps net)
-                   (decomp-key-hash key) key #t)]))
+    [cold (struct-copy prop-net-cold (prop-network-cold net)
+            [pair-decomps
+             (champ-insert (prop-network-pair-decomps net)
+                           (decomp-key-hash key) key #t)])]))
 
 ;; ========================================
 ;; Cross-Domain Propagation (Phase 6c)

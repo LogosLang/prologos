@@ -173,4 +173,5 @@
       (if (leq lo hi)
           n  ;; consistent — no action
           (struct-copy prop-network n
-            [contradiction lower-cid])))))
+            [warm (struct-copy prop-net-warm (prop-network-warm n)
+                    [contradiction lower-cid])])))))

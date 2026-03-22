@@ -134,13 +134,14 @@
   (define pnet (elab-network-prop-net enet))
   (define clean-pnet
     (struct-copy prop-network pnet
-      [propagators champ-empty]
-      [worklist '()]
-      [next-prop-id 0]
-      [fuel fuel]
-      [contradiction #f]
-      [cell-decomps champ-empty]
-      [pair-decomps champ-empty]))
+      [hot (prop-net-hot '() fuel)]
+      [warm (struct-copy prop-net-warm (prop-network-warm pnet)
+              [contradiction #f])]
+      [cold (struct-copy prop-net-cold (prop-network-cold pnet)
+              [propagators champ-empty]
+              [next-prop-id 0]
+              [cell-decomps champ-empty]
+              [pair-decomps champ-empty])]))
   (elab-network clean-pnet
                 (elab-network-cell-info enet)
                 0            ;; fresh meta counter

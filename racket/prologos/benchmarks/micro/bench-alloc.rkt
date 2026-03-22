@@ -258,7 +258,8 @@
       (λ ()
         (for/fold ([n net]) ([i (in-range 10000)])
           (struct-copy prop-network n
-            [worklist (cons (prop-id i) (prop-network-worklist n))]))))))
+            [hot (prop-net-hot (cons (prop-id i) (prop-network-worklist n))
+                               (prop-network-fuel n))]))))))
 
 ;; ============================================================
 ;; Direct Timing (sub-ms precision via multi-sample averaging)
@@ -352,7 +353,8 @@
     (λ ()
       (for/fold ([n net]) ([i (in-range 50000)])
         (struct-copy prop-network n
-          [worklist (cons (prop-id i) (prop-network-worklist n))])))))
+          [hot (prop-net-hot (cons (prop-id i) (prop-network-worklist n))
+                             (prop-network-fuel n))])))))
 
 ;; Change ratio measurement
 (measure-change-ratio)
