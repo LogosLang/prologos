@@ -360,6 +360,68 @@
 (measure-change-ratio)
 
 ;; ============================================================
+;; CHAMP-Level Baselines (CHAMP Performance Track Phase 0)
+;; ============================================================
+
+(printf "\n=== CHAMP-Level Baselines ===\n\n")
+
+;; Raw champ-insert throughput: sequential integer keys (network-like)
+(let ()
+  (direct-bench "champ-insert: 1000 sequential keys"
+    1000
+    (λ ()
+      (for/fold ([m champ-empty]) ([i (in-range 1000)])
+        (champ-insert m i i (* i i))))))
+
+;; Raw champ-insert throughput: scrambled keys
+(let ()
+  (direct-bench "champ-insert: 1000 scrambled keys (×7 prime)"
+    1000
+    (λ ()
+      (for/fold ([m champ-empty]) ([i (in-range 1000)])
+        (define h (* i 104729))  ;; large prime scramble
+        (champ-insert m h i (* i i))))))
+
+;; Value-only update (existing key, the hot path)
+(let ([m (for/fold ([m champ-empty]) ([i (in-range 500)])
+           (champ-insert m i i (* i i)))])
+  (direct-bench "champ-insert: 500 value-only updates on 500-entry map"
+    500
+    (λ ()
+      (for/fold ([acc m]) ([i (in-range 500)])
+        (champ-insert acc i i (* i i 2))))))
+
+;; Lookup throughput
+(let ([m (for/fold ([m champ-empty]) ([i (in-range 500)])
+           (champ-insert m i i (* i i)))])
+  (direct-bench "champ-lookup: 10000 hits on 500-entry map"
+    10000
+    (λ ()
+      (for ([round (in-range 20)])
+        (for ([i (in-range 500)])
+          (champ-lookup m i i))))))
+
+;; Current transient cycle at various batch sizes
+(let ([m (for/fold ([m champ-empty]) ([i (in-range 500)])
+           (champ-insert m i i (* i i)))])
+  (for ([n (in-list '(2 10 50 100))])
+    (direct-bench (format "champ-transient cycle: ~a inserts on 500-entry map" n)
+      n
+      (λ ()
+        (define t (champ-transient m))
+        (for ([i (in-range 500 (+ 500 n))])
+          (tchamp-insert! t i i (* i i)))
+        (tchamp-freeze t)))))
+
+;; Single-key insert (isolates per-insert node construction cost for Phase 4 regression check)
+(let ()
+  (direct-bench "champ-insert: 50000 single-key fresh maps (node construction baseline)"
+    50000
+    (λ ()
+      (for ([i (in-range 50000)])
+        (champ-insert champ-empty i i i)))))
+
+;; ============================================================
 ;; Memory and GC Analysis (Phase 6)
 ;; ============================================================
 
