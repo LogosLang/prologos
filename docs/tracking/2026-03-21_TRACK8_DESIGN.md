@@ -16,8 +16,8 @@
 |---|-------|-------------|--------|--------|-------|
 | — | **Part A: Infrastructure Migration** | | | | |
 | A0 | Acceptance file | Baseline canary + aspirational tests | ✅ | `68d1e7a` | 16 results 0 errors. §A baseline, §B-C commented out |
-| A1 | Meta-info TMS-awareness | `meta-info` CHAMP → TMS-managed field | ⬜ | | Enables `restore-meta-state!` retirement. Acceptance §A: Church fold still works |
-| A2 | Id-map accessibility | `id-map` accessible from prop-net layer | ⬜ | | Unblocks mult bridge wiring |
+| A1 | Meta-info TMS-awareness | `meta-info` CHAMP → TMS-managed field | ✅ | `249bb2b` | Per-entry assumption tagging. 6 read sites unwrap. S(-1) retracts. 7330 tests 243.8s |
+| A2 | Id-map accessibility | `id-map` accessible from prop-net layer | ✅ | (Track 6) | Already delivered by Track 6 Phase 1a: `current-prop-id-map-read` + `prop-meta-id->cell-id`. Confirmed accessible from prop fire functions. |
 | A3 | Mult/Level/Session on elab-network | Merge CHAMP boxes into elab-network cells | ⬜ | | Per-meta domain cells. Acceptance §A: cross-domain still works |
 | A4 | `restore-meta-state!` retirement | Replace box snapshot with TMS rollback | ⬜ | | Depends on A1-A3. Acceptance §A: Church fold + all speculation tests |
 | A5 | Resolution state simplification | Remove imperative flags | ⬜ | | Low-risk cleanup |
