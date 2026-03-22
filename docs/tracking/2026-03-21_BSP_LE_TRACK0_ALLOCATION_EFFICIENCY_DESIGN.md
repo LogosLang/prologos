@@ -25,7 +25,7 @@
 | 3f | Accessor macros → stable API | Retain macros as public API; remove "compatibility" framing | ✅ | | Macros decouple 18 consumer files from inner struct layout — keeping them IS the right design |
 | 4 | Batch cell registration | Transient CHAMP + next-cell-id range pre-allocation | ✅ | `6cf9a70` | API provided + 5 tests. Site conversion awaits Track 8 callback elimination |
 | 5 | Propagator input batching | Transient CHAMP for multi-input registration | ❌ | | REVERTED: transient cycle (345s) regressed vs sequential (239s). Typical arity 2-3 — too small for transient benefit |
-| 6 | Verification + A/B | Full suite + comparative benchmarks + memory | ⬜ | | Target: ≤180s suite (10-20% improvement) |
+| 6 | Verification + A/B | Full suite + micro-benchmarks + GC/memory analysis | 🔄 | | Wall-time neutral (+2%); GC during quiescence: 0ms; struct-copy 3× cheaper; cell-write -7%; zero allocation on hot path |
 
 ---
 

@@ -359,11 +359,14 @@
 ;; Change ratio measurement
 (measure-change-ratio)
 
-;; Memory baseline
-(printf "\n--- Memory Baseline ---\n")
+;; ============================================================
+;; Memory and GC Analysis (Phase 6)
+;; ============================================================
+
+;; Test 1: Retained memory after workload (same as Phase 0 baseline)
+(printf "\n--- Memory Baseline: Retained After 500-Cell Chain × 100 ---\n")
 (collect-garbage 'major)
 (define mem-before (current-memory-use))
-;; Process a representative workload: build + quiesce a 500-cell chain × 100
 (let-values ([(net ids) (make-chain-network 500)])
   (for ([round (in-range 100)])
     (define seeded (net-cell-write net (car ids) (add1 round)))
@@ -373,3 +376,76 @@
 (printf "Memory before: ~a bytes (~a MB)\n" mem-before (~r (/ mem-before 1048576.0) #:precision '(= 1)))
 (printf "Memory after:  ~a bytes (~a MB)\n" mem-after (~r (/ mem-after 1048576.0) #:precision '(= 1)))
 (printf "Delta:         ~a bytes (~a KB)\n" (- mem-after mem-before) (~r (/ (- mem-after mem-before) 1024.0) #:precision '(= 1)))
+
+;; Test 2: GC pressure during quiescence — measures allocation throughput.
+;; Fires F propagators in a chain. Before struct split: F × 13-field intermediates.
+;; After struct split + mutable worklist: ~C × 3-field intermediates (C = changed cells).
+;; GC time difference reveals allocation pressure reduction.
+(printf "\n--- GC Pressure: 1000-Cell Chain × 50 Quiescence Runs ---\n")
+(let-values ([(net ids) (make-chain-network 1000)])
+  (collect-garbage 'major)
+  (define gc-before (current-gc-milliseconds))
+  (define t-before (current-inexact-monotonic-milliseconds))
+  (for ([round (in-range 50)])
+    (define seeded (net-cell-write net (car ids) (add1 round)))
+    (run-to-quiescence seeded))
+  (define t-after (current-inexact-monotonic-milliseconds))
+  (define gc-after (current-gc-milliseconds))
+  (printf "Wall time:  ~a ms\n" (~r (- t-after t-before) #:precision '(= 1)))
+  (printf "GC time:    ~a ms\n" (- gc-after gc-before))
+  (printf "GC ratio:   ~a%\n" (~r (* 100.0 (/ (- gc-after gc-before)
+                                                (max 1 (- t-after t-before))))
+                                 #:precision '(= 1))))
+
+;; Test 3: GC pressure during cell allocation — measures batch allocation impact.
+;; Creates N cells sequentially. Each net-new-cell produces intermediate networks
+;; that become garbage immediately. Struct split means these intermediates are smaller.
+(printf "\n--- GC Pressure: 5000 Sequential Cell Allocations ---\n")
+(let ()
+  (collect-garbage 'major)
+  (define gc-before (current-gc-milliseconds))
+  (define mem-before-alloc (current-memory-use))
+  (define t-before (current-inexact-monotonic-milliseconds))
+  (define final-net
+    (for/fold ([net (make-prop-network)])
+              ([i (in-range 5000)])
+      (define-values (net* _cid) (net-new-cell net 'bot int-merge))
+      net*))
+  (define t-after (current-inexact-monotonic-milliseconds))
+  (define gc-after (current-gc-milliseconds))
+  (collect-garbage 'major)
+  (define mem-after-alloc (current-memory-use))
+  (printf "Wall time:   ~a ms\n" (~r (- t-after t-before) #:precision '(= 1)))
+  (printf "GC time:     ~a ms\n" (- gc-after gc-before))
+  (printf "GC ratio:    ~a%\n" (~r (* 100.0 (/ (- gc-after gc-before)
+                                                 (max 1 (- t-after t-before))))
+                                  #:precision '(= 1)))
+  (printf "Retained:    ~a KB\n" (~r (/ (- mem-after-alloc mem-before-alloc) 1024.0) #:precision '(= 1)))
+  ;; Keep net alive past GC
+  (void (prop-network-next-cell-id final-net)))
+
+;; Test 4: GC pressure during propagator allocation — same pattern.
+(printf "\n--- GC Pressure: 2000 Propagator Allocations (2 inputs each) ---\n")
+(let ()
+  ;; Create 2001 cells first
+  (define-values (base-net base-ids) (make-chain-network 2001))
+  (collect-garbage 'major)
+  (define gc-before (current-gc-milliseconds))
+  (define t-before (current-inexact-monotonic-milliseconds))
+  (define final-net
+    (for/fold ([net base-net])
+              ([i (in-range 2000)])
+      (define c1 (list-ref base-ids i))
+      (define c2 (list-ref base-ids (+ i 1)))
+      (define-values (net* _pid)
+        (net-add-propagator net (list c1 c2) '()
+          (lambda (n) n)))  ;; no-op fire fn
+      net*))
+  (define t-after (current-inexact-monotonic-milliseconds))
+  (define gc-after (current-gc-milliseconds))
+  (printf "Wall time:   ~a ms\n" (~r (- t-after t-before) #:precision '(= 1)))
+  (printf "GC time:     ~a ms\n" (- gc-after gc-before))
+  (printf "GC ratio:    ~a%\n" (~r (* 100.0 (/ (- gc-after gc-before)
+                                                 (max 1 (- t-after t-before))))
+                                  #:precision '(= 1)))
+  (void (prop-network-next-prop-id final-net)))
