@@ -105,6 +105,8 @@
  ;; Lives in propagator.rkt (not elab-speculation-bridge.rkt) to avoid
  ;; circular dependency: metavar-store.rkt needs it for TMS-aware reads.
  current-speculation-stack
+ ;; Track 8 C5a: Global BSP scheduler override for A/B benchmarking
+ current-use-bsp-scheduler?
  ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
  net-cell-read-raw
  ;; Track 6 Phase 2+3: Network-wide TMS commit
@@ -797,6 +799,12 @@
 ;; elab-speculation-bridge.rkt depends on metavar-store.rkt.
 (define current-speculation-stack (make-parameter '()))
 
+;; Track 8 C5a: Global scheduler override.
+;; When #t, ALL run-to-quiescence calls use BSP scheduling instead of Gauss-Seidel.
+;; This is the correct level for a full A/B comparison — it catches every quiescence
+;; invocation (unify.rkt, elab-speculation.rkt, bridges, tabling, not just metavar-store).
+(define current-use-bsp-scheduler? (make-parameter #f))
+
 ;; B2f Phase 0: Per-quiescence cell-write instrumentation.
 ;; When non-#f, these are boxes that net-cell-write increments.
 ;; - write-counter: every net-cell-write call
@@ -937,39 +945,43 @@
 ;; call summarizing all propagator firings and cell diffs from initial
 ;; to final state.
 (define (run-to-quiescence net)
-  (define observer (current-bsp-observer))
-  (if (not observer)
-      ;; Fast path: no tracing overhead
-      (run-to-quiescence-inner net)
-      ;; Traced path: capture diffs between initial and final state
-      (let* ([initial net]
-             [result (run-to-quiescence-inner/traced net)]
-             [final (car result)]
-             [fired-pids (cdr result)])
-        (when (pair? fired-pids)
-          ;; Compute cell diffs by comparing initial vs final cell values
-          (define cell-ids (champ-keys (prop-network-cells final)))
-          (define diffs
-            (for/fold ([acc '()])
-                      ([cid (in-list cell-ids)])
-              (define old-cell (champ-lookup (prop-network-cells initial)
-                                            (cell-id-hash cid) cid))
-              (define new-cell (champ-lookup (prop-network-cells final)
-                                            (cell-id-hash cid) cid))
-              (cond
-                [(eq? old-cell 'none) ;; new cell — diff from bot
-                 (cons (cell-diff cid 'bot (prop-cell-value new-cell)
-                                  (if (pair? fired-pids) (car fired-pids) (prop-id 0)))
-                       acc)]
-                [(eq? new-cell 'none) acc] ;; shouldn't happen
-                [(equal? (prop-cell-value old-cell) (prop-cell-value new-cell)) acc]
-                [else
-                 (cons (cell-diff cid (prop-cell-value old-cell) (prop-cell-value new-cell)
-                                  (if (pair? fired-pids) (car fired-pids) (prop-id 0)))
-                       acc)])))
-          (observer (bsp-round 0 final (reverse diffs) fired-pids
-                               (prop-network-contradiction final) '())))
-        final)))
+  ;; Track 8 C5a: global BSP override for full A/B benchmarking.
+  ;; Redirects ALL quiescence calls (unify, speculation, bridges, etc.) to BSP.
+  (if (current-use-bsp-scheduler?)
+      (run-to-quiescence-bsp net)
+      (let ([observer (current-bsp-observer)])
+        (if (not observer)
+            ;; Fast path: no tracing overhead
+            (run-to-quiescence-inner net)
+            ;; Traced path: capture diffs between initial and final state
+            (let* ([initial net]
+                   [result (run-to-quiescence-inner/traced net)]
+                   [final (car result)]
+                   [fired-pids (cdr result)])
+              (when (pair? fired-pids)
+                ;; Compute cell diffs by comparing initial vs final cell values
+                (define cell-ids (champ-keys (prop-network-cells final)))
+                (define diffs
+                  (for/fold ([acc '()])
+                            ([cid (in-list cell-ids)])
+                    (define old-cell (champ-lookup (prop-network-cells initial)
+                                                  (cell-id-hash cid) cid))
+                    (define new-cell (champ-lookup (prop-network-cells final)
+                                                  (cell-id-hash cid) cid))
+                    (cond
+                      [(eq? old-cell 'none) ;; new cell — diff from bot
+                       (cons (cell-diff cid 'bot (prop-cell-value new-cell)
+                                        (if (pair? fired-pids) (car fired-pids) (prop-id 0)))
+                             acc)]
+                      [(eq? new-cell 'none) acc] ;; shouldn't happen
+                      [(equal? (prop-cell-value old-cell) (prop-cell-value new-cell)) acc]
+                      [else
+                       (cons (cell-diff cid (prop-cell-value old-cell) (prop-cell-value new-cell)
+                                        (if (pair? fired-pids) (car fired-pids) (prop-id 0)))
+                             acc)])))
+                (observer (bsp-round 0 final (reverse diffs) fired-pids
+                                     (prop-network-contradiction final) '())))
+              final)))))
 
 ;; Inner loop: no tracing.
 ;; BSP-LE Track 0 Phase 3c: mutable worklist/fuel drain pattern.

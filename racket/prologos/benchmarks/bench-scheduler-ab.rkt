@@ -4,7 +4,11 @@
 ;;; Track 8 C5a: Gauss-Seidel vs BSP scheduler A/B comparison
 ;;;
 ;;; Runs each comparative benchmark file under both schedulers,
-;;; collects wall-time + fuel consumption, and reports comparison.
+;;; collects wall-time and reports comparison.
+;;;
+;;; Uses current-use-bsp-scheduler? (propagator.rkt level) to override
+;;; ALL run-to-quiescence calls globally — not just the stratified loop,
+;;; but also unify.rkt, elab-speculation.rkt, bridges, tabling, etc.
 ;;;
 
 (require racket/list
@@ -16,12 +20,15 @@
          "../metavar-store.rkt")
 
 (define RUNS 5)
-(define BENCHMARK-DIR "benchmarks/comparative/")
+
+;; Resolve benchmark directory relative to this script's location
+(define script-dir (path-only (resolved-module-path-name (variable-reference->resolved-module-path (#%variable-reference)))))
+(define BENCHMARK-DIR (build-path script-dir "comparative"))
 
 ;; Collect all .prologos files in the benchmark directory
 (define benchmark-files
   (sort
-   (for/list ([f (in-directory (build-path (current-directory) BENCHMARK-DIR))]
+   (for/list ([f (in-directory BENCHMARK-DIR)]
               #:when (regexp-match? #rx"\\.prologos$" (path->string f)))
      f)
    string<? #:key path->string))
@@ -35,13 +42,14 @@
             (list-ref sorted (quotient n 2)))
          2.0)))
 
-(define (run-benchmark file scheduler-fn scheduler-name)
+;; use-bsp?: when #t, overrides ALL run-to-quiescence calls globally (propagator.rkt level)
+(define (run-benchmark file use-bsp? scheduler-name)
   (define times
     (for/list ([_ (in-range RUNS)])
       (collect-garbage)
       (collect-garbage)
       (define t0 (current-inexact-milliseconds))
-      (parameterize ([current-quiescence-scheduler scheduler-fn])
+      (parameterize ([current-use-bsp-scheduler? use-bsp?])
         (process-file (path->string file)))
       (- (current-inexact-milliseconds) t0)))
   (define med (median times))
@@ -62,8 +70,8 @@
 
 (for ([f (in-list benchmark-files)])
   (define name (path->string (file-name-from-path f)))
-  (define-values (gs-med gs-times) (run-benchmark f run-to-quiescence "GS"))
-  (define-values (bsp-med bsp-times) (run-benchmark f run-to-quiescence-bsp "BSP"))
+  (define-values (gs-med gs-times) (run-benchmark f #f "GS"))
+  (define-values (bsp-med bsp-times) (run-benchmark f #t "BSP"))
   (define ratio (if (> gs-med 0) (/ bsp-med gs-med) +inf.0))
   (set! gs-totals (cons gs-med gs-totals))
   (set! bsp-totals (cons bsp-med bsp-totals))
