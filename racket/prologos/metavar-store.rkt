@@ -231,6 +231,9 @@
  maybe-flush-network!
  ;; Phase 4c: Meta cell lookup (for structural decomposition propagators)
  prop-meta-id->cell-id
+ ;; Track 8 C1: Trait resolution bridge callback (domain injection)
+ current-trait-resolution-bridge-fn
+ current-hasmethod-resolution-bridge-fn
  ;; Hash removal: test isolation helper
  with-fresh-meta-env)
 
@@ -431,6 +434,23 @@
                 (list (tagged-entry (action-resolve-trait meta-id info) aid)))
               pnet))))
     (set-box! tc-net-box enet-r))
+  ;; Track 8 C1: Resolution bridge propagator (resolves in S0, bypassing S1→S2).
+  ;; When the bridge callback is available and dep cells exist, install a bridge
+  ;; propagator that watches the same dep-cids. The bridge fire function syncs
+  ;; the enet box, calls the resolution function, and returns the updated pnet.
+  ;; The existing readiness propagators remain as fallback — if the bridge resolves
+  ;; the dict, the readiness action becomes a no-op (meta already solved).
+  (define bridge-fn (current-trait-resolution-bridge-fn))
+  (when (and bridge-fn (not (null? cell-ids)))
+    (define dep-cids (remove-duplicates cell-ids eq?))
+    ;; The dict-meta's cell receives the resolved dict expression.
+    (define dict-cell-id (prop-meta-id->cell-id meta-id))
+    (when dict-cell-id
+      (define-values (enet-bridge _bridge-pid)
+        (elab-add-propagator (unbox tc-net-box) dep-cids (list dict-cell-id)
+          (lambda (pnet)
+            (bridge-fn pnet meta-id info dep-cids))))
+      (set-box! tc-net-box enet-bridge)))
   )
 
 ;; Track 1 Phase 2a: read from cell.
@@ -459,6 +479,18 @@
 ;; Signature: (hasmethod-meta-id hasmethod-constraint-info) → void
 ;; Injected from driver.rkt to break circular dependency (same pattern as trait resolve).
 (define current-retry-hasmethod-resolve (make-parameter #f))
+
+;; Track 8 C1: Trait resolution bridge callback.
+;; Signature: (prop-network dict-meta-id trait-constraint-info (listof cell-id) → prop-network)
+;; When set, register-trait-constraint! installs a bridge propagator that resolves
+;; traits during S0 quiescence (bypassing the S1→S2 readiness→action path).
+;; The fire function syncs the box, calls resolution, returns updated pnet.
+;; Injected from driver.rkt (breaks metavar-store → trait-resolution cycle).
+(define current-trait-resolution-bridge-fn (make-parameter #f))
+
+;; Track 8 C2: Hasmethod resolution bridge callback. Same pattern as C1.
+;; Signature: (prop-network meta-id hasmethod-constraint-info (listof cell-id) → prop-network)
+(define current-hasmethod-resolution-bridge-fn (make-parameter #f))
 
 ;; Phase 1d: Install the hasmethod resolve callback.
 (define (install-hasmethod-resolve-callback! resolve-fn)
@@ -550,6 +582,27 @@
                   (list (tagged-entry (action-resolve-hasmethod meta-id info) aid)))
                 pnet))))
       (set-box! hm-net-box enet-r-hm)))
+  ;; Track 8 C2: Hasmethod resolution bridge propagator (resolves in S0).
+  ;; Same pattern as trait bridge in register-trait-constraint!.
+  (define hm-bridge-fn (current-hasmethod-resolution-bridge-fn))
+  (when (and hm-bridge-fn hm-net-box)
+    (define id-map-br (elab-network-id-map (unbox hm-net-box)))
+    (define dep-cids-br
+      (remove-duplicates
+       (for*/list ([dep-id (in-list all-dep-metas)]
+                   [cid (in-value (champ-lookup id-map-br (prop-meta-id-hash dep-id) dep-id))]
+                   #:when (not (eq? cid 'none)))
+         cid)
+       eq?))
+    (when (not (null? dep-cids-br))
+      ;; The hasmethod meta's cell receives the projected method expression.
+      (define hm-cell-id (prop-meta-id->cell-id meta-id))
+      (when hm-cell-id
+        (define-values (enet-hm-bridge _hm-bridge-pid)
+          (elab-add-propagator (unbox hm-net-box) dep-cids-br (list hm-cell-id)
+            (lambda (pnet)
+              (hm-bridge-fn pnet meta-id info dep-cids-br))))
+        (set-box! hm-net-box enet-hm-bridge))))
   )
 
 ;; Track 1 Phase 2b: read from cell.

@@ -16,6 +16,7 @@
 (require racket/match
          "syntax.rkt"
          "metavar-store.rkt"
+         "elab-network-types.rkt"   ;; Track 8 C1: elab-network-prop-net, elab-network-rewrap
          "unify.rkt"
          "zonk.rkt"
          "trait-resolution.rkt"
@@ -32,7 +33,10 @@
          retry-unify-constraint-pure
          resolve-trait-constraint-pure
          resolve-hasmethod-constraint-pure
-         resolution-execute-action-pure)
+         resolution-execute-action-pure
+         ;; Track 8 C1: Bridge propagator fire functions (pnet → pnet)
+         make-trait-resolution-bridge-fire-fn
+         make-hasmethod-resolution-bridge-fire-fn)
 
 ;; ========================================
 ;; Constraint Retry (extracted from unify.rkt module-level callback)
@@ -291,3 +295,56 @@
        (if (meta-solved? hm-id)
            enet
            (resolve-hasmethod-constraint-pure enet hm-id hm-info)))]))
+
+;; ========================================
+;; Track 8 C1: Resolution Bridge Fire Functions
+;; ========================================
+;;
+;; These functions are used as bridge propagator fire functions, executing
+;; during S0 quiescence. They bridge from prop-network (the quiescence
+;; domain) to elab-network (the resolution domain):
+;;   1. Read the enet from the box
+;;   2. Rewrap with the current pnet (quiescence has been modifying pnet)
+;;   3. Call the pure resolution function
+;;   4. Write updated enet back to box
+;;   5. Return the updated pnet (for quiescence loop)
+;;
+;; This moves trait/hasmethod resolution from S2 (post-quiescence) into
+;; S0 (during quiescence). The existing readiness propagators (threshold →
+;; fan-in → ready-queue) remain as fallback — if the bridge resolves the
+;; dict, the S2 action is a no-op (meta already solved).
+
+;; Returns a function suitable for current-trait-resolution-bridge-fn.
+;; The returned function has signature: (pnet dict-meta-id tc-info dep-cids → pnet)
+(define (make-trait-resolution-bridge-fire-fn)
+  (lambda (pnet dict-meta-id tc-info dep-cids)
+    ;; Early exit: already solved
+    (define net-box (current-prop-net-box))
+    (cond
+      [(not net-box) pnet]
+      [(meta-solved? dict-meta-id) pnet]
+      [else
+       ;; Sync box with current pnet from quiescence loop
+       (define enet-base (unbox net-box))
+       (define enet (elab-network-rewrap enet-base pnet))
+       ;; Attempt resolution (pure: enet → enet*)
+       (define enet* (resolve-trait-constraint-pure enet dict-meta-id tc-info))
+       ;; Write back to box (meta-info updates persist for subsequent reads)
+       (set-box! net-box enet*)
+       ;; Return updated pnet for quiescence loop
+       (elab-network-prop-net enet*)])))
+
+;; Returns a function suitable for current-hasmethod-resolution-bridge-fn.
+;; Same pattern as trait bridge.
+(define (make-hasmethod-resolution-bridge-fire-fn)
+  (lambda (pnet meta-id hm-info dep-cids)
+    (define net-box (current-prop-net-box))
+    (cond
+      [(not net-box) pnet]
+      [(meta-solved? meta-id) pnet]
+      [else
+       (define enet-base (unbox net-box))
+       (define enet (elab-network-rewrap enet-base pnet))
+       (define enet* (resolve-hasmethod-constraint-pure enet meta-id hm-info))
+       (set-box! net-box enet*)
+       (elab-network-prop-net enet*)])))

@@ -2182,6 +2182,10 @@
 (current-resolution-executor resolution-execute-action!)
 ;; Track 7 Phase 7b: Pure resolution executor for solve-meta! pure chain.
 (current-resolution-executor-pure resolution-execute-action-pure)
+;; Track 8 C1: Resolution bridge propagators — traits and hasmethods resolve
+;; during S0 quiescence via bridge propagators, bypassing S1→S2 readiness path.
+(current-trait-resolution-bridge-fn (make-trait-resolution-bridge-fire-fn))
+(current-hasmethod-resolution-bridge-fn (make-hasmethod-resolution-bridge-fire-fn))
 
 ;; ========================================
 ;; CLI entry point — process .prologos files
