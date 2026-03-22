@@ -32,6 +32,7 @@
 | B5 | Sugar constraint generation | `surf-get` generates Indexed/Keyed constraints | ⬜ | | Depends on B4; validates CIU vision |
 | B6 | Verification + benchmarks | Full suite + A/B comparison + acceptance | ⬜ | | |
 | — | **Part C: All Constraint Resolution as Propagators** | | | | |
+| C0 | Bridge convergence prototype | Manual trait bridge on test network; measure depth-2/3 firing count | ⬜ | | Validates core assumption before C1-C4. If >100 firings for depth-2, redesign needed |
 | C1 | Trait resolution as cross-domain bridges | `net-add-cross-domain-propagator` for trait constraints in S0 | ⬜ | | Uses session-type-bridge pattern. No new mechanism needed |
 | C2 | Hasmethod resolution as bridges | `net-add-cross-domain-propagator` for hasmethod in S0 | ⬜ | | Same bridge pattern as C1 |
 | C3 | Constraint retry as threshold propagators | Deferred constraints watch dependency cells via existing threshold | ⬜ | | Replaces imperative S2 polling with demand-driven firing |
@@ -128,10 +129,43 @@ persistent-registry-net-box    elab-network (per-command)
 
 ### Phase A0: Acceptance File
 
-Extend an existing acceptance file (or create a new one) with sections that exercise:
-- Speculation rollback (Church folds, union types) — should work identically post-TMS migration
-- Cross-domain constraints (type → mult, type → level) — should resolve without separate CHAMP boxes
-- Trait resolution (existing non-HKT traits) — regression canary
+Create `examples/2026-03-21-track8-acceptance.prologos` with concrete sections per Part:
+
+```prologos
+;; §A — Part A: Infrastructure Migration (regression canary)
+
+;; A1: Speculation rollback — Church folds and union types
+def church-two := [fn [f : [Int -> Int]] [fn [x : Int] [f [f x]]]]
+def result := [church-two [fn [y : Int] [int+ y 1]] 0]
+;; Should elaborate + reduce correctly after TMS migration
+
+;; A3: Cross-domain constraints
+;; (expressions exercising type → mult → session bridges)
+
+;; §B — Part B: HKT Resolution
+
+;; B3: HKT impl registration
+;; impl Seq List        ;; uncomment when B3 delivers
+;; impl Indexed PVec    ;; uncomment when B3 delivers
+
+;; B5: Sugar constraint generation
+;; def pv := @[10 20 30]
+;; pv[0]                ;; should use Indexed dispatch, not expr-get
+
+;; §C — Part C: Bridge Resolution
+
+;; C0: Bridge convergence (validated by prototype, not acceptance file)
+
+;; C1: Trait resolution via bridge
+;; [gfold [fn [x : Int] [int+ x 1]] 0 @[1 2 3]]
+;; Should resolve Foldable PVec via bridge propagator in S0
+
+;; C1-depth-2: Nested trait resolution
+;; (expressions requiring Seq resolution that triggers Indexed resolution)
+
+;; C4: S1 verification pass finds nothing
+;; (all constraints resolved by bridges — S1 confirms)
+```
 
 ### Phase A1: Meta-Info TMS-Awareness
 
@@ -431,6 +465,26 @@ Three patterns from prior design tracks directly inform Part C (see §11 for ful
 
 3. **Intra-walk threading from Architecture A+D**: During elaboration walks, constraint information should be collected as descriptors (not immediately wired as propagators). The session-type bridge demonstrates this: `msg-type-constraint` structs are accumulated during `compile-proc-with-type-bridges`, then checked post-quiescence. Part B5's `surf-get` should follow the same pattern.
 
+### Phase C0: Bridge Convergence Prototype
+
+**Goal**: Validate that the cross-domain bridge pattern converges for nested trait resolution before committing to C1-C6.
+
+**Design**: Manually wire a trait resolution bridge using `net-add-cross-domain-propagator` on a test propagator network. The test network has:
+- Type cells for `?C` (unsolved) and a compound type `PVec Int`
+- A trait bridge: type cell → α (extract constructor, lookup impl) → dict cell
+- A depth-2 test: resolving `Seq ?C` triggers resolving `Indexed (List ?A)` when `?C` = `List`
+- A depth-3 test: three levels of dependent trait resolution
+
+**Measurement**: Count propagator firings to reach quiescence for each depth level. Thresholds:
+- Depth 1: < 10 firings → expected
+- Depth 2: < 20 firings → acceptable
+- Depth 3: < 50 firings → acceptable
+- Any depth > 100 firings → redesign needed (layered scheduler becomes mandatory, or bridge approach is unsuitable)
+
+**Implementation note**: This can run alongside Part A — it's a standalone test, not dependent on A1-A5 or B1-B5. Early validation prevents investing in 10+ prerequisite phases before discovering the core assumption is wrong.
+
+**Files**: New test file `tests/test-trait-resolution-bridge.rkt`
+
 ### Phase C1: Trait Resolution as Cross-Domain Bridge Propagators
 
 **Goal**: Trait constraints with a single matching instance resolve as cross-domain bridge propagators in S0, using the existing `net-add-cross-domain-propagator` infrastructure.
@@ -548,9 +602,17 @@ Part C's interleaved resolution (C1-C3 firing in S0 alongside type propagation) 
 
 **Option D — Disable caching during S0**: `(current-reduction-caching-enabled?)` parameter, `#f` during quiescence, `#t` during zonk. The boundary is principled: "caching is valid only when the meta-solution context is final." Simple, correct, but potentially expensive if uncached S0 reduction is a hot path.
 
-**Option E — Generation-stamped cache** (D.2 critique): Each cache entry is tagged with the elab-network's structural identity (`eq?` on the network struct — Track 7 introduced this for progress detection). On lookup, if current network is `eq?` to the tagged identity, the entry is valid. If not (a meta was solved, changing the network), the entry is stale and must be recomputed. Cost: one `eq?` per cache lookup. Avoids the blanket disable of Option D while providing correct invalidation without per-reduction dependency tracking.
+**Option E — Solve-meta generation counter** (D.2 critique, refined): A monotonic counter incremented on each `solve-meta!` call (~5-15 times per command). Each cache entry is tagged with the counter value at computation time. On lookup, if the current counter matches the entry's tag, the entry is valid. If not (a meta was solved since computation), the entry is stale and must be recomputed.
 
-**Recommendation**: Try Option E first (lower performance risk). Fall back to Option D if Option E's per-lookup overhead is measurable. C6 should benchmark both.
+Cost model:
+- Counter increment: one `set-box!` per `solve-meta!` call — negligible
+- Cache lookup: one `(= counter entry-gen)` per WHNF/NF call — ~0.5ns per check, ~0.1μs total per command for 200 lookups
+- Expected hit rate: between two `solve-meta!` calls, cache is fully valid. With ~50 WHNF calls between solves and ~60% repeat rate, saves ~30-150μs per command
+- Worst case: if `solve-meta!` fires after every propagator firing, degrades to Option D. Unlikely: most firings are type unification (no `solve-meta!`)
+
+**Note**: The initial D.2 proposal used `eq?` on the elab-network struct as the generation stamp. This is wrong — the network changes on every cell write (immutable struct), invalidating the entire cache on every write (functionally identical to Option D). The solve-meta counter is the correct granularity: only meta solutions invalidate reduction results, not arbitrary cell writes.
+
+**Recommendation**: Option E (solve-meta counter) first. Fall back to Option D if counter overhead is measurable or if edge cases arise where cell writes (not just meta solutions) invalidate reduction. C6 benchmarks both. C6 should benchmark both.
 
 **Principled long-term solution (Track 9)**: Reduction results as propagator cells with dependency-tracked invalidation. When a meta that a reduction depends on is solved, the reduction cell automatically recomputes. No memo cache needed — the propagator network IS the cache. See [Track 9: Reduction as Propagators](2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md) for the full vision.
 
@@ -614,6 +676,7 @@ Part C's interleaved resolution (C1-C3 firing in S0 alongside type propagation) 
 
 | Phase | Level 1 | Level 2 | Level 3 |
 |-------|---------|---------|---------|
+| C0 | Manual bridge on test network: depth 1/2/3 firing count | — | Standalone (no acceptance file) |
 | C1 | Trait bridge resolves in S0: single-instance | Nested constraints (Seq of List) | Acceptance: `impl` resolution across collection types |
 | C2 | Hasmethod bridge resolves in S0 | — | Full suite regression |
 | C3 | Constraint retry fires on ground dependencies | Multi-dependency constraint | Full suite regression |
