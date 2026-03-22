@@ -23,8 +23,8 @@
 | 3d | Warm-group cell write | `net-cell-write` copies only warm group | ✅ | `bfe8e4f` | Already achieved by Phase 3b migration — warm+hot only, cold shared |
 | 3e | Cold-group allocation ops | `net-new-cell`/`net-add-propagator` copy cold group | ✅ | `bfe8e4f` | Already achieved by Phase 3b migration — warm+cold only, hot untouched |
 | 3f | Accessor macros → stable API | Retain macros as public API; remove "compatibility" framing | ✅ | | Macros decouple 18 consumer files from inner struct layout — keeping them IS the right design |
-| 4 | Batch cell registration | Transient CHAMP + next-cell-id range pre-allocation | ⬜ | | Eliminates dead intermediate networks |
-| 5 | Propagator input batching | Transient CHAMP for multi-input registration | ⬜ | | Follow-on to Phase 4 pattern |
+| 4 | Batch cell registration | Transient CHAMP + next-cell-id range pre-allocation | ✅ | `6cf9a70` | API provided + 5 tests. Site conversion awaits Track 8 callback elimination |
+| 5 | Propagator input batching | Transient CHAMP for multi-input registration | ❌ | | REVERTED: transient cycle (345s) regressed vs sequential (239s). Typical arity 2-3 — too small for transient benefit |
 | 6 | Verification + A/B | Full suite + comparative benchmarks + memory | ⬜ | | Target: ≤180s suite (10-20% improvement) |
 
 ---

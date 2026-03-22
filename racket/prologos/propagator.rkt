@@ -804,7 +804,10 @@
   (define pid (prop-id (prop-network-next-prop-id net)))
   (define prop (propagator input-ids output-ids fire-fn))
   (define ph (prop-id-hash pid))
-  ;; Register pid as dependent of each input cell
+  ;; Register pid as dependent of each input cell.
+  ;; Sequential CHAMP inserts — optimal for typical arity (2-3 inputs).
+  ;; Phase 5 attempted transient CHAMP here but it regressed: the
+  ;; champ-transient/freeze cycle costs more than 2-3 sequential inserts.
   (define new-cells
     (for/fold ([cells (prop-network-cells net)])
               ([cid (in-list input-ids)])
