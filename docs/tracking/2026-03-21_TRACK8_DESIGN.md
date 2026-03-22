@@ -465,6 +465,23 @@ Three patterns from prior design tracks directly inform Part C (see §11 for ful
 
 3. **Intra-walk threading from Architecture A+D**: During elaboration walks, constraint information should be collected as descriptors (not immediately wired as propagators). The session-type bridge demonstrates this: `msg-type-constraint` structs are accumulated during `compile-proc-with-type-bridges`, then checked post-quiescence. Part B5's `surf-get` should follow the same pattern.
 
+### Gödel Completeness: Termination Arguments for Part C
+
+Per [GÖDEL_COMPLETENESS.org](../principles/GÖDEL_COMPLETENESS.org), every computation added to the propagator network must state its termination argument explicitly. Part C moves three classes of constraint resolution from the imperative loop INTO the network as S0 propagators. Each must be decidable.
+
+| Phase | Propagator | Termination Level | Argument |
+|-------|-----------|-------------------|----------|
+| C1 | Trait resolution bridge (α) | Level 1 (Tarski) | α fires when type cell transitions bot→ground. Each type cell transitions at most once (monotone lattice, finite metas). α produces a deterministic result (single impl lookup). |
+| C1 | Trait resolution feedback loop | Level 2 (well-founded) | Dict solution → new type constraints → new type cells → new bridge firings. Each cycle resolves at strictly smaller type depth (admissibility condition, checked at `impl` registration). Type depth is a natural number (well-founded). |
+| C2 | Hasmethod bridge (α) | Level 1 (Tarski) | Same as C1 — fires once per type cell grounding. Boolean result (has/hasn't method). |
+| C3 | Constraint retry threshold | Level 1 (Tarski) | Multi-cell threshold fires when ALL dependency cells are ground. Each cell transitions at most once. Threshold fires at most once. |
+| C4 | S2 (ambiguous commitment) | Level 2 + Level 5 | Non-overlapping invariant prevents ambiguity for most traits. Rare ambiguous cases: type depth decreases per resolution cycle (Level 2). Fuel retained as defense-in-depth (Level 5). |
+| C5 | Layered scheduler | Same as underlying propagators | Scheduling order doesn't affect termination — only affects convergence speed. The propagator network terminates regardless of firing order (confluence from lattice properties). |
+
+**The critical argument**: C1's feedback loop. When a trait bridge resolves `Indexed PVec` and writes the dict, the dict may be used in elaborated code that generates new type constraints (e.g., the dict's method types contain type parameters that need unification). These new type cells may trigger new trait bridges. The well-founded measure is: the sum of type depths across all unsolved trait constraints decreases on each resolution cycle. This is the same Level 2 argument currently used for L2→S0 feedback — Part C moves it from "across strata" to "within S0," but the mathematical argument is unchanged.
+
+**Fuel retained as defense-in-depth**: The stratified loop's fuel (100 iterations) persists even with Part C's bridge propagators handling monotone resolution. The fuel catches bugs in the termination argument, not bugs in the code. If the feedback loop ever fails to decrease type depth (violating the admissibility condition), fuel catches it before divergence.
+
 ### Phase C0: Bridge Convergence Prototype
 
 **Goal**: Validate that the cross-domain bridge pattern converges for nested trait resolution before committing to C1-C6.
@@ -519,6 +536,7 @@ Three patterns from prior design tracks directly inform Part C (see §11 for ful
 
 **Key properties** (shared with session-type bridge):
 - α is pure and monotone (bot → bot, ground type → dict, top → top)
+- **Termination**: Level 1 (Tarski) — fires at most once per type cell grounding. Feedback loop: Level 2 (type depth decreases per resolution cycle). See §Gödel Completeness above.
 - Fires within normal S0 quiescence — no layered scheduler needed
 - The dict cell is readable by any dependent propagator (e.g., `surf-get`'s elaborated code references the dict cell)
 - Post-quiescence check verifies all trait constraints resolved (analogous to `check-type-constraints`)
@@ -531,7 +549,7 @@ Three patterns from prior design tracks directly inform Part C (see §11 for ful
 
 **Goal**: `hasmethod` constraints become cross-domain bridge propagators.
 
-**Design**: Same bridge pattern. α function: type-val → has-method check → boolean cell.
+**Design**: Same bridge pattern. α function: type-val → has-method check → boolean cell. **Termination**: Level 1 — fires once per type cell grounding, boolean result.
 
 ```racket
 (define (add-hasmethod-bridge net type-cell method-name)
@@ -552,7 +570,7 @@ Three patterns from prior design tracks directly inform Part C (see §11 for ful
 
 **Design**: Each postponed constraint creates a multi-input threshold propagator (already exists in `propagator.rkt`) that fires when ALL dependency cells are ground. This is the multi-cell generalization of the single-cell bridge pattern.
 
-The threshold propagator reads all dependency cells, checks if all are ground, and if so evaluates the constraint. This replaces the S2 polling loop with demand-driven firing.
+The threshold propagator reads all dependency cells, checks if all are ground, and if so evaluates the constraint. This replaces the S2 polling loop with demand-driven firing. **Termination**: Level 1 (Tarski) — each dependency cell transitions bot→ground at most once; the threshold condition is satisfied at most once; the propagator fires at most once.
 
 **Files**: `metavar-store.rkt`, `propagator.rkt` (existing `make-threshold-fire-fn`)
 
