@@ -1309,7 +1309,14 @@
           (define mi-champ (mi-read enet))
           (define cleaned-mi (retract-hasheq-entries mi-champ retracted))
           (unless (equal? mi-champ cleaned-mi)
-            (set-box! net-box (mi-set (unbox net-box) cleaned-mi))))))))
+            (set-box! net-box (mi-set (unbox net-box) cleaned-mi))))
+        ;; Track 8 Phase A3a: Retract tagged mult-meta entries from CHAMP box.
+        (define mult-box (current-mult-meta-champ-box))
+        (when mult-box
+          (define mult-champ (unbox mult-box))
+          (define cleaned-mult (retract-hasheq-entries mult-champ retracted))
+          (unless (equal? mult-champ cleaned-mult)
+            (set-box! mult-box cleaned-mult)))))))
 
 ;; Track 6 Phase 1a: id-map access callbacks (set by driver.rkt).
 ;; Break circular dep: metavar-store doesn't import elaborator-network.
@@ -1996,7 +2003,10 @@
 (define (fresh-mult-meta source)
   (define id (gensym 'mmeta))
   (define box (current-mult-meta-champ-box))
-  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id 'unsolved))
+  ;; Track 8 Phase A3a: Tag mult entry with current speculation assumption.
+  (define aid (current-speculation-assumption))
+  (define entry (if aid (tagged-entry 'unsolved aid) 'unsolved))
+  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id entry))
   ;; P5b: Allocate mult cell on propagator network if available
   (define net-box (current-prop-net-box))
   (define fresh-fn (current-prop-fresh-mult-cell))
@@ -2018,14 +2028,20 @@
 ;; P5b: Also writes to propagator mult cell if available.
 (define (solve-mult-meta! id solution)
   (define box (current-mult-meta-champ-box))
-  (define status
+  ;; Track 8 A3a: unwrap tagged-entry for status check
+  (define raw-entry
     (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
       (if (eq? v 'none) #f v)))
+  (define status (if (tagged-entry? raw-entry) (tagged-entry-value raw-entry) raw-entry))
+  (define entry-aid (if (tagged-entry? raw-entry) (tagged-entry-assumption-id raw-entry) #f))
   (unless status
     (error 'solve-mult-meta! "unknown mult-meta: ~a" id))
   (when (not (eq? status 'unsolved))
     (error 'solve-mult-meta! "mult-meta ~a already solved" id))
-  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id solution))
+  ;; Track 8 A3a: re-tag with original or current assumption
+  (define aid (or entry-aid (current-speculation-assumption)))
+  (define tagged-solution (if aid (tagged-entry solution aid) solution))
+  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id tagged-solution))
   ;; P5b: Write to propagator mult cell
   (define net-box (current-prop-net-box))
   (define write-fn (current-prop-mult-cell-write))
@@ -2048,17 +2064,21 @@
      (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
+        ;; Track 8 A3a: unwrap tagged-entry
         (define box (current-mult-meta-champ-box))
-        (define v (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (and (not (eq? v 'none)) (not (eq? v 'unsolved)))]
+        (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+        (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
+        (and (not (eq? v 'none)) (not (eq? v #f)) (not (eq? v 'unsolved)))]
        [else
         (define v (read-fn (unbox net-box) cid))
         (and (not (eq? v 'mult-bot)) (not (eq? v 'unsolved)))])]
     [else
+     ;; Track 8 A3a: unwrap tagged-entry
      (define box (current-mult-meta-champ-box))
-     (define v
+     (define raw
        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
          (if (eq? r 'none) #f r)))
+     (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
      (and v (not (eq? v 'unsolved)))]))
 
 ;; Retrieve the solution of a mult metavariable, or #f if unsolved/unknown.
@@ -2072,17 +2092,21 @@
      (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
+        ;; Track 8 A3a: unwrap tagged-entry
         (define box (current-mult-meta-champ-box))
-        (define v (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (and (not (eq? v 'none)) (not (eq? v 'unsolved)) v)]
+        (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+        (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
+        (and (not (eq? v 'none)) (not (eq? v #f)) (not (eq? v 'unsolved)) v)]
        [else
         (define v (read-fn (unbox net-box) cid))
         (and (not (eq? v 'mult-bot)) (not (eq? v 'unsolved)) v)])]
     [else
+     ;; Track 8 A3a: unwrap tagged-entry
      (define box (current-mult-meta-champ-box))
-     (define v
+     (define raw
        (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
          (if (eq? r 'none) #f r)))
+     (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
      (and v (not (eq? v 'unsolved)) v)]))
 
 ;; Zonk a multiplicity: follow solved mult-metas, leave unsolved in place.
