@@ -2175,7 +2175,11 @@
      (define foreign-combined (combine-foreign-blocks grouped))
      (define merged (merge-sibling-lets foreign-combined))
      (define expanded
-       (map (lambda (sub) (preparse-expand-form sub reg depth))
+       (map (lambda (sub)
+              ;; Track 8 B3: skip $brace-params subforms (kind annotations, not surface syntax)
+              (if (and (pair? sub) (eq? (car sub) '$brace-params))
+                  sub
+                  (preparse-expand-form sub reg depth)))
             merged))
      ;; Return expanded if any transformation changed the datum.
      ;; Compare against original datum (not intermediate) to preserve
