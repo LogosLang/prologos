@@ -7052,9 +7052,15 @@
      (define type-atoms (cdr rest))
      (when (null? type-atoms)
        (error 'trait "trait ~a: method ~a: missing type after ':'" trait-name name))
+     ;; Track 8 B3: Extract leading implicit brace-param binders from method type.
+     ;; (bar : {A : Type} -> [C A] -> A) → binders=((A . (Type 0))), type=(-> [C A] -> A)
+     ;; The binders become Pi-wrapped implicit parameters in the method's type.
+     (define-values (method-implicit-binders type-atoms-after-binders)
+       (extract-implicit-binders type-atoms name))
+     (define type-atoms* (if (null? method-implicit-binders) type-atoms type-atoms-after-binders))
      ;; Build the method's function type from atoms
      ;; Unlike data ctor, we keep the FULL type (including return type)
-     (define segments (split-on-arrow-datum type-atoms))
+     (define segments (split-on-arrow-datum type-atoms*))
      (define method-type
        (if (= (length segments) 1)
            ;; Single segment, no arrows — bare type
@@ -7071,7 +7077,17 @@
              (define domain-types
                (append-map (lambda (seg) seg) domains))
              (build-arrow-type domain-types codomain))))
-     (trait-method name method-type)]
+     ;; Track 8 B3: Wrap method type with Pi binders for implicit params.
+     ;; {A : Type} -> [C A] -> A becomes (Pi (A :0 (Type 0)) [[C A] -> A])
+     (define wrapped-type
+       (if (null? method-implicit-binders)
+           method-type
+           (for/foldr ([body method-type])
+                      ([b method-implicit-binders])
+             (define binder-name (car b))
+             (define binder-kind (cdr b))
+             `(Pi (,binder-name :0 ,binder-kind) ,body))))
+     (trait-method name wrapped-type)]
     ;; Angle-bracket (WS reader): (method ($angle-type T1) ...)
     [(and (not (null? rest))
           (pair? (car rest))
