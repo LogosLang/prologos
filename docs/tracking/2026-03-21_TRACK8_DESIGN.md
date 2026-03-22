@@ -26,6 +26,7 @@
 | B1 | Cell-ops extraction | Factor cell operations into importable module | ⬜ | | Breaks metavar-store ↔ elab-network cycle |
 | B2 | Root callback elimination | Inline `cell-read`/`cell-write` (63 sites) | ⬜ | | Depends on B1. Sub-phases B2a-B2d |
 | B2e | Macros parameter write cleanup | Remove 24 dual-writes; cell-only writes after B2 | ⬜ | | Natural cleanup once cell reads are universal |
+| B2f | Accumulate-during-quiescence | Owner-ID transient threading through cell-ops for quiescence loop | ⬜ | | Depends on B1-B2. Zero CHAMP allocation on hot path. See [CHAMP Performance](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) §Accumulate |
 | B3 | HKT `impl` registration | `impl Seq List` works and registers in trait system | ⬜ | | Depends on B2 (needs direct trait-resolution access) |
 | B4 | HKT trait resolution on propagator network | Readiness propagators resolve HKT constraints | ⬜ | | Depends on B3 |
 | B5 | Sugar constraint generation | `surf-get` generates Indexed/Keyed constraints | ⬜ | | Depends on B4; validates CIU vision |
@@ -265,6 +266,25 @@ All read from `(current-prop-net-box)` and unwrap elab-network → prop-network.
 **Design**: For each of the 24 registry functions (`register-schema!`, `register-ctor!`, `register-type-meta!`, etc.): remove the `(current-*-registry (hash-set ...))` parameter write. Retain the cell write. Verify that no module-load-time code path reads the parameter directly — Track 3 PIR confirmed all computation reads are cell-primary, and B2 converts the remaining callback-based reads.
 
 **Files**: `macros.rkt` (24 sites), `test-support.rkt` (verify no parameter reads remain)
+
+### Phase B2f: Accumulate-During-Quiescence
+
+**Goal**: The quiescence loop operates on an owner-ID transient of the cells CHAMP. Cell writes mutate in place during quiescence; freeze produces the persistent result at exit. Zero CHAMP allocation on the hot path.
+
+**Prerequisite**: B1 (cell-ops extraction) + B2 (callback elimination). Without callbacks, `cell-write` in `cell-ops.rkt` can accept a transient parameter directly.
+
+**Design** (from [CHAMP Performance Design](2026-03-21_CHAMP_PERFORMANCE_DESIGN.md) §Accumulate-During-Quiescence):
+
+1. Enter `run-to-quiescence-drain` → convert cells CHAMP to owned transient (O(1) — get edit token)
+2. Quiescence loop: propagator fire functions call `cell-write` → `tchamp-insert-owned!` (in-place mutation of owned nodes)
+3. On quiescence exit → `tchamp-freeze-owned` clears edit fields (O(modified nodes))
+4. Return persistent network with frozen cells
+
+**Threading approach** (Option A — same pattern as Track 0 Phase 3c mutable worklist): The owned-transient cells reference is held as a local mutable in the quiescence loop, NOT stored in the `prop-network` struct. `cell-ops.cell-write` reads the transient from a thread-local parameter `(current-quiescence-transient)`. Fire functions are unaware of the transient — they call `cell-write` normally; the transient threading is internal to the quiescence infrastructure.
+
+**Impact**: BSP-LE Track 0 measured 0ms GC during quiescence (from the mutable worklist). B2f extends this to the cells CHAMP — the last remaining source of per-cell-write allocation in the quiescence loop. Combined with CHAMP Performance's owner-ID transients (16× faster than hash-table transients), this is the path to the wall-time improvement that Track 0 targeted.
+
+**Files**: `propagator.rkt` (quiescence loop), `cell-ops.rkt` (transient-aware cell-write), `champ.rkt` (owner-ID transient API — already implemented)
 
 ### Phase B3: HKT `impl` Registration
 
@@ -630,4 +650,3 @@ Track 8 provides the following to downstream Series:
 - **Memo caches as cells** (Track 8 audit §1.9): Not constraint-like; keep imperative.
 - **Map HKT partial application** (`Map K` as `Type -> Type`): Important for Map to implement Foldable/Seq, but a separate type-system feature. Not Track 8 scope.
 - **Observation cells** (P3 in audit): Performance counters and observatory as cells for LSP. Future Track 9/10 scope.
-- **Accumulate-during-quiescence** (CHAMP Performance follow-on): Owner-ID transient threading through `cell-ops.rkt`. Enabled by B1-B2; implement as Track 8 follow-on or dedicated effort.
