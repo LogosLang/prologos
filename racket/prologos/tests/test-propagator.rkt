@@ -178,3 +178,62 @@
 
 (test-case "net-contradiction?: false for fresh network"
   (check-false (net-contradiction? (make-prop-network))))
+
+;; ========================================
+;; Phase 4: Batch Cell Registration
+;; ========================================
+
+(test-case "net-new-cells-batch: empty specs returns unchanged network"
+  (define net (make-prop-network))
+  (define-values (net* ids) (net-new-cells-batch net '()))
+  (check-eq? net* net)
+  (check-equal? ids '()))
+
+(test-case "net-new-cells-batch: creates N cells with contiguous IDs"
+  (define net (make-prop-network))
+  (define specs (list (list 'bot flat-merge)
+                      (list 'bot flat-merge)
+                      (list 'bot flat-merge)))
+  (define-values (net* ids) (net-new-cells-batch net specs))
+  (check-equal? (length ids) 3)
+  (check-equal? (map cell-id-n ids) '(0 1 2))
+  ;; All cells readable with initial values
+  (for ([cid (in-list ids)])
+    (check-equal? (net-cell-read net* cid) 'bot))
+  ;; next-cell-id advanced by 3
+  (check-equal? (prop-network-next-cell-id net*) 3))
+
+(test-case "net-new-cells-batch: cells are writable and merge correctly"
+  (define net (make-prop-network))
+  (define specs (list (list 0 max-merge)
+                      (list 0 max-merge)))
+  (define-values (net* ids) (net-new-cells-batch net specs))
+  (define c0 (car ids))
+  (define c1 (cadr ids))
+  (define net2 (net-cell-write net* c0 42))
+  (define net3 (net-cell-write net2 c1 99))
+  (check-equal? (net-cell-read net3 c0) 42)
+  (check-equal? (net-cell-read net3 c1) 99))
+
+(test-case "net-new-cells-batch: contradiction function works"
+  (define net (make-prop-network))
+  (define specs (list (list 'bot flat-merge (lambda (v) (eq? v 'top)))))
+  (define-values (net* ids) (net-new-cells-batch net specs))
+  (define cid (car ids))
+  ;; Write non-contradictory
+  (define net2 (net-cell-write net* cid 42))
+  (check-false (prop-network-contradiction net2))
+  ;; Write contradictory
+  (define net3 (net-cell-write net2 cid 'top))
+  (check-equal? (prop-network-contradiction net3) cid))
+
+(test-case "net-new-cells-batch: IDs continue from existing cells"
+  (define net (make-prop-network))
+  (define-values (net1 existing-id) (net-new-cell net 'bot flat-merge))
+  (define specs (list (list 'bot flat-merge)
+                      (list 'bot flat-merge)))
+  (define-values (net2 ids) (net-new-cells-batch net1 specs))
+  ;; existing cell was ID 0, batch should start at 1
+  (check-equal? (cell-id-n existing-id) 0)
+  (check-equal? (map cell-id-n ids) '(1 2))
+  (check-equal? (prop-network-next-cell-id net2) 3))

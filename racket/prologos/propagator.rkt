@@ -50,6 +50,7 @@
  make-prop-network
  ;; Cell operations
  net-new-cell
+ net-new-cells-batch  ;; Phase 4: batch cell registration
  net-cell-read
  net-cell-write
  net-cell-replace  ;; Track 7 post-fix: bypass merge for S(-1) retraction
@@ -348,6 +349,57 @@
                                 h id contradicts?)])])
        net*)
    id))
+
+;; BSP-LE Track 0 Phase 4: Batch cell registration.
+;; Allocate N cells at once using transient CHAMP builders, producing one
+;; persistent network update instead of N sequential updates.
+;; specs: (listof (list initial-value merge-fn)) or
+;;        (listof (list initial-value merge-fn contradicts?))
+;; Returns: (values new-network (listof cell-id))
+;; Cell IDs are allocated as a contiguous range [start, start+N).
+(define (net-new-cells-batch net specs)
+  (define n (length specs))
+  (if (zero? n)
+      (values net '())
+      (net-new-cells-batch-inner net specs n)))
+
+(define (net-new-cells-batch-inner net specs n)
+  (define start-id (prop-network-next-cell-id net))
+  ;; Build transient CHAMPs from current persistent maps
+  (define t-cells (champ-transient (prop-network-cells net)))
+  (define t-merge (champ-transient (prop-network-merge-fns net)))
+  (define t-contra (champ-transient (prop-network-contradiction-fns net)))
+  (define has-contra? #f)
+  ;; Allocate all cells into transients
+  (define ids
+    (for/list ([spec (in-list specs)]
+               [i (in-naturals start-id)])
+      (perf-inc-cell-alloc!)
+      (define id (cell-id i))
+      (define h (cell-id-hash id))
+      (define initial-value (car spec))
+      (define merge-fn (cadr spec))
+      (define cell (prop-cell initial-value champ-empty))
+      (tchamp-insert! t-cells h id cell)
+      (tchamp-insert! t-merge h id merge-fn)
+      (when (and (pair? (cddr spec)) (caddr spec))
+        (set! has-contra? #t)
+        (tchamp-insert! t-contra h id (caddr spec)))
+      id))
+  ;; Freeze all transients at once
+  (define new-net
+    (struct-copy prop-network net
+      [warm (struct-copy prop-net-warm (prop-network-warm net)
+              [cells (tchamp-freeze t-cells)])]
+      [cold (if has-contra?
+                (struct-copy prop-net-cold (prop-network-cold net)
+                  [merge-fns (tchamp-freeze t-merge)]
+                  [contradiction-fns (tchamp-freeze t-contra)]
+                  [next-cell-id (+ start-id n)])
+                (struct-copy prop-net-cold (prop-network-cold net)
+                  [merge-fns (tchamp-freeze t-merge)]
+                  [next-cell-id (+ start-id n)]))]))
+  (values new-net ids))
 
 ;; Query a cell's direction. Returns 'ascending (default) or 'descending.
 (define (net-cell-direction net cid)
