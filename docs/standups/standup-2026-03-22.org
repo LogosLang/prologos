@@ -1,0 +1,82 @@
+#+TITLE: Standup — 2026-03-22
+#+DATE: 2026-03-22
+
+* Yesterday (since 2026-03-21 standup)
+
+** Work Structure + Series Formalization
+- ~docs/tracking/principles/WORK_STRUCTURE.org~ — Series/Track/Phase hierarchy codified (~ab5279d~)
+- BSP-LE Series Master Roadmap: 6 Tracks from PUnify Part 3 scope expansion (~3080f8e~)
+- CIU Series Master Roadmap: 6 Tracks for collection interface unification (~53caf8a~)
+- ~MASTER_ROADMAP.org~: single source of truth for all work (~66da68a~, updated through ~eff3790~)
+
+** BSP-LE Track 0: Allocation Efficiency (COMPLETE)
+- 7 phases: struct split (hot/warm/cold), mutable worklist drain, batch cell registration
+- Wall-time neutral (+2%) but GC eliminated on hot path (0ms during quiescence)
+- Phase 5 rejected (transient CHAMP too expensive at N=2-3), later rehabilitated by CHAMP Performance
+- PIR: ~docs/tracking/2026-03-21_BSP_LE_TRACK0_PIR.md~ (~00a873f~)
+
+** CHAMP Performance Track (COMPLETE)
+- 7 phases: vector-copy!, eq?-first, value-only fast path, owner-ID transients
+- 16x improvement at N=2 (95.5us -> 6.0us)
+- PIR: ~docs/tracking/2026-03-21_CHAMP_PERFORMANCE_PIR.md~ (~b748e5d~)
+
+** CIU Track 0: Trait Hierarchy Audit (~f62fc06~)
+- 8 findings: F-6 (HKT impl broken) identified as linchpin for entire CIU vision
+- Directly informed Track 8 Part B design priorities
+
+** PM Track 8 Design D.1 through D.4
+- D.1: Two-part design (A infrastructure + B HKT resolution)
+- D.2: External critique — 13 items incorporated
+- D.3: Self-critique — 9 findings including solve-meta! re-entrancy
+- D.4: *Unified vision revision* — recognized D.1-D.3 as principles failure
+  - "Every part should answer: how do we bring all elaboration onto the network"
+  - Worldview-aware reads as centerpiece (not belt-and-suspenders partial retirement)
+
+** PM Track 8 Part A: Infrastructure Migration (COMPLETE)
+- A0: Acceptance file baseline (16 results, 0 errors)
+- A1: Meta-info per-entry assumption tagging (~249bb2b~)
+- A3a-d: Mult/level/session tagging + mult bridge (~85d5f96~ through ~6e26d38~)
+- A4+A4b: restore-meta-state! partial retirement (full blocked by ghost metas)
+- A5: Progress box removed (~4049908~)
+
+** PM Track 8 Part B: Elaboration on the Network (COMPLETE)
+- B1: *Worldview-aware reads* — cell-ops.rkt, speculation stack as worldview (~fa76f00~)
+  - restore-meta-state! FULLY RETIRED (3rd attempt — architectural breakthrough)
+- B2: 14/23 callbacks replaced with direct cell-ops (~340c2bc~ through ~58b2f5c~)
+  - elab-network-types.rkt extracted to break transitive dependency cycle
+- B3: HKT trait + impl registration — 4 parser fixes (~2079802~ through ~ac25508~)
+  - Root cause: $brace-params treated as defmacro pattern variable -> infinite loop
+- B4: HKT trait resolution verified — no code changes needed (~a08fd1c~)
+- B5: Transferred to CIU Track 3 (content change, not infrastructure)
+- B2f: Quiescence cell-write instrumentation — N too low for transients (~251f8a7~)
+
+** PM Track 8 Part C: The Phase Boundary Dissolves (COMPLETE)
+- C0: Bridge convergence prototype — depth 1/2/3 validated (4/8/10/18 firings) (~d86304d~)
+- C1+C2: Trait + hasmethod resolution bridges fire in S0 (~e6d8901~)
+- C3: Constraint retry bridges fire in S0 (~467d318~)
+- C4: Stratified loop S2 becomes safety net (~40760fb~)
+- C5a: GS vs BSP A/B — *inconclusive* (0.998x global) (~cc62e11~, ~e8cb6e3~)
+  - First test (stratified-loop only): BSP 0.8% slower — premature conclusion
+  - Second test (global override): BSP 0.2% faster — flipped sign, truly inconclusive
+- C7: B2f re-evaluation — NOT justified post-bridges (N<10/command)
+
+** PM Track 8 PIR (~fe2673e~)
+- 16-question review: 66 commits, ~18h, 3 wrong assumptions
+- Key lesson: principles alignment must challenge workarounds, not catalogue applicability
+
+** Transfer: Track 8 B5 -> CIU Track 3 (~b1d8cd5~)
+- CIU Tracks 3-5 now UNBLOCKED by Track 8
+
+** Metrics
+- 7343 tests, 379 files, 228.2s (all pass)
+- ~66 Track 8 commits: ~68d1e7a~ through ~e8cb6e3~
+- 4 new files: cell-ops.rkt, elab-network-types.rkt, test-trait-resolution-bridge.rkt, bench-scheduler-ab.rkt
+
+* Today
+
+** Review Track 8 PIR
+** Determine next priority: CIU Track 3 vs BSP-LE Track 1 vs other
+
+* Blockers
+
+- PUnify toggle flip blocked by Option module loading hang (pre-existing, not Track 8)
