@@ -84,74 +84,17 @@
 ;; Structs
 ;; ========================================
 
-;; Per-cell metadata: typing context, expected type, and provenance.
-;; Replaces meta-info from metavar-store.rkt for propagator cells.
-(struct elab-cell-info
-  (ctx          ;; typing context at creation (list of (cons type mult))
-   type         ;; expected type of this cell's solution (Expr)
-   source)      ;; any — debug/provenance info (string, srcloc, etc.)
-  #:transparent)
-
-;; An elaboration network: prop-network + type-inference metadata.
-;; Pure value — all operations return new elab-network values.
-(struct elab-network
-  (prop-net      ;; prop-network (the underlying propagator network)
-   cell-info     ;; champ-root : cell-id → elab-cell-info
-   next-meta-id  ;; Nat — deterministic counter (reserved for Phase 3 naming)
-   id-map        ;; champ-root : meta-id (gensym) → cell-id — Track 6 Phase 1a
-   meta-info)    ;; champ-root : meta-id (gensym) → meta-info — Track 6 Phase 5a
-  #:transparent)
-
-;; Track 6 Phase 1a: Functional update of the id-map field.
-;; Returns a new elab-network with the given id-map, all other fields unchanged.
-(define (elab-network-id-map-set enet new-id-map)
-  (struct-copy elab-network enet [id-map new-id-map]))
-
-;; Track 6 Phase 5a: Functional update of the meta-info field.
-;; Returns a new elab-network with the given meta-info CHAMP, all other fields unchanged.
-(define (elab-network-meta-info-set enet new-meta-info)
-  (struct-copy elab-network enet [meta-info new-meta-info]))
-
-;; Contradiction details for error reporting.
-(struct contradiction-info
-  (cell-id       ;; cell-id that first contradicted
-   cell-meta     ;; elab-cell-info or 'none
-   value)        ;; the contradictory cell value (type-top)
-  #:transparent)
+;; Track 8 Phase B2: Struct definitions (elab-cell-info, elab-network,
+;; contradiction-info) and field updaters (elab-network-id-map-set,
+;; elab-network-meta-info-set) extracted to elab-network-types.rkt.
+;; Imported above and re-exported via (struct-out ...) in the provide block.
 
 ;; ========================================
 ;; Network Lifecycle
 ;; ========================================
 
-;; Create a fresh elaboration network.
-(define (make-elaboration-network [fuel 1000000])
-  (elab-network (make-prop-network fuel) champ-empty 0 champ-empty champ-empty))
-
-;; Track 6 Phase 6: Reset an elab-network for a new command while preserving
-;; persistent cell state (macros registry cells, etc.).
-;; Keeps: prop-net cells, merge-fns, contradiction-fns, widen-fns, cell-dirs,
-;;        cell-info, and next-cell-id (to avoid reusing cell IDs).
-;; Resets: propagators, worklist, fuel, contradiction, cell-decomps, pair-decomps,
-;;         next-meta-id, id-map, meta-info, next-prop-id.
-;; The result is a network with all persistent cell values intact but ready
-;; for a new command's per-command cells and metavariables.
-(define (reset-elab-network-command-state enet [fuel 1000000])
-  (define pnet (elab-network-prop-net enet))
-  (define clean-pnet
-    (struct-copy prop-network pnet
-      [hot (prop-net-hot '() fuel)]
-      [warm (struct-copy prop-net-warm (prop-network-warm pnet)
-              [contradiction #f])]
-      [cold (struct-copy prop-net-cold (prop-network-cold pnet)
-              [propagators champ-empty]
-              [next-prop-id 0]
-              [cell-decomps champ-empty]
-              [pair-decomps champ-empty])]))
-  (elab-network clean-pnet
-                (elab-network-cell-info enet)
-                0            ;; fresh meta counter
-                champ-empty  ;; fresh id-map
-                champ-empty));; fresh meta-info
+;; Track 8 B2: make-elaboration-network and reset-elab-network-command-state
+;; are now defined in elab-network-types.rkt and imported above.
 
 ;; ========================================
 ;; Cell Operations
