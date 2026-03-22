@@ -172,7 +172,11 @@
              values
              "constraint-leak-test"))
          (check-false result)
-         ;; Phase 4b: constraint store should be RESTORED to empty
+         ;; Track 8 B1: worldview-aware reads handle CHAMP entries (meta-info, id-map).
+         ;; Scoped infrastructure cells (constraint store) still need S(-1) for cleanup.
+         ;; Run S(-1) to clean tagged constraint entries.
+         (run-retraction-stratum!)
+         ;; Phase 4b: constraint store should be clean after S(-1)
          (check-equal? (read-constraint-store) '()
                        "constraint store leaked after failed speculation"))))
 
@@ -219,7 +223,9 @@
                    #f)  ;; inner fails
                  values
                  "inner-fail")
-               ;; After inner failure: only outer constraint remains
+               ;; Track 8 B1: run S(-1) for scoped cell cleanup
+               (run-retraction-stratum!)
+               ;; After inner failure + S(-1): only outer constraint remains
                (check-equal? (length (read-constraint-store)) 1)
                #t)  ;; outer succeeds
              values

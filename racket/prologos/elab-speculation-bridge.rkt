@@ -208,16 +208,12 @@
      (define failures-before-count
        (let ([b (current-speculation-failures)])
          (if b (length (unbox b)) 0)))
-     ;; Track 8 Phase A4b: save-meta-state retained.
-     ;; Despite A1-A3 tagging + A4b id-map tagging, the timing gap between
-     ;; speculation failure (retraction recorded) and S(-1) execution (retraction
-     ;; applied) is too wide. The elaborator makes decisions based on meta existence
-     ;; and status between these points. Without synchronous restore, the second
-     ;; speculation branch inherits the first branch's metas (tagged but not yet
-     ;; cleaned), causing "already solved" errors. Full retirement requires making
-     ;; S(-1) run synchronously after speculation failure — a deeper architectural
-     ;; change deferred to Part B's cell-ops extraction.
-     (define saved (save-meta-state))
+     ;; Track 8 Phase B1: save-meta-state RETIRED.
+     ;; Worldview-aware reads (cell-ops.rkt) filter tagged entries by the current
+     ;; speculation stack. Entries from sibling branches are invisible to reads —
+     ;; no synchronous restore needed, no timing gap. The speculation stack IS the
+     ;; worldview. S(-1) becomes GC (cleaning invisible entries), not correctness.
+     ;;
      ;; Run the speculation with TMS stack push (Track 6 Phases 2–4)
      ;; Push hyp-id onto the speculation stack so cell writes are routed to
      ;; TMS branches at this depth. On success, commit-on-success promotes
@@ -259,13 +255,13 @@
             (define retracted-pnet
               (net-retract-assumption (elab-network-prop-net enet) hyp-id))
             (set-box! net-box (struct-copy elab-network enet [prop-net retracted-pnet]))))
-        ;; Track 7 Phase 5: Record retraction for S(-1) stratum.
-        ;; S(-1) will clean scoped cell entries AND tagged CHAMP entries.
+        ;; Track 7 Phase 5: Record retraction for S(-1) GC pass.
+        ;; S(-1) will clean invisible entries — but correctness doesn't depend on it.
+        ;; Worldview-aware reads (B1) make retracted entries invisible immediately.
         (record-assumption-retraction! hyp-id)
-        ;; Track 8 Phase A4b: restore-meta-state! retained (belt-and-suspenders).
-        ;; TMS + S(-1) handle value cleanup; restore handles structural consistency
-        ;; (meta existence between speculation branches).
-        (restore-meta-state! saved)
+        ;; Track 8 Phase B1: restore-meta-state! RETIRED.
+        ;; Worldview-aware reads filter by speculation stack — sibling branch
+        ;; entries are invisible. No synchronous restore needed.
         ;; Phase D2: Extract sub-failures (failures added during this thunk)
         ;; The box stores newest-first, so new failures are at the front.
         (define-values (sub-failures support-set)

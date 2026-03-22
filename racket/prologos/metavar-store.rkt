@@ -31,7 +31,8 @@
          "champ.rkt"
          "infra-cell.rkt"   ;; Phase 1a: merge-list-append for constraint cell
          "global-env.rkt"   ;; Phase 3a: current-definition-cells-content for with-fresh-meta-env
-         "propagator.rkt")  ;; Track 7 Phase 2: make-prop-network for persistent registry
+         "propagator.rkt"   ;; Track 7 Phase 2: make-prop-network for persistent registry
+         "cell-ops.rkt")   ;; Track 8 Phase B1: worldview-aware CHAMP reads
          ;; NOTE: elaborator-network.rkt and type-lattice.rkt are NOT required
          ;; directly to avoid a circular dependency:
          ;;   metavar-store → elaborator-network → type-lattice → reduction → metavar-store
@@ -264,12 +265,16 @@
   #:transparent)
 
 ;; ========================================
-;; Track 8 Phase A1: Unwrap tagged-entry wrapper from meta-info CHAMP lookup.
-;; Returns the raw meta-info struct (or #f/original value if not tagged).
+;; Track 8 Phase B1: Worldview-aware meta-info read.
+;; Replaces A1's unwrap-meta-info with worldview filtering.
+;; Returns the raw meta-info struct if visible under current worldview, or #f.
 (define (unwrap-meta-info v)
   (cond
     [(eq? v 'none) #f]
-    [(tagged-entry? v) (tagged-entry-value v)]
+    [(tagged-entry? v)
+     (if (worldview-visible? v)
+         (tagged-entry-value v)
+         #f)]  ;; invisible under current worldview (sibling branch)
     [(meta-info? v) v]
     [else #f]))
 
@@ -1433,13 +1438,10 @@
   (define net-box (current-prop-net-box))
   (define id-map-read (current-prop-id-map-read))
   (and net-box id-map-read
-       ;; Track 8 Phase A4b: Unwrap tagged-entry to recover the raw cell-id.
-       ;; id-map entries may be tagged with an assumption-id for S(-1) retraction.
-       (let ([v (champ-lookup (id-map-read (unbox net-box)) (prop-meta-id-hash id) id)])
-         (cond
-           [(eq? v 'none) #f]
-           [(tagged-entry? v) (tagged-entry-value v)]
-           [else v]))))
+       ;; Track 8 Phase B1: Worldview-aware id-map read.
+       ;; Entries tagged with assumptions not on the current speculation stack
+       ;; are invisible (from sibling branches). No retraction set check needed.
+       (champ-lookup-worldview (id-map-read (unbox net-box)) (prop-meta-id-hash id) id)))
 
 ;; ========================================
 ;; Hash removal: Test isolation macro
@@ -1593,16 +1595,21 @@
     (if (and mi-read net-box)
         (mi-read (unbox net-box))
         (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))))
-  ;; Track 8 A1: unwrap tagged-entry + re-tag on solve
+  ;; Track 8 B1: worldview-aware read + re-tag on solve
   (define raw-entry
     (and mi-champ
          (let ([v (champ-lookup mi-champ h id)])
            (if (eq? v 'none) #f v))))
   (define info (if (tagged-entry? raw-entry) (tagged-entry-value raw-entry) raw-entry))
   (define entry-aid (if (tagged-entry? raw-entry) (tagged-entry-assumption-id raw-entry) #f))
+  ;; If the entry is from an invisible sibling branch, treat status as 'unsolved.
+  (define effective-status
+    (if (and (tagged-entry? raw-entry) (not (worldview-visible? raw-entry)))
+        'unsolved
+        (and info (meta-info-status info))))
   (unless info
     (error 'solve-meta! "unknown metavariable: ~a" id))
-  (when (eq? (meta-info-status info) 'solved)
+  (when (eq? effective-status 'solved)
     (error 'solve-meta! "metavariable ~a already solved" id))
   ;; Insert updated meta-info into CHAMP (immutable update)
   (define updated (meta-info id (meta-info-ctx info) (meta-info-type info)
@@ -1646,22 +1653,27 @@
   (define mi-read (current-prop-meta-info-read))
   (define mi-set (current-prop-meta-info-set))
   (define mi-champ (if mi-read (mi-read enet) #f))
-  ;; Track 8 Phase A1: read may return tagged-entry — unwrap for status check.
+  ;; Track 8 B1: worldview-aware read — unwrap for status check.
   (define raw-entry
     (and mi-champ
          (let ([v (champ-lookup mi-champ h id)])
            (if (eq? v 'none) #f v))))
   (define info (if (tagged-entry? raw-entry) (tagged-entry-value raw-entry) raw-entry))
   (define entry-aid (if (tagged-entry? raw-entry) (tagged-entry-assumption-id raw-entry) #f))
+  ;; If the entry is from an invisible sibling branch, treat status as 'unsolved.
+  (define effective-status
+    (if (and (tagged-entry? raw-entry) (not (worldview-visible? raw-entry)))
+        'unsolved
+        (and info (meta-info-status info))))
   (unless info
     (error 'solve-meta-core-pure "unknown metavariable: ~a" id))
-  (when (eq? (meta-info-status info) 'solved)
+  (when (eq? effective-status 'solved)
     (error 'solve-meta-core-pure "metavariable ~a already solved" id))
   ;; Update meta-info
   (define updated (meta-info id (meta-info-ctx info) (meta-info-type info)
                               'solved solution
                               (meta-info-constraints info) (meta-info-source info)))
-  ;; Track 8 A1: re-tag with original assumption (entry was created under that speculation)
+  ;; Track 8 B1: re-tag with original assumption (entry was created under that speculation)
   ;; If entry was depth-0 (no tag), and we're solving under speculation, tag with current aid.
   (define aid (or entry-aid (current-speculation-assumption)))
   (define tagged-updated (if aid (tagged-entry updated aid) updated))
@@ -1968,21 +1980,23 @@
      (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
-        ;; Track 8 A3b: unwrap tagged-entry
+        ;; Track 8 B1: worldview-aware read
         (define box (current-level-meta-champ-box))
         (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
-        (and (not (eq? v 'none)) (not (eq? v #f)) (not (eq? v 'unsolved)))]
+        (define v (cond [(eq? raw 'none) #f]
+                        [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
+                        [else raw]))
+        (and v (not (eq? v 'unsolved)))]
        [else
         (define v (read-fn (unbox net-box) cid))
         (not (eq? v 'unsolved))])]
     [else
-     ;; Track 8 A3b: unwrap tagged-entry
+     ;; Track 8 B1: worldview-aware read
      (define box (current-level-meta-champ-box))
-     (define raw
-       (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-         (if (eq? r 'none) #f r)))
-     (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
+     (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+     (define v (cond [(eq? raw 'none) #f]
+                     [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
+                     [else raw]))
      (and v (not (eq? v 'unsolved)))]))
 
 ;; Retrieve the solution of a level metavariable, or #f if unsolved/unknown.
@@ -1996,21 +2010,23 @@
      (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
-        ;; Track 8 A3b: unwrap tagged-entry
+        ;; Track 8 B1: worldview-aware read
         (define box (current-level-meta-champ-box))
         (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
-        (and (not (eq? v 'none)) (not (eq? v #f)) (not (eq? v 'unsolved)) v)]
+        (define v (cond [(eq? raw 'none) #f]
+                        [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
+                        [else raw]))
+        (and v (not (eq? v 'unsolved)) v)]
        [else
         (define v (read-fn (unbox net-box) cid))
         (and (not (eq? v 'unsolved)) v)])]
     [else
-     ;; Track 8 A3b: unwrap tagged-entry
+     ;; Track 8 B1: worldview-aware read
      (define box (current-level-meta-champ-box))
-     (define raw
-       (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-         (if (eq? r 'none) #f r)))
-     (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
+     (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+     (define v (cond [(eq? raw 'none) #f]
+                     [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
+                     [else raw]))
      (and v (not (eq? v 'unsolved)) v)]))
 
 ;; Zonk a level: follow solved level-metas, leave unsolved in place.
@@ -2109,21 +2125,23 @@
      (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
-        ;; Track 8 A3a: unwrap tagged-entry
+        ;; Track 8 B1: worldview-aware read
         (define box (current-mult-meta-champ-box))
         (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
-        (and (not (eq? v 'none)) (not (eq? v #f)) (not (eq? v 'unsolved)))]
+        (define v (cond [(eq? raw 'none) #f]
+                        [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
+                        [else raw]))
+        (and v (not (eq? v 'unsolved)))]
        [else
         (define v (read-fn (unbox net-box) cid))
         (and (not (eq? v 'mult-bot)) (not (eq? v 'unsolved)))])]
     [else
-     ;; Track 8 A3a: unwrap tagged-entry
+     ;; Track 8 B1: worldview-aware read
      (define box (current-mult-meta-champ-box))
-     (define raw
-       (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-         (if (eq? r 'none) #f r)))
-     (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
+     (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+     (define v (cond [(eq? raw 'none) #f]
+                     [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
+                     [else raw]))
      (and v (not (eq? v 'unsolved)))]))
 
 ;; Retrieve the solution of a mult metavariable, or #f if unsolved/unknown.
@@ -2137,21 +2155,23 @@
      (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
-        ;; Track 8 A3a: unwrap tagged-entry
+        ;; Track 8 B1: worldview-aware read
         (define box (current-mult-meta-champ-box))
         (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
-        (and (not (eq? v 'none)) (not (eq? v #f)) (not (eq? v 'unsolved)) v)]
+        (define v (cond [(eq? raw 'none) #f]
+                        [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
+                        [else raw]))
+        (and v (not (eq? v 'unsolved)) v)]
        [else
         (define v (read-fn (unbox net-box) cid))
         (and (not (eq? v 'mult-bot)) (not (eq? v 'unsolved)) v)])]
     [else
-     ;; Track 8 A3a: unwrap tagged-entry
+     ;; Track 8 B1: worldview-aware read
      (define box (current-mult-meta-champ-box))
-     (define raw
-       (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-         (if (eq? r 'none) #f r)))
-     (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
+     (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+     (define v (cond [(eq? raw 'none) #f]
+                     [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
+                     [else raw]))
      (and v (not (eq? v 'unsolved)) v)]))
 
 ;; Zonk a multiplicity: follow solved mult-metas, leave unsolved in place.
@@ -2246,21 +2266,23 @@
      (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
-        ;; Track 8 Phase A3c: unwrap tagged-entry
+        ;; Track 8 B1: worldview-aware read
         (define box (current-sess-meta-champ-box))
         (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
-        (and (not (eq? v 'none)) (not (eq? v #f)) (not (eq? v 'unsolved)))]
+        (define v (cond [(eq? raw 'none) #f]
+                        [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
+                        [else raw]))
+        (and v (not (eq? v 'unsolved)))]
        [else
         (define v (read-fn (unbox net-box) cid))
         (not (eq? v 'unsolved))])]
     [else
-     ;; Track 8 Phase A3c: unwrap tagged-entry
+     ;; Track 8 B1: worldview-aware read
      (define box (current-sess-meta-champ-box))
-     (define raw
-       (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-         (if (eq? r 'none) #f r)))
-     (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
+     (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+     (define v (cond [(eq? raw 'none) #f]
+                     [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
+                     [else raw]))
      (and v (not (eq? v 'unsolved)))]))
 
 ;; Retrieve the solution of a sess metavariable, or #f if unsolved/unknown.
@@ -2274,21 +2296,23 @@
      (define cid (champ-lookup (id-map-read-fn (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
-        ;; Track 8 Phase A3c: unwrap tagged-entry
+        ;; Track 8 B1: worldview-aware read
         (define box (current-sess-meta-champ-box))
         (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
-        (and (not (eq? v 'none)) (not (eq? v #f)) (not (eq? v 'unsolved)) v)]
+        (define v (cond [(eq? raw 'none) #f]
+                        [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
+                        [else raw]))
+        (and v (not (eq? v 'unsolved)) v)]
        [else
         (define v (read-fn (unbox net-box) cid))
         (and (not (eq? v 'unsolved)) v)])]
     [else
-     ;; Track 8 Phase A3c: unwrap tagged-entry
+     ;; Track 8 B1: worldview-aware read
      (define box (current-sess-meta-champ-box))
-     (define raw
-       (let ([r (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-         (if (eq? r 'none) #f r)))
-     (define v (if (tagged-entry? raw) (tagged-entry-value raw) raw))
+     (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
+     (define v (cond [(eq? raw 'none) #f]
+                     [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
+                     [else raw]))
      (and v (not (eq? v 'unsolved)) v)]))
 
 ;; Zonk a session: follow solved sess-metas, leave unsolved in place.
