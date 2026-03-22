@@ -527,11 +527,24 @@ S1 is eliminated. The loop iteration count drops because S0 now resolves monoton
 
 **Files**: `metavar-store.rkt` (simplified loop), `resolution.rkt` (S2 reduced to ambiguous cases)
 
+### Memo Cache Correctness Under Interleaved Resolution
+
+Part C's interleaved resolution (C1-C3 firing in S0 alongside type propagation) introduces a correctness concern: reduction memo caches (`current-whnf-cache`, `current-nf-cache`, `current-nat-value-cache`) assume referential transparency, but reduction depends on meta solutions. A cache entry computed before a trait dict is resolved may be stale after resolution.
+
+**Within-Track-8 solution (Option D)**: Disable memo caches during S0 propagation. Enable only during zonk (final reduction pass, all metas solved). The boundary is principled: "caching is valid only when the meta-solution context is final." During S0, the context is in flux; during zonk, it's final.
+
+Implementation: `(current-reduction-caching-enabled?)` parameter, `#f` during `run-to-layered-quiescence`, `#t` during `zonk-final`. Cache lookups check the parameter; cache writes are gated.
+
+**Principled long-term solution (Track 9)**: Reduction results as propagator cells with dependency-tracked invalidation. When a meta that a reduction depends on is solved, the reduction cell automatically recomputes. No memo cache needed — the propagator network IS the cache. See [Track 9: Reduction as Propagators](2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md) for the full vision.
+
+**C5 verification item**: Test cases that exercise reduction before and after trait resolution within a single S0 pass. Verify that Option D produces correct results (no stale cache entries) and that the performance cost of uncached S0 reduction is acceptable.
+
 ### Phase C5: Verification + Benchmarks
 
 - Full test suite — identical results (behavioral parity)
 - Resolution cycle count: measure fuel consumption before/after. Target: significant reduction in loop iterations (fewer S0→S1→S2 cycles)
 - Ordering stability: test cases with nested constraints that depend on resolution order
+- **Memo cache correctness**: test cases exercising reduction before/after resolution within S0
 - A/B benchmarks: wall-time improvement from fewer resolution cycles
 - Acceptance file: all CIU aspirational sections pass at Level 3
 

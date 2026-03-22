@@ -381,9 +381,21 @@ See `docs/tracking/2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org` §5.2 
 
 **Design document**: TBD — full design required given risk level. Imperative state audit as Phase 0. Audit complete: `docs/tracking/2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org`.
 
-### Track 9: General Diagnostic Engine (GDE)
+### Track 9: Reduction as Propagators
 
-**Goal**: Multi-hypothesis conflict analysis using ATMS nogoods. Minimal diagnoses for type errors. The culmination of the propagator migration — the compiler doesn't just report errors, it explains the minimal set of assumptions that caused them.
+**Goal**: Reduction results as propagator cells with dependency-tracked invalidation. Memo caches become cells — when a meta that a reduction depends on is solved, the reduction cell automatically recomputes. Eliminates the class of stale-cache bugs that Track 8 Part C's interleaved resolution could expose.
+
+**Risk**: Medium-High — pervasive change to `reduction.rkt` (~4000 lines, ~50 cases), plus adaptation of ~30 call sites across 6 files.
+
+**Depends on**: Track 8 Part C (propagator-driven constraint resolution provides the foundation).
+
+**Design document**: [Stage 1 Research Note](2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md)
+
+**Enables**: Incremental re-reduction for LSP (Track 11). Correct memo caching under interleaved resolution. Solver-level incremental reduction for BSP-LE.
+
+### Track 10: General Diagnostic Engine (GDE)
+
+**Goal**: Multi-hypothesis conflict analysis using ATMS nogoods. Minimal diagnoses for type errors. The compiler doesn't just report errors, it explains the minimal set of assumptions that caused them.
 
 **Risk**: High — new capability, not a migration.
 
@@ -393,7 +405,7 @@ See `docs/tracking/2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org` §5.2 
 
 **Design document**: TBD.
 
-### Track 10: LSP Integration
+### Track 11: LSP Integration
 
 **Goal**: Integrate the full propagator infrastructure into a Language Server Protocol implementation. Incremental re-elaboration, live diagnostics, and enhanced error reporting — the user-facing payoff of Tracks 1–9.
 
@@ -415,9 +427,10 @@ See `docs/tracking/2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org` §5.2 
 - Track 6: Clean single-write-path architecture (no dual-write complexity in server)
 - Track 7: Cross-domain bridges (multiplicity-aware diagnostics)
 - Track 8: Propagator-driven unification (reactive type error updates)
-- Track 9: GDE minimal diagnoses (root-cause error explanations)
+- Track 9: Reduction as propagators (incremental re-reduction, dependency-tracked caching)
+- Track 10: GDE minimal diagnoses (root-cause error explanations)
 
-**Depends on**: Track 9 (GDE), Track 5 ✅ (dep-edges, module networks).
+**Depends on**: Track 9 (Reduction as Propagators), Track 10 (GDE), Track 5 ✅ (dep-edges, module networks).
 
 **Design document**: TBD — full design required. Should address: server lifecycle, file watcher integration, incremental vs full re-elaboration heuristics, diagnostic batching/debouncing, and the composition of all Track 1–9 infrastructure.
 
