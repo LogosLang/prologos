@@ -2374,20 +2374,17 @@
         (current-level-meta-champ-box (box champ-empty))
         (current-mult-meta-champ-box (box champ-empty))
         (current-sess-meta-champ-box (box champ-empty))))
-  ;; Propagator network: Track 8 B2b — always available (make-elaboration-network is a direct call).
-  ;; No longer gated on current-prop-make-network callback.
-  (let ()
+  ;; Propagator network: Track 8 B2b — make-elaboration-network is direct.
+  ;; Still gated on current-prop-new-infra-cell: infrastructure cells need the
+  ;; callback from driver.rkt. Without it, the network exists but can't create
+  ;; constraint/wakeup cells, causing "unknown metavariable" errors in
+  ;; test contexts that load via namespace-require.
+  (define new-cell-fn (current-prop-new-infra-cell))
+  (when new-cell-fn
     (define net-box (current-prop-net-box))
     (if net-box
         (set-box! net-box (make-elaboration-network))
         (current-prop-net-box (box (make-elaboration-network))))
-    ;; id-map is now a field of elab-network, initialized to champ-empty
-    ;; by make-elaboration-network — no separate box needed.
-    ;; Phase 1a: Create constraint store cell in the unified network.
-    ;; Track 6 Phase 1c: changed from list-cell (merge-list-append) to registry-cell
-    ;; (merge-hasheq-union) keyed by constraint cid. Enables functional status updates.
-    (define new-cell-fn (current-prop-new-infra-cell))
-    (when new-cell-fn
       (define nb (current-prop-net-box))
       (define enet0 (unbox nb))
       (define-values (enet1 cstore-cid) (new-cell-fn enet0 (hasheq) merge-hasheq-union))
@@ -2424,7 +2421,7 @@
       ;; Track 7 Phase 8a: Ready-queue channel cell for L1 readiness propagators.
       (define-values (enet13 rq-cid) (new-cell-fn enet12 '() merge-list-append))
       (current-ready-queue-cell-id rq-cid)
-      (set-box! nb enet13))))
+      (set-box! nb enet13)))
 
 ;; Track 6 Phase 6: save-base-elaboration-network REMOVED by Track 7 Phase 6.
 ;; Persistent cells now in dedicated persistent registry network.
