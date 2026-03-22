@@ -48,8 +48,9 @@ When adding a field to an existing struct:
 
 1. Run `raco make driver.rkt` to recompile ALL transitive dependents (stale `.zo` caches cause "expected N fields" errors)
 2. Grep for all pattern-matches on that struct — each must handle the new field
-3. Check `trace-serialize.rkt` and any other reflection-based consumers
-4. If the struct is in `prop-network` or `elab-network`, modules like `session-propagators.rkt` and `trace-serialize.rkt` that import by struct linklet will fail if not recompiled
+3. **Grep for `struct-copy` of that struct across the ENTIRE codebase** — not just the defining module. External files that `struct-copy` a struct with changed fields will fail silently (batch workers crash with zero test output). BSP-LE Track 0 discovered 4 external `struct-copy prop-network` sites (bilattice.rkt, elaborator-network.rkt, test-propagator-bsp.rkt, bench-alloc.rkt) that were missed by a module-scoped audit.
+4. Check `trace-serialize.rkt` and any other reflection-based consumers
+5. If the struct is in `prop-network` or `elab-network`, modules like `session-propagators.rkt` and `trace-serialize.rkt` that import by struct linklet will fail if not recompiled
 
 ## Known Coupling: Meta Resolution Pipeline
 
