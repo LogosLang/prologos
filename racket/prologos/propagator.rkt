@@ -804,22 +804,27 @@
   (define pid (prop-id (prop-network-next-prop-id net)))
   (define prop (propagator input-ids output-ids fire-fn))
   (define ph (prop-id-hash pid))
-  ;; Register pid as dependent of each input cell.
-  ;; Sequential CHAMP inserts — optimal for typical arity (2-3 inputs).
-  ;; Phase 5 attempted transient CHAMP here but it regressed: the
-  ;; champ-transient/freeze cycle costs more than 2-3 sequential inserts.
-  (define new-cells
-    (for/fold ([cells (prop-network-cells net)])
-              ([cid (in-list input-ids)])
+  ;; CHAMP Performance Phase 7: Owner-ID transient for dependency registration.
+  ;; BSP-LE Track 0 Phase 5 attempted hash-table transient here and regressed 44%.
+  ;; Owner-ID transients are O(modified paths), making this viable for N=2-3 inputs.
+  (define-values (cells-node cells-edit cells-size)
+    (champ-transient-owned (prop-network-cells net)))
+  (define sb (box cells-size))
+  (define final-node
+    (for/fold ([cn cells-node]) ([cid (in-list input-ids)])
       (define ch (cell-id-hash cid))
-      (define cell (champ-lookup cells ch cid))
+      (define cell (champ-lookup (prop-network-cells net) ch cid))
       (if (eq? cell 'none)
-          cells  ;; unknown cell — skip (defensive)
+          cn  ;; unknown cell — skip (defensive)
           (let ([new-deps (champ-insert (prop-cell-dependents cell)
                                          ph pid #t)])
-            (champ-insert cells ch cid
-                          (struct-copy prop-cell cell
-                            [dependents new-deps]))))))
+            (define-values (cn* _)
+              (tchamp-insert-owned! cn sb ch cid
+                                    (struct-copy prop-cell cell
+                                      [dependents new-deps])
+                                    cells-edit))
+            cn*))))
+  (define new-cells (tchamp-freeze-owned final-node (unbox sb) cells-edit))
   (values
    (struct-copy prop-network net
      [warm (struct-copy prop-net-warm (prop-network-warm net)

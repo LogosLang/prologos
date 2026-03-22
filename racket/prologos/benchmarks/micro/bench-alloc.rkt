@@ -422,6 +422,55 @@
         (champ-insert champ-empty i i i)))))
 
 ;; ============================================================
+;; Owner-ID Transient Baselines (CHAMP Performance Phase 7)
+;; ============================================================
+
+(printf "\n=== Owner-ID Transient Baselines ===\n\n")
+
+;; Owner-ID transient cycle at various batch sizes — compare with hash-table transient above
+(let ([m (for/fold ([m champ-empty]) ([i (in-range 500)])
+           (champ-insert m i i (* i i)))])
+  (for ([n (in-list '(2 5 10 50 100))])
+    (direct-bench (format "owner-ID transient cycle: ~a inserts on 500-entry map" n)
+      n
+      (λ ()
+        (define-values (node edit size) (champ-transient-owned m))
+        (define sb (box size))
+        (define final
+          (for/fold ([nd node]) ([i (in-range 500 (+ 500 n))])
+            (define-values (nd* _) (tchamp-insert-owned! nd sb i i (* i i) edit))
+            nd*))
+        (tchamp-freeze-owned final (unbox sb) edit)))))
+
+;; Owner-ID value-only updates (the hot path — should be near-zero cost on owned nodes)
+(let ([m (for/fold ([m champ-empty]) ([i (in-range 500)])
+           (champ-insert m i i (* i i)))])
+  (direct-bench "owner-ID transient: 500 value-only updates on 500-entry map"
+    500
+    (λ ()
+      (define-values (node edit size) (champ-transient-owned m))
+      (define sb (box size))
+      (define final
+        (for/fold ([nd node]) ([i (in-range 500)])
+          (define-values (nd* _) (tchamp-insert-owned! nd sb i i (* i i 2) edit))
+          nd*))
+      (tchamp-freeze-owned final (unbox sb) edit))))
+
+;; Owner-ID delete cycle
+(let ([m (for/fold ([m champ-empty]) ([i (in-range 500)])
+           (champ-insert m i i (* i i)))])
+  (direct-bench "owner-ID transient: 10 deletes on 500-entry map"
+    10
+    (λ ()
+      (define-values (node edit size) (champ-transient-owned m))
+      (define sb (box size))
+      (define final
+        (for/fold ([nd node]) ([i (in-range 10)])
+          (define-values (nd* _) (tchamp-delete-owned! nd sb i i edit))
+          nd*))
+      (tchamp-freeze-owned final (unbox sb) edit))))
+
+;; ============================================================
 ;; Memory and GC Analysis (Phase 6)
 ;; ============================================================
 
