@@ -34,9 +34,10 @@
          resolve-trait-constraint-pure
          resolve-hasmethod-constraint-pure
          resolution-execute-action-pure
-         ;; Track 8 C1: Bridge propagator fire functions (pnet → pnet)
+         ;; Track 8 C1-C3: Bridge propagator fire functions (pnet → pnet)
          make-trait-resolution-bridge-fire-fn
-         make-hasmethod-resolution-bridge-fire-fn)
+         make-hasmethod-resolution-bridge-fire-fn
+         make-constraint-retry-bridge-fire-fn)
 
 ;; ========================================
 ;; Constraint Retry (extracted from unify.rkt module-level callback)
@@ -348,3 +349,24 @@
        (define enet* (resolve-hasmethod-constraint-pure enet meta-id hm-info))
        (set-box! net-box enet*)
        (elab-network-prop-net enet*)])))
+
+;; Track 8 C3: Constraint retry bridge fire function.
+;; Returns a function suitable for current-constraint-retry-bridge-fn.
+;; Signature: (pnet constraint dep-cids → pnet)
+(define (make-constraint-retry-bridge-fire-fn)
+  (lambda (pnet c dep-cids)
+    (define net-box (current-prop-net-box))
+    (cond
+      [(not net-box) pnet]
+      [else
+       ;; Read the current constraint status — only retry if still postponed
+       (define enet-base (unbox net-box))
+       (define enet (elab-network-rewrap enet-base pnet))
+       (define current-c (read-constraint-by-cid-pure enet (constraint-cid c)))
+       (cond
+         [(not current-c) pnet]
+         [(not (eq? (constraint-status current-c) 'postponed)) pnet]
+         [else
+          (define enet* (retry-unify-constraint-pure enet current-c))
+          (set-box! net-box enet*)
+          (elab-network-prop-net enet*)])])))

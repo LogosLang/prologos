@@ -231,9 +231,10 @@
  maybe-flush-network!
  ;; Phase 4c: Meta cell lookup (for structural decomposition propagators)
  prop-meta-id->cell-id
- ;; Track 8 C1: Trait resolution bridge callback (domain injection)
+ ;; Track 8 C1-C3: Resolution bridge callbacks (domain injection)
  current-trait-resolution-bridge-fn
  current-hasmethod-resolution-bridge-fn
+ current-constraint-retry-bridge-fn
  ;; Hash removal: test isolation helper
  with-fresh-meta-env)
 
@@ -491,6 +492,12 @@
 ;; Track 8 C2: Hasmethod resolution bridge callback. Same pattern as C1.
 ;; Signature: (prop-network meta-id hasmethod-constraint-info (listof cell-id) → prop-network)
 (define current-hasmethod-resolution-bridge-fn (make-parameter #f))
+
+;; Track 8 C3: Constraint retry bridge callback.
+;; Signature: (prop-network constraint (listof cell-id) → prop-network)
+;; When set, postponed constraints install a bridge propagator that retries
+;; unification during S0 quiescence instead of waiting for S2.
+(define current-constraint-retry-bridge-fn (make-parameter #f))
 
 ;; Phase 1d: Install the hasmethod resolve callback.
 (define (install-hasmethod-resolve-callback! resolve-fn)
@@ -800,6 +807,18 @@
                 (list (tagged-entry (action-retry-constraint c) aid)))
               pnet))))
     (set-box! cstore-net-box enet-r-c))
+  ;; Track 8 C3: Constraint retry bridge propagator (retries in S0).
+  ;; Same pattern as C1/C2: bridge fire fn syncs enet box, calls retry, returns pnet.
+  (define retry-bridge-fn (current-constraint-retry-bridge-fn))
+  (when (and retry-bridge-fn (not (null? c-cell-ids)))
+    (define dep-cids-retry (remove-duplicates c-cell-ids eq?))
+    ;; Output: any cell that might be written by retry unification.
+    ;; We use the dep-cids themselves as outputs (unification writes to the same cells).
+    (define-values (enet-retry-bridge _retry-bridge-pid)
+      (elab-add-propagator (unbox cstore-net-box) dep-cids-retry dep-cids-retry
+        (lambda (pnet)
+          (retry-bridge-fn pnet c dep-cids-retry))))
+    (set-box! cstore-net-box enet-retry-bridge))
   c)
 
 ;; Get constraints associated with a metavariable for wakeup.
