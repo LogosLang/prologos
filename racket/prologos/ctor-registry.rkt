@@ -306,7 +306,8 @@
 ;; ========================================
 
 ;; A/B toggle for PUnify. When #f (default), existing unification runs unchanged.
-;; When #t, unify-core delegates to unify-via-propagator.
+;; When #t, unify-core delegates to unify-via-propagator (cell-tree decomposition).
+;; NOT safe to flip yet: Option module loading hangs/loops with #t (punify cleanup finding).
 (define current-punify-enabled? (make-parameter #f))
 
 ;; ========================================

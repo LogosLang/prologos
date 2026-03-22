@@ -82,7 +82,7 @@ restructuring.
 | Item | Status |
 |------+--------|
 | PUnify Parts 1–2 (cell-tree unification) | ✅ Complete ([[file:2026-03-19_PUNIFY_PARTS1_2_PIR.md][PIR]]) |
-| PUnify Cleanup (bridge retirement, 5 parity bugs — see [[file:2026-03-19_PUNIFY_PARTS1_2_PIR.md][PIR §15.2]]) | ⬜ Pending |
+| PUnify Cleanup (toggle flip + bridge retirement) | ⬜ BLOCKED: Option module loading hangs with punify ON. 2/5 parity bugs fixed (Phase -1); 3/5 reclassified as fixture gaps. Toggle flip blocked by Option hang — needs cell-tree unification debugging for sum types during module loading. Bridge retirement depends on toggle flip. |
 
 ** CIU (Collection Interface Unification)  — /All collection dispatch through traits on the propagator network/
 
