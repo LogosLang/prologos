@@ -131,6 +131,7 @@ or the project roadmap reaches them.
 
 | Document | Status | Notes |
 |----------+--------+-------|
+| [[file:2026-03-21_CHAMP_PERFORMANCE_DESIGN.md][CHAMP Performance]] | D.1 design, [[file:2026-03-21_CHAMP_PERFORMANCE_AUDIT.md][Audit]] | Owner-ID transients, eq?-first keys, vector-copy!. Addresses the actual bottleneck from BSP-LE Track 0 |
 | [[file:2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md][Capabilities as Types]] | Design complete, not started | Capability hierarchy, QTT enforcement, ATMS provenance |
 | [[file:2026-03-05_IO_LIBRARY_DESIGN_V2.md][IO Library V2]] | Design/research | Extended IO: Bytes type, binary IO, SQLite FFI |
 | [[file:2026-03-01_1200_IO_LIBRARY_DESIGN.md][IO Library V1]] | Superseded by V2 | Original IO design |
@@ -151,6 +152,7 @@ or the project roadmap reaches them.
 | [[file:2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org][Track 8 Infrastructure Audit]] | 2026-03-18 | ✅ | Track 8 design direction |
 | [[file:2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md][Cell/Propagator Allocation Audit]] | 2026-03-20 | ✅ | BSP-LE Track 0 (Allocation Efficiency) |
 | [[file:2026-03-20_COLLECTION_INTERFACE_AUDIT.md][Collection Interface Audit]] | 2026-03-20 | ✅ | CIU Series |
+| [[file:2026-03-21_CHAMP_PERFORMANCE_AUDIT.md][CHAMP Performance Audit]] | 2026-03-21 | ✅ | CHAMP Performance Track |
 
 * Research Documents
 
