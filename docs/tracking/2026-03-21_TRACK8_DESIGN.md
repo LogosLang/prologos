@@ -339,6 +339,20 @@ surf-get coll key
 
 The stratified quiescence loop (S0→S1→S2, iterated with fuel) dissolves into the propagator network for all monotone operations. The loop persists only for genuinely non-monotone commitment (ambiguous instance selection). This is the architectural capstone of the Propagator Migration Series — the type checker becomes a single propagator network where trait constraints, hasmethod checks, and deferred constraints are propagators alongside type unification.
 
+### Categorical Motivation: Kan Extensions
+
+The BSP-LE categorical analysis ([BSP-LE Master Roadmap](2026-03-21_BSP_LE_MASTER.md), standup 2026-03-21 §Outside Conversation) identified two adjoint mechanisms from the Kan extension framework:
+
+**Left Kan extension (speculative forwarding)**: Given partial information at stratum n, compute the best possible information at stratum n+1 without waiting for n to complete. Monotonicity guarantees the speculative result is a sound lower bound — it never needs retraction, only refinement.
+
+**Right Kan extension (demand-driven computation)**: Given a requirement at stratum n+1, compute the minimal sufficient computation at stratum n. Only propagate what downstream actually needs, not everything.
+
+Part C instantiates both:
+- **C1 (resolution in S0) IS the left Kan extension**: A resolution propagator fires on partial fixpoint information (a type cell just solved, but S0 hasn't fully quiesced). Monotonicity of the non-overlapping instance invariant guarantees the result is sound — resolution produces the correct dict even if other type cells haven't been solved yet, because the dict depends only on the type constructor (which is ground), not on the full type (which may have unsolved arguments).
+- **C0 (layered scheduler with demand-driven quiescence) instantiates the right Kan extension**: The scheduler doesn't need to drain all S0 propagators before checking if demanded cells have stabilized. If a resolution propagator's dependency is already ground, it fires immediately — S0 doesn't need to fully quiesce for constraints whose dependencies are already met.
+
+The Kan extensions are adjoint — speculative forwarding of demanded cells gives the same result as waiting for completion and extracting what's needed. This adjunction is the categorical proof that Part C's interleaved scheduling produces identical results to the current sequential S0→S1→S2 loop.
+
 ### Why This Matters
 
 The S0→S1→S2 cycle introduces ordering fragility: a type cell solved in S0 triggers readiness in S1, which triggers resolution in S2, which may solve another type cell that triggers another S0 pass. For nested constraints (e.g., `Seq (List Int)` where resolving `Seq` depends on `List`'s type constructor), this multi-cycle resolution can fail to converge within the fuel limit. Making resolution propagator-driven eliminates the cycles — constraints resolve as soon as their dependencies are ground, within the same S0 pass.
@@ -360,6 +374,27 @@ This directly addresses the acceptance file issues that motivated the CIU Series
 
 **Implementation**: The worklist becomes a vector of per-stratum lists (3 lists for S0/S1/S2). `net-cell-write` enqueues dependents into their respective stratum lists. The drain loop checks S0 first, S1 when S0 is empty, S2 when S1 is empty.
 
+**Right Kan refinement — demand-driven quiescence**: The basic layered scheduler drains all of S0 before checking higher strata. The right Kan extension refines this: resolution propagators (C1-C3, tagged at S0) register *demand* on specific type cells. The scheduler can interleave S0 type propagation with S0 resolution by tracking which cells have pending demand:
+
+```
+run-to-layered-quiescence:
+  loop:
+    if S0 worklist non-empty:
+      pop and fire S0 propagator
+      if fired propagator solved a demanded cell:
+        immediately fire waiting resolution propagators (still S0)
+    elif S2 worklist non-empty:
+      pop and fire S2 propagator (rare: ambiguous commitment)
+    else:
+      quiescent — exit
+```
+
+The key insight: resolution propagators don't need full S0 quiescence. They need their *specific dependency cells* to be ground. A type cell being ground is a local property (that cell's value ≠ bot), not a global property (all cells stable). So a resolution propagator can fire as soon as its watched cell is ground, even if other S0 propagators are still in the worklist.
+
+This is naturally implemented by the existing threshold propagator mechanism: resolution propagators are threshold propagators watching a type cell. When `net-cell-write` updates the type cell, the threshold fires and adds the resolution propagator to the S0 worklist. The layered scheduler fires it in the same S0 pass — no waiting for full quiescence.
+
+The demand-driven quiescence has a concrete performance benefit: for a command with 20 type metas and 5 trait constraints, the current loop runs S0 (solve all 20 metas) → S1 (detect 5 ready) → S2 (resolve 5) → loop back. With demand-driven scheduling, each trait constraint resolves as soon as its dependency meta is solved — potentially 5 resolution firings interleaved within the single S0 pass, with zero S1/S2 iterations.
+
 **Interaction with Track 0's mutable worklist**: The mutable worklist box from BSP-LE Track 0 Phase 3c becomes a mutable vector of boxes (one per stratum). Same drain pattern, same pure data-in/data-out contract at the quiescence boundary.
 
 **Files**: `propagator.rkt` (scheduler), `metavar-store.rkt` (stratum tagging for existing propagators), `elaborator-network.rkt` (propagator creation with stratum tags)
@@ -367,6 +402,8 @@ This directly addresses the acceptance file issues that motivated the CIU Series
 ### Phase C1: Deterministic Trait Resolution as S0 Propagators
 
 **Goal**: Trait constraints with a single matching instance resolve directly in S0, not through the S1→S2 cycle.
+
+**Categorical grounding — left Kan extension**: C1 is the concrete instantiation of the left Kan extension along the pushforward from type propagation to constraint resolution. The resolution propagator speculatively processes partial S0 fixpoint information: when a type cell is solved (partial fixpoint — other cells may still be unsolved), the resolution propagator fires immediately with that information. Monotonicity guarantees the result is sound: the dict depends only on the type constructor (which is ground once the cell is solved), not on the full network state. The left Kan extension's universal property ensures this is the *best possible* early result — no alternative scheduling would produce a better answer sooner.
 
 **Current flow** (after Part B):
 1. Elaborator emits `Indexed ?C` constraint
