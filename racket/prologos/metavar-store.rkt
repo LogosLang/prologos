@@ -1330,7 +1330,17 @@
           (define sess-champ (unbox sess-box))
           (define cleaned-sess (retract-hasheq-entries sess-champ retracted))
           (unless (equal? sess-champ cleaned-sess)
-            (set-box! sess-box cleaned-sess)))))))
+            (set-box! sess-box cleaned-sess)))
+        ;; Track 8 Phase A4b: Retract tagged id-map entries.
+        ;; id-map is a struct field of elab-network, not a cell.
+        (define id-map-read-fn (current-prop-id-map-read))
+        (define id-map-set-fn (current-prop-id-map-set))
+        (when (and id-map-read-fn id-map-set-fn)
+          (define enet-for-idmap (unbox net-box))
+          (define id-champ (id-map-read-fn enet-for-idmap))
+          (define cleaned-id (retract-hasheq-entries id-champ retracted))
+          (unless (equal? id-champ cleaned-id)
+            (set-box! net-box (id-map-set-fn (unbox net-box) cleaned-id))))))))
 
 ;; Track 6 Phase 1a: id-map access callbacks (set by driver.rkt).
 ;; Break circular dep: metavar-store doesn't import elaborator-network.
@@ -1423,8 +1433,13 @@
   (define net-box (current-prop-net-box))
   (define id-map-read (current-prop-id-map-read))
   (and net-box id-map-read
+       ;; Track 8 Phase A4b: Unwrap tagged-entry to recover the raw cell-id.
+       ;; id-map entries may be tagged with an assumption-id for S(-1) retraction.
        (let ([v (champ-lookup (id-map-read (unbox net-box)) (prop-meta-id-hash id) id)])
-         (if (eq? v 'none) #f v))))
+         (cond
+           [(eq? v 'none) #f]
+           [(tagged-entry? v) (tagged-entry-value v)]
+           [else v]))))
 
 ;; ========================================
 ;; Hash removal: Test isolation macro
@@ -1502,8 +1517,10 @@
      ;; Track 6 Phase 1a: id-map is a field of elab-network
      (define id-map-read (current-prop-id-map-read))
      (define id-map-set (current-prop-id-map-set))
+     ;; Track 8 Phase A4b: Tag id-map entry with speculation assumption.
+     (define id-map-entry (if aid (tagged-entry cid aid) cid))
      (define enet2 (id-map-set enet1
-                      (champ-insert (id-map-read enet1) h id cid)))
+                      (champ-insert (id-map-read enet1) h id id-map-entry)))
      ;; Track 6 Phase 1d: write to unsolved-metas tracking cell
      (define write-fn (current-prop-cell-write))
      (define um-cid (current-unsolved-metas-cell-id))
@@ -1640,7 +1657,7 @@
     (error 'solve-meta-core-pure "unknown metavariable: ~a" id))
   (when (eq? (meta-info-status info) 'solved)
     (error 'solve-meta-core-pure "metavariable ~a already solved" id))
-  ;; Update meta-info — preserve the original assumption tag (or current speculation tag)
+  ;; Update meta-info
   (define updated (meta-info id (meta-info-ctx info) (meta-info-type info)
                               'solved solution
                               (meta-info-constraints info) (meta-info-source info)))
@@ -1903,9 +1920,11 @@
     (define id-map-read (current-prop-id-map-read))
     (define id-map-set (current-prop-id-map-set))
     (when (and net-box id-map-read id-map-set)
+      ;; Track 8 Phase A4b: Tag id-map entry with speculation assumption.
+      (define id-map-entry-lm (if aid (tagged-entry cid aid) cid))
       (set-box! net-box (id-map-set (unbox net-box)
                           (champ-insert (id-map-read (unbox net-box))
-                                        (prop-meta-id-hash id) id cid)))))
+                                        (prop-meta-id-hash id) id id-map-entry-lm)))))
   (level-meta id))
 
 ;; Assign a solution to a level metavariable.
@@ -2042,9 +2061,11 @@
     (define id-map-read (current-prop-id-map-read))
     (define id-map-set (current-prop-id-map-set))
     (when (and net-box id-map-read id-map-set)
+      ;; Track 8 Phase A4b: Tag id-map entry with speculation assumption.
+      (define id-map-entry-mm (if aid (tagged-entry cid aid) cid))
       (set-box! net-box (id-map-set (unbox net-box)
                           (champ-insert (id-map-read (unbox net-box))
-                                        (prop-meta-id-hash id) id cid)))))
+                                        (prop-meta-id-hash id) id id-map-entry-mm)))))
   (mult-meta id))
 
 ;; Assign a solution to a mult metavariable.
@@ -2177,9 +2198,11 @@
     (define id-map-read (current-prop-id-map-read))
     (define id-map-set (current-prop-id-map-set))
     (when (and net-box id-map-read id-map-set)
+      ;; Track 8 Phase A4b: Tag id-map entry with speculation assumption.
+      (define id-map-entry-sm (if aid (tagged-entry cid aid) cid))
       (set-box! net-box (id-map-set (unbox net-box)
                           (champ-insert (id-map-read (unbox net-box))
-                                        (prop-meta-id-hash id) id cid)))))
+                                        (prop-meta-id-hash id) id id-map-entry-sm)))))
   (sess-meta id))
 
 ;; Assign a solution to a sess metavariable.

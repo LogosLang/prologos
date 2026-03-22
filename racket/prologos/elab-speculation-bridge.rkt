@@ -208,12 +208,15 @@
      (define failures-before-count
        (let ([b (current-speculation-failures)])
          (if b (length (unbox b)) 0)))
-     ;; Track 8 Phase A4: save-meta-state SIMPLIFIED (partial retirement).
-     ;; A1-A3 made CHAMP entries (meta-info, mult, level, session) assumption-tagged.
-     ;; TMS retraction + S(-1) clean those entries. But meta-info and id-map still
-     ;; need synchronous restore for structural consistency: metas created during
-     ;; failed speculation must not be visible as "unknown" to subsequent attempts.
-     ;; The box restore handles meta-info + id-map; TMS + S(-1) handle everything else.
+     ;; Track 8 Phase A4b: save-meta-state retained.
+     ;; Despite A1-A3 tagging + A4b id-map tagging, the timing gap between
+     ;; speculation failure (retraction recorded) and S(-1) execution (retraction
+     ;; applied) is too wide. The elaborator makes decisions based on meta existence
+     ;; and status between these points. Without synchronous restore, the second
+     ;; speculation branch inherits the first branch's metas (tagged but not yet
+     ;; cleaned), causing "already solved" errors. Full retirement requires making
+     ;; S(-1) run synchronously after speculation failure — a deeper architectural
+     ;; change deferred to Part B's cell-ops extraction.
      (define saved (save-meta-state))
      ;; Run the speculation with TMS stack push (Track 6 Phases 2–4)
      ;; Push hyp-id onto the speculation stack so cell writes are routed to
@@ -257,15 +260,11 @@
               (net-retract-assumption (elab-network-prop-net enet) hyp-id))
             (set-box! net-box (struct-copy elab-network enet [prop-net retracted-pnet]))))
         ;; Track 7 Phase 5: Record retraction for S(-1) stratum.
-        ;; S(-1) will clean scoped cell entries AND tagged CHAMP entries
-        ;; (meta-info, mult, level, session — A1-A3 tagging).
+        ;; S(-1) will clean scoped cell entries AND tagged CHAMP entries.
         (record-assumption-retraction! hyp-id)
-        ;; Track 8 Phase A4: SIMPLIFIED restore — only structural state.
-        ;; TMS retraction cleans cell branches. S(-1) cleans tagged entries.
-        ;; restore-meta-state! handles structural state (meta-info existence,
-        ;; id-map mappings) that must be synchronously reverted to prevent
-        ;; ghost metas (metas created during failed speculation that are
-        ;; invisible in meta-info but present in id-map/cells).
+        ;; Track 8 Phase A4b: restore-meta-state! retained (belt-and-suspenders).
+        ;; TMS + S(-1) handle value cleanup; restore handles structural consistency
+        ;; (meta existence between speculation branches).
         (restore-meta-state! saved)
         ;; Phase D2: Extract sub-failures (failures added during this thunk)
         ;; The box stores newest-first, so new failures are at the front.
