@@ -1,7 +1,7 @@
 # CHAMP Performance — Stage 3 Design
 
 **Date**: 2026-03-21
-**Status**: Draft (D.1)
+**Status**: Draft (D.2 — external critique incorporated)
 **Audit**: [CHAMP Performance Audit](2026-03-21_CHAMP_PERFORMANCE_AUDIT.md)
 **Prerequisite**: None — independent of all Series. Benefits all propagator-network consumers.
 **Prior work**: [BSP-LE Track 0 PIR](2026-03-21_BSP_LE_TRACK0_PIR.md) (identified CHAMP as actual bottleneck), [BSP-LE Track 0 Phase 5](2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md) (transient regression — motivation for owner-ID)
@@ -19,7 +19,7 @@
 | 3 | Value-only update fast path | Return same node when new value `eq?` old value | ⬜ | | Addresses F-4. Compounds with Track 0 Phase 1 (eq?-first in net-cell-write) |
 | 4 | Owner-ID node structure | Add `edit` field to `champ-node`; ownership check infrastructure | ⬜ | | Addresses F-5. Foundation for Phase 5 |
 | 5 | Owner-ID transient operations | In-place mutation for owned nodes; path-copy for shared | ⬜ | | Addresses F-5. Rehabilitates BSP-LE Track 0 Phase 5 |
-| 6 | Owner-ID freeze | O(1) freeze (clear edit field, not full rebuild) | ⬜ | | Completes owner-ID transient. `tchamp-freeze` becomes near-free |
+| 6 | Owner-ID freeze | O(modified nodes) freeze — walk + clear edit, not full rebuild | ⬜ | | Completes owner-ID transient. Old freeze was O(N log N); new is O(modified paths × depth) |
 | 7 | Verification + A/B | Micro-benchmarks, suite regression, BSP-LE Track 0 Phase 5 revisit | ⬜ | | Target: measurable wall-time improvement on full suite |
 
 ---
@@ -57,6 +57,7 @@ Extend `bench-alloc.rkt` with CHAMP-level micro-benchmarks:
 |-----------|-----------------|
 | `champ-insert` × 1000 (sequential keys) | Raw insert throughput for network-like workload |
 | `champ-insert` × 1000 (scrambled keys) | Effect of key distribution on trie depth |
+| `champ-node` construction 3-field vs 4-field | Regression baseline for Phase 4 edit field addition |
 | `champ-lookup` × 10000 (hit/miss ratio) | Lookup throughput at various map sizes |
 | `champ-insert` value-only update × 1000 | Cost of updating existing key (the hot path) |
 | `champ-transient` + 10 inserts + `tchamp-freeze` | Current transient cycle cost at N=10 |
@@ -122,6 +123,8 @@ Extend `bench-alloc.rkt` with CHAMP-level micro-benchmarks:
 
 **Impact**: On re-propagation (100% no-change writes per Phase 0 measurement), every cell write becomes O(1) through the full stack: merge → champ-insert → net-cell-write. No allocation whatsoever.
 
+**Specificity note**: This optimization benefits use cases where values have *identity stability* — where the merge/update function returns the identical Racket object on no-change. Our propagator network merge functions satisfy this (BSP-LE Track 0 Phase 2 ensured it). User-facing `Map` and `Set` operations with freshly-constructed values (strings, lists) won't see improvement from Phase 3 because freshly-allocated values are never `eq?` to existing ones. This is expected — Phase 3 targets the propagator hot path, not general-purpose map operations.
+
 ### Phase 4: Owner-ID Node Structure
 
 **Foundation phase** — adds the edit field to CHAMP nodes without changing behavior.
@@ -141,7 +144,7 @@ Extend `bench-alloc.rkt` with CHAMP-level micro-benchmarks:
 
 **Migration**: Every `(champ-node dm nm arr)` call gains a `#f` fourth argument. Mechanical grep-and-replace.
 
-**Risk**: The 4th field adds ~8 bytes per node. For a 500-entry CHAMP with ~50 nodes, that's ~400 bytes. Negligible.
+**Risk**: The 4th field adds ~8 bytes per node. For a 500-entry CHAMP with ~50 nodes, that's ~400 bytes. Negligible. Every persistent insert that path-copies nodes now constructs 4-field structs instead of 3-field — ~5 extra field writes per insert at ~1ns each = ~5ns regression (~3% of the ~150ns insert cost). Phase 0 baselines include a 3-field vs 4-field construction benchmark to measure this precisely before committing Phase 4.
 
 ### Phase 5: Owner-ID Transient Operations
 
@@ -162,9 +165,15 @@ Extend `bench-alloc.rkt` with CHAMP-level micro-benchmarks:
         (define entry (vector-ref arr idx))
         (cond
           [(equal? (de-key entry) key)
-           ;; Value update: mutate vector in place
-           (vector-set! arr idx (make-de hash key val))
-           (values node #f)]
+           ;; Value update on owned node
+           (cond
+             [(eq? (de-val entry) val)
+              ;; Same value — no mutation needed (Phase 3 fast path in transient mode)
+              (values node #f)]
+             [else
+              ;; Different value — mutate vector in place (saves content vector copy)
+              (vector-set! arr idx (make-de hash key val))
+              (values node #f)])]
           [else
            ;; Promote to sub-node (in-place: replace data entry with node entry)
            ...])]
@@ -179,6 +188,8 @@ Extend `bench-alloc.rkt` with CHAMP-level micro-benchmarks:
      ;; Now recurse into the owned copy
      (tnode-insert! new-node hash key val level edit)]))
 ```
+
+**Known remaining allocation in owned-node value update**: The `make-de` call still allocates a fresh 3-vector data entry (`#(hash key val)`) even though only the value changed. The content vector mutation is saved (the larger allocation — 8-16 words), but the data entry allocation (3 words) remains. Eliminating this would require inlining key/hash/value into the content vector (3 slots per entry instead of a reference to a 3-vector), which changes the content vector layout and ripples through `data-index`, `node-index`, `vec-insert`, `vec-remove`, and all iteration code. This is flagged as a potential Phase 5.5 follow-up if profiling shows the data entry allocation is significant after the content vector copy is eliminated.
 
 Key properties:
 - First touch of a shared node: one vector-copy + one struct allocation (same as persistent insert)
@@ -201,6 +212,18 @@ Key properties:
   ;; O(modified nodes), not O(all entries)
   (champ-root (freeze-node node edit) size))
 ```
+
+### Ownership Invariant (Phases 4–6)
+
+**The fundamental invariant: a persistent reference must never observe a mutation made through a transient.**
+
+This requires two guarantees:
+
+1. **Edit tokens are globally unique and never recycled.** Racket's `gensym` provides this — gensyms are never `eq?` to each other, by language specification. A new transient with a fresh gensym will never falsely claim ownership of nodes from a previous transient.
+
+2. **Abandoned transients are safe.** If a transient is created but never frozen (e.g., exception during processing), the owned nodes retain their edit field pointing to a gensym that no one holds. Future transients use different gensyms, so these nodes are treated as shared (copied on touch, not mutated). In our codebase, abandonment is not a practical concern: the quiescence loop (`run-to-quiescence-drain` in `propagator.rkt`) always runs to completion — it's a tail-recursive loop with three termination conditions (empty worklist, fuel exhaustion, contradiction), all of which reach `finalize`. There is no `with-handlers` or exception-based early exit. The ATMS speculation path (`save-meta-state!`/`restore-meta-state!`) operates on the `meta-info` CHAMP in `metavar-store.rkt`, not on the prop-network cells CHAMP.
+
+3. **Freeze must clear ALL owned nodes on ALL reachable paths.** The freeze walk visits every child of every owned node (not just modified children) because an owned node at depth 0 may have both owned and shared children. The walk's cost is O(owned-nodes × branching-factor), which for our typical networks (depth 1–2, branching ~8) is 2–6 nodes × 8 children = 16–48 checks. This scales linearly with owned-node count if networks grow (Track 8 adding more cells), but remains small relative to the O(N log N) cost of the old full-rebuild freeze.
 
 ### Phase 6: Owner-ID Freeze
 
@@ -240,6 +263,26 @@ Cost: O(modified nodes). For a transient that modified 3 paths through a depth-2
 2. **Full suite** — regression check
 3. **BSP-LE Track 0 Phase 5 revisit**: Re-attempt transient input batching in `net-add-propagator` using owner-ID transients. With O(modified-paths) transient cycle, the 2–3 input case should be efficient.
 4. **Accumulate-during-quiescence prototype**: Test the pattern where the quiescence loop operates on an owned transient, cell writes mutate in place, and freeze produces the persistent result at loop exit. If viable, this eliminates CHAMP allocation on the hot path entirely.
+
+### Accumulate-During-Quiescence: Conceptual Design
+
+The highest-value application of owner-ID transients. The pattern:
+
+1. Enter `run-to-quiescence-drain` (the serial quiescence loop)
+2. Convert the cells CHAMP to an owned transient (get edit token — O(1), no conversion needed with owner-ID)
+3. Quiescence loop: propagators fire, cell writes go through owned-transient insert (in-place mutation for owned nodes)
+4. On quiescence exit: freeze the cells CHAMP (O(modified nodes))
+5. Return persistent network with frozen cells
+
+**The contract question**: `net-cell-write` currently returns a new `prop-network`. In transient mode, the cells CHAMP is mutated in place — so what does `net-cell-write` return?
+
+**Recommended approach** (Option A — same pattern as Track 0 Phase 3c mutable worklist): The owned-transient cells reference is held as a local mutable in the quiescence loop, NOT stored in the `prop-network` struct. `net-cell-write` receives the transient as a parameter (or accesses it via a thread-local parameter). Fire functions receive a `prop-network` with the pre-quiescence cells field (stale), but the quiescence loop holds the live transient separately.
+
+This is exactly the Track 0 Phase 3c pattern (mutable worklist box held locally, network struct has empty worklist). The pure data-in/data-out contract is preserved at the quiescence boundary: immutable network in, immutable network out. Within the loop, the transient is a local mutable — same scope discipline.
+
+**Why defer implementation to post-Track 8**: Threading the transient through `net-cell-write` requires modifying `net-cell-write`'s API (adding a transient parameter or using a thread-local parameter). `net-cell-write` is called from 15+ sites through the `current-prop-cell-write` callback in `metavar-store.rkt`. Track 8 Part B eliminates these callbacks — fire functions will call `net-cell-write` directly via `cell-ops.rkt`. Threading the transient through the direct API is cleaner than threading it through the callback indirection layer.
+
+Implementation belongs in Phase 7 of this Track or as a Track 8 follow-on, once the callback elimination is in place.
 
 ---
 
