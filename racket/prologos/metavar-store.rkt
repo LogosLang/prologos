@@ -235,6 +235,8 @@
  current-trait-resolution-bridge-fn
  current-hasmethod-resolution-bridge-fn
  current-constraint-retry-bridge-fn
+ ;; Track 8 C5a: Scheduler selection (A/B benchmarking)
+ current-quiescence-scheduler
  ;; Hash removal: test isolation helper
  with-fresh-meta-env)
 
@@ -1490,6 +1492,11 @@
 ;; Returns #t if the current propagator network has a contradiction, #f otherwise.
 (define current-prop-has-contradiction? (make-parameter #f))  ;; (→ boolean)
 
+;; Track 8 C5a: Scheduler selection for quiescence.
+;; Default: run-to-quiescence (Gauss-Seidel). Alternative: run-to-quiescence-bsp (BSP/Jacobi).
+;; Set via parameterize for A/B benchmarking.
+(define current-quiescence-scheduler (make-parameter run-to-quiescence))
+
 ;; Propagator quiescence callbacks (set by driver.rkt).
 ;; Track 8 B2b: current-prop-run-quiescence REPLACED by direct run-to-quiescence call.
 ;; Track 8 B2b: current-prop-unwrap-net REPLACED by direct elab-network-prop-net accessor.
@@ -1813,7 +1820,7 @@
         (when has-network?
           (define enet (unbox net-box))
           (define pnet (elab-network-prop-net enet))
-          (define pnet* (run-to-quiescence pnet))
+          (define pnet* ((current-quiescence-scheduler) pnet))
           (set-box! net-box (elab-network-rewrap enet pnet*)))
         ;; ── S1/L1: Read ready-queue (Track 7 Phase 8c: scanners removed) ──
         ;; After S0 quiescence, readiness propagators have populated the ready-queue.
@@ -1863,7 +1870,7 @@
                ;; Track 8 B2: direct elab-network-rewrap instead of rewrap callback.
                [enet-s0 (if has-network?
                              (let* ([pnet (elab-network-prop-net enet-post-retract)]
-                                    [pnet* (run-to-quiescence pnet)])
+                                    [pnet* ((current-quiescence-scheduler) pnet)])
                                (elab-network-rewrap enet-post-retract pnet*))
                              enet-post-retract)]
                ;; S1/L1: After S0 quiescence, readiness propagators have fired
@@ -1908,7 +1915,7 @@
   (when net-box
     (define enet (unbox net-box))
     (define pnet (elab-network-prop-net enet))
-    (define pnet* (run-to-quiescence pnet))
+    (define pnet* ((current-quiescence-scheduler) pnet))
     (set-box! net-box (elab-network-rewrap enet pnet*))))
 
 ;; Check if a metavariable has been solved.
