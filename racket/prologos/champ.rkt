@@ -42,7 +42,9 @@
 ;; content is a vector: data entries at front, child champ-nodes at back.
 ;; Data entries are 3-vectors: #(hash key value), storing the caller-provided
 ;; hash so sub-node promotion doesn't need to re-derive it.
-(struct champ-node (datamap nodemap content) #:transparent)
+;; edit: #f for persistent (shared) nodes; a gensym for owned (transient) nodes.
+;; CHAMP Performance Phase 4: edit field enables owner-ID transient operations.
+(struct champ-node (datamap nodemap content edit) #:transparent)
 
 ;; Data entry accessors
 (define (de-hash entry) (vector-ref entry 0))
@@ -96,7 +98,7 @@
 ;; Empty CHAMP
 ;; ========================================
 
-(define empty-node (champ-node 0 0 #()))
+(define empty-node (champ-node 0 0 #() #f))
 
 (define champ-empty (champ-root empty-node 0))
 
@@ -186,7 +188,7 @@
                (values node #f)  ;; same value — return identical node
                (let ([new-arr (vector-copy arr)])
                  (vector-set! new-arr idx (make-de hash key val))
-                 (values (champ-node dm nm new-arr) #f)))]
+                 (values (champ-node dm nm new-arr #f) #f)))]
           ;; Different key: create sub-node or collision
           [else
            (define existing-hash (de-hash entry))  ;; USE STORED HASH (was: equal-hash-code)
@@ -200,7 +202,7 @@
                                                     (node-index new-dm new-nm bit)
                                                     sub-node
                                                     dm))
-           (values (champ-node new-dm new-nm new-arr) #t)])]
+           (values (champ-node new-dm new-nm new-arr #f) #t)])]
        ;; Child node exists at this position
        [(not (zero? (bitwise-and nm bit)))
         (define idx (node-index dm nm bit))
@@ -211,13 +213,13 @@
             (values node #f)
             (let ([new-arr (vector-copy arr)])
               (vector-set! new-arr idx new-child)
-              (values (champ-node dm nm new-arr) added?)))]
+              (values (champ-node dm nm new-arr #f) added?)))]
        ;; Empty: add data entry
        [else
         (define new-dm (bitwise-ior dm bit))
         (define idx (data-index new-dm bit))
         (define new-arr (vec-insert arr idx (make-de hash key val)))
-        (values (champ-node new-dm nm new-arr) #t)])]))
+        (values (champ-node new-dm nm new-arr #f) #t)])]))
 
 ;; Merge two key-value pairs into a sub-node (or collision node)
 (define (merge-two hash1 key1 val1 hash2 key2 val2 level)
@@ -234,14 +236,14 @@
        [(= seg1 seg2)
         ;; Same segment: recurse deeper
         (define child (merge-two hash1 key1 val1 hash2 key2 val2 (+ level 1)))
-        (champ-node 0 bit1 (vector child))]
+        (champ-node 0 bit1 (vector child) #f)]
        [else
         ;; Different segments: two data entries
         (if (< seg1 seg2)
             (champ-node (bitwise-ior bit1 bit2) 0
-                        (vector (make-de hash1 key1 val1) (make-de hash2 key2 val2)))
+                        (vector (make-de hash1 key1 val1) (make-de hash2 key2 val2)) #f)
             (champ-node (bitwise-ior bit1 bit2) 0
-                        (vector (make-de hash2 key2 val2) (make-de hash1 key1 val1))))])]))
+                        (vector (make-de hash2 key2 val2) (make-de hash1 key1 val1)) #f))])]))
 
 (define (collision-insert coll hash key val)
   (define entries (champ-collision-entries coll))
@@ -289,7 +291,7 @@
            (define new-arr (vec-remove arr idx))
            (if (and (zero? new-dm) (zero? nm))
                (values #f #t) ; node becomes empty
-               (values (champ-node new-dm nm new-arr) #t))]
+               (values (champ-node new-dm nm new-arr #f) #t))]
           [else (values node #f)])]
        ;; Child node at this position
        [(not (zero? (bitwise-and nm bit)))
@@ -304,7 +306,7 @@
            (define new-arr (vec-remove arr idx))
            (if (and (zero? dm) (zero? new-nm))
                (values #f #t)
-               (values (champ-node dm new-nm new-arr) #t))]
+               (values (champ-node dm new-nm new-arr #f) #t))]
           ;; Child is a single-entry node: inline it as data
           [(and (champ-node? new-child)
                 (= (popcount (champ-node-datamap new-child)) 1)
@@ -317,12 +319,12 @@
            (define arr-without-node (vec-remove arr idx))
            (define data-idx (data-index new-dm bit))
            (define new-arr (vec-insert arr-without-node data-idx entry))
-           (values (champ-node new-dm new-nm new-arr) #t)]
+           (values (champ-node new-dm new-nm new-arr #f) #t)]
           [else
            ;; Child still has entries: update in place
            (define new-arr (vector-copy arr))
            (vector-set! new-arr idx new-child)
-           (values (champ-node dm nm new-arr) #t)])]
+           (values (champ-node dm nm new-arr #f) #t)])]
        ;; Not found
        [else (values node #f)])]))
 
