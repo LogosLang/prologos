@@ -14,9 +14,11 @@
 ;;;
 
 (require racket/match
+         racket/string
          "syntax.rkt"
          "metavar-store.rkt"
          "elab-network-types.rkt"   ;; Track 8 C1: elab-network-prop-net, elab-network-rewrap
+         "propagator.rkt"           ;; Track 8D: net-cell-read for pure bridges
          "unify.rkt"
          "zonk.rkt"
          "trait-resolution.rkt"
@@ -34,10 +36,13 @@
          resolve-trait-constraint-pure
          resolve-hasmethod-constraint-pure
          resolution-execute-action-pure
-         ;; Track 8 C1-C3: Bridge propagator fire functions (pnet → pnet)
+         ;; Track 8 C1-C3: Bridge propagator fire functions (pnet → pnet) — LEGACY
          make-trait-resolution-bridge-fire-fn
          make-hasmethod-resolution-bridge-fire-fn
-         make-constraint-retry-bridge-fire-fn)
+         make-constraint-retry-bridge-fire-fn
+         ;; Track 8D: Pure bridge fire functions (pnet → pnet, no enet-box)
+         make-pure-trait-bridge-fire-fn
+         make-pure-hasmethod-bridge-fire-fn)
 
 ;; ========================================
 ;; Constraint Retry (extracted from unify.rkt module-level callback)
@@ -370,3 +375,291 @@
           (define enet* (retry-unify-constraint-pure enet current-c))
           (set-box! net-box enet*)
           (elab-network-prop-net enet*)])])))
+
+;; ========================================
+;; Track 8D: Pure Bridge Fire Functions (pnet → pnet, NO enet-box)
+;; ========================================
+;;
+;; These fire functions read cell values directly from the prop-network
+;; passed by the quiescence loop. No unbox, no set-box!, no enet-rewrap.
+;;
+;; Meta type-arg values are read from dependency cells (already resolved
+;; — cell values ARE the solutions, no zonk needed).
+;;
+;; Registry lookups read from the persistent registry network via
+;; net-cell-read on the persistent-registry-net-box. This is a monotone
+;; read from a stable source (registries only grow, never shrink).
+;;
+;; The fire function writes to the dict-meta cell on the per-command
+;; prop-network — a pure net-cell-write.
+
+;; Helper: read a hash from a persistent registry cell.
+;; Returns the hash value, or (hasheq) if not available.
+(define (read-persistent-registry-cell cid)
+  (define prn-box (current-persistent-registry-net-box))
+  (if (and cid prn-box)
+      (let ([v (net-cell-read (unbox prn-box) cid)])
+        (if v v (hasheq)))
+      (hasheq)))
+
+;; Inline type-lattice predicates (avoid requiring type-lattice.rkt — cycle).
+(define (prop-type-bot? v) (eq? v 'type-bot))
+(define (prop-type-top? v) (eq? v 'type-top))
+
+;; Helper: check if a cell value is a resolved type (not bot/top/meta).
+(define (resolved-cell-value? v)
+  (and v
+       (not (prop-type-bot? v))
+       (not (prop-type-top? v))))
+
+;; Pure trait resolution bridge.
+;; Closed over: trait-name, dict-cell-id, dep-cell-ids, impl-registry-cell-id.
+;; Fire function: pnet → pnet (pure).
+(define (make-pure-trait-bridge-fire-fn trait-name dict-cell-id dep-cell-ids impl-reg-cid param-impl-reg-cid)
+  (lambda (pnet)
+    ;; Early exit: dict already solved
+    (define dict-val (net-cell-read pnet dict-cell-id))
+    (cond
+      [(resolved-cell-value? dict-val) pnet]  ;; already resolved
+      [else
+       ;; Read dependency cell values (type-arg solutions)
+       (define type-arg-vals
+         (for/list ([cid (in-list dep-cell-ids)])
+           (net-cell-read pnet cid)))
+       ;; All resolved? (no bot/top)
+       (cond
+         [(not (andmap resolved-cell-value? type-arg-vals)) pnet]  ;; not all ground yet
+         [else
+          ;; Build impl key from ground type-arg values
+          (define type-arg-str
+            (string-join (map expr->impl-key-str type-arg-vals) "-"))
+          (define impl-key
+            (string->symbol (string-append type-arg-str "--" (symbol->string trait-name))))
+          ;; Read impl registry from persistent network cell
+          (define impl-reg (read-persistent-registry-cell impl-reg-cid))
+          (define entry (hash-ref impl-reg impl-key #f))
+          (cond
+            [entry
+             ;; Monomorphic resolution succeeded — write dict to cell
+             (net-cell-write pnet dict-cell-id (expr-fvar (impl-entry-dict-name entry)))]
+            [else
+             ;; Try parametric resolution
+             (define param-impl-reg (read-persistent-registry-cell param-impl-reg-cid))
+             (define param-entries (hash-ref param-impl-reg trait-name '()))
+             (cond
+               [(null? param-entries) pnet]  ;; no parametric impls — leave for S2
+               [else
+                ;; Match type-arg values against parametric patterns
+                (define matches
+                  (for/fold ([acc '()])
+                            ([pe (in-list param-entries)])
+                    (define bindings (match-type-args-pure type-arg-vals (param-impl-entry-type-pattern pe)))
+                    (if bindings
+                        (cons (cons pe bindings) acc)
+                        acc)))
+                (cond
+                  [(null? matches) pnet]  ;; no match
+                  [else
+                   ;; Pick most specific (fewest pattern vars)
+                   (define sorted
+                     (sort matches < #:key (lambda (m) (length (param-impl-entry-pattern-vars (car m))))))
+                   (define best (car sorted))
+                   (define pe (car best))
+                   (define bindings (cdr best))
+                   ;; Build the dict expression with resolved sub-dicts
+                   (define dict-expr
+                     (build-parametric-dict-expr-pure
+                       trait-name type-arg-vals pe bindings impl-reg param-impl-reg))
+                   (if dict-expr
+                       (net-cell-write pnet dict-cell-id dict-expr)
+                       pnet)])])])])])))
+
+;; Pure hasmethod resolution bridge.
+;; More complex: must find which trait owns the method, resolve the dict,
+;; then project the method. For now, delegates to the existing pure function
+;; via with-enet-reads (transitional — will be fully purified in a follow-up).
+(define (make-pure-hasmethod-bridge-fire-fn method-name meta-cell-id trait-var-cell-id
+                                            dict-meta-cell-id dep-cell-ids
+                                            trait-reg-cid impl-reg-cid param-impl-reg-cid)
+  (lambda (pnet)
+    ;; Early exit: already resolved
+    (define meta-val (net-cell-read pnet meta-cell-id))
+    (cond
+      [(resolved-cell-value? meta-val) pnet]
+      [else
+       ;; Read dependency cell values
+       (define type-arg-vals
+         (for/list ([cid (in-list dep-cell-ids)])
+           (net-cell-read pnet cid)))
+       (cond
+         [(not (andmap resolved-cell-value? type-arg-vals)) pnet]
+         [else
+          ;; Read trait registry to find which trait has this method
+          (define trait-reg (read-persistent-registry-cell trait-reg-cid))
+          (define resolved-trait-name
+            ;; Check if trait variable is already ground
+            (let ([tv (and trait-var-cell-id (net-cell-read pnet trait-var-cell-id))])
+              (if (and tv (resolved-cell-value? tv))
+                  (trait-expr->name tv)
+                  ;; Search all traits for the method
+                  (find-trait-with-method-from-hash method-name type-arg-vals trait-reg))))
+          (cond
+            [(not resolved-trait-name) pnet]
+            [else
+             ;; Look up the trait to get method index
+             (define tm (hash-ref trait-reg resolved-trait-name #f))
+             (cond
+               [(not tm) pnet]
+               [else
+                (define methods (trait-meta-methods tm))
+                (define method-idx
+                  (for/or ([m (in-list methods)] [i (in-naturals)])
+                    (and (eq? (trait-method-name m) method-name) i)))
+                (cond
+                  [(not method-idx) pnet]
+                  [else
+                   ;; Resolve the dict via impl registry
+                   (define impl-reg (read-persistent-registry-cell impl-reg-cid))
+                   (define param-impl-reg (read-persistent-registry-cell param-impl-reg-cid))
+                   (define type-arg-str
+                     (string-join (map expr->impl-key-str type-arg-vals) "-"))
+                   (define dict-key
+                     (string->symbol (string-append type-arg-str "--" (symbol->string resolved-trait-name))))
+                   (define dict-entry (hash-ref impl-reg dict-key #f))
+                   (define dict-expr
+                     (cond
+                       [dict-entry (expr-fvar (impl-entry-dict-name dict-entry))]
+                       [else
+                        ;; Try parametric
+                        (define param-entries (hash-ref param-impl-reg resolved-trait-name '()))
+                        (define match-result
+                          (for/or ([pe (in-list param-entries)])
+                            (define bindings (match-type-args-pure type-arg-vals (param-impl-entry-type-pattern pe)))
+                            (and bindings (cons pe bindings))))
+                        (and match-result
+                             (build-parametric-dict-expr-pure
+                               resolved-trait-name type-arg-vals
+                               (car match-result) (cdr match-result)
+                               impl-reg param-impl-reg))]))
+                   (cond
+                     [(not dict-expr) pnet]
+                     [else
+                      ;; Solve trait variable if still unsolved
+                      (define pnet1
+                        (if (and trait-var-cell-id
+                                 (not (resolved-cell-value? (net-cell-read pnet trait-var-cell-id))))
+                            (net-cell-write pnet trait-var-cell-id (expr-fvar resolved-trait-name))
+                            pnet))
+                      ;; Solve dict meta if present
+                      (define pnet2
+                        (if (and dict-meta-cell-id
+                                 (not (resolved-cell-value? (net-cell-read pnet1 dict-meta-cell-id))))
+                            (net-cell-write pnet1 dict-meta-cell-id dict-expr)
+                            pnet1))
+                      ;; Project method and solve evidence meta
+                      (define projected (project-method dict-expr tm method-idx))
+                      (net-cell-write pnet2 meta-cell-id projected)])])])])])])))
+
+;; ========================================
+;; Track 8D: Pure Helper Functions (no box/parameter access)
+;; ========================================
+
+;; Match type-arg values against a parametric impl's type pattern.
+;; Returns bindings alist or #f.
+;; Pure: operates only on the values passed, no parameter reads.
+(define (match-type-args-pure type-arg-vals pattern)
+  (define (match-one val pat bindings)
+    (cond
+      [(symbol? pat)
+       ;; Pattern variable — check if already bound
+       (define existing (assq pat bindings))
+       (if existing
+           (and (equal? (cdr existing) val) bindings)
+           (cons (cons pat val) bindings))]
+      [(and (pair? pat) (pair? (cdr pat)))
+       ;; Compound pattern — recursive match
+       (match-compound val pat bindings)]
+      [else
+       ;; Literal — must match exactly
+       (and (equal? (list pat) (list val)) bindings)]))
+  ;; match-compound handles (List A), (Map K V), etc.
+  (define (match-compound val pat bindings)
+    (match pat
+      [`(,tag . ,sub-pats)
+       (define val-parts (decompose-type-for-match val tag))
+       (and val-parts
+            (= (length val-parts) (length sub-pats))
+            (for/fold ([b bindings])
+                      ([v (in-list val-parts)]
+                       [p (in-list sub-pats)]
+                       #:break (not b))
+              (match-one v p b)))]
+      [_ #f]))
+  ;; Top-level: match each type-arg against corresponding pattern element
+  (and (= (length type-arg-vals) (length pattern))
+       (for/fold ([b '()])
+                 ([v (in-list type-arg-vals)]
+                  [p (in-list pattern)]
+                  #:break (not b))
+         (match-one v p b))))
+
+;; Decompose a type value for pattern matching.
+;; Returns list of components or #f if tag doesn't match.
+(define (decompose-type-for-match val tag)
+  (match (cons tag val)
+    [(cons 'List (expr-fvar name))
+     (and (memq name '(List prologos::data::list::List)) '())]
+    [(cons 'List (expr-app (expr-fvar name) a))
+     (and (memq name '(List prologos::data::list::List)) (list a))]
+    [(cons 'PVec (expr-PVec a)) (list a)]
+    [(cons 'Set (expr-Set a)) (list a)]
+    [(cons 'Map (expr-Map k v)) (list k v)]
+    [(cons 'Option (expr-app (expr-fvar name) a))
+     (and (memq name '(Option prologos::data::option::Option some none)) (list a))]
+    [_ #f]))
+
+;; Build a parametric dict expression from resolved bindings.
+;; Pure: uses the passed registry hashes, no parameter reads.
+(define (build-parametric-dict-expr-pure trait-name type-arg-vals pe bindings impl-reg param-impl-reg)
+  ;; Resolve where-constraints sub-dicts
+  (define where-constraints (param-impl-entry-where-constraints pe))
+  (define sub-dicts
+    (for/list ([wc (in-list where-constraints)])
+      (define wc-trait (car wc))
+      (define wc-type-args
+        (for/list ([pat (in-list (cdr wc))])
+          (cond
+            [(assq pat bindings) => cdr]
+            [else pat])))  ;; literal type arg
+      ;; Resolve sub-dict
+      (define wc-key-str (string-join (map expr->impl-key-str wc-type-args) "-"))
+      (define wc-key (string->symbol (string-append wc-key-str "--" (symbol->string wc-trait))))
+      (define wc-entry (hash-ref impl-reg wc-key #f))
+      (cond
+        [wc-entry (expr-fvar (impl-entry-dict-name wc-entry))]
+        [else
+         ;; Try parametric for sub-dict
+         (define wc-param-entries (hash-ref param-impl-reg wc-trait '()))
+         (define wc-match
+           (for/or ([wpe (in-list wc-param-entries)])
+             (define wb (match-type-args-pure wc-type-args (param-impl-entry-type-pattern wpe)))
+             (and wb (cons wpe wb))))
+         (and wc-match
+              (build-parametric-dict-expr-pure
+                wc-trait wc-type-args (car wc-match) (cdr wc-match) impl-reg param-impl-reg))])))
+  ;; If any sub-dict failed, overall resolution fails
+  (and (andmap values sub-dicts)
+       (let* ([dict-name (param-impl-entry-dict-name pe)]
+              [base (expr-fvar dict-name)])
+         ;; Apply sub-dicts as arguments
+         (for/fold ([e base])
+                   ([sd (in-list sub-dicts)])
+           (expr-app e sd)))))
+
+;; Find which trait contains a given method, from a registry hash.
+;; Pure: no parameter reads.
+(define (find-trait-with-method-from-hash method-name type-arg-vals trait-reg)
+  (for/or ([(name tm) (in-hash trait-reg)])
+    (and (for/or ([m (in-list (trait-meta-methods tm))])
+           (eq? (trait-method-name m) method-name))
+         name)))
