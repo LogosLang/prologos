@@ -23,7 +23,7 @@ Audits) are defined.
 |------------------+------|
 | *Master Roadmap* | [[file:2026-03-13_PROPAGATOR_MIGRATION_MASTER.md][2026-03-13_PROPAGATOR_MIGRATION_MASTER.md]] |
 | *Thesis*         | Every piece of mutable state that participates in type-checking flows through one unified propagator network. |
-| *Status*         | Tracks 1–7 complete. Track 8 audit complete, design pending. |
+| *Status*         | Tracks 1–7 complete. Track 8 D.1 design complete, awaiting critique. |
 
 *** Completed Tracks
 
@@ -42,7 +42,7 @@ Audits) are defined.
 
 | Track | Description | Status | Design/Audit |
 |-------+-------------+--------+--------------|
-| Track 8 | Infrastructure migration (imperative state → propagator cells) | Audit complete, design pending | [[file:2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org][Audit]] |
+| Track 8 | Infrastructure migration (imperative state → propagator cells) | D.1 design complete, awaiting critique | [[file:2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org][Audit]], [[file:2026-03-21_TRACK8_DESIGN.md][Design D.1]] |
 | Track 9 | General Diagnostic Engine (GDE) — multi-hypothesis conflict analysis | Not started | Depends on Track 8 |
 | Track 10 | LSP Integration — incremental re-elaboration, live diagnostics | Not started | [[file:2026-03-19_TRACK10_DESIGN_NOTES.org][Early notes]]; depends on Track 9 |
 
@@ -63,14 +63,14 @@ restructuring.
 |------------------+------|
 | *Master Roadmap* | [[file:2026-03-21_BSP_LE_MASTER.md][2026-03-21_BSP_LE_MASTER.md]] |
 | *Thesis*         | Choice points are ATMS assumptions, conjunction is worklist scheduling, backtracking is nogood accumulation, tabling is cell quiescence, parallel exploration is BSP. |
-| *Status*         | Series inception. All Tracks pending. |
+| *Status*         | Track 0 complete. Tracks 1–5 pending. |
 | *Origin*         | [[file:2026-02-24_LOGIC_ENGINE_DESIGN.org][Logic Engine Design (Phases 4–7)]], [[file:2026-03-19_PUNIFY_PART3_ATMS_SOLVER_ARCHITECTURE.md][PUnify Part 3 (Multiverse Multiplexer)]] |
 
 *** Tracks
 
 | Track | Description | Status | Depends On |
 |-------+-------------+--------+------------|
-| 0 | Allocation Efficiency | ⬜ | — (unblocked, [[file:2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md][Audit]]) |
+| 0 | Allocation Efficiency | ✅ [[file:2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md][Design]] [[file:2026-03-21_BSP_LE_TRACK0_PIR.md][PIR]] | — ([[file:2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md][Audit]]) |
 | 1 | UnionFind (persistent disjoint sets) | ⬜ | Track 0 |
 | 2 | ATMS Solver (Multiverse Multiplexer) | ⬜ | Track 0 |
 | 3 | Tabling (SLG memoization) | ⬜ | Track 2 |
@@ -90,7 +90,7 @@ restructuring.
 |------------------+------|
 | *Master Roadmap* | [[file:2026-03-21_CIU_MASTER.md][2026-03-21_CIU_MASTER.md]] |
 | *Thesis*         | Syntactic sugar generates trait constraints resolved on the propagator network — not constructor-specific dispatch. User-defined collections participate in all syntax automatically. |
-| *Status*         | Series inception. Track 0 next. |
+| *Status*         | Track 0 complete. Tracks 1–2 pre-Track 8; Tracks 3–5 post-Track 8. |
 | *Origin*         | [[file:2026-03-20_COLLECTION_INTERFACE_AUDIT.md][Collection Interface Audit]], [[file:2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md][Unification Design]] |
 
 *** Tracks
@@ -197,10 +197,10 @@ The following sequence reflects the current prioritization, informed by
 dependency analysis and leverage:
 
 #+begin_example
-  1. PUnify Cleanup          (pre-Series: 5 parity bugs + bridge retirement)
-  2. BSP-LE Track 0          (Allocation Efficiency — benefits all subsequent work)
-  3. CIU Track 0             (Trait Hierarchy Audit — Stage 2, pre-Track 8)
-  4. PM Track 8              (Propagator Infrastructure — informed by CIU Track 0)
+  1. PUnify Cleanup          (pre-Series: 5 parity bugs + bridge retirement)  ← NEXT
+  2. BSP-LE Track 0          (Allocation Efficiency)                          ✅ (commit 210d80d, PIR 00a873f)
+  3. CIU Track 0             (Trait Hierarchy Audit)                          ✅ (commit f62fc06)
+  4. PM Track 8              (Propagator Infrastructure — D.1 complete)       ← Design critique next
   5. CIU Track 0 revisit     (post-Track 8 design calibration)
   6. CIU Tracks 1–5          (implementation on Track 8 infrastructure)
   7. BSP-LE Tracks 1–5       (logic engine on Track 8 infrastructure)
@@ -238,14 +238,14 @@ interleave based on priority and what's unblocked.
 * Cross-Series Dependencies
 
 #+begin_example
-  PUnify Cleanup ──→ BSP-LE Track 0 (Allocation)
+  PUnify Cleanup ──→ BSP-LE Track 0 ✅
                            │
-  CIU Track 0 ────────────┼──→ PM Track 8 ──→ CIU Track 0 revisit
-  (pre-T8 audit)           │   (informed by    (post-T8 calibration)
-                           │    CIU + alloc)         │
-                           │                         ├──→ CIU Tracks 1–5
-                           │                         │
-                           └─────────────────────────┴──→ BSP-LE Tracks 1–5
+  CIU Track 0 ✅ ──────────┼──→ PM Track 8 (D.1) ──→ CIU Track 0 revisit
+                           │   (informed by              (post-T8 calibration)
+                           │    CIU + alloc)                    │
+                           │                                    ├──→ CIU Tracks 1–5
+                           │                                    │
+                           └────────────────────────────────────┴──→ BSP-LE Tracks 1–5
 #+end_example
 
 Track 8 is the critical path for post-design-phase work in both CIU
