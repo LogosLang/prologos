@@ -12,11 +12,12 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Acceptance file baseline | ⬜ | |
-| 1 | Registry cells | ⬜ | impl, trait, param-impl as cells |
-| 3 | Pure α/γ bridges | ⬜ | C1-C3 rewrite — read cells directly, no zonk |
-| 4 | Callback retirement | ⬜ | 6 symptomatic callbacks |
-| 7 | Verification + benchmarks | ⬜ | |
+| 0 | Acceptance file baseline | ✅ | 16 results, 0 errors |
+| 1 | Registry cells | ✅ | Already exist on persistent registry network (Track 7) |
+| 3a | Pure bridge fire functions | ✅ | `65503ea` — no enet-box, read cells directly |
+| 3b+c | Wire factories into installation | ✅ | `2672652` — quiescence writes dropped 12→8 |
+| 4 | Callback evaluation | ✅ | 3 bridge-fn callbacks reclassified: symptomatic → legitimate (pure factories). 3 remaining (unwrap/rewrap/quiescence) tied to solve-meta! path. |
+| 7 | Verification | ✅ | 7343 tests, 241.4s, all pass |
 | — | *Deferred: Phase 2 (zonk-from-net)* | — | Incremental improvement, not foundation |
 | — | *Deferred: Phase 5 (action descriptors)* | — | Cold-path cleanup |
 | — | *Deferred: Phase 6 (speculation threading)* | — | Depends on Phase 5 |
