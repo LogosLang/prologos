@@ -192,3 +192,43 @@
     (check-equal? (tycon-arity 'Eq) 1)
     (check-equal? (tycon-arity 'Add) 1)
     (check-equal? (tycon-arity 'Ord) 1)))
+
+;; ========================================
+;; 6. Track 8 B4: HKT trait resolution end-to-end
+;; ========================================
+;; Verify that where (Seqable C) resolves when C is inferred to be a
+;; known type constructor (PVec) with a registered Seqable impl.
+
+(test-case "B4: where (Seqable C) resolves for List argument"
+  ;; Trivial body — just tests that the HKT constraint resolves without error.
+  ;; C starts with default kind (Type 0), propagate-kinds-from-constraints
+  ;; upgrades it to (-> (Type 0) (Type 0)) from the Seqable trait declaration.
+  ;; At call site: C unifies to List, resolve-trait-constraints! finds List--Seqable.
+  (define result
+    (run-last
+      "(spec my-len {C} {A : Type} (C A) -> Nat where (Seqable C))
+       (defn my-len [xs] zero)
+       [my-len (cons Nat (suc zero) (nil Nat))]"))
+  (check-true (string? result) (format "expected string, got: ~v" result))
+  (check-true (string-contains? result "0N") (format "expected 0N in: ~v" result)))
+
+(test-case "B4: where (Foldable C) resolves for List argument"
+  ;; Exercises a different HKT trait. C inferred to List, Foldable List resolves.
+  ;; Simpler signature: takes a (C Nat) and returns Nat.
+  (define result
+    (run-last
+      "(spec my-wrap {C} (C Nat) -> Nat where (Foldable C))
+       (defn my-wrap [xs] zero)
+       [my-wrap (cons Nat (suc zero) (nil Nat))]"))
+  (check-true (string? result) (format "expected string, got: ~v" result))
+  (check-true (string-contains? result "0N") (format "expected 0N in: ~v" result)))
+
+(test-case "B4: explicit kind annotation bug — (-> Type Type) vs (-> (Type 0) (Type 0))"
+  ;; Known issue: explicit kind annotation uses (-> Type Type) datum,
+  ;; but trait registry stores (-> (Type 0) (Type 0)). These differ under equal?.
+  ;; This should error with a kind mismatch (documenting the known limitation).
+  (check-exn exn:fail?
+    (lambda ()
+      (run-last
+        "(spec bad-len {C : (-> Type Type)} {A : Type} (C A) -> Nat where (Seqable C))
+         (defn bad-len [xs] zero)"))))
