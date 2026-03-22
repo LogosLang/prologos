@@ -1,7 +1,7 @@
 # PM Track 8: Propagator Infrastructure Migration — Stage 3 Design
 
 **Date**: 2026-03-21
-**Status**: Draft (D.1 — awaiting critique)
+**Status**: Draft (D.1.1 — Part C added; awaiting critique)
 **Parent**: Propagator Migration Series ([Master Roadmap](2026-03-13_PROPAGATOR_MIGRATION_MASTER.md))
 **Audit**: [Track 8 Infrastructure Audit](2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org)
 **Informed by**: [CIU Track 0 Trait Hierarchy Audit](2026-03-21_CIU_TRACK0_TRAIT_HIERARCHY_AUDIT.md), [Allocation Audit](2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md)
@@ -24,11 +24,19 @@
 | — | **Part B: HKT Resolution + Module Restructuring** | | | | |
 | B0 | Module graph analysis | Map circular deps, design extraction | ⬜ | | |
 | B1 | Cell-ops extraction | Factor cell operations into importable module | ⬜ | | Breaks metavar-store ↔ elab-network cycle |
-| B2 | Root callback elimination | Inline `cell-read`/`cell-write` (63 sites) | ⬜ | | Depends on B1 |
+| B2 | Root callback elimination | Inline `cell-read`/`cell-write` (63 sites) | ⬜ | | Depends on B1. Sub-phases B2a-B2d |
+| B2e | Macros parameter write cleanup | Remove 24 dual-writes; cell-only writes after B2 | ⬜ | | Natural cleanup once cell reads are universal |
 | B3 | HKT `impl` registration | `impl Seq List` works and registers in trait system | ⬜ | | Depends on B2 (needs direct trait-resolution access) |
 | B4 | HKT trait resolution on propagator network | Readiness propagators resolve HKT constraints | ⬜ | | Depends on B3 |
 | B5 | Sugar constraint generation | `surf-get` generates Indexed/Keyed constraints | ⬜ | | Depends on B4; validates CIU vision |
 | B6 | Verification + benchmarks | Full suite + A/B comparison + acceptance | ⬜ | | |
+| — | **Part C: All Constraint Resolution as Propagators** | | | | |
+| C0 | Layered scheduler | Tag propagators with strata; worklist respects priority | ⬜ | | S0 drains before S1 fires, etc. Foundation for C1-C3 |
+| C1 | Deterministic trait resolution as S0 propagators | Single-instance traits resolve directly in S0 | ⬜ | | Monotone: refines B4's readiness→S2 into direct S0 resolution |
+| C2 | Hasmethod resolution as propagators | `hasmethod` constraints fire when type cell grounds | ⬜ | | Same pattern as C1 |
+| C3 | Constraint retry as propagators | Deferred constraints watch dependency cells, fire when ground | ⬜ | | Replaces imperative retry loop |
+| C4 | S2 scope reduction | S2 handles only genuinely non-monotone commitment | ⬜ | | Stratified loop: one S0 pass + rare S2, not iterative cycle |
+| C5 | Verification + benchmarks | Resolution cycle count, fuel consumption, ordering stability | ⬜ | | Target: fewer iterations, same results |
 
 ---
 
@@ -48,11 +56,13 @@ Seven tracks systematically migrated elaboration state onto the propagator netwo
 
 ### What Remains
 
-Two categories of work remain, corresponding to the two Parts:
+Three categories of work remain, corresponding to three Parts:
 
 **Part A — Infrastructure migration**: The elab-network's structural fields (`meta-info`, `id-map`, `next-meta-id`) are not TMS-managed. `restore-meta-state!` still exists as a box-snapshot mechanism. Mult/level/session meta stores are separate CHAMP boxes, not cells in the elab-network. This prevents clean speculation rollback and cross-domain bridges.
 
 **Part B — HKT resolution + module restructuring**: 12 callback parameters exist to break circular module dependencies. The root callbacks (`cell-read`/`cell-write`, 63 sites) prevent `surf-get` from generating trait constraints that flow through the propagator network. And `impl` doesn't work for HKT traits — the critical gap identified by CIU Track 0 (F-6). Without HKT resolution, the CIU vision (trait-dispatched collection access) is structurally impossible.
+
+**Part C — All constraint resolution as propagators**: The stratified quiescence loop (S0→S1→S2) dissolves into the propagator network for all monotone operations. Trait constraints, hasmethod checks, and deferred constraints become S0 propagators that fire when their dependencies are ground. The loop persists only for genuinely non-monotone commitment. This eliminates the ordering fragility between type inference and trait resolution that surfaced in the CIU acceptance file — constraints resolve in the same S0 pass as type solving, not on a subsequent loop iteration.
 
 ### Why This Order
 
@@ -61,7 +71,12 @@ Part A is prerequisite for Part B:
 - TMS-aware meta-info (A1) is needed for clean speculation in the restructured module graph
 - `restore-meta-state!` retirement (A4) simplifies the state model that B1-B2 must preserve
 
-Part B is the capability-adding part — it changes what the system can *do* (resolve HKT traits, generate sugar constraints). Part A is plumbing — it changes how the system *works* internally.
+Part B is prerequisite for Part C:
+- HKT `impl` registration (B3) provides the instances that Part C's resolution propagators look up
+- Callback elimination (B2) provides the direct call paths that resolution propagators use
+- Module restructuring (B1) provides the import structure that resolution propagators need
+
+Part A is plumbing (changes how the system works). Part B adds capabilities (changes what the system can do). Part C is the architectural capstone (unifies type inference and constraint resolution under a single propagator-driven model).
 
 ---
 
@@ -241,6 +256,16 @@ All read from `(current-prop-net-box)` and unwrap elab-network → prop-network.
 
 **Files**: `metavar-store.rkt`, `driver.rkt`, `cell-ops.rkt`
 
+### Phase B2e: Macros Parameter Write Cleanup
+
+**Goal**: Remove 24 dual-writes (cell + parameter) in `macros.rkt` registry functions. After B2's callback elimination, cell reads are universal — the parameter writes are dead code.
+
+**Current state**: Track 7 retained parameter writes for module-load-time seeding. Each `register-*!` function writes to both the persistent cell and the Racket parameter. After B2, all reads go through `cell-ops.rkt` → cell reads. The parameter writes serve no consumer.
+
+**Design**: For each of the 24 registry functions (`register-schema!`, `register-ctor!`, `register-type-meta!`, etc.): remove the `(current-*-registry (hash-set ...))` parameter write. Retain the cell write. Verify that no module-load-time code path reads the parameter directly — Track 3 PIR confirmed all computation reads are cell-primary, and B2 converts the remaining callback-based reads.
+
+**Files**: `macros.rkt` (24 sites), `test-support.rkt` (verify no parameter reads remain)
+
 ### Phase B3: HKT `impl` Registration
 
 **Goal**: Make `impl Seq List`, `impl Indexed PVec`, `impl Keyed Map` syntactically valid and semantically operational.
@@ -308,7 +333,154 @@ surf-get coll key
 
 ---
 
-## 5. Design Decisions
+## 5. Part C: All Constraint Resolution as Propagators
+
+### Thesis
+
+The stratified quiescence loop (S0→S1→S2, iterated with fuel) dissolves into the propagator network for all monotone operations. The loop persists only for genuinely non-monotone commitment (ambiguous instance selection). This is the architectural capstone of the Propagator Migration Series — the type checker becomes a single propagator network where trait constraints, hasmethod checks, and deferred constraints are propagators alongside type unification.
+
+### Why This Matters
+
+The S0→S1→S2 cycle introduces ordering fragility: a type cell solved in S0 triggers readiness in S1, which triggers resolution in S2, which may solve another type cell that triggers another S0 pass. For nested constraints (e.g., `Seq (List Int)` where resolving `Seq` depends on `List`'s type constructor), this multi-cycle resolution can fail to converge within the fuel limit. Making resolution propagator-driven eliminates the cycles — constraints resolve as soon as their dependencies are ground, within the same S0 pass.
+
+This directly addresses the acceptance file issues that motivated the CIU Series: `surf-get` generating trait constraints needs those constraints to resolve reliably. With Part B, they resolve through the S1→S2 loop (correct but fragile). With Part C, they resolve as S0 propagators (correct and robust).
+
+### Phase C0: Layered Scheduler
+
+**Goal**: Replace the flat worklist with a priority-ordered layered scheduler. Propagators tagged with their stratum; the worklist drains higher-priority (lower-numbered) strata before lower-priority ones.
+
+**Current state**: `run-to-quiescence-inner` pops propagators from a flat list. The stratified behavior is implemented *outside* the quiescence loop — `run-stratified-resolution-pure` in `metavar-store.rkt` calls S0 quiescence, then manually processes S1 (readiness), then S2 (resolution), then loops.
+
+**Design**: Each propagator gets a `stratum` tag at creation time:
+- Stratum 0: Type unification, decomposition, reconstruction propagators
+- Stratum 1: Readiness detection propagators (threshold cells)
+- Stratum 2: Resolution commitment propagators (after C1-C3, only ambiguous cases)
+
+`run-to-layered-quiescence` drains the worklist in priority order: all S0 propagators fire before any S1 propagator fires. Within a stratum, order is unspecified (same as current Gauss-Seidel scheduling). When an S1 propagator adds S0 propagators to the worklist (e.g., resolution solves a meta, triggering new unification), the scheduler drops back to S0.
+
+**Implementation**: The worklist becomes a vector of per-stratum lists (3 lists for S0/S1/S2). `net-cell-write` enqueues dependents into their respective stratum lists. The drain loop checks S0 first, S1 when S0 is empty, S2 when S1 is empty.
+
+**Interaction with Track 0's mutable worklist**: The mutable worklist box from BSP-LE Track 0 Phase 3c becomes a mutable vector of boxes (one per stratum). Same drain pattern, same pure data-in/data-out contract at the quiescence boundary.
+
+**Files**: `propagator.rkt` (scheduler), `metavar-store.rkt` (stratum tagging for existing propagators), `elaborator-network.rkt` (propagator creation with stratum tags)
+
+### Phase C1: Deterministic Trait Resolution as S0 Propagators
+
+**Goal**: Trait constraints with a single matching instance resolve directly in S0, not through the S1→S2 cycle.
+
+**Current flow** (after Part B):
+1. Elaborator emits `Indexed ?C` constraint
+2. S0: type propagation solves `?C` → `PVec`
+3. S1: readiness propagator detects `?C` is ground → adds to ready-queue
+4. S2: resolution loop processes ready-queue → looks up `impl Indexed PVec` → solves dict meta
+5. Loop back to S0 (dict solution may trigger more unification)
+
+**Target flow** (Part C):
+1. Elaborator emits `Indexed ?C` constraint → creates resolution propagator at S0 watching `?C`'s type cell
+2. S0: type propagation solves `?C` → `PVec`; resolution propagator fires → looks up `impl Indexed PVec` → solves dict meta → triggers dependent unification — **all within the same S0 pass**
+
+The resolution propagator is monotone under the non-overlapping instance invariant: adding type information can refine which instance matches but cannot change a committed choice (there's only one valid choice). This is why it belongs in S0 (monotone stratum), not S2 (non-monotone commitment).
+
+**Design**: A `make-trait-resolution-propagator` function:
+```
+(make-trait-resolution-propagator
+  trait-name        ;; e.g., 'Indexed
+  type-cell-id      ;; the cell to watch
+  dict-meta-id      ;; the meta to solve with the resolved dict
+  stratum: 0)       ;; fires in S0
+```
+
+When the type cell becomes ground:
+1. Extract type constructor (e.g., `PVec Int` → `PVec`)
+2. Look up `impl Indexed PVec` in the instance registry
+3. If exactly one match: solve the dict meta immediately (`solve-meta!`)
+4. If zero matches: leave as unsolved (will error later in constraint checking)
+5. If ambiguous: escalate to S2 (non-monotone commitment needed)
+
+Case 3 is the common case (non-overlapping invariant ensures it). Case 5 is rare and preserves correctness.
+
+**Key architectural requirement**: The resolution propagator must be able to call `solve-meta!` from within S0. Currently, `solve-meta!` triggers the stratified resolution chain, which is the outer loop. After Part C, `solve-meta!` within S0 simply writes to a cell — the propagator network handles the consequences.
+
+**Files**: `trait-resolution.rkt` (resolution propagator), `metavar-store.rkt` (propagator creation at constraint emission), `elaborator.rkt` (constraint emission creates propagator)
+
+### Phase C2: Hasmethod Resolution as Propagators
+
+**Goal**: `hasmethod` constraints (does type T have method M?) become S0 propagators.
+
+**Current state**: `hasmethod` constraints are accumulated in a scoped cell and resolved during S2 by iterating the constraint list and checking each against the now-ground type. This is the same pattern as trait resolution.
+
+**Design**: Same as C1 but for `hasmethod`:
+1. When a `hasmethod` constraint is emitted, create a resolution propagator watching the relevant type cell
+2. When the type becomes ground, the propagator checks whether the type has the method
+3. If yes: mark the constraint as satisfied
+4. If no: mark as failed (error)
+
+**Files**: `metavar-store.rkt` (hasmethod propagator creation), `trait-resolution.rkt` (hasmethod checking)
+
+### Phase C3: Constraint Retry as Propagators
+
+**Goal**: Deferred/postponed constraints (currently retried by the S2 loop when metas are solved) become propagators watching their dependency cells.
+
+**Current state**: When a constraint cannot be resolved because its type arguments are unsolved metas, it's added to a "postponed" list. The S2 loop periodically retries postponed constraints. This is polling — wasteful when most constraints are still not ready.
+
+**Design**: Each postponed constraint becomes a propagator:
+1. Identify the unsolved metas that the constraint depends on
+2. Create a propagator watching those meta cells
+3. When all dependencies become ground, the propagator fires and evaluates the constraint
+4. If the constraint is satisfied, remove it. If not, it remains as an error.
+
+This is demand-driven (propagator fires when ready) instead of polling (retry everything each S2 cycle). The scheduling is automatic — the propagator network knows when dependencies change.
+
+**Files**: `metavar-store.rkt` (constraint→propagator conversion), `propagator.rkt` (multi-cell threshold propagators)
+
+### Phase C4: S2 Scope Reduction
+
+**Goal**: After C1-C3, S2 handles only genuinely non-monotone operations.
+
+**What remains in S2**:
+- **Ambiguous instance selection**: When multiple trait instances match and specificity-based disambiguation is needed. This is rare (non-overlapping invariant prevents it for most traits).
+- **Overlapping constraint arbitration**: If any future extension relaxes the non-overlapping invariant, S2 is where the arbitration happens.
+
+**What moves to S0**:
+- All deterministic trait resolution (C1)
+- All hasmethod resolution (C2)
+- All constraint retry (C3)
+- Readiness detection (S1) — with C1-C3 doing resolution directly in S0, S1's ready-queue becomes vestigial. Readiness is implicit in the propagator firing.
+
+**Design**: The stratified loop simplifies from:
+```
+loop (fuel ≤ 100):
+  S(-1): retraction
+  S0: propagation to quiescence
+  S1: readiness → ready-queue
+  S2: process ready-queue → commit resolutions
+  check progress
+```
+
+To:
+```
+loop (fuel ≤ 100):
+  S(-1): retraction
+  S0: propagation to quiescence (includes trait/hasmethod/constraint resolution)
+  S2: non-monotone commitment (rare — only when ambiguous)
+  check progress
+```
+
+S1 is eliminated. The loop iteration count drops because S0 now resolves monotone constraints in the same pass as type solving, rather than waiting for the next iteration.
+
+**Files**: `metavar-store.rkt` (simplified loop), `resolution.rkt` (S2 reduced to ambiguous cases)
+
+### Phase C5: Verification + Benchmarks
+
+- Full test suite — identical results (behavioral parity)
+- Resolution cycle count: measure fuel consumption before/after. Target: significant reduction in loop iterations (fewer S0→S1→S2 cycles)
+- Ordering stability: test cases with nested constraints that depend on resolution order
+- A/B benchmarks: wall-time improvement from fewer resolution cycles
+- Acceptance file: all CIU aspirational sections pass at Level 3
+
+---
+
+## 6. Design Decisions
 
 | # | Decision | Resolution | Rationale |
 |---|----------|------------|-----------|
@@ -318,7 +490,11 @@ surf-get coll key
 | D4 | Module restructuring | Cell-ops extraction (Option 1 from audit) | Minimal extraction that breaks all cycles; no module merge, no parameter pollution |
 | D5 | HKT impl key | `(trait-name, type-constructor)` extracted from solved type | Natural extension of existing `expr->impl-key-str`; constructor extraction from `PVec Int` → `PVec` |
 | D6 | Backward compatibility | `expr-get` fallback during B5 migration | Gradual — sugar generates constraints when possible, falls back to constructor dispatch otherwise |
-| D7 | Part A/B ordering | A before B; A4 (restore retirement) before B1 (cell-ops extraction) | TMS-clean state model simplifies module restructuring |
+| D7 | Part A/B/C ordering | A before B before C; each Part builds on the previous | A provides TMS-clean state; B provides module structure + HKT; C leverages both for propagator-driven resolution |
+| D8 | Deterministic resolution in S0 | Monotone under non-overlapping instance invariant | Adding type information refines but doesn't change committed choice; safe for S0 |
+| D9 | S1 elimination | Readiness detection subsumed by C1-C3 resolution propagators | Resolution propagators watch type cells directly; ready-queue becomes vestigial |
+| D10 | Layered scheduler as C0 foundation | Propagators tagged with strata; worklist respects priority | C1-C3 need strata to work correctly; C0 provides the scheduling infrastructure |
+| D11 | Ambiguous cases remain in S2 | Non-monotone commitment preserved for rare overlapping cases | Correctness requires the barrier; Part C moves monotone work out of S2, not into it |
 
 ---
 
@@ -343,6 +519,17 @@ surf-get coll key
 | B4 | HKT constraint resolves on ground type | `where (Seq C)` in spec | Acceptance: generic Seq ops |
 | B5 | `xs[0]` generates Indexed constraint | `pv[0]` on PVec | Acceptance: user-defined Indexed |
 | B6 | A/B benchmarks, full suite, acceptance | — | Level 3 on all acceptance sections |
+
+### Part C
+
+| Phase | Level 1 | Level 2 | Level 3 |
+|-------|---------|---------|---------|
+| C0 | Layered scheduler: priority ordering verified | — | Full suite (behavioral parity) |
+| C1 | Trait resolution in S0: single-instance resolves | Nested constraints | Acceptance: `impl` resolution |
+| C2 | Hasmethod in S0: ground type check | — | Full suite regression |
+| C3 | Constraint retry as propagators | Deferred constraint fires on ground | Full suite regression |
+| C4 | S2 reduced: loop iterations measured | — | Fuel consumption comparison |
+| C5 | A/B benchmarks, ordering stability, full suite | — | All CIU aspirational sections |
 
 ---
 
@@ -393,6 +580,9 @@ Track 8 provides the following to downstream Series:
 | `cell-ops.rkt` API shaped for transient threading | — | — (CHAMP Performance follow-on) | B1 |
 | Module restructuring | All (elaborator ↔ trait-resolution access) | — | B1 |
 | TMS-clean speculation | — | Track 2 (worldview management) | A4 |
+| Layered scheduler | — | All (propagators fire in correct priority order) | C0 |
+| Deterministic resolution in S0 | Tracks 3-5 (trait constraints resolve without S2 cycle) | Track 2 (ATMS solver trait resolution) | C1 |
+| Ordering stability for nested constraints | Tracks 3-5 (nested Indexed/Keyed/Seq constraints) | — | C1-C3 |
 
 ---
 
@@ -403,3 +593,4 @@ Track 8 provides the following to downstream Series:
 - **Memo caches as cells** (Track 8 audit §1.9): Not constraint-like; keep imperative.
 - **Map HKT partial application** (`Map K` as `Type -> Type`): Important for Map to implement Foldable/Seq, but a separate type-system feature. Not Track 8 scope.
 - **Observation cells** (P3 in audit): Performance counters and observatory as cells for LSP. Future Track 9/10 scope.
+- **Accumulate-during-quiescence** (CHAMP Performance follow-on): Owner-ID transient threading through `cell-ops.rkt`. Enabled by B1-B2; implement as Track 8 follow-on or dedicated effort.
