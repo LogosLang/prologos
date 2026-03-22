@@ -63,6 +63,10 @@
  reset-elab-network-command-state
  ;; P5b: Multiplicity cells
  elab-fresh-mult-cell
+ ;; Track 8 A3d: Mult bridge callback + α/γ functions
+ current-structural-mult-bridge
+ type->mult-alpha
+ mult->type-gamma
  elab-mult-cell-read
  elab-mult-cell-write
  ;; Track 4 Phase 3: Level and session cells
@@ -361,6 +365,13 @@
 ;; Set by driver.rkt to break circular dependency with metavar-store.rkt.
 (define current-structural-meta-lookup (make-parameter #f))
 
+;; Track 8 Phase A3d: Callback for wiring mult bridges from decompose-pi.
+;; (prop-network type-cell-id mult-val → prop-network)
+;; Set by driver.rkt. When a Pi is decomposed and its multiplicity is a mult-meta,
+;; this callback looks up the mult cell-id from the id-map and creates a
+;; cross-domain bridge between the type cell and the mult cell.
+(define current-structural-mult-bridge (make-parameter #f))
+
 ;; ========================================
 ;; Phase 4c-b: Structural Decomposition (Pi + app)
 ;; ========================================
@@ -516,8 +527,24 @@
     (net-add-propagator net5
       (list dom-b cod-b) (list cell-b)
       (make-pi-reconstructor cell-b mult-b dom-b cod-b)))
+  ;; Track 8 Phase A3d: Wire cross-domain mult bridges.
+  ;; If either Pi has a mult-meta, create an α/γ bridge between the parent
+  ;; type cell and the corresponding mult cell. When the type cell's Pi is
+  ;; solved with a concrete multiplicity, the bridge propagates it to the mult cell.
+  ;; Note: this module does NOT import metavar-store.rkt (circular dep).
+  ;; We use the current-mult-bridge-callback to wire bridges from the prop-net level.
+  (define bridge-fn (current-structural-mult-bridge))
+  (define net7
+    (if (not bridge-fn)
+        net6  ;; no bridge callback installed (test context) — skip
+        (for/fold ([n net6])
+                  ([type-cell (list cell-a cell-b)]
+                   [mult-val (list mult-a mult-b)])
+          (if (mult-meta? mult-val)
+              (bridge-fn n type-cell mult-val)
+              n))))  ;; concrete mult — no bridge needed
   ;; Register pair as decomposed
-  (net-pair-decomp-insert net6 pair-key))
+  (net-pair-decomp-insert net7 pair-key))
 
 ;; Decompose an app constraint: same pattern as Pi with func/arg components.
 (define (decompose-app net cell-a cell-b va vb unified pair-key)

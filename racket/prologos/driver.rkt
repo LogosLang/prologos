@@ -2151,6 +2151,22 @@
    (and (expr-meta? e)
         (prop-meta-id->cell-id (expr-meta-id e)))))
 
+;; Track 8 Phase A3d: Mult bridge callback for decompose-pi.
+;; Looks up the mult-meta's cell-id from the id-map and creates a cross-domain
+;; bridge between the type cell and the mult cell.
+(current-structural-mult-bridge
+ (lambda (net type-cell mult-val)
+   (define mult-id (mult-meta-id mult-val))
+   (define mult-cid (prop-meta-id->cell-id mult-id))
+   (if mult-cid
+       (let-values ([(net* _pa _pg)
+                     (net-add-cross-domain-propagator net
+                       type-cell mult-cid
+                       type->mult-alpha
+                       mult->type-gamma)])
+         net*)
+       net)))  ;; mult cell not in id-map — skip (test context)
+
 ;; Track 7 Phase 7a: Install unified resolution executor from resolution.rkt.
 ;; Replaces 3 individual callbacks (trait, hasmethod, constraint retry)
 ;; with a single dispatcher that calls resolution functions directly.
