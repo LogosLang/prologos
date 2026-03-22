@@ -264,6 +264,15 @@
   #:transparent)
 
 ;; ========================================
+;; Track 8 Phase A1: Unwrap tagged-entry wrapper from meta-info CHAMP lookup.
+;; Returns the raw meta-info struct (or #f/original value if not tagged).
+(define (unwrap-meta-info v)
+  (cond
+    [(eq? v 'none) #f]
+    [(tagged-entry? v) (tagged-entry-value v)]
+    [(meta-info? v) v]
+    [else #f]))
+
 ;; Sprint 9: Structured provenance for error messages
 ;; ========================================
 
@@ -1290,7 +1299,17 @@
                   ;; Constraint cell: filter hash values
                   (retract-hasheq-entries val retracted)))
             (unless (equal? val cleaned)
-              (set-box! net-box (replace-fn (unbox net-box) cid cleaned)))))))))
+              (set-box! net-box (replace-fn (unbox net-box) cid cleaned)))))
+        ;; Track 8 Phase A1: Also retract tagged meta-info entries from elab-network.
+        ;; meta-info is a struct field (not a cell), so we operate on the elab-network directly.
+        (define mi-read (current-prop-meta-info-read))
+        (define mi-set (current-prop-meta-info-set))
+        (when (and mi-read mi-set)
+          (define enet (unbox net-box))
+          (define mi-champ (mi-read enet))
+          (define cleaned-mi (retract-hasheq-entries mi-champ retracted))
+          (unless (equal? mi-champ cleaned-mi)
+            (set-box! net-box (mi-set (unbox net-box) cleaned-mi))))))))
 
 ;; Track 6 Phase 1a: id-map access callbacks (set by driver.rkt).
 ;; Break circular dep: metavar-store doesn't import elaborator-network.
@@ -1451,8 +1470,13 @@
   (cond
     [(and net-box fresh-fn mi-read mi-set)
      ;; Network path: meta-info lives in elab-network struct
+     ;; Track 8 Phase A1: Tag meta-info entry with current speculation assumption.
+     ;; At depth-0 (no speculation): aid=#f → raw entry (no wrapper).
+     ;; Under speculation: aid=gensym → tagged-entry for S(-1) retraction.
+     (define aid (current-speculation-assumption))
+     (define tagged-info (if aid (tagged-entry info aid) info))
      (define enet (unbox net-box))
-     (define enet0 (mi-set enet (champ-insert (mi-read enet) h id info)))
+     (define enet0 (mi-set enet (champ-insert (mi-read enet) h id tagged-info)))
      (define-values (enet1 cid) (fresh-fn enet0 ctx type source))
      ;; Track 6 Phase 1a: id-map is a field of elab-network
      (define id-map-read (current-prop-id-map-read))
@@ -1535,10 +1559,13 @@
     (if (and mi-read net-box)
         (mi-read (unbox net-box))
         (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))))
-  (define info
+  ;; Track 8 A1: unwrap tagged-entry + re-tag on solve
+  (define raw-entry
     (and mi-champ
          (let ([v (champ-lookup mi-champ h id)])
            (if (eq? v 'none) #f v))))
+  (define info (if (tagged-entry? raw-entry) (tagged-entry-value raw-entry) raw-entry))
+  (define entry-aid (if (tagged-entry? raw-entry) (tagged-entry-assumption-id raw-entry) #f))
   (unless info
     (error 'solve-meta! "unknown metavariable: ~a" id))
   (when (eq? (meta-info-status info) 'solved)
@@ -1547,7 +1574,9 @@
   (define updated (meta-info id (meta-info-ctx info) (meta-info-type info)
                               'solved solution
                               (meta-info-constraints info) (meta-info-source info)))
-  (define new-mi-champ (champ-insert mi-champ h id updated))
+  (define aid (or entry-aid (current-speculation-assumption)))
+  (define tagged-updated (if aid (tagged-entry updated aid) updated))
+  (define new-mi-champ (champ-insert mi-champ h id tagged-updated))
   ;; Track 6 Phase 5a: Write back to elab-network or box
   (cond
     [(and mi-set net-box)
@@ -1583,19 +1612,26 @@
   (define mi-read (current-prop-meta-info-read))
   (define mi-set (current-prop-meta-info-set))
   (define mi-champ (if mi-read (mi-read enet) #f))
-  (define info
+  ;; Track 8 Phase A1: read may return tagged-entry — unwrap for status check.
+  (define raw-entry
     (and mi-champ
          (let ([v (champ-lookup mi-champ h id)])
            (if (eq? v 'none) #f v))))
+  (define info (if (tagged-entry? raw-entry) (tagged-entry-value raw-entry) raw-entry))
+  (define entry-aid (if (tagged-entry? raw-entry) (tagged-entry-assumption-id raw-entry) #f))
   (unless info
     (error 'solve-meta-core-pure "unknown metavariable: ~a" id))
   (when (eq? (meta-info-status info) 'solved)
     (error 'solve-meta-core-pure "metavariable ~a already solved" id))
-  ;; Update meta-info
+  ;; Update meta-info — preserve the original assumption tag (or current speculation tag)
   (define updated (meta-info id (meta-info-ctx info) (meta-info-type info)
                               'solved solution
                               (meta-info-constraints info) (meta-info-source info)))
-  (define new-mi-champ (champ-insert mi-champ h id updated))
+  ;; Track 8 A1: re-tag with original assumption (entry was created under that speculation)
+  ;; If entry was depth-0 (no tag), and we're solving under speculation, tag with current aid.
+  (define aid (or entry-aid (current-speculation-assumption)))
+  (define tagged-updated (if aid (tagged-entry updated aid) updated))
+  (define new-mi-champ (champ-insert mi-champ h id tagged-updated))
   (define enet1 (if mi-set (mi-set enet new-mi-champ) enet))
   ;; Write solution to cell
   (define write-fn (current-prop-cell-write))
@@ -1770,8 +1806,8 @@
      ;; CHAMP path (test context without network)
      (define mi-box (current-prop-meta-info-box))
      (if (not mi-box) #f  ;; No meta store initialized — treat as unsolved
-         (let ([v (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id)])
-           (and (not (eq? v 'none)) (eq? (meta-info-status v) 'solved))))]))
+         (let ([v (unwrap-meta-info (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id))])
+           (and v (eq? (meta-info-status v) 'solved))))]))
 
 ;; Retrieve the solution of a metavariable, or #f if unsolved/unknown.
 ;; Hash removal: Propagator cell (primary), CHAMP meta-info (fallback).
@@ -1789,8 +1825,8 @@
      ;; CHAMP path (test context without network)
      (define mi-box (current-prop-meta-info-box))
      (if (not mi-box) #f  ;; No meta store initialized
-         (let ([v (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id)])
-           (and (not (eq? v 'none)) (meta-info-solution v))))]))
+         (let ([v (unwrap-meta-info (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id))])
+           (and v (meta-info-solution v))))]))
 
 ;; Check if meta-info CHAMP says this meta is solved.
 ;; Unlike meta-solved? (which reads the propagator cell), this reads the CHAMP status.
@@ -1804,8 +1840,8 @@
       [(and mi-read net-box) (mi-read (unbox net-box))]
       [else (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))]))
   (and mi-champ
-       (let ([v (champ-lookup mi-champ (prop-meta-id-hash id) id)])
-         (and (not (eq? v 'none)) (eq? (meta-info-status v) 'solved)))))
+       (let ([v (unwrap-meta-info (champ-lookup mi-champ (prop-meta-id-hash id) id))])
+         (and v (eq? (meta-info-status v) 'solved)))))
 
 ;; Retrieve the full meta-info struct, or #f if unknown.
 ;; Track 6 Phase 5a: reads from elab-network meta-info when available, else box.
@@ -1817,8 +1853,8 @@
         (mi-read (unbox net-box))
         (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))))
   (if (not mi-champ) #f
-      (let ([v (champ-lookup mi-champ (prop-meta-id-hash id) id)])
-        (if (eq? v 'none) #f v))))
+      ;; Track 8 A1: unwrap tagged-entry
+      (unwrap-meta-info (champ-lookup mi-champ (prop-meta-id-hash id) id))))
 
 ;; ========================================
 ;; Sprint 6: Universe level metavariables
@@ -2351,13 +2387,15 @@
       (let ([um-hash (read-fn (unbox net-box) um-cid)])
         (for/list ([(mid unsolved?) (in-hash um-hash)]
                    #:when unsolved?)
-          (let ([v (champ-lookup mi-champ (prop-meta-id-hash mid) mid)])
-            (if (eq? v 'none) #f v))))
+          ;; Track 8 A1: unwrap tagged-entry
+          (unwrap-meta-info (champ-lookup mi-champ (prop-meta-id-hash mid) mid))))
       ;; Fallback: CHAMP scan (legacy, pre-initialization)
+      ;; Track 8 A1: unwrap tagged entries during scan
       (champ-fold mi-champ
                   (lambda (k v acc)
-                    (if (eq? (meta-info-status v) 'unsolved)
-                        (cons v acc)
+                    (define info (if (tagged-entry? v) (tagged-entry-value v) v))
+                    (if (and (meta-info? info) (eq? (meta-info-status info) 'unsolved))
+                        (cons info acc)
                         acc))
                   '())))
 
