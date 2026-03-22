@@ -122,7 +122,10 @@
  (struct-out prop-trace)
  ;; Trace capture (Visualization Phase 1)
  current-bsp-observer
- make-trace-accumulator)
+ make-trace-accumulator
+ ;; B2f Phase 0: Quiescence cell-write instrumentation
+ current-quiescence-write-counter
+ current-quiescence-change-counter)
 
 ;; ========================================
 ;; Structs
@@ -446,6 +449,9 @@
   (define cell (champ-lookup cells h cid))
   (when (eq? cell 'none)
     (error 'net-cell-write "unknown cell: ~a" cid))
+  ;; B2f Phase 0: count every write attempt
+  (define wc (current-quiescence-write-counter))
+  (when wc (set-box! wc (add1 (unbox wc))))
   (define merge-fn
     (champ-lookup (prop-network-merge-fns net) h cid))
   (define old-val (prop-cell-value cell))
@@ -459,7 +465,10 @@
   (define merged (merge-fn old-val actual-new-val))
   (if (or (eq? merged old-val) (equal? merged old-val))
       net  ;; No change — return same network (critical for termination)
-      (let* ([new-cell (struct-copy prop-cell cell [value merged])]
+      (let* (;; B2f Phase 0: count writes that actually change the CHAMP
+             [cc (current-quiescence-change-counter)]
+             [_ (when cc (set-box! cc (add1 (unbox cc))))]
+             [new-cell (struct-copy prop-cell cell [value merged])]
              [new-cells (champ-insert cells h cid new-cell)]
              ;; Enqueue dependents
              [deps (champ-keys (prop-cell-dependents cell))]
@@ -788,6 +797,13 @@
 ;; elab-speculation-bridge.rkt depends on metavar-store.rkt.
 (define current-speculation-stack (make-parameter '()))
 
+;; B2f Phase 0: Per-quiescence cell-write instrumentation.
+;; When non-#f, these are boxes that net-cell-write increments.
+;; - write-counter: every net-cell-write call
+;; - change-counter: only calls that actually modify the CHAMP (non-eq? merge result)
+(define current-quiescence-write-counter (make-parameter #f))
+(define current-quiescence-change-counter (make-parameter #f))
+
 ;; ========================================
 ;; Propagator Operations
 ;; ========================================
@@ -973,38 +989,48 @@
 (define (run-to-quiescence-drain net)
   (define wl (box (prop-network-worklist net)))
   (define remaining-fuel (box (prop-network-fuel net)))
+  ;; B2f Phase 0: cell-write instrumentation
+  (define write-count (box 0))
+  (define change-count (box 0))
   ;; Strip worklist/fuel from network — propagators see an empty worklist.
   ;; net-cell-write appends new dependents to the network's own worklist field;
   ;; we drain those into the box after each fire.
   (define net0 (struct-copy prop-network net
                  [hot (prop-net-hot '() 0)]))
   (define (finalize n)
+    ;; B2f Phase 0: emit stats if non-trivial
+    (define wc (unbox write-count))
+    (define cc (unbox change-count))
+    (when (> wc 0)
+      (perf-record-quiescence-writes! wc cc))
     ;; Reconstitute the hot fields from the mutable boxes.
     (struct-copy prop-network n
       [hot (prop-net-hot (unbox wl) (unbox remaining-fuel))]))
-  (let loop ([net net0])
-    (cond
-      [(prop-network-contradiction net) (finalize net)]
-      [(<= (unbox remaining-fuel) 0) (finalize net)]
-      [(null? (unbox wl)) (finalize net)]
-      [else
-       (define pid (car (unbox wl)))
-       (set-box! wl (cdr (unbox wl)))
-       (set-box! remaining-fuel (sub1 (unbox remaining-fuel)))
-       (define prop (champ-lookup (prop-network-propagators net)
-                                   (prop-id-hash pid) pid))
-       (if (eq? prop 'none)
-           (loop net)
-           (let ([net* ((propagator-fire-fn prop) net)])
-             (perf-inc-prop-firing!)  ;; Track 7 Phase 0b
-             ;; Drain: fire fn may have added to net*'s worklist via net-cell-write.
-             ;; Move those new entries into our mutable box.
-             (define new-wl-entries (prop-network-worklist net*))
-             (unless (null? new-wl-entries)
-               (set-box! wl (append new-wl-entries (unbox wl))))
-             ;; Clear net*'s worklist so it doesn't accumulate across iterations.
-             (loop (struct-copy prop-network net*
-                     [hot (prop-net-hot '() 0)]))))])))
+  (parameterize ([current-quiescence-write-counter write-count]
+                 [current-quiescence-change-counter change-count])
+    (let loop ([net net0])
+      (cond
+        [(prop-network-contradiction net) (finalize net)]
+        [(<= (unbox remaining-fuel) 0) (finalize net)]
+        [(null? (unbox wl)) (finalize net)]
+        [else
+         (define pid (car (unbox wl)))
+         (set-box! wl (cdr (unbox wl)))
+         (set-box! remaining-fuel (sub1 (unbox remaining-fuel)))
+         (define prop (champ-lookup (prop-network-propagators net)
+                                     (prop-id-hash pid) pid))
+         (if (eq? prop 'none)
+             (loop net)
+             (let ([net* ((propagator-fire-fn prop) net)])
+               (perf-inc-prop-firing!)  ;; Track 7 Phase 0b
+               ;; Drain: fire fn may have added to net*'s worklist via net-cell-write.
+               ;; Move those new entries into our mutable box.
+               (define new-wl-entries (prop-network-worklist net*))
+               (unless (null? new-wl-entries)
+                 (set-box! wl (append new-wl-entries (unbox wl))))
+               ;; Clear net*'s worklist so it doesn't accumulate across iterations.
+               (loop (struct-copy prop-network net*
+                       [hot (prop-net-hot '() 0)]))))]))))
 
 ;; Inner loop with tracing: returns (cons final-net fired-pids-list).
 ;; Same mutable worklist/fuel drain pattern as run-to-quiescence-inner.
@@ -1251,6 +1277,9 @@
   (define cell (champ-lookup cells h cid))
   (when (eq? cell 'none)
     (error 'net-cell-write-widen "unknown cell: ~a" cid))
+  ;; B2f Phase 0: count every write attempt
+  (define wc (current-quiescence-write-counter))
+  (when wc (set-box! wc (add1 (unbox wc))))
   (define merge-fn
     (champ-lookup (prop-network-merge-fns net) h cid))
   (define old-val (prop-cell-value cell))
@@ -1269,7 +1298,10 @@
         ((car widen-entry) old-val merged)))
   (if (or (eq? final-val old-val) (equal? final-val old-val))
       net  ;; No change — critical for termination
-      (let* ([new-cell (struct-copy prop-cell cell [value final-val])]
+      (let* (;; B2f Phase 0: count writes that actually change the CHAMP
+             [cc (current-quiescence-change-counter)]
+             [_ (when cc (set-box! cc (add1 (unbox cc))))]
+             [new-cell (struct-copy prop-cell cell [value final-val])]
              [new-cells (champ-insert cells h cid new-cell)]
              [deps (champ-keys (prop-cell-dependents cell))]
              [new-wl (append deps (prop-network-worklist net))]

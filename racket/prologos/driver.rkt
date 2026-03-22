@@ -1355,10 +1355,12 @@
   (define surfs (map parse-datum expanded-stxs))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
+  (define qs (make-quiescence-stats))
   (define mem-before (measure-memory-before))
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
-                   [current-provenance-counters pv])
+                   [current-provenance-counters pv]
+                   [current-quiescence-stats qs])
       (with-perf-counters
         (for/list ([surf (in-list surfs)])
           (if (prologos-error? surf)
@@ -1376,6 +1378,7 @@
   (print-provenance-report! pv)
   (print-memory-report! (measure-memory-after mem-before))
   (print-cell-metrics-report! (collect-cell-metrics))
+  (print-quiescence-stats! qs)
   results)
 
 ;; ========================================
@@ -1391,10 +1394,12 @@
   (define surfs (map parse-datum expanded-stxs))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
+  (define qs (make-quiescence-stats))
   (define mem-before (measure-memory-before))
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
-                   [current-provenance-counters pv])
+                   [current-provenance-counters pv]
+                   [current-quiescence-stats qs])
       (with-perf-counters
         (for/list ([surf (in-list surfs)])
           (if (prologos-error? surf)
@@ -1412,6 +1417,7 @@
   (print-provenance-report! pv)
   (print-memory-report! (measure-memory-after mem-before))
   (print-cell-metrics-report! (collect-cell-metrics))
+  (print-quiescence-stats! qs)
   results)
 
 ;; ========================================
@@ -1430,6 +1436,7 @@
   (define surfs (map parse-datum expanded-stxs))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
+  (define qs (make-quiescence-stats))
   (define mem-before (measure-memory-before))
   ;; Track 7 Phase 1-2: Initialize persistent registry network + cells (once per file).
   (init-persistent-registry-network!)
@@ -1441,7 +1448,8 @@
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
                    [current-provenance-counters pv]
-                   [current-verbose-mode verbose?])
+                   [current-verbose-mode verbose?]
+                   [current-quiescence-stats qs])
       (with-perf-counters
         (for/list ([surf (in-list surfs)]
                    [cmd-i (in-naturals)])
@@ -1472,6 +1480,7 @@
   (print-provenance-report! pv)
   (print-memory-report! (measure-memory-after mem-before))
   (print-cell-metrics-report! (collect-cell-metrics))
+  (print-quiescence-stats! qs)
   results)
 
 ;; ========================================

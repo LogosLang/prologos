@@ -107,7 +107,13 @@
  uprof-inc-postpone!
  unify-profile->hasheq
  unify-profile-total-classifications
- print-unify-profile-report!)
+ print-unify-profile-report!
+
+ ;; B2f Phase 0: Quiescence cell-write distribution
+ current-quiescence-stats
+ make-quiescence-stats
+ perf-record-quiescence-writes!
+ print-quiescence-stats!)
 
 ;; ============================================================
 ;; Counter struct: 12 mutable fields
@@ -644,3 +650,67 @@
               'wall_ms        (inexact->exact (round (* wall-ms 10))) ;; 0.1ms precision
               ))
     (eprintf "VERBOSE:~a\n" (jsexpr->string h))))
+
+;; ============================================================
+;; B2f Phase 0: Quiescence Cell-Write Distribution
+;; ============================================================
+;; Tracks per-quiescence-run cell-write counts to determine whether
+;; transient accumulation during quiescence would pay off.
+;; Histogram buckets: 0, 1, 2-5, 6-10, 11-50, 51+
+
+(struct quiescence-stats
+  (runs           ;; box: total quiescence runs with writes
+   total-writes   ;; box: sum of writes across all runs
+   total-changes  ;; box: sum of changes across all runs
+   max-writes     ;; box: max writes in a single run
+   max-changes    ;; box: max changes in a single run
+   change-hist)   ;; vector of 6 boxes: [0, 1, 2-5, 6-10, 11-50, 51+]
+  #:transparent)
+
+(define (make-quiescence-stats)
+  (quiescence-stats
+   (box 0) (box 0) (box 0) (box 0) (box 0)
+   (vector (box 0) (box 0) (box 0) (box 0) (box 0) (box 0))))
+
+(define current-quiescence-stats (make-parameter #f))
+
+(define (hist-bucket n)
+  (cond [(= n 0) 0] [(= n 1) 1] [(<= n 5) 2]
+        [(<= n 10) 3] [(<= n 50) 4] [else 5]))
+
+(define (perf-record-quiescence-writes! writes changes)
+  (define qs (current-quiescence-stats))
+  (when qs
+    (set-box! (quiescence-stats-runs qs) (add1 (unbox (quiescence-stats-runs qs))))
+    (set-box! (quiescence-stats-total-writes qs) (+ writes (unbox (quiescence-stats-total-writes qs))))
+    (set-box! (quiescence-stats-total-changes qs) (+ changes (unbox (quiescence-stats-total-changes qs))))
+    (set-box! (quiescence-stats-max-writes qs) (max writes (unbox (quiescence-stats-max-writes qs))))
+    (set-box! (quiescence-stats-max-changes qs) (max changes (unbox (quiescence-stats-max-changes qs))))
+    (define bucket (hist-bucket changes))
+    (define bx (vector-ref (quiescence-stats-change-hist qs) bucket))
+    (set-box! bx (add1 (unbox bx)))))
+
+(define (print-quiescence-stats! [qs (current-quiescence-stats)])
+  (when qs
+    (define runs (unbox (quiescence-stats-runs qs)))
+    (when (> runs 0)
+      (define tw (unbox (quiescence-stats-total-writes qs)))
+      (define tc (unbox (quiescence-stats-total-changes qs)))
+      (define mw (unbox (quiescence-stats-max-writes qs)))
+      (define mc (unbox (quiescence-stats-max-changes qs)))
+      (define hist (quiescence-stats-change-hist qs))
+      (define labels #("0" "1" "2-5" "6-10" "11-50" "51+"))
+      (define h
+        (hasheq 'runs runs
+                'total_writes tw 'total_changes tc
+                'avg_writes (exact->inexact (/ tw runs))
+                'avg_changes (exact->inexact (/ tc runs))
+                'max_writes mw 'max_changes mc
+                'change_ratio (if (> tw 0) (exact->inexact (/ tc tw)) 0.0)
+                'hist_0 (unbox (vector-ref hist 0))
+                'hist_1 (unbox (vector-ref hist 1))
+                'hist_2_5 (unbox (vector-ref hist 2))
+                'hist_6_10 (unbox (vector-ref hist 3))
+                'hist_11_50 (unbox (vector-ref hist 4))
+                'hist_51_plus (unbox (vector-ref hist 5))))
+      (eprintf "QUIESCENCE-WRITES:~a\n" (jsexpr->string h)))))
