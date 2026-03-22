@@ -1,7 +1,7 @@
 # CHAMP Performance — Stage 3 Design
 
 **Date**: 2026-03-21
-**Status**: Draft (D.2 — external critique incorporated)
+**Status**: Draft (D.3 — self-critique + principles alignment)
 **Audit**: [CHAMP Performance Audit](2026-03-21_CHAMP_PERFORMANCE_AUDIT.md)
 **Prerequisite**: None — independent of all Series. Benefits all propagator-network consumers.
 **Prior work**: [BSP-LE Track 0 PIR](2026-03-21_BSP_LE_TRACK0_PIR.md) (identified CHAMP as actual bottleneck), [BSP-LE Track 0 Phase 5](2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md) (transient regression — motivation for owner-ID)
@@ -13,12 +13,12 @@
 
 | # | Phase | Description | Status | Commit | Notes |
 |---|-------|-------------|--------|--------|-------|
-| 0 | Baselines | CHAMP-specific micro-benchmarks: insert, lookup, transient cycle, per-depth | ⬜ | | Extends bench-alloc.rkt with CHAMP-level measurements |
+| 0 | Baselines + acceptance tests | CHAMP-specific micro-benchmarks + `test-champ-owner-id.rkt` | ⬜ | | Benchmarks + acceptance test exercising all CHAMP operations as regression canary |
 | 1 | `vector-copy!` for array ops | Replace manual loop in `vec-insert`/`vec-remove` with memcpy | ⬜ | | Low-risk, mechanical. Addresses F-3 |
 | 2 | `eq?`-first key comparison | Parameterized key-eq? with `eq?` fast path | ⬜ | | Addresses F-1. Propagator CHAMPs use `eq?`; user maps keep `equal?` |
 | 3 | Value-only update fast path | Return same node when new value `eq?` old value | ⬜ | | Addresses F-4. Compounds with Track 0 Phase 1 (eq?-first in net-cell-write) |
-| 4 | Owner-ID node structure | Add `edit` field to `champ-node`; ownership check infrastructure | ⬜ | | Addresses F-5. Foundation for Phase 5 |
-| 5 | Owner-ID transient operations | In-place mutation for owned nodes; path-copy for shared | ⬜ | | Addresses F-5. Rehabilitates BSP-LE Track 0 Phase 5 |
+| 4 | Owner-ID node structure | Add `edit` field to `champ-node`; pipeline.md struct checklist | ⬜ | | Addresses F-5. Codebase-wide grep for champ-node struct-copy/match |
+| 5 | Owner-ID transient operations | In-place insert + delete + insert-join for owned nodes | ⬜ | | Addresses F-5. All three mutation operations, not just insert |
 | 6 | Owner-ID freeze | O(modified nodes) freeze — walk + clear edit, not full rebuild | ⬜ | | Completes owner-ID transient. Old freeze was O(N log N); new is O(modified paths × depth) |
 | 7 | Verification + A/B | Micro-benchmarks, suite regression, BSP-LE Track 0 Phase 5 revisit | ⬜ | | Target: measurable wall-time improvement on full suite |
 
@@ -49,9 +49,9 @@ After this Track:
 
 ## 2. Design: Seven Phases
 
-### Phase 0: CHAMP-Specific Baselines
+### Phase 0: CHAMP-Specific Baselines + Acceptance Tests
 
-Extend `bench-alloc.rkt` with CHAMP-level micro-benchmarks:
+**Micro-benchmarks**: Extend `bench-alloc.rkt` with CHAMP-level measurements:
 
 | Benchmark | What it measures |
 |-----------|-----------------|
@@ -63,6 +63,14 @@ Extend `bench-alloc.rkt` with CHAMP-level micro-benchmarks:
 | `champ-transient` + 10 inserts + `tchamp-freeze` | Current transient cycle cost at N=10 |
 | Same at N=2 and N=100 | Transient crossover point |
 | Per-level cost: depth 1 vs depth 2 vs depth 3 | Cost scaling with trie depth |
+
+**Acceptance test file** (`tests/test-champ-owner-id.rkt`): Exercises all CHAMP operations as a regression canary and progress instrument. Sections:
+- A: Persistent insert/lookup/delete (baseline — should pass from Phase 0)
+- B: Value-only update returns same node (uncomment at Phase 3)
+- C: Owner-ID transient insert/delete/insert-join (uncomment at Phase 5)
+- D: Mixed persistent + transient interleaving (uncomment at Phase 5)
+- E: Freeze invariant — no owned nodes after freeze (uncomment at Phase 6)
+- F: Post-freeze transient operations copy, not mutate (uncomment at Phase 6)
 
 ### Phase 1: `vector-copy!` for Array Operations
 
@@ -142,7 +150,12 @@ Extend `bench-alloc.rkt` with CHAMP-level micro-benchmarks:
 - `edit` is a gensym for owned (transient) nodes
 - All existing `champ-node` constructors pass `#f` for edit — zero behavioral change
 
-**Migration**: Every `(champ-node dm nm arr)` call gains a `#f` fourth argument. Mechanical grep-and-replace.
+**Migration** (per `.claude/rules/pipeline.md` "New Struct Field" checklist):
+1. Every `(champ-node dm nm arr)` call gains a `#f` fourth argument — mechanical grep-and-replace
+2. `raco make driver.rkt` to recompile all transitive dependents (stale `.zo` caches cause field-count errors)
+3. **Grep for `struct-copy champ-node` across the ENTIRE codebase** — BSP-LE Track 0 Phase 3b learned this lesson: external files with struct-copy of modified structs crash silently
+4. Grep for `match` patterns on `champ-node` — each must handle the new field
+5. Check `trace-serialize.rkt` — it serializes propagator network state including CHAMP internals
 
 **Risk**: The 4th field adds ~8 bytes per node. For a 500-entry CHAMP with ~50 nodes, that's ~400 bytes. Negligible. Every persistent insert that path-copies nodes now constructs 4-field structs instead of 3-field — ~5 extra field writes per insert at ~1ns each = ~5ns regression (~3% of the ~150ns insert cost). Phase 0 baselines include a 3-field vs 4-field construction benchmark to measure this precisely before committing Phase 4.
 
@@ -195,6 +208,15 @@ Key properties:
 - First touch of a shared node: one vector-copy + one struct allocation (same as persistent insert)
 - Subsequent touches of the same node: zero allocation (mutate in place)
 - For sequential keys (cell-ids 0–31 all hit the same depth-0 node): 1 copy + 31 in-place mutations, vs 32 copies in persistent mode
+
+**Scope includes all three mutation operations:**
+- `tnode-insert!` — insert/update key-value pair (the hot path)
+- `tnode-delete!` — remove key (used by general map/set operations; not on propagator hot path, but must be correct)
+- `tnode-insert-join!` — merge-on-collision variant (used by Prologos-level `Set` and `Map` merge; `champ-insert-join` exported at line 25)
+
+All three follow the same ownership discipline: check edit, mutate if owned, path-copy if shared.
+
+**Critical exposure constraint: the root node of an active transient must not be exposed as a persistent `champ-root` value.** During an active transient, owned nodes are mutable. If code captures a `champ-root` wrapping the transient's root node and treats it as persistent, it would observe mutations through the persistent reference. The transient API prevents this by returning raw nodes + edit tokens, not `champ-root` wrappers. The `champ-root` is constructed only at freeze time.
 
 **New transient API**:
 ```racket
@@ -323,7 +345,19 @@ Implementation belongs in Phase 7 of this Track or as a Track 8 follow-on, once 
 
 ---
 
-## 6. Key Files
+## 6. Deferred / Out of Scope
+
+| Item | Audit Finding | Rationale for Deferral |
+|------|--------------|----------------------|
+| Hardware `popcount` (`unsafe-fxpopcount`) | F-7 | ~1.6μs/command savings. Requires `racket/unsafe/ops` (Racket 8.7+); our Racket 9.0 supports it. Low effort but low impact — can be added any time. |
+| Small-map specialization for per-cell dependents | F-8 | Flat vector for ≤4 entries instead of full CHAMP trie. Medium effort (new representation + dispatch logic). Allocation savings compound across 200+ cells per command, but lookup cost difference is negligible at N=2-3. |
+| Data entry 3-vector elimination | F-2 | Inline key/hash/value into content vector. Saves 1 allocation per insert. Medium effort — changes content vector layout throughout champ.rkt. Lower priority than owner-ID which saves the content vector copy entirely. |
+| Hash scrambling for sequential keys | F-6 (partial) | Owner-ID transients address the same problem (repeated path copies of same node) more effectively. Scrambling helps persistent mode but hurts iteration cache locality. Deferred pending Phase 7 measurements. |
+| Phase 5.5: In-place data entry mutation | D.2 critique | Eliminate `make-de` allocation in owned-node value update by mutating value slot directly. Requires mutable data entries or inlined content layout. Deferred to post-Phase-7 if profiling shows remaining allocation is significant. |
+
+---
+
+## 7. Key Files
 
 | File | Role | Changes |
 |------|------|---------|
@@ -333,7 +367,7 @@ Implementation belongs in Phase 7 of this Track or as a Track 8 follow-on, once 
 
 ---
 
-## 7. Relationship to Other Work
+## 8. Relationship to Other Work
 
 - **BSP-LE Track 0**: This Track addresses the bottleneck that Track 0's baselines identified. Track 0 optimized the layer above (struct layout); this Track optimizes the layer below (CHAMP operations). Together they cover the full allocation stack.
 - **PM Track 8**: Track 8 adds more cells and propagators (mult/level/session, HKT resolution). Faster CHAMP operations compound with Track 8's increased cell count.
