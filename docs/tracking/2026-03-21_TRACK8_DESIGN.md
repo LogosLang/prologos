@@ -32,12 +32,12 @@
 | B5 | Sugar constraint generation | `surf-get` generates Indexed/Keyed constraints | ⬜ | | Depends on B4; validates CIU vision |
 | B6 | Verification + benchmarks | Full suite + A/B comparison + acceptance | ⬜ | | |
 | — | **Part C: All Constraint Resolution as Propagators** | | | | |
-| C0 | Layered scheduler | Tag propagators with strata; worklist respects priority | ⬜ | | S0 drains before S1 fires, etc. Foundation for C1-C3 |
-| C1 | Deterministic trait resolution as S0 propagators | Single-instance traits resolve directly in S0 | ⬜ | | Monotone: refines B4's readiness→S2 into direct S0 resolution |
-| C2 | Hasmethod resolution as propagators | `hasmethod` constraints fire when type cell grounds | ⬜ | | Same pattern as C1 |
-| C3 | Constraint retry as propagators | Deferred constraints watch dependency cells, fire when ground | ⬜ | | Replaces imperative retry loop |
-| C4 | S2 scope reduction | S2 handles only genuinely non-monotone commitment | ⬜ | | Stratified loop: one S0 pass + rare S2, not iterative cycle |
-| C5 | Verification + benchmarks | Resolution cycle count, fuel consumption, ordering stability | ⬜ | | Target: fewer iterations, same results |
+| C1 | Trait resolution as cross-domain bridges | `net-add-cross-domain-propagator` for trait constraints in S0 | ⬜ | | Uses session-type-bridge pattern. No new mechanism needed |
+| C2 | Hasmethod resolution as bridges | `net-add-cross-domain-propagator` for hasmethod in S0 | ⬜ | | Same bridge pattern as C1 |
+| C3 | Constraint retry as threshold propagators | Deferred constraints watch dependency cells via existing threshold | ⬜ | | Replaces imperative S2 polling with demand-driven firing |
+| C4 | S2 scope reduction + S1 elimination | S1 vestigial; S2 handles only ambiguous cases | ⬜ | | Stratified loop: S0 (with bridges) + rare S2 |
+| C5 | Layered scheduler (optimization) | Priority-ordered worklist for S0 propagators | ⬜ | | Right Kan demand-driven quiescence. Optimization, not correctness requirement |
+| C6 | Verification + benchmarks | Resolution cycle count, fuel consumption, ordering stability, memo cache | ⬜ | | Target: fewer iterations, same results |
 
 ---
 
@@ -359,173 +359,162 @@ surf-get coll key
 
 The stratified quiescence loop (S0→S1→S2, iterated with fuel) dissolves into the propagator network for all monotone operations. The loop persists only for genuinely non-monotone commitment (ambiguous instance selection). This is the architectural capstone of the Propagator Migration Series — the type checker becomes a single propagator network where trait constraints, hasmethod checks, and deferred constraints are propagators alongside type unification.
 
+### Existing Infrastructure: Cross-Domain Bridge Propagators
+
+**The mechanism already exists.** Two cross-domain bridges in the codebase demonstrate the exact pattern Part C needs:
+
+**1. Session-Type Bridge** (`session-type-bridge.rkt`): Session cell → α (extract message type) → Type cell. Uses `net-add-cross-domain-propagator`. The α function (`send-type-alpha`) is pure and monotone. The γ function returns `sess-bot` (no reverse flow). Constraints are collected during the walk (`msg-type-constraint` descriptors), checked post-quiescence (`check-type-constraints`).
+
+**2. Capability-Type Bridge** (`cap-type-bridge.rkt`): Type cell ↔ Capability cell via bidirectional α/γ. The α function (`type-to-cap-set`) extracts capability names from type expressions. The γ function (`cap-set-to-type`) converts capability sets back to type expressions. Full Galois adjunction: α∘γ∘α = α, γ∘α∘γ = γ.
+
+**Both work within the existing flat S0 quiescence loop.** No layered scheduler needed. The bridge propagator fires as part of normal S0 propagation — when the source cell changes, the α propagator fires and writes to the target cell. Dependent propagators on the target cell fire in the same S0 pass.
+
+**Part C's trait resolution follows the same pattern:**
+
+| Component | Session-Type Bridge | Trait Resolution Bridge |
+|-----------|-------------------|----------------------|
+| Source cell | Session cell (`sess-send(A, S)`) | Type cell (`PVec Int`) |
+| α function | `send-type-alpha`: extract message type A | `trait-resolve-alpha`: extract constructor `PVec`, look up `impl Indexed PVec`, return dict |
+| Target cell | Type cell (receives A) | Dict meta cell (receives resolved dict) |
+| γ function | `type-to-session-gamma`: returns `sess-bot` | `dict-to-type-gamma`: returns `type-bot` (no reverse flow) |
+| Constraint descriptors | `msg-type-constraint` (collected during walk) | `trait-constraint` (collected during elaboration) |
+| Post-quiescence check | `check-type-constraints` | `check-unresolved-constraints` |
+| Bridge constructor | `add-send-type-bridge` | `add-trait-resolution-bridge` |
+| Infrastructure | `net-add-cross-domain-propagator` | `net-add-cross-domain-propagator` (same) |
+
+This means Part C is NOT inventing a new mechanism. It's applying the session-type-bridge pattern to a new domain.
+
 ### Categorical Motivation: Kan Extensions
 
-The BSP-LE categorical analysis ([BSP-LE Master Roadmap](2026-03-21_BSP_LE_MASTER.md), standup 2026-03-21 §Outside Conversation) identified two adjoint mechanisms from the Kan extension framework:
+The BSP-LE categorical analysis ([BSP-LE Master Roadmap](2026-03-21_BSP_LE_MASTER.md), standup 2026-03-21 §Outside Conversation) identified two adjoint mechanisms:
 
-**Left Kan extension (speculative forwarding)**: Given partial information at stratum n, compute the best possible information at stratum n+1 without waiting for n to complete. Monotonicity guarantees the speculative result is a sound lower bound — it never needs retraction, only refinement.
+**Left Kan extension (speculative forwarding)**: The cross-domain bridge fires on partial S0 fixpoint information — a type cell just solved, but S0 hasn't fully quiesced. Monotonicity guarantees soundness. The trait resolution bridge IS the left Kan extension: it speculatively resolves the dict as soon as the type constructor is known, without waiting for all type cells to stabilize.
 
-**Right Kan extension (demand-driven computation)**: Given a requirement at stratum n+1, compute the minimal sufficient computation at stratum n. Only propagate what downstream actually needs, not everything.
+**Right Kan extension (demand-driven computation)**: The bridge propagator only fires when its source cell changes — demand-driven by the dependency graph. Type propagation doesn't need to solve all metas; only the ones with dependent resolution bridges need to be ground. This is the existing threshold mechanism applied to resolution.
 
-Part C instantiates both:
-- **C1 (resolution in S0) IS the left Kan extension**: A resolution propagator fires on partial fixpoint information (a type cell just solved, but S0 hasn't fully quiesced). Monotonicity of the non-overlapping instance invariant guarantees the result is sound — resolution produces the correct dict even if other type cells haven't been solved yet, because the dict depends only on the type constructor (which is ground), not on the full type (which may have unsolved arguments).
-- **C0 (layered scheduler with demand-driven quiescence) instantiates the right Kan extension**: The scheduler doesn't need to drain all S0 propagators before checking if demanded cells have stabilized. If a resolution propagator's dependency is already ground, it fires immediately — S0 doesn't need to fully quiesce for constraints whose dependencies are already met.
-
-The Kan extensions are adjoint — speculative forwarding of demanded cells gives the same result as waiting for completion and extracting what's needed. This adjunction is the categorical proof that Part C's interleaved scheduling produces identical results to the current sequential S0→S1→S2 loop.
+The Kan extensions are adjoint — speculative forwarding of demanded cells gives the same result as waiting for completion and extracting what's needed. This adjunction, already validated by the session-type bridge's correctness, guarantees Part C produces identical results to the sequential S0→S1→S2 loop.
 
 ### Why This Matters
 
-The S0→S1→S2 cycle introduces ordering fragility: a type cell solved in S0 triggers readiness in S1, which triggers resolution in S2, which may solve another type cell that triggers another S0 pass. For nested constraints (e.g., `Seq (List Int)` where resolving `Seq` depends on `List`'s type constructor), this multi-cycle resolution can fail to converge within the fuel limit. Making resolution propagator-driven eliminates the cycles — constraints resolve as soon as their dependencies are ground, within the same S0 pass.
+The S0→S1→S2 cycle introduces ordering fragility: a type cell solved in S0 triggers readiness in S1, which triggers resolution in S2, which may solve another type cell that triggers another S0 pass. For nested constraints (e.g., `Seq (List Int)` where resolving `Seq` depends on `List`'s type constructor), this multi-cycle resolution can fail to converge within the fuel limit.
 
-This directly addresses the acceptance file issues that motivated the CIU Series: `surf-get` generating trait constraints needs those constraints to resolve reliably. With Part B, they resolve through the S1→S2 loop (correct but fragile). With Part C, they resolve as S0 propagators (correct and robust).
+The cross-domain bridge pattern eliminates the cycles. The session-type bridge already proves this: session → type propagation happens within a single `run-to-quiescence` call, with no multi-cycle iteration. Trait resolution bridges work the same way.
 
-### Phase C0: Layered Scheduler
+### Prior Art Patterns Applied
 
-**Goal**: Replace the flat worklist with a priority-ordered layered scheduler. Propagators tagged with their stratum; the worklist drains higher-priority (lower-numbered) strata before lower-priority ones.
+Three patterns from prior design tracks directly inform Part C (see §11 for full analysis):
 
-**Current state**: `run-to-quiescence-inner` pops propagators from a flat list. The stratified behavior is implemented *outside* the quiescence loop — `run-stratified-resolution-pure` in `metavar-store.rkt` calls S0 quiescence, then manually processes S1 (readiness), then S2 (resolution), then loops.
+1. **Session-Type Bridge as template** (Architecture A+D): The `add-send-type-bridge` / `net-add-cross-domain-propagator` pattern is structurally identical to trait resolution bridges. Session bridge watches session cell → extracts type → writes to type cell. Trait bridge watches type cell → extracts constructor + looks up impl → writes to dict cell.
 
-**Design**: Each propagator gets a `stratum` tag at creation time:
-- Stratum 0: Type unification, decomposition, reconstruction propagators
-- Stratum 1: Readiness detection propagators (threshold cells)
-- Stratum 2: Resolution commitment propagators (after C1-C3, only ambiguous cases)
+2. **Residuation from FL-Narrowing**: Narrowing's definitional trees implement "needed demand analysis" — pause until needed information arrives. Trait constraints residuate identically: the bridge propagator sleeps until the type cell is ground, then fires. The propagator network provides residuation natively via the no-change guard.
 
-`run-to-layered-quiescence` drains the worklist in priority order: all S0 propagators fire before any S1 propagator fires. Within a stratum, order is unspecified (same as current Gauss-Seidel scheduling). When an S1 propagator adds S0 propagators to the worklist (e.g., resolution solves a meta, triggering new unification), the scheduler drops back to S0.
+3. **Intra-walk threading from Architecture A+D**: During elaboration walks, constraint information should be collected as descriptors (not immediately wired as propagators). The session-type bridge demonstrates this: `msg-type-constraint` structs are accumulated during `compile-proc-with-type-bridges`, then checked post-quiescence. Part B5's `surf-get` should follow the same pattern.
 
-**Implementation**: The worklist becomes a vector of per-stratum lists (3 lists for S0/S1/S2). `net-cell-write` enqueues dependents into their respective stratum lists. The drain loop checks S0 first, S1 when S0 is empty, S2 when S1 is empty.
+### Phase C1: Trait Resolution as Cross-Domain Bridge Propagators
 
-**Right Kan refinement — demand-driven quiescence**: The basic layered scheduler drains all of S0 before checking higher strata. The right Kan extension refines this: resolution propagators (C1-C3, tagged at S0) register *demand* on specific type cells. The scheduler can interleave S0 type propagation with S0 resolution by tracking which cells have pending demand:
+**Goal**: Trait constraints with a single matching instance resolve as cross-domain bridge propagators in S0, using the existing `net-add-cross-domain-propagator` infrastructure.
 
-```
-run-to-layered-quiescence:
-  loop:
-    if S0 worklist non-empty:
-      pop and fire S0 propagator
-      if fired propagator solved a demanded cell:
-        immediately fire waiting resolution propagators (still S0)
-    elif S2 worklist non-empty:
-      pop and fire S2 propagator (rare: ambiguous commitment)
-    else:
-      quiescent — exit
-```
+**Design**: A `add-trait-resolution-bridge` function following the session-type bridge pattern:
 
-The key insight: resolution propagators don't need full S0 quiescence. They need their *specific dependency cells* to be ground. A type cell being ground is a local property (that cell's value ≠ bot), not a global property (all cells stable). So a resolution propagator can fire as soon as its watched cell is ground, even if other S0 propagators are still in the worklist.
+```racket
+(define (add-trait-resolution-bridge net type-cell trait-name)
+  ;; Create a dict cell to receive the resolved dict
+  (define-values (net1 dict-cell)
+    (net-new-cell net type-bot type-lattice-merge type-lattice-contradicts?))
+  ;; Wire cross-domain bridge: type cell → dict cell
+  (define-values (net2 _pid-alpha _pid-gamma)
+    (net-add-cross-domain-propagator net1 type-cell dict-cell
+      (make-trait-resolve-alpha trait-name)   ;; α: extract constructor, lookup impl
+      (lambda (_) type-bot)))                 ;; γ: no reverse flow
+  (values net2 dict-cell))
 
-This is naturally implemented by the existing threshold propagator mechanism: resolution propagators are threshold propagators watching a type cell. When `net-cell-write` updates the type cell, the threshold fires and adds the resolution propagator to the S0 worklist. The layered scheduler fires it in the same S0 pass — no waiting for full quiescence.
-
-The demand-driven quiescence has a concrete performance benefit: for a command with 20 type metas and 5 trait constraints, the current loop runs S0 (solve all 20 metas) → S1 (detect 5 ready) → S2 (resolve 5) → loop back. With demand-driven scheduling, each trait constraint resolves as soon as its dependency meta is solved — potentially 5 resolution firings interleaved within the single S0 pass, with zero S1/S2 iterations.
-
-**Interaction with Track 0's mutable worklist**: The mutable worklist box from BSP-LE Track 0 Phase 3c becomes a mutable vector of boxes (one per stratum). Same drain pattern, same pure data-in/data-out contract at the quiescence boundary.
-
-**Files**: `propagator.rkt` (scheduler), `metavar-store.rkt` (stratum tagging for existing propagators), `elaborator-network.rkt` (propagator creation with stratum tags)
-
-### Phase C1: Deterministic Trait Resolution as S0 Propagators
-
-**Goal**: Trait constraints with a single matching instance resolve directly in S0, not through the S1→S2 cycle.
-
-**Categorical grounding — left Kan extension**: C1 is the concrete instantiation of the left Kan extension along the pushforward from type propagation to constraint resolution. The resolution propagator speculatively processes partial S0 fixpoint information: when a type cell is solved (partial fixpoint — other cells may still be unsolved), the resolution propagator fires immediately with that information. Monotonicity guarantees the result is sound: the dict depends only on the type constructor (which is ground once the cell is solved), not on the full network state. The left Kan extension's universal property ensures this is the *best possible* early result — no alternative scheduling would produce a better answer sooner.
-
-**Current flow** (after Part B):
-1. Elaborator emits `Indexed ?C` constraint
-2. S0: type propagation solves `?C` → `PVec`
-3. S1: readiness propagator detects `?C` is ground → adds to ready-queue
-4. S2: resolution loop processes ready-queue → looks up `impl Indexed PVec` → solves dict meta
-5. Loop back to S0 (dict solution may trigger more unification)
-
-**Target flow** (Part C):
-1. Elaborator emits `Indexed ?C` constraint → creates resolution propagator at S0 watching `?C`'s type cell
-2. S0: type propagation solves `?C` → `PVec`; resolution propagator fires → looks up `impl Indexed PVec` → solves dict meta → triggers dependent unification — **all within the same S0 pass**
-
-The resolution propagator is monotone under the non-overlapping instance invariant: adding type information can refine which instance matches but cannot change a committed choice (there's only one valid choice). This is why it belongs in S0 (monotone stratum), not S2 (non-monotone commitment).
-
-**Design**: A `make-trait-resolution-propagator` function:
-```
-(make-trait-resolution-propagator
-  trait-name        ;; e.g., 'Indexed
-  type-cell-id      ;; the cell to watch
-  dict-meta-id      ;; the meta to solve with the resolved dict
-  stratum: 0)       ;; fires in S0
+(define (make-trait-resolve-alpha trait-name)
+  (lambda (type-val)
+    (cond
+      [(type-bot? type-val) type-bot]         ;; not yet solved
+      [(type-top? type-val) type-top]         ;; contradiction
+      [else
+       ;; Extract type constructor, look up impl
+       (define ctor (extract-type-constructor type-val))
+       (define impl (lookup-impl trait-name ctor))
+       (cond
+         [(not impl) type-bot]                ;; no impl found — leave unsolved
+         [else (impl-dict impl)])])))         ;; resolved dict
 ```
 
-When the type cell becomes ground:
-1. Extract type constructor (e.g., `PVec Int` → `PVec`)
-2. Look up `impl Indexed PVec` in the instance registry
-3. If exactly one match: solve the dict meta immediately (`solve-meta!`)
-4. If zero matches: leave as unsolved (will error later in constraint checking)
-5. If ambiguous: escalate to S2 (non-monotone commitment needed)
+**Key properties** (shared with session-type bridge):
+- α is pure and monotone (bot → bot, ground type → dict, top → top)
+- Fires within normal S0 quiescence — no layered scheduler needed
+- The dict cell is readable by any dependent propagator (e.g., `surf-get`'s elaborated code references the dict cell)
+- Post-quiescence check verifies all trait constraints resolved (analogous to `check-type-constraints`)
 
-Case 3 is the common case (non-overlapping invariant ensures it). Case 5 is rare and preserves correctness.
+**The "ambiguous" case** (multiple matching instances): The α function returns `type-bot` (unresolved) when disambiguation is needed. The post-quiescence check detects unresolved trait constraints and either reports an error or escalates to S2 commitment. This mirrors the session bridge's handling of `type-bot` in `check-type-constraints` (line 336: "no type info yet, skip").
 
-**Key architectural requirement**: The resolution propagator must be able to call `solve-meta!` from within S0. Currently, `solve-meta!` triggers the stratified resolution chain, which is the outer loop. After Part C, `solve-meta!` within S0 simply writes to a cell — the propagator network handles the consequences.
+**Files**: New `trait-resolution-bridge.rkt` (following `session-type-bridge.rkt` structure), `elaborator.rkt` (constraint emission), `metavar-store.rkt` (bridge creation)
 
-**Files**: `trait-resolution.rkt` (resolution propagator), `metavar-store.rkt` (propagator creation at constraint emission), `elaborator.rkt` (constraint emission creates propagator)
+### Phase C2: Hasmethod Resolution as Bridge Propagators
 
-### Phase C2: Hasmethod Resolution as Propagators
+**Goal**: `hasmethod` constraints become cross-domain bridge propagators.
 
-**Goal**: `hasmethod` constraints (does type T have method M?) become S0 propagators.
+**Design**: Same bridge pattern. α function: type-val → has-method check → boolean cell.
 
-**Current state**: `hasmethod` constraints are accumulated in a scoped cell and resolved during S2 by iterating the constraint list and checking each against the now-ground type. This is the same pattern as trait resolution.
+```racket
+(define (add-hasmethod-bridge net type-cell method-name)
+  (define-values (net1 result-cell)
+    (net-new-cell net 'unknown hasmethod-merge))
+  (define-values (net2 _ __)
+    (net-add-cross-domain-propagator net1 type-cell result-cell
+      (make-hasmethod-alpha method-name)
+      (lambda (_) 'unknown)))
+  (values net2 result-cell))
+```
 
-**Design**: Same as C1 but for `hasmethod`:
-1. When a `hasmethod` constraint is emitted, create a resolution propagator watching the relevant type cell
-2. When the type becomes ground, the propagator checks whether the type has the method
-3. If yes: mark the constraint as satisfied
-4. If no: mark as failed (error)
+**Files**: `trait-resolution-bridge.rkt` (alongside trait bridge)
 
-**Files**: `metavar-store.rkt` (hasmethod propagator creation), `trait-resolution.rkt` (hasmethod checking)
+### Phase C3: Constraint Retry as Bridge Propagators
 
-### Phase C3: Constraint Retry as Propagators
+**Goal**: Deferred/postponed constraints become bridge propagators watching their dependency cells.
 
-**Goal**: Deferred/postponed constraints (currently retried by the S2 loop when metas are solved) become propagators watching their dependency cells.
+**Design**: Each postponed constraint creates a multi-input threshold propagator (already exists in `propagator.rkt`) that fires when ALL dependency cells are ground. This is the multi-cell generalization of the single-cell bridge pattern.
 
-**Current state**: When a constraint cannot be resolved because its type arguments are unsolved metas, it's added to a "postponed" list. The S2 loop periodically retries postponed constraints. This is polling — wasteful when most constraints are still not ready.
+The threshold propagator reads all dependency cells, checks if all are ground, and if so evaluates the constraint. This replaces the S2 polling loop with demand-driven firing.
 
-**Design**: Each postponed constraint becomes a propagator:
-1. Identify the unsolved metas that the constraint depends on
-2. Create a propagator watching those meta cells
-3. When all dependencies become ground, the propagator fires and evaluates the constraint
-4. If the constraint is satisfied, remove it. If not, it remains as an error.
+**Files**: `metavar-store.rkt`, `propagator.rkt` (existing `make-threshold-fire-fn`)
 
-This is demand-driven (propagator fires when ready) instead of polling (retry everything each S2 cycle). The scheduling is automatic — the propagator network knows when dependencies change.
+### Phase C4: S2 Scope Reduction + S1 Elimination
 
-**Files**: `metavar-store.rkt` (constraint→propagator conversion), `propagator.rkt` (multi-cell threshold propagators)
+**Goal**: After C1-C3, the stratified loop simplifies.
 
-### Phase C4: S2 Scope Reduction
+**What moves to S0 (as bridge propagators)**: All deterministic trait resolution (C1), all hasmethod resolution (C2), all constraint retry (C3).
 
-**Goal**: After C1-C3, S2 handles only genuinely non-monotone operations.
+**What's eliminated**: S1 (readiness detection) — with bridge propagators resolving in S0, readiness is implicit in the propagator firing. The ready-queue cell and readiness propagators (Track 7 Phase 8) become vestigial.
 
-**What remains in S2**:
-- **Ambiguous instance selection**: When multiple trait instances match and specificity-based disambiguation is needed. This is rare (non-overlapping invariant prevents it for most traits).
-- **Overlapping constraint arbitration**: If any future extension relaxes the non-overlapping invariant, S2 is where the arbitration happens.
+**What remains in S2**: Only genuinely non-monotone commitment — ambiguous instance selection. The α function returns `type-bot` for ambiguous cases; the post-quiescence check escalates these to S2.
 
-**What moves to S0**:
-- All deterministic trait resolution (C1)
-- All hasmethod resolution (C2)
-- All constraint retry (C3)
-- Readiness detection (S1) — with C1-C3 doing resolution directly in S0, S1's ready-queue becomes vestigial. Readiness is implicit in the propagator firing.
-
-**Design**: The stratified loop simplifies from:
+**Simplified loop**:
 ```
 loop (fuel ≤ 100):
   S(-1): retraction
-  S0: propagation to quiescence
-  S1: readiness → ready-queue
-  S2: process ready-queue → commit resolutions
+  S0: propagation to quiescence (type inference + resolution bridges + hasmethod + constraint retry)
+  S2: non-monotone commitment (rare)
   check progress
 ```
-
-To:
-```
-loop (fuel ≤ 100):
-  S(-1): retraction
-  S0: propagation to quiescence (includes trait/hasmethod/constraint resolution)
-  S2: non-monotone commitment (rare — only when ambiguous)
-  check progress
-```
-
-S1 is eliminated. The loop iteration count drops because S0 now resolves monotone constraints in the same pass as type solving, rather than waiting for the next iteration.
 
 **Files**: `metavar-store.rkt` (simplified loop), `resolution.rkt` (S2 reduced to ambiguous cases)
+
+### Phase C5: Layered Scheduler (Optimization)
+
+**Goal**: Optimize the quiescence loop with priority-ordered propagator scheduling.
+
+**Note**: C1-C4 work within the existing flat S0 quiescence loop (proven by the session-type bridge precedent). C5 is an optimization that improves scheduling efficiency, not a correctness requirement.
+
+**Design**: Propagators tagged with priority. The worklist drains higher-priority propagators first. Type unification propagators (highest priority) fire before resolution bridges (medium) fire before readiness detection (lowest, now vestigial).
+
+**Right Kan refinement**: The scheduler interleaves type propagation with resolution bridge firing — when a type cell becomes ground, its dependent resolution bridge fires immediately in the same pass, before other type propagators. This is demand-driven quiescence: resolution happens as soon as demanded information is available.
+
+**Implementation**: The mutable worklist from Track 0 Phase 3c becomes a priority queue (or vector of per-priority lists). `net-cell-write` enqueues dependents at their tagged priority level.
+
+**Files**: `propagator.rkt` (priority worklist), `elaborator-network.rkt` (priority tagging)
 
 ### Memo Cache Correctness Under Interleaved Resolution
 
@@ -561,10 +550,11 @@ Implementation: `(current-reduction-caching-enabled?)` parameter, `#f` during `r
 | D5 | HKT impl key | `(trait-name, type-constructor)` extracted from solved type | Natural extension of existing `expr->impl-key-str`; constructor extraction from `PVec Int` → `PVec` |
 | D6 | Backward compatibility | `expr-get` fallback during B5 migration | Gradual — sugar generates constraints when possible, falls back to constructor dispatch otherwise |
 | D7 | Part A/B/C ordering | A before B before C; each Part builds on the previous | A provides TMS-clean state; B provides module structure + HKT; C leverages both for propagator-driven resolution |
-| D8 | Deterministic resolution in S0 | Monotone under non-overlapping instance invariant | Adding type information refines but doesn't change committed choice; safe for S0 |
-| D9 | S1 elimination | Readiness detection subsumed by C1-C3 resolution propagators | Resolution propagators watch type cells directly; ready-queue becomes vestigial |
-| D10 | Layered scheduler as C0 foundation | Propagators tagged with strata; worklist respects priority | C1-C3 need strata to work correctly; C0 provides the scheduling infrastructure |
-| D11 | Ambiguous cases remain in S2 | Non-monotone commitment preserved for rare overlapping cases | Correctness requires the barrier; Part C moves monotone work out of S2, not into it |
+| D8 | Resolution as cross-domain bridge propagators | Use existing `net-add-cross-domain-propagator` (same as session-type-bridge and cap-type-bridge) | Proven mechanism — two existing implementations validate the pattern. No new propagator infrastructure needed |
+| D9 | S1 elimination | Readiness detection subsumed by bridge propagators' natural firing | Bridge propagators fire when source cell changes; ready-queue becomes vestigial |
+| D10 | Layered scheduler as optimization, not prerequisite | Session-type bridge works within flat S0; trait bridges will too | C1-C4 proven correct without layered scheduler; C5 adds scheduling efficiency |
+| D11 | Ambiguous cases remain in S2 | α returns `type-bot` for ambiguous; post-quiescence escalates to S2 | Mirrors session bridge's `type-bot` handling in `check-type-constraints` |
+| D12 | Constraint collection during walk, check post-quiescence | Follow session-type-bridge's `msg-type-constraint` descriptor pattern | Elaboration walk collects descriptors; bridges wired at cell creation; checked after quiescence |
 
 ---
 
@@ -594,12 +584,12 @@ Implementation: `(current-reduction-caching-enabled?)` parameter, `#f` during `r
 
 | Phase | Level 1 | Level 2 | Level 3 |
 |-------|---------|---------|---------|
-| C0 | Layered scheduler: priority ordering verified | — | Full suite (behavioral parity) |
-| C1 | Trait resolution in S0: single-instance resolves | Nested constraints | Acceptance: `impl` resolution |
-| C2 | Hasmethod in S0: ground type check | — | Full suite regression |
-| C3 | Constraint retry as propagators | Deferred constraint fires on ground | Full suite regression |
-| C4 | S2 reduced: loop iterations measured | — | Fuel consumption comparison |
-| C5 | A/B benchmarks, ordering stability, full suite | — | All CIU aspirational sections |
+| C1 | Trait bridge resolves in S0: single-instance | Nested constraints (Seq of List) | Acceptance: `impl` resolution across collection types |
+| C2 | Hasmethod bridge resolves in S0 | — | Full suite regression |
+| C3 | Constraint retry fires on ground dependencies | Multi-dependency constraint | Full suite regression |
+| C4 | S1 eliminated, S2 reduced: loop iterations measured | — | Fuel consumption comparison |
+| C5 | Layered scheduler: priority ordering verified | — | A/B benchmarks (optimization over C1-C4) |
+| C6 | Full suite, ordering stability, memo cache, benchmarks | — | All CIU aspirational sections |
 
 ---
 
@@ -634,6 +624,9 @@ Implementation: `(current-reduction-caching-enabled?)` parameter, `#f` during `r
 | B3 HKT `impl` interacts badly with existing trait resolution | Medium | High | Isolated test file for HKT resolution before wiring into production |
 | B5 Deferred constraints (unsolved meta) create ordering issues | Low | Medium | Track 7's readiness propagators handle this; test with delayed type solving |
 | Performance regression from trait dispatch vs. hardcoded dispatch | Low | Medium | A/B benchmarks; `expr-get` fallback preserves performance for known types |
+| C1 α function needs access to trait instance registry from propagator fire context | Medium | Medium | Registry is already a persistent cell (Track 7); `cell-read` from fire fn via cell-ops |
+| C1-C3 bridge propagators increase cell/propagator count per command | Low | Low | Mitigated by CHAMP Performance owner-ID transients + BSP-LE Track 0 struct split |
+| Memo cache staleness under interleaved resolution (C1-C3 in S0) | Medium | High | Option D (disable caching during S0); Track 9 provides principled solution |
 
 ---
 
@@ -650,9 +643,9 @@ Track 8 provides the following to downstream Series:
 | `cell-ops.rkt` API shaped for transient threading | — | — (CHAMP Performance follow-on) | B1 |
 | Module restructuring | All (elaborator ↔ trait-resolution access) | — | B1 |
 | TMS-clean speculation | — | Track 2 (worldview management) | A4 |
-| Layered scheduler | — | All (propagators fire in correct priority order) | C0 |
-| Deterministic resolution in S0 | Tracks 3-5 (trait constraints resolve without S2 cycle) | Track 2 (ATMS solver trait resolution) | C1 |
+| Trait resolution bridges in S0 | Tracks 3-5 (trait constraints resolve without S2 cycle) | Track 2 (ATMS solver trait resolution) | C1 |
 | Ordering stability for nested constraints | Tracks 3-5 (nested Indexed/Keyed/Seq constraints) | — | C1-C3 |
+| Layered scheduler (optimization) | — | All (better scheduling efficiency) | C5 |
 
 ---
 
@@ -663,3 +656,33 @@ Track 8 provides the following to downstream Series:
 - **Memo caches as cells** (Track 8 audit §1.9): Not constraint-like; keep imperative.
 - **Map HKT partial application** (`Map K` as `Type -> Type`): Important for Map to implement Foldable/Seq, but a separate type-system feature. Not Track 8 scope.
 - **Observation cells** (P3 in audit): Performance counters and observatory as cells for LSP. Future Track 9/10 scope.
+
+---
+
+## 11. Prior Work Patterns Informing This Design
+
+Three completed tracks provide direct architectural templates for Track 8:
+
+### Session-Type Bridge → Part C Trait Resolution
+
+`session-type-bridge.rkt` implements the exact cross-domain bridge pattern that Part C needs. The mapping: session cell → α (extract message type) → type cell is isomorphic to type cell → α (extract constructor + lookup impl) → dict cell. Both use `net-add-cross-domain-propagator`. Both collect constraint descriptors during the walk and check them post-quiescence. Both work within the existing flat S0 quiescence loop.
+
+**Key design insight from session bridge**: The γ direction returns lattice bottom (no reverse flow). This makes the bridge effectively unidirectional while using the bidirectional `net-add-cross-domain-propagator` infrastructure. Trait resolution bridges follow the same pattern — dict information doesn't flow back to constrain the type.
+
+**Key implementation insight**: `compile-proc-with-type-bridges` threads constraint accumulation through the walk, creating bridge propagators alongside process compilation. Part B5's `surf-get` should follow the same pattern — create trait resolution bridges during elaboration, accumulate constraint descriptors, wire bridges when cells exist.
+
+### FL-Narrowing Residuation → Part C Demand-Driven Resolution
+
+FL-Narrowing's definitional trees implement "needed demand analysis" — which variable must be instantiated for progress. The narrowing engine residuates (pauses) until the needed variable is bound. This is the same mechanism as Part C's trait resolution bridges: a bridge propagator sleeps (via the no-change guard) until its dependency type cell becomes ground.
+
+**Key insight**: The propagator network provides residuation natively. No custom "sleep until ready" mechanism is needed — the threshold propagator + no-change guard IS the residuation mechanism. FL-Narrowing validated this: the narrowing engine didn't need a custom constraint solver because the propagator network already provides the "wait for information" pattern.
+
+### Architecture A+D Intra-Walk Threading → Part B5 Constraint Collection
+
+Architecture A+D's effect ordering engine threads state through bindings during the elaboration walk, then writes to cells at walk completion. The key insight: "propagator cells are for inter-quiescence communication; intra-walk state must use the threading medium."
+
+Part B5's `surf-get` should follow this: during elaboration, collect `trait-constraint` descriptors in the elaboration context (like A+D's `'__effect_acc` binding key). After the elaborated expression is wired into the network, create the bridge propagators and let propagation handle resolution. This avoids premature cell reads during the walk.
+
+### Capability-Type Bridge → Bidirectional α/γ Template
+
+`cap-type-bridge.rkt` demonstrates the full Galois adjunction (α∘γ∘α = α, γ∘α∘γ = γ) for cases where bidirectional flow is needed. If future trait resolution requires reverse flow (e.g., a dict constraint refining the type), the cap-type-bridge provides the template for upgrading unidirectional trait bridges to bidirectional ones.
