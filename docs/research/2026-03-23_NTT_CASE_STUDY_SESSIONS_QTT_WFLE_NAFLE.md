@@ -416,24 +416,223 @@ requires assignment to a barrier stratum.
 
 ---
 
+## Part E: Effect Ordering System
+
+### E.1 Lattices (Value — Multiple Interacting)
+
+The effect system has THREE interacting lattices:
+
+```prologos
+;; Effect position: where in the protocol an effect occurs
+type EffPos
+  := eff-bot
+   | eff-pos [channel : Symbol] [depth : Nat]
+   | eff-top
+
+impl Lattice EffPos
+  join
+    | eff-bot x -> x
+    | x eff-bot -> x
+    | [eff-pos c1 d1] [eff-pos c2 d2]
+      | [eq? c1 c2] -> eff-pos c1 [max d1 d2]  ;; same channel: higher depth
+      | _            -> eff-top                   ;; different channels: contradiction
+    | _ _ -> eff-top
+  bot -> eff-bot
+
+;; Effect ordering: happens-before edges (set-union lattice)
+type EffOrdering := eff-ordering [edges : Set EffEdge]
+
+impl Lattice EffOrdering
+  join [eff-ordering a] [eff-ordering b] -> eff-ordering [set-union a b]
+  bot -> eff-ordering [set-empty]
+
+;; Effect accumulator: collected effect descriptors
+type EffectSet := effect-set [effects : [List EffectDescriptor]]
+
+impl Lattice EffectSet
+  join [effect-set a] [effect-set b] -> effect-set [append a b]
+  bot -> effect-set '[]
+```
+
+**Implementation status**: NETWORK-NATIVE (for monotone phases).
+- Effect positions tracked as cells on the propagator network
+- Ordering edges accumulated via set-union merge (monotone)
+- Transitive closure computed as fixpoint on the ordering lattice
+- Deadlock = cycle in transitive closure = contradiction
+
+**NTT observation**: Three value lattices interacting via propagators.
+No structural lattice — effects are flat values, not recursive trees.
+The interesting structure is the ORDERING lattice (set of edges), which
+is a join-semilattice where join = union. This validates the value
+lattice model (`impl Lattice`) — no SRE needed for effects.
+
+### E.2 The Layer 5 Barrier (Non-Monotone Execution)
+
+```prologos
+;; The effect system has a fundamental phase split:
+;; Layers AD-A through AD-E: monotone (propagator-native)
+;; Layer AD-F (execution): non-monotone (actual I/O)
+
+stratification EffectPipeline
+  :strata [Compute Execute]
+  :fiber Compute
+    :networks [session-net effect-pos-net ordering-net]
+    :bridges  [SessionToEffect]
+  :barrier Execute
+    :mode commit
+    :commit linearize-and-execute
+  :fuel 1   ;; execute once after fixpoint
+```
+
+**NTT observation**: This is a clean two-stratum stratification: monotone
+computation → non-monotone execution barrier. The `:barrier` form
+captures this directly. The effect system's Architecture D pipeline
+(collect → order → linearize → execute) maps to:
+- Collect: propagators accumulate effect descriptors (monotone)
+- Order: ordering propagator computes transitive closure (monotone)
+- Linearize: topological sort (pure function at barrier)
+- Execute: actual I/O (non-monotone, Layer 5)
+
+### E.3 Bridges
+
+```prologos
+;; Session → Effect Position (Galois connection, one-way)
+bridge SessionToEffect
+  :from SessionExpr
+  :to   EffPos
+  :alpha session-to-effect-alpha
+  ;; Maps session advancement to effect position:
+  ;; When session cell advances from !String.?Int.end to ?Int.end,
+  ;; compute depth via session-steps-to, write eff-pos(channel, depth)
+  ;; No gamma: effect positions don't feed back to sessions.
+  :preserves [Tensor]   ;; sequential composition preserved
+```
+
+**Implementation status**: NETWORK-NATIVE.
+- `add-session-effect-bridge` uses `net-add-cross-domain-propagator`
+- α: `session-steps-to full current → depth`
+- One-way (no γ): effect positions are derived, not bidirectional
+
+**NTT observation**: This is the first bridge that crosses THREE domains
+in a chain: `TypeExpr → SessionExpr → EffPos`. The type checker resolves
+session types; session types determine effect positions; effect positions
+determine execution order.
+
+**Bridge composition question**: Can we express `TypeExpr → EffPos`
+as a composed bridge `TypeToSession ∘ SessionToEffect`? In category
+theory, Galois connections compose: `(α₂ ∘ α₁, γ₁ ∘ γ₂)`. The NTT
+should support bridge composition — declaring that a chain of bridges
+forms a valid Galois connection chain.
+
+### E.4 Capabilities ↔ Effects (Not Yet Connected)
+
+```prologos
+;; Capabilities and effects are currently SEPARATE systems.
+;; Future design: capability-gated effect execution
+;; i.e., you need Capability FileWrite to execute eff-write effects.
+
+;; This would be another bridge:
+bridge CapabilityToEffect
+  :from CapabilitySet
+  :to   EffectSet
+  :alpha cap-grants-effect   ;; capability enables effect execution
+  ;; No gamma: effects don't grant capabilities
+```
+
+**Implementation status**: NOT CONNECTED.
+- `capability-inference.rkt` tracks capability requirements separately
+- `cap-type-bridge.rkt` bridges types ↔ capabilities
+- No automated enforcement of capabilities over effects yet
+- Design space: capability requirement as `:where` constraint on effects
+
+### E.5 Ordering Propagator (Transitive Closure as Fixpoint)
+
+```prologos
+propagator ordering-closure
+  :reads  [session-edges : Cell EffOrdering
+           data-flow-edges : Cell EffOrdering]
+  :writes [complete-ordering : Cell EffOrdering]
+  ;; Computes: transitive closure of union(session-edges, data-flow-edges)
+  ;; Detects: cycles → contradiction (deadlock)
+  ;; Fixpoint: monotone (edges only accumulate)
+```
+
+**Implementation status**: NETWORK-NATIVE.
+- `add-ordering-propagator` in `effect-ordering.rkt`
+- Reads two edge sources, computes union + transitive closure
+- Writes to complete ordering cell
+- Cycle detection via self-edges in closure
+
+**NTT observation**: The transitive closure IS a monotone fixpoint
+computation (edges only accumulate). It happens WITHIN the ordering
+propagator's fire function — a fixpoint within a fixpoint (ordering
+fixpoint within S0 quiescence fixpoint). The NTT captures this via
+nested fixpoints: S0 quiescence is the outer fixpoint; the ordering
+propagator's transitive closure is the inner fixpoint (computed on
+each fire).
+
+### E.6 Architecture Selection (Meta-Computation)
+
+```prologos
+;; The effect system auto-selects between Architecture A (simple) and
+;; Architecture D (full ordering) based on process structure:
+;; - 1 IO channel, no cross-channel data flow → Architecture A
+;; - Multiple channels or data flow → Architecture D
+
+;; This is a META-COMPUTATION: analyzing the process BEFORE building
+;; the propagator network. In NTT terms, this is a functor that
+;; selects which network template to instantiate.
+```
+
+**NTT observation**: Architecture selection is parameterized network
+instantiation — a `functor` that examines the process structure and
+produces either a simple network (Architecture A) or a full ordering
+network (Architecture D). This validates the `functor` concept for
+networks and connects to the actor model / Milner discussion (which
+process topology determines which network topology).
+
+### E.7 What the Case Study Reveals
+
+- **Multiple interacting value lattices** work well with the NTT model.
+  Three lattices (EffPos, EffOrdering, EffectSet) connected by
+  propagators, no structural lattice needed.
+- **Bridge composition is a new NTT concept.** The `TypeExpr → SessionExpr
+  → EffPos` chain is a composed Galois connection. The NTT should express
+  this compositionally (not requiring a separate `TypeToEffect` bridge).
+- **Two-stratum monotone/execute pattern** maps cleanly to
+  `stratification` with a `:barrier`. CALM theorem: all monotone
+  computation is coordination-free; only the execution barrier requires
+  coordination.
+- **The quantale morphism is real but latent.** Sequential composition
+  IS preserved across the session→effect bridge, but the code doesn't
+  explicitly verify `:preserves [Tensor]`. Making it explicit would
+  catch violations statically.
+- **Capability-effect bridge is future work** but the NTT framework
+  is ready for it — it's just another `bridge` declaration.
+- **Architecture selection as functor** validates the higher-order
+  network concept.
+
+---
+
 ## Cross-Study Synthesis
 
 ### NTT Syntax Validation Matrix
 
-| NTT Feature | Type Checker | NF-Narrowing | Sessions | QTT | WF-LE | NAF-LE |
-|-------------|-------------|-------------|----------|-----|-------|--------|
-| Value lattice | MultExpr ✓ | — | — | MultExpr ✓ | TruthValue ✓ | TruthValue ✓ |
-| Structural lattice | TypeExpr ✓ | TermValue ✓ | SessionExpr ✓ | — | — | — |
-| `interface` | Implicit | Implicit | Implicit | Implicit | Implicit | Implicit |
-| `network` | Static | Dynamic | Dynamic | Static | Static | Inductive |
-| `bridge` | TypeToMult ✓ | Implicit | SendType ✓ | TypeToMult ✓ | — | — |
-| `stratification` | 4-stratum ✓ | Embedded S0 | Embedded S0 | Embedded S0 | :approximation ✓ | :stratified ✓ |
-| `exchange` | S0↔S1 ✓ | — | — | — | — | — |
-| `:preserves` | [Tensor] ✓ | — | [Trace] ✓ | [Tensor] ✓ | — | — |
-| `:non-monotone` | S(-1) ✓ | — | — | — | — | naf-check ✓ |
-| `:fixpoint` | :lfp ✓ | :lfp ✓ | :lfp ✓ | :lfp ✓ | :approximation ✓ | :stratified ✓ |
-| SRE applicable | HIGH | HIGHEST | HIGH | LOW | LOW | LOW |
-| Imperative debt | HIGH | LOW | LOW | NONE | MEDIUM | LOW |
+| NTT Feature | Type Checker | NF-Narrowing | Sessions | QTT | WF-LE | NAF-LE | Effects |
+|-------------|-------------|-------------|----------|-----|-------|--------|---------|
+| Value lattice | MultExpr ✓ | — | — | MultExpr ✓ | TruthValue ✓ | TruthValue ✓ | EffPos+EffOrd+EffSet ✓ |
+| Structural lattice | TypeExpr ✓ | TermValue ✓ | SessionExpr ✓ | — | — | — | — |
+| `interface` | Implicit | Implicit | Implicit | Implicit | Implicit | Implicit | Implicit |
+| `network` | Static | Dynamic | Dynamic | Static | Static | Inductive | Parameterized (A/D) |
+| `bridge` | TypeToMult ✓ | Implicit | SendType ✓ | TypeToMult ✓ | — | — | SessionToEff ✓ |
+| `stratification` | 4-stratum ✓ | Embedded S0 | Embedded S0 | Embedded S0 | :approximation ✓ | :stratified ✓ | 2-stratum ✓ |
+| `exchange` | S0↔S1 ✓ | — | — | — | — | — | — |
+| `:preserves` | [Tensor] ✓ | — | [Trace] ✓ | [Tensor] ✓ | — | — | [Tensor] ✓ |
+| `:non-monotone` | S(-1) ✓ | — | — | — | — | naf-check ✓ | Execute barrier ✓ |
+| `:fixpoint` | :lfp ✓ | :lfp ✓ | :lfp ✓ | :lfp ✓ | :approximation ✓ | :stratified ✓ | :lfp ✓ |
+| Bridge composition | — | — | — | — | — | — | Type→Sess→Eff chain |
+| SRE applicable | HIGH | HIGHEST | HIGH | LOW | LOW | LOW | LOW |
+| Imperative debt | HIGH | LOW | LOW | NONE | MEDIUM | LOW | LOW (Layer 5 only) |
 
 ### Patterns Confirmed Across All Studies
 
@@ -467,8 +666,10 @@ requires assignment to a barrier stratum.
 | Involution-based SRE (duality) | Sessions (A.2) | LOW |
 | Trigger condition formalization | NAF-LE (D.4) | LOW |
 | All `interface` forms are implicit | All systems | MEDIUM |
+| Bridge composition (Galois chain) | Effects (E.3) | MEDIUM |
+| Architecture selection as functor | Effects (E.6) | LOW |
 
-### Cumulative Gap Summary (All 6 Studies)
+### Cumulative Gap Summary (All 7 Studies)
 
 | Gap | Severity | Resolution Status |
 |-----|----------|------------------|
@@ -480,9 +681,11 @@ requires assignment to a barrier stratum.
 | `TracedCell` for provenance | MEDIUM | OPEN (needs design) |
 | Implicit `interface` everywhere | MEDIUM | OPEN (needs adoption) |
 | Speculation dynamics | MEDIUM | OPEN (needs `speculation` form or integration) |
+| Bridge composition (Galois chain) | MEDIUM | OPEN (Type→Sess→Eff as composed connection) |
 | Network lifetime (persistent/speculative) | LOW | RESOLVED (`:lifetime` on `network`) |
 | Involution-based SRE decomposition | LOW | OPEN (extend SRE for duality) |
 | NAF trigger condition formalization | LOW | OPEN |
+| Architecture selection as functor | LOW | OPEN (parameterized network instantiation) |
 
 ---
 
