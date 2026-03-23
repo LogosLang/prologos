@@ -118,11 +118,20 @@
 (define type-ctor-table (make-hasheq))  ; tag → ctor-desc
 (define data-ctor-table (make-hasheq))  ; tag → ctor-desc
 
+;; SRE Track 0: Extensible domain table registry.
+;; New domains auto-create their table on first registration.
+(define extra-domain-tables (make-hasheq))  ; domain-symbol → (hasheq tag → ctor-desc)
+
 (define (domain-table domain)
   (case domain
     [(type) type-ctor-table]
     [(data) data-ctor-table]
-    [else (error 'domain-table "unknown domain: ~a" domain)]))
+    [else
+     ;; Auto-create table for new domains
+     (or (hash-ref extra-domain-tables domain #f)
+         (let ([tbl (make-hasheq)])
+           (hash-set! extra-domain-tables domain tbl)
+           tbl))]))
 
 ;; ========================================
 ;; Validation
@@ -214,10 +223,14 @@
 
 ;; Determine the constructor descriptor for a value by testing all registered
 ;; recognizers. Returns ctor-desc or #f for atoms/unrecognized values.
-;; Tests type domain first, then data domain.
+;; Tests type domain first, then data domain, then extra domains.
 (define (ctor-tag-for-value v)
   (or (ctor-tag-for-value-in-domain v type-ctor-table)
-      (ctor-tag-for-value-in-domain v data-ctor-table)))
+      (ctor-tag-for-value-in-domain v data-ctor-table)
+      ;; SRE Track 0: search extra domain tables
+      (for/first ([tbl (in-hash-values extra-domain-tables)]
+                  #:when (ctor-tag-for-value-in-domain v tbl))
+        (ctor-tag-for-value-in-domain v tbl))))
 
 (define (ctor-tag-for-value-in-domain v tbl)
   (for/first ([desc (in-hash-values tbl)]
@@ -229,7 +242,9 @@
   (cond
     [(not domain)
      (append (hash-values type-ctor-table)
-             (hash-values data-ctor-table))]
+             (hash-values data-ctor-table)
+             ;; SRE Track 0: include extra domain tables
+             (apply append (map hash-values (hash-values extra-domain-tables))))]
     [else
      (hash-values (domain-table domain))]))
 
