@@ -95,9 +95,163 @@ This is the natural second domain for validation.
 
 ---
 
-## 3. Design
+## 3. NTT Speculative Syntax
 
-### 3.1 The Domain Spec (`sre-domain`)
+This section expresses the design in NTT syntax — what we'd write if
+the NTT type system existed today. This serves as: (a) design clarity
+check, (b) correctness reference, (c) NTT refinement data point, and
+(d) future implementation guide. The Racket implementation in §4
+is the operational realization of these declarations.
+
+### 3.0.1 Level 0: Structural Lattice Declarations
+
+```prologos
+;; The type domain — primary structural lattice
+data TypeExpr
+  := type-bot
+   | type-top
+   | expr-pi    [domain : TypeExpr] [codomain : TypeExpr]
+   | expr-sigma [fst : TypeExpr]    [snd : TypeExpr]
+   | expr-app   [fn : TypeExpr]     [arg : TypeExpr]
+   | expr-pvec  [elem : TypeExpr]
+   | expr-map   [key : TypeExpr]    [val : TypeExpr]
+   | expr-set   [elem : TypeExpr]
+   | ...
+  :lattice :structural
+  :bot type-bot
+  :top type-top
+
+;; The term domain — NF-Narrowing's structural lattice (validation)
+data TermValue
+  := term-bot
+   | term-top
+   | term-cons [head : TermValue] [tail : TermValue]
+   | term-zero
+   | term-suc  [pred : TermValue]
+  :lattice :structural
+  :bot term-bot
+  :top term-top
+
+;; A value lattice for contrast — pure join, no structural decomposition
+type MultExpr := mult-bot | m0 | m1 | mw | mult-top
+
+impl Lattice MultExpr
+  join
+    | mult-bot x -> x
+    | x mult-bot -> x
+    | x x        -> x
+    | _ _        -> mult-top
+  bot -> mult-bot
+```
+
+**What `:lattice :structural` derives** (the SRE's job):
+- Form registry entries from each constructor (tag, arity, fields)
+- Decomposition propagators: parent cell → sub-cells per field
+- Reconstruction propagators: sub-cells → parent cell
+- Merge semantics: matching tags → pairwise sub-field decomposition;
+  mismatching tags → top (contradiction)
+- Sub-cell caching in the decomposition registry (CHAMP-backed)
+
+### 3.0.2 Level 2: Derived Propagators
+
+These are auto-derived from `:lattice :structural` — the user never
+writes them. Shown here to make the derivation explicit:
+
+```prologos
+;; Auto-derived: structural equality propagator for TypeExpr
+propagator structural-relate-TypeExpr
+  :reads  [a : Cell TypeExpr, b : Cell TypeExpr]
+  :writes [a : Cell TypeExpr, b : Cell TypeExpr]
+  ;; Monotone implicit.
+  ;; Fire: read both cells.
+  ;;   Both bot → no-op.
+  ;;   One bot → write known to unknown, decompose.
+  ;;   Both non-bot → merge. Contradiction → write top.
+  ;;     Compatible → write merged to both, decompose sub-fields.
+
+;; Auto-derived: Pi decomposition propagator
+propagator decompose-pi
+  :reads  [parent : Cell TypeExpr]
+  :writes [domain : Cell TypeExpr, codomain : Cell TypeExpr]
+  ;; Fire: if parent has Pi tag, extract domain/codomain into sub-cells.
+  ;; Reverse: if both sub-cells non-bot, reconstruct Pi and write to parent.
+
+;; Auto-derived: generic reconstruction (one per constructor)
+propagator reconstruct-pi
+  :reads  [domain : Cell TypeExpr, codomain : Cell TypeExpr]
+  :writes [parent : Cell TypeExpr]
+  ;; Fire: if all sub-cells non-bot, build expr-pi and write to parent.
+```
+
+### 3.0.3 Level 4: Cross-Domain Bridges
+
+```prologos
+;; The mult bridge — Layer 2 concern, wired by caller after SRE decomposition
+bridge TypeToMult
+  :from TypeExpr
+  :to   MultExpr
+  :alpha type->mult
+  :gamma mult->type
+  :preserves [Tensor]
+
+;; The session bridge
+bridge TypeToSession
+  :from TypeExpr
+  :to   SessionExpr
+  :alpha type->session
+  :gamma session->type
+```
+
+These correspond to the `wire-mult-bridge` call in the PUnify
+dispatch code. The SRE (Layer 1) decomposes structurally; the
+bridge (Layer 2) crosses domains. The NTT declaration generates
+the same propagator wiring that the Racket caller does manually.
+
+### 3.0.4 Level 5: Stratification Context
+
+```prologos
+stratification ElabLoop
+  :strata [S-neg1 S0 S1 S2]
+  :fiber S0
+    :bridges [TypeToMult TypeToSession]
+    :speculation :atms
+  :fiber S1
+  :barrier S2 -> S-neg1
+    :commit resolve-and-retract
+  :fuel 100
+  :where [WellFounded ElabLoop]
+```
+
+This IS our `run-to-quiescence` loop with stratified resolution.
+The SRE's structural-relate propagators fire in S0. The bridges
+also fire in S0. The NTT declaration describes the same architecture
+that `metavar-store.rkt` implements imperatively.
+
+### 3.0.5 NTT ↔ Racket Correspondence
+
+| NTT Construct | Racket Implementation (SRE Track 0) |
+|--------------|-------------------------------------|
+| `data ... :lattice :structural` | `sre-domain` struct + `ctor-desc` registrations |
+| Constructor fields | `ctor-desc` arity, extract-fn, reconstruct-fn |
+| `:bot` / `:top` | `sre-domain-bot-value`, `sre-domain-contradicts?` |
+| Auto-derived `structural-relate` propagator | `sre-make-structural-relate-propagator` |
+| Auto-derived decomposition | `sre-maybe-decompose` → `sre-decompose-generic` |
+| Auto-derived reconstruction | `make-generic-reconstructor` |
+| Sub-cell caching | `sre-get-or-create-sub-cells` (CHAMP registry) |
+| `bridge :from :to :alpha :gamma` | `wire-mult-bridge` call in PUnify dispatch |
+| `stratification :fiber S0` | `run-to-quiescence` in `metavar-store.rkt` |
+| `:lattice :structural` derivation | `sre-core.rkt` (THIS TRACK'S DELIVERABLE) |
+
+**Key insight**: `sre-core.rkt` IS the operational semantics of
+`:lattice :structural`. The NTT declaration is the surface syntax;
+the SRE is the execution engine. SRE Track 0 builds the engine that
+the NTT will eventually drive.
+
+---
+
+## 4. Design
+
+### 4.1 The Domain Spec (`sre-domain`)
 
 A domain spec bundles the lattice operations needed for structural
 reasoning in a particular domain. It's a first-class data value —
@@ -173,7 +327,7 @@ into a single value that can be:
 
 This is **Data Orientation**: the domain is a value, not ambient state.
 
-### 3.2 The SRE Core Module (`sre-core.rkt`)
+### 4.2 The SRE Core Module (`sre-core.rkt`)
 
 New file. Contains domain-parameterized versions of the 5 hardcoded
 functions. All are pure — they accept the network as a value and
@@ -239,7 +393,7 @@ return a modified network. No Racket parameters used internally.
 ;; Relation parameter defaults to 'equality (symmetric merge).
 ;; Future SRE tracks add 'subtyping, 'duality, 'coercion.
 ;; NOTE: Future SRE Track 1 will add a #:relation parameter here.
-;; See §3.6 for design rationale on deferral.
+;; See §4.6 for design rationale on deferral.
 (define (sre-make-structural-relate-propagator domain cell-a cell-b)
   (define merge (sre-domain-lattice-merge domain))
   (define contradicts? (sre-domain-contradicts? domain))
@@ -378,7 +532,7 @@ inside `sre-get-or-create-sub-cells`). Reconstructor reuse unchanged.
      (values net** ordered-cids)]))
 ```
 
-### 3.3 Binder Handling
+### 4.3 Binder Handling
 
 The specialized Pi/Sigma/lam decomposers exist because they handle
 dependent type binders: opening the codomain with a fresh fvar,
@@ -458,7 +612,7 @@ Track 0, but monitor for the threshold.
 - **Completeness**: The SRE handles ALL structural decomposition.
   The caller handles cross-domain concerns. No mixed responsibility.
 
-### 3.4 PUnify Delegation
+### 4.4 PUnify Delegation
 
 After extraction, PUnify's dispatch functions delegate to the SRE.
 The delegation is mechanical — each function replaces hardcoded
@@ -539,7 +693,7 @@ bridges) and domain-specific operations (binder opening).
 `punify-dispatch-binder`. Test after each. The existing test suite
 is the oracle — any behavioral change is a bug.
 
-### 3.5 Second Domain Validation (Phase 3)
+### 4.5 Second Domain Validation (Phase 3)
 
 To validate the SRE is genuinely domain-parameterized, we register
 term-value structural forms from NF-Narrowing and write isolated tests.
@@ -587,7 +741,7 @@ term-value structural forms from NF-Narrowing and write isolated tests.
 **What might break**: If `decompose-generic` has any residual type-domain
 assumptions. The test will catch this.
 
-### 3.6 Relation Parameter (Future — SRE Track 1)
+### 4.6 Relation Parameter (Future — SRE Track 1)
 
 The structural-relate propagator currently handles equality (symmetric
 merge). Future SRE tracks will add a `#:relation` parameter for
@@ -613,7 +767,7 @@ compatible — no existing call sites break.
 
 ---
 
-## 4. Phased Implementation Plan
+## 5. Phased Implementation Plan
 
 ### Phase 0: Acceptance File Baseline
 
@@ -734,7 +888,7 @@ decomposition/composition machinery.
 
 ---
 
-## 5. File Plan
+## 6. File Plan
 
 | File | Action | Phase | Description |
 |------|--------|-------|-------------|
@@ -747,7 +901,7 @@ decomposition/composition machinery.
 
 ---
 
-## 6. Dependency Analysis
+## 7. Dependency Analysis
 
 ```
 sre-core.rkt
@@ -770,7 +924,7 @@ driver.rkt
 
 ---
 
-## 7. Termination Arguments
+## 8. Termination Arguments
 
 ### Structural-relate propagators (equality relation)
 
@@ -795,7 +949,7 @@ statically via the `:where [Monotone]` constraint on propagators.
 
 ---
 
-## 8. Principles Alignment (Challenge, Not Catalogue)
+## 9. Principles Alignment (Challenge, Not Catalogue)
 
 ### Propagator-First
 **Serves**: SRE primitives create cells, install propagators, use
@@ -852,7 +1006,7 @@ hooks, reconsider.
 
 ---
 
-## 9. Acceptance Criteria
+## 10. Acceptance Criteria
 
 1. All 7343+ tests pass with PUnify delegating to SRE
 2. No performance regression (< 5% wall time increase)
@@ -861,14 +1015,14 @@ hooks, reconsider.
 5. Debug-mode idempotency assertions pass for both type and term domains
 6. Negative tests confirm graceful handling of unregistered tags and malformed specs
 
-## 10. WS Impact
+## 11. WS Impact
 
 None. This track changes internal infrastructure only. No new
 user-facing syntax. No preparse changes. No reader changes.
 
 ---
 
-## 11. D.2 Critique Summary
+## 12. D.2 Critique Summary
 
 External critique received and addressed. Key changes:
 
@@ -885,7 +1039,7 @@ External critique received and addressed. Key changes:
 | Post-decompose-hook threshold (lower to 2) | Push back: mult bridge is Layer 2 caller concern, not SRE hook. Session duality same. Keep monitoring at 3. | No change, rationale documented |
 | Concurrency tests | Defer: sequential scheduling currently. Note for BSP-LE Track 4. | No change |
 
-## 12. Source Documents
+## 13. Source Documents
 
 | Document | Relationship |
 |----------|-------------|
