@@ -3,7 +3,7 @@
 **Stage**: 1 (Design Discussion)
 **Date**: 2026-03-22
 **Series**: NTT Research Document 2 / SRE Series
-**Status**: Active design discussion. ~70-80% clarity. Known unknowns identified. Case studies pending at ~90%.
+**Status**: Active design discussion. ~80-85% clarity. Design iteration round 2 incorporated. Case studies pending at ~90%.
 
 ## 1. Purpose
 
@@ -31,14 +31,16 @@ The design is informed by:
 | Form | Level | Purpose | Status |
 |------|-------|---------|--------|
 | `trait Lattice` | 0 | Lattice as trait (existing machinery) | Refine |
-| `propagator` | 2 | Propagator type declaration | New |
-| `schema` (network) | 3 | Network interface type | New (extends existing `schema`) |
+| `property` | 0 | Named reusable constraint groups | Designed (parsed) |
+| `propagator` | 2 | Propagator type declaration (context-free, no stratum) | New |
+| `interface` | 3 | Network interface type (polynomial functor) | New |
 | `network` | 3 | Network implementation | New |
-| `bridge` | 4 | Galois connection between domains | New |
-| `stratification` | 5 | Declarative stratum configuration + solver config | New |
+| `bridge` | 4 | Galois connection between domains (one-way or bidirectional) | New |
+| `stratification` | 5 | Declarative config + solver + fixpoint modalities | New |
 | `exchange` | 6 | Inter-stratum adjunction (Kan, Free/Forgetful, etc.) | New |
+| `codata` | — | Coinductive type definition (observations, not constructors) | New |
 
-**Not a form**: `form` (SRE structural decomposition) — derived from type definitions automatically. See §8.
+**Not a form**: SRE structural decomposition — derived from `data`/`codata`/type definitions + NF-narrowing. See §9.
 
 ## 3. Level 0: Lattice Types
 
@@ -84,22 +86,38 @@ impl Lattice Color
   preserve tensor structure are quantale morphisms (see §7 `:preserves`).
 - `:where` uses block syntax: one keyword, indented constraints.
 
-**Open question**: Should lattice laws use `property` groups (`:laws`)
-or inline `:where` constraints? The `trait :laws` pattern references
-a named `property` group. The inline `:where` is more compact. Both
-should work; preference is a style question.
+**Resolved**: `:where` is the universal catch-all for constraints, laws,
+and property obligations. `property` is a *definition form* that names
+a reusable group of constraints. `:where` is the *usage site* — it can
+reference named property groups OR contain inline constraints:
+
+```prologos
+;; Named property group (reusable)
+property Monoid {M : Type}
+  :where [Associative op]
+         [Identity op e]
+
+;; Usage: inline + named
+trait Lattice {L : Type}
+  :where [Monoid L join bot]      ;; reference named group
+         [Idempotent join]        ;; inline constraint
+         [Commutative join]       ;; inline constraint
+  spec join L L -> L
+  spec bot -> L
+```
+
+No need for `:laws` or `:properties` as separate keywords. One keyword,
+one concept: "these conditions must hold."
 
 ## 4. Level 2: Propagator Types
 
 New toplevel form. Distinguished from `spec` because propagators carry
-fundamentally different metadata (reads/writes cells, stratum assignment,
-monotonicity class).
+fundamentally different metadata (reads/writes cells, monotonicity class).
 
 ```prologos
 propagator add-prop
   :reads  [Cell NatLattice] [Cell NatLattice]
   :writes [Cell NatLattice]
-  :stratum S0
   [plus [read x] [read y]]
 ```
 
@@ -107,17 +125,26 @@ propagator add-prop
 |---------|------|---------|-------------|
 | `:reads` | `[Cell L ...]` | required | Input cells with lattice types |
 | `:writes` | `[Cell L ...]` | required | Output cells with lattice types |
-| `:stratum` | `Stratum` | none | Which stratum this fires in |
 | `:non-monotone` | flag | monotone | Opt out of implicit Monotone (requires barrier stratum) |
 
 **Design decisions**:
 - **Monotone is implicit**: All propagators default to Monotone. Only
   barrier-stratum propagators opt out with `:non-monotone`. Parallels
   QTT defaulting to `:ω`. The compiler enforces: `:non-monotone`
-  requires `:stratum` to be a barrier stratum.
+  propagators can only be assigned to barrier strata in `stratification`.
+- **No `:stratum` on propagator**: A propagator's stratum is NOT inherent
+  — the same propagator could fire in S0 in one stratification and S1 in
+  another. Stratum assignment belongs to the `stratification` that embeds
+  the propagator (via `:fiber` declarations). This keeps propagator
+  definitions context-free and reusable.
+- **Cross-stratum effects are cell-mediated**: A propagator that "fires
+  into" another stratum doesn't reach across strata — it writes to cells
+  that propagators in the other stratum watch. The `exchange` adjunction
+  (§8) formalizes this cross-stratum mediation. The individual propagator
+  doesn't need to know about strata at all.
 - **`:reads` / `:writes`** not `:inputs` / `:outputs`: More honest about
-  what propagators do (read cell values, write joins). Avoids collision
-  with `schema :inputs :outputs` for network interfaces.
+  what propagators do (read cell values, write joins). Distinguishes from
+  `interface :inputs :outputs` for network boundary declarations.
 - **Body is the fire function**: The expression after the metadata is the
   fire function body. Propagator cells are bound positionally from
   `:reads` / `:writes` declarations.
@@ -125,18 +152,21 @@ propagator add-prop
 **Open question**: Should the body be mandatory? Some propagators are
 structural (SRE-derived from type definitions) and have no user-written
 body. These may not need a `propagator` declaration at all — they're
-auto-generated. See §8.
+auto-generated. See §9.
 
 ## 5. Level 3: Network Types
 
-### 5.1 Network Interface (`schema`)
+### 5.1 Network Interface (`interface`)
 
-Network interfaces reuse the existing `schema` concept — a typed
-description of inputs and outputs. This is the polynomial functor type.
+Network interfaces use `interface` — a typed declaration of inputs and
+outputs for a computational component. This is the polynomial functor
+type. (`schema` is reserved for data object shapes — the structure of
+maps and records.)
 
 ```prologos
-schema AdderNet
-  :inputs  [x : Cell NatLattice, y : Cell NatLattice]
+interface AdderNet
+  :inputs  [x : Cell NatLattice
+            y : Cell NatLattice]
   :outputs [sum : Cell NatLattice]
 ```
 
@@ -148,6 +178,16 @@ schema AdderNet
 **Design note**: The polynomial functor `p(y) = Σ_{i∈O} y^{deps(i)}`
 is encoded by `:outputs` (positions O) and `:inputs` (directions).
 Users don't see polynomial functors; they see inputs and outputs.
+
+**Connection to actor model**: Propagator networks subsume the actor
+model — an actor is a propagator with private cells and message-passing
+via shared cells. But propagators are more general: multi-read (fan-in),
+multi-write (fan-out), monotonic accumulation, and lattice merge. Milner's
+π-calculus gives us channels as first-class values, parallel composition,
+and restriction — in our framework: cells (first-class, scopable),
+`embed` + `connect` (parallel composition), and cell scoping (restriction).
+The `interface` declaration is the static type of a network's channel
+topology.
 
 ### 5.2 Network Implementation (`network`)
 
@@ -164,7 +204,7 @@ network combined : CombinedNet
 
 | Keyword | Type | Default | Description |
 |---------|------|---------|-------------|
-| `embed` | block: `name : Schema` | — | Instantiate sub-networks |
+| `embed` | block: `name : Interface` | — | Instantiate sub-networks |
 | `connect` | block: `cell -> cell` | — | Wire outputs to inputs (type-checked) |
 | `bridge` | block: `name : Bridge` | — | Embed bridge instances (see §7) |
 
@@ -196,29 +236,40 @@ bridge TypeToMult
 | `:to` | `Lattice` | required | Target lattice domain |
 | `:alpha` | `Fn : L -> M` | required | Abstraction (forward) |
 | `:gamma` | `Fn : M -> L` | required | Concretization (backward) |
-| `:preserves` | `[Structure ...]` | `[Adjunction]` | Structural conditions beyond adjunction |
-| `:one-way` | flag | bidirectional | Projection-only bridge (no γ) |
+| `:preserves` | `[Structure ...]` | `[]` | Additional structural conditions (quantale, trace) |
 
 **Design decisions**:
-- **Adjunction is implicit**: Bridges default to full Galois connection.
-  Compiler verifies adjunction laws automatically. Override with
-  `:one-way` for projection-only bridges (α without γ).
-- **`:preserves`**: Extensible structural conditions. `[Tensor]` makes
-  the bridge a quantale morphism. `[Trace]` preserves traced monoidal
-  structure. Each condition adds a proof obligation.
+- **Adjunction is implicit for bidirectional bridges**: When both `:alpha`
+  and `:gamma` are provided, the compiler verifies adjunction laws
+  automatically (α ∘ γ ∘ α = α, γ ∘ α ∘ γ = γ).
+- **One-way is implicit from missing keyword**: If only `:alpha` is
+  specified, the bridge is one-way from→to. If only `:gamma`, one-way
+  to→from. No explicit `:one-way` flag needed — the structure speaks for
+  itself. Minimal syntax.
+
+```prologos
+;; Bidirectional (full Galois connection, adjunction verified)
+bridge TypeToMult
+  :from TypeLattice
+  :to   MultLattice
+  :alpha type->mult
+  :gamma mult->type
+
+;; One-way projection (only alpha, no gamma)
+bridge EffectToLog
+  :from EffectLattice
+  :to   LogLattice
+  :alpha effect->log
+```
+
+- **`:preserves`**: Extensible structural conditions beyond adjunction.
+  `[Tensor]` makes the bridge a quantale morphism. `[Trace]` preserves
+  traced monoidal structure. Each condition adds a proof obligation.
+  The concept is essential; the keyword name may evolve.
 - **Bridges live in `stratification`**: A bridge declaration defines the
   bridge; its stratum assignment comes from the `stratification` that
-  embeds it. This keeps bridge definitions clean and orthogonal to
-  orchestration.
-
-**Open question**: Is `:preserves` the right keyword? It's semantically
-correct (the bridge preserves additional structure) but may not be
-immediately intuitive. Alternatives: `:also`, `:structure`, `:maintains`.
-The concept is important regardless of naming.
-
-**Open question**: One-way bridges. If `:one-way` means "only α, no γ",
-is this still a "bridge"? Or should one-way projections have a different
-form? Currently keeping as a flag on `bridge` for simplicity.
+  embeds it (via `:bridges` on `:fiber`). This keeps bridge definitions
+  clean and orthogonal to orchestration.
 
 ## 7. Level 5: Stratification
 
@@ -230,16 +281,21 @@ subsumes the existing `solver` configuration.
 ```prologos
 stratification ElabLoop
   :strata [S-neg1 S0 S1 S2]
+  :scheduler :bsp                       ;; default for all fibers
   :fiber S0
-    :mode monotone
     :bridges [TypeToSession TypeToMult]
   :fiber S1
-    :mode monotone
+    :scheduler :gauss-seidel            ;; override for S1
   :barrier S2 -> S-neg1
     :commit resolve-and-retract
   :fuel 100
   :where [WellFounded ElabLoop]
 ```
+
+Note: `:mode monotone` is implicit (safe default). Only barrier strata
+need explicit mode (`:mode retraction`, `:mode commit`).
+`:scheduler` uses CSS-cascade scoping: outer scope sets default, inner
+`:fiber` overrides for that stratum.
 
 ### 7.2 Inductive (Growing) Stratification
 
@@ -273,7 +329,60 @@ stratification CustomElabLoop
   :fuel 200                     ;; override fuel
 ```
 
-### 7.4 Keyword Reference
+### 7.4 Fiber Network Composition
+
+Networks embedded in a fiber are isolated unless connected by bridges:
+
+```prologos
+stratification TypeCheckWithSessions
+  :extends ElabLoop
+  :fiber S0
+    :networks [type-net session-net mult-net effect-net]
+    :bridges  [TypeToSession TypeToMult EffectToMult]
+  :fiber S1
+    :networks [readiness-net]
+```
+
+The egress of one network (type cells becoming ground) feeds via a
+bridge's α into the ingress of another (constraint cells needing type
+information). Without a bridge declaration, networks in the same fiber
+share quiescence but not state. This IS polynomial functor composition:
+`type-net ◁ bridge ◁ constraint-net`, where ◁ is Poly wiring.
+
+### 7.5 Fixpoint Modalities
+
+Stratifications specify their fixpoint character:
+
+| Modality | Character | Example |
+|----------|-----------|---------|
+| `:lfp` | Least fixpoint — inductive, finite, well-founded | Type inference (default) |
+| `:gfp` | Greatest fixpoint — coinductive, productive | Stream checking, session protocols |
+| `:stratified` | Iterated lfp across strata | NAF-LE (each stratum lfp, overall iterated) |
+| `:approximation` | Denecker's AFT — stable/well-founded semantics | WF-LE bilattice solver |
+| `:metric` | Banach contraction — unique fixpoint by contractiveness | Tropical semiring optimization |
+| `:mixed` | Alternating μν/νμ — parity games | Liveness + safety property checking |
+
+```prologos
+stratification TypeInference
+  :fixpoint :lfp               ;; default for most strata
+  :fuel 100
+
+stratification StreamChecker
+  :fixpoint :gfp               ;; coinductive: productive streams
+  :where [Productive StreamChecker]
+
+stratification WFSolver
+  :fixpoint :approximation     ;; Denecker's AFT
+  :bilattice [knowledge truth]
+  :stable-operator wf-stable
+```
+
+`:lfp` is the implicit default (the common case). The first five are
+lattice-theoretic (Knaster-Tarski foundation); `:metric` lives in
+complete metric spaces but still has a propagator interpretation
+(each iteration contracts distances, guaranteed to converge).
+
+### 7.6 Keyword Reference
 
 | Keyword | Type | Default | Description |
 |---------|------|---------|-------------|
@@ -293,7 +402,9 @@ stratification CustomElabLoop
 | `:extends` | `Stratification` | none | Inherit + override from parent |
 | `:scheduler` | `Symbol` | `:auto` | `bsp`, `gauss-seidel`, `:auto` |
 | `:strategy` | `Symbol` | `:dfs` | Search strategy (for solver contexts) |
-| `:where` | `[Constraint ...]` | `[]` | Well-foundedness, other constraints |
+| `:fixpoint` | `Symbol` | `:lfp` | `lfp`, `gfp`, `stratified`, `approximation`, `metric`, `mixed` |
+| `:bilattice` | `[Lattice Lattice]` | — | Knowledge + truth orderings (for `:approximation`) |
+| `:where` | `[Constraint ...]` | `[]` | Well-foundedness, productivity, other constraints |
 
 **Design decisions**:
 - **Subsumes `solver` config**: `:scheduler`, `:fuel`, `:strategy` were
@@ -311,10 +422,11 @@ stratification CustomElabLoop
   stratifications terminate if `:halts-when` is well-founded AND fuel
   is finite.
 
-**Open question**: Should `:scheduler` be per-stratum (on `:fiber`) or
-per-stratification? Per-stratum is more flexible (BSP for heavy S0,
-Gauss-Seidel for light S1) but adds complexity. Currently shown on
-`:fiber` for maximum flexibility.
+**Resolved**: `:scheduler` uses CSS-cascade scoping — declared at
+stratification level as default, overrideable per-fiber. Inner scope
+shadows outer scope. This gives both simplicity (one `:scheduler` for
+the common case) and flexibility (per-fiber override when needed).
+Same scoping principle applies to `:fixpoint` and other config keywords.
 
 ## 8. Level 6: Exchange (Inter-Stratum Adjunctions)
 
@@ -362,7 +474,8 @@ stratification ElabLoop
 **Open question**: Is Adjunction the right implicit default for exchanges?
 Unlike bridges (where Adjunction is almost always correct), some
 inter-stratum interactions may be weaker (e.g., one-way triggering without
-a proper right adjoint). Should `:one-way` exist on exchanges too?
+a proper right adjoint). Same resolution as bridges: if only `:left` is
+specified, it's one-way. If both, adjunction verified.
 
 ## 9. Structural Decomposition: Derived, Not Declared
 
@@ -395,7 +508,118 @@ functor structure of the SRE is derived from the type system.
 decomposition be derived? What are the edge cases? The design should
 support the derive-by-default path while allowing escape hatches.
 
-## 10. Design Unknowns
+## 10. Coinductive Types and Foreign Type Structure
+
+Inductive types define structure by *constructors* (how you build values).
+Coinductive types define structure by *observations* (how you use values).
+
+| | Inductive | Coinductive |
+|---|----------|-------------|
+| Defined by | Constructors (intro) | Observations/destructors (elim) |
+| Values | Finite, well-founded | Potentially infinite, productive |
+| Reasoning | Structural recursion | Guarded corecursion |
+| SRE structure | Constructor tags → decomposition | Observation labels → projection |
+| Fixpoint | `:lfp` | `:gfp` |
+
+```prologos
+;; Inductive: constructors define structure
+data List {A : Type} := nil | cons [head : A] [tail : List A]
+
+;; Coinductive: observations define structure
+codata Stream {A : Type}
+  head -> A
+  tail -> Stream A
+```
+
+For the SRE, coinductive structure is just as derivable as inductive —
+but from observations rather than constructors. The polynomial functor
+summand is the same shape (`y²` for a stream's two observations), but
+the direction is flipped.
+
+**Foreign types**: When we can't see constructors (opaque Racket FFI
+types), we CAN define observations:
+
+```prologos
+foreign codata RacketPort
+  read-byte -> Option Byte
+  peek-byte -> Option Byte
+  port-open? -> Bool
+```
+
+The foreign type's structure is defined by what you can observe, not by
+how it's constructed. The SRE decomposes `RacketPort` into its
+observation interface. This gives structural reasoning about foreign
+types without needing their internal representation.
+
+**Connection to fixpoint modalities**: Inductive types pair with `:lfp`
+stratifications (well-founded recursion). Coinductive types pair with
+`:gfp` stratifications (productive corecursion). The `stratification`
+form's `:fixpoint` keyword directly reflects this duality.
+
+## 11. Additional Sources of Structural Information
+
+Beyond type definitions, two other systems provide structural knowledge
+that the SRE can ingest:
+
+### 11.1 NF-Narrowing
+
+NF-narrowing analysis reveals what constructors a function can produce
+in normal form. If `f : Nat -> List Nat` always produces `cons` (never
+`nil`), the SRE knows:
+- Decomposing the output of `f` into head/tail is always safe
+- The `nil` branch of a match on `[f n]` is dead code
+- The output type is refined: `NonEmptyList Nat`
+
+This is structural inference from definition — dual to the coinductive
+approach (structural inference from usage/observation).
+
+### 11.2 Usage-Based Inference
+
+For types without explicit structure (foreign types without `codata`
+declarations), the compiler can infer structure from usage patterns:
+if code always accesses `foo.bar` and `foo.baz`, the type has at least
+those two observations. This is the weakest form of structural
+information but provides a safety net for untyped foreign interop.
+
+## 12. Vision: First-Class Networks and Phase Unification
+
+### 12.1 First-Class Networks
+
+The polynomial functor `interface` type makes networks safe to treat
+as first-class values:
+- **Pass**: A function taking `Network AdderNet` as argument
+- **Compose**: `connect` wires outputs to inputs with type checking
+- **Share**: Send a network over a session channel:
+  `Send [Network SolverNet] ; S`
+- **Distribute**: Networks on different machines propagate via distributed
+  cells. Lattice merge is commutative and associative — order of arrival
+  doesn't matter (CALM theorem: monotone = coordination-free)
+
+Our session types (`proc` language) and first-class propagator networks
+together enable distributed computing paradigms where networks are shared,
+composed, and computed over. The combinatorial richness — first-class
+channels × types × sessions × prop-nets — is precisely what the NTT type
+discipline controls. Without types, that explosion is chaos. With types,
+it's composable power.
+
+### 12.2 Compile-Time / Runtime Unification
+
+Propagators dissolve the hard phase distinction between compilation and
+execution:
+- **At compile time**: Cells hold partial information (metas, constraints).
+  Propagation infers types and resolves traits.
+- **At runtime**: Cells hold ground values. Propagation computes results.
+- **Same mechanism**: Both are propagation to fixpoint on a lattice. The
+  difference is the lattice (type vs value) and information availability.
+
+This means gradual typing is natural (cells on the partial→ground
+spectrum), runtime type checking is just propagation (`(the Int x)`
+installs a type propagator), and AOT guarantees compose monotonically
+with runtime flexibility. The propagator paradigm doesn't bridge static
+and dynamic — it makes them the same thing at different points on the
+information lattice.
+
+## 13. Design Unknowns
 
 ### 10.1 Known Unknowns
 
@@ -454,16 +678,16 @@ support the derive-by-default path while allowing escape hatches.
    a type-checking stratification with an effect-checking stratification)?
    Is this a product in the category of stratifications?
 
-## 11. Progressive Disclosure Summary
+## 14. Progressive Disclosure Summary
 
 | Layer | What the user writes | Categorical content (invisible) |
 |-------|---------------------|-------------------------------|
 | 1 | `trait Lattice`, `impl Lattice Color`, `propagator add-prop` | Lattice theory, polynomial summands, monotonicity |
-| 2 | `schema AdderNet`, `network combined`, `embed`, `connect` | Polynomial functor composition, typed wiring |
-| 3 | `bridge TypeToMult`, `stratification ElabLoop`, `exchange` | Galois connections, Grothendieck fibrations, Kan extensions |
-| 4 | `:preserves [Tensor Trace]`, `:where [WellFounded]`, full specs | Quantale morphisms, traced monoidal structure, proof terms |
+| 2 | `interface AdderNet`, `network combined`, `embed`, `connect` | Polynomial functor composition, typed wiring |
+| 3 | `bridge TypeToMult`, `stratification ElabLoop`, `exchange`, `codata` | Galois connections, Grothendieck fibrations, Kan extensions, M-types |
+| 4 | `:preserves [Tensor Trace]`, `:fixpoint :gfp`, `:where [WellFounded]` | Quantale morphisms, coinductive types, traced monoidal structure |
 
-## 12. Next Steps
+## 15. Next Steps
 
 1. **Continue design iteration**: Address open questions through discussion.
    Target ~90% clarity before case studies.
@@ -481,7 +705,7 @@ support the derive-by-default path while allowing escape hatches.
 4. **Toplevel Forms Reference update**: Add finalized NTT forms to
    `TOPLEVEL_FORMS_REFERENCE.org`.
 
-## 13. Source Documents
+## 16. Source Documents
 
 | Document | Relationship |
 |----------|-------------|
