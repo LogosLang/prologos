@@ -1,0 +1,699 @@
+#+TITLE: Prologos Toplevel Forms Reference
+#+SUBTITLE: Config Language, Keywords, and Metadata for All Surface Forms
+#+AUTHOR: The Prologos Project
+#+DATE: 2026-03-22
+
+* Purpose
+
+This document is the single reference for ALL toplevel forms in Prologos
+that carry keyword metadata (the "config language"). Each form's available
+keywords, their types, defaults, and implementation status are documented
+here.
+
+Consult this document to answer: "What keywords does =spec= accept?",
+"What metadata can I put on a =trait=?", "Is =:laws= implemented?"
+
+Forms are organized by domain. Implementation status uses:
+- *Implemented* (I): Parsed, elaborated, type-checked in WS-mode
+- *Parsed only* (P): Sexp parsing exists, WS-mode or elaboration incomplete
+- *Designed* (D): In a design document, not yet in the parser
+- *Research* (R): Proposed in research/NTT, no grammar entry yet
+
+* Functional Core
+
+** =spec= — Function Type Signature
+
+Declares the type signature for a function. The primary carrier of
+metadata in the language.
+
+#+begin_example
+spec sort {A : Type} [List A] -> [List A]
+  :where [Ord A]
+  :doc "Sorts a list in ascending order"
+  :examples
+    - [sort '[3 1 2]] => '[1 2 3]
+  :properties [sortable-laws A]
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:where= | =[Constraint ...]= | none | I | Trait constraints on type parameters |
+| =:doc= | =String= | none | I | Documentation string |
+| =:examples= | =[(input => output) ...]= | none | I | Input/output pairs for auto-test generation |
+| =:properties= | =[PropertyRef ...]= | none | P | References to =property= groups that hold for this function |
+| =:see-also= | =[Symbol ...]= | none | P | Related function names |
+| =:pre= | =Expr= | none | D | Precondition expression (Extended Spec Phase 3) |
+| =:post= | =Expr= | none | D | Postcondition expression (Extended Spec Phase 3) |
+| =:refines= | =Symbol= | none | D | Reference to a verified/refined implementation |
+| =:instrument= | =Bool= | =false= | D | Enable contract enforcement at runtime |
+| =:implicits= | ={A B : Type}= | inferred | I | Explicit implicit binder specification |
+
+*Source*: =macros.rkt= ~line 3086 (=parse-spec-metadata=), struct =spec-entry= ~line 439.
+*Grammar*: =grammar.org= lines 806-877. *Design*: Extended Spec Design (2026-02-22).
+
+** =defn= — Function Implementation
+
+Implements a function declared by =spec=. Carries no metadata of its own
+(metadata lives on =spec=). Multi-arity dispatch via =|= patterns.
+
+#+begin_example
+defn sort
+  | '[]        -> '[]
+  | [cons h t] -> [insert h [sort t]]
+#+end_example
+
+*Status*: I. *Source*: =macros.rkt=.
+
+** =def= — Value Binding
+
+Top-level value binding. Minimal metadata (type annotation only).
+
+#+begin_example
+def greeting : String := "hello"
+def answer := 42                    ;; type inferred
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:= | =Type= | inferred | I | Type annotation |
+| =:=​== | =Expr= | required | I | Binding operator (value) |
+
+*Status*: I. *Source*: =macros.rkt=.
+
+* Type System Forms
+
+** =type= / =data= — Algebraic Data Types
+
+Declares a new type with constructors.
+
+#+begin_example
+type Color := red | green | blue
+data Tree A := leaf A | branch [Tree A] [Tree A]
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:=​== | constructors | required | I | Constructor list |
+| =:deriving= | =[Trait ...]= | none | D | Auto-derive trait instances |
+
+*Status*: I (core); =:deriving= is D. *Source*: =macros.rkt=.
+
+** =subtype= — Subtype Relationship
+
+Declares a subtype relationship with transitive closure at registration.
+
+#+begin_example
+subtype PosInt Int
+subtype Zero Int :via zero-to-int
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:via= | =Symbol= | auto-inferred | I | Coercion function |
+
+*Status*: I. *Design*: Refined Numeric Subtyping (2026-02-27).
+
+* Trait System
+
+** =trait= — Type Class Declaration
+
+Declares a type class with method signatures and optional laws.
+
+#+begin_example
+trait Functor {F : Type -> Type}
+  :laws [functor-laws F]
+  spec fmap {A B : Type} [A -> B] -> [F A] -> [F B]
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:laws= | =[PropertyRef ...]= | none | P | References to =property= groups defining algebraic laws |
+| =:where= | =[Constraint ...]= | none | D | Constraints on type parameters (superclass constraints) |
+| =:extends= | =[Trait ...]= | none | D | Superclass hierarchy (alternative to =:where=) |
+| =:doc= | =String= | none | P | Documentation |
+
+*Note*: =:laws= is parsed and stored but not yet verified against
+implementations. When =property= elaboration is complete, =impl= blocks
+will be checked against trait laws automatically.
+
+*Status*: I (core); =:laws= is P; =:where=, =:extends= are D.
+*Source*: =macros.rkt=. *Design*: First-Class Traits (2026-03-09).
+
+** =impl= — Trait Implementation
+
+Implements a trait for a specific type. Method bodies are pattern-matched
+by name against the trait's =spec= signatures.
+
+#+begin_example
+impl Eq Color
+  eq?
+    | x x -> true
+    | _ _ -> false
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| (none currently) | — | — | — | Method names matched positionally |
+
+*Note*: The implicit-=defn= syntax (method name directly, no =defn=
+keyword) is the target ergonomic form. Currently requires =defn= in sexp
+mode.
+
+*Status*: I. *Source*: =macros.rkt= struct =impl-entry= ~line 6080.
+
+** =bundle= — Named Trait Conjunction
+
+Groups multiple traits into a single name for convenience.
+
+#+begin_example
+bundle Num := (Add Sub Mul Neg Abs FromInt)
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:=​== | =(Trait ...)= | required | I | Constituent traits |
+
+*Status*: I. *Source*: =macros.rkt= struct =bundle-entry= ~line 6262.
+
+* Property System
+
+** =property= — Named Proposition Group
+
+Declares a group of named propositions (laws) that can be referenced by
+=spec :properties= and =trait :laws=.
+
+#+begin_example
+property sortable-laws {A : Type}
+  :where [Ord A]
+  :includes [permutation-laws A]
+  - :name "idempotent"
+    :forall {xs : [List A]}
+    :holds [eq? [sort [sort xs]] [sort xs]]
+  - :name "length-preserving"
+    :forall {xs : [List A]}
+    :holds [eq? [length [sort xs]] [length xs]]
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:where= | =[Constraint ...]= | none | P | Constraints on type parameters |
+| =:includes= | =[PropertyRef ...]= | none | P | Compose other property groups (set union) |
+
+*Clause-level keywords*:
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:name= | =String= | required | P | Human-readable label for this proposition |
+| =:forall= | ={bindings}= | none | P | Universally quantified variables |
+| =:holds= | =Expr= | required | P | Boolean expression that must hold |
+
+*Status*: P (sexp parsing complete, WS-mode preparse not wired, elaboration
+hooks incomplete). *Source*: =macros.rkt= struct =property-entry= ~line
+7343. *Design*: Extended Spec Design (2026-02-22) Part IV.
+
+* Type Abstraction
+
+** =functor= — Named Type Abstraction
+
+Declares a named, composable type abstraction with category-theoretic
+metadata. Used for optics (Lens, Prism), transducers (Xf), and other
+compositional patterns.
+
+#+begin_example
+functor Xf {A B : Type}
+  :doc "A transducer: transforms A-reductions into B-reductions"
+  :unfolds <(S :0 Type) -> [S -> B -> S] -> S -> A -> S>
+  :compose xf-compose
+  :identity id-xf
+  :laws [transducer-fusion-laws A B]
+  :see-also [map-xf filter-xf take-xf]
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:unfolds= | =Type= | required | P | Transparent expansion type |
+| =:compose= | =Symbol= | none | P | Composition function (=functor . functor -> functor=) |
+| =:identity= | =Symbol= | none | P | Identity element |
+| =:laws= | =[PropertyRef ...]= | none | D | Property groups (composition laws) |
+| =:doc= | =String= | none | P | Documentation |
+| =:see-also= | =[Symbol ...]= | none | P | Related functors |
+| =:transforms= | =Functor= | none | D | Natural transformation target |
+| =:adjoint= | =Functor= | none | R | Adjoint functor (far future) |
+
+*Status*: P (sexp parsing complete, WS-mode preparse not wired).
+*Source*: =macros.rkt= struct =functor-entry= ~line 7615.
+*Design*: Extended Spec Design (2026-02-22) Part VII.
+
+* Data Schema
+
+** =schema= — Typed Record Shape
+
+Declares a typed record schema with per-field metadata.
+
+#+begin_example
+schema Config
+  :host String :default "localhost"
+  :port Nat    :default 8080N :check [pos?]
+  :debug Bool  :default false
+  :closed
+#+end_example
+
+| Keyword (schema-level) | Type | Default | Status | Description |
+|-------------------------+------+---------+--------+-------------|
+| =:closed= | flag | open | P | Reject unknown fields |
+
+| Keyword (field-level) | Type | Default | Status | Description |
+|-----------------------+------+---------+--------+-------------|
+| =:default= | =Expr= | none | P | Default value for field |
+| =:check= | =Fn= | none | D | Validation predicate |
+
+*Status*: P (sexp parsing complete, WS via implicit-map works partially).
+*Source*: =macros.rkt= struct =schema-field= ~line 728.
+*Design*: Schema/Selection Design (2026-03-02).
+
+** =selection= — Field-Level Access Policy
+
+Declares required/provided fields for a schema, enabling row-polymorphic
+access control.
+
+#+begin_example
+selection user-login :from User
+  :requires [:id :email :password]
+  :provides [:auth-token]
+  :includes [base-auth-selection]
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:from= | =Schema= | required | D | Parent schema |
+| =:requires= | =[Keyword ...]= | none | D | Required field paths |
+| =:provides= | =[Keyword ...]= | none | D | Guaranteed field paths |
+| =:includes= | =[Selection ...]= | none | D | Compose other selections |
+| =:properties= | =[PropertyRef ...]= | none | D | Schema-level invariants |
+
+*Status*: D (design complete, not in grammar).
+*Design*: Schema/Selection Design (2026-03-02) §3.2-4.12.
+
+* Module System
+
+** =ns= — Namespace Declaration
+
+Declares the namespace for a file with optional prelude control.
+
+#+begin_example
+ns my-project.utils
+ns prologos.data.list :no-prelude
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:no-prelude= | flag | prelude ON | I | Opt out of auto-imported prelude |
+
+*Status*: I. *Source*: =namespace.rkt=.
+
+* Session Types
+
+** =session= — Protocol Type Declaration
+
+Declares a session type (communication protocol) with WS operators.
+
+#+begin_example
+session login-protocol
+  :doc "Two-phase login with error handling"
+  ! UserCredentials
+  ? Bool
+  | true  -> ! AuthToken . end
+  | false -> ! ErrorMsg  . end
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:doc= | =String= | none | P | Documentation |
+| =:deprecated= | =String= | none | D | Deprecation notice |
+| =:throws= | =[Type ...]= | none | D | Exception types |
+| =:linear= | flag | linear | D | Linearity constraint (default: linear) |
+
+*WS Operators* (within session body):
+
+| Operator | Meaning | Status |
+|----------+---------+--------|
+| =!= | Send | P |
+| =?= | Receive | P |
+| =\vert= | Branch/choice | P |
+| =.= | Continuation (single-line) | P |
+| =end= | Termination | P |
+| =&= | Selection (far future) | D |
+
+*Status*: P (sexp IR complete, WS operators tokenized, declaration form
+incomplete). *Design*: Session Type Design (2026-03-03).
+
+** =defproc= — Named Process Definition
+
+Defines a process that implements a session protocol.
+
+#+begin_example
+defproc login-server
+  :protocol login-protocol
+  :dual server-side
+  [state : LoginState]
+  ...body...
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:protocol= | =Session= | required | D | Session type this process implements |
+| =:dual= | =Symbol= | none | D | Dual protocol perspective |
+
+*Status*: D (design complete, no grammar entry).
+*Design*: Session Type Design (2026-03-03).
+
+** =strategy= — Execution Strategy
+
+Declares a scheduling/execution strategy with arbitrary config.
+
+#+begin_example
+strategy fast-path
+  :max-retries 10
+  :timeout 100
+  :backoff exponential
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =(arbitrary)= | =Any= | — | P | User-defined key-value properties |
+
+*Status*: P (sexp parsing exists, WS not wired).
+*Design*: Session Type Design (2026-03-03) §11.
+
+* Logic Engine
+
+** =defr= — Named Relation
+
+Defines a relation (logic program) with facts and rules.
+
+#+begin_example
+defr parent [?x ?parent]
+  || facts ||
+    ('alice' 'bob')
+    ('bob' 'charlie')
+  &> rules &>
+    parent ?x ?z &> parent ?z ?y &> (! [parent ?x ?y])
+#+end_example
+
+*WS Operators*:
+
+| Operator | Meaning | Status |
+|----------+---------+--------|
+| =\vert\vert= | Fact block sentinel | P |
+| =&>= | Rule clause separator | P |
+| =\vert= | Goal conjunction | P |
+| =!= | Assert (cut) | P |
+
+*Status*: P (sexp parsing complete, WS operators tokenized, elaboration
+incomplete). *Design*: Logic Engine Design (2026-02-24), Relational
+Surface (2026-02-25).
+
+** =solver= — Solver Configuration
+
+Declares a named solver with scheduling and resource configuration.
+
+#+begin_example
+solver my-solver
+  :scheduler bsp
+  :fuel 10000
+  :strategy round-robin
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:scheduler= | =Symbol= | =:auto= | P | Scheduling algorithm (=bsp=, =gauss-seidel=, =:auto=) |
+| =:fuel= | =Nat= | =1000= | P | Maximum reduction steps |
+| =:strategy= | =Symbol= | =:dfs= | P | Search strategy (=dfs=, =bfs=, =round-robin=) |
+
+*Status*: P (sexp parsing exists, WS not wired, dispatch not complete).
+*Design*: Logic Engine Design (2026-02-24) §7.6.2.
+
+** =solve= / =solve-one= / =solve-with= — Query Forms
+
+Executes a logic query against the current relation database.
+
+#+begin_example
+solve (parent ?x 'bob')             ;; all solutions
+solve-one (parent ?x 'bob')         ;; first solution
+solve-with my-solver (parent ?x 'bob')
+#+end_example
+
+*Status*: P (sexp parsing complete, WS not designed).
+*Design*: Logic Engine Design (2026-02-24).
+
+** =explain= / =explain-one= — Provenance Queries
+
+Like =solve= but returns bindings + ATMS derivation tree.
+
+*Status*: P (mirrors =solve= forms).
+*Design*: Explain/Provenance Design (2026-03-14).
+
+* Capability System
+
+** =capability= — Capability Type Declaration
+
+Declares a capability type (QTT :0 erased by default).
+
+#+begin_example
+capability FileRead [path : Path]
+capability NetworkAccess [host : String, port : Nat]
+#+end_example
+
+*Status*: P (parsing exists, capability inference infrastructure in place
+but integration hooks incomplete).
+*Design*: Capabilities as Types (2026-03-01).
+
+* Foreign Function Interface
+
+** =foreign= — Foreign Binding
+
+Imports a Racket-side function with type annotation.
+
+#+begin_example
+foreign int+ : Int Int -> Int
+foreign string-length : String -> Int
+#+end_example
+
+*Status*: I. *Source*: =foreign.rkt=.
+
+* Propagator Network Types (NTT — Research/Future)
+
+These forms are proposed by the NTT (Network Type Theory) research program.
+None have grammar entries yet. See the [[file:MASTER_ROADMAP.org][Master Roadmap]] NTT Series.
+
+** =propagator= — Propagator Type Declaration (R)
+
+#+begin_example
+propagator add-prop
+  :reads  [Cell NatLattice] [Cell NatLattice]
+  :writes [Cell NatLattice]
+  :stratum S0
+  ;; Monotone implicit (safe default)
+  [plus [read x] [read y]]
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:reads= | =[Cell L ...]= | required | R | Input cells with lattice types |
+| =:writes= | =[Cell L ...]= | required | R | Output cells with lattice types |
+| =:stratum= | =Stratum= | none | R | Which stratum this fires in |
+| =:non-monotone= | flag | monotone | R | Opt out of implicit Monotone constraint |
+| =:form= | =Symbol= | none | R | SRE form registry: constructor this handles |
+| =:components= | =[Symbol ...]= | none | R | Named sub-cells for SRE decomposition |
+
+** =network= — Network Composition (R)
+
+#+begin_example
+network combined : CombinedNet
+  embed adder1 : AdderNet
+        adder2 : AdderNet
+  connect a -> adder1.x
+          b -> adder1.y
+          adder1.sum -> adder2.x
+          c -> adder2.y
+          adder2.sum -> result
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =embed= | =Name : Schema= | — | R | Instantiate sub-network |
+| =connect= | =Cell -> Cell= | — | R | Wire outputs to inputs (type-checked) |
+
+** =bridge= — Galois Connection (R)
+
+#+begin_example
+bridge TypeToMult
+  :from TypeLattice
+  :to   MultLattice
+  :alpha type->mult-alpha
+  :gamma mult->type-gamma
+  ;; Adjunction implicit (safe default)
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:from= | =Lattice= | required | R | Source lattice domain |
+| =:to= | =Lattice= | required | R | Target lattice domain |
+| =:alpha= | =Fn= | required | R | Abstraction function (L -> M) |
+| =:gamma= | =Fn= | required | R | Concretization function (M -> L) |
+| =:galois-insertion= | flag | adjunction | R | Weaker: one direction exact, other approximate |
+
+** =stratification= — Declarative Stratum Configuration (R)
+
+#+begin_example
+stratification ElabLoop
+  :strata [S-neg1 S0 S1 S2]
+  :fiber S0
+    :mode monotone
+    :bridges [TypeToSession TypeToMult]
+  :fiber S1
+    :mode monotone
+  :interaction S0 <-> S1
+    :speculative partial-fixpoint -> approximate-result
+    :demand     needed-cells -> targeted-thresholds
+  :barrier S2 -> S-neg1
+    :commit resolve-and-retract
+  :fuel 100
+  :where [WellFounded ElabLoop]
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:strata= | =[Stratum ...]= | required | R | Ordered stratum list |
+| =:fiber= | =Stratum= block | — | R | Per-stratum configuration |
+| =:mode= | =Symbol= | =monotone= | R | =monotone= / =retraction= / =commit= |
+| =:bridges= | =[Bridge ...]= | none | R | Bridges that fire in this stratum |
+| =:networks= | =[Network ...]= | none | R | Sub-networks in this stratum |
+| =:interaction= | =S <-> S= block | none | R | Inter-stratum Kan extension |
+| =:speculative= | =Fn= | none | R | Left Kan (forward partial results) |
+| =:demand= | =Fn= | none | R | Right Kan (demand-driven thresholds) |
+| =:barrier= | =S -> S= | none | R | Non-monotone transition |
+| =:commit= | =Fn= | none | R | Barrier action |
+| =:fuel= | =Nat= | required | R | Maximum iteration fuel |
+| =:where= | =[Constraint ...]= | none | R | Well-foundedness, other constraints |
+
+** =form= — SRE Structural Form Registration (R)
+
+#+begin_example
+form Pi : TypeLattice
+  :components [domain : TypeLattice, codomain : TypeLattice]
+  decompose [cell]
+    ...extract domain and codomain sub-cells...
+  reconstruct [domain codomain]
+    [make-pi domain codomain]
+#+end_example
+
+| Keyword | Type | Default | Status | Description |
+|---------+------+---------+--------+-------------|
+| =:components= | =[name : Lattice ...]= | required | R | Named sub-cells with lattice types |
+| =decompose= | =Fn= | required | R | Cell -> sub-cells extraction |
+| =reconstruct= | =Fn= | required | R | Sub-cells -> cell composition |
+
+* Cross-Reference: Keyword Index
+
+| Keyword | Forms | Domain |
+|---------+-------+--------|
+| =:alpha= | =bridge= | NTT |
+| =:check= | =schema= (field) | Data |
+| =:closed= | =schema= | Data |
+| =:commit= | =stratification= barrier | NTT |
+| =:components= | =propagator=, =form= | NTT |
+| =:compose= | =functor= | Abstraction |
+| =:default= | =schema= (field) | Data |
+| =:demand= | =stratification= interaction | NTT |
+| =:deprecated= | =session= | Session |
+| =:doc= | =spec=, =functor=, =session=, =trait= | General |
+| =:dual= | =defproc= | Session |
+| =:examples= | =spec= | Functional |
+| =:extends= | =trait= | Traits |
+| =:fiber= | =stratification= | NTT |
+| =:form= | =propagator= | NTT |
+| =:forall= | =property= clause | Property |
+| =:from= | =selection=, =bridge= | Data / NTT |
+| =:fuel= | =solver=, =stratification= | Logic / NTT |
+| =:galois-insertion= | =bridge= | NTT |
+| =:gamma= | =bridge= | NTT |
+| =:holds= | =property= clause | Property |
+| =:identity= | =functor= | Abstraction |
+| =:implicits= | =spec= | Functional |
+| =:includes= | =property=, =selection= | Property / Data |
+| =:instrument= | =spec= | Functional |
+| =:interaction= | =stratification= | NTT |
+| =:laws= | =trait=, =functor= | Traits / Abstraction |
+| =:linear= | =session= | Session |
+| =:mode= | =stratification= fiber | NTT |
+| =:name= | =property= clause | Property |
+| =:no-prelude= | =ns= | Module |
+| =:non-monotone= | =propagator= | NTT |
+| =:post= | =spec= | Functional |
+| =:pre= | =spec= | Functional |
+| =:properties= | =spec=, =selection= | Functional / Data |
+| =:protocol= | =defproc= | Session |
+| =:provides= | =selection= | Data |
+| =:reads= | =propagator= | NTT |
+| =:refines= | =spec= | Functional |
+| =:requires= | =selection= | Data |
+| =:scheduler= | =solver= | Logic |
+| =:see-also= | =spec=, =functor= | General |
+| =:speculative= | =stratification= interaction | NTT |
+| =:strata= | =stratification= | NTT |
+| =:strategy= | =solver= | Logic |
+| =:stratum= | =propagator= | NTT |
+| =:throws= | =session= | Session |
+| =:to= | =bridge= | NTT |
+| =:unfolds= | =functor= | Abstraction |
+| =:via= | =subtype= | Types |
+| =:where= | =spec=, =trait=, =property=, =stratification= | General |
+| =:writes= | =propagator= | NTT |
+
+* Design Pattern: The Config Language
+
+All metadata-carrying forms follow the same structural pattern:
+
+#+begin_example
+<form-keyword> <name> [<type-params>] [<positional-args>]
+  :<keyword1> <value1>
+  :<keyword2> <value2>
+           <continuation-value>
+  <body>
+#+end_example
+
+*Parsing infrastructure*:
+- =keyword-like-symbol?= (macros.rkt ~line 330): Classifies =:foo= tokens
+- =flatten-ws-kv-pairs= (macros.rkt ~line 2272): Normalizes WS-reader
+  sub-lists for keyword-value forms
+- =rewrite-implicit-map= (macros.rkt ~line 2452): Detects keyword-headed
+  children, wraps as =$brace-params=
+- =parse-spec-metadata= (macros.rkt ~line 3086): Extracts =:key value=
+  pairs into hasheq
+- =split-session-metadata= (macros.rkt ~line 1258): Extracts leading
+  metadata from body items
+
+*Design principles*:
+- *Minimal syntax*: The 80% use case requires no annotation. Safe defaults
+  are implicit; exceptions are explicit.
+- *Block grouping*: Multiple values under one keyword use indentation, not
+  repeated keyword prefixes (e.g., =:where= with indented constraints).
+- *Forward compatibility*: Unrecognized keywords are stored but not acted
+  upon, allowing future extensions without breaking existing code.
+- *Progressive disclosure*: Simple forms look simple. Metadata reveals
+  complexity gradually. Layer 1 users never see =:laws= or =:where=.
+
+* Source Documents
+
+| Document | Date | Forms Defined |
+|----------+------+---------------|
+| Grammar (=grammar.ebnf= + =grammar.org=) | ongoing | All implemented forms |
+| [[file:2026-02-22_EXTENDED_SPEC_DESIGN.md][Extended Spec Design]] | 2026-02-22 | =property=, =functor=, extended =spec= metadata |
+| [[file:2026-03-09_FIRST_CLASS_TRAITS_STAGE3_DESIGN.md][First-Class Traits]] | 2026-03-09 | =trait=, =impl=, =bundle=, =schema=, =spec=, =defn= surface |
+| [[file:2026-03-02_2200_SCHEMA_SELECTION_DESIGN.md][Schema/Selection]] | 2026-03-02 | =schema=, =selection=, path algebra |
+| [[file:2026-03-03_SESSION_TYPE_DESIGN.md][Session Types]] | 2026-03-03 | =session=, =defproc=, =proc=, =strategy=, WS operators |
+| [[file:2026-02-24_LOGIC_ENGINE_DESIGN.md][Logic Engine]] | 2026-02-24 | =defr=, =rel=, =solve=, =explain=, =solver= |
+| [[file:2026-03-01_1500_CAPABILITIES_AS_TYPES_DESIGN.md][Capabilities as Types]] | 2026-03-01 | =capability= |
+| [[file:2026-02-25_PHASE7_RELATIONAL_SURFACE.md][Relational Surface]] | 2026-02-25 | =defr=, =rel= WS operators |
+| [[file:MASTER_ROADMAP.org][Master Roadmap (NTT)]] | 2026-03-22 | =propagator=, =network=, =bridge=, =stratification=, =form= |
