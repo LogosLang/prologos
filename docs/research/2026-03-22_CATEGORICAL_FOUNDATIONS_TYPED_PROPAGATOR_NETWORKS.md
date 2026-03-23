@@ -566,7 +566,67 @@ functor structure is an open question. One possibility: e-classes are
 polynomial functors with position equivalence (positions in the same
 e-class are identified), and saturation is the colimit over rewrite rules.
 
-### 9.5 Tropical Semiring and Optimization
+### 9.5 Structural Decomposition: Derived, Not Declared
+
+The SRE form registry (§7.1) was initially conceived as a manually-populated
+catalog of polynomial summands. But type constructors already carry their
+decomposition structure: `data Pi := pi [domain : Type] [codomain : Type]`
+specifies that Pi decomposes into domain and codomain. The SRE should
+*derive* decomposition propagators from type definitions, not require
+separate `form` declarations.
+
+Lattices are tree-like structures. In polynomial functor theory, they
+correspond to M-types (initial algebras of polynomial endofunctors). The
+type constructors are the polynomial's summands. Decomposition is inherent
+in the type definition — it need not be re-declared.
+
+Where explicit registration may still be needed: cross-domain decomposition
+(e.g., `List Int` → `Indexed List Int` for trait resolution) that isn't
+derivable from the type's own constructor. But this is a bridge concern,
+not a structural form concern.
+
+**Open question**: Can we make SRE form derivation fully automatic from
+type definitions? What edge cases require explicit registration? This
+is a key design question for SRE Series Track 0 (Form Registry).
+
+### 9.6 Extended Adjunction Catalog
+
+Beyond Galois connections (bridges) and Kan extensions (inter-stratum
+exchange), several other adjunctions appear relevant to our architecture:
+
+| Adjunction | Left | Right | Potential application |
+|-----------|------|-------|---------------------|
+| Galois connection | α (abstraction) | γ (concretization) | Bridges between lattice domains |
+| Lan ⊣ Ran | Speculative forwarding | Demand-driven | Inter-stratum exchange |
+| Free ⊣ Forgetful | Free construction | Forget structure | Auto-derived trait instances (`impl Eq` from `data` definition) |
+| ∃ ⊣ Reindex ⊣ ∀ | Existential | Universal | Dependent types (Pi/Sigma); implicit argument resolution |
+| Curry ⊣ Eval | Currying | Evaluation | Higher-order propagators; network templates as first-class values |
+| Suspension ⊣ Loop | Suspend computation | Resume/loop | Inductive stratification (NAF-LE growing strata) |
+
+**Free ⊣ Forgetful**: When we auto-derive `impl Eq Color` from
+`data Color := red | green | blue`, we construct the *free* Eq algebra
+over Color's constructors. This could be formalized as the left adjoint
+of the forgetful functor from Eq-algebras to types. This would give
+automatic derivation a categorical foundation and potentially improve
+how the trait resolution system handles derived instances.
+
+**Traced monoidal and provenance**: If we make most domains into traced
+monoidal categories (adding a trace/feedback operation), provenance
+collection becomes a *natural transformation* — the trace records the
+information flow path. This could formalize the explain/provenance system
+more precisely than the current ad-hoc ATMS derivation tree approach.
+
+**Suspension ⊣ Loop for inductive stratification**: NAF-LE's growing
+strata (stratum n triggers recomputation in stratum n+1) is a Suspension
+⊣ Loop adjunction. The suspension functor "pauses" the current stratum;
+the loop functor "resumes" with the negated atom. This gives inductive
+stratification (`:recurse` in the NTT syntax) a categorical foundation
+distinct from fixed stratification (`:fixed` strata).
+
+**Open question**: Which of these adjunctions should be first-class in
+the NTT type system, vs. derivable from simpler primitives?
+
+### 9.7 Tropical Semiring and Optimization
 
 The proposed tropical semiring optimization layer (min-plus algebra for
 cost-based e-graph extraction) introduces a second quantale enrichment
