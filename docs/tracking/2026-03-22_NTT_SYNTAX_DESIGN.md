@@ -3,7 +3,7 @@
 **Stage**: 1 (Design Discussion)
 **Date**: 2026-03-22
 **Series**: NTT Research Document 2 / SRE Series
-**Status**: Active design discussion. ~80-85% clarity. Design iteration round 2 incorporated. Case studies pending at ~90%.
+**Status**: Active design discussion. ~85-90% clarity. Architecture survey completed, 5 gaps identified and resolved. Deep case study (NF-Narrowing) pending.
 
 ## 1. Purpose
 
@@ -39,13 +39,26 @@ The design is informed by:
 | `stratification` | 5 | Declarative config + solver + fixpoint modalities | New |
 | `exchange` | 6 | Inter-stratum adjunction (Kan, Free/Forgetful, etc.) | New |
 | `codata` | — | Coinductive type definition (observations, not constructors) | New |
+| `newtype` | — | Zero-cost type wrapper (bilattice orderings, etc.) | New |
 
-**Not a form**: SRE structural decomposition — derived from `data`/`codata`/type definitions + NF-narrowing. See §9.
+**Not a form**: SRE structural decomposition — derived from `data`/`codata`
+type definitions (`:lattice :structural`) + NF-narrowing. See §9.
+Dynamic propagator installation handled by SRE, not by individual propagators.
 
 ## 3. Level 0: Lattice Types
 
-Lattices are expressed via the existing `trait`/`impl` machinery. No new
-toplevel form needed.
+The architecture survey (NTT Doc 3) revealed a fundamental split: three
+of seven systems have lattice merges that create sub-cells and install
+propagators (TypeExpr, TermValue, SessionExpr). These are NOT pure
+`join : L L -> L` functions — they're network transformations. The SRE
+handles these automatically via structural decomposition.
+
+This splits Level 0 into two kinds:
+
+### 3.1 Value Lattices (pure join)
+
+Simple lattices with pure merge functions: flat lattices, finite chains,
+boolean lattices. These get `impl Lattice` with a normal join.
 
 ```prologos
 trait Lattice {L : Type}
@@ -68,6 +81,21 @@ trait Quantale {L : Type}
 ```
 
 ```prologos
+;; Value lattice — pure join
+type MultExpr := mult-bot | m0 | m1 | mw | mult-top
+
+impl Lattice MultExpr
+  join
+    | mult-bot x -> x
+    | x mult-bot -> x
+    | x x        -> x
+    | _ _        -> mult-top
+  bot -> mult-bot
+
+impl Quantale MultExpr
+  tensor [a b] [mult-times a b]
+
+;; Value lattice — finite enumeration
 type Color := red | green | blue | unknown | mixed
 
 impl Lattice Color
@@ -79,35 +107,92 @@ impl Lattice Color
   bot -> unknown
 ```
 
-**Design notes**:
-- `:where` constraints are property/law obligations. The compiler verifies
-  for finite types (exhaustive case analysis) or requires proof terms.
-- `Quantale` extends `Lattice` with a tensor operation. Bridges that
-  preserve tensor structure are quantale morphisms (see §7 `:preserves`).
-- `:where` uses block syntax: one keyword, indented constraints.
+### 3.2 Structural Lattices (SRE-derived merge)
 
-**Resolved**: `:where` is the universal catch-all for constraints, laws,
-and property obligations. `property` is a *definition form* that names
-a reusable group of constraints. `:where` is the *usage site* — it can
-reference named property groups OR contain inline constraints:
+Types whose merge involves structural decomposition into sub-cells.
+These DON'T get `impl Lattice` with a manual join. Instead, their
+type definitions carry the structural information, and the SRE provides
+merge as a network operation — automatically derived from constructors.
 
 ```prologos
-;; Named property group (reusable)
+;; Structural lattice — SRE handles merge
+;; The constructors' fields ARE the polynomial summands
+data TypeExpr
+  := type-bot
+   | type-top
+   | expr-pi [domain : TypeExpr] [codomain : TypeExpr]
+   | expr-sigma [fst : TypeExpr] [snd : TypeExpr]
+   | expr-app [fn : TypeExpr] [arg : TypeExpr]
+   | ...
+  :lattice :structural
+  :bot type-bot
+  :top type-top
+```
+
+The `:lattice :structural` annotation says: "this type's merge semantics
+are structural decomposition." The SRE knows: `Pi` decomposes into
+`domain` and `codomain`; merging two `Pi` values means unifying their
+sub-fields via sub-cells. Merging `Pi` with `Sigma` = `type-top`
+(contradiction). Merging `type-bot` with anything = that thing.
+
+**Three systems use structural lattices**: TypeExpr, TermValue,
+SessionExpr. All three exhibit the same pattern — merge creates sub-cells
+and installs propagators. The SRE handles all three uniformly.
+
+**This eliminates three survey gaps**: Structural merge creating
+propagators, dynamic propagator installation, and higher-order network
+operations are all "the SRE doing its job." The NTT doesn't need
+`:dynamic` flags or `propagator-template` — it types the SRE by
+distinguishing structural from value lattices.
+
+### 3.3 Bilattices (two orderings via `newtype`)
+
+WF-LE needs two orderings (knowledge, truth) on the same carrier.
+Resolved via `newtype` wrappers that give distinct types for each
+ordering:
+
+```prologos
+type BilatticeValue := bl-bot | bl-true | bl-false | bl-unknown | bl-top
+
+newtype Knowledge := Knowledge BilatticeValue
+newtype Truth := Truth BilatticeValue
+
+impl Lattice Knowledge
+  join [Knowledge a] [Knowledge b] -> Knowledge [knowledge-join a b]
+  bot -> Knowledge bl-bot
+
+impl Lattice Truth
+  join [Truth a] [Truth b] -> Truth [truth-join a b]
+  bot -> Truth bl-bot
+```
+
+`newtype` is zero-cost (erased at runtime) but gives distinct types.
+The WF-LE solver works on `Cell Knowledge` and `Cell Truth` as separate
+cells — which matches our implementation (lower cell + upper cell per
+variable). The `:bilattice` keyword on `stratification` connects them.
+
+### 3.4 Design Notes
+
+- `:where` is the universal catch-all for constraints, laws, and
+  property obligations. `property` is a *definition form* that names
+  a reusable group:
+
+```prologos
 property Monoid {M : Type}
   :where [Associative op]
          [Identity op e]
 
-;; Usage: inline + named
 trait Lattice {L : Type}
-  :where [Monoid L join bot]      ;; reference named group
-         [Idempotent join]        ;; inline constraint
-         [Commutative join]       ;; inline constraint
+  :where [Monoid L join bot]
+         [Idempotent join]
+         [Commutative join]
   spec join L L -> L
   spec bot -> L
 ```
 
-No need for `:laws` or `:properties` as separate keywords. One keyword,
-one concept: "these conditions must hold."
+- `Quantale` extends `Lattice` with tensor. Bridges with
+  `:preserves [Tensor]` are quantale morphisms.
+- `:where` uses block syntax: one keyword, indented constraints.
 
 ## 4. Level 2: Propagator Types
 
@@ -149,10 +234,12 @@ propagator add-prop
   fire function body. Propagator cells are bound positionally from
   `:reads` / `:writes` declarations.
 
-**Open question**: Should the body be mandatory? Some propagators are
-structural (SRE-derived from type definitions) and have no user-written
-body. These may not need a `propagator` declaration at all — they're
-auto-generated. See §9.
+**Resolved**: Structural decomposition propagators are SRE-derived from
+type definitions (§3.2) — they don't need `propagator` declarations.
+The `propagator` form is for user-defined, non-structural propagators
+with explicit fire function bodies. Dynamic propagator installation
+(PUnify, NF-Narrowing branch dispatch) is handled by the SRE, not by
+individual propagators — no `:dynamic` flag needed.
 
 ## 5. Level 3: Network Types
 
@@ -217,6 +304,18 @@ network combined : CombinedNet
   it's network cell access — different semantics, same syntax).
 - **Type checking on `connect`**: The compiler verifies that connected
   cells have compatible lattice types. Incompatible lattices = type error.
+- **Network lifetime**: `:lifetime :persistent` (survives across commands,
+  e.g., registry network) vs `:lifetime :speculative` (scoped to
+  speculation branch, TMS-aware entries). Default is `:speculative`.
+
+```prologos
+network registry-net : RegistryInterface
+  :lifetime :persistent
+
+network elab-net : ElaborationInterface
+  :lifetime :speculative
+  :tagged-by Assumption
+```
 
 ## 6. Level 4: Bridge Types
 
@@ -477,36 +576,51 @@ inter-stratum interactions may be weaker (e.g., one-way triggering without
 a proper right adjoint). Same resolution as bridges: if only `:left` is
 specified, it's one-way. If both, adjunction verified.
 
-## 9. Structural Decomposition: Derived, Not Declared
+## 9. The SRE: Structural Reasoning as First-Class Concept
 
-A key insight from the design discussion: **SRE structural decomposition
-should be derived from type definitions, not separately declared.**
+The architecture survey (NTT Doc 3) promoted the SRE from a convenience
+("derive decomposition from types") to a **load-bearing architectural
+concept**: the SRE is HOW structural lattices operate. It's not a layer
+on top of the propagator network — it IS the propagator network's
+structural reasoning mechanism.
 
-When a user writes:
-```prologos
-data Pi := pi [domain : Type] [codomain : Type]
-```
+### 9.1 What the SRE Does
 
-The SRE automatically knows:
-- Pi decomposes into `domain` and `codomain`
-- The polynomial summand is `y²` (two sub-cells)
-- Decomposition propagators can be auto-generated
+For any type annotated `:lattice :structural`:
+1. **Derives merge semantics** from constructor fields (polynomial summands)
+2. **Creates sub-cells** when structural values meet (decomposition)
+3. **Installs unification propagators** between sub-cells (composition)
+4. **Handles contradiction** when incompatible constructors meet (→ top)
 
-This means **no `form` toplevel is needed**. The SRE form registry is
-populated automatically from `data`/`type` definitions. The polynomial
-functor structure of the SRE is derived from the type system.
+This replaces three separate mechanisms: manual `impl Lattice` join,
+explicit `propagator` declarations for decomposition, and dynamic
+propagator installation flags.
 
-**Where explicit declaration may still be needed**:
-- Cross-domain decomposition that isn't structural (e.g., extracting
-  `Indexed` from `List Int` for trait dispatch) — but this is a `bridge`
-  concern, not a `form` concern.
-- Performance-critical decomposition where the auto-derived propagator
-  isn't optimal — an `:optimize` hint on the type definition, not a
-  separate form.
+### 9.2 What the SRE Doesn't Handle
 
-**This is a research question for SRE Track 0**: Can all structural
-decomposition be derived? What are the edge cases? The design should
-support the derive-by-default path while allowing escape hatches.
+- **Value lattice merge**: Pure functions, handled by `impl Lattice`
+- **Cross-domain relationships**: Handled by `bridge` (α/γ)
+- **Inter-stratum interaction**: Handled by `exchange`
+- **Non-structural decomposition**: e.g., extracting `Indexed` from
+  `List Int` for trait dispatch — this is a `bridge` concern
+
+### 9.3 Additional Structural Sources
+
+Beyond type definitions:
+- **NF-Narrowing**: Reveals which constructors a function can produce
+  in normal form (structural inference from definition)
+- **Coinductive types** (`codata`): Structure from observations, dual
+  to constructors (structural inference from usage/elimination)
+- **Usage-based inference**: For untyped foreign interop, infer structure
+  from access patterns (weakest form)
+
+### 9.4 The SRE in the NTT Type Tower
+
+The SRE sits between Level 0 (Lattice) and Level 2 (Propagator):
+- Level 0 declares structural lattices via `:lattice :structural`
+- The SRE derives Level 2 propagators from Level 0 type definitions
+- Level 3 networks contain SRE-derived propagators alongside user-defined ones
+- The SRE's form registry IS the polynomial functor's summand catalog
 
 ## 10. Coinductive Types and Foreign Type Structure
 
@@ -621,7 +735,17 @@ information lattice.
 
 ## 13. Design Unknowns
 
-### 10.1 Known Unknowns
+### 13.1 Resolved by Architecture Survey
+
+| Gap | Resolution |
+|-----|-----------|
+| Structural merge creates propagators | §3.2: `:lattice :structural` — SRE-derived merge |
+| Dynamic propagator installation | §9: SRE handles it; no `:dynamic` flag needed |
+| Higher-order network operations | §9: PUnify IS the SRE; `propagator-template` unnecessary |
+| Bilattice two orderings | §3.3: `newtype` wrappers + separate `impl Lattice` each |
+| Persistent vs speculative networks | §5: `:lifetime :persistent` / `:speculative` on `network` |
+
+### 13.2 Remaining Known Unknowns
 
 1. **Quantale morphism syntax**: `:preserves [Tensor]` captures the
    concept but the keyword may not be intuitive. Need to explore how
@@ -657,23 +781,23 @@ information lattice.
    domain has overhead. Should trace be opt-in (`:preserves [Trace]` on
    bridges) or domain-level (on lattice declarations)?
 
-### 10.2 Unknown Unknowns (Areas Where Surprises May Emerge)
+8. **SRE merge for coinductive types**: `:lattice :structural` on `data`
+   derives merge from constructors. What does SRE merge mean for `codata`?
+   Observation-based merge: two values merge if their observations merge
+   pointwise? This needs formalization.
+
+### 13.3 Unknown Unknowns (Areas Where Surprises May Emerge)
 
 1. **Interaction between multiple enrichments**: A cell that is
    lattice-enriched (correctness), tropical-enriched (cost optimization),
    AND trace-enriched (provenance) — do these compose cleanly?
 
-2. **Mode-dependent polynomial fan-out**: When a propagator's output
-   count depends on runtime values (not just constructor tags), the
-   polynomial functor becomes mode-dependent. How does this interact
-   with static type checking?
-
-3. **Self-referential typing**: The NTT types the propagator network.
+2. **Self-referential typing**: The NTT types the propagator network.
    The type checker IS a propagator network. When the NTT types itself,
    what happens? Bootstrapping is the expected resolution, but edge
    cases may surprise.
 
-4. **Composing stratifications**: `:extends` handles single inheritance.
+3. **Composing stratifications**: `:extends` handles single inheritance.
    What about composing two independent stratifications (e.g., combining
    a type-checking stratification with an effect-checking stratification)?
    Is this a product in the category of stratifications?
