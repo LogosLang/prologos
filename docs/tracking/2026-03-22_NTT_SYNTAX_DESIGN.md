@@ -3,7 +3,7 @@
 **Stage**: 1 (Design Discussion)
 **Date**: 2026-03-22
 **Series**: NTT Research Document 2 / SRE Series
-**Status**: Active design discussion. ~85-90% clarity. Architecture survey completed, 5 gaps identified and resolved. Deep case study (NF-Narrowing) pending.
+**Status**: Active design discussion. ~90% clarity. Architecture survey (7 systems) + 6 deep case studies completed. 11 cumulative gaps (3 resolved, 4 medium open, 4 low open). Round 4 refinements integrated.
 
 ## 1. Purpose
 
@@ -317,6 +317,42 @@ network elab-net : ElaborationInterface
   :tagged-by Assumption
 ```
 
+### 5.3 Parameterized Networks (`functor`)
+
+Our actual networks are ~0% fixed-topology. Every system creates
+topology from data: the type checker's network depends on the AST,
+PUnify's topology depends on which type constructors appear,
+NF-Narrowing's depends on the definitional tree, session verification
+depends on the protocol tree. Without `functor`, we can only describe
+the *schema* of networks, not their *instantiation* from data.
+
+```prologos
+;; SRE structural decomposition, parameterized by type
+functor StructuralDecomposition {T : Type} :where [Structural T]
+  interface
+    :inputs  [parent : Cell TypeLattice]
+    :outputs [components : Cell TypeLattice ...]
+
+;; NF-Narrowing network, parameterized by definitional tree
+functor NarrowingNet {dt : DefTree}
+  interface
+    :inputs  [args : Cell TermValue ...]
+    :outputs [result : Cell TermValue]
+
+;; Instantiation via embed
+network type-checker-s0 : TypeCheckerS0Interface
+  embed pi-decomp : StructuralDecomposition Pi
+        sigma-decomp : StructuralDecomposition Sigma
+  ...
+```
+
+`functor` is essential — it makes NTT able to describe real
+infrastructure, not just toy fixed-topology examples. The `functor`
+parameter (`{T : Type}`, `{dt : DefTree}`) is what determines the
+output cell count and topology. This is the polynomial functor's
+data-dependent arity: how many output cells depends on the constructor
+tag or definitional tree structure.
+
 ## 6. Level 4: Bridge Types
 
 Bridges connect two lattice domains via a Galois connection (α/γ adjunction).
@@ -365,6 +401,29 @@ bridge EffectToLog
   `[Tensor]` makes the bridge a quantale morphism. `[Trace]` preserves
   traced monoidal structure. Each condition adds a proof obligation.
   The concept is essential; the keyword name may evolve.
+- **`:compose`**: Bridge composition. A→B and B→C compose to A→C:
+
+```prologos
+bridge TypeToEffect
+  :compose [TypeToSession SessionToEffect]
+  ;; α = session-to-effect-alpha ∘ type-to-session-alpha
+  ;; γ = type-to-session-gamma ∘ session-to-effect-gamma
+  ;; Adjunction verified from components
+```
+
+  This is operad composition — the output of one feeds the input of
+  the next, with the intermediate lattice type as the "color" that must
+  match at the junction. Polynomial functors generalize operads by
+  supporting data-dependent fan-out (how many sub-cells depends on the
+  constructor tag). And Galois connections add bidirectionality (both α
+  and γ compose). The NTT type-checks all three: lattice colors match
+  at junctions, fan-out matches polynomial summands, and composed
+  adjunction laws hold.
+
+  As long as all three bridges are well-typed, A→C is also expressible
+  directly. `:compose` is optional sugar that gives the compiler
+  structure for automatic verification.
+
 - **Bridges live in `stratification`**: A bridge declaration defines the
   bridge; its stratum assignment comes from the `stratification` that
   embeds it (via `:bridges` on `:fiber`). This keeps bridge definitions
@@ -503,6 +562,9 @@ complete metric spaces but still has a propagator interpretation
 | `:strategy` | `Symbol` | `:dfs` | Search strategy (for solver contexts) |
 | `:fixpoint` | `Symbol` | `:lfp` | `lfp`, `gfp`, `stratified`, `approximation`, `metric`, `mixed` |
 | `:bilattice` | `[Lattice Lattice]` | — | Knowledge + truth orderings (for `:approximation`) |
+| `:trace` | `Symbol` | `:none` | `:none`, `:count`, `:structural`, `:full` (cascade scoping) |
+| `:speculation` | `Symbol` | none | `:atms` — enables TMS-based branching on this fiber |
+| `:branch-on` | `[Symbol ...]` | `[]` | What triggers speculation branches |
 | `:where` | `[Constraint ...]` | `[]` | Well-foundedness, productivity, other constraints |
 
 **Design decisions**:
@@ -526,6 +588,58 @@ stratification level as default, overrideable per-fiber. Inner scope
 shadows outer scope. This gives both simplicity (one `:scheduler` for
 the common case) and flexibility (per-fiber override when needed).
 Same scoping principle applies to `:fixpoint` and other config keywords.
+
+**`:trace` cascade scoping**: `:trace` follows the same CSS-cascade
+pattern as `:scheduler` — set at stratification level as default,
+override per-fiber or per-cell:
+
+```prologos
+stratification ElabLoop
+  :trace :structural              ;; default: record propagator + assumption
+  :fiber S0
+    :speculation :atms            ;; enable TMS branching
+    :branch-on [union-types church-folds]
+  :fiber S1
+    :trace :none                  ;; override: readiness is cheap, don't trace
+```
+
+Trace modes (cost dial):
+- `:none` — no history, just current value (zero overhead)
+- `:count` — write count only (near-zero, enough for hotspot detection)
+- `:structural` — propagator ID + assumption ID per write (moderate, enough for explanation)
+- `:full` — complete history with values, timestamps, derivation chains (debugging)
+
+Cell-level override for specific instrumentation:
+```prologos
+interface TypeNet
+  :inputs  [expr-cell : Cell TypeLattice :trace :full]   ;; always traced
+  :outputs [result : Cell TypeLattice]                    ;; inherits from fiber
+```
+
+**Speculation lives on `:fiber`**: The fiber declares that it supports
+TMS-based branching. Cells within that fiber are automatically
+TMS-tagged (entries carry assumption IDs). A cell outside a speculative
+fiber doesn't get tagged — speculation is meaningless without the
+branching infrastructure. No per-cell speculation annotation needed;
+it's inherited from the fiber context.
+
+**`:trigger` block formalization** (for inductive stratification):
+
+```prologos
+:recurse
+  :trigger
+    :condition [negated-atom-unresolved]
+    :witness [atom : Cell TruthValue]    ;; data produced by trigger
+    :when [lfp-reached]                  ;; timing: only after stratum stabilizes
+  :grows-by 1
+  :halts-when [no-new-triggers]
+```
+
+The `:trigger` block has three parts: `:condition` (what pattern
+triggers growth), `:witness` (what data the trigger produces for the
+next stratum), and `:when` (timing constraint — typically after lfp).
+This pattern is general: NAF-LE triggers on negation, WF-LE on
+unfounded sets, tabling on new answer registration.
 
 ## 8. Level 6: Exchange (Inter-Stratum Adjunctions)
 
@@ -745,12 +859,21 @@ information lattice.
 | Bilattice two orderings | §3.3: `newtype` wrappers + separate `impl Lattice` each |
 | Persistent vs speculative networks | §5: `:lifetime :persistent` / `:speculative` on `network` |
 
-### 13.2 Remaining Known Unknowns
+### 13.2 Resolved by Case Studies (Round 4)
+
+| Gap | Resolution |
+|-----|-----------|
+| TracedCell provenance | §7: `:trace` with cascade scoping (stratification → fiber → cell) and 4 trace modes |
+| Speculation dynamics | §7: `:speculation :atms` on `:fiber`; cells inherit TMS tagging from fiber context |
+| NAF trigger formalization | §7: `:trigger` block with `:condition`, `:witness`, `:when` |
+| Bridge composition | §6: `:compose` sugar with operad semantics; also A→C directly |
+| `functor` for networks | §5.3: Essential for real infrastructure (0% fixed-topology) |
+
+### 13.3 Remaining Known Unknowns
 
 1. **Quantale morphism syntax**: `:preserves [Tensor]` captures the
-   concept but the keyword may not be intuitive. Need to explore how
-   the effect ordering system's quantale morphisms map into bridge
-   declarations specifically.
+   concept. The effect ordering case study confirmed it's load-bearing.
+   Keyword may evolve but concept is settled.
 
 2. **Solver ↔ Stratification unification**: If `stratification` subsumes
    `solver`, what happens to existing `solver` declarations? Migration
@@ -766,25 +889,32 @@ information lattice.
    condition is actually reachable. For NAF-LE this is well-understood;
    for user-defined inductive stratifications, it may be undecidable.
 
-5. **Network template instantiation**: Higher-order networks (parameterized
-   by lattice type via `functor`) need an instantiation syntax. `embed`
-   in `network` handles this, but the type checking of parameterized
-   instantiation needs design.
+5. **`functor` type checking**: `functor` networks with data-dependent
+   topology need type checking rules. How does the compiler verify that
+   a functor instantiation produces a well-typed network? The polynomial
+   functor framework provides the theory, but the syntax for expressing
+   instantiation constraints needs design.
 
 6. **Free ⊣ Forgetful for trait derivation**: Can this adjunction be made
    first-class in the NTT? Would `impl Eq Color :derive` invoke the
    left adjoint (free construction)? How does this interact with the
    existing manual `impl` pattern?
 
-7. **Traced monoidal provenance**: Making domains traced monoidal would
-   formalize provenance collection. But adding trace structure to every
-   domain has overhead. Should trace be opt-in (`:preserves [Trace]` on
-   bridges) or domain-level (on lattice declarations)?
+7. **`:trace` across bridge crossings**: `:preserves [Trace]` on bridges
+   means provenance chains extend across domain crossings. The α function
+   carries not just the value but the derivation. Implementation details
+   of cross-domain trace composition need formalization.
 
 8. **SRE merge for coinductive types**: `:lattice :structural` on `data`
    derives merge from constructors. What does SRE merge mean for `codata`?
    Observation-based merge: two values merge if their observations merge
    pointwise? This needs formalization.
+
+9. **SRE structural relations beyond equality** (from case studies): The
+   SRE currently handles structural equality (unification). Session type
+   duality requires structural *involution*. Subtyping requires structural
+   *ordering*. Coercion requires structural *embedding*. Should the SRE
+   be parameterized by relation type? See SRE Research Doc update.
 
 ### 13.3 Unknown Unknowns (Areas Where Surprises May Emerge)
 
