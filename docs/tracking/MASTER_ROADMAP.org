@@ -23,7 +23,7 @@ Audits) are defined.
 |------------------+------|
 | *Master Roadmap* | [[file:2026-03-13_PROPAGATOR_MIGRATION_MASTER.md][2026-03-13_PROPAGATOR_MIGRATION_MASTER.md]] |
 | *Thesis*         | Every piece of mutable state that participates in type-checking flows through one unified propagator network. |
-| *Status*         | Tracks 1–7 complete. Track 8 D.3 design complete (3 Parts: A infrastructure, B HKT + modules, C propagator-driven constraints). Implementation starting. |
+| *Status*         | Tracks 1–8D complete. Tracks 8E–11 pending. Track 8 delivered: TMS-tagged state, worldview-aware reads, restore-meta-state! retirement, 14/23 callbacks eliminated, HKT impl/resolution, bridge propagators (trait/hasmethod/constraint-retry), pure α/γ fire functions. |
 
 *** Completed Tracks
 
@@ -37,27 +37,30 @@ Audits) are defined.
 | [[file:2026-03-16_TRACK5_GLOBAL_ENV_DEPENDENCY_EDGES.md][Track 5]] | Global-env consolidation + dependency edges | [[file:2026-03-16_TRACK5_GLOBAL_ENV_DEPENDENCY_EDGES_PIR.md][PIR]] | Per-module persistent networks, cross-module dep edges |
 | [[file:2026-03-16_TRACK6_DRIVER_SIMPLIFICATION.md][Track 6]] | Driver simplification + cleanup | [[file:2026-03-17_TRACK6_DRIVER_SIMPLIFICATION_PIR.md][PIR]] | Parameterize 30→13, callback elimination, first clean suite |
 | [[file:2026-03-18_TRACK7_PERSISTENT_CELLS_STRATIFIED_RETRACTION.md][Track 7]] | Persistent registry cells + stratified retraction | [[file:2026-03-18_TRACK7_PIR.md][PIR]] | 29 persistent cells, S(−1) retraction, readiness propagators, pure resolution |
+| [[file:2026-03-21_TRACK8_DESIGN.md][Track 8]] | Infrastructure migration + HKT + bridge propagators | [[file:2026-03-22_TRACK8_PIR.md][PIR]] | TMS-tagged state, worldview-aware reads, pure α/γ bridges, HKT impl/resolution, restore-meta-state! retired |
+| Track 8D | Pure bridge fire functions (Completeness correction) | — | Bridges read cells directly via net-cell-read; no zonk, no box, no with-enet-reads |
 
 *** Pending Tracks
 
 | Track | Description | Status | Design/Audit |
 |-------+-------------+--------+--------------|
-| Track 8 | Infrastructure migration + HKT resolution + propagator-driven constraints | D.3 complete (3 Parts, 20 phases). Implementation next. | [[file:2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org][Audit]], [[file:2026-03-21_TRACK8_DESIGN.md][Design D.3]] |
-| Track 9 | Reduction as Propagators — dependency-tracked reduction, memo caches as cells | Stage 1 research | [[file:2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md][Research note]]; depends on Track 8 Part C |
-| Track 10 | General Diagnostic Engine (GDE) — multi-hypothesis conflict analysis | Not started | Depends on Track 8 |
+| Track 8E | Remaining registries + warnings as cells (17 registries) | Scoped in [[file:2026-03-22_PM_UNIFIED_INFRASTRUCTURE_ROADMAP.md][Unified Roadmap]] | Depends on Track 8D |
+| Track 8F | Meta-info as cells (solve-meta! → cell-write) | Scoped in Unified Roadmap | Depends on Track 8E |
+| Track 9 | Reduction as Propagators — interaction nets, GoI, e-graph rewriting | Stage 1 research | [[file:2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md][Research note]]; may become Track Series |
+| Track 10 | Network-first init + box elimination | Scoped in Unified Roadmap | Depends on Track 8F; may become Track Series |
 | Track 11 | LSP Integration — incremental re-elaboration, live diagnostics | Not started | [[file:2026-03-19_TRACK10_DESIGN_NOTES.org][Early notes]]; depends on Track 9 + Track 10 |
 
-Track 8 is a dependency for CIU Series Tracks 3–5 and may benefit BSP-LE.
-Track 9 enables correct memo caching under interleaved resolution and incremental re-reduction for LSP.
+Track 8 (complete) unblocked CIU Series Tracks 3–5 and BSP-LE.
+Track 9 enables interaction-net reduction, GoI-style fixpoint computation, e-graph equality saturation.
+Track 10 is the convergence point: no box, no dual-writes, module loading on-network.
+See [[file:2026-03-22_PM_UNIFIED_INFRASTRUCTURE_ROADMAP.md][Unified Propagator Network Infrastructure Roadmap]] for the comprehensive on-network/off-network boundary analysis.
 
 *Note on PUnify*: PUnify Parts 1–2 originated as the first half of Track
 8's scope (cell-tree unification for the type-level and solver-level
 systems). The scope was large enough that it was broken out as an
 independent effort with its own design documents and PIR. PUnify's
 cell-tree infrastructure is now a prerequisite for BSP-LE Track 2 (ATMS
-Solver). Track 8's remaining scope focuses on the second half:
-imperative state migration, callback elimination, and module
-restructuring.
+Solver) and is the foundation for the SRE Series.
 
 ** BSP-LE  — /The Logic Engine, realized on propagators/
 
@@ -105,6 +108,90 @@ restructuring.
 | 3 | Trait-Dispatched Access (~surf-get~ generates constraints) | ⬜ | Post Track 8 |
 | 4 | Trait-Dispatched Iteration (broadcast via Seq) | ⬜ | Post Track 8 |
 | 5 | Union-Aware Dispatch | ⬜ | Post Track 8 |
+
+** SRE (Structural Reasoning Engine)  — /PUnify as universal structural decomposition/composition substrate/
+
+| | |
+|------------------+------|
+| *Thesis*         | PUnify is not "the unification algorithm on propagators" — it is the universal structural reasoning engine. Every system that analyzes, decomposes, or matches structure (elaboration, trait resolution, pattern compilation, reduction) uses the same SRE primitives. |
+| *Status*         | Stage 0-1 research complete. Track scoping pending NTT research. |
+| *Origin*         | [[file:../research/2026-03-22_STRUCTURAL_REASONING_ENGINE.md][SRE Research (2026-03-22)]], Track 8D principles audit |
+
+*** Key Insight
+
+The elaborator manually creates cells and installs propagators for every
+AST node. But this IS structural decomposition — exactly what PUnify's
+=structural-unify-propagator=, =identify-sub-cell=, =get-or-create-sub-cells=
+already do. The elaborator becomes: create cells, call =structural-relate=,
+recurse. PUnify installs the propagators. Bidirectional type checking
+partially dissolves (the SRE propagates both directions).
+
+*** Tracks (Preliminary — refine after NTT Research Doc 2)
+
+| Track | Description | Status | Depends On |
+|-------+-------------+--------+------------|
+| 0 | SRE Form Registry — domain-parameterized structural decomposition | ⬜ | PM Track 8D |
+| 1 | Elaborator-on-SRE — typing-core rewritten as structural-relate calls | ⬜ | Track 0 |
+| 2 | Trait Resolution-on-SRE — structural pattern matching for impl lookup | ⬜ | Track 0 |
+| 3 | Pattern Compilation-on-SRE — scrutinee decomposition via SRE | ⬜ | Track 0 |
+| 4 | Reduction-on-SRE — GoI fixpoint, interaction nets, e-graph layer | ⬜ | Track 0; PM Track 9 |
+
+*** Two-Layer Architecture
+
+- *Layer 1: SRE* (within-domain): Registered structural forms, decomposition/composition propagators
+- *Layer 2: Galois Bridges* (between-domain): Pure α/γ connections between different lattice domains
+
+Both layers live on the same propagator network and compose automatically.
+The SRE makes within-domain reasoning automatic; bridges make between-domain
+reasoning automatic.
+
+*** Cross-Cutting Simplifications
+
+When elaboration, resolution, matching, and reduction all use the SRE:
+- *Zonk* → eliminated during elaboration (cell reads are current)
+- *Ground-check* → cell-level property (propagator watches sub-cells)
+- *Occurs check* → graph cycle detection in cell dependency graph
+- *Error reporting* → contradiction cells accumulate structural info
+- *Incremental re-elaboration* → propagation (dependency graph IS the incremental compilation graph)
+- *Speculation* → unified TMS across all SRE-based systems
+
+** NTT (Network Type Theory)  — /Typing discipline for propagator networks themselves/
+
+| | |
+|------------------+------|
+| *Thesis*         | Propagator networks have a natural type theory: lattice types → cell types → propagator types → network types (polynomial functors) → bridge types (Galois connections) → stratification types → fixpoint/interaction types. Dependent types express monotonicity, adjunction laws, well-foundedness. Progressive disclosure hides the categorical structure from most users. |
+| *Status*         | Stage 0-1 research. 4 research documents scoped. |
+| *Origin*         | Track 8D principles audit, 2026-03-22 outside conversation on typing a network |
+
+*** Research Documents
+
+| # | Document | Stage | Status | Scope |
+|---+----------+-------+--------+-------|
+| 1 | Categorical Foundations of Typed Propagator Networks | 0-1 | 🔄 In progress | Polynomial functors vs PROPs; Grothendieck fibrations over stratum posets; Kan extensions; quantale enrichment; relationship to Five Systems analysis |
+| 2 | Network Type Theory for Prologos | 1-2 | ⬜ Next | 7-level type tower; dependent types for monotonicity/adjunction/well-foundedness; progressive disclosure layers; trait system integration |
+| 3 | Language Design: Network Type Ergonomics | 2 | ⬜ | Surface syntax for =lattice=, =cell=, =propagator=, =network=, =bridge=, =stratification=; composition with =spec=, =schema=, =functor=, =bundle= |
+| 4 | Engineering: Self-Hosting via Network Types | 1-2 | ⬜ | SRE form registry as polynomial functor data model; compile-time type checking cost; bootstrapping strategy; workstream ordering |
+
+*** The 7-Level Type Tower
+
+| Level | Type | Categorical Structure | What It Guarantees |
+|-------+------+-----------------------+--------------------|
+| 0 | Lattice Type | Carrier + partial order + join + ⊥ | Values combine monotonically |
+| 1 | Cell Type | =Cell L= parameterized by lattice | Writes are joins, not replaces |
+| 2 | Propagator Type | =Prop [Cell L₁...] → Cell L₂= + =:where Monotone= | Output ≥ f(inputs) in lattice order |
+| 3 | Network Type | Polynomial functor =P(y) = Σ_{i∈I} y^{B_i}= | Typed interfaces, compositional wiring |
+| 4 | Bridge Type | Galois connection + adjunction laws | Sound cross-domain information flow |
+| 5 | Stratification Type | Grothendieck fibration over stratum poset | Monotone within fibers, non-monotone across barriers |
+| 6 | Fixpoint/Interaction | lfp (inductive) / gfp (coinductive) / Left Kan / Right Kan | Convergence, demand-driven/speculative interaction |
+
+*** Self-Hosting Trajectory
+
+1. Build SRE in Racket (type-informed: carry lattice/monotonicity annotations as data)
+2. Express network types in Prologos (dependent types + trait system)
+3. Use Prologos network types to verify SRE form registrations ← *inflection point*
+4. Express elaborator as SRE =structural-relate= calls
+5. Express type checker as stratified propagator network
+6. Compiler is a Prologos program that type-checks itself
 
 * Completed Standalone Tracks (not part of a Series)
 
@@ -159,13 +246,25 @@ or the project roadmap reaches them.
 
 * Research Documents
 
-See =docs/research/= for the full set. Key recent research:
+See =docs/research/= for the full set.
+
+** Active Research (feeding current design)
+
+| Document | Date | Stage | Feeds Into |
+|----------+------+-------+------------|
+| [[file:../research/2026-03-22_STRUCTURAL_REASONING_ENGINE.md][Structural Reasoning Engine]] | 2026-03-22 | 0-1 | SRE Series scoping |
+| Categorical Foundations of Typed Propagator Networks | 2026-03-22 | 0-1 🔄 | NTT Research Doc 1 |
+| Network Type Theory for Prologos | — | 1-2 ⬜ | NTT Research Doc 2 |
+| Language Design: Network Type Ergonomics | — | 2 ⬜ | NTT Research Doc 3 |
+| Engineering: Self-Hosting via Network Types | — | 1-2 ⬜ | NTT Research Doc 4 |
+
+** Completed/Background Research
 
 | Document | Date | Relevance |
 |----------+------+-----------|
 | [[file:../research/2026-03-21_PROPAGATOR_NETWORK_TAXONOMY.org][Propagator Network Taxonomy]] | 2026-03-21 | Cross-disciplinary classification of propagator architecture |
-| [[file:../research/2026-03-21_CATEGORICAL_STRUCTURE_FIVE_SYSTEMS.org][Categorical Structure of Five Systems]] | 2026-03-21 | Precise categorical characterization of each subsystem |
-| [[file:../research/2026-03-13_LAYERED_RECOVERY_CATEGORICAL_ANALYSIS.org][Layered Recovery Categorical Analysis]] | 2026-03-13 | Opfibration framework for layered recovery principle |
+| [[file:../research/2026-03-21_CATEGORICAL_STRUCTURE_FIVE_SYSTEMS.org][Categorical Structure of Five Systems]] | 2026-03-21 | Precise categorical characterization of each subsystem; feeds NTT Doc 1 |
+| [[file:../research/2026-03-13_LAYERED_RECOVERY_CATEGORICAL_ANALYSIS.org][Layered Recovery Categorical Analysis]] | 2026-03-13 | Opfibration framework for layered recovery principle; feeds NTT Doc 1 |
 | [[file:../research/2026-03-16_NEXT_GEN_LOGIC_PROGRAMMING.org][Next-Gen Logic Programming]] | 2026-03-16 | Survey: tabling, constraints, parallelism in modern LP |
 | [[file:../research/2026-03-07_PROPAGATORS_AS_MODEL_CHECKERS.org][Propagators as Model Checkers]] | 2026-03-07 | Verification via propagator infrastructure |
 | [[file:../research/2026-03-14_FORMAL_MODELING_ON_PROPAGATORS.org][Formal Modeling on Propagators]] | 2026-03-14 | Formal methods perspective on the architecture |
@@ -202,59 +301,62 @@ The following sequence reflects the current prioritization, informed by
 dependency analysis and leverage:
 
 #+begin_example
-  1. PUnify Cleanup          (pre-Series: 5 parity bugs + bridge retirement)  ← NEXT
+  1. PUnify Cleanup          (pre-Series: 5 parity bugs + bridge retirement)  BLOCKED (Option hang)
   2. BSP-LE Track 0          (Allocation Efficiency)                          ✅ (PIR 00a873f)
   2b. CHAMP Performance       (Owner-ID transients — standalone)              ✅ (PIR b748e5d)
   3. CIU Track 0             (Trait Hierarchy Audit)                          ✅ (commit f62fc06)
-  4. PM Track 8              (Propagator Infrastructure — D.3 complete)       ← Implementation starting
-  5. CIU Track 0 revisit     (post-Track 8 design calibration)
-  6. CIU Tracks 1–5          (implementation on Track 8 infrastructure)
-  7. BSP-LE Tracks 1–5       (logic engine on Track 8 infrastructure)
+  4. PM Track 8              (Parts A/B/C/D — all complete)                   ✅ (PIR fe2673e)
+  5. NTT Research Doc 1      (Categorical Foundations)                        ← ACTIVE
+  6. NTT Research Doc 2      (Network Type Theory — discussion)              ← NEXT
+  7. SRE Series scoping      (Tracks 0–4, informed by NTT research)
+  8. PM Track 8E             (17 remaining registries as cells)
+  9. CIU Tracks 1–5          (implementation on Track 8 infrastructure)
+ 10. BSP-LE Tracks 1–5       (logic engine on Track 8 infrastructure)
+ 11. PM Track 8F → 9 → 10    (meta-info cells, reduction, box elimination)
 #+end_example
 
-*Rationale*:
+*Rationale* (updated post-Track 8):
 
-- *Allocation efficiency first*: Every subsequent Track creates cells and
-  propagators at scale. The audit identified ~11 allocations per cell
-  creation; fixing this means all later benchmarks are representative
-  and infrastructure overhead doesn't mask algorithmic issues.
+- *NTT research before further infrastructure*: The SRE + NTT insights
+  fundamentally reframe how we approach PM Tracks 8E–10, BSP-LE, and
+  CIU. Building infrastructure without the type-informed data model means
+  retrofitting later. Research Docs 1–2 establish the categorical
+  foundations and type tower that inform the SRE form registry design.
 
-- *CIU Track 0 before Track 8*: The trait hierarchy audit examines the
-  collection dispatch design space against principles and identifies what
-  the propagator infrastructure must provide. Its output feeds directly
-  into Track 8's priorities (callback elimination, id-map accessibility,
-  module restructuring). CIU Track 0 is design work — it does not need
-  Track 8 infrastructure.
+- *SRE Series scoping depends on NTT*: The SRE form registry's data model
+  should carry typing information from day one (lattice types, monotonicity
+  class, component types). This "types-ready" approach means the transition
+  from annotated-but-unchecked to checked is a toggle, not a rewrite.
 
-- *CIU Track 0 revisit after Track 8*: Track 8 changes the design
-  landscape. Constraints that seemed fundamental pre-Track 8 (e.g.,
-  =surf-get= can't generate trait constraints due to callback
-  indirection) may dissolve. A lightweight re-audit before CIU Track 1
-  calibrates the design against what Track 8 actually delivered, rather
-  than committing to a pre-Track 8 plan that may no longer be optimal.
+- *PM 8E before CIU/BSP-LE*: The 17 remaining registries (warnings,
+  debug, parsing state) becoming cells further reduces the imperative
+  surface area. CIU Track 3 (=surf-get= constraint generation) benefits
+  from registry cells being propagation-visible.
 
-- *BSP-LE Tracks 1–5 after Track 8*: BSP-LE can technically proceed
-  independently, but Track 8's module restructuring and callback
-  elimination simplify the ATMS solver integration. Sequencing BSP-LE
-  after Track 8 avoids building workarounds that Track 8 would retire.
+- *PM Tracks 8F–10 may become Track Series* given scope: meta-info as
+  cells (8F), reduction as propagators (9), and network-first init (10)
+  each have enough internal structure for multiple sub-tracks.
 
-Steps 6 and 7 are not strictly sequential — CIU and BSP-LE Tracks can
+Steps 9 and 10 are not strictly sequential — CIU and BSP-LE Tracks can
 interleave based on priority and what's unblocked.
 
 * Cross-Series Dependencies
 
 #+begin_example
-  PUnify Cleanup ──→ BSP-LE Track 0 ✅
-                           │
-  CIU Track 0 ✅ ──────────┼──→ PM Track 8 (D.1) ──→ CIU Track 0 revisit
-                           │   (informed by              (post-T8 calibration)
-                           │    CIU + alloc)                    │
-                           │                                    ├──→ CIU Tracks 1–5
-                           │                                    │
-                           └────────────────────────────────────┴──→ BSP-LE Tracks 1–5
+  PM Track 8 ✅ ─────────────────┬──→ CIU Tracks 3–5 (UNBLOCKED)
+                                 ├──→ BSP-LE Tracks 1–5 (UNBLOCKED)
+                                 ├──→ PM Track 8E → 8F → 9 → 10
+                                 │
+  NTT Research Docs 1–4 ────────┼──→ SRE Series scoping
+                                 │     ├──→ SRE Track 0 (Form Registry)
+                                 │     ├──→ SRE Track 1 (Elaborator-on-SRE)
+                                 │     └──→ SRE Tracks 2–4
+                                 │
+  SRE Track 0 ──────────────────┴──→ PM Track 9 (Reduction-on-SRE)
+                                     PM Track 10 (Network-first init)
 #+end_example
 
-Track 8 is the critical path for post-design-phase work in both CIU
-and BSP-LE. CIU Track 0 (pre-Track 8) and BSP-LE Track 0 (allocation
-efficiency) inform Track 8's design; CIU Tracks 1–5 and BSP-LE Tracks
-1–5 depend on Track 8's delivery.
+The SRE Series is the new architectural foundation. NTT research informs
+its design. PM Tracks 8E–10 and SRE Tracks can interleave — each
+delivers standalone value. The convergence point (PM Track 10 + SRE
+Track 1) is where the box disappears and the elaborator runs on the SRE.
