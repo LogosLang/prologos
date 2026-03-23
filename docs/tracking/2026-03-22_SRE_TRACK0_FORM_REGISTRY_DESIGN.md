@@ -3,7 +3,7 @@
 **Stage**: 3 (Design)
 **Date**: 2026-03-22
 **Series**: SRE (Structural Reasoning Engine)
-**Status**: Draft D.1 — awaiting critique
+**Status**: D.2 — critique incorporated, ready for implementation
 **Depends on**: PM Track 8D ✅, PUnify Parts 1-2 ✅
 
 ## Progress Tracker
@@ -14,8 +14,7 @@
 | 1 | Domain spec + sre-core.rkt extraction | ⬜ | |
 | 2 | PUnify delegates to SRE (type domain) | ⬜ | |
 | 3 | Second domain validation (term-value) | ⬜ | |
-| 4 | Relation parameter stub | ⬜ | |
-| 5 | Verification + benchmarks | ⬜ | |
+| 4 | Verification + benchmarks | ⬜ | |
 
 ---
 
@@ -106,15 +105,33 @@ not a set of callbacks scattered across Racket parameters.
 
 ```racket
 (struct sre-domain
-  (name           ; symbol: 'type, 'term, 'session, ...
-   lattice-merge  ; (old new → merged) — the lattice join
-   contradicts?   ; (val → bool) — is this value top/contradiction?
-   bot?           ; (val → bool) — is this value bottom?
-   bot-value      ; the bottom element itself
-   meta-lookup    ; (expr → cell-id | #f) — map meta/var refs to their cells
-                  ; #f if domain has no meta-like references
+  (name              ; symbol: 'type, 'term, 'session, ...
+   lattice-merge     ; (old new → merged) — the lattice join
+   contradicts?      ; (val → bool) — is this value top/contradiction?
+   bot?              ; (val → bool) — is this value bottom?
+   bot-value         ; the bottom element itself
+   meta-recognizer   ; (expr → bool) — pure structural check: is this a meta/var ref?
+                     ; #f if domain has no meta-like references
+   meta-resolver     ; (expr → cell-id | #f) — context-dependent lookup: what cell?
+                     ; #f if domain has no meta-like references
    )
   #:transparent)
+
+;; Design note (D.2 critique): meta-recognizer is PURE — safe to cache,
+;; no ambient state. meta-resolver is CONTEXT-DEPENDENT — it reads from
+;; the current elab-network (type domain) or narrowing context (term domain).
+;; The domain spec is created per-command, so the resolver closure always
+;; reads from the correct context. This invariant must be maintained.
+;;
+;; Design note: The lattice ordering is NOT a separate field because
+;; merge IS the ordering for join-semilattices (a ≤ b iff merge(a,b) = b).
+;; Subtyping variance (SRE Track 1) uses per-component annotations on
+;; ctor-desc, not a domain-level ordering function.
+;;
+;; Design note: Domain identity is by name symbol. Two domains that
+;; share a lattice (e.g., type domain and refinement type domain) are
+;; treated as separate — their cells don't interact without a bridge.
+;; This is a deliberate isolation choice, not accidental.
 ```
 
 **Instantiations**:
@@ -127,9 +144,9 @@ not a set of callbacks scattered across Racket parameters.
               type-lattice-contradicts?
               type-bot?
               type-bot
-              (lambda (expr)
-                (and (expr-meta? expr)
-                     (prop-meta-id->cell-id (expr-meta-id expr))))))
+              expr-meta?                                    ;; pure recognizer
+              (lambda (expr)                                ;; context-dependent resolver
+                (prop-meta-id->cell-id (expr-meta-id expr)))))
 
 ;; Term domain — NF-Narrowing's domain (Phase 3 validation)
 (define term-sre-domain
@@ -138,9 +155,9 @@ not a set of callbacks scattered across Racket parameters.
               term-contradiction?
               term-bot?
               term-bot
-              (lambda (expr)
-                (and (term-var? expr)
-                     (narrowing-var->cell-id (term-var-name expr))))))
+              term-var?                                     ;; pure recognizer
+              (lambda (expr)                                ;; context-dependent resolver
+                (narrowing-var->cell-id (term-var-name expr)))))
 ```
 
 **Why a struct, not a Racket parameter?**
@@ -168,11 +185,19 @@ return a modified network. No Racket parameters used internally.
 ;; Domain-parameterized version of identify-sub-cell
 ;; Was: elaborator-network.rkt:317, hardcoded to type domain
 (define (sre-identify-sub-cell net domain expr)
-  (define meta-lookup (sre-domain-meta-lookup domain))
+  (define recognizer (sre-domain-meta-recognizer domain))
+  (define resolver (sre-domain-meta-resolver domain))
   (cond
-    ;; Meta/var ref → reuse existing cell
-    [(and meta-lookup (meta-lookup expr))
-     => (lambda (cid) (values net cid))]
+    ;; Meta/var ref → reuse existing cell (recognizer is pure, resolver is context-dependent)
+    [(and recognizer (recognizer expr))
+     (define cid (and resolver (resolver expr)))
+     (if cid
+         (values net cid)
+         ;; Recognized as meta but no cell mapping → fresh bot cell
+         (net-new-cell net
+                       (sre-domain-bot-value domain)
+                       (sre-domain-lattice-merge domain)
+                       (sre-domain-contradicts? domain)))]
     ;; Bot → fresh bot cell
     [((sre-domain-bot? domain) expr)
      (net-new-cell net
@@ -213,8 +238,9 @@ return a modified network. No Racket parameters used internally.
 ;;
 ;; Relation parameter defaults to 'equality (symmetric merge).
 ;; Future SRE tracks add 'subtyping, 'duality, 'coercion.
-(define (sre-make-structural-relate-propagator domain cell-a cell-b
-                                                #:relation [relation 'equality])
+;; NOTE: Future SRE Track 1 will add a #:relation parameter here.
+;; See §3.6 for design rationale on deferral.
+(define (sre-make-structural-relate-propagator domain cell-a cell-b)
   (define merge (sre-domain-lattice-merge domain))
   (define contradicts? (sre-domain-contradicts? domain))
   (define bot? (sre-domain-bot? domain))
@@ -234,6 +260,13 @@ return a modified network. No Racket parameters used internally.
       ;; Both have values: compute lattice join
       [else
        (define unified (merge va vb))
+       ;; Debug-mode idempotency check (D.2 critique): catches non-monotone merge
+       ;; functions at low cost. merge(merge(a,b), a) must equal merge(a,b).
+       (when (current-sre-debug?)
+         (unless (equal? (merge unified va) unified)
+           (error 'sre-structural-relate
+                  "Non-idempotent merge detected: merge(~a, ~a) = ~a but merge(~a, ~a) = ~a"
+                  va vb unified unified va (merge unified va))))
        (if (contradicts? unified)
            ;; Contradiction
            (net-cell-write net cell-a unified)
@@ -410,6 +443,15 @@ decomposition. One new field on `ctor-desc` (`binder-open-fn`), not
 two. The mult bridge stays where it is — in the PUnify dispatch code
 that calls the SRE.
 
+**Future consideration (D.2 critique)**: `ctor-desc` now has 9 fields
+and serves multiple roles (recognizer, extractor, reconstructor, domain
+tag, structural descriptor, binder handler). If SRE Track 1 adds
+per-component variance annotations and Track 2 adds coercion functions,
+the struct grows further. Consider factoring into core (tag, arity,
+domain) + capability structs (extraction, reconstruction, binder-handling,
+variance) — the "small structs composed by product" pattern. Not for
+Track 0, but monitor for the threshold.
+
 **Principles check**:
 - **Decomplection**: Structural decomposition (SRE, Layer 1) is
   separated from cross-domain bridging (Galois, Layer 2). Good.
@@ -545,31 +587,29 @@ term-value structural forms from NF-Narrowing and write isolated tests.
 **What might break**: If `decompose-generic` has any residual type-domain
 assumptions. The test will catch this.
 
-### 3.6 Relation Parameter Stub (Phase 4)
+### 3.6 Relation Parameter (Future — SRE Track 1)
 
-Add a `#:relation` keyword parameter to
-`sre-make-structural-relate-propagator`:
+The structural-relate propagator currently handles equality (symmetric
+merge). Future SRE tracks will add a `#:relation` parameter for
+subtyping (directional with variance), duality (involution), and
+coercion (one-way embedding). See SRE Research doc § "Structural
+Relation Engine."
+
+**Design decision (D.2 critique)**: Do NOT add the `#:relation`
+parameter as a stub in Track 0. A parameter that accepts `'subtyping`
+but silently treats it as equality is a correctness hazard — worse
+than the parameter not existing. When SRE Track 1 adds subtyping, it
+adds the parameter with actual implementation. The API change from
+"no parameter" to "optional parameter with default" is backward-
+compatible — no existing call sites break.
 
 ```racket
-(define (sre-make-structural-relate-propagator domain cell-a cell-b
-                                                #:relation [relation 'equality])
-  (case relation
-    [(equality)
-     ;; Current behavior: symmetric merge
-     ... (existing implementation) ...]
-    [(subtyping)
-     ;; Stub: for now, falls through to equality
-     ;; Future: directional merge with variance from descriptor
-     ... (existing implementation) ...]
-    [else
-     (error 'sre-make-structural-relate-propagator
-            "Unknown relation: ~a" relation)]))
+;; NOTE (sre-make-structural-relate-propagator): Future SRE tracks
+;; will add a #:relation parameter here for subtyping, duality, and
+;; coercion. The structural-relate propagator will dispatch on relation
+;; type with variance annotations from ctor-desc component fields.
+;; See SRE Research doc § "Structural Relation Engine."
 ```
-
-Phase 4 deliverable: the parameter exists, equality works (regression-free),
-subtyping compiles but behaves identically to equality. This is a
-skeleton — full relation support is SRE Track 1 scope. The stub ensures
-the API is forward-compatible.
 
 ---
 
@@ -604,8 +644,12 @@ wall time and test count. This is the regression baseline.
 still use the old functions. The SRE core exists but isn't wired in.
 
 **Test strategy**: Unit tests in `test-sre-core.rkt` that exercise
-each function in isolation with both type and term domains. No
-integration — that's Phase 2.
+each function in isolation with both type and term domains. Include
+negative tests (D.2 critique):
+- Unregistered constructor tag → `sre-maybe-decompose` returns net unchanged
+- `contradicts?` returning true for bot → detectable inconsistency
+- Debug-mode idempotency assertion catches a deliberately non-monotone merge
+No integration testing in Phase 1 — that's Phase 2.
 
 **Dependency check**: `sre-core.rkt` imports from `propagator.rkt`
 (cell ops), `ctor-registry.rkt` (descriptor lookup). No circular
@@ -619,6 +663,14 @@ both domains. Full suite still passes (no changes to production code).
 **Deliverable**: `unify.rkt` punify-dispatch functions call SRE instead
 of hardcoded elaborator-network functions.
 
+**Pre-step (D.2 critique)**: Grep all call sites of the 5 hardcoded
+functions (`identify-sub-cell`, `make-structural-unify-propagator`,
+`type-constructor-tag`, `maybe-decompose`, `get-or-create-sub-cells`).
+If all callers are within `elaborator-network.rkt` + `unify.rkt`,
+skip the thin-wrapper strategy — delete the old functions and update
+call sites directly. If external callers exist, use thin wrappers
+for backward compatibility.
+
 **Migration order** (ascending risk):
 1. `punify-dispatch-sub` — simplest, no binders, no mult
 2. `punify-dispatch-binder` — binder handling (Sigma/lam)
@@ -629,11 +681,16 @@ replaces `identify-sub-cell` with `sre-identify-sub-cell`,
 `make-structural-unify-propagator` with
 `sre-make-structural-relate-propagator`, etc.
 
-**What changes in `elaborator-network.rkt`**: The original functions
-(`identify-sub-cell`, `make-structural-unify-propagator`,
-`maybe-decompose`) become thin wrappers that call SRE equivalents
-with `type-sre-domain`. This preserves backward compatibility for
-any callers outside of PUnify.
+**What changes in `elaborator-network.rkt`**: If no external callers
+(likely), the old functions are deleted. The SRE equivalents in
+`sre-core.rkt` are the canonical implementations. If external callers
+exist, the old functions become thin wrappers.
+
+**Explicit fvar test (D.2 critique)**: After migrating `punify-dispatch-pi`,
+add a test that decomposes a Pi type and verifies: (a) the codomain
+sub-cell contains the opened expression with fvar, (b) the fvar is
+treated as a concrete value (not routed through meta-lookup), (c) the
+sub-cell is initialized to the opened codomain, not bot.
 
 **Test strategy**: Full test suite after each sub-step (dispatch-sub,
 dispatch-binder, dispatch-pi). Any failure = bug in delegation.
@@ -659,19 +716,7 @@ decomposition/composition machinery.
 
 **Success criteria**: All term-domain tests pass. Full suite still passes.
 
-### Phase 4: Relation Parameter Stub
-
-**Deliverable**: `#:relation` parameter on
-`sre-make-structural-relate-propagator`. Equality works (default).
-Subtyping compiles but falls through to equality.
-
-**Test strategy**: Add test cases that explicitly pass `#:relation 'equality`
-and `#:relation 'subtyping` — both should produce identical results.
-
-**Success criteria**: Relation parameter exists. API is forward-compatible.
-Full suite passes.
-
-### Phase 5: Verification + Benchmarks
+### Phase 4: Verification + Benchmarks
 
 **Deliverable**: Confirmed no regression. Performance data.
 
@@ -807,14 +852,40 @@ hooks, reconsider.
 
 ---
 
-## 9. WS Impact
+## 9. Acceptance Criteria
+
+1. All 7343+ tests pass with PUnify delegating to SRE
+2. No performance regression (< 5% wall time increase)
+3. A second domain (term-value) registers forms and structural-relate works
+4. No `type-lattice-merge` or `type-bot?` calls remain in `sre-core.rkt` (fully domain-parameterized)
+5. Debug-mode idempotency assertions pass for both type and term domains
+6. Negative tests confirm graceful handling of unregistered tags and malformed specs
+
+## 10. WS Impact
 
 None. This track changes internal infrastructure only. No new
 user-facing syntax. No preparse changes. No reader changes.
 
 ---
 
-## 10. Source Documents
+## 11. D.2 Critique Summary
+
+External critique received and addressed. Key changes:
+
+| Critique Point | Response | Action |
+|---------------|----------|--------|
+| sre-domain missing lattice ordering | Push back: merge IS ordering for join-semilattices. Subtyping variance goes on ctor-desc, not domain. | Added design notes as comments |
+| meta-lookup conflates recognizer + resolver | Accept: split into pure `meta-recognizer` + context-dependent `meta-resolver` | Updated sre-domain struct |
+| binder-open-fn fvar handling unclear | Accept as test: verify fvar treated as concrete value, not meta | Added explicit fvar test in Phase 2 |
+| Relation parameter stub premature | Accept: comment instead of dead code. Add parameter in Track 1 with implementation. | Removed Phase 4, added design rationale §3.6 |
+| Thin wrappers may be unnecessary | Accept as pre-step: grep call sites before deciding | Added pre-step to Phase 2 |
+| ctor-desc getting heavy (9 fields) | Noted: monitor for god-struct, consider factoring in future | Design note added |
+| Missing negative tests | Accept: added to Phase 1 test strategy | Added 3 negative test cases |
+| Monotonicity runtime assertion | Accept for debug mode: idempotency check after merge | Added to structural-relate propagator |
+| Post-decompose-hook threshold (lower to 2) | Push back: mult bridge is Layer 2 caller concern, not SRE hook. Session duality same. Keep monitoring at 3. | No change, rationale documented |
+| Concurrency tests | Defer: sequential scheduling currently. Note for BSP-LE Track 4. | No change |
+
+## 12. Source Documents
 
 | Document | Relationship |
 |----------|-------------|
