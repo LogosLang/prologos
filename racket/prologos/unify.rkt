@@ -33,7 +33,9 @@
          "performance-counters.rkt"
          "ctor-registry.rkt"        ;; PUnify Phase 1: current-punify-enabled? toggle
          "propagator.rkt"           ;; PUnify Phase 2: direct network access
-         "elaborator-network.rkt")  ;; PUnify Phase 2: elab-network-prop-net
+         "elaborator-network.rkt"   ;; PUnify Phase 2: elab-network-prop-net
+         "sre-core.rkt"             ;; SRE Track 0: domain-parameterized structural decomposition
+         "type-lattice.rkt")        ;; SRE Track 0: type-sre-domain creation
 
 (provide unify unify-ok? occurs?
          ;; Backward-compat alias (unify* = unify after P1-G7)
@@ -51,6 +53,24 @@
          flatten-union build-union-type
          ;; HKT normalization
          normalize-for-resolution normalizable-builtin?)
+
+;; ========================================
+;; SRE Track 0: Type domain spec
+;; ========================================
+;; The type domain for structural decomposition. All PUnify dispatch functions
+;; use this instead of hardcoded type-lattice-merge/type-bot? references.
+;; meta-recognizer is pure (expr-meta?); meta-resolver reads from elab-network
+;; via current-structural-meta-lookup (rebound per-command).
+(define type-sre-domain
+  (sre-domain 'type
+              type-lattice-merge
+              type-lattice-contradicts?
+              type-bot?
+              type-bot
+              expr-meta?
+              (lambda (expr)
+                (define lookup (current-structural-meta-lookup))
+                (and lookup (lookup expr)))))
 
 ;; ========================================
 ;; Sprint 5: Three-valued result helper
@@ -173,9 +193,10 @@
            [else
             (define enet (unbox net-box))
             (define pnet (elab-network-prop-net enet))
-            ;; Domain sub-cells: identify-sub-cell reuses meta cells when possible
-            (define-values (pnet1 dom-a-cid) (identify-sub-cell pnet dom-a))
-            (define-values (pnet2 dom-b-cid) (identify-sub-cell pnet1 dom-b))
+            (define domain type-sre-domain)
+            ;; SRE Track 0: Domain sub-cells via domain-parameterized SRE
+            (define-values (pnet1 dom-a-cid) (sre-identify-sub-cell pnet domain dom-a))
+            (define-values (pnet2 dom-b-cid) (sre-identify-sub-cell pnet1 domain dom-b))
             ;; Domain unify-propagator (skip if same cell — e.g., shared meta)
             (define-values (pnet3 _pid1)
               (if (equal? dom-a-cid dom-b-cid)
@@ -183,22 +204,23 @@
                   (net-add-propagator pnet2
                     (list dom-a-cid dom-b-cid)
                     (list dom-a-cid dom-b-cid)
-                    (make-structural-unify-propagator dom-a-cid dom-b-cid))))
+                    (sre-make-structural-relate-propagator domain dom-a-cid dom-b-cid))))
             ;; Open codomains with fresh fvar for correct de Bruijn handling
+            ;; (binder handling stays in caller — Layer 2 / domain-specific concern)
             (define x (expr-fvar (gensym 'punify-pi)))
             (define opened-cod-a (open-expr (zonk-at-depth 1 cod-a) x))
             (define opened-cod-b (open-expr (zonk-at-depth 1 cod-b) x))
-            ;; Codomain sub-cells
-            (define-values (pnet4 cod-a-cid) (identify-sub-cell pnet3 opened-cod-a))
-            (define-values (pnet5 cod-b-cid) (identify-sub-cell pnet4 opened-cod-b))
-            ;; Codomain unify-propagator
+            ;; Codomain sub-cells via SRE
+            (define-values (pnet4 cod-a-cid) (sre-identify-sub-cell pnet3 domain opened-cod-a))
+            (define-values (pnet5 cod-b-cid) (sre-identify-sub-cell pnet4 domain opened-cod-b))
+            ;; Codomain unify-propagator via SRE
             (define-values (pnet6 _pid2)
               (if (equal? cod-a-cid cod-b-cid)
                   (values pnet5 #f)
                   (net-add-propagator pnet5
                     (list cod-a-cid cod-b-cid)
                     (list cod-a-cid cod-b-cid)
-                    (make-structural-unify-propagator cod-a-cid cod-b-cid))))
+                    (sre-make-structural-relate-propagator domain cod-a-cid cod-b-cid))))
             ;; Run quiescence — fires all newly-added propagators
             (define pnet7 (run-to-quiescence pnet6))
             ;; Rewrap and rebox
@@ -225,30 +247,32 @@
     [else
      (define enet (unbox net-box))
      (define pnet (elab-network-prop-net enet))
-     ;; First component sub-cells
-     (define-values (pnet1 fst-a-cid) (identify-sub-cell pnet fst-a))
-     (define-values (pnet2 fst-b-cid) (identify-sub-cell pnet1 fst-b))
+     (define domain type-sre-domain)
+     ;; SRE Track 0: First component sub-cells via SRE
+     (define-values (pnet1 fst-a-cid) (sre-identify-sub-cell pnet domain fst-a))
+     (define-values (pnet2 fst-b-cid) (sre-identify-sub-cell pnet1 domain fst-b))
      (define-values (pnet3 _pid1)
        (if (equal? fst-a-cid fst-b-cid)
            (values pnet2 #f)
            (net-add-propagator pnet2
              (list fst-a-cid fst-b-cid)
              (list fst-a-cid fst-b-cid)
-             (make-structural-unify-propagator fst-a-cid fst-b-cid))))
+             (sre-make-structural-relate-propagator domain fst-a-cid fst-b-cid))))
      ;; Open second components with fresh fvar
+     ;; (binder handling stays in caller — Layer 2 / domain-specific concern)
      (define x (expr-fvar (gensym 'punify-binder)))
      (define opened-snd-a (open-expr (zonk-at-depth 1 snd-a) x))
      (define opened-snd-b (open-expr (zonk-at-depth 1 snd-b) x))
-     ;; Second component sub-cells
-     (define-values (pnet4 snd-a-cid) (identify-sub-cell pnet3 opened-snd-a))
-     (define-values (pnet5 snd-b-cid) (identify-sub-cell pnet4 opened-snd-b))
+     ;; Second component sub-cells via SRE
+     (define-values (pnet4 snd-a-cid) (sre-identify-sub-cell pnet3 domain opened-snd-a))
+     (define-values (pnet5 snd-b-cid) (sre-identify-sub-cell pnet4 domain opened-snd-b))
      (define-values (pnet6 _pid2)
        (if (equal? snd-a-cid snd-b-cid)
            (values pnet5 #f)
            (net-add-propagator pnet5
              (list snd-a-cid snd-b-cid)
              (list snd-a-cid snd-b-cid)
-             (make-structural-unify-propagator snd-a-cid snd-b-cid))))
+             (sre-make-structural-relate-propagator domain snd-a-cid snd-b-cid))))
      ;; Quiescence + rebox + contradiction check
      (define pnet7 (run-to-quiescence pnet6))
      (set-box! net-box
@@ -275,18 +299,19 @@
     [else
      (define enet (unbox net-box))
      (define pnet (elab-network-prop-net enet))
-     ;; Create cells + propagators for each goal pair
+     (define domain type-sre-domain)
+     ;; SRE Track 0: Create cells + propagators via domain-parameterized SRE
      (define pnet-final
        (for/fold ([n pnet])
                  ([g (in-list goals)])
-         (define-values (n1 a-cid) (identify-sub-cell n (car g)))
-         (define-values (n2 b-cid) (identify-sub-cell n1 (cdr g)))
+         (define-values (n1 a-cid) (sre-identify-sub-cell n domain (car g)))
+         (define-values (n2 b-cid) (sre-identify-sub-cell n1 domain (cdr g)))
          (if (equal? a-cid b-cid)
              n2
              (let-values ([(n3 _pid) (net-add-propagator n2
                                        (list a-cid b-cid)
                                        (list a-cid b-cid)
-                                       (make-structural-unify-propagator a-cid b-cid))])
+                                       (sre-make-structural-relate-propagator domain a-cid b-cid))])
                n3))))
      ;; Quiescence + rebox + contradiction check
      (define pnet* (run-to-quiescence pnet-final))
