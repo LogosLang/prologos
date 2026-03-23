@@ -10,11 +10,11 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Acceptance file baseline | ⬜ | |
-| 1 | Domain spec + sre-core.rkt extraction | ⬜ | |
-| 2 | PUnify delegates to SRE (type domain) | ⬜ | |
-| 3 | Second domain validation (term-value) | ⬜ | |
-| 4 | Verification + benchmarks | ⬜ | |
+| 0 | Acceptance file baseline | ✅ | 7343 tests, 244.3s; acceptance 16/0 |
+| 1 | Domain spec + sre-core.rkt extraction | ✅ | `03e9ede` — leaf module, clean compile |
+| 2 | PUnify delegates to SRE (type domain) | ✅ | `08c71ac` — 7343 tests, 239.3s, all pass |
+| 3 | Second domain validation (test-term) | ✅ | `217fb31` — 15/15 tests, zero sre-core changes |
+| 4 | Verification + benchmarks | ✅ | 7358 tests, 236.7s, all 6 criteria met |
 
 ---
 
