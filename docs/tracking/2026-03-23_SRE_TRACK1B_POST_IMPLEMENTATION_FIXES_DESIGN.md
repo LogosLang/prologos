@@ -21,11 +21,11 @@ above it is simpler. Track 1B fixes the foundation before Track 2 builds on it.
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 1 | Relation-parameterized decomposition guard | ⬜ | Replace binder-depth name-check with principled relation property |
-| 2 | Merge-per-relation registry | ⬜ | Replace fixed lattice-merge + subtype-merge with relation→merge lookup |
-| 3 | Dependent duality (sre-decompose-binder) | ⬜ | Proper binder opening for DSend/DRecv |
-| 4 | Session duality edge case tests | ⬜ | Partial sessions, incremental, deeply nested, mu |
-| 5 | Microbenchmark + adversarial subtype testing | ⬜ | Query pattern performance, frequency analysis |
+| 1 | Microbenchmark + adversarial + frequency analysis | ⬜ | Measure before changing. Informs Phase 2 design. |
+| 2 | Merge-per-relation registry | ⬜ | Informed by Phase 1 benchmark data |
+| 3 | Relation-parameterized decomposition guard | ⬜ | Pure correctness fix, independent |
+| 4 | Dependent duality (sre-decompose-binder) | ⬜ | Proper binder opening for DSend/DRecv |
+| 5 | Session duality edge case tests | ⬜ | Partial sessions, incremental, deeply nested, mu |
 
 **Baseline**: SRE Track 1 final (7392 tests, 243.9s, commit `155d0ba`)
 
