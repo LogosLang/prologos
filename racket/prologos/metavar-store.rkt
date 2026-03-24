@@ -53,6 +53,9 @@
  meta-lookup
  reset-meta-store!
  all-unsolved-metas
+ ;; PM 8F Phase 0: bvar detection
+ current-bvar-solution-count
+ bvar-free?
  ;; Phase 4d: save-meta-state/restore-meta-state! are internal to the
  ;; speculation bridge. External code should use with-speculative-rollback.
  ;; Exported only for elab-speculation-bridge.rkt — do not use directly.
@@ -1686,8 +1689,28 @@
 
 ;; Core of solve-meta!: write solution to CHAMP + propagator cell.
 ;; No retry logic — that lives in run-stratified-resolution!.
+;; PM 8F Phase 0: bvar detection in meta solutions.
+;; PUnify opens binders before solving, so solutions SHOULD be fvar-based.
+;; This assertion detects if any solve path produces bvar-containing solutions.
+;; Detection only — no behavior change. Phase 3 adds close-expr if needed.
+(define current-bvar-solution-count (make-parameter 0))
+
+(define (bvar-free? expr)
+  (cond
+    [(not expr) #t]
+    [(expr-bvar? expr) #f]
+    [(struct? expr)
+     (define v (struct->vector expr))
+     (for/and ([field (in-vector v 1)])
+       (or (not (struct? field)) (bvar-free? field)))]
+    [else #t]))
+
 (define (solve-meta-core! id solution)
   (perf-inc-meta-solved!)
+  ;; PM 8F Phase 0: detect bvar-containing solutions (assertion, not correction)
+  (unless (bvar-free? solution)
+    (current-bvar-solution-count (add1 (current-bvar-solution-count)))
+    (log-warning "solve-meta!: bvar-containing solution for meta ~a: ~a" id solution))
   ;; Track 8 A5: progress-box signal removed (pure variant uses eq? instead)
   (define h (prop-meta-id-hash id))
   ;; Track 6 Phase 5a: Read meta-info from elab-network when available, else box
