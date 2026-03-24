@@ -41,6 +41,10 @@
  sre-decompose-generic
  sre-make-generic-reconstructor
 
+ ;; Polarity inference (SRE Track 1)
+ variance-join
+ variance-flip
+
  ;; Debug parameter
  current-sre-debug?)
 
@@ -84,6 +88,45 @@
 
 ;; Debug mode: enables idempotency assertions (D.2 critique)
 (define current-sre-debug? (make-parameter #f))
+
+;; ========================================================================
+;; Polarity Inference (SRE Track 1)
+;; ========================================================================
+;;
+;; Infer variance annotations for type parameters from constructor field
+;; positions. Uses iterative fixpoint on the 4-element lattice {ø, +, -, =}.
+;;
+;; Polarity rules:
+;; - Direct occurrence of param → covariant (+)
+;; - Occurrence in contravariant position (e.g., Pi domain) → contravariant (-)
+;; - Occurrence in both positions → invariant (=)
+;; - No occurrence → phantom (ø)
+;;
+;; Fixpoint handles recursive types: `data List A := nil | cons A (List A)`
+;; - Start with ø for all params
+;; - Propagate polarity through fields (including recursive occurrences)
+;; - Converge in 2-3 iterations on the finite lattice
+;;
+;; Known limitations:
+;; - HKT parameters treated as invariant (safe default)
+;; - GADTs: out of scope (would need equational constraint analysis)
+;; - Mutual recursion: needs simultaneous iteration over all types in group
+
+;; Join two variance values: polarity lattice join
+(define (variance-join a b)
+  (cond
+    [(eq? a b) a]
+    [(eq? a 'ø) b]
+    [(eq? b 'ø) a]
+    [else '=]))  ;; + and - join to = (invariant)
+
+;; Flip polarity (for contravariant positions)
+(define (variance-flip v)
+  (case v
+    [(+) '-]
+    [(-) '+]
+    [(=) '=]
+    [(ø) 'ø]))
 
 ;; ========================================================================
 ;; SRE Relation (Track 1)
