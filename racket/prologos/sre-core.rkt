@@ -455,9 +455,17 @@
           [(zero? (ctor-desc-binder-depth desc))
            (sre-decompose-generic net domain cell-a cell-b va vb unified pair-key desc
                                   #:relation relation)]
-          ;; Binder-depth>0: not handled by SRE core yet.
-          ;; Callers (PUnify dispatch) handle Pi/Sigma/lam binders directly.
-          ;; Future: sre-decompose-binder using ctor-desc binder-open-fn.
+          ;; Binder-depth>0: decomposition depends on relation.
+          ;; For equality (live elaboration): binder opening needed, fall through
+          ;; to PUnify dispatch which handles Pi/Sigma/lam binders directly.
+          ;; For subtype/duality (ground type checking): binder opening NOT needed —
+          ;; both values are concrete, extract components directly.
+          [(not (eq? (sre-relation-name relation) 'equality))
+           ;; Non-equality relation on ground types: decompose directly
+           ;; (ignore binder-depth — no metas to open)
+           (sre-decompose-generic net domain cell-a cell-b va vb unified pair-key desc
+                                  #:relation relation)]
+          ;; Equality with binders: fall through to PUnify dispatch
           [else net])])]))
 
 ;; ========================================================================
