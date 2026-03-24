@@ -47,39 +47,25 @@
 
 ;; Check whether an expression contains no unsolved metavariables.
 ;; Uses structural recursion on the common expression forms.
+;; PM 8F Phase 6: unified ground-expr? using cell-id fast path.
+;; A meta is ground when its cell has a non-bot value (= solved).
+;; Follows solutions recursively (a solved meta whose solution
+;; contains unsolved metas is NOT ground).
 (define (ground-expr? e)
   (match e
-    [(expr-meta id _) (and (meta-solved? id) (ground-expr? (meta-solution id)))]
+    [(expr-meta id cell-id)
+     (let ([sol (meta-solution/cell-id cell-id id)])
+       (and sol (ground-expr? sol)))]
     [(expr-app f a) (and (ground-expr? f) (ground-expr? a))]
     [(expr-Pi m d c) (and (ground-expr? d) (ground-expr? c))]
     [(expr-lam m d b) (and (ground-expr? d) (ground-expr? b))]
     [(expr-Sigma d c) (and (ground-expr? d) (ground-expr? c))]
     [(expr-pair e1 e2) (and (ground-expr? e1) (ground-expr? e2))]
-    [(expr-fvar _) #t]
-    [(expr-bvar _) #t]
-    [(expr-tycon _) #t]
-    [(expr-Nat) #t]
-    [(expr-Bool) #t]
-    [(expr-Int) #t]
-    [(expr-Rat) #t]
-    [(expr-Posit8) #t]
-    [(expr-Posit16) #t]
-    [(expr-Posit32) #t]
-    [(expr-Posit64) #t]
-    [(expr-Keyword) #t]
-    [(expr-Char) #t]
-    [(expr-String) #t]
-    [(expr-zero) #t]
-    [(expr-true) #t]
-    [(expr-false) #t]
-    [(expr-Type _) #t]
-    [(expr-hole) #t]
-    [(expr-typed-hole _) #t]
     ;; Built-in parameterized types: check their sub-expressions
     [(expr-PVec a) (ground-expr? a)]
     [(expr-Set a) (ground-expr? a)]
     [(expr-Map k v) (and (ground-expr? k) (ground-expr? v))]
-    [_ #t]))  ;; conservative: treat unknown nodes as ground
+    [_ #t]))  ;; atoms, fvar, bvar, tycon, etc. are always ground
 
 ;; ========================================
 ;; Core expression → impl key string
