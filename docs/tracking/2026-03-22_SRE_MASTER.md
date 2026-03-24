@@ -13,7 +13,8 @@ of NTT's `:lattice :structural` annotation.
 **Source Documents**:
 - [SRE Research](../research/2026-03-22_STRUCTURAL_REASONING_ENGINE.md) — founding insight + architectural analysis
 - [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md) — typing discipline for SRE (`:lattice :structural`)
-- [NTT Case Studies](2026-03-22_NTT_CASE_STUDY_TYPE_CHECKER.md) — validation across 6 systems
+- [NTT Case Study: Type Checker](../research/2026-03-22_NTT_CASE_STUDY_TYPE_CHECKER.md) — deep case study, impedance mismatch analysis
+- [NTT Architecture Survey](../research/2026-03-22_NTT_ARCHITECTURE_SURVEY.md) — all 7 systems as NTT skeletons, gap analysis
 - [Categorical Foundations](../research/2026-03-22_CATEGORICAL_FOUNDATIONS_TYPED_PROPAGATOR_NETWORKS.md) — polynomial functor grounding
 - [Unified Propagator Network Roadmap](2026-03-22_UNIFIED_PROPAGATOR_NETWORK_ROADMAP.md) — on-network/off-network boundary analysis
 
