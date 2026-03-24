@@ -28,7 +28,9 @@
          type-key
          subtype-lattice-merge
          ;; SRE Track 1 Phase 4: frequency counter for monitoring
-         current-subtype-check-count)
+         current-subtype-check-count
+         ;; Track 1B Phase 1: global counters + reporter
+         report-subtype-frequency!)
 
 ;; Extract a canonical symbol key from a type expression.
 ;; Built-in types → short name; user-defined types → qualified fvar name.
@@ -45,11 +47,30 @@
 ;; Use: (current-subtype-check-count) → (cons total compound)
 (define current-subtype-check-count (make-parameter (cons 0 0)))
 
+;; Track 1B Phase 1: Global counters survive across parameterize blocks.
+;; For suite-wide measurement without per-command reset.
+(define global-subtype-total (box 0))
+(define global-subtype-compound (box 0))
+
 (define (bump-subtype-count! #:compound? [compound? #f])
   (define counts (current-subtype-check-count))
   (current-subtype-check-count
    (cons (add1 (car counts))
-         (if compound? (add1 (cdr counts)) (cdr counts)))))
+         (if compound? (add1 (cdr counts)) (cdr counts))))
+  ;; Also bump globals
+  (set-box! global-subtype-total (add1 (unbox global-subtype-total)))
+  (when compound?
+    (set-box! global-subtype-compound (add1 (unbox global-subtype-compound)))))
+
+(define (report-subtype-frequency!)
+  (fprintf (current-error-port)
+           "SUBTYPE-FREQUENCY: total=~a compound=~a ratio=~a%\n"
+           (unbox global-subtype-total)
+           (unbox global-subtype-compound)
+           (if (zero? (unbox global-subtype-total))
+               0
+               (exact->inexact (* 100 (/ (unbox global-subtype-compound)
+                                          (unbox global-subtype-total)))))))
 
 ;; Within-family subtype predicate (Phase 3e + Phase E)
 ;; Automatic widening within two type families:
