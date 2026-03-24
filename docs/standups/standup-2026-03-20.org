@@ -45,6 +45,18 @@
 - 60+ commits in interval
 - Performance: 175.9s (fastest ever) → 183.2s (post Phase -1 fix)
 
+
+
+* Roadmap/Notes
+** Part 3 on P Unify / parallel (BSP) LE
+** Track 8
+** Collection Interface Unification
+*** [[../tracking/2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md][Collection Interface Unification — Design]]
+
+
+
+** Prop Efficiency
+
 * Today
 
 ** Part 3 Design Review
@@ -59,3 +71,451 @@
 - 5 L3 parser bugs from acceptance file (preparse/parser level)
 - 5 punify parity bugs (head, map, Pair, match, Vec) — must fix before Part 3 flips default
 - bench-zonk.rkt staleness
+
+
+
+** First-Class Path Values
+*** [[../tracking/2026-03-20_FIRST_CLASS_PATHS_DESIGN.md][First-Class Path Values — Stage 3 Design Document]]
+*** 🗣️ first feedback, broadcast path selection syntax proposal
+In the document it shows `#p(:address.{zip city})`, and I just want to be sure that it's ok that we support `#p(address.{zip city})` (without the `:` prefix) as an option. These are, after all, implicitly key-paths.
+
+
+
+Another syntax that I'm interested in supporting is something like a broadcast-path selection. For instance, when we get back large lists of solutions from the solver, it would be nice to map over certain keys to collect them; or a list of record-like data, this is useful.
+
+
+
+I'm thinking of some syntax like `.*Path` using the `*.` or `.*` (leaning to the latter) to mean something like `map [get-in records _Path_] records`.
+
+
+
+```prologos
+
+def solutions := '[{:a 1 :b 10}, {:a 2...}, ...]
+solutions.*a ;; => '[1 2 ...]
+
+def records := '[{:name "Alice"...}, {:name "Bob"...},...]
+
+def names := records.*names
+;; names => '["Alice" "Bob" ...]
+
+
+records.>names
+records.*names
+
+
+```
+
+
+This would mean that identifiers could not start with a `*` (I think I'm fine with that)
+
+I'm interested in hearing your take on this syntax proposal, whether there are other potential conflict areas with it, or if there weren't perhaps a better ergonomic proposal or alternative syntax that would be more suitable.
+
+
+
+Another question I'd like some clarity on, is on branch selection and how we can be principled in the lookup... since we're operating on immutable datastructures, the lookup on each branch could be done safely in parallel, no? I suppose there's still sequentiality in the parsing irregardless, but I'm just curious to hear your reflections on this.
+
+
+I'm curious to hear more expansion on how we can support path combinators in a pure prologos way. This could be useful construct for people to interact with.
+
+I'm also curious if there are any parts in the specter library `https://github.com/redplanetlabs/specter` from which to draw lessons that should be considered in the path combinator support, or folded into the ergonomics of the syntax. (you may websearch that)
+
+
+In any case, let's continue design discussion here; we'll decide together in what ways to expand or improve on this design.
+*** 🤖
+
+#+begin_src markdown
+```markdown
+OK. Now I have everything needed. Let me synthesize the response.
+```
+---
+
+Here are my reflections on each point:
+
+## 1. `#p(address.zip)` without the `:` prefix
+
+Yes, this should be supported. Since `#p(...)` explicitly marks a path context, the `:` prefix is redundant — everything inside is implicitly a key path. I'd suggest:
+
+- `#p(address.zip)` — canonical form, clean
+- `#p(:address.zip)` — also accepted (colon stripped during parsing, for consistency with keyword syntax elsewhere)
+
+The parser for path literals just needs to accept both `:address` and bare `address` as segment identifiers. This is a small tweak to the path-segment tokenizer inside `#p(...)` mode.
+
+I'll update the design doc to make `#p(address.zip)` the primary form and `:` optional.
+
+## 2. Broadcast path syntax: `.*field`
+
+The idea is compelling — `records.*name` as sugar for `[map [get-in _ #p(name)] records]`. Let me assess the syntax options:
+
+**`.*field` (dot-star-field):** This reads naturally — "from this collection, broadcast-access field." The reader already handles `.` as a delimiter and `*` as `ident-start?`. So `.*name` would tokenize as `.` → dot sentinel, then `*name` as an identifier. The question is whether `*name` collides with anything.
+
+**Current `*` usage:**
+- `*` alone is the product type operator / Sigma type separator (`star-symbol?` in parser)
+- `*` in paths means wildcard (`:address.*` = all fields)
+- `*name` is currently a valid identifier (since `*` is `ident-start?`), but nothing in the codebase uses `*`-prefixed identifiers
+
+**Conflict analysis for `.*`:**
+- `records.*` already means something in path algebra — wildcard, "all fields of records." So `records.*name` would need disambiguation: is it `records . (* name)` (wildcard applied to name?) or `records . *name` (broadcast-access name)?
+- The key distinction: `.*` (dot-star with nothing after) = wildcard, `.*identifier` (dot-star-identifier) = broadcast. This is context-dependent at the character level but unambiguous in practice since wildcards are always bare `*`.
+
+**Alternative syntaxes considered:**
+
+| Syntax | Example | Pros | Cons |
+|--------|---------|------|------|
+| `.*field` | `records.*name` | Concise, reads as "spread-access" | Near-collision with wildcard `.*` |
+| `..field` | `records..name` | Clean, "deep access" connotation | `..` might suggest parent/recursive |
+| `*>field` | `records *> name` | Arrow-like, explicit | Requires space, loses dot-access feel |
+| `[*field]` | `records[*name]` | Uses existing postfix index syntax | Heavier |
+| `.:*field` | `records.:*name` | Explicit broadcast marker | Verbose |
+
+**My recommendation: `.*field` works.** The near-collision with wildcard `.*` is resolvable in the reader: if `*` is followed by an `ident-continue?` character, it's a broadcast; if followed by nothing/whitespace/delimiter, it's a wildcard. This is a clean single-character lookahead.
+
+The reader would emit a new sentinel, say `$broadcast-access`:
+```markdown
+records.*name → records ($broadcast-access name)
+```
+
+And `rewrite-dot-access` desugars:
+```markdown
+($broadcast-access name) on target → (map (fn ($x) (map-get $x :name)) target)
+```
+
+Or better, with first-class paths:
+```markdown
+($broadcast-access name) on target → (map-path target #p(name))
+```
+
+Where `map-path` is a new primitive that maps a path over a collection. This gives us broadcast with deep paths too: `records.*address.zip` → `(map-path records #p(address.zip))`.
+
+**One caution:** The `.*` disambiguating by lookahead means `records.* ` (wildcard with trailing space) and `records.*name` (broadcast) differ by a single character. This is fine for a parser but could surprise users visually. Worth noting in docs.
+
+## 3. Branch selection parallelism
+
+You're right that branch lookups are independent and semantically parallelizable. In `#p(address.{zip city})`, the lookups for `:zip` and `:city` share the same prefix (`:address`) but diverge at the branch point — each branch reads from the same immutable sub-map independently.
+
+Currently branches are elaborated sequentially (each becomes a `map-get` chain), but because the data is immutable:
+- No ordering dependencies between branches
+- No shared mutable state
+- Each branch could be a separate propagator cell in the network
+
+For now, sequential elaboration is fine (branch counts are small). But this is a natural future optimization point — especially if branch paths are used in solver contexts where many solutions need path-extraction. The propagator network could schedule branch evaluations as independent cells that fire concurrently.
+
+The more interesting parallelism story is with broadcast: `records.*address.{zip city}` over a large list — each element's extraction is fully independent.
+
+## 4. Path combinators in pure Prologos
+
+Looking at this more carefully, several combinators CAN be pure Prologos if we expose the right primitives. The minimum Racket-side foreign functions needed:
+
+```prologos
+;; Foreign (Racket-side) — structural operations on Path values
+foreign path-segments  : Path -> [List Keyword]     ;; decompose
+foreign path-from-segments : [List Keyword] -> Path  ;; construct
+foreign path-branch-count : Path -> Int              ;; number of branches
+foreign path-branch : Path -> Int -> Path            ;; extract nth branch
+```
+
+Then combinators are pure Prologos:
+
+```markdown
+;; Append two single-branch paths
+spec path-append Path Path -> Path
+defn path-append [p1 p2]
+  [path-from-segments [list-append [path-segments p1] [path-segments p2]]]
+
+;; First segment
+spec path-head Path -> Keyword
+defn path-head [p] [head [path-segments p]]
+
+;; Remaining segments
+spec path-tail Path -> Path
+defn path-tail [p] [path-from-segments [tail [path-segments p]]]
+
+;; Length
+spec path-depth Path -> Int
+defn path-depth [p] [length [path-segments p]]
+
+;; Predicate: is this a single-segment path?
+spec path-leaf? Path -> Bool
+defn path-leaf? [p] [eq? [path-depth p] 1]
+```
+
+This gives users full path manipulation in the language itself. The foreign layer is minimal — just boxing/unboxing the `expr-path` struct.
+
+## 5. Lessons from Specter
+
+Specter's key insights that are relevant to our design:
+
+**Navigator composition as the core abstraction.** Specter's power comes from treating navigation as a composable algebra — not a fixed set of operations. Our `#p(...)` paths are the static version of this; the question is whether we want dynamic navigator composition.
+
+**Key Specter navigators and their Prologos equivalents:**
+
+| Specter | Concept | Prologos Equivalent |
+|---------|---------|---------------------|
+| `ALL` | Navigate every element | `.*` broadcast syntax |
+| `MAP-VALS` | Navigate map values | `.*` on a map |
+| `MAP-KEYS` | Navigate map keys | Could add `.*:` or similar |
+| `FIRST`, `LAST` | Positional | `[0]`, `[-1]` postfix indexing |
+| `filterer` | Predicate filter | `.*field` + `filter` composition |
+| `walker` | Recursive depth-first | `.**` globstar |
+| `if-path` | Conditional navigation | Future: path guards |
+| `collect-one` | Gather context during traversal | Future: path annotations |
+| `keypath` | Navigate to a key | `#p(field)` — our base case |
+| `must` | Navigate only if key exists | Nil-safe `#.field` already handles this |
+
+**What Specter teaches us to include now:**
+1. **`ALL` equivalent is the broadcast `.*` — good call, this is Specter's most-used navigator.** Your syntax proposal directly covers this.
+2. **Path as a value that composes** — we're doing this with `#p(...)`. Specter validates this choice.
+3. **`select` + `transform` duality** — our `get-in` is `select` and `update-in` is `transform`. Keeping both is right.
+
+**What to defer but design-for:**
+1. **Conditional navigation (`if-path`)** — paths that branch based on predicates. Not needed now but the `Path` type should be extensible to support this later (path segments could include filter predicates).
+2. **Context collection (`collect-one`)** — gathering values during traversal for use in transforms. This is powerful but complex. Future work.
+3. **Compiled paths** — Specter's performance comes from compiling navigator chains into optimized code. Our static path inlining (literal `#p(...)` → chained `map-get`) already does this implicitly. Dynamic paths could get a similar optimization pass later.
+
+**What Specter validates about our approach:**
+- First-class paths that compose are the right abstraction level
+- The `select`/`transform` (get-in/update-in) duality is proven
+- Broadcast over collections (`ALL`) is essential, not optional
+- Static path compilation (our elaboration-time inlining) is the key performance move
+
+---
+
+Let me update the design doc with these refinements.  
+#+end_src
+
+
+
+
+
+
+
+
+
+*** 🗣️
+
+
+The alternative to `.*` I'm thinking is `.>` This would conflict less with identifiers, doesn't conflat with glob pattern syntax; and it evokes our pipe function syntax, which often use this pattern of `OP>`. That said, perhaps we want to reserve `.>` for just such an operator. I still prefer the aesthetic flow/read of `.*`, that said.
+
+Comparison:
+```prologos
+records.>names
+records.*names
+```
+
+
+4. Path Combinators
+
+The other aspect I'm thinking about on this, is the `=` unification, pattern matching, and destructuring aspects... paths could be nicely picked apart and reconstituted. Being able to decompose on paths would likely be more ergonomic in practice than calling a `path-head` function. But both options have their place and time.
+
+5. good to note some of these "for later" considerations, and that our current approach is validated.
+
+
+---
+
+Oh yeah! I almost forgot... there's been another path algebra syntax extension that I've had in mind for a bit now, and this is the appropriate time to bring it up.
+
+The idea is to select keys, with dynamic key-renaming using `^`
+
+
+```prologos
+
+def user := {:user-name "Pete" :id 1234 :address {:zip 12345 :city "Springfield"}}
+
+
+user.{user-name^userName id^userID address.city^location}
+
+;; => {:userName "Pete" :userId 1234 :location "Springfield"}
+
+
+```
+
+
+
+Do you think there are any other outstanding questions or concerns about what we have so far? I'm thinking, this is a smaller design than a lot of our more-heavy infrastructure features, so I'm not thinking of needing to do an external critique.
+
+
+What are your thoughts to the dynamic key-renaming syntax proposal, and the other above points?
+
+
+Let's only discuss for now. Please respond only.
+
+
+
+
+
+
+
+
+
+
+
+** Summary
+
+
+Today's Standup
+Yesterday:
+Unification on Propagators (PUnify)
+Yesterday we worked on Part 1 and 2 of a track to bring unification on the propagator network
+
+I was really worried about this one working out. In part, because the unification algorithm is well-understood and well-optimized; and adding propagator-cell allocation was uncertain to see benefit, and would be more allocation than just putting a pure "wrapper" over an imperative process (so that was our fallback plane).
+
+The core insight: unification is "just" tree comparison—and our CHAMP-backed immutable, structural-sharing datastructure could, potentially, make this a cheap "tree" comparison... common elements between the lhs and rhs of the unification comparison would literally be the same memory-pointers, so there wouldn't even be a read/lookup cost (which would be a cheap O(1) anyways. That was the driving bet (and it actually paid off, as you'll see... every bet I've made on propagators so far, has exceeded my expectation... but every time, I go in with anxious uncertainty... we're doing something new and untested, so I'm always carefully optimistic... but the more I design with these things, the more elegance and potential I am appreciating...  and I have growing confidence in a number of exciting future directions... ).
+
+---
+Part 1
+
+We actually did quite a bit of language design work, clarifying the `=` unification operator semantics across both the functional and relational contexts (slight semantic drift between context).
+
+
+Also clarified `#=` used in FL-narrowing (functional-logical narrowing... the bit where we turn functions into reversible constraint-solving)... it carries over the meaning from other constraint logical programming constructs where `#=` is read to mean "is constrained to be equal to", so that felt like a nice clarification and disambiguation (narrowing context was previously cued by logic-variables in a function call, and with `=`)
+
+So, `plus ?x 5 = 7` is now `plus ?x 5 #= 7`
+(Which would return:)
+'[{:x 2}]
+
+---
+We set up an acceptance file exercising exhaustive patterns of unification used in the type system, and at the syntactic level.
+
+Really did a lot of cleanup, making sure that everything was well-wired into the surface language. Was nice to see more of the language come to actually-running code alive, not just deep implementation sitting further down in the compilation pipeline.
+
+---
+
+Adversarial testing & microbenchmarking
+
+Because unification is such a central component to the language (various levels in the type checker(s) use it, it's foundational in the relational language and solver, as well)... we wanted to gather precise benchmarking characteristics (what runs what part where, for how long, with what memory cost, etc) to see our before and after times, on constructs that would really stress-test these features.
+
+Oh, we have a very sophisticated microbenchmarking suite that we can extend to get very decent statistical information. So, that's what we're using.
+
+
+So we wrote three different stress-tests across various systems, and have excellent base-line metrics to compare
+
+
+---
+Part 2
+
+Design and implemented the "Structural Unification" on propagators
+Design was ~9 hours
+
+Was success. Total test suite is 20% faster from this alone.
+
+
+
+Today
+Started some design work on Part 3, which is actually more about fulfilling the original design/vision of a parallel solver for the logic engine. So this is some pretty important pieces. We weren't able to get all the way their originally, but now have the key infrastructure and design patterns to do this right.
+
+- Did some more work on wiring more constructs, testing them out, and making sure the language is in a good shape
+
+- Designed out an extension to "The Path Algebra", and working through implementation of that now. Some really neat features for this. The path algebra is able to succinctly select out any subtree from
+
+So say you had a map (dictionary object), like such:
+```prologos
+def app-config
+  :name "MyApp"
+  :date [now]   ;; date is computed dynamically
+  :version "1.0.0"
+  :server
+    :host "localhost"
+    :port 8080
+    :ssl
+      :enabled true
+      :cert-path "/etc/ssl/cert.pem"
+  :database
+    :url [env "DATABASE_URL"]
+    :pool-size 10
+  :features @[:auth :logging :caching]
+  :admins
+    -
+      :name "Alice"
+      :role :super
+    -
+      :name "Bob"
+      :role :regular
+```
+
+Path syntax could grab anything out you wanted:
+
+```prologos
+app-config.{name version ssl.enabled admins[0].name^admin}
+
+;; returns => {:name "MyApp" :version "1.0.0" :admin "Alice"}
+
+```
+
+Notice the index post-fix and the use of `^` to do dynamic key-renaming!
+
+```
+def admins := app-config.admins.*name
+
+admins
+;; => '["Alice" "Bob"]
+```
+
+The `.*` is a "broadcast select" that works over sequences of record-like objects (Maps)
+
+So in this case the `app-config.admins` is a vector (sequence, list-like) that contains maps with the keys `:name` and `:role`
+
+Or, say you wanted to select things down multiple branches:
+```prologos
+
+app-config.{server.{ssl.* port} database.{url^dbPath  pool-size}}
+
+;; => {:ssl {:enabled true :cert-path "/etc/ssl/cert.pem"}
+       :port 8080}
+       :dbPath "localhost/file-path"
+       :pool-size 10}
+```
+
+Also note, the `.*` in this context is a glob pattern... it grabs everything at that level... `.**` grabs everything at that level and below, recursively
+
+
+
+All of these paths are first class, so they can be passed around, composed, decomposed, defined, used in functions, etc. This is one of the features I'm most proud of... but it's not like fundamentally a huge deal, just a neat ergonomic win for the language... and I'm surprised no language has come up with something like this before... it's so handy... I can't count the times I've needed to pick apart some object and build it up by pieces, line by line.
+
+
+
+
+---
+
+Current Roadmap
+
+Return to Part 3 of the Unification on Propagators,
+which is actually the fulfillment of the parallel Logic Engine we designed weeks back, but only now do we have the infrastructure and design patterns down to actually make this real.
+
+
+---
+
+Propagator / Cell efficiency - design and implement
+
+---
+
+Track 8 of the Propagator Migration
+
+This brings the runtime "elaborator" onto the network, bringing dispatch on types to runtime awareness
+
+
+---
+
+Generic Collections with efficient runtime dispatch (enabled by Track 8)
+
+
+---
+
+
+Track 9 of Propagator Migration
+General Diagnostics Engine
+Goal: Multi-hypothesis conflict analysis using ATMS nogoods. Minimal diagnoses for type errors. The culmination of the propagator migration — the compiler doesn't just report errors, it explains the minimal set of assumptions that caused them.
+
+
+
+Track 10 of Propagator Migration
+LSP Integration
+Goal: Integrate the full propagator infrastructure into a Language Server Protocol implementation. Incremental re-elaboration, live diagnostics, and enhanced error reporting — the user-facing payoff of Tracks 1–9.
+
+
+
+
+
+
+
+
+

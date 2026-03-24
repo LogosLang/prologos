@@ -64,9 +64,284 @@
 
 * Today
 
+
+** SRE Track 1 Design
+*** [[../tracking/2026-03-23_SRE_TRACK1_RELATION_PARAMETERIZED_DECOMPOSITION_DESIGN.md][SRE Track 1: Relation-Parameterized Structural Decomposition]]
+
+Let's discuss the Open Questions. A lot of them seem to be punting rather than fulfilling the "Completeness" principle; and by not supporting user definiable subtyping, are we neglecting making subtyping a first-class citizen?
+
+
+--
+
+I've submitted our design for outside, independent critique. Remember, the reviewer does not have the context that we do, so push back and reason, grounded in the context of the code and project.
+
+Critique:
+```
+
+```
+
+Please respond here with your considerations, and we will decide together what to incorporate into the design revision. Remember to push back and ground your reasoning in the code.
+
+
+
+--
+
+I'd like us to consider another research direction for propagator migration:
+
+In one of our propagator unification documents, it states that parsing is one part of infrastructure where it does not make sense to put on the network.
+
+I want to push back against this consideration, with the following justification: I have been tracking for some time now the body of literature around context-free hypergraph grammars (and other (hyper)graph rewriting systems) for some time, and I think propagators are a natural expression of this.
+
+So let's consider this research - you may do some websearch to enhance your context in informing a response to this.
+
+
+I'd like us to consider how this may simplify our parsing pipe-line. Instead of multi-phase, multi-pass, multi-pipeline... could parsing as a hypergraph-aware propagator network be an expression of fixpoints of partial information incrementally accumulating more information?
+
+
+I'd like for you to also consider the conversation from an external context in my currently open standup document (`/Users/avanti/dev/projects/prologos/docs/standups/standup-2026-03-23.org`)  under the heading `* Outside Conversations` as more consideration.
+
+How does this fit in our language infrastructure project of migrating to propagator networks? How does this change how we approach language-design? How does it integrate with our current and projecting roadmap?
+
+Hypergraph rewriting grammars, and the like, could be a powerful tool, and allow even more flexible grammars and constructs to be expressed. It could simplify parsing and bring it onto architecture that we already have infrastructure to support; and be useful across our architecture, and has applications that could touch on tooling, and self-hosted compiler efforts and correctness. It touches on aspects we've touched on regarding reductions on propagators (only through light research questions so far); but also LF-Narrowing.
+
+The more I've been revisiting these topics, the more I see as useful background and context to our Structural Reasoning Engine work... It may even change the flavor of it?
+
+
+I'm thinking that this effort op bringing parsing as network-native could be it's own series. Thoughts? Reflections? Let's discuss this.
+
+I'm proposing that we do research report on this general topic, a document in our `research` directory. I'm thinking that the research is general enough to form the basis of our considerations, but also show the rich applicability of how we could apply this rich body of research in ways we yet are not.
+
+
+
+Then, return back here with your thoughts and reflections.
+
+
+
+---
+
+Before getting to the next phase, let's consider:
+
+
+What do you think we could do differently to gather all the context we need from error reporting when running tests, based on our recent trial-and-mostly-error experiences?
+
+I'm seeing a lot of "I didn't get enough error context; let me re-run the test"...
+
+I'm also seeing a lot of "stale .zo? let's recompile... "; or "This is a compilation issue..."
+
+
+
+How can we make it so that we do the right thing first, get everything that we need, and have tighter iteration loops? Improvements to our workflow rules? Better test-scripts that automate away these issues? Fixing the "pre-existing REPL/process-string" issue, would that help--it seems necessary if we're running a file with `raco ...`?
+
+We failed to recognize the bail-out timeouts for what they were. Could better error printing give us a useful report indicating this as a bailout, and major regression we should follow-up on?
+
+
+
+Also, what is the issue with `This is the pre-existing REPL/process-string hang during module loading.`?
+
+I think it is a process-smell anytime that we find ourselves saying "this is a pre-exsting issue.." What do you think our process should be for this? At the end of a session, raising the issue? Following up afterwards with a deeper investigation -- fixing root causes -- This is to me is a tell, that something somewhere failed to meet our "Completeness" principle, and should be addressed in a fundamental way.
+
+
+
+
+
+---
+
+Let's make sure that the proper deferrals are captured in track 10 -- as well as the zonk elimination -- either in the dedicated "notes" for that track, or in the PM master (or both?).
+
+
+Salient Issues:
+
+1. How can we audit better for this? We already do a stage2 audit that informs the stage3 design doc! We then do a self-critique round... I think it should be caught here...
+
+The stage 2/3 is supposed to be audit, feed into design...
+I'm thinking we always need a much stronger, more detailed stage 2 document, BEFORE going into a stage 3. I think that our self critique shouldn't just be "challenge design according to principles" but also... does our design proposal make sense to the needs of the actual code-base? Are we missing something?...
+
+
+2. Should we look into this more? I'm thinking it's not our best use of time, considering we're about to eliminate zonk entirely with PM Track 10 (which I propose we consider next, if it's unlocked; I think having module loading on-network may simplify a lot of testing considerations, as well as be a quality of life bump).
+
+
+3. Should we look at optimizing this? I'm curious to open up this point more.
+
+
+On benchmarking: I think it's also that our design process captures testing as a pre-0 phase, after first design draft; and has an explicit cleanup step at the end, to compare A/B and gather data to self-evaluate at that point -- and see if we need to reconsider aspects of our implementation... then that can also feed a better, data-driven PIR.
+
+Also, does our instrumentation for the microbenchmarking need to be cleaned up itself? That could create some overhead, right? What about our instrumentation from previous microbenchmarking? Is that something we should check up on?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ** Determine next priority: SRE Track 1 (subtyping) vs PM Track 8E vs other
 ** Distill 5 pending lessons from SRE Track 0 PIR into principles docs
 ** Continue NTT research refinement if needed
+
+
+
+* Outside Conversations
+** 🗣️
+One other research aspect that I'm looking at for migrating our language infrastructure onto propagator networks, is that of parsing. Initially, this aspect was flagged as "not appropriate" to be on the propagator network, but I've been tracking a body of research involving context-free hypergraph grammars, which have a natural expression on propagator networks.
+
+I'm wondering if you can expand on this research point (are you able to do websearch for enhanced context?), give more clarity on the underlying formalisms and approaches.
+
+I'm hoping that this could simplify a multi-pass, multi-phase parsing pipeline, into a single network that incrementally gains more information through the parsing process.
+
+I'm also interested, more generally, in the research of (hyper)graph-rewriting systems, as it may apply to optimizations for our future self-hosting compiler story. I'm also interested in how having parsing information on the same network could be useful in these contexts (proof objects, mapping source-language to compilation target, and so on...)
+** 🤖
+#+begin_src markdown
+```markdown
+response:
+```
+  Let me search for the relevant research to give you the most current picture.This research landscape is rich. Let me synthesize what's most relevant to your situation.
+
+---
+
+## The Key Insight: Attribute Grammars ARE Propagator Networks
+
+The deepest connection here isn't hypergraph grammars per se — it's the equivalence between attribute grammars and propagator networks. Context-free hypergraph grammars and attribute grammars generate the same class of term languages. This is the Engelfriet-Heyker theorem, and it's directly relevant to what you want.
+
+An attribute grammar decorates a parse tree with computed values. Synthesized attributes flow upward (child to parent). Inherited attributes flow downward (parent to child). The evaluation of attributes is a fixpoint computation — attributes depend on other attributes, and the evaluator iterates until all values stabilize.
+
+This is literally a propagator network on a tree-shaped graph. Each tree node is a cluster of cells (one per attribute). Each semantic rule is a propagator (reading some cells, writing others). Synthesized attributes are propagators that read from child cells and write to parent cells. Inherited attributes are propagators that read from parent cells and write to child cells. Evaluation to fixpoint is run-to-quiescence.
+
+The equivalence with hypergraph grammars means: anything you can express as a context-free hypergraph grammar, you can express as an attribute grammar, which you can express as a propagator network on a parse tree.
+
+---
+
+## Parsing as Monotonic Information Accumulation
+
+Here's the vision that maps onto your architecture.
+
+Traditional parsing is a phase: you take a string of tokens, run a parsing algorithm (LR, Earley, PEG, etc.), and produce a parse tree. Then type checking happens on the tree. Then elaboration. Then optimization. Each phase is separate, with a complete data structure handed from one to the next.
+
+On a propagator network, you can collapse these phases. The parse tree is a network of cells. Initially, the cells hold partial information — a token is known, but its syntactic role isn't. As parsing proceeds, information accumulates monotonically:
+
+- The lexer writes token cells (character → token lattice)
+- The parser writes syntax cells (token sequence → production lattice)
+- The type checker writes type cells (syntax → type lattice)
+- The elaborator writes elaborated cells (syntax + type → elaborated form lattice)
+
+All of these are propagators on the same network. There's no "handoff" between phases. Information flows as soon as it's available. If the type checker can determine a type from a partial parse (because enough context is known), it does so immediately — it doesn't wait for parsing to complete.
+
+This is incremental in the strongest sense: not "re-parse the changed region" but "propagate the change through the existing network." A character edit changes a token cell, which triggers the parser propagators, which trigger the type propagators, which trigger the elaboration propagators. Only the affected cells update. Everything else stays at its current value (the no-change guard prevents unnecessary propagation).
+
+### The Lattice Structure for Parsing
+
+The key design question is: what's the lattice for parse state?
+
+**Token lattice**: ⊥ (unknown) → character sequence → token classification → ⊤ (error). Monotonic: once you know a character is part of an identifier, that information only gets refined (not retracted).
+
+**Syntax lattice**: this is trickier because parsing involves ambiguity. A token sequence might be parseable as multiple productions. The lattice needs to represent ambiguity:
+
+- ⊥ = no parse information
+- Ambiguous = set of possible parse trees (like a parse forest)
+- Unique = single parse tree
+- ⊤ = parse error
+
+The ordering: ⊥ ≤ Ambiguous ≤ Unique ≤ ⊤ (more information reduces ambiguity). This is a powerset lattice ordered by reverse inclusion — exactly the same structure as your narrowing choice lattices.
+
+**Attribute lattice**: for each attribute (type, scope, elaborated form), a domain-specific lattice. Your existing type lattice, multiplicity lattice, session lattice all apply here.
+
+### Connecting to Hypergraph Grammars
+
+Context-free hypergraph grammars generalize context-free string grammars to graphs. HRGs have practical applications in graph parsing, information extraction, and learning, bridging expressive graph theory with computational efficiency. The generalization is relevant because your AST isn't really a tree — it's a graph (with variable references creating cross-links, with type annotations creating additional edges, with scope creating hierarchical structure).
+
+A context-free graph grammar generalizes the concept of context-free string grammars to the domain of graphs, with the dominant formalism being hyperedge replacement grammars that enable the generative specification, analysis, and manipulation of graph languages.
+
+For your propagator network, a hyperedge replacement grammar rule becomes a propagator template. When the parser recognizes that a subgraph matches the left-hand side of a production, it installs the propagators corresponding to the production's semantic rules. This is exactly your SRE pattern — register a form, get decomposition/composition/reconstruction propagators for free — applied to parsing.
+
+The context-freeness lemma for hypergraph grammars states that derivations in hyperedge replacement grammars do not interfere with each other as long as they concern different hyperedges. In propagator terms: parsing propagators for independent subexpressions don't interfere. They can fire in parallel. This gives you parallel parsing as a natural consequence of the propagator architecture.
+
+---
+
+## Graph Rewriting for Compilation
+
+Graph rewrite systems can be used to specify and generate program optimizations, with termination criteria defining exhaustive graph rewrite systems and stratification automatically selecting single normal forms.
+
+This connects directly to your self-hosting compiler story. The key ideas:
+
+**Compiler passes as graph rewrite rules.** Each optimization (constant folding, dead code elimination, inlining) is a graph rewrite rule: match a pattern in the program graph, replace it with an optimized version. The rewrite rules are propagators — they fire when they detect their pattern in the network.
+
+**Stratification for phase ordering.** Different optimizations interact — inlining might enable constant folding, which might enable dead code elimination. The phase ordering problem (which optimization to apply first) maps to your stratification: each optimization phase is a stratum, with monotonic propagation within and controlled transitions between.
+
+**Termination via your lattice structure.** Graph rewrite systems need termination guarantees. Your lattice height bounds + fuel limits provide exactly this. Each optimization moves the program "up" the lattice (toward a more optimized form). The lattice has finite height. Therefore optimization terminates.
+
+**Double-pushout rewriting.** The algebraic approach to graph rewriting is based upon category theory, with the double-pushout approach and single-pushout approach being the most common. DPO rewriting has a clean categorical semantics as two pushout squares in the category of graphs. For your system, DPO rewriting rules would be typed by your polynomial functor/operad type system — a rewrite rule has a typed interface (what it matches, what it produces), and composition of rewrite rules is type-checked.
+
+In this paper, hypergraph rewriting is studied in categorical terms in an attempt to define the notion of events and develop foundations of causality in graph rewriting. The causal structure of rewriting — which rewrites enable which subsequent rewrites — maps directly onto your propagator dependency graph. The causal ordering is your effect ordering quantale. This means your existing infrastructure for tracking effect ordering can also track optimization ordering in the compiler.
+
+---
+
+## The Unified Network Vision
+
+Here's how all of this comes together for Prologos:
+
+**A single propagator network that spans the entire compilation pipeline.**
+
+```markdown
+Source text → Tokens → Parse tree → Typed AST → Elaborated IR → Optimized IR → Target code
+```
+
+Each arrow is not a phase boundary but a set of propagators. Information flows left-to-right (parsing to compilation) and right-to-left (type constraints influencing parse disambiguation, optimization constraints influencing elaboration). The network is bidirectional — your Galois connections between subsystems apply to the compilation pipeline just as they apply to type checking.
+
+**What this gives you for self-hosting:**
+
+Source provenance is preserved end-to-end. Every cell in the target code has a derivation tree tracing back through optimization, elaboration, typing, and parsing to the original source text. This derivation tree is the proof object you need for verified compilation — it's the certificate that the compiled code correctly implements the source.
+
+**What this gives you for interactive editing:**
+
+When the user edits a character, the change propagates through the network incrementally. The parser updates the affected region. The type checker updates the affected types. The elaborator updates the affected elaboration. The optimizer updates the affected optimizations. All of this happens via propagation, with the no-change guard ensuring that unchanged parts of the pipeline don't recompute.
+
+This is the dream of language-server architecture: instead of a pipeline of batch processors (parse → typecheck → elaborate → emit diagnostics), you have a live network where every change propagates immediately to all affected analyses.
+
+**What this gives you for formal verification:**
+
+If parsing is on the network, the parse tree is a cell value with provenance. Type checking refines it (monotonically). Elaboration refines it further. Optimization is a graph rewrite (tracked as a cell-tree transformation). The entire compilation is a monotonic lattice ascent from source text (⊥) to compiled artifact (fixpoint). The Layered Recovery Principle handles the non-monotonic aspects (optimization rewriting, negation in type checking, etc.).
+
+The compilation proof object is the network's derivation tree at fixpoint. It includes every parsing decision, every type inference step, every optimization applied, and every elaboration choice — all as first-class data in the network. This is what your proof-carrying code infrastructure would verify. And because it's on the propagator network, it composes with your existing type checking, session checking, and effect tracking.
+
+---
+
+## Practical Starting Point
+
+For an initial experiment, I'd suggest not trying to put the entire parsing pipeline on propagators immediately. Instead:
+
+**Start with attribute evaluation.** Take your existing parsed AST and attach attribute propagators to it. Type attributes, scope attributes, elaboration attributes — all as propagators on the AST nodes. This replaces your current multi-pass elaboration with a single-network fixpoint computation.
+
+You're essentially already doing this with your type checker's propagator network. The step is to recognize that the AST structure itself — the parent-child relationships, the sibling orderings, the variable references — can be cells and propagators rather than a separate static data structure.
+
+**Then extend downward to parsing.** Once attributes are on the network, extend the network to include parsing state. Token cells, production cells, ambiguity cells. The parser becomes a set of propagators that fire when tokens arrive and produce parse structure. Attribute propagators fire when parse structure stabilizes.
+
+**Then extend upward to optimization.** Graph rewrite rules as propagators that match patterns and produce optimized forms. The e-graph structure we discussed earlier is the natural representation — equivalent forms coexist in the same e-class, and the optimizer picks the best one.
+
+Each step is independently useful and testable. Each step exercises and validates your propagator infrastructure at a new scale. And the end state is a unified network spanning the entire compilation pipeline — which is both the technical foundation for self-hosting and the theoretical validation of propagators as universal substrate.
+
+## References
+https://www.emergentmind.com/topics/hyperedge-replacement-grammars
+https://www.emergentmind.com/topics/context-free-graph-grammars
+https://www.cs.rochester.edu/u/gildea/2018_Fall/hrg.pdf
+https://dl.acm.org/doi/10.1145/363911.363914
+https://en.wikipedia.org/wiki/Graph_rewriting
+https://arxiv.org/html/2409.01006v1
+
+
+
+
+#+end_src
+
+
+
 
 * Blockers
 

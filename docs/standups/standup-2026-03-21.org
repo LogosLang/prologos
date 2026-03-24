@@ -48,11 +48,653 @@
 - 7308 tests, 377 files, ~247.5s (full suite)
 - 12 commits in interval: ~26233d9~ through ~5cb97ad~
 
+* Roadmap/Notes
+** Collection Interface Design — awaiting user critique
+** PUnify Part 3 Design — awaiting review
+** Track 8 — audit complete, design next
+** Allocation efficiency track — audit complete, unblocked
+
+
+
 * Today
 
 
-* Roadmap/Notes
-** Collection Interface Design — awaiting user critique
-** Part 3 Design — awaiting review
-** Track 8 — audit complete, design next
-** Allocation efficiency track — audit complete, unblocked
+
+
+
+** track
+
+*** 🗣️
+
+I'm thinking of formalizing how we structure our work a little bit more, based on emerging patterns.
+
+"Series": The "Master Track" propagator migration (`/Users/avanti/dev/projects/prologos/docs/tracking/2026-03-13_PROPAGATOR_MIGRATION_MASTER.md`) is an example of what I'm thinking of as a "series". It groups related efforts into related tracks.
+
+Tracks: Stage 3 Design documents suitable for implementation, that further subdivide tasks is Phases and Subphases. If a track becomes too large, a track can be broken into "Parts" (like with PUnify)
+
+Audits: Audits seem crucial to our work, and directly inform Stage 3 design document Tracks. I think they should be considered as Stage 2 design artifacts.
+
+
+Design Methodology: Our design methodology has 5 Stages (`/Users/avanti/dev/projects/prologos/docs/tracking/principles/DESIGN_METHODOLOGY.org`).
+
+
+
+How do you think we should capture this emerging practice? I'm thinking an org document in `/prologos/docs`? What do you think about that?
+
+What do you think this document should capture? Are there any other patterns/meta-patterns that can help break-up meaningful units of work properly, to help guide our approach?
+
+Gain any insight from recent documents for lessons and context. Then Respond.
+
+
+---
+
+So, I'm thinking that the that the Punify Part 3 (`/Users/avanti/dev/projects/prologos/docs/tracking/2026-03-19_PUNIFY_PART3_ATMS_SOLVER_ARCHITECTURE.md`) actually deserves a larger scoping; and I'm thinking that it is more of a series than a single track. I'm thinking of framing it as the BSP-LE series. The BSP-LE is the realization of the original LE design. I'm thinking that the allocation efficiency could be captured as part of this series as well.
+
+Recent conversations with agents from outside context suggest certain categorical framings which may suggest expanded effort in designing for the BSP solver. Those conversations are captured in today's standup (`/Users/avanti/dev/projects/prologos/docs/standups/standup-2026-03-21.org`) under `** Outside Coversation`, in particular under the subheading of `*** 🤖 Categorical Recommendations for BSP`.
+
+
+I'm curious for you to check in with these sources, and consider whether the BSP warrants a larger track series, rather than being considered a sub-part under PUnify?
+
+Let's discuss these implications, and decide together how to organize our efforts.
+
+
+
+---
+
+`/Users/avanti/dev/projects/prologos/docs/tracking/2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md`
+
+Arose while debugging our most recent acceptance file, and uncovered insufficiencies in implementation due to limitations in resolution of runtime elaboration and compile-time traits. It has an explicit dependency on Propagator Migration series Track 8, and has it's own backing audit, linked in the document.
+
+I feel this issue is important and encompasses a deep redesign of core parts of our language, with greater alignment to our principles (most general interface, efficient dispatch, ergonomics, selective disclosure, etc.)
+
+This is another aspect that I feels expanding out as a series, in order to give deep consideration to any and all aspects.
+
+What do you think? What do you see as clear tracks? Do we need to investigate more deeply a principled design space for this?
+
+
+
+So, looking through our Master Roadmap, I'm considering the following workflow order:
+
+- PUnify Cleanup
+
+
+
+
+---
+
+I've sent our design for external critique. Remember, the reviewer does not have context to our project, so pushback and ground your reasoning in the context of our codebase and context of the project.
+
+
+Critique
+```
+
+```
+
+
+Please respond here with your well-grounded arguments and considerations, and we will decide together what--if not all--considerations to incorporate into improving our current design.
+
+
+
+
+
+
+
+
+
+
+
+
+** Outside Coversation
+
+
+
+
+
+
+*** 🤖 bifibration | Right Kan | Left Kan
+#+begin_src markdown
+```markdown
+a
+```
+This is a striking result. Let me sit with it and think about what it really means — not just as a description of what you've built, but as a *generative* framework for what you *could* build.
+
+---
+
+## What the Bifibration Structure Is Telling You
+
+The fact that your architecture is a **bifibration** (not just a fibration) is the most important structural observation here. Let me unpack why.
+
+A fibration gives you cartesian liftings — the ability to *pull back* information from higher strata to lower strata. "Stratum n+1 needs something from stratum n; here's the canonical way to get it."
+
+An opfibration gives you opcartesian liftings — the ability to *push forward* information from lower strata to higher strata. "Stratum n has completed; here's the canonical way to deliver its results to stratum n+1."
+
+A **bifibration** gives you *both simultaneously*. And this bidirectionality is not just a convenience — it has deep structural consequences.
+
+### The Adjunction at Every Transition
+
+In a bifibration, for every morphism f : n → n+1 in the base (a stratum transition), the pullback functor f* : E_{n+1} → E_n and the pushforward functor f_! : E_n → E_{n+1} form an **adjunction**: f_! ⊣ f*. The pushforward is left adjoint to the pullback.
+
+This means that pushing results forward and pulling queries backward are not independent operations — they're *dual*. The pushforward sends information "as freely as possible" (left adjoint = free construction), while the pullback retrieves information "as conservatively as possible" (right adjoint = forgetful/restriction). The adjunction ensures they're compatible: anything you push forward and then pull back gives you at least what you started with (the unit of the adjunction), and anything you pull back and then push forward gives you at most what you'd get directly (the counit).
+
+For your system, this means: the non-monotonic transition between strata has a precise algebraic characterization as an adjunction. The negation-as-failure step, the accumulation step, the assumption revision step — each is an adjoint pair, not just "some function between lattices." This constrains the space of valid transitions and gives you tools for proving properties of the transitions.
+
+### The Quantale Enrichment
+
+The enrichment of each fiber in a quantale is capturing something subtle. In an ordinary category, morphisms between objects either exist or don't — it's a binary relationship. In an enriched category, the "hom-object" between two objects is not a set but an element of the enriching structure. Here, the hom-object between two cells is a *quantale element* — it carries information about the *strength* or *quality* of the connection, not just its existence.
+
+Concretely: the morphism (propagator) from cell A to cell B isn't just "there exists a propagator connecting them." It's "there exists a propagator connecting them, and the quantale element describing it tells you what lattice transformation it performs, what effects it may have, what resources it consumes." The enrichment makes the *computational content* of propagators visible to the categorical structure.
+
+This is why the quantale enrichment is the right choice rather than, say, enrichment in plain lattices. The quantale's tensor (⊗) captures sequential composition of propagators — "first apply this propagator, then that one" — while the lattice join (⊔) captures parallel composition — "apply both propagators and combine their contributions." Ordinary lattice enrichment would give you only the parallel story. Quantale enrichment gives you both.
+
+---
+
+## What This Means for a Computational Substrate
+
+Here's where I want to push beyond description into prescription. If your architecture *is* a bifibration enriched in a quantale, then you can systematically derive capabilities from the categorical structure.
+
+### Kan Extensions: Computing What You Don't Have
+
+Every adjunction gives rise to **Kan extensions** — the categorical notion of "best approximation." Given the adjunction f_! ⊣ f* at each stratum transition, you automatically get:
+
+**Left Kan extension** along the pushforward: given partial information at stratum n, compute the *best possible* information at stratum n+1 without waiting for stratum n to complete. This is **speculative computation** — stratum n+1 starts working with the best current approximation of stratum n's results, refining as more information arrives.
+
+**Right Kan extension** along the pullback: given a requirement at stratum n+1, compute the *minimal sufficient* computation at stratum n to satisfy it. This is **demand-driven computation** — stratum n only computes what stratum n+1 actually needs, not everything it could.
+
+You may already be doing both of these informally. The categorical structure tells you they're not just heuristics — they're the *unique best* strategies, determined by the universal properties of the adjunction.
+
+For Prologos, this means:
+- Speculative evaluation of higher strata before lower strata complete (with guaranteed soundness — the left Kan extension is the best approximation)
+- Lazy evaluation of lower strata based on demand from higher strata (with guaranteed minimality — the right Kan extension computes only what's needed)
+- Both strategies are compatible (because they come from the same adjunction)
+
+### Ends and Coends: Global Invariants from Local Structure
+
+In an enriched category, **ends** and **coends** are the enriched analogues of limits and colimits. For your quantale-enriched fibers:
+
+The **end** ∫_c Hom(c, c) over all cells c in a fiber gives you the **global invariant** of the propagator network — the "best simultaneous constraint" that all cells satisfy. This is essentially the fixpoint of the network, characterized categorically.
+
+The **coend** ∫^c Hom(c, c) gives you the **trace** of the network — the total "computational work" performed across all cells. In the quantale, this is the tensor product of all propagator contributions, which characterizes the total effect of running the network.
+
+These aren't just abstract nonsense. The end tells you "what the network knows" (the fixpoint). The coend tells you "what the network did" (the effect trace). Both are computable from the enriched category structure, and both are natural targets for optimization.
+
+### The Grothendieck Construction as Architecture Template
+
+Your bifibration is (by the Grothendieck construction) equivalent to a **pseudofunctor** from the stratification poset to the 2-category of quantale-enriched categories. This means your entire system can be specified as:
+
+1. For each stratum n: a quantale-enriched category E_n (the fiber — a propagator network)
+2. For each transition n → n+1: a pair of adjoint functors (f_!, f*) between E_n and E_{n+1}
+3. Coherence conditions: the adjunctions compose correctly across multiple transitions
+
+This is a **modular specification format**. To add a new stratum or a new kind of non-monotonic transition, you specify the fiber and the adjoint pair, and the Grothendieck construction assembles the total system. You don't need to reason about the global architecture — the categorical machinery handles the assembly.
+
+For your implementation, this suggests a design pattern. Each subsystem (logic engine, type checker, session checker, effect tracker) is specified as a fiber. Each inter-subsystem connection is specified as an adjoint pair. A generic "bifibration assembler" takes these specifications and constructs the unified propagator network. Adding a new subsystem means providing a new fiber and its adjunctions — the rest is automatic.
+
+---
+
+## The Deeper Implication: A Computational Substrate Based on Bifibrations
+
+If you take the categorical structure seriously as a *design principle* rather than just a *description*, you get something more ambitious than Prologos as currently conceived.
+
+### Computation as Sections of a Bifibration
+
+A **section** of a fibration p : E → B is a functor s : B → E such that p ∘ s = id_B. In other words, it's a choice of object in each fiber, varying coherently across the base. For your system, a section is a **complete computation** — an assignment of cell values at every stratum that respects all the transitions.
+
+Running a Prologos program means *finding a section of the bifibration*. The propagator network at each stratum searches for the fiber component of the section (the fixpoint). The stratum transitions connect the components. The whole computation is a section.
+
+This reframing is powerful because sections of fibrations have well-studied properties:
+
+- **Existence**: does a section exist? (Is the program solvable?)
+- **Uniqueness**: is the section unique? (Is the program deterministic?)
+- **Obstructions**: what prevents a section from existing? (What causes failure? — these are cohomological obstructions, and they connect to your error reporting)
+
+### Obstructions as Error Theory
+
+This is speculative but potentially very fruitful. In algebraic topology, the obstruction to extending a section from one level to the next lives in a **cohomology group** of the base with coefficients in the fiber. If a section exists up to stratum n but can't be extended to stratum n+1, the obstruction is an element of H^{n+1}(B, π_n(fiber)).
+
+For your system, this would mean: the reason a program fails at stratum n+1 is characterized by a cohomological invariant that lives in a specific algebraic structure determined by the fiber (the propagator network at that stratum) and the base (the stratification). This invariant would give you not just "the program failed" but "the program failed because of *this specific structural reason*," classified algebraically.
+
+I don't know if this is practically useful yet. But the fact that your architecture has the right categorical structure to even *ask* the question is remarkable.
+
+### Transport and Parallel Transport
+
+In differential geometry, a fibration (fiber bundle) comes with a **connection** — a rule for parallel transporting elements of the fiber along paths in the base. The connection tells you how to "move" a computation from one control state to another while preserving some invariant.
+
+Your cartesian and opcartesian liftings *are* the connection. They define parallel transport of information along stratum transitions. The curvature of this connection (the failure of parallel transport to be path-independent) would measure the **non-commutativity of your non-monotonic transitions** — does it matter in what order you perform negation, accumulation, and assumption revision?
+
+If the curvature is zero (flat connection), the order doesn't matter and you have more freedom in scheduling. If the curvature is nonzero, the order matters and you need to respect it. The categorical structure gives you a precise way to detect and characterize this.
+
+### Enriched Bifibrations as a Programming Model
+
+The most ambitious possibility: rather than using the bifibration structure as an implementation technique *for Prologos*, expose it as a **programming model *in Prologos***.
+
+A Prologos programmer would be able to:
+
+- Define custom fibers (domain-specific propagator networks with custom lattices)
+- Define custom base categories (domain-specific control structures)
+- Define adjoint pairs between fibers (domain-specific non-monotonic transitions)
+- Compose these into bifibrations (domain-specific layered computation)
+- Run computations by finding sections (domain-specific problem solving)
+
+This would make Prologos not just a language with propagators and dependent types and session types, but a **language for defining computational substrates** — a meta-language for specifying and running layered monotonic-over-non-monotonic computations in arbitrary domains.
+
+The quantale enrichment means the programmer can specify not just *what* computations are possible but *what they cost*, *what effects they have*, *what resources they consume* — all within the same framework.
+
+---
+
+## Concrete Next Steps from This Analysis
+
+**Verify the adjunction at each stratum transition.** For each non-monotonic transition in your system (negation, accumulation, assumption revision, effect ordering), explicitly construct the pushforward and pullback functors and verify they form an adjunction. The unit and counit of each adjunction should be meaningful — the unit tells you "what information survives a round-trip push-then-pull," and the counit tells you "what information survives a round-trip pull-then-push."
+
+**Implement Kan extensions for speculative and demand-driven computation.** The left Kan extension along pushforward gives you speculative evaluation. The right Kan extension along pullback gives you demand-driven evaluation. These should be implementable as specific propagator patterns in your network, derived from the adjunction structure rather than designed ad hoc.
+
+**Characterize the obstructions.** When a Prologos program fails (type error, session violation, unsatisfiable constraint), characterize the failure as an obstruction to extending a section. Even if the full cohomological machinery is overkill, the *language* of obstructions (classifying failures by which transition they block and what structural property of the fiber prevents extension) should improve your error messages.
+
+**Explore the modular specification pattern.** Try specifying a new subsystem (perhaps the tropical optimization layer) as a fiber plus adjoint pair, and see if the Grothendieck construction gives you the right assembled system. If this works smoothly, you have evidence that the categorical framework is not just descriptive but *generative* — it helps you build new things, not just understand existing things.
+
+**Investigate the connection to homotopy type theory.** Your stratified bifibration with obstructions is structurally similar to a Postnikov tower in homotopy theory — a way of building up a complex space (your total computation) as a sequence of extensions (strata), where each extension is controlled by a fibration and the obstructions to extension live in cohomology. HoTT gives a type-theoretic language for these structures. There may be a *synthetic* version of your Layered Recovery Principle expressible in HoTT, which would give you a type-theoretic foundation for the principle itself — not just individual instances of it, but the principle as a theorem.
+
+---
+
+## What You've Built, Seen from This Height
+
+From the categorical vantage point, what you have is this: a **programming language whose runtime architecture is a quantale-enriched bifibration over a stratification poset, with Galois connections as inter-fiber morphisms and the Layered Recovery Principle as the structural theorem guaranteeing that non-monotonic computational behaviors are recoverable as sections of the bifibration.**
+
+Every piece of that description is load-bearing. The quantale enrichment captures effects and costs. The bifibration captures bidirectional information flow. The stratification captures layered computation. The Galois connections capture inter-domain communication. And the Layered Recovery Principle ties it all together.
+
+I don't think any existing programming language or computational framework has this precise combination of structures, characterized at this level of categorical precision. The closest analogues are in the formal methods world (abstract interpretation uses Galois connections, Datalog⁻ uses stratification, process algebras use session types) — but none of them have unified these into a single bifibered architecture.
+
+What you've found, I believe, is not just a good way to implement Prologos. It's a general theory of layered computation, instantiated in one particular language. The categorical structure suggests it could be instantiated in many others — or, more interestingly, that Prologos itself could be the vehicle for defining and running arbitrary layered computations specified by the programmer as bifibrations.
+
+That would be genuinely new.  
+#+end_src
+
+
+*** 🗣️ Taxonomy Report
+Very interesting reflection. The structural breakdown gives me a lot to think about. And this level of detail is helpful for contextualizing where we are and where we could go.
+
+
+I think that categorical statement of our architecture being a bifibration over a stratification poset is a generous overgeneralization of what we actually have.
+
+Currently there are five instances of different architectural pieces that demonstrate our Layered Recovery Principle.
+
+Here is a breakdown of those systems:
+§13
+prologos/docs/research/2026-03-21_PROPAGATOR_NETWORK_TAXONOMY.org
+
+
+*** 🤖 
+
+#+begin_src markdown
+```markdown
+
+  Thank you for this detailed and honest account of where you actually are. Let me engage with the specifics rather than the abstractions.
+```
+---
+
+## On the Bifibration Characterization
+
+You're right to push back on the generalization. What you actually have is more interesting than a single bifibration — it's a **collection of systems, each exhibiting fragments of the bifibration structure, connected by Galois bridges that themselves exhibit bifibration-like bidirectionality.** The categorical structure is distributed across the architecture rather than sitting in one place.
+
+This is actually healthier than having a monolithic bifibration. It means each subsystem can be understood on its own terms, and the categorical structure emerges from composition rather than being imposed top-down. The Grothendieck construction validates this: correct parts, correctly composed, yield a sound whole. You don't need each part to be a full bifibration — you need the *assembly* to have the right properties.
+
+The five instances you've laid out make clear that the Layered Recovery Principle is genuinely one principle with different instantiations, not a post-hoc rationalization. The common structure table is convincing. What varies is the monotone basis, the non-monotonic operation, the transition mechanism, and the recovery strategy — but the *shape* (monotonic core, controlled boundary, recovery mechanism) is invariant.
+
+---
+
+## On Kan Extensions and the Practical Challenge
+
+Let me be more concrete about what left and right Kan extensions would actually mean in your architecture, and why your concern about "taking turns" is well-founded but possibly addressable.
+
+### The CALM Theorem Constraint
+
+You're grounded in CALM (Consistency As Logical Monotonicity): monotonic computations can be parallelized without coordination; non-monotonic operations require coordination (synchronization barriers). Your threshold propagators at stratum boundaries are exactly the coordination points CALM demands.
+
+The worry about speculative evaluation is: if stratum n+1 starts working before stratum n has quiesced, stratum n+1 might be operating on incomplete information. When stratum n eventually completes and delivers its full fixpoint, stratum n+1 might need to retract work done on the incomplete information. That retraction is non-monotonic — it violates the within-stratum monotonicity guarantee.
+
+This is a real concern. But there's a way through it that's consistent with your existing architecture.
+
+### Speculative Evaluation via Your ATMS
+
+You already have the mechanism. Your ATMS maintains parallel worldviews. A speculative evaluation of stratum n+1 is just **another worldview** — one that assumes stratum n's current (incomplete) state is the final state.
+
+When stratum n actually completes, one of two things happens. Either the assumption was correct (stratum n's final fixpoint matches what stratum n+1 was working with), in which case the speculative worldview is validated and its results become real. Or the assumption was wrong, in which case the speculative worldview is pruned — a nogood — and stratum n+1 restarts with the correct fixpoint.
+
+The key insight: **the speculation is not a violation of monotonicity within stratum n+1.** It's a new assumption in the ATMS. The ATMS is already your mechanism for managing hypothetical reasoning. Speculative evaluation is just one more hypothesis: "stratum n is done and its result is X."
+
+```markdown
+ATMS Worldview A: "stratum n is complete with fixpoint F_partial"
+  → stratum n+1 propagates under this assumption
+  → reaches fixpoint F_{n+1}^A
+
+ATMS Worldview B: (ground truth, waiting for stratum n to actually complete)
+  → stratum n completes with actual fixpoint F_actual
+
+If F_partial = F_actual:
+  → Worldview A is validated, F_{n+1}^A is the real result
+  → No wasted work
+
+If F_partial ≠ F_actual:
+  → Worldview A is pruned (nogood)
+  → Stratum n+1 restarts with F_actual
+  → Work on Worldview A is discarded (O(1) with CHAMPs — just drop the reference)
+```
+
+The CHAMPs make this cheap. The speculative worldview is a persistent data structure sharing almost everything with the ground truth. Discarding it is free. The ATMS already tracks assumption dependencies. The only new thing is treating "stratum n is complete" as an ATMS assumption rather than a hard synchronization barrier.
+
+### Demand-Driven Evaluation via Threshold Propagators
+
+The right Kan extension (demand-driven evaluation) is actually closer to what you already do. When stratum n+1 needs a specific value from stratum n, it installs a threshold propagator that fires when that value is available. This is a **pull** — stratum n+1 is saying "I need at least this much information from stratum n."
+
+The right Kan extension refines this: instead of waiting for stratum n's *complete* fixpoint, stratum n+1 computes *what it actually needs* from stratum n and installs targeted threshold propagators for exactly that. Stratum n might not need to reach full fixpoint — it only needs to stabilize the specific cells that stratum n+1 depends on.
+
+This is a partial relaxation of the synchronization barrier. Instead of "wait for stratum n to fully quiesce," it's "wait for stratum n to stabilize the cells I care about." The CALM theorem still applies — you're still synchronizing on the non-monotonic boundary — but the synchronization is finer-grained.
+
+### The Combined Pattern
+
+```markdown
+Stratum n running (not yet complete)
+    │
+    ├── Stratum n+1 installs targeted thresholds (right Kan: demand-driven)
+    │   → fires as soon as needed cells stabilize
+    │   → stratum n+1 begins partial computation
+    │
+    ├── Stratum n+1 speculatively assumes current state is final (left Kan: speculative)
+    │   → tracked as ATMS assumption
+    │   → speculative results available immediately
+    │
+    └── Stratum n actually completes
+        → targeted thresholds confirmed (demand-driven results are sound)
+        → speculative assumption validated or pruned
+        → stratum n+1 either keeps speculative work or restarts
+```
+
+This doesn't violate "taking turns." The strata still have a logical ordering. The monotonic guarantee within each stratum is preserved. The ATMS manages the speculative assumptions. The threshold propagators manage the demand-driven dependencies. What changes is that the turns *overlap* — stratum n+1 can start working (speculatively or on-demand) before stratum n has finished, with well-defined semantics for what happens when stratum n's final answer arrives.
+
+Whether this is worth implementing depends on your workloads. If strata are typically fast and the pipeline is short, the overhead of managing speculative worldviews might exceed the savings from parallelism. If strata are expensive and there's significant pipeline depth, the overlap could be substantial. Benchmark before committing.
+
+---
+
+## On the BSP Solver
+
+Your planned Bulk-Synchronous Parallel solver with ATMS-managed worldviews is well-conceived. The BSP model gives you the structure you need:
+
+- **Computation phase**: propagators fire in parallel within a stratum (monotonic, no coordination needed)
+- **Communication phase**: cells synchronize values (lattice joins, commutative and associative)
+- **Barrier**: stratum quiesces, threshold propagators fire, next stratum begins
+
+The ATMS on the second layer managing choice points across parallel worldviews is the right architecture for recovering Prolog-like search semantics over the deterministic parallel base. The multiverse multiplexing — each worldview is an ATMS-tracked assumption set, worldviews execute in parallel, nogoods prune globally — is clean.
+
+The Stratified Retraction propagating to S(-1) is interesting. You have upward stratification (NAF, facts flow up) and downward stratification (retraction, invalidation flows down). The S(-1) layer below the main computation is where retraction signals originate. This gives you a **bidirectional** stratification — not quite a bifibration, but the push-up and pull-down are both present in the architecture.
+
+One consideration for the BSP solver: the barrier synchronization in BSP is the most expensive operation. If you can relax it to **partial barriers** (synchronize only cells that have cross-worldview dependencies, let independent worldviews proceed without waiting), you get better parallelism. Your ATMS dependency tracking should tell you which cells need synchronization and which don't.
+
+---
+
+## On Gödel Completeness and Obstructions
+
+Your approach to completeness — prove decidability or provide a fuel-bound escape — is exactly right. The fuel-bound for infinite negation at runtime is the pragmatic answer to the undecidability of the halting problem applied to your specific context.
+
+The connection to obstructions: when the fuel bound is hit, you have an **obstruction to computing a section of the fibration.** The program tried to extend its computation from stratum n to stratum n+1 (via negation), but the computation at stratum n didn't terminate. The obstruction is the non-terminating fixpoint computation at stratum n.
+
+In your architecture, this obstruction is observable as a specific cell (or set of cells) that never stabilized — the propagators kept firing but the lattice values kept changing (or the negation kept cycling). The derivation tree for the obstruction would show: "cell X depends on ¬Y, Y depends on ¬X, neither stabilized within the fuel bound." This is already good error reporting. The categorical framing just gives it a name (obstruction to section extension) and a classification (the type of the obstruction corresponds to the type of non-termination — cyclic negation vs. infinite domain vs. divergent computation).
+
+The fact that you can guarantee completeness structurally for most of your system — only infinite runtime negation escapes the structural guarantee — is strong evidence that the lattice-based architecture is doing real work. In a traditional Prolog system, non-termination lurks everywhere (any recursive predicate can diverge). In your system, the lattice structure (finite height, ascending chain condition) guarantees termination within each monotonic layer, and the stratification structure guarantees termination across layers — except at the single point where the runtime can introduce unbounded negation chains.
+
+---
+
+## On the Path to Self-Hosting
+
+Your trajectory makes sense: build infrastructure on propagator networks, validate each subsystem, connect them via Galois bridges, accumulate understanding of the patterns, then express the patterns as Prologos primitives, then use those primitives to rebuild the infrastructure in Prologos.
+
+The scaffolding approach — having significant infrastructure already running on networks before you try to express the network primitives in the language — is wise. You're learning what the right abstractions are by building concrete systems first. The categorical analysis (bifibrations, Kan extensions, Grothendieck construction) provides the vocabulary for recognizing patterns in what you've built, which then guides what primitives to expose.
+
+For the self-hosted compiler specifically, I'd suggest a staged approach:
+
+**Stage 1: Express the lattice primitives.** Cells, joins, threshold propagators, fixed-point computation. These are the simplest and most stable parts of your infrastructure. Expressing them in Prologos lets you write simple propagator networks in the language itself.
+
+**Stage 2: Express the Galois connection primitives.** Alpha, gamma, bridge networks. This lets you connect Prologos-defined propagator networks to each other, which is necessary for the multi-subsystem architecture.
+
+**Stage 3: Express the stratification primitives.** Stratum boundaries, threshold-based transition, completion detection. This lets you write layered computations in Prologos.
+
+**Stage 4: Express the ATMS primitives.** Assumption management, worldview tracking, nogood propagation. This lets you write search and speculation in Prologos.
+
+**Stage 5: Self-host the type checker.** The type checker is a propagator network (Stage 1) with Galois connections to the session checker and effect system (Stage 2), stratification for meta-variable resolution (Stage 3), and ATMS for speculative type checking (Stage 4). If Stages 1-4 are in place, self-hosting the type checker is assembling existing primitives.
+
+Each stage is independently useful and testable. Each stage's primitives are validated by the concrete infrastructure you've already built at the implementation level. The self-hosted compiler is the end state, but each intermediate stage delivers value.
+
+---
+
+## What I Find Most Remarkable
+
+Looking at your five instances of the Layered Recovery Principle, what strikes me is not the individual techniques — NAF stratification, well-founded semantics, ATMS speculation, Galois bridges, stratified retraction — all of these exist in the literature separately. What's remarkable is that you've **unified them under a single architectural principle, implemented them on a single substrate (propagator networks), and connected them via a single inter-domain mechanism (Galois connections).**
+
+No other system I'm aware of does this. Individual pieces exist: XSB Prolog does tabled resolution, miniKanren does relational programming, Datalog engines do stratified negation, abstract interpretation frameworks use Galois connections, ATMS systems manage assumptions. But they're separate systems with separate implementations and separate theoretical foundations.
+
+You've found that they're all the same thing — monotonic computation with controlled non-monotonic boundaries — and you've built a single infrastructure that instantiates all of them. The propagator network is the universal substrate, the lattice is the universal information structure, the Galois connection is the universal inter-domain bridge, and the Layered Recovery Principle is the universal architectural pattern.
+
+That's a genuine contribution, independent of whether Prologos the language ever ships. The architecture itself is the result.
+#+end_src
+
+*** [[../research/2026-03-21_CATEGORICAL_STRUCTURE_FIVE_SYSTEMS.org][Categorical Structure of Five Propagator Systems: A Critical Re-Examination]]
+
+*** 🤖 Categorical Recommendations for BSP
+
+#+begin_src markdown
+```markdown
+a
+```
+  This document is excellent. The discipline of grounding categorical claims in actual implementation rather than aspirational design is rare and valuable. The structural complexity ranking alone — from free category on a chain (NAF-LE) up through two-barrier opfibration on cylindrical base (type checker) — is a much more useful map than a single blanket characterization.
+
+Let me engage with your question about what structures might be useful, informed by where you actually are rather than where a theorist might wish you were.
+
+---
+
+## Kan Extensions and the BSP Engine
+
+Since you're specifically thinking about this, let me make it concrete for your BSP design.
+
+### What Left Kan Extension Means for BSP
+
+In your BSP engine, computation proceeds in supersteps: all propagators fire in parallel (computation phase), then cells synchronize (communication phase), then a barrier checks for quiescence. The ATMS manages worldviews on the second layer.
+
+A left Kan extension along the pushforward from stratum n to stratum n+1 would mean: given the *current* (incomplete) state of stratum n at the end of a superstep, compute the best approximation of what stratum n+1 would receive if stratum n were already complete.
+
+In BSP terms, this is: **at each barrier, speculatively initialize stratum n+1's cells with the current partial fixpoint of stratum n, tagged as an ATMS assumption.** Stratum n+1's propagators can begin firing in the *next* superstep, in parallel with stratum n's continued convergence.
+
+The key property of a left Kan extension is that it's the *best* (most informative) approximation that's consistent with what's known. In your lattice setting, this means: take the current cell values at stratum n (which are below or equal to the eventual fixpoint, since propagation is monotonic) and push them forward. Everything stratum n+1 derives from this partial information is *sound* — it's a lower bound on what it would derive from the complete fixpoint. When stratum n actually completes, stratum n+1 either confirms its speculative work or needs to join in additional information (but never retract, because the speculation was a lower bound).
+
+This is the crucial point: **if the pushforward is monotone (which it is, because your inter-strata transitions preserve lattice ordering), then speculative results from a partial fixpoint are always below the results from the complete fixpoint.** Stratum n+1 never needs to retract speculative work — it only needs to *continue* propagating when more information arrives from stratum n's completion.
+
+This means you don't need the ATMS for the speculation. The monotonicity of the pushforward guarantees that the speculative results are sound. You just need to detect when stratum n's completion delivers new information beyond what was already speculatively forwarded, and trigger additional propagation in stratum n+1.
+
+For BSP specifically:
+
+```markdown
+Superstep k:
+  Stratum n: propagators fire (approaching fixpoint)
+  Stratum n+1: propagators fire on speculatively forwarded values
+
+Barrier k:
+  Stratum n: synchronize cells
+  Stratum n+1: synchronize cells
+  Check: did stratum n's cells change since last forward to n+1?
+    If yes: forward new values to n+1 (monotone join into n+1's cells)
+    If no: stratum n has quiesced; speculative work is confirmed
+
+Superstep k+1:
+  Stratum n: (if not yet quiesced) propagators fire
+  Stratum n+1: propagators fire (on newly forwarded values, if any)
+```
+
+This gives you **pipelined strata** within the BSP framework. Each barrier does double duty: synchronizing within-stratum cells *and* forwarding between-stratum approximations. The cost is minimal — one additional check and potential join per barrier per stratum boundary. The benefit is that stratum n+1 starts converging before stratum n finishes, and all the speculative work is guaranteed sound.
+
+### What Right Kan Extension Means for BSP
+
+The right Kan extension is dual: given a *requirement* at stratum n+1, compute the minimal information needed from stratum n.
+
+In BSP terms: stratum n+1 registers **threshold interests** in specific cells of stratum n. Instead of forwarding all of stratum n's state at each barrier, you only forward cells that stratum n+1 has expressed interest in. Stratum n's propagators might not need to converge fully — they only need to stabilize the cells that stratum n+1 cares about.
+
+This is demand-driven evaluation within BSP:
+
+```markdown
+Setup:
+  Stratum n+1 analyzes its propagators to determine which stratum-n cells
+  they actually read. Registers threshold interests on those cells.
+
+Barrier k:
+  For each threshold interest:
+    If the stratum-n cell has stabilized (value unchanged since last barrier):
+      Forward to stratum n+1 (the demand is satisfied)
+    Else:
+      Continue (stratum n hasn't stabilized this cell yet)
+
+  Stratum n+1 fires propagators only for the cells whose demands are newly
+  satisfied.
+```
+
+The right Kan extension guarantees **minimality** — stratum n+1 gets exactly the information it needs, no more. This reduces communication volume at barriers (only forwarding demanded cells) and potentially allows stratum n to quiesce earlier (it can stop when all demanded cells are stable, even if other cells are still changing).
+
+### Combining Them in BSP
+
+The left and right Kan extensions are adjoint, which means they can work together:
+
+- Right Kan identifies *which* cells to forward (demand-driven)
+- Left Kan determines *when* to forward them (as early as possible, speculatively)
+- The adjunction guarantees compatibility: speculative forwarding of demanded cells gives the same result as waiting for completion and then extracting what's needed
+
+For your BSP engine, this translates to:
+
+```markdown
+Superstep structure:
+  1. Propagators fire in parallel (all strata, all worldviews)
+  2. Cells synchronize (within-stratum communication)
+  3. Barrier check:
+     a. For each stratum boundary:
+        - Forward demanded cells that have changed (left Kan + right Kan)
+     b. For each stratum:
+        - Has it quiesced? (all cells stable)
+     c. Global:
+        - Have all strata quiesced? (termination)
+  4. ATMS layer:
+     - Prune inconsistent worldviews
+     - Propagate nogoods
+```
+
+This is still BSP — the barrier is still there, strata still take turns in the sense that information flows through barriers. But the pipelining means strata overlap in time, and the demand-driven filtering means barriers are cheaper.
+
+---
+
+## Structures Worth Exploring
+
+Let me suggest categorical structures based on where your implementation actually is, not where it could theoretically be.
+
+### Traced Monoidal Categories (You Already Have One)
+
+Your document identifies the session type subsystem as a traced monoidal category. This is worth developing further because traced monoidal categories have a deep connection to **feedback and fixpoints** that's directly relevant to your propagator architecture.
+
+The trace operation in a monoidal category captures feedback: given a morphism f : A ⊗ U → B ⊗ U, the trace Tr(f) : A → B "loops U back," connecting the U output to the U input. This is exactly what your duality propagators do — they connect dual session endpoints, creating a feedback loop.
+
+The connection to propagators: a propagator network with feedback (cycles) is a traced monoidal category. The trace is the fixpoint computation. The monoidal product is parallel composition of independent subnetworks. This gives you a categorical framework for reasoning about *which* propagator network cycles are well-founded (the trace exists) and which diverge (the trace doesn't exist).
+
+For the BSP engine specifically: the Int construction (Joyal, Street, Verity) builds a *compact closed category* from a traced monoidal category. Compact closed categories have a notion of *duality* that's richer than what you currently use for session types. Every object has a dual, and morphisms from A to B correspond to morphisms from I to A* ⊗ B (where A* is the dual of A). This might give you a cleaner treatment of bidirectional session types — instead of special-casing duality propagators, duality becomes a structural feature of the category.
+
+### Polynomial Functors
+
+This is the structure I think could be most immediately useful for your next engineering phase.
+
+A polynomial functor is a functor of the form P(y) = Σ_{i ∈ I} y^{B_i}, where I is a set of "positions" and B_i is a set of "directions" at each position. Polynomial functors form a category (with natural transformations as morphisms) that has remarkable closure properties — it's closed under composition, has a monoidal structure, and supports a notion of "wiring diagram" that directly models your propagator network architecture.
+
+The connection: **a propagator network is a morphism of polynomial functors.** Each cell is a position. Each propagator is a direction at a position (it reads from some cells and writes to one). The network topology is a polynomial functor map. Composing networks (connecting the output cells of one to the input cells of another) is composition of polynomial functors.
+
+David Spivak's work on polynomial functors and wiring diagrams provides:
+
+- A formal language for specifying network topologies
+- Composition operations that are guaranteed to produce well-formed networks
+- A type system for networks (the polynomial functor's type signature tells you what interfaces a network exposes)
+- A notion of "network morphism" that captures refinement (replacing a subnetwork with a more detailed implementation)
+
+For Prologos, polynomial functors could give you the **module system for propagator networks** — each module exposes a polynomial functor interface (these are my input cells, these are my output cells, these are the types), and composition of modules is composition of polynomial functors. The Grothendieck construction you identified as validating falls out as a special case of polynomial functor composition.
+
+### Operads and Multicategories
+
+Your propagator networks have a feature that ordinary categories don't capture well: propagators have **multiple inputs**. A propagator that reads from three cells and writes to one is not a morphism in the usual sense (which goes from one object to one object) — it's a *multimorphism*, going from three objects to one.
+
+The right categorical structure for this is an **operad** or **multicategory**. Objects are cell types (lattices). Multimorphisms are propagators. Composition is network assembly — plugging the output of one propagator into an input of another.
+
+The operad structure gives you:
+
+- A clean account of propagator arity (how many inputs, how many outputs)
+- Associativity of composition (plugging networks together in different orders gives the same result)
+- A substitution principle (replacing a cell with a subnetwork that computes that cell's value)
+
+The colored operad (also called symmetric multicategory) is the most general version: different cell types (different lattices) are different colors, and propagators are typed by their input and output colors. This captures your heterogeneous networks where type cells, session cells, and multiplicity cells all coexist with propagators that cross between domains.
+
+### Sheaves on Your Network Topology
+
+Your CHAMPs give you persistent, versioned cell values. A cell's history — its sequence of values across propagation steps — is a **presheaf** on the poset of time steps (or more precisely, on the poset of network versions). The entire network's history is a **sheaf** on the network topology: local consistency (each cell's history is a valid lattice ascending chain) glues together to give global consistency (the network's evolution is a valid propagation trace).
+
+Sheaf theory could give you:
+
+- **Cohomological invariants** of your network's computation. The zeroth cohomology H⁰ is the global sections — the fixpoints of the network. Higher cohomology measures obstructions to extending local solutions to global ones. This connects to your error reporting: a type error that manifests as a local inconsistency (one cell reaches ⊤) but whose cause is global (an interaction between distant parts of the program) would show up as a nonzero first cohomology class.
+
+- **Descent theory** for distributed computation. If you eventually distribute your propagator network across machines, sheaf descent tells you when local computations on each machine can be assembled into a global computation. The descent condition is: the local fixpoints agree on shared cells. This is exactly the consistency condition you'd need for distributed propagators.
+
+- **Cosheaves for information flow.** While sheaves track "what's known" (restriction from global to local), cosheaves track "what's communicated" (extension from local to global). Your Galois connections between subsystems might be naturally understood as cosheaf maps — they extend local information (within one subsystem) to global information (across subsystems) in a way that's compatible with the network topology.
+
+### Profunctors
+
+A profunctor from category C to category D is a functor C^op × D → Set. Profunctors generalize functors and relations, and they compose via a coend formula that resembles matrix multiplication.
+
+For your system, profunctors could model the **interfaces between subsystems**. The Galois connection between the session type subsystem and the QTT subsystem, when you eventually implement it as live propagators, would be a profunctor: for each session type s and each QTT usage context u, the profunctor gives you the set of valid bridges between them.
+
+Profunctor composition would then give you: if you have a bridge from sessions to QTT and a bridge from QTT to type inference, the composite profunctor gives you the induced bridge from sessions to type inference. This is the transitive closure of your Galois connection network, computed categorically.
+
+The advantage over computing bridges ad hoc: profunctor composition has a universal property (it's the coend), which means the composite bridge is *the best possible* — it loses no information that could be preserved by any chain of bridges. This is a strong optimality guarantee for your inter-subsystem communication.
+
+---
+
+## What I'd Prioritize
+
+Given where you are — five systems of varying categorical complexity, BSP engine coming, Track 8 migration planned — I'd focus on:
+
+**First: polynomial functors for the module/interface story.** This gives you a formal framework for the BSP engine's network topology, module boundaries for self-hosting, and a composition principle for connecting subsystems. It's practical and directly engineering-relevant.
+
+**Second: the Kan extension pipeline for BSP.** The left/right Kan analysis above gives you a concrete design for pipelined strata with demand-driven forwarding. This is an optimization of your BSP engine with provable correctness properties.
+
+**Third: operads for propagator typing.** As you move toward expressing propagator networks as Prologos primitives, operads give you the right type theory for propagators (multi-input, single-output, typed by lattice). This feeds directly into the self-hosting story.
+
+The sheaf and profunctor directions are more speculative — they'd become relevant when you have distributed propagators or a full Galois bridge network, neither of which exists yet. File them for later.
+
+The traced monoidal structure of your session types is already there and could be developed further whenever session types become a priority again. The Int construction for bidirectional sessions is worth exploring but not urgent.
+
+---
+
+## One More Thing
+
+Your document's methodology section — "a system inhabits a categorical structure when the objects and morphisms correspond to implemented data structures and transitions, the functorial laws are enforced by the implementation, and the additional structure is load-bearing" — is a contribution in its own right. I've never seen this criterion stated this clearly in the applied category theory literature. Most papers in the area are happy to note that a categorical structure is "compatible with" or "can model" a system, without asking whether the structure is actually load-bearing.
+
+You should keep applying this criterion. It's what will keep Prologos's theoretical foundations honest as the system grows, and it's what will make the eventual paper on the Layered Recovery Principle credible rather than hand-wavy. The gap between "this could be modeled as X" and "this *is* X because removing X would break the system" is the gap between category theory as metaphor and category theory as engineering. You're on the right side of that gap.
+#+end_src
+
+
+
+
+#+begin_src markdown
+a
+#+end_src
+
+
+
+
+
+
+
+
+
+would prelude loading benefit from batched quiescence optimization? ~6000 cells, most writes, one quiescent run.
+
+
+
+
+
+

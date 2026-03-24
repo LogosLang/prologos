@@ -1,0 +1,48 @@
+#+TITLE: Standup — 2026-03-24
+#+DATE: 2026-03-24
+
+* Yesterday (since 2026-03-23 standup)
+
+** PM Track 8F: Metas as Cells (COMPLETE)
+- Design: D.1→D.4 (4 critique rounds + Pre-0 benchmarks as design input)
+- 6/8 phases delivered, 2 deferred (Phase 5 architectural, Phase 7 → Track 10)
+- cell-id in expr-meta: 1.5x faster meta reads (103ns vs 150ns)
+- Suite: 244.3s → 232.9s (4.7% cumulative improvement)
+- PIR: ~docs/tracking/2026-03-24_PM_8F_PIR.md~ (19 sections, 5 wrong assumptions)
+- 5 wrong assumptions: 225→31 zonk sites, Phase 0 was no-op, Phase 2 zero scope, zonk-at-depth≠zonk, ground-expr? different concepts
+- Deferred: defaults at solve-time (architectural), CHAMP fallback (Track 10)
+
+** REPL/process-string Hang Fixed (~29a1fad~)
+- Root cause: ~current-prop-net-box~ = #f during REPL module loading
+- Fix: auto-create minimal network in process-string/process-string-ws
+- Was "pre-existing" for multiple sessions, cost 2+ hours in workarounds
+- Resolved by applying Completeness principle to our own process
+
+** Test Runner Improvement (~4211a78~)
+- Bail-out message: box-drawn banner with SYSTEMIC REGRESSION DETECTED
+- Explicit ACTION: REVERT instruction
+
+** Instrumentation Cleanup (~3339fec~)
+- Dead ~subtype-check-count~ from SRE Track 1B: cons alloc on every subtype? call
+- Gated behind #f default — 1.2% suite improvement
+
+** DESIGN_METHODOLOGY.org Updated (~cf3a856~)
+- Stage 2: grep-backed code measurements (not vision estimates)
+- Stage 3: Pre-0 benchmark as explicit design phase; codebase reality check in self-critique
+- Stage 4: post-implementation A/B + instrumentation cleanup; explicit PIR per methodology
+- 4 new workflow rules: separate compile/test, 3-timeout=revert, "pre-existing" smell, full output capture
+
+** Metrics
+- 7401 tests, 382 files, 232.9s (all pass)
+- ~15 commits in interval
+- Cumulative improvement: 244.3s → 232.9s (4.7%)
+
+* Today
+
+** Research program (user-directed)
+** Code-sleuthing
+** Track 10 design considerations
+
+* Blockers
+
+- PUnify toggle flip blocked by Option module loading hang (may be resolved by REPL fix — needs verification)
