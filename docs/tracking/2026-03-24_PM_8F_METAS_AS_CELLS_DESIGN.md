@@ -22,7 +22,7 @@
 | Pre-0 | Micro-benchmark + adversarial testing | ✅ | Key findings: id-map is bottleneck (82ns), meta-solution ALREADY cell-primary, bvar risk confirmed |
 | 0 | **bvar closure detection** (assertion only, correction in Phase 3) | ⬜ | D.4: detection not correction. Avoids Phase 0/3 chicken-and-egg. |
 | 1 | **Embed cell-id in expr-meta** (skip id-map lookup) | ⬜ | 82ns → ~4ns per meta-solution. The meta IS the cell. |
-| 2 | Eliminate defensive zonk calls (cell reads sufficient) | ⬜ | ~225+ sites, classify necessary vs defensive |
+| 2 | Zonk call site audit: classify 31 sites (was 225 est.) | ✅ | **0 defensive calls found.** 13 necessary + 15 boundary. Phase has zero elimination scope. |
 | 3 | Eliminate zonk-at-depth + activate close-expr (atomic) | ⬜ | D.4: close-expr + zonk-at-depth elimination happen together. Depends on Phase 0 data. |
 | 4 | Freeze at command boundaries: single-pass cell read | ⬜ | Replaces zonk-final (~200 lines) |
 | 5 | Defaults at solve-time (eliminate default-metas) | ⬜ | Level→lzero, mult→mw at cell write |
