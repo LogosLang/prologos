@@ -17,6 +17,18 @@ of NTT's `:lattice :structural` annotation.
 - [NTT Architecture Survey](../research/2026-03-22_NTT_ARCHITECTURE_SURVEY.md) — all 7 systems as NTT skeletons, gap analysis
 - [Categorical Foundations](../research/2026-03-22_CATEGORICAL_FOUNDATIONS_TYPED_PROPAGATOR_NETWORKS.md) — polynomial functor grounding
 - [Unified Propagator Network Roadmap](2026-03-22_UNIFIED_PROPAGATOR_NETWORK_ROADMAP.md) — on-network/off-network boundary analysis
+- [Hypergraph Rewriting + Propagator Parsing](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md) — SRE decomposition IS DPO hyperedge replacement
+- [Tropical Optimization + Network Architecture](../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md) — cost-weighted rewriting, ATMS search, stratification
+
+**Key insight (2026-03-24)**: SRE structural decomposition IS hyperedge
+replacement (DPO graph rewriting). The form registry IS a hypergraph grammar.
+Critical pair analysis from the graph transformation literature applies to
+SRE confluence. `prop:ctor-desc-tag` guarantees no critical pairs for
+decomposition — confluence by construction.
+
+**Cross-series connections**: PPN (parsing as HR grammar on network),
+OE (tropical semiring enrichment for cost-weighted rewriting),
+PM Track 9 (reductions as DPO rewriting). All share the SRE as foundation.
 
 ---
 

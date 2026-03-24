@@ -220,6 +220,59 @@ When elaboration, resolution, matching, and reduction all use the SRE:
 5. Express type checker as stratified propagator network
 6. Compiler is a Prologos program that type-checks itself
 
+** PPN (Propagator-Parsing-Network)  — /Parsing and rewriting as graph transformation on the network/
+
+| | |
+|------------------+------|
+| *Thesis*         | Parsing IS attribute evaluation IS propagator fixpoint (Engelfriet-Heyker). The multi-phase pipeline (lex→parse→elaborate→typecheck) collapses to a single propagator network with bidirectional information flow. User-defined grammar extensions as typed hyperedge replacement rules. |
+| *Status*         | Stage 0 research. 2 research documents. |
+| *Origin*         | [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research]], [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]] |
+
+*** Tracks (Proposed)
+
+| Track | Description | Status | Depends On |
+|-------+-------------+--------+------------|
+| 0 | Lattice design for parse state (ambiguity, token, attribute lattices) | ⬜ | SRE Track 0 (form registry) |
+| 1 | Lexer as propagators (character→token cells) | ⬜ | Track 0 |
+| 2 | Parser as propagators (chart/Earley as fixpoint, HR productions as propagators) | ⬜ | Track 1 |
+| 3 | Type-directed disambiguation (backward type→parse flow via Galois bridges) | ⬜ | Track 2, PM 8F (cell-primary types) |
+| 4 | User-defined grammar extensions (NTT-typed HR rules, richer than macros) | ⬜ | Track 3, NTT |
+| 5 | Incremental editing (LSP-grade: edit character → propagation updates affected cells) | ⬜ | Track 3; IS PM Track 11 (partial) |
+
+*** Key Connections
+
+- SRE structural decomposition IS hyperedge replacement (DPO rewriting)
+- SRE form registry IS a hypergraph grammar
+- ATMS provides search strategy for ambiguous parses / conflicting rewrites
+- NTT types grammar rules (type-safe grammar extensions)
+- PM Track 9 (reduction) shares DPO rewriting infrastructure
+- Goodman's semiring parsing: same parser parameterized by semiring (Boolean→recognition, tropical→optimization, forest→all parses)
+
+** OE (Optimization Enrichment)  — /Tropical semirings and cost-optimal computation across all series/
+
+| | |
+|------------------+------|
+| *Thesis*         | Correctness (join-semilattice) and optimization (min-plus tropical semiring) are two enrichments on the same network. Cells carry both a value and a cost. The tropical merge keeps cheapest derivations. Cost-bounded exploration replaces flat fuel limits with problem-aware thresholds. |
+| *Status*         | Stage 0 research. |
+| *Origin*         | [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]], [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research §5]] |
+
+*** Research Tracks (Proposed)
+
+| Track | Description | Status | Touches |
+|-------+-------------+--------+---------|
+| 0 | Tropical semiring lattice design + cell product enrichment | ⬜ | All series (cross-cutting) |
+| 1 | Weighted parsing (Goodman semiring framework on PPN) | ⬜ | PPN Track 2 |
+| 2 | Cost-weighted rewriting (tropical extraction on e-graphs) | ⬜ | PM Track 9, SRE Track 5 |
+| 3 | Cost-bounded exploration (replace fuel limits with tropical thresholds) | ⬜ | BSP-LE, NTT stratification |
+| 4 | Weighted constraint solving (tropical enrichment on LE/NF-Narrowing) | ⬜ | BSP-LE, FL-Narrowing |
+
+*** Cross-Cutting Nature
+
+OE is NOT a standalone implementation series — it produces lattice designs
+and enrichment patterns that OTHER series consume. Each OE track delivers
+infrastructure (a tropical lattice, a cell product type, a cost-merge
+function) that plugs into PPN, PM, SRE, or BSP-LE.
+
 * Completed Standalone Tracks (not part of a Series)
 
 These are Tracks that were independently scoped and completed outside of
