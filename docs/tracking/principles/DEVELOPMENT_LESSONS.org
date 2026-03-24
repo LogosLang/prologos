@@ -346,6 +346,41 @@ measure (type depth × unsolved metas). Without stating this explicitly,
 the design would have relied on fuel alone --- missing the structural
 insight that makes the architecture provably decidable.
 
+** Non-Equality Relations Break Equality Assumptions
+
+When extending the SRE from equality-only to support additional structural
+relations (subtyping, duality, coercion), every decomposition function
+must be audited for equality-specific assumptions. Three classes of
+assumptions were discovered in SRE Track 1:
+
+1. /Lattice ordering assumption/: Equality uses a flat lattice where
+   ~merge(Nat, Int) = top~ (incompatible). Subtyping needs a
+   partially-ordered lattice where ~merge(Nat, Int) = Int~ (the
+   supertype). Two orderings on the same carrier require separate merge
+   functions --- a single merge cannot serve both relations.
+
+2. /Symmetric decomposition assumption/: Equality decomposes with one
+   descriptor (both sides have the same constructor tag). Duality
+   decomposes with two descriptors (Send on one side, Recv on the other).
+   ~sre-decompose-generic~ assumed symmetric decomposition; duality
+   required a dedicated ~sre-duality-decompose-dual-pair~.
+
+3. /Value copying assumption/: Equality safely copies the "unified" value
+   to both sides (they converge to the same value). Duality and subtyping
+   cannot --- copying source-side values into target-side sub-cells
+   produces un-dualized or un-subtyped values. For non-equality relations,
+   always initialize target-side sub-cells with bot and let propagators
+   push the correct values.
+
+When adding a new relation, analyze it along four axes before
+implementation: (a) symmetry (symmetric, directional, involutive),
+(b) merge semantics (merges cells, checks cells, swaps constructors),
+(c) constructor mapping (same tag, dual tag pairs, coercion mapping),
+(d) binder requirements (needs fresh metas, or operates on ground types).
+
+Discovered in SRE Track 1 + 1B: 7 bugs total, 3 from equality-specific
+assumptions. See [[file:../2026-03-23_SRE_TRACK1_PIR.md][SRE Track 1 PIR §4, §13, §14]].
+
 ** Retraction Is Aggregation's Dual
 Both retraction (removing entries from a cell) and aggregation (collecting
 the complete set of derivations) are non-monotonic operations. Both are

@@ -190,6 +190,26 @@ This is an iterative cycle:
   termination arguments for its propagator components is incomplete.
   See [[file:GÖDEL_COMPLETENESS.org][GÖDEL_COMPLETENESS.org]].
 
+- *Benchmark as design input, not just post-implementation validation*:
+  For infrastructure tracks, include a benchmarking phase BEFORE
+  implementation phases. Setup micro-benchmarks and adversarial tests as
+  part of the design process. Run them, then iterate the design with the
+  data. The cycle is: draft design → setup benchmarks → run → iterate
+  design with data → implement.
+
+  Benchmarking before reveals whether the optimization target is correct.
+  SRE Track 1B discovered that its failure path bottleneck was cold-start
+  allocation, not excessive computation --- leading to "eliminate the
+  network entirely for ground types" instead of "smarter quiescence."
+  BSP-LE Track 0 discovered transient CHAMPs were slower at N=2-3,
+  preventing a wrong optimization. In both cases, the pre-implementation
+  benchmark changed the design fundamentally.
+
+  This is distinct from "benchmark after infrastructure phases" (the
+  existing workflow rule): post-implementation benchmarking detects
+  regressions; pre-implementation benchmarking discovers whether the
+  approach is correct.
+
 *** The critique cycle in practice
 
 The Extended Spec Design went through multiple rounds:

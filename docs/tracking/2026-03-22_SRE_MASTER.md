@@ -114,7 +114,7 @@ creates cells and calls `structural-relate` to express type relationships.
 - Registry access pattern (needs PM 8E: registries as cells)
 - The `current-prop-net-box` (needs PM Track 10)
 
-**Dependencies**: Track 0 (form registry)
+**Dependencies**: Track 1 (relation engine — equality + subtyping + duality)
 
 **PM interleaving**: Partial benefit without PM 8E/8F. Full benefit with them.
 Can proceed independently — the `sre-structural-relate` calls work with the
@@ -123,6 +123,33 @@ current box-based infrastructure. The SRE doesn't require cells-only access.
 **Key risk**: typing-core.rkt is ~3000 lines with 40+ infer/check cases.
 Each case needs migration. Incremental migration possible (convert one case at
 a time, existing tests catch regressions).
+
+**Known gaps from Track 1+1B PIR** (to address in this track):
+- **Polarity inference integration**: `variance-join`/`variance-flip` utilities
+  exist but aren't wired into `data` elaboration. User-defined types get `#f`
+  variance (no structural subtyping). Integration = fill `component-variances`
+  automatically during ctor-desc registration for `data` definitions.
+- **Subtyping can't guide inference**: Track 1's subtype-relate is a CHECKER
+  (fires on ground values, returns yes/no). For the elaborator-on-SRE, if
+  subtyping needs to participate in inference (`?X <: Int` constraining `?X`),
+  subtype-relate would need bounds propagation (cells carry intervals, not
+  single values). This is a significant architectural change. Design must
+  decide: keep checking (defer to metas being solved first) or add bounds.
+- **Coercion insertion**: Runtime coercion (Nat→Int, Int→Rat) needs to be
+  expressed as SRE structural transformations during elaboration. Deferred
+  from Track 1 (runtime concern). Track 2 is where it becomes relevant.
+
+**Design consideration from Track 1+1B PIR §14**: Structural relations are
+a FAMILY of operations with different algebraic properties:
+- Symmetry: equality=symmetric, subtyping=directional, duality=involutive
+- Merge semantics: equality=merges cells, subtyping=checks cells, duality=swaps constructors
+- Constructor mapping: equality=same tag, duality=dual tag pairs
+- Binder requirements: equality=needs fresh metas, subtype/duality=ground types
+
+When the elaborator generates structural-relate calls, the RELATION determines
+decomposition mechanics. Each new relation should be analyzed along these 4 axes
+before implementation. Track 1 discovered 3 bugs from equality-specific assumptions;
+the elaborator-on-SRE design must not inherit these assumptions.
 
 ### Track 2: Trait Resolution-on-SRE
 
@@ -150,10 +177,20 @@ state IS the SRE's structural matching state.
 - Duality checking is structural: `Send(A, S) ~ dual(Recv(A', S'))` decomposes
   into `A ~ A'` (equality) and `S ~ dual(S')` (recursive duality)
 
-**Dependencies**: Track 0.5 (duality relation)
+**Dependencies**: Track 1 (duality relation — basic integration done in Track 1/1B)
 
 **NTT validation**: Case study confirmed sessions are nearly network-native.
-Main gap was involution-based decomposition — Track 0.5 delivers this.
+Track 1/1B delivered basic duality integration (Send/Recv/AsyncSend/AsyncRecv/Mu/DSend/DRecv).
+
+**Known gaps from Track 1+1B PIR** (to address in this track):
+- **Choice/Offer branch duality**: Variable-arity branch lists (label → session maps),
+  not fixed-arity components. Current ctor-desc assumes fixed arity. Needs a different
+  decomposition pattern (match branches by label, dualize each).
+- **`dual` function retirement**: `sessions.rkt` still exports imperative `dual`, called
+  in error messages, pretty-printing, and `typing-sessions.rkt` (4 remaining call sites).
+  Track 1 replaced the `session-propagators.rkt` call site only. Full retirement
+  means replacing the 4 remaining call sites with SRE-based duality queries or
+  keeping `dual` as a utility for non-network uses (error formatting).
 
 ### Track 4: Pattern Compilation-on-SRE
 
