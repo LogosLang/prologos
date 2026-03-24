@@ -108,20 +108,30 @@
     [(and desc-a desc-b
           (eq? (ctor-desc-tag desc-a) (ctor-desc-tag desc-b))
           (eq? (ctor-desc-domain desc-a) (ctor-desc-domain desc-b)))
-     ;; Skip binder cases (Pi, Sigma, lam) — they need special handling
-     ;; in Phase 2. For now, let the hardcoded cases handle them.
+     (define tag (ctor-desc-tag desc-a))
      (define bd (ctor-desc-binder-depth desc-a))
+     (define extract-a (ctor-desc-extract-fn desc-a))
+     (define extract-b (ctor-desc-extract-fn desc-b))
+     (define comps-a (extract-a a))
+     (define comps-b (extract-b b))
      (cond
-       [(and bd (> bd 0)) #f]  ;; Binder case — fall through to hardcoded
+       ;; Pi: special handling — mult + domain + codomain (binder)
+       ;; Returns 'pi tag for backward compat with dispatch-unify-whnf
+       [(eq? tag 'Pi)
+        (list 'pi
+              (first comps-a) (first comps-b)     ; mults
+              (second comps-a) (second comps-b)    ; domains
+              (third comps-a) (third comps-b))]    ; codomains (raw, dispatcher opens)
+       ;; Sigma, lam: fst/type + snd/body (binder)
+       ;; Returns 'binder tag for backward compat with dispatch-unify-whnf
+       [(and bd (> bd 0))
+        (list 'binder
+              (first comps-a) (first comps-b)      ; fst-type/type
+              (second comps-a) (second comps-b))]   ; snd-type/body (raw, dispatcher opens)
+       ;; Non-binder structural decomposition
        [else
-        ;; Non-binder structural decomposition via SRE
-        (define extract-a (ctor-desc-extract-fn desc-a))
-        (define extract-b (ctor-desc-extract-fn desc-b))
-        (define comps-a (extract-a a))
-        (define comps-b (extract-b b))
         (list 'sub (map cons comps-a comps-b))])]
     ;; Different tags or different domains → not structurally compatible
-    ;; Fall through to other checks (level, union, retry, conv)
     [else #f]))
 
 ;; ========================================
@@ -517,6 +527,18 @@
       [(expr-meta? b) (list 'flex-rigid (expr-meta-id b) a)]
 
       ;; --- Structural decomposition ---
+      ;; SRE Track 2 Phase 2: ALL structural cases (including binders) via SRE
+      ;; when toggle is on. Handles Pi ('pi tag), Sigma/lam ('binder tag),
+      ;; and non-binder cases ('sub tag) in one dispatch.
+      ;; suc is included — SRE handles it via ctor-desc.
+      ;; nat-val cross-repr cases MUST come after this (permanent exception).
+
+      ;; SRE dispatch (Phase 1+2: all structural cases)
+      [(and (current-sre-classify-enabled?)
+            (sre-structural-classify a b))
+       => values]
+
+      ;; --- Fallback: hardcoded structural cases (when SRE toggle is off) ---
 
       ;; Pi vs Pi
       [(and (expr-Pi? a) (expr-Pi? b))
@@ -578,15 +600,6 @@
        (list 'retry (normalize-for-resolution a) b)]
       [(and (flex-app? a) (normalizable-builtin? b))
        (list 'retry a (normalize-for-resolution b))]
-
-      ;; --- SRE Track 2: Non-binder structural dispatch ---
-      ;; When enabled, delegates app, Eq, Vec, Fin, pair, suc to SRE ctor-desc
-      ;; dispatch (O(1) via prop:ctor-desc-tag). Binder cases (Pi, Sigma, lam)
-      ;; remain hardcoded above — they need special mult/binder handling (Phase 2).
-      ;; flex-app checks are AFTER app-vs-app (current ordering preserved).
-      [(and (current-sre-classify-enabled?)
-            (sre-structural-classify a b))
-       => values]
 
       ;; --- Fallback: hardcoded structural cases (when SRE toggle is off) ---
 
