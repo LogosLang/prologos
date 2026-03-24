@@ -22,7 +22,10 @@ above it is simpler. Track 1B fixes the foundation before Track 2 builds on it.
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 1 | Microbenchmark + adversarial + frequency analysis | ✅ | `312ca3a`. Zero compound checks in suite. Success 8-54μs, failure 333μs. |
-| 2 | Merge-per-relation registry + failure path optimization | ⬜ | case dispatch (zero overhead), early-exit quiescence for failures |
+| 2a | Merge-per-relation registry | ✅ | `d276922`. case dispatch, 10→9 fields |
+| 2b | Early-exit quiescence | ✅ | Already implemented (4 firings before exit) |
+| 2c | Flat NOT guard (compound-type?) | ✅ | `3e00244`. 2.0μs → 0.47μs (4.3× faster) |
+| 2d | Ground-type direct recursive check | ⬜ | Bypass mini-network for ground subtype queries. 8μs → ~0.5μs expected. |
 | 3 | Relation-parameterized decomposition guard | ⬜ | Pure correctness fix, independent |
 | 4 | Dependent duality (sre-decompose-binder) | ⬜ | Proper binder opening for DSend/DRecv |
 | 5 | Session duality edge case tests | ⬜ | Partial sessions, incremental, deeply nested, mu |
@@ -257,6 +260,78 @@ checks are ~0.01μs each — effectively free).
 ;;   subtype: partial ordering (Nat ≤ Int → Int)
 ;; The merge-registry is the Racket encoding of NTT's multi-ordered lattice.
 ```
+
+## 2d. Ground-Type Direct Recursive Check
+
+### Problem
+
+The mini-network query pattern (Phase 4 of Track 1) creates a full
+`prop-network` for each compound subtype check: CHAMPs for cells,
+propagators, decomps; worklist drain; struct-copies per iteration.
+~80-100 allocations for a 2-cell query. Benchmarks show:
+- Success: 8-54μs (dominated by allocation, not computation)
+- Failure: 333μs (cold-start + 4 propagator firings)
+
+For ground-type subtype checks (both values fully known, no metas),
+propagation adds no value — there's no incremental information to flow.
+The computation is a total function: walk the structure, check variance
+at each level, verify leaves via flat subtype check.
+
+### Principled Fix
+
+Replace the mini-network query pattern with a direct recursive function
+for ground-type checks. Uses the SRE's data structures (ctor-desc,
+variance annotations, merge-registry) but not the propagator machinery.
+
+```racket
+(define (structural-subtype-ground? domain t1 t2)
+  (cond
+    [(equal? t1 t2) #t]
+    [else
+     (define tag1 (sre-constructor-tag domain t1))
+     (define tag2 (sre-constructor-tag domain t2))
+     (cond
+       ;; Both compound, same tag → check components with variance
+       [(and tag1 tag2 (eq? tag1 tag2))
+        (define desc (lookup-ctor-desc tag1 #:domain (sre-domain-name domain)))
+        (and desc
+             (let ([comps1 ((ctor-desc-extract-fn desc) t1)]
+                   [comps2 ((ctor-desc-extract-fn desc) t2)]
+                   [variances (or (ctor-desc-component-variances desc)
+                                  (make-list (ctor-desc-arity desc) '=))])
+               (for/and ([c1 (in-list comps1)]
+                         [c2 (in-list comps2)]
+                         [v (in-list variances)])
+                 (case v
+                   [(+) (structural-subtype-ground? domain c1 c2)]
+                   [(-) (structural-subtype-ground? domain c2 c1)]
+                   [(=) (equal? c1 c2)]
+                   [(ø) #t]))))]
+       ;; Atomic or different tags → use subtype merge
+       [else
+        (define merge (sre-domain-merge domain sre-subtype))
+        (define merged (merge t1 t2))
+        (and (not ((sre-domain-contradicts? domain) merged))
+             (equal? merged t2))])]))
+```
+
+**Performance expected**: ~0.3-0.5μs for 1-level success (vs 8μs), ~3-5μs
+for 10-level (vs 54μs), ~0.3-0.5μs for failure (vs 333μs). Zero allocations.
+
+**Principles alignment**:
+- **Propagator-First**: The function reads FROM the SRE's data structures
+  (ctor-desc, variance, merge-registry). The structural knowledge is on-network.
+  Ground-type subtyping is a pure function over fully-known values — propagation
+  adds no information. Analogous to not creating a propagator network to compute `2 + 3`.
+- **Data Orientation**: Variance and merge functions are data on ctor-desc/domain.
+  The recursive walk is driven by this data, not hardcoded per-type.
+- **Completeness**: The mini-network path is PRESERVED for Track 2 (partial
+  information with metas). Ground-type optimization is a specialization, not
+  a replacement.
+
+**Provenance note**: If explanation is needed ("why is PVec Nat <: PVec Int?"),
+the recursive walk can collect a proof trace as a return value alongside the
+boolean. This is cheaper than reconstructing provenance from cell write histories.
 
 ## 3. Dependent Duality (sre-decompose-binder)
 
