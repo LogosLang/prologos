@@ -64,6 +64,7 @@
               #f    ; no meta-recognizer
               #f    ; no meta-resolver
               #f    ; no dual-pairs
+              'top  ; top-value
               #f))  ; no subtype-merge
 
 ;; ========================================
@@ -257,7 +258,7 @@
             new))
       (define bad-domain
         (sre-domain 'bad bad-merge (lambda (v) (eq? v 'top))
-                    (lambda (v) (eq? v 'bot)) 'bot #f #f #f #f))  ; dual-pairs + subtype-merge
+                    (lambda (v) (eq? v 'bot)) 'bot #f #f #f 'top #f))  ; dual-pairs, top-value, subtype-merge
       ;; In debug mode, this should error
       (parameterize ([current-sre-debug? #t])
         (define net0 (fresh-net))

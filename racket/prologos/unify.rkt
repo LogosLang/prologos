@@ -73,6 +73,7 @@
                 (define lookup (current-structural-meta-lookup))
                 (and lookup (lookup expr)))
               #f                      ; dual-pairs: type domain doesn't support duality
+              type-top                ; top-value: contradiction element
               subtype-lattice-merge)) ; subtype-merge: proper lattice merge for subtype ordering
 
 ;; ========================================

@@ -17,7 +17,8 @@
 ;; Layer 1 (within-domain) only. Cross-domain bridging (Layer 2: Galois
 ;; connections) is the caller's responsibility. See design §4.3.
 
-(require "propagator.rkt"
+(require racket/list
+         "propagator.rkt"
          "ctor-registry.rkt")
 
 (provide
@@ -83,6 +84,9 @@
                      ; Constructor pairing for duality relation. #f = domain doesn't
                      ; support duality. Derivation assumption: same-domain components
                      ; are continuations (get duality), cross-domain get equality.
+   top-value         ; SRE Track 1: the contradiction/top element. Counterpart to bot-value.
+                     ; Needed for relation violations (e.g., wrong dual pairing) where
+                     ; lattice-merge alone can't produce contradiction (same-tag merge is idempotent).
    subtype-merge     ; SRE Track 1: (a b → merged) | #f — lattice merge for subtype ordering.
                      ; Returns the join in the subtype ordering:
                      ;   merge(a, b) = b if a <: b, = a if b <: a, = top if incomparable.
@@ -208,8 +212,15 @@
 ;; Assumption: same-domain components are continuations.
 ;; See design §2.5 for documented fragility and mitigation.
 ;;
-;; The lattice-spec matching uses a helper that checks whether a component's
-;; lattice belongs to the same domain. For session constructors:
+;; Domain identity: each domain has a "canonical" lattice-spec.
+;; - Type domain: the symbol 'type (sentinel)
+;; - Session domain: session-lattice-spec (a lattice-spec struct)
+;; - Mult domain: mult-lattice-spec, Term domain: term-lattice-spec
+;; The sub-relation-fn checks if a component's lattice-spec is the domain's
+;; own spec. For this to work, the domain must register its canonical spec.
+;; This is done via a domain-level constant, not a field on sre-domain.
+;;
+;; For session constructors:
 ;;   - payload components have type-lattice-spec ('type sentinel) → cross-domain → equality
 ;;   - continuation components have session-lattice-spec → same domain → duality
 (define sre-duality
@@ -218,25 +229,19 @@
    (λ (rel desc idx domain-name)
      (define lats (ctor-desc-component-lattices desc))
      (define comp-lat (list-ref lats idx))
-     ;; Determine if this component's lattice is the same domain
-     ;; lattice-spec has no domain tag, so we compare by identity:
-     ;; - 'type sentinel → type domain
-     ;; - lattice-spec objects are matched by eq? against known domain specs
-     ;; For Phase 3, session constructor registration will use a
-     ;; session-lattice-spec that's distinct from type-lattice-spec.
-     ;; Same-domain = continuation → duality. Cross-domain = payload → equality.
-     (define same-domain?
-       (cond
-         ;; Symbol sentinels: 'type = type domain, 'session = session domain, etc.
-         [(symbol? comp-lat) (eq? comp-lat domain-name)]
-         ;; lattice-spec structs: compare against domain's known spec
-         ;; For now, type-lattice-spec is 'type (a symbol sentinel), so
-         ;; any lattice-spec struct is non-type, i.e., could be session/mult/term
-         ;; This will be refined in Phase 3 when session domain is registered
-         [else #f]))
-     (if same-domain?
-         sre-duality    ;; same domain: continuation → duality
-         sre-equality)  ;; cross-domain: payload → equality
+     ;; Determine if this component's lattice is the same domain.
+     ;; Strategy: the component's lattice-spec is the domain's own spec
+     ;; iff it's NOT one of the known cross-domain specs.
+     ;; Known cross-domain: 'type (type lattice sentinel).
+     ;; If comp-lat is 'type → cross-domain → equality.
+     ;; If comp-lat is anything else in a session domain → same domain → duality.
+     ;; This works because session constructor components are either
+     ;; type-lattice (payload) or session-lattice (continuation).
+     (define cross-domain?
+       (eq? comp-lat 'type))  ;; 'type sentinel = type domain, always cross-domain for session
+     (if cross-domain?
+         sre-equality    ;; cross-domain: payload type → equality
+         sre-duality)    ;; same domain: continuation → duality
      )))
 
 ;; Phantom: no constraint. Used for phantom type parameters.
@@ -584,12 +589,196 @@
                      ;; merged ≠ either → shouldn't happen for well-formed subtype merge
                      net])))]))])))
 
-;; --- Duality propagator (Track 1: Phase 3 implements) ---
-;; Reads cell-a, applies dual constructor pairing, writes to cell-b.
-;; Bidirectional: cell-b changes → apply inverse dual → write cell-a.
+;; --- Duality propagator (SRE Track 1 Phase 3) ---
+;; Duality is an involution: dual(dual(x)) = x.
+;; For session types: Send↔Recv, AsyncSend↔AsyncRecv, Choice↔Offer.
+;;
+;; Strategy: when one cell has a concrete session value, look up the dual
+;; constructor via dual-pairs, reconstruct with swapped tag, write to other cell.
+;; Then structurally decompose: payload sub-cells get equality, continuation
+;; sub-cells get duality (derived from component lattice types per D.3 design).
+;;
+;; This is INFORMATION PROPAGATION (like equality), not checking (like subtyping).
+;; Both cells move toward compatible values via the dual mapping.
 (define (sre-make-duality-propagator domain cell-a cell-b relation)
-  ;; Phase 3 will implement the full duality propagator.
-  ;; Error rather than silent equality fallback — equality is stricter than
-  ;; duality, so falling back would give silently wrong behavior.
-  (error 'sre-make-duality-propagator
-         "duality relation not yet implemented (SRE Track 1 Phase 3)"))
+  (define merge (sre-domain-lattice-merge domain))
+  (define contradicts? (sre-domain-contradicts? domain))
+  (define bot? (sre-domain-bot? domain))
+  (define pairs (sre-domain-dual-pairs domain))
+  (unless pairs
+    (error 'sre-make-duality-propagator
+           "domain ~a has no dual-pairs — cannot create duality propagator"
+           (sre-domain-name domain)))
+  ;; Build lookup tables from dual-pairs: tag → dual-tag
+  (define dual-tag-map
+    (let ([h (make-hasheq)])
+      (for ([p (in-list pairs)])
+        (hash-set! h (car p) (cdr p))
+        (hash-set! h (cdr p) (car p)))
+      h))
+  (define (lookup-dual-tag tag)
+    (hash-ref dual-tag-map tag #f))
+  (lambda (net)
+    (define va (net-cell-read net cell-a))
+    (define vb (net-cell-read net cell-b))
+    (cond
+      ;; Both bot: wait
+      [(and (bot? va) (bot? vb)) net]
+      ;; One has value: compute dual, write to other, then decompose
+      [(bot? vb)
+       (sre-duality-propagate-one net domain cell-a cell-b va
+                                   lookup-dual-tag relation)]
+      [(bot? va)
+       (sre-duality-propagate-one net domain cell-b cell-a vb
+                                   lookup-dual-tag relation)]
+      ;; Both have values: verify duality holds and decompose
+      [else
+       (sre-duality-propagate-both net domain cell-a cell-b va vb
+                                    lookup-dual-tag relation)])))
+
+;; Helper: one cell has value, propagate dual to other cell
+(define (sre-duality-propagate-one net domain from-cell to-cell from-val
+                                    lookup-dual-tag relation)
+  (define from-tag (sre-constructor-tag domain from-val))
+  (cond
+    ;; Non-compound (atoms like sess-end, sess-svar): self-dual, write as-is
+    [(not from-tag)
+     (net-cell-write net to-cell from-val)]
+    ;; Compound: look up dual constructor, reconstruct with swapped tag
+    [else
+     (define dual-tag (lookup-dual-tag from-tag))
+     (define from-desc (lookup-ctor-desc from-tag #:domain (sre-domain-name domain)))
+     (cond
+       [(not from-desc) net]
+       [(not dual-tag)
+        ;; No dual mapping — self-dual constructor (e.g., mu)
+        ;; Write the same value, decompose sub-cells with duality
+        (let ([net* (net-cell-write net to-cell from-val)])
+          ;; Use sre-decompose-generic directly — both sides have same tag
+          (define pair-key (decomp-key from-cell to-cell (sre-relation-name relation)))
+          (if (net-pair-decomp? net* pair-key)
+              net*
+              (sre-decompose-generic net* domain from-cell to-cell
+                                     from-val from-val from-val pair-key from-desc
+                                     #:relation relation)))]
+       [else
+        ;; Dual constructor found.
+        ;; DON'T write any value to to-cell yet — the components need to be
+        ;; dualized by sub-cell propagators first. The reconstructor propagator
+        ;; on to-cell will build the correct dual value from the sub-cells.
+        ;; We decompose directly: from-cell gets real sub-cells, to-cell gets
+        ;; bot sub-cells. Sub-cell duality/equality propagators push values.
+        ;; Then the reconstructor fires and writes the correct compound to to-cell.
+        (define dual-desc (lookup-ctor-desc dual-tag #:domain (sre-domain-name domain)))
+        (cond
+          [(not dual-desc) net]
+          [else
+           (define pair-key (decomp-key from-cell to-cell (sre-relation-name relation)))
+           (if (net-pair-decomp? net pair-key)
+               net
+               ;; Decompose directly without pre-writing to to-cell.
+               ;; sre-duality-decompose-dual-pair will create sub-cells for each side
+               ;; using each side's descriptor. For to-cell side, the extracted components
+               ;; are from the CURRENT to-cell value (sess-bot), so identify-sub-cell creates
+               ;; bot sub-cells. The sub-cell propagators then push values into them.
+               (sre-duality-decompose-dual-pair
+                net domain from-cell to-cell from-val (net-cell-read net to-cell)
+                from-desc dual-desc pair-key relation))])])]))
+
+;; Duality-specific decomposition for dual constructor pairs.
+;; Each side uses its OWN descriptor for extraction/reconstruction.
+;; Sub-cells are paired by position (Send.type ↔ Recv.type, Send.cont ↔ Recv.cont).
+;; Sub-relations derived from component lattice types.
+(define (sre-duality-decompose-dual-pair net domain cell-a cell-b va vb
+                                          desc-a desc-b pair-key relation)
+  (define domain-name (sre-domain-name domain))
+  (define bot? (sre-domain-bot? domain))
+  (define bot-val (sre-domain-bot-value domain))
+  (define extract-a (ctor-desc-extract-fn desc-a))
+  (define extract-b (ctor-desc-extract-fn desc-b))
+  (define recog-a (ctor-desc-recognizer-fn desc-a))
+  (define recog-b (ctor-desc-recognizer-fn desc-b))
+  ;; Extract components — handle bot cells by creating bot sub-components
+  (define comps-a (if (or (bot? va) (not (recog-a va)))
+                      (make-list (ctor-desc-arity desc-a) bot-val)
+                      (extract-a va)))
+  (define comps-b (if (or (bot? vb) (not (recog-b vb)))
+                      (make-list (ctor-desc-arity desc-b) bot-val)
+                      (extract-b vb)))
+  ;; Get or create sub-cells for each side
+  (define tag-a (ctor-desc-tag desc-a))
+  (define tag-b (ctor-desc-tag desc-b))
+  (define-values (net1 subs-a)
+    (sre-get-or-create-sub-cells net domain cell-a tag-a comps-a))
+  (define-values (net2 subs-b)
+    (sre-get-or-create-sub-cells net1 domain cell-b tag-b comps-b))
+  ;; Install sub-relation propagators for each component pair
+  ;; Use desc-a for sub-relation derivation (both descs have same component structure)
+  (define sub-rel-fn (sre-relation-sub-relation-fn relation))
+  (define net3
+    (for/fold ([n net2])
+              ([sa (in-list subs-a)]
+               [sb (in-list subs-b)]
+               [idx (in-naturals)])
+      (if (equal? sa sb)
+          n
+          (let* ([sub-rel (sub-rel-fn relation desc-a idx domain-name)])
+            (if (eq? (sre-relation-name sub-rel) 'phantom)
+                n
+                (let-values ([(n* _pid)
+                              (net-add-propagator n
+                                (list sa sb) (list sa sb)
+                                (sre-make-structural-relate-propagator
+                                 domain sa sb #:relation sub-rel))])
+                  n*))))))
+  ;; Add reconstructors for each side (using each side's own descriptor)
+  (define-values (net4 _p1)
+    (net-add-propagator net3 subs-a (list cell-a)
+      (sre-make-generic-reconstructor domain cell-a subs-a desc-a)))
+  (define-values (net5 _p2)
+    (net-add-propagator net4 subs-b (list cell-b)
+      (sre-make-generic-reconstructor domain cell-b subs-b desc-b)))
+  ;; Register pair as decomposed
+  (net-pair-decomp-insert net5 pair-key))
+
+;; Helper: both cells have values, verify duality and decompose
+(define (sre-duality-propagate-both net domain cell-a cell-b va vb
+                                     lookup-dual-tag relation)
+  (define contradicts? (sre-domain-contradicts? domain))
+  (define tag-a (sre-constructor-tag domain va))
+  (define tag-b (sre-constructor-tag domain vb))
+  (cond
+    ;; Both non-compound: check they're equal (self-dual atoms)
+    [(and (not tag-a) (not tag-b))
+     (if (equal? va vb) net
+         (net-cell-write net cell-a (sre-domain-top-value domain)))]
+    ;; One compound, one not → contradiction
+    [(or (not tag-a) (not tag-b))
+     (net-cell-write net cell-a (sre-domain-top-value domain))]
+    ;; Both compound: check dual pairing
+    [else
+     (define expected-dual-a (lookup-dual-tag tag-a))
+     (define pair-key (decomp-key cell-a cell-b (sre-relation-name relation)))
+     (cond
+       ;; Already decomposed
+       [(net-pair-decomp? net pair-key) net]
+       ;; Tags are duals → decompose with dual-pair decomposition
+       [(and expected-dual-a (eq? expected-dual-a tag-b))
+        (define desc-a (lookup-ctor-desc tag-a #:domain (sre-domain-name domain)))
+        (define desc-b (lookup-ctor-desc tag-b #:domain (sre-domain-name domain)))
+        (if (and desc-a desc-b)
+            (sre-duality-decompose-dual-pair
+             net domain cell-a cell-b va vb desc-a desc-b pair-key relation)
+            net)]
+       ;; Same tag, self-dual (e.g., mu) → decompose with sre-decompose-generic
+       [(and (eq? tag-a tag-b) (not expected-dual-a))
+        (define desc (lookup-ctor-desc tag-a #:domain (sre-domain-name domain)))
+        (if (and desc (zero? (ctor-desc-binder-depth desc)))
+            (sre-decompose-generic net domain cell-a cell-b va vb va pair-key desc
+                                   #:relation relation)
+            net)]
+       ;; Wrong pairing → contradiction
+       ;; Can't use lattice-merge (same-tag values merge cleanly).
+       ;; Must signal contradiction explicitly by writing top-value.
+       [else
+        (net-cell-write net cell-a (sre-domain-top-value domain))])]))

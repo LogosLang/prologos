@@ -26,7 +26,10 @@
          racket/list
          "syntax.rkt"
          "mult-lattice.rkt"
-         "term-lattice.rkt")
+         "term-lattice.rkt"
+         "sessions.rkt")          ;; SRE Track 1 Phase 3: session struct predicates/accessors
+;; NOTE: session-lattice.rkt NOT imported here (circular dep through type-lattice → reduction chain).
+;; Session lattice uses 'session sentinel (like 'type for type-lattice), resolved at call time.
 
 (provide
  ;; Struct
@@ -41,6 +44,7 @@
  type-lattice-spec
  mult-lattice-spec
  term-lattice-spec
+ session-lattice-spec
  lattice-spec?
  lattice-spec-merge
  lattice-spec-contradicts?
@@ -102,7 +106,7 @@
 
 (struct lattice-spec (merge contradicts?) #:transparent)
 
-;; Pre-built specs for the three lattice families
+;; Pre-built specs for the four lattice families
 (define mult-lattice-spec
   (lattice-spec mult-lattice-merge mult-lattice-contradicts?))
 
@@ -111,6 +115,12 @@
 
 ;; Sentinel for type-lattice components (resolved at call time)
 (define type-lattice-spec 'type)
+
+;; SRE Track 1 Phase 3: Session lattice spec — sentinel symbol, like type-lattice-spec.
+;; Cannot use concrete lattice-spec here because session-lattice.rkt creates a
+;; circular dependency (session-lattice → type-lattice → reduction → ... → ctor-registry).
+;; Resolved at call time via #:session-merge parameter on generic operations.
+(define session-lattice-spec 'session)
 
 ;; Resolve a component's lattice spec to its merge function.
 ;; For 'type specs, uses the provided type-merge-fn.
@@ -644,3 +654,67 @@
   #:component-lattices (list term-lattice-spec)
   #:domain 'data
   #:sample '(err e))
+
+;; ========================================
+;; Session Constructor Registrations (System 3) — SRE Track 1 Phase 3
+;; ========================================
+;;
+;; Session types use Racket structs (sess-send, sess-recv, etc.) from sessions.rkt.
+;; Component lattices: type-lattice-spec for payload types, session-lattice-spec for continuations.
+;; The duality relation uses dual-pairs on the domain to know that Send↔Recv, etc.
+;; Sub-relation derivation: same-domain (session) → duality, cross-domain (type) → equality.
+;;
+;; Note: Choice/Offer have branch lists (variable arity) — not registered as ctor-desc.
+;; They're handled specially by the duality propagator.
+
+;; Send: type (payload), cont (continuation)
+(register-ctor! 'sess-send
+  #:arity 2
+  #:recognizer sess-send?
+  #:extract (λ (v) (list (sess-send-type v) (sess-send-cont v)))
+  #:reconstruct (λ (cs) (sess-send (first cs) (second cs)))
+  #:component-lattices (list type-lattice-spec session-lattice-spec)
+  #:domain 'session
+  #:sample (sess-send (expr-tycon 'Int) (sess-end)))
+
+;; Recv: type (payload), cont (continuation)
+(register-ctor! 'sess-recv
+  #:arity 2
+  #:recognizer sess-recv?
+  #:extract (λ (v) (list (sess-recv-type v) (sess-recv-cont v)))
+  #:reconstruct (λ (cs) (sess-recv (first cs) (second cs)))
+  #:component-lattices (list type-lattice-spec session-lattice-spec)
+  #:domain 'session
+  #:sample (sess-recv (expr-tycon 'Int) (sess-end)))
+
+;; AsyncSend: type, cont
+(register-ctor! 'sess-async-send
+  #:arity 2
+  #:recognizer sess-async-send?
+  #:extract (λ (v) (list (sess-async-send-type v) (sess-async-send-cont v)))
+  #:reconstruct (λ (cs) (sess-async-send (first cs) (second cs)))
+  #:component-lattices (list type-lattice-spec session-lattice-spec)
+  #:domain 'session
+  #:sample (sess-async-send (expr-tycon 'Int) (sess-end)))
+
+;; AsyncRecv: type, cont
+(register-ctor! 'sess-async-recv
+  #:arity 2
+  #:recognizer sess-async-recv?
+  #:extract (λ (v) (list (sess-async-recv-type v) (sess-async-recv-cont v)))
+  #:reconstruct (λ (cs) (sess-async-recv (first cs) (second cs)))
+  #:component-lattices (list type-lattice-spec session-lattice-spec)
+  #:domain 'session
+  #:sample (sess-async-recv (expr-tycon 'Int) (sess-end)))
+
+;; Mu: body (recursive, body under binder — but session binders use de Bruijn indices,
+;; not the type domain's open-expr pattern, so binder-depth=0 for SRE purposes.
+;; The "opening" of mu is via unfold-session, not via binder-open-fn.)
+(register-ctor! 'sess-mu
+  #:arity 1
+  #:recognizer sess-mu?
+  #:extract (λ (v) (list (sess-mu-body v)))
+  #:reconstruct (λ (cs) (sess-mu (first cs)))
+  #:component-lattices (list session-lattice-spec)
+  #:domain 'session
+  #:sample (sess-mu (sess-svar 0)))

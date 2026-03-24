@@ -136,6 +136,7 @@
               type-bot
               #f #f  ;; no meta-recognizer/resolver for standalone tests
               #f     ;; no dual-pairs
+              type-top  ;; top-value
               subtype-lattice-merge))  ;; proper subtype-ordering lattice merge
 
 (define (sre-subtype-check t1 t2)
