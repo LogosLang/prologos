@@ -44,7 +44,7 @@ Audits) are defined.
 
 | Track | Description | Status | Design/Audit |
 |-------+-------------+--------+--------------|
-| Track 8E | Remaining registries + warnings as cells (17 registries) | Scoped in [[file:2026-03-22_PM_UNIFIED_INFRASTRUCTURE_ROADMAP.md][Unified Roadmap]] | Depends on Track 8D |
+| Track 8E | Remaining registries + warnings as cells (17 registries) | Scoped in [[./2026-03-22_UNIFIED_PROPAGATOR_NETWORK_ROADMAP.md][Unified Roadmap]] | Depends on Track 8D |
 | Track 8F | Meta-info as cells (solve-meta! → cell-write) | Scoped in Unified Roadmap | Depends on Track 8E |
 | Track 9 | Reduction as Propagators — interaction nets, GoI, e-graph rewriting | Stage 1 research | [[file:2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md][Research note]]; may become Track Series |
 | Track 10 | Network-first init + box elimination | Scoped in Unified Roadmap | Depends on Track 8F; may become Track Series |
@@ -53,7 +53,7 @@ Audits) are defined.
 Track 8 (complete) unblocked CIU Series Tracks 3–5 and BSP-LE.
 Track 9 enables interaction-net reduction, GoI-style fixpoint computation, e-graph equality saturation.
 Track 10 is the convergence point: no box, no dual-writes, module loading on-network.
-See [[file:2026-03-22_PM_UNIFIED_INFRASTRUCTURE_ROADMAP.md][Unified Propagator Network Infrastructure Roadmap]] for the comprehensive on-network/off-network boundary analysis.
+See [[./2026-03-22_UNIFIED_PROPAGATOR_NETWORK_ROADMAP.md][Unified Propagator Network Infrastructure Roadmap]] for the comprehensive on-network/off-network boundary analysis.
 
 *Note on PUnify*: PUnify Parts 1–2 originated as the first half of Track
 8's scope (cell-tree unification for the type-level and solver-level
@@ -114,7 +114,7 @@ Solver) and is the foundation for the SRE Series.
 | | |
 |------------------+------|
 | *Thesis*         | PUnify is not "the unification algorithm on propagators" — it is the universal structural reasoning engine. Every system that analyzes, decomposes, or matches structure (elaboration, trait resolution, pattern compilation, reduction) uses the same SRE primitives. |
-| *Status*         | Track 0 complete. Track 1 next. |
+| *Status*         | Track 0 ✅, Track 1 (relations) ✅ + 1B (fixes) ✅. Track 2 next. |
 | *Master*         | [[file:2026-03-22_SRE_MASTER.md][SRE Series Master Tracking]] |
 | *Origin*         | [[../research/2026-03-22_STRUCTURAL_REASONING_ENGINE.md][SRE Research (2026-03-22)]], Track 8D principles audit |
 
@@ -132,10 +132,11 @@ partially dissolves (the SRE propagates both directions).
 | Track | Description | Status | Depends On |
 |-------+-------------+--------+------------|
 | [[file:2026-03-22_SRE_TRACK0_FORM_REGISTRY_DESIGN.md][0]] | SRE Form Registry — domain-parameterized structural decomposition | ✅ [[file:2026-03-22_SRE_TRACK0_PIR.md][PIR]] | sre-core.rkt: 6 functions, 23 type ctor-descs, term-value validated |
-| 0.5 | Structural Relation Engine — parameterize by relation (equality, subtyping, duality, coercion) | ⬜ | Track 0 |
-| 1 | Elaborator-on-SRE — typing-core as structural-relate calls | ⬜ | Track 0 |
-| 2 | Trait Resolution-on-SRE — impl lookup via structural matching | ⬜ | Track 0.5 (subtyping) |
-| 3 | Session Types-on-SRE — duality via involution relation | ⬜ | Track 0.5 (duality) |
+| [[file:2026-03-23_SRE_TRACK1_RELATION_PARAMETERIZED_DECOMPOSITION_DESIGN.md][1]] | Structural Relation Engine — equality, subtyping (variance), duality (constructor pairing) | ✅ [[file:2026-03-23_SRE_TRACK1_PIR.md][PIR]] | 5 relations, 28 ctor-descs, session duality on SRE, 110× failure speedup |
+| [[file:2026-03-23_SRE_TRACK1B_POST_IMPLEMENTATION_FIXES_DESIGN.md][1B]] | Post-impl fixes — merge-registry, decomp guard, dependent duality, benchmarks | ✅ | 7401 tests, 244.8s |
+| 2 | Elaborator-on-SRE — typing-core as structural-relate calls | ⬜ | Track 1 |
+| 3 | Trait Resolution-on-SRE — impl lookup via structural matching | ⬜ | Track 1 (subtyping) |
+| 4 | Session Types-on-SRE — duality integration complete | ⬜ | Track 1 (duality) — basic integration done in 1/1B |
 | 4 | Pattern Compilation-on-SRE — scrutinee decomposition via SRE | ⬜ | Track 0 |
 | 5 | Reduction-on-SRE — interaction nets, e-graph, GoI | ⬜ | Track 1, PM 8F; IS PM Track 9 |
 | 6 | Module Loading-on-SRE — exports/imports as structural matching | ⬜ | Track 1; IS PM Track 10 (partial) |
@@ -146,9 +147,10 @@ partially dissolves (the SRE propagates both directions).
 PM Series (state migration)          SRE Series (system migration)
 ─────────────────────────            ────────────────────────────
 PM 8D ✅ (bridges+registries)    →   SRE Track 0 ✅ (form registry)
-PM 8E (17 registries as cells)   ↔   SRE Track 1 (elaborator-on-SRE)
-                                      SRE Track 0.5 (relation engine)
-                                      SRE Track 2 (trait resolution)
+                                      SRE Track 1 ✅ (relation engine)
+                                      SRE Track 1B ✅ (fixes+benchmarks)
+PM 8E (17 registries as cells)   ↔   SRE Track 2 (elaborator-on-SRE)
+                                      SRE Track 3 (trait resolution)
                                       SRE Track 3 (sessions)
                                       SRE Track 4 (pattern compilation)
 PM 8F (meta-info as cells)       ↔   SRE Track 5 (reduction-on-SRE)
