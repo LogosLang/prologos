@@ -11,9 +11,9 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Acceptance baseline | ⬜ | |
-| 1 | Relation type + variance on ctor-desc | ⬜ | |
-| 2 | Subtype-aware structural-relate | ⬜ | |
-| 3 | Duality-aware structural-relate | ⬜ | |
+| 1 | Relation type + variance + polarity inference infra | ⬜ | |
+| 2 | Subtype-aware structural-relate + user-defined variance | ⬜ | |
+| 3 | Duality-aware structural-relate + dependent sessions | ⬜ | |
 | 4 | Integration: subtype? delegation | ⬜ | |
 | 5 | Integration: session duality propagator | ⬜ | |
 | 6 | Verification + benchmarks | ⬜ | |
@@ -326,7 +326,7 @@ data SessionExpr
 
 Run full test suite + Track 8D acceptance file. Record baseline.
 
-### Phase 1: Relation Type + Variance on ctor-desc
+### Phase 1: Relation Type + Variance + Polarity Inference Infrastructure
 
 **Deliverables**:
 1. `sre-relation` struct in `sre-core.rkt`
@@ -334,14 +334,29 @@ Run full test suite + Track 8D acceptance file. Record baseline.
 3. `component-variances` field on `ctor-desc` (default `#f`)
 4. `component-sub-relations` field on `ctor-desc` (default `#f`)
 5. `dual-pairs` field on `sre-domain` (default `#f`)
-6. Update all existing ctor-desc registrations with `#f #f` for new fields
-7. Update all existing sre-domain instantiations with `#f` for dual-pairs
+6. `binder-open-fn` field on `ctor-desc` (default `#f`) — scaffolded in
+   Track 0, now needed for Phase 3 dependent duality
+7. Polarity inference function: `infer-variance : type-def → (listof variance)`
+   - Walks constructor fields, tracks type parameter positions
+   - Positive position → covariant (+), negative → contravariant (-),
+     both → invariant (=), absent → phantom (ø)
+   - Applied during `data` elaboration to automatically fill
+     `component-variances` on user-defined ctor-desc entries
+8. Built-in type variance annotations (hardcoded, textbook):
+   - Pi: `'(- +)`, Sigma: `'(+ +)`, App: `'(= +)`, List/PVec/Set: `'(+)`,
+     Map: `'(= +)`
+9. Update all existing ctor-desc registrations with `#f #f #f` for new fields
+10. Update all existing sre-domain instantiations with `#f` for dual-pairs
 
 **Test**: Existing tests pass unchanged (new fields default to Track 0 behavior).
+New test: polarity inference for `data Pair A B := pair A B` → `'(+ +)`.
+New test: polarity inference for `data Fn A B := fn (A -> B)` → `'(- +)`.
 
-**Risk**: Low. All changes are additive. Defaults preserve existing behavior.
+**Risk**: Low-medium. Polarity inference is well-understood but touches the
+elaboration pipeline for `data` definitions. Need to verify it doesn't affect
+elaboration of existing types.
 
-### Phase 2: Subtype-Aware structural-relate
+### Phase 2: Subtype-Aware structural-relate + User-Defined Variance
 
 **Deliverables**:
 1. `sre-propagate-subtype` function in `sre-core.rkt`
@@ -349,34 +364,53 @@ Run full test suite + Track 8D acceptance file. Record baseline.
    - No symmetric merge — subtyping is directional
    - Decomposes compound types using variance from ctor-desc
 2. `sre-make-structural-relate-propagator` accepts `#:relation` parameter
-3. `sre-decompose-generic` propagates relation to sub-cell propagators
+3. `sre-decompose-generic` propagates relation to sub-cell propagators,
+   using `(sre-relation-sub-relation-fn rel variance)` to determine the
+   sub-cell relation for each component
 4. `sre-subtype-reverse` — subtype with flipped direction (for contravariant)
 5. `sre-phantom` — no constraint (for phantom variance)
-6. Variance annotations on type-domain constructors:
-   - Pi: `'(- +)` (contravariant domain, covariant codomain)
-   - Sigma: `'(+ +)` (covariant both)
-   - App: `'(= +)` (invariant function, covariant argument)
-   - List/PVec/Set: `'(+)` (covariant element)
-   - Map: `'(= +)` (invariant key, covariant value)
+6. Built-in variance annotations on type-domain constructors (from Phase 1)
+7. User-defined types get automatic variance via polarity inference (Phase 1)
+   - Verify: `data Wrapper A := wrap A` → variance `'(+)` → structural
+     subtyping works: `Wrapper Nat <: Wrapper Int`
+8. **Decomp cache relation-awareness**: The decomp registry key must
+   include the relation type, not just the cell pair. A cell pair
+   decomposed for equality (`cell-a = cell-b`) is a different
+   decomposition than for subtyping (`cell-a <: cell-b`) — equality
+   creates symmetric propagators, subtyping creates directional ones.
+   The `decomp-key` function (in `sre-maybe-decompose`) must be extended:
+   `(decomp-key cell-a cell-b relation-name)`. Verify that existing
+   equality decompositions are not confused with subtyping decompositions.
 
 **Test**: New test file `test-sre-subtype.rkt` with cases:
-- `Nat <: Int` via flat subtype? (existing)
+- `Nat <: Int` via flat subtype? (existing behavior preserved)
 - `List Nat <: List Int` via SRE structural subtyping (NEW)
 - `(Int -> Nat) <: (Nat -> Int)` via Pi variance (NEW)
 - `Map String Nat <: Map String Int` via Map variance (NEW)
-- NOT: `List Int <: List Nat` (variance prevents reversal)
+- NOT: `List Int <: List Nat` (covariance prevents reversal)
+- NOT: `(Nat -> Int) <: (Int -> Nat)` (contravariant domain prevents)
+- User-defined: `data Box A := box A` then `Box Nat <: Box Int` (NEW)
+- Invariant: mutable container equality-only (if applicable)
+- Cache: decompose same pair for equality then subtype — both work independently
 
 **Risk**: Medium. Subtype propagation semantics are new — need to verify
-the directional propagation doesn't break the termination argument.
+the directional propagation doesn't break the termination argument. Cache
+key extension touches a hot path.
 
 **Termination argument for subtype relation**: The subtype propagator does
-NOT merge cells bidirectionally (equality does). It checks `join(a,b) = b`
-(is a ≤ b?). If yes, no cell write needed. If no, it signals a subtyping
-violation (contradiction). Since no cell writes occur on success, the only
-writes are contradiction signals — which are monotone (once contradicted,
-always contradicted). Termination preserved.
+NOT merge cells bidirectionally (equality does). It checks `a ≤ b` via
+the lattice ordering. For compound types, it decomposes with variance and
+installs sub-cell subtype constraints. Each sub-constraint is strictly
+smaller than the parent (sub-cells have lower lattice height). Since no
+bidirectional merging occurs, the only cell writes are contradiction signals
+(monotone: once contradicted, always contradicted). Fuel guards provide the
+hard bound. Decomp registry prevents duplicate sub-cell creation.
 
-### Phase 3: Duality-Aware structural-relate
+Transitivity falls out of propagation naturally: if `cell-a <: cell-b` and
+`cell-b <: cell-c` are both installed, information flows through cell-b.
+No additional mechanism needed.
+
+### Phase 3: Duality-Aware structural-relate + Dependent Sessions
 
 **Deliverables**:
 1. `sre-propagate-duality` function in `sre-core.rkt`
@@ -386,28 +420,50 @@ always contradicted). Termination preserved.
 2. `dual-pairs` on session-sre-domain
 3. `component-sub-relations` on session constructor descriptors:
    - Send/Recv: `'(equality duality)` (payload=equal, continuation=dual)
-   - DSend/DRecv: `'(equality duality)`
+   - DSend/DRecv: `'(equality duality)` with binder-depth=1
    - AsyncSend/AsyncRecv: `'(equality duality)`
    - Choice/Offer: dual with branch sub-relations
    - mu: `'(duality)` (body is dual)
    - svar/end: self-dual (no decomposition)
 4. Session constructor descriptors registered in ctor-registry
+5. `binder-open-fn` implemented for DSend/DRecv descriptors:
+   - Opens the binder: creates fresh variable, substitutes into continuation
+   - Under duality: `DSend(x:A, S(x)) ~ DRecv(x:A, dual(S(x)))`
+   - The fresh variable is shared (same on both sides — duality applies
+     to the continuation's structure, not to the binding variable)
+   - Uses `sre-decompose-binder` (new function) that handles binder
+     opening before creating sub-cells, then installs the appropriate
+     sub-relation on the opened continuation
+6. `sre-decompose-binder` in `sre-core.rkt`:
+   - Generic binder decomposition for any relation
+   - Opens binder via descriptor's `binder-open-fn`
+   - Creates sub-cells for opened components
+   - Installs sub-relation propagators (equality for binder variable,
+     parent relation for opened body)
+   - This also enables Pi/Sigma binder decomposition on the SRE
+     (currently handled by PUnify dispatch layer — can migrate in Track 2)
 
 **Test**: New test file `test-sre-duality.rkt` with cases:
 - `Send Int S ~ Recv Int (dual S)` — basic duality
 - `dual(dual(S)) = S` — involution property
 - Nested: `Send Int (Recv Bool End) ~ Recv Int (Send Bool End)`
+- Dependent: `DSend(x:Int, S(x)) ~ DRecv(x:Int, dual(S(x)))` (NEW)
+- Choice/Offer branch correspondence
 
-**Risk**: Medium. Duality propagation is bidirectional (like equality) but
-with constructor swapping. Need to verify that the propagator doesn't enter
-an infinite loop when both cells are updated simultaneously.
+**Risk**: Medium-high. Dependent duality combines binder handling with
+constructor pairing. The `sre-decompose-binder` function is new infrastructure
+that also serves Phase 2 migration of Pi/Sigma (future Track 2 use). Need
+to verify that binder opening under duality correctly shares the binding
+variable across both sides.
 
 **Termination argument for duality**: Similar to equality. The dual
 propagator writes `dual(v)` to the opposite cell. If the cells already
 satisfy duality (`dual(va) = vb`), no write occurs (net-cell-write's
 identity check). If they don't, the write triggers convergence. Monotonicity
 is preserved because `dual` is an involution on the session lattice (it
-preserves the lattice ordering). Fuel guards provide the hard bound.
+preserves the lattice ordering). For dependent sessions, the binder
+opening is a one-time operation (decomp registry prevents re-opening).
+Fuel guards provide the hard bound.
 
 ### Phase 4: Integration — subtype? Delegation
 
@@ -519,32 +575,43 @@ variances without sub-relations, or sub-relations without variances. Keeping
 them as separate fields is the decomplected design. The alternative
 (a single `component-relation-behavior` that handles both) would braid them.
 
-## 5. Open Questions
+## 5. Open Questions (Revised after Completeness review)
 
-1. **Structural subtyping for user-defined types**: Not in Track 1 scope.
-   When users define `data Wrapper A := wrap A`, should `Wrapper Nat <:
-   Wrapper Int`? This requires inferring variance from the definition
-   (covariant because A appears only in positive position). Defer to
-   Track 2 or NTT integration.
+The original draft deferred user-defined structural subtyping, transitivity
+composition, and dependent session duality. Review against the Completeness
+principle revealed these were not genuine "open questions" — they were
+Completeness violations. Building the relation infrastructure without making
+relations first-class for all types is building an incomplete foundation.
 
-2. **Subtype transitivity**: `Nat <: Int <: Rat` implies `Nat <: Rat`.
-   The flat path handles this. The structural path handles it via
-   propagation: if `List Nat <: List Int` and `List Int <: List Rat`,
-   does `List Nat <: List Rat` follow? Yes — by separate subtype queries.
-   But should the SRE compose them? Probably not in Track 1.
+**Resolved (incorporated into phases)**:
+1. ~~User-defined structural subtyping~~ → Phase 1 (polarity inference) +
+   Phase 2 (user-defined types get automatic variance)
+2. ~~Subtype transitivity~~ → Falls out of propagation. Not a question.
+3. ~~Dependent session duality~~ → Phase 3 (`sre-decompose-binder` +
+   `binder-open-fn` on DSend/DRecv descriptors)
+4. ~~Subtype query caching~~ → Phase 2 deliverable #8 (decomp cache key
+   includes relation type)
 
-3. **Duality for dependent sessions**: `DSend(x:A, S(x))` — the payload
-   is a binder. Under duality, `DSend(x:A, S(x)) ~ DRecv(x:A, dual(S(x)))`.
-   The binder handling interacts with duality. Track 1 handles simple
-   (non-dependent) sessions. Dependent session duality is Track 1 stretch
-   goal or Track 2.
+**Remaining open questions**:
 
-4. **Performance of subtype queries**: Creating temporary cells for each
-   `subtype?` call on compound types has overhead. The flat fast path
-   avoids this for base types. For compound types, the first call creates
-   cells; subsequent calls for the same pair should be cached. The
-   decomp registry already handles this caching for equality — verify it
-   works for subtyping.
+1. **Polarity inference for higher-kinded types**: `data App F A := app (F A)`
+   — the variance of `A` depends on the variance of `F`. If `F = List`
+   (covariant), then `A` is covariant. If `F = Fn _ ` (contravariant in
+   first arg), `A` is contravariant. Full HKT variance requires
+   variance-polymorphism. For Track 1, treat HKT parameters as invariant
+   (safe default). Refinement in SRE Track 2 or NTT integration.
+
+2. **Branch duality for Choice/Offer**: Choice and Offer have branch lists,
+   not positional components. Duality requires matching branches by label
+   and dualizing each. This is structural decomposition over a map-like
+   structure, not a fixed-arity constructor. May need a `branch-decompose-fn`
+   on the descriptor, or a special case in `sre-propagate-duality`.
+
+3. **Relation composition**: Can we compose subtyping and duality?
+   E.g., `Send Nat S <:~ Recv Int (dual S)` (subtyping on payload, duality
+   on continuation). This would require a "composed relation" construct.
+   Not needed for current use cases — subtyping and duality operate on
+   different domains. Monitor for future need.
 
 ## 6. Source Documents
 
