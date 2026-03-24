@@ -282,11 +282,9 @@
      (define domain (car dt))
      (define tag (cdr dt))
      (hash-ref (domain-table domain) tag #f)]
-    ;; If v is a Racket struct without the property, it's a non-structural
-    ;; type-domain atom (e.g., expr-Int, expr-Bool). Return #f immediately.
-    ;; Don't scan data tables for struct values.
-    [(struct? v) #f]
-    ;; Slow path: linear scan for non-struct values (data domain: plain lists/symbols)
+    ;; Slow path: linear scan for values without property.
+    ;; Data domain (lists/symbols like '(cons h t), 'nil) and extra domains
+    ;; (test structs, narrowing vars) don't carry the property.
     [else
      (or (ctor-tag-for-value-in-domain v data-ctor-table)
          ;; SRE Track 0: search extra domain tables
