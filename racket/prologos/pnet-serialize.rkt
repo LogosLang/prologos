@@ -63,10 +63,13 @@
              gensym-counter)))
        (string->symbol (format "~a$$~a" (symbol->string s) uid))]))
 
+  (define has-foreign-procs? (box #f))  ;; Track if any procedures found
+
   (define (deep-s->v v)
     (cond
       [(procedure? v)
-       ;; Foreign function or preparse expander — store name for re-linking
+       ;; Foreign function or preparse expander — mark module as having foreign procs
+       (set-box! has-foreign-procs? #t)
        (define name (or (object-name v) 'anonymous))
        (list 'foreign-proc name)]
       [(symbol? v) (serialize-sym v)]
@@ -83,10 +86,11 @@
       [(box? v) (list 'box-sentinel (deep-s->v (unbox v)))]
       [else v]))  ;; numbers, strings, booleans, keywords: pass-through
 
-  deep-s->v)
+  (values deep-s->v has-foreign-procs?))
 
 (define (deep-struct->serializable v)
-  ((make-serializer) v))
+  (define-values (f _) (make-serializer))
+  (f v))
 
 ;; ============================================================
 ;; Deserialization: read + tag dispatch reconstruction
@@ -284,7 +288,7 @@
                          (source-hash-for-module ns-sym source-path)))))))
 
 (define (serialize-module-state ns-sym source-path module-info)
-  (define serialize! (make-serializer))
+  (define-values (serialize! has-foreign?) (make-serializer))
   (define env (module-info-env-snapshot module-info))
   (define specs (module-info-specs module-info))
   (define locs (module-info-definition-locations module-info))
@@ -292,28 +296,31 @@
   (define s-env (serialize! env))
   (define s-specs (serialize! specs))
   (define s-locs (serialize! locs))
-  (define hash-val (source-hash-for-module ns-sym source-path))
 
-  (define pnet-data
-    (list PNET_VERSION
-          hash-val
-          s-env
-          s-specs
-          s-locs
-          (module-info-exports module-info)
-          (symbol->string ns-sym)))
-
-  (define pnet-path (pnet-path-for-module ns-sym))
-  (make-directory* (path-only pnet-path))
-
-  ;; Atomic write: write to temp, then rename
-  (define tmp-path (make-temporary-file "pnet-~a" #f (path-only pnet-path)))
-  (call-with-output-file tmp-path
-    (lambda (out) (write pnet-data out))
-    #:exists 'replace)
-  (rename-file-or-directory tmp-path pnet-path #t)
-
-  pnet-path)
+  ;; Phase 2a: skip serialization for modules with foreign procs.
+  ;; Foreign function stubs cause test failures. 22/40 prelude modules affected.
+  ;; Full re-linking via dynamic-require deferred to Phase 2b.
+  (cond
+    [(unbox has-foreign?) #f]  ;; skip — can't serialize foreign procs
+    [else
+     (define hash-val (source-hash-for-module ns-sym source-path))
+     (define pnet-data
+       (list PNET_VERSION
+             hash-val
+             s-env
+             s-specs
+             s-locs
+             (module-info-exports module-info)
+             (symbol->string ns-sym)))
+     (define pnet-path (pnet-path-for-module ns-sym))
+     (make-directory* (path-only pnet-path))
+     ;; Atomic write: write to temp, then rename
+     (define tmp-path (make-temporary-file "pnet-~a" #f (path-only pnet-path)))
+     (call-with-output-file tmp-path
+       (lambda (out) (write pnet-data out))
+       #:exists 'replace)
+     (rename-file-or-directory tmp-path pnet-path #t)
+     pnet-path]))
 
 (define (deserialize-module-state ns-sym source-path)
   (define pnet-path (pnet-path-for-module ns-sym))

@@ -76,8 +76,12 @@
 
 ;; Track 10 Phase 1b: feature flag for .pnet caching.
 ;; #t = use .pnet cache. #f = always elaborate from source (rollback).
-;; Phase 2: disabled — foreign function stubs cause test failures.
-;; Need proper dynamic-require re-linking before enabling.
+;; Phase 2: disabled — .pnet deserialization skips registry propagation,
+;; causing unbound variables in downstream modules. Need to restore:
+;; ctor-registry, subtype-registry, preparse-registry, spec-store
+;; contributions alongside env-snapshot data.
+;; Architecture is sound (40/40 round-trip verified). Integration needs
+;; registry restoration in the deserialization path.
 (define current-use-pnet-cache? (make-parameter #f))
 
 ;; ========================================
