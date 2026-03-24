@@ -3,7 +3,7 @@
 **Stage**: 2 (Audit) + 3 (Design), combined
 **Date**: 2026-03-24
 **Series**: PM (Propagator Migration) + SRE (Structural Reasoning Engine)
-**Status**: D.2 — revised with Pre-0 benchmark findings
+**Status**: D.3 — revised with external critique
 **Depends on**: [SRE Track 2](2026-03-23_SRE_TRACK2_ELABORATOR_ON_SRE_DESIGN.md) ✅ (SRE dispatch stable), [PM Track 8D](2026-03-22_TRACK8D_DESIGN.md) ✅ (pure bridge fire functions)
 **Enables**: Zonk elimination (~1100 lines), SRE Track 3 (trait resolution), SRE Track 6 (reduction), PM Track 10 (convergence)
 **Source Documents**:
@@ -355,19 +355,33 @@ compensating for bvar-in-cell values.
   )
 ```
 
-Where `close-expr` replaces any remaining bvars with fvars. In practice,
-PUnify already opens binders with fvars before solving (decompose-pi calls
-`open-expr`). The closing step is a SAFETY NET for non-PUnify solve paths
-(flex-rigid in unify.rkt, direct solutions in trait resolution).
+**`close-expr` specification** (D.3 refinement): `close-expr` walks the
+expression and for each `expr-bvar` encountered, creates a fresh fvar
+and records the substitution. This is identical to what `open-expr`
+already does in elaborator-network.rkt — we reuse the same bvar→fvar
+replacement pattern. `close-expr` = `open-expr` applied to the solution.
+
+In practice, PUnify already opens binders with fvars before solving
+(decompose-pi calls `open-expr`). The closing step is a SAFETY NET for
+non-PUnify solve paths (flex-rigid in unify.rkt, direct solutions in
+trait resolution).
+
+**Frequency measurement** (D.3 addition): Add a counter to measure how
+many solutions actually contain bvars. If PUnify always opens first, the
+count may be 0 — making `close-expr` a dead path. This data informs
+whether Phase 0 is a correctness fix (bvar solutions exist) or a
+preventive assertion (they don't, but could if a future solve path is
+added without proper opening).
 
 **Deliverables**:
 1. Audit ALL `solve-meta!` call paths for bvar-containing solutions
 2. Add `bvar-free?` check function
-3. Add `close-expr` function (bvar → fvar replacement)
+3. Add `close-expr` function (reuse `open-expr` bvar→fvar pattern)
 4. Debug-mode assertion in `solve-meta-core!`
-5. Add closing step for any solve path that produces unclosed solutions
-6. Targeted tests: solve under binders, verify cell contains fvars not bvars
-7. Full test suite passes
+5. Add `current-bvar-solution-count` counter to measure frequency
+6. Add closing step for any solve path that produces unclosed solutions
+7. Targeted tests: solve under binders, verify cell contains fvars not bvars
+8. Full test suite passes
 
 ### Phase 1: Embed cell-id in expr-meta (Skip id-map Lookup)
 
@@ -376,15 +390,29 @@ meta-solution's total 150ns cost. The id-map exists because `expr-meta`
 was designed before cells existed. The meta IS the cell; the id-map is
 an unnecessary indirection.
 
-**Strategy**: Add `cell-id` field to `expr-meta` struct.
+**Strategy**: Add `cell-id` field to `expr-meta` struct with custom
+equality that ignores `cell-id`.
 
 ```racket
 ;; Before:
 (struct expr-meta (id) ...)  ;; id → id-map → cell-id → cell read
 
 ;; After:
-(struct expr-meta (id cell-id) ...)  ;; cell-id → cell read (direct)
+(struct expr-meta (id cell-id)
+  #:methods gen:equal+hash
+  [(define (equal-proc a b _) (= (expr-meta-id a) (expr-meta-id b)))
+   (define (hash-proc a _) (expr-meta-id a))
+   (define (hash2-proc a _) (expr-meta-id a))])
 ```
+
+**Critical D.3 refinement**: `cell-id` is METADATA, not IDENTITY. Two
+`expr-meta` nodes with the same `id` but different `cell-id` values
+(e.g., one from module-loading with #f, one from elaboration with a cell)
+must compare as `equal?`. Without custom equality, code that uses
+`expr-meta` as hash keys or in `equal?` comparisons (pattern matcher,
+occurs check, expression comparison) would break. The custom `equal?`
+compares only `id`; `hash` uses only `id`. Cell-id is carried for fast
+lookup but invisible to identity operations.
 
 **This touches syntax.rkt** — the central AST struct definition file. All
 14 pipeline files that pattern-match on `expr-meta` need updating. This
@@ -407,36 +435,51 @@ identity, eliminating the indirection.
     [else (meta-solution-by-id (expr-meta-id meta-expr))]))
 ```
 
+**Module-loading context** (D.3 confirmation): During module loading,
+`(current-prop-net-box)` = #f, so all metas get cell-id=#f. This is
+CORRECT — module metas are solved via the CHAMP path, and their solutions
+are ground before they're imported by other contexts. The cell-id=#f
+fallback to id-map handles this cleanly. No retroactive cell-id setting
+needed — module metas are fully solved in their own context.
+
 **Deliverables**:
 1. Add `cell-id` field to `expr-meta` in syntax.rkt (default `#f`)
-2. Update `fresh-meta` to set `cell-id` at creation time
-3. Update `meta-solution` to read `cell-id` directly, fallback to id-map
-4. Update all 14 pipeline files for the new struct field
-5. `raco make driver.rkt` to recompile ALL dependents
-6. Full test suite passes
-7. Micro-benchmark: meta-solution cost before vs after (target: 56ns)
+2. Add custom `gen:equal+hash` that compares/hashes only `id`
+3. Update `fresh-meta` to set `cell-id` at creation time
+4. Update `meta-solution` to read `cell-id` directly, fallback to id-map
+5. Update all 14 pipeline files for the new struct field
+6. `raco make driver.rkt` to recompile ALL dependents
+7. Test: verify `(equal? (expr-meta 5 100) (expr-meta 5 #f))` → #t
+8. Full test suite passes
+9. Micro-benchmark: meta-solution cost before vs after (target: 56ns)
 
-### Phase 1: Eliminate Elaboration-Time zonk
+### Phase 2: Eliminate Elaboration-Time zonk
 
-With cell-primary `meta-solution`, `zonk` already reads from cells.
-But `zonk` is still called explicitly at ~225+ sites during elaboration.
-Many of these calls are unnecessary: the expression is already ground
-(all metas solved), or the caller immediately uses the result for a
-comparison that could read cells directly.
+With cell-primary `meta-solution` and cell-id in expr-meta, `zonk`
+already reads from cells. But `zonk` is still called explicitly at ~225+
+sites during elaboration. Many of these calls are unnecessary.
 
-**Strategy**: Replace `(zonk expr)` calls with `expr` directly. Where
-the caller needs a ground expression, use a new `ensure-ground` that
-checks (via cell reads) whether all metas in the expression are solved.
+**Strategy**: Classify and remove in 4 priority tiers (D.3 refinement):
+
+| Tier | Sites | Frequency | Description |
+|------|-------|-----------|-------------|
+| 1 (hot-loop) | ~10 | Highest | `unify-core` — zonk before comparing types. Called recursively. |
+| 2 (resolution) | ~10 | Medium | `resolve-trait-constraints!` — zonk before key extraction. Stratified loop. |
+| 3 (elaboration) | ~100 | One-shot | `elaborate-*` functions — zonk after elaborating sub-expression. |
+| 4 (error-only) | ~50+ | Cold | `format-type-error` etc. — zonk for display only. |
+
+Tackle in tier order: Tier 1 delivers the most performance improvement
+per site removed. Tier 4 can retain `zonk` calls (cold path, correctness
+matters more than speed for error messages).
 
 **Deliverables**:
-1. Identify which zonk calls are NECESSARY (the expression contains
-   metas whose solutions matter for the next step) vs DEFENSIVE
-   (zonk "just in case" before comparison/storage).
-2. Remove defensive zonk calls (expected: majority of ~225 sites).
-3. For necessary calls: replace with `ensure-ground` or leave as
-   `zonk` (which now reads from cells — still works, just unnecessary
-   if solutions propagated).
-4. Full test suite after each batch of removals.
+1. Classify all ~225 zonk sites into 4 tiers
+2. Tier 1: remove/replace hot-loop zonk in unify-core (~10 sites)
+3. Tier 2: remove/replace resolution zonk (~10 sites)
+4. Tier 3: remove/replace elaboration zonk (~100 sites)
+5. Tier 4: audit error-path zonk — retain where zonk provides better
+   error messages, remove where unnecessary
+6. Full test suite after each tier.
 
 **Risk**: Some zonk calls may have subtle ordering dependencies (zonk
 must run AFTER a solve-meta! to see the solution). With cells, this
@@ -452,10 +495,10 @@ a queued propagator. So the cell IS updated before `solve-meta!` returns.
 Reading the cell immediately after `solve-meta!` sees the solution. No
 ordering concern.
 
-### Phase 2: Eliminate zonk-at-depth
+### Phase 3: Eliminate zonk-at-depth
 
 The hardest phase. `zonk-at-depth` handles bvar shifting when solutions
-are read under binders.
+are read under binders. **Depends on Phase 0** (bvar closure invariant).
 
 **Prerequisite**: Verify that all cell solutions are CLOSED (no bvars).
 
@@ -472,22 +515,30 @@ are read under binders.
    calls with plain cell reads. The depth parameter becomes irrelevant.
 4. Delete `zonk-at-depth` function.
 
-### Phase 3: Freeze at Command Boundaries
+### Phase 4: Freeze at Command Boundaries
 
 Replace `zonk-final` with `freeze`: a single-pass walk that reads cell
 values for each `expr-meta`, producing a ground expression for storage
 in the global environment.
 
+**Expressions are trees, not graphs** (D.3 clarification): The occurs
+check in unification prevents cyclic solutions. `freeze` walks a tree,
+not a graph — no visited-set needed. However, solution chains (meta→meta→
+...→ground) are bounded by elaboration depth. Add a depth-bound assertion
+in debug mode (depth > 100 → error) as a safety net against pathological
+chains.
+
 **Deliverables**:
 1. `freeze` function (~200 lines): walks expression tree, replaces
-   `expr-meta id` with `(net-cell-read net cell-id)`. No recursion on
+   `expr-meta id` with cell value via `cell-id`. No recursion on
    solutions (cell values are already ground from propagation). No
    depth tracking (expressions at boundaries are already closed).
-2. Replace all ~21 `zonk-final` calls with `freeze` calls.
-3. Delete `zonk-final` and `default-metas`.
-4. Full test suite passes.
+2. Debug-mode depth-bound assertion (max 100 chain hops)
+3. Replace all ~21 `zonk-final` calls with `freeze` calls.
+4. Delete `zonk-final` and `default-metas`.
+5. Full test suite passes.
 
-### Phase 4: Defaults at Solve-Time
+### Phase 5: Defaults at Solve-Time
 
 Currently, `default-metas` (called by `zonk-final`) replaces unsolved
 level-metas with `lzero` and unsolved mult-metas with `'mw` at command
@@ -504,7 +555,7 @@ writing default values to unsolved level/mult cells.
    and before `freeze`.
 3. Delete `default-metas`, `zonk-level-default`, `zonk-mult-default`.
 
-### Phase 5: Unify ground-expr?
+### Phase 6: Unify ground-expr?
 
 Replace two incompatible `ground-expr?` definitions with one cell-level
 check.
@@ -520,7 +571,7 @@ check.
    module.
 4. All call sites updated (58 total across 4 modules).
 
-### Phase 6: CHAMP Fallback Removal
+### Phase 7: CHAMP Fallback Removal
 
 Once all meta access goes through cells, the CHAMP solution field is
 unused. Remove it.
@@ -534,7 +585,7 @@ unused. Remove it.
 4. `with-fresh-meta-env`: simplify — no CHAMP solution initialization.
 5. Full suite passes. No behavioral change.
 
-### Phase 7: Verification + Benchmarks + PIR
+### Phase 8: Verification + Benchmarks + PIR
 
 **Deliverables**:
 1. Full test suite: all pass
