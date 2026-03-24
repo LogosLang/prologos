@@ -18,7 +18,8 @@
          "metavar-store.rkt"
          "substitution.rkt"
          "performance-counters.rkt"
-         "solver.rkt")
+         "solver.rkt"
+         (only-in "namespace.rkt" ns-context?))
 
 (provide zonk zonk-ctx zonk-final zonk-at-depth)
 
@@ -54,6 +55,10 @@
     [(expr-hole) e]
     [(expr-typed-hole _) e]
     [(expr-error) e]
+
+    ;; Non-expression atoms that can leak into type expressions via meta solutions.
+    ;; ns-context: namespace metadata — pass-through (no sub-metas).
+    [(? ns-context?) e]
 
     ;; Binding forms (Sprint 7: zonk mult field for mult-metas)
     [(expr-lam m t body)
@@ -492,6 +497,7 @@
     [(expr-hole) e]
     [(expr-typed-hole _) e]
     [(expr-error) e]
+    [(? ns-context?) e]
 
     ;; Binding forms: increment depth for codomains/bodies
     [(expr-lam m t body)
@@ -934,6 +940,7 @@
     [(expr-hole) e]
     [(expr-typed-hole _) e]
     [(expr-error) e]
+    [(? ns-context?) e]
     [(expr-lam m t body) (expr-lam (zonk-mult-default m) (default-metas t) (default-metas body))]
     [(expr-Pi m dom cod) (expr-Pi (zonk-mult-default m) (default-metas dom) (default-metas cod))]
     [(expr-Sigma t1 t2) (expr-Sigma (default-metas t1) (default-metas t2))]

@@ -26,6 +26,7 @@
          "rrb.rkt"
          "propagator.rkt"
          "union-find.rkt"
+         (only-in "namespace.rkt" ns-context?)
          "atms.rkt"
          "tabling.rkt"
          "solver.rkt"
@@ -3155,6 +3156,7 @@
     [(expr-typed-hole _) e]
     [(expr-meta _ _) e]
     [(expr-error) e]
+    [(? ns-context?) e]  ;; namespace metadata — pass-through
     [(expr-panic msg) (expr-panic (nf msg))]  ;; reduce msg, stay stuck
     [(expr-tycon _) e]  ;; Unapplied type constructor (HKT) — already normal
 

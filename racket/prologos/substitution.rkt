@@ -13,7 +13,8 @@
 
 (require racket/match
          "prelude.rkt"
-         "syntax.rkt")
+         "syntax.rkt"
+         (only-in "namespace.rkt" ns-context?))
 
 (provide shift subst open-expr)
 
@@ -47,6 +48,7 @@
     [(expr-typed-hole _) e]
     [(expr-meta _ _) e]
     [(expr-error) e]
+    [(? ns-context?) e]  ;; namespace metadata — pass-through
 
     ;; Binding forms: cutoff increases under binders
     [(expr-lam m t body)
@@ -504,6 +506,7 @@
     [(expr-typed-hole _) e]
     [(expr-meta _ _) e]
     [(expr-error) e]
+    [(? ns-context?) e]
 
     ;; Binding forms: increase k, shift s up by 1
     [(expr-lam m t body)
