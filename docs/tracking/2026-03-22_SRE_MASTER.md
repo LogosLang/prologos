@@ -25,13 +25,15 @@ of NTT's `:lattice :structural` annotation.
 | Track | Description | Status | Design | PIR | Notes |
 |-------|------------|--------|--------|-----|-------|
 | 0 | Form Registry — domain-parameterized structural decomposition | ✅ | [Design](2026-03-22_SRE_TRACK0_FORM_REGISTRY_DESIGN.md) | [PIR](2026-03-22_SRE_TRACK0_PIR.md) | sre-core.rkt: 6 functions, 23 type ctor-descs, term-value validated |
-| 0.5 | Structural Relation Engine — parameterize by relation | ⬜ | — | — | Equality (default), subtyping, duality, coercion, isomorphism |
-| 1 | Elaborator-on-SRE — typing-core as structural-relate calls | ⬜ | — | — | Highest leverage next step |
-| 2 | Trait Resolution-on-SRE — impl lookup via structural matching | ⬜ | — | — | Needs Track 0.5 (subtyping relation) |
-| 3 | Session Types-on-SRE — duality via involution relation | ⬜ | — | — | Needs Track 0.5 (duality relation) |
-| 4 | Pattern Compilation-on-SRE — scrutinee decomposition | ⬜ | — | — | |
-| 5 | Reduction-on-SRE — interaction nets, e-graph, GoI | ⬜ | — | — | IS PM Track 9; may be Track Series |
-| 6 | Module Loading-on-SRE — exports/imports as structural matching | ⬜ | — | — | Overlaps PM Track 10 |
+| 1 | Structural Relation Engine — equality, subtyping, duality | ✅ | [Design](2026-03-23_SRE_TRACK1_RELATION_PARAMETERIZED_DECOMPOSITION_DESIGN.md) | [PIR](2026-03-23_SRE_TRACK1_PIR.md) | 3 relations, variance, polarity utils, session duality, merge-per-relation |
+| 1B | Post-implementation fixes — merge registry, direct recursive, binder guard | ✅ | [Design](2026-03-23_SRE_TRACK1B_POST_IMPLEMENTATION_FIXES_DESIGN.md) | (in Track 1 PIR) | 110× subtype failure speedup, principled decomposition guard |
+| 2 | Elaborator-on-SRE — classifier → SRE dispatch | ✅ | [Design](2026-03-23_SRE_TRACK2_ELABORATOR_ON_SRE_DESIGN.md) | [PIR](2026-03-23_SRE_TRACK2_PIR.md) | O(1) prop:ctor-desc-tag, 10/10 structural cases, ~2.5% speedup |
+| 2B | Polarity Inference — user-defined structural subtyping | ⬜ | — | — | Wire polarity inference into `data` elaboration. Utilities exist (variance-join, variance-flip). Small scope. |
+| 3 | Trait Resolution-on-SRE — impl lookup via structural matching | ⬜ | — | — | Needs Track 1 ✅ (subtyping). Subsumes PM 8E resolution state. |
+| 4 | Session Types-on-SRE — duality via involution relation | ⬜ | — | — | Needs Track 1 ✅ (duality). Choice/Offer branch duality. `dual` retirement. |
+| 5 | Pattern Compilation-on-SRE — scrutinee decomposition + NF-Narrowing | ⬜ | — | — | GADT path via unified narrowing. Independent of PM tracks. |
+| 6 | Reduction-on-SRE — typed graph rewriting engine | ⬜ | — | — | IS PM Track 9. Track Series (5a-5e). E-graphs, tropical semirings. |
+| 7 | Module Loading-on-SRE — exports/imports as structural matching | ⬜ | — | — | Overlaps PM Track 10. Convergence point. |
 
 ---
 
@@ -348,10 +350,12 @@ PM describes *what's on the network* (which state lives as cells).
 PM Series (state migration)          SRE Series (system migration)
 ─────────────────────────            ────────────────────────────
 PM 8D ✅ (3 registries+bridges)  →   SRE Track 0 ✅ (form registry)
-PM 8E (17 registries as cells)   ↔   SRE Track 1 (elaborator-on-SRE)
-                                      SRE Track 0.5 (relation engine)
-                                      SRE Track 2 (trait resolution)
-                                      SRE Track 3 (sessions)
+                                      SRE Track 1 ✅ (relation engine)
+                                      SRE Track 1B ✅ (post-impl fixes)
+                                      SRE Track 2 ✅ (classifier → SRE)
+                                      SRE Track 2B (polarity inference)
+PM 8E (17 registries as cells)   ↔   SRE Track 3 (trait resolution)
+                                      SRE Track 4 (sessions)
                                       SRE Track 4 (pattern compilation)
 PM 8F (meta-info as cells)       ↔   SRE Track 5 (reduction-on-SRE)
 PM Track 9 = SRE Track 5
@@ -366,16 +370,19 @@ PM Track 10                      =   SRE Track 6 (module loading)
 - PM 8E's "resolution state" migration is subsumed by SRE Track 2
 - PM Track 9 IS SRE Track 5 — these should be unified into one track
 
-**Recommended ordering** (interleaved):
+**Recommended ordering** (updated post-Track 2):
 
-1. **SRE Track 1** (elaborator-on-SRE) — highest leverage, validates SRE under real load
-2. **PM 8E** (registries as cells) — mechanical, unblocks full SRE Track 1 benefit
-3. **SRE Track 0.5** (structural relations) — unblocks Tracks 2-3
-4. **SRE Track 2** (trait resolution) — subsumes PM 8E resolution state
-5. **SRE Track 3** (sessions) + **Track 4** (patterns) — can run in parallel
-6. **PM 8F** (metas as cells) — prerequisite for reduction
-7. **SRE Track 5/PM 9** (reduction) — unified track
-8. **SRE Track 6/PM 10** (module loading + convergence) — endgame
+1. ~~SRE Track 0~~ ✅ (form registry)
+2. ~~SRE Track 1~~ ✅ (structural relations)
+3. ~~SRE Track 1B~~ ✅ (post-implementation fixes)
+4. ~~SRE Track 2~~ ✅ (elaborator-on-SRE: classifier → SRE dispatch)
+5. **SRE Track 2B** (polarity inference) — small scope, infrastructure ready
+6. **PM 8F** (metas as cells) — major code elimination: zonk → freeze (~1100 lines)
+7. **SRE Track 3** (trait resolution) — subsumes PM 8E resolution state
+8. **SRE Track 4** (sessions) + **Track 5** (patterns) — can run in parallel
+9. **PM 8E** (17 registries as cells) — mechanical, lower priority than 8F
+10. **SRE Track 6/PM 9** (reduction) — Track Series
+11. **SRE Track 7/PM 10** (module loading + convergence) — endgame
 
 ---
 
