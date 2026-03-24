@@ -36,7 +36,9 @@
          "source-location.rkt"
          "pretty-print.rkt"
          "prop-observatory.rkt"
-         "champ.rkt")
+         "champ.rkt"
+         "sre-core.rkt"          ;; SRE Track 1 Phase 5: duality via SRE
+         "ctor-registry.rkt")    ;; SRE Track 1 Phase 5: session constructor lookup
 
 (provide
  ;; Core operations
@@ -248,33 +250,37 @@
   net*)
 
 ;; ========================================
-;; Duality propagator (S4c)
+;; Session domain spec (SRE Track 1 Phase 5)
+;; ========================================
+
+(define session-sre-domain
+  (sre-domain 'session
+              session-lattice-merge
+              session-lattice-contradicts?
+              sess-bot?
+              sess-bot
+              sess-meta?                     ;; meta-recognizer: session metas
+              #f                             ;; meta-resolver: none (session metas don't have cell IDs yet)
+              '((sess-send . sess-recv)      ;; dual-pairs
+                (sess-async-send . sess-async-recv))
+              sess-top                       ;; top-value
+              #f))                           ;; no subtype-merge
+
+;; ========================================
+;; Duality propagator (S4c → SRE Track 1 Phase 5)
 ;; ========================================
 
 ;; add-duality-prop: cell1 and cell2 must be dual sessions.
-;; Bidirectional: cell1 refines → dual written to cell2, and vice versa.
+;; SRE Track 1: delegates to SRE duality propagator for structural
+;; decomposition (constructor pairing, sub-cell relations).
+;; Replaces the old bidirectional (dual v) pattern.
 (define (add-duality-prop net cell1 cell2)
-  ;; Forward: cell1 → dual → cell2
-  (define fwd-fire
-    (lambda (n)
-      (define v1 (net-cell-read n cell1))
-      (cond
-        [(sess-bot? v1) n]
-        [(sess-top? v1) (net-cell-write n cell2 sess-top)]
-        [else (net-cell-write n cell2 (dual v1))])))
-  ;; Backward: cell2 → dual → cell1
-  (define bwd-fire
-    (lambda (n)
-      (define v2 (net-cell-read n cell2))
-      (cond
-        [(sess-bot? v2) n]
-        [(sess-top? v2) (net-cell-write n cell1 sess-top)]
-        [else (net-cell-write n cell1 (dual v2))])))
-  (define-values (net1 _p1)
-    (net-add-propagator net (list cell1) (list cell2) fwd-fire))
-  (define-values (net2 _p2)
-    (net-add-propagator net1 (list cell2) (list cell1) bwd-fire))
-  net2)
+  (define-values (net1 _pid)
+    (net-add-propagator net (list cell1 cell2) (list cell1 cell2)
+      (sre-make-structural-relate-propagator
+       session-sre-domain cell1 cell2
+       #:relation sre-duality)))
+  net1)
 
 ;; ========================================
 ;; Process tree compilation (with trace)
