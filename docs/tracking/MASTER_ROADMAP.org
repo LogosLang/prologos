@@ -45,7 +45,7 @@ Audits) are defined.
 | Track | Description | Status | Design/Audit |
 |-------+-------------+--------+--------------|
 | Track 8E | Remaining registries + warnings as cells (17 registries) | Scoped in [[./2026-03-22_UNIFIED_PROPAGATOR_NETWORK_ROADMAP.md][Unified Roadmap]] | Depends on Track 8D |
-| Track 8F | Meta-info as cells (solve-meta! → cell-write) | Scoped in Unified Roadmap | Depends on Track 8E |
+| [[file:2026-03-24_PM_8F_METAS_AS_CELLS_DESIGN.md][Track 8F]] | Meta-info as cells (cell-id in expr-meta, cell-id zonk paths) | [[file:2026-03-24_PM_8F_PIR.md][PIR]] ✅ | 6/8 phases; 3.5% suite improvement; Phase 5+7 deferred to Track 10 |
 | Track 9 | Reduction as Propagators — interaction nets, GoI, e-graph rewriting | Stage 1 research | [[file:2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md][Research note]]; may become Track Series |
 | Track 10 | Network-first init + box elimination | Scoped in Unified Roadmap | Depends on Track 8F; may become Track Series |
 | Track 11 | LSP Integration — incremental re-elaboration, live diagnostics | Not started | [[file:2026-03-19_TRACK10_DESIGN_NOTES.org][Early notes]]; depends on Track 9 + Track 10 |
