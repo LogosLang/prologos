@@ -278,7 +278,37 @@ designed ("cell-primary meta-solution") is the current architecture.
 bvar closure (Finding 4). The real Phase 1 is embed cell-id in
 expr-meta (Finding 1). The original Phase 0 is already done.
 
-### 2.8 Revised Performance Targets (Post-Benchmark)
+### 2.8 Pre-Implementation Measurements (D.4 Addition)
+
+**Measurement 1: Custom gen:equal+hash overhead on expr-meta.**
+
+| Operation | Current (1 field) | Custom equal? (id only) | Default (2 fields) |
+|-----------|------------------|------------------------|-------------------|
+| `equal?` same id | 52ns | **43ns** ✓ faster | 94ns |
+| `equal?` diff id | 72ns | **42ns** ✓ faster | 95ns |
+| Hash ops (100 keys) | 21.6ns/op | **9.5ns/op** ✓ 2.3× | 21.1ns/op |
+| `eq?` | 2.7ns | 2.7ns (unaffected) | — |
+| struct predicate | 2.8ns | 2.7ns (unaffected) | — |
+
+**Result**: Custom `gen:equal+hash` is a performance WIN. Integer-only
+hash gives better distribution than default struct hash. Hash table
+operations 2.3× faster. This confirms the D.3 approach — no risk, only
+upside.
+
+**Measurement 2: bvar frequency in meta solutions.**
+
+Across 10 representative programs (simple defs, Pi types, polymorphic,
+pattern matching, dependent types, lambdas, higher-order, lists):
+- Total solved metas examined: 4
+- **Metas with bvar-containing solutions: 0 (0.00%)**
+- PUnify opens binders before solving — solutions are fvar-based
+
+**Result**: `close-expr` in Phase 3 is PREVENTIVE, not corrective. No
+current solve path produces bvar-containing solutions. Phase 0's assertion
+will confirm this across the full test suite. Phase 3 adds `close-expr`
+as insurance against future solve paths that might not open binders first.
+
+### 2.9 Revised Performance Targets (Post-Benchmark)
 
 | Operation | Current (measured) | Target | Improvement |
 |-----------|-------------------|--------|-------------|
