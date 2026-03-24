@@ -1348,6 +1348,12 @@
 ;; Process all commands from a string
 ;; ========================================
 (define (process-string s)
+  ;; PM 8F: Ensure propagator network exists before processing.
+  ;; Without a network, module loading hangs during elaboration.
+  ;; Only creates the network box — does NOT reset prelude-env or other context.
+  (when (not (current-prop-net-box))
+    (current-prop-net-box (box (make-elaboration-network)))
+    (reset-meta-store!))
   (define port (open-input-string s))
   ;; Read raw syntax, apply pre-parse expansion, then parse
   (define raw-stxs (read-all-syntax port "<string>"))
@@ -1387,6 +1393,10 @@
 ;; Like process-string, but uses the WS reader (indentation-sensitive).
 ;; This is the path that .prologos files use — the primary design target.
 (define (process-string-ws s)
+  ;; PM 8F: Ensure propagator network exists (same as process-string).
+  (when (not (current-prop-net-box))
+    (current-prop-net-box (box (make-elaboration-network)))
+    (reset-meta-store!))
   (define port (open-input-string s))
   ;; Use WS reader (indentation -> nested lists)
   (define raw-stxs (read-all-syntax-ws port "<ws-string>"))
