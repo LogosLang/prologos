@@ -6,6 +6,7 @@
 - **Skip list**: `tests/.skip-tests` -- 2 pathological perf tests skipped by default (use `--no-skip` to include)
 - **Guideline**: Keep test files under ~20 test-cases / ~30s wall time for good thread-pool parallelism
 - **Pre-compilation**: Both runners call `raco make driver.rkt` before tests (skip with `--no-precompile`)
+- **Separate compile from test timing**: When measuring suite wall time for performance comparison, run `raco make driver.rkt` as a SEPARATE step first, THEN run the test suite with `--no-precompile`. Compilation time varies by cache state and pollutes wall time measurements.
 - **DAG impact**: `prelude.rkt` or `syntax.rkt` -> nearly all tests; single `.prologos` lib -> 1-15 tests; single test -> 1 test
 - **Fallback**: `raco test -j 10 prologos/tests/` -- no timing recorded
 - **Output capture** (CRITICAL): Run the test suite ONCE and capture sufficient output. NEVER re-run the full suite just to see different parts of the output. Correct patterns:
