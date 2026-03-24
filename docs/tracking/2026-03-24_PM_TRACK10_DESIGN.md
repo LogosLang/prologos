@@ -22,12 +22,14 @@
 |-------|-------------|--------|-------|
 | Pre-0 | Microbenchmarks + adversarial | ✅ | `313a930` — see §3.Pre-0 for results |
 | 0 | Acceptance file baseline | ⬜ | |
-| 1 | Network-active module loading + .pnet serialization | ⬜ | THE highest-value phase — 20s → ~50ms cold start |
-| 2 | Prelude as persistent shared network | ⬜ | Fork from deserialized prelude .pnet |
-| 3 | Test isolation via subnetwork scoping | ⬜ | Architectural value (not performance — setup is already 2.2μs) |
+| 1a | Network-active module loading | ⬜ | `prop-net-box ≠ #f` during load-module |
+| 1b | `.pnet` serialization (struct->vector + gensym + foreign-proc) | ⬜ | THE highest-value phase — 20s → ~50ms cold start |
+| 2 | Prelude as persistent shared network | ⬜ | Deserialize from .pnet, freeze, fork |
+| 3a | Test isolation via three-layer fork | ⬜ | prelude → test-file → test-case fork chain |
+| 3b | Test-granular scheduling | ⬜ | Per-test work items across Places, eliminate tail effect |
 | 4 | Absorb PM 8F deferrals | ⬜ | CHAMP fallback removal, defaults at solve-time |
-| 5 | Eliminate dual-path (snapshot retirement) | ⬜ | module-network-ref as sole source of truth |
-| 6 | Parameter reduction (incremental) | ⬜ | Architectural cleanup, not performance-critical (3.4μs/scope) |
+| 5 | Eliminate dual-path (snapshot retirement) | ⬜ | module-network-ref + .pnet frozen view |
+| 6 | Parameter reduction (incremental, ~41 → ~5) | ⬜ | Architectural cleanup |
 | 7 | Verification + A/B benchmarks + PIR | ⬜ | Compare against Pre-0 baselines |
 
 ---
@@ -233,7 +235,154 @@ Propagators fire during elaboration. Type checking uses the same network.
 The module-network-ref (Track 5) becomes the module's subnetwork — not a
 post-hoc reconstruction, but the ACTUAL network from elaboration.
 
-### 2.5 Module Network Serialization (`.pnet` files)
+### 2.5 Three-Layer Fork Model (D.3)
+
+Test isolation uses three layers of CHAMP fork, each inheriting from the
+layer above via structural sharing:
+
+```
+Layer 1: prelude-network (process-wide, frozen, deserialized from .pnet)
+  │       Contains: all 63 prelude module definitions, registries, trait instances
+  │       Lifetime: entire process
+  │       Mutation: NONE (frozen after deserialization)
+  │
+  ├── Layer 2: test-file-network (per-file, custom definitions)
+  │       Contains: prelude + test-file setup (ns declaration, helper defs, custom types)
+  │       Lifetime: all tests in one file
+  │       Mutation: during setup only, frozen after
+  │       Created by: fork from prelude + elaborate file-level definitions
+  │
+  │   ├── Layer 3: test-case-network (per-test, ephemeral)
+  │   │       Contains: file + one test expression's metas, constraints, errors
+  │   │       Lifetime: one test case
+  │   │       Mutation: during test execution
+  │   │       Created by: fork from test-file-network (287ns for 5000 entries)
+  │   │       Discarded: after test assertion
+  │   │
+  │   ├── Layer 3: (next test case...)
+  │   └── ...
+  │
+  ├── Layer 2: (next test file...)
+  └── ...
+```
+
+**Custom parameterizations become cell writes in the fork:**
+
+```racket
+;; Current: parameterize (15+ bindings)
+(define-values (env run run-last)
+  (make-shared-env
+    (parameterize ([current-solver-strategy 'bfs]
+                   [current-special-flag #t]
+                   ;; ... 13 more bindings
+                   )
+      "(ns test-foo)\ndef helper := ...")))
+
+;; Track 10: fork-with (cell writes, not parameterize)
+(define test-file-network
+  (fork-with prelude-network
+    [solver-strategy-cell 'bfs]
+    [special-flag-cell #t]
+    (elaborate "(ns test-foo)\ndef helper := ...")))
+
+(define (run-last s)
+  (with-fork test-file-network
+    (last (process-string s))))
+```
+
+`fork-with` creates a CHAMP fork, applies cell writes for custom state,
+elaborates file-level definitions, returns a frozen network. `with-fork`
+creates an ephemeral fork for one test case and discards after.
+
+**Racket-intrinsic parameters that CAN'T be cells** (~3-5):
+- `current-output-port` / `current-error-port` (Racket I/O)
+- `current-directory` (filesystem)
+- `current-custodian` (resource management)
+
+These remain as a minimal `parameterize` (3-5 bindings, down from 15-41).
+
+**Tests with different prelude configurations** fork from different layers:
+- `:no-prelude` tests → fork from empty `raw-network`
+- Standard tests → fork from `prelude-network`
+- Specialized tests → fork from a `partial-prelude-network`
+
+### 2.6 Test-Granular Scheduling (D.3)
+
+**Current**: Batch workers operate at FILE granularity. Each of 10 workers
+gets a test FILE, processes all tests sequentially. The tail effect: 9
+workers idle while 1 grinds through test-stdlib (285 tests, 132s).
+
+**Proposed**: Workers operate at TEST granularity. Individual test cases are
+work items distributed across workers. No worker is stuck on a large file.
+
+```
+Current (file-granular):
+Worker 1: [test-stdlib ████████████████████████████████] 132s
+Worker 2: [test-list-extended ██████████] [test-eq-ord ████] 69s + 45s
+...
+Worker 10: [test-parser █] [test-reader █] 6s + 1s → idle 125s
+
+Proposed (test-granular):
+Worker 1: A-1, A-5, A-9, B-1, C-3, ...  (evenly distributed)
+Worker 2: A-2, A-6, A-10, B-2, C-4, ...
+...
+Worker 10: A-4, A-8, B-5, C-2, D-1, ...  (all finish ~simultaneously)
+```
+
+**Architecture:**
+
+```
+Main process (or coordinator):
+  1. Pre-generate .pnet files for prelude + all test-file setups
+  2. Discover individual tests across all files
+  3. Build work queue: [(file-A, test-1, expected), (file-A, test-2, ...), ...]
+
+10 Racket Places (one per core):
+  Each Place:
+    - Deserialize prelude from .pnet (~50ms, once)
+    - file-cache: hash of file → frozen test-file-network
+    Loop:
+      - Receive (file, test-expr, expected) from coordinator
+      - Get-or-create file network from cache:
+          cache miss → deserialize from .pnet (~5ms) or elaborate (~100ms)
+          cache hit → reuse (0ms)
+      - Fork file-network → run test → check result → discard fork
+      - Report (test-id, pass/fail, time) to coordinator
+```
+
+**Why Racket Places, not threads**: Racket green threads don't use multiple
+cores. Places are Racket's multi-core primitive — separate memory spaces
+connected by place-channels. Each Place deserializes its own prelude from
+`.pnet` (fast: ~50ms). The `.pnet` files are the sharing mechanism — not
+in-memory CHAMP sharing (which requires same-process threads).
+
+**Performance estimate:**
+
+| Metric | Current | Target |
+|--------|---------|--------|
+| Prelude load per worker | ~20s (elaborate) | ~50ms (deserialize) |
+| File setup per worker | ~100ms (elaborate once) | ~5ms (.pnet cache) |
+| Tail effect | 132s (test-stdlib pins 1 worker) | ~13s (285 tests across 10 workers) |
+| Memory per worker | ~130MB (full prelude in memory) | ~6MB (.pnet) + working set |
+| Total wall time | ~240s | Target <150s |
+
+**Test discovery**: Requires either:
+- **(A)** Parse test files to extract `check-equal?` / `test-case` blocks
+  (complex, fragile — test syntax varies)
+- **(B)** A test registration API: each test file exports a list of named
+  test thunks. The runner discovers them via `dynamic-require`.
+- **(C)** Keep file-level granularity but split large files into smaller
+  ones. Simpler, no infrastructure change, but manual.
+
+Option B is most principled. Option C is most pragmatic for Track 10
+(split test-stdlib into test-stdlib-01 through test-stdlib-10, each ~30
+tests). Option B can be a Track 10b follow-up.
+
+**Thread-safe output**: Test results from 10 Places collected via
+place-channels. Each Place sends `(test-id pass/fail wall-ms)` messages.
+Coordinator collects, aggregates, reports. No interleaving.
+
+### 2.7 Module Network Serialization (`.pnet` files)
 
 **The highest-leverage mechanism in Track 10.** Pre-0 benchmarks show that
 the 20s cold-start is the dominant cost — and it's pure elaboration (parsing
@@ -959,16 +1108,19 @@ efficient branching).
 Track 10 is DONE when:
 
 1. ✅ `current-prop-net-box ≠ #f` during all module elaboration
-2. ✅ `.pnet` files generated for all prelude modules
+2. ✅ `.pnet` files generated for all prelude modules (40/40 round-trip verified)
 3. ✅ Cold-start prelude load from `.pnet` < 100ms (down from ~20s)
-4. ✅ Prelude shared via CHAMP fork across tests
-5. ✅ CHAMP fallback removed from `meta-solution/cell-id`
-6. ✅ `env-snapshot` removed from `module-info`
-7. ✅ Full suite wall time < 200s (down from ~240s)
-8. ✅ All 7401+ tests pass
-9. ✅ Acceptance file 0 errors
-10. ✅ A/B benchmarks run and compared against Pre-0
-11. ✅ PIR written per methodology
+4. ✅ Three-layer fork model: prelude → test-file → test-case
+5. ✅ `fork-with` / `with-fork` API implemented and used by test suite
+6. ✅ Test-granular scheduling via Places (eliminates tail effect)
+7. ✅ CHAMP fallback removed from `meta-solution/cell-id`
+8. ✅ `env-snapshot` removed from `module-info` (`.pnet` frozen view replaces it)
+9. ✅ Full suite wall time < 150s (down from ~240s)
+10. ✅ All 7401+ tests pass
+11. ✅ Acceptance file 0 errors
+12. ✅ A/B benchmarks run and compared against Pre-0
+13. ✅ Instrumentation cleanup
+14. ✅ PIR written per methodology
 
 ---
 
@@ -983,49 +1135,23 @@ Track 10 is DONE when:
 
 ---
 
-## 8. Open Questions
+## 8. Open Questions — Resolution Status
 
-1. **How many of the 41 parameters CAN be cells vs MUST remain parameters?**
-   Some parameters (e.g., `current-output-port`) are Racket runtime state
-   that can't be cells. Phase 4 needs a per-parameter audit.
-
-2. **Module loading order on network**: Currently serial (each module loads
-   its dependencies before itself). On the network, could we parallelize
-   independent module loads? The CHAMP fork enables this — but the current
-   serial loading is correct and simple.
-
-3. **Persistent registry network ↔ prelude network**: Currently these are
-   separate (persistent-registry-net-box vs module networks). Should they
-   merge into one unified prelude network?
-
-4. **The `install-module-loader!` callback pattern**: 7 call sites install
-   the module loader. After Track 10, is this still needed? Or does the
-   network carry the loader as a cell?
-
-5. **Batch worker compatibility**: The batch worker saves/restores state
-   across test files. With subnetwork forking, does the batch worker become
-   simpler (fork prelude per file) or more complex (manage fork lifecycle)?
-
-6. **`fasl` compatibility with our struct types**: Do our AST structs
-   (expr-Pi, expr-app, etc.) round-trip correctly through `fasl->output` /
-   `fasl->input`? Need to test: struct identity, custom `gen:equal+hash`
-   (expr-meta has custom equality), nested structs, hasheqs of structs.
-
-7. **Macro transformer serialization**: Macros are closures — not
-   `fasl`-serializable. Store macro SOURCE and re-parse on deserialize?
-   Or exclude macros and re-install from Racket module? Measure: how many
-   macros, how expensive is re-parsing vs full module load?
-
-8. **Cell-id determinism**: Must cell IDs be deterministic (same source →
-   same IDs) for `.pnet` correctness? If the deserialized network has
-   cell-id 42 for `List`, but the runtime expects cell-id 57, lookups fail.
-   Options: deterministic counter, or ID remapping on deserialize.
-
-9. **Incremental `.pnet` invalidation**: If module A changes and module B
-   depends on A, both `.pnet` files are stale. The transitive dependency
-   hash handles this — but do we re-serialize just A and B, or all 63?
-   Incremental re-serialization = faster rebuild. Full = simpler.
-
-10. **Pre-compilation tool**: Should we add a `raco prologos-make` or extend
-    `tools/run-affected-tests.rkt` to pre-generate `.pnet` files? This
-    parallels `raco make` for `.zo` files.
+| # | Question | Status | Resolution |
+|---|----------|--------|------------|
+| 1 | 41 params: cells vs Racket-intrinsic? | **Partially resolved** | ~3-5 Racket-intrinsic (output-port, error-port, directory, custodian). Rest → cells. Phase 6 per-parameter audit. |
+| 2 | Parallel module loading? | **Deferred** | Serial is correct + simple. Not needed for targets. |
+| 3 | Registry ↔ prelude network merge? | **Resolved: YES** | One unified prelude network. Both persistent, both shared. |
+| 4 | `install-module-loader!` pattern? | **Reduced** | .pnet simplifies loader. 7 call sites persist until Phase 6. |
+| 5 | Batch worker compatibility? | **Resolved: simpler** | .pnet replaces save/restore. Each Place deserializes once. |
+| 6 | Serialization mechanism? | **Resolved** | `struct->vector` + tag dispatch. Tested 40/40 modules. |
+| 7 | Macro serialization? | **Resolved: non-issue** | 0 macros in prelude. User macros: store source, re-parse. |
+| 8 | Cell-id determinism? | **Resolved: remap** | Store `(name→cell-id)` table in .pnet. Remap on deserialize. |
+| 9 | Incremental invalidation? | **Resolved: full rebuild** | Re-serialize all stale + dependents. Simple. Track 11 for incremental. |
+| 10 | Pre-compilation tool? | **Resolved: YES** | `tools/pnet-compile.rkt`. Integrates with test runner pre-step. |
+| 11 | Non-network contexts? | **Resolved** | .pnet deserialized form = frozen read-only view (D.3.2). |
+| 12 | Gensym round-trip? | **Resolved** | `symbol$$N` tagging. Per-module gensym table. 40/40 verified. |
+| 13 | Foreign function procedures? | **Resolved** | `(foreign-proc name)` substitution. Re-link via namespace-variable-value. 22/40 modules affected. |
+| 14 | Specs + def-locations serialization? | **Resolved: include** | 614 specs + 30,908 locations. Must be in .pnet for import resolution + error messages. |
+| 15 | Test custom parameterizations? | **Resolved** | Three-layer fork: cell writes in Layer 2 fork replace parameterize. `fork-with` API. |
+| 16 | Test-granular scheduling? | **Resolved** | Per-test work items via Places. Eliminates tail effect. Option C (split files) pragmatic. Option B (test registration) principled follow-up. |
