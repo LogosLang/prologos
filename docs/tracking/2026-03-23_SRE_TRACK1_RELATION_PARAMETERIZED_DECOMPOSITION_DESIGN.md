@@ -3,20 +3,52 @@
 **Stage**: 2/3 Combined (Audit + Design)
 **Date**: 2026-03-23
 **Series**: SRE (Structural Reasoning Engine)
-**Depends on**: SRE Track 0 (Form Registry) ✅
-**Enables**: SRE Track 2 (Elaborator-on-SRE), CIU Track 3 (trait-dispatched access)
+**Depends on**: [SRE Track 0](2026-03-22_SRE_TRACK0_FORM_REGISTRY_DESIGN.md) ✅
+**Enables**: SRE Track 2 (Elaborator-on-SRE), [CIU Series](2026-03-21_CIU_MASTER.md) Track 3
+**SRE Master**: [SRE Series Roadmap](2026-03-22_SRE_MASTER.md)
+**Master Roadmap**: [MASTER_ROADMAP.org](MASTER_ROADMAP.org)
+
+## 0. Vision and Goal
+
+**What we're solving**: The SRE (Track 0) currently handles one structural
+relation: equality. But our codebase uses at least three structural
+relations — equality, subtyping, and duality — each implemented as separate,
+incompatible mechanisms (`unify` via SRE, `subtype?` as flat predicate,
+`dual` as recursive function). This means:
+
+- **Subtyping is not structural**: `List Nat` is not recognized as a subtype
+  of `List Int`, even though List is covariant. The flat `subtype?` predicate
+  only handles base types.
+- **Duality is not on the network**: The `dual` function is synchronous and
+  recursive — it doesn't participate in propagation. Session type inference
+  can't benefit from incremental duality resolution.
+- **User-defined types don't participate**: A user who defines `data Box A := box A`
+  gets no structural subtyping. Subtyping is not first-class.
+
+**What Track 1 delivers**: A single SRE that handles equality, subtyping,
+AND duality via a relation parameter. Structural decomposition is
+relation-aware: variance-driven for subtyping, constructor-pairing for
+duality. User-defined types get automatic variance via polarity inference.
+The three separate mechanisms unify into one.
+
+**Why this matters for the infrastructure program**: SRE Track 2
+(elaborator-on-SRE) needs the elaborator to express subtyping and duality
+constraints via `structural-relate`. If Track 1 only handles equality, Track 2
+must maintain separate paths for subtyping and duality — which is the
+fragmented architecture we're trying to eliminate.
 
 ## Progress Tracker
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Acceptance baseline | ⬜ | |
 | 1 | Relation type + variance + polarity inference infra | ⬜ | |
 | 2 | Subtype-aware structural-relate + user-defined variance | ⬜ | |
 | 3 | Duality-aware structural-relate + dependent sessions | ⬜ | |
 | 4 | Integration: subtype? delegation | ⬜ | |
 | 5 | Integration: session duality propagator | ⬜ | |
-| 6 | Verification + benchmarks | ⬜ | |
+| 6 | Verification + benchmarks + PIR | ⬜ | |
+
+**Baseline**: SRE Track 0 final (7358 tests, 236.7s, commit `86524d8`)
 
 ## 1. Stage 2 Audit: Relations in the Codebase
 
@@ -213,60 +245,49 @@ Three built-in relations:
    'duality
    ;; Propagate: decompose with dual constructor pairing
    sre-propagate-duality
-   ;; Sub-relation: payload=equality, continuation=duality
-   (λ (rel variance)
-     ;; For duality, variance is replaced by per-component sub-relation:
-     ;; payload → equality, continuation → duality
-     ;; This comes from the ctor-desc's component-sub-relations field
-     ;; (see §2.5 below)
-     rel)))
+   ;; Sub-relation: derived from component lattice type (§2.5)
+   ;; Same domain as parent → duality. Different domain → equality.
+   ;; The sub-relation-fn receives the component's lattice-spec and
+   ;; the parent domain name to determine this.
+   (λ (rel component-lattice parent-domain-name)
+     (if (eq? component-lattice parent-domain-name)
+         sre-duality    ;; same domain: recurse duality
+         sre-equality)) ;; cross-domain: equality
+   ))
 ```
 
-### 2.5 Per-Component Sub-Relations for Duality
+### 2.5 Duality Sub-Relations: Derived, Not Declared
 
-Variance handles subtyping. But duality needs per-component sub-relation
-specification (payload=equality, continuation=duality). This is different
-from variance — it's a mapping from component position to relation.
+Variance handles subtyping. Duality needs per-component sub-relation
+determination (payload=equality, continuation=duality).
 
-Option A: Add `component-sub-relations` to ctor-desc (a list of relation
-symbols per component, used when the parent relation is duality).
+**Original design (D.1)**: A `component-sub-relations` field on ctor-desc.
 
-Option B: Encode in the relation's `sub-relation-fn`, using the component
-index.
+**Revised design (D.3 self-critique)**: Derive sub-relations from existing
+data. The ctor-desc already has `component-lattices` which names the lattice
+for each component. The duality relation's `sub-relation-fn` checks: if a
+component's lattice matches the parent domain → duality. If it's a different
+domain → equality.
 
-**Decision**: Option A is more data-oriented. The ctor-desc for `Send` would be:
+For `Send(payload: TypeExpr, cont: SessionExpr)`:
+- `payload` lattice = `type-lattice` ≠ session domain → equality
+- `cont` lattice = `session-lattice` = session domain → duality
 
-```racket
-(ctor-desc
-  'Send 2 sess-send? (λ (s) (list (sess-send-type s) (sess-send-cont s)))
-  (λ (vals) (sess-send (first vals) (second vals)))
-  '(type-lattice session-lattice)  ;; component-lattices
-  0  ;; binder-depth
-  'session  ;; domain
-  '(= +)   ;; component-variances (for subtyping if ever needed)
-  '(equality duality))  ;; component-sub-relations (for duality)
-```
+This derivation is correct because duality only applies within a domain —
+cross-domain components are structurally equal (both endpoints send/receive
+the same type).
 
-The `component-sub-relations` field says: under duality, the first component
-(payload type) uses equality, and the second (continuation) uses duality.
-
-This field is `#f` for most constructors (equality relation doesn't need it).
-It's only populated for constructors in domains that support duality.
-
-**Combined ctor-desc expansion**: Two new fields:
+**ctor-desc expansion**: One new field only:
 
 ```racket
 (struct ctor-desc
   (tag arity recognizer-fn extract-fn reconstruct-fn
    component-lattices binder-depth domain
-   component-variances       ;; NEW: '(+ - = ø) or #f
-   component-sub-relations)  ;; NEW: '(equality duality ...) or #f
+   component-variances)   ;; NEW: '(+ - = ø) or #f
   #:transparent)
 ```
 
-This brings ctor-desc to 10 fields. Per the D.2 critique, we're monitoring
-for god-struct. At 10, we're at the boundary. If Track 2 adds more, factor
-into core + capabilities.
+9 fields total. The D.2 critique threshold of 10 is not reached.
 
 ### 2.6 NTT Speculative Syntax
 
@@ -286,12 +307,14 @@ data TypeExpr
   :top type-top
 
 ;; Level 0: Session lattice with duality
+;; NOTE: No :under-duality annotations needed — the duality relation
+;; DERIVES sub-relations from component lattice types:
+;;   - payload : TypeExpr (cross-domain) → equality
+;;   - cont : SessionExpr (same domain) → duality
 data SessionExpr
   := sess-bot | sess-top
-   | sess-send [payload : TypeExpr :under-duality equality]
-               [cont : SessionExpr :under-duality duality]
-   | sess-recv [payload : TypeExpr :under-duality equality]
-               [cont : SessionExpr :under-duality duality]
+   | sess-send [payload : TypeExpr] [cont : SessionExpr]
+   | sess-recv [payload : TypeExpr] [cont : SessionExpr]
    | sess-choice [branches : ...]
    | sess-offer  [branches : ...]
   :lattice :structural
@@ -304,7 +327,8 @@ data SessionExpr
 ;; - For TypeExpr: structural-relate with equality (Track 0)
 ;;                 structural-relate with subtype (Track 1, using :variance)
 ;; - For SessionExpr: structural-relate with equality (Track 0)
-;;                    structural-relate with duality (Track 1, using :dual-pairs + :under-duality)
+;;                    structural-relate with duality (Track 1, using :dual-pairs
+;;                    + component lattice types for sub-relation derivation)
 
 ;; Usage in type checking (what Track 2 would generate):
 ;; structural-relate cell-a cell-b :relation subtype
@@ -315,16 +339,13 @@ data SessionExpr
 ;; -----------------------------|----------------------------------
 ;; :variance + on field         | component-variances '(... + ...)
 ;; :variance - on field         | component-variances '(... - ...)
-;; :under-duality equality      | component-sub-relations '(... equality ...)
 ;; :dual-pairs [[Send Recv]]    | sre-domain dual-pairs
 ;; :relation subtype            | #:relation sre-subtype
+;; (sub-relation derived from   | duality sub-relation-fn checks
+;;  component lattice type)     |  component-lattices on ctor-desc
 ```
 
 ## 3. Phase Design
-
-### Phase 0: Acceptance Baseline
-
-Run full test suite + Track 8D acceptance file. Record baseline.
 
 ### Phase 1: Relation Type + Variance + Polarity Inference Infrastructure
 
@@ -332,25 +353,41 @@ Run full test suite + Track 8D acceptance file. Record baseline.
 1. `sre-relation` struct in `sre-core.rkt`
 2. Three built-in relations: `sre-equality`, `sre-subtype`, `sre-duality`
 3. `component-variances` field on `ctor-desc` (default `#f`)
-4. `component-sub-relations` field on `ctor-desc` (default `#f`)
-5. `dual-pairs` field on `sre-domain` (default `#f`)
-6. `binder-open-fn` field on `ctor-desc` (default `#f`) — scaffolded in
+4. `dual-pairs` field on `sre-domain` (default `#f`)
+5. `binder-open-fn` field on `ctor-desc` (default `#f`) — scaffolded in
    Track 0, now needed for Phase 3 dependent duality
-7. Polarity inference function: `infer-variance : type-def → (listof variance)`
+6. Polarity inference function: `infer-variance : type-def → (listof variance)`
    - Walks constructor fields, tracks type parameter positions
    - Positive position → covariant (+), negative → contravariant (-),
      both → invariant (=), absent → phantom (ø)
    - Applied during `data` elaboration to automatically fill
      `component-variances` on user-defined ctor-desc entries
-8. Built-in type variance annotations (hardcoded, textbook):
+7. Built-in type variance annotations (hardcoded, textbook):
    - Pi: `'(- +)`, Sigma: `'(+ +)`, App: `'(= +)`, List/PVec/Set: `'(+)`,
      Map: `'(= +)`
-9. Update all existing ctor-desc registrations with `#f #f #f` for new fields
-10. Update all existing sre-domain instantiations with `#f` for dual-pairs
+8. Update all existing ctor-desc registrations with `#f #f` for new fields
+9. Update all existing sre-domain instantiations with `#f` for dual-pairs
+
+**Design note: No `component-sub-relations` field** (D.3 self-critique).
+The original design had a per-component sub-relation annotation for duality
+(payload=equality, continuation=duality). This is redundant: the duality
+relation can DERIVE sub-relations from component lattice types — a component
+whose lattice is the same domain as the parent gets duality, a component on
+a different domain gets equality. The `component-lattices` field already
+carries this information. This keeps ctor-desc at 9 fields (with variance)
+instead of 10.
+
+**Polarity inference dependency ordering**: Types must be analyzed in
+dependency order — `List`'s variance must be known before `data Nested A
+:= nested (List A)` can determine that `A` is covariant. Our module loading
+system already elaborates `data` definitions in dependency order. Variance
+annotations are written to ctor-desc at registration time, so downstream
+types can query them. Verify this ordering holds in the implementation.
 
 **Test**: Existing tests pass unchanged (new fields default to Track 0 behavior).
 New test: polarity inference for `data Pair A B := pair A B` → `'(+ +)`.
 New test: polarity inference for `data Fn A B := fn (A -> B)` → `'(- +)`.
+New test: polarity inference for nested `data Nested A := nested (List A)` → `'(+)`.
 
 **Risk**: Low-medium. Polarity inference is well-understood but touches the
 elaboration pipeline for `data` definitions. Need to verify it doesn't affect
@@ -409,6 +446,17 @@ hard bound. Decomp registry prevents duplicate sub-cell creation.
 Transitivity falls out of propagation naturally: if `cell-a <: cell-b` and
 `cell-b <: cell-c` are both installed, information flows through cell-b.
 No additional mechanism needed.
+
+**Meta-interaction boundary** (known limitation): Subtype-relate decomposes
+compound types structurally, but leaf-level subtype checks only fire when
+BOTH sub-cells are ground. If one sub-cell is a meta (unsolved), the
+propagator waits. The meta gets solved by equality constraints from
+elaboration, THEN the subtype check fires. This means subtyping cannot
+GUIDE meta solving — `?X <: Int` has multiple solutions (Nat, Int, etc.)
+and the SRE doesn't pick one. This is correct for our current architecture
+(where `subtype?` is only called on ground types). It becomes a limitation
+in Track 2 (elaborator-on-SRE), where subtyping constraints would
+participate in inference. Document as known boundary for Track 2 design.
 
 ### Phase 3: Duality-Aware structural-relate + Dependent Sessions
 
@@ -471,13 +519,45 @@ Fuel guards provide the hard bound.
 1. `subtype?` in `typing-core.rkt` delegates structural cases to SRE
 2. Flat cases (Nat<:Int, Posit8<:Posit16) remain as fast path
 3. Compound cases dispatch to `sre-structural-subtype-check`
-4. `sre-structural-subtype-check`: creates temporary cells for the two
-   types, installs a subtype-relate propagator, runs to quiescence,
-   checks for contradiction
 
-**Design note**: This is a "query" pattern — create a temporary sub-network,
-propagate, read the result. The temporary cells don't persist beyond the
-query. This is similar to how we'd implement occurs-check on the network.
+**Query pattern** (concrete sketch):
+
+```racket
+(define (sre-structural-subtype-check domain t1 t2)
+  ;; Create a mini-network for the query
+  (define net0 (make-prop-network))
+  ;; Create cells initialized to the two types
+  (define-values (net1 cell-a)
+    (net-new-cell net0 t1
+      (sre-domain-lattice-merge domain)
+      (sre-domain-contradicts? domain)))
+  (define-values (net2 cell-b)
+    (net-new-cell net1 t2
+      (sre-domain-lattice-merge domain)
+      (sre-domain-contradicts? domain)))
+  ;; Install a subtype-relate propagator
+  (define-values (net3 _pid)
+    (net-add-propagator net2 (list cell-a cell-b) (list cell-a cell-b)
+      (sre-make-structural-relate-propagator domain cell-a cell-b
+        #:relation sre-subtype)))
+  ;; Run to quiescence
+  (define net4 (run-to-quiescence net3))
+  ;; Check: no contradiction = subtype holds
+  (not (or (net-contradiction? net4)
+           ((sre-domain-contradicts? domain) (net-cell-read net4 cell-a))
+           ((sre-domain-contradicts? domain) (net-cell-read net4 cell-b)))))
+```
+
+The mini-network is GC'd after the check — no persistent state. This
+pattern generalizes to any SRE query: create cells, install relation
+propagator, quiesce, read result. Occurs-check, well-formedness, etc.
+can all follow this pattern.
+
+**Performance**: The mini-network is only created for compound types
+(the flat fast path handles base types without cells). For compound
+types, cell creation + one quiescence run. The decomp registry within
+the mini-network caches sub-decompositions, so nested types (e.g.,
+`List (List Nat) <: List (List Int)`) don't re-decompose.
 
 **Test**: `test-subtyping.rkt` extended with structural cases.
 
@@ -538,19 +618,21 @@ inspectable. This is the same justification as sre-domain in Track 0.
 
 ### 4.3 Correct-by-Construction
 
-**Challenge**: Variance annotations are per-constructor, manually specified.
-What prevents a wrong variance annotation (marking Pi domain as covariant)?
+**Challenge**: Variance annotations are per-constructor. For built-in types
+they're manually specified (textbook). For user-defined types, polarity
+inference derives them. What prevents a wrong variance annotation?
 
-**Response**: This is correct-by-contract, not correct-by-construction.
-The programmer specifies variance. The SRE trusts it. A wrong annotation
-produces unsound subtyping. This is the same gap as Track 0's monotonicity
-trust. The NTT type system (future) would verify variance from polarity
-analysis. For now, the test suite is the safety net.
+**Response**: Two tiers of correctness:
+- **User-defined types**: Correct-by-construction. Polarity inference derives
+  variance from the type definition. If `A` appears only in positive position,
+  it's covariant. The user doesn't specify variance — the compiler infers it.
+- **Built-in types**: Correct-by-contract. Pi's `'(- +)` is textbook, but
+  the compiler trusts the hardcoded annotation. A wrong annotation produces
+  unsound subtyping. Mitigated by: (a) these are well-established results,
+  (b) the test suite validates, (c) NTT enforcement (future) would verify.
 
-**Mitigation**: The variance annotations for built-in types (Pi, Sigma,
-List, etc.) are well-established (textbook results). The risk is for
-user-defined types — but user-defined structural subtyping is not in
-Track 1 scope.
+This is strictly better than Track 0's monotonicity trust: user-defined types
+get correct-by-construction variance; only built-in types remain by-contract.
 
 ### 4.4 Completeness
 
@@ -558,22 +640,34 @@ Track 1 scope.
 isomorphism. Is Track 1 complete?
 
 **Response**: Track 1 delivers the two compile-time structural relations
-(subtyping, duality). Coercion is a runtime concern (Track 2). Isomorphism
-has no current use case. Delivering subtyping + duality is complete for the
-current architecture's needs. The relation infrastructure is extensible —
+(subtyping, duality) with first-class support for ALL types (user-defined
+included, via polarity inference). Coercion is a runtime/reduction concern
+that requires the elaborator-on-SRE architecture (Track 2). Isomorphism
+has no current use case. The relation infrastructure is extensible —
 adding coercion or isomorphism in a future track requires only a new
 `sre-relation` instance and appropriate ctor-desc annotations.
 
+The Completeness revision (D.2) incorporated user-defined structural
+subtyping and dependent session duality — both were originally deferred
+but identified as Completeness violations. Track 1 now makes subtyping
+and duality genuinely first-class.
+
 ### 4.5 Decomplection
 
-**Challenge**: Adding `component-variances` AND `component-sub-relations`
-to ctor-desc — are these two separate concerns being braided?
+**Challenge**: The original design added both `component-variances` AND
+`component-sub-relations` to ctor-desc. The D.3 self-critique identified
+that `component-sub-relations` is redundant — duality can derive
+sub-relations from component lattice types (same-domain → duality,
+cross-domain → equality). Removing it keeps concerns separated.
 
-**Response**: They serve different relations: variances for subtyping,
-sub-relations for duality. They're orthogonal — a constructor can have
-variances without sub-relations, or sub-relations without variances. Keeping
-them as separate fields is the decomplected design. The alternative
-(a single `component-relation-behavior` that handles both) would braid them.
+**Response**: Only `component-variances` is added. Each relation's
+`sub-relation-fn` derives sub-cell relations from existing data:
+- Equality: always equality (no variance needed)
+- Subtyping: uses `component-variances` from ctor-desc
+- Duality: uses `component-lattices` from ctor-desc (same domain → duality,
+  different domain → equality)
+
+One field serves one concern. No braiding.
 
 ## 5. Open Questions (Revised after Completeness review)
 
@@ -613,7 +707,67 @@ relations first-class for all types is building an incomplete foundation.
    Not needed for current use cases — subtyping and duality operate on
    different domains. Monitor for future need.
 
-## 6. Source Documents
+## 6. Expectations (PIR checkpoints)
+
+### 6.1 Performance
+
+- **No regression on equality path**: The `#:relation` parameter defaults to
+  equality. Existing structural unification must not get slower. Benchmark
+  target: ≤ 2% wall-time increase on bench-ab comparative suite.
+- **Flat subtype fast path preserved**: `Nat <: Int` should be O(1) table
+  lookup, no cell creation. The structural path only activates for compound
+  types.
+- **Structural subtype query overhead**: Creating a mini-network for compound
+  subtype checks has overhead vs the flat predicate. Target: < 100μs per
+  compound subtype check. Measure via micro-benchmark.
+- **Suite time**: Baseline 236.7s. Target: ≤ 245s (< 4% increase, accounting
+  for new tests).
+
+### 6.2 Correctness
+
+- **Soundness**: No false positives — if `sre-structural-subtype-check`
+  returns true, the subtype relationship genuinely holds. Test with known
+  counterexamples: `List Int` is NOT a subtype of `List Nat`.
+- **Variance accuracy**: Polarity inference for all existing `data` definitions
+  produces the expected variance annotations. Cross-check against textbook
+  results for Pi, Sigma, List.
+- **Duality involution**: `dual(dual(S)) = S` for all session types. Test
+  with nested, dependent, and recursive sessions.
+- **No behavioral change on existing tests**: 7358 tests must pass unchanged.
+
+### 6.3 Architecture
+
+- **SRE core changes are domain-neutral**: `sre-core.rkt` must not contain
+  any type-domain-specific or session-domain-specific code. All domain
+  specificity lives in domain specs and ctor-descs.
+- **ctor-desc field count**: ≤ 9 (with variance, without sub-relations).
+  If we exceed 9, document why in the PIR.
+- **Zero new Racket parameters**: Relations are data (structs), not ambient
+  state (parameters).
+
+## 7. Completion Criteria
+
+Track 1 is DONE when:
+
+1. **All 6 phases complete** with progress tracker updated
+2. **All tests pass** (existing + new subtype/duality tests)
+3. **Structural subtyping works for user-defined types**: `data Box A := box A`
+   → `Box Nat <: Box Int` without any user annotation
+4. **Dependent session duality works**: `DSend(x:Int, S(x)) ~ DRecv(x:Int, dual(S(x)))`
+5. **Performance expectations met** (§6.1)
+6. **bench-ab comparative suite shows no regression**
+7. **PIR written** following POST_IMPLEMENTATION_REVIEW.org methodology,
+   covering:
+   - Was the query pattern the right choice for subtype integration?
+   - Did polarity inference handle all existing `data` definitions correctly?
+   - What was the actual overhead of structural subtype checks?
+   - Were there surprises in duality propagation termination?
+   - Does the meta-interaction boundary (§Phase 2) need Track 2 attention?
+   - Architecture assessment: is ctor-desc growing too heavy?
+   - What's next: does Track 2 (elaborator-on-SRE) need design changes
+     based on Track 1 learnings?
+
+## 8. Source Documents
 
 | Document | Relationship |
 |----------|-------------|
