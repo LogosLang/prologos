@@ -232,15 +232,13 @@ constructor mapping, and binder requirements.
 
 | Lesson | Target Document | Status |
 |--------|----------------|--------|
-| "Correct lattice for the correct relation" | DEVELOPMENT_LESSONS.org | Pending |
-| "Don't pre-populate sub-cells from wrong side for non-equality" (3 instances) | PATTERNS_AND_CONVENTIONS.org | Pending |
-| "Equality-specific assumptions break for non-equality relations" (3 instances) | DEVELOPMENT_LESSONS.org | Pending |
-| "Benchmark before changing" (2 instances) | DESIGN_METHODOLOGY.org | Pending — needs 3rd instance |
-| "Design:implementation ratio predicts smoothness" (3 instances) | DESIGN_METHODOLOGY.org | Pending |
-| "Design critique changes designs" (4 instances) | DESIGN_METHODOLOGY.org | Pending |
+| "Non-equality relations break equality assumptions" (lattice ordering + symmetric decomp + value copying) | DEVELOPMENT_LESSONS.org | Done (`eca77b4`) |
+| "Benchmark as design input" (draft → benchmark → iterate → implement) | DESIGN_METHODOLOGY.org § Stage 3 | Done (`eca77b4`) |
 | "Principles Gate works during implementation" | Already in workflow.md | Done (`c7cda29`) |
-| "Symbol sentinels for cross-module lattice identity" | PATTERNS_AND_CONVENTIONS.org | Pending |
-| NTT-Racket isomorphism confirmed | MEMORY.md Watching → Confirmed | Pending |
+| "Design:implementation ratio predicts smoothness" (3 instances) | — | Already standard practice, not additional noise |
+| "Design critique changes designs" (4 instances) | — | Already standard practice, not additional noise |
+| "Symbol sentinels for cross-module lattice identity" | — | 2 instances, watching for 3rd |
+| NTT-Racket isomorphism confirmed | MEMORY.md | Watching → Confirmed (pending update) |
 
 ## 17. Key Files
 
