@@ -6,7 +6,7 @@
 **Depends on**: [SRE Track 0](2026-03-22_SRE_TRACK0_FORM_REGISTRY_DESIGN.md) ✅
 **Enables**: SRE Track 2 (Elaborator-on-SRE), [CIU Series](2026-03-21_CIU_MASTER.md) Track 3
 **SRE Master**: [SRE Series Roadmap](2026-03-22_SRE_MASTER.md)
-**Master Roadmap**: [MASTER_ROADMAP.org](MASTER_ROADMAP.org)
+**Master Roadmap**: [MASTER_ROADMAP](MASTER_ROADMAP.md)
 
 ## 0. Vision and Goal
 
@@ -137,14 +137,35 @@ Track 1 parameterizes this by relation:
 
 ;; Track 1 (new):
 (sre-make-structural-relate-propagator domain cell-a cell-b #:relation rel)
-;; → equality: write unified to both, decompose symmetrically
-;; → subtype:  check a <: b, decompose with variance
-;; → duality:  check a ~ dual(b), decompose swapping pairs
+;; → equality: write unified to both, decompose symmetrically (PROPAGATION)
+;; → subtype:  check a <: b, decompose with variance (CHECKING)
+;; → duality:  check a ~ dual(b), decompose swapping pairs (PROPAGATION)
 ```
 
 The `#:relation` parameter is an optional keyword argument defaulting to
 `'equality`. This is backward-compatible: all existing call sites get
 equality behavior without changes.
+
+**Critical semantic distinction (D.4 clarification)**: Equality and duality
+are *information propagators* — they write new values into cells, moving
+them up the lattice. Subtyping is a *structural checker via propagation
+infrastructure* — it fires when cells are sufficiently ground, verifies the
+relationship holds, and signals contradiction on failure. It does NOT write
+new information into either cell (only contradiction signals).
+
+This asymmetry is a deliberate design decision:
+- **Track 1**: Subtype-relate checks. Sufficient for our current `subtype?`
+  use cases (2 call sites, both on ground types).
+- **Track 2**: If the elaborator-on-SRE needs subtyping to guide inference
+  (`?X <: Int` constrains `?X`), subtype-relate would need bounds propagation
+  (cells carry intervals, not single values). This is a significant
+  architectural change deferred to Track 2's design.
+
+The practical implication: the structural decomposition in subtype-relate
+creates sub-cells and sub-constraints, but these sub-constraints are ALSO
+checkers. The whole thing is a structured recursive check expressed as a
+propagator network. The network gives us: decomp caching, termination via
+fuel, composable sub-checks — without requiring information-flow semantics.
 
 ### 2.2 Variance on ctor-desc
 
@@ -289,6 +310,15 @@ the same type).
 
 9 fields total. The D.2 critique threshold of 10 is not reached.
 
+**Documented assumption (D.4)**: The derivation rule assumes that
+same-domain components are continuations (should get duality). If a future
+constructor has same-domain non-continuation components (e.g., session
+polymorphism: sending a session type as a value), the derivation would give
+the wrong sub-relation. In that case, an optional `component-sub-relations`
+override field can be added backward-compatibly (`#f` default, explicit list
+when needed). No current constructor triggers this — all session constructors
+have cross-domain payloads and same-domain continuations.
+
 ### 2.6 NTT Speculative Syntax
 
 What Track 1 implements, expressed in NTT:
@@ -384,10 +414,27 @@ system already elaborates `data` definitions in dependency order. Variance
 annotations are written to ctor-desc at registration time, so downstream
 types can query them. Verify this ordering holds in the implementation.
 
+**Polarity inference edge cases**:
+- **Recursive types**: `data List A := nil | cons A (List A)` — polarity
+  inference is a fixpoint computation on the 4-element lattice `{ø, +, -, =}`.
+  Start with ø, propagate polarity through fields (including recursive
+  occurrences), reach fixpoint. Converges in 2-3 iterations for any type.
+  Example: `data Strange A := mk (Strange A -> A)` → A is invariant (=)
+  because it appears in both positive (codomain) and negative (domain via
+  recursive negative position) positions.
+- **Mutual recursion**: `data Even A := ... (Odd A) ...` and vice versa.
+  Iterate fixpoint over all types in the mutual group simultaneously. Our
+  module system already groups mutual recursion for elaboration.
+- **GADTs**: Out of scope. We don't support GADTs. If added, variance
+  inference becomes significantly more complex (equational constraints,
+  not just position). Document as future concern.
+
 **Test**: Existing tests pass unchanged (new fields default to Track 0 behavior).
 New test: polarity inference for `data Pair A B := pair A B` → `'(+ +)`.
 New test: polarity inference for `data Fn A B := fn (A -> B)` → `'(- +)`.
 New test: polarity inference for nested `data Nested A := nested (List A)` → `'(+)`.
+New test: recursive `data List A := nil | cons A (List A)` → `'(+)` (fixpoint).
+New test: invariant `data Strange A := mk (Strange A -> A)` → `'(=)` (fixpoint).
 
 **Risk**: Low-medium. Polarity inference is well-understood but touches the
 elaboration pipeline for `data` definitions. Need to verify it doesn't affect
@@ -447,6 +494,12 @@ Transitivity falls out of propagation naturally: if `cell-a <: cell-b` and
 `cell-b <: cell-c` are both installed, information flows through cell-b.
 No additional mechanism needed.
 
+**Equality + subtype interaction test**: If a cell pair has both an
+equality-relate and a subtype-relate decomposition, verify soundness:
+equality makes cells equal → subtyping trivially holds. Add explicit
+test: create cell pair, install both relations, quiesce, verify no
+contradiction.
+
 **Meta-interaction boundary** (known limitation): Subtype-relate decomposes
 compound types structurally, but leaf-level subtype checks only fire when
 BOTH sub-cells are ground. If one sub-cell is a meta (unsolved), the
@@ -497,6 +550,9 @@ participate in inference. Document as known boundary for Track 2 design.
 - Nested: `Send Int (Recv Bool End) ~ Recv Int (Send Bool End)`
 - Dependent: `DSend(x:Int, S(x)) ~ DRecv(x:Int, dual(S(x)))` (NEW)
 - Choice/Offer branch correspondence
+- **Binder generality**: test `sre-decompose-binder` with EQUALITY relation
+  on Pi (binder-depth=1). Validates that the function works for both duality
+  and equality, proving generality before Track 2 needs it for PUnify migration.
 
 **Risk**: Medium-high. Dependent duality combines binder handling with
 constructor pairing. The `sre-decompose-binder` function is new infrastructure
@@ -558,6 +614,13 @@ can all follow this pattern.
 types, cell creation + one quiescence run. The decomp registry within
 the mini-network caches sub-decompositions, so nested types (e.g.,
 `List (List Nat) <: List (List Int)`) don't re-decompose.
+
+**Frequency counter**: Add a `current-subtype-check-count` parameter
+incremented on each `subtype?` call. Measure across the full test suite
+to establish: (a) how often `subtype?` is called, (b) what fraction
+are compound (trigger mini-network), (c) what the actual wall-time
+overhead is. If compound checks are >1000 per suite run, evaluate
+persistent subtype network as a Track 2 optimization.
 
 **Test**: `test-subtyping.rkt` extended with structural cases.
 
