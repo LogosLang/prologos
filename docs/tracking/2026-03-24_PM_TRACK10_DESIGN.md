@@ -1,10 +1,10 @@
 # PM Track 10: Module Loading on Network — Stage 3 Design
 
-**Stage**: 3 (Design — D.3, self-critique: serialization mechanism, code reality audit, principles challenge)
+**Stage**: 3 (Design — D.4, external critique + NTT modeling)
 **Date**: 2026-03-24
 **Series**: PM (Propagator Migration)
 **Prerequisite**: PM 8F ✅ (cell-id in expr-meta, cell-primary reads)
-**Status**: Draft D.3
+**Status**: Draft D.4
 
 ## Source Documents
 
@@ -21,16 +21,21 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | Pre-0 | Microbenchmarks + adversarial | ✅ | `313a930` — see §3.Pre-0 for results |
+| Pre-0.5 | Serialization round-trip benchmark (D.4) | ⬜ | Time actual serialize + deserialize of prelude. Validates <100ms target. |
 | 0 | Acceptance file baseline | ⬜ | |
 | 1a | Network-active module loading | ⬜ | `prop-net-box ≠ #f` during load-module |
-| 1b | `.pnet` serialization (struct->vector + gensym + foreign-proc) | ⬜ | THE highest-value phase — 20s → ~50ms cold start |
-| 2 | Prelude as persistent shared network | ⬜ | Deserialize from .pnet, freeze, fork |
-| 3a | Test isolation via three-layer fork | ⬜ | prelude → test-file → test-case fork chain |
-| 3b | Test-granular scheduling | ⬜ | Per-test work items across Places, eliminate tail effect |
+| 1b | `.pnet` serialization (struct->vector + gensym + dynamic-require) | ⬜ | Highest-value phase — 20s → ~50ms cold start. Version header. Atomic writes. Feature flag. |
+| 2 | Prelude as persistent shared network | ⬜ | Deserialize per-module .pnet files, compose, freeze, fork |
+| 3 | Test isolation via three-layer fork | ⬜ | prelude → test-file → test-case. Unified .pnet = modules + registries. 21→3 params. |
 | 4 | Absorb PM 8F deferrals | ⬜ | CHAMP fallback removal, defaults at solve-time |
-| 5 | Eliminate dual-path (snapshot retirement) | ⬜ | module-network-ref + .pnet frozen view |
-| 6 | Parameter reduction (incremental, ~41 → ~5) | ⬜ | Architectural cleanup |
-| 7 | Verification + A/B benchmarks + PIR | ⬜ | Compare against Pre-0 baselines |
+| 5 | Eliminate dual-path (snapshot retirement) | ⬜ | module-network-ref + .pnet frozen view for non-network contexts |
+| 6 | Parameter reduction (incremental, ~41 → ~3) | ⬜ | Architectural cleanup |
+| 7 | Verification + A/B benchmarks + PIR | ⬜ | Compare against Pre-0 baselines + per-file regression check |
+
+**Deferred to Track 10b**: Test-granular scheduling via Places (per-test
+work items, eliminates tail effect). Requires: test discovery infrastructure,
+Place worker module, place-channel result serialization. Target: <150s.
+Pragmatic interim: split test-stdlib into ~10 smaller files (Option C).
 
 ---
 
@@ -1130,18 +1135,20 @@ Track 10 is DONE when:
 
 1. ✅ `current-prop-net-box ≠ #f` during all module elaboration
 2. ✅ `.pnet` files generated for all prelude modules (40/40 round-trip verified)
-3. ✅ Cold-start prelude load from `.pnet` < 100ms (down from ~20s)
-4. ✅ Three-layer fork model: prelude → test-file → test-case
-5. ✅ `fork-with` / `with-fork` API implemented and used by test suite
-6. ✅ Test-granular scheduling via Places (eliminates tail effect)
+3. ✅ `.pnet` format version header + atomic writes + feature flag
+4. ✅ Cold-start prelude load from `.pnet` < 100ms (validated by Pre-0.5)
+5. ✅ Three-layer fork: prelude → test-file → test-case with `fork-with`/`with-fork`
+6. ✅ `run-ns-last` reduced to 3 params (network box, output port, module loader)
 7. ✅ CHAMP fallback removed from `meta-solution/cell-id`
-8. ✅ `env-snapshot` removed from `module-info` (`.pnet` frozen view replaces it)
-9. ✅ Full suite wall time < 150s (down from ~240s)
-10. ✅ All 7401+ tests pass
-11. ✅ Acceptance file 0 errors
-12. ✅ A/B benchmarks run and compared against Pre-0
-13. ✅ Instrumentation cleanup
-14. ✅ PIR written per methodology
+8. ✅ `env-snapshot` removed from `module-info` (`.pnet` frozen view for non-network contexts)
+9. ✅ Full suite wall time < 200s (down from ~240s). Track 10b targets <150s.
+10. ✅ No individual test file regresses > 2× its pre-Track-10 median (D.4)
+11. ✅ All 7401+ tests pass
+12. ✅ Acceptance file 0 errors
+13. ✅ 40/40 prelude modules pass serialize→deserialize→compare round-trip (D.4)
+14. ✅ A/B benchmarks run and compared against Pre-0
+15. ✅ Instrumentation cleanup
+16. ✅ PIR written per methodology
 
 ---
 
@@ -1156,7 +1163,141 @@ Track 10 is DONE when:
 
 ---
 
-## 8. Open Questions — Resolution Status
+## 8. NTT Model (D.4)
+
+Modeling Track 10 in NTT syntax revealed 2 gaps in NTT and 5 architectural
+findings. Full NTT syntax additions captured in [NTT Syntax Design §15](2026-03-22_NTT_SYNTAX_DESIGN.md).
+
+### 8.1 NTT Gaps Discovered
+
+**Gap 1: NTT had no `serialize` / `deserialize` form.** Serialization is
+a fundamental operation for persistent networks. NTT's Level 3 (Network
+Types) needed operations for persistence — snapshotting quiescent networks
+to disk and restoring them. The new forms carry typed contracts: preconditions
+(`:requires [Quiescent Ground]`), exclusions (`:excludes [Propagators Closures]`),
+re-linking (`:relinks [ForeignProc] :via dynamic-require`), and validation
+(`:validates [FormatVersion SourceHash]`).
+
+**Gap 2: NTT had no `fork` form.** Network isolation via structural sharing
+is the mechanism for test isolation, speculation, and incremental compilation.
+The new `fork` form specifies what's shared (`:shares [cells propagators
+registries]`), what's reset (`:resets [worklist fuel contradiction]`), and
+the isolation guarantee (`:isolation :copy-on-write`).
+
+### 8.2 Architectural Findings from NTT Modeling
+
+1. **Serialization and fork are Level 3 operations** on networks, alongside
+   `interface`, `network`, `embed`, `connect`. Not cell-level or propagator-level.
+
+2. **Serialization has dependent type preconditions**: `Quiescent` and `Ground`
+   are propositions about network state. NTT's dependent types express these
+   as `:requires` constraints.
+
+3. **Module re-loading is non-monotone**: `stale → loading` reverses the
+   status lattice. NTT `:mode monotone` flags it. Resolution: re-elaboration
+   is a barrier stratum operation.
+
+4. **Import wiring is data-dependent fan-out**: number of wired cells depends
+   on module's export count. NTT `functor` handles this — the import-wire
+   propagator is a functor instantiated from module metadata.
+
+5. **Closures in cells are an optimization cache**: the NTT-typed form of a
+   preparse registry entry is `(module-path × symbol)`, not a closure. The
+   closure is derived. The serialized form IS the NTT-correct representation.
+
+### 8.3 NTT Speculative Syntax for Track 10
+
+```prologos
+;; Module as a serializable persistent network
+serialize prelude-snapshot : Snapshot PreludeNet
+  :format :pnet-v1
+  :requires [Quiescent prelude] [Ground prelude]
+  :excludes [Propagators Closures]
+  :relinks  [ForeignProc PreparseExpander]
+    :via dynamic-require
+  :gensyms  :tagged
+  :source-hash :sha256
+
+deserialize prelude-restore : PreludeNet
+  :from prelude-snapshot
+  :validates [FormatVersion SourceHash]
+  :fallback elaborate-from-source
+
+;; Three-layer fork for test isolation
+fork test-file : PreludeNet -> FileNet
+  :shares [cells propagators registries]
+  :resets [worklist fuel contradiction]
+  :lifetime :per-file
+
+fork test-case : FileNet -> CaseNet
+  :shares [cells propagators registries]
+  :resets [worklist fuel contradiction metas constraints]
+  :lifetime :ephemeral
+```
+
+---
+
+## 9. D.4 External Critique Integration
+
+### 9.1 Accepted (11 items)
+
+| # | Recommendation | How incorporated |
+|---|---------------|-----------------|
+| 1 | `.pnet` format version | Version header in serialized file. Deserialize validates before processing. |
+| 2 | Defer test-granular to Track 10b | Phase 3b removed. Target → <200s. <150s is Track 10b stretch. |
+| 3 | Specify `fork-prop-network` | Added: share cold+warm.cells, reset hot (worklist/fuel), reset contradiction. ~5 lines of struct-copy. |
+| 4 | Enumerate mutable state | Added: table of mutable state (boxes, hasheqs, callbacks) + fork handling. |
+| 5 | `dynamic-require` for re-linking | Replaces `namespace-variable-value`. Store `(module-path . symbol)` pairs. More robust. |
+| 6 | Pre-0.5 benchmark | Added as phase. Time full serialize/deserialize of actual prelude state. |
+| 7 | Fix fasl references in Phase 1b | Replaced with `write`/`read` throughout. |
+| 8 | Specify gensym handling | Documented: `symbol-interned?` detection, `$$N` tagging, per-module table, identity within module preserved. |
+| 9 | Per-module vs unified .pnet | Clarified: per-module files for granular invalidation, unified in-memory snapshot composed from per-module files. |
+| 10 | Atomic write | `write` to temp file, `rename-file-or-directory`. Prevents half-written corruption. |
+| 11 | Feature flag | `current-use-pnet-cache?` parameter. `#f` = source elaboration (current behavior, rollback path). |
+
+### 9.2 Pushed Back (2 items)
+
+**10.5 (module loader callback)**: The reviewer worried the callback closes
+over stale state. In our codebase, `install-module-loader!` installs a
+closure that reads `current-module-registry` via the PARAMETER (dynamic
+scoping), not a captured value. In a fork, the parameter reads the fork's
+value. No shared-mutable-state bug. Verified in driver.rkt:1754.
+
+**10.3 (prop-network is not a CHAMP)**: Accepted the naming correction
+("fork-prop-network" not "champ-fork") but pushed back on the implication
+that the mechanism is fundamentally different. It's the same structural
+sharing, at the struct level rather than CHAMP level.
+
+### 9.3 Mutable State Enumeration (D.4 item 4)
+
+| State | Location | Mutable? | Fork handling |
+|-------|----------|----------|---------------|
+| `current-prop-net-box` | metavar-store.rkt | box (mutable) | Each fork gets own box ✅ |
+| `current-mult-meta-store` | metavar-store.rkt | make-hasheq (mutable) | Must become immutable cell in fork |
+| `current-meta-store` | metavar-store.rkt | make-hasheq (mutable) | Must become immutable cell in fork |
+| `current-constraint-store` | metavar-store.rkt | make-hasheq (mutable) | Must become immutable cell in fork |
+| `install-module-loader!` | driver.rkt | callback (shared) | Intentionally shared — reads params dynamically |
+| prop-net-warm.cells | propagator.rkt | CHAMP (immutable) | Shared via structural sharing ✅ |
+| prop-net-cold.* | propagator.rkt | CHAMPs (immutable) | Shared via structural sharing ✅ |
+| prop-net-hot.worklist | propagator.rkt | list (mutable only during quiescence drain) | Reset to '() in fork ✅ |
+
+### 9.4 `fork-prop-network` Specification (D.4 item 3)
+
+```racket
+(define (fork-prop-network net)
+  (struct-copy prop-network net
+    [hot (prop-net-hot '() (default-fuel))]      ;; fresh worklist + fuel
+    [warm (struct-copy prop-net-warm (prop-network-warm net)
+            [contradiction #f])]))                ;; no inherited contradiction
+    ;; cold: shared (merge-fns, propagators, etc. — immutable)
+    ;; warm.cells: shared (CHAMP — CoW on write)
+```
+
+O(1): two struct allocations. All CHAMP fields structurally shared.
+
+---
+
+## 10. Open Questions — Resolution Status
 
 | # | Question | Status | Resolution |
 |---|----------|--------|------------|
@@ -1172,9 +1313,9 @@ Track 10 is DONE when:
 | 10 | Pre-compilation tool? | **Resolved: YES** | `tools/pnet-compile.rkt`. Integrates with test runner pre-step. |
 | 11 | Non-network contexts? | **Resolved** | .pnet deserialized form = frozen read-only view (D.3.2). |
 | 12 | Gensym round-trip? | **Resolved** | `symbol$$N` tagging. Per-module gensym table. 40/40 verified. |
-| 13 | Foreign function procedures? | **Resolved** | `(foreign-proc name)` substitution. Re-link via namespace-variable-value. 22/40 modules affected. |
+| 13 | Foreign function procedures? | **Resolved (D.4 revised)** | `(module-path . symbol)` pairs. Re-link via `dynamic-require` (not namespace-variable-value). 22/40 modules affected. |
 | 14 | Specs + def-locations serialization? | **Resolved: include** | 614 specs + 30,908 locations. Must be in .pnet for import resolution + error messages. |
 | 15 | Test custom parameterizations? | **Resolved** | Three-layer fork: cell writes in Layer 2 fork replace parameterize. `fork-with` API. |
-| 16 | Test-granular scheduling? | **Resolved** | Per-test work items via Places. Eliminates tail effect. Option C (split files) pragmatic. Option B (test registration) principled follow-up. |
+| 16 | Test-granular scheduling? | **Deferred to Track 10b** (D.4 critique: separate infrastructure project) | Option C (split large files) in Track 10. Full Places-based scheduling in Track 10b. |
 | 17 | Can registries go into the prelude .pnet? | **Resolved: YES** | 4/6 clean, 2/6 need named-proc re-link. Same mechanism as foreign-proc. Persistent registry cells: 27/29 clean. Unified .pnet = modules + registries + cells. |
 | 18 | Realistic parameter count after fork? | **Resolved: 21 → 3** | D.3 classified all 21: 11→cells, 7→prelude fork reads, 3→fork mechanism. Remaining: network box, output port, module loader. |

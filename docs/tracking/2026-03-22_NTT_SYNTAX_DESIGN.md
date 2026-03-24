@@ -941,7 +941,148 @@ information lattice.
 | 3 | `bridge TypeToMult`, `stratification ElabLoop`, `exchange`, `codata` | Galois connections, Grothendieck fibrations, Kan extensions, M-types |
 | 4 | `:preserves [Tensor Trace]`, `:fixpoint :gfp`, `:where [WellFounded]` | Quantale morphisms, coinductive types, traced monoidal structure |
 
-## 15. Next Steps
+## 15. Level 3b: Persistence Operations (from PM Track 10 case study)
+
+Track 10 (Module Loading on Network) revealed two NTT gaps: the type
+system had no way to express network persistence (serialization) or
+network isolation (fork/structural sharing). Both are fundamental
+operations for production systems.
+
+### 15.1 `serialize` — Typed Network Persistence
+
+Serialization snapshots a quiescent network's cell values to a persistent
+format (`.pnet` files). It's a NETWORK-LEVEL operation with typed
+preconditions and postconditions.
+
+```prologos
+serialize prelude-snapshot : Snapshot PreludeNet
+  :format :pnet-v1
+  :requires [Quiescent prelude]        ;; all propagators fired
+  :requires [Ground prelude]           ;; no unsolved metas (or gensym-tagged)
+  :excludes [Propagators]              ;; mechanism, not result
+  :excludes [Closures]                 ;; re-link by reference
+  :relinks  [ForeignProc PreparseExpander]
+    :via dynamic-require               ;; (module-path . symbol) pairs
+  :gensyms  :tagged                    ;; symbol$$N per-module table
+  :source-hash :sha256                 ;; staleness check
+```
+
+| Keyword | Type | Default | Description |
+|---------|------|---------|-------------|
+| `:format` | `Symbol` | required | Serialization format identifier + version |
+| `:requires` | `[Constraint ...]` | `[]` | Preconditions (quiescence, groundness) |
+| `:excludes` | `[Category ...]` | `[Propagators]` | What's excluded from serialization |
+| `:relinks` | `[Category ...]` block | `[]` | Opaque values re-linked by reference on deserialize |
+| `:via` | `Symbol` | — | Re-linking mechanism (dynamic-require, namespace-lookup) |
+| `:gensyms` | `Symbol` | `:tagged` | How uninterned symbols are handled |
+| `:source-hash` | `Symbol` | `:sha256` | Hash algorithm for staleness check |
+
+**Design rationale**: Serialization has CONTRACTS. A network that isn't
+quiescent has partial results — serializing it would capture intermediate
+state. A network with unsolved metas has non-deterministic content (which
+solution does the meta represent?). These preconditions are dependent type
+constraints: `Quiescent : Network → Prop` and `Ground : Network → Prop`.
+
+The `:excludes` list is also typed: propagators are the MECHANISM (how values
+were computed), cell values are the RESULT. Serializing the result without
+the mechanism is correct because the mechanism has already fired. This is
+the same distinction as serializing a `.class` file (compiled bytecode)
+without the Java compiler.
+
+### 15.2 `deserialize` — Typed Network Restoration
+
+```prologos
+deserialize prelude-restore : PreludeNet
+  :from prelude-snapshot
+  :validates [FormatVersion SourceHash]
+  :fallback elaborate-from-source     ;; if .pnet stale or corrupt
+  :reconstructs [Gensyms]             ;; fresh gensyms from tagged table
+  :relinks [ForeignProc PreparseExpander]
+    :via dynamic-require
+```
+
+| Keyword | Type | Default | Description |
+|---------|------|---------|-------------|
+| `:from` | `Snapshot T` | required | The serialized snapshot to restore |
+| `:validates` | `[Check ...]` | `[]` | Validation checks before accepting |
+| `:fallback` | `Fn` | error | What to do if validation fails |
+| `:reconstructs` | `[Category ...]` | `[]` | What's reconstructed (not direct copy) |
+| `:relinks` | block | `[]` | Same as serialize — re-link by reference |
+
+**The fallback clause is essential**: if the `.pnet` is stale (source changed),
+corrupt (half-written), or incompatible (format version mismatch), the fallback
+re-elaborates from source. This is the graceful degradation that makes `.pnet`
+an optimization, not a correctness dependency.
+
+### 15.3 `fork` — Typed Network Isolation
+
+Fork creates a structurally-shared copy of a network with copy-on-write
+isolation. Reads see the parent's values; writes create child-local copies.
+
+```prologos
+fork test-context : PreludeNet -> TestNet
+  :shares   [cells propagators registries]
+  :resets   [worklist fuel contradiction]
+  :isolation :copy-on-write
+  :lifetime  :ephemeral
+```
+
+| Keyword | Type | Default | Description |
+|---------|------|---------|-------------|
+| `:shares` | `[Component ...]` | `[cells propagators]` | What's structurally shared |
+| `:resets` | `[Component ...]` | `[worklist fuel contradiction]` | What's freshly initialized |
+| `:isolation` | `Symbol` | `:copy-on-write` | Isolation guarantee |
+| `:lifetime` | `Symbol` | `:ephemeral` | How long the fork lives |
+
+**Fork composes transitively**: prelude → file → command → speculation.
+Each layer inherits from the parent and overlays its own state.
+
+```prologos
+;; Three-layer fork for test isolation
+fork test-file : PreludeNet -> FileNet
+  :shares [cells propagators registries]
+  :resets [worklist fuel contradiction]
+  :lifetime :per-file
+
+fork test-case : FileNet -> CaseNet
+  :shares [cells propagators registries]
+  :resets [worklist fuel contradiction metas constraints]
+  :lifetime :ephemeral
+```
+
+**Design insight from Track 10**: The fork operation is at Level 3 (Network
+Types) because it operates on networks, not cells or propagators. The
+polynomial functor characterization supports this: forking a polynomial
+functor `p` creates a new functor `p'` that shares `p`'s fiber but has
+its own state. Writes to `p'` don't affect `p` — structural sharing via
+the CHAMP's persistent data structure semantics.
+
+### 15.4 Findings from Track 10 NTT Modeling
+
+Modeling Track 10's architecture in NTT revealed 5 findings:
+
+1. **Serialization and fork are Level 3 operations** — they belong alongside
+   `network`, `interface`, `embed`, `connect`. They're operations ON networks,
+   not within them.
+
+2. **Serialization has dependent type preconditions** — `Quiescent` and `Ground`
+   are propositions about network state. NTT's dependent types can express these
+   as `:requires` constraints, making serialization type-safe.
+
+3. **Module re-loading is non-monotone** — `stale → loading` goes backward
+   in the module status lattice. NTT's `:mode monotone` on fibers flags this.
+   Resolution: re-elaboration is a barrier operation (separate stratum).
+
+4. **Import wiring is data-dependent fan-out** — the number of cells wired
+   depends on the module's export count. NTT's `functor` concept handles this:
+   the import-wire propagator is a functor instantiated from module metadata.
+
+5. **Closures in cells are an optimization cache** — the NTT-typed form of a
+   preparse registry entry is `(module-path × symbol)`, not a closure. The
+   closure is a derived, non-serializable cache. The serialized form IS the
+   NTT-correct representation.
+
+## 16. Next Steps
 
 1. **Continue design iteration**: Address open questions through discussion.
    Target ~90% clarity before case studies.
@@ -968,3 +1109,5 @@ information lattice.
 | [Toplevel Forms Reference](TOPLEVEL_FORMS_REFERENCE.org) | Config language patterns and keyword conventions |
 | [Master Roadmap](MASTER_ROADMAP.org) | NTT Series tracking, SRE Series tracking |
 | [Unified Infrastructure Roadmap](2026-03-22_PM_UNIFIED_INFRASTRUCTURE_ROADMAP.md) | On-network / off-network boundary analysis |
+| [PM Track 10 Design](2026-03-24_PM_TRACK10_DESIGN.md) | Discovered serialize/fork gaps; NTT case study §15.4 |
+| [PM Track 10 Stage 2 Audit](2026-03-24_PM_TRACK10_STAGE2_AUDIT.md) | Module loading infrastructure analysis |
