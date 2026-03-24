@@ -281,9 +281,9 @@
   (define descs (all-ctor-descs #:domain 'data))
   (check-equal? (length descs) 9))
 
-(test-case "all-ctor-descs: total = 26"  ;; 12 type + 9 data + 5 session (SRE Track 1 Phase 3)
+(test-case "all-ctor-descs: total = 28"  ;; 12 type + 9 data + 7 session (Track 1 Phase 3 + Track 1B Phase 4)
   (define descs (all-ctor-descs))
-  (check-equal? (length descs) 26))
+  (check-equal? (length descs) 28))
 
 ;; ========================================
 ;; Suite 6: Descriptor struct field access
