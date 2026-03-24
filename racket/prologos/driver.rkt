@@ -1571,8 +1571,12 @@
                     [current-spec-store (hasheq)]  ;; fresh — specs are module-local
                     [current-propagated-specs (seteq)]  ;; fresh propagated tracking
                     [current-loading-set (set-add (current-loading-set) ns-sym)]
-                    ;; Phase 8b: fresh propagator network per module
-                    [current-prop-net-box #f]
+                    ;; Track 10 Phase 1a: live network during module loading.
+                    ;; Previously #f — modules elaborated without a network.
+                    ;; Now: fresh isolated network per module. Cells created during
+                    ;; elaboration persist. After elaboration, captured into
+                    ;; module-network-ref (Track 5).
+                    [current-prop-net-box (box (make-prop-network))]
                     ;; Track 6 Phase 1a: id-map is now a field of elab-network (no separate box)
                     ;; Track 5 Phase 3a: Module loading now uses cell path.
                     ;; process-command sets current-prelude-env-prop-net-box to
