@@ -29,8 +29,9 @@
   (perf-inc-zonk!)
   (match e
     ;; THE KEY CASE: metavariable — follow solution recursively
-    [(expr-meta id _)
-     (let ([sol (meta-solution id)])
+    ;; PM 8F Phase 3: use cell-id fast path (skips 82ns id-map lookup)
+    [(expr-meta id cell-id)
+     (let ([sol (meta-solution/cell-id cell-id id)])
        (if sol
            (zonk sol)       ; recursive: solution may contain more metas
            e))]             ; unsolved: leave as-is
