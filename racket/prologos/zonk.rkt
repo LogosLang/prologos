@@ -464,8 +464,9 @@
 (define (zonk-at-depth depth e)
   (match e
     ;; THE KEY CASE: metavariable — follow solution and shift by accumulated depth
-    [(expr-meta id _)
-     (let ([sol (meta-solution id)])
+    ;; PM 8F Phase 3: use cell-id fast path (same as zonk)
+    [(expr-meta id cell-id)
+     (let ([sol (meta-solution/cell-id cell-id id)])
        (if sol
            (let ([zonked-sol (zonk sol)])  ; zonk at depth 0 (solution is at solve-site depth)
              (if (> depth 0)
