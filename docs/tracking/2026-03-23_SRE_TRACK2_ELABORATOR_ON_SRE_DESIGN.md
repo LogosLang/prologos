@@ -21,13 +21,13 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| Pre-0 | Micro-benchmark + adversarial baseline | ✅ | **Critical finding**: linear scan 4-200× slower than struct predicates |
-| 0 | O(1) struct-type dispatch (`prop:ctor-desc-tag`) | ⬜ | Foundation + end-to-end benchmark + .zo verification |
-| 1 | Unify classifier → SRE ctor-desc dispatch | ⬜ | Non-binder cases + rollback toggle + flex-app ordering |
-| 2 | Binder handling via SRE | ⬜ | Pi/Sigma/lam + PUnify toggle interaction documented |
-| 3 | Meta handling verification | ⬜ | flex-app before SRE dispatch; edge case tests |
-| 4 | Subtype/conversion fallback via SRE | ⬜ | Track 1's structural-subtype-ground? + cumulativity |
-| 5 | Verification + benchmarks + PIR | ⬜ | Remove rollback toggle after validation |
+| Pre-0 | Micro-benchmark + adversarial baseline | ✅ | Linear scan 4-200× slower; informed O(1) design |
+| 0 | O(1) struct-type dispatch (`prop:ctor-desc-tag`) | ✅ | 19 structs annotated. Pi: 357→34ns (10.5×). `f97c9a9`, `01ca400` |
+| 1 | Unify classifier → SRE dispatch (non-binder) | ✅ | app, Eq, Vec, Fin, pair via SRE. Rollback toggle added. `4d4fb80` |
+| 2 | Binder handling via SRE (Pi/Sigma/lam) | ✅ | Pi→'pi, Sigma/lam→'binder via SRE extract. `50e95ba` |
+| 3 | Meta handling verification | ✅ | expr-meta/#f, flex-app preserves current ordering. `50e95ba` |
+| 4 | Subtype/conversion fallback via SRE | ✅ | Already delivered by Track 1B Phase 2d. No-op. |
+| 5 | Verification + benchmarks + PIR | 🔄 | Final suite: 234.6s (3.9% faster). PIR pending. |
 
 **Decoupled**: Polarity inference → SRE Track 2B (separate feature, not migration)
 
