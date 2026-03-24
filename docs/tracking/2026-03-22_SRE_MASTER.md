@@ -195,34 +195,130 @@ Track 1/1B delivered basic duality integration (Send/Recv/AsyncSend/AsyncRecv/Mu
 ### Track 4: Pattern Compilation-on-SRE
 
 **Scope**: Pattern matching compilation via SRE scrutinee decomposition.
+Unifies term-level and type-level exhaustiveness analysis via NF-Narrowing.
 
 **What changes**:
 - `compile-match-tree` uses SRE to decompose scrutinee types
 - Pattern constructors registered as structural forms
 - Narrowing-based pattern dispatch uses SRE structural matching
+- **NF-Narrowing as unified exhaustiveness engine**: NF-Narrowing already
+  solves "given constraints, which branches are reachable?" for term-level
+  values via definitional trees. GADT exhaustiveness is the same problem
+  at the type level — "given type constraints, which constructor branches
+  are reachable?" If type parameters are treated as narrowable positions
+  (natural in our dependent type system where types and terms share a
+  universe), NF-Narrowing handles both levels with one engine.
+- This track delivers GADT-style exhaustiveness as a CONSEQUENCE of
+  unifying term-level and type-level narrowing, not as separate machinery.
+
+**Research connection: GADTs**:
+- Our TMS/speculation infrastructure maps naturally to GADT branch
+  refinement: each branch is a speculation scope where local type
+  equalities (A = Int in the `lit` branch) are installed as propagators.
+- Session type checking already solves the same TMS + linearity (QTT)
+  interaction that GADTs require — speculative branches with linear
+  resource tracking through type equality introduction.
+- The "complexity cost" of GADTs is less than expected because the
+  hardest parts (speculation, exhaustiveness, linearity) are solved by
+  existing infrastructure built for other purposes.
+- **Open question**: How much GADT expressivity do we already get from
+  dependent types + spec annotations on constructors? ("80% solution")
+  And how much additional work would TMS-based branch refinement add?
 
 **Dependencies**: Track 0 (form registry)
 
 **PM interleaving**: Independent of PM tracks. Pattern compilation doesn't
 need registries as cells or metas as cells.
 
-### Track 5: Reduction-on-SRE
+### Track 5: Reduction-on-SRE (Typed Graph Rewriting Engine)
 
 **Scope**: Reduction/normalization as propagator-driven structural rewriting.
-This IS PM Track 9 — the same work, SRE-framed.
+This IS PM Track 9 — the same work, SRE-framed. The deeper framing:
+build a **typed graph rewriting engine** on the SRE, where GADTs,
+e-graphs, interaction nets, and GoI are all applications of the same
+substrate.
+
+**The unified vision**: All four are instances of "typed (hyper)graph
+with rewrite rules, executed to fixpoint":
+
+| System | Nodes | Rewriting | Fixpoint |
+|--------|-------|-----------|----------|
+| GADTs | Typed terms | Pattern match with type refinement | Branch exhaustion |
+| E-graphs | Equivalence classes | Rule saturation (merge classes) | Equality saturation |
+| Interaction nets | Typed agents + ports | Local graph rewriting at interaction sites | Strong confluence → normal form |
+| GoI | Paths in traced monoidal category | Execution traces | Trace normalization |
+
+The SRE provides the substrate for all four:
+- **SRE structural decomposition** = graph inspection (decompose a node into components)
+- **Propagator network** = fixpoint execution (rewriting to saturation/normal form)
+- **NTT types** = invariant preservation (rewrites are type-safe)
+- **TMS** = speculation (explore multiple rewrite paths / GADT branches)
+- **NF-Narrowing** = rewrite strategy (which rule applies where — definitional trees)
 
 **What changes**:
 - `reduce` and `whnf` become propagator-driven
 - Normal form cache IS the network (cell values are normal forms)
 - E-graph rewriting: structural equivalence classes as SRE forms
 - β/δ/ι-reduction as structural decomposition + recomposition
+- **Rewrite rules registered as SRE structural forms + propagators**:
+  a rule becomes a propagator that watches for its LHS pattern (via SRE
+  matching) and writes the RHS to the output cell
+- **Strategy via NF-Narrowing**: Definitional trees determine which rules
+  apply where. The narrowing lattice tracks possible reductions. This
+  connects NF-Narrowing (Track 4's narrowing engine) to reduction
+  strategy — the same infrastructure serves both exhaustiveness and
+  reduction order selection.
+
+**Tropical semirings and optimization**:
+- E-graph extraction requires choosing WHICH equivalent form to use.
+  The tropical semiring (min-plus algebra) provides a cost lattice for
+  optimization: each rewrite rule carries a cost, the optimal reduction
+  sequence is the shortest path in the tropical semiring.
+- This connects to our logic engine: NF-Narrowing + tropical semiring =
+  optimal narrowing strategy selection. Instead of "which derivation
+  exists?" (boolean), "which derivation is cheapest?" (optimization).
+- **Dual enrichment**: A cell simultaneously carries (a) a lattice value
+  for correctness (type/term lattice, monotone propagation) and (b) a
+  tropical value for optimization (cost, min-plus). The correctness
+  lattice says "what are the valid reductions?" The tropical lattice
+  says "which valid reduction is optimal?"
+- This is the "dual quantale enrichment" identified as an open question
+  in the [Categorical Foundations](../research/2026-03-22_CATEGORICAL_FOUNDATIONS_TYPED_PROPAGATOR_NETWORKS.md) §9.5.
+- **Application to constraint solving**: The logic engine / NF-Narrowing
+  framework becomes a general constraint solver + optimizer when extended
+  with tropical semirings. "Find a solution" (SAT) becomes "find the
+  cheapest solution" (optimization). Propagator networks naturally handle
+  both: the lattice fixpoint finds solutions, the tropical fixpoint
+  ranks them.
+
+**Confluence and term rewriting**:
+- NF-Narrowing already provides narrowing-based functional-logic
+  evaluation, which touches on confluence (do all reduction paths converge
+  to the same normal form?). Interaction nets guarantee strong confluence
+  by construction (local rewriting, no critical pairs). E-graphs
+  sidestep confluence entirely (all equivalent forms coexist).
+- The SRE + propagator network can support all three strategies:
+  (a) confluent rewriting (interaction net style — register only
+  confluent rules), (b) equality saturation (e-graph style — register
+  ALL rules, merge results), (c) narrowing (NF-Narrowing style —
+  explore possible reductions, backtrack via TMS on failure).
+- The strategy is a `stratification` configuration choice, not an
+  architectural difference. Different `:strategy` values on the
+  reduction stratum select different rewriting disciplines.
 
 **Dependencies**: Track 1 (elaborator on SRE), PM 8F (metas as cells)
 
 **Research basis**: [Track 9 Research Note](2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md),
-interaction nets, Geometry of Interaction, e-graph equality saturation
+interaction nets, Geometry of Interaction, e-graph equality saturation,
+tropical semirings
 
-**This may be a Track Series** given scope and research depth.
+**This is almost certainly a Track Series** given scope and research depth.
+Suggested sub-tracks:
+- 5a: β/δ-reduction as propagators (basic rewriting)
+- 5b: E-graph equivalence classes (equality saturation)
+- 5c: Tropical semiring optimization layer
+- 5d: Interaction net / GoI integration
+- 5e: Confluence verification
 
 ### Track 6: Module Loading-on-SRE
 
@@ -305,7 +401,9 @@ PM Track 10                      =   SRE Track 6 (module loading)
 
 - **Parser / reader**: Syntactic phase, pre-network
 - **QTT multiplicity tracking**: Separate lattice domain, connected via Galois bridges
-- **Exhaustiveness checking**: Analysis over the set of patterns, not individual decomposition
+- **Exhaustiveness checking**: Partially subsumed — NF-Narrowing unified with type-level
+  narrowing (Track 4) handles GADT-style exhaustiveness. Pure combinatorial exhaustiveness
+  (are all constructors covered?) remains a separate analysis over the pattern set.
 - **I/O effects**: External system interaction
 - **Session duality computation**: Domain-specific (but SRE handles the structural matching around it via Track 0.5)
 - **Opaque foreign types**: May use coinductive observations (NTT `codata`) but not SRE structural decomposition
