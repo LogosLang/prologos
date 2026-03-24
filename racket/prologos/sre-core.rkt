@@ -163,7 +163,11 @@
 
 (struct sre-relation
   (name
-   sub-relation-fn)
+   sub-relation-fn
+   requires-binder-opening?)  ;; SRE Track 1B Phase 3: does this relation need
+                              ;; fresh meta variables during binder decomposition?
+                              ;; #t: equality (needs fresh metas for opened binders)
+                              ;; #f: subtype, duality (operate on ground types, extract directly)
   #:transparent)
 
 ;; --- Built-in relations ---
@@ -172,7 +176,8 @@
 (define sre-equality
   (sre-relation
    'equality
-   (λ (rel desc idx domain-name) sre-equality)))
+   (λ (rel desc idx domain-name) sre-equality)
+   #t))  ;; requires binder opening (creates fresh metas)
 
 ;; Subtype: directional check a ≤ b. Sub-relation from variance.
 (define sre-subtype
@@ -186,7 +191,8 @@
            [(+) sre-subtype]          ;; covariant: same direction
            [(-) sre-subtype-reverse]  ;; contravariant: flip
            [(=) sre-equality]         ;; invariant: equality
-           [(ø) sre-phantom])))))     ;; phantom: no constraint
+           [(ø) sre-phantom])))
+   #f))  ;; ground types: no binder opening needed     ;; phantom: no constraint
 
 ;; Subtype-reverse: flipped direction (b ≤ a instead of a ≤ b).
 ;; Used for contravariant positions under subtyping.
@@ -201,7 +207,8 @@
            [(+) sre-subtype-reverse]  ;; covariant: same direction (still reversed)
            [(-) sre-subtype]          ;; contravariant: flip back to normal
            [(=) sre-equality]
-           [(ø) sre-phantom])))))
+           [(ø) sre-phantom])))
+   #f))  ;; ground types: no binder opening needed
 
 ;; Duality: constructor pairing with involution. Sub-relation derived
 ;; from component lattice type (same domain → duality, cross → equality).
@@ -242,13 +249,15 @@
      (if cross-domain?
          sre-equality    ;; cross-domain: payload type → equality
          sre-duality)    ;; same domain: continuation → duality
-     )))
+     )
+   #f))  ;; ground types: no binder opening needed
 
 ;; Phantom: no constraint. Used for phantom type parameters.
 (define sre-phantom
   (sre-relation
    'phantom
-   (λ (rel desc idx domain-name) sre-phantom)))
+   (λ (rel desc idx domain-name) sre-phantom)
+   #f))  ;; no binder opening
 
 ;; ========================================================================
 ;; sre-identify-sub-cell
@@ -460,13 +469,17 @@
           ;; to PUnify dispatch which handles Pi/Sigma/lam binders directly.
           ;; For subtype/duality (ground type checking): binder opening NOT needed —
           ;; both values are concrete, extract components directly.
-          [(not (eq? (sre-relation-name relation) 'equality))
-           ;; Non-equality relation on ground types: decompose directly
-           ;; (ignore binder-depth — no metas to open)
+          ;; Track 1B Phase 3: principled check via requires-binder-opening?
+          ;; (replaces ad-hoc name-check on 'equality)
+          [(sre-relation-requires-binder-opening? relation)
+           ;; Relation needs fresh metas for binder opening (e.g., equality).
+           ;; Fall through to PUnify dispatch for Pi/Sigma/lam binders.
+           net]
+          ;; Relation operates on ground types (e.g., subtype, duality):
+          ;; decompose directly — no binder opening needed.
+          [else
            (sre-decompose-generic net domain cell-a cell-b va vb unified pair-key desc
-                                  #:relation relation)]
-          ;; Equality with binders: fall through to PUnify dispatch
-          [else net])])]))
+                                  #:relation relation)])])]))
 
 ;; ========================================================================
 ;; sre-make-structural-relate-propagator
