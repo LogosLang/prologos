@@ -1518,15 +1518,29 @@
 ;;   pair-decomps: per-pair dedup (prevents duplicate sub-propagators)
 
 ;; Canonical key for a cell pair: (cons smaller-id larger-id) by cell-id-n.
-(define (decomp-key cid-a cid-b)
-  (if (<= (cell-id-n cid-a) (cell-id-n cid-b))
-      (cons cid-a cid-b)
-      (cons cid-b cid-a)))
+;; SRE Track 1: optional relation-name distinguishes equality/subtype/duality
+;; decompositions of the same cell pair (different relations produce different
+;; sub-cell propagators — symmetric vs directional).
+(define (decomp-key cid-a cid-b [relation-name #f])
+  (define base
+    (if (<= (cell-id-n cid-a) (cell-id-n cid-b))
+        (cons cid-a cid-b)
+        (cons cid-b cid-a)))
+  (if relation-name
+      (cons relation-name base)
+      base))
 
 ;; Hash for decomp keys: combine the two cell-id hashes.
+;; SRE Track 1: handles both 2-element (cons cid cid) and 3-element
+;; (cons relation-name (cons cid cid)) keys.
 (define (decomp-key-hash key)
-  (bitwise-xor (cell-id-hash (car key))
-               (* 31 (+ 1 (cell-id-hash (cdr key))))))
+  (define pair (if (symbol? (car key)) (cdr key) key))
+  (define base-hash
+    (bitwise-xor (cell-id-hash (car pair))
+                 (* 31 (+ 1 (cell-id-hash (cdr pair))))))
+  (if (symbol? (car key))
+      (bitwise-xor base-hash (eq-hash-code (car key)))
+      base-hash))
 
 ;; Look up per-cell sub-cell assignments.
 ;; Returns (cons constructor-tag (listof cell-id)) or 'none.

@@ -71,7 +71,8 @@
               (lambda (expr)
                 (define lookup (current-structural-meta-lookup))
                 (and lookup (lookup expr)))
-              #f))  ; dual-pairs: type domain doesn't support duality
+              #f    ; dual-pairs: type domain doesn't support duality
+              #f))  ; flat-subtype?: set by driver via current-flat-subtype-check
 
 ;; ========================================
 ;; Sprint 5: Three-valued result helper

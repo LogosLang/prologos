@@ -63,7 +63,8 @@
               test-bot
               #f    ; no meta-recognizer
               #f    ; no meta-resolver
-              #f))  ; no dual-pairs
+              #f    ; no dual-pairs
+              #f))  ; no flat-subtype?
 
 ;; ========================================
 ;; B. Register test constructors
@@ -256,7 +257,7 @@
             new))
       (define bad-domain
         (sre-domain 'bad bad-merge (lambda (v) (eq? v 'top))
-                    (lambda (v) (eq? v 'bot)) 'bot #f #f #f))
+                    (lambda (v) (eq? v 'bot)) 'bot #f #f #f #f))
       ;; In debug mode, this should error
       (parameterize ([current-sre-debug? #t])
         (define net0 (fresh-net))

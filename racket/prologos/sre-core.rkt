@@ -83,6 +83,12 @@
                      ; Constructor pairing for duality relation. #f = domain doesn't
                      ; support duality. Derivation assumption: same-domain components
                      ; are continuations (get duality), cross-domain get equality.
+   flat-subtype?     ; SRE Track 1: (a b → bool) | #f — flat subtype check for atomic values.
+                     ; The type lattice is flat (equality-based), so merge(a,b) = b doesn't
+                     ; encode subtyping. This function checks the domain-specific subtype
+                     ; relationship for leaf values (Nat <: Int, Posit8 <: Posit16, etc.).
+                     ; The SRE handles structural decomposition; this handles the leaves.
+                     ; #f = domain doesn't support subtyping.
    )
   #:transparent)
 
@@ -360,10 +366,12 @@
 ;; structural-relate propagators between corresponding sub-cells,
 ;; adds reconstructors for each side.
 
-(define (sre-decompose-generic net domain cell-a cell-b va vb unified pair-key desc)
+(define (sre-decompose-generic net domain cell-a cell-b va vb unified pair-key desc
+                                #:relation [relation sre-equality])
   (define tag (ctor-desc-tag desc))
   (define recog (ctor-desc-recognizer-fn desc))
   (define extract (ctor-desc-extract-fn desc))
+  (define domain-name (sre-domain-name domain))
   ;; Per-side sources: use original value if it matches, else unified
   (define src-a (if (recog va) va unified))
   (define src-b (if (recog vb) vb unified))
@@ -374,17 +382,28 @@
   (define-values (net1 subs-a) (sre-get-or-create-sub-cells net domain cell-a tag comps-a))
   (define-values (net2 subs-b) (sre-get-or-create-sub-cells net1 domain cell-b tag comps-b))
   ;; Add structural-relate propagators for each component pair
+  ;; SRE Track 1: sub-cell relation derived via relation's sub-relation-fn
+  (define sub-rel-fn (sre-relation-sub-relation-fn relation))
   (define net3
     (for/fold ([n net2])
               ([sa (in-list subs-a)]
-               [sb (in-list subs-b)])
+               [sb (in-list subs-b)]
+               [idx (in-naturals)])
       (if (equal? sa sb)
           n
-          (let-values ([(n* _pid) (net-add-propagator n
-                                    (list sa sb) (list sa sb)
-                                    (sre-make-structural-relate-propagator domain sa sb))])
-            n*))))
+          (let* ([sub-rel (sub-rel-fn relation desc idx domain-name)]
+                 [_ (void)]  ;; phantom relation → skip entirely
+                 )
+            (if (eq? (sre-relation-name sub-rel) 'phantom)
+                n  ;; no constraint for phantom components
+                (let-values ([(n* _pid)
+                              (net-add-propagator n
+                                (list sa sb) (list sa sb)
+                                (sre-make-structural-relate-propagator
+                                 domain sa sb #:relation sub-rel))])
+                  n*))))))
   ;; Add generic reconstructors for each side
+  ;; (reconstructors are relation-independent — they always rebuild from sub-cells)
   (define-values (net4 _p1)
     (net-add-propagator net3 subs-a (list cell-a)
       (sre-make-generic-reconstructor domain cell-a subs-a desc)))
@@ -410,12 +429,16 @@
 ;; not from the SRE). Once binder-open-fn is fully wired, they can
 ;; be migrated to sre-decompose-binder. See design §4.3.
 
-(define (sre-maybe-decompose net domain cell-a cell-b va vb unified)
+(define (sre-maybe-decompose net domain cell-a cell-b va vb unified
+                             #:relation [relation sre-equality])
   (define tag (sre-constructor-tag domain unified))
   (cond
     [(not tag) net]  ;; Not compound — nothing to decompose
     [else
-     (define pair-key (decomp-key cell-a cell-b))
+     ;; SRE Track 1: decomp key includes relation name so equality and
+     ;; subtype decompositions don't collide in the cache.
+     (define rel-name (sre-relation-name relation))
+     (define pair-key (decomp-key cell-a cell-b rel-name))
      (cond
        [(net-pair-decomp? net pair-key) net]  ;; Already decomposed
        [else
@@ -424,7 +447,8 @@
           [(not desc) net]
           ;; Binder-depth=0: generic descriptor-driven decomposition
           [(zero? (ctor-desc-binder-depth desc))
-           (sre-decompose-generic net domain cell-a cell-b va vb unified pair-key desc)]
+           (sre-decompose-generic net domain cell-a cell-b va vb unified pair-key desc
+                                  #:relation relation)]
           ;; Binder-depth>0: not handled by SRE core yet.
           ;; Callers (PUnify dispatch) handle Pi/Sigma/lam binders directly.
           ;; Future: sre-decompose-binder using ctor-desc binder-open-fn.
@@ -434,27 +458,38 @@
 ;; sre-make-structural-relate-propagator
 ;; ========================================================================
 ;;
-;; Domain-parameterized version of make-structural-unify-propagator.
-;; Was: elaborator-network.rkt:871, hardcoded to type lattice.
+;; Domain-parameterized, relation-parameterized structural relate propagator.
+;; Was: elaborator-network.rkt:871, hardcoded to type lattice + equality.
 ;;
-;; The structural-relate propagator: reads two cells, merges their values
-;; (equality relation), and triggers structural decomposition for compound
-;; types.
+;; SRE Track 1: dispatches on relation type:
+;; - Equality: reads two cells, merges to join, writes both, decomposes.
+;;   This is INFORMATION PROPAGATION — cells move up the lattice.
+;; - Subtype: reads two cells, checks a ≤ b, decomposes with variance.
+;;   This is STRUCTURAL CHECKING — no writes except contradiction.
+;; - Duality: reads two cells, applies dual constructor pairing.
+;;   This is INFORMATION PROPAGATION with constructor swapping.
+;; - Phantom: no-op (for phantom type parameters).
 ;;
-;; NOTE: Future SRE Track 1 will add a #:relation parameter here
-;; for subtyping, duality, and coercion. The structural-relate
-;; propagator will dispatch on relation type with variance annotations
-;; from ctor-desc component fields.
-;; See SRE Research doc § "Structural Relation Engine."
-;;
-;; Termination argument (preserved from PUnify):
-;; - Decomp registries prevent duplicate sub-cell creation
-;; - Lattice-merge monotonicity + net-cell-write no-change guard prevent
-;;   infinite loops
-;; - Reconstructor writes same compound as parent → no change → terminate
+;; Termination argument:
+;; - Equality: decomp registries + lattice-merge monotonicity + no-change guard.
+;; - Subtype: no cell writes on success; only contradiction signals (monotone).
+;;   Decomposition creates sub-checkers that are strictly smaller.
+;; - Duality: involution preserves lattice ordering; no-change guard.
 ;; Guarantee level: 2 (finite lattice height with fuel guard)
 
-(define (sre-make-structural-relate-propagator domain cell-a cell-b)
+(define (sre-make-structural-relate-propagator domain cell-a cell-b
+                                                #:relation [relation sre-equality])
+  (define rel-name (sre-relation-name relation))
+  (case rel-name
+    [(equality) (sre-make-equality-propagator domain cell-a cell-b relation)]
+    [(subtype subtype-reverse) (sre-make-subtype-propagator domain cell-a cell-b relation)]
+    [(duality) (sre-make-duality-propagator domain cell-a cell-b relation)]
+    [(phantom) (lambda (net) net)]  ;; no constraint
+    [else (error 'sre-make-structural-relate-propagator
+                 "unknown relation: ~a" rel-name)]))
+
+;; --- Equality propagator (Track 0 behavior, unchanged) ---
+(define (sre-make-equality-propagator domain cell-a cell-b relation)
   (define merge (sre-domain-lattice-merge domain))
   (define contradicts? (sre-domain-contradicts? domain))
   (define bot? (sre-domain-bot? domain))
@@ -462,29 +497,92 @@
     (define va (net-cell-read net cell-a))
     (define vb (net-cell-read net cell-b))
     (cond
-      ;; Both bot: nothing to propagate
       [(and (bot? va) (bot? vb)) net]
-      ;; One bot: propagate the known value, then try decomposition
       [(bot? va)
        (let ([net* (net-cell-write net cell-a vb)])
-         (sre-maybe-decompose net* domain cell-a cell-b va vb vb))]
+         (sre-maybe-decompose net* domain cell-a cell-b va vb vb
+                              #:relation relation))]
       [(bot? vb)
        (let ([net* (net-cell-write net cell-b va)])
-         (sre-maybe-decompose net* domain cell-a cell-b va vb va))]
-      ;; Both have values: compute lattice join
+         (sre-maybe-decompose net* domain cell-a cell-b va vb va
+                              #:relation relation))]
       [else
        (define unified (merge va vb))
-       ;; Debug-mode idempotency check (D.2 critique): catches non-monotone
-       ;; merge functions at low cost. merge(merge(a,b), a) must = merge(a,b).
        (when (current-sre-debug?)
          (unless (equal? (merge unified va) unified)
            (error 'sre-structural-relate
                   "Non-idempotent merge detected for domain ~a: merge(~a, ~a) = ~a but merge(~a, ~a) = ~a"
                   (sre-domain-name domain) va vb unified unified va (merge unified va))))
        (if (contradicts? unified)
-           ;; Contradiction: signal via writing contradiction value
            (net-cell-write net cell-a unified)
-           ;; Compatible: write unified to both, then decompose
            (let* ([net*  (net-cell-write net cell-a unified)]
                   [net** (net-cell-write net* cell-b unified)])
-             (sre-maybe-decompose net** domain cell-a cell-b va vb unified)))])))
+             (sre-maybe-decompose net** domain cell-a cell-b va vb unified
+                                  #:relation relation)))])))
+
+;; --- Subtype propagator (Track 1: structural checker) ---
+;; Checks a ≤ b directionally. Does NOT merge/write cell values.
+;; Fires when both cells are non-bot. Decomposes structurally with variance.
+;; For subtype-reverse: checks b ≤ a (used for contravariant positions).
+;;
+;; KEY INSIGHT: The type lattice merge is equality-based (different compound
+;; types → top/contradiction). For subtyping, we must decompose structurally
+;; BEFORE using the flat lattice check. Strategy:
+;; 1. Both compound with same tag? → decompose with variance (structural path)
+;; 2. Both atomic? → check flat subtype relationship (flat path)
+;; 3. Different tags? → subtype violation
+(define (sre-make-subtype-propagator domain cell-a cell-b relation)
+  (define contradicts? (sre-domain-contradicts? domain))
+  (define bot? (sre-domain-bot? domain))
+  (define flat-sub? (sre-domain-flat-subtype? domain))
+  (define reversed? (eq? (sre-relation-name relation) 'subtype-reverse))
+  (lambda (net)
+    (define va (net-cell-read net cell-a))
+    (define vb (net-cell-read net cell-b))
+    (cond
+      ;; Wait for both cells to have values
+      [(or (bot? va) (bot? vb)) net]
+      [else
+       ;; Direction: check lhs ≤ rhs
+       (let* ([lhs (if reversed? vb va)]
+              [rhs (if reversed? va vb)]
+              [tag-lhs (sre-constructor-tag domain lhs)]
+              [tag-rhs (sre-constructor-tag domain rhs)])
+         (cond
+           ;; Both compound with same tag → structural decomposition with variance
+           [(and tag-lhs tag-rhs (eq? tag-lhs tag-rhs))
+            (sre-maybe-decompose net domain cell-a cell-b va vb lhs
+                                 #:relation relation)]
+           ;; Different compound tags → subtype violation (contradiction)
+           [(and tag-lhs tag-rhs)
+            ;; Signal contradiction by writing both values merged (→ top)
+            (net-cell-write net cell-a
+              ((sre-domain-lattice-merge domain) lhs rhs))]
+           ;; At least one atomic → use domain-specific flat subtype check
+           ;; The type lattice merge is equality-based (Nat ≠ Int → top).
+           ;; For subtyping, we use the domain's flat-subtype? predicate
+           ;; which knows Nat <: Int, Posit8 <: Posit16, etc.
+           [else
+            (cond
+              ;; Equal values trivially satisfy subtyping
+              [(equal? lhs rhs) net]
+              ;; Use domain's flat subtype check
+              [(and flat-sub? (flat-sub? lhs rhs)) net]  ;; lhs ≤ rhs holds
+              ;; No flat-subtype? function → can only check equality
+              [(not flat-sub?)
+               (if (equal? lhs rhs) net
+                   ;; Can't determine — signal contradiction conservatively
+                   (net-cell-write net cell-a
+                     ((sre-domain-lattice-merge domain) lhs rhs)))]
+              ;; flat-subtype? returned false → subtype violation
+              [else
+               (net-cell-write net cell-a
+                 ((sre-domain-lattice-merge domain) lhs rhs))])]))])))
+
+;; --- Duality propagator (Track 1: placeholder, Phase 3 implements) ---
+;; Reads cell-a, applies dual constructor pairing, writes to cell-b.
+;; Bidirectional: cell-b changes → apply inverse dual → write cell-a.
+(define (sre-make-duality-propagator domain cell-a cell-b relation)
+  ;; Phase 3 will implement the full duality propagator.
+  ;; For now, fall back to equality (safe: equality is stricter than duality).
+  (sre-make-equality-propagator domain cell-a cell-b sre-equality))
