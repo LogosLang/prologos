@@ -1,10 +1,10 @@
 # PM Track 10: Module Loading on Network — Stage 3 Design
 
-**Stage**: 3 (Design — D.1)
+**Stage**: 3 (Design — D.2, revised with Pre-0 benchmark data + .pnet serialization)
 **Date**: 2026-03-24
 **Series**: PM (Propagator Migration)
 **Prerequisite**: PM 8F ✅ (cell-id in expr-meta, cell-primary reads)
-**Status**: Draft D.1
+**Status**: Draft D.2
 
 ## Source Documents
 
@@ -14,19 +14,20 @@
 - [SRE Master](2026-03-22_SRE_MASTER.md) — SRE Track 6 = Track 10 (partial)
 - [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md) — network/stratification types
 - [Master Roadmap](MASTER_ROADMAP.org) — Track 10 = convergence point
+- [Pre-0 Benchmark Suite](../../racket/prologos/benchmarks/micro/bench-track10-module-loading.rkt) — parameterize, cache-hit, CHAMP fork, prelude e2e, isolation, memory
 
 ## Progress Tracker
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| Pre-0 | Microbenchmarks + adversarial | ⬜ | Baseline: parameterize cost, cache-hit import, prelude load |
+| Pre-0 | Microbenchmarks + adversarial | ✅ | `313a930` — see §3.Pre-0 for results |
 | 0 | Acceptance file baseline | ⬜ | |
-| 1 | Network-active module loading | ⬜ | `current-prop-net-box` ≠ #f during load-module |
-| 2 | Prelude as persistent shared network | ⬜ | Load once, share via CHAMP structural sharing |
-| 3 | Test isolation via subnetwork scoping | ⬜ | Replace 306 `with-fresh-meta-env` parameterize blocks |
-| 4 | Eliminate 41-parameter scope | ⬜ | State in network cells, not Racket parameters |
-| 5 | Absorb PM 8F deferrals | ⬜ | CHAMP fallback removal, defaults at solve-time |
-| 6 | Eliminate dual-path (snapshot retirement) | ⬜ | module-network-ref becomes sole source of truth |
+| 1 | Network-active module loading + .pnet serialization | ⬜ | THE highest-value phase — 20s → ~50ms cold start |
+| 2 | Prelude as persistent shared network | ⬜ | Fork from deserialized prelude .pnet |
+| 3 | Test isolation via subnetwork scoping | ⬜ | Architectural value (not performance — setup is already 2.2μs) |
+| 4 | Absorb PM 8F deferrals | ⬜ | CHAMP fallback removal, defaults at solve-time |
+| 5 | Eliminate dual-path (snapshot retirement) | ⬜ | module-network-ref as sole source of truth |
+| 6 | Parameter reduction (incremental) | ⬜ | Architectural cleanup, not performance-critical (3.4μs/scope) |
 | 7 | Verification + A/B benchmarks + PIR | ⬜ | Compare against Pre-0 baselines |
 
 ---
@@ -39,45 +40,80 @@ The Stage 2 audit identified the root architectural problem: **module loading
 is entirely imperative** — `current-prop-net-box = #f` during module
 elaboration (driver.rkt:1575). Modules are elaborated without a live
 propagator network, their cells are discarded, and their results are captured
-as hasheq snapshots. This creates:
+as hasheq snapshots.
 
-1. **The prelude tax**: 63 module elaborations through the full AST pipeline.
-   Every new AST node makes every module load slower. Currently ~12s per
-   prelude-heavy test (28 files affected).
+**Pre-0 benchmark data (D.2 revision)** revealed the cost distribution:
 
-2. **The 41-parameter scope**: Each module load creates a `parameterize` with
-   41 bindings — even on cache hits. 63 modules × per-test = 63 scope
-   creations/teardowns per test.
+| Component | Cost | Impact |
+|-----------|------|--------|
+| First-time prelude elaboration | ~20s | Paid once per process (per worker) |
+| 41-param parameterize × 63 modules | ~214μs | Negligible (D.1 overestimated) |
+| Cache-hit import loop × 63 modules | ~410μs | Negligible (D.1 overestimated) |
+| CHAMP fork (5000 entries) | 287ns | Replacement is viable |
+| Per-test state restoration | 2.2μs | Already fast |
+
+**D.1 was wrong about the bottleneck.** Parameterize overhead and cache-hit
+costs are microseconds, not seconds. The real costs are:
+
+1. **The 20s cold-start**: First-time elaboration of 63 prelude modules
+   through the full AST pipeline. Paid once per worker process. With 10
+   batch workers, ~20s wall time at suite start. Cannot be reduced by
+   caching in memory — must be reduced by **not elaborating from source**.
+
+2. **The structural tax on pipeline dispatch**: Every new AST node adds match
+   arms to zonk, substitution, reduction, qtt, elaboration. This slows ALL
+   elaboration (prelude + test bodies). The First-Class Paths +55s regression
+   (185s → 240s) is from this, not from prelude re-loading. Track 10 addresses
+   this by eliminating re-elaboration of prelude modules via serialized cache.
 
 3. **The dual-path burden**: Module state exists as BOTH env-snapshot (hasheq)
-   AND module-network-ref (cells). Every read must check both. Every write
-   must update both.
+   AND module-network-ref (cells). Architectural complexity, not performance.
 
 4. **Test isolation complexity**: 306 `with-fresh-meta-env` calls across 50+
-   test files, each parameterizing 15+ bindings. Fragile, verbose, error-prone.
+   test files. Architectural complexity — the parameterize cost is 2.2μs,
+   but the code is fragile and verbose.
 
 ### 1.2 What Track 10 Delivers
 
-**The propagator network is live from first instruction to last.**
+**The propagator network is live from first instruction to last. Module
+elaboration results are serialized to disk and deserialized on cold start.**
 
-- Module loading happens on the network. Cells created during elaboration
-  persist in the module's subnetwork.
-- The prelude is a persistent shared network loaded once per process.
-  Tests reference it via CHAMP structural sharing — O(1), not O(n).
-- Test isolation is subnetwork scoping — fork the network, test in the fork,
-  discard the fork. No parameterize.
-- The 41-parameter scope is eliminated. State lives in network cells.
-- The dual-path (snapshot + cells) collapses to cells-only.
+- **Module network serialization (`.pnet` files)**: Elaborated module state
+  (cell values, registries, metadata) is serialized to disk via Racket's
+  `fasl` format. On cold start, `.pnet` files are deserialized directly —
+  no re-parsing, no re-elaboration, no re-type-checking. Like `.zo` for
+  Racket modules, but for propagator networks.
 
-### 1.3 Performance Targets
+- **Module loading on live network**: Cells created during elaboration persist
+  in the module's subnetwork. No more `current-prop-net-box = #f`.
+
+- **Prelude as persistent shared network**: Deserialized from `.pnet` files
+  on cold start (~50ms), forked via CHAMP structural sharing for each test.
+
+- **Test isolation via subnetwork scoping**: Fork the network, test in the
+  fork, discard the fork. CHAMP CoW guarantees isolation.
+
+- **Dual-path retirement**: `env-snapshot` removed; `module-network-ref`
+  (cell values) is the sole source of truth.
+
+### 1.3 Performance Targets (revised from Pre-0 data)
 
 | Metric | Current | Target | Rationale |
 |--------|---------|--------|-----------|
-| Prelude-heavy test overhead | ~12s | <1s | Shared network, no re-import |
-| Full suite wall time | ~240s | <180s | Eliminate prelude tax |
-| Module cache-hit cost | ~0.5ms | <0.05ms | No parameterize, no env import loop |
-| Test isolation setup cost | ~2ms | <0.1ms | Subnetwork fork, not parameterize |
-| Parameter count in load-module | 41 | 0 | State in cells |
+| Cold-start prelude load | ~20s per worker | <100ms | .pnet deserialization, not elaboration |
+| Full suite wall time | ~240s | <200s | Cold-start elimination + reduced pipeline tax |
+| Module cache-hit cost | ~6.5μs | <1μs | CHAMP lookup, no import loop |
+| Test isolation setup | 2.2μs | <0.5μs | CHAMP fork (287ns for 5000 entries) |
+| Parameter count in load-module | 41 | <10 | Incremental migration, not zero (some are Racket-intrinsic) |
+
+**Note on the 12s per-test regression**: Pre-0 data shows this is from
+heavier pipeline dispatch (more match arms), NOT from prelude re-loading.
+Track 10 reduces this indirectly: with `.pnet` serialization, the prelude's
+elaboration results bypass the pipeline entirely. Tests that USE prelude
+definitions benefit because those definitions are already in cells — no
+re-elaboration through the heavier pipeline. The improvement depends on
+how much of each test's time is spent re-elaborating prelude-imported
+definitions vs. elaborating new test-local code.
 
 ### 1.4 NTT Speculative Syntax
 
@@ -197,38 +233,158 @@ Propagators fire during elaboration. Type checking uses the same network.
 The module-network-ref (Track 5) becomes the module's subnetwork — not a
 post-hoc reconstruction, but the ACTUAL network from elaboration.
 
+### 2.5 Module Network Serialization (`.pnet` files)
+
+**The highest-leverage mechanism in Track 10.** Pre-0 benchmarks show that
+the 20s cold-start is the dominant cost — and it's pure elaboration (parsing
++ type-checking + resolution of 63 modules from source). Serializing the
+elaboration RESULT eliminates this cost on subsequent runs.
+
+#### 2.5.1 What Gets Serialized
+
+For a fully-elaborated module (quiescent network, all metas solved, all
+constraints resolved), the propagators are INERT — they've already fired.
+The cell values ARE the result. We serialize the result, not the mechanism:
+
+| Serialized | Format | Size estimate |
+|-----------|--------|--------------|
+| Cell values (type exprs, definitions) | `fasl` (struct trees) | ~50 bytes/def |
+| Registry state (ctor, trait, preparse) | `fasl` (hasheqs) | ~2KB/module |
+| Module metadata (exports, specs, macros source) | `fasl` | ~1KB/module |
+| Definition-to-cell-id mappings | `fasl` (symbol→int) | ~0.5KB/module |
+| Source hash (staleness check) | SHA-256 | 32 bytes |
+
+| NOT serialized | Why |
+|---------------|-----|
+| Propagators | Already fired — inert. Mechanism, not result. |
+| Worklist | Empty after quiescence |
+| Contradiction state | Clean after successful elaboration |
+| Closures (macro transformers) | Not serializable; re-parse from cached source |
+
+Estimated total: ~5KB per module × 63 = ~315KB for full prelude `.pnet` cache.
+
+#### 2.5.2 Staleness Check
+
+```racket
+(define (pnet-stale? module-ns)
+  (define pnet-path (ns->pnet-path module-ns))
+  (define source-paths (module-transitive-sources module-ns))
+  (or (not (file-exists? pnet-path))
+      (let ([cached-hash (pnet-source-hash pnet-path)]
+            [current-hash (hash-sources source-paths)])
+        (not (equal? cached-hash current-hash)))))
+```
+
+Hash the module source + all transitive dependency sources. If hash matches
+the cached `.pnet`, deserialize. If stale, re-elaborate from source and
+re-serialize. Same model as `raco make` for `.zo` files.
+
+#### 2.5.3 The Load Path
+
+```
+load-module(ns):
+  1. Memory cache hit? → return (current behavior, ~129ns)
+  2. .pnet exists AND fresh? → deserialize into network (~1-5ms)
+  3. Neither → elaborate from source (~300ms/module)
+             → serialize to .pnet
+             → cache in memory
+```
+
+Step 2 is the new path — 400-2000× faster than step 3.
+
+#### 2.5.4 Serialization Mechanism: Racket `fasl`
+
+Racket's FASL (Fast Assembly Language) is the same format `.zo` files use.
+`fasl->output` / `fasl->input` from `racket/fasl` handle arbitrary Racket
+values including structs, numbers, strings, hasheqs, vectors — everything
+in our module state EXCEPT closures.
+
+Our type expressions (expr-Pi, expr-app, etc.) are standard Racket structs.
+Registry entries are hasheqs of structs. Module metadata is structs + lists.
+All serializable via `fasl`.
+
+**The closure problem**: Macros are syntax transformers = Racket closures.
+Closures can't be serialized via `fasl`. Options:
+- **(A)** Store macro SOURCE in `.pnet`, re-parse on deserialize
+- **(B)** Exclude macros from `.pnet`; re-install from `.rkt` module on load
+- **(C)** Use `racket/serialize` for closures (requires `serializable-struct`)
+
+Option A is simplest: macros are defined as S-expressions in the source.
+Store the S-expression; on deserialize, parse and install the macro.
+Parsing a macro definition is microseconds, not milliseconds.
+
+**Cell-id stability**: Cell IDs must be deterministic (same source → same IDs)
+OR remapped on deserialize. Deterministic assignment is simpler: use a
+counter starting from 0, assigned in definition order. Same source file →
+same definition order → same cell IDs. If a dependency changes, the module
+is re-elaborated (staleness check catches it) → fresh IDs.
+
+#### 2.5.5 NTT Speculative Syntax for Serialization
+
+```prologos
+;; Module as a serializable network
+network list-module : ModuleInterface
+  :lifetime :persistent
+  :serializable true              ;; can be written to .pnet
+  :source "lib/prologos/data/list.prologos"
+  :hash "a1b2c3..."              ;; source + transitive deps hash
+
+;; Deserialization as network instantiation
+network prelude : PreludeInterface
+  :lifetime :persistent
+  :deserialize-from "data/cache/prelude.pnet"
+  :fallback elaborate-from-source  ;; if .pnet stale
+```
+
+#### 2.5.6 `.pnet` File Location
+
+```
+lib/prologos/data/list.prologos        → data/cache/prologos/data/list.pnet
+lib/prologos/core/eq.prologos          → data/cache/prologos/core/eq.pnet
+lib/prologos/core/arithmetic.prologos  → data/cache/prologos/core/arithmetic.pnet
+```
+
+The `data/cache/` directory mirrors the `lib/` tree. `.pnet` files are
+gitignored (generated artifacts, like `.zo`). `raco make` equivalent:
+a tool that pre-generates all `.pnet` files.
+
 ---
 
-## 3. Phased Implementation
+## 3. Phased Implementation (revised from Pre-0 data)
 
-### Pre-0: Microbenchmarks
+### Pre-0: Microbenchmarks ✅ (`313a930`)
 
-Measure before designing further:
+**Results** (from `bench-track10-module-loading.rkt`):
 
-**A. Parameterize overhead:**
-- Time to create/teardown a 41-binding parameterize (no body)
-- Time for 63 × parameterize (simulating cache-hit prelude import)
-- Compare: CHAMP fork + merge cost for equivalent isolation
+| # | Measurement | Result | Implication |
+|---|-------------|--------|-------------|
+| A1 | 41-param parameterize | 3.4μs | NOT the bottleneck (D.1 overestimated) |
+| A2 | 15-param parameterize (run-ns-last) | 1.1μs | Already fast |
+| A3 | 63 × 5-param nested | 40μs | Negligible |
+| B1 | Module cache-hit lookup | 129ns | Trivial |
+| B2 | 50-entry env-snapshot import | 3.8μs | Trivial |
+| B3 | 7 hash-union (registry propagation) | 2.5μs | Trivial |
+| C1 | CHAMP fork (100 entries) | 105ns | 32× faster than parameterize |
+| C2 | CHAMP fork (5000 entries) | 287ns | Prelude-scale fork viable |
+| C3 | CHAMP read-through | 37ns | Parity with hash-ref |
+| C4 | Fork + 10 writes | 1.1μs | Parity with hash-set |
+| C5 | 4-deep fork chain | 2.3μs | Composable |
+| D1 | Full `(ns bench)` | ~20s | **THE bottleneck** — first-time elaboration |
+| D2 | Per-module (cached) | ~0.1ms each | Cache path is fast |
+| E1 | CHAMP isolation | ✓ correct | Parent unmodified after child writes |
+| E2 | 100 fork-discard cycles | <1ms, 0ms GC | No memory pressure |
+| F1 | 5000-entry CHAMP memory | 262KB (53.7 bytes/entry) | Feasible |
+| F2 | Fork memory overhead | 752 bytes | Negligible |
+| G1 | run-ns-last state restore | 2.2μs | Already fast |
 
-**B. Cache-hit import cost:**
-- Time for `load-module` on cached module (env-snapshot import loop)
-- Breakdown: cache lookup + parameterize + env import + registry propagation
+**Key finding**: The 20s cold-start (D1) is the ONLY significant cost.
+Everything else is microseconds. `.pnet` serialization targets this directly.
 
-**C. Prelude loading baseline:**
-- `(process-string "(ns bench)")` end-to-end time
-- Per-module breakdown within prelude loading
-- Identify slowest modules (candidates for optimization)
-
-**D. CHAMP structural sharing:**
-- Fork cost for a 1000-entry CHAMP (simulating module-env)
-- Read-through cost (child reads parent's entry)
-- Write-in-child cost (path-copy)
-- Freeze/snapshot cost
-
-**E. Adversarial:**
-- 100 modules with cross-dependencies
-- Deep dependency chains (A imports B imports C ... 10 deep)
-- Module with 200 definitions (large env-snapshot)
+**Design revision from data**: D.1 focused on parameterize elimination and
+CHAMP fork as performance levers. Pre-0 data shows these are architectural
+improvements (cleanliness, composability) not performance improvements. The
+performance lever is `.pnet` serialization: 20s elaboration → ~50ms
+deserialization (400×). Phase ordering revised accordingly.
 
 ### Phase 0: Acceptance File
 
@@ -240,20 +396,25 @@ Create `examples/2026-03-24-track10.prologos` exercising:
 
 Run as baseline for all subsequent phases.
 
-### Phase 1: Network-Active Module Loading
+### Phase 1: Network-Active Module Loading + `.pnet` Serialization
 
-**Goal**: `current-prop-net-box ≠ #f` during `load-module`.
+**Goal**: Modules elaborate on a live network AND results are serialized to
+disk for instant cold-start loading.
 
-**Change**: In `load-module` (driver.rkt:1575), replace
-`[current-prop-net-box #f]` with a fresh propagator network:
+**Two sub-phases:**
+
+**Phase 1a: Network-active loading.**
+
+In `load-module` (driver.rkt:1575), replace `[current-prop-net-box #f]`
+with a fresh propagator network:
 
 ```racket
 [current-prop-net-box (box (make-prop-network))]
 ```
 
-This is the minimal change — modules now elaborate with a live network.
-Cells created during elaboration exist on this network. After elaboration,
-the network is captured into `module-network-ref` (already done by Track 5).
+Modules now elaborate with a live network. Cells created during elaboration
+persist in the module's subnetwork. After elaboration, the network is
+captured into `module-network-ref` (Track 5 already does this).
 
 **Risk**: Module elaboration may trigger propagator behavior that wasn't
 active before (resolution bridges, constraint propagation). The fresh
@@ -261,10 +422,50 @@ network is isolated (no parent), so cross-module propagation doesn't happen.
 But within-module propagation DOES — trait resolution, type inference,
 constraint solving all fire on the live network.
 
-**Validation**: Full test suite. Per-module verbose output comparing with/without.
+**Phase 1b: `.pnet` serialization.**
 
-**Principles**: Propagator-First (modules elaborate on network, not in vacuum).
-Completeness (the network is available everywhere, not just in process-command).
+After successful module elaboration, serialize the module's cell values +
+registry state + metadata to a `.pnet` file using `fasl->output`.
+
+```racket
+(define (serialize-module-network! module-ns module-info net)
+  (define pnet-path (ns->pnet-path module-ns))
+  (define source-hash (hash-module-sources module-ns))
+  (define data
+    (list source-hash
+          (module-info-env-snapshot module-info)
+          (extract-registry-state)
+          (module-info-specs module-info)
+          (module-info-exports module-info)
+          (module-info-definition-locations module-info)
+          (extract-macro-sources module-info)))
+  (call-with-output-file pnet-path
+    (lambda (out) (fasl->output data out))
+    #:exists 'replace))
+```
+
+On load, check staleness and deserialize if fresh:
+
+```racket
+(define (load-module-from-pnet module-ns)
+  (define pnet-path (ns->pnet-path module-ns))
+  (and (file-exists? pnet-path)
+       (let ([data (call-with-input-file pnet-path fasl->input)])
+         (and (equal? (car data) (hash-module-sources module-ns))
+              (reconstruct-module-info data)))))
+```
+
+**Load path becomes**:
+1. Memory cache hit → return (~129ns)
+2. `.pnet` fresh → deserialize (~1-5ms)
+3. Neither → elaborate from source (~300ms/module) → serialize → cache
+
+**Validation**: Full suite. Cold-start timing comparison. `.pnet` round-trip
+(serialize → deserialize → compare with elaborated result).
+
+**Principles**: Propagator-First (modules elaborate on network).
+Completeness (elaboration results persist — no re-elaboration on cold start).
+Data Orientation (serialized network is a value, not a side-effect chain).
 
 ### Phase 2: Prelude as Persistent Shared Network
 
@@ -496,6 +697,9 @@ efficient branching).
 | 3 | Test isolation leakage via shared cells | CHAMP CoW guarantees isolation; add cross-test leak detection |
 | 4 | 41 parameters × call sites across codebase | Incremental migration, one parameter at a time |
 | 5 | CHAMP fallback removal breaks module-loading context | Phase 1 ensures cells are available everywhere |
+| 1b | `fasl` round-trip fails for some struct types | Test with each struct type before building pipeline |
+| 1b | Macro closures not serializable | Store macro source, re-parse on load (microseconds) |
+| 1b | Cell-id instability across serialization cycles | Deterministic counter assignment; verify with round-trip test |
 | 6 | Snapshot retirement breaks callers that assume hasheq | Grep all env-snapshot reads before removing |
 
 ---
@@ -505,15 +709,15 @@ efficient branching).
 Track 10 is DONE when:
 
 1. ✅ `current-prop-net-box ≠ #f` during all module elaboration
-2. ✅ Prelude loaded once per process, shared via CHAMP fork
-3. ✅ `run-ns-last` uses subnetwork fork (1 parameter, not 15)
-4. ✅ `load-module` parameterize has <5 bindings (down from 41)
+2. ✅ `.pnet` files generated for all prelude modules
+3. ✅ Cold-start prelude load from `.pnet` < 100ms (down from ~20s)
+4. ✅ Prelude shared via CHAMP fork across tests
 5. ✅ CHAMP fallback removed from `meta-solution/cell-id`
 6. ✅ `env-snapshot` removed from `module-info`
-7. ✅ Full suite wall time <180s (down from ~240s)
-8. ✅ 28 prelude-heavy tests each <30s (down from ~40s)
-9. ✅ All 7401+ tests pass
-10. ✅ Acceptance file 0 errors
+7. ✅ Full suite wall time < 200s (down from ~240s)
+8. ✅ All 7401+ tests pass
+9. ✅ Acceptance file 0 errors
+10. ✅ A/B benchmarks run and compared against Pre-0
 11. ✅ PIR written per methodology
 
 ---
@@ -551,3 +755,27 @@ Track 10 is DONE when:
 5. **Batch worker compatibility**: The batch worker saves/restores state
    across test files. With subnetwork forking, does the batch worker become
    simpler (fork prelude per file) or more complex (manage fork lifecycle)?
+
+6. **`fasl` compatibility with our struct types**: Do our AST structs
+   (expr-Pi, expr-app, etc.) round-trip correctly through `fasl->output` /
+   `fasl->input`? Need to test: struct identity, custom `gen:equal+hash`
+   (expr-meta has custom equality), nested structs, hasheqs of structs.
+
+7. **Macro transformer serialization**: Macros are closures — not
+   `fasl`-serializable. Store macro SOURCE and re-parse on deserialize?
+   Or exclude macros and re-install from Racket module? Measure: how many
+   macros, how expensive is re-parsing vs full module load?
+
+8. **Cell-id determinism**: Must cell IDs be deterministic (same source →
+   same IDs) for `.pnet` correctness? If the deserialized network has
+   cell-id 42 for `List`, but the runtime expects cell-id 57, lookups fail.
+   Options: deterministic counter, or ID remapping on deserialize.
+
+9. **Incremental `.pnet` invalidation**: If module A changes and module B
+   depends on A, both `.pnet` files are stale. The transitive dependency
+   hash handles this — but do we re-serialize just A and B, or all 63?
+   Incremental re-serialization = faster rebuild. Full = simpler.
+
+10. **Pre-compilation tool**: Should we add a `raco prologos-make` or extend
+    `tools/run-affected-tests.rkt` to pre-generate `.pnet` files? This
+    parallels `raco make` for `.zo` files.
