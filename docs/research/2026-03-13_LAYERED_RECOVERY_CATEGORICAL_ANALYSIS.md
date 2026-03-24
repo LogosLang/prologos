@@ -1,71 +1,88 @@
-- [Abstract](#org96935ab)
-- [1. The Three Systems](#org46ac1a2)
-  - [1.1 System I: The Logic Engine (`rel`)](#orgd0b6cde)
-  - [1.2 System II: The Session Runtime (`proc`)](#org77aeb82)
-  - [1.3 System III: The Type Checker (Stratified Quiescence)](#org52ae247)
-- [2. The Common Categorical Structure](#org863cc13)
-  - [2.1 Definition: Stratified Recovery System](#orgfbca38d)
-  - [2.2 The Enrichment: Quantale Structure](#orgd70d397)
-  - [2.3 The Decomposition: Inter-Stratum Galois Connections](#org98f121f)
-  - [2.4 Theorem: Stratification Preserves Fixpoint Equivalence](#org43cd58d)
-  - [2.5 The Common Structure: Diagram](#org9d216ad)
-- [3. The Quantale Morphism as Bridge](#org31e4e20)
-  - [3.1 Why Quantales, Not Just Lattices?](#org6929237)
-  - [3.2 The Bridge Pattern in Implementation](#org6d8d260)
-  - [3.3 Composition of Galois Connections](#org4ff114b)
-- [4. Formal Statements](#org2ff5c33)
-  - [4.1 Definition: Stratifiable Operation](#orge8a07da)
-  - [4.2 Theorem: Generalized Stratification](#org387596d)
-  - [4.3 Theorem: Quantale Morphism Preservation](#org010f747)
-  - [4.4 Corollary: Confluence Under Non-Overlapping Resolution](#orgbfeefaf)
-- [5. Relationship to Approximation Fixpoint Theory](#orgca5864c)
-  - [5.1 The Connection](#orgfdd6431)
-  - [5.2 Layered Recovery as a Special Case of AFT](#org0c4f9b1)
-  - [5.3 What AFT Offers for Future Extensions](#org1d7931f)
-- [6. Variants and Approaches for Non-Monotonic Domains](#orgdc453ed)
-  - [6.1 Classification of Non-Monotone Operations](#org9c18282)
-    - [Class A: Stratifiable (barrier-compatible)](#org50c0ac1)
-    - [Class B: Locally Stratifiable (barrier-compatible with context restriction)](#org54aba20)
-    - [Class C: Anti-Monotone (requires bilattice or ATMS)](#orgf80646b)
-    - [Class D: Chaotic (no fixpoint guarantee)](#org7a5b926)
-  - [6.2 The Adaptation Recipe](#orgb44c654)
-  - [6.3 Specific Future Applications in Prologos](#org20e9311)
-- [7. Implications and Conclusions](#org202c329)
-  - [7.1 What the Categorical Structure Tells Us](#orgdd228d3)
-  - [7.2 What This Means for Implementation](#org2450a4d)
-  - [7.3 What This Means for Theorists](#org87b5528)
-  - [7.4 Open Questions](#orgfbbb4c5)
-- [8. References](#orgd39a06e)
-  - [8.1 Categorical and Algebraic Foundations](#org0b2f6b1)
-  - [8.2 Effect Systems and Graded Monads](#org7bad0d7)
-  - [8.3 Fixpoint Theory and Stratification](#org990ae81)
-  - [8.4 CALM Theorem and Distributed Monotonicity](#org0254121)
-  - [8.5 Propagator Networks](#orge81abc7)
-  - [8.6 Session Types](#orgdf427f2)
-  - [8.7 Datalog and Non-Monotonic Reasoning](#org854d790)
-  - [8.8 Prologos Internal Documents](#org13538c6)
+- [Abstract](#org7874a12)
+- [1. The Three Systems](#org1263839)
+  - [1.1 System I: The Logic Engine (`rel`)](#org3e44f41)
+    - [1.1.1 Layer 1: The Propagator Network as a Complete Lattice](#orgbe01787)
+    - [1.1.2 Layer 2: The ATMS as a Sheaf on a Dynamically-Refined Site](#org74f0384)
+    - [1.1.3 Layer 3: The Stratification Controller as Opfibration](#org9bf3ba9)
+    - [1.1.4 The Full Structure: Bifibered Over a Product Base](#org74e2ee5)
+  - [1.2 System II: The Effect Order System (`proc`)](#orgd1bb3cc)
+    - [1.2.1 Quantale-Enriched Fibers](#orga35102b)
+    - [1.2.2 The Cross-Domain Bridge as Local Adjunction](#org3568d12)
+    - [1.2.3 The Stratified Chain](#orgea487d5)
+  - [1.3 System III: The Type Checker (Stratified Quiescence)](#org4575204)
+    - [1.3.1 Mixed Enrichment Across Fibers](#org6f0d48f)
+    - [1.3.2 Inter-Stratum Functors](#org21657a7)
+    - [1.3.3 The Stratified Chain](#org00e2925)
+- [2. The Common Categorical Structure](#orgdf8c21e)
+  - [2.1 Definition: Stratified Recovery System](#orgfe9da62)
+  - [2.2 Optional Enrichment: Quantale Structure](#org1f13e10)
+  - [2.3 Cleavage, Not Strict Opfibration](#org3fb67ab)
+  - [2.4 Inter-Fiber Connections: Local Adjunctions](#orgffd8ead)
+  - [2.5 Theorem: Stratification Preserves Fixpoint Equivalence](#orgbb6187a)
+  - [2.6 Theorem: Quantale Morphism Preservation (for Enriched Fibers)](#org7603cf2)
+  - [2.7 The Common Structure: Diagram](#orgd59f3ec)
+- [3. Bridges as Local Adjunctions in Fibered Categories](#orgb0b2e29)
+  - [3.1 Why Quantales in Some Fibers But Not Others?](#orgdb7195e)
+  - [3.2 The Bridge Pattern in Implementation](#org059c065)
+  - [3.3 Composition of Local Adjunctions](#orga36a8f1)
+- [4. The ATMS: Sheaf Theory and Cross-Level Interactions](#org41dd9a9)
+  - [4.1 The Consistency Site](#org04b78f6)
+  - [4.2 The Presheaf of Supported Values](#org7a2d4b8)
+  - [4.3 Nogood Discovery as Topology Refinement](#org6c654fc)
+  - [4.4 Worldview Enumeration: Sections of the Presheaf](#org51d5b39)
+- [5. Relationship to Approximation Fixpoint Theory](#org9e63a5c)
+  - [5.1 The Connection](#org293edeb)
+  - [5.2 Layered Recovery and AFT: The Fibered Perspective](#orgf7a2eab)
+  - [5.3 What AFT Offers for Future Extensions](#org641c5fc)
+- [6. Variants and Approaches for Non-Monotonic Domains](#org060ea43)
+  - [6.1 Classification of Non-Monotone Operations](#orga67de97)
+    - [Class A: Stratifiable (barrier-compatible)](#orgac22f37)
+    - [Class B: Locally Stratifiable (barrier-compatible with context restriction)](#orgbb527b5)
+    - [Class C: Anti-Monotone (requires bilattice or ATMS)](#org7e300a6)
+    - [Class D: Chaotic (no fixpoint guarantee)](#org56e2246)
+  - [6.2 The Adaptation Recipe](#org0234d5e)
+  - [6.3 Specific Future Applications in Prologos](#orgdc3dd43)
+- [7. Implications and Conclusions](#orgc4ced9f)
+  - [7.1 What the Categorical Structure Tells Us](#org5425fed)
+  - [7.2 What This Means for Implementation](#orgf64064c)
+  - [7.3 Honest Assessment: What Each System Actually Needs](#orge5716d8)
+  - [7.4 Resolved Questions](#orgc7d27f6)
+  - [7.5 Open Questions](#org8b252b8)
+- [8. References](#org625b7f4)
+  - [8.1 Categorical and Algebraic Foundations](#org92519d3)
+  - [8.2 Grothendieck Fibrations, Indexed Categories, and Hyperdoctrines](#org1d36f8e)
+  - [8.3 Graded Monads and Effect Systems](#org3276a5b)
+  - [8.4 Fixpoint Theory and Stratification](#orgac29041)
+  - [8.5 CALM Theorem and Distributed Monotonicity](#org66638d3)
+  - [8.6 Propagator Networks](#orgab92a58)
+  - [8.7 Session Types](#orgb581fc8)
+  - [8.8 Datalog and Non-Monotonic Reasoning](#orgca0ba7b)
+  - [8.9 Coalgebraic Semantics and Graded Logics](#orge2249db)
+  - [8.10 Prologos Internal Documents](#orgfd8cf46)
 
 
 
-<a id="org96935ab"></a>
+<a id="org7874a12"></a>
 
 # Abstract
 
-We identify the precise categorical structure underlying the Layered Recovery Principle as implemented in three subsystems of the Prologos language: the logic engine (stratified negation), the session runtime (effect ordering), and the type checker (reactive constraint resolution). Each system faces the same fundamental problem: recovering non-monotone behavior on a monotone propagator substrate.
+We identify the precise categorical structure underlying the Layered Recovery Principle as implemented in three subsystems of the Prologos language: the logic engine (stratified negation), the effect order system (session-derived effect sequencing), and the type checker (reactive constraint resolution). Each system faces the same fundamental problem: recovering non-monotone behavior on a monotone propagator substrate.
 
-We show that all three systems instantiate a common categorical pattern: a **stratified endofunctor** on a **quantale-enriched lattice**, where the endofunctor decomposes as a chain of monotone functors between lattices connected by Galois connections, with non-monotone operations isolated at precisely one barrier in the chain. The global fixpoint is the least fixpoint of the endofunctor, computed by Kleene iteration over the stratified chain.
+We show that all three systems are instances of a common categorical pattern: an **opfibration with cleavage** over a **well-founded base category**, where each fiber is a complete lattice equipped with a monotone endofunctor, within-fiber computation is fixpoint iteration (Knaster-Tarski), and exactly one inter-fiber transition is permitted to be non-monotone (the barrier). Fibers may optionally carry additional monoidal or quantale enrichment when sequential composition is meaningful in that domain.
 
-We prove that this structure is sufficient to recover any non-monotone operation on a monotone substrate, provided the non-monotone operation satisfies a *stratifiability condition*: it must be expressible as a barrier between two monotone phases. We characterize the class of non-monotone operations that satisfy this condition and identify variants for operations that do not.
+The quantale structure is genuinely load-bearing for the effect order system (System II), where the quantale morphism preserves sequential composition across the session-to-effect bridge, but incidental to the logic engine (System I), whose stratified negation and ATMS layers operate on lattice and sheaf-theoretic structure alone. The opfibration framework is the most general category that honestly captures all three systems without over-attributing structure to those that do not require it.
+
+We further characterize the ATMS (Assumption-based Truth Maintenance System) as a **presheaf on a dynamically-refined consistency site**, where nogoods define a topology on the Boolean algebra of assumption sets, and nogood discovery is a global topology refinement — an operation that modifies the base of the worldview fibration rather than any individual fiber. The stratification and worldview axes are orthogonal, forming a product base B<sub>strata</sub> × B<sub>worldviews</sub> with a one-directional cross-level interaction: within-fiber computation (propagation discovering contradictions) can refine the worldview-axis topology (adding nogoods), but not vice versa.
 
 
-<a id="org46ac1a2"></a>
+<a id="org1263839"></a>
 
 # 1. The Three Systems
 
-Three subsystems of Prologos independently discovered and implemented the same architectural pattern. We analyze each in turn, extracting the precise algebraic structure.
+Three subsystems of Prologos independently discovered and implemented the same architectural pattern. We analyze each in turn, extracting the precise algebraic structure — taking care to attribute only the structure that is genuinely load-bearing in each system.
 
 
-<a id="orgd0b6cde"></a>
+<a id="org3e44f41"></a>
 
 ## 1.1 System I: The Logic Engine (`rel`)
 
@@ -85,34 +102,131 @@ Layer 3 (Stratification Controller): Evaluate ¬P only after stratum containing
   P has reached fixpoint. This is the non-monotone barrier.
 ```
 
-*Lattice structure*: Let U be the unification lattice (substitutions ordered by refinement). Each stratum Sₖ operates on U. The join is unification; the bottom is the empty substitution.
 
-*The stratified chain*:
+<a id="orgbe01787"></a>
+
+### 1.1.1 Layer 1: The Propagator Network as a Complete Lattice
+
+The propagator network computes within a complete lattice of Herbrand interpretations. Let H be the Herbrand base (the set of all ground atoms constructible from the program's signature). The lattice is ℘(H) — the powerset ordered by inclusion:
+
+-   ⊥ = ∅ (no facts derived)
+-   ⊔ = ∪ (union of derived facts)
+-   ⊤ = H (all facts derived)
+
+The immediate consequence operator T<sub>P</sub> : ℘(H) → ℘(H) is monotone: if I ⊆ I', then T<sub>P</sub>(I) ⊆ T<sub>P</sub>(I'). The fixpoint lfp(T<sub>P</sub>) is the set of all derivable facts, computed by Kleene iteration.
+
+*Note on substitutions*: The unification mechanism within derivation steps operates on a substitution lattice (which is technically a quantale under composition). However, this quantale structure is **internal to the derivation mechanism** — it is not load-bearing for the stratified recovery pattern. The negation barrier does not inspect substitution composition; it checks **derivability** (membership in the fixpoint interpretation), which is a lattice property. The inter-stratum structure is organized around ℘(H), not around the substitution quantale.
+
+*Implementation grounding*: In `relations.rkt`, the DFS solver accumulates substitutions per derivation, but the stratification controller in `stratified-eval.rkt` operates at the level of "which goals have solutions" — a set-membership question on the Herbrand interpretation. The function `solve-single-goal` for negation (lines 307-317) applies the current substitution to ground the negated goal, then checks whether the inner goal has *any* solutions — a pure ∅-vs-nonempty test, with no reference to substitution composition.
+
+
+<a id="org74f0384"></a>
+
+### 1.1.2 Layer 2: The ATMS as a Sheaf on a Dynamically-Refined Site
+
+The ATMS introduces hypothetical reasoning via assumptions, supported values, and nogoods. Its categorical structure is fundamentally different from either a lattice or a quantale — it is a **sheaf-theoretic** structure.
+
+**The site.** Let Σ be the set of assumptions. The base category is the powerset P(Σ) ordered by inclusion, viewed as a thin category. Not all assumption sets are valid: the nogoods define a **consistency topology** J<sub>N</sub> on P(Σ), where an assumption set W is *open* (valid) iff no nogood N ∈ N is a subset of W.
+
+The valid worldviews form a **downset** (order ideal) in P(Σ): if W is consistent and W' ⊆ W, then W' is consistent (removing assumptions cannot introduce a nogood).
+
+**The presheaf of supported values.** Each TMS cell stores a list of `supported-value` pairs (value, support), where support ⊆ Σ. Reading a cell under worldview W returns the value whose support ⊆ W. This defines a presheaf:
 
 ```
-S₀ ──lfp──→ U₀* ──neg──→ S₁ ──lfp──→ U₁* ──neg──→ S₂ ──lfp──→ ...
- ↑                                                              ↓
- └──────────────────── Kleene iteration ────────────────────────┘
+F : Valid(Σ, N)^op → Set
+F(W) = { v | ∃ (v, S) ∈ cell s.t. S ⊆ W }
 ```
 
-Where:
+The restriction maps F(W) → F(W') for W' ⊆ W are inclusions (if support S ⊆ W' ⊆ W, the value is still visible at W'). This satisfies the presheaf functoriality condition.
 
--   lfp denotes the least fixpoint of monotone propagation within a stratum
--   neg denotes the non-monotone negation evaluation at the barrier
--   Uₖ\* is the fixpoint of stratum k
+**Nogood sharing as topology refinement.** When a nogood {a₁, &hellip;, aₖ} is discovered during within-fiber propagation, it is recorded at the ATMS level (globally, not per-worldview). In `atms.rkt`, nogoods live in the `atms` struct alongside all worldviews:
 
-*Algebraic structure*:
+```
+(struct atms (network assumptions nogoods tms-cells
+              next-assumption believed amb-groups))
+```
 
--   The unification lattice U is a quantale: substitutions compose (sequential application σ ∘ τ) and this composition distributes over joins (most general unifiers). The ordering is refinement: σ ≤ τ iff τ is a refinement of σ.
--   Negation evaluation neg : U\* → Init(U) is not a quantale morphism (it is anti-monotone on the truth ordering). It maps fixpoint states to initial conditions for the next stratum.
--   Each stratum's propagation is an endofunctor Fₖ : U → U that is monotone. The fixpoint Uₖ\* = lfp(Fₖ).
+Adding a nogood refines the consistency topology: J<sub>N</sub> → J<sub>N ∪ {new-nogood}</sub>. This is a **global** operation — it simultaneously invalidates all worldviews containing the new nogood. Values that were supported only by now-invalid worldviews vanish from all future reads.
 
-*Sources*: Logic Engine Design (`2026-02-24_LOGIC_ENGINE_DESIGN.org` §5), Effectful Computation on Propagators (`EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org` §2).
+This is a **cross-level interaction**: computation within a fiber (propagation discovers a contradiction) modifies the **base** of the inner fibration (the set of valid worldviews). In standard Grothendieck fibration theory, the base is fixed. The ATMS's dynamic topology refinement means the inner fibration is not a static Grothendieck opfibration but a **fibration over an evolving site**.
+
+Categorically, nogood accumulation is a functor between sites:
+
+```
+add-nogood : Site(Σ, N) → Site(Σ, N ∪ {n})
+```
+
+This induces a **restriction** of the total category — a full subcategory inclusion ∫F|<sub>N∪{n}</sub> ↪ ∫F|<sub>N</sub> that forgets the fibers over invalidated worldviews.
 
 
-<a id="org77aeb82"></a>
+<a id="org9bf3ba9"></a>
 
-## 1.2 System II: The Session Runtime (`proc`)
+### 1.1.3 Layer 3: The Stratification Controller as Opfibration
+
+The stratification controller evaluates strata bottom-up: stratum k's fixpoint is completed before stratum k+1 begins. This is naturally modeled as a **Grothendieck opfibration** over a well-ordered base.
+
+**Base category B.** The poset of strata {0, 1, &hellip;, n}, determined at compile time by SCC analysis of the predicate dependency graph (`stratify.rkt`). The morphisms are the unique maps k → k+1 for consecutive strata.
+
+**Fiber over stratum k.** F(k) = the complete lattice ℘(H<sub>k</sub>) of interpretations for stratum k's predicates, equipped with the immediate consequence operator T<sub>P</sub><sup>k</sup> : ℘(H<sub>k</sub>) → ℘(H<sub>k</sub>) (monotone). Within-fiber computation is lfp(T<sub>P</sub><sup>k</sup>).
+
+**Transition functors.** For k → k+1, the reindexing functor F(k → k+1) : F(k) → F(k+1) carries the completed fixpoint of stratum k into initial conditions for stratum k+1:
+
+1.  Take the fixpoint I<sub>k</sub>\* = lfp(T<sub>P</sub><sup>k</sup>)
+2.  Evaluate negation-as-failure: for each ¬P in stratum k+1's rules where P is in stratum k, check P ∉ I<sub>k</sub>\*
+3.  Initialize stratum k+1 with the derived negative facts
+
+This transition is **non-monotone** (more facts in I<sub>k</sub>\* can cause fewer negative facts in I<sub>k+1</sub>'s initialization). It is the **barrier** in the Layered Recovery pattern.
+
+**The stratified chain as Kleene iteration in the total category:**
+
+```
+F(0) ──lfp──→ F(0)* ──neg──→ F(1) ──lfp──→ F(1)* ──neg──→ ...
+ ↑   within-fiber    transition    within-fiber    transition
+ │    fixpoint        functor       fixpoint        functor
+ │
+ └──── Kleene iteration in ∫F ────────────────────────────────┘
+```
+
+The global computation is the colimit construction in the total category ∫F.
+
+
+<a id="org74e2ee5"></a>
+
+### 1.1.4 The Full Structure: Bifibered Over a Product Base
+
+System I's complete categorical structure is a **bifibered structure over a product base**:
+
+```
+L(k, W) fibered over B_strata × B_worldviews
+
+Strata axis:    k ∈ {0, ..., n}        [opfibration over well-ordered base]
+Worldview axis: W ∈ Valid(Σ, N)        [presheaf over dynamically-refined site]
+Fiber:          L(k, W) = complete lattice of interpretations at stratum k
+                under worldview W
+```
+
+The two axes are **orthogonal**, not nested. In the implementation:
+
+-   Stratification is the **default evaluation engine** for all relational queries. The function `stratified-solve-multi` in `stratified-eval.rkt` evaluates strata bottom-up — this is the universal code path regardless of ATMS.
+-   The ATMS is **optional and value-level**. It is activated only when `amb` creates choice points. The function `atms-solve-all` in `atms.rkt` enumerates worldviews as a separate operation, not as a wrapper around stratified evaluation.
+-   Neither axis modifies the other's structure: stratified evaluation within one worldview does not change the worldview, and worldview enumeration does not change the strata ordering.
+
+The one interaction between axes is the **nogood side-channel**: a nogood discovered during within-fiber propagation (strata axis) refines the consistency topology (worldview axis). This is a one-directional cross-level effect — fiber computation modifying the worldview base — not a composition of fibrations.
+
+**Key structural properties:**
+
+-   **No quantale enrichment needed.** The within-fiber lattice ℘(H<sub>k</sub>) is a complete lattice with set union as join. There is no load-bearing sequential composition operation on this lattice. The substitution quantale lives inside the unification mechanism, but the stratification and ATMS layers do not use it.
+
+-   **The Galois connection is trivial (identity).** Unlike Systems II and III, there is no inter-domain bridge. All strata operate on the same kind of lattice (powerset of ground atoms). The transition functor is a direct map between these lattices, not mediated by a Galois connection to a different domain.
+
+-   **The ATMS is a sheaf, not an algebra.** The ATMS's structure is sheaf-theoretic: supported values indexed by assumption sets, with consistency filtering via a topology. This is orthogonal to the lattice/quantale distinction.
+
+*Sources*: Logic Engine Design (`2026-02-24_LOGIC_ENGINE_DESIGN.org` §5), Effectful Computation on Propagators (`EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org` §2). Implementation: `stratify.rkt`, `stratified-eval.rkt`, `relations.rkt`, `atms.rkt`, `infra-cell.rkt`.
+
+
+<a id="orgd1bb3cc"></a>
+
+## 1.2 System II: The Effect Order System (`proc`)
 
 *Non-monotone operation*: IO effect execution. Writing to a file, sending a message, opening a connection — these are irreversible observations that cannot be undone, retried, or merged.
 
@@ -135,13 +249,31 @@ Layer 5 (Effect Handler): Execute effects in a valid linearization of the
   resolved partial order. This is the non-monotone barrier.
 ```
 
-*Lattice structure*: Two lattices connected by a Galois connection.
+
+<a id="orga35102b"></a>
+
+### 1.2.1 Quantale-Enriched Fibers
+
+Unlike System I, the effect order system's fibers carry genuine quantale structure that is **load-bearing** for the inter-domain bridge.
 
 Let S be the *session lattice*: session types ordered by advancement (bot → concrete → advanced states → end). The join is the most-advanced common state.
 
 Let E be the *effect position lattice*: sets of ordering constraints (i < j) over effect indices, ordered by inclusion. The join is set union. Transitive closure is a closure operator on E (monotone, extensive, idempotent).
 
-*The Galois connection (α, γ)*:
+Both S and E are **effect quantales** (Katsumata 2014, Gordon 2021):
+
+-   Lattice structure (partial order with joins)
+-   Sequential composition (⊕) distributes over joins
+-   Ordering respects composition: i ≤ i' ∧ j ≤ j' ⟹ i ⊕ j ≤ i' ⊕ j'
+
+The session lattice's composition is protocol continuation (send then receive then end). The effect lattice's composition is effect sequencing (effect at position 0 before position 1 before position 2).
+
+
+<a id="org3568d12"></a>
+
+### 1.2.2 The Cross-Domain Bridge as Local Adjunction
+
+The Galois connection (α, γ) : S ⇌ E is the critical structure:
 
 ```
 α : S → E     (extract causal position from session state)
@@ -150,33 +282,38 @@ Let E be the *effect position lattice*: sets of ordering constraints (i < j) ove
 α(s) ≤ e  ⟺  s ≤ γ(e)    (adjunction property)
 ```
 
-Both α and γ are monotone. The key insight: α preserves sequential composition.
+Both α and γ are monotone. Crucially, α is a **quantale morphism**: it preserves sequential composition:
 
-*Algebraic structure*:
+```
+α(a ⊗_S b) = α(a) ⊗_E α(b)     (preserves composition)
+α(⊔ᵢ aᵢ) = ⊔'ᵢ α(aᵢ)           (preserves joins)
+```
 
--   Both S and E are **effect quantales** (Katsumata 2014, Gordon 2021):
-    -   Lattice structure (partial order with joins)
-    -   Sequential composition (⊕) distributes over joins
-    -   Ordering respects composition: i ≤ i' ∧ j ≤ j' ⟹ i ⊕ j ≤ i' ⊕ j'
--   The Galois connection (α, γ) is a **quantale morphism**: it preserves both the lattice ordering and sequential composition.
--   Effect execution (Layer 5) is non-monotone: it selects a linearization of the partial order and performs irreversible IO.
+This is what makes the bridge meaningful: the session protocol's sequential structure (send, then receive, then end) maps faithfully to the effect ordering's sequential structure. The morphism doesn't just preserve ordering — it preserves the *reason* for the ordering. Without the quantale structure, the Galois connection would preserve only order information, losing the causal structure.
 
-*The stratified chain*:
+In the Grothendieck opfibration framing, this Galois connection is a **local adjunction** between fibers. The global adjunction between the fibered categories of session types and effect positions decomposes into these fiberwise adjunctions. This is an instance of the general principle (Turkenburg et al., CALCO 2023): Galois connections used in abstract interpretation are local manifestations of global adjunctions lifted along fibrations.
+
+
+<a id="orgea487d5"></a>
+
+### 1.2.3 The Stratified Chain
 
 ```
 S ──α──→ E ──tc──→ E* ──exec──→ World
-↑    Galois     monotone     non-monotone
-│   connection   closure       barrier
+↑    quantale     monotone     non-monotone
+│    morphism      closure       barrier
 │
 (session advancement propagators — monotone)
 ```
 
-Where tc denotes transitive closure (a monotone closure operator).
+Where tc denotes transitive closure (a monotone closure operator). Effect execution (Layer 5) is non-monotone: it selects a linearization of the partial order and performs irreversible IO.
+
+In the opfibration picture, the base is the chain of processing stages {session → effect-position → closure → execution}, and the barrier sits at the final transition.
 
 *Sources*: Session Types as Effect Ordering (`2026-03-06_SESSION_TYPES_AS_EFFECT_ORDERING.org` §4-6), Effectful Computation (`EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org` §3-4).
 
 
-<a id="org52ae247"></a>
+<a id="org4575204"></a>
 
 ## 1.3 System III: The Type Checker (Stratified Quiescence)
 
@@ -198,15 +335,25 @@ Stratum 2 (Resolution Commitment): Consume readiness signals. Execute
   commitment selects one instance, excluding alternatives.
 ```
 
-*Lattice structure*: Three lattices forming a chain.
 
-Let T be the *type cell lattice*: metavariable values ordered by refinement (bot → partial types → ground types). The merge is unification.
+<a id="org6f0d48f"></a>
 
-Let R be the *readiness lattice*: sets of ready-constraint descriptors, ordered by inclusion. The join is set union. Readiness is monotone in T: if a cell is non-bot, the constraint is ready; more refined cells are still non-bot.
+### 1.3.1 Mixed Enrichment Across Fibers
 
-Let A be the *action lattice*: multisets of resolution actions (trait resolution, constraint retry, hasmethod resolution), ordered by inclusion. Each action is a data descriptor (free monad pattern) — not an executed effect.
+The three strata operate on lattices with different algebraic structures:
 
-*The functors between strata*:
+-   **T** (type cell lattice): Metavariable values ordered by refinement (bot → partial types → ground types). The merge is unification. T is a **quantale**: type substitutions compose and composition distributes over the unification join. This quantale structure is load-bearing — substitution composition is how type inference propagates information.
+
+-   **R** (readiness lattice): Sets of ready-constraint descriptors, ordered by inclusion. The join is set union. R is a **join-semilattice**. It lacks sequential composition — there is no meaningful way to "compose" two readiness signals. The quantale structure is absent here.
+
+-   **A** (action lattice): Multisets of resolution actions (trait resolution, constraint retry, hasmethod resolution), ordered by inclusion. Each action is a data descriptor (free monad pattern) — not an executed effect. A is a **free monoid**. The ordering is prefix/subset.
+
+This mixed enrichment is a natural consequence of the opfibration framing: each fiber carries exactly the algebraic structure appropriate to its domain. The quantale enrichment lives in the type cell fiber where it is needed; it is not forced onto the readiness or action fibers where it would be artificial.
+
+
+<a id="org21657a7"></a>
+
+### 1.3.2 Inter-Stratum Functors
 
 ```
 α : T → R     (extract readiness from type cell states)
@@ -216,9 +363,14 @@ Let A be the *action lattice*: multisets of resolution actions (trait resolution
 
 -   α is monotone: more refined type cells produce (weakly) more readiness signals.
 -   β is monotone: more readiness signals produce more action descriptors.
--   γ is **not monotone** in the general case: committing a resolution can invalidate other pending resolutions (e.g., solving meta ?X = Nat might make a trait constraint solvable but also make another constraint unsatisfiable). However, γ is monotone *per action* — each individual resolution writes a more refined value to a type cell.
+-   γ is **not monotone** in the general case: committing a resolution can invalidate other pending resolutions. However, γ is monotone *per action* — each individual resolution writes a more refined value to a type cell.
 
-*The stratified chain (one iteration)*:
+The non-monotone γ is the barrier. In the opfibration picture, it is the transition functor from the A-fiber back to the T-fiber that is permitted to violate monotonicity.
+
+
+<a id="org00e2925"></a>
+
+### 1.3.3 The Stratified Chain
 
 ```
 T ──lfp(S0)──→ T* ──α──→ R ──lfp(S1)──→ R* ──β──→ A ──commit──→ T'
@@ -226,14 +378,7 @@ T ──lfp(S0)──→ T* ──α──→ R ──lfp(S1)──→ R* ──
 └──────────────── Kleene iteration (fuel=100) ────────────────┘
 ```
 
-*Algebraic structure*:
-
--   T is a quantale: type substitutions compose and composition distributes over the unification join.
--   R is a join-semilattice (readiness sets under union). It lacks the sequential composition that would make it a full quantale.
--   A is a free monoid (action sequences). The ordering is prefix/subset.
--   α : T\* → R is a Galois connection's upper adjoint (abstraction). The lower adjoint γ : R → T does not exist in the traditional sense because commitment is non-monotone. Instead, β ∘ γ : A → T is a *partial function* — it succeeds only when the action is still valid (re-check guard).
-
-*Confluence conditions* (proved in Track 2 Phase 9):
+**Confluence conditions** (proved in Track 2 Phase 9):
 
 -   S0: Confluent by construction (lattice merge properties).
 -   S1: Confluent by construction (readiness is monotone in cell state).
@@ -242,270 +387,124 @@ T ──lfp(S0)──→ T* ──α──→ R ──lfp(S1)──→ R* ──
 *Sources*: Track 2 Design (`2026-03-13_TRACK2_REACTIVE_RESOLUTION_DESIGN.md` §3.4), Track 2 Phase 9 (`test-resolution-confluence-01.rkt`).
 
 
-<a id="org863cc13"></a>
+<a id="orgdf8c21e"></a>
 
 # 2. The Common Categorical Structure
 
 
-<a id="orgfbca38d"></a>
+<a id="orgfe9da62"></a>
 
 ## 2.1 Definition: Stratified Recovery System
 
-A **stratified recovery system** is a tuple $(L, F_m, f_{nm}, n)$ where:
+A **stratified recovery system** is an opfibration with cleavage p : E → B where:
 
-1.  **L** is a complete lattice (the *substrate*).
-2.  **F<sub>m</sub> : L → L** is a monotone endofunctor (the *propagation phase*). By Knaster-Tarski, F<sub>m</sub> has a least fixpoint lfp(F<sub>m</sub>).
-3.  **f<sub>nm</sub> : L → L** is a (possibly non-monotone) function (the *barrier operation*).
-4.  **n ∈ ℕ ∪ {ω}** is the *stratification depth* (number of strata).
+1.  **B** is a well-founded category (the *base* — typically a finite poset of strata, a chain of processing stages, or a well-ordered set).
+2.  For each object b ∈ B, the fiber E<sub>b</sub> is a **complete lattice** equipped with a monotone endofunctor F<sub>b</sub> : E<sub>b</sub> → E<sub>b</sub> (the *propagation phase*). By Knaster-Tarski, F<sub>b</sub> has a least fixpoint lfp(F<sub>b</sub>).
+3.  For each morphism f : b → b' in B, a **chosen lift** f\_! : E<sub>b</sub> → E<sub>b'</sub> carries fixpoints from fiber b to initial conditions for fiber b'. The cleavage provides a specific lift at each transition; the lift may or may not be unique (see §2.3). All chosen lifts are monotone except at most one, which is the *barrier*.
+4.  The **global computation** is the Kleene iteration in the total category ∫E: compute lfp(F<sub>b</sub>) in each fiber bottom-up along B, transporting results via chosen lifts.
 
-The **stratified fixpoint** is computed by:
-
-```
-x₀ = ⊥
-For k = 0, 1, ..., n-1:
-  xₖ* = lfp(F_m | initialized at xₖ)
-  xₖ₊₁ = f_nm(xₖ*)
-Result = x_n*
-```
-
-This is Kleene iteration on the composition f<sub>nm</sub> ∘ lfp(F<sub>m</sub>), starting from ⊥.
+The special case where B is a linear order and all fibers are the same lattice reduces to a tuple $(L, F_m, f_{nm}, n)$: a substrate lattice L, a monotone endofunctor F<sub>m</sub>, a non-monotone barrier f<sub>nm</sub>, and a stratification depth n.
 
 
-<a id="orgd70d397"></a>
+<a id="org1f13e10"></a>
 
-## 2.2 The Enrichment: Quantale Structure
+## 2.2 Optional Enrichment: Quantale Structure
 
-In all three Prologos systems, the substrate lattice L carries additional algebraic structure: it is a **quantale**.
+The base definition requires only complete lattice structure in each fiber. Some systems carry additional algebraic structure:
 
-A quantale is a complete lattice (L, ≤, ⊔) equipped with an associative binary operation (⊗ : L × L → L) called *sequential composition* that distributes over arbitrary joins:
+A **quantale-enriched fiber** is a fiber E<sub>b</sub> that is additionally a quantale: a complete lattice equipped with an associative binary operation (⊗ : E<sub>b</sub> × E<sub>b</sub> → E<sub>b</sub>) distributing over arbitrary joins. The composition ⊗ represents sequential composition of operations in that domain.
 
 ```
 a ⊗ (⊔ᵢ bᵢ) = ⊔ᵢ (a ⊗ bᵢ)     (left distributivity)
 (⊔ᵢ aᵢ) ⊗ b = ⊔ᵢ (aᵢ ⊗ b)     (right distributivity)
 ```
 
-The three systems' quantale structures:
+The three systems' enrichment:
 
-| System   | Lattice L      | Join (⊔)             | Composition (⊗)               |
-|-------- |-------------- |-------------------- |----------------------------- |
-| Logic    | Substitutions  | Most general unifier | Substitution application      |
-| Sessions | Session states | Most-advanced state  | Protocol continuation         |
-| Types    | Type cells     | Unification          | Type substitution composition |
+| System   | Fiber lattice    | Quantale enrichment?  | Why / why not                   |
+|-------- |---------------- |--------------------- |------------------------------- |
+| Logic    | ℘(H) (Herbrand)  | No                    | Barrier checks derivability     |
+|          |                  |                       | (lattice property), not         |
+|          |                  |                       | composition. Substitution       |
+|          |                  |                       | quantale is internal to         |
+|          |                  |                       | unification, not load-bearing.  |
+| Sessions | Session states   | Yes (effect quantale) | Sequential composition of       |
+|          | Effect positions | Yes (effect quantale) | protocol steps / effects is     |
+|          |                  |                       | preserved by cross-domain       |
+|          |                  |                       | bridge (quantale morphism).     |
+| Types    | Type cells (T)   | Yes (substitution)    | Substitution composition is how |
+|          | Readiness (R)    | No (join-semilattice) | type inference propagates.      |
+|          | Actions (A)      | No (free monoid)      | R and A lack meaningful ⊗.      |
 
-
-<a id="org98f121f"></a>
-
-## 2.3 The Decomposition: Inter-Stratum Galois Connections
-
-The stratified fixpoint computation decomposes the endofunctor (f<sub>nm</sub> ∘ lfp(F<sub>m</sub>)) through intermediate lattices connected by Galois connections.
-
-In the general case, a stratified recovery system with k strata has intermediate lattices L₀, L₁, &#x2026;, Lₖ and Galois connections:
-
-```
-(αᵢ, γᵢ) : Lᵢ ⇌ Lᵢ₊₁     for i = 0, ..., k-2
-
-where αᵢ is monotone (abstraction)
-      γᵢ is monotone (concretization)
-      αᵢ(x) ≤ y  ⟺  x ≤ γᵢ(y)
-```
-
-The non-monotone operation f<sub>nm</sub> factors through the final lattice Lₖ₋₁:
-
-```
-f_nm = γ₀ ∘ ... ∘ γₖ₋₂ ∘ barrier ∘ αₖ₋₂ ∘ ... ∘ α₀
-```
-
-where *barrier* : Lₖ₋₁ → Lₖ₋₁ is the non-monotone operation at the top stratum. All other operations in the chain are monotone.
-
-The three systems instantiate this pattern:
-
-| System   | Lattice chain | Galois connections                  | Barrier             |
-|-------- |------------- |----------------------------------- |------------------- |
-| Logic    | U → U         | identity (single lattice, iterated) | neg : U\* → Init(U) |
-| Sessions | S → E → E\*   | (α,γ) : S ⇌ E (quantale morphism)   | exec : E\* → World  |
-| Types    | T → R → A     | α : T\* → R (abstraction)           | commit : A → T      |
+The key insight: quantale enrichment is **meaningful when sequential composition must be preserved across domain boundaries**. System II's session-to-effect bridge is a quantale morphism because the causal ordering of protocol steps must map faithfully to effect ordering. System I has no cross-domain bridge, so no sequential composition needs preservation. System III has quantale structure in the type cell fiber (where substitution composition matters) but not in the readiness or action fibers.
 
 
-<a id="org43cd58d"></a>
+<a id="org3fb67ab"></a>
 
-## 2.4 Theorem: Stratification Preserves Fixpoint Equivalence
+## 2.3 Cleavage, Not Strict Opfibration
 
-**Theorem** (Fixpoint Equivalence). Let $(L, F_m, f_{nm}, n)$ be a stratified recovery system. If f<sub>nm</sub> is *stratifiable* — i.e., the composition f<sub>nm</sub> ∘ lfp(F<sub>m</sub>) is monotone — then the stratified fixpoint equals the direct fixpoint:
+A strict Grothendieck opfibration requires opcartesian liftings — lifts with a **universal factorization** property (uniqueness up to isomorphism). Not all three systems satisfy this.
 
-```
-lfp(f_nm ∘ lfp(F_m)) = stratified_fixpoint(L, F_m, f_nm, n)
-```
+The test is **determinism**: given the fixpoint of stratum k, is the initialization for stratum k+1 uniquely determined?
 
-*Proof sketch*: Define G = f<sub>nm</sub> ∘ lfp(F<sub>m</sub>) : L → L. Since lfp(F<sub>m</sub>) is monotone (as a function of the initialization point, by the parametric fixpoint theorem — Cousot & Cousot 1979) and f<sub>nm</sub> is stratifiable (monotone when composed with lfp), G is monotone. By Knaster-Tarski, G has a least fixpoint lfp(G). The stratified computation is exactly Kleene iteration of G starting from ⊥:
+| System  | Barrier operation     | Deterministic? | Opcartesian? |
+|------- |--------------------- |-------------- |------------ |
+| Logic   | NAF (null? check)     | Yes            | Yes          |
+| Types   | Resolution commitment | Yes\*          | Yes\*        |
+| Effects | Effect linearization  | No             | No           |
 
-```
-x₀ = ⊥,  xₖ₊₁ = G(xₖ) = f_nm(lfp(F_m | xₖ))
-```
+(\*) Under the non-overlapping instance invariant: each (trait, type-args) pair has at most one valid resolution (monomorphic lookup by key, parametric most-specific-wins with ambiguity rejection).
 
-For monotone G on a complete lattice, Kleene iteration converges to lfp(G) (possibly at a transfinite ordinal for general complete lattices; at ω for algebraic/continuous lattices, which all three systems are). □
+The effect execution barrier (System II) is not opcartesian because multiple valid topological sorts of a partial order exist. When effects e₁ and e₂ are unordered (neither e₁ < e₂ nor e₂ < e₁), both [e₁, e₂] and [e₂, e₁] are valid linearizations. The implementation chooses one (via canonical enumeration order), but this choice is contingent — it lacks the universal property.
 
-**Corollary** (Confluence). If the stratified fixpoint equals the direct fixpoint and S0 is confluent (lattice merge properties), then the overall computation is confluent — the result is independent of the order in which propagators fire within each stratum.
-
-*Note*: The stratifiability condition is not always satisfied. System III (type checker) satisfies it only under the non-overlapping instance invariant. If overlapping instances existed, f<sub>nm</sub> ∘ lfp(F<sub>m</sub>) would not be monotone (adding type information could change which instance is selected, leading to a different fixpoint). This is why Prologos rejects overlapping instances — it is a *semantic requirement for confluence*, not merely a design choice.
+The appropriate generalization is an **opfibration with cleavage**: a choice of lift at each transition, which may or may not be unique. In fibration theory, a cleavage is "a choice of cartesian lifting for every object and morphism." A fibration with cleavage is weaker than a split fibration (where the choice is functorial). Systems I and III have canonical (unique) lifts; System II has chosen lifts.
 
 
-<a id="org9d216ad"></a>
+<a id="orgffd8ead"></a>
 
-## 2.5 The Common Structure: Diagram
+## 2.4 Inter-Fiber Connections: Local Adjunctions
 
-```
-                ┌─────────────────────────┐
-                │   STRATIFIED RECOVERY    │
-                │       SYSTEM             │
-                └───────────┬─────────────┘
-                            │
-          ┌─────────────────┼─────────────────┐
-          │                 │                 │
-┌─────────▼──────┐ ┌───────▼────────┐ ┌──────▼──────────┐
-│ System I: rel  │ │ System II: proc│ │ System III: tc  │
-│ (Logic Engine) │ │ (Sessions)     │ │ (Type Checker)  │
-└─────────┬──────┘ └───────┬────────┘ └──────┬──────────┘
-          │                │                 │
-          ▼                ▼                 ▼
-┌──────────────────────────────────────────────────────┐
-│         QUANTALE-ENRICHED LATTICE  (L, ≤, ⊗)        │
-│                                                      │
-│  Monotone endofunctor Fm : L → L                     │
-│  Fixpoint computation: lfp(Fm) via propagator network│
-└──────────────────────┬───────────────────────────────┘
-                       │
-          ┌────────────▼──────────────┐
-          │  GALOIS CONNECTION CHAIN   │
-          │                           │
-          │  L₀ ⇌ L₁ ⇌ ... ⇌ Lₖ₋₁   │
-          │  (αᵢ, γᵢ) monotone pairs  │
-          └────────────┬──────────────┘
-                       │
-          ┌────────────▼──────────────┐
-          │  NON-MONOTONE BARRIER     │
-          │                           │
-          │  barrier : Lₖ₋₁ → L₀     │
-          │  (negation / execution /  │
-          │   commitment)             │
-          └────────────┬──────────────┘
-                       │
-          ┌────────────▼──────────────┐
-          │  KLEENE ITERATION         │
-          │                           │
-          │  Iterate (barrier ∘ lfp)  │
-          │  until global fixpoint    │
-          └───────────────────────────┘
-```
+In the Grothendieck opfibration framework, cross-domain connections between different fiber lattices are **local adjunctions** — adjunctions (α<sub>b</sub>, γ<sub>b</sub>) between fibers at each base object b. When the fibers carry quantale enrichment, these local adjunctions may additionally be quantale morphisms.
+
+Galois connections are precisely adjunctions in the 2-category of posets. In the fibered setting, a Galois connection (α, γ) : L ⇌ M between two fiber lattices is a local expression of a global adjunction between fibered categories. This is an instance of the general principle identified by Turkenburg et al. (CALCO 2023) and Cousot (2014): the adjunctions used in abstract interpretation are fibrewise adjunctions of codomain fibrations.
+
+The three systems' inter-fiber connections:
+
+| System   | Connection                                 | Type                 |
+|-------- |------------------------------------------ |-------------------- |
+| Logic    | Identity (single lattice family, iterated) | Trivial              |
+| Sessions | (α,γ) : S ⇌ E                              | Quantale morphism    |
+| Types    | α : T\* → R (abstraction only)             | Monotone map (no     |
+|          |                                            | right adjoint — γ is |
+|          |                                            | non-monotone)        |
+
+The trivial connection in System I is consistent with the opfibration framing: there is no inter-domain bridge, so no adjunction is needed. The quantale morphism in System II is the richest structure, preserving both order and sequential composition. The one-sided connection in System III (α without a proper γ) reflects the non-monotonicity of trait resolution commitment — the barrier operation prevents the formation of a full adjunction.
 
 
-<a id="org31e4e20"></a>
+<a id="orgbb6187a"></a>
 
-# 3. The Quantale Morphism as Bridge
+## 2.5 Theorem: Stratification Preserves Fixpoint Equivalence
 
-
-<a id="org6929237"></a>
-
-## 3.1 Why Quantales, Not Just Lattices?
-
-The lattice structure alone suffices for fixpoint computation (Knaster-Tarski). The quantale structure — the sequential composition ⊗ — is what makes the Galois connections between systems meaningful.
-
-Without ⊗, a Galois connection (α, γ) : L ⇌ M between lattices preserves only order information. With ⊗, a **quantale morphism** preserves both order AND sequential composition:
+**Theorem** (Fixpoint Equivalence). Let p : E → B be a stratified recovery system (Grothendieck opfibration over a well-founded base). If the composed transition f<sub>nm</sub> ∘ lfp(F<sub>b</sub>) is monotone (the *stratifiability condition*), then the stratified fixpoint (computed fiber-by-fiber along B) equals the direct fixpoint of the global endofunctor:
 
 ```
-α(a ⊗ b) = α(a) ⊗' α(b)     (preserves composition)
-α(⊔ᵢ aᵢ) = ⊔'ᵢ α(aᵢ)        (preserves joins)
+lfp(f_nm ∘ lfp(F_b)) = colim_{b ∈ B} lfp(F_b | transported from b-1)
 ```
 
-This is critical for Prologos because the systems don't just compute values — they compute *sequences of operations*. Substitution application, protocol continuation, and type-checking steps all have sequential structure. The quantale morphism guarantees that the sequential structure is preserved across the Galois bridge.
+*Proof sketch*: Define G = f<sub>nm</sub> ∘ lfp(F) : L → L. Since lfp(F) is monotone as a function of the initialization point (parametric fixpoint theorem — Cousot & Cousot 1979) and f<sub>nm</sub> is stratifiable (monotone when composed with lfp), G is monotone. By Knaster-Tarski, G has a least fixpoint lfp(G). The stratified computation is exactly Kleene iteration of G starting from ⊥. For monotone G on a complete lattice, Kleene iteration converges to lfp(G). □
 
-In System II (sessions), this means: the session protocol's sequential structure (send, then receive, then end) maps faithfully to the effect ordering's sequential structure (effect at position 0 before effect at position 1 before effect at position 2). The morphism doesn't just preserve ordering — it preserves the *reason* for the ordering.
+**Corollary** (Confluence). If the stratified fixpoint equals the direct fixpoint and each within-fiber fixpoint computation is confluent (lattice merge properties), then the overall computation is confluent — the result is independent of the order in which propagators fire within each stratum.
 
-
-<a id="org6d8d260"></a>
-
-## 3.2 The Bridge Pattern in Implementation
-
-In Prologos, the Galois connection between domains is implemented as a **bridge propagator** — a propagator that watches cells in one domain and writes to cells in another:
-
-```
-bridge-propagator : Cell[L] × Cell[M] → Propagator
-  When Cell[L] refines from l to l':
-    write α(l') to Cell[M]      (α is the abstraction)
-  When Cell[M] refines from m to m':
-    write γ(m') to Cell[L]      (γ is the concretization)
-```
-
-The monotonicity of α and γ guarantees that the bridge propagator is a valid monotone propagator — it can participate in the propagator network's fixpoint computation without violating confluence.
-
-Existing bridges in Prologos:
-
--   Type ⇌ Session bridge (`session-propagators.rkt`)
--   Type ⇌ Interval bridge (from abstract interpretation work)
--   Session ⇌ Effect Position bridge (proposed in Architecture D)
-
-Each bridge is a quantale morphism instantiated as a pair of propagators.
+*Note*: The stratifiability condition is not always satisfied. System III (type checker) satisfies it only under the non-overlapping instance invariant. If overlapping instances existed, f<sub>nm</sub> ∘ lfp(F) would not be monotone (adding type information could change which instance is selected). This is why Prologos rejects overlapping instances — it is a *semantic requirement for confluence*, not merely a design choice.
 
 
-<a id="org4ff114b"></a>
+<a id="org7603cf2"></a>
 
-## 3.3 Composition of Galois Connections
+## 2.6 Theorem: Quantale Morphism Preservation (for Enriched Fibers)
 
-Galois connections compose: if (α₁, γ₁) : L ⇌ M and (α₂, γ₂) : M ⇌ N, then (α₂ ∘ α₁, γ₁ ∘ γ₂) : L ⇌ N is also a Galois connection.
+When fibers carry quantale enrichment and inter-fiber connections are quantale morphisms, an additional soundness result holds.
 
-This means the inter-stratum connections compose into a single Galois connection from the substrate lattice to the barrier lattice. For System III (type checker):
-
-```
-(α₂ ∘ α₁, γ₁ ∘ γ₂) : T ⇌ A
-
-where α₁ : T* → R (readiness extraction)
-      α₂ : R* → A (action construction)
-      γ₂ : A → R (action interpretation)
-      γ₁ : R → T (resolution commitment)
-```
-
-The *composed* Galois connection maps directly from type cell fixpoints to resolution actions. This is exactly what the stratified quiescence loop computes — but the categorical perspective reveals that the intermediate lattice R (readiness) is not essential; it is a *factorization* of the composed connection that makes the computation more efficient (readiness can be computed incrementally by propagators).
-
-
-<a id="org2ff5c33"></a>
-
-# 4. Formal Statements
-
-We now state the key results precisely.
-
-
-<a id="orge8a07da"></a>
-
-## 4.1 Definition: Stratifiable Operation
-
-A function f : L → L on a complete lattice L is *stratifiable with respect to a monotone endofunctor F : L → L* if the composition f ∘ lfp(F) : L → L is monotone, where lfp(F) denotes the parametric least fixpoint of F (which is monotone in the initialization point by Cousot & Cousot 1979).
-
-
-<a id="org387596d"></a>
-
-## 4.2 Theorem: Generalized Stratification
-
-Let L be a complete lattice, F : L → L monotone, and f : L → L stratifiable with respect to F. Define the stratified iteration:
-
-```
-G = f ∘ lfp(F) : L → L
-
-x₀ = ⊥
-xₙ₊₁ = G(xₙ)
-```
-
-Then:
-
-1.  G is monotone (by definition of stratifiability).
-2.  lfp(G) exists (by Knaster-Tarski).
-3.  The Kleene chain x₀ ≤ x₁ ≤ &#x2026; converges to lfp(G).
-4.  lfp(G) is the unique minimal solution to: x = f(lfp(F | x)).
-
-
-<a id="org010f747"></a>
-
-## 4.3 Theorem: Quantale Morphism Preservation
-
-Let (Q₁, ≤₁, ⊗₁) and (Q₂, ≤₂, ⊗₂) be quantales and (α, γ) : Q₁ ⇌ Q₂ a Galois connection that is also a quantale morphism (α preserves ⊗ and ⊔). If F₁ : Q₁ → Q₁ and F₂ : Q₂ → Q₂ are monotone endofunctors such that α ∘ F₁ = F₂ ∘ α (the bridge commutes with propagation), then:
+Let (Q₁, ≤₁, ⊗₁) and (Q₂, ≤₂, ⊗₂) be quantale-enriched fibers and (α, γ) : Q₁ ⇌ Q₂ a Galois connection that is also a quantale morphism. If F₁ : Q₁ → Q₁ and F₂ : Q₂ → Q₂ are monotone endofunctors such that α ∘ F₁ = F₂ ∘ α (the bridge commutes with propagation), then:
 
 ```
 α(lfp(F₁)) ≤ lfp(F₂)
@@ -517,26 +516,218 @@ and if additionally γ ∘ F₂ ≤ F₁ ∘ γ, then:
 α(lfp(F₁)) = lfp(F₂)
 ```
 
-*This is the soundness theorem for cross-domain bridges.* It guarantees that fixpoints computed in one domain (e.g., session types) map correctly to fixpoints in another domain (e.g., effect positions).
+*This is the soundness theorem for cross-domain bridges.* It guarantees that fixpoints computed in one domain (e.g., session types) map correctly to fixpoints in another domain (e.g., effect positions). This theorem applies to System II (sessions ⇌ effects) but not to System I (no cross-domain bridge) or the R and A fibers of System III (no quantale enrichment).
 
 
-<a id="orgbfeefaf"></a>
+<a id="orgd59f3ec"></a>
 
-## 4.4 Corollary: Confluence Under Non-Overlapping Resolution
+## 2.7 The Common Structure: Diagram
 
-For System III (type checker), the barrier operation (trait resolution commitment) is stratifiable if and only if the instance resolution function is *deterministic* — i.e., for each (trait, type-args) pair, there is at most one valid instance.
+```
+                ┌──────────────────────────────────┐
+                │   OPFIBRATION WITH CLEAVAGE       │
+                │   over well-founded base B        │
+                │                                  │
+                │   p : E → B                      │
+                │   (canonical lifts for I, III;   │
+                │    chosen lifts for II)           │
+                └───────────────┬──────────────────┘
+                                │
+          ┌─────────────────────┼─────────────────────┐
+          │                     │                     │
+┌─────────▼──────┐   ┌─────────▼────────┐   ┌────────▼──────────┐
+│ System I: rel  │   │ System II: proc  │   │ System III: tc    │
+│ (Logic Engine) │   │ (Effect Order)   │   │ (Type Checker)    │
+└─────────┬──────┘   └─────────┬────────┘   └────────┬──────────┘
+          │                     │                     │
+          ▼                     ▼                     ▼
+┌────────────────┐   ┌──────────────────┐   ┌───────────────────┐
+│ Fiber: Sup     │   │ Fiber: Quantale  │   │ Fiber: Mixed      │
+│ (complete      │   │ (effect quantale │   │ (T: quantale,     │
+│  lattice only) │   │  with ⊗)         │   │  R: semilattice,  │
+│                │   │                  │   │  A: free monoid)  │
+│ + ATMS: sheaf  │   │ + cross-domain   │   │                   │
+│   on dynamic   │   │   bridge via     │   │ Barrier: non-     │
+│   site         │   │   quantale       │   │ monotone γ: A → T │
+│                │   │   morphism       │   │                   │
+│ Barrier: neg   │   │ Barrier: exec    │   │ Confluence:       │
+│ (NAF at strat  │   │ (linearization   │   │ non-overlapping   │
+│  boundary)     │   │  + IO)           │   │ instance inv.     │
+└────────────────┘   └──────────────────┘   └───────────────────┘
 
-Under the non-overlapping instance invariant enforced by Prologos (monomorphic lookup by key, parametric most-specific-wins, same-specificity ties rejected as HKT-7 ambiguity), the resolution function is deterministic, hence stratifiable, hence the stratified fixpoint is confluent.
+Within each fiber:
+┌──────────────────────────────────────────────────────┐
+│  Monotone endofunctor F_b : E_b → E_b                │
+│  Fixpoint computation: lfp(F_b) via propagator net   │
+│  Kleene iteration in total category ∫E               │
+└──────────────────────────────────────────────────────┘
+```
 
-This result was verified empirically by Track 2 Phase 9 (19 confluence tests, randomized evaluation order, deterministic results).
+
+<a id="orgb0b2e29"></a>
+
+# 3. Bridges as Local Adjunctions in Fibered Categories
 
 
-<a id="orgca5864c"></a>
+<a id="orgdb7195e"></a>
+
+## 3.1 Why Quantales in Some Fibers But Not Others?
+
+The lattice structure alone suffices for fixpoint computation (Knaster-Tarski). The quantale structure — sequential composition ⊗ — becomes necessary when two conditions hold simultaneously:
+
+1.  The domain has intrinsic sequential structure (effects occur in order, substitutions compose, protocol steps follow each other).
+2.  This sequential structure must be **preserved across a domain boundary** (the session-to-effect bridge, the type-to-session bridge).
+
+Without condition 2, the quantale structure is incidental. System I's substitutions form a quantale, but the negation barrier and ATMS layer never inspect substitution composition — they operate on derivability (a lattice property). So the quantale is present but not load-bearing.
+
+With both conditions, the quantale morphism is essential. In System II, the Galois connection (α, γ) : S ⇌ E preserves both order AND sequential composition:
+
+```
+α(a ⊗_S b) = α(a) ⊗_E α(b)     (preserves composition)
+α(⊔ᵢ aᵢ) = ⊔'ᵢ α(aᵢ)           (preserves joins)
+```
+
+This means: the session protocol's causal structure maps faithfully to the effect ordering's causal structure. The morphism doesn't just preserve which effects come before which — it preserves *why* they are ordered (the protocol mandates it).
+
+
+<a id="org059c065"></a>
+
+## 3.2 The Bridge Pattern in Implementation
+
+In Prologos, inter-domain connections are implemented as **bridge propagators** — propagators that watch cells in one domain and write to cells in another:
+
+```
+bridge-propagator : Cell[L] × Cell[M] → Propagator
+  When Cell[L] refines from l to l':
+    write α(l') to Cell[M]      (α is the abstraction)
+  When Cell[M] refines from m to m':
+    write γ(m') to Cell[L]      (γ is the concretization)
+```
+
+The monotonicity of α and γ guarantees that the bridge propagator is a valid monotone propagator — it participates in the propagator network's fixpoint computation without violating confluence.
+
+Existing bridges in Prologos:
+
+-   Type ⇌ Session bridge (`session-propagators.rkt`)
+-   Type ⇌ Interval bridge (from abstract interpretation work)
+-   Session ⇌ Effect Position bridge (proposed in Architecture D)
+
+Each bridge is a local adjunction between fibers, instantiated as a pair of propagators. When the fibers are quantale-enriched, the bridge is additionally a quantale morphism.
+
+
+<a id="orga36a8f1"></a>
+
+## 3.3 Composition of Local Adjunctions
+
+Galois connections compose: if (α₁, γ₁) : L ⇌ M and (α₂, γ₂) : M ⇌ N, then (α₂ ∘ α₁, γ₁ ∘ γ₂) : L ⇌ N is also a Galois connection.
+
+In the fibered setting, this means local adjunctions compose along the base: if we have adjunctions between fibers at consecutive base objects, they compose into a single adjunction from the first fiber to the last. For System III:
+
+```
+(α₂ ∘ α₁, γ₁ ∘ γ₂) : T ⇌ A
+
+where α₁ : T* → R (readiness extraction)
+      α₂ : R* → A (action construction)
+      γ₂ : A → R (action interpretation)
+      γ₁ : R → T (resolution commitment)
+```
+
+The intermediate fiber R (readiness) is a *factorization* of the composed adjunction — it exists because readiness can be computed incrementally by propagators, making the computation more efficient, but it is not categorically essential.
+
+
+<a id="org41dd9a9"></a>
+
+# 4. The ATMS: Sheaf Theory and Cross-Level Interactions
+
+This section develops the sheaf-theoretic characterization of the ATMS in detail, addressing the cross-level interaction between fiber computation and base topology that is a distinctive feature of System I.
+
+
+<a id="org04b78f6"></a>
+
+## 4.1 The Consistency Site
+
+Let Σ be the set of assumptions. The nogoods N ⊆ ℘(Σ) define a *consistency topology* J<sub>N</sub> on the poset P(Σ)<sup>op</sup>:
+
+**Definition.** An assumption set W ∈ P(Σ) is *consistent* (with respect to nogoods N) iff for all n ∈ N, n ⊄ W. The set of consistent assumption sets Valid(Σ, N) forms the opens of the consistency site.
+
+**Properties:**
+
+-   Valid(Σ, N) is a **downset** (order ideal) of (P(Σ), ⊆): if W is consistent and W' ⊆ W, then W' is consistent (removing assumptions cannot introduce a nogood).
+-   Valid(Σ, N) is closed under arbitrary intersection of consistent sets (if each W<sub>i</sub> is consistent, then ∩ W<sub>i</sub> is consistent).
+-   The empty set ∅ is always consistent (no nogood is empty).
+
+
+<a id="org7a2d4b8"></a>
+
+## 4.2 The Presheaf of Supported Values
+
+Each TMS cell in the ATMS stores a list of `(supported-value value support)` pairs. This defines a presheaf on the consistency site:
+
+```
+F_cell : Valid(Σ, N)^op → Set
+F_cell(W) = { v | ∃ (v, S) in cell s.t. S ⊆ W }
+```
+
+The restriction maps are inclusions: if W' ⊆ W and S ⊆ W', then S ⊆ W, so F(W') ⊆ F(W). This is functorial (preserves composition of inclusions).
+
+The reading operation `atms-read-cell` in `atms.rkt` is precisely the evaluation of this presheaf at the current worldview:
+
+```
+(define (atms-read-cell a cell-key)
+  ;; Find first supported-value whose support ⊆ believed
+  (for/first ([sv (tms-cell-values cell)])
+    (when (subset? (supported-value-support sv)
+                   (atms-believed a))
+      (supported-value-value sv))))
+```
+
+
+<a id="org6c654fc"></a>
+
+## 4.3 Nogood Discovery as Topology Refinement
+
+When propagation within a fiber discovers a contradiction, a nogood is added to the ATMS. This is categorically a **site morphism**:
+
+```
+add-nogood(n) : (P(Σ)^op, J_N) → (P(Σ)^op, J_{N ∪ {n}})
+```
+
+The morphism refines the topology: J<sub>N ∪ {n}</sub> is finer than J<sub>N</sub> (more worldviews are excluded). The presheaf F<sub>cell</sub>, restricted along this site morphism, loses sections that were supported only by now-invalid worldviews.
+
+**Cross-level interaction.** This is the key structural feature: computation within a fiber (propagation discovers an inconsistency) triggers a modification of the **base** of the inner fibration (the consistency site). In standard Grothendieck fibration theory, the base category is fixed throughout the computation. The ATMS's topology refinement means we are working with a **fibration over an evolving site** — a structure not fully captured by the standard Grothendieck construction.
+
+**Monotonicity of the refinement.** The refinement is monotone in a specific sense: the nogood set only grows (N ⊆ N'), and the valid worldview set only shrinks (Valid(Σ, N') ⊆ Valid(Σ, N)). So the sequence of sites forms a chain:
+
+```
+(P(Σ)^op, J_{N_0}) → (P(Σ)^op, J_{N_1}) → ... → (P(Σ)^op, J_{N_final})
+```
+
+This chain is itself a well-founded diagram — a second opfibration, orthogonal to the stratification axis. The full structure is a fibration over the product base B<sub>strata</sub> × B<sub>worldviews</sub> (see §1.1.4), with the nogood side-channel providing the one-directional cross-axis interaction.
+
+
+<a id="org51d5b39"></a>
+
+## 4.4 Worldview Enumeration: Sections of the Presheaf
+
+The operation `atms-solve-all` enumerates all consistent worldviews and reads the goal cell under each:
+
+```
+(define (atms-solve-all a goal-cell-key)
+  (for/list ([wv (enumerate-consistent-worldviews a)])
+    (atms-read-cell (atms-with-worldview a wv) goal-cell-key)))
+```
+
+Categorically, this computes the **global sections** of the presheaf F<sub>cell</sub> over all opens of the consistency site — the set { F<sub>cell</sub>(W) | W ∈ Valid(Σ, N) }.
+
+The amb mechanism (`atms-amb`) creates mutually exclusive assumptions with auto-generated pairwise nogoods. This partitions the worldview space into branches. The enumeration then corresponds to evaluating the presheaf on each branch's maximal consistent worldview.
+
+
+<a id="org9e63a5c"></a>
 
 # 5. Relationship to Approximation Fixpoint Theory
 
 
-<a id="orgfdd6431"></a>
+<a id="org293edeb"></a>
 
 ## 5.1 The Connection
 
@@ -545,24 +736,22 @@ Approximation Fixpoint Theory (AFT), developed by Denecker, Marek, and Truszczy�
 The key construction: given a non-monotone operator O : L → L on a complete lattice L, define an approximating operator A : L² → L² on the bilattice L² (pairs (x, y) where x ≤ y, ordered by the *precision* ordering ≤<sub>p</sub>), such that A is monotone with respect to ≤<sub>p</sub>. The fixpoints of A approximate the fixpoints of O.
 
 
-<a id="org0c4f9b1"></a>
+<a id="orgf7a2eab"></a>
 
-## 5.2 Layered Recovery as a Special Case of AFT
+## 5.2 Layered Recovery and AFT: The Fibered Perspective
 
-Our stratified recovery systems can be seen as a restricted case of AFT where:
+Recent work by Heyninck et al. (2025, arXiv:2502.09234) lifts AFT into a categorical framework. Their construction views the approximating operator as acting on a fibered structure — the bilattice L² is the total category of a fibration over a two-element base {lower, upper}.
 
-1.  The approximating operator A decomposes into a chain of Galois connections (our inter-stratum functors).
-2.  The bilattice structure is implicit in the stratification: the lower bound of the approximation is the fixpoint of the monotone phase (lfp(F<sub>m</sub>)), and the upper bound is determined by the barrier operation.
-3.  The precision ordering corresponds to the number of strata computed: more strata = more precise approximation.
+Our stratified recovery systems relate to AFT as follows:
 
-However, Layered Recovery is *more structured* than general AFT because:
+1.  **More structured decomposition.** AFT's approximating operator A is a single monotone operator on L². Our systems decompose A into a chain of monotone functors between fibers connected by adjunctions, with the non-monotone part isolated at exactly one transition. This decomposition is captured by the opfibration structure.
 
--   The monotone and non-monotone phases are cleanly separated (not interleaved).
--   The quantale enrichment provides sequential composition, which AFT does not require.
--   The Galois connections between strata provide soundness guarantees that general approximating operators do not.
+2.  **Quantale enrichment is orthogonal to AFT.** AFT requires only complete lattice structure. The quantale enrichment in Systems II and III is additional structure that AFT does not model — it captures sequential composition, which AFT's bilattice approach does not address. The opfibration framework accommodates both: bare lattice fibers (System I, compatible with AFT) and enriched fibers (Systems II-III, beyond AFT).
+
+3.  **The ATMS connection.** AFT's bilattice naturally supports three-valued logic (true, false, unknown). The ATMS's presheaf structure provides a different generalization: values are not three-valued but *indexed by assumption sets*. This is strictly more expressive than AFT's bilattice when multiple independent hypotheses interact.
 
 
-<a id="org1d7931f"></a>
+<a id="org641c5fc"></a>
 
 ## 5.3 What AFT Offers for Future Extensions
 
@@ -570,22 +759,22 @@ AFT provides semantics for operations that Layered Recovery currently does not h
 
 -   **Well-founded semantics**: For self-referential negation (P ← ¬P), AFT assigns the well-founded model (unknown). Layered Recovery's stratification rejects this as unstratifiable. AFT provides a graceful degradation.
 -   **Stable models**: For programs with multiple stable fixpoints (non-deterministic choice), AFT characterizes all stable models. Layered Recovery computes one fixpoint (the least). AFT could extend the ATMS layer to enumerate alternatives.
--   **Three-valued fixpoints**: AFT's bilattice naturally supports three-valued logic (true, false, unknown). This could extend Prologos's type checker to track constraints whose satisfiability is not yet determined, rather than failing eagerly.
+-   **Three-valued fixpoints**: AFT's bilattice naturally supports three-valued logic (true, false, unknown). This could extend the type checker to track constraints whose satisfiability is not yet determined, rather than failing eagerly.
 
 
-<a id="orgdc453ed"></a>
+<a id="org060ea43"></a>
 
 # 6. Variants and Approaches for Non-Monotonic Domains
 
 
-<a id="org9c18282"></a>
+<a id="orga67de97"></a>
 
 ## 6.1 Classification of Non-Monotone Operations
 
 Not all non-monotone operations are stratifiable. We classify them:
 
 
-<a id="org50c0ac1"></a>
+<a id="orgac22f37"></a>
 
 ### Class A: Stratifiable (barrier-compatible)
 
@@ -597,28 +786,28 @@ The operation f : L → L is stratifiable if f ∘ lfp(F) is monotone. This mean
 -   Effect execution (when the effect ordering is derived from a monotone source)
 -   Trait resolution commitment (under non-overlapping instances)
 
-*Approach*: Direct application of the Layered Recovery Principle. Insert a barrier between the monotone fixpoint and the non-monotone operation.
+*Approach*: Direct application of the Layered Recovery Principle. Insert a barrier between the monotone fixpoint and the non-monotone operation. In the opfibration framing: make the barrier a transition functor between two fibers.
 
 
-<a id="org54aba20"></a>
+<a id="orgbb527b5"></a>
 
 ### Class B: Locally Stratifiable (barrier-compatible with context restriction)
 
-The operation f is not globally stratifiable but becomes stratifiable when restricted to a subset of the lattice. This typically happens when non-monotonicity arises only for certain value combinations.
+The operation f is not globally stratifiable but becomes stratifiable when restricted to a subset of the lattice.
 
 *Examples*:
 
 -   Overlapping instance resolution (stratifiable for non-overlapping subsets)
 -   Aggregation with non-monotone aggregates (e.g., average — stratifiable when the set being aggregated is fixed)
 
-*Approach*: *Dynamic stratification*. Partition the lattice at runtime into regions where f is stratifiable, and process each region at a separate barrier. This is analogous to local stratification in Datalog.
+*Approach*: *Dynamic stratification*. Partition the lattice at runtime into regions where f is stratifiable, and process each region at a separate barrier. In the opfibration framing: the base category B is determined dynamically, with new strata inserted as partition boundaries are discovered.
 
 
-<a id="orgf80646b"></a>
+<a id="org7e300a6"></a>
 
 ### Class C: Anti-Monotone (requires bilattice or ATMS)
 
-The operation f is anti-monotone: more input information decreases the output. Classical negation (¬) is the canonical example.
+The operation f is anti-monotone: more input information decreases the output.
 
 *Examples*:
 
@@ -626,113 +815,130 @@ The operation f is anti-monotone: more input information decreases the output. C
 -   Set complement
 -   Constraint *retraction* (removing a previously-added constraint)
 
-*Approach*: Use AFT's bilattice construction. Lift the operation to L² where the approximating operator is monotone. Or use the ATMS: treat the anti-monotone operation's inputs as hypotheses, compute fixpoints for each hypothesis set, and select the consistent worldview.
+*Approach*: Use AFT's bilattice construction (lift to L² where the approximating operator is monotone). Or use the ATMS: treat the anti-monotone operation's inputs as hypotheses, compute fixpoints for each hypothesis set, and select the consistent worldview. In the opfibration framing: add a sheaf-theoretic layer (worldview axis) to the fibered structure.
 
 
-<a id="org7a5b926"></a>
+<a id="org56e2246"></a>
 
 ### Class D: Chaotic (no fixpoint guarantee)
 
-The operation has no monotonicity or anti-monotonicity structure. Applying it repeatedly may oscillate without converging.
+The operation has no monotonicity or anti-monotonicity structure.
 
 *Examples*:
 
 -   Arbitrary function composition with side effects
 -   Operations that depend on evaluation order (inherently non-confluent)
 
-*Approach*: *Bounded iteration with fuel*. Iterate the stratified chain up to a fuel limit (as System III does with fuel=100). If convergence is not reached, report an error. This is not a theoretical guarantee — it is a pragmatic safety valve. Alternatively, impose ordering constraints to make the operation deterministic (converting Class D to Class A at the cost of parallelism).
+*Approach*: *Bounded iteration with fuel*. Iterate the stratified chain up to a fuel limit (as System III does with fuel=100). In the opfibration framing: the Kleene iteration in the total category is truncated after finitely many steps. This is a pragmatic safety valve, not a theoretical guarantee.
 
 
-<a id="orgb44c654"></a>
+<a id="org0234d5e"></a>
 
 ## 6.2 The Adaptation Recipe
 
 For any new non-monotonic domain:
 
-1.  **Identify the substrate quantale (L, ≤, ⊗)**: What is the lattice of partial information? What is sequential composition? What is the join (information merge)?
+1.  **Identify the fiber lattice**: What is the complete lattice of partial information? What is the join (information merge)?
 
-2.  **Identify the non-monotone operation f**: What operation on L violates monotonicity? Classify it (A, B, C, or D above).
+2.  **Determine enrichment**: Does the domain have intrinsic sequential composition? Will this composition need to be preserved across a domain boundary? If yes to both, the fiber is a quantale. If no, a bare complete lattice suffices.
 
-3.  **For Class A**: Define the monotone propagation phase F<sub>m</sub> and verify stratifiability. Insert a single barrier.
+3.  **Identify the non-monotone operation f**: What operation violates monotonicity? Classify it (A, B, C, or D above).
 
-4.  **For Class B**: Identify the stratifiable partitions. Design dynamic stratification that detects partition boundaries at runtime.
+4.  **Construct the opfibration with cleavage**: Define the base category B (strata ordering), the fibers (lattices at each stratum), and the chosen lifts (transition functors, including exactly one non-monotone barrier). Determine whether lifts are canonical (opcartesian — unique) or chosen (contingent on implementation details like enumeration order).
 
-5.  **For Class C**: Choose between AFT (bilattice approximation) and ATMS (hypothetical reasoning). AFT is simpler for pure logic; ATMS is better when the non-monotone operation interacts with choice.
+5.  **If cross-domain interaction is needed**: Define a local adjunction (α, γ) : E<sub>b</sub> ⇌ E<sub>b'</sub> between the relevant fibers. If both fibers are quantale-enriched, verify that the adjunction is a quantale morphism (preserves ⊗). Implement as a bridge propagator.
 
-6.  **For Class D**: Apply fuel-bounded iteration. Consider whether ordering constraints can reduce to Class A.
-
-7.  **If cross-domain interaction is needed**: Define a Galois connection (α, γ) : L ⇌ M between the new domain and existing domains. Verify that it is a quantale morphism (preserves ⊗). Implement as a bridge propagator.
+6.  **If hypothetical reasoning is needed**: Add a sheaf-theoretic layer. Define the consistency site, the presheaf of supported values, and the topology refinement mechanism for nogoods.
 
 
-<a id="org20e9311"></a>
+<a id="orgdc3dd43"></a>
 
 ## 6.3 Specific Future Applications in Prologos
 
-| Domain                  | Non-Monotone Operation                                | Class       | Approach                                      |
-|----------------------- |----------------------------------------------------- |----------- |--------------------------------------------- |
-| Refinement types        | Predicate weakening under subtyping                   | B           | Dynamic stratification by predicate structure |
-| Dependent types         | Type-level computation with recursion                 | D (bounded) | Fuel-bounded normalization (already exists)   |
-| Module system           | Re-export shadowing                                   | A           | Barrier at module boundary                    |
-| Incremental compilation | Definition invalidation                               | C           | ATMS with assumptions per definition          |
-| Proof search            | Backtracking                                          | C           | ATMS (existing)                               |
-| Probabilistic types     | Bayesian conditioning (non-monotone on probabilities) | B           | Stratify by observation order                 |
+| Domain                  | Non-Monotone Op         | Class       | Approach                             |
+|----------------------- |----------------------- |----------- |------------------------------------ |
+| Refinement types        | Predicate weakening     | B           | Dynamic stratification by predicate  |
+| Dependent types         | Type-level recursion    | D (bounded) | Fuel-bounded normalization (exists)  |
+| Module system           | Re-export shadowing     | A           | Barrier at module boundary           |
+| Incremental compilation | Definition invalidation | C           | ATMS with assumptions per definition |
+| Proof search            | Backtracking            | C           | ATMS (existing)                      |
+| Probabilistic types     | Bayesian conditioning   | B           | Stratify by observation order        |
 
 
-<a id="org202c329"></a>
+<a id="orgc4ced9f"></a>
 
 # 7. Implications and Conclusions
 
 
-<a id="orgdd228d3"></a>
+<a id="org5425fed"></a>
 
 ## 7.1 What the Categorical Structure Tells Us
 
-The three implementations of Layered Recovery are not *analogous* — they are *instances of the same mathematical structure*. The common structure is a stratified endofunctor on a quantale-enriched lattice, with Galois connections between strata and a non-monotone barrier at exactly one point in the chain.
+The three implementations of Layered Recovery are *instances of the same categorical pattern*: a Grothendieck opfibration over a well-founded base, with complete-lattice fibers, monotone within-fiber fixpoint computation, and exactly one non-monotone transition functor (the barrier).
 
-This is not a coincidence. The CALM theorem (Hellerstein 2011) tells us that non-monotone operations require coordination, and that monotone operations do not. The Layered Recovery Principle is the *minimal* coordination strategy: all monotone reasoning happens coordination-free in the propagator network, and the single barrier provides the coordination required by the CALM theorem. The quantale enrichment ensures that sequential structure is preserved across domain bridges.
+However, they are not instances of the *same enrichment*. System II (effect ordering) genuinely requires quantale-enriched fibers because its cross-domain bridge must preserve sequential composition. System I (logic engine) requires no enrichment beyond the lattice — its stratification and ATMS layers operate on derivability and assumption-compatibility, not on substitution composition. System III (type checker) requires mixed enrichment: quantale in the type cell fiber, bare semilattice in the readiness fiber.
+
+The CALM theorem (Hellerstein 2011) provides the deeper justification: non-monotone operations require coordination, monotone operations do not. The Layered Recovery Principle is the *minimal* coordination strategy: all monotone reasoning happens coordination-free in the propagator network, and the single barrier provides the coordination required by the CALM theorem. The opfibration structure formalizes this separation: within-fiber computation (monotone, coordination-free) vs. inter-fiber transition (the barrier, coordinated).
 
 
-<a id="org2450a4d"></a>
+<a id="orgf64064c"></a>
 
 ## 7.2 What This Means for Implementation
 
 For implementers, the categorical structure provides:
 
-1.  **A checklist**: For each new domain, identify the lattice, the composition, the non-monotone operation, and its class. The categorical structure tells you exactly what infrastructure is needed.
+1.  **A checklist**: For each new domain, identify the fiber lattice, determine whether quantale enrichment is needed (does sequential composition cross a domain boundary?), classify the non-monotone operation, and construct the opfibration. If hypothetical reasoning is needed, add the sheaf layer.
 
-2.  **A correctness criterion**: If your Galois connection is a quantale morphism and your barrier operation is stratifiable, confluence is guaranteed. If any of these conditions fails, the structure tells you exactly where the problem is.
+2.  **A correctness criterion**: If your transition functors are monotone (except the barrier) and your barrier is stratifiable, confluence is guaranteed. If you have a cross-domain bridge and the fibers are quantale-enriched, verify the quantale morphism condition for soundness.
 
-3.  **A composition principle**: Galois connections compose. Bridge propagators compose. New domains can be added to the propagator network without modifying existing domains — just add a bridge.
-
-
-<a id="org87b5528"></a>
-
-## 7.3 What This Means for Theorists
-
-The contribution is the identification of quantale enrichment as the key structure that distinguishes Layered Recovery from general stratified fixpoint computation. Lattice-theoretic stratification (Datalog, AFT) handles the fixpoint side. The quantale morphism handles the *sequential composition* side — which is essential for programming language semantics where operations have causal order.
-
-The three systems demonstrate that the same categorical pattern arises independently in logic programming (unification quantale), protocol verification (session quantale), and type inference (substitution quantale). This suggests the pattern is fundamental to any system that combines monotone constraint propagation with non-monotone decision procedures.
+3.  **A composition principle**: Local adjunctions compose along the base. Bridge propagators compose. New domains can be added by extending the opfibration with new fibers and adjunctions, without modifying existing fibers.
 
 
-<a id="orgfbbb4c5"></a>
+<a id="orge5716d8"></a>
 
-## 7.4 Open Questions
+## 7.3 Honest Assessment: What Each System Actually Needs
 
-1.  **Is there a 2-categorical structure?** The Galois connections between domains are 1-cells in a 2-category. Do the bridge propagators form 2-cells? If so, what additional coherence conditions arise?
+| System  | Lattice | Quantale | Galois conn. | Sheaf/ATMS | Opfibration |
+|------- |------- |-------- |------------ |---------- |----------- |
+| Logic   | Yes     | No\*     | Trivial      | Yes        | Yes         |
+| Effects | Yes     | Yes      | Yes (morph.) | Possible   | Yes         |
+| Types   | Yes     | Partial  | Partial      | No         | Yes         |
 
-2.  **Can the ATMS be characterized as a specific stratification?** Currently, the ATMS is treated as a separate layer. Can it be unified into the stratified endofunctor framework — perhaps as an internal hom in the quantale?
+(\*) The substitution quantale exists within the unification mechanism but is not load-bearing for the stratified recovery pattern.
 
-3.  **What is the complexity of stratifiability checking?** For System III, we verify stratifiability by enforcing non-overlapping instances (a syntactic condition). Is there a general decision procedure for stratifiability of barrier operations?
-
-4.  **Quantaloid enrichment**: When multiple quantales interact via multiple Galois connections, the natural home is a *quantaloid* (a category enriched over quantales). Does the full Prologos propagator network, with all its cross-domain bridges, form a quantaloid-enriched category?
+The opfibration is the only structure required by all three systems. Everything else is optional enrichment, present where the domain demands it.
 
 
-<a id="orgd39a06e"></a>
+<a id="orgc7d27f6"></a>
+
+## 7.4 Resolved Questions
+
+Three structural questions were investigated by cross-referencing the implementation against fibration theory. The resolutions are:
+
+1.  **Cleavage, not strict opfibration (§2.3).** The negation barrier (System I) and resolution commitment barrier (System III) are opcartesian — given the fixpoint, the transition is uniquely determined (NAF is a pure `null?` check; resolution is unique under the non-overlapping instance invariant). The effect execution barrier (System II) is *not* opcartesian: multiple valid topological sorts of a partial order exist, and the implementation makes a contingent choice. The common framework is therefore an opfibration with cleavage (chosen lifts), not a strict Grothendieck opfibration.
+
+2.  **Product base, not nested fibration (§1.1.4).** The stratification and worldview axes are orthogonal. Stratified evaluation is the default path for all relational queries (`stratified-solve-goal` is called unconditionally in `reduction.rkt`). The ATMS is optional and value-level, activated only when `amb` creates choice points. Neither axis modifies the other's structure directly. The correct model is a fibration over the product base B<sub>strata</sub> × B<sub>worldviews</sub>, with a one-directional side-channel (nogoods discovered during stratum-axis computation refine the worldview-axis topology).
+
+3.  **Herbrand base is properly external.** Negation-as-failure in Prologos is pure proof-search failure (`solve-single-goal` returns empty → negation succeeds). It does not complement against an explicit universe. In the Lawvere hyperdoctrine framework, this corresponds to the *closed-world assumption* — a metalogical operation on the fixpoint, not an internal complement in a Boolean fiber. The Herbrand base H enters only as the carrier of the powerset lattice ℘(H) (determining *what* the fiber *is*) and need not be internalized. Internalization would be needed only for *explicit negation* (where ¬P is a derivable positive fact), which would require Boolean hyperdoctrine structure (complements in each fiber P(A)). Under NAF, the current implicit treatment is categorically honest.
+
+
+<a id="org8b252b8"></a>
+
+## 7.5 Open Questions
+
+1.  **Fibrations over evolving sites.** The ATMS's dynamic topology refinement (nogood accumulation modifying the worldview base) is not captured by the standard Grothendieck construction, which assumes a fixed base. Is there a known categorical framework for fibrations where the base evolves? Candidates include: indexed categories over a filtered diagram of sites, or coalgebraic state machines on sites.
+
+2.  **The 2-categorical structure.** Do the bridge propagators between fibers form 2-cells in a 2-category whose 1-cells are the local adjunctions? If so, what coherence conditions arise? The natural home for multiple interacting quantale-enriched fibers might be a **quantaloid** — a category enriched over quantales (Stubbe 2013).
+
+3.  **Graded monads and the Grothendieck construction.** Fujii (2019) showed that graded monads can be understood via the Grothendieck construction: the algebras of an indexed state monad are sections of a 2-categorical fibration. Our stratified recovery systems have a graded structure (indexed by stratum). Do the within-fiber endofunctors F<sub>b</sub> assemble into a graded monad over the base B? If so, the fixpoint computation might be expressible as the initial algebra of this graded monad, connecting Layered Recovery to the theory of algebraic effects.
+
+
+<a id="org625b7f4"></a>
 
 # 8. References
 
 
-<a id="org0b2f6b1"></a>
+<a id="org92519d3"></a>
 
 ## 8.1 Categorical and Algebraic Foundations
 
@@ -742,66 +948,92 @@ The three systems demonstrate that the same categorical pattern arises independe
 -   Fong, B. & Spivak, D.I. (2019). *Seven Sketches in Compositionality*. §1.3 Galois Connections. [LibreTexts](https://math.libretexts.org/Bookshelves/Applied_Mathematics/Seven_Sketches_in_Compositionality:_An_Invitation_to_Applied_Category_Theory_(Fong_and_Spivak)/01:_Generative_Effects_-_Orders_and_Adjunctions/1.03:_Galois_Connections)
 
 
-<a id="org7bad0d7"></a>
+<a id="org1d36f8e"></a>
 
-## 8.2 Effect Systems and Graded Monads
+## 8.2 Grothendieck Fibrations, Indexed Categories, and Hyperdoctrines
+
+-   nLab. "Grothendieck fibration." [nLab](https://ncatlab.org/nlab/show/Grothendieck+fibration)
+-   nLab. "Grothendieck construction." [nLab](https://ncatlab.org/nlab/show/Grothendieck+construction)
+-   nLab. "hyperdoctrine." [nLab](https://ncatlab.org/nlab/show/hyperdoctrine)
+-   Streicher, T. "Fibred Categories à la Bénabou." [PDF](https://www2.mathematik.tu-darmstadt.de/~streicher/FIBR/FiBo.pdf)
+-   Turkenburg, R. et al. (2023). "Forward and Backward Steps in a Fibration." *CALCO 2023*. [Dagstuhl](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CALCO.2023.6)
+-   Milewski, B. (2019). "Fibrations, Cleavages, and Lenses." [Blog](https://bartoszmilewski.com/2019/10/09/fibrations-cleavages-and-lenses/)
+-   Loregian, F. & de Oliveira Santos, E. (2019). "Categorical Notions of Fibration." *Expositiones Mathematicae* 38(4). [arXiv](https://arxiv.org/pdf/1806.06129)
+-   Bonchi, F. et al. (2024). "When Lawvere Meets Peirce: An Equational Presentation of Boolean Hyperdoctrines." *MFCS 2024*. [Dagstuhl](https://drops.dagstuhl.de/storage/00lipics/lipics-vol306-mfcs2024/LIPIcs.MFCS.2024.30/LIPIcs.MFCS.2024.30.pdf)
+-   Lawvere, F.W. (1969). "Adjointness in Foundations." *Dialectica* 23(3-4).
+
+
+<a id="org3276a5b"></a>
+
+## 8.3 Graded Monads and Effect Systems
 
 -   Katsumata, S. (2014). "Parametric effect monads and semantics of effect systems." *POPL 2014*. [ResearchGate](https://www.researchgate.net/publication/262368930_Parametric_Effect_Monads_and_Semantics_of_Effect_Systems)
 -   Gordon, C.S. (2021). "Lifting Sequential Effects to Indexed Computation Types." *ESOP 2021*.
 -   Orchard, D. et al. (2020). "Unifying graded and parameterised monads." [arXiv](https://arxiv.org/pdf/2001.10274)
+-   Fujii, S. (2019). "A 2-Categorical Study of Graded and Indexed Monads." [arXiv](https://arxiv.org/abs/1904.08083)
+-   Fujii, S., Katsumata, S. & Melliès, P.-A. (2016). "Towards a Formal Theory of Graded Monads." *FoSSaCS 2016*. [Springer](https://link.springer.com/chapter/10.1007/978-3-662-49630-5_30)
 -   Uustalu, T. (2018). "Graded monads and quantified computational effects." [Slides](https://mta.ca/~rrosebru/FMCS2018/Slides/Uustalu.pdf)
 -   nLab. "Graded monad." [nLab](https://ncatlab.org/nlab/show/graded+monad)
 -   Barreto, S. & Milius, S. (2025). "A Category-Theoretic Framework for Dependent Effect Systems." [arXiv](https://arxiv.org/html/2601.14846)
 
 
-<a id="org990ae81"></a>
+<a id="orgac29041"></a>
 
-## 8.3 Fixpoint Theory and Stratification
+## 8.4 Fixpoint Theory and Stratification
 
 -   Cousot, P. & Cousot, R. (1977). "Abstract interpretation: a unified lattice model for static analysis." *POPL 1977*.
 -   Cousot, P. & Cousot, R. (2014). "A Galois connection calculus for abstract interpretation." *POPL 2014*. [PDF](https://www.di.ens.fr/~cousot/publications.www/CousotCousot-POPL14-ACM-p2-3-2014.pdf)
 -   Denecker, M. et al. (2000, 2004). Approximation Fixpoint Theory. [Recent extension](https://proceedings.kr.org/2021/32/kr2021-0032-heyninck-et-al.pdf)
 -   Heyninck, J. et al. (2025). "A Category-Theoretic Perspective on Approximation Fixpoint Theory." [arXiv](https://arxiv.org/pdf/2502.09234) [Cambridge](https://www.cambridge.org/core/journals/theory-and-practice-of-logic-programming/article/categorytheoretic-perspective-on-higherorder-approximation-fixpoint-theory/D3A56D482FE54B7DA41C155021088E39)
+-   Fixpoint Constructions in Focused Orthogonality Categories. [arXiv:2309.10084](https://arxiv.org/pdf/2309.10084)
 
 
-<a id="org0254121"></a>
+<a id="org66638d3"></a>
 
-## 8.4 CALM Theorem and Distributed Monotonicity
+## 8.5 CALM Theorem and Distributed Monotonicity
 
 -   Hellerstein, J.M. (2010, 2019). "Keeping CALM: When Distributed Consistency is Easy." *CACM*. [arXiv](https://arxiv.org/abs/1901.01930) [ACM](https://cacm.acm.org/research/keeping-calm/)
 -   Conway, N. et al. (2012). "Logic and Lattices for Distributed Programming." [PDF](https://dsf.berkeley.edu/papers/UCB-lattice-tr.pdf)
 -   Alvaro, P. et al. (2011). "Consistency Analysis in Bloom: a CALM and Collected Approach." *CIDR 2011*. [PDF](https://people.ucsc.edu/~palvaro/cidr11.pdf)
 
 
-<a id="orge81abc7"></a>
+<a id="orgab92a58"></a>
 
-## 8.5 Propagator Networks
+## 8.6 Propagator Networks
 
 -   Radul, A. & Sussman, G.J. (2009). "The Art of the Propagator." MIT CSAIL Tech Report.
 -   Radul, A. (2009). *Propagation Networks: A Flexible and Expressive Substrate for Computation*. PhD thesis, MIT.
 
 
-<a id="orgdf427f2"></a>
+<a id="orgb581fc8"></a>
 
-## 8.6 Session Types
+## 8.7 Session Types
 
 -   Caires, L. & Pfenning, F. (2010). "Session Types as Intuitionistic Linear Propositions." *CONCUR 2010*.
 -   Wadler, P. (2012). "Propositions as Sessions." *ICFP 2012*.
 -   Atkey, R. (2009). "Parameterised Notions of Computation." *JFP 19(3-4)*.
 
 
-<a id="org854d790"></a>
+<a id="orgca0ba7b"></a>
 
-## 8.7 Datalog and Non-Monotonic Reasoning
+## 8.8 Datalog and Non-Monotonic Reasoning
 
 -   Madsen, M. et al. (2024). "From Datalog to Flix: A Declarative Language for Fixed Points on Lattices." [Berkeley](https://inst.eecs.berkeley.edu/~cs294-260/sp24/2024-02-12-flix)
 -   Charalambidis, A. et al. (2025). "The Power of Negation in Higher-Order Datalog." *TPLP*. [Cambridge](https://www.cambridge.org/core/journals/theory-and-practice-of-logic-programming/article/power-of-negation-in-higherorder-datalog/F29B686E15B1D940647C9C500E335194)
 -   Kuper, L. & Newton, R.R. (2023). "Breaking the Negative Cycle." *ECOOP 2023*. [PDF](https://drops.dagstuhl.de/storage/00lipics/lipics-vol263-ecoop2023/LIPIcs.ECOOP.2023.31/LIPIcs.ECOOP.2023.31.pdf)
 
 
-<a id="org13538c6"></a>
+<a id="orge2249db"></a>
 
-## 8.8 Prologos Internal Documents
+## 8.9 Coalgebraic Semantics and Graded Logics
+
+-   Forster, J. et al. (2024). "Graded Semantics and Graded Logics for Eilenberg-Moore Coalgebras." *ICALP 2024*. [Springer](https://link.springer.com/chapter/10.1007/978-3-031-66438-0_6)
+-   Kupke, C. et al. (2024). "Expressive Quantale-Valued Logics for Coalgebras." *STACS 2024*. [Dagstuhl](https://drops.dagstuhl.de/storage/00lipics/lipics-vol289-stacs2024/LIPIcs.STACS.2024.10/LIPIcs.STACS.2024.10.pdf)
+
+
+<a id="orgfd8cf46"></a>
+
+## 8.10 Prologos Internal Documents
 
 -   `EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org` — Layered Recovery Principle (canonical)
 -   `2026-03-06_SESSION_TYPES_AS_EFFECT_ORDERING.org` — System II design

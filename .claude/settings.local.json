@@ -132,7 +132,19 @@
       "Bash(/tmp/test-explicit.prologos:*)",
       "Bash(__NEW_LINE_f653db9e9955f894__ racket -e ':*)",
       "Bash(/tmp/test_angle.rkt:*)",
-      "Bash(raco docs:*)"
+      "Bash(raco docs:*)",
+      "Bash(git revert:*)",
+      "Bash(Substrate\" — the project''s central thesis, exploration imperative,:*)",
+      "Bash(grep -E \"\\(test-.*\\\\.rkt\\)$\")",
+      "Bash(\"/Applications/Racket v9.0/bin/racket\" -e '\\(require \"\"racket/prologos/driver.rkt\"\"\\) \\(process-file \"\"racket/prologos/examples/2026-03-20-punify-p3-acceptance.prologos\"\"\\)')",
+      "Read(//tmp/**)",
+      "Bash('/Applications/Racket v9.0/bin/racket' -e '\\(require \"\"\"\"racket/prologos/driver.rkt\"\"\"\"\\) \\(process-file \"\"\"\"racket/prologos/examples/2026-03-20-punify-p3-acceptance.prologos\"\"\"\"\\)')",
+      "Bash(\"/Applications/Racket v9.0/bin/raco\" test tests/test-champ-owner-id.rkt)",
+      "Bash(\"/Applications/Racket v9.0/bin/racket\" benchmarks/micro/bench-alloc.rkt)",
+      "Bash(\"/Applications/Racket v9.0/bin/raco\" make champ.rkt)",
+      "Bash(\"/Applications/Racket v9.0/bin/raco\" make driver.rkt)",
+      "Bash(\"/Applications/Racket v9.0/bin/racket\" tools/run-affected-tests.rkt --all)",
+      "Bash(\"/Applications/Racket v9.0/bin/racket\" racket/prologos/tests/test-sre-core.rkt)"
     ]
   }
 }
