@@ -25,7 +25,12 @@
          "namespace.rkt"
          "source-location.rkt"
          (only-in "propagator.rkt" cell-id)
-         (only-in "macros.rkt" spec-entry))
+         (only-in "macros.rkt" spec-entry
+                  current-preparse-registry current-ctor-registry
+                  current-type-meta
+                  current-subtype-registry current-coercion-registry
+                  current-capability-registry)
+         (only-in "multi-dispatch.rkt" current-multi-defn-registry))
 
 ;; Lib dir for resolving relative .rkt paths in foreign function re-linking
 (define pnet-lib-dir (simplify-path (build-path (syntax-source #'here) ".." "lib")))
@@ -328,18 +333,36 @@
   (define s-specs (serialize! specs))
   (define s-locs (serialize! locs))
 
-  ;; Phase 2a: foreign procs are now re-linked via dynamic-require using
-  ;; expr-foreign-fn's source-module + racket-name fields. All modules serializable.
+  ;; Phase 2b: serialize all 7 registries alongside env/specs/locs.
+  ;; These are the module's accumulated contributions (including transitive deps).
+  ;; Read from current parameters (in scope when called from load-module).
+  (define s-preparse-reg (serialize! (current-preparse-registry)))
+  (define s-ctor-reg     (serialize! (current-ctor-registry)))
+  (define s-type-meta    (serialize! (current-type-meta)))
+  (define s-multi-defn   (serialize! (current-multi-defn-registry)))
+  (define s-subtype-reg  (serialize! (current-subtype-registry)))
+  (define s-coercion-reg (serialize! (current-coercion-registry)))
+  (define s-capability-reg (serialize! (current-capability-registry)))
+
   (let ()
      (define hash-val (source-hash-for-module ns-sym source-path))
      (define pnet-data
-       (list PNET_VERSION
-             hash-val
-             s-env
-             s-specs
-             s-locs
-             (module-info-exports module-info)
-             (symbol->string ns-sym)))
+       (list PNET_VERSION               ;; 0: version
+             hash-val                    ;; 1: source hash
+             s-env                       ;; 2: env-snapshot
+             s-specs                     ;; 3: specs
+             s-locs                      ;; 4: definition-locations
+             (module-info-exports module-info)  ;; 5: exports
+             (symbol->string ns-sym)     ;; 6: namespace
+             ;; Phase 2b: 7 registries
+             s-preparse-reg              ;; 7
+             s-ctor-reg                  ;; 8
+             s-type-meta                 ;; 9
+             s-multi-defn                ;; 10
+             s-subtype-reg               ;; 11
+             s-coercion-reg              ;; 12
+             s-capability-reg            ;; 13
+             ))
      (define pnet-path (pnet-path-for-module ns-sym))
      (make-directory* (path-only pnet-path))
      ;; Atomic write: write to temp, then rename
@@ -360,11 +383,28 @@
               (= (car raw) PNET_VERSION)
               (equal? (cadr raw) (source-hash-for-module ns-sym source-path))
               ;; Valid — reconstruct
-              (let ([s-env   (list-ref raw 2)]
-                    [s-specs (list-ref raw 3)]
-                    [s-locs  (list-ref raw 4)]
-                    [exports (list-ref raw 5)])
-                (list (deep-serializable->struct s-env)
-                      (deep-serializable->struct s-specs)
-                      (deep-serializable->struct s-locs)
-                      exports))))))
+              ;; Phase 2b: includes 7 registries (indices 7-13)
+              (and (>= (length raw) 14)  ;; version with registries
+                   (let ([s-env   (list-ref raw 2)]
+                         [s-specs (list-ref raw 3)]
+                         [s-locs  (list-ref raw 4)]
+                         [exports (list-ref raw 5)]
+                         [s-preparse (list-ref raw 7)]
+                         [s-ctor    (list-ref raw 8)]
+                         [s-tmeta   (list-ref raw 9)]
+                         [s-multi   (list-ref raw 10)]
+                         [s-sub     (list-ref raw 11)]
+                         [s-coerce  (list-ref raw 12)]
+                         [s-cap     (list-ref raw 13)])
+                     (list (deep-serializable->struct s-env)
+                           (deep-serializable->struct s-specs)
+                           (deep-serializable->struct s-locs)
+                           exports
+                           ;; 7 registries
+                           (deep-serializable->struct s-preparse)
+                           (deep-serializable->struct s-ctor)
+                           (deep-serializable->struct s-tmeta)
+                           (deep-serializable->struct s-multi)
+                           (deep-serializable->struct s-sub)
+                           (deep-serializable->struct s-coerce)
+                           (deep-serializable->struct s-cap))))))))

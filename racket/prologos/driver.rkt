@@ -76,12 +76,9 @@
 
 ;; Track 10 Phase 1b: feature flag for .pnet caching.
 ;; #t = use .pnet cache. #f = always elaborate from source (rollback).
-;; Phase 2: disabled — .pnet deserialization skips registry propagation,
-;; causing unbound variables in downstream modules. Need to restore:
-;; ctor-registry, subtype-registry, preparse-registry, spec-store
-;; contributions alongside env-snapshot data.
-;; Architecture is sound (40/40 round-trip verified). Integration needs
-;; registry restoration in the deserialization path.
+;; Phase 2b: disabled — timeouts with cache enabled. Registry deserialization
+;; may have closure stubs or missing struct types causing infinite loops.
+;; Need targeted investigation before enabling.
 (define current-use-pnet-cache? (make-parameter #f))
 
 ;; ========================================
@@ -1567,20 +1564,32 @@
 
      (cond
        [pnet-result
-        ;; .pnet hit: reconstruct module-info from deserialized state
-        (match-define (list d-env d-specs d-locs d-exports) pnet-result)
+        ;; .pnet hit: reconstruct module-info + propagate registries
+        (match-define (list d-env d-specs d-locs d-exports
+                           d-preparse d-ctor d-tmeta d-multi
+                           d-sub d-coerce d-cap)
+          pnet-result)
         (define mod-info
           (module-info ns-sym d-exports d-env file-path
-                       (hasheq)    ;; macros (re-parse if needed)
+                       (hasheq)    ;; macros
                        (hasheq)    ;; type-aliases
                        d-specs
                        d-locs
-                       #f))        ;; module-network (not from .pnet)
+                       #f))        ;; module-network
         ;; Register in module registry
         (register-module! ns-sym mod-info)
         ;; Import into caller's env
         (for ([(k v) (in-hash d-env)])
           (current-prelude-env (hash-set (current-prelude-env) k v)))
+        ;; Track 10 Phase 2b: propagate 7 registries to caller
+        ;; Same propagation as lines 1718-1732 in the full elaboration path.
+        (current-preparse-registry d-preparse)
+        (current-ctor-registry d-ctor)
+        (current-type-meta d-tmeta)
+        (current-multi-defn-registry d-multi)
+        (current-subtype-registry d-sub)
+        (current-coercion-registry d-coerce)
+        (current-capability-registry d-cap)
         mod-info]
 
        [else
