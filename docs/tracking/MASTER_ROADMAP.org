@@ -38,7 +38,7 @@ Audits) are defined.
 | [[file:2026-03-16_TRACK6_DRIVER_SIMPLIFICATION.md][Track 6]] | Driver simplification + cleanup | [[file:2026-03-17_TRACK6_DRIVER_SIMPLIFICATION_PIR.md][PIR]] | Parameterize 30→13, callback elimination, first clean suite |
 | [[file:2026-03-18_TRACK7_PERSISTENT_CELLS_STRATIFIED_RETRACTION.md][Track 7]] | Persistent registry cells + stratified retraction | [[file:2026-03-18_TRACK7_PIR.md][PIR]] | 29 persistent cells, S(−1) retraction, readiness propagators, pure resolution |
 | [[file:2026-03-21_TRACK8_DESIGN.md][Track 8]] | Infrastructure migration + HKT + bridge propagators | [[file:2026-03-22_TRACK8_PIR.md][PIR]] | TMS-tagged state, worldview-aware reads, pure α/γ bridges, HKT impl/resolution, restore-meta-state! retired |
-| [[file:2026-03-22_TRACK8_DESIGN.md][Track 8D]] | Pure bridge fire functions (Completeness correction) | [[file:2026-03-22_TRACK8_PIR.md][PIR §12]] | Bridges read cells directly via net-cell-read; no zonk, no box, no with-enet-reads |
+| [[file:2026-03-22_TRACK8D_DESIGN.md][Track 8D]] | Pure bridge fire functions (Completeness correction) | [[file:2026-03-22_TRACK8_PIR.md][PIR §12]] | Bridges read cells directly via net-cell-read; no zonk, no box, no with-enet-reads |
 
 *** Pending Tracks
 
