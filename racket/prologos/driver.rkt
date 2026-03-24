@@ -55,7 +55,8 @@
          "session-runtime.rkt"    ;; Phase S7c: rt-execute-process (spawn execution)
          "effect-executor.rkt"    ;; AD-F2: rt-execute-process-auto (architecture dispatch)
          "global-constraints.rkt"  ;; Phase 3c: current-narrow-var-constraints
-         "prop-observatory.rkt")  ;; Observatory: capture protocol
+         "prop-observatory.rkt"   ;; Observatory: capture protocol
+         "pnet-serialize.rkt")   ;; Track 10: .pnet serialization
 
 (provide process-command
          process-file
@@ -69,7 +70,13 @@
          extract-foreign-caps
          extract-caps-from-brace-params
          ;; IO-H: Post-compilation capability inference
-         run-post-compilation-inference!)
+         run-post-compilation-inference!
+         ;; Track 10: .pnet cache feature flag
+         current-use-pnet-cache?)
+
+;; Track 10 Phase 1b: feature flag for .pnet caching.
+;; #t = use .pnet cache (default). #f = always elaborate from source (rollback).
+(define current-use-pnet-cache? (make-parameter #f))  ;; Start disabled, enable after validation
 
 ;; ========================================
 ;; Standard library path (computed from this module's location)
@@ -1543,7 +1550,35 @@
        (error 'imports "Cannot find module: ~a (searched lib paths: ~a)"
               ns-sym (current-lib-paths)))
 
-     ;; 4. Process the file in a fresh environment
+     ;; Track 10 Phase 1b: check .pnet cache before elaboration.
+     ;; If .pnet is fresh, deserialize directly (skip 300ms+ elaboration).
+     ;; Feature flag: current-use-pnet-cache? (default #t).
+     (define pnet-result
+       (and (current-use-pnet-cache?)
+            (not (pnet-stale? ns-sym file-path))
+            (with-handlers ([exn? (lambda (_) #f)])  ;; graceful fallback
+              (deserialize-module-state ns-sym file-path))))
+
+     (cond
+       [pnet-result
+        ;; .pnet hit: reconstruct module-info from deserialized state
+        (match-define (list d-env d-specs d-locs d-exports) pnet-result)
+        (define mod-info
+          (module-info ns-sym d-exports d-env file-path
+                       (hasheq)    ;; macros (re-parse if needed)
+                       (hasheq)    ;; type-aliases
+                       d-specs
+                       d-locs
+                       #f))        ;; module-network (not from .pnet)
+        ;; Register in module registry
+        (register-module! ns-sym mod-info)
+        ;; Import into caller's env
+        (for ([(k v) (in-hash d-env)])
+          (current-prelude-env (hash-set (current-prelude-env) k v)))
+        mod-info]
+
+       [else
+        ;; 4. Process the file in a fresh environment (full elaboration path)
      (define mod-env #f)
      (define mod-ns-ctx #f)
      (define mod-preparse-reg #f)
@@ -1748,7 +1783,13 @@
            (current-module-definitions-content
             (hash-set (current-module-definitions-content) name val)))))
 
-     mi]))
+     ;; Track 10 Phase 1b: serialize successful elaboration to .pnet
+     (when (current-use-pnet-cache?)
+       (with-handlers ([exn? (lambda (e)
+         (void))])  ;; serialization failure is non-fatal
+         (serialize-module-state ns-sym file-path mi)))
+
+     mi])]))  ;; closes else + cond + cond
 
 ;; ========================================
 ;; Install the module loader callback
