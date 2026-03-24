@@ -41,12 +41,13 @@ fragmented architecture we're trying to eliminate.
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 1 | Relation type + variance + polarity inference infra | ⬜ | |
-| 2 | Subtype-aware structural-relate + user-defined variance | ⬜ | |
-| 3 | Duality-aware structural-relate + dependent sessions | ⬜ | |
-| 4 | Integration: subtype? delegation | ⬜ | |
-| 5 | Integration: session duality propagator | ⬜ | |
-| 6 | Verification + benchmarks + PIR | ⬜ | |
+| 1 | Relation type + variance + polarity inference infra | ✅ | `6c24277`, `45a816d` |
+| 2 | Subtype-aware structural-relate + user-defined variance | ✅ | `200bec6` |
+| 2b | Principles fixes (subtype-merge, extract, duality error) | ✅ | `260903f` |
+| 3 | Duality-aware structural-relate + dependent sessions | ✅ | `20a3e84`, `48634d8` |
+| 4 | Integration: subtype? delegation | ✅ | `9045059`, `7c8ef21` |
+| 5 | Integration: session duality propagator | ✅ | `58dd714` |
+| 6 | Verification + benchmarks + PIR | 🔄 | `dc796fb` (binder-depth fix), PIR drafted |
 
 **Baseline**: SRE Track 0 final (7358 tests, 236.7s, commit `86524d8`)
 
