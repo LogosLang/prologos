@@ -94,10 +94,12 @@
   (check-false (tc:subtype? (expr-Rat) (expr-Int)))
   (check-false (tc:subtype? (expr-Posit64) (expr-Posit8))))
 
-(test-case "subtype?/reflexive-is-false"
-  ;; Reflexive case is handled by unify, not subtype?
-  (check-false (tc:subtype? (expr-Int) (expr-Int)))
-  (check-false (tc:subtype? (expr-Posit32) (expr-Posit32))))
+(test-case "subtype?/reflexive-is-true"
+  ;; SRE Track 1: subtype? is now reflexive (standard preorder semantics).
+  ;; Previously strict (a <: b only if a ≠ b) because it was only called
+  ;; after equality check failed. Now it's a standalone predicate.
+  (check-true (tc:subtype? (expr-Int) (expr-Int)))
+  (check-true (tc:subtype? (expr-Posit32) (expr-Posit32))))
 
 ;; ========================================
 ;; B. Core check acceptance (AST-level)
