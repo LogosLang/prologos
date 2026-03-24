@@ -35,7 +35,8 @@
          "propagator.rkt"           ;; PUnify Phase 2: direct network access
          "elaborator-network.rkt"   ;; PUnify Phase 2: elab-network-prop-net
          "sre-core.rkt"             ;; SRE Track 0: domain-parameterized structural decomposition
-         "type-lattice.rkt")        ;; SRE Track 0: type-sre-domain creation
+         "type-lattice.rkt"         ;; SRE Track 0: type-sre-domain creation
+         "subtype-predicate.rkt")   ;; SRE Track 1: subtype-lattice-merge for on-network subtyping
 
 (provide unify unify-ok? occurs?
          ;; Backward-compat alias (unify* = unify after P1-G7)
@@ -71,8 +72,8 @@
               (lambda (expr)
                 (define lookup (current-structural-meta-lookup))
                 (and lookup (lookup expr)))
-              #f    ; dual-pairs: type domain doesn't support duality
-              #f))  ; flat-subtype?: set by driver via current-flat-subtype-check
+              #f                      ; dual-pairs: type domain doesn't support duality
+              subtype-lattice-merge)) ; subtype-merge: proper lattice merge for subtype ordering
 
 ;; ========================================
 ;; Sprint 5: Three-valued result helper

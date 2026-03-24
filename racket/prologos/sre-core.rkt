@@ -83,11 +83,12 @@
                      ; Constructor pairing for duality relation. #f = domain doesn't
                      ; support duality. Derivation assumption: same-domain components
                      ; are continuations (get duality), cross-domain get equality.
-   flat-subtype?     ; SRE Track 1: (a b → bool) | #f — flat subtype check for atomic values.
-                     ; The type lattice is flat (equality-based), so merge(a,b) = b doesn't
-                     ; encode subtyping. This function checks the domain-specific subtype
-                     ; relationship for leaf values (Nat <: Int, Posit8 <: Posit16, etc.).
-                     ; The SRE handles structural decomposition; this handles the leaves.
+   subtype-merge     ; SRE Track 1: (a b → merged) | #f — lattice merge for subtype ordering.
+                     ; Returns the join in the subtype ordering:
+                     ;   merge(a, b) = b if a <: b, = a if b <: a, = top if incomparable.
+                     ; This is a proper lattice merge (monotone, commutative, associative,
+                     ; idempotent). The subtype propagator uses this instead of lattice-merge
+                     ; to keep subtyping fully on-network — no off-network predicate escape hatch.
                      ; #f = domain doesn't support subtyping.
    )
   #:transparent)
@@ -534,7 +535,7 @@
 (define (sre-make-subtype-propagator domain cell-a cell-b relation)
   (define contradicts? (sre-domain-contradicts? domain))
   (define bot? (sre-domain-bot? domain))
-  (define flat-sub? (sre-domain-flat-subtype? domain))
+  (define sub-merge (sre-domain-subtype-merge domain))
   (define reversed? (eq? (sre-relation-name relation) 'subtype-reverse))
   (lambda (net)
     (define va (net-cell-read net cell-a))
@@ -553,36 +554,42 @@
            [(and tag-lhs tag-rhs (eq? tag-lhs tag-rhs))
             (sre-maybe-decompose net domain cell-a cell-b va vb lhs
                                  #:relation relation)]
-           ;; Different compound tags → subtype violation (contradiction)
-           [(and tag-lhs tag-rhs)
-            ;; Signal contradiction by writing both values merged (→ top)
-            (net-cell-write net cell-a
-              ((sre-domain-lattice-merge domain) lhs rhs))]
-           ;; At least one atomic → use domain-specific flat subtype check
-           ;; The type lattice merge is equality-based (Nat ≠ Int → top).
-           ;; For subtyping, we use the domain's flat-subtype? predicate
-           ;; which knows Nat <: Int, Posit8 <: Posit16, etc.
+           ;; At least one atomic, or different compound tags →
+           ;; use subtype-merge lattice (proper subtype ordering).
+           ;; subtype-merge(a, b) = b if a <: b, = a if b <: a,
+           ;; = top if incomparable. This is fully on-network.
            [else
-            (cond
-              ;; Equal values trivially satisfy subtyping
-              [(equal? lhs rhs) net]
-              ;; Use domain's flat subtype check
-              [(and flat-sub? (flat-sub? lhs rhs)) net]  ;; lhs ≤ rhs holds
-              ;; No flat-subtype? function → can only check equality
-              [(not flat-sub?)
-               (if (equal? lhs rhs) net
-                   ;; Can't determine — signal contradiction conservatively
-                   (net-cell-write net cell-a
-                     ((sre-domain-lattice-merge domain) lhs rhs)))]
-              ;; flat-subtype? returned false → subtype violation
-              [else
-               (net-cell-write net cell-a
-                 ((sre-domain-lattice-merge domain) lhs rhs))])]))])))
+            (if (not sub-merge)
+                ;; No subtype-merge → domain doesn't support subtyping.
+                ;; Fall back to equality check.
+                (let ([eq-merged ((sre-domain-lattice-merge domain) lhs rhs)])
+                  (if (contradicts? eq-merged)
+                      (net-cell-write net cell-a eq-merged)
+                      net))
+                ;; Use the subtype-ordering merge
+                (let ([merged (sub-merge lhs rhs)])
+                  (cond
+                    [(contradicts? merged)
+                     ;; Incomparable → subtype violation
+                     (net-cell-write net cell-a merged)]
+                    [(equal? merged rhs)
+                     ;; merged = rhs → lhs ≤ rhs holds (lhs joins up to rhs)
+                     net]
+                    [(equal? merged lhs)
+                     ;; merged = lhs → rhs ≤ lhs (wrong direction) → violation
+                     ;; Unless lhs = rhs (handled by equal? in sub-merge)
+                     (net-cell-write net cell-a
+                       ((sre-domain-lattice-merge domain) lhs rhs))]
+                    [else
+                     ;; merged ≠ either → shouldn't happen for well-formed subtype merge
+                     net])))]))])))
 
-;; --- Duality propagator (Track 1: placeholder, Phase 3 implements) ---
+;; --- Duality propagator (Track 1: Phase 3 implements) ---
 ;; Reads cell-a, applies dual constructor pairing, writes to cell-b.
 ;; Bidirectional: cell-b changes → apply inverse dual → write cell-a.
 (define (sre-make-duality-propagator domain cell-a cell-b relation)
   ;; Phase 3 will implement the full duality propagator.
-  ;; For now, fall back to equality (safe: equality is stricter than duality).
-  (sre-make-equality-propagator domain cell-a cell-b sre-equality))
+  ;; Error rather than silent equality fallback — equality is stricter than
+  ;; duality, so falling back would give silently wrong behavior.
+  (error 'sre-make-duality-propagator
+         "duality relation not yet implemented (SRE Track 1 Phase 3)"))

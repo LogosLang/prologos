@@ -13,7 +13,7 @@
          "../sre-core.rkt"
          "../ctor-registry.rkt"
          "../syntax.rkt"
-         (only-in "../typing-core.rkt" subtype?)
+         "../subtype-predicate.rkt"  ;; subtype?, subtype-lattice-merge
          "../type-lattice.rkt")
 
 ;; ========================================================================
@@ -136,7 +136,7 @@
               type-bot
               #f #f  ;; no meta-recognizer/resolver for standalone tests
               #f     ;; no dual-pairs
-              subtype?))  ;; flat subtype check for atomic values
+              subtype-lattice-merge))  ;; proper subtype-ordering lattice merge
 
 (define (sre-subtype-check t1 t2)
   "Create mini-network, install subtype-relate, quiesce, return #t if no contradiction."
