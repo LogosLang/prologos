@@ -1,0 +1,1354 @@
+- [Part I: Foundations and Cross-Disciplinary Literature Survey](#org2fb0b24)
+  - [1. The Propagator Model](#org351a599)
+    - [1.1 Origins](#orgf501d2c)
+    - [1.2 Radul's Synthesis (2009)](#org63422a3)
+    - [1.3 Kmett's Unification](#org9aff07c)
+    - [1.4 Kuper's LVars](#org3944101)
+  - [2. Lattice Theory and Domain Theory](#org33458f4)
+    - [2.1 Partial Orders and Join-Semilattices](#orga8ea2d1)
+    - [2.2 Fixed-Point Theorems](#orgab60e1d)
+    - [2.3 Lattice Taxonomy](#orgf360096)
+    - [2.4 Key Connections](#orge196213)
+  - [3. Category Theory for Propagator Networks](#orga11b32c)
+    - [3.1 Traced Monoidal Categories](#org15dc14a)
+    - [3.2 Quantales](#org18dc8a9)
+    - [3.3 Grothendieck Fibrations](#orga26fd05)
+    - [3.4 Enriched Categories](#orgae98b1b)
+    - [3.5 The Answer: Most General Category for Layered Recovery](#org05d5c13)
+  - [4. Diagrammatic Formalisms](#orgce5b60b)
+    - [4.1 String Diagrams](#orgf63287d)
+    - [4.2 Graphical Linear Algebra](#org59f98ba)
+    - [4.3 Wiring Diagrams (Spivak)](#orgad3f7aa)
+    - [4.4 Proof Nets and Interaction Nets](#org1d0781b)
+    - [4.5 Geometry of Interaction](#org7233352)
+  - [5. Constraint Solver Architectures](#orgda76720)
+    - [5.1 Arc Consistency Hierarchy](#org065dfcb)
+    - [5.2 Global Constraints and Decomposability](#org4ba6555)
+    - [5.3 DPLL(T) and SMT](#org00d529a)
+    - [5.4 CHR (Constraint Handling Rules)](#orgb2dce29)
+  - [6. Reactive and Incremental Computation](#orgbadf47a)
+    - [6.1 FRP Denotational Semantics](#org695aee2)
+    - [6.2 Push/Pull/Push-Pull Taxonomy](#org6066122)
+    - [6.3 Self-Adjusting Computation](#orge085f56)
+  - [7. Parallel and Distributed Computation](#org121ea76)
+    - [7.1 BSP (Bulk Synchronous Parallelism)](#org77855d6)
+    - [7.2 CRDTs (Conflict-Free Replicated Data Types)](#orgc3704dd)
+    - [7.3 The CALM Theorem](#org343b7ff)
+    - [7.4 Kahn Process Networks](#org7ade444)
+    - [7.5 Lattice Agreement](#org239ce69)
+  - [8. Truth Maintenance Systems](#orga1199fb)
+    - [8.1 JTMS (Justification-Based)](#org21d5fbe)
+    - [8.2 LTMS (Logic-Based)](#org1f27624)
+    - [8.3 ATMS (Assumption-Based)](#orgba3cc53)
+    - [8.4 GDE (General Diagnostic Engine)](#org686fc62)
+    - [8.5 TMS Taxonomy Summary](#org1c8922d)
+- [Part II: Codebase Taxonomy — Cells, Propagators, and Lattices](#orgb6ae697)
+  - [9. Cell Taxonomy](#org69a8ce7)
+    - [9.1 Cell Classification by Semantic Role](#org00dc44f)
+    - [9.2 Cell Classification by Lattice Structure](#orgaf1aa22)
+    - [9.3 Structural Decomposition: Cells as Nested Lattices](#org4576ccc)
+  - [10. Propagator Taxonomy](#org2c7ab24)
+    - [10.1 Classification by Composition Pattern](#orga35fd3d)
+    - [10.2 Classification by Directionality](#org692aef5)
+    - [10.3 Purity Analysis](#org1b826e2)
+    - [10.4 The "No-Change Guard" as Termination Mechanism](#org8c980e7)
+  - [11. Lattice Ecosystem](#org179f508)
+    - [11.1 Implemented Lattice Instances](#org7051dc7)
+    - [11.2 Lattice Interaction Map](#org0ff8522)
+- [Part III: Architectural Patterns](#org376034c)
+  - [12. The Three-Layer Architecture](#org587c381)
+    - [12.1 Layer 1: Propagator Network (Monotonic Data Plane)](#orgb399b86)
+    - [12.2 Layer 2: ATMS (Non-Monotonic Control Plane)](#org4046981)
+    - [12.3 Layer 3: Stratification (Controlled Non-Monotonicity)](#org7391be8)
+  - [13. The Layered Recovery Principle](#orge767914)
+    - [13.1 Definition](#orgf83c225)
+    - [13.2 Instance 1: NAF-LE (Negation-as-Failure)](#org8d03976)
+    - [13.3 Instance 2: WF-LE (Well-Founded Semantics)](#org2dd8ebd)
+    - [13.4 Instance 3: Type System (Elaborator Network)](#orgddda2aa)
+    - [13.5 Instance 4: Effect System (QTT + Session Types)](#org5e62731)
+    - [13.6 Instance 5: Stratified Retraction (Track 7 Design)](#orgb293cbb)
+    - [13.7 The Common Structure](#orga7e91bb)
+  - [14. Compositional Patterns](#org8c7aa32)
+    - [14.1 Structural Decomposition Pattern](#org8e9dc0c)
+    - [14.2 Galois Connection (Cross-Domain Bridge) Pattern](#org587634c)
+    - [14.3 Threshold Gate Pattern](#org7f22735)
+    - [14.4 Speculative Execution Pattern](#orgbc71c1b)
+- [Part IV: Toward a Compositional Design Language](#org95ebf94)
+  - [15. Taxonomy Dimensions](#orged8ab0a)
+    - [15.1 Monotonicity (from CALM / Distributed Computing)](#org3f767c9)
+    - [15.2 Consistency Level (from Constraint Solving)](#orgd04c68d)
+    - [15.3 Rule Type (from CHR)](#org9c2a01d)
+    - [15.4 Evaluation Strategy (from FRP / Distributed Simulation)](#org5c4dc99)
+    - [15.5 Context Model (from TMS Taxonomy)](#org5b93e73)
+    - [15.6 Decomposability (from Self-Decomposable Constraints)](#org9d8d693)
+    - [15.7 Composition Topology (from String Diagrams)](#orgfc6f2f5)
+    - [15.8 Summary Table](#org4026f11)
+  - [16. Cross-Disciplinary Unifications](#orgafb3d40)
+    - [16.1 Cell = CRDT = Lattice Element = FRP Behavior = Kahn Channel](#org99eeb4b)
+    - [16.2 Propagator = Filter = Transformer = Theory Solver = CHR Rule = Process](#org9454819)
+    - [16.3 Stratification = BSP Superstep = Clock Tick = CALM Coordination](#org461621f)
+    - [16.4 The Most General Category](#orgabac4e7)
+  - [17. Observed Patterns in Prologos Today](#orga85f805)
+    - [17.1 Complete Pattern Catalog](#org1ae7494)
+    - [17.2 Pattern Frequency Analysis](#orgaef0b98)
+    - [17.3 Architectural Gaps and Future Directions](#orgb7031c9)
+- [References](#orge7abab2)
+  - [Foundational](#orgcd609ec)
+  - [Lattice Theory and Domain Theory](#org4cd53fd)
+  - [Category Theory](#orgb86945c)
+  - [Diagrammatic Formalisms](#orgbcb8672)
+  - [Constraint Solving](#orgedcbc30)
+  - [Reactive and Incremental Computation](#org5f7ebd0)
+  - [Parallel and Distributed Computation](#orgcd4602b)
+  - [Truth Maintenance Systems](#org2f9d105)
+
+
+
+<a id="org2fb0b24"></a>
+
+# Part I: Foundations and Cross-Disciplinary Literature Survey
+
+
+<a id="org351a599"></a>
+
+## 1. The Propagator Model
+
+The propagator model of computation, originated by Stallman and Sussman (1977) for circuit analysis and refined by Steele (1980) into a general constraint language, represents one of the most underappreciated computational paradigms. In a propagator network, autonomous stateless agents (*propagators*) communicate through shared stateful storage elements (*cells*) that accumulate partial information.
+
+
+<a id="orgf501d2c"></a>
+
+### 1.1 Origins
+
+-   **Stallman-Sussman (1977)**: Rule-based circuit analysis (EL system). Known electrical values propagate through Ohm's law, Kirchhoff's laws. Introduced dependency-directed backtracking: contradictions traced to specific assumption sets recorded as *nogoods*.
+
+-   **Steele (1980)**: Formalized the *locality principle* &mdash; each constraint operates using only locally available information. This makes propagator networks inherently parallelizable: no global coordination needed.
+
+
+<a id="org63422a3"></a>
+
+### 1.2 Radul's Synthesis (2009)
+
+Alexey Radul's PhD thesis, *Propagation Networks: A Flexible and Expressive Substrate for Computation*, unified these threads:
+
+-   **Cells as lattice accumulators**: A cell does not store a value; it accumulates *information about* a value. The cell's content is an element of a join-semilattice, and new information is incorporated via the lattice join (merge) operation.
+
+-   **Propagators as monotone functions**: Each propagator reads cells, computes, and writes to cells. The write is idempotent: if the new information is already subsumed by what the cell knows, nothing happens. This is the *no-change guard* &mdash; the termination mechanism.
+
+-   **Merge as join**: The merge operation is commutative, associative, and idempotent. Multiple propagators contributing to the same cell produce the same result regardless of order &mdash; determinism from nondeterministic scheduling.
+
+-   **Contradiction as top**: When incompatible information merges (e.g., a type variable constrained to be both `Int` and `String`), the result is $\top$, the lattice top, signaling contradiction.
+
+Key papers: Radul & Sussman, *The Art of the Propagator* (2009); *The Revised Report on the Propagator Model* (2010); Hanson & Sussman, *Software Design for Flexibility*, Ch. 7 (2021).
+
+
+<a id="org9aff07c"></a>
+
+### 1.3 Kmett's Unification
+
+Edward Kmett observed that propagators, CRDTs, Datalog, SAT solvers, and FRP all share the same algebraic structure: iterative fixed-point computation over lattice-valued state. His `propagators` Haskell library demonstrated this unification, treating cells as `TVar`-backed lattice accumulators with STM-based merge.
+
+
+<a id="org3944101"></a>
+
+### 1.4 Kuper's LVars
+
+Lindsey Kuper's LVars (2013) formalized lattice-based deterministic parallelism: monotonically increasing lattice variables that can be written from any thread, with threshold reads that block until the cell's value crosses a threshold set. LVars provide the formal guarantee that propagator networks are deterministic despite concurrent execution.
+
+
+<a id="org33458f4"></a>
+
+## 2. Lattice Theory and Domain Theory
+
+
+<a id="orga8ea2d1"></a>
+
+### 2.1 Partial Orders and Join-Semilattices
+
+A *partial order* $(S, \leq)$ is reflexive, antisymmetric, and transitive. A *join-semilattice* $(L, \leq, \bot, \sqcup)$ adds a bottom element $\bot$ (least informative) and a join operation $\sqcup$ (least upper bound). Join is commutative, associative, and idempotent &mdash; exactly the merge semantics of propagator cells.
+
+
+<a id="orgab60e1d"></a>
+
+### 2.2 Fixed-Point Theorems
+
+-   **Knaster-Tarski (1955)**: Every monotone function on a complete lattice has a least fixed point. This guarantees propagator network convergence for finite-height lattices.
+
+-   **Kleene fixed-point theorem**: For $&omega;$-continuous functions on $&omega;$-CPOs, the least fixed point is the supremum of the ascending Kleene chain $\bot, f(\bot), f^2(\bot), \ldots$. Propagator networks compute this chain by repeatedly firing propagators until quiescence.
+
+
+<a id="orgf360096"></a>
+
+### 2.3 Lattice Taxonomy
+
+| Lattice Type   | Structure                        | Example in Prologos            |
+|-------------- |-------------------------------- |------------------------------ |
+| Flat           | $\bot \to v \to \top$            | Type metas, multiplicity cells |
+| Interval       | $[lo, hi]$ with $\sqcap/\sqcup$  | Bounds consistency cells       |
+| Product        | $(L_1 \times L_2, \leq_{prod})$  | Type $\times$ multiplicity     |
+| Powerset       | $(\mathcal{P}(S), \subseteq)$    | Capability sets, answer tables |
+| Bilattice      | Two orderings: truth + knowledge | Belnap's FOUR                  |
+| Lifted         | $L_\bot = L \cup \{\bot\}$       | Optional cells                 |
+| Function space | $A \to L$ pointwise              | Environment maps               |
+| Structural     | Unification-based join           | Type lattice, session lattice  |
+
+
+<a id="orge196213"></a>
+
+### 2.4 Key Connections
+
+-   **Bilattices** (Fitting 1991): Two lattice orderings on the same carrier &mdash; one for *truth*, one for *knowledge*. Belnap's FOUR ($\{\bot, t, f, \top\}$) is the canonical example. Truth maintenance systems operate on bilattices.
+
+-   **Widening/narrowing** (Cousot & Cousot 1977): For infinite-height lattices, standard fixed-point iteration may not terminate. Widening over-approximates to force convergence; narrowing refines afterward. Relevant for abstract interpretation domains.
+
+-   **Residuated lattices** and substructural logic: Connection to QTT multiplicities. A residuated lattice has a monoidal product with residuals, modeling resource consumption &mdash; exactly the structure underlying Prologos's multiplicity annotations.
+
+
+<a id="orga11b32c"></a>
+
+## 3. Category Theory for Propagator Networks
+
+
+<a id="org15dc14a"></a>
+
+### 3.1 Traced Monoidal Categories
+
+Joyal, Street, and Verity (1996) introduced *traced monoidal categories* &mdash; monoidal categories with a trace operation that models feedback. A propagator network with cells feeding back into propagators is precisely a morphism in a traced monoidal category: the trace captures the fixed-point feedback loop.
+
+
+<a id="org18dc8a9"></a>
+
+### 3.2 Quantales
+
+A *quantale* (Mulvey 1986; Abramsky & Vickers 1993) is a complete lattice equipped with an associative tensor product $\otimes$ that distributes over arbitrary joins. Quantales model concurrent observation: $\otimes$ represents "and then" (sequential composition), while $\sqcup$ represents "or" (nondeterministic choice). The lattice of propagator cell values, enriched with a composition operation for propagator chaining, forms a quantale.
+
+
+<a id="orga26fd05"></a>
+
+### 3.3 Grothendieck Fibrations
+
+A *Grothendieck fibration* $p: \mathcal{E} \to \mathcal{B}$ organizes a "total" category $\mathcal{E}$ over a "base" category $\mathcal{B}$ via fibers $p^{-1}(b)$. For stratified propagator networks:
+
+-   Base category: the poset of strata $\{0, 1, 2, \ldots\}$
+-   Fiber over stratum $i$: the category of cells and propagators at that level
+-   Cartesian lifts: higher-stratum queries pull back to lower-stratum facts
+-   Opcartesian lifts: lower-stratum results push forward to higher strata
+
+A *bifibration* (both fibration and opfibration) models layered recovery: monotone within fibers, controlled non-monotonicity between fibers via reindexing functors.
+
+
+<a id="orgae98b1b"></a>
+
+### 3.4 Enriched Categories
+
+Lawvere (1973) showed that metric spaces, partial orders, and many other structures are categories *enriched* over a monoidal category $\mathcal{V}$. When $\mathcal{V}$ is a quantale, enriched categories capture propagator networks where the "distance" between cell states is measured in lattice values. This is the most general framework: *quantale-enriched categories* subsume lattice-ordered sets, metric spaces, and probabilistic structures.
+
+
+<a id="org05d5c13"></a>
+
+### 3.5 The Answer: Most General Category for Layered Recovery
+
+**Bifibrations over a stratification poset, enriched in a quantale of lattice values.** This captures:
+
+-   Monotonicity within strata (enrichment in the quantale)
+-   Non-monotonic transitions between strata (reindexing functors)
+-   Both upward and downward information flow (cartesian + opcartesian lifts)
+
+
+<a id="orgce5b60b"></a>
+
+## 4. Diagrammatic Formalisms
+
+
+<a id="orgf63287d"></a>
+
+### 4.1 String Diagrams
+
+Selinger's survey (2010) established a hierarchy of graphical languages for monoidal categories. String diagrams represent morphisms as *wires* (objects) and *boxes* (morphisms). Composition is wire-joining; tensor product is parallel placement. For propagator networks: wires are cells, boxes are propagators, and the traced monoidal structure allows feedback loops.
+
+
+<a id="org59f98ba"></a>
+
+### 4.2 Graphical Linear Algebra
+
+Bonchi, Sobociński, and Zanasi developed *Graphical Linear Algebra* (GLA): a diagrammatic calculus for signal flow graphs as PROPs (product and permutation categories). GLA provides:
+
+-   Generators for copy, discard, add, scale
+-   Equations as graphical rewrites
+-   Completeness for the theory of matrices over a field
+
+The connection to propagators: signal flow graphs are a special case of propagator networks where cells carry signals and propagators are linear operators.
+
+
+<a id="orgad3f7aa"></a>
+
+### 4.3 Wiring Diagrams (Spivak)
+
+David Spivak's *operad of wiring diagrams* provides hierarchical composition for open systems. A wiring diagram specifies how inner boxes connect to outer ports. This models propagator network modularity: sub-networks compose into larger networks via explicit wiring.
+
+
+<a id="org1d0781b"></a>
+
+### 4.4 Proof Nets and Interaction Nets
+
+-   **Proof nets** (Girard 1987/1996): Graphical representations of linear logic proofs. The resource-sensitivity of linear logic maps to propagator cell linearity &mdash; each cell consumed exactly once in linear mode (QTT multiplicity 1).
+
+-   **Interaction nets** (Lafont 1990): The closest existing graphical formalism to propagators. An interaction net consists of agents (propagators) connected by ports (cells), with interaction rules (merge functions). Lafont's key insight: all computation reduces to local agent interaction, just as propagators compute locally.
+
+
+<a id="org7233352"></a>
+
+### 4.5 Geometry of Interaction
+
+Girard's Geometry of Interaction (GoI) models cut-elimination as the fixed point of a feedback equation. This is exactly propagator network quiescence: the network runs (eliminates cuts / propagates information) until it reaches a fixed point (no more cuts to eliminate / no more information to propagate).
+
+
+<a id="orgda76720"></a>
+
+## 5. Constraint Solver Architectures
+
+
+<a id="org065dfcb"></a>
+
+### 5.1 Arc Consistency Hierarchy
+
+Constraint propagation has its own rich taxonomy, beginning with Mackworth's foundational AC-3 algorithm (1977). The hierarchy of consistency levels maps directly to propagator strength:
+
+| Level              | Scope      | Cost     | Propagator Analog            |
+|------------------ |---------- |-------- |---------------------------- |
+| Node consistency   | Single var | $O(d)$   | Domain filter propagator     |
+| Arc consistency    | Binary     | $O(d^2)$ | Binary constraint propagator |
+| Bounds consistency | Binary     | $O(d)$   | Interval propagator          |
+| Path consistency   | Ternary    | $O(d^3)$ | Triple constraint propagator |
+| $k$-consistency    | $k$-ary    | $O(d^k)$ | Higher-order propagator      |
+| GAC                | Global     | Varies   | Global constraint propagator |
+
+AC-1 through AC-2001 represent progressive refinements of the basic arc consistency algorithm, trading space for time. Modern constraint solvers use *adaptive* consistency: stronger propagation for heavily-constrained subproblems, weaker for loose ones.
+
+
+<a id="org4ba6555"></a>
+
+### 5.2 Global Constraints and Decomposability
+
+Fages et al. (2014) introduced *self-decomposable* global constraints: constraints that can automatically decompose into simpler sub-constraints when this improves propagation. This maps directly to Prologos's structural decomposition pattern: a compound type cell decomposes into sub-cells when unification demands it.
+
+
+<a id="org00d529a"></a>
+
+### 5.3 DPLL(T) and SMT
+
+The DPLL(T) architecture underlying modern SMT solvers separates:
+
+-   A SAT solver (propositional backbone)
+-   Theory solvers (domain-specific propagators)
+
+Each theory solver is essentially a propagator: it reads variable assignments, propagates consequences within its theory, and reports conflicts. The *theory propagation interface* is a formalization of the propagator trait: `propagate : State → (State × Consequences)`.
+
+
+<a id="orgb2dce29"></a>
+
+### 5.4 CHR (Constraint Handling Rules)
+
+Frühwirth's CHR (1998) classifies rules into three kinds that form a taxonomy of propagator behaviors:
+
+-   **Propagation rules**: $H \Longrightarrow G \mid B$ &mdash; add constraints without removing the head. Monotonic: standard propagator behavior.
+
+-   **Simplification rules**: $H \Longleftrightarrow G \mid B$ &mdash; replace the head constraints with the body. Non-monotonic: requires stratum boundary or retraction support.
+
+-   **Simpagation rules**: $H_1 \setminus H_2 \Longleftrightarrow G \mid B$ &mdash; keep $H_1$, replace $H_2$. Hybrid: partially monotonic.
+
+This three-way classification applies directly to Prologos: standard propagators are propagation rules; session protocol transitions are simpagation (keep the channel, replace the state); retraction in stratified evaluation is simplification.
+
+
+<a id="orgbadf47a"></a>
+
+## 6. Reactive and Incremental Computation
+
+
+<a id="org695aee2"></a>
+
+### 6.1 FRP Denotational Semantics
+
+Elliott and Hudak (1997) defined *Functional Reactive Programming* via:
+
+-   **Behaviors**: continuous time-varying values ($Time \to a$)
+-   **Events**: discrete occurrences ($[(Time, a)]$)
+
+The connection: a propagator cell IS a behavior (a time-varying value that increases monotonically in the information order). A propagator firing IS an event that triggers value update.
+
+
+<a id="org6066122"></a>
+
+### 6.2 Push/Pull/Push-Pull Taxonomy
+
+Bainomugisha et al. (2013) surveyed FRP evaluation strategies:
+
+| Strategy  | Description                     | Propagator Analog             |
+|--------- |------------------------------- |----------------------------- |
+| Push      | Producers push on change        | Standard propagator (eager)   |
+| Pull      | Consumers pull on demand        | Demand-driven (Adapton-style) |
+| Push-pull | Push notifications, pull values | Threshold propagators         |
+
+Threshold propagators in Prologos are push-pull: they are *notified* of cell changes (push) but only *fire* when the cell crosses a threshold (pull of the actual value is gated).
+
+
+<a id="orge085f56"></a>
+
+### 6.3 Self-Adjusting Computation
+
+Acar's self-adjusting computation (2005) and Hammer et al.'s Adapton (2014) provide demand-driven incremental computation:
+
+-   **Dynamic dependence graphs**: Track which computations depend on which inputs; re-execute only affected computations on input change.
+
+-   **Demand-driven**: Only recompute values that are actually demanded.
+
+The connection: propagator networks are naturally *push-based* (firing propagators eagerly). Adding demand-driven evaluation would yield a hybrid model where cells are only computed if downstream consumers exist &mdash; analogous to lazy evaluation in functional programming.
+
+
+<a id="org121ea76"></a>
+
+## 7. Parallel and Distributed Computation
+
+
+<a id="org77855d6"></a>
+
+### 7.1 BSP (Bulk Synchronous Parallelism)
+
+Valiant's BSP model (1990) structures parallel computation into *supersteps*: each processor computes locally, then a global barrier synchronizes. This maps precisely to stratified evaluation:
+
+-   Within a stratum: local propagator firing (BSP local computation)
+-   Between strata: barrier synchronization (BSP barrier)
+-   Non-monotonic operations happen at barriers (BSP communication)
+
+
+<a id="orgc3704dd"></a>
+
+### 7.2 CRDTs (Conflict-Free Replicated Data Types)
+
+Shapiro et al. (2011) formalized CRDTs: data structures that can be replicated across distributed nodes, updated independently, and merged deterministically. The key insight: *propagator cells ARE CRDTs*. Both are join-semilattice-valued state that merges via the lattice join, guaranteeing eventual consistency regardless of merge order.
+
+| CRDT Concept     | Propagator Analog              |
+|---------------- |------------------------------ |
+| State-based CRDT | Cell with lattice merge        |
+| Op-based CRDT    | Propagator firing as operation |
+| Merge function   | Cell merge / lattice join      |
+| Monotonic growth | No-change guard termination    |
+
+
+<a id="org343b7ff"></a>
+
+### 7.3 The CALM Theorem
+
+Ameloot, Neven, and Van den Bussche proved the CALM theorem (Consistency As Logical Monotonicity): a program has an eventually consistent, coordination-free distributed implementation if and only if it is monotonic. Non-monotonic operations *require* coordination.
+
+For propagator networks: within a stratum (monotonic), propagators can fire in any order on any thread &mdash; coordination-free. Between strata (non-monotonic), a barrier is required &mdash; minimal coordination. The CALM theorem retroactively validates the stratified propagator architecture.
+
+
+<a id="org7ade444"></a>
+
+### 7.4 Kahn Process Networks
+
+Kahn (1974) proved that networks of deterministic processes communicating via unbounded FIFO channels have deterministic semantics regardless of scheduling. Propagator networks satisfy the Kahn conditions within a stratum: each propagator is deterministic (monotone function), and cells are the "channels" (lattice-valued rather than FIFO, but the monotonicity guarantee is equivalent).
+
+
+<a id="org239ce69"></a>
+
+### 7.5 Lattice Agreement
+
+Attiya et al. (1995) formalized *lattice agreement*: a distributed consensus problem where processes must agree on a lattice value that is between their inputs. This is exactly the semantics of concurrent cell writes in a propagator network: multiple propagators writing to the same cell must converge to the lattice join of their contributions.
+
+
+<a id="orga1199fb"></a>
+
+## 8. Truth Maintenance Systems
+
+
+<a id="org21d5fbe"></a>
+
+### 8.1 JTMS (Justification-Based)
+
+Doyle's JTMS (1979) maintains a single set of "in" and "out" beliefs:
+
+-   Each belief has a *justification* (the beliefs that support it)
+-   Retraction cascades: removing a support may cascade to dependent beliefs
+-   Single-context: only one worldview at a time
+-   Expensive context switching (must retract and re-derive)
+
+In Prologos, `save-meta-state` / `restore-meta-state!` implements JTMS-style single-context reasoning for speculative type checking.
+
+
+<a id="org1f27624"></a>
+
+### 8.2 LTMS (Logic-Based)
+
+McAllester's LTMS (1980) adds propositional reasoning:
+
+-   Maintains a set of clauses (propositional constraints)
+-   Boolean Constraint Propagation (BCP) as the core mechanism
+-   Unit propagation: if all but one literal in a clause are false, the remaining literal must be true
+-   Connection: BCP IS propagation over a Boolean lattice
+
+
+<a id="orgba3cc53"></a>
+
+### 8.3 ATMS (Assumption-Based)
+
+De Kleer's ATMS (1986) represents the most sophisticated TMS:
+
+-   Maintains *all* consistent worldviews simultaneously
+-   Each datum labeled with its *assumption set* (the minimal set of assumptions under which it holds)
+-   *Nogoods*: sets of assumptions known to be contradictory
+-   Free context switching: selecting a worldview is $O(1)$ (just check assumption labels)
+-   The nogood set grows monotonically &mdash; ATMS is itself a lattice!
+
+Prologos implements ATMS for hypothetical reasoning in the logic engine: `amb` creates premises, propagation explores consequences, nogoods record contradictions, and solutions are valid worldviews.
+
+
+<a id="org686fc62"></a>
+
+### 8.4 GDE (General Diagnostic Engine)
+
+De Kleer and Williams' GDE (1987) builds on ATMS for model-based diagnosis: given observed symptoms and a system model, identify minimal sets of faulty components. The connection: type error diagnosis in Prologos can be cast as GDE-style reasoning &mdash; observed type errors are "symptoms," and the ATMS identifies minimal sets of assumptions (type annotations, implicit coercions) that are responsible.
+
+
+<a id="org1c8922d"></a>
+
+### 8.5 TMS Taxonomy Summary
+
+| Aspect          | JTMS            | LTMS     | ATMS                |
+|--------------- |--------------- |-------- |------------------- |
+| Worldviews      | 1               | 1        | All                 |
+| Context switch  | Expensive       | Moderate | $O(1)$              |
+| Propagation     | Justification   | BCP      | Label propagation   |
+| Monotonic?      | No (retraction) | Partial  | Yes (nogood growth) |
+| Prologos analog | save/restore    | ---      | atms.rkt            |
+
+
+<a id="orgb6ae697"></a>
+
+# Part II: Codebase Taxonomy — Cells, Propagators, and Lattices
+
+This part grounds the theoretical survey in Prologos's actual implementation. Every cell type, propagator type, and lattice instance is drawn from the codebase as of March 2026.
+
+
+<a id="org69a8ce7"></a>
+
+## 9. Cell Taxonomy
+
+Cells are the stateful storage elements of the propagator network &mdash; lattice-valued accumulators of partial information. In Prologos, cells are created by `net-new-cell` (`propagator.rkt:162`), which takes an initial value, a merge function, and an optional contradiction predicate.
+
+
+<a id="org00dc44f"></a>
+
+### 9.1 Cell Classification by Semantic Role
+
+1.  Value Cells
+
+    Hold domain values that represent partial knowledge about program terms.
+    
+    | Cell Type          | Subsystem                | Lattice Domain    | Merge Fn             |
+    |------------------ |------------------------ |----------------- |-------------------- |
+    | Type meta cell     | elaborator-network.rkt   | Type lattice      | `type-lattice-merge` |
+    | Multiplicity cell  | propagator.rkt           | Mult lattice      | `mult-lattice-merge` |
+    | Capability closure | capability-inference.rkt | CapSet (powerset) | `cap-set-join`       |
+
+2.  Readiness Cells
+
+    Gate computation by tracking when prerequisites are met.
+    
+    | Cell Type           | Subsystem              | Purpose                               |
+    |------------------- |---------------------- |------------------------------------- |
+    | Threshold cell      | propagator.rkt         | Fire only when cell crosses threshold |
+    | Infrastructure cell | elaborator-network.rkt | Internal propagator state             |
+
+3.  Protocol Cells
+
+    Track session protocol state machines.
+    
+    | Cell Type    | Subsystem               | Lattice Domain      |
+    |------------ |----------------------- |------------------- |
+    | Session cell | session-propagators.rkt | Session lattice     |
+    | Message cell | session-propagators.rkt | Flat (message type) |
+    | Choice cell  | session-propagators.rkt | Flat (choice label) |
+
+4.  Accumulator Cells
+
+    Collect results over time via monotonic accumulation.
+    
+    | Cell Type           | Subsystem     | Lattice Domain          |
+    |------------------- |------------- |----------------------- |
+    | Answer table cell   | tabling.rkt   | Set (all-mode) or Flat  |
+    | Capability set cell | cap-inference | Powerset (cap-set-join) |
+
+5.  Contingent Cells
+
+    Hold assumption-tagged values for hypothetical reasoning.
+    
+    | Cell Type | Subsystem | Structure                        |
+    |--------- |--------- |-------------------------------- |
+    | TMS cell  | atms.rkt  | Append-only supported-value list |
+
+6.  Side-Effect Boundary Cells
+
+    Manage IO state transitions at the imperative/pure boundary.
+    
+    | Cell Type     | Subsystem  | Domain                                   |
+    |------------- |---------- |---------------------------------------- |
+    | IO state cell | io-ffi.rkt | Progression: bot→opening→open→closed→top |
+
+
+<a id="orgaf1aa22"></a>
+
+### 9.2 Cell Classification by Lattice Structure
+
+| Lattice Class | Structure                | Cell Types                                         |
+|------------- |------------------------ |-------------------------------------------------- |
+| Flat          | $\bot \to v \to \top$    | Type metas, multiplicity, message, choice, IO      |
+| Powerset      | $(\mathcal{P}(S), \cup)$ | Capability sets, answer tables (all-mode)          |
+| Structural    | Unification-based join   | Type lattice (compound types), session lattice     |
+| Contingent    | Append-only              | ATMS TMS cells (no merge, append supported-values) |
+| Progression   | Linear chain             | IO state (bot→opening→open→closed→top)             |
+
+
+<a id="org4576ccc"></a>
+
+### 9.3 Structural Decomposition: Cells as Nested Lattices
+
+The "pocket universe" pattern: compound type cells lazily decompose into sub-cells when unification demands structural access.
+
+-   **Pi decomposition**: $\Pi(m, A, B) \to$ dom cell $A$ + cod cell $B$ + reconstructor propagator (`decompose-pi`, elaborator-network.rkt:387)
+
+-   **Sigma, App, Eq, Vec, Map, Pair, Lam decomposers**: Each compound type constructor has a corresponding decomposer function that creates sub-cells for its components.
+
+-   **Meta reuse**: When a bare metavariable is decomposed, the `current-structural-meta-lookup` callback checks whether a cell already exists for that meta. This prevents duplicate cells and maintains the invariant that each metavariable maps to exactly one cell.
+
+-   **Decomposition registry**: `net-cell-decomp-lookup` / `net-cell-decomp-insert` (propagator.rkt) prevents duplicate decompositions. Each cell-tag pair is decomposed at most once.
+
+-   **Information flow pattern**:
+    -   Downward: parent → sub-cells (decomposer creates sub-cells)
+    -   Lateral: sub-cell ↔ sub-cell (unify propagators between matching subs)
+    -   Upward: sub-cells → parent (reconstructor fires when all subs solved)
+
+
+<a id="org2c7ab24"></a>
+
+## 10. Propagator Taxonomy
+
+
+<a id="orga35fd3d"></a>
+
+### 10.1 Classification by Composition Pattern
+
+1.  Unification Propagators
+
+    Bidirectional. Read both cells, compute structural merge, write merged value to both. Core of type inference. (`elab-add-unify-constraint`, elaborator-network.rkt:176)
+
+2.  Decomposition Propagators
+
+    Unidirectional downward. Parent cell → sub-cells. Lazy: created only when unification encounters compound types that need structural access. (`decompose-pi`, `decompose-app`, `decompose-sigma`, etc.)
+
+3.  Reconstruction Propagators
+
+    Unidirectional upward. Sub-cells → parent cell. Conditional: fires only when all sub-cells are solved. Reconstructs the compound type from its decomposed components.
+
+4.  Protocol Decomposers
+
+    Session protocol operations (send/recv/choice/offer/stop) decompose a session cell into a continuation cell. Similar to type decomposition but over the session lattice. (`session-propagators.rkt`)
+
+5.  Duality Propagators
+
+    Bidirectional. Enforce that two session endpoints are duals. `send` ↔ `recv`, `choice` ↔ `offer`. (`session-propagators.rkt`)
+
+6.  Cross-Domain (Galois) Propagators
+
+    Bridge between abstraction domains via Galois connections:
+    
+    -   α propagator: concrete → abstract (e.g., type → capability requirement)
+    -   γ propagator: abstract → concrete (e.g., capability → type constraint)
+    
+    (`cap-type-bridge.rkt`, creating both α and γ propagators)
+
+7.  Threshold/Barrier Propagators
+
+    Gated firing: a threshold propagator watches a cell and fires its body function only when the cell's value satisfies a predicate. (`make-threshold-fire-fn`, propagator.rkt:273)
+
+8.  Constraint-Retry Propagators
+
+    Watch metavariable cells and retry postponed constraints when the meta becomes ground. Enables lazy constraint solving: defer work until enough information is available.
+
+
+<a id="org692aef5"></a>
+
+### 10.2 Classification by Directionality
+
+| Direction     | Pattern               | Examples                               |
+|------------- |--------------------- |-------------------------------------- |
+| Bidirectional | Read+write both cells | Unify, duality                         |
+| Down          | Parent → sub-cells    | Decomposers (Pi, Sigma, App, &hellip;) |
+| Up            | Sub-cells → parent    | Reconstructors                         |
+| Cross-domain  | Domain A → Domain B   | α/γ Galois propagators                 |
+| Gated         | Conditional firing    | Threshold propagators                  |
+
+
+<a id="org1b826e2"></a>
+
+### 10.3 Purity Analysis
+
+All propagators in Prologos are pure functions `net → net`. The propagator network is an immutable persistent data structure; each propagator takes a network state and returns a (possibly modified) network state. No side effects, no mutation.
+
+| Propagator Type   | Pure? | Fan-in | Fan-out | Bidirectional? |
+|----------------- |----- |------ |------- |-------------- |
+| Unify             | Yes   | 2      | 2       | Yes            |
+| Decompose         | Yes   | 1      | 2-3     | No (down)      |
+| Reconstruct       | Yes   | 2-3    | 1       | No (up)        |
+| Session decompose | Yes   | 1      | 1-2     | No (down)      |
+| Duality           | Yes   | 2      | 2       | Yes            |
+| α (Galois)        | Yes   | 1      | 1       | No (cross)     |
+| γ (Galois)        | Yes   | 1      | 1       | No (cross)     |
+| Threshold         | Yes   | 1      | varies  | No (gated)     |
+
+
+<a id="org8c980e7"></a>
+
+### 10.4 The "No-Change Guard" as Termination Mechanism
+
+`net-cell-write` (propagator.rkt:193) implements the no-change guard:
+
+1.  Read current cell value
+2.  Compute merge of current and new value (`merge-fn`)
+3.  If merged value equals current value, return unchanged network (no-op)
+4.  Otherwise, update cell and schedule dependent propagators
+
+This idempotency guard is the sole termination mechanism. Because:
+
+-   Each cell's domain is a lattice (finite height in practice)
+-   Each merge is a join (monotonically increasing)
+-   The no-change guard stops when the join is idempotent
+
+The network must reach a fixed point in at most $h \cdot n$ steps, where $h$ is the maximum lattice height and $n$ is the number of cells.
+
+
+<a id="org179f508"></a>
+
+## 11. Lattice Ecosystem
+
+
+<a id="org7051dc7"></a>
+
+### 11.1 Implemented Lattice Instances
+
+1.  Racket-Level (Compiler Infrastructure)
+
+    | Lattice              | Module              | Bot        | Top        | Merge                      |
+    |-------------------- |------------------- |---------- |---------- |-------------------------- |
+    | Type lattice         | type-lattice.rkt    | `type-bot` | `type-top` | `type-lattice-merge`       |
+    | Multiplicity lattice | mult-lattice.rkt    | `mult-bot` | `mult-top` | `mult-lattice-merge`       |
+    | Session lattice      | session-lattice.rkt | `sess-bot` | `sess-top` | `session-lattice-merge`    |
+    | Capability set       | cap-inference.rkt   | empty set  | ---        | `cap-set-join` (set union) |
+    | ATMS nogood set      | atms.rkt            | empty set  | ---        | set union (monotonic)      |
+    | Answer table         | tabling.rkt         | empty set  | ---        | set union (all-mode)       |
+
+2.  Prologos-Level (User-Facing Standard Library)
+
+    | Lattice         | Module                | Structure                              |
+    |--------------- |--------------------- |-------------------------------------- |
+    | FlatLattice A   | prologos.core.lattice | $\bot \to A \to \top$                  |
+    | SetLattice A    | prologos.core.lattice | $(\mathcal{P}(A), \cup)$               |
+    | MapLattice K V  | prologos.core.lattice | Pointwise join on values               |
+    | IntervalLattice | prologos.core.lattice | $[lo, hi]$ with $\sqcap$/$\sqcup$      |
+    | BoolLattice     | prologos.core.lattice | $\bot < F < \top$, $\bot < T < \top$   |
+    | Sign            | prologos.core.lattice | 5-element: $\{-, 0, +, \top, \bot\}$   |
+    | Parity          | prologos.core.lattice | 4-element: $\{even, odd, \top, \bot\}$ |
+
+
+<a id="org0ff8522"></a>
+
+### 11.2 Lattice Interaction Map
+
+The lattice ecosystem is not a set of independent lattices &mdash; they interact via cross-domain propagators:
+
+```
+Type Lattice ←——α/γ——→ Multiplicity Lattice
+     |                        |
+     α/γ                      |
+     |                        |
+Capability Lattice            |
+     |                        |
+     ←————————————————————————┘
+          (cross-domain bridge)
+
+Session Lattice ←——duality——→ Session Lattice (dual endpoint)
+     |
+     decompose
+     |
+     v
+Type Lattice (message types)
+```
+
+Each arrow represents one or more propagators that synchronize information between lattice domains. The α direction abstracts (e.g., from a concrete type to its capability requirements); the γ direction concretizes (e.g., from a capability constraint to a type constraint).
+
+
+<a id="org376034c"></a>
+
+# Part III: Architectural Patterns
+
+
+<a id="org587c381"></a>
+
+## 12. The Three-Layer Architecture
+
+Prologos's logic engine is organized into three layers, each providing progressively stronger reasoning at the cost of coordination.
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Layer 3: Stratification (Controlled Non-Monotonicity) │
+│  ┌───────────────────────────────────────────────┐  │
+│  │  Layer 2: ATMS (Non-Monotonic Control Plane)  │  │
+│  │  ┌───────────────────────────────────────────┐│  │
+│  │  │  Layer 1: Propagator Network              ││  │
+│  │  │  (Monotonic Data Plane)                   ││  │
+│  │  └───────────────────────────────────────────┘│  │
+│  └───────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+```
+
+
+<a id="orgb399b86"></a>
+
+### 12.1 Layer 1: Propagator Network (Monotonic Data Plane)
+
+The foundation. Cells hold lattice elements; propagators are monotone functions. All computation within this layer is:
+
+-   **Deterministic**: confluence from lattice idempotency
+-   **Convergent**: guaranteed by Knaster-Tarski (finite-height lattices)
+-   **Parallelizable**: by the CALM theorem (monotonic = coordination-free)
+
+This layer hosts type inference, constraint propagation, capability inference, and session type checking. All these are fundamentally monotonic: information only grows, never shrinks.
+
+
+<a id="org4046981"></a>
+
+### 12.2 Layer 2: ATMS (Non-Monotonic Control Plane)
+
+The ATMS (`atms.rkt`) sits atop the propagator network and provides hypothetical reasoning:
+
+-   `amb` creates hypothetical assumptions, forking the worldview space
+-   Each datum is labeled with its *assumption set* &mdash; the minimal assumptions under which it holds
+-   Nogoods record contradictory assumption sets
+-   The nogood set is itself a monotonically growing lattice
+
+The key insight: non-monotonicity is *reified* as monotonicity in the meta-lattice. The ATMS never retracts information &mdash; instead, it accumulates knowledge about which worldviews are inconsistent. Context switching is free ($O(1)$): just check if the target worldview's assumptions intersect with any nogood.
+
+
+<a id="org7391be8"></a>
+
+### 12.3 Layer 3: Stratification (Controlled Non-Monotonicity)
+
+Stratified evaluation (`stratified-eval.rkt`) structures computation into sequential strata based on dependency analysis (SCC decomposition):
+
+-   **Within each stratum**: run the propagator network to quiescence. All operations are monotonic. CALM-compliant: coordination-free.
+
+-   **Between strata**: apply non-monotonic operations (negation-as-failure, aggregation, retraction). This is a *barrier* &mdash; minimal coordination.
+
+-   **Version-cached**: stratification is computed once and cached until the dependency graph changes.
+
+
+<a id="orge767914"></a>
+
+## 13. The Layered Recovery Principle
+
+
+<a id="orgf83c225"></a>
+
+### 13.1 Definition
+
+The Layered Recovery Principle is an architectural pattern for handling non-monotonic operations within a fundamentally monotonic computational substrate. It has four components:
+
+1.  **Decompose** computation into layers with clear boundaries
+2.  **Ensure monotonicity** within each layer via fixed-point computation
+3.  **Control transitions** between layers via threshold propagators or completion detection
+4.  **Provide recovery** mechanisms when layer boundaries are crossed and previous assumptions are invalidated
+
+This principle appears independently in multiple subsystems of Prologos. The following instances demonstrate that it is a *single principle* with five manifestations, not five unrelated techniques.
+
+
+<a id="org8d03976"></a>
+
+### 13.2 Instance 1: NAF-LE (Negation-as-Failure)
+
+-   **Strata**: ordered by dependency; lower strata complete before upper strata evaluate negation of lower-stratum predicates
+-   **Monotone within**: facts accumulate via set union (powerset lattice)
+-   **Non-monotonic between**: negation flips truth value based on completed lower stratum
+-   **Transition**: explicit orchestration, version-cached stratification
+-   **Recovery**: re-evaluation per stratum; stratification IS the recovery (once you know stratum $n$ is complete, stratum $n+1$ can safely negate)
+-   **Direction**: stratifies UPWARD (lower strata complete first)
+
+
+<a id="org2dd8ebd"></a>
+
+### 13.3 Instance 2: WF-LE (Well-Founded Semantics)
+
+-   **Strata**: substitution lattice with unification; delayed negation until variables are sufficiently ground
+-   **Monotone within**: unification joins grow the substitution
+-   **Non-monotonic between**: negation applied after grounding
+-   **Transition**: `apply-subst-to-goal` resolves variables before checking negation
+-   **Recovery**: constraint postponement, re-evaluation on new bindings
+
+
+<a id="orgddda2aa"></a>
+
+### 13.4 Instance 3: Type System (Elaborator Network)
+
+-   **Strata**: propagator network with type lattice; structural decomposition creates sub-cells lazily
+-   **Monotone within**: lattice merge (type, multiplicity, session)
+-   **Non-monotonic**: meta-solution callbacks, contradiction recovery
+-   **Transition**: threshold propagators, run-to-quiescence
+-   **Recovery**: speculative type-checking via `save-meta-state` / `restore-meta-state!`; ATMS worldviews for Church fold attempts and union types
+
+
+<a id="org5e62731"></a>
+
+### 13.5 Instance 4: Effect System (QTT + Session Types)
+
+-   **Strata**: product lattice (type × multiplicity); cross-domain Galois connections (type ↔ capability, session ↔ type)
+-   **Monotone within**: multiplicity merge, capability set union
+-   **Non-monotonic**: type-multiplicity coupling (a multiplicity annotation constrains type usage, and vice versa)
+-   **Transition**: cross-domain α/γ propagators fire when source cell becomes sufficiently concrete
+-   **Recovery**: contradiction detected in both domains; GDE-style diagnosis possible
+
+
+<a id="orgb293cbb"></a>
+
+### 13.6 Instance 5: Stratified Retraction (Track 7 Design)
+
+The *dual* of NAF: retractions at the lowest level, effects propagate upward through the dependency graph.
+
+-   **Monotone within**: fact addition (standard propagator behavior)
+-   **Non-monotonic**: retraction invalidates derived facts
+-   **Transition**: retraction signal propagates upward (inverse of NAF's downward query pattern)
+-   **Recovery**: tabling invalidation, re-evaluation on demand
+-   **Direction**: stratifies DOWNWARD (retraction at bottom, effects rise)
+
+
+<a id="orga7e91bb"></a>
+
+### 13.7 The Common Structure
+
+| Aspect           | NAF       | WF          | Type           | Effect        | Retraction   |
+|---------------- |--------- |----------- |-------------- |------------- |------------ |
+| Monotone basis   | Set union | Unification | Lattice merge  | Product merge | Set union    |
+| Non-monotonic op | Negation  | Negation    | Meta callback  | Cross-domain  | Retraction   |
+| Transition       | Stratum   | Grounding   | Threshold      | α/γ bridge    | Signal prop  |
+| Recovery         | Re-eval   | Postpone    | Speculative    | Contradiction | Invalidation |
+| Direction        | Upward    | On-demand   | Run-to-quiesce | Cross-domain  | Downward     |
+
+Why this is one principle: each instance decomposes a fundamentally non-monotonic operation (negation, retraction, context switch) into a monotonic core with controlled boundaries. The categorical formalization is a *bifibration over a stratification poset*: monotone within fibers, non-monotonic transitions via reindexing functors between fibers.
+
+
+<a id="org8c7aa32"></a>
+
+## 14. Compositional Patterns
+
+
+<a id="org8e9dc0c"></a>
+
+### 14.1 Structural Decomposition Pattern
+
+Compound types lazily decompose into sub-cells with bidirectional information flow:
+
+```
+Pi(m, A, B)         ← parent cell
+   |
+decompose-pi
+   |
+┌──┴──┐
+A      B            ← sub-cells
+|      |
+unify  unify        ← lateral propagators connect to other cells
+|      |
+A'     B'           ← matching sub-cells from another compound type
+└──┬──┘
+reconstruct
+   |
+Pi(m, A', B')       ← reconstructed parent
+```
+
+Key invariants:
+
+-   Decomposition is idempotent (registry prevents duplicates)
+-   Sub-cells inherit the parent's lattice domain
+-   Reconstruction fires only when ALL sub-cells are solved
+-   Meta reuse via `current-structural-meta-lookup` prevents cell duplication
+
+
+<a id="org587634c"></a>
+
+### 14.2 Galois Connection (Cross-Domain Bridge) Pattern
+
+Two abstraction domains connected by α (abstract) and γ (concretize):
+
+```
+Concrete domain (types)     Abstract domain (capabilities)
+     |                              |
+     α ──────────────────→          |
+     |                              |
+     ←────────────────── γ          |
+```
+
+`cap-type-bridge.rkt` instantiates this pattern: the α propagator extracts capability requirements from a type; the γ propagator propagates capability constraints back to type constraints. Both propagators are registered in a single call, creating a bidirectional bridge.
+
+
+<a id="org7f22735"></a>
+
+### 14.3 Threshold Gate Pattern
+
+A threshold propagator watches a cell and fires only when the cell's value satisfies a predicate:
+
+```
+watched cell ──→ [threshold?] ──→ body-fn fires
+                     |
+                  (blocked if predicate fails)
+```
+
+`make-threshold-fire-fn` (propagator.rkt:273) implements this: the threshold function reads the watched cell, checks the predicate, and either fires the body or returns the network unchanged. This is the push-pull pattern from FRP: push notification of cell change, pull gated by threshold predicate.
+
+
+<a id="orgbc71c1b"></a>
+
+### 14.4 Speculative Execution Pattern
+
+For situations where the correct type-checking path is unknown (Church-encoded folds, union type matching), Prologos uses speculative execution:
+
+1.  `save-meta-state` captures current propagator network state
+2.  Try path A (e.g., Church fold interpretation)
+3.  If contradiction: `restore-meta-state!` and try path B
+4.  If success: commit
+
+This is JTMS-style single-context reasoning: only one worldview is active at a time, and context switching requires explicit save/restore. The ATMS alternative (maintaining all worldviews simultaneously) is used for `amb`-based hypothetical reasoning in the logic engine.
+
+
+<a id="org95ebf94"></a>
+
+# Part IV: Toward a Compositional Design Language
+
+
+<a id="orged8ab0a"></a>
+
+## 15. Taxonomy Dimensions
+
+Based on the cross-disciplinary survey, we propose a multi-dimensional taxonomy for classifying propagators. Each dimension draws from a specific discipline, and each has concrete instances in Prologos.
+
+
+<a id="org3f767c9"></a>
+
+### 15.1 Monotonicity (from CALM / Distributed Computing)
+
+| Value         | Meaning                                    | Example             |
+|------------- |------------------------------------------ |------------------- |
+| Monotonic     | Coordination-free, any execution order     | Type unification    |
+| Non-monotonic | Requires stratification / "point of order" | Negation-as-failure |
+
+
+<a id="orgd04c68d"></a>
+
+### 15.2 Consistency Level (from Constraint Solving)
+
+| Level              | Strength  | Cost     | Example                      |
+|------------------ |--------- |-------- |---------------------------- |
+| Domain consistency | Strongest | $O(d^k)$ | Full type unification        |
+| Bounds consistency | Moderate  | $O(d)$   | Interval lattice propagators |
+| Arc consistency    | Binary    | $O(d^2)$ | Binary constraint cells      |
+| GAC                | Global    | Varies   | Capability set inference     |
+
+
+<a id="org9c2a01d"></a>
+
+### 15.3 Rule Type (from CHR)
+
+| Type           | Behavior             | Monotonic? | Example                     |
+|-------------- |-------------------- |---------- |--------------------------- |
+| Propagation    | Additive (keep head) | Yes        | Standard propagator         |
+| Simplification | Replace head         | No         | Retraction                  |
+| Simpagation    | Hybrid               | Partial    | Session protocol transition |
+
+
+<a id="org5c4dc99"></a>
+
+### 15.4 Evaluation Strategy (from FRP / Distributed Simulation)
+
+| Strategy     | Description                   | Example                         |
+|------------ |----------------------------- |------------------------------- |
+| Eager-push   | Fire on input change          | Standard propagator model       |
+| Demand-pull  | Evaluate on output demand     | (Future: Adapton integration)   |
+| Push-pull    | Push notify, pull gated       | Threshold propagators           |
+| Speculative  | Fire optimistically, rollback | Church fold / union type checks |
+| Conservative | Wait until safe to fire       | Stratified evaluation barriers  |
+
+
+<a id="org5b93e73"></a>
+
+### 15.5 Context Model (from TMS Taxonomy)
+
+| Model          | Description                   | Example                    |
+|-------------- |----------------------------- |-------------------------- |
+| Single-context | One active worldview          | save/restore-meta-state    |
+| Multi-context  | All worldviews simultaneously | ATMS amb + nogood tracking |
+
+
+<a id="org9d8d693"></a>
+
+### 15.6 Decomposability (from Self-Decomposable Constraints)
+
+| Type              | Description                 | Example                       |
+|----------------- |--------------------------- |----------------------------- |
+| Atomic            | Indivisible propagator      | Multiplicity merge            |
+| Self-decomposable | Splits into sub-propagators | Type structural decomposition |
+
+
+<a id="orgfc6f2f5"></a>
+
+### 15.7 Composition Topology (from String Diagrams)
+
+| Topology     | Structure               | Example                            |
+|------------ |----------------------- |---------------------------------- |
+| Sequential   | $A \to B \to C$         | Pipeline: elaborate → check → zonk |
+| Parallel     | $A \parallel B$         | Independent type cells             |
+| Traced       | Output → input feedback | Recursive type decomposition       |
+| Hierarchical | Nested sub-networks     | Module-level propagator networks   |
+
+
+<a id="org4026f11"></a>
+
+### 15.8 Summary Table
+
+| Dimension       | Source Discipline   | Values                         | Prologos Example             |
+|--------------- |------------------- |------------------------------ |---------------------------- |
+| Monotonicity    | Distributed systems | Monotone / Non-monotone        | Unify vs. NAF                |
+| Consistency     | Constraint solving  | Domain / Bounds / Arc / GAC    | Type unify vs. cap-set       |
+| Rule type       | CHR                 | Propagation / Simplification   | Standard vs. retraction      |
+| Eval strategy   | FRP                 | Push / Pull / Push-pull / Spec | Eager vs. threshold vs. spec |
+| Context model   | TMS                 | Single / Multi                 | save-restore vs. ATMS        |
+| Decomposability | Global constraints  | Atomic / Self-decomposable     | mult-merge vs. Pi decomp     |
+| Topology        | String diagrams     | Sequential / Parallel / Traced | Pipeline vs. feedback        |
+
+
+<a id="orgafb3d40"></a>
+
+## 16. Cross-Disciplinary Unifications
+
+
+<a id="org99eeb4b"></a>
+
+### 16.1 Cell = CRDT = Lattice Element = FRP Behavior = Kahn Channel
+
+These five concepts from five different disciplines are *the same mathematical object*: a monotonically increasing element in a join-semilattice.
+
+| Discipline          | Name             | Operations                 | Guarantee             |
+|------------------- |---------------- |-------------------------- |--------------------- |
+| Propagators         | Cell             | read, write (merge)        | Monotonic growth      |
+| Distributed systems | State-based CRDT | query, update, merge       | Eventual consistency  |
+| Order theory        | Lattice element  | $\sqcup$, $\sqcap$, $\leq$ | Fixed-point existence |
+| FRP                 | Behavior         | sample, step               | Time-monotone         |
+| Dataflow            | Kahn channel     | read (blocking), write     | Deterministic         |
+
+The merge function is the same in all cases: the lattice join $\sqcup$. Commutativity ensures order-independence; idempotency ensures duplicate contributions are harmless; associativity enables incremental merging.
+
+
+<a id="org9454819"></a>
+
+### 16.2 Propagator = Filter = Transformer = Theory Solver = CHR Rule = Process
+
+Similarly, these six concepts are *the same mathematical object*: a monotone (ideally continuous) function on the cell lattice.
+
+| Discipline        | Name               | Type Signature                                       |
+|----------------- |------------------ |---------------------------------------------------- |
+| Propagators       | Propagator         | $\text{Net} \to \text{Net}$                          |
+| Signal processing | Filter             | $\text{Signal} \to \text{Signal}$                    |
+| FRP               | Stream transformer | $\text{Behavior} \to \text{Behavior}$                |
+| SMT               | Theory solver      | $\text{State} \to \text{State} \times \text{Lemmas}$ |
+| CHR               | Propagation rule   | $\text{Store} \to \text{Store}$                      |
+| Kahn networks     | Process            | $\text{Channels} \to \text{Channels}$                |
+
+
+<a id="org461621f"></a>
+
+### 16.3 Stratification = BSP Superstep = Clock Tick = CALM Coordination
+
+These concepts all structure non-monotonic operations into sequential phases with monotonic interiors:
+
+| Discipline          | Name              | Monotonic Within  | Barrier Between        |
+|------------------- |----------------- |----------------- |---------------------- |
+| Logic programming   | Stratum           | Fact derivation   | Negation evaluation    |
+| Parallel computing  | BSP superstep     | Local computation | Global synchronization |
+| Synchronous langs   | Clock tick        | Combinational     | Sequential latch       |
+| Distributed systems | CALM coordination | Monotone messages | Coordination points    |
+
+The common structure: decompose into phases; within each phase, operate monotonically (coordination-free); at phase boundaries, apply non-monotonic operations (requiring coordination/synchronization).
+
+
+<a id="orgabac4e7"></a>
+
+### 16.4 The Most General Category
+
+**Question**: What is the most general category capturing layered recovery?
+
+**Answer**: *Bifibrations over a stratification poset, enriched in a quantale of lattice values.*
+
+-   **Base category**: the poset of strata $(\{0, 1, 2, \ldots\}, \leq)$ with monotone maps as morphisms.
+
+-   **Each fiber** $\mathcal{E}_i$ over stratum $i$: a quantale-enriched category of cells and propagators. Objects are cells; morphisms are propagators; the enrichment captures the lattice structure of cell values.
+
+-   **Cartesian lifts**: higher-stratum queries pull back to lower-stratum computations. When stratum $n+1$ needs the result of stratum $n$, the cartesian lift retrieves it.
+
+-   **Opcartesian lifts**: lower-stratum results push forward to higher strata. When stratum $n$ completes, its results are pushed to stratum $n+1$.
+
+-   **Non-monotonic transitions**: modeled by *reindexing functors*. The functor $\mathcal{E}_n \to \mathcal{E}_{n+1}$ captures the non-monotonic operation (negation, retraction) as a structure-preserving map between fibers.
+
+This framework captures: monotonicity within strata (enrichment), non-monotonic transitions between strata (reindexing), bidirectional information flow (bifibration), and the lattice structure of cell values (quantale enrichment).
+
+
+<a id="orga85f805"></a>
+
+## 17. Observed Patterns in Prologos Today
+
+
+<a id="org1ae7494"></a>
+
+### 17.1 Complete Pattern Catalog
+
+| Pattern                  | File                     | Mechanism                       | Trigger                       |
+|------------------------ |------------------------ |------------------------------- |----------------------------- |
+| Structural decomposition | elaborator-network.rkt   | Registry check + lazy creation  | Unification of compound type  |
+| Meta reuse               | elaborator-network.rkt   | current-structural-meta-lookup  | Decomposition finds same meta |
+| Cell allocation tracking | propagator.rkt           | perf-inc-cell-alloc! counter    | Every net-new-cell call       |
+| Fresh metavariables      | elaborator-network.rkt   | elab-fresh-meta et al.          | Type checker needs unknown    |
+| Infrastructure cells     | elaborator-network.rkt   | elab-new-infra-cell             | Internal propagator state     |
+| Persistent cell state    | elaborator-network.rkt   | Command-level reset + reuse     | Multi-command processing      |
+| Session continuations    | session-propagators.rkt  | Per-operation lazy allocation   | Process operation applied     |
+| Decomposition caching    | propagator.rkt           | net-cell-decomp-lookup/insert   | Once per cell per tag         |
+| Cross-domain bridge      | cap-type-bridge.rkt      | α/γ bidirectional propagators   | Capability network building   |
+| Threshold gate           | propagator.rkt           | Predicate-gated firing          | Cell change + predicate true  |
+| Speculative execution    | elaborator-network.rkt   | save/restore-meta-state         | Church fold, union type       |
+| ATMS worldviews          | atms.rkt                 | Assumption labeling + nogoods   | amb in logic engine           |
+| Tabling memoization      | tabling.rkt              | Answer table per predicate      | Recursive relation call       |
+| Stratified evaluation    | stratified-eval.rkt      | SCC + sequential strata         | Non-monotonic operations      |
+| Widening                 | propagator.rkt           | net-cell-write-widen            | Infinite-height lattice cells |
+| No-change guard          | propagator.rkt           | net-cell-write merge + eq check | Every cell write              |
+| Duality enforcement      | session-propagators.rkt  | send↔recv, choice↔offer         | Session endpoint pairing      |
+| Capability provenance    | capability-inference.rkt | ATMS cell keys per func×cap     | Capability analysis           |
+
+
+<a id="orgaef0b98"></a>
+
+### 17.2 Pattern Frequency Analysis
+
+The most pervasive patterns are:
+
+1.  **No-change guard** (every cell write) &mdash; the termination mechanism
+2.  **Structural decomposition** (every compound type unification)
+3.  **Threshold gating** (every conditional propagator)
+4.  **Cross-domain bridging** (every multi-domain analysis)
+
+
+<a id="orgb7031c9"></a>
+
+### 17.3 Architectural Gaps and Future Directions
+
+| Gap                        | Current State                                         | Future Direction               |
+|-------------------------- |----------------------------------------------------- |------------------------------ |
+| Demand-driven evaluation   | All push-based                                        | Adapton-style pull integration |
+| Parallel propagator firing | Sequential (make-parallel-fire-all exists but unused) | BSP superstep parallelism      |
+| Widening operators         | Basic net-cell-write-widen                            | Full abstract interpretation   |
+| Dynamic re-stratification  | Static SCC decomposition                              | Incremental SCC on fact change |
+| GDE-style diagnosis        | Ad hoc error messages                                 | ATMS-backed minimal diagnosis  |
+| Hierarchical composition   | Flat propagator networks                              | Spivak-style operad nesting    |
+
+
+<a id="orge7abab2"></a>
+
+# References
+
+
+<a id="orgcd609ec"></a>
+
+## Foundational
+
+-   Stallman, R. M. & Sussman, G. J. (1977). *Forward reasoning and dependency-directed backtracking in a system for computer-aided circuit analysis.* AI Memo 380, MIT.
+-   Steele, G. L. Jr. (1980). *The Definition and Implementation of a Computer Programming Language Based on Constraints.* PhD thesis, MIT.
+-   Radul, A. (2009). *Propagation Networks: A Flexible and Expressive Substrate for Computation.* PhD thesis, MIT.
+-   Radul, A. & Sussman, G. J. (2009). *The Art of the Propagator.* MIT CSAIL Tech Report.
+-   Radul, A. & Sussman, G. J. (2010). *Revised Report on the Propagator Model.* MIT CSAIL.
+-   Hanson, C. & Sussman, G. J. (2021). *Software Design for Flexibility.* MIT Press, Ch. 7.
+
+
+<a id="org4cd53fd"></a>
+
+## Lattice Theory and Domain Theory
+
+-   Tarski, A. (1955). *A lattice-theoretical fixpoint theorem and its applications.* Pacific J. Math.
+-   Scott, D. (1972). *Continuous lattices.* Springer LNM.
+-   Fitting, M. (1991). *Bilattices and the semantics of logic programming.* J. Logic Programming.
+-   Davey, B. A. & Priestley, H. A. (2002). *Introduction to Lattices and Order.* Cambridge UP.
+-   Abramsky, S. & Jung, A. (1994). *Domain theory.* Handbook of Logic in CS.
+-   Cousot, P. & Cousot, R. (1977). *Abstract interpretation.* POPL.
+
+
+<a id="orgb86945c"></a>
+
+## Category Theory
+
+-   Joyal, A., Street, R., & Verity, D. (1996). *Traced monoidal categories.* Math. Proc. Cambridge Phil. Soc.
+-   Abramsky, S. & Vickers, S. (1993). *Quantales, observational logic and process semantics.* Math. Structures in CS.
+-   Lawvere, F. W. (1973). *Metric spaces, generalized logic, and closed categories.* Rendiconti del Seminario Matematico.
+-   Selinger, P. (2010). *A survey of graphical languages for monoidal categories.* Springer LNS.
+
+
+<a id="orgbcb8672"></a>
+
+## Diagrammatic Formalisms
+
+-   Bonchi, F., Sobociński, P., & Zanasi, F. (2014-2017). *Graphical Linear Algebra* series.
+-   Spivak, D. I. (2013). *The operad of wiring diagrams.* arXiv:1305.0297.
+-   Girard, J.-Y. (1987). *Linear logic.* Theoretical CS.
+-   Lafont, Y. (1990). *Interaction nets.* POPL.
+
+
+<a id="orgedcbc30"></a>
+
+## Constraint Solving
+
+-   Mackworth, A. K. (1977). *Consistency in networks of relations.* Artificial Intelligence.
+-   Frühwirth, T. (1998). *Theory and practice of constraint handling rules.* J. Logic Programming.
+-   Fages, F. et al. (2014). *Self-decomposable global constraints.*
+
+
+<a id="org5f7ebd0"></a>
+
+## Reactive and Incremental Computation
+
+-   Elliott, C. & Hudak, P. (1997). *Functional reactive animation.* ICFP.
+-   Bainomugisha, E. et al. (2013). *A survey on reactive programming.* ACM Computing Surveys.
+-   Acar, U. A. (2005). *Self-adjusting computation.* PhD thesis, CMU.
+-   Hammer, M. A. et al. (2014). *Adapton: composable, demand-driven incremental computation.* PLDI.
+
+
+<a id="orgcd4602b"></a>
+
+## Parallel and Distributed Computation
+
+-   Valiant, L. G. (1990). *A bridging model for parallel computation.* CACM.
+-   Shapiro, M. et al. (2011). *Conflict-free replicated data types.* SSS.
+-   Ameloot, T., Neven, F., & Van den Bussche, J. (2011). *Relational transducers for declarative networking.* PODS. (CALM theorem)
+-   Kahn, G. (1974). *The semantics of a simple language for parallel programming.* IFIP.
+-   Kuper, L. & Newton, R. R. (2013). *LVars: lattice-based data structures for deterministic parallelism.* FHPC.
+-   Attiya, H. et al. (1995). *Atomic snapshots of shared memory.* JACM.
+
+
+<a id="org2f9d105"></a>
+
+## Truth Maintenance Systems
+
+-   Doyle, J. (1979). *A truth maintenance system.* Artificial Intelligence.
+-   McAllester, D. (1980). *An outlook on truth maintenance.* AI Memo 551, MIT.
+-   de Kleer, J. (1986). *An assumption-based TMS.* Artificial Intelligence.
+-   de Kleer, J. & Williams, B. C. (1987). *Diagnosing multiple faults.* Artificial Intelligence.

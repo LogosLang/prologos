@@ -1,48 +1,54 @@
-- [Purpose](#org163f357)
-- [The Five Phases](#orga8ce28d)
-  - [Phase 1: Deep Research](#orgf2f8859)
-    - [What this looks like](#org8b9a42c)
-    - [Key practices](#org75c540b)
-    - [Artifacts](#org72fc998)
-    - [Example](#orge8e1356)
-  - [Phase 2: Research Refinement and Gap Analysis](#org32c9e08)
-    - [What this looks like](#org30595ad)
-    - [Key practices](#org353b6d2)
-    - [Artifacts](#orga482507)
-  - [Phase 3: Design Iteration](#orged5cb32)
-    - [What this looks like](#orga3ab094)
-    - [Key practices](#org8bc5967)
-    - [The critique cycle in practice](#orgad88a5a)
-    - [Artifacts](#org7019f64)
-  - [Phase 4: Implementation](#orgee28009)
-    - [What this looks like](#org1254d38)
-    - [Key practices](#org9dc4874)
-    - [Implementation flow](#org909ef4c)
-    - [Artifacts](#org9f1e6be)
-  - [Phase 5: Composition and Extension](#org6400175)
-    - [What this looks like](#org2577fc6)
-    - [Key practices](#org1233e32)
-- [Cross-Cutting Principles](#org1c1e9e5)
-  - [Theoretical Grounding, Practical Surface](#orgef4a37c)
-  - [Design Documents Are Living](#orgec7b043)
-  - [Critique Is a Gift](#orged369f8)
-  - [Standups as Design Memory](#org183fe4b)
-  - [The 14-File Pipeline as Discipline](#org845a580)
-- [Anti-Patterns](#org8385c81)
-  - ["We'll come back to it"](#orgf04f6ee)
-  - [Quick fixes that meet criteria partially](#org6196233)
-  - [Research without documentation](#orgcde9701)
-  - [Design without critique](#orgbd3334d)
-  - [Implementation without tests](#orgd01cf30)
-- [Relationship to Other Principles Documents](#org86d9910)
-- [Exemplar Projects](#orgb9d7ef1)
-  - [Extended Spec Language Design](#org0aa99e0)
-  - [Logic Engine on Propagators](#orgdf9aaf5)
-  - [Collections Ergonomics](#org9e5acf1)
+- [Purpose](#orgde6edf9)
+- [The Five Stages](#orga92e01f)
+  - [Stage 1: Deep Research](#orgb833a67)
+    - [What this looks like](#orgd1dab07)
+    - [Key practices](#org4918b2a)
+    - [Artifacts](#org7ca741c)
+    - [Example](#org50d200b)
+  - [Stage 2: Research Refinement and Gap Analysis](#org7103a91)
+    - [What this looks like](#orgec1952a)
+    - [Key practices](#org9572b51)
+    - [Artifacts](#org2b65edd)
+  - [Stage 3: Design Iteration](#org944dd75)
+    - [What this looks like](#org4c53b09)
+    - [Key practices](#orge4c7195)
+    - [The critique cycle in practice](#org8a6dd73)
+    - [Artifacts](#org8ce2ec2)
+  - [Stage 4: Implementation](#orga9912a5)
+    - [What this looks like](#org232c9ce)
+    - [Key practices](#org282c891)
+    - [Implementation flow](#orgef5eb8a)
+    - [WS-Mode Validation Protocol](#orgda50188)
+    - [Artifacts](#orgd48129e)
+  - [Stage 5: Composition and Extension](#orge2e18d9)
+    - [What this looks like](#orgc0d5159)
+    - [Key practices](#org7df7a0f)
+    - [Feature Capstone Demo (Mandatory)](#org7643f09)
+    - [Post Implementation Review (PIR)](#orgf871b51)
+- [Cross-Cutting Principles](#org725f2d5)
+  - [Theoretical Grounding, Practical Surface](#orgdc343dc)
+  - [Design Documents Are Living](#org2f5dba3)
+  - [Critique Is a Gift](#org00dcdd5)
+  - [Standups as Design Memory](#orga26487b)
+  - [The 14-File Pipeline as Discipline](#org64e2661)
+- [Anti-Patterns](#org0a6fc1b)
+  - ["We'll come back to it"](#org8b0c671)
+  - [Quick fixes that meet criteria partially](#orgd2eb6d9)
+  - [Research without documentation](#orgae410dc)
+  - [Design without critique](#org88f16da)
+  - [Implementation without tests](#org7be7d1b)
+  - [Sexp-only validation](#org9715879)
+- [Relationship to Other Principles Documents](#orgc9e38bd)
+- [Exemplar Projects](#orga359f35)
+  - [Extended Spec Language Design](#org03dd88f)
+  - [Logic Engine on Propagators](#org2b6bc36)
+  - [Collections Ergonomics](#org81275cc)
+  - [Session Types (S1&ndash;S8)](#org371c128)
+  - [Effect Ordering via Session Types (Architecture A+D)](#orgb43c0c1)
 
 
 
-<a id="org163f357"></a>
+<a id="orgde6edf9"></a>
 
 # Purpose
 
@@ -51,19 +57,19 @@ This document describes the methodology we follow when designing and implementin
 The methodology emerged organically from our practice on major efforts including the Extended Spec Language Design, the Logic Engine on Propagators, Collections Ergonomics, the Numerics Tower, and the Homoiconicity phases. It is descriptive (capturing what actually works) as much as prescriptive (defining what we should do).
 
 
-<a id="orga8ce28d"></a>
+<a id="orga92e01f"></a>
 
-# The Five Phases
-
-
-<a id="orgf2f8859"></a>
-
-## Phase 1: Deep Research
-
-*Goal*: Ground ourselves in the best techniques &#x2014; cutting-edge and well-proven &#x2014; with a comprehensive survey of the landscape.
+# The Five Stages
 
 
-<a id="org8b9a42c"></a>
+<a id="orgb833a67"></a>
+
+## Stage 1: Deep Research
+
+*Goal*: Ground ourselves in the best techniques &mdash; cutting-edge and well-proven &mdash; with a comprehensive survey of the landscape.
+
+
+<a id="orgd1dab07"></a>
 
 ### What this looks like
 
@@ -73,20 +79,20 @@ The methodology emerged organically from our practice on major efforts including
 -   Produce a research document (`docs/research/` or `docs/tracking/`) that synthesizes findings
 
 
-<a id="org75c540b"></a>
+<a id="org4918b2a"></a>
 
 ### Key practices
 
--   **Cast a wide net**: Survey at least 3&#x2013;5 existing approaches to the same problem. For the Extended Spec Design, we surveyed Clojure Spec, Malli, PropEr, Agda, Idris 2, Lean 4, Haskell, F\*, Koka, and Racket Contracts before writing a line of design prose.
+-   **Cast a wide net**: Survey at least 3&ndash;5 existing approaches to the same problem. For the Extended Spec Design, we surveyed Clojure Spec, Malli, PropEr, Agda, Idris 2, Lean 4, Haskell, F\*, Koka, and Racket Contracts before writing a line of design prose.
 
--   **Identify the essential vs. accidental**: What is fundamental to the problem domain vs. what is incidental to a particular implementation? The Logic Engine research distilled that propagator networks, lattice theory, and truth maintenance are the essential components &#x2014; the specific data structures (CHAMP vs. HAMTs, persistent vs. mutable) are implementation choices.
+-   **Identify the essential vs. accidental**: What is fundamental to the problem domain vs. what is incidental to a particular implementation? The Logic Engine research distilled that propagator networks, lattice theory, and truth maintenance are the essential components &mdash; the specific data structures (CHAMP vs. HAMTs, persistent vs. mutable) are implementation choices.
 
--   **Name the theories**: Lattice theory, Curry-Howard correspondence, the pi-calculus, Radul-Sussman propagators, Kuper's LVars &#x2014; naming the theoretical foundations makes them citable, shareable, and critiquable. A design grounded in named theory is more robust than one grounded in intuition alone.
+-   **Name the theories**: Lattice theory, Curry-Howard correspondence, the pi-calculus, Radul-Sussman propagators, Kuper's LVars &mdash; naming the theoretical foundations makes them citable, shareable, and critiquable. A design grounded in named theory is more robust than one grounded in intuition alone.
 
 -   **Document as you go**: Research that isn't written down evaporates when context windows reset. The research document becomes the institutional memory.
 
 
-<a id="org72fc998"></a>
+<a id="org7ca741c"></a>
 
 ### Artifacts
 
@@ -95,38 +101,38 @@ The methodology emerged organically from our practice on major efforts including
 -   A vocabulary of concepts that the team will use in subsequent phases
 
 
-<a id="orge8e1356"></a>
+<a id="org50d200b"></a>
 
 ### Example
 
 The Logic Engine began with `2026-02-23_LATTICE_PROPAGATOR_RESEARCH.md`, covering lattice foundations, LVars/LVish deterministic parallelism, the "Multiverse Mechanism" and "Pocket Universe" theories, Radul-Sussman propagator networks, and TMS/ATMS truth maintenance. This document established the conceptual vocabulary (cells, propagators, quiescence, monotonic merge) that all subsequent design work referenced.
 
 
-<a id="org32c9e08"></a>
+<a id="org7103a91"></a>
 
-## Phase 2: Research Refinement and Gap Analysis
+## Stage 2: Research Refinement and Gap Analysis
 
 *Goal*: Refine our understanding, identify gaps in current infrastructure, consider tradeoffs, identify opportunities aligned with core principles, and make qualified recommendations.
 
 
-<a id="org30595ad"></a>
+<a id="orgec1952a"></a>
 
 ### What this looks like
 
 -   Review research findings against our existing implementation
 -   Identify what infrastructure we already have and what is missing
 -   Enumerate alternative approaches with their tradeoffs
--   Check alignment with principles in `DESIGN_PRINCIPLES.org` and `LANGUAGE_VISION.org`
+-   Check alignment with design principles in `DESIGN_PRINCIPLES.org` and `LANGUAGE_VISION.org`
 -   Make recommendations, with rationale, for which approach to pursue
 
 
-<a id="org353b6d2"></a>
+<a id="org9572b51"></a>
 
 ### Key practices
 
--   **Infrastructure gap analysis**: Before designing the Logic Engine, we identified that we needed persistent data structures (CHAMP), lattice traits, and type-system exposure of runtime values &#x2014; and that we already had CHAMP maps, the trait system, and the 14-file AST pipeline. The gap analysis shapes the roadmap.
+-   **Infrastructure gap analysis**: Before designing the Logic Engine, we identified that we needed persistent data structures (CHAMP), lattice traits, and type-system exposure of runtime values &mdash; and that we already had CHAMP maps, the trait system, and the 14-file AST pipeline. The gap analysis shapes the roadmap.
 
--   **Tradeoff matrices**: When multiple approaches exist, make the tradeoffs explicit. Mutable vs. persistent propagator networks? The tradeoff is performance (mutable wins for raw speed) vs. backtracking simplicity (persistent wins &#x2014; O(1) backtrack is "keep old reference"). Making this explicit lets us choose with eyes open.
+-   **Tradeoff matrices**: When multiple approaches exist, make the tradeoffs explicit. Mutable vs. persistent propagator networks? The tradeoff is performance (mutable wins for raw speed) vs. backtracking simplicity (persistent wins &mdash; O(1) backtrack is "keep old reference"). Making this explicit lets us choose with eyes open.
 
 -   **Principle alignment check**: Every recommendation should pass the "does this uphold our principles?" test:
     
@@ -138,10 +144,10 @@ The Logic Engine began with `2026-02-23_LATTICE_PROPAGATOR_RESEARCH.md`, coverin
     
     The Logic Engine's decision to subsume LVars into propagator cells (rather than having separate LVar types) was driven by decomplection: cells with per-cell merge functions are the more general abstraction.
 
--   **Opportunities over features**: Don't just fill gaps &#x2014; identify opportunities where our unique combination of features enables something no other system offers. The fusion of propagators with session types for distributed constraint solving is an opportunity that arises from having both systems in the same language.
+-   **Opportunities over features**: Don't just fill gaps &mdash; identify opportunities where our unique combination of features enables something no other system offers. The fusion of propagators with session types for distributed constraint solving is an opportunity that arises from having both systems in the same language.
 
 
-<a id="orga482507"></a>
+<a id="org2b65edd"></a>
 
 ### Artifacts
 
@@ -150,14 +156,14 @@ The Logic Engine began with `2026-02-23_LATTICE_PROPAGATOR_RESEARCH.md`, coverin
 -   Recommendation with rationale tied to principles
 
 
-<a id="orged5cb32"></a>
+<a id="org944dd75"></a>
 
-## Phase 3: Design Iteration
+## Stage 3: Design Iteration
 
 *Goal*: Produce a concrete design with a detailed, phased roadmap for implementation, refined through critique and feedback until there is full clarity.
 
 
-<a id="orga3ab094"></a>
+<a id="org4c53b09"></a>
 
 ### What this looks like
 
@@ -165,11 +171,11 @@ This is an iterative cycle:
 
 1.  **Draft**: Produce a complete design document with implementation roadmap
 2.  **Critique**: Subject the design to rigorous, independent critique
-3.  **Respond**: Address critiques &#x2014; accept, refine, or justify
+3.  **Respond**: Address critiques &mdash; accept, refine, or justify
 4.  **Repeat**: Continue until all parties have clarity and confidence
 
 
-<a id="org8bc5967"></a>
+<a id="orge4c7195"></a>
 
 ### Key practices
 
@@ -181,12 +187,14 @@ This is an iterative cycle:
 
 -   **Pushback with context**: Not all critiques are valid. When a critique misunderstands the system's context, push back with the fuller picture. When the Logic Engine critique suggested adding `:includes` to traits for contradiction detection, we pushed back: "We don't want trait hierarchies AT ALL, EVER! This is the whole rationale for the `bundle` concept." The pushback refined both the design and our articulation of the principle.
 
--   **Phase dependencies are architecture**: The phased roadmap isn't just a schedule &#x2014; it's an architectural statement about what depends on what. The Logic Engine's critical path (`Phase 1 → 2 → 3 → 5 → 6 → 7`, with `Phase 4` parallelizable) encodes fundamental architectural dependencies. Getting this right prevents wasted work.
+-   **Phase dependencies are architecture**: The phased roadmap isn't just a schedule &mdash; it's an architectural statement about what depends on what. The Logic Engine's critical path (`Phase 1 → 2 → 3 → 5 → 6 → 7`, with `Phase 4` parallelizable) encodes fundamental architectural dependencies. Getting this right prevents wasted work.
 
 -   **Concrete over abstract**: Show elaboration examples, not just type signatures. Show how `defr ancestor` becomes propagator cells and fire functions, not just "relations elaborate to propagator networks." Every level of abstraction should have at least one concrete example that a reader can trace through.
 
+-   **State termination arguments for propagator-hosted computation**: Any design that adds propagators, lattices, or cross-layer interactions must include explicit termination arguments. For each new propagator: which guarantee level (1&ndash;5) applies? For cross-layer feedback: what is the well-founded measure that decreases? A design without termination arguments for its propagator components is incomplete. See [GÖDEL<sub>COMPLETENESS.org</sub>](GÖDEL_COMPLETENESS.md).
 
-<a id="orgad88a5a"></a>
+
+<a id="org8a6dd73"></a>
 
 ### The critique cycle in practice
 
@@ -207,7 +215,7 @@ The Logic Engine Design went through a similar cycle:
 6.  **Final roadmap** → phased implementation plan with clear phase dependencies and test strategies per phase
 
 
-<a id="org7019f64"></a>
+<a id="org8ce2ec2"></a>
 
 ### Artifacts
 
@@ -217,28 +225,28 @@ The Logic Engine Design went through a similar cycle:
 -   Record of critique and responses (preserved in standups)
 
 
-<a id="orgee28009"></a>
+<a id="orga9912a5"></a>
 
-## Phase 4: Implementation
+## Stage 4: Implementation
 
 *Goal*: Execute the phased roadmap, shipping complete and sound solutions at each phase, raising design issues as they surface.
 
 
-<a id="org1254d38"></a>
+<a id="org232c9ce"></a>
 
 ### What this looks like
 
 -   Work through the roadmap phase by phase
 -   Create tracking documents before implementation begins
--   Ship complete, tested solutions &#x2014; not partial scaffolding
+-   Ship complete, tested solutions &mdash; not partial scaffolding
 -   When implementation reveals design gaps, stop and address them
 
 
-<a id="org9dc4874"></a>
+<a id="org282c891"></a>
 
 ### Key practices
 
--   **Completeness over deferral**: This is our most important implementation principle (see `DEVELOPMENT_LESSONS.org` § "Completeness Over Deferral"). When you have clarity, vision, and full context &#x2014; finish the work now. Half-built pieces that get deferred are half-built pieces that get forgotten. The cost of re-acquiring context later almost always exceeds the cost of doing the work while the understanding is fresh.
+-   **Completeness over deferral**: This is our most important implementation principle (see `DEVELOPMENT_LESSONS.org` § "Completeness Over Deferral"). When you have clarity, vision, and full context &mdash; finish the work now. Half-built pieces that get deferred are half-built pieces that get forgotten. The cost of re-acquiring context later almost always exceeds the cost of doing the work while the understanding is fresh.
     
     Defer *only* when there is a genuine dependency on unbuilt infrastructure or genuinely uncertain design. "We'll come back to it" is a red flag.
 
@@ -250,9 +258,9 @@ The Logic Engine Design went through a similar cycle:
     
     Each of these was addressed: the first two with code fixes and design documentation, the third with a workaround and a tracked limitation. The key is: *don't paper over design issues with quick fixes that meet criteria partially*.
 
--   **If a gap requires deeper infrastructure, address the core concern**: When the Logic Engine critique identified that contradiction detection needed a `HasTop` trait, we built it &#x2014; including a `BoundedLattice` bundle and trait instances for Bool, FlatVal, and Interval. This was more work than a simple boolean flag, but it produced the correct abstraction that composes with the rest of the trait system.
+-   **If a gap requires deeper infrastructure, address the core concern**: When the Logic Engine critique identified that contradiction detection needed a `HasTop` trait, we built it &mdash; including a `BoundedLattice` bundle and trait instances for Bool, FlatVal, and Interval. This was more work than a simple boolean flag, but it produced the correct abstraction that composes with the rest of the trait system.
 
--   **Phase-gated implementation with sub-phases**: Break phases into lettered sub-phases (a, b, c&#x2026;) with explicit "done" vs. "remaining" tracking. The Logic Engine Phase 3 was broken into:
+-   **Phase-gated implementation with sub-phases**: Break phases into lettered sub-phases (a, b, c&hellip;) with explicit "done" vs. "remaining" tracking. The Logic Engine Phase 3 was broken into:
     
     -   3a: AST structs + mechanical traversals
     -   3b: Type rules + type tests
@@ -262,12 +270,14 @@ The Logic Engine Design went through a similar cycle:
     
     Each sub-phase has a clear scope, produces testable artifacts, and creates a natural commit point.
 
--   **Test at every boundary**: Every sub-phase should end with passing tests. The Logic Engine implementation produced 56 new tests across 3 test files, verifying types (32 tests), integration (16 tests), and library-level traits (8 tests). Tests are not an afterthought &#x2014; they are the proof that the implementation matches the design.
+-   **Test at every boundary**: Every sub-phase should end with passing tests. The Logic Engine implementation produced 56 new tests across 3 test files, verifying types (32 tests), integration (16 tests), and library-level traits (8 tests). Tests are not an afterthought &mdash; they are the proof that the implementation matches the design.
+
+-   **Three-level WS validation** (see "WS-Mode Validation Protocol" below): Features must be validated at all three levels: sexp unit tests, `process-string-ws` tests, and `process-file` on a `.prologos` file. A feature that passes sexp tests but fails in a `.prologos` file is *not done*. This is the most common gap in our process &mdash; see the anti-pattern "Sexp-Only Validation" below.
 
 -   **Track deferred work immediately**: When something must be deferred (the `new-lattice-cell` generic wrapper, for instance), add it to `DEFERRED.md` in the same commit. Deferred work not tracked is abandoned work.
 
 
-<a id="org909ef4c"></a>
+<a id="orgef5eb8a"></a>
 
 ### Implementation flow
 
@@ -308,34 +318,97 @@ The Logic Engine Design went through a similar cycle:
 ```
 
 
-<a id="org9f1e6be"></a>
+<a id="orgda50188"></a>
+
+### WS-Mode Validation Protocol
+
+WS-mode `.prologos` files are the *only* user-facing syntax. A feature that works in sexp mode but not in WS mode is broken &mdash; it does not work for our users. This protocol ensures we catch these gaps during implementation, not at Stage 5 demo time.
+
+1.  Three levels of testing
+
+    | Level | Tool                                | What it validates                                                                     |
+    |----- |----------------------------------- |------------------------------------------------------------------------------------- |
+    | 1     | `process-string` / `run-last`       | Sexp IR, parser internals, type rules                                                 |
+    | 2     | `process-string-ws` / `run-ws-last` | Single WS expression in preloaded env                                                 |
+    | 3     | `process-file` on `.prologos`       | Full pipeline: reader, top-level scoping, multi-form interaction, file-level preparse |
+    
+    Level 3 is consistently the gap. Features pass Level 1 and 2 but fail Level 3 because:
+    
+    -   Top-level scoping differs from inside-defn scoping
+    -   File-level preparse expansion has different code paths than string mode
+    -   Multi-form interaction (e.g., `def` followed by indexing expression) exercises the WS reader's form-boundary logic
+
+2.  The acceptance file
+
+    Before implementation begins, write a skeleton `.prologos` file with the expressions the feature should support. This becomes the acceptance test. The file lives at:
+    
+    `racket/prologos/examples/{date}-{feature}.prologos`
+    
+    The skeleton can start with commented-out expressions showing the target syntax. As each phase completes, uncomment the expressions that now work. The feature isn't done until `process-file` on the acceptance file produces 0 errors.
+    
+    This catches the sexp-vs-WS gap at implementation time because you are forced to confront top-level scoping, file-level preparse, and multi-form interaction from the start.
+
+3.  The canary file
+
+    Maintain a single `.prologos` file (`examples/canary.prologos`) that exercises every landed feature. Updated incrementally as each feature lands &mdash; not deferred to Stage 5. Run it as part of the test suite or as a manual smoke test. If it breaks, something regressed.
+    
+    The canary differs from per-feature tests in that it tests *composition* of features in a single namespace &mdash; the same environment a user works in.
+
+4.  Completion criterion
+
+    A phase is not complete until:
+    
+    1.  All sexp unit tests pass (Level 1)
+    2.  WS-mode string tests pass (Level 2)
+    3.  The expressions work in a standalone `.prologos` file via `process-file` (Level 3)
+    4.  The acceptance file has been updated (new expressions uncommented)
+    
+    A `process-string-ws` test alone is insufficient &mdash; top-level scoping and file-level preparse must be validated.
+
+5.  Tracking WS coverage
+
+    The progress tracker for each feature should include a column for WS file validation:
+    
+    | Phase | Status | Commit    | WS file validated?              |
+    |----- |------ |--------- |------------------------------- |
+    | 1a    | DONE   | `f4ef4c0` | Yes                             |
+    | 1c    | DONE   | `587cacf` | **No &mdash; only inside defn** |
+    | 1d    | DONE   | `b8b5039` | **No &mdash; sexp only**        |
+    
+    This makes the gap visible. "DONE" without WS file validation should be treated as "DONE (sexp only)" and flagged for follow-up.
+
+
+<a id="orgd48129e"></a>
 
 ### Artifacts
 
 -   Phase-specific commits with descriptive messages
--   Updated tracking document with completion status
+-   Updated tracking document with completion status (including WS validation column)
 -   Updated `DEFERRED.md` for any deferred work
 -   Test suite growth (measurable)
+-   Acceptance `.prologos` file with uncommented working expressions
 
 
-<a id="org6400175"></a>
+<a id="orge2e18d9"></a>
 
-## Phase 5: Composition and Extension
+## Stage 5: Composition and Extension
 
 *Goal*: Enjoy the well-thought-out design and how it composes with our multi-level, modular, extensible language. Verify that the new feature integrates cleanly and enables future extension.
 
 
-<a id="org2577fc6"></a>
+<a id="orgc0d5159"></a>
 
 ### What this looks like
 
+-   Write a capstone demo (`.prologos` file) exercising the feature in the user-facing syntax — this is the first mandatory step
 -   Verify that the new feature composes with existing features
 -   Check that the new abstractions are reusable in contexts beyond the original design
 -   Update principles documents if new patterns emerged
 -   Identify the new possibilities that the feature enables
+-   Conduct a Post Implementation Review for significant features
 
 
-<a id="org1233e32"></a>
+<a id="org7df7a0f"></a>
 
 ### Key practices
 
@@ -349,116 +422,235 @@ The Logic Engine Design went through a similar cycle:
     -   Relevant principles docs (new patterns, new lessons)
     -   The original tracking document (completion status, lessons learned)
 
--   **Teach through usage**: Write examples that show the feature in context. The Logic Engine's test files serve double duty as documentation: they show how to create networks, add cells, wire propagators, run to quiescence, and read results. Future users (including future context windows) learn from these examples.
+-   **Teach through the capstone demo**: Write a `.prologos` demo file that shows the feature in context (see "Feature Capstone Demo" below). The demo serves triple duty: user-facing documentation, integration validation, and honest assessment of WS-mode surface coverage. This replaces the test-files-as-documentation pattern — tests prove correctness, demos prove usability.
 
 
-<a id="org1c1e9e5"></a>
+<a id="org7643f09"></a>
+
+### Feature Capstone Demo (Mandatory)
+
+After a significant feature track is complete &mdash; all sub-phases shipped, tests passing &mdash; write a **capstone demo file** that exercises the feature in the user-facing `.prologos` syntax. This is not a test file (those exist already); it is a *feature showcase* written in the ideal syntax of the language, intended to be read and run by users (including future selves).
+
+1.  Why this is mandatory
+
+    The capstone demo serves purposes that unit tests cannot:
+    
+    -   **Discovers syntax gaps**: Unit tests exercise the sexp/API layer. The capstone forces the WS reader → preparse → parse → elaborate path, revealing features that work internally but aren't surfaced in the user-facing syntax. The FL Narrowing capstone revealed that ground constructor args in WS narrowing (`[add zero ?y] = 5N`), nested match patterns, and composed-function narrowing don't yet work in WS mode &mdash; none of which were visible from the passing test suite.
+    
+    -   **Validates integration with other features**: The demo should exercise how the new feature interacts with existing language components &mdash; the prelude, the type system, other syntactic forms (pipes, match, pattern defn). A feature that works in isolation but breaks when composed with the rest of the language is not done.
+    
+    -   **Establishes ground truth for "what works"**: After the demo runs, you have an honest inventory: which ideal-syntax expressions produce correct output, which need commenting out, and which reveal future work. This inventory is more valuable than any design document for understanding the current state of the feature.
+    
+    -   **Creates user-facing documentation**: The demo is a teaching artifact. It shows users what the feature does, how to use it, and what the output looks like. Heavy commenting explains the underlying mechanisms.
+    
+    -   **Exercises the language vision**: Writing the demo forces you to think about how the feature *should* look in the ideal syntax, even if the current parser doesn't support it yet. Ideal syntax that's commented out with a `NOTE:` becomes a specification for future work.
+
+2.  What the capstone should contain
+
+    -   **Prologos header and `ns` declaration**: First-class `.prologos` file in the examples directory
+    -   **Sections organized by feature/phase**: Each section introduces one capability with commentary explaining the mechanism
+    -   **Live executable expressions**: Every uncommented expression must run without errors
+    -   **Commented ideal syntax**: Features not yet surfaced in WS mode are shown as commented-out ideal syntax with `NOTE:` explaining the gap
+    -   **Cross-feature exercises**: At least one section showing how the new feature composes with existing features (e.g., narrowing + functional code, narrowing + prelude functions, narrowing + user definitions)
+    -   **Summary table**: Lines/tests per sub-phase, giving readers a sense of the implementation's scope
+
+3.  What the capstone should NOT be
+
+    -   Not a test file (no `check-equal?`, no `rackunit`)
+    -   Not an exhaustive regression suite (that's what `tests/` is for)
+    -   Not a design document (that's in `docs/tracking/`)
+    -   Not a copy of existing tests translated to WS mode (it should explore NEW combinations and usage patterns)
+
+4.  When to write it
+
+    After the last sub-phase is committed and all tests pass, but *before* the PIR. The capstone often surfaces issues that inform the PIR's "challenges" and "forward enablement" sections.
+
+5.  Naming and location
+
+    `racket/prologos/examples/{feature}-demo.prologos`
+    
+    Examples: `narrowing-demo.prologos`, `relational-demo.prologos`, `session-demo.prologos`.
+
+6.  Example
+
+    The FL Narrowing capstone (`examples/narrowing-demo.prologos`, 533 lines) covered all 11 sub-phases with 16 live narrowing queries and 5 commented ideal-syntax sections. It revealed 3 WS-mode gaps, validated 7 working cross-feature interactions, and established the ground truth that narrowing currently operates over inductively-defined types (Nat, Bool) with Int narrowing via constraint propagation as a future extension.
+
+
+<a id="orgf871b51"></a>
+
+### Post Implementation Review (PIR)
+
+After a significant feature is complete &mdash; all sub-phases shipped, tests passing, tracking documents updated &mdash; conduct a Post Implementation Review. The PIR is the reflective counterpart to the research stage: where Stage 1 asks "what do we know going in?", the PIR asks "what do we know coming out?"
+
+A PIR is *not* a retrospective about process (though process insights belong). It is primarily a *technical* review: did the design hold up? What did the implementation reveal about our architecture? What does this feature enable that we didn't anticipate?
+
+For the full PIR methodology &mdash; questions to answer, format template, what to collect during implementation, pre-implementation practices, and anti-patterns &mdash; see [POST<sub>IMPLEMENTATION</sub><sub>REVIEW.org</sub>](POST_IMPLEMENTATION_REVIEW.md).
+
+1.  What to cover
+
+    -   **Objectives vs. actuals**: What did we set out to build? What did we actually build? Quantify scope adherence (e.g., "36/38 sub-phases, 95%"). Note what was correctly deferred vs. what was scope creep or missed.
+    
+    -   **What went well**: Identify decisions, patterns, and practices that paid off. These are candidates for codification in principles documents. The Session Type PIR identified the 3-stage design process (research → design → plan) and propagator-as-universal-substrate as key successes worth replicating.
+    
+    -   **Challenges and how they were resolved**: Document the hard problems and their solutions. Be specific &mdash; "the `??` / `$typed-hole` reader conflict required context-sensitive disambiguation at three points in the desugaring pipeline" is more useful than "WS parsing was tricky." Future implementations facing similar challenges will benefit from the concrete resolution.
+    
+    -   **Architectural validation**: Did the feature integrate cleanly with existing systems? Were the extension points (AST pipeline, trait system, propagator network) sufficient, or did they need modification? A clean integration validates the architecture; friction points identify areas for improvement.
+    
+    -   **Quantitative summary**: Lines of code, test count growth, number of commits, implementation duration. These establish baselines for estimating future work of similar scope.
+    
+    -   **Forward enablement**: What does this feature make possible that wasn't possible before? What are the natural next steps? This section bridges from the completed work to the future roadmap.
+    
+    -   **Lessons learned**: Distill the key insights &mdash; both technical and methodological &mdash; into actionable guidance. The best lessons are specific enough to apply ("single-method trait dicts should be the function itself, not a wrapper struct") rather than generic ("test early and often").
+
+2.  When to do a PIR
+
+    Not every change warrants a PIR. Use one when:
+    
+    -   The feature spanned multiple phases or sub-phases
+    -   The implementation took more than a single session
+    -   The work involved architectural decisions (new AST nodes, new infrastructure files, new cross-cutting concerns)
+    -   You learned something that future work should benefit from
+    
+    Skip for routine bug fixes, single-file changes, or features that followed established patterns without surprises.
+
+3.  Artifacts
+
+    -   PIR document: `docs/tracking/YYYY-MM-DD_TOPIC_PIR.md`
+    -   Updates to `DEVELOPMENT_LESSONS.org` for broadly applicable lessons
+    -   Updates to `PATTERNS_AND_CONVENTIONS.org` for new patterns discovered
+    -   Updates to `MEMORY.md` for project-level status
+
+4.  Example
+
+    The Session Types PIR (`2026-03-04_SESSION_TYPE_PIR.md`) covered 36/38 sub-phases across ~24 hours. Key findings:
+    
+    -   The 3-stage design methodology (deep research → adversarial critique → phased implementation) produced zero architectural rework
+    -   Propagator networks proved to be a universal substrate: session types were the third domain (after types and multiplicities) to use the same infrastructure without modification
+    -   The `??` / `$typed-hole` WS reader conflict revealed that context-sensitive token disambiguation requires handling at every stage of the desugaring pipeline, not just one
+    -   Phase 0 scoping (defer concurrent runtime) was validated as correct: complete type-level infrastructure enables future runtime work without redesign
+
+
+<a id="org725f2d5"></a>
 
 # Cross-Cutting Principles
 
-These principles apply across all five phases.
+These principles apply across all five stages.
 
 
-<a id="orgef4a37c"></a>
+<a id="orgdc343dc"></a>
 
 ## Theoretical Grounding, Practical Surface
 
 Every design decision should be traceable to a theoretical foundation, but the surface presentation should be practical and approachable. "Lattice-theoretic monotonic constraint propagation" is the theory; `net-cell-write` with a merge function is the practice. Both must exist: the theory ensures correctness, the practice ensures usability.
 
 
-<a id="orgec7b043"></a>
+<a id="org2f5dba3"></a>
 
 ## Design Documents Are Living
 
 Design documents are not write-once artifacts. They are updated as implementation reveals new information. The Logic Engine design document was refined after every critique round and after Phase 3 implementation revealed the `HasTop` trait need and the implicit-resolution limitation. Stale design documents are worse than no design documents.
 
 
-<a id="orged369f8"></a>
+<a id="org00dcdd5"></a>
 
 ## Critique Is a Gift
 
-Adversarial critique &#x2014; even harsh critique &#x2014; improves designs. The 10-point critique of the Logic Engine identified real gaps (resolution strategy underspecified, negation handling unsound). Every accepted critique made the design stronger. The discipline is to engage with critique on its merits, not defensively.
+Adversarial critique &mdash; even harsh critique &mdash; improves designs. The 10-point critique of the Logic Engine identified real gaps (resolution strategy underspecified, negation handling unsound). Every accepted critique made the design stronger. The discipline is to engage with critique on its merits, not defensively.
 
 Not all critiques are valid. The key judgment is: does this critique identify a real gap in the design, or does it misunderstand the system's context? When the latter, push back clearly and use the pushback to sharpen your articulation of *why* the design is the way it is.
 
 
-<a id="org183fe4b"></a>
+<a id="orga26487b"></a>
 
 ## Standups as Design Memory
 
 Our standup documents (`docs/standups/standup-YYYY-MM-DD.org`) serve as a chronological record of design discussions, including the back-and-forth of critique and refinement. The 🗣️ (human) and 🤖 (machine) annotations preserve the conversational flow. This record is invaluable for reconstructing design rationale months later.
 
 
-<a id="org845a580"></a>
+<a id="org64e2661"></a>
 
 ## The 14-File Pipeline as Discipline
 
 Prologos's 14-file AST pipeline (syntax → surface-syntax → parser → elaborator → typing-core → qtt → reduction → substitution → zonk → pretty-print → unify → macros → foreign) is both a cost and a benefit. The cost is that every new AST node requires touching many files. The benefit is that every subsystem handles every node consistently. This enforced consistency is a design methodology in itself: if a feature can't be expressed through the pipeline, it's a signal that the feature's abstraction is wrong.
 
 
-<a id="org8385c81"></a>
+<a id="org0a6fc1b"></a>
 
 # Anti-Patterns
 
 
-<a id="orgf04f6ee"></a>
+<a id="org8b0c671"></a>
 
 ## "We'll come back to it"
 
 Defer only when genuinely blocked. Track all deferrals immediately. See `DEVELOPMENT_LESSONS.org` § "Completeness Over Deferral."
 
 
-<a id="org6196233"></a>
+<a id="orgd2eb6d9"></a>
 
 ## Quick fixes that meet criteria partially
 
 A partial solution that passes tests but doesn't address the underlying design concern creates technical debt with interest. Better to identify the design gap, address it, and ship the complete solution.
 
 
-<a id="orgcde9701"></a>
+<a id="orgae410dc"></a>
 
 ## Research without documentation
 
 Research that exists only in a developer's head is lost when context resets. Write it down. Even rough notes are better than nothing.
 
 
-<a id="orgbd3334d"></a>
+<a id="org88f16da"></a>
 
 ## Design without critique
 
-A design that hasn't been subjected to adversarial critique has unknown weaknesses. Actively seek feedback, especially on the parts you're most confident about &#x2014; confidence is where blind spots hide.
+A design that hasn't been subjected to adversarial critique has unknown weaknesses. Actively seek feedback, especially on the parts you're most confident about &mdash; confidence is where blind spots hide.
 
 
-<a id="orgd01cf30"></a>
+<a id="org7be7d1b"></a>
 
 ## Implementation without tests
 
 An untested implementation is an unverified hypothesis. Tests are the proof that the implementation matches the design. New features aren't done until they have tests.
 
 
-<a id="org86d9910"></a>
+<a id="org9715879"></a>
+
+## Sexp-only validation
+
+A feature validated only at the sexp or `process-string-ws` level has an unknown status in the user-facing syntax. This is the most common gap in our process. The Surface Ergonomics Sprint (March 2026) revealed that several features marked "DONE" failed in `.prologos` files:
+
+-   Top-level `let` with sequential scoping &mdash; works inside `defn` bodies, fails at file top level (forms parsed as separate top-level expressions)
+-   Flat-pair `let [x v y v]` &mdash; works in sexp mode, no WS surface at all
+-   Keyword equality (`:hello = :hello`) &mdash; no `Eq Keyword` instance
+-   `let`-bound values as narrowing targets &mdash; value doesn't propagate into the narrowing context
+
+None of these were visible from the passing test suite because the tests used `process-string-ws` (Level 2), which processes a single expression in a pre-initialized environment. The gap is between Level 2 (string) and Level 3 (file). See "WS-Mode Validation Protocol" under Stage 4.
+
+
+<a id="orgc9e38bd"></a>
 
 # Relationship to Other Principles Documents
 
 | Document                         | Relationship to this methodology                           |
 |-------------------------------- |---------------------------------------------------------- |
-| `DESIGN_PRINCIPLES.org`          | Provides the values that Phase 2 alignment checks use      |
-| `LANGUAGE_VISION.org`            | Provides the north star that research (Phase 1) aims at    |
-| `DEVELOPMENT_LESSONS.org`        | Collects lessons that emerge from Phase 4                  |
-| `PATTERNS_AND_CONVENTIONS.org`   | Captures patterns that Phase 5 discovers                   |
-| `ERGONOMICS.org`                 | Informs Phase 2 tradeoff analysis for user-facing features |
-| `RELATIONAL_LANGUAGE_VISION.org` | Example of Phase 1-2 output for a specific domain          |
-| `CAPABILITY_SECURITY.md`         | Principles for authority control; constrains I/O, FFI, and process designs |
+| `DESIGN_PRINCIPLES.org`          | Provides the values that Stage 2 alignment checks use      |
+| `LANGUAGE_VISION.org`            | Provides the north star that research (Stage 1) aims at    |
+| `DEVELOPMENT_LESSONS.org`        | Collects lessons that emerge from Stage 4                  |
+| `PATTERNS_AND_CONVENTIONS.org`   | Captures patterns that Stage 5 discovers                   |
+| `ERGONOMICS.org`                 | Informs Stage 2 tradeoff analysis for user-facing features |
+| `RELATIONAL_LANGUAGE_VISION.org` | Example of Stage 1-2 output for a specific domain          |
+| `POST_IMPLEMENTATION_REVIEW.org` | Full PIR methodology for Stage 5 reviews                   |
 
 
-<a id="orgb9d7ef1"></a>
+<a id="orga359f35"></a>
 
 # Exemplar Projects
 
 These completed efforts illustrate the methodology in practice:
 
 
-<a id="org0aa99e0"></a>
+<a id="org03dd88f"></a>
 
 ## Extended Spec Language Design
 
@@ -469,22 +661,48 @@ These completed efforts illustrate the methodology in practice:
 -   **Composition**: `property` composes with `trait` via `:laws`, `bundle` composes `property` groups, `functor` composes with `spec` metadata.
 
 
-<a id="orgdf9aaf5"></a>
+<a id="org2b6bc36"></a>
 
 ## Logic Engine on Propagators
 
 -   **Research**: `2026-02-23_LATTICE_PROPAGATOR_RESEARCH.md` + the broader `TOWARDS_A_GENERAL_LOGIC_ENGINE_ON_PROPAGATORS.org` synthesis
 -   **Design**: `2026-02-24_LOGIC_ENGINE_DESIGN.org` with 7-phase roadmap, 14 AST nodes, data structure specifications
 -   **Iteration**: Relational language vision discussion, design critique (10 points), pushback on trait hierarchies, refinement of resolution strategy and HasTop design
--   **Implementation**: Phases 1&#x2013;3 complete. Phase 1 (lattice traits), Phase 2 (persistent PropNetwork with BSP), Phase 3 (14 AST nodes through 12-file pipeline, HasTop trait, BoundedLattice bundle). 56 new tests, parametric impl dispatch fix.
+-   **Implementation**: Phases 1&ndash;3 complete. Phase 1 (lattice traits), Phase 2 (persistent PropNetwork with BSP), Phase 3 (14 AST nodes through 12-file pipeline, HasTop trait, BoundedLattice bundle). 56 new tests, parametric impl dispatch fix.
 -   **Composition**: PropNetwork composes with trait system (Lattice, HasTop, BoundedLattice), type system (first-class type), prelude (available from any `ns` module).
 
 
-<a id="org9e5acf1"></a>
+<a id="org81275cc"></a>
 
 ## Collections Ergonomics
 
 -   **Research**: Audit of existing collection generics, gap identification
--   **Design**: Stages A&#x2013;I with clear boundaries
--   **Implementation**: Stages A&#x2013;H complete in one session (completeness over deferral). Stage I deferred (genuine infrastructure dependency on transient type exposure).
+-   **Design**: Stages A&ndash;I with clear boundaries
+-   **Implementation**: Stages A&ndash;H complete in one session (completeness over deferral). Stage I deferred (genuine infrastructure dependency on transient type exposure).
 -   **Composition**: Generic `map~/~filter~/~reduce` work across all collection types. `into` converts between any two collections.
+
+
+<a id="org371c128"></a>
+
+## Session Types (S1&ndash;S8)
+
+-   **Research**: `2026-03-03_SESSION_TYPE_RESEARCH.md` surveying the pi-calculus, Gay-Vasconcelos session types, Toninho-Caires-Pfenning propositions-as-sessions, Wadler's Classical Processes, Scalas-Yoshida multiparty session types, and Jespersen-Munksgaard-Sestoft Rust embedding
+-   **Design**: `2026-03-03_SESSION_TYPE_DESIGN.md` with 8-phase roadmap, ~26 surface syntax structs, propagator-based type checking, Galois connection bridges
+-   **Iteration**: Adversarial critique refined duality computation, deadlock detection strategy, capability integration, and the functional-relational boundary between session and process layers
+-   **Implementation**: 36/38 sub-phases complete (~24 hours). 4 new infrastructure files, 1,880 new lines, 392 test cases (+21% suite growth). S8b correctly deferred (promises meaningless without concurrent runtime).
+-   **Composition**: Session types are the third domain on the propagator network (after types and multiplicities), using the same infrastructure without modification. Galois connection bridges compose session and type domains. `defproc` composes with trait system, QTT, and capability binders.
+-   **PIR**: `2026-03-04_SESSION_TYPE_PIR.md` &mdash; first exemplar of the PIR practice. Validated the 3-stage design methodology, identified the `??~/~$typed-hole` desugaring lesson, and established forward roadmap for concurrent runtime and multi-party sessions.
+
+
+<a id="orgb43c0c1"></a>
+
+## Effect Ordering via Session Types (Architecture A+D)
+
+-   **Research**: `2026-03-06_EFFECTFUL_PROPAGATORS_RESEARCH.md` surveying CALM theorem, LVars, Timely Dataflow, CRDTs, Radul-Sussman, BloomL, algebraic effects, and Flix. Three candidate architectures (A, B, C) for recovering order-dependent effects on a monotone substrate.
+-   `2026-03-06_SESSION_TYPES_AS_EFFECT_ORDERING.org` (~1,200 lines): discovery that session types are *causal clocks* &mdash; each position in a session type's continuation chain is a causally-ordered event. Formal Galois connection $(\alpha, \gamma)$ between session lattice and effect position lattice. Quantale morphism at the algebraic level.
+-   **Key insight**: The Layered Recovery Principle &mdash; non-monotone behavior (effect ordering) recovered on a monotone substrate (propagator network) by inserting a control layer between phases of monotone computation. Generalises the logic engine's recovery of choice-point semantics.
+-   **Design**: `2026-03-07_ARCHITECTURE_AD_IMPLEMENTATION_DESIGN.org` (~750 lines) with 16 sub-phases across 6 phases (AD-A through AD-F), dependency graph, concrete data structures, traced example, migration strategy, and test plan (~178 tests).
+-   **Architecture decision**: A + D &mdash; session-derived ordering (D) for session-typed IO, sequential walk ordering (A) for unsessioned IO. Architecture B subsumed; no overlap, each mechanism maximally suited to its domain.
+-   **Implementation**: All 6 phases complete. 4 new modules (`effect-position.rkt`, `effect-bridge.rkt`, `effect-ordering.rkt`, `effect-executor.rkt`), `770 lines, ~165 tests, 0 regressions. Auto-detection in ~driver.rkt` selects Architecture A or D based on process structure.
+-   **Principles**: Elevated to `EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org` &mdash; the Layered Recovery Principle as a general design methodology, the `rel~/~proc` structural parallel, and the five-layer architecture.
+-   **Composition**: Effect position lattice composes with session lattice via Galois connection bridge propagators. Effect ordering composes with ATMS branching (choice branches → per-branch orderings). Architecture selection composes with existing `rt-execute-process` (additive, not replacing).

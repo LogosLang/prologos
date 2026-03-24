@@ -1,0 +1,519 @@
+% Created 2026-03-18 Wed 03:02
+% Intended LaTeX compiler: lualatex
+\documentclass[11pt]{article}
+\usepackage{amsmath}
+\usepackage{fontspec}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{Prologos Project}
+\date{2026-03-18}
+\title{Gödel Completeness: Decidability as an Architectural Property}
+\hypersetup{
+ pdfauthor={Prologos Project},
+ pdftitle={Gödel Completeness: Decidability as an Architectural Property},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Purpose}
+\label{sec:orgc38d131}
+
+This document codifies the principle that all computation hosted on
+Prologos's propagator networks should be provably decidable ---
+terminating for all inputs, with the termination argument stated
+explicitly for each layer and propagator. We call this property
+\textbf{Gödel Completeness}: the dual of Turing Completeness, where every
+computation provably halts rather than potentially diverging.
+
+It is far more difficult to design a decidable computation model than
+to accidentally exercise the Halting Problem. Most systems default to
+Turing Completeness and add fuel bounds as a safety net. Prologos
+inverts this: the propagator network is a \textbf{decidable kernel} where
+termination is structural, and general recursion lives outside it.
+
+This principle emerged from the Track 6 propagator migration, where
+the design of stratified propagator networks (S(-1), S0, L1, L2) raised
+the question: what guarantees does layered quiescence provide? The
+answer led to a hierarchy of termination guarantees and a discipline
+for applying them.
+
+For how this principle interacts with propagator-first infrastructure
+and correct-by-construction design, see \href{DESIGN\_PRINCIPLES.org}{DESIGN\textsubscript{PRINCIPLES.org}}.
+\section{The Decidability Principle}
+\label{sec:org52bf8c2}
+
+\begin{quote}
+Every computation hosted on the propagator network must come with a
+termination guarantee --- structural proof preferred, fuel bound as
+pragmatic fallback. The network is a decidable computation model;
+general recursion and unbounded computation happen outside it. When a
+new propagator or lattice is added, its termination argument must be
+stated explicitly.
+\end{quote}
+
+This is a design discipline, not a blanket theorem. It is a commitment
+to \emph{thinking about termination} at every level, and choosing the
+strongest guarantee available. The fuel fallback ensures pragmatism;
+the discipline ensures we don't default to fuel when a structural
+argument exists.
+\subsection{What "Gödel Complete" means}
+\label{sec:org279927d}
+
+A system is Gödel Complete when every well-formed computation in the
+system provably terminates. This is the opposite of Turing
+Completeness, which guarantees expressiveness at the cost of
+undecidable halting.
+
+\begin{center}
+\begin{tabular}{lll}
+Property & Turing Complete & Gödel Complete\\
+\hline
+Expressiveness & All computable fns & Total computable fns\\
+Halting & Undecidable & Decidable (structural)\\
+Paradigm & Partial functions & Total functions\\
+Examples & Haskell, Racket & Agda, Idris, Walnut\\
+Prologos analogue & User-level \texttt{defn} & Propagator network\\
+\end{tabular}
+\end{center}
+
+The propagator network is the Gödel Complete kernel. User-level code
+(\texttt{defn} with general recursion, IO effects) is Turing Complete. The
+boundary is clear: the network reasons \emph{about} programs; programs
+\emph{execute} outside the network.
+\section{The Hierarchy of Termination Guarantees}
+\label{sec:org1adf136}
+
+Not all termination arguments are equal. We recognize five levels,
+ordered from strongest (most informative) to weakest (least
+informative). The discipline is: use the strongest level available.
+\subsection{Level 1: Structural (Tarski Fixpoint)}
+\label{sec:orge82c92e}
+
+Finite lattice + monotone propagators → fixpoint in at most \emph{h} steps,
+where \emph{h} is the lattice height. No fuel needed. The lattice height IS
+the bound.
+
+\textbf{When it applies}: Any propagator operating on a finite domain with a
+monotone merge function.
+
+\textbf{Examples in Prologos}:
+\begin{itemize}
+\item S0 type propagation: each meta cell transitions at most once (⊥ →
+solved). Finite metas = finite writes.
+\item Effect propagation: effect lattice has finite height (declared
+effects are finite).
+\item QTT multiplicity: 3-element lattice (\texttt{m0 < m1 < mw}).
+\item S(-1) retraction: believed-assumptions set can only shrink. Finite
+assumptions → finite retractions.
+\item L1 readiness: each readiness propagator fires at most once per
+dependency becoming non-⊥.
+\end{itemize}
+
+\textbf{Proof obligation}: Show that the lattice has finite height and the
+propagator's transfer function is monotone.
+\subsection{Level 2: Well-Founded Measure}
+\label{sec:orgd274b95}
+
+Cross-stratum feedback or recursive resolution decreases a well-
+founded ordering on each step. Termination follows from well-
+foundedness (every strictly decreasing chain in a well-founded order
+is finite).
+
+\textbf{When it applies}: When one propagator layer's output triggers another
+layer, and the triggering chain has a natural decreasing measure.
+
+\textbf{Examples in Prologos}:
+\begin{itemize}
+\item L2→S0 feedback (trait resolution): resolving a trait constraint may
+create new metas and new constraints, but at strictly smaller type
+depth. Type depth is a natural number (well-founded). Each cycle
+decreases depth → finite cycles.
+\item Inductive structural recursion: computation over Nat, List, Tree
+decreases the structural size on each recursive step.
+\item Narrowing (functional-logic sense): each narrowing step reduces the
+set of possible values --- the search space shrinks on a well-
+founded measure.
+\end{itemize}
+
+\textbf{Proof obligation}: Identify the measure, show it decreases on every
+step, show the ordering is well-founded.
+
+\textbf{Enforcement}: For trait resolution, the decreasing type-depth
+condition can be checked at instance registration time (correct by
+construction). Instances that violate the condition are rejected with
+a diagnostic --- no fuel needed. This is analogous to structural
+recursion checking in Agda/Idris.
+\subsection{Level 3: Widening-Guaranteed Convergence}
+\label{sec:orge06f5b6}
+
+The concrete domain is infinite, but a widening operator forces
+convergence to an abstract fixpoint in bounded steps. Precision is
+traded for termination. Narrowing (lattice sense) then recovers
+precision without threatening termination (bounded by the number of
+widening steps).
+
+\textbf{When it applies}: Abstract interpretation over infinite domains
+(integers, sizes, resource bounds, numeric ranges).
+
+\textbf{Examples in Prologos}:
+\begin{itemize}
+\item Integer range analysis: concrete domain is ℤ (infinite height).
+Widen to sign domain \{neg, zero, pos, top\} (height 2). Fixpoint
+in at most 2 steps per cell.
+\item Resource bound analysis: concrete usage counts are unbounded. Widen
+to multiplicity lattice \{m0, m1, mw\} (height 2).
+\end{itemize}
+
+\textbf{Proof obligation}: Show that the widening operator produces a lattice
+of finite height, and that narrowing is bounded by widening steps.
+
+\textbf{Relationship to Level 1}: After widening, the abstract domain IS a
+finite lattice --- so Level 3 reduces to Level 1 on the abstract
+domain. The novelty is that the \emph{concrete} domain is infinite; the
+widening operator is what makes it tractable.
+\subsection{Level 4: Coinductive Productivity}
+\label{sec:org46cfe20}
+
+The computation is infinite (a stream, a session, an ongoing process),
+but each \emph{observation} terminates. Productivity replaces termination
+--- the guarantee is "you can always get the next element," not "the
+computation eventually stops."
+
+This is the greatest fixpoint (gfp) dual of inductive termination
+(lfp). Where induction says "the base case is reached in finite
+steps," coinduction says "each productive step completes in finite
+time, yielding the next layer of the infinite structure."
+
+\textbf{When it applies}: Stream processing, session types (ongoing
+communication), reactive systems, coinductive types.
+
+\textbf{Examples in Prologos}:
+\begin{itemize}
+\item Session types: a session type like \texttt{!Int.?Bool.!Int.?Bool...} is
+coinductive (potentially infinite). But each message
+send/receive is a finite observation. The propagator network
+computes one "layer" of the session per quiescence cycle.
+\item Stream processing: \texttt{Stream Int} is coinductive. Computing \texttt{head}
+terminates; computing \texttt{tail} yields another stream (productive
+observation, not full evaluation).
+\item Effect system bridges: the IO bridge processes one effect
+description per cycle. The stream of effects may be unbounded,
+but each effect's processing terminates.
+\end{itemize}
+
+\textbf{Proof obligation}: Show that each observation (one layer of the
+coinductive structure) can be computed in finitely many propagator
+steps. This often reduces to Level 1 or 2 for the individual layer.
+
+\textbf{Relationship to the propagator network}: Coinductive computations
+on the network use \emph{productive quiescence} --- the network reaches
+quiescence for one layer (terminating), yields an observation, then
+is perturbed by the next input (the next layer begins). The per-
+layer quiescence is Level 1; the overall computation is productive
+(Level 4).
+\subsection{Level 5: Fuel Bound}
+\label{sec:org3df24c0}
+
+Decidable by fiat. The computation stops because we force it to after
+\emph{n} steps. Informative about safety (the system cannot diverge), not
+about structure (we don't know WHY it terminates within the bound).
+
+\textbf{When it applies}: As defense-in-depth behind Levels 1-4. As the
+primary guarantee only when no structural argument is available (e.g.,
+user-opted-into undecidable instance resolution).
+
+\textbf{Examples in Prologos}:
+\begin{itemize}
+\item Stratified resolution fuel (100 iterations): currently the primary
+guarantee. Track 7 will add Level 2 (well-founded measure) as the
+structural guarantee, with fuel retained as defense-in-depth.
+\item Reduction fuel: user-level computation (\texttt{defn} with general
+recursion) runs with fuel. This is correct --- user code IS
+potentially non-terminating; fuel is the appropriate mechanism.
+\end{itemize}
+
+\textbf{Role in the architecture}: Fuel should be the \emph{safety net}, not the
+\emph{design}. When a computation relies on fuel as its primary termination
+guarantee, ask: "can we identify a structural argument (Levels 1-4)
+that makes the fuel bound unnecessary for correctness, retaining it
+only for defense-in-depth?"
+\section{Infinite Domains on a Decidable Network}
+\label{sec:org3d10aeb}
+
+A common misconception: propagator networks are limited to finite
+domains. Through the combination of inductive/coinductive reasoning,
+abstract interpretation, and widening/narrowing, the Prologos
+propagator network can handle infinite domains while maintaining
+decidability.
+\subsection{Inductive Domains (lfp)}
+\label{sec:orgc0cdae2}
+
+Nat, List, Tree --- finite structures built from constructors. Propagation
+over these terminates because each inductive value has finite depth.
+The structural recursion principle gives a well-founded measure
+(Level 2). The propagator network handles inductive types naturally:
+each constructor application is a cell write; pattern matching is a
+propagator that reads the cell and dispatches.
+\subsection{Coinductive Domains (gfp)}
+\label{sec:org58bcc09}
+
+Streams, sessions, processes --- potentially infinite structures observed
+one layer at a time. The propagator network computes one productive
+observation per quiescence cycle (Level 4). The per-observation
+computation is Level 1 (finite lattice within the cycle). The
+combination gives decidability for each step and productivity for the
+overall computation.
+\subsection{Abstract Domains (Galois Connection)}
+\label{sec:org8730e0f}
+
+For domains like ℤ or ℝ where the concrete lattice has infinite
+height, abstract interpretation provides a finite abstraction. The
+Galois connection (α, γ) between concrete and abstract ensures
+soundness:
+
+\begin{itemize}
+\item α (abstraction): concrete → abstract (e.g., 42 → pos)
+\item γ (concretization): abstract → concrete set (e.g., pos → \{1, 2, \ldots{}\})
+\end{itemize}
+
+Propagators operate on the abstract domain (Level 1 termination).
+Widening forces convergence when even the abstract domain has
+unbounded ascending chains. Narrowing (lattice sense) recovers
+precision post-widening, bounded by widening steps.
+\subsection{The IO Bridge: Effects as Pure Values}
+\label{sec:org7129047}
+
+The IO bridge propagator network captures effects as first-class
+values --- descriptions of intent, not executed side effects. This is
+structurally a graded monad:
+
+\begin{itemize}
+\item The effect annotation (the grade) is a lattice value propagated
+through the network
+\item \texttt{bind} sequences effect descriptions; the grade combines via the
+effect quantale's tensor product
+\item The propagator network is the "evaluator" operating on monadic values
+\end{itemize}
+
+Because effect descriptions are \emph{values} in the network (not side
+effects), they are subject to the same termination guarantees as any
+other cell value. The effect lattice has finite height (declared
+effects are finite), so effect propagation terminates structurally
+(Level 1). Only the \emph{execution} of effects (actual IO) happens
+outside the network, in the imperative world.
+
+This means we can reason about effectful computations \emph{within} the
+decidable propagator framework. Effect composition, ordering, and
+constraint checking all terminate structurally. The monadic bridge
+brings effects into the decidable kernel without compromising
+decidability.
+\section{Application to the Stratified Propagator Network}
+\label{sec:org8713e36}
+
+The Track 7 stratified propagator network architecture assigns a
+termination guarantee level to each layer:
+
+\begin{center}
+\begin{tabular}{llrl}
+Layer & Role & Level & Argument\\
+\hline
+S(-1) & Retraction & 1 & Finite assumptions, monotone ↓\\
+S0 & Type propagation & 1 & Finite metas, each solved once\\
+L1 & Readiness detection & 1 & Finite constraints, fire once\\
+L2 & Resolution commitment & 2 & Type depth decreases per cycle\\
+Cross & L2→S0 feedback & 2 & Finite metas bounds cycle count\\
+Full & Layered quiescence & 1+2 & Composition of per-layer guarantees\\
+\end{tabular}
+\end{center}
+
+The full layered quiescence terminates because:
+\begin{enumerate}
+\item Each individual layer terminates (Level 1 or 2)
+\item Cross-layer feedback (L2→S0) decreases a well-founded measure
+(number of unsolved metas × maximum type depth)
+\item The product of two well-founded orderings is well-founded
+\end{enumerate}
+
+Fuel is retained as defense-in-depth for the full cycle, catching
+bugs in the termination argument. But the structural argument (not
+the fuel) is what guarantees termination under correct operation.
+\subsection{Trait Resolution Decidability}
+\label{sec:org52b0724}
+
+The potential source of non-termination in L2 is trait resolution
+creating new metas. The decidability condition:
+
+\begin{quote}
+An instance declaration \texttt{impl Foo [T args...]} where \texttt{[Constraint deps...]}
+is admissible iff every constraint's type depth is strictly less than
+the head's type depth.
+\end{quote}
+
+This is checked at instance registration time (correct by
+construction). Admissible instances guarantee that resolution chains
+decrease in type depth on every step --- a well-founded measure
+(Level 2).
+
+For advanced users who need non-decreasing instances (analogous to
+Haskell's \texttt{UndecidableInstances}), a pragma opts into fuel-bounded
+resolution (Level 5). The user makes an explicit choice to leave
+the decidable fragment. The pragma should be rare; the default is
+decidability.
+\section{The Decidability Boundary}
+\label{sec:orge9b4ff4}
+
+The propagator network is the decidable kernel. User-level code is
+the Turing Complete shell. The boundary is architecturally clear:
+
+\begin{center}
+\begin{tabular}{lll}
+Domain & Decidable? & Mechanism\\
+\hline
+Type propagation & Yes & Level 1 (Tarski)\\
+Effect propagation & Yes & Level 1 (Tarski)\\
+QTT multiplicity & Yes & Level 1 (Tarski)\\
+Constraint readiness & Yes & Level 1 (Tarski)\\
+Retraction & Yes & Level 1 (finite ↓)\\
+Trait resolution & Yes* & Level 2 (depth ↓)\\
+Abstract interpretation & Yes & Level 3 (widening)\\
+Session type checking & Yes & Level 4 (productive)\\
+Stream processing & Yes & Level 4 (productive)\\
+User-level \texttt{defn} & No & Fuel (Level 5)\\
+General IO & No & Outside network\\
+\end{tabular}
+\end{center}
+
+(*) Decidable with the type-depth admissibility condition. Opt-out
+pragma falls back to fuel.
+
+The principle does not attempt to make user code decidable (that
+would cripple expressiveness). It makes the \emph{infrastructure} decidable
+--- the type checker, the constraint solver, the effect system, the
+session type checker. These are the components that users depend on
+to be reliable, predictable, and non-surprising. A type checker that
+diverges is a broken tool; a user function that diverges is the
+user's choice.
+\section{Design Discipline}
+\label{sec:org774b9a7}
+
+When adding a new propagator, lattice, or computation to the network:
+
+\begin{enumerate}
+\item \textbf{State the termination argument explicitly.} "This propagator
+terminates because\ldots{}" One sentence, in the code comment or
+design doc.
+
+\item \textbf{Identify the guarantee level.} Which of Levels 1-5 applies?
+Document it.
+
+\item \textbf{If Level 5 (fuel), ask: can we do better?} Is there a structural
+argument (Levels 1-4) that makes fuel unnecessary for correctness?
+If yes, implement the structural guarantee and retain fuel as
+defense-in-depth. If no, document why --- what property of the
+domain prevents a structural argument?
+
+\item \textbf{For cross-layer interactions, identify the well-founded measure.}
+If layer A's output triggers layer B, which triggers layer A
+again, what decreases on each cycle? If nothing decreases,
+the cycle may not terminate --- this requires either a structural
+fix or explicit fuel.
+
+\item \textbf{For infinite domains, identify the finitization mechanism.}
+Widening? Abstraction? Coinductive productivity? Document
+which mechanism makes the infinite domain tractable.
+\end{enumerate}
+
+This is not bureaucratic overhead --- it is the \emph{minimum viable
+reasoning} for ensuring the network remains decidable as it grows.
+A single propagator without a termination argument can make the
+entire network potentially non-terminating.
+\section{Relationship to Other Principles}
+\label{sec:org30154ba}
+
+\begin{itemize}
+\item \textbf{Correct by Construction} (\href{DESIGN\_PRINCIPLES.org}{DESIGN\textsubscript{PRINCIPLES.org}}): Decidability IS
+a correct-by-construction property. A decidable network cannot
+diverge --- not because of fuel, but because of structural properties.
+Gödel Completeness extends correct-by-construction from "wrong
+states are unrepresentable" to "non-termination is unrepresentable."
+
+\item \textbf{Propagator-First Infrastructure} (\href{DESIGN\_PRINCIPLES.org}{DESIGN\textsubscript{PRINCIPLES.org}}): The
+propagator network's decidability gives it a trustworthiness that
+imperative infrastructure lacks. A propagator-first system that is
+also Gödel Complete provides deterministic, terminating responses
+to every query. This is essential for tooling (LSP, IDE) where
+divergence means a frozen editor.
+
+\item \textbf{Stratified Propagator Networks} (\href{DESIGN\_PRINCIPLES.org}{DESIGN\textsubscript{PRINCIPLES.org}}): Stratification
+is the mechanism that makes non-monotone operations (retraction,
+aggregation) decidable. By containing non-monotonicity within a
+stratum that runs to fixpoint before higher strata observe it,
+stratification preserves the decidability of the overall network.
+Retraction is aggregation's dual; both are addressed by stratification.
+
+\item \textbf{Data-Oriented Design}: Termination arguments are \emph{data} about
+propagators, not runtime checks. The lattice height, the well-
+founded measure, the widening operator --- these are structural
+properties declared at definition time, not guards checked at
+execution time.
+\end{itemize}
+\section{Historical Context}
+\label{sec:orgb51ba23}
+
+The decidability principle emerged from the Track 6 propagator
+migration (2026-03-17). The design of stratified propagator networks
+raised the question of termination guarantees for layered quiescence.
+This led to:
+
+\begin{enumerate}
+\item The hierarchy of termination guarantees (Levels 1-5)
+\item The recognition that retraction is aggregation's dual, both
+addressed by stratification
+\item The connection between the IO bridge's monadic structure and the
+decidable kernel
+\item The expansion of the propagator network's scope to include infinite
+domains (through widening, coinduction, and abstract interpretation)
+\end{enumerate}
+
+Prior art: Agda's structural recursion checker (Level 2), Datalog's
+stratified negation (stratified non-monotonicity), abstract
+interpretation's widening operators (Level 3), Radul \& Sussman's
+propagator model (Level 1 for finite domains). Prologos combines
+these into a unified framework with explicit guarantee levels.
+\section{References}
+\label{sec:org59c6d89}
+
+\begin{itemize}
+\item Tarski, A. (1955). "A lattice-theoretical fixpoint theorem and its
+applications." \emph{Pacific Journal of Mathematics}. (Level 1 foundation)
+\item Cousot, P. \& Cousot, R. (1977). "Abstract Interpretation: A Unified
+Lattice Model." (Levels 1, 3: widening/narrowing)
+\item Abel, A. (2010). "MiniAgda: Integrating Sized and Dependent Types."
+(Level 2: sized types as well-founded measures)
+\item Radul, A. \& Sussman, G.J. (2009). "The Art of the Propagator."
+(Level 1: monotone propagators on finite lattices)
+\item Ceri, S., Gottlob, G., \& Tanca, L. (1989). "What You Always Wanted
+to Know About Datalog." (Stratified fixpoints)
+\item Turner, D.A. (2004). "Total Functional Programming." (Gödel
+Completeness in functional languages)
+\item Abel, A. \& Pientka, B. (2013). "Wellfounded Recursion with
+Copatterns." (Level 4: coinductive productivity)
+\end{itemize}
+
+\begin{quote}
+"A language where you can prove termination is more useful than one
+where you can't --- not because non-termination is uncommon, but
+because the \emph{ability to prove} it reveals structural understanding of
+the computation."
+\end{quote}
+\end{document}

@@ -1,32 +1,32 @@
-- [The Insight](#org3f12428)
-- [Why This Changes Everything](#org372abbd)
-  - [The Elaborator Becomes Trivially Thin](#orgb55de06)
-  - [Bidirectional Type Checking Dissolves](#orgc07867a)
-  - [Six Cross-Cutting Concerns Simplify or Disappear](#org454799b)
-    - [Zonk → Eliminated During Elaboration](#org67ec147)
-    - [Ground-Check → Cell-Level Property](#org7cc783b)
-    - [Occurs Check → Graph Cycle Detection](#orgec8d128)
-    - [Error Reporting → Contradiction Cells](#org5fa4ffe)
-    - [Incremental Re-Elaboration → Dependency-Tracked Propagation](#org90957f6)
-    - [Speculation → Unified TMS](#org929cd12)
-- [The Two-Layer Architecture](#orgdea85ec)
-  - [Layer 1: Structural Reasoning Engine (Within-Domain)](#orga8a47e3)
-  - [Layer 2: Galois Bridges (Between-Domain)](#orgb72a4e1)
-- [How This Changes The Roadmap](#orgdc819ca)
-  - [Before: Track-Per-System Migration](#org141eab9)
-  - [After: Build the SRE, Then Each System Plugs In](#orgb969d7c)
-  - [What The SRE Subsumes](#org9cdf97c)
-  - [What The SRE Does NOT Subsume](#orgbc29015)
-- [The SRE as Correct-by-Construction Infrastructure](#org2ba2a8f)
-  - [Missing Decomposition Cases](#org10cb062)
-  - [Inconsistent Structural Handling](#org603e9f2)
-  - [Stale Cell Values](#org011dbdb)
-- [Relationship to Existing Principles](#org1ba1c1c)
-- [Next Steps](#org5928bd8)
+- [The Insight](#org2d2efbf)
+- [Why This Changes Everything](#orga517008)
+  - [The Elaborator Becomes Trivially Thin](#org004bc68)
+  - [Bidirectional Type Checking Dissolves](#org7183634)
+  - [Six Cross-Cutting Concerns Simplify or Disappear](#org297e483)
+    - [Zonk → Eliminated During Elaboration](#org9001b13)
+    - [Ground-Check → Cell-Level Property](#org6003197)
+    - [Occurs Check → Graph Cycle Detection](#orga36e734)
+    - [Error Reporting → Contradiction Cells](#orge136b56)
+    - [Incremental Re-Elaboration → Dependency-Tracked Propagation](#orgb2be92c)
+    - [Speculation → Unified TMS](#org2e4241f)
+- [The Two-Layer Architecture](#org1a28a57)
+  - [Layer 1: Structural Reasoning Engine (Within-Domain)](#org44d6a22)
+  - [Layer 2: Galois Bridges (Between-Domain)](#org7fa5b41)
+- [How This Changes The Roadmap](#orgda08a07)
+  - [Before: Track-Per-System Migration](#orgc8d6541)
+  - [After: Build the SRE, Then Each System Plugs In](#org3e5ef43)
+  - [What The SRE Subsumes](#org851b9f9)
+  - [What The SRE Does NOT Subsume](#org878b8a0)
+- [The SRE as Correct-by-Construction Infrastructure](#org34be291)
+  - [Missing Decomposition Cases](#org670a1cd)
+  - [Inconsistent Structural Handling](#org901c4bc)
+  - [Stale Cell Values](#org3eb6f1b)
+- [Relationship to Existing Principles](#orgfebbe74)
+- [Next Steps](#orgc7904c1)
 
 
 
-<a id="org3f12428"></a>
+<a id="org2d2efbf"></a>
 
 # The Insight
 
@@ -42,12 +42,12 @@ PUnify was built as "the unification algorithm on propagators." But what it *act
 All of these are "structural reasoning." The insight is that PUnify's structural decomposition propagators &mdash; `identify-sub-cell`, `get-or-create-sub-cells`, `make-pi-reconstructor`, `make-structural-unify-propagator` &mdash; are *not* unification-specific. They are the universal primitive for structural analysis on the propagator network.
 
 
-<a id="org372abbd"></a>
+<a id="orga517008"></a>
 
 # Why This Changes Everything
 
 
-<a id="orgb55de06"></a>
+<a id="org004bc68"></a>
 
 ## The Elaborator Becomes Trivially Thin
 
@@ -79,7 +79,7 @@ Every elaboration case follows this pattern:
 The elaborator's *entire type inference job* is installing structural relationships between cells. That's what the SRE does.
 
 
-<a id="orgc07867a"></a>
+<a id="org7183634"></a>
 
 ## Bidirectional Type Checking Dissolves
 
@@ -93,12 +93,12 @@ The SRE propagates in both directions. If `T` is known and `type(e)` is unknown,
 The bidirectional discipline is still useful for controlling elaboration order and providing good error messages &mdash; but it's no longer a fundamental architectural distinction. It's an elaboration *strategy* over the SRE, not a separate mechanism.
 
 
-<a id="org454799b"></a>
+<a id="org297e483"></a>
 
 ## Six Cross-Cutting Concerns Simplify or Disappear
 
 
-<a id="org67ec147"></a>
+<a id="org9001b13"></a>
 
 ### Zonk → Eliminated During Elaboration
 
@@ -107,7 +107,7 @@ The bidirectional discipline is still useful for controlling elaboration order a
 At command boundaries, `freeze` (a single-pass cell read) replaces `zonk` (a recursive expression walk). `1300 lines of ~zonk.rkt` → `200 lines of ~freeze`.
 
 
-<a id="org7cc783b"></a>
+<a id="org6003197"></a>
 
 ### Ground-Check → Cell-Level Property
 
@@ -116,14 +116,14 @@ Currently `ground-expr?` walks an expression tree looking for `expr-meta` nodes.
 This can be computed by a *groundness propagator* that watches sub-cells and transitions a groundness flag when all become ground. No expression walking. Groundness is structurally emergent from the SRE's decomposition topology.
 
 
-<a id="orgec8d128"></a>
+<a id="orga36e734"></a>
 
 ### Occurs Check → Graph Cycle Detection
 
 Currently implemented as an expression walk during unification. With the SRE, it becomes a graph property: does cell A appear in cell A's structural decomposition? This is cycle detection in the cell dependency graph &mdash; a structural property of the network, not an algorithmic check.
 
 
-<a id="org5fa4ffe"></a>
+<a id="orge136b56"></a>
 
 ### Error Reporting → Contradiction Cells
 
@@ -132,7 +132,7 @@ Type errors are currently constructed by zonking types and formatting. With the 
 Error reporting reads contradiction cells. No zonking. Error messages are derived from the structural decomposition path: "expected Pi because application at line 5, but got Int from annotation at line 3."
 
 
-<a id="org90957f6"></a>
+<a id="orgb2be92c"></a>
 
 ### Incremental Re-Elaboration → Dependency-Tracked Propagation
 
@@ -141,21 +141,21 @@ Currently re-elaborating a definition requires redoing the whole command. With t
 LSP "re-check on edit" falls out of the SRE's propagation semantics. No separate incremental compilation infrastructure.
 
 
-<a id="org929cd12"></a>
+<a id="org2e4241f"></a>
 
 ### Speculation → Unified TMS
 
 The SRE's structural decomposition propagators participate in the same TMS as everything else. Speculative decompositions are tagged with assumption IDs. On retraction, the SRE's sub-cells from the failed branch become invisible (worldview-aware reads). No separate speculation mechanism for the SRE vs. the type checker vs. the resolver.
 
 
-<a id="orgdea85ec"></a>
+<a id="org1a28a57"></a>
 
 # The Two-Layer Architecture
 
 The fully propagator-native architecture has two layers:
 
 
-<a id="orga8a47e3"></a>
+<a id="org44d6a22"></a>
 
 ## Layer 1: Structural Reasoning Engine (Within-Domain)
 
@@ -178,7 +178,7 @@ Each domain registers its forms with the SRE. The SRE handles:
 -   Decomposition registry: `get-or-create-sub-cells` (already exists)
 
 
-<a id="orgb72a4e1"></a>
+<a id="org7fa5b41"></a>
 
 ## Layer 2: Galois Bridges (Between-Domain)
 
@@ -194,19 +194,19 @@ Handles information flow between domains via α/γ Galois connections. The SRE d
 Both layers live on the same propagator network. SRE propagators and Galois bridge propagators compose automatically via shared cells.
 
 
-<a id="orgdc819ca"></a>
+<a id="orgda08a07"></a>
 
 # How This Changes The Roadmap
 
 
-<a id="org141eab9"></a>
+<a id="orgc8d6541"></a>
 
 ## Before: Track-Per-System Migration
 
 > "Track 8D: put registries on network. Track 8F: put meta-info on network. Track 9: put reduction on network. Each track migrates one system."
 
 
-<a id="orgb969d7c"></a>
+<a id="org3e5ef43"></a>
 
 ## After: Build the SRE, Then Each System Plugs In
 
@@ -225,7 +225,7 @@ The SRE is the foundation. Each system "migrates onto the network" by *registeri
 6.  **Module Loading on SRE**: Module exports/imports as structural matching. The network exists first (Track 10), module loading registers structural forms and populates cells.
 
 
-<a id="org9cdf97c"></a>
+<a id="org851b9f9"></a>
 
 ## What The SRE Subsumes
 
@@ -243,7 +243,7 @@ The SRE is the foundation. Each system "migrates onto the network" by *registeri
 | Bridge fire functions (C1-C3)                | SRE structural matching + Galois bridges          |
 
 
-<a id="orgbc29015"></a>
+<a id="org878b8a0"></a>
 
 ## What The SRE Does NOT Subsume
 
@@ -254,35 +254,35 @@ The SRE is the foundation. Each system "migrates onto the network" by *registeri
 -   **I/O effects**: External system interaction.
 
 
-<a id="org2ba2a8f"></a>
+<a id="org34be291"></a>
 
 # The SRE as Correct-by-Construction Infrastructure
 
 The SRE makes several classes of bugs structurally impossible:
 
 
-<a id="org10cb062"></a>
+<a id="org670a1cd"></a>
 
 ## Missing Decomposition Cases
 
 Currently, adding a new type constructor (e.g., `expr-Record`) requires updating 14 pipeline files. With the SRE, adding `Record` means registering a structural form: its tag, its component count, its decomposer, its reconstructor. The SRE handles all propagator installation, sub-cell creation, and registry management. If the form is registered, it works everywhere. If it's not registered, it fails at registration time, not at some downstream pattern match.
 
 
-<a id="org603e9f2"></a>
+<a id="org901c4bc"></a>
 
 ## Inconsistent Structural Handling
 
 Currently, Pi decomposition in the elaborator, in PUnify, and in trait resolution are three separate implementations. With the SRE, Pi decomposition is registered once. All consumers use the same mechanism. Inconsistency is structurally impossible.
 
 
-<a id="org011dbdb"></a>
+<a id="org3eb6f1b"></a>
 
 ## Stale Cell Values
 
 Currently, `zonk` is needed because expressions can contain stale `expr-meta` references. With the SRE, cell values are always current because the network's propagation semantics guarantee it. If a sub-cell changes, the parent cell's reconstruction propagator fires, updating the parent. Staleness is impossible.
 
 
-<a id="org1ba1c1c"></a>
+<a id="orgfebbe74"></a>
 
 # Relationship to Existing Principles
 
@@ -299,108 +299,14 @@ Currently, `zonk` is needed because expressions can contain stale `expr-meta` re
 -   **Composition**: The SRE composes with Galois bridges. Cross-domain structural reasoning (type → trait, type → session) falls out of the SRE's decomposition + bridge propagators. No special plumbing per domain pair.
 
 
-<a id="org8a1c3d7"></a>
-
-# The SRE as Structural Relation Engine (Round 4 Insight)
-
-The NTT case studies (6 systems modeled) revealed that the SRE handles
-more than structural equality (unification). Three distinct structural
-*relations* appeared across the case studies:
-
-## Relations Beyond Equality
-
-| Relation | Laws | Where it appears | SRE decomposition behavior |
-|----------|------|-----------------|---------------------------|
-| **Equality** | reflexive, symmetric, transitive | Unification (the default) | Pi(A,B) = Pi(C,D) → A=C, B=D |
-| **Duality** | involution: dual(dual(x)) = x | Session types | Send(A,S) ~ Recv(A',S') → A=A', S ~ dual(S') |
-| **Subtyping** | reflexive, transitive, antisymmetric | Type checking | Pi(A,B) <: Pi(A',B') → A' <: A (contra), B <: B' (co) |
-| **Coercion** | directional (A ↪ B, not B ↪ A) | Numeric widening (Int → Num) | coerce(Pi(A,B), Pi(A',B')) → coerce(A',A), coerce(B,B') |
-| **Isomorphism** | bijective (equality up to structure) | Curry/uncurry, α-equivalence | Iso(A×B→C, A→B→C) via structural witness |
-
-## Relation-Parameterized Decomposition
-
-The key insight: structural decomposition propagators can be
-*parameterized by the relation*. The same structural dispatch (match
-on constructor tag, extract sub-cells) applies to all relations — but
-the sub-cell relationships differ:
-
--   **Equality**: sub-cells related by `=` (reflexive, same direction)
--   **Duality**: sub-cells related by `~` (involution, flip at each level)
--   **Subtyping**: sub-cells related by `<:` with *variance rules* —
-    contravariant for function domains, covariant for codomains, invariant
-    for mutable references
--   **Coercion**: sub-cells related by `↪` with directional composition
-
-The variance rules are per-constructor-field, not per-relation. The
-`domain` field of `Pi` is contravariant under subtyping; the `codomain`
-is covariant. The SRE form registration should carry variance annotations:
-
-```
-;; In the form registry (derived from type definition):
-Pi:
-  fields: [domain (contravariant), codomain (covariant)]
-  decompose: cell → [domain-cell, codomain-cell]
-  reconstruct: [domain-cell, codomain-cell] → cell
-
-;; When applying subtyping:
-Pi(A,B) <: Pi(A',B') →
-  A' <: A   (contravariant: flip direction)
-  B <: B'   (covariant: same direction)
-
-;; When applying duality:
-Send(A,S) ~ Recv(A',S') →
-  A = A'    (payload: equality, not duality)
-  S ~ S'    (continuation: duality propagates)
-```
-
-## What This Changes
-
-The SRE expands from "Structural Reasoning Engine" to "Structural
-*Relation* Engine" — still abbreviated SRE, but the scope is broader.
-Every place the system needs to analyze, decompose, or match structure
-*under any structural relation*, the SRE provides the propagator-native
-primitive.
-
-This subsumes several mechanisms that are currently separate:
--   `unify` (equality relation on types)
--   `sess-dual?` (duality relation on sessions)
--   `subtype?` (subtyping relation on types)
--   Pattern matching compilation (equality relation on terms)
--   Coercion insertion (coercion relation on types)
-
-All become: `structural-relate(cell-a, relation, cell-b)` where the
-SRE dispatches on both the constructor tag AND the relation to determine
-sub-cell relationships and variance.
-
-## Open Questions
-
-1.  **Can variance be derived from type definitions?** For algebraic data
-    types, variance is often determinable from the polarity of type
-    parameter occurrences (positive = covariant, negative = contravariant).
-    This would make variance annotations on form fields derivable,
-    extending the derive-not-declare principle.
-
-2.  **How do relations compose?** If we have equality and subtyping, what
-    about "equal up to subtyping" or "dual up to coercion"? Relation
-    composition could be a powerful mechanism but needs careful design.
-
-3.  **Performance**: Relation-parameterized dispatch adds a branch per
-    decomposition. Is this cost significant? Likely not — the branch is
-    on a small enum (5-6 relations), and most paths use equality.
-
-
-<a id="org5928bd8"></a>
+<a id="orgc7904c1"></a>
 
 # Next Steps
 
-1.  Capture this insight in `DESIGN_PRINCIPLES.org` as an elaboration of "Propagators as Universal Computational Substrate" — the SRE is the named mechanism.
+1.  Capture this insight in `DESIGN_PRINCIPLES.org` as an elaboration of "Propagators as Universal Computational Substrate" &mdash; the SRE is the named mechanism.
 
-2.  Track 8D (registry cells + pure bridges) is COMPLETE (`eb9857a`). Confirmed that bridges read cells directly — first SRE-aligned bridge architecture.
+2.  Evaluate: can Track 8D (registry cells + pure bridges) be reframed as "register trait constraints as SRE structural forms"? If so, Track 8D becomes the first SRE application beyond type unification.
 
-3.  Scope the SRE Foundation track: extract PUnify's structural primitives, parameterize by domain AND relation, build the form registry. The relation parameterization (equality, duality, subtyping, coercion, isomorphism) is the key addition from the NTT case studies.
-
-4.  Variance derivation: investigate whether variance annotations (contravariant domain, covariant codomain) can be derived from type parameter polarity analysis. If yes, this extends derive-not-declare to relations.
-
-5.  NTT integration: the SRE's structural relation concept informs NTT §13.3 item 9. The NTT type system should be able to express "this propagator operates under the subtyping relation with these variance rules" as a type-level constraint.
+3.  Scope the SRE Foundation track: extract PUnify's structural primitives, parameterize by domain, build the form registry. This is mostly code extraction + generalization, not new algorithm design.
 
 4.  Revise the Unified Propagator Network Roadmap to reflect the SRE as the foundational layer that all tracks build on.

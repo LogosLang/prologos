@@ -13,15 +13,15 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Acceptance file | ✅ | Baseline passes with 0 errors |
-| 1 | AST node + surface syntax | ⬜ | |
-| 2 | Parser: path literal production | ⬜ | |
-| 3 | Reader integration: dot-to-path | ⬜ | |
-| 4 | Elaboration: path-aware get-in/update-in | ⬜ | |
-| 5 | Type system: Path type + get-in typing | ⬜ | |
-| 6 | Reduction: path-based navigation | ⬜ | |
-| 7 | Path combinators + destructuring | ⬜ | |
-| 7b | Broadcast syntax `.*field` | ⬜ | |
-| 7c | Key renaming `^` syntax | ⬜ | |
+| 1 | AST node + surface syntax | ✅ | `48b8d03` |
+| 2 | Parser: path literal production | ✅ | `8383eee` |
+| 3 | Reader integration: dot-to-path | ✅ | `1fe7fa8` |
+| 4 | Elaboration: path-aware get-in/update-in | ✅ | `26233d9` |
+| 5 | Type system: Path type + get-in typing | ✅ | `e0bb1f1` |
+| 6 | Reduction: path-based navigation | ✅ | `0d151b4` — full pipeline for expr-get-in/update-in |
+| 7a | Path foreign primitives + combinators | ✅ | `addf240` — 6 foreign ops, 3 pure combinators, foreign type fix |
+| 7b | Broadcast syntax `.*field` | ✅ | `0a61cba` — 13-file pipeline, expr-broadcast-get AST node |
+| 7c | Key renaming `^` syntax | ✅ | `c7bb09f` — rename pairs in path segments, get-in branching |
 | 8 | Lens layer (future) | ⬜ | Out of scope |
 
 ---

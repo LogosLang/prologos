@@ -1,0 +1,496 @@
+- [Purpose](#org756992b)
+- [The Questions a PIR Must Answer](#orgc0ef11e)
+  - [Factual Foundation](#org7287500)
+  - [Evaluative Analysis](#org38ce19d)
+  - [Forward-Looking](#orga627c14)
+  - [Meta-Learning](#orgddd348c)
+- [The Questions a PIR Should Provoke](#orgea8a167)
+- [Format and Structure](#org443b838)
+  - [The Prologos PIR Template](#org4a3f721)
+  - [Format Principles](#org84e458c)
+  - [Anti-Patterns in PIR Writing](#orge15d3a2)
+- [What to Collect During Implementation](#orgf2e4b01)
+  - [Decision Log (Real-Time)](#org2e6dd4a)
+  - [Surprise Journal](#org73685f4)
+  - [Quantitative Data](#orga5fa1ed)
+  - [Design-to-Implementation Correspondence](#org455c212)
+- [Pre-Implementation Practices That Improve PIRs](#org77b9970)
+  - [Premortems (Gary Klein, HBR 2007)](#org4049331)
+  - [Before-Action Reviews (BARs)](#org52ffcdd)
+  - [Acceptance Files (Prologos-Specific)](#org7070ad6)
+- [The PIR Lifecycle](#org9319a8a)
+  - [When to Write](#orgebfdb92)
+  - [Where the Lessons Go](#orga2e5be5)
+  - [How to Know If PIRs Are Working](#org67c46bd)
+- [Relationship to Other Artifacts](#orgc855baa)
+  - [The Artifact Lifecycle](#org6a4a14d)
+- [Exemplar PIRs](#orga6e3101)
+- [References](#orgb58ba99)
+  - [Industry Practices](#org311de4e)
+  - [Government / Military](#org35d9d55)
+  - [Academic](#orgb2ffd4f)
+  - [Agile / Retrospective](#org16e5b08)
+
+
+
+<a id="org756992b"></a>
+
+# Purpose
+
+This document codifies the methodology for Post-Implementation Reviews (PIRs) in the Prologos project. It is a companion to [DESIGN<sub>METHODOLOGY.org</sub>](DESIGN_METHODOLOGY.md) &mdash; where that document defines *when* and *why* to conduct a PIR (Stage 5: Composition and Extension), this document defines *how* to conduct one well.
+
+A PIR is the reflective counterpart to the research stage: where Stage 1 asks "what do we know going in?", the PIR asks "what do we know coming out?" It is primarily a *technical* review &mdash; not a process retrospective, though process insights belong. Its goal is to extract knowledge that changes future behavior.
+
+Sources: Google SRE postmortem culture, PagerDuty incident analysis, Etsy debriefing methodology, NASA Lessons Learned Information System, US Army After-Action Reviews, PMI project learning, Argyris double-loop learning, resilience engineering (Hollnagel/Dekker/Woods), Gary Klein's cognitive task analysis.
+
+
+<a id="orgc0ef11e"></a>
+
+# The Questions a PIR Must Answer
+
+A PIR that cannot answer these questions is incomplete. These are organized from concrete to abstract &mdash; the natural flow of analysis.
+
+
+<a id="org7287500"></a>
+
+## Factual Foundation
+
+These establish *what happened*, free from interpretation.
+
+1.  **What were the stated objectives?** Reproduce the goals from the original design document or tracking doc. If objectives evolved during implementation, note both the original and final versions.
+
+2.  **What was actually delivered?** Enumerate concretely: files created, files modified, tests added, lines of code, commits, acceptance criteria met. Quantify scope adherence (e.g., "36/38 sub-phases, 95%"). Use the progress tracker as the primary source.
+
+3.  **What is the timeline?** Chronological sequence of phases, commits, and key decision points. Include wall-clock duration and the ratio of design-to-implementation time. This is not prose &mdash; it is a timestamped log.
+
+4.  **What was deferred and why?** Distinguish intentional deferral (genuine dependency on unbuilt infrastructure, uncertain design) from scope creep or exhaustion. Reference DEFERRED.md entries.
+
+
+<a id="org38ce19d"></a>
+
+## Evaluative Analysis
+
+These ask *how well* it went.
+
+1.  **What went well?** Identify decisions, patterns, and practices that paid off. Be specific: "the hybrid DFS+bilattice architecture avoided forking 1500 lines of solver code" is actionable; "design was good" is not. Candidates for codification in [PATTERNS<sub>AND</sub><sub>CONVENTIONS.org</sub>](PATTERNS_AND_CONVENTIONS.md) or [DEVELOPMENT<sub>LESSONS.org</sub>](DEVELOPMENT_LESSONS.md).
+
+2.  **What went wrong?** Bugs encountered, wrong approaches tried, misunderstandings about the problem. Be specific about *why* the wrong path seemed right at the time &mdash; this is what prevents repeating the mistake.
+
+3.  **Where did we get lucky?** (Google SRE's "Where We Got Lucky" section.) What could have gone worse but didn't? What near-misses occurred? Luck is not a strategy &mdash; anything that relied on luck should be hardened.
+
+4.  **What surprised us?** Unexpected interactions, emergent properties, assumptions that proved wrong. Surprises are the richest source of learning because they reveal gaps in our mental model.
+
+5.  **How did the architecture hold up?** Did the feature integrate cleanly with existing systems? Were the extension points (AST pipeline, trait system, propagator network, module hierarchy) sufficient, or did they require modification? A clean integration validates the architecture; friction points identify areas for improvement.
+
+
+<a id="orga627c14"></a>
+
+## Forward-Looking
+
+These ask *what now?* and *what next?*
+
+1.  **What does this enable?** Features, capabilities, or research directions that were not possible before this work. This bridges the completed work to the future roadmap.
+
+2.  **What technical debt was accepted?** Intentional shortcuts, known-incomplete implementations, hardcoded values, missing edge cases. Each should have a clear rationale and an entry in DEFERRED.md.
+
+3.  **What would we do differently if starting over?** Not hypothetical &mdash; based on what we now know. If the answer is "nothing", the design process worked well. If the answer is substantial, the design process has a gap.
+
+
+<a id="orgddd348c"></a>
+
+## Meta-Learning
+
+These are the questions that make PIRs genuinely valuable. Most PIRs skip them.
+
+1.  **What assumptions were wrong?** Not "what broke" &mdash; what did we *believe* about the problem space, the architecture, or the tools that turned out to be false? Wrong assumptions are more dangerous than bugs because they're invisible until they cause problems.
+
+2.  **What did we learn about the problem itself?** Implementation always teaches things that research and design cannot. Does our understanding of the problem domain differ from what we started with?
+
+3.  **Are we solving the right problem?** Did the implementation reveal that the real need is different from what the design addressed? This is Argyris's "double-loop learning" &mdash; questioning the goals themselves, not just the methods.
+
+4.  **Is this an isolated outcome or part of a pattern?** Cross-reference with prior PIRs. If the same lesson recurs (e.g., "WS pipeline gaps", "circular dependency management"), the response should be architectural, not per-project.
+
+
+<a id="orgea8a167"></a>
+
+# The Questions a PIR Should Provoke
+
+A PIR is not only a retrospective artifact &mdash; it should *surface open questions* that drive future work. Include these explicitly.
+
+-   What failure modes become more likely as the system scales?
+-   Who now holds critical knowledge that isn't documented? If they are unavailable, what knowledge is lost?
+-   What tools, practices, or processes should change based on this experience?
+-   What monitoring, validation, or invariant-checking should exist that doesn't yet?
+-   Are we actually learning from our PIRs, or repeating the same lessons? (This is the meta-question that prevents PIR fatigue.)
+
+
+<a id="org443b838"></a>
+
+# Format and Structure
+
+
+<a id="org4a3f721"></a>
+
+## The Prologos PIR Template
+
+Based on analysis of 9 existing Prologos PIRs and best practices from Google SRE, PagerDuty, and Etsy, the recommended structure is:
+
+```text
+# [Topic] --- Post-Implementation Review
+
+**Date**: YYYY-MM-DD
+**Duration**: [wall-clock hours, session count]
+**Commits**: [count] (from [first] through [last])
+**Test delta**: [before → after]
+**Code delta**: [lines added across N files]
+**Suite health**: [total tests, files, wall time, pass/fail]
+**Design docs**: [links to design/tracking documents]
+
+---
+
+## 1. What Was Built
+[1-3 paragraph executive summary. What is it, why does it matter,
+how does it work at the architectural level. Include a code example
+if the feature is user-facing.]
+
+## 2. Timeline and Phases
+[Chronological. Use tables for phases with commit hashes and timestamps.
+Note the design-to-implementation time ratio.]
+
+## 3. Test Coverage
+[New test files, counts, categories. Acceptance file status if
+applicable. Highlight any gaps.]
+
+## 4. Bugs Found and Fixed
+[Specific, with root cause analysis. Each should explain why the bug
+was plausible --- what made the wrong path seem right.]
+
+## 5. Design Decisions and Rationale
+[Key decisions with explicit rationale. Each should be traceable to a
+design principle or architectural constraint.]
+
+## 6. Lessons Learned
+[Specific, actionable insights. Each should answer: what happened,
+why it matters, and how to apply it in the future.]
+
+## 7. Metrics
+[Quantitative summary table: times, counts, ratios.]
+
+## 8. What's Next
+[Immediate, medium-term, long-term. What does this enable?]
+
+## 9. Key Files
+[Quick reference table: file paths and their roles.]
+
+## 10. Lessons Distilled
+[MANDATORY. For each lesson from §6 and each meta-pattern from cross-
+referencing, record whether and where it was distilled:
+
+| Lesson | Distilled To | Status |
+|--------|-------------|--------|
+| Two-context audit needed | pipeline.md checklist | Done (commit xyz) |
+| Design critique changes designs | DEVELOPMENT_LESSONS.org | Pending |
+| (none yet) | PATTERNS_AND_CONVENTIONS.org | — |
+
+If no lessons were promoted to principles documents, state why. An
+empty "Lessons Distilled" section is a signal that the PIR lifecycle
+is incomplete --- lessons that stay only in the PIR are lessons that
+will not be encountered during future work.]
+```
+
+
+<a id="org84e458c"></a>
+
+## Format Principles
+
+-   **Timeline is data, not narrative.** Use tables with timestamps and commit hashes. The timeline should be reconstructable from git log alone &mdash; the PIR adds interpretation, not facts.
+
+-   **Lessons must be specific and actionable.** "Test early" is not a lesson. "The DFS solver's `unify-terms` treats only Racket symbols as logic variables; `expr-logic-var` structs are opaque values that never unify with ground terms &mdash; when constructing probe goals, use the solver's representation, not the AST's" is a lesson.
+
+-   **Quantify everything possible.** Design-to-implementation ratio, lines per hour, tests per phase, bug-fix-to-implementation ratio. These baselines inform future estimation.
+
+-   **Include "Where We Got Lucky."** This section requires intellectual honesty. Omitting it means either the PIR author isn't thinking critically, or they're uncomfortable admitting uncertainty. Both reduce the PIR's value.
+
+-   **Reference prior PIRs.** If a lesson echoes a prior PIR, say so. If three PIRs in a row identify the same WS pipeline gap pattern, the response should be systemic.
+
+
+<a id="orge15d3a2"></a>
+
+## Anti-Patterns in PIR Writing
+
+Avoid these &mdash; they make PIRs ineffective:
+
+1.  **Filed and forgotten**: PIR completed, never read again. Fix: PIR lessons must flow into [DEVELOPMENT<sub>LESSONS.org</sub>](DEVELOPMENT_LESSONS.md) and [PATTERNS<sub>AND</sub><sub>CONVENTIONS.org</sub>](PATTERNS_AND_CONVENTIONS.md) &mdash; the PIR is the raw material, those documents are the distilled knowledge.
+
+2.  **Generic lessons**: "Communication is important", "test early." Fix: every lesson must cite a specific incident from the implementation.
+
+3.  **Single-cause fixation**: Treating complex events as having one "root cause." Software failures are almost always multi-causal. Use "contributing factors" language.
+
+4.  **Scope creep in the PIR itself**: The PIR covers what was built, not what could have been built. Future work belongs in a brief forward-looking section, not a second design document.
+
+5.  **Omitting what went right**: Only discussing problems trains the team to expect failure. Document successes explicitly &mdash; they are the things to *repeat*.
+
+6.  **Rushing to remediation**: Proposing fixes before understanding the system. The PIR should understand before it recommends.
+
+7.  **Dashboard trap**: "Add monitoring" as an action item without understanding what to monitor or why.
+
+8.  **UNSMART action items**: Follow-up items that lack specificity (start with a verb), measurability (how do you know it's done?), or time-boxing (when?). Every "What's Next" item should be actionable.
+
+
+<a id="orgf2e4b01"></a>
+
+# What to Collect During Implementation
+
+The quality of a PIR is bounded by the quality of the data available when writing it. Collect these *during* implementation, not after.
+
+
+<a id="org2e6dd4a"></a>
+
+## Decision Log (Real-Time)
+
+Record significant decisions as they happen. Not every decision &mdash; only ones where you considered alternatives, made a tradeoff, or changed direction. Each entry should capture:
+
+-   **What was decided**: The choice made
+-   **What alternatives were considered**: What was rejected and why
+-   **What was the context**: What information was available at the time
+-   **What was the rationale**: Why this choice seemed best
+
+In Prologos, the dailies document (`docs/tracking/standups/YYYY-MM-DD_dailies.md`) serves as a lightweight decision log. Key decisions should also appear in design document updates.
+
+
+<a id="org73685f4"></a>
+
+## Surprise Journal
+
+Surprises &mdash; things that didn't match expectations &mdash; are the richest source of PIR material. Note these as they happen:
+
+-   Assumptions that turned out to be wrong
+-   Interactions between components that weren't anticipated
+-   Things that were harder than expected (and why)
+-   Things that were easier than expected (and why)
+-   Bugs that revealed misunderstandings about the problem
+
+
+<a id="orga5fa1ed"></a>
+
+## Quantitative Data
+
+Let instrumentation do the work:
+
+-   **Git history**: Commits, timestamps, diffstats. Always available retroactively.
+-   **Test suite metrics**: Test counts, wall time, failures. Recorded automatically by `tools/run-affected-tests.rkt` in `data/benchmarks/timings.jsonl`.
+-   **Progress tracker**: Phase completion status with commit hashes. Maintained in the tracking document.
+-   **Acceptance file**: Section-by-section status. The acceptance `.prologos` file itself is a living metric.
+
+
+<a id="org455c212"></a>
+
+## Design-to-Implementation Correspondence
+
+At the end of each phase, briefly note:
+
+-   Did the implementation match the design? If not, where did it diverge?
+-   Were the design's estimates (difficulty, scope, risk) accurate?
+-   Did the design anticipate the actual challenges?
+
+This correspondence analysis is the foundation of §4 (Bugs Found and Fixed) and §5 (Design Decisions) in the PIR template.
+
+
+<a id="org77b9970"></a>
+
+# Pre-Implementation Practices That Improve PIRs
+
+
+<a id="org4049331"></a>
+
+## Premortems (Gary Klein, HBR 2007)
+
+Before implementation begins, conduct a brief premortem:
+
+-   *Assume* the implementation has already failed
+-   Generate plausible reasons for failure
+-   Research shows prospective hindsight increases risk identification by 30% (Mitchell, Russo, Pennington 1989)
+
+The premortem's predictions become PIR evaluation criteria: which predicted failures materialized? Which didn't? What failures occurred that weren't predicted?
+
+In Prologos, the design critique phases (self-critique, external critique) serve a similar function. The WFLE design underwent two critique rounds (commits `063ca8c`, `c0cf366`) that identified 19 issues &mdash; none of which caused problems during implementation, validating the practice.
+
+
+<a id="org52ffcdd"></a>
+
+## Before-Action Reviews (BARs)
+
+At the start of each phase, briefly answer:
+
+-   What are we trying to accomplish?
+-   What challenges do we anticipate?
+-   What have we learned from similar situations?
+-   What will make us successful this time?
+
+BARs create checkpoints that the PIR can evaluate. They also embed the learning cycle *during* work, not just after it.
+
+
+<a id="org7070ad6"></a>
+
+## Acceptance Files (Prologos-Specific)
+
+Per [DESIGN<sub>METHODOLOGY.org</sub>](DESIGN_METHODOLOGY.md) Stage 4, write a skeleton `.prologos` acceptance file BEFORE implementation. This serves three PIR-relevant purposes:
+
+1.  **Gap detection**: Reveals pre-existing gaps in the WS pipeline that would block validation (the WFLE acceptance file discovered 5 such gaps)
+2.  **Scope definition**: Sections with explicit expected outputs define "done" precisely
+3.  **Incremental validation**: Sections uncommented one at a time as phases complete, creating a running progress record
+
+
+<a id="org9319a8a"></a>
+
+# The PIR Lifecycle
+
+
+<a id="orgebfdb92"></a>
+
+## When to Write
+
+-   **Immediately after completion**: Within the same session if possible. Memory fades rapidly; git log preserves facts but not reasoning. Every PIR in the Prologos project has been written in the same session as the final implementation commits.
+
+-   **At major milestones**: For large features, consider intermediate PIRs at natural boundaries (e.g., after Phases 1-3, then after Phases 4-7). The WFLE could have benefited from a mid-point PIR after the core engine was complete but before WS wiring.
+
+
+<a id="orga2e5be5"></a>
+
+## Where the Lessons Go
+
+A PIR is the *source* of lessons, not the *destination*. Lessons must flow to where they will be encountered during future work:
+
+| Lesson Type                              | Destination                                                                     |
+|---------------------------------------- |------------------------------------------------------------------------------- |
+| Broadly applicable implementation wisdom | [DEVELOPMENT<sub>LESSONS.org</sub>](DEVELOPMENT_LESSONS.md)                     |
+| New coding patterns or conventions       | [PATTERNS<sub>AND</sub><sub>CONVENTIONS.org</sub>](PATTERNS_AND_CONVENTIONS.md) |
+| Project status and phase completion      | `MEMORY.md` (auto-memory)                                                       |
+| Deferred work items                      | `docs/tracking/DEFERRED.md`                                                     |
+| Design methodology improvements          | [DESIGN<sub>METHODOLOGY.org</sub>](DESIGN_METHODOLOGY.md)                       |
+| New design principles discovered         | [DESIGN<sub>PRINCIPLES.org</sub>](DESIGN_PRINCIPLES.md)                         |
+
+The PIR document itself (`docs/tracking/YYYY-MM-DD_TOPIC_PIR.md`) remains the detailed record. The destinations above are the distilled, actionable extracts.
+
+
+<a id="org67c46bd"></a>
+
+## How to Know If PIRs Are Working
+
+PIRs that change behavior are successful; PIRs that are filed and forgotten are waste. Indicators of effective PIRs:
+
+-   Lessons from PIR N appear as avoided mistakes in PIR N+1
+-   New patterns codified in PATTERNS<sub>AND</sub><sub>CONVENTIONS.org</sub> are actually used in subsequent implementations
+-   Design critique rounds reference prior PIR findings
+-   The same lesson does not appear in three consecutive PIRs (if it does, the response should be architectural, not documentary)
+
+This is Argyris's distinction between *single-loop* and *double-loop* learning. Single-loop: fix the bug. Double-loop: change the process that produced the bug. PIRs should produce both.
+
+
+<a id="orgc855baa"></a>
+
+# Relationship to Other Artifacts
+
+| Artifact                       | Relationship to PIR                                   |
+|------------------------------ |----------------------------------------------------- |
+| Design documents               | PIR evaluates whether the design held up              |
+| Tracking documents             | PIR draws data from progress trackers                 |
+| Acceptance files               | PIR reports on acceptance criteria met/unmet          |
+| `DEFERRED.md`                  | PIR identifies what was correctly deferred vs. missed |
+| Dailies                        | PIR source material (decision log, surprise journal)  |
+| `DEVELOPMENT_LESSONS.org`      | PIR distills lessons into this document               |
+| `PATTERNS_AND_CONVENTIONS.org` | PIR distills patterns into this document              |
+| `DESIGN_METHODOLOGY.org`       | PIR may update methodology based on meta-lessons      |
+| `MEMORY.md`                    | PIR updates project status                            |
+| Prior PIRs                     | Current PIR cross-references for recurring patterns   |
+
+
+<a id="org6a4a14d"></a>
+
+## The Artifact Lifecycle
+
+```text
+Premortem / BAR          (before implementation)
+      ↓
+Design Document          (before implementation)
+      ↓
+Acceptance File          (before implementation)
+      ↓
+Tracking Doc + Dailies   (during implementation)
+      ↓
+Progress Tracker         (during implementation)
+      ↓
+PIR                      (after implementation)
+      ↓
+┌─────────────────────────────────────────────┐
+│ DEVELOPMENT_LESSONS.org    (distilled)      │
+│ PATTERNS_AND_CONVENTIONS.org (distilled)    │
+│ DESIGN_METHODOLOGY.org    (meta-lessons)    │
+│ DEFERRED.md               (remaining work)  │
+│ MEMORY.md                 (project status)  │
+└─────────────────────────────────────────────┘
+```
+
+
+<a id="orga6e3101"></a>
+
+# Exemplar PIRs
+
+These PIRs from the Prologos project illustrate the methodology well:
+
+-   **Session Types PIR** (`2026-03-04_SESSION_TYPE_PIR.md`): The first comprehensive PIR. 36/38 sub-phases across ~24 hours. Identified the 3-stage design methodology and propagator-as-universal-substrate as replicable patterns.
+
+-   **FL Narrowing PIR** (`2026-03-08_FL_NARROWING_PIR.md`): Strong example of architectural validation &mdash; showed how 14 AST nodes threaded through 12 pipeline stages cleanly.
+
+-   **WFLE PIR** (`2026-03-14_WFLE_PIR.md`): Strongest example of quantitative analysis (6:1 design-to-implementation ratio, 5 bugs caught exclusively by Level 3 validation) and the "Where We Got Lucky" mindset in bug analysis.
+
+-   **Architecture AD PIR** (`2026-03-07_ARCHITECTURE_AD_PIR.md`): Most comprehensive PIR to date. Strong cross-referencing with prior PIRs.
+
+-   **First-Class Traits PIR** (`2026-03-09_FIRST_CLASS_TRAITS_PIR.md`): Good example of design-decision rationale documentation.
+
+
+<a id="orgb58ba99"></a>
+
+# References
+
+
+<a id="org311de4e"></a>
+
+## Industry Practices
+
+-   Google SRE: Postmortem culture, blameless postmortems, postmortem action items. *Site Reliability Engineering* (O'Reilly, 2016), chapters 15 and 17.
+-   PagerDuty: Incident postmortem process. `postmortems.pagerduty.com`.
+-   Etsy: Debriefing facilitation guide. Grounded in cognitive task analysis (Klein's Critical Decision Method) and resilience engineering. `github.com/etsy/DebriefingFacilitationGuide`.
+-   NASA: Lessons Learned Information System (LLIS). Three-phase process (Record, Disseminate, Apply). Lessons infused into center standards.
+-   Microsoft: Engineering Playbook decision log template. Stored in version control, submitted as PRs.
+
+
+<a id="org35d9d55"></a>
+
+## Government / Military
+
+-   US Army: After-Action Reviews (FM 7-0, Appendix K; TC 7-0.1). Four questions: What was planned? What actually happened? Why did it happen? What can we do better?
+-   US DoD: Post-Implementation Review in acquisition lifecycle (AcqNotes).
+
+
+<a id="orgb2ffd4f"></a>
+
+## Academic
+
+-   Argyris, C. (1977). "Double loop learning in organizations." *Harvard Business Review*, 55(5), 115-125. Single-loop (fix the error) vs. double-loop (question the governing variables).
+-   Klein, G. (2007). "Performing a project premortem." *Harvard Business Review*. Prospective hindsight increases risk identification by 30%.
+-   Mitchell, Russo, Pennington (1989). Prospective hindsight research underlying the premortem method.
+-   Hollnagel, E. (2014). *Safety-I and Safety-II*. Study how things go right, not just what goes wrong. Humans are a resource, not a liability.
+-   Dekker, S. (2014). *The Field Guide to Understanding 'Human Error'*. The "New View" on human error: actions are rational given available information.
+-   Basten & Haamann (2018). "Approaches for organizational learning." *SAGE Open*. Knowledge retention is the critical weak link.
+-   Tan et al. (2011). "Knowledge discovery from post-project reviews." *Construction Management and Economics*. Reports "filed away never to be seen again."
+
+
+<a id="org16e5b08"></a>
+
+## Agile / Retrospective
+
+-   Starfish retrospective: Keep / Less Of / More Of / Stop / Start.
+-   4Ls retrospective: Liked / Learned / Lacked / Longed For.
+-   Scrum.org: 21 Sprint Retrospective Anti-Patterns.
+-   Martin Fowler: "Retrospective Antipatterns" &mdash; the Wheel of Fortune (solving symptoms by skipping insight generation).
