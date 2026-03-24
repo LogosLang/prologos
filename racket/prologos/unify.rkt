@@ -62,19 +62,25 @@
 ;; use this instead of hardcoded type-lattice-merge/type-bot? references.
 ;; meta-recognizer is pure (expr-meta?); meta-resolver reads from elab-network
 ;; via current-structural-meta-lookup (rebound per-command).
+;; Type domain merge registry: case dispatch for zero overhead
+(define (type-merge-registry rel-name)
+  (case rel-name
+    [(equality) type-lattice-merge]
+    [(subtype subtype-reverse) subtype-lattice-merge]
+    [else (error 'type-merge-registry "no merge for relation: ~a" rel-name)]))
+
 (define type-sre-domain
   (sre-domain 'type
-              type-lattice-merge
+              type-merge-registry     ; merge-registry (replaces lattice-merge + subtype-merge)
               type-lattice-contradicts?
               type-bot?
               type-bot
+              type-top                ; top-value
               expr-meta?
               (lambda (expr)
                 (define lookup (current-structural-meta-lookup))
                 (and lookup (lookup expr)))
-              #f                      ; dual-pairs: type domain doesn't support duality
-              type-top                ; top-value: contradiction element
-              subtype-lattice-merge)) ; subtype-merge: proper lattice merge for subtype ordering
+              #f))                    ; dual-pairs
 
 ;; ========================================
 ;; Sprint 5: Three-valued result helper

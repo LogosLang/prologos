@@ -128,16 +128,21 @@
 ;; ========================================================================
 
 ;; Helper: create a mini-network, install subtype-relate, quiesce, check result
+(define (test-type-merge-registry rel-name)
+  (case rel-name
+    [(equality) type-lattice-merge]
+    [(subtype subtype-reverse) subtype-lattice-merge]
+    [else (error 'test-type-merge-registry "no merge for: ~a" rel-name)]))
+
 (define type-domain
   (sre-domain 'type
-              type-lattice-merge
+              test-type-merge-registry  ;; merge-registry
               type-lattice-contradicts?
               type-bot?
               type-bot
-              #f #f  ;; no meta-recognizer/resolver for standalone tests
-              #f     ;; no dual-pairs
               type-top  ;; top-value
-              subtype-lattice-merge))  ;; proper subtype-ordering lattice merge
+              #f #f     ;; no meta-recognizer/resolver
+              #f))      ;; no dual-pairs
 
 (define (sre-subtype-check t1 t2)
   "Create mini-network, install subtype-relate, quiesce, return #t if no contradiction."

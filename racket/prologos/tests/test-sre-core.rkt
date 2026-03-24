@@ -55,17 +55,21 @@
 (define (test-contradicts? v) (test-top? v))
 
 ;; Test domain spec
+(define (test-merge-registry rel-name)
+  (case rel-name
+    [(equality) test-merge]
+    [else (error 'test-merge-registry "no merge for: ~a" rel-name)]))
+
 (define test-domain
   (sre-domain 'test-term
-              test-merge
+              test-merge-registry  ; merge-registry
               test-contradicts?
               test-bot?
               test-bot
-              #f    ; no meta-recognizer
-              #f    ; no meta-resolver
-              #f    ; no dual-pairs
-              'top  ; top-value
-              #f))  ; no subtype-merge
+              'top   ; top-value
+              #f     ; no meta-recognizer
+              #f     ; no meta-resolver
+              #f))   ; no dual-pairs
 
 ;; ========================================
 ;; B. Register test constructors
@@ -257,8 +261,8 @@
             'different-each-time
             new))
       (define bad-domain
-        (sre-domain 'bad bad-merge (lambda (v) (eq? v 'top))
-                    (lambda (v) (eq? v 'bot)) 'bot #f #f #f 'top #f))  ; dual-pairs, top-value, subtype-merge
+        (sre-domain 'bad (lambda (rn) bad-merge) (lambda (v) (eq? v 'top))
+                    (lambda (v) (eq? v 'bot)) 'bot 'top #f #f #f))  ; merge-registry, contradicts, bot, bot-val, top-val, meta-rec, meta-res, dual-pairs
       ;; In debug mode, this should error
       (parameterize ([current-sre-debug? #t])
         (define net0 (fresh-net))

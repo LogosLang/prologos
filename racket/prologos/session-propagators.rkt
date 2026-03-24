@@ -253,18 +253,22 @@
 ;; Session domain spec (SRE Track 1 Phase 5)
 ;; ========================================
 
+(define (session-merge-registry rel-name)
+  (case rel-name
+    [(equality duality) session-lattice-merge]
+    [else (error 'session-merge-registry "no merge for: ~a" rel-name)]))
+
 (define session-sre-domain
   (sre-domain 'session
-              session-lattice-merge
+              session-merge-registry           ;; merge-registry
               session-lattice-contradicts?
               sess-bot?
               sess-bot
-              sess-meta?                     ;; meta-recognizer: session metas
-              #f                             ;; meta-resolver: none (session metas don't have cell IDs yet)
-              '((sess-send . sess-recv)      ;; dual-pairs
-                (sess-async-send . sess-async-recv))
-              sess-top                       ;; top-value
-              #f))                           ;; no subtype-merge
+              sess-top                         ;; top-value
+              sess-meta?                       ;; meta-recognizer
+              #f                               ;; meta-resolver
+              '((sess-send . sess-recv)        ;; dual-pairs
+                (sess-async-send . sess-async-recv))))
 
 ;; ========================================
 ;; Duality propagator (S4c → SRE Track 1 Phase 5)

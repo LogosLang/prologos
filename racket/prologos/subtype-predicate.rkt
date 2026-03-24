@@ -164,13 +164,18 @@
 
 ;; Domain spec for structural subtype queries (used by sre-structural-subtype-check above).
 ;; Defined after subtype-lattice-merge since it references it.
+(define (subtype-query-merge-registry rel-name)
+  (case rel-name
+    [(equality) type-lattice-merge]
+    [(subtype subtype-reverse) subtype-lattice-merge]
+    [else (error 'subtype-query-merge "no merge for: ~a" rel-name)]))
+
 (define type-sre-domain-for-subtype
   (sre-domain 'type
-              type-lattice-merge
+              subtype-query-merge-registry  ;; merge-registry
               type-lattice-contradicts?
               type-bot?
               type-bot
-              #f #f  ;; no meta-recognizer/resolver (ground types only)
-              #f     ;; no dual-pairs
-              type-top ;; top-value
-              subtype-lattice-merge))
+              type-top   ;; top-value
+              #f #f      ;; no meta-recognizer/resolver (ground types only)
+              #f))       ;; no dual-pairs

@@ -74,28 +74,27 @@
 
 (struct sre-domain
   (name              ; symbol: 'type, 'term, 'session, ...
-   lattice-merge     ; (old new → merged) — the lattice join
+   merge-registry    ; SRE Track 1B: (relation-name → merge-fn)
+                     ; Replaces fixed lattice-merge + subtype-merge fields.
+                     ; Each relation has its own lattice ordering on the same carrier:
+                     ;   equality → flat merge (Nat ≠ Int → top)
+                     ;   subtype → subtype-ordering merge (Nat ≤ Int → Int)
+                     ;   duality → same as equality (structural swap, not ordering)
+                     ; Implemented as `case` dispatch (zero overhead, compiles to jump table).
+                     ; Error on unregistered relation (fail-fast).
    contradicts?      ; (val → bool) — is this value top/contradiction?
    bot?              ; (val → bool) — is this value bottom?
    bot-value         ; the bottom element itself
+   top-value         ; SRE Track 1: the contradiction/top element.
    meta-recognizer   ; (expr → bool) | #f — pure structural check: is this a meta/var ref?
    meta-resolver     ; (expr → cell-id | #f) | #f — context-dependent: what cell?
-   dual-pairs        ; SRE Track 1: '((Send . Recv) (Choice . Offer) ...) or #f
-                     ; Constructor pairing for duality relation. #f = domain doesn't
-                     ; support duality. Derivation assumption: same-domain components
-                     ; are continuations (get duality), cross-domain get equality.
-   top-value         ; SRE Track 1: the contradiction/top element. Counterpart to bot-value.
-                     ; Needed for relation violations (e.g., wrong dual pairing) where
-                     ; lattice-merge alone can't produce contradiction (same-tag merge is idempotent).
-   subtype-merge     ; SRE Track 1: (a b → merged) | #f — lattice merge for subtype ordering.
-                     ; Returns the join in the subtype ordering:
-                     ;   merge(a, b) = b if a <: b, = a if b <: a, = top if incomparable.
-                     ; This is a proper lattice merge (monotone, commutative, associative,
-                     ; idempotent). The subtype propagator uses this instead of lattice-merge
-                     ; to keep subtyping fully on-network — no off-network predicate escape hatch.
-                     ; #f = domain doesn't support subtyping.
+   dual-pairs        ; SRE Track 1: '((Send . Recv) ...) or #f
    )
   #:transparent)
+
+;; Merge lookup: gets the merge function for a given relation from the domain registry.
+(define (sre-domain-merge domain relation)
+  ((sre-domain-merge-registry domain) (sre-relation-name relation)))
 
 ;; Debug mode: enables idempotency assertions (D.2 critique)
 (define current-sre-debug? (make-parameter #f))
@@ -265,7 +264,7 @@
 (define (sre-identify-sub-cell net domain expr)
   (define recognizer (sre-domain-meta-recognizer domain))
   (define resolver (sre-domain-meta-resolver domain))
-  (define merge (sre-domain-lattice-merge domain))
+  (define merge (sre-domain-merge domain sre-equality))
   (define contradicts? (sre-domain-contradicts? domain))
   (define bot? (sre-domain-bot? domain))
   (define bot-val (sre-domain-bot-value domain))
@@ -504,7 +503,7 @@
 
 ;; --- Equality propagator (Track 0 behavior, unchanged) ---
 (define (sre-make-equality-propagator domain cell-a cell-b relation)
-  (define merge (sre-domain-lattice-merge domain))
+  (define merge (sre-domain-merge domain sre-equality))
   (define contradicts? (sre-domain-contradicts? domain))
   (define bot? (sre-domain-bot? domain))
   (lambda (net)
@@ -548,7 +547,7 @@
 (define (sre-make-subtype-propagator domain cell-a cell-b relation)
   (define contradicts? (sre-domain-contradicts? domain))
   (define bot? (sre-domain-bot? domain))
-  (define sub-merge (sre-domain-subtype-merge domain))
+  (define sub-merge (sre-domain-merge domain relation))
   (define reversed? (eq? (sre-relation-name relation) 'subtype-reverse))
   (lambda (net)
     (define va (net-cell-read net cell-a))
@@ -574,8 +573,8 @@
            [else
             (if (not sub-merge)
                 ;; No subtype-merge → domain doesn't support subtyping.
-                ;; Fall back to equality check.
-                (let ([eq-merged ((sre-domain-lattice-merge domain) lhs rhs)])
+                ;; No merge for this relation → fall back to equality merge.
+                (let ([eq-merged ((sre-domain-merge domain sre-equality) lhs rhs)])
                   (if (contradicts? eq-merged)
                       (net-cell-write net cell-a eq-merged)
                       net))
@@ -592,7 +591,7 @@
                      ;; merged = lhs → rhs ≤ lhs (wrong direction) → violation
                      ;; Unless lhs = rhs (handled by equal? in sub-merge)
                      (net-cell-write net cell-a
-                       ((sre-domain-lattice-merge domain) lhs rhs))]
+                       ((sre-domain-merge domain sre-equality) lhs rhs))]
                     [else
                      ;; merged ≠ either → shouldn't happen for well-formed subtype merge
                      net])))]))])))
@@ -609,7 +608,7 @@
 ;; This is INFORMATION PROPAGATION (like equality), not checking (like subtyping).
 ;; Both cells move toward compatible values via the dual mapping.
 (define (sre-make-duality-propagator domain cell-a cell-b relation)
-  (define merge (sre-domain-lattice-merge domain))
+  (define merge (sre-domain-merge domain sre-equality))
   (define contradicts? (sre-domain-contradicts? domain))
   (define bot? (sre-domain-bot? domain))
   (define pairs (sre-domain-dual-pairs domain))

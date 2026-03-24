@@ -20,18 +20,22 @@
 ;; A. Session domain spec for testing
 ;; ========================================================================
 
+(define (test-session-merge-registry rel-name)
+  (case rel-name
+    [(equality duality) session-lattice-merge]
+    [else (error 'test-session-merge-registry "no merge for: ~a" rel-name)]))
+
 (define session-domain
   (sre-domain 'session
-              session-lattice-merge
+              test-session-merge-registry  ;; merge-registry
               session-lattice-contradicts?
               sess-bot?
               sess-bot
-              #f #f  ;; no meta-recognizer/resolver for standalone tests
+              sess-top  ;; top-value
+              #f #f     ;; no meta-recognizer/resolver
               ;; Dual pairs: Send↔Recv, AsyncSend↔AsyncRecv
               '((sess-send . sess-recv)
-                (sess-async-send . sess-async-recv))
-              sess-top  ;; top-value (contradiction)
-              #f))      ;; no subtype-merge
+                (sess-async-send . sess-async-recv))))
 
 ;; Helper: create mini-network, install duality-relate, quiesce
 (define (sre-duality-check sa sb)
