@@ -294,12 +294,33 @@ Layer 1: prelude-network (process-wide, frozen, deserialized from .pnet)
 elaborates file-level definitions, returns a frozen network. `with-fork`
 creates an ephemeral fork for one test case and discards after.
 
-**Racket-intrinsic parameters that CAN'T be cells** (~3-5):
-- `current-output-port` / `current-error-port` (Racket I/O)
-- `current-directory` (filesystem)
-- `current-custodian` (resource management)
+**D.3 Code Reality Audit — parameter classification:**
 
-These remain as a minimal `parameterize` (3-5 bindings, down from 15-41).
+Of the 21 parameters in `run-ns-last` (test-support.rkt:130-154):
+- **11 become cells** in the network (per-file/per-test state): prelude-env,
+  module-definitions, definition-cells, definition-dependencies, cross-module-deps,
+  ns-context, mult-meta-store, definition-cell-ids, module-registry-cell-id,
+  ns-context-cell-id, defn-param-names-cell-id
+- **7 are shared prelude values** that become cell reads from the prelude fork:
+  module-registry, lib-paths, preparse-registry, trait-registry, impl-registry,
+  param-impl-registry, persistent-registry-net-box
+- **3 are network boxes** that the fork mechanism itself replaces:
+  prop-net-box, prelude-env-prop-net-box, ns-prop-net-box
+
+**Registries in the unified prelude `.pnet`** (D.3 audit verified):
+- 4/6 registries fully serializable (trait: 29, impl: 156, param-impl: 3, capability: 20)
+- 2/6 have named procedures needing re-link (preparse: 12/49 expanders, module: 22/40 foreign fns)
+- Persistent registry cells: 27/29 clean, 2 need re-link (coercion-fns, preparse-expanders)
+- Same `(foreign-proc name)` / `(preparse-expander name)` mechanism handles all cases
+
+**Realistic parameter reduction: 21 → 3**
+- `current-prop-net-box` (the fork)
+- `current-output-port` (Racket I/O, can't be a cell)
+- `install-module-loader!` (callback, until module loading is fully network-native)
+
+All 7 shared prelude params are cells in the prelude network — forking gives
+them for free. All 11 per-file/per-test params are cells written during fork
+setup. Only Racket-intrinsic params remain.
 
 **Tests with different prelude configurations** fork from different layers:
 - `:no-prelude` tests → fork from empty `raw-network`
@@ -1155,3 +1176,5 @@ Track 10 is DONE when:
 | 14 | Specs + def-locations serialization? | **Resolved: include** | 614 specs + 30,908 locations. Must be in .pnet for import resolution + error messages. |
 | 15 | Test custom parameterizations? | **Resolved** | Three-layer fork: cell writes in Layer 2 fork replace parameterize. `fork-with` API. |
 | 16 | Test-granular scheduling? | **Resolved** | Per-test work items via Places. Eliminates tail effect. Option C (split files) pragmatic. Option B (test registration) principled follow-up. |
+| 17 | Can registries go into the prelude .pnet? | **Resolved: YES** | 4/6 clean, 2/6 need named-proc re-link. Same mechanism as foreign-proc. Persistent registry cells: 27/29 clean. Unified .pnet = modules + registries + cells. |
+| 18 | Realistic parameter count after fork? | **Resolved: 21 → 3** | D.3 classified all 21: 11→cells, 7→prelude fork reads, 3→fork mechanism. Remaining: network box, output port, module loader. |
