@@ -20,16 +20,15 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | Pre-0 | Micro-benchmark + adversarial testing | ✅ | Key findings: id-map is bottleneck (82ns), meta-solution ALREADY cell-primary, bvar risk confirmed |
-| 0 | **bvar closure detection** (assertion only, correction in Phase 3) | ⬜ | D.4: detection not correction. Avoids Phase 0/3 chicken-and-egg. |
-| 1 | **Embed cell-id in expr-meta** (skip id-map lookup) | ⬜ | 82ns → ~4ns per meta-solution. The meta IS the cell. |
-| 2 | Zonk call site audit: classify 31 sites (was 225 est.) | ✅ | **0 defensive calls found.** 13 necessary + 15 boundary. |
-| 3 | Eliminate zonk-at-depth + activate close-expr (atomic, 5 sites in unify.rkt) | ⬜ | close-expr ensures fvar solutions; depth tracking unnecessary |
-| 4a | Freeze at command boundaries: replace 15 zonk-final calls | ⬜ | Single-pass cell read (~200 lines) |
-| 4b | Resolution key extraction reads cells directly (8 sites) | ⬜ | `expr->impl-key-str` reads cell-id instead of requiring zonk |
-| 5 | Defaults at solve-time (eliminate default-metas) | ⬜ | Level→lzero, mult→mw at cell write |
-| 6 | ground-expr? unification: cell-level check | ⬜ | Two incompatible definitions → one |
-| 7 | CHAMP fallback removal: cell-only path | ⬜ | Removes dual storage + id-map |
-| 8 | Verification + benchmarks + PIR | ⬜ | |
+| 0 | bvar closure detection (assertion in solve-meta!) | ✅ | 0 bvar solutions across 7401 tests. close-expr is PREVENTIVE. (`14705f6`) |
+| 1 | Embed cell-id in expr-meta + custom gen:equal+hash | ✅ | 36 files changed. Hash ops 2.3× faster. (`8bbdee4`) |
+| 2 | Zonk call site audit: 31 sites (not 225) | ✅ | 0 defensive calls. typing-core makes ZERO zonk calls. (`2edada1`) |
+| 3 | zonk + zonk-at-depth use cell-id fast path | ✅ | 5.4% suite improvement (244→231s). zonk-at-depth 0→zonk unsafe (identity). (`22b4a4a`, `6e773ef`) |
+| 4 | Resolution key extraction: remove redundant zonk (8 sites) | ✅ | normalize-for-resolution already chases metas. (`1ab5f99`) |
+| 5 | Defaults at solve-time | ⏸️ | DEFERRED — cheap single-pass walk, architectural not performance |
+| 6 | ground-expr? cell-id + clarification | ✅ | Two defs serve different contexts (type vs logic). Updated type version. (`dbfce20`) |
+| 7 | CHAMP fallback removal | ⏸️ | DEFERRED to PM Track 10 — module-loading needs cells everywhere |
+| 8 | Verification + PIR | ✅ | 7401 tests, 245.3s, all pass. PIR pending. |
 
 ---
 
