@@ -76,7 +76,7 @@
 (define (resolve-trait-constraint! dict-meta-id tc-info)
   (define trait-name (trait-constraint-info-trait-name tc-info))
   (define type-args
-    (map (lambda (e) (normalize-for-resolution (zonk e)))
+    (map (lambda (e) (normalize-for-resolution e))
          (trait-constraint-info-type-arg-exprs tc-info)))
   (when (andmap ground-expr? type-args)
     (define dict-expr
@@ -99,7 +99,7 @@
   (unless (meta-solved? meta-id)
     (define method-name (hasmethod-constraint-info-method-name hm-info))
     (define type-args
-      (map (lambda (e) (normalize-for-resolution (zonk e)))
+      (map (lambda (e) (normalize-for-resolution e))
            (hasmethod-constraint-info-type-arg-exprs hm-info)))
     (when (andmap ground-expr? type-args)
       ;; Strategy 1: P (trait var) is already ground
@@ -200,7 +200,7 @@
   (with-enet-reads enet
     (define trait-name (trait-constraint-info-trait-name tc-info))
     (define type-args
-      (map (lambda (e) (normalize-for-resolution (zonk e)))
+      (map (lambda (e) (normalize-for-resolution e))
            (trait-constraint-info-type-arg-exprs tc-info)))
     (cond
       [(not (andmap ground-expr? type-args)) enet]
@@ -221,7 +221,7 @@
       [else
        (define method-name (hasmethod-constraint-info-method-name hm-info))
        (define type-args
-         (map (lambda (e) (normalize-for-resolution (zonk e)))
+         (map (lambda (e) (normalize-for-resolution e))
               (hasmethod-constraint-info-type-arg-exprs hm-info)))
        (cond
          [(not (andmap ground-expr? type-args)) enet]

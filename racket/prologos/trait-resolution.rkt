@@ -334,7 +334,7 @@
     (unless (meta-solved? meta-id)
       (perf-inc-trait-resolve!)
       (define trait-name (trait-constraint-info-trait-name tc-info))
-      (define type-args (map (lambda (e) (normalize-for-resolution (zonk e)))
+      (define type-args (map (lambda (e) (normalize-for-resolution e))
                              (trait-constraint-info-type-arg-exprs tc-info)))
       (when (andmap ground-expr? type-args)
         (define dict-expr
@@ -422,10 +422,10 @@
                #:when (not (meta-solved? meta-id))
                #:when (not (hash-has-key? cell-errors meta-id))
                #:when (andmap ground-expr?
-                             (map (lambda (e) (normalize-for-resolution (zonk e)))
+                             (map (lambda (e) (normalize-for-resolution e))
                                   (trait-constraint-info-type-arg-exprs tc-info))))
       (define trait-name (trait-constraint-info-trait-name tc-info))
-      (define type-args (map (lambda (e) (normalize-for-resolution (zonk e)))
+      (define type-args (map (lambda (e) (normalize-for-resolution e))
                              (trait-constraint-info-type-arg-exprs tc-info)))
       (build-trait-error meta-id trait-name type-args)))
   ;; Filter cell errors: only include errors for metas that are still unsolved.
@@ -518,7 +518,7 @@
     (unless (meta-solved? meta-id)
       (define method-name (hasmethod-constraint-info-method-name hm-info))
       (define type-args
-        (map (lambda (e) (normalize-for-resolution (zonk e)))
+        (map (lambda (e) (normalize-for-resolution e))
              (hasmethod-constraint-info-type-arg-exprs hm-info)))
       (when (andmap ground-expr? type-args)
         ;; Strategy 1: P is already ground

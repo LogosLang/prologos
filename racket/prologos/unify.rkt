@@ -177,11 +177,12 @@
      (if (tycon-arity name)
          (expr-tycon name)
          e)]
-    ;; Chase solved metas
-    [(expr-meta id _)
-     (if (meta-solved? id)
-         (normalize-for-resolution (meta-solution id))
-         e)]
+    ;; Chase solved metas — PM 8F: use cell-id fast path
+    [(expr-meta id cell-id)
+     (let ([sol (meta-solution/cell-id cell-id id)])
+       (if sol
+           (normalize-for-resolution sol)
+           e))]
     ;; Everything else: leave unchanged
     [_ e]))
 
