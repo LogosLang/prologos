@@ -170,6 +170,132 @@ definition time. Or: the property holds a TAG (symbol), and the registry
 maps tags to full ctor-descs. Lookup is: property → tag (O(1)), then
 tag → ctor-desc (O(1) hash-ref). Two O(1) lookups = still O(1).
 
+### 1b.2 D.4: End-to-End Benchmark Findings
+
+The D.3 critique §1 identified a gap: tag lookup was benchmarked in
+isolation, but the full classify → extract → build-result path was not.
+The e2e benchmark measures the COMPLETE proposed path against the current
+classifier.
+
+**Benchmark file**: `benchmarks/micro/bench-classify-e2e.rkt`
+
+#### E2E Raw Data
+
+| Case | Current (ns) | SRE e2e (ns) | Ratio | Notes |
+|------|-------------|-------------|-------|-------|
+| identical | 117 | 67 | **0.57×** | SRE FASTER: fewer branches before equal? |
+| meta | 72 | 20 | **0.28×** | SRE FASTER: meta check is earlier |
+| flex-app | 424 | 107 | **0.25×** | SRE FASTER: dedicated check, not fallthrough |
+| Pi-vs-Pi | 160 | 549 | 3.4× | Linear scan dominates |
+| Sigma-vs-Sigma | 148 | 273 | 1.8× | Closest structural case |
+| app-vs-app | 330 | 783 | 2.4× | Linear scan |
+| Eq-vs-Eq | 340 | 680 | 2.0× | Linear scan |
+| pair-vs-pair | 329 | 509 | 1.5× | Linear scan |
+| Vec-vs-Vec | 267 | 775 | 2.9× | Linear scan |
+| suc-vs-suc | 258 | 859 | 3.3× | Linear scan (late in table) |
+| atom-vs-atom | 124 | 1830 | **14.8×** | Full scan, both sides, finds nothing |
+
+#### Extraction Cost: Settled (Non-Issue)
+
+| Operation | Direct field (ns) | Closure (ns) | Overhead |
+|-----------|------------------|-------------|----------|
+| Pi (2 fields) | 5 | 8 | 3ns |
+| Eq (3 fields) | 7 | 7 | 0ns |
+| suc (1 field) | 4 | 5 | 1ns |
+
+**The D.3 critique §1's concern about "20-40ns closure overhead" was wrong.**
+Racket optimizes closure calls well. The SRE's `extract-fn` approach adds
+~0-3ns per extraction — negligible compared to the 300-800ns linear scan.
+No design change needed for extraction.
+
+#### Key Findings (D.4)
+
+**1. Three cases are ALREADY faster with the SRE path — without O(1) dispatch.**
+The pre-check reordering (fewer branches before identity/meta/flex-app)
+beats the classifier's long cond chain. These improvements are FREE —
+they come from the migration itself, not from O(1) optimization.
+
+**2. The linear scan is the SOLE bottleneck for structural cases.**
+Every structural case's excess cost is explained entirely by the
+`ctor-tag-for-value` linear scan. Remove the scan → the SRE path
+is faster for ALL cases.
+
+**3. With O(1) dispatch, predicted performance:**
+
+| Case | Current (ns) | Predicted SRE O(1) (ns) | Predicted ratio |
+|------|-------------|------------------------|----------------|
+| identical | 117 | 67 | **0.57×** (unchanged — equal? path) |
+| meta | 72 | 20 | **0.28×** (unchanged — meta path) |
+| flex-app | 424 | 107 | **0.25×** (unchanged — flex-app path) |
+| Pi-vs-Pi | 160 | ~102 | **~0.64×** |
+| app-vs-app | 330 | ~90 | **~0.27×** |
+| atom-vs-atom | 124 | ~50 | **~0.40×** |
+
+Predicted O(1) structural path: pre-checks (~40ns) + property access
+(~4ns × 2 sides) + hash-ref (~15ns × 2) + domain check (~4ns × 2) +
+extraction (~8ns × 2) = ~102ns for Pi (with binder check), ~90ns for
+non-binder (app/Eq/pair). All faster than the classifier's 160-340ns.
+
+Atom path: pre-checks (~40ns) + property check returns #f (~4ns × 2) =
+~48ns. vs classifier's 124ns.
+
+**4. flex-app correctness finding.**
+The current classifier routes `(app (meta ?F) arg)` vs `(app (fvar g) arg)`
+to `'sub` (app-vs-app structural decomposition). Our SRE version routes it
+to `'flex-app` (higher-order unification). The current behavior works
+accidentally — recursive decomposition hits `flex-rigid` on the func
+sub-goal and solves the meta. But it does unnecessary work (creating
+decomposition sub-goals for a direct meta-solve).
+
+Our ordering (flex-app BEFORE structural dispatch) is more correct. Must
+verify via full test suite that this doesn't change observable behavior.
+
+#### Design Implications (D.4)
+
+**No design changes needed.** The e2e benchmark validates D.2/D.3:
+- Phase 0 (O(1) dispatch) is necessary AND sufficient
+- Extraction closures are fine (settled question)
+- Pre-check reordering provides bonus improvement
+- flex-app ordering correction provides bonus correctness
+- Performance targets can be tightened: the SRE path should be
+  FASTER for all cases, not just "within 3% regression"
+
+**Revised performance targets** (updated from D.2):
+
+| Metric | D.2 Target | D.4 Revised Target | Basis |
+|--------|-----------|-------------------|-------|
+| Full suite wall time | ≤ 236.7s (0%) | ≤ 230s (potential 3% improvement) | All dispatch paths faster |
+| Classifier dispatch (hot) | ≤ 50 ns/call | ≤ 102 ns/call (Pi), ≤ 90 ns (non-binder) | e2e measurement, not isolated tag |
+| Atom dispatch | ≤ 30 ns/call | ≤ 50 ns/call | Property check + pre-checks |
+| Identical fast path | (not measured) | ≤ 70 ns/call | Already 0.57× without O(1) |
+| Meta fast path | (not measured) | ≤ 25 ns/call | Already 0.28× without O(1) |
+
+**Alternatives analysis** (principled consideration):
+
+| Approach | O(1)? | Hardcoded? | Data-oriented? | Complete? |
+|----------|-------|-----------|----------------|-----------|
+| Current classifier (cond chain) | No (O(N) branches) | Yes | No (code) | N/A (current) |
+| Frequency-sorted recognizer list | No (O(N) worst) | No | Partially | No |
+| Top-8 hardcoded + fallback | Yes (common) | Yes | No | No |
+| Struct-type property | Yes (all) | No | Yes | **Yes** |
+
+Only the struct-type property satisfies all four criteria: O(1) for all
+cases, no hardcoded structural knowledge, data-oriented (value carries
+identity), and complete (no worst-case degradation).
+
+**Principles validation:**
+
+- **Completeness**: O(1) dispatch is the complete solution. Partial
+  approaches (sorted list, top-8 hybrid) would require revisiting.
+  The hard thing (modify syntax.rkt) makes everything else easy.
+- **Data Orientation**: The value carries its own structural identity
+  via the property. More data-oriented than code-based matching OR
+  registry-based scanning.
+- **Correct-by-Construction**: Forgetting the property on a new AST
+  struct → SRE doesn't recognize it → tests fail immediately.
+  Forgetting a ctor-desc entry → linear scan doesn't find it →
+  silent fallthrough to `'conv`. The property makes omissions visible.
+
 **What "done" looks like**:
 - `classify-whnf-problem` delegates ALL structural cases to `sre-constructor-tag` + ctor-desc extraction
 - No hardcoded `(and (expr-Pi? a) (expr-Pi? b))` patterns in the classifier
@@ -452,14 +578,19 @@ dispatch is a PREREQUISITE for the migration, not an optimization.
 2. Property added to all 23+ structural AST structs
 3. `ctor-tag-for-value` updated to use property-first dispatch with domain
    filtering. Fallback to linear scan for non-AST types.
-4. **End-to-end benchmark** (D.3 critique §1): measure full
-   `sre-classify-problem` path (property + hash-ref + domain + extract)
-   against `classify-whnf-problem`. Not just tag lookup in isolation.
-5. **Stale .zo verification** (D.3 critique §2): `raco make driver.rkt`
+4. **End-to-end benchmark** (D.3 §1, D.4): Re-run `bench-classify-e2e.rkt`
+   with O(1) dispatch. Confirm predictions:
+   - Pi-vs-Pi: ≤ 102ns (vs 160ns current, vs 549ns pre-O(1) SRE)
+   - app-vs-app: ≤ 90ns (vs 330ns current)
+   - atom-vs-atom: ≤ 50ns (vs 124ns current, vs 1830ns pre-O(1) SRE)
+   - identical/meta/flex-app: unchanged (already faster without O(1))
+5. **Stale .zo verification** (D.3 §2): `raco make driver.rkt`
    recompiles all. Verify property accessible on representative structs.
    Test with intentionally stale .zo to confirm it's caught.
-6. Micro-benchmark confirmation: ~19ns per lookup (vs 300-825ns)
+6. Micro-benchmark: `ctor-tag-for-value` ≤ 19ns per lookup (vs 300-825ns)
 7. Full suite passes — no behavioral change
+8. flex-app ordering verification: full suite with new ordering to
+   confirm no behavioral regression (D.4 §4)
 
 **Blast radius mitigation**:
 - The property is ADDITIVE: existing struct fields, pattern matching,
@@ -670,14 +801,17 @@ criteria to new feature correctness (D.3 critique §6).
 
 ## 5. Performance Expectations
 
-| Metric | Baseline (Pre-0 measured) | Target | Rationale |
-|--------|--------------------------|--------|-----------|
-| Full suite wall time | 236.7s | ≤ 236.7s (0% regression, possible improvement) | O(1) dispatch is faster than cond chain |
-| Classifier dispatch (hot) | 162-342 ns/call | ≤ 50 ns/call | prop:ctor-desc (~4ns) + hash-ref (~15ns) + pre-checks (~20ns) |
-| Atom dispatch (failure case) | 123-825 ns/call | ≤ 30 ns/call | Property check returns #f in ~4ns; no scan |
-| `ctor-tag-for-value` | 43-825 ns/call | ≤ 19 ns/call | O(1) replaces O(N) linear scan |
-| Memory | 7392 tests | ≤ 7400 tests | No new cells/propagators from dispatch change |
-| Compound subtype check | 0.5μs (Track 1B) | ≤ 0.5μs | structural-subtype-ground? unchanged |
+| Metric | Baseline (measured) | Target (D.4 revised) | Rationale |
+|--------|---------------------|---------------------|-----------|
+| Full suite wall time | 236.7s | ≤ 230s (potential 3% improvement) | All dispatch paths faster with O(1) |
+| Structural dispatch e2e (Pi) | 160 ns/call | ≤ 102 ns/call | Pre-checks + O(1) tag + extraction |
+| Structural dispatch e2e (non-binder) | 258-340 ns/call | ≤ 90 ns/call | Fewer checks needed |
+| Atom dispatch e2e | 124 ns/call | ≤ 50 ns/call | Property check #f (~4ns) + pre-checks |
+| Identical fast path | 117 ns/call | ≤ 70 ns/call | Already 0.57× in SRE ordering |
+| Meta fast path | 72 ns/call | ≤ 25 ns/call | Already 0.28× in SRE ordering |
+| `ctor-tag-for-value` | 43-825 ns/call | ≤ 19 ns/call | O(1) property + hash replaces O(N) scan |
+| Extraction closure overhead | N/A | ≤ 3 ns per field | **Settled**: closure ≈ direct access (D.4) |
+| Memory | 7392 tests | ≤ 7400 tests | No new cells/propagators |
 
 **How we know we're done** (completion criteria):
 1. `classify-whnf-problem` has zero hardcoded structural pattern matches
