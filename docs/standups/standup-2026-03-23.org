@@ -1,0 +1,73 @@
+#+TITLE: Standup — 2026-03-23
+#+DATE: 2026-03-23
+
+* Yesterday (since 2026-03-22 standup)
+
+** Principles-First Design Gate (~c7cda29~)
+- 10 load-bearing principles in two groups: Group A (infrastructure), Group B (design quality)
+- Gate at three decision points: design drafting, implementation mid-flight, critique rounds
+- Completeness as the bridge principle: "when ergonomics feel forced, a Group A principle was applied incompletely"
+- Red-flag phrases codified for automatic scrutiny
+
+** PM Track 8 PIR: Principles Audit + Track 8D
+- §12 full principles audit: 6 findings → 1 root cause (~current-prop-net-box~ mutable seam)
+- Track 8D scoped, designed (D.1 + D.2 revision: bridges read cells directly)
+- Track 8D COMPLETE (~65503ea~, ~2672652~): pure α/γ bridge fire functions, quiescence writes 12→8
+- PIR updated with C1-C3 Completeness violation, legitimate vs illegitimate debt split
+
+** Unified Propagator Network Infrastructure Roadmap (~f37a6c0~)
+- Comprehensive audit: 205 Racket parameters, 40+ registries, on/off-network boundary map
+- Zonk disappears during elaboration when metas ARE cells; becomes "freeze" at command boundary
+- 5 PM tracks scoped: 8D→8E→8F→9→10. Track 10 = convergence (no box, no dual-writes, no zonk)
+- Estimated 20-40 sessions total
+
+** Research: Structural Reasoning Engine (~7ec4d8a~)
+- PUnify is a universal structural reasoning engine, not "the unification algorithm"
+- Elaborator becomes trivially thin: every type inference case = ~structural-relate(cell, Form(sub-cells))~
+- Two-layer architecture: SRE (within-domain) + Galois bridges (between-domain)
+- Roadmap reframe: build SRE foundation → each system registers structural forms
+
+** NTT Research Program (4 rounds of design iteration)
+- Doc 1: Categorical Foundations (~68d7302~) — polynomial functors, Grothendieck fibrations, Kan extensions
+- NTT Syntax Design: 4 rounds (~c7816a1~ → ~c60ce81~ → ~2b27ea8~ → ~12dd587~)
+  - 7 forms: ~trait Lattice~, ~propagator~, ~interface~, ~network~, ~bridge~, ~stratification~, ~exchange~
+  - Key decisions: derive-not-declare, ~stratification~ subsumes ~solver~, ~:extends~ composability,
+    value vs structural lattices, ~:trace~ cascade scoping, ~:speculation~ on fiber
+  - ~90% clarity achieved after 6-system case study program
+- Architecture Survey + 6 deep case studies (Type Checker, NF-Narrowing, Sessions, QTT, WF-LE, NAF-LE + Effect Ordering)
+  - 11 gaps found (3 resolved by SRE, 4 medium, 4 low)
+  - SRE more central than expected: handles merge, constraints, meta→cell, AND zonk elimination
+- Toplevel Forms Reference (~683ca0e~): 25+ forms, 50+ keywords, 7 domains canvassed
+- SRE expanded: "Structural Relation Engine" — equality, duality, subtyping, coercion, isomorphism
+
+** SRE Track 0: Form Registry (COMPLETE)
+- Design: D.1 (~d7eb083~) + D.2 external critique (~19b17ad~): 6 accepted, 2 pushed back, 2 noted
+- NTT speculative syntax added to design doc as companion (~bcdf1c4~)
+- Implementation: 4 phases, zero bugs, zero reverts — smoothest track in project history
+  - Phase 1: ~sre-core.rkt~ (325 lines, 6 core functions) (~03e9ede~)
+  - Phase 2: PUnify delegates to SRE, 23 ctor-descs registered (~08c71ac~)
+  - Phase 3: Second domain (term-value) validated with zero sre-core changes (~217fb31~)
+  - Phase 4: 7358 tests, 236.7s, all 6 verification criteria met (~86524d8~)
+- PIR: ~docs/tracking/2026-03-22_SRE_TRACK0_PIR.md~ (~089d53b~)
+  - Key finding: ~sre-domain~ ≡ NTT ~:lattice :structural~ (isomorphic data models)
+  - Design:implementation ratio 2:1 → zero bugs (22-PIR pattern confirmed)
+
+** Master Roadmap Updated (~4ddf3e2~)
+- PM Track 8 (A/B/C/D) moved to completed
+- SRE Series (5 tracks) and NTT Series (4 research docs) added
+- Self-hosting trajectory: 6-step path from Racket SRE to self-verifying compiler
+
+** Metrics
+- 7358 tests, 380 files, 236.7s (all pass)
+- ~35 commits in interval: ~c7cda29~ through ~089d53b~
+- New files: sre-core.rkt, test-sre-core.rkt, 8 research/design docs, 2 case studies
+
+* Today
+
+** Determine next priority: SRE Track 1 (subtyping) vs PM Track 8E vs other
+** Distill 5 pending lessons from SRE Track 0 PIR into principles docs
+** Continue NTT research refinement if needed
+
+* Blockers
+
+- PUnify toggle flip blocked by Option module loading hang (pre-existing)
