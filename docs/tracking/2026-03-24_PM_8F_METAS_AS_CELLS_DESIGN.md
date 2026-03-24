@@ -3,7 +3,7 @@
 **Stage**: 2 (Audit) + 3 (Design), combined
 **Date**: 2026-03-24
 **Series**: PM (Propagator Migration) + SRE (Structural Reasoning Engine)
-**Status**: D.3 — revised with external critique
+**Status**: D.4 — self-critique (full 10-principle challenge + Phase 0/3 resolution)
 **Depends on**: [SRE Track 2](2026-03-23_SRE_TRACK2_ELABORATOR_ON_SRE_DESIGN.md) ✅ (SRE dispatch stable), [PM Track 8D](2026-03-22_TRACK8D_DESIGN.md) ✅ (pure bridge fire functions)
 **Enables**: Zonk elimination (~1100 lines), SRE Track 3 (trait resolution), SRE Track 6 (reduction), PM Track 10 (convergence)
 **Source Documents**:
@@ -20,10 +20,10 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | Pre-0 | Micro-benchmark + adversarial testing | ✅ | Key findings: id-map is bottleneck (82ns), meta-solution ALREADY cell-primary, bvar risk confirmed |
-| 0 | **bvar closure invariant** (correctness prerequisite) | ⬜ | Assertion in solve-meta! — bvar-containing solutions are written today |
+| 0 | **bvar closure detection** (assertion only, correction in Phase 3) | ⬜ | D.4: detection not correction. Avoids Phase 0/3 chicken-and-egg. |
 | 1 | **Embed cell-id in expr-meta** (skip id-map lookup) | ⬜ | 82ns → ~4ns per meta-solution. The meta IS the cell. |
 | 2 | Eliminate defensive zonk calls (cell reads sufficient) | ⬜ | ~225+ sites, classify necessary vs defensive |
-| 3 | Eliminate zonk-at-depth (after bvar closure guaranteed) | ⬜ | Highest risk — binder correctness. Depends on Phase 0. |
+| 3 | Eliminate zonk-at-depth + activate close-expr (atomic) | ⬜ | D.4: close-expr + zonk-at-depth elimination happen together. Depends on Phase 0 data. |
 | 4 | Freeze at command boundaries: single-pass cell read | ⬜ | Replaces zonk-final (~200 lines) |
 | 5 | Defaults at solve-time (eliminate default-metas) | ⬜ | Level→lzero, mult→mw at cell write |
 | 6 | ground-expr? unification: cell-level check | ⬜ | Two incompatible definitions → one |
@@ -373,15 +373,19 @@ whether Phase 0 is a correctness fix (bvar solutions exist) or a
 preventive assertion (they don't, but could if a future solve path is
 added without proper opening).
 
+**D.4 revision**: Phase 0 is DETECTION ONLY. The `close-expr` correction
+happens in Phase 3, atomically with `zonk-at-depth` elimination. This
+avoids the chicken-and-egg where closing solutions breaks downstream
+`zonk-at-depth` callers that expect bvars.
+
 **Deliverables**:
 1. Audit ALL `solve-meta!` call paths for bvar-containing solutions
 2. Add `bvar-free?` check function
-3. Add `close-expr` function (reuse `open-expr` bvar→fvar pattern)
-4. Debug-mode assertion in `solve-meta-core!`
-5. Add `current-bvar-solution-count` counter to measure frequency
-6. Add closing step for any solve path that produces unclosed solutions
-7. Targeted tests: solve under binders, verify cell contains fvars not bvars
-8. Full test suite passes
+3. Add `current-bvar-solution-count` counter to measure frequency
+4. Debug-mode assertion in `solve-meta-core!` (detection, not correction)
+5. Run full suite with assertion enabled — collect bvar frequency data
+6. Document which solve paths produce bvar solutions and why
+7. Full test suite passes (assertion is detection, not behavior change)
 
 ### Phase 1: Embed cell-id in expr-meta (Skip id-map Lookup)
 
@@ -445,13 +449,15 @@ needed — module metas are fully solved in their own context.
 **Deliverables**:
 1. Add `cell-id` field to `expr-meta` in syntax.rkt (default `#f`)
 2. Add custom `gen:equal+hash` that compares/hashes only `id`
-3. Update `fresh-meta` to set `cell-id` at creation time
-4. Update `meta-solution` to read `cell-id` directly, fallback to id-map
-5. Update all 14 pipeline files for the new struct field
-6. `raco make driver.rkt` to recompile ALL dependents
-7. Test: verify `(equal? (expr-meta 5 100) (expr-meta 5 #f))` → #t
-8. Full test suite passes
-9. Micro-benchmark: meta-solution cost before vs after (target: 56ns)
+3. Grep for ALL direct `expr-meta` construction outside `fresh-meta` —
+   route through factory (D.4: correct-by-construction)
+4. Update `fresh-meta` to set `cell-id` at creation time
+5. Update `meta-solution` to read `cell-id` directly, fallback to id-map
+6. Update all 14 pipeline files for the new struct field
+7. `raco make driver.rkt` to recompile ALL dependents
+8. Test: verify `(equal? (expr-meta 5 100) (expr-meta 5 #f))` → #t
+9. Full test suite passes
+10. Micro-benchmark: meta-solution cost before vs after (target: 56ns)
 
 ### Phase 2: Eliminate Elaboration-Time zonk
 
@@ -673,6 +679,23 @@ the solution is closed (no bvars) before cell write. This is a
 debug-mode check that catches any solve path that produces unclosed
 solutions. The assertion makes the invariant explicit and testable.
 
+### First-Class by Default
+**Challenge**: Does `freeze` make meta solutions NOT first-class?
+**Answer**: No. During elaboration, the meta IS a first-class cell
+reference — you can pass it, compare it, decompose it. `freeze` is
+serialization at the boundary (cell reference → ground value), not
+downgrading. Same as serializing any first-class value for storage.
+
+### Decomplection
+**Challenge**: Is `cell-id` on `expr-meta` entangling identity (id)
+with storage (cell-id)?
+**Answer**: Partially. The custom `gen:equal+hash` decouples them for
+equality/hashing — identity is by `id` only. But `cell-id` is an
+elaboration-time concern on a syntax-level struct. An alternative
+(separate mapping) is exactly the id-map we're eliminating. The struct
+field is the right trade-off: minor entanglement, 2.7× performance win,
+and the custom equality makes the separation explicit.
+
 ### Composition
 **Challenge**: Does cell-primary meta-solution compose with the
 existing speculation/TMS infrastructure?
@@ -681,6 +704,34 @@ meta is solved speculatively, the solution is tagged with an assumption
 ID. Cell reads through `worldview-visible?` filter correctly. The
 cell-primary path inherits this filtering — it reads from the cell,
 which is TMS-aware.
+
+### Progressive Disclosure
+**Challenge**: Does `cell-id` leak to users?
+**Answer**: No. Pretty-print formats `expr-meta` by name (`?X`), not
+by internal fields. REPL output never shows cell-id. The optimization
+is invisible to users.
+
+### Correct-by-Construction (D.4 strengthening)
+**Challenge**: Can `expr-meta` be constructed with a wrong cell-id?
+**Answer**: Currently, yes — the struct is public. A manually-constructed
+`expr-meta` with wrong cell-id silently gives wrong solutions. Mitigation:
+all `expr-meta` construction should go through `fresh-meta`. In Phase 1,
+grep for direct `expr-meta` construction outside `fresh-meta` and route
+through the factory. Long-term: make the constructor private (export only
+the factory).
+
+### Phase 0/3 Chicken-and-Egg (D.4 discovery)
+**Challenge**: Phase 0 (`close-expr`) changes the invariant that Phase 3
+(`eliminate zonk-at-depth`) relies on. But Phase 3 can't happen without
+Phase 0. If Phase 0 closes solutions (bvar→fvar) but downstream code
+still calls `zonk-at-depth` expecting bvars, the closed solutions break
+the downstream expectation.
+**Resolution**: Phase 0 adds the `bvar-free?` ASSERTION but does NOT
+activate `close-expr`. The assertion detects how many solutions contain
+bvars and which solve paths produce them. Phase 3 activates `close-expr`
+AND eliminates `zonk-at-depth` in the SAME phase — the invariant change
+and the code that depends on it are updated atomically. This avoids the
+chicken-and-egg: Phase 0 = detection, Phase 3 = correction.
 
 ---
 
