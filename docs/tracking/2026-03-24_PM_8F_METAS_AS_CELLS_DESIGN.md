@@ -22,9 +22,10 @@
 | Pre-0 | Micro-benchmark + adversarial testing | ✅ | Key findings: id-map is bottleneck (82ns), meta-solution ALREADY cell-primary, bvar risk confirmed |
 | 0 | **bvar closure detection** (assertion only, correction in Phase 3) | ⬜ | D.4: detection not correction. Avoids Phase 0/3 chicken-and-egg. |
 | 1 | **Embed cell-id in expr-meta** (skip id-map lookup) | ⬜ | 82ns → ~4ns per meta-solution. The meta IS the cell. |
-| 2 | Zonk call site audit: classify 31 sites (was 225 est.) | ✅ | **0 defensive calls found.** 13 necessary + 15 boundary. Phase has zero elimination scope. |
-| 3 | Eliminate zonk-at-depth + activate close-expr (atomic) | ⬜ | D.4: close-expr + zonk-at-depth elimination happen together. Depends on Phase 0 data. |
-| 4 | Freeze at command boundaries: single-pass cell read | ⬜ | Replaces zonk-final (~200 lines) |
+| 2 | Zonk call site audit: classify 31 sites (was 225 est.) | ✅ | **0 defensive calls found.** 13 necessary + 15 boundary. |
+| 3 | Eliminate zonk-at-depth + activate close-expr (atomic, 5 sites in unify.rkt) | ⬜ | close-expr ensures fvar solutions; depth tracking unnecessary |
+| 4a | Freeze at command boundaries: replace 15 zonk-final calls | ⬜ | Single-pass cell read (~200 lines) |
+| 4b | Resolution key extraction reads cells directly (8 sites) | ⬜ | `expr->impl-key-str` reads cell-id instead of requiring zonk |
 | 5 | Defaults at solve-time (eliminate default-metas) | ⬜ | Level→lzero, mult→mw at cell write |
 | 6 | ground-expr? unification: cell-level check | ⬜ | Two incompatible definitions → one |
 | 7 | CHAMP fallback removal: cell-only path | ⬜ | Removes dual storage + id-map |
