@@ -28,7 +28,7 @@ above it is simpler. Track 1B fixes the foundation before Track 2 builds on it.
 | 2d | Ground-type direct recursive check | ✅ | `a1b347d`. 8μs→2.6μs success, 333μs→3μs failure (110× faster) |
 | 3 | Relation-parameterized decomposition guard | ✅ | `faeb915`. requires-binder-opening? on sre-relation |
 | 4 | Dependent duality (DSend/DRecv) | ✅ | `87ab254`. Ground duality with bvar(0) preserved. binder-open-fn for Track 2. |
-| 5 | Session duality edge case tests | ⬜ | Partial sessions, incremental, deeply nested, mu |
+| 5 | Session duality edge case tests | ✅ | `19fa95d`. 7 new tests. mu fix: bot sub-components for non-equality decomp. |
 
 **Baseline**: SRE Track 1 final (7392 tests, 243.9s, commit `155d0ba`)
 
