@@ -174,3 +174,71 @@
      (sess-dsend (expr-tycon 'Int) (sess-end))
      (sess-dsend (expr-tycon 'Int) (sess-end))))
   (check-true (net-contradiction? net)))
+
+;; ========================================================================
+;; G. Edge cases (SRE Track 1B Phase 5)
+;; ========================================================================
+
+;; Deeply nested protocols (5 levels)
+(test-case "Duality: 5-level nested Send/Recv"
+  (define deep-send
+    (sess-send (expr-tycon 'A)
+      (sess-recv (expr-tycon 'B)
+        (sess-send (expr-tycon 'C)
+          (sess-recv (expr-tycon 'D)
+            (sess-send (expr-tycon 'E) (sess-end)))))))
+  (define-values (net ca cb) (sre-duality-check deep-send sess-bot))
+  (check-false (net-contradiction? net))
+  ;; Verify outermost: Recv
+  (define vb (net-cell-read net cb))
+  (check-pred sess-recv? vb)
+  (check-equal? (sess-recv-type vb) (expr-tycon 'A)))
+
+;; Mu (recursive) duality: mu is self-dual, body gets duality
+(test-case "Duality: mu(Send(Int, svar(0))) ↔ mu(Recv(Int, svar(0)))"
+  (define mu-send (sess-mu (sess-send (expr-tycon 'Int) (sess-svar 0))))
+  (define-values (net ca cb) (sre-duality-check mu-send sess-bot))
+  (check-false (net-contradiction? net))
+  (define vb (net-cell-read net cb))
+  (check-pred sess-mu? vb)
+  ;; Body should be dualized: Recv(Int, svar(0))
+  (define body (sess-mu-body vb))
+  (check-pred sess-recv? body)
+  (check-equal? (sess-recv-type body) (expr-tycon 'Int))
+  (check-equal? (sess-recv-cont body) (sess-svar 0)))
+
+;; Mixed constructors: Send + AsyncRecv in same protocol
+(test-case "Duality: Send(Int, AsyncRecv(Bool, End)) ↔ Recv(Int, AsyncSend(Bool, End))"
+  (define mixed (sess-send (expr-tycon 'Int)
+                  (sess-async-recv (expr-tycon 'Bool) (sess-end))))
+  (define-values (net ca cb) (sre-duality-check mixed sess-bot))
+  (check-false (net-contradiction? net))
+  (define vb (net-cell-read net cb))
+  (check-pred sess-recv? vb)
+  (define cont (sess-recv-cont vb))
+  (check-pred sess-async-send? cont))
+
+;; Both sides with concrete values that ARE duals — should succeed
+(test-case "Duality: both sides concrete duals — verify, don't contradict"
+  (define-values (net ca cb)
+    (sre-duality-check
+     (sess-send (expr-tycon 'Int) (sess-recv (expr-tycon 'Bool) (sess-end)))
+     (sess-recv (expr-tycon 'Int) (sess-send (expr-tycon 'Bool) (sess-end)))))
+  (check-false (net-contradiction? net)))
+
+;; Both sides concrete but NOT duals — should contradict
+(test-case "Duality: both sides concrete non-duals — contradiction"
+  (define-values (net ca cb)
+    (sre-duality-check
+     (sess-send (expr-tycon 'Int) (sess-end))
+     (sess-send (expr-tycon 'Bool) (sess-end))))
+  (check-true (net-contradiction? net)))
+
+;; Payload type mismatch under duality — should contradict
+(test-case "Duality: Send(Int, End) ↔ Recv(Bool, End) — payload mismatch"
+  (define-values (net ca cb)
+    (sre-duality-check
+     (sess-send (expr-tycon 'Int) (sess-end))
+     (sess-recv (expr-tycon 'Bool) (sess-end))))
+  ;; Payload types must be EQUAL (not dual). Int ≠ Bool → contradiction.
+  (check-true (net-contradiction? net)))

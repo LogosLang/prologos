@@ -387,12 +387,21 @@
   (define recog (ctor-desc-recognizer-fn desc))
   (define extract (ctor-desc-extract-fn desc))
   (define domain-name (sre-domain-name domain))
-  ;; Per-side sources: use original value if it matches, else unified
+  ;; Per-side sources: use original value if it matches.
+  ;; Track 1B: for non-equality relations (duality, subtype), when one side
+  ;; is bot or doesn't match, use BOT sub-components instead of copying from
+  ;; unified. Copying would put un-dualized/un-subtyped values in sub-cells.
   (define src-a (if (recog va) va unified))
+  (define use-bot-for-b?
+    (and (not (recog vb))
+         (not (sre-relation-requires-binder-opening? relation))))
   (define src-b (if (recog vb) vb unified))
   ;; Extract components
   (define comps-a (extract src-a))
-  (define comps-b (extract src-b))
+  (define bot-val (sre-domain-bot-value domain))
+  (define comps-b (if use-bot-for-b?
+                      (make-list (ctor-desc-arity desc) bot-val)
+                      (extract src-b)))
   ;; Get or create sub-cells for each side
   (define-values (net1 subs-a) (sre-get-or-create-sub-cells net domain cell-a tag comps-a))
   (define-values (net2 subs-b) (sre-get-or-create-sub-cells net1 domain cell-b tag comps-b))
@@ -673,15 +682,15 @@
        [(not from-desc) net]
        [(not dual-tag)
         ;; No dual mapping — self-dual constructor (e.g., mu)
-        ;; Write the same value, decompose sub-cells with duality
-        (let ([net* (net-cell-write net to-cell from-val)])
-          ;; Use sre-decompose-generic directly — both sides have same tag
-          (define pair-key (decomp-key from-cell to-cell (sre-relation-name relation)))
-          (if (net-pair-decomp? net* pair-key)
-              net*
-              (sre-decompose-generic net* domain from-cell to-cell
-                                     from-val from-val from-val pair-key from-desc
-                                     #:relation relation)))]
+        ;; DON'T pre-write from-val (body would be un-dualized).
+        ;; Decompose directly — sub-cell propagators build the correct body,
+        ;; then the reconstructor builds the correct parent value.
+        (define pair-key (decomp-key from-cell to-cell (sre-relation-name relation)))
+        (if (net-pair-decomp? net pair-key)
+            net
+            (sre-decompose-generic net domain from-cell to-cell
+                                   from-val (net-cell-read net to-cell) from-val pair-key from-desc
+                                   #:relation relation))]
        [else
         ;; Dual constructor found.
         ;; DON'T write any value to to-cell yet — the components need to be

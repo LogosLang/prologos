@@ -26,8 +26,8 @@ above it is simpler. Track 1B fixes the foundation before Track 2 builds on it.
 | 2b | Early-exit quiescence | ✅ | Already implemented (4 firings before exit) |
 | 2c | Flat NOT guard (compound-type?) | ✅ | `3e00244`. 2.0μs → 0.47μs (4.3× faster) |
 | 2d | Ground-type direct recursive check | ✅ | `a1b347d`. 8μs→2.6μs success, 333μs→3μs failure (110× faster) |
-| 3 | Relation-parameterized decomposition guard | ⬜ | Pure correctness fix, independent |
-| 4 | Dependent duality (sre-decompose-binder) | ⬜ | Proper binder opening for DSend/DRecv |
+| 3 | Relation-parameterized decomposition guard | ✅ | `faeb915`. requires-binder-opening? on sre-relation |
+| 4 | Dependent duality (DSend/DRecv) | ✅ | `87ab254`. Ground duality with bvar(0) preserved. binder-open-fn for Track 2. |
 | 5 | Session duality edge case tests | ⬜ | Partial sessions, incremental, deeply nested, mu |
 
 **Baseline**: SRE Track 1 final (7392 tests, 243.9s, commit `155d0ba`)
