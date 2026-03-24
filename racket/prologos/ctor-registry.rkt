@@ -67,6 +67,17 @@
 ;; component-lattices: (listof lattice-spec) — per-component merge/contradicts
 ;; binder-depth:       natural — how many trailing components are under a binder
 ;; domain:             symbol — 'type or 'data
+;;
+;; SRE Track 1 additions:
+;; component-variances: (listof variance) or #f — per-component variance for subtyping
+;;   Variance values: '+ (covariant), '- (contravariant), '= (invariant), 'ø (phantom)
+;;   When #f, all components default to invariant (= equality, no subtyping).
+;;   For built-in types: hardcoded textbook values (Pi = '(- +), List = '(+), etc.)
+;;   For user-defined types: derived via polarity inference from type definition.
+;; binder-open-fn:     (value gensym → (values opened-body fresh-var)) or #f
+;;   How to open a binder for structural decomposition. Needed for Pi, Sigma,
+;;   lam, DSend, DRecv — any constructor with binder-depth > 0.
+;;   When #f, binder decomposition falls through to caller (PUnify dispatch).
 (struct ctor-desc
   (tag
    arity
@@ -75,7 +86,9 @@
    reconstruct-fn
    component-lattices
    binder-depth
-   domain)
+   domain
+   component-variances   ; SRE Track 1: '(+ - = ø ...) or #f
+   binder-open-fn)       ; SRE Track 1: (value gensym → values) or #f
   #:transparent)
 
 ;; ========================================
@@ -182,7 +195,26 @@
   (unless (<= bd arity)
     (error 'validate-ctor-desc!
            "~a: binder-depth ~a exceeds arity ~a"
-           tag bd arity)))
+           tag bd arity))
+
+  ;; SRE Track 1: Check component-variances length if provided
+  (define cv (ctor-desc-component-variances desc))
+  (when (and cv (not (= (length cv) arity)))
+    (error 'validate-ctor-desc!
+           "~a: component-variances has ~a entries, expected ~a"
+           tag (length cv) arity))
+
+  ;; SRE Track 1: Validate variance values
+  (when cv
+    (for ([v (in-list cv)])
+      (unless (memq v '(+ - = ø))
+        (error 'validate-ctor-desc!
+               "~a: invalid variance ~a (expected +, -, =, or ø)"
+               tag v))))
+
+  ;; SRE Track 1: binder-open-fn should be present iff binder-depth > 0
+  ;; (Soft check — warn, don't error, since Track 0 descriptors may not have it yet)
+  )
 
 ;; ========================================
 ;; Registration
@@ -198,10 +230,13 @@
                         #:component-lattices component-lattices
                         #:binder-depth [binder-depth 0]
                         #:domain domain
-                        #:sample sample)
+                        #:sample sample
+                        #:component-variances [component-variances #f]
+                        #:binder-open-fn [binder-open-fn #f])
   (define desc
     (ctor-desc tag arity recognizer-fn extract-fn reconstruct-fn
-               component-lattices binder-depth domain))
+               component-lattices binder-depth domain
+               component-variances binder-open-fn))
   ;; Validate at registration time
   (validate-ctor-desc! desc sample)
   ;; Store in appropriate domain table
@@ -358,6 +393,7 @@
 ;; and mult-lattice-spec (concrete) for multiplicity components.
 
 ;; Pi: mult, domain, codomain (codomain under binder)
+;; Variance: mult=invariant, domain=contravariant, codomain=covariant
 (register-ctor! 'Pi
   #:arity 3
   #:recognizer expr-Pi?
@@ -366,9 +402,11 @@
   #:component-lattices (list mult-lattice-spec type-lattice-spec type-lattice-spec)
   #:binder-depth 1
   #:domain 'type
-  #:sample (expr-Pi 'mw (expr-tycon 'Nat) (expr-bvar 0)))
+  #:sample (expr-Pi 'mw (expr-tycon 'Nat) (expr-bvar 0))
+  #:component-variances '(= - +))
 
 ;; Sigma: fst-type, snd-type (snd-type under binder)
+;; Variance: fst=covariant, snd=covariant
 (register-ctor! 'Sigma
   #:arity 2
   #:recognizer expr-Sigma?
@@ -377,9 +415,11 @@
   #:component-lattices (list type-lattice-spec type-lattice-spec)
   #:binder-depth 1
   #:domain 'type
-  #:sample (expr-Sigma (expr-tycon 'Nat) (expr-bvar 0)))
+  #:sample (expr-Sigma (expr-tycon 'Nat) (expr-bvar 0))
+  #:component-variances '(+ +))
 
 ;; App: func, arg
+;; Variance: func=invariant (HKT variance unknown), arg=covariant
 (register-ctor! 'app
   #:arity 2
   #:recognizer expr-app?
@@ -388,9 +428,11 @@
   #:component-lattices (list type-lattice-spec type-lattice-spec)
   #:binder-depth 0
   #:domain 'type
-  #:sample (expr-app (expr-tycon 'List) (expr-tycon 'Nat)))
+  #:sample (expr-app (expr-tycon 'List) (expr-tycon 'Nat))
+  #:component-variances '(= +))
 
 ;; Eq: type, lhs, rhs
+;; Variance: all invariant (equality type is fixed, lhs/rhs must match exactly)
 (register-ctor! 'Eq
   #:arity 3
   #:recognizer expr-Eq?
@@ -399,9 +441,11 @@
   #:component-lattices (list type-lattice-spec type-lattice-spec type-lattice-spec)
   #:binder-depth 0
   #:domain 'type
-  #:sample (expr-Eq (expr-tycon 'Nat) (expr-zero) (expr-zero)))
+  #:sample (expr-Eq (expr-tycon 'Nat) (expr-zero) (expr-zero))
+  #:component-variances '(= = =))
 
 ;; Vec: elem-type, length
+;; Variance: elem=covariant, length=invariant (length is a value, not a type)
 (register-ctor! 'Vec
   #:arity 2
   #:recognizer expr-Vec?
@@ -410,9 +454,11 @@
   #:component-lattices (list type-lattice-spec type-lattice-spec)
   #:binder-depth 0
   #:domain 'type
-  #:sample (expr-Vec (expr-tycon 'Nat) (expr-zero)))
+  #:sample (expr-Vec (expr-tycon 'Nat) (expr-zero))
+  #:component-variances '(+ =))
 
 ;; Fin: bound
+;; Variance: bound=invariant (Fin is indexed by a specific value)
 (register-ctor! 'Fin
   #:arity 1
   #:recognizer expr-Fin?
@@ -421,9 +467,11 @@
   #:component-lattices (list type-lattice-spec)
   #:binder-depth 0
   #:domain 'type
-  #:sample (expr-Fin (expr-suc (expr-zero))))
+  #:sample (expr-Fin (expr-suc (expr-zero)))
+  #:component-variances '(=))
 
 ;; pair (type-level): fst, snd
+;; Variance: both covariant
 (register-ctor! 'pair
   #:arity 2
   #:recognizer expr-pair?
@@ -432,9 +480,11 @@
   #:component-lattices (list type-lattice-spec type-lattice-spec)
   #:binder-depth 0
   #:domain 'type
-  #:sample (expr-pair (expr-zero) (expr-zero)))
+  #:sample (expr-pair (expr-zero) (expr-zero))
+  #:component-variances '(+ +))
 
 ;; lam: mult, type, body (body under binder)
+;; Variance: mult=invariant, type=contravariant (input), body=covariant (output)
 (register-ctor! 'lam
   #:arity 3
   #:recognizer expr-lam?
@@ -443,9 +493,11 @@
   #:component-lattices (list mult-lattice-spec type-lattice-spec type-lattice-spec)
   #:binder-depth 1
   #:domain 'type
-  #:sample (expr-lam 'mw (expr-tycon 'Nat) (expr-bvar 0)))
+  #:sample (expr-lam 'mw (expr-tycon 'Nat) (expr-bvar 0))
+  #:component-variances '(= - +))
 
 ;; PVec: elem-type
+;; Variance: elem=covariant
 (register-ctor! 'PVec
   #:arity 1
   #:recognizer expr-PVec?
@@ -454,9 +506,11 @@
   #:component-lattices (list type-lattice-spec)
   #:binder-depth 0
   #:domain 'type
-  #:sample (expr-PVec (expr-tycon 'Nat)))
+  #:sample (expr-PVec (expr-tycon 'Nat))
+  #:component-variances '(+))
 
 ;; Set: elem-type
+;; Variance: elem=covariant
 (register-ctor! 'Set
   #:arity 1
   #:recognizer expr-Set?
@@ -465,9 +519,11 @@
   #:component-lattices (list type-lattice-spec)
   #:binder-depth 0
   #:domain 'type
-  #:sample (expr-Set (expr-tycon 'Nat)))
+  #:sample (expr-Set (expr-tycon 'Nat))
+  #:component-variances '(+))
 
 ;; Map: k-type, v-type
+;; Variance: key=invariant (keys must match exactly for lookup), value=covariant
 (register-ctor! 'Map
   #:arity 2
   #:recognizer expr-Map?
@@ -476,9 +532,11 @@
   #:component-lattices (list type-lattice-spec type-lattice-spec)
   #:binder-depth 0
   #:domain 'type
-  #:sample (expr-Map (expr-tycon 'String) (expr-tycon 'Nat)))
+  #:sample (expr-Map (expr-tycon 'String) (expr-tycon 'Nat))
+  #:component-variances '(= +))
 
 ;; suc (type-level): predecessor
+;; Variance: invariant (suc is a value constructor, not a type constructor)
 (register-ctor! 'suc
   #:arity 1
   #:recognizer expr-suc?
@@ -487,7 +545,8 @@
   #:component-lattices (list type-lattice-spec)
   #:binder-depth 0
   #:domain 'type
-  #:sample (expr-suc (expr-zero)))
+  #:sample (expr-suc (expr-zero))
+  #:component-variances '(=))
 
 ;; ========================================
 ;; Data Constructor Registrations (System 2)

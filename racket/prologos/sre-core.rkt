@@ -24,6 +24,14 @@
  ;; Domain spec
  (struct-out sre-domain)
 
+ ;; Relation spec (SRE Track 1)
+ (struct-out sre-relation)
+ sre-equality
+ sre-subtype
+ sre-subtype-reverse
+ sre-duality
+ sre-phantom
+
  ;; Core SRE functions
  sre-identify-sub-cell
  sre-get-or-create-sub-cells
@@ -67,11 +75,125 @@
    bot-value         ; the bottom element itself
    meta-recognizer   ; (expr → bool) | #f — pure structural check: is this a meta/var ref?
    meta-resolver     ; (expr → cell-id | #f) | #f — context-dependent: what cell?
+   dual-pairs        ; SRE Track 1: '((Send . Recv) (Choice . Offer) ...) or #f
+                     ; Constructor pairing for duality relation. #f = domain doesn't
+                     ; support duality. Derivation assumption: same-domain components
+                     ; are continuations (get duality), cross-domain get equality.
    )
   #:transparent)
 
 ;; Debug mode: enables idempotency assertions (D.2 critique)
 (define current-sre-debug? (make-parameter #f))
+
+;; ========================================================================
+;; SRE Relation (Track 1)
+;; ========================================================================
+;;
+;; A first-class structural relation. Parameterizes how the SRE propagates
+;; between cell pairs.
+;;
+;; Semantic distinction (D.4 clarification):
+;; - Equality and duality are INFORMATION PROPAGATORS: they write new values
+;;   into cells, moving them up the lattice.
+;; - Subtyping is a STRUCTURAL CHECKER via propagation infrastructure: it
+;;   fires when cells are ground, verifies the relationship, and signals
+;;   contradiction on failure. Does NOT write new information.
+;;
+;; name:            symbol — 'equality, 'subtype, 'subtype-reverse, 'duality, 'phantom
+;; sub-relation-fn: (relation ctor-desc component-index domain → relation)
+;;   Given the parent relation, the constructor descriptor, the component
+;;   index, and the domain, returns the sub-cell relation for that component.
+;;   For equality: always equality.
+;;   For subtyping: uses component-variances from ctor-desc.
+;;   For duality: uses component-lattices (same-domain → duality, cross → equality).
+
+(struct sre-relation
+  (name
+   sub-relation-fn)
+  #:transparent)
+
+;; --- Built-in relations ---
+
+;; Equality: symmetric merge. Sub-relation is always equality.
+(define sre-equality
+  (sre-relation
+   'equality
+   (λ (rel desc idx domain-name) sre-equality)))
+
+;; Subtype: directional check a ≤ b. Sub-relation from variance.
+(define sre-subtype
+  (sre-relation
+   'subtype
+   (λ (rel desc idx domain-name)
+     (define variances (ctor-desc-component-variances desc))
+     (if (not variances)
+         sre-equality  ;; no variance info → treat as invariant
+         (case (list-ref variances idx)
+           [(+) sre-subtype]          ;; covariant: same direction
+           [(-) sre-subtype-reverse]  ;; contravariant: flip
+           [(=) sre-equality]         ;; invariant: equality
+           [(ø) sre-phantom])))))     ;; phantom: no constraint
+
+;; Subtype-reverse: flipped direction (b ≤ a instead of a ≤ b).
+;; Used for contravariant positions under subtyping.
+(define sre-subtype-reverse
+  (sre-relation
+   'subtype-reverse
+   (λ (rel desc idx domain-name)
+     (define variances (ctor-desc-component-variances desc))
+     (if (not variances)
+         sre-equality
+         (case (list-ref variances idx)
+           [(+) sre-subtype-reverse]  ;; covariant: same direction (still reversed)
+           [(-) sre-subtype]          ;; contravariant: flip back to normal
+           [(=) sre-equality]
+           [(ø) sre-phantom])))))
+
+;; Duality: constructor pairing with involution. Sub-relation derived
+;; from component lattice type (same domain → duality, cross → equality).
+;; Assumption: same-domain components are continuations.
+;; See design §2.5 for documented fragility and mitigation.
+;; Duality: constructor pairing with involution. Sub-relation derived
+;; from component lattice type (same domain → duality, cross → equality).
+;; Assumption: same-domain components are continuations.
+;; See design §2.5 for documented fragility and mitigation.
+;;
+;; The lattice-spec matching uses a helper that checks whether a component's
+;; lattice belongs to the same domain. For session constructors:
+;;   - payload components have type-lattice-spec ('type sentinel) → cross-domain → equality
+;;   - continuation components have session-lattice-spec → same domain → duality
+(define sre-duality
+  (sre-relation
+   'duality
+   (λ (rel desc idx domain-name)
+     (define lats (ctor-desc-component-lattices desc))
+     (define comp-lat (list-ref lats idx))
+     ;; Determine if this component's lattice is the same domain
+     ;; lattice-spec has no domain tag, so we compare by identity:
+     ;; - 'type sentinel → type domain
+     ;; - lattice-spec objects are matched by eq? against known domain specs
+     ;; For Phase 3, session constructor registration will use a
+     ;; session-lattice-spec that's distinct from type-lattice-spec.
+     ;; Same-domain = continuation → duality. Cross-domain = payload → equality.
+     (define same-domain?
+       (cond
+         ;; Symbol sentinels: 'type = type domain, 'session = session domain, etc.
+         [(symbol? comp-lat) (eq? comp-lat domain-name)]
+         ;; lattice-spec structs: compare against domain's known spec
+         ;; For now, type-lattice-spec is 'type (a symbol sentinel), so
+         ;; any lattice-spec struct is non-type, i.e., could be session/mult/term
+         ;; This will be refined in Phase 3 when session domain is registered
+         [else #f]))
+     (if same-domain?
+         sre-duality    ;; same domain: continuation → duality
+         sre-equality)  ;; cross-domain: payload → equality
+     )))
+
+;; Phantom: no constraint. Used for phantom type parameters.
+(define sre-phantom
+  (sre-relation
+   'phantom
+   (λ (rel desc idx domain-name) sre-phantom)))
 
 ;; ========================================================================
 ;; sre-identify-sub-cell

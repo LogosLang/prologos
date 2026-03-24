@@ -70,7 +70,8 @@
               expr-meta?
               (lambda (expr)
                 (define lookup (current-structural-meta-lookup))
-                (and lookup (lookup expr)))))
+                (and lookup (lookup expr)))
+              #f))  ; dual-pairs: type domain doesn't support duality
 
 ;; ========================================
 ;; Sprint 5: Three-valued result helper
