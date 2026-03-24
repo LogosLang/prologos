@@ -21,8 +21,8 @@ above it is simpler. Track 1B fixes the foundation before Track 2 builds on it.
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 1 | Microbenchmark + adversarial + frequency analysis | ⬜ | Measure before changing. Informs Phase 2 design. |
-| 2 | Merge-per-relation registry | ⬜ | Informed by Phase 1 benchmark data |
+| 1 | Microbenchmark + adversarial + frequency analysis | ✅ | `312ca3a`. Zero compound checks in suite. Success 8-54μs, failure 333μs. |
+| 2 | Merge-per-relation registry + failure path optimization | ⬜ | case dispatch (zero overhead), early-exit quiescence for failures |
 | 3 | Relation-parameterized decomposition guard | ⬜ | Pure correctness fix, independent |
 | 4 | Dependent duality (sre-decompose-binder) | ⬜ | Proper binder opening for DSend/DRecv |
 | 5 | Session duality edge case tests | ⬜ | Partial sessions, incremental, deeply nested, mu |
@@ -87,9 +87,41 @@ field must be provided (struct construction requires it).
 ;; on ground types never encounters unsolved binders by construction.
 ```
 
-## 2. Merge-Per-Relation Registry
+## 1B. Phase 1 Findings (Benchmark Data → Design Implications)
 
-### Problem
+**Frequency**: Zero compound subtype checks in the full test suite. All
+30 subtype? calls per representative program are flat (Nat<:Int, etc.).
+The structural path is pure infrastructure for Track 2.
+
+**Performance tiers** (10000 iterations):
+
+| Path | μs/call | Relative | Notes |
+|------|---------|----------|-------|
+| Flat success | 0.15 | 1× | Fast path, no cells |
+| Flat NOT | 2.0 | 13× | Overhead from structural tag check on atoms |
+| Structural 1-level success | 8-10 | 55× | Mini-network + quiesce |
+| Structural 2-level success | 13 | 87× | Linear with depth |
+| PVec^10 success | 54 | 360× | Linear ~5μs/level |
+| Structural FAILURE | 333 | 2200× | Contradiction propagation expensive |
+
+**Design implications**:
+
+1. **Merge registry must use `case` dispatch, not hash lookup.** The flat
+   path (0.15μs) is the performance floor. Hash lookup adds ~0.5μs.
+   `case` on symbol compiles to jump table — effectively free.
+
+2. **Structural failure path needs early-exit quiescence.** The 333μs failure
+   cost comes from full quiescence run after contradiction. An early-exit
+   variant that checks for contradiction after each propagator firing would
+   eliminate the wasted work. Add to Phase 2 scope.
+
+3. **Flat NOT path overhead (2μs) deferred.** The 13× overhead from
+   `sre-constructor-tag` calls on atoms is measurable but low-impact at
+   zero frequency. Optimize when Track 2 makes it matter.
+
+## 2. Merge-Per-Relation Registry + Failure Path Optimization
+
+### Problem (merge registry)
 
 `sre-domain` has two fixed merge fields: `lattice-merge` (for equality) and
 `subtype-merge` (for subtyping). This doesn't scale to additional orderings
@@ -150,6 +182,70 @@ For the session domain:
 `(sre-domain-merge domain sre-equality)`. `sre-make-subtype-propagator`
 uses `(sre-domain-merge domain relation)` (handles both subtype and
 subtype-reverse). Uniform API.
+
+### Problem (failure path — 333μs, 40× slower than success)
+
+The structural failure path is expensive because `run-to-quiescence` runs
+the full worklist even after contradiction is detected. For the subtype
+query pattern, once any sub-cell contradicts, the answer is "not a subtype"
+— remaining propagator firings are wasted work.
+
+### Principled Fix (early-exit quiescence)
+
+Add a `run-to-quiescence/early-exit` variant (or a flag on `run-to-quiescence`)
+that checks `net-contradiction?` after each propagator firing and exits
+immediately on contradiction.
+
+```racket
+(define (run-to-quiescence-early-exit net)
+  ;; Same as run-to-quiescence but bail on first contradiction
+  (define-values (net* changed?)
+    (drain-worklist net
+      #:check-contradiction? #t))  ;; NEW flag
+  net*)
+```
+
+The subtype query pattern uses this variant:
+```racket
+(define net4 (run-to-quiescence-early-exit net3))  ;; fast-fail on contradiction
+```
+
+**Expected improvement**: The 333μs failure cost should drop to ~20-30μs
+(first-level decomposition + one sub-cell contradiction check + immediate exit).
+This brings failure cost in line with success cost.
+
+### Problem (flat NOT path — 2μs overhead on atoms)
+
+Every `subtype?` call returning `#f` on atoms pays 13× overhead (2μs vs 0.15μs)
+from the structural tag check. The current flow: `flat-subtype?` fails →
+`sre-structural-subtype-check` called → `sre-constructor-tag` on both values →
+returns `#f` (atoms have no tag) → exits.
+
+### Fix (guard structural call with quick compound check)
+
+Before calling `sre-structural-subtype-check`, verify at least one value is
+a known compound struct type. Atoms (expr-Nat, expr-Int, expr-Bool, etc.)
+skip the structural path entirely.
+
+```racket
+;; Quick check: is this a compound type expression?
+(define (compound-type? v)
+  (or (expr-Pi? v) (expr-Sigma? v) (expr-app? v) (expr-PVec? v)
+      (expr-Set? v) (expr-Map? v) (expr-Vec? v) (expr-Eq? v)
+      (expr-pair? v) (expr-lam? v)))
+
+(define (subtype? t1 t2)
+  (cond
+    [(equal? t1 t2) #t]
+    [(flat-subtype? t1 t2) #t]
+    ;; Only try structural if both are compound
+    [(and (compound-type? t1) (compound-type? t2))
+     (sre-structural-subtype-check t1 t2)]
+    [else #f]))
+```
+
+This eliminates the 1.85μs overhead for atom comparisons (struct predicate
+checks are ~0.01μs each — effectively free).
 
 ### NTT Correspondence
 
