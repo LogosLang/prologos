@@ -1699,7 +1699,7 @@
          [_ (expr-error)]))]
 
     ;; ---- Foreign function: look up type from global env ----
-    [(expr-foreign-fn name _ _ _ _ _)
+    [(expr-foreign-fn name _ _ _ _ _ _ _)
      (or (global-env-lookup-type name) (expr-error))]
 
     ;; ---- PropNetwork type constructors ----

@@ -3047,7 +3047,7 @@
               ;; Create the foreign-fn with a gensym name
               (define fn-name (gensym 'foreign-block))
               (define foreign-fn-val
-                (expr-foreign-fn fn-name rkt-proc arity '() marshal-in marshal-out))
+                (expr-foreign-fn fn-name rkt-proc arity '() marshal-in marshal-out #f #f))
 
               ;; Register the type in global-env so the infer case can find it
               (current-prelude-env

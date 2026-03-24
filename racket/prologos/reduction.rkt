@@ -1388,7 +1388,7 @@
     [(expr-vtail _ _ (expr-vcons _ _ _ tl)) (whnf tl)]
 
     ;; Foreign function application: accumulate args, call when arity reached
-    [(expr-app (expr-foreign-fn name proc arity args marshal-in marshal-out) arg)
+    [(expr-app (expr-foreign-fn name proc arity args marshal-in marshal-out src-mod rkt-name) arg)
      (let* ([arg* (whnf arg)]
             [new-args (append args (list arg*))])
        (if (= (length new-args) arity)
@@ -1399,7 +1399,7 @@
                   [prologos-result (marshal-out rkt-result)])
              (whnf prologos-result))
            ;; Partial application — return updated foreign-fn
-           (expr-foreign-fn name proc arity new-args marshal-in marshal-out)))]
+           (expr-foreign-fn name proc arity new-args marshal-in marshal-out src-mod rkt-name)))]
 
     ;; Application of non-lambda: reduce function first
     [(expr-app e1 e2)
@@ -3621,7 +3621,7 @@
      (expr-narrow (nf func) (map nf args) (nf target) vars)]
 
     ;; Foreign function: opaque leaf (already in WHNF)
-    [(expr-foreign-fn _ _ _ _ _ _) e]
+    [(expr-foreign-fn _ _ _ _ _ _ _ _) e]
 
     ;; Union types: normalize components
     [(expr-union l r) (expr-union (nf l) (nf r))]

@@ -35,4 +35,4 @@ racket/prologos/data/benchmarks/report.html
 .tangled/
 
 # Woven stdlib HTML (generated from book chapters)
-docs/stdlib-book/
+docs/stdlib-book/racket/prologos/data/cache/

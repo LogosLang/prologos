@@ -917,7 +917,11 @@
 ;; args:        list of accumulated args (for curried partial application)
 ;; marshal-in:  list of (Prologos-value -> Racket-value) converters, one per arg
 ;; marshal-out: (Racket-value -> Prologos-value) converter for return type
-(struct expr-foreign-fn (name proc arity args marshal-in marshal-out) #:transparent)
+;; Track 10 Phase 2a: added source-module + racket-name for .pnet serialization.
+;; source-module: string (Racket module path, e.g., "racket/char") or #f
+;; racket-name: symbol (binding name in source module, e.g., 'char-upcase) or #f
+;; Together: (dynamic-require source-module racket-name) reconstructs proc on deserialize.
+(struct expr-foreign-fn (name proc arity args marshal-in marshal-out source-module racket-name) #:transparent)
 
 ;; ========================================
 ;; Type hole (for untyped lambda parameters — filled during checking)

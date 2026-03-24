@@ -441,7 +441,7 @@
     [(expr-tycon _) e]
 
     ;; Foreign function (opaque leaf)
-    [(expr-foreign-fn _ _ _ _ _ _) e]
+    [(expr-foreign-fn _ _ _ _ _ _ _ _) e]
 
     ;; Reduce (pattern matching)
     [(expr-reduce scrut arms structural?)
@@ -893,7 +893,7 @@
     [(expr-tycon _) e]
 
     ;; Foreign function (opaque leaf)
-    [(expr-foreign-fn _ _ _ _ _ _) e]
+    [(expr-foreign-fn _ _ _ _ _ _ _ _) e]
 
     ;; Reduce (pattern matching)
     [(expr-reduce scrut arms structural?)
@@ -1304,7 +1304,7 @@
     ;; Unapplied type constructor (HKT) — no metas inside
     [(expr-tycon _) e]
     ;; Foreign function (opaque leaf)
-    [(expr-foreign-fn _ _ _ _ _ _) e]
+    [(expr-foreign-fn _ _ _ _ _ _ _ _) e]
     [(expr-reduce scrut arms structural?)
      (expr-reduce (default-metas scrut)
                   (map (lambda (arm)

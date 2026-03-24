@@ -180,7 +180,7 @@
     [(expr-vindex _ _ _ _) #t]
     [(expr-fzero _) #t]
     [(expr-fsuc _ _) #t]
-    [(expr-foreign-fn _ _ _ _ _ _) #t]
+    [(expr-foreign-fn _ _ _ _ _ _ _ _) #t]
     [(expr-app f x) (or (contains-unsupported-qtt? f) (contains-unsupported-qtt? x))]
     [(expr-lam _ a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
     [(expr-Pi _ a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
@@ -2038,7 +2038,9 @@
           (apply rkt-proc (drop args n-caps)))))
 
   ;; Build the foreign-fn value with the Prologos name
-  (define val (expr-foreign-fn prologos-name effective-proc full-arity '() full-marshal-in marshal-out))
+  ;; Track 10 Phase 2a: include source-module + racket-name for .pnet serialization
+  (define val (expr-foreign-fn prologos-name effective-proc full-arity '() full-marshal-in marshal-out
+                               module-path-str racket-name))
 
   ;; Register in global env with full type (including capability Pi binders)
   (global-env-add (current-prelude-env) prologos-name full-type val)

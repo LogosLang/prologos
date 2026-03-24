@@ -460,7 +460,7 @@
     [(expr-tycon _) e]
 
     ;; Foreign function (opaque leaf — no Prologos sub-expressions)
-    [(expr-foreign-fn _ _ _ _ _ _) e]
+    [(expr-foreign-fn _ _ _ _ _ _ _ _) e]
 
     ;; Reduce: scrutinee is non-binding, arm bodies have binding-count binders
     [(expr-reduce scrut arms structural?)
@@ -918,7 +918,7 @@
     [(expr-tycon _) e]
 
     ;; Foreign function (opaque leaf — no Prologos sub-expressions)
-    [(expr-foreign-fn _ _ _ _ _ _) e]
+    [(expr-foreign-fn _ _ _ _ _ _ _ _) e]
 
     ;; Reduce: arm bodies have binding-count binders
     [(expr-reduce scrut arms structural?)
