@@ -3,7 +3,7 @@
 **Stage**: 2 (Audit) + 3 (Design), combined
 **Date**: 2026-03-24
 **Series**: PM (Propagator Migration) + SRE (Structural Reasoning Engine)
-**Status**: D.1 — awaiting critique
+**Status**: D.2 — revised with Pre-0 benchmark findings
 **Depends on**: [SRE Track 2](2026-03-23_SRE_TRACK2_ELABORATOR_ON_SRE_DESIGN.md) ✅ (SRE dispatch stable), [PM Track 8D](2026-03-22_TRACK8D_DESIGN.md) ✅ (pure bridge fire functions)
 **Enables**: Zonk elimination (~1100 lines), SRE Track 3 (trait resolution), SRE Track 6 (reduction), PM Track 10 (convergence)
 **Source Documents**:
@@ -19,15 +19,16 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| Pre-0 | Micro-benchmark: meta-solution, zonk, fresh-meta call costs | ⬜ | Benchmark before building |
-| 0 | Cell-primary meta-solution: read from cell, CHAMP as fallback | ⬜ | The incremental bridge |
-| 1 | Eliminate elaboration-time zonk: cell reads replace solution chasing | ⬜ | ~650 call sites, biggest elimination |
-| 2 | Eliminate zonk-at-depth: no bvar shifting when cells are ground | ⬜ | Highest risk — binder correctness |
-| 3 | Freeze at command boundaries: single-pass cell read | ⬜ | Replaces zonk-final (~200 lines) |
-| 4 | Eliminate default-metas: defaults at solve time, not boundary time | ⬜ | Level→lzero, mult→mw at cell write |
-| 5 | ground-expr? unification: cell-level check (is value non-bot?) | ⬜ | Two incompatible definitions → one |
-| 6 | CHAMP fallback removal: cell-only path | ⬜ | Removes dual storage |
-| 7 | Verification + benchmarks + PIR | ⬜ | |
+| Pre-0 | Micro-benchmark + adversarial testing | ✅ | Key findings: id-map is bottleneck (82ns), meta-solution ALREADY cell-primary, bvar risk confirmed |
+| 0 | **bvar closure invariant** (correctness prerequisite) | ⬜ | Assertion in solve-meta! — bvar-containing solutions are written today |
+| 1 | **Embed cell-id in expr-meta** (skip id-map lookup) | ⬜ | 82ns → ~4ns per meta-solution. The meta IS the cell. |
+| 2 | Eliminate defensive zonk calls (cell reads sufficient) | ⬜ | ~225+ sites, classify necessary vs defensive |
+| 3 | Eliminate zonk-at-depth (after bvar closure guaranteed) | ⬜ | Highest risk — binder correctness. Depends on Phase 0. |
+| 4 | Freeze at command boundaries: single-pass cell read | ⬜ | Replaces zonk-final (~200 lines) |
+| 5 | Defaults at solve-time (eliminate default-metas) | ⬜ | Level→lzero, mult→mw at cell write |
+| 6 | ground-expr? unification: cell-level check | ⬜ | Two incompatible definitions → one |
+| 7 | CHAMP fallback removal: cell-only path | ⬜ | Removes dual storage + id-map |
+| 8 | Verification + benchmarks + PIR | ⬜ | |
 
 ---
 
@@ -209,6 +210,88 @@ cells directly.
 
 ---
 
+### 2.7 Pre-0 Benchmark Findings (D.2 Revision)
+
+The Pre-0 micro-benchmarks revealed 5 findings that fundamentally change
+the design priorities:
+
+**Finding 1: Id-map lookup is the real bottleneck (82ns).**
+
+`meta-solution` costs ~150ns total: id-map CHAMP lookup (82ns) + cell
+CHAMP read (52ns) + overhead (16ns). The CHAMP solution field isn't even
+in the read path — `meta-solution` already reads from cells (line 1958).
+The D.1 design's Phase 0 ("cell-primary meta-solution") is a NO-OP — it
+describes the CURRENT architecture.
+
+**Design adjustment**: The highest-leverage change isn't "remove CHAMP
+solution field" — it's "embed cell-id directly in `expr-meta`." If
+`expr-meta` carried `(id cell-id)` instead of just `(id)`, we skip the
+82ns id-map lookup entirely. `meta-solution` becomes: extract cell-id
+from struct (4ns) + `elab-cell-read` (52ns) = ~56ns. That's 2.7× faster
+per read, across 128+ call sites.
+
+This changes the `expr-meta` struct definition — touching the entire AST
+pipeline (syntax.rkt → all 14 pipeline files). But it's the RIGHT change:
+the meta IS the cell. The id-map is an indirection layer that exists
+because `expr-meta` was designed before cells existed.
+
+**Finding 2: Defensive zonk on ground expressions is pure waste (778ns).**
+
+`zonk` on a ground `Pi(Int, Bool)` costs 778ns — walking the entire tree,
+checking each node for metas, finding none. With ~225 elaboration-time
+zonk calls, many on ground expressions, this waste is substantial.
+
+**Design adjustment**: Phase 2 should classify zonk calls as "necessary"
+(expression contains metas) vs "defensive" (zonk just in case). Defensive
+calls should be removed outright, not replaced with cell reads.
+
+**Finding 3: zonk-at-depth anomaly (283μs vs 778ns).**
+
+`zonk-at-depth` (depth=3) on `Pi^10` costs 283μs — 360× more than
+`zonk` on `Pi(Int, Bool)`. This is primarily expression size (10 levels
+of nesting), but the depth-tracking overhead may contribute. The
+benchmark ran after 5000 solve-meta! calls, so CHAMP size may also
+be a factor.
+
+**Design adjustment**: Phase 3 (eliminate zonk-at-depth) is higher
+leverage than initially estimated. Even moderate expressions under
+binders pay significant depth-tracking overhead.
+
+**Finding 4: bvar risk CONFIRMED.**
+
+The adversarial probe shows `solve-meta!` writes `(expr-bvar 0)` directly
+to the cell. This is NOT a hypothetical — it happens today. Any design
+that assumes cell values are closed is wrong.
+
+**Design adjustment**: Phase 0 is now "bvar closure invariant" — a
+correctness prerequisite that must come BEFORE any zonk elimination.
+Add an assertion in `solve-meta!` that verifies solutions are closed
+(debug mode). Add a closing step for paths that produce bvar solutions.
+
+**Finding 5: `meta-solution` already reads from cells.**
+
+The D.1 audit found that `meta-solution` (line 1958) already does
+cell-primary reading with CHAMP fallback. Phase 0 as originally
+designed ("cell-primary meta-solution") is the current architecture.
+
+**Design adjustment**: Remove original Phase 0. The real Phase 0 is
+bvar closure (Finding 4). The real Phase 1 is embed cell-id in
+expr-meta (Finding 1). The original Phase 0 is already done.
+
+### 2.8 Revised Performance Targets (Post-Benchmark)
+
+| Operation | Current (measured) | Target | Improvement |
+|-----------|-------------------|--------|-------------|
+| `meta-solution` | 150ns (82ns id-map + 52ns cell + 16ns overhead) | 56ns (4ns struct + 52ns cell) | 2.7× |
+| `fresh-meta` | 2,087ns (cell + CHAMP + id-map) | ~1,500ns (cell + CHAMP metadata-only) | 1.4× |
+| `solve-meta!` (without resolution) | 1,756ns (cell + CHAMP + id-map) | ~800ns (cell-only + metadata update) | 2.2× |
+| `solve-meta!` (with resolution) | 15,600ns (cascading resolution) | Same (resolution cost dominates) | ~1× |
+| `zonk` on ground Pi(Int,Bool) | 778ns | 0ns (call eliminated) | ∞ |
+| `zonk-at-depth` on Pi^10 | 283,000ns | 0ns (call eliminated) | ∞ |
+| Suite wall time | ~244s baseline | ≤ 235s | ~4% improvement |
+
+---
+
 ## 3. NTT Speculative Syntax
 
 ```prologos
@@ -251,36 +334,87 @@ pattern). Measure current costs to set targets and identify bottlenecks.
    full test suite?
 6. Cell read cost (`net-cell-read`) for comparison target
 
-### Phase 0: Cell-Primary meta-solution
+### Phase 0: bvar Closure Invariant (Correctness Prerequisite)
 
-**The incremental bridge.** Change `meta-solution` to read from the cell
-FIRST, falling back to the CHAMP only if no cell exists (module-loading
-context where cells aren't available).
+**The benchmark confirmed**: `solve-meta!` writes `(expr-bvar 0)` directly
+to cells today. This is a latent correctness bug — any reader at a
+different binder depth gets the wrong value. This MUST be fixed before
+any zonk elimination, because zonk-at-depth is the only thing currently
+compensating for bvar-in-cell values.
+
+**Strategy**: Add an assertion + closing step in `solve-meta!`.
 
 ```racket
-(define (meta-solution id)
-  (define cell-id (prop-meta-id->cell-id id))
+(define (solve-meta-core! id solution)
+  ;; Ensure solution is closed (no bvars) before cell write
+  (define closed-solution (close-expr solution))
+  (when (current-sre-debug?)
+    (assert (bvar-free? closed-solution)
+            "solve-meta!: solution must be closed"))
+  ;; ... existing solve logic with closed-solution ...
+  )
+```
+
+Where `close-expr` replaces any remaining bvars with fvars. In practice,
+PUnify already opens binders with fvars before solving (decompose-pi calls
+`open-expr`). The closing step is a SAFETY NET for non-PUnify solve paths
+(flex-rigid in unify.rkt, direct solutions in trait resolution).
+
+**Deliverables**:
+1. Audit ALL `solve-meta!` call paths for bvar-containing solutions
+2. Add `bvar-free?` check function
+3. Add `close-expr` function (bvar → fvar replacement)
+4. Debug-mode assertion in `solve-meta-core!`
+5. Add closing step for any solve path that produces unclosed solutions
+6. Targeted tests: solve under binders, verify cell contains fvars not bvars
+7. Full test suite passes
+
+### Phase 1: Embed cell-id in expr-meta (Skip id-map Lookup)
+
+**The benchmark revealed**: id-map CHAMP lookup is 82ns — 55% of
+meta-solution's total 150ns cost. The id-map exists because `expr-meta`
+was designed before cells existed. The meta IS the cell; the id-map is
+an unnecessary indirection.
+
+**Strategy**: Add `cell-id` field to `expr-meta` struct.
+
+```racket
+;; Before:
+(struct expr-meta (id) ...)  ;; id → id-map → cell-id → cell read
+
+;; After:
+(struct expr-meta (id cell-id) ...)  ;; cell-id → cell read (direct)
+```
+
+**This touches syntax.rkt** — the central AST struct definition file. All
+14 pipeline files that pattern-match on `expr-meta` need updating. This
+is high-blast-radius but the right change: the meta carries its own cell
+identity, eliminating the indirection.
+
+`fresh-meta` sets `cell-id` at creation time (when the cell is allocated).
+`meta-solution` reads it directly:
+
+```racket
+(define (meta-solution meta-expr)
+  ;; cell-id is RIGHT THERE in the struct — no id-map lookup
+  (define cell-id (expr-meta-cell-id meta-expr))
   (cond
-    ;; Cell-primary path: read from propagator cell
     [(and cell-id (current-prop-net-box))
      (define net (unbox (current-prop-net-box)))
      (define val (net-cell-read (elab-network-prop-net net) cell-id))
      (and (not (type-bot? val)) val)]
-    ;; Fallback: CHAMP path (module-loading, tests without network)
-    [else
-     (define info (unwrap-meta-info id))
-     (and info (meta-info-solution info))]))
+    ;; Fallback: id-map path (module-loading, tests without cells)
+    [else (meta-solution-by-id (expr-meta-id meta-expr))]))
 ```
 
-**This is behavior-preserving**: the cell and CHAMP always hold the same
-solution (both are written by `solve-meta!`). The cell path is faster
-(struct field access vs CHAMP lookup + worldview filtering).
-
 **Deliverables**:
-1. `meta-solution` updated to cell-primary with CHAMP fallback
-2. Same for `level-meta-solution`, `mult-meta-solution`, `sess-meta-solution`
-3. Full test suite passes (behavioral identity)
-4. Micro-benchmark: `meta-solution` call cost before vs after
+1. Add `cell-id` field to `expr-meta` in syntax.rkt (default `#f`)
+2. Update `fresh-meta` to set `cell-id` at creation time
+3. Update `meta-solution` to read `cell-id` directly, fallback to id-map
+4. Update all 14 pipeline files for the new struct field
+5. `raco make driver.rkt` to recompile ALL dependents
+6. Full test suite passes
+7. Micro-benchmark: meta-solution cost before vs after (target: 56ns)
 
 ### Phase 1: Eliminate Elaboration-Time zonk
 
@@ -422,15 +556,19 @@ unused. Remove it.
 
 ## 5. Performance Expectations
 
-| Metric | Baseline | Target | Rationale |
-|--------|----------|--------|-----------|
-| Suite wall time | ~238s | ≤ 230s (potential 3% improvement) | Eliminated ~650 zonk calls |
-| meta-solution | ~50-100ns (CHAMP + worldview) | ~4ns (cell read) | 10-25× faster, 128 call sites |
+| Metric | Baseline (measured Pre-0) | Target | Rationale |
+|--------|--------------------------|--------|-----------|
+| Suite wall time | ~244s | ≤ 235s (~4% improvement) | Eliminated ~650 zonk calls + faster meta-solution |
+| `meta-solution` | 150ns (82ns id-map + 52ns cell + 16ns) | 56ns (4ns struct + 52ns cell) | 2.7× — cell-id in expr-meta skips id-map |
+| `fresh-meta` | 2,087ns | ~1,500ns | Cell + metadata-only CHAMP (no solution field) |
+| `solve-meta!` (no resolution) | 1,756ns | ~800ns | Cell-only + metadata update |
+| `zonk` on ground expr | 778ns | 0ns (call eliminated) | Defensive calls removed entirely |
+| `zonk-at-depth` | 283μs (10-level Pi) | 0ns (eliminated) | bvar closure makes depth tracking unnecessary |
 | zonk calls during elaboration | ~225+ per command | 0 | Cell reads replace solution chasing |
 | zonk.rkt lines | 1317 | ~200 (freeze.rkt) | ~1100 lines eliminated |
 | ground-expr? definitions | 2 (incompatible) | 1 (cell-level) | Unified |
 | default-metas | 393 lines | 0 (defaults at solve-time) | ~20-line apply-defaults! |
-| Memory | Baseline | Slight reduction | CHAMP entries shrink (no solution field) |
+| Memory | Baseline | Slight reduction | CHAMP entries shrink, id-map eventually eliminated |
 
 ---
 
@@ -438,12 +576,13 @@ unused. Remove it.
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| bvar-containing solutions in cells | **CRITICAL** | Phase 2 audit: verify all solve paths produce closed solutions. Add closing step if not. |
-| Ordering: solve-meta! + immediate cell read | HIGH | Verified: elab-cell-write is synchronous. Cell value available immediately. |
-| Module-loading context (no cells) | HIGH | Phase 0 CHAMP fallback retained. Phase 6 addresses after cells available everywhere. |
-| zonk removal breaks subtle ordering | MEDIUM | Incremental removal with full suite after each batch. Rollback individual removals. |
-| ~225 zonk call sites to review | MEDIUM | Classify as necessary vs defensive first. Remove defensive calls in bulk. |
-| with-fresh-meta-env (306 call sites) | MEDIUM | Phase 6 scope. Most are tests — change once, verify all. |
+| bvar-containing solutions in cells | **CRITICAL** | **Phase 0** (new): assertion + closing step in solve-meta!. Pre-0 benchmark CONFIRMED this is real — not hypothetical. |
+| expr-meta struct change (14 pipeline files) | **HIGH** | Phase 1: `raco make driver.rkt` recompiles all. Grep for all pattern matches on expr-meta. Same pattern as Track 0 struct changes. |
+| Module-loading context (no cells → cell-id is #f) | HIGH | cell-id defaults to #f. meta-solution falls back to id-map when cell-id is #f. Phase 7 addresses after cells available everywhere. |
+| Ordering: solve-meta! + immediate cell read | MEDIUM | Verified: elab-cell-write is synchronous. Cell value available immediately. |
+| zonk removal breaks subtle ordering | MEDIUM | Phase 2: incremental removal with full suite after each batch. Classify necessary vs defensive first. |
+| ~225 zonk call sites to review | MEDIUM | Phase 2: remove defensive calls in bulk. Necessary calls retain as cell-read equivalents. |
+| with-fresh-meta-env (306 call sites) | MEDIUM | Phase 7 scope. Most are tests — change once, verify all. |
 | default-metas timing (must happen after resolution) | LOW | apply-defaults! called explicitly in driver.rkt after resolution. Clear ordering. |
 
 ---
