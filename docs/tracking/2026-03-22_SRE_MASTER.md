@@ -11,7 +11,7 @@ of NTT's `:lattice :structural` annotation.
 **Origin**: Track 8D principles audit → SRE Research Doc → NTT case studies
 
 **Source Documents**:
-- [SRE Research](../research/2026-03-22_STRUCTURAL_REASONING_ENGINE.md) — founding insight + architectural analysis
+- [SRE Research](../research/2026-03-22_STRUCTURAL_REASONING_ENGINE.org) — founding insight + architectural analysis
 - [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md) — typing discipline for SRE (`:lattice :structural`)
 - [NTT Case Study: Type Checker](../research/2026-03-22_NTT_CASE_STUDY_TYPE_CHECKER.md) — deep case study, impedance mismatch analysis
 - [NTT Architecture Survey](../research/2026-03-22_NTT_ARCHITECTURE_SURVEY.md) — all 7 systems as NTT skeletons, gap analysis
@@ -79,9 +79,21 @@ different relations). Per-domain is simpler (each domain has one relation).
 **Recommendation**: Per-call, defaulting to equality. The elaborator calls with equality;
 session type checking calls with duality; subtyping calls with subtype relation.
 
+**Coercion phasing note**: Coercion (runtime value transformation: Nat→Int,
+Int→Rat) was identified in the Track 1 audit as a RUNTIME/REDUCTION concern,
+not a compile-time structural relation. The SRE operates during elaboration
+(type checking). Coercion *insertion* (where the elaborator wraps expressions
+with coercion functions) IS an elaboration concern — but it requires the
+elaborator-on-SRE architecture (Track 2). Track 1 focuses on the two
+compile-time structural relations (subtyping, duality). Coercion becomes
+relevant when the elaborator is on the SRE and can insert coercion nodes
+as structural transformations during type checking.
+
 **Dependencies**: Track 0 (form registry)
 
 **Unblocks**: Track 2 (trait resolution needs subtyping), Track 3 (sessions need duality)
+
+**Design document**: [Track 1 Design](2026-03-23_SRE_TRACK1_RELATION_PARAMETERIZED_DECOMPOSITION_DESIGN.md)
 
 ### Track 1: Elaborator-on-SRE
 
