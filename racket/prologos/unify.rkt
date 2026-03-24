@@ -48,6 +48,8 @@
          classify-level-problem
          classify-mult-problem
          dispatch-unify-whnf
+         ;; SRE Track 2: rollback toggle
+         current-sre-classify-enabled?
          ;; Sprint 2b exports
          decompose-meta-app pattern-check invert-args
          ;; Union type helpers
@@ -81,6 +83,46 @@
                 (define lookup (current-structural-meta-lookup))
                 (and lookup (lookup expr)))
               #f))                    ; dual-pairs
+
+;; ========================================
+;; SRE Track 2: Rollback toggle + SRE structural dispatch
+;; ========================================
+;; When #t (default), classify-whnf-problem delegates non-binder
+;; structural cases to SRE ctor-desc dispatch (O(1) via prop:ctor-desc-tag).
+;; When #f, falls back to original hardcoded match* (for A/B testing).
+;; Remove after Phase 5 validation.
+(define current-sre-classify-enabled? (make-parameter #t))
+
+;; SRE-based structural dispatch for classify-whnf-problem.
+;; Replaces hardcoded non-binder structural cases (app, Eq, Vec, Fin, pair, suc)
+;; with ctor-desc lookup. Returns classification or #f (not a structural case).
+;;
+;; Ordering (D.3 §7): this is called AFTER identity, meta, and flex-app checks,
+;; and AFTER Pi/Sigma/lam/nat-val hardcoded cases. It handles the remaining
+;; structural cases that map 1:1 to ctor-descs.
+(define (sre-structural-classify a b)
+  (define desc-a (ctor-tag-for-value a))
+  (define desc-b (ctor-tag-for-value b))
+  (cond
+    ;; Both have ctor-descs with same tag in same domain
+    [(and desc-a desc-b
+          (eq? (ctor-desc-tag desc-a) (ctor-desc-tag desc-b))
+          (eq? (ctor-desc-domain desc-a) (ctor-desc-domain desc-b)))
+     ;; Skip binder cases (Pi, Sigma, lam) — they need special handling
+     ;; in Phase 2. For now, let the hardcoded cases handle them.
+     (define bd (ctor-desc-binder-depth desc-a))
+     (cond
+       [(and bd (> bd 0)) #f]  ;; Binder case — fall through to hardcoded
+       [else
+        ;; Non-binder structural decomposition via SRE
+        (define extract-a (ctor-desc-extract-fn desc-a))
+        (define extract-b (ctor-desc-extract-fn desc-b))
+        (define comps-a (extract-a a))
+        (define comps-b (extract-b b))
+        (list 'sub (map cons comps-a comps-b))])]
+    ;; Different tags or different domains → not structurally compatible
+    ;; Fall through to other checks (level, union, retry, conv)
+    [else #f]))
 
 ;; ========================================
 ;; Sprint 5: Three-valued result helper
@@ -525,6 +567,7 @@
        (if (eq? (expr-tycon-name a) (expr-tycon-name b)) '(ok) '(conv))]
 
       ;; --- HKT normalization: retry after normalizing built-in types ---
+      ;; These MUST come before app-vs-app and flex-app checks.
       [(and (normalizable-builtin? a) (expr-app? b))
        (list 'retry (normalize-for-resolution a) b)]
       [(and (expr-app? a) (normalizable-builtin? b))
@@ -535,6 +578,17 @@
        (list 'retry (normalize-for-resolution a) b)]
       [(and (flex-app? a) (normalizable-builtin? b))
        (list 'retry a (normalize-for-resolution b))]
+
+      ;; --- SRE Track 2: Non-binder structural dispatch ---
+      ;; When enabled, delegates app, Eq, Vec, Fin, pair, suc to SRE ctor-desc
+      ;; dispatch (O(1) via prop:ctor-desc-tag). Binder cases (Pi, Sigma, lam)
+      ;; remain hardcoded above — they need special mult/binder handling (Phase 2).
+      ;; flex-app checks are AFTER app-vs-app (current ordering preserved).
+      [(and (current-sre-classify-enabled?)
+            (sre-structural-classify a b))
+       => values]
+
+      ;; --- Fallback: hardcoded structural cases (when SRE toggle is off) ---
 
       ;; app vs app (rigid-rigid)
       [(and (expr-app? a) (expr-app? b))
