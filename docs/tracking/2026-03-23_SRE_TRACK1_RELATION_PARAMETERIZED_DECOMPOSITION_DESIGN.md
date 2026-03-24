@@ -47,7 +47,7 @@ fragmented architecture we're trying to eliminate.
 | 3 | Duality-aware structural-relate + dependent sessions | ✅ | `20a3e84`, `48634d8` |
 | 4 | Integration: subtype? delegation | ✅ | `9045059`, `7c8ef21` |
 | 5 | Integration: session duality propagator | ✅ | `58dd714` |
-| 6 | Verification + benchmarks + PIR | 🔄 | `dc796fb` (binder-depth fix), PIR drafted |
+| 6 | Verification + benchmarks + PIR | ✅ | `dc796fb` (binder-depth fix), `b5f4ac0` (PIR). 7392 tests, 243.9s, all pass |
 
 **Baseline**: SRE Track 0 final (7358 tests, 236.7s, commit `86524d8`)
 

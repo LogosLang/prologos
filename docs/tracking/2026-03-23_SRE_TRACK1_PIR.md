@@ -71,8 +71,8 @@ into one relation-parameterized SRE.
 ## §6. Performance
 
 - **Baseline**: 7358 tests, 236.7s (SRE Track 0 final)
-- **Final**: 7393 tests (+35), awaiting final timing
-- **Expectation**: ≤ 245s (< 4% increase). Previous runs: 244.1 → 259.7 → 254.4 → TBD
+- **Final**: 7392 tests (+34), 243.9s (+3.0%)
+- **Expectation**: ≤ 245s (< 4% increase) ✅ MET (243.9s = 3.0%)
 - **No structural subtype checks triggered in existing suite**: The existing test suite doesn't have compound subtype checks (PVec Nat <: PVec Int). The query pattern overhead is zero for the existing codebase.
 - **Session duality overhead**: The SRE duality propagator replaces two simple `(dual v)` propagators with one structural propagator. For simple sessions (Send/Recv with no nesting), the overhead is minimal (one propagator instead of two, but with SRE dispatch overhead). For nested sessions, the SRE correctly decomposes structurally — the old approach applied `dual` recursively in one shot, the new approach decomposes into sub-cells and propagates. Performance should be equivalent for current test cases.
 
@@ -103,6 +103,7 @@ into one relation-parameterized SRE.
 3. **Duality pre-write creates cross-domain bot** (Phase 3): Skeleton `Recv(sess-bot, sess-bot)` puts session-domain bot in type-lattice position. Fix: don't pre-write, decompose directly.
 4. **ctor-registry test count** (Phase 3): Expected 21 descs, actual 26 after session registration.
 5. **Reflexive subtype semantics** (Phase 4): `subtype?(Int, Int)` now returns `#t`. Test updated.
+6. **Binder-depth blocked Pi decomposition** (Phase 6): Pi has binder-depth=1, and `sre-maybe-decompose` fell through for binder-depth>0. For subtype/duality on ground types, binder opening is irrelevant — extract components directly. Caused 7 eliminator test failures (wrong codomain types passed subtype check because inner Pi decomposition was blocked). Fix: non-equality relations bypass binder-depth check (`dc796fb`).
 
 ## §10. Lessons Distilled
 
