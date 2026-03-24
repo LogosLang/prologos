@@ -38,7 +38,7 @@ Audits) are defined.
 | [[file:2026-03-16_TRACK6_DRIVER_SIMPLIFICATION.md][Track 6]] | Driver simplification + cleanup | [[file:2026-03-17_TRACK6_DRIVER_SIMPLIFICATION_PIR.md][PIR]] | Parameterize 30→13, callback elimination, first clean suite |
 | [[file:2026-03-18_TRACK7_PERSISTENT_CELLS_STRATIFIED_RETRACTION.md][Track 7]] | Persistent registry cells + stratified retraction | [[file:2026-03-18_TRACK7_PIR.md][PIR]] | 29 persistent cells, S(−1) retraction, readiness propagators, pure resolution |
 | [[file:2026-03-21_TRACK8_DESIGN.md][Track 8]] | Infrastructure migration + HKT + bridge propagators | [[file:2026-03-22_TRACK8_PIR.md][PIR]] | TMS-tagged state, worldview-aware reads, pure α/γ bridges, HKT impl/resolution, restore-meta-state! retired |
-| Track 8D | Pure bridge fire functions (Completeness correction) | — | Bridges read cells directly via net-cell-read; no zonk, no box, no with-enet-reads |
+| [[file:2026-03-22_TRACK8_DESIGN.md][Track 8D]] | Pure bridge fire functions (Completeness correction) | [[file:2026-03-22_TRACK8_PIR.md][PIR §12]] | Bridges read cells directly via net-cell-read; no zonk, no box, no with-enet-reads |
 
 *** Pending Tracks
 
@@ -115,7 +115,7 @@ Solver) and is the foundation for the SRE Series.
 |------------------+------|
 | *Thesis*         | PUnify is not "the unification algorithm on propagators" — it is the universal structural reasoning engine. Every system that analyzes, decomposes, or matches structure (elaboration, trait resolution, pattern compilation, reduction) uses the same SRE primitives. |
 | *Status*         | Stage 0-1 research complete. Track scoping pending NTT research. |
-| *Origin*         | [[file:../research/2026-03-22_STRUCTURAL_REASONING_ENGINE.md][SRE Research (2026-03-22)]], Track 8D principles audit |
+| *Origin*         | [[../research/2026-03-22_STRUCTURAL_REASONING_ENGINE.org][SRE Research (2026-03-22)]], Track 8D principles audit |
 
 *** Key Insight
 
@@ -130,7 +130,7 @@ partially dissolves (the SRE propagates both directions).
 
 | Track | Description | Status | Depends On |
 |-------+-------------+--------+------------|
-| 0 | SRE Form Registry — domain-parameterized structural decomposition | ⬜ | PM Track 8D |
+| [[file:2026-03-22_SRE_TRACK0_FORM_REGISTRY_DESIGN.md][0]] | SRE Form Registry — domain-parameterized structural decomposition | ✅ [[file:2026-03-22_SRE_TRACK0_PIR.md][PIR]] | sre-core.rkt: 6 functions, 23 type ctor-descs, term-value validated. Zero bugs. |
 | 1 | Elaborator-on-SRE — typing-core rewritten as structural-relate calls | ⬜ | Track 0 |
 | 2 | Trait Resolution-on-SRE — structural pattern matching for impl lookup | ⬜ | Track 0 |
 | 3 | Pattern Compilation-on-SRE — scrutinee decomposition via SRE | ⬜ | Track 0 |
@@ -348,11 +348,12 @@ interleave based on priority and what's unblocked.
                                  ├──→ PM Track 8E → 8F → 9 → 10
                                  │
   NTT Research Docs 1–4 ────────┼──→ SRE Series scoping
-                                 │     ├──→ SRE Track 0 (Form Registry)
-                                 │     ├──→ SRE Track 1 (Elaborator-on-SRE)
-                                 │     └──→ SRE Tracks 2–4
+                                 │     ├──→ SRE Track 0 (Form Registry) ✅
+                                 │     ├──→ SRE Track 1 (Subtyping Relations)
+                                 │     ├──→ SRE Track 2 (Elaborator-on-SRE)
+                                 │     └──→ SRE Tracks 3–4
                                  │
-  SRE Track 0 ──────────────────┴──→ PM Track 9 (Reduction-on-SRE)
+  SRE Track 0 ✅ ───────────────┴──→ PM Track 9 (Reduction-on-SRE)
                                      PM Track 10 (Network-first init)
 #+end_example
 
