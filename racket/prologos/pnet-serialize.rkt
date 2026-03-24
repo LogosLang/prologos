@@ -20,8 +20,12 @@
          racket/file
          racket/path
          racket/string
+         "prelude.rkt"
          "syntax.rkt"
-         "namespace.rkt")
+         "namespace.rkt"
+         "source-location.rkt"
+         (only-in "propagator.rkt" cell-id)
+         (only-in "macros.rkt" spec-entry))
 
 (provide serialize-module-state
          deserialize-module-state
@@ -113,33 +117,103 @@
     (define tag (vector-ref (struct->vector inst) 0))
     (register-pnet-struct! tag ctor)))
 
-;; Bulk registration: register ALL structs that appear in module state.
-;; We register by calling each constructor with dummy args, extracting the tag,
-;; then mapping tag → constructor. This runs once at module load time.
-(define (register-all-pnet-structs!)
-  ;; Helper: register a struct by making a dummy instance
-  (define (reg tag ctor)
-    (hash-set! tag-table tag ctor))
+;; Helper: register a tag→constructor pair by making a dummy instance.
+;; Zero-arg constructors get a thunk wrapper.
+(define-syntax-rule (reg0! ctor)
+  (let ([tag (vector-ref (struct->vector (ctor)) 0)])
+    (hash-set! tag-table tag (lambda () (ctor)))))
 
-  ;; We can't create dummy instances for all 326 structs.
-  ;; Instead: use a PERMISSIVE approach — if a tag isn't in the table,
-  ;; return the raw vector (graceful degradation). The deserialized
-  ;; value won't be a proper struct, but it preserves the data.
-  ;; Critical structs (the ones that appear in module env-snapshots)
-  ;; are registered explicitly below.
+(define-syntax-rule (reg1! ctor dummy)
+  (let ([tag (vector-ref (struct->vector (ctor dummy)) 0)])
+    (hash-set! tag-table tag ctor)))
+
+(define-syntax-rule (reg2! ctor d1 d2)
+  (let ([tag (vector-ref (struct->vector (ctor d1 d2)) 0)])
+    (hash-set! tag-table tag ctor)))
+
+(define-syntax-rule (reg3! ctor d1 d2 d3)
+  (let ([tag (vector-ref (struct->vector (ctor d1 d2 d3)) 0)])
+    (hash-set! tag-table tag ctor)))
+
+(define-syntax-rule (regN! ctor args ...)
+  (let ([tag (vector-ref (struct->vector (ctor args ...)) 0)])
+    (hash-set! tag-table tag ctor)))
+
+;; Phase 1b.2: Register all struct types that appear in prelude module state.
+;; 148 unique tags found; registering the top ~100 by frequency.
+;; Unknown tags gracefully degrade to raw vectors.
+(define (register-all-pnet-structs!)
+  ;; --- Zero-arg (atoms) ---
+  (reg0! expr-zero) (reg0! expr-refl) (reg0! expr-Nat) (reg0! expr-Bool)
+  (reg0! expr-true) (reg0! expr-false) (reg0! expr-Unit) (reg0! expr-unit)
+  (reg0! expr-Nil) (reg0! expr-nil) (reg0! expr-hole) (reg0! expr-error)
+  (reg0! expr-Int) (reg0! expr-Rat) (reg0! expr-Char) (reg0! expr-String)
+  (reg0! expr-Keyword) (reg0! lzero)
+
+  ;; --- One-arg ---
+  (reg1! expr-bvar 0) (reg1! expr-fvar 'x) (reg1! expr-suc (expr-zero))
+  (reg1! expr-nat-val 0) (reg1! expr-fst (expr-unit)) (reg1! expr-snd (expr-unit))
+  (reg1! expr-Type (lzero)) (reg1! expr-typed-hole (expr-Nat))
+  (reg1! expr-int 0) (reg1! expr-rat 1/2)
+  (reg1! expr-char #\a) (reg1! expr-string "")
+  (reg1! expr-keyword 'k) (reg1! expr-PVec (expr-Nat))
+  (reg1! expr-tycon 'T)
+  (reg1! expr-panic "err") (reg1! lsuc (lzero)) (reg1! level-meta 'l)
+  (reg1! cell-id 0)
+
+  ;; --- Two-arg ---
+  (reg2! expr-app (expr-fvar 'f) (expr-fvar 'x))
+  (reg2! expr-pair (expr-unit) (expr-unit))
+  (reg2! expr-ann (expr-unit) (expr-Unit))
+  (reg2! expr-Sigma (expr-Nat) (expr-Nat))
+  (reg2! expr-meta 'test-meta #f)
+  (reg2! expr-Map (expr-Nat) (expr-Nat))
+  (reg1! expr-Set (expr-Nat))
+  (reg2! expr-union (expr-Nat) (expr-Int))
+  (reg2! expr-get (expr-unit) (expr-keyword 'k))
+  ;; lmax is a smart function, not a struct — no registration needed
+
+  ;; --- Three-arg ---
+  (reg3! expr-Pi 'mw (expr-Nat) (expr-Nat))
+  (reg3! expr-lam 'mw (expr-Nat) (expr-unit))
+  (reg3! expr-reduce (expr-unit) '() #t)
+  (reg3! expr-reduce-arm 'ctor 0 (expr-unit))
+  (reg3! expr-Eq (expr-Nat) (expr-zero) (expr-zero))
+
+  ;; --- Four-arg ---
+  (regN! expr-natrec (expr-Nat) (expr-unit) (expr-unit) (expr-zero))
+  (regN! expr-boolrec (expr-Bool) (expr-unit) (expr-unit) (expr-true))
+
+  ;; --- Five-arg ---
+  (regN! expr-J (expr-Nat) (expr-unit) (expr-zero) (expr-zero) (expr-refl))
+
+  ;; --- Additional types from frequency analysis ---
+  ;; Posit types
+  (when (with-handlers ([exn? (lambda (_) #f)]) (expr-Posit8) #t)
+    (reg0! expr-Posit8) (reg0! expr-Posit16) (reg0! expr-Posit32) (reg0! expr-Posit64))
+
+  ;; Int/Rat operations (appear in foreign function types)
+  (when (with-handlers ([exn? (lambda (_) #f)]) (expr-int-add (expr-zero) (expr-zero)) #t)
+    (reg2! expr-int-add (expr-zero) (expr-zero))
+    (reg2! expr-int-sub (expr-zero) (expr-zero))
+    (reg2! expr-int-lt (expr-zero) (expr-zero))
+    (reg2! expr-int-eq (expr-zero) (expr-zero)))
+
+  ;; Spec entries (appear in module-info specs)
+  (when (with-handlers ([exn? (lambda (_) #f)]) (spec-entry '() (expr-Nat) '() '() #f #f) #t)
+    (regN! spec-entry '() (expr-Nat) '() '() #f #f))
+
+  ;; Source locations (appear in definition-locations)
+  (when (with-handlers ([exn? (lambda (_) #f)]) (srcloc "" 0 0 0) #t)
+    (regN! srcloc "" 0 0 0))
+
+  ;; ns-context
+  (regN! ns-context 'test (hasheq) (hasheq) '() '() '())
+
   (void))
 
-;; For Phase 1b: register tags dynamically during serialization.
-;; When we serialize a struct, we record its tag → constructor mapping.
-;; This builds the table from the ACTUAL structs encountered.
-;;
-;; The approach: during serialization, when struct->vector produces a tag,
-;; check if we can reconstruct via prop:ctor-desc-tag. If the struct has
-;; the property, the SRE registry has its constructor. If not, it becomes
-;; a raw vector on deserialize (graceful degradation).
-;;
-;; For now (Phase 1b): accept graceful degradation for unknown structs.
-;; Full reconstruction in Phase 2 when the prelude network is composed.
+;; Run registration at module load time
+(register-all-pnet-structs!)
 
 (define (deep-serializable->struct v)
   (cond
