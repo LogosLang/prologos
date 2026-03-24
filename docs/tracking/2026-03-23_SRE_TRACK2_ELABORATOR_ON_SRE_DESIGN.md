@@ -3,7 +3,7 @@
 **Stage**: 2 (Audit) + 3 (Design), combined
 **Date**: 2026-03-23
 **Series**: SRE (Structural Reasoning Engine)
-**Status**: D.1 — awaiting critique
+**Status**: D.2 — incorporating Pre-0 benchmark findings
 **Depends on**: [SRE Track 0](2026-03-22_SRE_TRACK0_FORM_REGISTRY_DESIGN.md) ✅, [SRE Track 1](2026-03-23_SRE_TRACK1_RELATION_PARAMETERIZED_DECOMPOSITION_DESIGN.md) ✅
 **Enables**: SRE Track 3 (Trait Resolution), Track 4 (Sessions), Track 5 (Patterns), PM 8F (metas as cells)
 **Source Documents**:
@@ -21,11 +21,12 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| Pre-0 | Micro-benchmark + adversarial baseline | ⬜ | Informs design iteration |
-| 1 | Unify classifier → SRE ctor-desc dispatch | ⬜ | The core migration |
+| Pre-0 | Micro-benchmark + adversarial baseline | ✅ | **Critical finding**: linear scan 4-200× slower than struct predicates |
+| 0 | O(1) struct-type dispatch (`prop:ctor-desc`) | ⬜ | Foundation: makes SRE dispatch competitive with hardcoded match |
+| 1 | Unify classifier → SRE ctor-desc dispatch | ⬜ | The core migration (non-binder cases) |
 | 2 | Binder handling via SRE | ⬜ | Pi codomain, Sigma snd-type, lam body |
-| 3 | Meta handling (flex-rigid, flex-app) via SRE | ⬜ | Cell-based meta resolution |
-| 4 | Subtype/conversion fallback via SRE | ⬜ | Track 1's subtype-relate + cumulativity |
+| 3 | Meta handling verification | ⬜ | Verify SRE dispatch doesn't interfere with flex cases |
+| 4 | Subtype/conversion fallback via SRE | ⬜ | Track 1's structural-subtype-ground? + cumulativity |
 | 5 | Polarity inference integration | ⬜ | User-defined types get automatic variance |
 | 6 | Verification + benchmarks + PIR | ⬜ | |
 
@@ -56,10 +57,117 @@ pattern matching with SRE ctor-desc lookups.
    works as the elaborator's PRIMARY mechanism for 7000+ test cases.
 
 **Performance expectations** (to check against in PIR):
-- Unification wall time: ≤ 5% regression (ctor-desc lookup vs hardcoded match)
-- Full suite wall time: ≤ 3% regression (236.7s baseline)
+- Unification wall time: ≤ 0% regression (O(1) prop:ctor-desc lookup FASTER than linear cond chain)
+- Full suite wall time: potential IMPROVEMENT (4ns dispatch vs 123-342ns cond chain)
 - Memory: neutral (same cell/propagator count — SRE lookup replaces hardcoded match, doesn't add cells)
-- If the SRE lookup is FASTER than hardcoded match (possible: hash lookup vs linear match*), note as positive finding
+- Phase 0 (O(1) dispatch) should deliver measurable speedup on unification-heavy benchmarks
+
+---
+
+## 1b. Pre-0 Benchmark Findings (D.2)
+
+Micro-benchmarks revealed a critical performance issue that CHANGES the design:
+
+### Raw Data
+
+| Operation | Time (ns/call) | Notes |
+|-----------|---------------|-------|
+| Direct struct predicate (`expr-Pi?`) | 4 | The performance floor |
+| Classifier Pi-vs-Pi | 162 | ~10 cond branches before structural match |
+| Classifier app-vs-app | 330 | Later in cond chain |
+| Classifier atom-vs-atom | 123 | Falls through to `'conv` |
+| SRE `sre-constructor-tag` Pi | 357 | Linear scan of 28 recognizers |
+| SRE `sre-constructor-tag` app | 96 | Registered early |
+| SRE `sre-constructor-tag` atom | 825 | Scans ALL 28, finds none |
+
+### Key Findings
+
+1. **`ctor-tag-for-value` does a LINEAR SCAN** of all registered recognizer
+   closures. With 28 descriptors, worst case is 28 function calls (~825ns).
+   This is 200× slower than a struct predicate (4ns).
+
+2. **Registration order determines performance.** `Eq` (43ns, registered early)
+   vs `suc` (320ns, registered late). Fragile and non-deterministic.
+
+3. **Atoms are catastrophic.** Most common expressions in the type checker
+   (expr-Int, expr-Nat, expr-Bool) have NO ctor-desc. Every atom pays the
+   full 28-recognizer scan. This would make SRE dispatch 7× slower than
+   the classifier for the most common case.
+
+4. **The classifier's cond chain is also suboptimal.** It tests ~10 branches
+   (equal?, 4 hole checks, same-meta, 2 meta checks) before reaching
+   structural predicates. The structural predicates themselves are 4ns each,
+   but the cond overhead is 120-330ns.
+
+### Architectural Insight: Static Dispatch vs Dynamic Reasoning
+
+**Not everything needs to be on the network.**
+
+The key distinction is between STRUCTURAL KNOWLEDGE (static configuration)
+and STRUCTURAL REASONING (dynamic computation):
+
+| Concern | Character | Where it belongs |
+|---------|-----------|-----------------|
+| "What form is this value?" | Static routing decision | O(1) dispatch (off-network) |
+| "Decompose into sub-cells" | Dynamic computation | On-network (propagators) |
+| "Relate sub-cells structurally" | Dynamic computation | On-network (propagators) |
+| "Reconstruct from sub-cells" | Dynamic computation | On-network (propagators) |
+| "Detect contradiction" | Dynamic computation | On-network (cell writes) |
+
+**NF-Narrowing precedent**: The definitional tree is a pre-computed dispatch
+structure — given a constructor tag, the DT immediately knows which branch
+to take (O(1)). But the NARROWING itself (creating logic variables,
+propagating constraints) is fully on-network. Nobody would put DT traversal
+on the propagator network — it's a routing decision, not a computation.
+
+**The SRE form dispatch is the same pattern**: "what structural form does this
+value have?" is a routing decision (static, O(1)). "Decompose it and propagate
+relationships" is the computation (dynamic, on-network). Provenance starts at
+decomposition, not at dispatch. The reasoning is on-network; the routing is
+compiled infrastructure.
+
+### Design Consequence: `prop:ctor-desc` Struct-Type Property
+
+The solution: attach ctor-desc directly to each AST struct definition via
+Racket's struct-type property mechanism.
+
+```racket
+;; Define the property
+(define-values (prop:ctor-desc ctor-desc-has? ctor-desc-ref)
+  (make-struct-type-property 'ctor-desc))
+
+;; AST struct carries its own descriptor
+(struct expr-Pi (mult domain codomain)
+  #:property prop:ctor-desc <pi-desc>)
+
+;; O(1) lookup — single vtable access
+(define (ctor-tag-for-value-fast v)
+  (and (ctor-desc-has? v) (ctor-desc-ref v)))
+```
+
+**Expected performance**: ~4ns per lookup (vtable access, same as struct predicate).
+This makes SRE dispatch FASTER than the classifier's cond chain (4ns vs 123-342ns).
+
+**Data Orientation**: The value carries its own structural identity. No external
+registry scanning. The ctor-desc IS the NTT's structural type annotation,
+attached to the data itself.
+
+**First-Class by Default**: Structural identity is a property of the value,
+not of the lookup context. Any function can determine a value's structural
+form in O(1) without importing the registry.
+
+**Blast radius**: Modifying syntax.rkt struct definitions touches the entire
+pipeline. Mitigation: the property is ADDITIVE — existing struct fields,
+pattern matching, and serialization are unaffected. The property adds a slot
+to the struct type descriptor (compile-time), not to struct instances (runtime).
+
+**Challenge**: ctor-descs reference functions from elaborator-network.rkt
+(extract-fn, reconstruct-fn). These can't be available at syntax.rkt
+definition time (circular dependency). Resolution: the property is set to
+a THUNK or PARAMETER that's populated at registration time, not at struct
+definition time. Or: the property holds a TAG (symbol), and the registry
+maps tags to full ctor-descs. Lookup is: property → tag (O(1)), then
+tag → ctor-desc (O(1) hash-ref). Two O(1) lookups = still O(1).
 
 **What "done" looks like**:
 - `classify-whnf-problem` delegates ALL structural cases to `sre-constructor-tag` + ctor-desc extraction
@@ -209,25 +317,73 @@ becomes: "check tags via SRE, decompose via ctor-desc, handle metas separately."
 
 ## 4. Phased Implementation
 
-### Phase Pre-0: Micro-Benchmark + Adversarial Baseline
+### Phase Pre-0: Micro-Benchmark + Adversarial Baseline ✅
 
-**Rationale**: Track 1B's lesson — benchmark before changing reveals whether
-the optimization target is correct. Measure BEFORE the migration to know
-what we're working with.
+**Completed.** See §1b above for full results.
+
+**Key findings that changed the design**:
+1. `ctor-tag-for-value` linear scan is 4-200× slower than struct predicates
+2. Atom case is catastrophic (825ns for a "not found" scan)
+3. The classifier's cond chain is also suboptimal (123-342ns for routing)
+4. O(1) struct-type dispatch would make SRE FASTER than the classifier
+
+**Benchmark file**: `benchmarks/micro/bench-classify-vs-sre.rkt`
+
+### Phase 0: O(1) Struct-Type Dispatch
+
+**Rationale**: Pre-0 benchmark proved that the SRE cannot replace the
+classifier with the current linear-scan `ctor-tag-for-value`. O(1)
+dispatch is a PREREQUISITE for the migration, not an optimization.
+
+**Approach**: Two-level O(1) dispatch via struct-type property:
+
+1. Define `prop:ctor-desc-tag` as a struct-type property in syntax.rkt.
+   The property holds a SYMBOL tag (not the full ctor-desc — avoids
+   circular dependency with elaborator-network.rkt).
+
+2. Each AST struct in syntax.rkt that has structural form gets the
+   property:
+   ```racket
+   (struct expr-Pi (mult domain codomain)
+     #:property prop:ctor-desc-tag 'Pi)
+   ```
+
+3. `ctor-tag-for-value` becomes O(1):
+   ```racket
+   (define (ctor-tag-for-value-fast v)
+     (and (ctor-desc-tag-has? v)
+          (let ([tag (ctor-desc-tag-ref v)])
+            (lookup-ctor-desc tag))))
+   ```
+   Property access (~4ns) → hash-ref (~15ns) = ~19ns total.
+   vs current: linear scan of 28 closures (~300-825ns).
+
+4. `sre-constructor-tag` updated to use `ctor-tag-for-value-fast`.
+
+5. The existing `register-ctor!` function continues to populate the
+   hash tables — the property provides the TAG, the hash provides the
+   full ctor-desc. Registration is unchanged.
 
 **Deliverables**:
-1. Micro-benchmark: `classify-whnf-problem` dispatch time for each tag type
-   (Pi, app, Eq, Vec, Fin, suc, pair, Sigma, lam)
-2. Micro-benchmark: `sre-constructor-tag` lookup time for same expressions
-3. Compare: is SRE lookup faster or slower than hardcoded match*?
-4. Adversarial: deeply nested types (Pi^10, App^10) — does SRE decomposition
-   create more overhead than hardcoded decomposition?
-5. Frequency counter: how many times is each classifier tag hit during full suite?
+1. `prop:ctor-desc-tag` property definition in syntax.rkt
+2. Property added to all 23+ structural AST structs
+3. `ctor-tag-for-value` updated to use property-first dispatch
+4. Fallback to linear scan for non-AST types (term-value, session types)
+   that may not have the property
+5. Micro-benchmark confirmation: ~19ns per lookup (vs 300-825ns)
+6. Full suite passes — no behavioral change
 
-This data tells us:
-- Whether SRE dispatch is faster/slower (may be FASTER: hash lookup vs linear match)
-- Which tags are hot (Pi and app are likely dominant — optimize those)
-- Whether adversarial nesting is a concern
+**Blast radius mitigation**:
+- The property is ADDITIVE: existing struct fields, pattern matching,
+  and serialization are unaffected
+- Property adds to struct type descriptor (compile-time), not instances (runtime)
+- Backward compatible: `ctor-tag-for-value` falls back to linear scan
+  for values without the property
+- `raco make driver.rkt` recompiles all dependents (standard after syntax.rkt change)
+
+**What this enables**: All subsequent phases use O(1) SRE dispatch.
+The classifier migration (Phase 1) becomes unambiguously faster than
+the current cond chain.
 
 ### Phase 1: Unify Classifier → SRE Dispatch
 
@@ -370,10 +526,12 @@ This phase wires polarity inference into `data` elaboration.
 
 ## 5. Performance Expectations
 
-| Metric | Baseline | Target | Rationale |
-|--------|----------|--------|-----------|
-| Full suite wall time | 236.7s | ≤ 244s (3%) | SRE lookup replaces match*; overhead is ctor-desc hash lookup vs linear pattern match |
-| Unify dispatch (hot path) | TBD (Pre-0) | ≤ 1.1× | Hash lookup may be FASTER for 23-entry registry vs 37-case match* |
+| Metric | Baseline (Pre-0 measured) | Target | Rationale |
+|--------|--------------------------|--------|-----------|
+| Full suite wall time | 236.7s | ≤ 236.7s (0% regression, possible improvement) | O(1) dispatch is faster than cond chain |
+| Classifier dispatch (hot) | 162-342 ns/call | ≤ 50 ns/call | prop:ctor-desc (~4ns) + hash-ref (~15ns) + pre-checks (~20ns) |
+| Atom dispatch (failure case) | 123-825 ns/call | ≤ 30 ns/call | Property check returns #f in ~4ns; no scan |
+| `ctor-tag-for-value` | 43-825 ns/call | ≤ 19 ns/call | O(1) replaces O(N) linear scan |
 | Memory | 7392 tests | ≤ 7400 tests | No new cells/propagators from dispatch change |
 | Compound subtype check | 0.5μs (Track 1B) | ≤ 0.5μs | structural-subtype-ground? unchanged |
 
@@ -392,23 +550,35 @@ This phase wires polarity inference into `data` elaboration.
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
+| syntax.rkt struct property blast radius | HIGH | Property is additive (no field changes). `raco make driver.rkt` recompiles all. Run full suite immediately after Phase 0. |
+| Circular dependency: ctor-desc at syntax.rkt time | HIGH | Two-level dispatch: property holds TAG (symbol), hash holds full ctor-desc. Tags are constants; descs are registered later. |
 | Pi binder regression | HIGH | Migrate Pi LAST among binders (most tested); full suite after each sub-migration |
-| SRE tag lookup slower than match* | MEDIUM | Pre-0 benchmark answers this; if slower, optimize ctor-desc lookup to use struct-predicate directly |
-| nat-val cross-representation cases | LOW | These aren't pure structural decomposition (nat-val(0) = zero requires value comparison). May need special handling in SRE or persist as hardcoded cases |
-| HKT normalization retry cases | LOW | These are preprocessing, not decomposition. Persist as-is in the classifier |
+| nat-val cross-representation cases | LOW | Semantic equalities (nat-val(0) = zero). Persist as hardcoded cases — these are CONVERSION rules, not structural decomposition |
+| HKT normalization retry cases | LOW | Preprocessing, not decomposition. Persist as-is in classifier |
 | Polarity inference for recursive types | MEDIUM | Fixpoint convergence proven for small lattice; test on actual codebase types |
+| Property not present on non-AST types | LOW | Fallback to linear scan for term-value, session types. These are low-frequency paths. |
 
 ---
 
 ## 7. Principles Alignment (Challenge, Not Catalogue)
 
 ### Propagator-First
-**Challenge**: Does this migration actually put MORE on the network?
-**Answer**: No — it reorganizes how structural knowledge is accessed (from
-hardcoded match to ctor-desc registry) but doesn't add new propagators or
-cells. The network-level behavior is unchanged. This is a CODE organization
-improvement, not an architectural one. The architectural improvements come
-from what this ENABLES (PM 8F, SRE Track 3-5).
+**Challenge**: Does this migration put more on the network? Is O(1)
+dispatch "off-network" and therefore a principles violation?
+**Answer**: No. The distinction is between STRUCTURAL KNOWLEDGE (static
+configuration — "what form is this value?") and STRUCTURAL REASONING
+(dynamic computation — "decompose, relate, propagate"). Structural
+knowledge is the dispatch table; structural reasoning is the propagator
+network. The dispatch table is analogous to NF-Narrowing's definitional
+tree — a pre-computed routing structure that nobody would put on the
+propagator network because it never changes. The network handles the
+REASONING that follows dispatch: sub-cell creation, relationship
+propagation, contradiction detection. All provenance and inter-network
+intelligence come from the reasoning, not from the dispatch.
+
+This is a principled architectural boundary: static dispatch (O(1),
+compiled) feeds into dynamic reasoning (on-network, propagator-based).
+The boundary is clean and explicit.
 
 ### Data Orientation
 **Challenge**: Is the ctor-desc registry more data-oriented than the match?
