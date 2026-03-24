@@ -82,6 +82,16 @@
 ;; SRE Track 1 Phase 4: compound types delegate to SRE structural check.
 ;; Both sides must have the same constructor tag for structural subtyping.
 ;; e.g., PVec Nat <: PVec Int (covariant element type).
+;; Track 1B Phase 2c: quick compound-type check.
+;; Avoids 1.85μs overhead of sre-constructor-tag call on atoms.
+;; Struct predicate checks are ~0.01μs — effectively free.
+(define (compound-type? v)
+  (or (expr-Pi? v) (expr-Sigma? v) (expr-app? v)
+      (expr-PVec? v) (expr-Set? v) (expr-Map? v)
+      (expr-Vec? v) (expr-Eq? v)
+      (expr-pair? v) (expr-lam? v)
+      (expr-Fin? v) (expr-suc? v)))
+
 (define (subtype? t1 t2)
   (bump-subtype-count!)
   (cond
@@ -89,8 +99,11 @@
     [(equal? t1 t2) #t]
     ;; Flat fast path: 9 hardcoded edges + registry
     [(flat-subtype? t1 t2) #t]
-    ;; SRE structural path: compound types with same constructor tag
-    [(sre-structural-subtype-check t1 t2) #t]
+    ;; SRE structural path: only if BOTH are compound types.
+    ;; Atoms (expr-Nat, expr-Int, expr-Bool, etc.) skip the structural
+    ;; path entirely — eliminates 1.85μs overhead from sre-constructor-tag.
+    [(and (compound-type? t1) (compound-type? t2)
+          (sre-structural-subtype-check t1 t2)) #t]
     ;; Not a subtype
     [else #f]))
 
