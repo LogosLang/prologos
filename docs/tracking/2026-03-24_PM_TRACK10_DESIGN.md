@@ -248,20 +248,35 @@ The cell values ARE the result. We serialize the result, not the mechanism:
 
 | Serialized | Format | Size estimate |
 |-----------|--------|--------------|
-| Cell values (type exprs, definitions) | `fasl` (struct trees) | ~50 bytes/def |
-| Registry state (ctor, trait, preparse) | `fasl` (hasheqs) | ~2KB/module |
-| Module metadata (exports, specs, macros source) | `fasl` | ~1KB/module |
-| Definition-to-cell-id mappings | `fasl` (symbol→int) | ~0.5KB/module |
+| Cell values (type exprs, definitions) | `struct->vector` trees | ~50 bytes/def |
+| Registry contributions (ctor, trait, preparse, subtype, coercion) | tagged vectors | ~2KB/module |
+| Specs (614 across prelude) | tagged vectors | ~3KB/module |
+| Definition-locations (30,908 across prelude) | symbol→location pairs | ~5KB/module |
+| Module metadata (exports, namespace) | symbols/lists | ~0.5KB/module |
+| Definition-to-cell-id mappings | symbol→int (for ID remapping) | ~0.5KB/module |
 | Source hash (staleness check) | SHA-256 | 32 bytes |
+| Foreign function names (re-linked on load) | symbols | ~0.1KB/module |
 
 | NOT serialized | Why |
 |---------------|-----|
 | Propagators | Already fired — inert. Mechanism, not result. |
 | Worklist | Empty after quiescence |
 | Contradiction state | Clean after successful elaboration |
-| Closures (macro transformers) | Not serializable; re-parse from cached source |
+| Racket procedures (foreign impls) | Not serializable; re-linked by name |
+| Macros (0 in prelude) | Not serializable; re-parse if needed |
 
-Estimated total: ~5KB per module × 63 = ~315KB for full prelude `.pnet` cache.
+**D.3 audit finding**: Round-trip tested on ALL 40 prelude modules.
+18 modules serialize+deserialize cleanly (22→157KB each). 22 modules
+contain Racket procedures (foreign function implementations) that require
+re-linking on deserialize. Total serialized size: ~5.9MB across all modules.
+
+**Foreign function re-linking**: Foreign definitions store a Racket
+procedure (e.g., `char-upcase`). On serialize, replace with `(foreign-proc
+char-upcase)`. On deserialize, look up in Racket namespace:
+`(namespace-variable-value 'char-upcase)`. This is dynamic linking.
+
+Estimated total: ~150KB per module × 63 = ~9.5MB for full prelude `.pnet`
+cache (larger than D.2's estimate due to specs + definition-locations).
 
 #### 2.5.2 Staleness Check
 
@@ -803,7 +818,35 @@ on deserialize. This enables incremental re-elaboration: deserialize module
 **Documented as**: `.pnet` v2 requirement for Track 11. Not needed for
 Track 10.
 
-### D.3.6 Code Reality Audit
+### D.3.7 Missing Serialization Content (Critical — from completeness audit)
+
+**D.2's serialization list was incomplete.** Testing on actual prelude modules
+revealed:
+
+1. **Specs (614 total)**: Module-info contains specs for import resolution.
+   Must be serialized — `(imports [module :refer [name]])` needs to know
+   what specs a module exports.
+
+2. **Definition-locations (30,908 total)**: Source location metadata for
+   error reporting and IDE features. Must be serialized for correct error
+   messages from imported definitions.
+
+3. **Registry contributions**: Each module adds entries to 7 global
+   registries (ctor, trait, preparse, subtype, coercion, multi-defn,
+   capability). The `.pnet` must serialize WHAT EACH MODULE CONTRIBUTED
+   so registries can be reconstructed on deserialize.
+
+4. **Foreign function procedures (22/40 modules affected)**: Env-snapshot
+   values contain Racket procedures for foreign functions. `struct->vector`
+   exposes them; `format "~s"` prints `#<procedure:...>` which is NOT
+   readable. Resolution: serialize the procedure NAME (symbol), re-link
+   on deserialize via `namespace-variable-value`.
+
+**Full round-trip test results**: 18/40 modules pass clean round-trip.
+22/40 fail due to Racket procedures. With foreign function name
+substitution, all 40 should pass. Total serialized size: ~5.9MB.
+
+### D.3.8 Code Reality Audit
 
 **Verified claims**:
 - ✅ `current-prop-net-box #f` at driver.rkt:1575 (the root cause)
@@ -815,9 +858,12 @@ Track 10.
 - ✅ CHAMP fork: 287ns for 5000 entries (Pre-0 benchmark confirmed)
 
 **Corrected claims**:
-- ❌ D.2 claimed `fasl` works for our structs → `fasl` NOT AVAILABLE
+- ❌ D.2 claimed `fasl` works for our structs → `fasl` NOT AVAILABLE in Racket 9.0
 - ❌ D.2 assumed `write`/`read` round-trips structs → transparent structs LOSE type identity
 - ❌ D.1 assumed parameterize is the bottleneck → Pre-0 shows 3.4μs (negligible)
+- ❌ D.2's serialization list missed: specs (614), def-locations (30,908), registry contributions, foreign procedures
+- ❌ D.2 assumed 0 macros was the only closure problem → 22/40 modules have foreign function procedures
+- ❌ D.2 estimated ~315KB total → actual is ~5.9MB (specs + locations dominate)
 
 ---
 
