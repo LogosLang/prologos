@@ -2091,7 +2091,7 @@
 
     ;; ---- Meta expression: optimistically succeed with zero usage ----
     ;; A metavariable (from implicit arg insertion) doesn't consume resources.
-    [((expr-meta _) _) (bu #t (zero-usage n))]
+    [((expr-meta _ _) _) (bu #t (zero-usage n))]
 
     ;; ---- Symbol literal: check against Symbol type ----
     [((expr-symbol _) (expr-Symbol)) (bu #t (zero-usage n))]

@@ -48,8 +48,8 @@
 ;; --- Test 1: equal? comparison ---
 (printf "1. equal? comparison (same id, different cell-id):\n")
 
-(let ([a (expr-meta 42)]
-      [b (expr-meta 42)])
+(let ([a (expr-meta 42 #f)]
+      [b (expr-meta 42 #f)])
   (bench "current expr-meta (1 field)" (lambda () (equal? a b)) N))
 
 (let ([a (test-meta-custom 42 100)]
@@ -66,8 +66,8 @@
 
 (printf "\n2. equal? comparison (different id):\n")
 
-(let ([a (expr-meta 42)]
-      [b (expr-meta 43)])
+(let ([a (expr-meta 42 #f)]
+      [b (expr-meta 43 #f)])
   (bench "current expr-meta" (lambda () (equal? a b)) N))
 
 (let ([a (test-meta-custom 42 100)]
@@ -82,7 +82,7 @@
 (printf "\n3. Hash table insert + lookup:\n")
 
 (let ([ht (make-hash)]
-      [keys (for/list ([i (in-range 100)]) (expr-meta i))])
+      [keys (for/list ([i (in-range 100)]) (expr-meta i #f))])
   (bench "current expr-meta hash ops"
          (lambda ()
            (for ([k (in-list keys)])
@@ -114,7 +114,7 @@
 ;; --- Test 3: eq? comparison (unaffected by gen:equal+hash) ---
 (printf "\n4. eq? comparison (identity, not equality):\n")
 
-(let ([a (expr-meta 42)])
+(let ([a (expr-meta 42 #f)])
   (bench "current expr-meta eq?" (lambda () (eq? a a)) N))
 
 (let ([a (test-meta-custom 42 100)])
@@ -122,7 +122,7 @@
 
 (printf "\n5. Struct predicate (unaffected by gen:equal+hash):\n")
 
-(let ([a (expr-meta 42)])
+(let ([a (expr-meta 42 #f)])
   (bench "expr-meta?" (lambda () (expr-meta? a)) N))
 
 (let ([a (test-meta-custom 42 100)])

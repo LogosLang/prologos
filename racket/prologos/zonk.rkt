@@ -29,7 +29,7 @@
   (perf-inc-zonk!)
   (match e
     ;; THE KEY CASE: metavariable — follow solution recursively
-    [(expr-meta id)
+    [(expr-meta id _)
      (let ([sol (meta-solution id)])
        (if sol
            (zonk sol)       ; recursive: solution may contain more metas
@@ -463,7 +463,7 @@
 (define (zonk-at-depth depth e)
   (match e
     ;; THE KEY CASE: metavariable — follow solution and shift by accumulated depth
-    [(expr-meta id)
+    [(expr-meta id _)
      (let ([sol (meta-solution id)])
        (if sol
            (let ([zonked-sol (zonk sol)])  ; zonk at depth 0 (solution is at solve-site depth)
@@ -915,7 +915,7 @@
 (define (default-metas e)
   (match e
     [(expr-Type l) (expr-Type (zonk-level-default l))]
-    [(expr-meta _) e]
+    [(expr-meta _ _) e]
     [(expr-bvar _) e]
     [(expr-fvar _) e]
     [(expr-zero) e]

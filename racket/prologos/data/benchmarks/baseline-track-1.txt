@@ -1,0 +1,14 @@
+Last run (8d9e919, main 2026-03-12T21:28:53Z):
+  Total: 189.2s (358 files, 6889 tests, 10 jobs, all pass)
+
+  Slowest 10:
+    test-char-string-02.rkt                 31.9s  (19 tests, pass)
+    test-char-string-01.rkt                 31.5s  (19 tests, pass)
+    test-cfa-analysis-02.rkt                30.1s  (9 tests, pass)
+    test-cfa-analysis-01.rkt                29.7s  (14 tests, pass)
+    test-pattern-defn-01.rkt                27.6s  (14 tests, pass)
+    test-mixfix-02.rkt                      27.4s  (29 tests, pass)
+    test-narrowing-search-02.rkt            26.8s  (7 tests, pass)
+    test-narrow-syntax-02.rkt               26.8s  (8 tests, pass)
+    test-postfix-index-03.rkt               26.7s  (12 tests, pass)
+    test-mixfix-01.rkt                      26.6s  (36 tests, pass)

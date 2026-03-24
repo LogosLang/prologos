@@ -178,7 +178,7 @@
          (expr-tycon name)
          e)]
     ;; Chase solved metas
-    [(expr-meta id)
+    [(expr-meta id _)
      (if (meta-solved? id)
          (normalize-for-resolution (meta-solution id))
          e)]
@@ -801,7 +801,7 @@
     [(expr-TSet _) "3:TSet"]
     [(expr-tycon name) (format "1:tycon:~a" name)]
     [(expr-app _ _) "4:app"]
-    [(expr-meta id) (format "5:?~a" id)]
+    [(expr-meta id _) (format "5:?~a" id)]
     [_ "9:other"]))
 
 ;; Remove duplicate components (idempotence: A | A ≡ A).
@@ -861,7 +861,7 @@
   (let loop ([expr e] [args '()])
     (match expr
       [(expr-app f a) (loop f (cons a args))]
-      [(expr-meta id)
+      [(expr-meta id _)
        (if (meta-solved? id)
            (values #f #f)    ; solved meta: not a flex head
            (values id args))]

@@ -10,7 +10,8 @@
 ;;; Types are Expr (types are first-class in dependent type theory).
 ;;;
 
-(require "prelude.rkt")
+(require "prelude.rkt"
+         racket/generic)  ;; PM 8F Phase 1: gen:equal+hash for expr-meta
 
 ;; ========================================
 ;; SRE Track 2 Phase 0: O(1) Constructor Tag Dispatch
@@ -932,7 +933,18 @@
 ;; ========================================
 ;; Metavariable (placeholder to be solved by unification)
 ;; ========================================
-(struct expr-meta (id) #:transparent)    ; id is a gensym symbol
+;; PM 8F Phase 1: cell-id field for direct cell access (skips id-map lookup).
+;; cell-id is METADATA, not IDENTITY — custom equal?/hash compares only id.
+;; cell-id = #f during module loading (no propagator network available).
+(struct expr-meta (id cell-id)
+  #:transparent
+  #:methods gen:equal+hash
+  [(define (equal-proc a b _rec)
+     (eq? (expr-meta-id a) (expr-meta-id b)))
+   (define (hash-proc a _rec)
+     (eq-hash-code (expr-meta-id a)))
+   (define (hash2-proc a _rec)
+     (+ 17 (eq-hash-code (expr-meta-id a))))])
 
 ;; ========================================
 ;; Reduce (ML-style pattern matching — desugared in type checker)

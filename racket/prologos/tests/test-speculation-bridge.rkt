@@ -162,7 +162,7 @@
            (with-speculative-rollback
              (lambda ()
                ;; Manually add a constraint (simulates unify → pattern-check failure)
-               (add-constraint! (expr-meta (expr-meta-id m))
+               (add-constraint! (expr-meta-id m)
                                 (expr-Bool)
                                 '()
                                 #f)
@@ -189,7 +189,7 @@
          (define result
            (with-speculative-rollback
              (lambda ()
-               (add-constraint! (expr-meta (expr-meta-id m))
+               (add-constraint! (expr-meta-id m)
                                 (expr-Bool)
                                 '()
                                 #f)
@@ -211,13 +211,13 @@
            (with-speculative-rollback
              (lambda ()
                ;; Outer adds a constraint
-               (add-constraint! (expr-meta (expr-meta-id m1))
+               (add-constraint! (expr-meta-id m1)
                                 (expr-Bool) '() #f)
                (check-equal? (length (read-constraint-store)) 1)
                ;; Inner speculation adds another then fails
                (with-speculative-rollback
                  (lambda ()
-                   (add-constraint! (expr-meta (expr-meta-id m2))
+                   (add-constraint! (expr-meta-id m2)
                                     (expr-Nat) '() #f)
                    (check-equal? (length (read-constraint-store)) 2)
                    #f)  ;; inner fails

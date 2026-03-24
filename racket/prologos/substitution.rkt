@@ -45,7 +45,7 @@
     [(expr-Type _) e]
     [(expr-hole) e]
     [(expr-typed-hole _) e]
-    [(expr-meta _) e]
+    [(expr-meta _ _) e]
     [(expr-error) e]
 
     ;; Binding forms: cutoff increases under binders
@@ -502,7 +502,7 @@
     [(expr-Type _) e]
     [(expr-hole) e]
     [(expr-typed-hole _) e]
-    [(expr-meta _) e]
+    [(expr-meta _ _) e]
     [(expr-error) e]
 
     ;; Binding forms: increase k, shift s up by 1

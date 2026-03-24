@@ -49,7 +49,7 @@
 ;; Uses structural recursion on the common expression forms.
 (define (ground-expr? e)
   (match e
-    [(expr-meta id) (and (meta-solved? id) (ground-expr? (meta-solution id)))]
+    [(expr-meta id _) (and (meta-solved? id) (ground-expr? (meta-solution id)))]
     [(expr-app f a) (and (ground-expr? f) (ground-expr? a))]
     [(expr-Pi m d c) (and (ground-expr? d) (ground-expr? c))]
     [(expr-lam m d b) (and (ground-expr? d) (ground-expr? b))]
@@ -128,7 +128,7 @@
      (if (< k (vector-length var-names))
          (vector-ref var-names k)
          (format "T~a" k))]
-    [(expr-meta id)
+    [(expr-meta id _)
      ;; If solved, chase the solution
      (if (meta-solved? id)
          (expr->impl-key-str (meta-solution id))

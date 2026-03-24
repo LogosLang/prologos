@@ -49,6 +49,7 @@
  solve-meta!
  meta-solved?
  meta-solution
+ meta-solution/cell-id  ;; PM 8F Phase 1: fast path with direct cell-id
  meta-info-solved?
  meta-lookup
  reset-meta-store!
@@ -1613,36 +1614,41 @@
   ;; elab-network-id-map-set instead of current-prop-meta-info-read/set/id-map-read/set callbacks.
   (define net-box (current-prop-net-box))
   (define fresh-fn (current-prop-fresh-meta))
-  (cond
-    [(and net-box fresh-fn)
-     ;; Network path: meta-info lives in elab-network struct
-     ;; Track 8 Phase A1: Tag meta-info entry with current speculation assumption.
-     ;; At depth-0 (no speculation): aid=#f → raw entry (no wrapper).
-     ;; Under speculation: aid=gensym → tagged-entry for S(-1) retraction.
-     (define aid (current-speculation-assumption))
-     (define tagged-info (if aid (tagged-entry info aid) info))
-     (define enet (unbox net-box))
-     (define enet0 (elab-network-meta-info-set enet (champ-insert (elab-network-meta-info enet) h id tagged-info)))
-     (define-values (enet1 cid) (fresh-fn enet0 ctx type source))
-     ;; Track 6 Phase 1a: id-map is a field of elab-network
-     ;; Track 8 Phase A4b: Tag id-map entry with speculation assumption.
-     (define id-map-entry (if aid (tagged-entry cid aid) cid))
-     (define enet2 (elab-network-id-map-set enet1
-                      (champ-insert (elab-network-id-map enet1) h id id-map-entry)))
-     ;; Track 6 Phase 1d: write to unsolved-metas tracking cell
-     ;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
-     (define um-cid (current-unsolved-metas-cell-id))
-     (define enet3
-       (if um-cid
-           (elab-cell-write enet2 um-cid (hasheq id #t))
-           enet2))
-     (set-box! net-box enet3)]
-    [else
-     ;; Fallback: write to standalone box (test/legacy contexts)
-     (define mi-box (current-prop-meta-info-box))
-     (when mi-box
-       (set-box! mi-box (champ-insert (unbox mi-box) h id info)))])
-  (expr-meta id))
+  ;; PM 8F Phase 1: track cell-id for direct cell access in expr-meta.
+  ;; Network path sets cid from fresh-fn; fallback path sets cid=#f.
+  (define meta-cell-id
+    (cond
+      [(and net-box fresh-fn)
+       ;; Network path: meta-info lives in elab-network struct
+       ;; Track 8 Phase A1: Tag meta-info entry with current speculation assumption.
+       ;; At depth-0 (no speculation): aid=#f → raw entry (no wrapper).
+       ;; Under speculation: aid=gensym → tagged-entry for S(-1) retraction.
+       (define aid (current-speculation-assumption))
+       (define tagged-info (if aid (tagged-entry info aid) info))
+       (define enet (unbox net-box))
+       (define enet0 (elab-network-meta-info-set enet (champ-insert (elab-network-meta-info enet) h id tagged-info)))
+       (define-values (enet1 cid) (fresh-fn enet0 ctx type source))
+       ;; Track 6 Phase 1a: id-map is a field of elab-network
+       ;; Track 8 Phase A4b: Tag id-map entry with speculation assumption.
+       (define id-map-entry (if aid (tagged-entry cid aid) cid))
+       (define enet2 (elab-network-id-map-set enet1
+                        (champ-insert (elab-network-id-map enet1) h id id-map-entry)))
+       ;; Track 6 Phase 1d: write to unsolved-metas tracking cell
+       ;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
+       (define um-cid (current-unsolved-metas-cell-id))
+       (define enet3
+         (if um-cid
+             (elab-cell-write enet2 um-cid (hasheq id #t))
+             enet2))
+       (set-box! net-box enet3)
+       cid]  ;; return cell-id
+      [else
+       ;; Fallback: write to standalone box (test/legacy contexts)
+       (define mi-box (current-prop-meta-info-box))
+       (when mi-box
+         (set-box! mi-box (champ-insert (unbox mi-box) h id info)))
+       #f]))  ;; no cell in fallback path
+  (expr-meta id meta-cell-id))
 
 ;; Track 2 Phase 3: Stratified resolution flag.
 ;; When #t, solve-meta! only writes the solution (core) and defers retries
@@ -1978,11 +1984,17 @@
 ;; Retrieve the solution of a metavariable, or #f if unsolved/unknown.
 ;; Hash removal: Propagator cell (primary), CHAMP meta-info (fallback).
 ;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
-(define (meta-solution id)
+;; PM 8F Phase 1: Fast path that uses cell-id directly (skips 82ns id-map lookup).
+;; Called by callers that have the expr-meta struct (zonk, unify, etc.)
+(define (meta-solution/cell-id cell-id id)
   (define net-box (current-prop-net-box))
   (cond
+    [(and cell-id net-box)
+     ;; Direct cell read — no id-map lookup (82ns savings per call)
+     (let ([v (elab-cell-read (unbox net-box) cell-id)])
+       (and (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]
     [net-box
-     ;; Propagator path: read cell value
+     ;; cell-id=#f (module-loading meta) — fall back to id-map
      (define cid (prop-meta-id->cell-id id))
      (and cid
           (let ([v (elab-cell-read (unbox net-box) cid)])
@@ -1990,9 +2002,13 @@
     [else
      ;; CHAMP path (test context without network)
      (define mi-box (current-prop-meta-info-box))
-     (if (not mi-box) #f  ;; No meta store initialized
+     (if (not mi-box) #f
          (let ([v (unwrap-meta-info (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id))])
            (and v (meta-info-solution v))))]))
+
+;; Original API: takes meta id (symbol). Delegates to cell-id path when possible.
+(define (meta-solution id)
+  (meta-solution/cell-id #f id))
 
 ;; Check if meta-info CHAMP says this meta is solved.
 ;; Unlike meta-solved? (which reads the propagator cell), this reads the CHAMP status.

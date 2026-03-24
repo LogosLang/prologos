@@ -50,11 +50,11 @@
 (define same-b (expr-Pi 'mw expr-Int expr-Bool))
 
 ;; Meta (flex-rigid)
-(define meta-a (expr-meta 'test-meta-1))
+(define meta-a (expr-meta 'test-meta-1 #f))
 (define concrete-b expr-Int)
 
 ;; flex-app: (app (meta ?F) arg) vs (app (fvar f) arg)
-(define flex-app-a (expr-app (expr-meta 'test-meta-flex) expr-Int))
+(define flex-app-a (expr-app (expr-meta 'test-meta-flex #f) expr-Int))
 (define flex-app-b (expr-app (expr-fvar 'g) expr-Nat))
 
 ;; ========================================

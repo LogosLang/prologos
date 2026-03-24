@@ -88,7 +88,7 @@
 ;; between commands by reset-meta-store!).
 (define (unsolved-metas-to-holes e)
   (match e
-    [(expr-meta _) (expr-hole)]
+    [(expr-meta _ _) (expr-hole)]
     [(expr-Pi m a b) (expr-Pi m (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
     [(expr-Sigma a b) (expr-Sigma (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
     [(expr-app f x) (expr-app (unsolved-metas-to-holes f) (unsolved-metas-to-holes x))]

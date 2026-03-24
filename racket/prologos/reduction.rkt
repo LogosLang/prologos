@@ -3107,7 +3107,7 @@
            (if val (whnf val) e)))]
 
     ;; Metavariable: if solved, reduce solution; if unsolved, stuck
-    [(expr-meta id)
+    [(expr-meta id _)
      (let ([sol (meta-solution id)])
        (if sol (whnf sol) e))]
 
@@ -3153,7 +3153,7 @@
     [(expr-Type _) e]
     [(expr-hole) e]
     [(expr-typed-hole _) e]
-    [(expr-meta _) e]
+    [(expr-meta _ _) e]
     [(expr-error) e]
     [(expr-panic msg) (expr-panic (nf msg))]  ;; reduce msg, stay stuck
     [(expr-tycon _) e]  ;; Unapplied type constructor (HKT) — already normal

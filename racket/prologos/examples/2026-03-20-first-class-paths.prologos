@@ -98,8 +98,10 @@ def maybe-user := {:name "Bob"}
 
 def deep-map := {:a {:b {:c 99}}}
 
+deep-map.a.b.c
+  
 ;; C1: get-in with static path literal (inlines to chained map-get)
-;; [get-in deep-map #p(a.b.c)]   ;; => 99
+get-in deep-map #p(a.b.c)   ;; => 99
 
 ;; C2: get-in with bound path variable (dynamic path)
 ;; def path-abc := #p(a.b.c)
@@ -113,8 +115,9 @@ def deep-map := {:a {:b {:c 99}}}
 ;; [update-in deep-map up-path [int+ _ 1]]      ;; => {:a {:b {:c 100}}}
 
 ;; C5: get-in with branching path — returns sub-map of matched keys
-;; def user2 := {:name "Alice" :age 30 :email "a@b.com"}
-;; [get-in user2 #p({name email})]   ;; => {:name "Alice" :email "a@b.com"}
+def user2 := {:name "Alice" :age 30 :email "a@b.com"}
+get-in user2 #p({name email})   ;; => {:name "Alice" :email "a@b.com"}
+;; => <error> : Int | String  ❌
 
 ;; C6: get-in with inline keyword path (WS fix — currently broken)
 ;; [get-in deep-map :a.b.c]     ;; => 99  (requires preparse fix)
@@ -299,8 +302,9 @@ defn now [] "today"
 
 defn env [var]
     | _ -> "localhost/db-path"
-    
 
+
+;; 
 def app-config
   :name "MyApp"
   :date [now]   ;; date is computed dynamically
@@ -323,17 +327,28 @@ def app-config
       :name "Bob"
       :role :regular
 
+
+app-config.{name version ssl.enabled admins[0].name^admin}
+;; ERROR: mixfix: Unexpected token after expression: version ❌
+
+
+
       
 ;; KNOWN: "Could not infer type" — reader flattening bug: `-` list items with
 ;; multi-line key blocks treat continuation lines as nested forms instead of
 ;; sibling key-value pairs. Tracked separately from path feature.
 def admins
   :admins
-    - :name "Alice"
+    - 
+      :name "Alice"
       :role :super
-    - :name "Bob"
+    - 
+      :name "Bob"
       :role :regular
 
+admins.admins.*name
+;; => [broadcast-get @[{:name "Alice", :role :super} {:name "Bob", :role :regular}] :name] : ?meta12391 ❌
+;; Expected: '["Alice" "Bob"]
 
 
 def movie
@@ -359,3 +374,8 @@ def other-genres := @[:comedy :drama]
 
 other-genres[0]
 ;; => :comedy ✅
+
+;; Could not infer type error ❌
+def xs := '[1 '[20 '[300]]]
+def vs := @[1 @[20 @[300]]]
+

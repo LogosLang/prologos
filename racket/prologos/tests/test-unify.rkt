@@ -213,7 +213,7 @@
 
 (test-case "occurs?: meta found directly"
   (define id (gensym 'test))
-  (check-true (occurs? id (expr-meta id))))
+  (check-true (occurs? id (expr-meta id #f))))
 
 (test-case "occurs?: meta not in atom"
   (define id (gensym 'test))
@@ -221,11 +221,11 @@
 
 (test-case "occurs?: meta in Pi domain"
   (define id (gensym 'test))
-  (check-true (occurs? id (expr-Pi 'mw (expr-meta id) (expr-Nat)))))
+  (check-true (occurs? id (expr-Pi 'mw (expr-meta id #f) (expr-Nat)))))
 
 (test-case "occurs?: meta in Pi codomain"
   (define id (gensym 'test))
-  (check-true (occurs? id (expr-Pi 'mw (expr-Nat) (expr-meta id)))))
+  (check-true (occurs? id (expr-Pi 'mw (expr-Nat) (expr-meta id #f)))))
 
 (test-case "unify: occur check prevents infinite type"
   (with-fresh-meta-env

@@ -331,7 +331,7 @@
     [(expr-PVec _) "3:PVec"]
     [(expr-Set _) "3:Set"]
     [(expr-app _ _) "4:app"]
-    [(expr-meta id) (format "5:?~a" id)]
+    [(expr-meta id _) (format "5:?~a" id)]
     [_ "9:other"]))
 
 (define (dedup-union-components-pure cs)

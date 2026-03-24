@@ -70,7 +70,7 @@
      (check-false (type-constructor-tag (expr-Nat)))
      (check-false (type-constructor-tag (expr-Bool)))
      (check-false (type-constructor-tag (expr-Type 0)))
-     (check-false (type-constructor-tag (expr-meta 42))))
+     (check-false (type-constructor-tag (expr-meta 42 #f))))
 
    (test-case "type-bot/top → #f"
      (check-false (type-constructor-tag type-bot))
@@ -139,7 +139,7 @@
      (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
      (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
      ;; Write compound types
-     (define enet4 (elab-cell-write enet3 cell-a (expr-Pi 'm1 (expr-Nat) (expr-meta M-id))))
+     (define enet4 (elab-cell-write enet3 cell-a (expr-Pi 'm1 (expr-Nat) (expr-meta M-id #f))))
      (define enet5 (elab-cell-write enet4 cell-b (expr-Pi 'm1 (expr-Nat) (expr-Bool))))
      (parameterize ([current-structural-meta-lookup
                      (make-test-meta-lookup (hash M-id meta-M-cell))]
@@ -158,9 +158,9 @@
      (define-values (enet3 cell-a) (elab-fresh-meta enet2 '() #f "cell-a"))
      (define-values (enet4 cell-b) (elab-fresh-meta enet3 '() #f "cell-b"))
      (define enet5 (elab-cell-write enet4 cell-a
-                     (expr-Pi 'm1 (expr-meta N-id) (expr-Bool))))
+                     (expr-Pi 'm1 (expr-meta N-id #f) (expr-Bool))))
      (define enet6 (elab-cell-write enet5 cell-b
-                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id))))
+                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id #f))))
      (parameterize ([current-structural-meta-lookup
                      (make-test-meta-lookup (hash M-id meta-M-cell
                                                   N-id meta-N-cell))]
@@ -179,7 +179,7 @@
      (define-values (enet3 cell-a) (elab-fresh-meta enet2 '() #f "cell-a"))
      (define-values (enet4 cell-b) (elab-fresh-meta enet3 '() #f "cell-b"))
      (define enet5 (elab-cell-write enet4 cell-a
-                     (expr-Pi 'm1 (expr-meta N-id) (expr-meta M-id))))
+                     (expr-Pi 'm1 (expr-meta N-id #f) (expr-meta M-id #f))))
      (define enet6 (elab-cell-write enet5 cell-b
                      (expr-Pi 'm1 (expr-Nat) (expr-Bool))))
      (parameterize ([current-structural-meta-lookup
@@ -199,7 +199,7 @@
      (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
      (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
      (define enet4 (elab-cell-write enet3 cell-a
-                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id))))
+                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id #f))))
      ;; cell-b stays bot
      (parameterize ([current-structural-meta-lookup
                      (make-test-meta-lookup (hash M-id meta-M-cell))]
@@ -208,7 +208,7 @@
        (define enet6 (solve-ok enet5))
        ;; cell-b got the Pi value from cell-a
        (check-equal? (elab-cell-read enet6 cell-b)
-                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id)))
+                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id #f)))
        ;; ?M is still unsolved (no contradicting info)
        (check-true (type-bot? (elab-cell-read enet6 meta-M-cell)))))))
 
@@ -240,11 +240,11 @@
      (define-values (enet7 cell-c) (elab-fresh-meta enet6 '() #f "cell-c"))
      ;; Write compound types
      (define enet8 (elab-cell-write enet7 cell-a
-                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id))))
+                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id #f))))
      (define enet9 (elab-cell-write enet8 cell-b
-                     (expr-Pi 'm1 (expr-meta N-id) (expr-meta K-id))))
+                     (expr-Pi 'm1 (expr-meta N-id #f) (expr-meta K-id #f))))
      (define enet10 (elab-cell-write enet9 cell-c
-                      (expr-Pi 'm1 (expr-meta P-id) (expr-Bool))))
+                      (expr-Pi 'm1 (expr-meta P-id #f) (expr-Bool))))
      (parameterize ([current-structural-meta-lookup
                      (make-test-meta-lookup
                        (hash M-id meta-M N-id meta-N K-id meta-K P-id meta-P))]
@@ -294,9 +294,9 @@
      (define-values (enet3 cell-a) (elab-fresh-meta enet2 '() #f "cell-a"))
      (define-values (enet4 cell-b) (elab-fresh-meta enet3 '() #f "cell-b"))
      (define enet5 (elab-cell-write enet4 cell-a
-                     (expr-app (expr-meta F-id) (expr-Nat))))
+                     (expr-app (expr-meta F-id #f) (expr-Nat))))
      (define enet6 (elab-cell-write enet5 cell-b
-                     (expr-app (expr-fvar 'g) (expr-meta A-id))))
+                     (expr-app (expr-fvar 'g) (expr-meta A-id #f))))
      (parameterize ([current-structural-meta-lookup
                      (make-test-meta-lookup (hash F-id meta-F A-id meta-A))]
                     [current-lattice-meta-solution-fn unsolved-meta-solution-fn])
@@ -337,7 +337,7 @@
      (define enet5 (elab-cell-write enet4 cell-a
                      (expr-Pi 'm1 (expr-app (expr-fvar 'f) (expr-Nat)) (expr-Bool))))
      (define enet6 (elab-cell-write enet5 cell-b
-                     (expr-Pi 'm1 (expr-app (expr-fvar 'f) (expr-meta A-id)) (expr-meta M-id))))
+                     (expr-Pi 'm1 (expr-app (expr-fvar 'f) (expr-meta A-id #f)) (expr-meta M-id #f))))
      (parameterize ([current-structural-meta-lookup
                      (make-test-meta-lookup (hash A-id meta-A M-id meta-M))]
                     [current-lattice-meta-solution-fn unsolved-meta-solution-fn])
@@ -364,7 +364,7 @@
      (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
      (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
      (define enet4 (elab-cell-write enet3 cell-a
-                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id))))
+                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id #f))))
      (define enet5 (elab-cell-write enet4 cell-b
                      (expr-Pi 'm1 (expr-Nat) (expr-Bool))))
      (parameterize ([current-structural-meta-lookup
@@ -391,9 +391,9 @@
      ;; cell-b: Pi(m1, ?N, Bool)
      ;; cell-c: Pi(m1, Nat, Bool)
      (define enet6 (elab-cell-write enet5 cell-a
-                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id))))
+                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id #f))))
      (define enet7 (elab-cell-write enet6 cell-b
-                     (expr-Pi 'm1 (expr-meta N-id) (expr-Bool))))
+                     (expr-Pi 'm1 (expr-meta N-id #f) (expr-Bool))))
      (define enet8 (elab-cell-write enet7 cell-c
                      (expr-Pi 'm1 (expr-Nat) (expr-Bool))))
      (parameterize ([current-structural-meta-lookup
@@ -461,7 +461,7 @@
      (define-values (enet3 cell-a) (elab-fresh-meta enet2 '() #f "cell-a"))
      (define-values (enet4 cell-b) (elab-fresh-meta enet3 '() #f "cell-b"))
      (define enet5 (elab-cell-write enet4 cell-a
-                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id))))
+                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id #f))))
      (define enet6 (elab-cell-write enet5 cell-b
                      (expr-Pi 'm1 (expr-Nat) (expr-Nat))))
      (parameterize ([current-structural-meta-lookup
@@ -491,7 +491,7 @@
      (define-values (enet4 cell-b) (elab-fresh-meta enet3 '() #f "cell-b"))
      ;; Cell A: Pi(m1, ?N, ?M), Cell B: Pi(m1, Nat, Bool)
      (define enet5 (elab-cell-write enet4 cell-a
-                     (expr-Pi 'm1 (expr-meta N-id) (expr-meta M-id))))
+                     (expr-Pi 'm1 (expr-meta N-id #f) (expr-meta M-id #f))))
      (define enet6 (elab-cell-write enet5 cell-b
                      (expr-Pi 'm1 (expr-Nat) (expr-Bool))))
      (parameterize ([current-structural-meta-lookup
@@ -538,7 +538,7 @@
      (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
      (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
      (define enet4 (elab-cell-write enet3 cell-a
-                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id))))
+                     (expr-Pi 'm1 (expr-Nat) (expr-meta M-id #f))))
      (define enet5 (elab-cell-write enet4 cell-b
                      (expr-Pi 'm1 (expr-Nat) (expr-Bool))))
      (parameterize ([current-structural-meta-lookup
@@ -590,7 +590,7 @@
      (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
      (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
      (define enet4 (elab-cell-write enet3 cell-a
-                     (expr-Sigma (expr-Nat) (expr-meta M-id))))
+                     (expr-Sigma (expr-Nat) (expr-meta M-id #f))))
      (define enet5 (elab-cell-write enet4 cell-b
                      (expr-Sigma (expr-Nat) (expr-Bool))))
      (parameterize ([current-structural-meta-lookup
@@ -609,7 +609,7 @@
      (define-values (enet3 cell-a) (elab-fresh-meta enet2 '() #f "cell-a"))
      (define-values (enet4 cell-b) (elab-fresh-meta enet3 '() #f "cell-b"))
      (define enet5 (elab-cell-write enet4 cell-a
-                     (expr-Sigma (expr-meta A-id) (expr-meta B-id))))
+                     (expr-Sigma (expr-meta A-id #f) (expr-meta B-id #f))))
      (define enet6 (elab-cell-write enet5 cell-b
                      (expr-Sigma (expr-Nat) (expr-Bool))))
      (parameterize ([current-structural-meta-lookup
@@ -638,7 +638,7 @@
      (define-values (enet4 cell-b) (elab-fresh-meta enet3 '() #f "cell-b"))
      (define suc-zero (expr-suc (expr-zero)))
      (define enet5 (elab-cell-write enet4 cell-a
-                     (expr-Eq (expr-meta T-id) (expr-zero) (expr-meta R-id))))
+                     (expr-Eq (expr-meta T-id #f) (expr-zero) (expr-meta R-id #f))))
      (define enet6 (elab-cell-write enet5 cell-b
                      (expr-Eq (expr-Nat) (expr-zero) suc-zero)))
      (parameterize ([current-structural-meta-lookup
@@ -665,7 +665,7 @@
      (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
      (define suc-zero (expr-suc (expr-zero)))
      (define enet4 (elab-cell-write enet3 cell-a
-                     (expr-Vec (expr-meta E-id) suc-zero)))
+                     (expr-Vec (expr-meta E-id #f) suc-zero)))
      (define enet5 (elab-cell-write enet4 cell-b
                      (expr-Vec (expr-Nat) suc-zero)))
      (parameterize ([current-structural-meta-lookup
@@ -689,7 +689,7 @@
      (define E-id (cell-id-n meta-E))
      (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
      (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
-     (define enet4 (elab-cell-write enet3 cell-a (expr-PVec (expr-meta E-id))))
+     (define enet4 (elab-cell-write enet3 cell-a (expr-PVec (expr-meta E-id #f))))
      (define enet5 (elab-cell-write enet4 cell-b (expr-PVec (expr-Nat))))
      (parameterize ([current-structural-meta-lookup
                      (make-test-meta-lookup (hash E-id meta-E))]
@@ -704,7 +704,7 @@
      (define E-id (cell-id-n meta-E))
      (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
      (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
-     (define enet4 (elab-cell-write enet3 cell-a (expr-Set (expr-meta E-id))))
+     (define enet4 (elab-cell-write enet3 cell-a (expr-Set (expr-meta E-id #f))))
      (define enet5 (elab-cell-write enet4 cell-b (expr-Set (expr-Bool))))
      (parameterize ([current-structural-meta-lookup
                      (make-test-meta-lookup (hash E-id meta-E))]
@@ -719,7 +719,7 @@
      (define P-id (cell-id-n meta-P))
      (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
      (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
-     (define enet4 (elab-cell-write enet3 cell-a (expr-suc (expr-meta P-id))))
+     (define enet4 (elab-cell-write enet3 cell-a (expr-suc (expr-meta P-id #f))))
      (define enet5 (elab-cell-write enet4 cell-b (expr-suc (expr-zero))))
      (parameterize ([current-structural-meta-lookup
                      (make-test-meta-lookup (hash P-id meta-P))]
@@ -745,7 +745,7 @@
      (define-values (enet3 cell-a) (elab-fresh-meta enet2 '() #f "cell-a"))
      (define-values (enet4 cell-b) (elab-fresh-meta enet3 '() #f "cell-b"))
      (define enet5 (elab-cell-write enet4 cell-a
-                     (expr-Map (expr-meta K-id) (expr-meta V-id))))
+                     (expr-Map (expr-meta K-id #f) (expr-meta V-id #f))))
      (define enet6 (elab-cell-write enet5 cell-b
                      (expr-Map (expr-Nat) (expr-Bool))))
      (parameterize ([current-structural-meta-lookup
@@ -771,7 +771,7 @@
      (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
      (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
      (define enet4 (elab-cell-write enet3 cell-a
-                     (expr-pair (expr-meta F-id) (expr-true))))
+                     (expr-pair (expr-meta F-id #f) (expr-true))))
      (define enet5 (elab-cell-write enet4 cell-b
                      (expr-pair (expr-zero) (expr-true))))
      (parameterize ([current-structural-meta-lookup
@@ -796,7 +796,7 @@
      (define-values (enet2 cell-a) (elab-fresh-meta enet1 '() #f "cell-a"))
      (define-values (enet3 cell-b) (elab-fresh-meta enet2 '() #f "cell-b"))
      (define enet4 (elab-cell-write enet3 cell-a
-                     (expr-lam 'm1 (expr-meta T-id) (expr-bvar 0))))
+                     (expr-lam 'm1 (expr-meta T-id #f) (expr-bvar 0))))
      (define enet5 (elab-cell-write enet4 cell-b
                      (expr-lam 'm1 (expr-Nat) (expr-bvar 0))))
      (parameterize ([current-structural-meta-lookup

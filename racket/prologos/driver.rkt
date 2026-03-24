@@ -131,7 +131,7 @@
 ;; between commands by reset-meta-store!).
 (define (unsolved-metas-to-holes e)
   (match e
-    [(expr-meta _) (expr-hole)]
+    [(expr-meta _ _) (expr-hole)]
     [(expr-Pi m a b) (expr-Pi m (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
     [(expr-Sigma a b) (expr-Sigma (unsolved-metas-to-holes a) (unsolved-metas-to-holes b))]
     [(expr-app f x) (expr-app (unsolved-metas-to-holes f) (unsolved-metas-to-holes x))]
@@ -145,7 +145,7 @@
 ;; These types will be properly checked during the body type-check phase.
 (define (type-contains-meta? e)
   (match e
-    [(expr-meta _) #t]
+    [(expr-meta _ _) #t]
     [(expr-Type l) (level-meta? l)]
     [(expr-Pi m a b) (or (mult-meta? m) (type-contains-meta? a) (type-contains-meta? b))]
     [(expr-Sigma a b) (or (type-contains-meta? a) (type-contains-meta? b))]

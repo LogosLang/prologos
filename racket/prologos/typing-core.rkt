@@ -2407,7 +2407,7 @@
     ;; A metavariable in expression position (e.g., implicit argument)
     ;; will be solved by unification constraints from other arguments.
     ;; We can't infer its type yet, so accept it optimistically.
-    [((expr-meta _) _) #t]
+    [((expr-meta _ _) _) #t]
 
     ;; ---- nil overloading: check against Nil or List ----
     ;; nil checks against Nil (the nullable type)
@@ -2758,7 +2758,7 @@
     ;; Metavariable: if solved, follow solution; if unsolved, assume Type(lzero).
     ;; Unsolved metas in type position (e.g. map-empty key/value types) will be
     ;; resolved later via unification. This mirrors check's [(expr-meta _) _) #t].
-    [(expr-meta id)
+    [(expr-meta id _)
      (let ([sol (meta-solution id)])
        (if sol
            (infer-level ctx sol)

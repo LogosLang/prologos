@@ -76,7 +76,7 @@
     [(expr-nil) "nil"]
     [(expr-hole) "_"]
     [(expr-typed-hole name) (if name (format "??~a" name) "??")]
-    [(expr-meta id)
+    [(expr-meta id _)
      (let ([sol (meta-solution id)])
        (if sol
            (pp-expr sol names)
@@ -898,7 +898,7 @@
     [(expr-Type _) #f]
     [(expr-hole) #f]
     [(expr-typed-hole _) #f]
-    [(expr-meta _) #f]
+    [(expr-meta _ _) #f]
     [(expr-error) #f]
     [(expr-tycon _) #f]
     [(expr-suc e1) (uses-bvar0? e1)]

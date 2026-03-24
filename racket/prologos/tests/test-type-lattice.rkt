@@ -122,8 +122,8 @@
 
    (test-case "Meta encountered → returns concrete side (P-U4b)"
      ;; P-U4b: unsolved meta ⊔ concrete = concrete (monotone lattice merge)
-     (check-equal? (try-unify-pure (expr-meta 'x) (expr-Nat)) (expr-Nat))
-     (check-equal? (try-unify-pure (expr-Nat) (expr-meta 'y)) (expr-Nat)))
+     (check-equal? (try-unify-pure (expr-meta 'x #f) (expr-Nat)) (expr-Nat))
+     (check-equal? (try-unify-pure (expr-Nat) (expr-meta 'y #f)) (expr-Nat)))
 
    (test-case "Nested structure: Pi(Pi(Nat,Bool), Int)"
      (define inner (expr-Pi 'mw (expr-Nat) (expr-Bool)))
@@ -199,27 +199,27 @@
      ;; Simulate: meta 'a is solved to Nat
      (parameterize ([current-lattice-meta-solution-fn
                      (lambda (id) (if (eq? id 'a) (expr-Nat) #f))])
-       ;; (expr-meta 'a) should unify with Nat → Nat
-       (check-equal? (try-unify-pure (expr-meta 'a) (expr-Nat)) (expr-Nat))))
+       ;; (expr-meta 'a #f) should unify with Nat → Nat
+       (check-equal? (try-unify-pure (expr-meta 'a #f) (expr-Nat)) (expr-Nat))))
 
    (test-case "try-unify-pure follows solved meta (RHS)"
      (parameterize ([current-lattice-meta-solution-fn
                      (lambda (id) (if (eq? id 'b) (expr-Bool) #f))])
-       (check-equal? (try-unify-pure (expr-Nat) (expr-meta 'b)) #f)  ;; Nat ≠ Bool
-       (check-equal? (try-unify-pure (expr-Bool) (expr-meta 'b)) (expr-Bool))))
+       (check-equal? (try-unify-pure (expr-Nat) (expr-meta 'b #f)) #f)  ;; Nat ≠ Bool
+       (check-equal? (try-unify-pure (expr-Bool) (expr-meta 'b #f)) (expr-Bool))))
 
    (test-case "try-unify-pure returns concrete side for unsolved meta (P-U4b)"
      (parameterize ([current-lattice-meta-solution-fn
                      (lambda (id) #f)])  ;; All unsolved
        ;; P-U4b: unsolved meta → return the other (concrete) side
-       (check-equal? (try-unify-pure (expr-meta 'x) (expr-Nat)) (expr-Nat))
-       (check-equal? (try-unify-pure (expr-Nat) (expr-meta 'y)) (expr-Nat))))
+       (check-equal? (try-unify-pure (expr-meta 'x #f) (expr-Nat)) (expr-Nat))
+       (check-equal? (try-unify-pure (expr-Nat) (expr-meta 'y #f)) (expr-Nat))))
 
    (test-case "try-unify-pure follows solved meta inside structure"
      ;; Meta 'a solved to Nat; try to unify (List ?a) with (List Nat)
      (parameterize ([current-lattice-meta-solution-fn
                      (lambda (id) (if (eq? id 'a) (expr-Nat) #f))])
-       (define t1 (expr-app (expr-tycon 'List) (expr-meta 'a)))
+       (define t1 (expr-app (expr-tycon 'List) (expr-meta 'a #f)))
        (define t2 (expr-app (expr-tycon 'List) (expr-Nat)))
        (define result (try-unify-pure t1 t2))
        (check-true (expr-app? result))
@@ -230,28 +230,28 @@
      ;; more concrete side instead of type-top
      (parameterize ([current-lattice-meta-solution-fn
                      (lambda (id) #f)])  ;; All unsolved
-       (define result (type-lattice-merge (expr-meta 'x) (expr-Nat)))
+       (define result (type-lattice-merge (expr-meta 'x #f) (expr-Nat)))
        ;; Should NOT be type-top — should be Nat (the concrete side)
        (check-equal? result (expr-Nat))))
 
    (test-case "merge: unsolved meta on RHS avoids false contradiction"
      (parameterize ([current-lattice-meta-solution-fn
                      (lambda (id) #f)])
-       (define result (type-lattice-merge (expr-Nat) (expr-meta 'y)))
+       (define result (type-lattice-merge (expr-Nat) (expr-meta 'y #f)))
        (check-equal? result (expr-Nat))))
 
    (test-case "merge: solved meta enables proper merge"
      ;; Meta 'a solved to Nat → merge(Nat, ?a) = Nat
      (parameterize ([current-lattice-meta-solution-fn
                      (lambda (id) (if (eq? id 'a) (expr-Nat) #f))])
-       (define result (type-lattice-merge (expr-Nat) (expr-meta 'a)))
+       (define result (type-lattice-merge (expr-Nat) (expr-meta 'a #f)))
        (check-equal? result (expr-Nat))))
 
    (test-case "merge: solved meta with mismatch = top"
      ;; Meta 'a solved to Bool → merge(Nat, ?a) = top
      (parameterize ([current-lattice-meta-solution-fn
                      (lambda (id) (if (eq? id 'a) (expr-Bool) #f))])
-       (define result (type-lattice-merge (expr-Nat) (expr-meta 'a)))
+       (define result (type-lattice-merge (expr-Nat) (expr-meta 'a #f)))
        (check-equal? result type-top)))
 
    (test-case "try-unify-pure follows solved mult-meta in Pi"
@@ -267,8 +267,8 @@
    (test-case "has-unsolved-meta? detects unsolved"
      (parameterize ([current-lattice-meta-solution-fn
                      (lambda (id) #f)])
-       (check-true (has-unsolved-meta? (expr-meta 'x)))
-       (check-true (has-unsolved-meta? (expr-app (expr-tycon 'List) (expr-meta 'x))))
+       (check-true (has-unsolved-meta? (expr-meta 'x #f)))
+       (check-true (has-unsolved-meta? (expr-app (expr-tycon 'List) (expr-meta 'x #f))))
        (check-false (has-unsolved-meta? (expr-Nat)))
        (check-false (has-unsolved-meta? (expr-Pi 'mw (expr-Nat) (expr-Bool))))))
 
@@ -276,9 +276,9 @@
      (parameterize ([current-lattice-meta-solution-fn
                      (lambda (id) (if (eq? id 'a) (expr-Nat) #f))])
        ;; 'a is solved → not unsolved
-       (check-false (has-unsolved-meta? (expr-meta 'a)))
+       (check-false (has-unsolved-meta? (expr-meta 'a #f)))
        ;; 'b is unsolved → has unsolved
-       (check-true (has-unsolved-meta? (expr-meta 'b)))))))
+       (check-true (has-unsolved-meta? (expr-meta 'b #f)))))))
 
 ;; ========================================
 ;; Run all tests

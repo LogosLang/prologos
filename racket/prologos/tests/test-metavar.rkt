@@ -102,15 +102,15 @@
 ;; ========================================
 
 (test-case "shift: expr-meta unchanged"
-  (define m (expr-meta 'test-id))
+  (define m (expr-meta 'test-id #f))
   (check-equal? (shift 1 0 m) m))
 
 (test-case "subst: expr-meta unchanged"
-  (define m (expr-meta 'test-id))
+  (define m (expr-meta 'test-id #f))
   (check-equal? (subst 0 (expr-zero) m) m))
 
 (test-case "shift: expr-meta inside app"
-  (define m (expr-meta 'test-id))
+  (define m (expr-meta 'test-id #f))
   ;; Meta stays, but bvar(0) shifts to bvar(1)
   (check-equal? (shift 1 0 (expr-app m (expr-bvar 0)))
                 (expr-app m (expr-bvar 1))))
@@ -275,4 +275,4 @@
 ;; ========================================
 
 (test-case "expr?: expr-meta is recognized as expression"
-  (check-true (expr? (expr-meta 'test-id))))
+  (check-true (expr? (expr-meta 'test-id #f))))

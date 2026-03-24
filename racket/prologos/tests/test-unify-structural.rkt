@@ -32,26 +32,26 @@
   (check-equal? (classify-whnf-problem (expr-typed-hole 'th1) (expr-Bool)) '(ok)))
 
 (test-case "classify: same unsolved meta → ok"
-  (check-equal? (classify-whnf-problem (expr-meta 'a) (expr-meta 'a)) '(ok)))
+  (check-equal? (classify-whnf-problem (expr-meta 'a #f) (expr-meta 'a #f)) '(ok)))
 
 ;; ========================================
 ;; Suite 2: Flex-rigid (meta solving)
 ;; ========================================
 
 (test-case "classify: meta on left → flex-rigid"
-  (define result (classify-whnf-problem (expr-meta 'm1) (expr-Nat)))
+  (define result (classify-whnf-problem (expr-meta 'm1 #f) (expr-Nat)))
   (check-equal? (car result) 'flex-rigid)
   (check-equal? (cadr result) 'm1)
   (check-true (expr-Nat? (caddr result))))
 
 (test-case "classify: meta on right → flex-rigid"
-  (define result (classify-whnf-problem (expr-Bool) (expr-meta 'm2)))
+  (define result (classify-whnf-problem (expr-Bool) (expr-meta 'm2 #f)))
   (check-equal? (car result) 'flex-rigid)
   (check-equal? (cadr result) 'm2)
   (check-true (expr-Bool? (caddr result))))
 
 (test-case "classify: different metas → flex-rigid (left wins)"
-  (define result (classify-whnf-problem (expr-meta 'a) (expr-meta 'b)))
+  (define result (classify-whnf-problem (expr-meta 'a #f) (expr-meta 'b #f)))
   (check-equal? (car result) 'flex-rigid)
   (check-equal? (cadr result) 'a))
 
@@ -141,7 +141,7 @@
   (check-equal? (classify-whnf-problem (expr-zero) (expr-nat-val 0)) '(ok)))
 
 (test-case "classify: nat-val(3) vs suc(X) → sub (decrement)"
-  (define result (classify-whnf-problem (expr-nat-val 3) (expr-suc (expr-meta 'm))))
+  (define result (classify-whnf-problem (expr-nat-val 3) (expr-suc (expr-meta 'm #f))))
   (check-equal? (car result) 'sub)
   (check-equal? (expr-nat-val-n (caar (cadr result))) 2))
 
