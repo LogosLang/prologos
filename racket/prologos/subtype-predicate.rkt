@@ -50,22 +50,27 @@
 ;; SRE Track 1 Phase 4: Frequency counter for monitoring subtype? usage.
 ;; Tracks total calls and compound calls (which create mini-networks).
 ;; Use: (current-subtype-check-count) → (cons total compound)
-(define current-subtype-check-count (make-parameter (cons 0 0)))
+;; Default #f = disabled (avoids cons allocation per subtype? call).
+;; Set to (cons 0 0) in benchmark/debug contexts to enable counting.
+(define current-subtype-check-count (make-parameter #f))
 
 ;; Track 1B Phase 1: Global counters survive across parameterize blocks.
 ;; For suite-wide measurement without per-command reset.
 (define global-subtype-total (box 0))
 (define global-subtype-compound (box 0))
 
+;; PM 8F cleanup: gate behind #f default to avoid cons allocation on every subtype? call.
+;; Set to (cons 0 0) in benchmark contexts to enable counting.
 (define (bump-subtype-count! #:compound? [compound? #f])
   (define counts (current-subtype-check-count))
-  (current-subtype-check-count
-   (cons (add1 (car counts))
-         (if compound? (add1 (cdr counts)) (cdr counts))))
-  ;; Also bump globals
-  (set-box! global-subtype-total (add1 (unbox global-subtype-total)))
-  (when compound?
-    (set-box! global-subtype-compound (add1 (unbox global-subtype-compound)))))
+  (when (pair? counts)  ;; only count when enabled (default #f = disabled)
+    (current-subtype-check-count
+     (cons (add1 (car counts))
+           (if compound? (add1 (cdr counts)) (cdr counts))))
+    ;; Also bump globals
+    (set-box! global-subtype-total (add1 (unbox global-subtype-total)))
+    (when compound?
+      (set-box! global-subtype-compound (add1 (unbox global-subtype-compound))))))
 
 (define (report-subtype-frequency!)
   (fprintf (current-error-port)
