@@ -75,8 +75,10 @@
          current-use-pnet-cache?)
 
 ;; Track 10 Phase 1b: feature flag for .pnet caching.
-;; #t = use .pnet cache (default). #f = always elaborate from source (rollback).
-(define current-use-pnet-cache? (make-parameter #f))  ;; Start disabled, enable after validation
+;; #t = use .pnet cache. #f = always elaborate from source (rollback).
+;; Phase 2: disabled — foreign function stubs cause test failures.
+;; Need proper dynamic-require re-linking before enabling.
+(define current-use-pnet-cache? (make-parameter #f))
 
 ;; ========================================
 ;; Standard library path (computed from this module's location)

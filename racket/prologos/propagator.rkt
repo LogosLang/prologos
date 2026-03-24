@@ -48,6 +48,7 @@
  prop-id-hash
  ;; Network construction
  make-prop-network
+ fork-prop-network
  ;; Cell operations
  net-new-cell
  net-new-cells-batch  ;; Phase 4: batch cell registration
@@ -295,6 +296,16 @@
                   champ-empty        ;;   cell-decomps
                   champ-empty        ;;   pair-decomps
                   champ-empty)))     ;;   cell-dirs
+
+;; Track 10 Phase 3: Fork a prop-network for subnetwork isolation.
+;; Shares all CHAMP fields (cells, propagators, registries) via structural sharing.
+;; Resets hot state (worklist, fuel) and contradiction.
+;; O(1): two struct allocations. All data shared until child writes (CoW).
+(define (fork-prop-network net [fuel 1000000])
+  (prop-network
+   (prop-net-hot '() fuel)                              ;; fresh worklist + fuel
+   (prop-net-warm (prop-network-cells net) #f)          ;; shared cells, no contradiction
+   (prop-network-cold net)))                            ;; shared: merge-fns, propagators, etc.
 
 ;; ========================================
 ;; Cell Operations
