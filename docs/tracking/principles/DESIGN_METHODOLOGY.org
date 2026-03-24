@@ -119,9 +119,23 @@ and make qualified recommendations.
   session types for distributed constraint solving is an opportunity
   that arises from having both systems in the same language.
 
+- *Concrete code measurements, not estimates from vision*: The gap
+  analysis MUST include grep counts, call site lists, and actual
+  function signatures from the codebase. "~225 zonk call sites" is an
+  estimate from vision; "31 external zonk call sites (5 in unify.rkt,
+  8 in resolution.rkt, 15 in driver.rkt, 3 in trait-resolution.rkt)"
+  is a measurement from code. Estimates from vision are systematically
+  wrong (3 consecutive tracks: PUnify Phase 5c, SRE Track 2, PM 8F).
+  Measurements from code are authoritative.
+
+  If a Stage 2 document says "~N sites" without grep evidence, it is
+  incomplete. The grep output doesn't need to be in the document, but
+  the COUNTS must come from greps, not from reading the architecture
+  and guessing.
+
 *** Artifacts
 
-- Gap analysis section in the design document
+- Gap analysis section with concrete code measurements (grep-backed counts)
 - Tradeoff tables with explicit criteria
 - Recommendation with rationale tied to principles
 
@@ -135,10 +149,24 @@ full clarity.
 
 This is an iterative cycle:
 
-1. *Draft*: Produce a complete design document with implementation roadmap
-2. *Critique*: Subject the design to rigorous, independent critique
-3. *Respond*: Address critiques --- accept, refine, or justify
-4. *Repeat*: Continue until all parties have clarity and confidence
+1. *Draft (D.1)*: Produce a complete design document with implementation
+   roadmap, including a Pre-0 micro-benchmark phase
+2. *Pre-0 Benchmark*: Setup and run micro-benchmarks + adversarial
+   tests BEFORE implementation. This is design input, not validation.
+   The data feeds D.2.
+3. *Revise (D.2)*: Incorporate benchmark findings into the design.
+   Pre-0 data may reveal that phases are no-ops, estimates are wrong,
+   or the bottleneck is different from expected. 4 confirmed instances
+   where Pre-0 changed the design fundamentally.
+4. *Critique (D.3+)*: Subject the design to rigorous, independent
+   critique. Include a "codebase reality check" --- for each phase,
+   can you point to the specific lines of code it changes? If not,
+   the scope is speculative.
+5. *Respond*: Address critiques --- accept, refine, or justify
+6. *Self-Critique (D.4)*: Challenge against all 10 principles. Also
+   ask: does this design match what the codebase ACTUALLY does, or
+   does it design against a vision of what we WANT it to do?
+7. *Repeat*: Continue until all parties have clarity and confidence
 
 *** Key practices
 
@@ -209,6 +237,15 @@ This is an iterative cycle:
   existing workflow rule): post-implementation benchmarking detects
   regressions; pre-implementation benchmarking discovers whether the
   approach is correct.
+
+- *Codebase reality check in self-critique*: The self-critique round
+  (D.4) must ask: "for each phase in this design, can I point to the
+  specific lines of code it changes?" If the answer is "approximately"
+  or "I think so," the design is speculative. Run the greps. Check the
+  call counts. Verify the function signatures match what the design
+  assumes. PM 8F's D.1 assumed ~225 zonk sites; a grep found 31.
+  SRE Track 2 assumed 158 typing-core cases; an audit found 0.
+  Speculation that isn't grounded in code measurements will be wrong.
 
 *** The critique cycle in practice
 
@@ -321,6 +358,32 @@ at each phase, raising design issues as they surface.
   (the ~new-lattice-cell~ generic wrapper, for instance), add it to
   ~DEFERRED.md~ in the same commit. Deferred work not tracked is
   abandoned work.
+
+- *Post-implementation A/B benchmark (final phase before PIR)*: The
+  last implementation phase should include:
+  1. Run the SAME micro-benchmarks from Pre-0 against the completed code
+  2. Compare A/B: did we meet the Pre-0 performance targets?
+  3. Investigate deviations (benchmark context drift vs real regression)
+  4. Clean up dead instrumentation (counters, assertions left from
+     benchmarking phases that are still active in production)
+  5. Use the A/B data to feed the PIR's performance assessment
+
+  PM 8F found that the subtype-check-count from SRE Track 1B was still
+  allocating a cons pair on every subtype? call --- dead instrumentation
+  costing ~1.2% of suite time. The cleanup phase caught it.
+
+  The design document should include this as an explicit final phase
+  (e.g., "Phase N: Verification + A/B benchmarks + instrumentation
+  cleanup + PIR"). This is not optional --- it is the data that makes
+  the PIR quantitative rather than anecdotal.
+
+- *Write PIR per methodology*: After the final verification phase,
+  write the PIR following [[file:POST_IMPLEMENTATION_REVIEW.org][POST_IMPLEMENTATION_REVIEW.org]] (the 16 questions,
+  template sections §1--§19). Re-read the methodology BEFORE writing
+  --- PIRs written without consulting the methodology systematically
+  omit the evaluative and meta-learning sections (§13--§16) that make
+  PIRs genuinely valuable. Compare against at least 3 prior PIRs for
+  longitudinal pattern detection (§16).
 
 *** Implementation flow
 
