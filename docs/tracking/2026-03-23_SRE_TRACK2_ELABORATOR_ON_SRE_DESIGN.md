@@ -3,7 +3,7 @@
 **Stage**: 2 (Audit) + 3 (Design), combined
 **Date**: 2026-03-23
 **Series**: SRE (Structural Reasoning Engine)
-**Status**: D.2 — incorporating Pre-0 benchmark findings
+**Status**: D.3 — incorporating external critique (10 points)
 **Depends on**: [SRE Track 0](2026-03-22_SRE_TRACK0_FORM_REGISTRY_DESIGN.md) ✅, [SRE Track 1](2026-03-23_SRE_TRACK1_RELATION_PARAMETERIZED_DECOMPOSITION_DESIGN.md) ✅
 **Enables**: SRE Track 3 (Trait Resolution), Track 4 (Sessions), Track 5 (Patterns), PM 8F (metas as cells)
 **Source Documents**:
@@ -22,13 +22,14 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | Pre-0 | Micro-benchmark + adversarial baseline | ✅ | **Critical finding**: linear scan 4-200× slower than struct predicates |
-| 0 | O(1) struct-type dispatch (`prop:ctor-desc`) | ⬜ | Foundation: makes SRE dispatch competitive with hardcoded match |
-| 1 | Unify classifier → SRE ctor-desc dispatch | ⬜ | The core migration (non-binder cases) |
-| 2 | Binder handling via SRE | ⬜ | Pi codomain, Sigma snd-type, lam body |
-| 3 | Meta handling verification | ⬜ | Verify SRE dispatch doesn't interfere with flex cases |
+| 0 | O(1) struct-type dispatch (`prop:ctor-desc-tag`) | ⬜ | Foundation + end-to-end benchmark + .zo verification |
+| 1 | Unify classifier → SRE ctor-desc dispatch | ⬜ | Non-binder cases + rollback toggle + flex-app ordering |
+| 2 | Binder handling via SRE | ⬜ | Pi/Sigma/lam + PUnify toggle interaction documented |
+| 3 | Meta handling verification | ⬜ | flex-app before SRE dispatch; edge case tests |
 | 4 | Subtype/conversion fallback via SRE | ⬜ | Track 1's structural-subtype-ground? + cumulativity |
-| 5 | Polarity inference integration | ⬜ | User-defined types get automatic variance |
-| 6 | Verification + benchmarks + PIR | ⬜ | |
+| 5 | Verification + benchmarks + PIR | ⬜ | Remove rollback toggle after validation |
+
+**Decoupled**: Polarity inference → SRE Track 2B (separate feature, not migration)
 
 ---
 
@@ -176,6 +177,87 @@ tag → ctor-desc (O(1) hash-ref). Two O(1) lookups = still O(1).
 - Acceptance file passes
 - Performance within bounds
 - PIR written per methodology
+
+---
+
+## 1c. D.3 External Critique Response (10 points)
+
+### Accepted (6)
+
+**1. Full round-trip cost not benchmarked.** The Pre-0 benchmark measured
+`ctor-tag-for-value` in isolation. The full path (property access + hash-ref +
+domain check + extract-fn closure call × 2 sides) is ~103ns for Pi-vs-Pi —
+still faster than the classifier's 162ns, but the margin is thinner than the
+isolated numbers suggest. **Action**: Phase 0 includes end-to-end benchmark.
+
+**3. Multi-domain tag collision.** `'suc` is registered in BOTH type and data
+domains (for `expr-suc` and `term-suc`). Since these are different struct types,
+each gets its own property — `expr-suc` carries `'suc` in type domain, `term-suc`
+carries `'suc` in term domain. The property holds `(cons domain-name tag)` rather
+than just the tag. `sre-constructor-tag` filters by domain as before.
+
+For structs registered in multiple domains (e.g., session constructors in both
+type and session domains): the property holds the PRIMARY domain's tag. The
+secondary domain falls back to linear scan. This is acceptable because
+cross-domain lookups are low-frequency (session verification) vs same-domain
+lookups (type unification, the hot path). **Action**: Explicit test with `'suc`
+and `'pair` cross-domain cases.
+
+**6. Phase 5 (polarity inference) is a separate feature.** Agreed. Polarity
+inference is new functionality, not migration. Including it couples the
+migration's completion criteria to a new feature's correctness. **Action**:
+Moved to SRE Track 2B. Phases 0-4+5(verification) are the migration track.
+
+**7. flex-app ordering.** Critical catch. `(expr-app (expr-meta ?F) arg)` IS
+an `expr-app` — it would match the SRE's app tag. But it must route to
+flex-app (higher-order unification), not structural decomposition. The fix:
+`sre-classify-problem` checks flex-app BEFORE SRE dispatch. The ordering is:
+identity → bare metas → **flex-app** → SRE structural → non-structural → fallback.
+**Action**: Ordering explicitly specified in Phase 1. Integration test added.
+
+**8. Rollback toggle.** `current-sre-classify-enabled?` parameter (default `#t`).
+Parallels `current-punify-enabled?`. Allows reverting to hardcoded classifier
+without reverting code. Removed in Phase 5 after full validation. **Action**:
+Added to Phase 1 deliverables.
+
+**10. Jump table alternative.** Acknowledged. Racket has no public API for struct
+type descriptor index. The struct-type property approach is Racket-idiomatic
+(used by Racket's own serialization, printing, and matching). It provides O(1)
+vtable access without extracting the struct-type at runtime. The jump table
+alternative would require `struct-type-info` extraction (~15ns) + hash lookup
+(~15ns) = ~30ns, vs property access (~4ns). Rejected on performance grounds.
+
+### Partially Accepted (2)
+
+**2. Blast radius underestimated.** The .zo stale cache concern is valid — our
+`pipeline.md` documents this exact failure class (Track 0 Phase 3b). However,
+struct inheritance is a non-issue: our AST structs in syntax.rkt do NOT use
+inheritance — all flat struct definitions. **Action**: Explicit .zo verification
+step in Phase 0 (recompile + verify property accessible).
+
+**4. nat-val cross-representation cases.** Accept the honesty point. Cases 5-6
+(nat-val(n>0) vs suc(X)) DO produce `'sub` results — they're normalization +
+decomposition, not pure conversion. The "single mechanism" claim should be
+qualified: "single mechanism for constructor-preserving structural decomposition."
+Cross-representation normalization is a REDUCTION concern (Track 6/PM 9).
+**Action**: Document as permanent exception with honest classification.
+
+### Pushed Back (2)
+
+**5. Phase 2 binder handling / PUnify toggle.** The answer is simple: after
+Track 2, the PUnify toggle (`current-punify-enabled?`) survives but its scope
+narrows. Toggle OFF (default): classifier uses SRE dispatch (Track 2).
+Toggle ON: classifier uses cell-tree decomposition (existing PUnify path).
+Both paths use ctor-descs under the hood. `punify-dispatch-pi` and
+`punify-dispatch-binder` are NOT dead code — they're the cell-tree path.
+The critique assumed Track 2 would eliminate the toggle; it doesn't. Documented.
+
+**9. `equal?` fast path cost.** Interesting optimization but not actionable in
+Track 2. The `equal?` check is the FIRST thing in the classifier — if it
+succeeds, no dispatch happens at all. Replacing it with tag + component-wise
+equal would change semantics (what about non-structural fields like source
+locations?). This is a future optimization that requires careful design.
+Noted, not in scope.
 
 ---
 
@@ -365,13 +447,19 @@ dispatch is a PREREQUISITE for the migration, not an optimization.
    full ctor-desc. Registration is unchanged.
 
 **Deliverables**:
-1. `prop:ctor-desc-tag` property definition in syntax.rkt
+1. `prop:ctor-desc-tag` property definition in syntax.rkt. Property holds
+   `(cons domain-name tag)` to handle multi-domain structs (D.3 critique §3).
 2. Property added to all 23+ structural AST structs
-3. `ctor-tag-for-value` updated to use property-first dispatch
-4. Fallback to linear scan for non-AST types (term-value, session types)
-   that may not have the property
-5. Micro-benchmark confirmation: ~19ns per lookup (vs 300-825ns)
-6. Full suite passes — no behavioral change
+3. `ctor-tag-for-value` updated to use property-first dispatch with domain
+   filtering. Fallback to linear scan for non-AST types.
+4. **End-to-end benchmark** (D.3 critique §1): measure full
+   `sre-classify-problem` path (property + hash-ref + domain + extract)
+   against `classify-whnf-problem`. Not just tag lookup in isolation.
+5. **Stale .zo verification** (D.3 critique §2): `raco make driver.rkt`
+   recompiles all. Verify property accessible on representative structs.
+   Test with intentionally stale .zo to confirm it's caught.
+6. Micro-benchmark confirmation: ~19ns per lookup (vs 300-825ns)
+7. Full suite passes — no behavioral change
 
 **Blast radius mitigation**:
 - The property is ADDITIVE: existing struct fields, pattern matching,
@@ -403,31 +491,50 @@ unify-core → zonk → sre-classify-problem → (SRE tag lookup) → decomposit
 ```
 
 **Deliverables**:
-1. `sre-classify-problem`: New function that replaces `classify-whnf-problem`'s
-   structural cases. For each pair (a, b):
-   - Pre-check: equal? / holes / same-meta → `'ok` (unchanged)
-   - Meta check: `expr-meta?` → `'flex-rigid` or `'flex-app` (unchanged)
+
+1. **Rollback toggle** (D.3 critique §8): `current-sre-classify-enabled?`
+   parameter, default `#t`. When `#f`, falls back to hardcoded classifier.
+   Parallels `current-punify-enabled?`. Removed in Phase 5 after validation.
+
+2. `sre-classify-problem`: New function that replaces `classify-whnf-problem`'s
+   structural cases. **Ordering is critical** (D.3 critique §7):
+   - Pre-check: `equal?` / holes / same-meta → `'ok` (unchanged)
+   - Bare meta check: `expr-meta?` → `'flex-rigid` (unchanged)
+   - **flex-app check BEFORE SRE dispatch** (D.3 §7): `flex-app?` tests
+     whether the value is an `expr-app` whose spine head is an unsolved
+     meta. `(expr-app (expr-meta ?F) arg)` must route to `'flex-app`,
+     NOT to SRE structural decomposition. This check MUST precede SRE
+     tag lookup.
    - **SRE dispatch**: `(sre-constructor-tag type-sre-domain a)` and
      `(sre-constructor-tag type-sre-domain b)` → if same tag, extract
      components via ctor-desc → return `'sre-decompose` with components
    - Level check: both `expr-Type?` → `'level` (unchanged)
    - Union check: both `expr-union?` → `'union` (unchanged)
    - Retry: normalizable-builtin?, ann → `'retry` (unchanged)
+   - nat-val cross-representation: persist as hardcoded (D.3 §4 —
+     normalization + decomposition, not pure structural decomposition;
+     permanent exception until reduction-on-SRE)
    - Fallback: `'conv` (unchanged)
 
-2. `unify-whnf` updated: new `'sre-decompose` tag dispatches to
+3. `unify-whnf` updated: new `'sre-decompose` tag dispatches to
    recursive `unify-core` on component pairs extracted by the SRE.
    Pi/Sigma/lam binder handling moved to Phase 2.
 
-3. **Non-binder structural cases migrated first**: app, pair, Eq, Vec, Fin,
+4. **Non-binder structural cases migrated first**: app, pair, Eq, Vec, Fin,
    suc. These are simple: same tag → extract components → recurse on
    component pairs. No binder opening needed.
 
-4. Test: full suite passes. Acceptance file passes.
+5. **flex-app integration test** (D.3 §7): `(expr-app (expr-meta 'x) arg1)`
+   vs `(expr-app (expr-fvar 'f) arg2)` — verify routes to flex-app, NOT
+   to SRE structural decomposition.
+
+6. Test: full suite passes. Acceptance file passes.
 
 **What doesn't change yet**: Pi, Sigma, lam (binder cases — Phase 2).
-flex-rigid, flex-app (meta cases — Phase 3). Union matching (future track).
-Level unification (separate lattice). Retry/conv (preprocessing/fallback).
+flex-rigid, flex-app (meta cases — Phase 3 verification). Union matching
+(future track). Level unification (separate lattice). Retry/conv
+(preprocessing/fallback). nat-val cross-representation (permanent
+exception — normalization concern, not structural decomposition).
 
 ### Phase 2: Binder Handling via SRE
 
@@ -447,6 +554,21 @@ with a fresh fvar before component decomposition.
 5. **Validation**: Phase 2 is the highest-risk phase (Pi is the most
    common binder, any regression is visible). Run full suite after each
    sub-migration (Pi first, then Sigma, then lam).
+
+**PUnify toggle interaction** (D.3 critique §5): After Track 2, the
+`current-punify-enabled?` toggle survives but its scope narrows:
+- Toggle OFF (default): `classify-whnf-problem` uses SRE dispatch for
+  structural cases. `unify-whnf` dispatches `'sre-decompose` tags.
+  This is what Track 2 delivers.
+- Toggle ON: `unify-core` delegates to `unify-via-propagator` BEFORE
+  the classifier runs. The cell-tree decomposition path (`punify-dispatch-pi`,
+  `punify-dispatch-binder`) is unchanged. These are NOT dead code.
+
+Both paths use ctor-descs under the hood (Track 0 unified this). The
+toggle controls WHETHER unification happens via imperative recursion
+(OFF: standard path with SRE-based classifier) or via cell-tree
+propagation (ON: PUnify path). Track 2 changes the standard path; the
+PUnify path is orthogonal.
 
 ### Phase 3: Meta Handling Integration
 
@@ -492,24 +614,46 @@ This phase wires it into the conversion fallback.
    a type-lattice concern.
 4. Test: subtype cases in test suite + adversarial compound subtype queries.
 
-### Phase 5: Polarity Inference Integration
+### Phase 5: Verification + Benchmarks + PIR
 
-User-defined types currently get `#f` variance (no structural subtyping).
-This phase wires polarity inference into `data` elaboration.
+**Note**: Polarity inference (originally Phase 5) has been **decoupled to
+SRE Track 2B** (D.3 critique §6). It is a new feature, not a migration
+phase. Phases 0-4 are the migration; this phase validates and closes.
 
 **Deliverables**:
-1. During `data` definition elaboration (in `elaborator.rkt`), after
-   creating ctor-descs for each constructor, run polarity inference on the
-   type parameters. Fill in `component-variances` automatically.
-2. Polarity inference algorithm: iterative fixpoint on `{ø, +, -, =}` lattice.
-   Walk constructor fields, track type parameter positions (positive = covariant,
-   negative = contravariant, both = invariant). Handle recursive types via
-   fixpoint iteration. Handle mutual recursion by iterating over the full group.
-3. Test: `data Box A := box A` → variance `(+)` (covariant). `Box Nat <: Box Int`
-   should hold. `data Fn A B := fn (A -> B)` → variance `(- +)`.
-   `Fn Int Nat <: Fn Nat Int` should hold (contravariant domain, covariant codomain).
-4. GADT edge case: document that GADT-constrained constructors produce
-   invariant (`=`) variance. Not implemented but the `=` case is handled
+1. Full test suite: all pass, within performance bounds
+2. Acceptance file: all pass
+3. **End-to-end benchmark**: full `sre-classify-problem` path vs
+   `classify-whnf-problem` (not just tag lookup)
+4. A/B benchmark: `bench-ab.rkt` on comparative suite
+5. Frequency data: SRE tag hits (should match classifier tag hits exactly)
+6. **Remove rollback toggle** (`current-sre-classify-enabled?`): if all
+   tests pass and performance is within bounds, the toggle is no longer needed
+7. PIR written per methodology (16 questions)
+8. Update SRE Master, Master Roadmap, dailies
+
+**Completion criteria** (how we know we're done):
+1. `classify-whnf-problem` has zero hardcoded structural pattern matches
+   (all `'sub`, `'pi`, `'binder` cases replaced by SRE dispatch)
+2. All 7392+ tests pass
+3. Performance within bounds (measured, not assumed)
+4. nat-val cross-representation cases documented as permanent exception
+5. PIR written with §1-§16
+
+---
+
+### Decoupled: SRE Track 2B — Polarity Inference Integration
+
+**Scope**: Wire polarity inference into `data` elaboration. User-defined
+types get automatic variance annotations. This is a new feature, not a
+migration — separated from Track 2 to avoid coupling migration completion
+criteria to new feature correctness (D.3 critique §6).
+
+**Deliverables** (when Track 2B is designed):
+1. Polarity inference during `data` elaboration (iterative fixpoint on
+   `{ø, +, -, =}` lattice)
+2. Handle recursive types, mutual recursion
+3. GADT edge case: invariant (`=`) variance. Not implemented but the `=` case is handled
    correctly (equality check, not subtype).
 
 ### Phase 6: Verification + Benchmarks + PIR
@@ -550,13 +694,24 @@ This phase wires polarity inference into `data` elaboration.
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| syntax.rkt struct property blast radius | HIGH | Property is additive (no field changes). `raco make driver.rkt` recompiles all. Run full suite immediately after Phase 0. |
-| Circular dependency: ctor-desc at syntax.rkt time | HIGH | Two-level dispatch: property holds TAG (symbol), hash holds full ctor-desc. Tags are constants; descs are registered later. |
-| Pi binder regression | HIGH | Migrate Pi LAST among binders (most tested); full suite after each sub-migration |
-| nat-val cross-representation cases | LOW | Semantic equalities (nat-val(0) = zero). Persist as hardcoded cases — these are CONVERSION rules, not structural decomposition |
-| HKT normalization retry cases | LOW | Preprocessing, not decomposition. Persist as-is in classifier |
-| Polarity inference for recursive types | MEDIUM | Fixpoint convergence proven for small lattice; test on actual codebase types |
-| Property not present on non-AST types | LOW | Fallback to linear scan for term-value, session types. These are low-frequency paths. |
+| syntax.rkt struct property blast radius | HIGH | Additive property; explicit .zo verification step (D.3 §2) |
+| Circular dependency: ctor-desc at syntax.rkt time | HIGH | Two-level: property holds `(cons domain tag)`, hash holds full desc |
+| Multi-domain tag collision (`'suc`, `'pair`) | HIGH | Property holds `(cons domain-name tag)`; domain filtering at lookup (D.3 §3) |
+| flex-app ordering: app containing meta head | HIGH | flex-app check BEFORE SRE dispatch (D.3 §7). Integration test required. |
+| Pi binder regression | HIGH | Migrate Pi LAST among binders; full suite per sub-migration |
+| nat-val cross-representation | LOW | Permanent exception: normalization + decomposition (D.3 §4); honest documentation |
+| HKT normalization retry cases | LOW | Persist as-is; preprocessing, not decomposition |
+| Property not present on non-AST types | LOW | Fallback to linear scan for term-value, session types |
+
+**Rollback strategy** (D.3 §8): `current-sre-classify-enabled?` parameter
+allows reverting to hardcoded classifier without code revert. Removed in
+Phase 5 after full validation.
+
+**Alternative considered and rejected** (D.3 §10): Jump table via struct
+type descriptor index. Racket has no public API for struct type index.
+Struct-type property is Racket-idiomatic, provides O(1) vtable access
+without extracting struct-type at runtime. Property approach is faster
+(~4ns vs ~30ns for struct-type extraction + hash).
 
 ---
 
@@ -599,10 +754,18 @@ concern (Track 6/PM 9: reduction-on-SRE).
 
 ### Completeness
 **Challenge**: Are we deferring anything that should be done now?
-**Answer**: flex-rigid/flex-app (meta handling) are deferred to PM 8F. This
-is a genuine dependency, not a rationalization — meta cells don't exist yet.
-Union matching is deferred to SRE Track 3. Level unification is a separate
-lattice concern. All deferrals have clear dependency justifications.
+**Answer**: Deferrals with justification:
+- flex-rigid/flex-app → PM 8F (genuine dependency: meta cells don't exist yet)
+- Union matching → SRE Track 3 (iterative, not structural decomposition)
+- Level unification → separate lattice concern
+- Polarity inference → Track 2B (D.3 §6: new feature, not migration)
+- nat-val cross-representation → permanent exception (D.3 §4: normalization
+  concern, not structural decomposition — Track 6/PM 9 scope)
+
+**Honest qualification**: The "single mechanism" claim applies to
+*constructor-preserving structural decomposition*. Cross-representation
+normalization (nat-val ↔ suc/zero) is a different concern — reduction,
+not decomposition.
 
 ### Composition
 **Challenge**: Does the SRE dispatch compose with the existing classifier
