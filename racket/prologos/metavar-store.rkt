@@ -1699,7 +1699,9 @@
 ;; PUnify opens binders before solving, so solutions SHOULD be fvar-based.
 ;; This assertion detects if any solve path produces bvar-containing solutions.
 ;; Detection only — no behavior change. Phase 3 adds close-expr if needed.
-(define current-bvar-solution-count (make-parameter 0))
+;; Default #f = disabled in production (avoids struct->vector overhead).
+;; Set to 0 in debug/benchmark contexts to enable bvar detection.
+(define current-bvar-solution-count (make-parameter #f))
 
 (define (bvar-free? expr)
   (cond
@@ -1713,8 +1715,10 @@
 
 (define (solve-meta-core! id solution)
   (perf-inc-meta-solved!)
-  ;; PM 8F Phase 0: detect bvar-containing solutions (assertion, not correction)
-  (unless (bvar-free? solution)
+  ;; PM 8F Phase 0: detect bvar-containing solutions (debug mode only).
+  ;; Gated behind current-bvar-solution-count being non-#f to avoid
+  ;; struct->vector overhead on every solve in production.
+  (when (and (current-bvar-solution-count) (not (bvar-free? solution)))
     (current-bvar-solution-count (add1 (current-bvar-solution-count)))
     (log-warning "solve-meta!: bvar-containing solution for meta ~a: ~a" id solution))
   ;; Track 8 A5: progress-box signal removed (pure variant uses eq? instead)

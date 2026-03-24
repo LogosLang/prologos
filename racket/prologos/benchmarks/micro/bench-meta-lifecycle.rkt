@@ -100,6 +100,24 @@
            (lambda () (meta-solution id2))
            N-read)))
 
+;; --- A3b: meta-solution/cell-id (PM 8F fast path) ---
+(printf "\n--- A3b: meta-solution/cell-id (fast path) ---\n")
+(with-elab-env
+  (lambda ()
+    (define m (fresh-meta '() (expr-Int) 'bench))
+    (define id (expr-meta-id m))
+    (define cell-id (expr-meta-cell-id m))
+    (solve-meta! id (expr-Int))
+    (bench "meta-solution/cell-id (solved, direct cell)"
+           (lambda () (meta-solution/cell-id cell-id id))
+           N-read)
+    (define m2 (fresh-meta '() (expr-Int) 'bench))
+    (define id2 (expr-meta-id m2))
+    (define cell-id2 (expr-meta-cell-id m2))
+    (bench "meta-solution/cell-id (unsolved, direct cell)"
+           (lambda () (meta-solution/cell-id cell-id2 id2))
+           N-read)))
+
 ;; --- A4: prop-meta-id->cell-id cost ---
 (printf "\n--- A4: prop-meta-id->cell-id ---\n")
 (with-elab-env
