@@ -687,6 +687,45 @@
   #:domain 'session
   #:sample (sess-recv (expr-tycon 'Int) (sess-end)))
 
+;; DSend: type (payload), cont (continuation under binder — de Bruijn)
+;; SRE Track 1B Phase 4: binder-open-fn opens the binder by substituting
+;; a fresh fvar for bvar(0) in the continuation.
+(register-ctor! 'sess-dsend
+  #:arity 2
+  #:recognizer sess-dsend?
+  #:extract (λ (v) (list (sess-dsend-type v) (sess-dsend-cont v)))
+  #:reconstruct (λ (cs) (sess-dsend (first cs) (second cs)))
+  #:component-lattices (list type-lattice-spec session-lattice-spec)
+  #:binder-depth 1
+  #:domain 'session
+  #:sample (sess-dsend (expr-tycon 'Int) (sess-end))
+  #:binder-open-fn
+  (λ (val sym)
+    ;; Open: substitute fresh fvar for bvar(0) in continuation
+    (define payload (sess-dsend-type val))
+    (define cont (sess-dsend-cont val))
+    (define fv (expr-fvar sym))
+    (define opened-cont (substS cont 0 fv))
+    (values (list payload opened-cont) sym)))
+
+;; DRecv: type (payload), cont (continuation under binder — de Bruijn)
+(register-ctor! 'sess-drecv
+  #:arity 2
+  #:recognizer sess-drecv?
+  #:extract (λ (v) (list (sess-drecv-type v) (sess-drecv-cont v)))
+  #:reconstruct (λ (cs) (sess-drecv (first cs) (second cs)))
+  #:component-lattices (list type-lattice-spec session-lattice-spec)
+  #:binder-depth 1
+  #:domain 'session
+  #:sample (sess-drecv (expr-tycon 'Int) (sess-end))
+  #:binder-open-fn
+  (λ (val sym)
+    (define payload (sess-drecv-type val))
+    (define cont (sess-drecv-cont val))
+    (define fv (expr-fvar sym))
+    (define opened-cont (substS cont 0 fv))
+    (values (list payload opened-cont) sym)))
+
 ;; AsyncSend: type, cont
 (register-ctor! 'sess-async-send
   #:arity 2

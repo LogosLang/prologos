@@ -33,8 +33,9 @@
               sess-bot
               sess-top  ;; top-value
               #f #f     ;; no meta-recognizer/resolver
-              ;; Dual pairs: Send↔Recv, AsyncSend↔AsyncRecv
+              ;; Dual pairs: Send↔Recv, DSend↔DRecv, AsyncSend↔AsyncRecv
               '((sess-send . sess-recv)
+                (sess-dsend . sess-drecv)
                 (sess-async-send . sess-async-recv))))
 
 ;; Helper: create mini-network, install duality-relate, quiesce
@@ -138,3 +139,38 @@
   (define desc (lookup-ctor-desc 'sess-send #:domain 'session))
   (define sub-fn (sre-relation-sub-relation-fn sre-duality))
   (check-eq? (sre-relation-name (sub-fn sre-duality desc 1 'session)) 'duality))
+
+;; ========================================================================
+;; F. Dependent session duality (SRE Track 1B Phase 4)
+;; ========================================================================
+
+(test-case "Duality: DSend(Int, Send(bvar(0), End)) ↔ DRecv(Int, Recv(bvar(0), End))"
+  ;; Dependent session: continuation references the bound variable
+  (define-values (net ca cb)
+    (sre-duality-check
+     (sess-dsend (expr-tycon 'Int) (sess-send (expr-bvar 0) (sess-end)))
+     sess-bot))
+  (check-false (net-contradiction? net))
+  (define vb (net-cell-read net cb))
+  ;; Expected: DRecv(Int, Recv(bvar(0), End))
+  (check-pred sess-drecv? vb)
+  (check-equal? (sess-drecv-type vb) (expr-tycon 'Int))
+  (define cont (sess-drecv-cont vb))
+  (check-pred sess-recv? cont)
+  ;; The bound variable (bvar 0) is preserved — both sides share it
+  (check-equal? (sess-recv-type cont) (expr-bvar 0))
+  (check-equal? (sess-recv-cont cont) (sess-end)))
+
+(test-case "Duality: matching DSend/DRecv — no contradiction"
+  (define-values (net ca cb)
+    (sre-duality-check
+     (sess-dsend (expr-tycon 'Int) (sess-send (expr-bvar 0) (sess-end)))
+     (sess-drecv (expr-tycon 'Int) (sess-recv (expr-bvar 0) (sess-end)))))
+  (check-false (net-contradiction? net)))
+
+(test-case "Duality: mismatched DSend/DSend — contradiction"
+  (define-values (net ca cb)
+    (sre-duality-check
+     (sess-dsend (expr-tycon 'Int) (sess-end))
+     (sess-dsend (expr-tycon 'Int) (sess-end))))
+  (check-true (net-contradiction? net)))

@@ -268,6 +268,7 @@
               sess-meta?                       ;; meta-recognizer
               #f                               ;; meta-resolver
               '((sess-send . sess-recv)        ;; dual-pairs
+                (sess-dsend . sess-drecv)
                 (sess-async-send . sess-async-recv))))
 
 ;; ========================================
