@@ -268,14 +268,31 @@
 
 ;; Determine the constructor descriptor for a value by testing all registered
 ;; recognizers. Returns ctor-desc or #f for atoms/unrecognized values.
-;; Tests type domain first, then data domain, then extra domains.
+;;
+;; SRE Track 2 Phase 0: O(1) fast path via prop:ctor-desc-tag struct property.
+;; If the value carries the property, extract (domain . tag) and look up the
+;; descriptor directly. Falls back to linear scan for non-struct values
+;; (data domain: plain lists/symbols) or values without the property.
 (define (ctor-tag-for-value v)
-  (or (ctor-tag-for-value-in-domain v type-ctor-table)
-      (ctor-tag-for-value-in-domain v data-ctor-table)
-      ;; SRE Track 0: search extra domain tables
-      (for/first ([tbl (in-hash-values extra-domain-tables)]
-                  #:when (ctor-tag-for-value-in-domain v tbl))
-        (ctor-tag-for-value-in-domain v tbl))))
+  ;; Fast path: O(1) via struct-type property (~4ns + ~15ns)
+  ;; Covers all type-domain and session-domain structs from syntax.rkt/sessions.rkt.
+  (cond
+    [(ctor-desc-tag? v)
+     (define dt (ctor-desc-tag-ref v))
+     (define domain (car dt))
+     (define tag (cdr dt))
+     (hash-ref (domain-table domain) tag #f)]
+    ;; If v is a Racket struct without the property, it's a non-structural
+    ;; type-domain atom (e.g., expr-Int, expr-Bool). Return #f immediately.
+    ;; Don't scan data tables for struct values.
+    [(struct? v) #f]
+    ;; Slow path: linear scan for non-struct values (data domain: plain lists/symbols)
+    [else
+     (or (ctor-tag-for-value-in-domain v data-ctor-table)
+         ;; SRE Track 0: search extra domain tables
+         (for/first ([tbl (in-hash-values extra-domain-tables)]
+                     #:when (ctor-tag-for-value-in-domain v tbl))
+           (ctor-tag-for-value-in-domain v tbl)))]))
 
 (define (ctor-tag-for-value-in-domain v tbl)
   (for/first ([desc (in-hash-values tbl)]

@@ -28,15 +28,15 @@
 ;; Session Type Constructors
 ;; ========================================
 
-(struct sess-send (type cont) #:transparent)       ; !A. S
-(struct sess-recv (type cont) #:transparent)       ; ?A. S
-(struct sess-dsend (type cont) #:transparent)      ; !(x:A). S (dependent, binds in S)
-(struct sess-drecv (type cont) #:transparent)      ; ?(x:A). S (dependent, binds in S)
-(struct sess-async-send (type cont) #:transparent) ; !!A. S (non-blocking send)
-(struct sess-async-recv (type cont) #:transparent) ; ??A. S (non-blocking recv)
-(struct sess-choice (branches) #:transparent)      ; internal choice
-(struct sess-offer (branches) #:transparent)       ; external choice
-(struct sess-mu (body) #:transparent)              ; recursive session
+(struct sess-send (type cont) #:transparent #:property prop:ctor-desc-tag '(session . sess-send))
+(struct sess-recv (type cont) #:transparent #:property prop:ctor-desc-tag '(session . sess-recv))
+(struct sess-dsend (type cont) #:transparent #:property prop:ctor-desc-tag '(session . sess-dsend))
+(struct sess-drecv (type cont) #:transparent #:property prop:ctor-desc-tag '(session . sess-drecv))
+(struct sess-async-send (type cont) #:transparent #:property prop:ctor-desc-tag '(session . sess-async-send))
+(struct sess-async-recv (type cont) #:transparent #:property prop:ctor-desc-tag '(session . sess-async-recv))
+(struct sess-choice (branches) #:transparent)      ; internal choice (no ctor-desc yet)
+(struct sess-offer (branches) #:transparent)       ; external choice (no ctor-desc yet)
+(struct sess-mu (body) #:transparent #:property prop:ctor-desc-tag '(session . sess-mu))
 (struct sess-svar (index) #:transparent)           ; session variable (de Bruijn)
 (struct sess-end () #:transparent)                 ; session end
 (struct sess-meta (id) #:transparent)              ; Sprint 8: unsolved session continuation

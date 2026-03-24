@@ -12,7 +12,22 @@
 
 (require "prelude.rkt")
 
+;; ========================================
+;; SRE Track 2 Phase 0: O(1) Constructor Tag Dispatch
+;; ========================================
+;;
+;; Struct-type property for O(1) lookup of constructor tags.
+;; Property value is (cons domain-symbol tag-symbol), e.g., '(type . Pi).
+;; Used by ctor-tag-for-value to bypass linear recognizer scan.
+;; See: docs/tracking/2026-03-23_SRE_TRACK2_ELABORATOR_ON_SRE_DESIGN.md §1b.2
+(define-values (prop:ctor-desc-tag ctor-desc-tag? ctor-desc-tag-ref)
+  (make-struct-type-property 'ctor-desc-tag))
+
 (provide
+ ;; SRE Track 2: O(1) dispatch property
+ prop:ctor-desc-tag
+ ctor-desc-tag?
+ ctor-desc-tag-ref
  ;; Expression constructors
  (struct-out expr-bvar)
  (struct-out expr-fvar)
@@ -297,15 +312,15 @@
 
 ;; Natural numbers
 (struct expr-zero () #:transparent)
-(struct expr-suc (pred) #:transparent)
+(struct expr-suc (pred) #:transparent #:property prop:ctor-desc-tag '(type . suc))
 (struct expr-nat-val (n) #:transparent)   ; O(1) native natural number (Idris 2 model)
 
 ;; Lambda and application
-(struct expr-lam (mult type body) #:transparent)  ; lam(mult, type, body)
-(struct expr-app (func arg) #:transparent)        ; app(func, arg)
+(struct expr-lam (mult type body) #:transparent #:property prop:ctor-desc-tag '(type . lam))
+(struct expr-app (func arg) #:transparent #:property prop:ctor-desc-tag '(type . app))
 
 ;; Pairs (Sigma intro/elim)
-(struct expr-pair (fst snd) #:transparent)
+(struct expr-pair (fst snd) #:transparent #:property prop:ctor-desc-tag '(type . pair))
 (struct expr-fst (expr) #:transparent)
 (struct expr-snd (expr) #:transparent)
 
@@ -365,13 +380,13 @@
 (struct expr-nil-check (arg) #:transparent)  ; nil? : A -> Bool
 
 ;; Dependent function type
-(struct expr-Pi (mult domain codomain) #:transparent) ; Pi(mult, domain, codomain)
+(struct expr-Pi (mult domain codomain) #:transparent #:property prop:ctor-desc-tag '(type . Pi))
 
 ;; Dependent pair type
-(struct expr-Sigma (fst-type snd-type) #:transparent) ; Sigma(fst-type, snd-type)
+(struct expr-Sigma (fst-type snd-type) #:transparent #:property prop:ctor-desc-tag '(type . Sigma))
 
 ;; Identity/Equality type
-(struct expr-Eq (type lhs rhs) #:transparent)     ; Eq(type, lhs, rhs)
+(struct expr-Eq (type lhs rhs) #:transparent #:property prop:ctor-desc-tag '(type . Eq))
 
 ;; ========================================
 ;; Vec and Fin (from prologos-inductive.maude)
@@ -379,14 +394,14 @@
 ;; ========================================
 
 ;; Vec type: Vec(A, n) where A : Type and n : Nat
-(struct expr-Vec (elem-type length) #:transparent)
+(struct expr-Vec (elem-type length) #:transparent #:property prop:ctor-desc-tag '(type . Vec))
 
 ;; Vec constructors
 (struct expr-vnil (type) #:transparent)            ; vnil(A) : Vec(A, zero)
 (struct expr-vcons (type len head tail) #:transparent) ; vcons(A, n, head, tail) : Vec(A, suc(n))
 
 ;; Fin type: Fin(n) where n : Nat
-(struct expr-Fin (bound) #:transparent)
+(struct expr-Fin (bound) #:transparent #:property prop:ctor-desc-tag '(type . Fin))
 
 ;; Fin constructors
 (struct expr-fzero (n) #:transparent)              ; fzero(n) : Fin(suc(n))
@@ -572,7 +587,7 @@
 ;; ========================================
 
 ;; Type constructor: Map K V
-(struct expr-Map (k-type v-type) #:transparent)               ; Map K V : Type 0
+(struct expr-Map (k-type v-type) #:transparent #:property prop:ctor-desc-tag '(type . Map))
 
 ;; Runtime value (racket-champ is a champ-root from champ.rkt)
 (struct expr-champ (racket-champ) #:transparent)              ; map literal value
@@ -605,7 +620,7 @@
 ;; ========================================
 
 ;; Type constructor: Set A
-(struct expr-Set (elem-type) #:transparent)                   ; Set A : Type(level(A))
+(struct expr-Set (elem-type) #:transparent #:property prop:ctor-desc-tag '(type . Set))
 
 ;; Runtime value (racket-champ is a champ-root from champ.rkt, values are #t)
 (struct expr-hset (racket-champ) #:transparent)               ; set literal value
@@ -624,7 +639,7 @@
 (struct expr-set-to-list (s) #:transparent)                   ; set-to-list : Set A → List A
 
 ;; ---- Persistent Vector (PVec, RRB-Tree-backed) ----
-(struct expr-PVec (elem-type) #:transparent)                  ; PVec A : Type(level(A))
+(struct expr-PVec (elem-type) #:transparent #:property prop:ctor-desc-tag '(type . PVec))
 (struct expr-rrb (racket-rrb) #:transparent)                  ; runtime wrapper (opaque Racket rrb-root)
 (struct expr-pvec-empty (elem-type) #:transparent)            ; pvec-empty(A) : PVec A
 (struct expr-pvec-push (v x) #:transparent)                   ; pvec-push : PVec A → A → PVec A
