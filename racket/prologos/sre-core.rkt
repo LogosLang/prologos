@@ -24,6 +24,7 @@
 (provide
  ;; Domain spec
  (struct-out sre-domain)
+ sre-domain-merge
 
  ;; Relation spec (SRE Track 1)
  (struct-out sre-relation)

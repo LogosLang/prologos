@@ -16,13 +16,18 @@
 ;; on sre-domain, keeping subtyping fully on-network.
 
 (require racket/match
+         racket/list
          "syntax.rkt"
          "macros.rkt"          ;; subtype-pair?
          "type-lattice.rkt"    ;; type-top, type-bot, type-lattice-merge, etc.
          "propagator.rkt"      ;; SRE Track 1 Phase 4: mini-network for compound checks
          "sre-core.rkt"        ;; SRE Track 1 Phase 4: structural subtype check
          (only-in "ctor-registry.rkt"
-                  ctor-tag-for-value))
+                  ctor-tag-for-value
+                  lookup-ctor-desc
+                  ctor-desc-extract-fn
+                  ctor-desc-component-variances
+                  ctor-desc-arity))
 
 (provide subtype?
          type-key
@@ -123,41 +128,58 @@
      (let ([k1 (type-key t1)] [k2 (type-key t2)])
        (and k1 k2 (subtype-pair? k1 k2)))]))
 
-;; SRE structural subtype check: query pattern (design §Phase 4).
-;; Creates a mini-network, installs subtype-relate propagator, quiesces,
-;; checks for contradiction. Only activates for compound types with
-;; matching constructor tags.
+;; SRE Track 1B Phase 2d: Direct recursive structural subtype check.
+;; Replaces the mini-network query pattern for GROUND types (both values
+;; fully known, no metas). Zero allocations, O(structure depth).
+;;
+;; Uses the SRE's data structures (ctor-desc, variance, merge-registry)
+;; but not the propagator machinery. Ground-type subtyping is a pure
+;; function — propagation adds no information.
+;;
+;; The mini-network path is preserved in sre-structural-subtype-check/network
+;; for Track 2 (partial information with metas).
 ;;
 ;; NOTE: type-sre-domain-for-subtype is defined AFTER subtype-lattice-merge
-;; (below) because it references it. Racket evaluates top-level defines
-;; in order; forward references fail at module-load time.
+;; (below) because it references it.
 
 (define (sre-structural-subtype-check t1 t2)
-  ;; Only try structural check if both are compound with same tag
-  (define tag1 (sre-constructor-tag type-sre-domain-for-subtype t1))
-  (define tag2 (sre-constructor-tag type-sre-domain-for-subtype t2))
+  (bump-subtype-count! #:compound? #t)
+  (structural-subtype-ground? type-sre-domain-for-subtype t1 t2))
+
+;; Direct recursive ground-type structural subtype check.
+;; Walks the type structure, checks variance at each level, verifies
+;; leaves via the domain's subtype merge.
+(define (structural-subtype-ground? domain t1 t2)
   (cond
-    [(not (and tag1 tag2 (eq? tag1 tag2))) #f]  ;; different tags or atomic → not structural
+    [(equal? t1 t2) #t]
     [else
-     (bump-subtype-count! #:compound? #t)
-     ;; Create mini-network
-     (define net0 (make-prop-network))
-     (define-values (net1 cell-a)
-       (net-new-cell net0 t1 type-lattice-merge type-lattice-contradicts?))
-     (define-values (net2 cell-b)
-       (net-new-cell net1 t2 type-lattice-merge type-lattice-contradicts?))
-     ;; Install subtype-relate propagator
-     (define-values (net3 _pid)
-       (net-add-propagator net2 (list cell-a cell-b) (list cell-a cell-b)
-         (sre-make-structural-relate-propagator
-          type-sre-domain-for-subtype cell-a cell-b
-          #:relation sre-subtype)))
-     ;; Run to quiescence
-     (define net4 (run-to-quiescence net3))
-     ;; No contradiction = subtype holds
-     (not (or (net-contradiction? net4)
-              (type-lattice-contradicts? (net-cell-read net4 cell-a))
-              (type-lattice-contradicts? (net-cell-read net4 cell-b))))]))
+     (define tag1 (sre-constructor-tag domain t1))
+     (define tag2 (sre-constructor-tag domain t2))
+     (cond
+       ;; Both compound, same tag → check components with variance
+       [(and tag1 tag2 (eq? tag1 tag2))
+        (define desc (lookup-ctor-desc tag1 #:domain (sre-domain-name domain)))
+        (and desc
+             (let ([comps1 ((ctor-desc-extract-fn desc) t1)]
+                   [comps2 ((ctor-desc-extract-fn desc) t2)]
+                   [variances (or (ctor-desc-component-variances desc)
+                                  (make-list (ctor-desc-arity desc) '=))])
+               (for/and ([c1 (in-list comps1)]
+                         [c2 (in-list comps2)]
+                         [v (in-list variances)])
+                 (case v
+                   [(+) (structural-subtype-ground? domain c1 c2)]
+                   [(-) (structural-subtype-ground? domain c2 c1)]
+                   [(=) (equal? c1 c2)]
+                   [(ø) #t]))))]
+       ;; Different compound tags → not subtypes
+       [(and tag1 tag2) #f]
+       ;; At least one atomic → use subtype merge from domain registry
+       [else
+        (define merge (sre-domain-merge domain sre-subtype))
+        (define merged (merge t1 t2))
+        (and (not ((sre-domain-contradicts? domain) merged))
+             (equal? merged t2))])]))
 
 ;; SRE Track 1: Subtype-ordering lattice merge.
 ;; Returns the join in the subtype ordering:
