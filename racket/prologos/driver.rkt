@@ -1478,6 +1478,14 @@
 ;; Process all commands from a file
 ;; ========================================
 (define (process-file path #:verbose [verbose? #f])
+  ;; Track 10 Phase 4: Ensure network exists, scoped to this call
+  (if (not (current-prop-net-box))
+      (parameterize ([current-prop-net-box (box (make-elaboration-network))])
+        (reset-meta-store!)
+        (process-file-inner path #:verbose verbose?))
+      (process-file-inner path #:verbose verbose?)))
+
+(define (process-file-inner path #:verbose [verbose? #f])
   (define port (open-input-file path))
   ;; Use WS reader for .prologos files, sexp reader otherwise
   (define path-str (if (string? path) path (path->string path)))

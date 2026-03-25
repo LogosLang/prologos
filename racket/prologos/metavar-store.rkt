@@ -2004,7 +2004,10 @@
           (let ([v (elab-cell-read (unbox net-box) cid)])
             (and (not (prop-type-bot? v)) (not (prop-type-top? v)) v)))]
     [else
-     ;; CHAMP path (test context without network)
+     ;; CHAMP path: no network available (expander.rkt #lang context, or test
+     ;; context without process-string). Track 10 Phase 4: RETAINED — the #lang
+     ;; expander doesn't use process-string, so no network exists. CHAMP is the
+     ;; correct fallback until expander.rkt is network-aware (Phase 5+).
      (define mi-box (current-prop-meta-info-box))
      (if (not mi-box) #f
          (let ([v (unwrap-meta-info (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id))])
