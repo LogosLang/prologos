@@ -5982,6 +5982,9 @@
   (define storable (list 'coerce sub-key super-key))
   (current-coercion-registry
    (hash-set (current-coercion-registry) (cons sub-key super-key) storable))
+  ;; Phase 2c: cache the actual closure for runtime use
+  (when coerce-fn
+    (cache-coercion-fn! sub-key super-key coerce-fn))
   ;; Phase 2a: dual-write to cell
   (macros-cell-write! (current-coercion-registry-cell-id) (hash (cons sub-key super-key) storable)))
 
@@ -6006,9 +6009,40 @@
   ;; Track 10 Phase 2c: registry stores data references, not closures.
   ;; Check the runtime cache first (has the actual procedure).
   ;; Fall back to registry (may have legacy procedure or data ref).
+  ;; Check runtime cache first (has actual closures from elaboration)
   (or (resolve-coercion sub-key super-key)
+      ;; Fallback: registry entry. May be a closure (legacy) or data ref (.pnet).
       (let ([entry (hash-ref (read-coercion-registry) (cons sub-key super-key) #f)])
-        (and entry (procedure? entry) entry))))
+        (cond
+          [(not entry) #f]
+          [(procedure? entry) entry]  ;; legacy closure path
+          ;; Track 10 Phase 2e: data reference from .pnet cache.
+          ;; For cold start, derive a generic unwrap coercion.
+          ;; Single-field subtypes (PosInt wraps Int) → unwrap.
+          ;; All other subtypes → identity (same representation).
+          [(and (list? entry) (pair? entry) (eq? (car entry) 'coerce))
+           (define sub (cadr entry))
+           (define super (caddr entry))
+           ;; Try to determine coercion kind from type metadata
+           (define ctors (lookup-type-ctors sub))
+           (define fn
+             (cond
+               ;; Single-constructor, single-field → unwrap
+               [(and ctors (= (length ctors) 1))
+                (define meta (lookup-ctor (car ctors)))
+                (if (and meta (= (length (ctor-meta-field-types meta)) 1))
+                    (lambda (e)
+                      (match e
+                        [(expr-app _ inner) inner]
+                        [_ e]))
+                    ;; Multi-field or no meta → identity
+                    (lambda (e) e))]
+               ;; No constructors found → identity
+               [else (lambda (e) e)]))
+           ;; Cache the derived closure for future lookups
+           (cache-coercion-fn! sub-key super-key fn)
+           fn]
+          [else #f]))))
 
 ;; ========================================
 ;; Built-in subtype registrations
