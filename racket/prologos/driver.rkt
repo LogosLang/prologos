@@ -71,18 +71,24 @@
          extract-caps-from-brace-params
          ;; IO-H: Post-compilation capability inference
          run-post-compilation-inference!
-         ;; Track 10: .pnet cache feature flag
-         current-use-pnet-cache?)
+         ;; Track 10: .pnet cache feature flags
+         current-use-pnet-cache?
+         current-pnet-write-enabled?)
 
 ;; Track 10 Phase 1b: feature flag for .pnet caching.
 ;; #t = use .pnet cache. #f = always elaborate from source (rollback).
-;; Phase 2d: disabled — systemic timeouts persist despite closure-free registries.
-;; The deserialized env-snapshot or registry data causes infinite loops during
-;; elaboration. Deeper investigation needed: struct reconstruction may produce
-;; values that the elaborator doesn't handle correctly.
-;; Architecture validated (40/40 round-trip, foreign re-linking, closure-free registries).
-;; Integration gap is in the elaboration path consuming deserialized data.
+;; Phase 2d: enabled for READING, disabled for concurrent WRITING.
+;; Hypothesis: 10 batch workers writing .pnet files simultaneously causes races.
+;; Direct process-string + run-ns-last both work with cache. Batch workers timeout.
+;; Solution: pre-generate .pnet files in single-threaded step, then read-only during tests.
+;; current-pnet-write-enabled? controls writing; cache reading is always on.
+;; Phase 2d investigation: direct process-string + run-ns-last work with cache.
+;; Batch worker fails because .pnet cache-hit path is INCOMPLETE — doesn't populate
+;; module-definitions-content, doesn't run spec-propagation-handler, doesn't create
+;; module-network-ref. Batch worker saves this incomplete state → test files break.
+;; Fix: make cache-hit path a COMPLETE replacement for full elaboration side effects.
 (define current-use-pnet-cache? (make-parameter #f))
+(define current-pnet-write-enabled? (make-parameter #f))
 
 ;; ========================================
 ;; Standard library path (computed from this module's location)
@@ -1802,7 +1808,10 @@
             (hash-set (current-module-definitions-content) name val)))))
 
      ;; Track 10 Phase 1b: serialize successful elaboration to .pnet
-     (when (current-use-pnet-cache?)
+     ;; Track 10 Phase 2d: only write .pnet if write is enabled.
+     ;; During parallel tests, writing is disabled to avoid races.
+     ;; Pre-generate .pnet files in single-threaded step before tests.
+     (when (and (current-use-pnet-cache?) (current-pnet-write-enabled?))
        (with-handlers ([exn? (lambda (e)
          (void))])  ;; serialization failure is non-fatal
          (serialize-module-state ns-sym file-path mi)))
