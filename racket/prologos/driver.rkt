@@ -76,9 +76,12 @@
 
 ;; Track 10 Phase 1b: feature flag for .pnet caching.
 ;; #t = use .pnet cache. #f = always elaborate from source (rollback).
-;; Phase 2b: disabled — timeouts with cache enabled. Registry deserialization
-;; may have closure stubs or missing struct types causing infinite loops.
-;; Need targeted investigation before enabling.
+;; Phase 2d: disabled — systemic timeouts persist despite closure-free registries.
+;; The deserialized env-snapshot or registry data causes infinite loops during
+;; elaboration. Deeper investigation needed: struct reconstruction may produce
+;; values that the elaborator doesn't handle correctly.
+;; Architecture validated (40/40 round-trip, foreign re-linking, closure-free registries).
+;; Integration gap is in the elaboration path consuming deserialized data.
 (define current-use-pnet-cache? (make-parameter #f))
 
 ;; ========================================
