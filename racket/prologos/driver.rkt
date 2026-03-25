@@ -87,6 +87,13 @@
 ;; module-definitions-content, doesn't run spec-propagation-handler, doesn't create
 ;; module-network-ref. Batch worker saves this incomplete state → test files break.
 ;; Fix: make cache-hit path a COMPLETE replacement for full elaboration side effects.
+;; Phase 2e: enabled with absolute paths. Root cause was relative pnet-cache-dir
+;; resolving differently in batch workers (project root) vs direct runs (racket/prologos/).
+;; Phase 2e: absolute path fix got further (15 vs 8 files). Still failing.
+;; "Unbound variable: when" — deserialized preparse registry missing entries.
+;; The .pnet cache-hit path restores the registry from the .pnet file,
+;; but the restored state may not match what incremental module loading builds.
+;; Need deeper investigation: compare preparse registries between paths.
 (define current-use-pnet-cache? (make-parameter #f))
 (define current-pnet-write-enabled? (make-parameter #f))
 

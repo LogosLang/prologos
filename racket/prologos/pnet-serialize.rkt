@@ -297,7 +297,10 @@
 ;; File operations
 ;; ============================================================
 
-(define pnet-cache-dir "data/cache/pnet/")
+;; Track 10 Phase 2e: absolute path, relative to THIS module's location.
+;; Prevents working-directory sensitivity (batch workers run from project root).
+(define pnet-cache-dir
+  (simplify-path (build-path (path-only (syntax-source #'here)) "data" "cache" "pnet")))
 
 (define (pnet-path-for-module ns-sym)
   (define ns-str (symbol->string ns-sym))
