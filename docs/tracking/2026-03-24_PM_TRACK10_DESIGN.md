@@ -29,7 +29,10 @@
 | 2a | Foreign function provenance | ✅ | `05d93c4` — source-module + racket-name, dynamic-require re-linking |
 | 2b-2e | Registry completeness (incremental) | ✅ | Preparse closures→symbols, coercion→data refs, 5 registries, capability wrappers |
 | 2f | Comprehensive registry audit — ALL GREEN | ✅ | `e25061a` — 17/28 registries. 382/382, 7401 tests, 243.2s |
-| 3 | Test isolation via three-layer fork | ⬜ | prelude → test-file → test-case. Unified .pnet. 21→3 params. |
+| 3a | .pnet cache ON + tooling | ✅ | `51e6a9e` — pnet-compile.rkt, --no-pnet-cache, 155.6s |
+| 3b | fork-prop-network + with-forked-network | ✅ | `1462fd6` — O(1) CHAMP structural sharing |
+| 3c | Fork integrated into test-support | ✅ | `81b5c21` — macro hygiene fix |
+| 3d | process-string scoping fix — ALL GREEN | ✅ | `41b67c4` — 382/382, 149.0s (38% improvement). Root: box mutation leak. |
 | 4 | Absorb PM 8F deferrals | ⬜ | CHAMP fallback removal, defaults at solve-time |
 | 5 | Eliminate dual-path (snapshot retirement) | ⬜ | module-network-ref + .pnet frozen view for non-network contexts |
 | 6 | Parameter reduction (incremental, ~41 → ~3) | ⬜ | Architectural cleanup |
