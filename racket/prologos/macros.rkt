@@ -5976,10 +5976,13 @@
 ;;   - A procedure (legacy, backward compat during transition)
 ;;   - A list '(coerce sub-sym super-sym) (new, serializable)
 ;; At lookup time, resolve-coercion derives the procedure from the data.
-(define (register-coercion! sub-key super-key coerce-fn)
-  ;; Store the DATA reference (sub-key + super-key pair),
-  ;; not the closure. The closure is derivable from the type pair.
-  (define storable (list 'coerce sub-key super-key))
+(define (register-coercion! sub-key super-key coerce-fn #:via [via-fn-name #f])
+  ;; Store a DATA reference that captures the coercion kind.
+  ;; via-fn-name: if provided, stores the via function for re-derivation.
+  (define storable
+    (if via-fn-name
+        (list 'coerce-via sub-key super-key via-fn-name)
+        (list 'coerce sub-key super-key)))
   (current-coercion-registry
    (hash-set (current-coercion-registry) (cons sub-key super-key) storable))
   ;; Phase 2c: cache the actual closure for runtime use
@@ -6020,6 +6023,13 @@
           ;; For cold start, derive a generic unwrap coercion.
           ;; Single-field subtypes (PosInt wraps Int) → unwrap.
           ;; All other subtypes → identity (same representation).
+          ;; coerce-via: explicit via function stored
+          [(and (list? entry) (>= (length entry) 4) (eq? (car entry) 'coerce-via))
+           (define via-name (list-ref entry 3))
+           (define fn (lambda (e) (expr-app (expr-fvar via-name) e)))
+           (cache-coercion-fn! sub-key super-key fn)
+           fn]
+          ;; coerce: generic — derive from type metadata
           [(and (list? entry) (pair? entry) (eq? (car entry) 'coerce))
            (define sub (cadr entry))
            (define super (caddr entry))

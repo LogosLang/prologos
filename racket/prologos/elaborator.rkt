@@ -3230,19 +3230,22 @@
      ;; Register the direct subtype pair under BOTH FQN and short-name keys.
      ;; FQN: for subtype? in typing-core.rkt (type-key extracts FQN from expr-fvar)
      ;; Short: for try-coerce-via-registry in reduction.rkt (ctor-meta-type-name = short name)
+     ;; Track 10 Phase 2e: pass #:via for coercion data reference
+     (define via-qualified-name
+       (and via-fn-sym (qualify via-fn-sym)))
      (register-subtype-pair! sub-fqn super-fqn)
      (when coerce-fn
-       (register-coercion! sub-fqn super-fqn coerce-fn)
+       (register-coercion! sub-fqn super-fqn coerce-fn #:via via-qualified-name)
        (cache-coercion-fn! sub-fqn super-fqn coerce-fn))  ;; Track 10 Phase 2c
      (unless (eq? sub-fqn sub-short)
        (register-subtype-pair! sub-short super-short)
        (when coerce-fn
-         (register-coercion! sub-short super-short coerce-fn)
+         (register-coercion! sub-short super-short coerce-fn #:via via-qualified-name)
          (cache-coercion-fn! sub-short super-short coerce-fn))  ;; Track 10 Phase 2c
        ;; Also register cross-combinations for mixed lookups
        (register-subtype-pair! sub-short super-fqn)
        (when coerce-fn
-         (register-coercion! sub-short super-fqn coerce-fn)
+         (register-coercion! sub-short super-fqn coerce-fn #:via via-qualified-name)
          (cache-coercion-fn! sub-short super-fqn coerce-fn)))
 
      ;; Compute transitive closure:

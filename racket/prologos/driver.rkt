@@ -1650,6 +1650,7 @@
           (define d-pimpl (list-ref pnet-result 13))
           (define d-spec-r (and (> (length pnet-result) 14) (list-ref pnet-result 14)))
           (define d-tycon  (and (> (length pnet-result) 15) (list-ref pnet-result 15)))
+          (define d-bundle (and (> (length pnet-result) 16) (list-ref pnet-result 16)))
           (current-trait-registry
            (for/fold ([reg (current-trait-registry)]) ([(k v) (in-hash d-trait)])
              (hash-set reg k v)))
@@ -1666,6 +1667,10 @@
           (when d-tycon
             (current-tycon-arity-extension
              (for/fold ([reg (current-tycon-arity-extension)]) ([(k v) (in-hash d-tycon)])
+               (hash-set reg k v))))
+          (when d-bundle
+            (current-bundle-registry
+             (for/fold ([reg (current-bundle-registry)]) ([(k v) (in-hash d-bundle)])
                (hash-set reg k v)))))
         mod-info]
 
@@ -1687,6 +1692,7 @@
      (define mod-param-impl-reg #f)
      (define mod-specialization-reg #f)
      (define mod-tycon-arity #f)
+     (define mod-bundle-reg #f)
      (define mod-module-network #f)
      (parameterize ([current-prelude-env (hasheq)]
                     [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
@@ -1709,6 +1715,7 @@
                     [current-param-impl-registry (current-param-impl-registry)]
                     [current-specialization-registry (current-specialization-registry)]
                     [current-tycon-arity-extension (current-tycon-arity-extension)]
+                    [current-bundle-registry (current-bundle-registry)]
                     [current-spec-store (hasheq)]  ;; fresh — specs are module-local
                     [current-propagated-specs (seteq)]  ;; fresh propagated tracking
                     [current-loading-set (set-add (current-loading-set) ns-sym)]
@@ -1787,6 +1794,7 @@
        (set! mod-param-impl-reg (current-param-impl-registry))
        (set! mod-specialization-reg (current-specialization-registry))
        (set! mod-tycon-arity (current-tycon-arity-extension))
+       (set! mod-bundle-reg (current-bundle-registry))
 
        ;; Track 5 Phase 3b: Build module-network-ref from accumulated definitions.
        ;; Each entry in mod-env becomes a definition cell in the module's network.
@@ -1843,6 +1851,7 @@
      (current-param-impl-registry mod-param-impl-reg)
      (current-specialization-registry mod-specialization-reg)
      (current-tycon-arity-extension mod-tycon-arity)
+     (current-bundle-registry mod-bundle-reg)
 
      ;; Note: spec store is NOT globally propagated — it's carried in module-info
      ;; for selective propagation via process-imports-spec.

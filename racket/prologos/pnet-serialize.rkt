@@ -33,7 +33,8 @@
                   current-capability-registry
                   current-trait-registry current-impl-registry
                   current-param-impl-registry
-                  current-specialization-registry)
+                  current-specialization-registry
+                  current-bundle-registry bundle-entry)
          (only-in "multi-dispatch.rkt" current-multi-defn-registry)
          (only-in "foreign.rkt" parse-foreign-type make-marshaller-pair))
 
@@ -285,6 +286,9 @@
   (reg2! trait-method 'test '())
   (reg3! impl-entry 'T '() 'dict)
 
+  ;; bundle-entry (stored in bundle-registry)
+  (regN! bundle-entry 'test '() '() (hasheq))
+
   ;; param-impl-entry (stored in param-impl-registry)
   (regN! param-impl-entry 'T '() '() 'dict '())
 
@@ -458,6 +462,7 @@
   (define s-param-impl-reg (serialize! (current-param-impl-registry)))
   (define s-specialization-reg (serialize! (current-specialization-registry)))
   (define s-tycon-arity (serialize! (current-tycon-arity-extension)))
+  (define s-bundle-reg (serialize! (current-bundle-registry)))
 
   (let ()
      (define hash-val (source-hash-for-module ns-sym source-path))
@@ -483,6 +488,7 @@
              s-param-impl-reg           ;; 16
              s-specialization-reg      ;; 17
              s-tycon-arity            ;; 18
+             s-bundle-reg            ;; 19
              ))
      (define pnet-path (pnet-path-for-module ns-sym))
      (make-directory* (path-only pnet-path))
@@ -523,6 +529,7 @@
                      (define s-pimpl (and (>= (length raw) 17) (list-ref raw 16)))
                      (define s-spec-reg (and (>= (length raw) 18) (list-ref raw 17)))
                      (define s-tycon-a  (and (>= (length raw) 19) (list-ref raw 18)))
+                     (define s-bundle  (and (>= (length raw) 20) (list-ref raw 19)))
                      (list (deep-serializable->struct s-env)
                            (deep-serializable->struct s-specs)
                            (deep-serializable->struct s-locs)
@@ -541,6 +548,7 @@
                            (if s-pimpl (deep-serializable->struct s-pimpl) (hasheq))
                            (if s-spec-reg (deep-serializable->struct s-spec-reg) (hash))
                            (if s-tycon-a (deep-serializable->struct s-tycon-a) (hasheq))
+                           (if s-bundle (deep-serializable->struct s-bundle) (hasheq))
                            )))))))
 
 ;; ============================================================
