@@ -1671,7 +1671,29 @@
           (when d-bundle
             (current-bundle-registry
              (for/fold ([reg (current-bundle-registry)]) ([(k v) (in-hash d-bundle)])
-               (hash-set reg k v)))))
+               (hash-set reg k v))))
+          ;; Phase 2f: 4 additional registries
+          (when (> (length pnet-result) 17)
+            (define d-dparam (and (> (length pnet-result) 17) (list-ref pnet-result 17)))
+            (define d-tlaws  (and (> (length pnet-result) 18) (list-ref pnet-result 18)))
+            (define d-props  (and (> (length pnet-result) 19) (list-ref pnet-result 19)))
+            (define d-funcs  (and (> (length pnet-result) 20) (list-ref pnet-result 20)))
+            (when d-dparam
+              (current-defn-param-names
+               (for/fold ([reg (current-defn-param-names)]) ([(k v) (in-hash d-dparam)])
+                 (hash-set reg k v))))
+            (when d-tlaws
+              (current-trait-laws
+               (for/fold ([reg (current-trait-laws)]) ([(k v) (in-hash d-tlaws)])
+                 (hash-set reg k v))))
+            (when d-props
+              (current-property-store
+               (for/fold ([reg (current-property-store)]) ([(k v) (in-hash d-props)])
+                 (hash-set reg k v))))
+            (when d-funcs
+              (current-functor-store
+               (for/fold ([reg (current-functor-store)]) ([(k v) (in-hash d-funcs)])
+                 (hash-set reg k v))))))
         mod-info]
 
        [else
@@ -1693,6 +1715,10 @@
      (define mod-specialization-reg #f)
      (define mod-tycon-arity #f)
      (define mod-bundle-reg #f)
+     (define mod-defn-param-names #f)
+     (define mod-trait-laws #f)
+     (define mod-property-store #f)
+     (define mod-functor-store #f)
      (define mod-module-network #f)
      (parameterize ([current-prelude-env (hasheq)]
                     [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
@@ -1716,6 +1742,11 @@
                     [current-specialization-registry (current-specialization-registry)]
                     [current-tycon-arity-extension (current-tycon-arity-extension)]
                     [current-bundle-registry (current-bundle-registry)]
+                    ;; Track 10 Phase 2f: ALL remaining non-zero registries
+                    [current-defn-param-names (current-defn-param-names)]
+                    [current-trait-laws (current-trait-laws)]
+                    [current-property-store (current-property-store)]
+                    [current-functor-store (current-functor-store)]
                     [current-spec-store (hasheq)]  ;; fresh — specs are module-local
                     [current-propagated-specs (seteq)]  ;; fresh propagated tracking
                     [current-loading-set (set-add (current-loading-set) ns-sym)]
@@ -1795,6 +1826,10 @@
        (set! mod-specialization-reg (current-specialization-registry))
        (set! mod-tycon-arity (current-tycon-arity-extension))
        (set! mod-bundle-reg (current-bundle-registry))
+       (set! mod-defn-param-names (current-defn-param-names))
+       (set! mod-trait-laws (current-trait-laws))
+       (set! mod-property-store (current-property-store))
+       (set! mod-functor-store (current-functor-store))
 
        ;; Track 5 Phase 3b: Build module-network-ref from accumulated definitions.
        ;; Each entry in mod-env becomes a definition cell in the module's network.
@@ -1852,6 +1887,10 @@
      (current-specialization-registry mod-specialization-reg)
      (current-tycon-arity-extension mod-tycon-arity)
      (current-bundle-registry mod-bundle-reg)
+     (current-defn-param-names mod-defn-param-names)
+     (current-trait-laws mod-trait-laws)
+     (current-property-store mod-property-store)
+     (current-functor-store mod-functor-store)
 
      ;; Note: spec store is NOT globally propagated — it's carried in module-info
      ;; for selective propagation via process-imports-spec.

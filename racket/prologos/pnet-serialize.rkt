@@ -35,7 +35,10 @@
                   current-trait-registry current-impl-registry
                   current-param-impl-registry
                   current-specialization-registry
-                  current-bundle-registry bundle-entry)
+                  current-bundle-registry bundle-entry
+                  current-trait-laws current-property-store
+                  current-functor-store)
+         (only-in "global-env.rkt" current-defn-param-names)
          (only-in "multi-dispatch.rkt" current-multi-defn-registry)
          (only-in "foreign.rkt" parse-foreign-type make-marshaller-pair))
 
@@ -477,6 +480,10 @@
   (define s-specialization-reg (serialize! (current-specialization-registry)))
   (define s-tycon-arity (serialize! (current-tycon-arity-extension)))
   (define s-bundle-reg (serialize! (current-bundle-registry)))
+  (define s-defn-params (serialize! (current-defn-param-names)))
+  (define s-trait-laws (serialize! (current-trait-laws)))
+  (define s-property (serialize! (current-property-store)))
+  (define s-functor (serialize! (current-functor-store)))
 
   (let ()
      (define hash-val (source-hash-for-module ns-sym source-path))
@@ -503,6 +510,10 @@
              s-specialization-reg      ;; 17
              s-tycon-arity            ;; 18
              s-bundle-reg            ;; 19
+             s-defn-params          ;; 20
+             s-trait-laws           ;; 21
+             s-property             ;; 22
+             s-functor              ;; 23
              ))
      (define pnet-path (pnet-path-for-module ns-sym))
      (make-directory* (path-only pnet-path))
@@ -544,6 +555,10 @@
                      (define s-spec-reg (and (>= (length raw) 18) (list-ref raw 17)))
                      (define s-tycon-a  (and (>= (length raw) 19) (list-ref raw 18)))
                      (define s-bundle  (and (>= (length raw) 20) (list-ref raw 19)))
+                     (define s-dparam (and (>= (length raw) 21) (list-ref raw 20)))
+                     (define s-tlaws  (and (>= (length raw) 22) (list-ref raw 21)))
+                     (define s-props  (and (>= (length raw) 23) (list-ref raw 22)))
+                     (define s-funcs  (and (>= (length raw) 24) (list-ref raw 23)))
                      (list (deep-serializable->struct s-env)
                            (deep-serializable->struct s-specs)
                            (deep-serializable->struct s-locs)
@@ -563,6 +578,10 @@
                            (if s-spec-reg (deep-serializable->struct s-spec-reg) (hash))
                            (if s-tycon-a (deep-serializable->struct s-tycon-a) (hasheq))
                            (if s-bundle (deep-serializable->struct s-bundle) (hasheq))
+                           (if s-dparam (deep-serializable->struct s-dparam) (hasheq))
+                           (if s-tlaws (deep-serializable->struct s-tlaws) (hasheq))
+                           (if s-props (deep-serializable->struct s-props) (hasheq))
+                           (if s-funcs (deep-serializable->struct s-funcs) (hasheq))
                            )))))))
 
 ;; ============================================================
