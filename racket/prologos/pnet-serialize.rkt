@@ -20,6 +20,7 @@
          racket/file
          racket/path
          racket/string
+         racket/list
          "prelude.rkt"
          "syntax.rkt"
          "namespace.rkt"
@@ -248,11 +249,24 @@
                     (string->symbol source-module)))
               (dynamic-require mod-path racket-name))
             proc))  ;; no source-module → keep the stub
-      ;; Also re-derive marshallers from the type if needed
-      ;; For now, keep the deserialized marshal stubs — they work for
-      ;; type checking but not for runtime execution. Full marshal
-      ;; reconstruction would require the type information.
-      (expr-foreign-fn name real-proc arity args marshal-in marshal-out
+      ;; Check if the re-linked proc has fewer args than arity.
+      ;; This happens when :requires (Cap) adds capability token args.
+      ;; Wrap the raw proc to accept the extra capability args and drop them.
+      (define wrapped-proc
+        (if (and (procedure? real-proc) (number? arity))
+            (let ([raw-arity (procedure-arity real-proc)])
+              (if (and (integer? raw-arity)
+                       (integer? arity)
+                       (> arity raw-arity))
+                  ;; Capability-wrapped: extra args are cap tokens, drop them
+                  (let ([n-caps (- arity raw-arity)])
+                    (case n-caps
+                      [(1) (lambda (cap . rest) (apply real-proc rest))]
+                      [(2) (lambda (c1 c2 . rest) (apply real-proc rest))]
+                      [else (lambda args (apply real-proc (drop args n-caps)))]))
+                  real-proc))
+            real-proc))
+      (expr-foreign-fn name wrapped-proc arity args marshal-in marshal-out
                        source-module racket-name)))
 
   ;; --- Additional types from frequency analysis ---
