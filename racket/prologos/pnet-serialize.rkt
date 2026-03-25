@@ -26,17 +26,22 @@
          "source-location.rkt"
          (only-in "propagator.rkt" cell-id)
          (only-in "macros.rkt" spec-entry preparse-macro ctor-meta
+                  trait-meta trait-method impl-entry
                   current-preparse-registry current-ctor-registry
                   current-type-meta
                   current-subtype-registry current-coercion-registry
-                  current-capability-registry)
-         (only-in "multi-dispatch.rkt" current-multi-defn-registry))
+                  current-capability-registry
+                  current-trait-registry current-impl-registry
+                  current-param-impl-registry)
+         (only-in "multi-dispatch.rkt" current-multi-defn-registry)
+         (only-in "foreign.rkt" parse-foreign-type make-marshaller-pair))
 
 ;; Lib dir for resolving relative .rkt paths in foreign function re-linking
 (define pnet-lib-dir (simplify-path (build-path (syntax-source #'here) ".." "lib")))
 
 (provide serialize-module-state
          deserialize-module-state
+         relink-foreign-marshallers!
          pnet-stale?
          pnet-path-for-module
          ;; For testing
@@ -274,6 +279,11 @@
   ;; preparse-macro (user-defined macros from defmacro — stored in preparse registry)
   (reg3! preparse-macro 'test '() '())
 
+  ;; trait-meta + trait-method + impl-entry (stored in trait/impl registries)
+  (regN! trait-meta 'T '() '() (hasheq))
+  (reg2! trait-method 'test '())
+  (reg3! impl-entry 'T '() 'dict)
+
   ;; Phase 2e: populate dynamic-ctor-cache with ALL constructors from syntax.rkt.
   ;; This is the fallback for tags not in the static table above.
   ;; Uses struct->vector on dummy instances to discover tags, then maps tag-name → ctor.
@@ -434,6 +444,10 @@
   (define s-subtype-reg  (serialize! (current-subtype-registry)))
   (define s-coercion-reg (serialize! (current-coercion-registry)))
   (define s-capability-reg (serialize! (current-capability-registry)))
+  ;; Phase 2e: ALSO serialize trait + impl + param-impl registries (indices 14-16)
+  (define s-trait-reg     (serialize! (current-trait-registry)))
+  (define s-impl-reg      (serialize! (current-impl-registry)))
+  (define s-param-impl-reg (serialize! (current-param-impl-registry)))
 
   (let ()
      (define hash-val (source-hash-for-module ns-sym source-path))
@@ -453,6 +467,10 @@
              s-subtype-reg               ;; 11
              s-coercion-reg              ;; 12
              s-capability-reg            ;; 13
+             ;; Phase 2e: trait + impl registries
+             s-trait-reg                ;; 14
+             s-impl-reg                 ;; 15
+             s-param-impl-reg           ;; 16
              ))
      (define pnet-path (pnet-path-for-module ns-sym))
      (make-directory* (path-only pnet-path))
@@ -474,8 +492,8 @@
               (= (car raw) PNET_VERSION)
               (equal? (cadr raw) (source-hash-for-module ns-sym source-path))
               ;; Valid — reconstruct
-              ;; Phase 2b: includes 7 registries (indices 7-13)
-              (and (>= (length raw) 14)  ;; version with registries
+              ;; Phase 2e: includes 10 registries (indices 7-16)
+              (and (>= (length raw) 14)  ;; minimum version with 7 registries
                    (let ([s-env   (list-ref raw 2)]
                          [s-specs (list-ref raw 3)]
                          [s-locs  (list-ref raw 4)]
@@ -487,15 +505,76 @@
                          [s-sub     (list-ref raw 11)]
                          [s-coerce  (list-ref raw 12)]
                          [s-cap     (list-ref raw 13)])
+                     ;; Phase 2e: also extract trait + impl registries if present
+                     (define s-trait (and (>= (length raw) 17) (list-ref raw 14)))
+                     (define s-impl  (and (>= (length raw) 17) (list-ref raw 15)))
+                     (define s-pimpl (and (>= (length raw) 17) (list-ref raw 16)))
                      (list (deep-serializable->struct s-env)
                            (deep-serializable->struct s-specs)
                            (deep-serializable->struct s-locs)
                            exports
-                           ;; 7 registries
+                           ;; 7 original registries
                            (deep-serializable->struct s-preparse)
                            (deep-serializable->struct s-ctor)
                            (deep-serializable->struct s-tmeta)
                            (deep-serializable->struct s-multi)
                            (deep-serializable->struct s-sub)
                            (deep-serializable->struct s-coerce)
-                           (deep-serializable->struct s-cap))))))))
+                           (deep-serializable->struct s-cap)
+                           ;; 3 new registries (or empty if old .pnet format)
+                           (if s-trait (deep-serializable->struct s-trait) (hasheq))
+                           (if s-impl  (deep-serializable->struct s-impl)  (hasheq))
+                           (if s-pimpl (deep-serializable->struct s-pimpl) (hasheq))
+                           )))))))
+
+;; ============================================================
+;; Post-deserialization: re-link foreign function marshallers
+;; ============================================================
+;; After deserializing an env-snapshot, walk it and fix any expr-foreign-fn
+;; whose marshal-in/marshal-out are stubs. Re-derive from the paired type.
+(define (relink-foreign-marshallers! env-hash)
+  (for/hasheq ([(name entry) (in-hash env-hash)])
+    (values name (relink-entry entry))))
+
+(define (relink-entry entry)
+  (cond
+    ;; Entry is (type . body) where body is the foreign-fn OR (type . (body ...))
+    [(and (pair? entry) (expr-foreign-fn? (cdr entry)))
+     ;; Direct pair: (type . foreign-fn)
+     (define type-expr (car entry))
+     (define ff (cdr entry))
+     (relink-ff type-expr ff entry)]
+    [(and (pair? entry) (pair? (cdr entry)) (expr-foreign-fn? (cadr entry)))
+     ;; List form: (type foreign-fn ...)
+     (define type-expr (car entry))
+     (define ff (cadr entry))
+     (define relinked (relink-ff type-expr ff entry))
+     (if (eq? relinked entry)
+         entry
+         (cons type-expr (cons (cdr relinked) (cddr entry))))]
+    [else entry]))
+
+(define (relink-ff type-expr ff fallback)
+  (define mi (expr-foreign-fn-marshal-in ff))
+  ;; Check if marshallers are stubs
+  (define needs-relink?
+    (and (list? mi) (not (null? mi))
+         (procedure? (car mi))
+         (let ([name (object-name (car mi))])
+           (or (not name)
+               (regexp-match? #rx"pnet-serialize" (format "~a" name))))))
+  (if needs-relink?
+      (with-handlers ([exn? (lambda (_) fallback)])
+        (define parsed (parse-foreign-type type-expr))
+        (define-values (new-mi new-mo) (make-marshaller-pair parsed))
+        (define new-ff
+          (expr-foreign-fn
+           (expr-foreign-fn-name ff)
+           (expr-foreign-fn-proc ff)
+           (expr-foreign-fn-arity ff)
+           (expr-foreign-fn-args ff)
+           new-mi new-mo
+           (expr-foreign-fn-source-module ff)
+           (expr-foreign-fn-racket-name ff)))
+        (cons type-expr new-ff))
+      fallback))

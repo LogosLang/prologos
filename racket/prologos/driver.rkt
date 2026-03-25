@@ -56,7 +56,9 @@
          "effect-executor.rkt"    ;; AD-F2: rt-execute-process-auto (architecture dispatch)
          "global-constraints.rkt"  ;; Phase 3c: current-narrow-var-constraints
          "prop-observatory.rkt"   ;; Observatory: capture protocol
-         "pnet-serialize.rkt")   ;; Track 10: .pnet serialization
+         (only-in "pnet-serialize.rkt"   ;; Track 10: .pnet serialization
+                  serialize-module-state deserialize-module-state
+                  pnet-stale? relink-foreign-marshallers!))
 
 (provide process-command
          process-file
@@ -1589,10 +1591,13 @@
         ;; .pnet hit: reconstruct module-info + propagate registries
         (match-define (list d-env d-specs d-locs d-exports
                            d-preparse d-ctor d-tmeta d-multi
-                           d-sub d-coerce d-cap)
+                           d-sub d-coerce d-cap
+                           d-trait d-impl d-param-impl)
           pnet-result)
+        ;; Track 10 Phase 2e: re-link foreign function marshallers from stubs
+        (define d-env-relinked (relink-foreign-marshallers! d-env))
         (define mod-info
-          (module-info ns-sym d-exports d-env file-path
+          (module-info ns-sym d-exports d-env-relinked file-path
                        (hasheq)    ;; macros
                        (hasheq)    ;; type-aliases
                        d-specs
@@ -1600,8 +1605,8 @@
                        #f))        ;; module-network
         ;; Register in module registry
         (register-module! ns-sym mod-info)
-        ;; Import into caller's env
-        (for ([(k v) (in-hash d-env)])
+        ;; Import into caller's env (use relinked version)
+        (for ([(k v) (in-hash d-env-relinked)])
           (current-prelude-env (hash-set (current-prelude-env) k v)))
         ;; Track 10 Phase 2e: MERGE registries (not SET).
         ;; The deserialized registry contains this module's contributions + its deps.
@@ -1628,6 +1633,16 @@
            (if (hash? reg) (hash-set reg k v) (hash k v))))
         (current-capability-registry
          (for/fold ([reg (current-capability-registry)]) ([(k v) (in-hash d-cap)])
+           (hash-set reg k v)))
+        ;; Phase 2e: trait + impl + param-impl registries
+        (current-trait-registry
+         (for/fold ([reg (current-trait-registry)]) ([(k v) (in-hash d-trait)])
+           (hash-set reg k v)))
+        (current-impl-registry
+         (for/fold ([reg (current-impl-registry)]) ([(k v) (in-hash d-impl)])
+           (hash-set reg k v)))
+        (current-param-impl-registry
+         (for/fold ([reg (current-param-impl-registry)]) ([(k v) (in-hash d-param-impl)])
            (hash-set reg k v)))
         mod-info]
 
