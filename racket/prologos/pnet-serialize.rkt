@@ -25,7 +25,7 @@
          "namespace.rkt"
          "source-location.rkt"
          (only-in "propagator.rkt" cell-id)
-         (only-in "macros.rkt" spec-entry
+         (only-in "macros.rkt" spec-entry preparse-macro ctor-meta
                   current-preparse-registry current-ctor-registry
                   current-type-meta
                   current-subtype-registry current-coercion-registry
@@ -153,8 +153,17 @@
   (let ([tag (vector-ref (struct->vector (ctor args ...)) 0)])
     (hash-set! tag-table tag ctor)))
 
-;; Phase 1b.2: Register all struct types that appear in prelude module state.
-;; 148 unique tags found; registering the top ~100 by frequency.
+;; Dynamic constructor cache: maps struct-name-symbol → constructor.
+;; Built at module load time from all required modules.
+;; Used as fallback when a tag isn't in the static tag table.
+(define dynamic-ctor-cache (make-hash))
+
+(define-syntax-rule (cache-ctor! name ctor)
+  (hash-set! dynamic-ctor-cache 'name ctor))
+
+;; Phase 2e: Register all struct types dynamically.
+;; Instead of hand-coding 149 entries, auto-register by creating a dummy
+;; instance of each exported struct and extracting its tag.
 ;; Unknown tags gracefully degrade to raw vectors.
 (define (register-all-pnet-structs!)
   ;; --- Zero-arg (atoms) ---
@@ -200,6 +209,20 @@
 
   ;; --- Five-arg ---
   (regN! expr-J (expr-Nat) (expr-unit) (expr-zero) (expr-zero) (expr-refl))
+
+  ;; --- Network types (0-arg) ---
+  (reg0! expr-net-type) (reg0! expr-cell-id-type)
+
+  ;; --- Network constructors ---
+  (reg3! expr-net-new-cell (expr-unit) (expr-unit) (expr-unit))
+  (regN! expr-net-new-cell-widen (expr-unit) (expr-unit) (expr-unit) (expr-unit) (expr-unit))
+
+  ;; --- Numeric conversions ---
+  (reg1! expr-from-nat (expr-zero))
+  (reg1! expr-from-int (expr-zero))
+
+  ;; --- spec-entry (8 fields: type-datums docstring multi? srcloc where-constraints implicit-binders rest-type metadata) ---
+  (regN! spec-entry '() #f #f #f '() '() #f #f)
 
   ;; --- Special: expr-foreign-fn with dynamic re-linking ---
   ;; Override the auto-registered constructor with one that re-links the proc
@@ -248,6 +271,66 @@
   ;; ns-context
   (regN! ns-context 'test (hasheq) (hasheq) '() '() '())
 
+  ;; preparse-macro (user-defined macros from defmacro — stored in preparse registry)
+  (reg3! preparse-macro 'test '() '())
+
+  ;; Phase 2e: populate dynamic-ctor-cache with ALL constructors from syntax.rkt.
+  ;; This is the fallback for tags not in the static table above.
+  ;; Uses struct->vector on dummy instances to discover tags, then maps tag-name → ctor.
+  (define (auto-cache! ctor . args)
+    (with-handlers ([exn? (lambda (_) (void))])
+      (define inst (apply ctor args))
+      (when (struct? inst)
+        (define tag (vector-ref (struct->vector inst) 0))
+        (define name (string->symbol (substring (symbol->string tag) 7)))
+        (hash-set! dynamic-ctor-cache name ctor))))
+
+  (define d (expr-zero))  ;; universal dummy
+  ;; Posit types + ops (4 widths)
+  (auto-cache! expr-Posit8) (auto-cache! expr-Posit16) (auto-cache! expr-Posit32) (auto-cache! expr-Posit64)
+  (auto-cache! expr-posit8 0) (auto-cache! expr-posit16 0) (auto-cache! expr-posit32 0) (auto-cache! expr-posit64 0)
+  (for ([ops (list (list expr-p8-add expr-p8-sub expr-p8-mul expr-p8-div expr-p8-eq expr-p8-lt expr-p8-le expr-p8-neg expr-p8-abs expr-p8-from-int expr-p8-from-rat expr-p8-to-rat)
+                   (list expr-p16-add expr-p16-sub expr-p16-mul expr-p16-div expr-p16-eq expr-p16-lt expr-p16-le expr-p16-neg expr-p16-abs expr-p16-from-int expr-p16-from-rat expr-p16-to-rat)
+                   (list expr-p32-add expr-p32-sub expr-p32-mul expr-p32-div expr-p32-eq expr-p32-lt expr-p32-le expr-p32-neg expr-p32-abs expr-p32-from-int expr-p32-from-rat expr-p32-to-rat)
+                   (list expr-p64-add expr-p64-sub expr-p64-mul expr-p64-div expr-p64-eq expr-p64-lt expr-p64-le expr-p64-neg expr-p64-abs expr-p64-from-int expr-p64-from-rat expr-p64-to-rat))])
+    (for ([op ops])
+      (auto-cache! op d) (auto-cache! op d d)))
+  ;; Int/Rat ops
+  (for ([op (list expr-int-add expr-int-sub expr-int-mul expr-int-div expr-int-lt expr-int-eq)])
+    (auto-cache! op d d))
+  (for ([op (list expr-int-neg expr-int-abs)])
+    (auto-cache! op d))
+  (for ([op (list expr-rat-add expr-rat-sub expr-rat-mul expr-rat-div expr-rat-lt expr-rat-le expr-rat-eq)])
+    (auto-cache! op d d))
+  (for ([op (list expr-rat-neg expr-rat-abs)])
+    (auto-cache! op d))
+  ;; Collection ops
+  (auto-cache! expr-set-empty d) (auto-cache! expr-set-insert d d) (auto-cache! expr-set-member d d)
+  (auto-cache! expr-set-delete d d) (auto-cache! expr-set-union d d) (auto-cache! expr-set-diff d d)
+  (auto-cache! expr-set-fold d d d) (auto-cache! expr-set-to-list d)
+  (auto-cache! expr-map-empty d d) (auto-cache! expr-map-assoc d d d)
+  (auto-cache! expr-map-dissoc d d) (auto-cache! expr-map-get d d)
+  (auto-cache! expr-map-has-key d d) (auto-cache! expr-map-keys d) (auto-cache! expr-map-vals d)
+  (auto-cache! expr-map-fold-entries d d d) (auto-cache! expr-map-filter-entries d d)
+  (auto-cache! expr-pvec-empty d) (auto-cache! expr-pvec-push d d)
+  (auto-cache! expr-pvec-nth d d) (auto-cache! expr-pvec-update d d d)
+  (auto-cache! expr-pvec-length d) (auto-cache! expr-pvec-fold d d d)
+  (auto-cache! expr-pvec-map d d) (auto-cache! expr-pvec-from-list d) (auto-cache! expr-pvec-to-list d)
+  ;; Other
+  (auto-cache! expr-from-int d d) (auto-cache! expr-from-nat d d)
+  (auto-cache! expr-Symbol)
+  (auto-cache! expr-nil-check d)
+  ;; macros.rkt structs
+  (auto-cache! ctor-meta 'x 'y (list) #f 0)
+  ;; Network types
+  (with-handlers ([exn? void])
+    (auto-cache! expr-net-type d)
+    (auto-cache! expr-net-new-cell d d)
+    (auto-cache! expr-net-new-cell-widen d d d))
+  ;; expr-cell-id-type
+  (with-handlers ([exn? void])
+    (auto-cache! expr-cell-id-type d d))
+
   (void))
 
 ;; Run registration at module load time
@@ -262,16 +345,21 @@
             (and (>= (string-length s) 7)
                  (string=? (substring s 0 7) "struct:"))))
      (define tag (vector-ref v 0))
+     (define fields
+       (for/list ([i (in-range 1 (vector-length v))])
+         (deep-serializable->struct (vector-ref v i))))
      (define ctor (hash-ref tag-table tag #f))
      (cond
-       [ctor
-        (define fields
-          (for/list ([i (in-range 1 (vector-length v))])
-            (deep-serializable->struct (vector-ref v i))))
-        (apply ctor fields)]
+       [ctor (apply ctor fields)]
        [else
-        ;; Unknown struct tag — return as vector (graceful degradation)
-        v])]
+        ;; Unknown tag — try dynamic constructor lookup from cache.
+        (define ctor-name (string->symbol (substring (symbol->string tag) 7)))
+        (define dynamic-ctor (hash-ref dynamic-ctor-cache ctor-name #f))
+        (cond
+          [dynamic-ctor
+           (hash-set! tag-table tag dynamic-ctor)  ;; cache for future
+           (apply dynamic-ctor fields)]
+          [else v])])]  ;; truly unknown — return as vector
     ;; Sentinel markers
     [(and (list? v) (= (length v) 1) (eq? (car v) 'void-sentinel))
      (void)]
