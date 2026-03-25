@@ -3232,15 +3232,18 @@
      ;; Short: for try-coerce-via-registry in reduction.rkt (ctor-meta-type-name = short name)
      (register-subtype-pair! sub-fqn super-fqn)
      (when coerce-fn
-       (register-coercion! sub-fqn super-fqn coerce-fn))
+       (register-coercion! sub-fqn super-fqn coerce-fn)
+       (cache-coercion-fn! sub-fqn super-fqn coerce-fn))  ;; Track 10 Phase 2c
      (unless (eq? sub-fqn sub-short)
        (register-subtype-pair! sub-short super-short)
        (when coerce-fn
-         (register-coercion! sub-short super-short coerce-fn))
+         (register-coercion! sub-short super-short coerce-fn)
+         (cache-coercion-fn! sub-short super-short coerce-fn))  ;; Track 10 Phase 2c
        ;; Also register cross-combinations for mixed lookups
        (register-subtype-pair! sub-short super-fqn)
        (when coerce-fn
-         (register-coercion! sub-short super-fqn coerce-fn)))
+         (register-coercion! sub-short super-fqn coerce-fn)
+         (cache-coercion-fn! sub-short super-fqn coerce-fn)))
 
      ;; Compute transitive closure:
      ;; For each existing super of super-fqn (or super-short), register sub as sub of that too
@@ -3264,8 +3267,10 @@
                  (define intermediate (coerce-fn e))
                  (and intermediate (super-coerce intermediate))))
              (register-coercion! sub-fqn super-of-super composed)
+             (cache-coercion-fn! sub-fqn super-of-super composed)  ;; Track 10 Phase 2c
              (unless (eq? sub-fqn sub-short)
-               (register-coercion! sub-short super-of-super composed))))))
+               (register-coercion! sub-short super-of-super composed)
+               (cache-coercion-fn! sub-short super-of-super composed))))))  ;; Track 10 Phase 2c
 
      ;; For each existing sub of sub-fqn (or sub-short), register them as sub of super too
      (define all-subs
@@ -3286,7 +3291,9 @@
                  (define intermediate (sub-coerce e))
                  (and intermediate (coerce-fn intermediate))))
              (register-coercion! sub-of-sub super-fqn composed)
-             (register-coercion! sub-of-sub super-short composed)))))
+             (cache-coercion-fn! sub-of-sub super-fqn composed)    ;; Track 10 Phase 2c
+             (register-coercion! sub-of-sub super-short composed)
+             (cache-coercion-fn! sub-of-sub super-short composed)))))  ;; Track 10 Phase 2c
 
      ;; Return — declaration only, no elaborated form to process
      (list 'subtype sub-fqn super-fqn)]))

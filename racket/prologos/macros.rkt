@@ -133,6 +133,8 @@
          current-coercion-registry
          read-coercion-registry
          register-coercion!
+         cache-coercion-fn!
+         resolve-coercion
          lookup-coercion
          ;; Capability registry (Capabilities as Types)
          current-capability-registry
@@ -409,13 +411,41 @@
 ;; Registry: symbol → (or/c preparse-macro? procedure?)
 ;;   preparse-macro = user-defined pattern-template (from defmacro)
 ;;   procedure = built-in procedural macro (e.g., let, do, if)
+;;   symbol = Track 10 Phase 2c: reference to built-in expander (closure-free, serializable)
 (define current-preparse-registry (make-parameter (hasheq)))
 
+;; Track 10 Phase 2c: static expander lookup table.
+;; Built-in procedural macros are stored as SYMBOLS in the registry.
+;; The lookup table maps symbol → procedure. Populated at module load time.
+;; This makes the registry closure-free (serializable).
+(define built-in-expander-table (make-hash))
+
+(define (register-built-in-expander! name proc)
+  (hash-set! built-in-expander-table name proc))
+
+(define (resolve-preparse-entry entry)
+  ;; Resolve a registry entry to a callable:
+  ;; - symbol → look up in built-in-expander-table
+  ;; - procedure → use directly (legacy/backward compat)
+  ;; - preparse-macro → pattern-template (unchanged)
+  (cond
+    [(symbol? entry)
+     (define result (hash-ref built-in-expander-table entry #f))
+     result]
+    [(procedure? entry) entry]
+    [else #f]))
+
 (define (register-preparse-macro! name entry)
+  ;; Track 10 Phase 2c: if entry is a procedure with a name matching
+  ;; a registered built-in, store the SYMBOL instead of the closure.
+  (define storable-entry
+    (if (and (procedure? entry) (hash-has-key? built-in-expander-table (object-name entry)))
+        (object-name entry)
+        entry))
   (current-preparse-registry
-   (hash-set (current-preparse-registry) name entry))
+   (hash-set (current-preparse-registry) name storable-entry))
   ;; Phase 2c: dual-write to cell
-  (macros-cell-write! (current-preparse-registry-cell-id) (hasheq name entry)))
+  (macros-cell-write! (current-preparse-registry-cell-id) (hasheq name storable-entry)))
 
 ;; Track 3 Phase 3: cell-primary reader for preparse registry
 (define (read-preparse-registry)
@@ -1706,9 +1736,10 @@
     ;; Bare symbol — check if it's a registered macro (e.g., simple deftype alias)
     [(symbol? datum)
      (define entry (hash-ref reg datum #f))
+     (define resolved (resolve-preparse-entry entry))
      (cond
-       [(procedure? entry)
-        (define result (entry datum))
+       [resolved
+        (define result (resolved datum))
         (if (equal? result datum) datum
             (preparse-expand-form result reg (+ depth 1)))]
        [else datum])]
@@ -1735,12 +1766,13 @@
              reg (+ depth 1))
             ;; Pattern didn't match — still recurse into subexpressions
             (preparse-expand-subforms datum reg depth))]
-       [(procedure? entry)
-        ;; Built-in procedural macro
-        (define result (entry datum))
-        (if (equal? result datum)
-            datum  ; no change, avoid infinite loop
-            (preparse-expand-form result reg (+ depth 1)))]
+       [(resolve-preparse-entry entry)
+        => (lambda (resolved)
+             ;; Built-in procedural macro (resolved from symbol or direct procedure)
+             (define result (resolved datum))
+             (if (equal? result datum)
+                 datum  ; no change, avoid infinite loop
+                 (preparse-expand-form result reg (+ depth 1))))]
        [else
         ;; Schema construction rewrite: (SchemaName ($brace-params ...)) → (the SchemaName ($brace-params ...))
         ;; When the head is a known schema name and the rest is a brace-params map literal,
@@ -1773,8 +1805,9 @@
   (cond
     [(symbol? datum)
      (define entry (hash-ref reg datum #f))
+     (define resolved (resolve-preparse-entry entry))
      (cond
-       [(procedure? entry) (entry datum)]
+       [resolved (resolved datum)]
        [else datum])]
     [(and (pair? datum) (eq? (car datum) '$foreign-block))
      datum]
@@ -1786,7 +1819,8 @@
         (if bindings
             (datum-subst (preparse-macro-template entry) bindings)
             datum)]
-       [(procedure? entry) (entry datum)]
+       [(resolve-preparse-entry entry)
+        => (lambda (resolved) (resolved datum))]
        [else datum])]
     [else datum]))
 
@@ -5662,7 +5696,21 @@
       (error 'mixfix "Empty .{} expression")
       (pratt-parse tokens (effective-operator-table) (effective-precedence-groups))))
 
-;; Register built-in pre-parse macros at module load time
+;; Track 10 Phase 2c: register built-in expanders in the lookup table FIRST,
+;; then register them in the preparse registry (which stores symbols, not closures).
+(register-built-in-expander! 'expand-let expand-let)
+(register-built-in-expander! 'expand-do expand-do)
+(register-built-in-expander! 'expand-if expand-if)
+(register-built-in-expander! 'expand-cond expand-cond)
+(register-built-in-expander! 'expand-list-literal expand-list-literal)
+(register-built-in-expander! 'expand-lseq-literal expand-lseq-literal)
+(register-built-in-expander! 'expand-pipe-block expand-pipe-block)
+(register-built-in-expander! 'expand-compose-sexp expand-compose-sexp)
+(register-built-in-expander! 'expand-mixfix-form expand-mixfix-form)
+
+;; Register built-in pre-parse macros at module load time.
+;; Phase 2c: register-preparse-macro! now stores SYMBOLS (from built-in-expander-table)
+;; instead of CLOSURES, making the registry serializable.
 (register-preparse-macro! 'let expand-let)
 (register-preparse-macro! 'do expand-do)
 (register-preparse-macro! 'if expand-if)
@@ -5710,6 +5758,7 @@
 (define (expand-quote datum)
   (datum->datum-expr (cadr datum)))
 
+(register-built-in-expander! 'expand-quote expand-quote)
 (register-preparse-macro! '$quote expand-quote)
 
 ;; ========================================
@@ -5755,6 +5804,7 @@
 (define (expand-quasiquote datum)
   (qq->datum-expr (cadr datum)))
 
+(register-built-in-expander! 'expand-quasiquote expand-quasiquote)
 (register-preparse-macro! '$quasiquote expand-quasiquote)
 
 ;; ========================================
@@ -5825,6 +5875,7 @@
      (error 'with-transient
             "expected (with-transient coll fn-expr) or (with-transient coll step1 step2 ...), got ~v" datum)]))
 
+(register-built-in-expander! 'expand-with-transient expand-with-transient)
 (register-preparse-macro! 'with-transient expand-with-transient)
 
 ;; ========================================
@@ -5920,18 +5971,44 @@
 ;; Used by reduction.rkt to coerce refined type values at runtime.
 (define current-coercion-registry (make-parameter (hash)))
 
+;; Track 10 Phase 2c: coercion registry stores DATA REFERENCES, not closures.
+;; Each entry is either:
+;;   - A procedure (legacy, backward compat during transition)
+;;   - A list '(coerce sub-sym super-sym) (new, serializable)
+;; At lookup time, resolve-coercion derives the procedure from the data.
 (define (register-coercion! sub-key super-key coerce-fn)
+  ;; Store the DATA reference (sub-key + super-key pair),
+  ;; not the closure. The closure is derivable from the type pair.
+  (define storable (list 'coerce sub-key super-key))
   (current-coercion-registry
-   (hash-set (current-coercion-registry) (cons sub-key super-key) coerce-fn))
+   (hash-set (current-coercion-registry) (cons sub-key super-key) storable))
   ;; Phase 2a: dual-write to cell
-  (macros-cell-write! (current-coercion-registry-cell-id) (hash (cons sub-key super-key) coerce-fn)))
+  (macros-cell-write! (current-coercion-registry-cell-id) (hash (cons sub-key super-key) storable)))
+
+;; Track 10 Phase 2c: coercion function derivation table.
+;; Maps (sub-key . super-key) → procedure. Populated during elaboration.
+;; This is the runtime cache; the registry holds serializable data.
+(define coercion-fn-cache (make-hash))
+
+(define (cache-coercion-fn! sub-key super-key fn)
+  (hash-set! coercion-fn-cache (cons sub-key super-key) fn))
+
+(define (resolve-coercion sub-key super-key)
+  ;; Look up the cached coercion function.
+  ;; If not cached, return #f — the caller falls back to identity or error.
+  (hash-ref coercion-fn-cache (cons sub-key super-key) #f))
 
 ;; Track 3 Phase 1: cell-primary reader
 (define (read-coercion-registry)
   (or (macros-cell-read-safe (current-coercion-registry-cell-id)) (current-coercion-registry)))
 
 (define (lookup-coercion sub-key super-key)
-  (hash-ref (read-coercion-registry) (cons sub-key super-key) #f))
+  ;; Track 10 Phase 2c: registry stores data references, not closures.
+  ;; Check the runtime cache first (has the actual procedure).
+  ;; Fall back to registry (may have legacy procedure or data ref).
+  (or (resolve-coercion sub-key super-key)
+      (let ([entry (hash-ref (read-coercion-registry) (cons sub-key super-key) #f)])
+        (and entry (procedure? entry) entry))))
 
 ;; ========================================
 ;; Built-in subtype registrations

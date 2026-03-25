@@ -302,25 +302,26 @@
   (check-true (hash-has-key? reg 'let))
   (check-true (hash-has-key? reg 'if)))
 
-(test-case "introspection/macros: built-in macros are procedural"
-  ;; do, let, if are all registered as procedures (not pattern-template)
+(test-case "introspection/macros: built-in macros are symbol references"
+  ;; Track 10 Phase 2c: built-in macros are stored as SYMBOLS (not procedures)
+  ;; for serializable registries. resolve-preparse-entry looks up the procedure.
   (define entry-do (hash-ref (current-preparse-registry) 'do #f))
   (check-not-false entry-do)
-  (check-true (procedure? entry-do))
+  (check-true (symbol? entry-do))
   (check-false (preparse-macro? entry-do))
 
   (define entry-let (hash-ref (current-preparse-registry) 'let #f))
   (check-not-false entry-let)
-  (check-true (procedure? entry-let))
+  (check-true (symbol? entry-let))
 
   (define entry-if (hash-ref (current-preparse-registry) 'if #f))
   (check-not-false entry-if)
-  (check-true (procedure? entry-if)))
+  (check-true (symbol? entry-if)))
 
-(test-case "introspection/macros: $list-literal is procedural"
+(test-case "introspection/macros: $list-literal is symbol reference"
   (define entry (hash-ref (current-preparse-registry) '$list-literal #f))
   (check-not-false entry)
-  (check-true (procedure? entry)))
+  (check-true (symbol? entry)))
 
 (test-case "introspection/macros: user defmacro creates preparse-macro struct"
   (parameterize ([current-preparse-registry prelude-preparse-registry])
