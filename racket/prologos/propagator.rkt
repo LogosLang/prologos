@@ -307,19 +307,26 @@
    (prop-net-warm (prop-network-cells net) #f)          ;; shared cells, no contradiction
    (prop-network-cold net)))                            ;; shared: merge-fns, propagators, etc.
 
-;; Track 10 Phase 3b: Ergonomic fork macros for test isolation.
+;; Track 10 Phase 3b: Ergonomic fork macro for test isolation.
 ;;
-;; with-forked-network: fork the network in current-prop-net-box,
+;; with-forked-network: fork the network in a given box parameter,
 ;; execute body with the forked network, discard on exit.
 ;; The parent network is unmodified (CHAMP structural sharing).
+;; NOTE: Takes the box PARAMETER as first argument (not a value) to
+;; avoid circular dependency — propagator.rkt can't import metavar-store.rkt.
+;; Usage: (with-forked-network current-prop-net-box body ...)
 (provide with-forked-network)
-(define-syntax-rule (with-forked-network body ...)
-  (let* ([parent-box (current-prop-net-box)]
-         [parent-net (and parent-box (unbox parent-box))]
-         [child-net (if parent-net (fork-prop-network parent-net) (make-prop-network))]
-         [child-box (box child-net)])
-    (parameterize ([current-prop-net-box child-box])
-      body ...)))
+(define-syntax-rule (with-forked-network box-param body ...)
+  (let* ([parent-box (box-param)]
+         [parent-net (and parent-box (unbox parent-box))])
+    (if parent-net
+        ;; Parent has a network: fork it (CHAMP structural sharing)
+        (let ([child-box (box (fork-prop-network parent-net))])
+          (parameterize ([box-param child-box])
+            body ...))
+        ;; No parent network: keep #f, let process-command create its own
+        (parameterize ([box-param #f])
+          body ...))))
 
 ;; ========================================
 ;; Cell Operations

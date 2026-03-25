@@ -32,7 +32,8 @@
          "../driver.rkt"
          "../namespace.rkt"
          "../warnings.rkt"           ;; Track 7 Phase 6d: init-warning-cells!
-         "../global-constraints.rkt") ;; Track 7 Phase 6d: init-narrow-cells!
+         "../global-constraints.rkt"  ;; Track 7 Phase 6d: init-narrow-cells!
+         (only-in "../propagator.rkt" with-forked-network)) ;; Track 10 Phase 3c: network fork
 
 (provide ;; Pre-loaded prelude registries
          prelude-module-registry
@@ -128,6 +129,9 @@
 ;; Returns the LAST result (like the common run-ns-last pattern).
 ;; Each call gets a fresh global-env, ns-context, and meta-store for isolation.
 (define (run-ns-last s)
+  ;; Track 10 Phase 3c: Network isolation via fork.
+  ;; Network-related params replaced by with-forked-network (8 params → 1 fork).
+  ;; Registry params remain until Phase 6 migrates them to cells.
   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
@@ -141,17 +145,15 @@
                  [current-trait-registry prelude-trait-registry]
                  [current-impl-registry prelude-impl-registry]
                  [current-param-impl-registry prelude-param-impl-registry]
-                 ;; Track 6 Phase 7a: network isolation
-                 [current-prop-net-box              #f]
+                 ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
-                 [current-prelude-env-prop-net-box   #f]
-                 [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  [current-defn-param-names-cell-id  #f])
-    (install-module-loader!)
-    (last (process-string s))))
+    (with-forked-network current-prop-net-box
+      (install-module-loader!)
+      (last (process-string s)))))
 
 ;; Process a string and return ALL results (list).
 (define (run-ns-all s)
@@ -168,17 +170,15 @@
                  [current-trait-registry prelude-trait-registry]
                  [current-impl-registry prelude-impl-registry]
                  [current-param-impl-registry prelude-param-impl-registry]
-                 ;; Track 6 Phase 7a: network isolation
-                 [current-prop-net-box              #f]
+                 ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
-                 [current-prelude-env-prop-net-box   #f]
-                 [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  [current-defn-param-names-cell-id  #f])
-    (install-module-loader!)
-    (process-string s)))
+    (with-forked-network current-prop-net-box
+      (install-module-loader!)
+      (process-string s))))
 
 ;; ========================================
 ;; WS-mode helpers (primary design target)
@@ -200,17 +200,15 @@
                  [current-trait-registry prelude-trait-registry]
                  [current-impl-registry prelude-impl-registry]
                  [current-param-impl-registry prelude-param-impl-registry]
-                 ;; Track 6 Phase 7a: network isolation
-                 [current-prop-net-box              #f]
+                 ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
-                 [current-prelude-env-prop-net-box   #f]
-                 [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  [current-defn-param-names-cell-id  #f])
-    (install-module-loader!)
-    (last (process-string-ws s))))
+    (with-forked-network current-prop-net-box
+      (install-module-loader!)
+      (last (process-string-ws s)))))
 
 (define (run-ns-ws-all s)
   (parameterize ([current-prelude-env (hasheq)]
@@ -226,17 +224,15 @@
                  [current-trait-registry prelude-trait-registry]
                  [current-impl-registry prelude-impl-registry]
                  [current-param-impl-registry prelude-param-impl-registry]
-                 ;; Track 6 Phase 7a: network isolation
-                 [current-prop-net-box              #f]
+                 ;; Track 10 Phase 3c: fork replaces 8 network params
                  [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
-                 [current-prelude-env-prop-net-box   #f]
-                 [current-ns-prop-net-box           #f]
                  [current-definition-cell-ids       (hasheq)]
                  [current-module-registry-cell-id   #f]
                  [current-ns-context-cell-id        #f]
                  [current-defn-param-names-cell-id  #f])
-    (install-module-loader!)
-    (process-string-ws s)))
+    (with-forked-network current-prop-net-box
+      (install-module-loader!)
+      (process-string-ws s))))
 
 ;; ========================================
 ;; GDE-4: Structured error testing helpers
@@ -252,16 +248,14 @@
                    [current-definition-dependencies (hasheq)]  ;; Phase 3b
                    [current-cross-module-deps '()]  ;; Track 5 Phase 4
                    [current-error-port stderr-out]
-                   ;; Track 6 Phase 7a: network isolation
-                   [current-prop-net-box              #f]
+                   ;; Track 10 Phase 3c: fork replaces 8 network params
                    [current-persistent-registry-net-box prelude-persistent-registry-net-box]  ;; Track 7 Phase 6d
-                   [current-prelude-env-prop-net-box   #f]
-                   [current-ns-prop-net-box           #f]
                    [current-definition-cell-ids       (hasheq)]
                    [current-module-registry-cell-id   #f]
                    [current-ns-context-cell-id        #f]
                    [current-defn-param-names-cell-id  #f])
-      (process-string s)))
+      (with-forked-network current-prop-net-box
+        (process-string s))))
   (cons results (get-output-string stderr-out)))
 
 ;; Assert that an error has a non-empty provenance field.

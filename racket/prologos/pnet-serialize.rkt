@@ -25,7 +25,10 @@
          "syntax.rkt"
          "namespace.rkt"
          "source-location.rkt"
-         (only-in "propagator.rkt" cell-id)
+         (only-in "propagator.rkt" cell-id
+                  prop-network prop-net-hot prop-net-warm prop-net-cold
+                  prop-cell tms-cell-value)
+         (only-in "elab-network-types.rkt" elab-network elab-cell-info contradiction-info)
          (only-in "macros.rkt" spec-entry preparse-macro ctor-meta
                   trait-meta trait-method impl-entry param-impl-entry
                   current-preparse-registry current-ctor-registry
@@ -369,6 +372,18 @@
   ;; expr-cell-id-type
   (with-handlers ([exn? void])
     (auto-cache! expr-cell-id-type d d))
+
+  ;; Track 10 Phase 3c: prop-network + CHAMP structs (for foreign functions that return networks)
+  (with-handlers ([exn? void])
+    (auto-cache! prop-network d d)
+    (auto-cache! prop-net-hot d d)
+    (auto-cache! prop-net-warm d d)
+    (auto-cache! prop-net-cold d d)
+    (auto-cache! elab-network d d)
+    (auto-cache! elab-cell-info d d)
+    (auto-cache! contradiction-info d d)
+    (auto-cache! prop-cell d d)
+    (auto-cache! tms-cell-value d d))
 
   (void))
 
