@@ -307,6 +307,20 @@
    (prop-net-warm (prop-network-cells net) #f)          ;; shared cells, no contradiction
    (prop-network-cold net)))                            ;; shared: merge-fns, propagators, etc.
 
+;; Track 10 Phase 3b: Ergonomic fork macros for test isolation.
+;;
+;; with-forked-network: fork the network in current-prop-net-box,
+;; execute body with the forked network, discard on exit.
+;; The parent network is unmodified (CHAMP structural sharing).
+(provide with-forked-network)
+(define-syntax-rule (with-forked-network body ...)
+  (let* ([parent-box (current-prop-net-box)]
+         [parent-net (and parent-box (unbox parent-box))]
+         [child-net (if parent-net (fork-prop-network parent-net) (make-prop-network))]
+         [child-box (box child-net)])
+    (parameterize ([current-prop-net-box child-box])
+      body ...)))
+
 ;; ========================================
 ;; Cell Operations
 ;; ========================================
