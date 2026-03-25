@@ -1385,11 +1385,15 @@
 ;; ========================================
 (define (process-string s)
   ;; PM 8F: Ensure propagator network exists before processing.
-  ;; Without a network, module loading hangs during elaboration.
-  ;; Only creates the network box — does NOT reset prelude-env or other context.
-  (when (not (current-prop-net-box))
-    (current-prop-net-box (box (make-elaboration-network)))
-    (reset-meta-store!))
+  ;; Track 10 Phase 3d: if no network exists, create one SCOPED to this call
+  ;; (via parameterize, not mutation). Prevents elab-network leak into caller.
+  (if (not (current-prop-net-box))
+      (parameterize ([current-prop-net-box (box (make-elaboration-network))])
+        (reset-meta-store!)
+        (process-string-inner s))
+      (process-string-inner s)))
+
+(define (process-string-inner s)
   (define port (open-input-string s))
   ;; Read raw syntax, apply pre-parse expansion, then parse
   (define raw-stxs (read-all-syntax port "<string>"))
@@ -1429,10 +1433,14 @@
 ;; Like process-string, but uses the WS reader (indentation-sensitive).
 ;; This is the path that .prologos files use — the primary design target.
 (define (process-string-ws s)
-  ;; PM 8F: Ensure propagator network exists (same as process-string).
-  (when (not (current-prop-net-box))
-    (current-prop-net-box (box (make-elaboration-network)))
-    (reset-meta-store!))
+  ;; Track 10 Phase 3d: scoped network creation (same as process-string)
+  (if (not (current-prop-net-box))
+      (parameterize ([current-prop-net-box (box (make-elaboration-network))])
+        (reset-meta-store!)
+        (process-string-ws-inner s))
+      (process-string-ws-inner s)))
+
+(define (process-string-ws-inner s)
   (define port (open-input-string s))
   ;; Use WS reader (indentation -> nested lists)
   (define raw-stxs (read-all-syntax-ws port "<ws-string>"))

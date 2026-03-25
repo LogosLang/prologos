@@ -26,9 +26,10 @@
          "namespace.rkt"
          "source-location.rkt"
          (only-in "propagator.rkt" cell-id
-                  prop-network prop-net-hot prop-net-warm prop-net-cold
+                  prop-network prop-network? make-prop-network
+                  prop-net-hot prop-net-warm prop-net-cold
                   prop-cell tms-cell-value)
-         (only-in "elab-network-types.rkt" elab-network elab-cell-info contradiction-info)
+         (only-in "elab-network-types.rkt" elab-network elab-network? elab-cell-info contradiction-info)
          (only-in "macros.rkt" spec-entry preparse-macro ctor-meta
                   trait-meta trait-method impl-entry param-impl-entry
                   current-preparse-registry current-ctor-registry
@@ -97,6 +98,11 @@
        (define name (or (object-name v) 'anonymous))
        (list 'foreign-proc name)]
       [(symbol? v) (serialize-sym v)]
+      ;; Track 10 Phase 3c: prop-network and elab-network contain internal
+      ;; CHAMP nodes that aren't exported and can't be properly reconstructed.
+      ;; Replace with sentinels — these are runtime values, not module state.
+      [(prop-network? v) '(runtime-prop-network)]
+      [(elab-network? v) '(runtime-elab-network)]
       [(struct? v)
        (for/vector ([e (in-vector (struct->vector v))]) (deep-s->v e))]
       [(pair? v)
@@ -417,6 +423,11 @@
     ;; Sentinel markers
     [(and (list? v) (= (length v) 1) (eq? (car v) 'void-sentinel))
      (void)]
+    ;; Track 10 Phase 3c: runtime network sentinels → fresh networks
+    [(and (list? v) (= (length v) 1) (eq? (car v) 'runtime-prop-network))
+     (make-prop-network)]
+    [(and (list? v) (= (length v) 1) (eq? (car v) 'runtime-elab-network))
+     (make-prop-network)]  ;; elab-network → fresh prop-network (no elab state needed)
     [(and (list? v) (= (length v) 2) (eq? (car v) 'box-sentinel))
      (box (deep-serializable->struct (cadr v)))]
     [(and (list? v) (= (length v) 2) (eq? (car v) 'foreign-proc))
