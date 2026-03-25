@@ -22,11 +22,14 @@
 |-------|-------------|--------|-------|
 | Pre-0 | Microbenchmarks + adversarial | ✅ | `313a930` — see §3.Pre-0 for results |
 | Pre-0.5 | Serialization round-trip benchmark (D.4) | ⬜ | Time actual serialize + deserialize of prelude. Validates <100ms target. |
-| 0 | Acceptance file baseline | ⬜ | |
-| 1a | Network-active module loading | ⬜ | `prop-net-box ≠ #f` during load-module |
-| 1b | `.pnet` serialization (struct->vector + gensym + dynamic-require) | ⬜ | Highest-value phase — 20s → ~50ms cold start. Version header. Atomic writes. Feature flag. |
-| 2 | Prelude as persistent shared network | ⬜ | Deserialize per-module .pnet files, compose, freeze, fork |
-| 3 | Test isolation via three-layer fork | ⬜ | prelude → test-file → test-case. Unified .pnet = modules + registries. 21→3 params. |
+| 0 | Acceptance file baseline + ns-context fix | ✅ | `d5a61fa` — 7401 tests, 241.4s |
+| 1a | Network-active module loading | ✅ | `a96f543` — `prop-net-box = (box (make-prop-network))` during load-module |
+| 1b | `.pnet` serialization pipeline | ✅ | `9203476` — struct->vector + write/read + tag dispatch |
+| 1b.2 | Tag table (60+ constructors) | ✅ | `7b8e282` — register-all-pnet-structs! |
+| 2a | Foreign function provenance | ✅ | `05d93c4` — source-module + racket-name, dynamic-require re-linking |
+| 2b-2e | Registry completeness (incremental) | ✅ | Preparse closures→symbols, coercion→data refs, 5 registries, capability wrappers |
+| 2f | Comprehensive registry audit — ALL GREEN | ✅ | `e25061a` — 17/28 registries. 382/382, 7401 tests, 243.2s |
+| 3 | Test isolation via three-layer fork | ⬜ | prelude → test-file → test-case. Unified .pnet. 21→3 params. |
 | 4 | Absorb PM 8F deferrals | ⬜ | CHAMP fallback removal, defaults at solve-time |
 | 5 | Eliminate dual-path (snapshot retirement) | ⬜ | module-network-ref + .pnet frozen view for non-network contexts |
 | 6 | Parameter reduction (incremental, ~41 → ~3) | ⬜ | Architectural cleanup |
