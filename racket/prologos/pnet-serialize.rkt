@@ -26,13 +26,14 @@
          "source-location.rkt"
          (only-in "propagator.rkt" cell-id)
          (only-in "macros.rkt" spec-entry preparse-macro ctor-meta
-                  trait-meta trait-method impl-entry
+                  trait-meta trait-method impl-entry param-impl-entry
                   current-preparse-registry current-ctor-registry
                   current-type-meta
                   current-subtype-registry current-coercion-registry
                   current-capability-registry
                   current-trait-registry current-impl-registry
-                  current-param-impl-registry)
+                  current-param-impl-registry
+                  current-specialization-registry)
          (only-in "multi-dispatch.rkt" current-multi-defn-registry)
          (only-in "foreign.rkt" parse-foreign-type make-marshaller-pair))
 
@@ -284,6 +285,13 @@
   (reg2! trait-method 'test '())
   (reg3! impl-entry 'T '() 'dict)
 
+  ;; param-impl-entry (stored in param-impl-registry)
+  (regN! param-impl-entry 'T '() '() 'dict '())
+
+  ;; ctor-meta (stored in ctor-registry)
+  (when (with-handlers ([exn? (lambda (_) #f)]) (ctor-meta 'T '() 0 #f #f #f) #t)
+    (regN! ctor-meta 'T '() 0 #f #f #f))
+
   ;; Phase 2e: populate dynamic-ctor-cache with ALL constructors from syntax.rkt.
   ;; This is the fallback for tags not in the static table above.
   ;; Uses struct->vector on dummy instances to discover tags, then maps tag-name → ctor.
@@ -448,6 +456,8 @@
   (define s-trait-reg     (serialize! (current-trait-registry)))
   (define s-impl-reg      (serialize! (current-impl-registry)))
   (define s-param-impl-reg (serialize! (current-param-impl-registry)))
+  (define s-specialization-reg (serialize! (current-specialization-registry)))
+  (define s-tycon-arity (serialize! (current-tycon-arity-extension)))
 
   (let ()
      (define hash-val (source-hash-for-module ns-sym source-path))
@@ -471,6 +481,8 @@
              s-trait-reg                ;; 14
              s-impl-reg                 ;; 15
              s-param-impl-reg           ;; 16
+             s-specialization-reg      ;; 17
+             s-tycon-arity            ;; 18
              ))
      (define pnet-path (pnet-path-for-module ns-sym))
      (make-directory* (path-only pnet-path))
@@ -509,6 +521,8 @@
                      (define s-trait (and (>= (length raw) 17) (list-ref raw 14)))
                      (define s-impl  (and (>= (length raw) 17) (list-ref raw 15)))
                      (define s-pimpl (and (>= (length raw) 17) (list-ref raw 16)))
+                     (define s-spec-reg (and (>= (length raw) 18) (list-ref raw 17)))
+                     (define s-tycon-a  (and (>= (length raw) 19) (list-ref raw 18)))
                      (list (deep-serializable->struct s-env)
                            (deep-serializable->struct s-specs)
                            (deep-serializable->struct s-locs)
@@ -525,6 +539,8 @@
                            (if s-trait (deep-serializable->struct s-trait) (hasheq))
                            (if s-impl  (deep-serializable->struct s-impl)  (hasheq))
                            (if s-pimpl (deep-serializable->struct s-pimpl) (hasheq))
+                           (if s-spec-reg (deep-serializable->struct s-spec-reg) (hash))
+                           (if s-tycon-a (deep-serializable->struct s-tycon-a) (hasheq))
                            )))))))
 
 ;; ============================================================

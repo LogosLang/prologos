@@ -102,7 +102,7 @@
 ;; Fix: update test-trait-resolution to use standard test-support fixtures,
 ;; OR add a per-test cache disable flag.
 ;; Enabling cache for now — 1 failure is acceptable for validation.
-(define current-use-pnet-cache? (make-parameter #t))
+(define current-use-pnet-cache? (make-parameter #f))
 (define current-pnet-write-enabled? (make-parameter #f))
 
 ;; ========================================
@@ -1589,11 +1589,20 @@
      (cond
        [pnet-result
         ;; .pnet hit: reconstruct module-info + propagate registries
-        (match-define (list d-env d-specs d-locs d-exports
-                           d-preparse d-ctor d-tmeta d-multi
-                           d-sub d-coerce d-cap
-                           d-trait d-impl d-param-impl)
-          pnet-result)
+        ;; Destructure: first 11 are the core fields. Additional fields
+        ;; (trait, impl, param-impl, specialization) are serialized but NOT
+        ;; restored — they're outer-scope state, not load-module-managed.
+        (define d-env       (list-ref pnet-result 0))
+        (define d-specs     (list-ref pnet-result 1))
+        (define d-locs      (list-ref pnet-result 2))
+        (define d-exports   (list-ref pnet-result 3))
+        (define d-preparse  (list-ref pnet-result 4))
+        (define d-ctor      (list-ref pnet-result 5))
+        (define d-tmeta     (list-ref pnet-result 6))
+        (define d-multi     (list-ref pnet-result 7))
+        (define d-sub       (list-ref pnet-result 8))
+        (define d-coerce    (list-ref pnet-result 9))
+        (define d-cap       (list-ref pnet-result 10))
         ;; Track 10 Phase 2e: re-link foreign function marshallers from stubs
         (define d-env-relinked (relink-foreign-marshallers! d-env))
         (define mod-info
@@ -1634,16 +1643,30 @@
         (current-capability-registry
          (for/fold ([reg (current-capability-registry)]) ([(k v) (in-hash d-cap)])
            (hash-set reg k v)))
-        ;; Phase 2e: trait + impl + param-impl registries
-        (current-trait-registry
-         (for/fold ([reg (current-trait-registry)]) ([(k v) (in-hash d-trait)])
-           (hash-set reg k v)))
-        (current-impl-registry
-         (for/fold ([reg (current-impl-registry)]) ([(k v) (in-hash d-impl)])
-           (hash-set reg k v)))
-        (current-param-impl-registry
-         (for/fold ([reg (current-param-impl-registry)]) ([(k v) (in-hash d-param-impl)])
-           (hash-set reg k v)))
+        ;; Track 10 Phase 2e: merge 5 additional registries (now managed by load-module)
+        (when (> (length pnet-result) 11)
+          (define d-trait (list-ref pnet-result 11))
+          (define d-impl  (list-ref pnet-result 12))
+          (define d-pimpl (list-ref pnet-result 13))
+          (define d-spec-r (and (> (length pnet-result) 14) (list-ref pnet-result 14)))
+          (define d-tycon  (and (> (length pnet-result) 15) (list-ref pnet-result 15)))
+          (current-trait-registry
+           (for/fold ([reg (current-trait-registry)]) ([(k v) (in-hash d-trait)])
+             (hash-set reg k v)))
+          (current-impl-registry
+           (for/fold ([reg (current-impl-registry)]) ([(k v) (in-hash d-impl)])
+             (hash-set reg k v)))
+          (current-param-impl-registry
+           (for/fold ([reg (current-param-impl-registry)]) ([(k v) (in-hash d-pimpl)])
+             (hash-set reg k v)))
+          (when d-spec-r
+            (current-specialization-registry
+             (for/fold ([reg (current-specialization-registry)]) ([(k v) (in-hash d-spec-r)])
+               (if (hash? reg) (hash-set reg k v) (hash k v)))))
+          (when d-tycon
+            (current-tycon-arity-extension
+             (for/fold ([reg (current-tycon-arity-extension)]) ([(k v) (in-hash d-tycon)])
+               (hash-set reg k v)))))
         mod-info]
 
        [else
@@ -1658,6 +1681,12 @@
      (define mod-subtype-reg #f)
      (define mod-coercion-reg #f)
      (define mod-capability-reg #f)
+     ;; Track 10 Phase 2e: 5 additional registries now managed by load-module
+     (define mod-trait-reg #f)
+     (define mod-impl-reg #f)
+     (define mod-param-impl-reg #f)
+     (define mod-specialization-reg #f)
+     (define mod-tycon-arity #f)
      (define mod-module-network #f)
      (parameterize ([current-prelude-env (hasheq)]
                     [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
@@ -1672,6 +1701,14 @@
                     [current-subtype-registry (current-subtype-registry)]
                     [current-coercion-registry (current-coercion-registry)]
                     [current-capability-registry (current-capability-registry)]
+                    ;; Track 10 Phase 2e: trait/impl/specialization registries now managed
+                    ;; by load-module (previously outer-scope side effects).
+                    ;; This ensures .pnet cache-hit path can serialize/restore them.
+                    [current-trait-registry (current-trait-registry)]
+                    [current-impl-registry (current-impl-registry)]
+                    [current-param-impl-registry (current-param-impl-registry)]
+                    [current-specialization-registry (current-specialization-registry)]
+                    [current-tycon-arity-extension (current-tycon-arity-extension)]
                     [current-spec-store (hasheq)]  ;; fresh — specs are module-local
                     [current-propagated-specs (seteq)]  ;; fresh propagated tracking
                     [current-loading-set (set-add (current-loading-set) ns-sym)]
@@ -1744,6 +1781,12 @@
        (set! mod-subtype-reg (current-subtype-registry))
        (set! mod-coercion-reg (current-coercion-registry))
        (set! mod-capability-reg (current-capability-registry))
+       ;; Track 10 Phase 2e: capture 5 additional registries
+       (set! mod-trait-reg (current-trait-registry))
+       (set! mod-impl-reg (current-impl-registry))
+       (set! mod-param-impl-reg (current-param-impl-registry))
+       (set! mod-specialization-reg (current-specialization-registry))
+       (set! mod-tycon-arity (current-tycon-arity-extension))
 
        ;; Track 5 Phase 3b: Build module-network-ref from accumulated definitions.
        ;; Each entry in mod-env becomes a definition cell in the module's network.
@@ -1793,6 +1836,13 @@
 
      ;; Capability registry: propagate capability declarations from loaded modules.
      (current-capability-registry mod-capability-reg)
+
+     ;; Track 10 Phase 2e: propagate 5 additional registries
+     (current-trait-registry mod-trait-reg)
+     (current-impl-registry mod-impl-reg)
+     (current-param-impl-registry mod-param-impl-reg)
+     (current-specialization-registry mod-specialization-reg)
+     (current-tycon-arity-extension mod-tycon-arity)
 
      ;; Note: spec store is NOT globally propagated — it's carried in module-info
      ;; for selective propagation via process-imports-spec.
