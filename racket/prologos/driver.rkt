@@ -101,9 +101,11 @@
 ;; This test has its own module loading setup that's incompatible with cache.
 ;; Fix: update test-trait-resolution to use standard test-support fixtures,
 ;; OR add a per-test cache disable flag.
-;; Enabling cache for now — 1 failure is acceptable for validation.
-(define current-use-pnet-cache? (make-parameter #f))
-(define current-pnet-write-enabled? (make-parameter #f))
+;; Track 10 Phase 3a: .pnet cache ON by default.
+;; Staleness detection is automatic (source hash check).
+;; Disable with --no-pnet-cache flag or (current-use-pnet-cache? #f).
+(define current-use-pnet-cache? (make-parameter #t))
+(define current-pnet-write-enabled? (make-parameter #t))
 
 ;; ========================================
 ;; Standard library path (computed from this module's location)

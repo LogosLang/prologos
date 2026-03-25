@@ -13,6 +13,7 @@
 ;;   racket tools/run-affected-tests.rkt --no-record # skip JSONL timing recording
 ;;   racket tools/run-affected-tests.rkt --timeout 300  # per-test timeout (default: 600)
 ;;   racket tools/run-affected-tests.rkt --no-precompile  # skip bytecode pre-compilation
+;;   racket tools/run-affected-tests.rkt --no-pnet-cache # disable .pnet module network cache
 ;;   racket tools/run-affected-tests.rkt --failures      # show failure logs from last run
 ;;
 ;; Automatically records per-file timing data to data/benchmarks/timings.jsonl.
@@ -170,6 +171,7 @@
 (define record-timings? (make-parameter #t))
 (define timeout-secs (make-parameter 600))
 (define do-precompile? (make-parameter #t))
+(define do-pnet-cache? (make-parameter #t))
 (define show-failures? (make-parameter #f))
 (define bail-timeout-threshold (make-parameter 3))
 
@@ -195,6 +197,8 @@
     (timeout-secs (string->number secs))]
    ["--no-precompile" "Skip bytecode pre-compilation step"
     (do-precompile? #f)]
+   ["--no-pnet-cache" "Disable .pnet module network caching (default: enabled)"
+    (do-pnet-cache? #f)]
    ["--failures" "Show failure logs from last run (no tests executed)"
     (show-failures? #t)]
    ["--bail-timeouts" n "Abort after N per-file timeouts (default: 3, 0=disable)"
@@ -400,6 +404,36 @@
     (define precomp-ms (- (current-inexact-monotonic-milliseconds) precomp-t0))
     (printf "Pre-compiled in ~as\n"
             (real->decimal-string (/ precomp-ms 1000.0) 1)))
+
+  ;; .pnet cache: set env var for batch workers, check/generate cache
+  (cond
+    [(do-pnet-cache?)
+     (putenv "PROLOGOS_PNET_CACHE" "1")
+     ;; Check if .pnet files already exist (skip expensive generation)
+     (let* ([pnet-dir (build-path project-root "data" "cache" "pnet")]
+            [pnet-count
+             (if (directory-exists? pnet-dir)
+                 (length (filter (lambda (p) (regexp-match? #rx"\\.pnet$" (path->string p)))
+                                 (directory-list pnet-dir)))
+                 0)])
+       (if (> pnet-count 0)
+           (printf ".pnet cache: ~a files ready\n" pnet-count)
+           (let ([pnet-t0 (current-inexact-monotonic-milliseconds)])
+             (printf "Generating .pnet cache (first run) ...\n")
+             (let ([dev-null-out (open-output-file "/dev/null" #:exists 'append)]
+                   [dev-null-err (open-output-file "/dev/null" #:exists 'append)])
+               (let-values ([(gen-proc _out _in _err)
+                             (subprocess dev-null-out #f dev-null-err
+                                         racket-path
+                                         (path->string (build-path project-root "tools" "pnet-compile.rkt")))])
+                 (subprocess-wait gen-proc)
+                 (close-output-port dev-null-out)
+                 (close-output-port dev-null-err)))
+             (let ([pnet-ms (- (current-inexact-monotonic-milliseconds) pnet-t0)])
+               (printf ".pnet cache generated in ~as\n"
+                       (real->decimal-string (/ pnet-ms 1000.0) 1))))))]
+    [else
+     (putenv "PROLOGOS_PNET_CACHE" "0")])
 
   ;; Check PRELUDE manifest against namespace.rkt (catch drift early)
   (check-prelude-drift! project-root)

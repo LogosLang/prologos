@@ -55,7 +55,16 @@
          "../namespace.rkt"
          "../global-env.rkt"
          "../metavar-store.rkt"
-         "../errors.rkt")
+         "../errors.rkt"
+         "../driver.rkt")
+
+;; Track 10 Phase 3a: Read .pnet cache setting from environment
+;; The test runner sets PROLOGOS_PNET_CACHE=1 when cache is enabled.
+;; Batch workers read from pre-generated .pnet files (read-only — no writes).
+(define pnet-env (getenv "PROLOGOS_PNET_CACHE"))
+(when (and pnet-env (string=? pnet-env "1"))
+  (current-use-pnet-cache? #t)
+  (current-pnet-write-enabled? #f))
 
 ;; Load prelude via test-support.rkt (warms Racket module cache).
 ;; Must use dynamic-require (not require) to control execution order.
