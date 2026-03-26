@@ -30,7 +30,7 @@
 | A2 | `zonk-final` → `freeze` rename (15 sites) | ✅ | `d12eacf` — cosmetic rename, defaults at solve-time deferred to WS-B |
 | A3 | id-map elimination. Add cell-id to `hasmethod-constraint-info`. | ✅ | `cd0d708` — 3 external callers → cell-id direct. Zero external id-map callers. 139.0s |
 | A3b | process-string scoping audit (74 high-risk `set-box!` sites) | ✅ | NO LEAKS FOUND. All 69 metavar-store + 5 global-env set-box! write to parameterized boxes. |
-| A4 | Batch worker simplification (11→6 saved values) | ⬜ | D.4 fix: 6 not 4. Specify new batch worker structure (not just "delete and hope"). |
+| A4 | Batch worker simplification (11→6 saved values) | ⏸️ | DEFERRED: macros snapshot (19 Racket params) still needed. Fork helps network cells but not params. Simplification requires WS-B (registries as cells). |
 | A5 | PUnify toggle flip validation | ⬜ | Runs AFTER A4 (tests against final WS-A state, not mid-migration). |
 | A6 | A/B benchmark comparison (WS-A before/after) | ⬜ | Compare against Pre-0 baselines. See §A6 table. |
 | A7 | Verification (full suite green) | ⬜ | |
