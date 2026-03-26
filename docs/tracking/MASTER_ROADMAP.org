@@ -228,6 +228,7 @@ When elaboration, resolution, matching, and reduction all use the SRE:
 | | |
 |------------------+------|
 | *Thesis*         | Parsing, structural reasoning, reduction, and logical inference are all instances of typed hyperlattice rewriting on propagator networks. PRN is the theoretical foundation that the application series (PPN, SRE, PReductions, BSP-LE) instantiate and contribute insights back to. |
+| *Master Roadmap* | [[file:2026-03-26_PRN_MASTER.md][2026-03-26_PRN_MASTER.md]] |
 | *Status*         | Stage 0 research. Emerges from application track discoveries. |
 | *Origin*         | [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research]], [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]], SRE Track 0 PIR (SRE = DPO hyperedge replacement) |
 
