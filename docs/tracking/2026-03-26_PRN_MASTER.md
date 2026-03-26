@@ -189,6 +189,7 @@ as application tracks complete PIRs.
 | [PPN Master §4: Bidirectional Typed Grammars](2026-03-26_PPN_MASTER.md) | 2026-03-26 | DCG bidirectionality, invariant levels, NTT type correspondence | Grammar-as-type; serialization/deserialization as dual rewriting |
 | [Lattice Foundations for PPN](../research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) | 2026-03-26 | Abstract interpretation, semiring parsing, Datalog, monotone frameworks, categorical connections, ATMS-guided parsing | Concrete lattice design for 6 domains + reduced product + scheduling strategy |
 | [FL-Narrowing Design](../research/2026-03-07_FL_NARROWING_DESIGN.org) | 2026-03-07 | Definitional trees, residuation-first, term lattice, needed narrowing | Strategy layer: DTs as optimal rewrite rule selection |
+| [Kan Extensions, ATMS, GFP Parsing](../research/2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md) | 2026-03-26 | Right Kan = NF-Narrowing demands, Left Kan + ATMS = 4-level search, GFP parsing bilattice, cross-network disambiguation | Deep structural connections between Kan extensions, ATMS, and parsing |
 
 ## 7. Watching / Emerging Patterns
 
@@ -203,6 +204,10 @@ more data points before promotion to §3 (Universal Primitives).
 | "DTs are the universal strategy layer" | NF-Narrowing (DTs guide narrowing), SRE (ctor-desc dispatch = 1-level DT) | If PPN parsing uses DT-like strategy, and PReductions uses DTs for optimization rule selection — DTs are the STRATEGY primitive across all applications |
 | "Needed optimality transfers across domains" | NF-Narrowing (needed narrowing = minimal steps) | If "needed parsing" (DT-guided rule selection) is provably optimal for CFGs, the optimality result generalizes beyond logic programming |
 | "ATMS + type network = proof-based disambiguation" | Conversation insight (2026-03-26): parse ambiguity → ATMS branches → type contradiction → nogood → retraction. Strictly more powerful than PEG/GLR/GLL/Earley. | PPN Track 5 implementation |
+| "Parse bilattice (derivation × elimination)" | Combine lfp (what's derived) with gfp (what's impossible) into bilattice — parallels WF-LE well-founded semantics. Novel for parsing: no existing framework does this. | PPN Track 0 lattice design |
+| "4-level search optimization (branch → prune → focus → select)" | ATMS (branch) + Left Kan (prune via partial type info) + Right Kan (demand-driven focus) + tropical (cost-optimal selection). Compose on one network. | PPN + OE + PRN foundational |
+| "Residuation = propagator waiting (identity, not analogy)" | NF-Narrowing residuation IS the standard cell-at-bot behavior. No special mechanism needed. | PPN (grammar rule residuation), SRE |
+| "GFP for grammar extension validation" | gfp of parses with old grammar vs new grammar — growth = ambiguity. Static check, no test strings. | PPN Track 7 |
 | "The grammar IS the type" | PPN (grammar = parse type), SRE (form = structural type) | If PReductions' rewrite rules are typed by their input/output pattern types |
 | "Self-describing formats = meta-grammars" | PPN Track 9 (grammar-as-Part-1) | Need implementation evidence |
 

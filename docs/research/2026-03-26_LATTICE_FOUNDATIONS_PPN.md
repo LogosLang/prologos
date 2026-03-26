@@ -1178,6 +1178,156 @@ graceful degradation.
 - Van Wyk, E. et al. (2010). "Silver: an Extensible Attribute Grammar System."
   Science of Computer Programming, 75(1-2):39-54.
 
+---
+
+## 11. GFP/Bilattice Parsing and Advanced Search (Post-Conversation Addendum)
+
+*Added after conversational research (2026-03-26). See
+[Kan Extensions, ATMS, GFP Parsing](2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md)
+for the full development of these ideas.*
+
+### 11.1 The Parse Bilattice
+
+The lattice design in §7 specifies a SINGLE ordering on each domain
+(derivation — what can be parsed). But parsing benefits from a DUAL
+ordering: **elimination** (what can be ruled out). The combination is
+a **bilattice**, paralleling WF-LE's well-founded semantics.
+
+| Ordering | Direction | Starting point | Question |
+|----------|-----------|---------------|----------|
+| Derivation (lfp) | Upward from bot | No parses known | "What CAN we derive?" |
+| Elimination (gfp) | Downward from top | All rules possible | "What can we NOT rule out?" |
+
+The **well-founded parse** is the combined fixpoint: derivations that
+exist AND are not eliminated. This is computed by alternating lfp and
+gfp passes, exactly as WF-LE alternates knowledge and truth orderings.
+
+**Implications for §7 lattice design**: The parse state lattice should
+be a bilattice, not a simple lattice. The carrier set is the same (sets
+of parse items), but with two orderings: derivation (subset inclusion)
+and elimination (superset inclusion in the dual). The ATMS manages
+branching across both orderings.
+
+**Applications**:
+- **Error recovery**: lfp = what DID match (partial parse). gfp = what
+  COULD match (all applicable rules). Gap (gfp - lfp) = possible repairs.
+  Tropical semiring selects cheapest repair.
+- **Grammar extension validation**: gfp of parses with old grammar vs
+  new grammar. Growth = ambiguity. Static check, no test strings needed.
+- **Foreign type inference**: gfp of "what types could this value have,
+  given observations." Coinductive: define by what you CAN DO, not how
+  you BUILD.
+
+### 11.2 GFP on Propagator Networks
+
+GFP doesn't need new infrastructure. Use the **dual lattice** (reverse
+ordering): top becomes dual-bot, bot becomes dual-top. Start cells at
+dual-bot (original top). Propagate monotonically in the dual. The
+fixpoint in the dual IS the gfp in the original.
+
+The existing WF-LE bilattice (`newtype Knowledge`, `newtype Truth`)
+already implements this pattern. The PPN analog: `newtype Derivation`
+and `newtype Elimination` on the same carrier.
+
+### 11.3 The 4-Level Search Strategy
+
+ATMS, Kan extensions, and tropical semirings compose into a search
+strategy more powerful than any single mechanism:
+
+1. **ATMS creates branches** (full exploration space): One branch per
+   parse alternative. Complete but expensive.
+
+2. **Left Kan prunes** (speculative forwarding): Forward PARTIAL type
+   information from elaboration into parse branches before full fixpoint.
+   If even the lower bound contradicts a branch, prune it without
+   running to fixpoint. "Speculative pruning."
+
+3. **Right Kan focuses** (demand-driven): Among surviving branches, only
+   compute what's demanded. Don't elaborate parts of a parse that no
+   downstream consumer needs.
+
+4. **Tropical selects** (cost-optimal): Among branches that survive
+   pruning and produce complete results, select the cheapest.
+
+**The composition**: Branch → Prune → Focus → Select. Each level uses
+a different mechanism on the same network. The parse result is not
+heuristic — it's a PROOF that the surviving parse is the unique
+type-consistent, cost-optimal interpretation.
+
+### 11.4 NF-Narrowing as Strategy Layer
+
+Definitional trees provide OPTIMAL rule selection for inductively
+sequential systems (Antoy 2005). The optimality result: needed narrowing
+uses the MINIMUM number of narrowing steps. No other strategy uses fewer.
+
+This transfers to PPN IF grammar rules are inductively sequential (each
+production matches a specific nonterminal at a specific position — which
+CFGs guarantee). DT-guided rule application for CFGs is conjectured
+optimal.
+
+Key correspondences:
+- **Residuation = propagator waiting**: cell at bot → propagator doesn't
+  fire. Identical behavior, not analogy.
+- **DT dispatch = form registry**: `prop:ctor-desc-tag` IS a 1-level DT.
+  Multi-level DTs handle nested pattern matching.
+- **Needed narrowing = Right Kan demand**: only compute what's needed
+  to reach a result.
+
+### 11.5 Demand Lattice
+
+Right Kan formalization requires a **demand lattice** — a lattice of
+"what information is needed, at what position." Currently demands are
+imperative (DT traversal in NF-Narrowing, bidirectional mode in type
+checking). Formal demand lattice would unify:
+
+- DT demands (narrowing: "which constructor at position P?")
+- Type-checking demands (bidirectional: "what type does this subexpression have?")
+- Parse demands (disambiguation: "what token/form is at position P?")
+
+All three are "I need information at position P to proceed." A shared
+demand lattice lets them compose: a type demand can trigger a parse
+demand (need to parse more to determine the type), which can trigger a
+narrowing demand (need to narrow a type variable to determine the parse).
+
+### 11.6 Cross-Network Disambiguation Sources
+
+Every lattice domain on the network is a potential disambiguation
+source for parsing. The parser isn't standalone — it participates in
+the full network's fixpoint:
+
+| Domain | What it tells the parser |
+|--------|------------------------|
+| Type lattice | Arity, argument types, return types |
+| Session lattice | Expected communication actions in protocol context |
+| QTT multiplicities | Linear variable usage constraints |
+| Effect lattice | Valid operations in current effect context |
+| Module exports | Available names for import resolution |
+| Trait constraints | Overloaded function resolution |
+| Narrowing lattice | Possible constructors for pattern matching |
+| Coercion lattice | Implicit numeric conversions |
+
+Each flows backward (from downstream domain into parser) via Galois
+bridge γ-functions. The γ-image of downstream constraints projected
+into the parse domain IS the disambiguation — not heuristic, but the
+mathematically-determined projection.
+
+### 11.7 Revised Lattice Design Recommendations
+
+Based on these insights, §7's concrete lattice design should be
+extended:
+
+1. **Parse state**: bilattice (derivation × elimination), not simple
+   lattice. Two orderings on the same carrier.
+2. **Demand lattice**: new domain. Carries "what's needed" information.
+   Connected to parse, type, and narrowing domains via demand bridges.
+3. **Cost lattice**: tropical semiring (min-plus) for optimization.
+   Enriches parse state with derivation costs for optimal selection.
+4. **Scheduling**: the 4-level strategy (ATMS → Left Kan → Right Kan →
+   tropical) replaces simple worklist scheduling for parse-related
+   strata.
+
+---
+
 ### Foundational Category Theory
 
 - Lawvere, F.W. (1973). "Metric spaces, generalized logic, and closed
