@@ -206,4 +206,4 @@ The Collection Interface Design's post-Track 8 phases (T1-T4) are independent of
 
 | Document | Role |
 |----------|------|
-| [Parallel Propagator Scheduling](../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md) | Topological-sort rounds, prefix scan as propagator pattern, array operations, CAS cell writes. From PPN Track 1 D.8 discussion. |
+| [Parallel Propagator Scheduling](../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md) | Topological-sort rounds, prefix scan as propagator pattern, array operations, CAS cell writes. From PPN Track 1 D.8 discussion. **Revisit for parsing**: PPN Track 1 designs set-latch interface (per-token-position independent classification) with sequential O(n) implementation. Parallel pivot = replace 1 propagator with N latches. Embarrassingly parallel: 370ns total on N processors. Tree-builder = prefix scan: O(n/p + log n). Combined: parsing goes from ~306μs sequential to ~10μs parallel (30× speedup). |

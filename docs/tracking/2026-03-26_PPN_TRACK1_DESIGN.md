@@ -950,42 +950,89 @@ ignores location; srcloc provides location when needed for errors.
 
 ## 11. Resolved Design Points (D.8b)
 
-### 11.1 Tree M-type: annotated S-expression (no new struct)
+### 11.1 Tree node: RRB-backed children (D.8c)
 
-The current reader produces NESTED LISTS (S-expressions):
-`(def x : Int := 42 (where (Eq x)))`. The tree M-type IS the nested
-list — the initial algebra of cons cells over atoms. No new struct
-needed.
+The tree node is a dedicated struct with RRB children:
 
-Metadata (srcloc, indent level) is carried as annotations alongside
-the datum. The compatibility API extracts plain S-expressions (drops
-metadata). The primary API returns annotated S-expressions.
+```racket
+(struct parse-tree-node
+  (tag         ;; symbol or token-cell-value: what kind of form
+   children    ;; rrb of parse-tree-node: ordered children
+   srcloc      ;; source location (file, line, col, span)
+   indent      ;; indent level (int)
+   )
+  #:transparent)
+```
+
+**Why RRB children, not cons lists**: Benchmark (D.8c):
+
+| Operation (n=20 children) | List | RRB | Winner |
+|--------------------------|------|-----|--------|
+| Append child | 56 ns | **30 ns** | RRB 1.9× |
+| Count children | 13 ns | **9 ns** | RRB 1.5× |
+| Structural sharing on modify | none | **yes (eq? preserved)** | RRB |
+
+Track 2's rewriting (insert, remove, splice children) benefits from
+RRB's O(log32 n) operations + structural sharing. Two sub-trees with
+same content share RRB nodes — critical for the Pocket Universe M-type.
 
 The tree cell's value IS a `parse-cell-value` (from Track 0) where
-each derivation-node holds a complete annotated S-expression as its
-"item." For unambiguous input: one derivation. For ambiguous: set of
-alternative derivations, resolved by ATMS (Track 5).
+each derivation-node holds a `parse-tree-node` as its "item." For
+unambiguous input: one derivation. For ambiguous: set of alternative
+derivations, resolved by ATMS (Track 5).
 
-### 11.2 Tree merge: Track 0's parse-cell-value (set-union)
+The compatibility API extracts S-expressions from parse-tree-nodes
+(recursive: tag + children → nested list). `datum->syntax` wraps with
+Racket source location for the production path (driver.rkt).
 
-The tree cell uses Track 0's parse lattice directly. Merge = set-union
-of derivation-nodes (alternative parses). For unambiguous input: the
-set has one element (idempotent). For ambiguous: multiple alternatives
-accumulate monotonically.
+### 11.2 Tree merge: set-union of alternatives, NOT unification (D.8c)
 
-This connects D.7's "one tree cell" back to Track 0's lattice design
-cleanly. No new merge semantics needed.
+The tree cell uses Track 0's `parse-cell-value` with set-union.
 
-### 11.3 Token classification: one propagator, O(n) scan
+**Verified against SRE precedent**: The type lattice merge (`type-
+lattice-merge` in type-lattice.rkt:125) uses STRUCTURAL UNIFICATION —
+if two values unify, merge is the unified result. This is WRONG for
+parse trees. Two parses of the same input are ALTERNATIVES, not values
+to unify. They coexist until disambiguation selects one.
 
-ONE tokenizer propagator reads the character RRB and writes the token
-RRB. It fires when the character RRB changes. Fire function: iterate
-positions, try registered patterns (highest priority match), write
-classified token to token RRB entry. O(n) work, ~370 ns/token.
+**Two-layer merge semantics**:
+- **Between alternative parses**: set-union of derivation-nodes. Each
+  derivation holds a `parse-tree-node` tree. Multiple alternatives
+  accumulate monotonically.
+- **Within one parse (tree growth)**: as parsing progresses, the tree
+  grows (more nodes). A new derivation-node with more nodes SUPERSEDES
+  the old (same derivation-id, more complete tree). Set-union handles
+  this: the new element replaces the old via id-based dedup.
+
+Set-union IS correct. The type lattice's unification merge is for a
+DIFFERENT problem (resolving constraints on one value). Parse trees
+accumulate alternatives (set-union), not resolve constraints (unify).
+
+### 11.3 Token classification: set-latch interface, O(n) implementation (D.8c)
+
+**Interface**: each token position is INDEPENDENTLY classifiable. Given
+the character span for position P, the classification depends only on
+the characters at that span (+ registered patterns). No dependency on
+other token positions. This is the SET-LATCH pattern: each position is
+a latch that fires independently when its input is available.
+
+**Track 1 implementation**: ONE tokenizer propagator reads the entire
+character RRB and writes the entire token RRB. O(n) work, ~370 ns/token.
+This is optimal for SEQUENTIAL execution (one propagator, no scheduling
+overhead).
+
+**Parallel pivot (BSP-LE)**: Replace the one propagator with N
+per-position latches. Each reads its character span, classifies
+independently, writes its token RRB entry. Embarrassingly parallel:
+N positions on N processors = 370 ns total (one step). The cell
+topology doesn't change — only the propagator granularity.
+
+**The interface is parallel-ready from day one.** The implementation
+is sequential for Track 1. The pivot to parallel is a PROPAGATOR
+REPLACEMENT (one O(n) → N O(1) latches), not an architecture change.
 
 For incremental (Track 8): RRB diff tells which character positions
-changed. The tokenizer re-scans only changed spans + their context
-(patterns that span the change boundary). O(affected) not O(n).
+changed. Re-classify only changed spans + context. O(affected).
 
 ### 11.4 Disambiguation cycle: single stratum, ≤2 rounds
 
