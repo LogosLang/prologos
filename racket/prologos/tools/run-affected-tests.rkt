@@ -524,7 +524,13 @@
   (define bailed? #f)
   (let loop ([remaining file-count] [count 0])
     (when (> remaining 0)
-      (define r (sync/timeout (* (timeout-secs) 1.0) result-ch))
+      ;; Track 10B: Use short timeout (30s) for the FIRST result.
+      ;; If no result arrives in 30s, workers likely crashed silently.
+      ;; Subsequent results use the normal per-file timeout.
+      (define first-result-timeout 30)
+      (define effective-timeout
+        (if (= count 0) first-result-timeout (timeout-secs)))
+      (define r (sync/timeout (* effective-timeout 1.0) result-ch))
       (cond
         [r
          (define ms (hash-ref r 'wall_ms))
@@ -582,9 +588,24 @@
            [else
             (loop (sub1 remaining) (add1 count))])]
         [else
-         ;; Timeout — kill all workers, report remaining as timeout
-         (eprintf "\nTIMEOUT: No result received for ~as. Killing ~a remaining.\n"
-                  (timeout-secs) remaining)
+         ;; Timeout — check if this is dead-worker (first result never arrived)
+         ;; vs per-file timeout (individual test took too long)
+         (cond
+           [(= count 0)
+            ;; No results AT ALL — workers crashed silently.
+            (printf "\n")
+            (printf "╔══════════════════════════════════════════════════════════╗\n")
+            (printf "║  ⛔ DEAD WORKERS — no results after ~as               ║\n" first-result-timeout)
+            (printf "║                                                        ║\n")
+            (printf "║  All batch workers crashed before producing output.    ║\n")
+            (printf "║  ACTION: Run `raco make driver.rkt` to recompile.     ║\n")
+            (printf "║  Common cause: stale .zo after struct field changes.   ║\n")
+            (printf "╚══════════════════════════════════════════════════════════╝\n")
+            (set! bailed? #t)]
+           [else
+            ;; Normal per-file timeout
+            (eprintf "\nTIMEOUT: No result received for ~as. Killing ~a remaining.\n"
+                     (timeout-secs) remaining)])
          (for ([p (in-list all-procs)])
            (with-handlers ([exn:fail? void])
              (subprocess-kill p #t)))])))
