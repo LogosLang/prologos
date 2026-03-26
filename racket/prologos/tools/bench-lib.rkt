@@ -273,7 +273,10 @@
 ;; This reduces per-subprocess preamble overhead from ~22s to ~1s.
 ;; Returns #t on success.
 (define (precompile-modules! project-root)
-  (define driver-path (path->string (build-path project-root "driver.rkt")))
+  ;; Track 10B: use absolute path for raco make.
+  ;; Subprocess inherits OS CWD (not Racket current-directory).
+  ;; Using absolute driver-path ensures correct compilation regardless of CWD.
+  (define driver-path (path->string (simplify-path (build-path project-root "driver.rkt"))))
   (define-values (proc out in err)
     (subprocess #f #f #f raco-path "make" driver-path))
   (close-output-port in)

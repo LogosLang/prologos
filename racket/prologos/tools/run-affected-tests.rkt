@@ -219,6 +219,11 @@
   (define project-root
     (path->string (simplify-path (build-path tools-dir ".."))))
 
+  ;; Track 10B: set CWD to project-root so subprocesses (batch workers,
+  ;; raco make) inherit the correct working directory regardless of
+  ;; where the runner was invoked from.
+  (current-directory project-root)
+
   (define tests-dir
     (build-path project-root "tests"))
 
@@ -530,6 +535,24 @@
                  (real->decimal-string (/ ms 1000.0) 1))
          (flush-output)
          (set! collected (cons r collected))
+         ;; Track 10B: Dead-worker detection.
+         ;; If first batch completes with 0 total tests, workers crashed silently.
+         ;; Common cause: stale .zo after struct field changes.
+         (define running-test-total
+           (apply + (map (λ (r) (hash-ref r 'tests 0)) collected)))
+         (when (and (>= count jobs)    ;; first batch done
+                    (<= count (+ jobs 2))  ;; check once
+                    (= running-test-total 0))
+           (set! bailed? #t)
+           (printf "\n")
+           (printf "╔══════════════════════════════════════════════════════════╗\n")
+           (printf "║  ⛔ DEAD WORKERS — 0 tests after ~a files              ║\n" count)
+           (printf "║                                                        ║\n")
+           (printf "║  All batch workers crashed silently.                   ║\n")
+           (printf "║  ACTION: Run `raco make driver.rkt` to recompile.     ║\n")
+           (printf "║  Common cause: stale .zo after struct field changes.   ║\n")
+           (printf "╚══════════════════════════════════════════════════════════╝\n"))
+
          ;; Early-bail: abort if too many per-file timeouts
          (when (string=? status "timeout")
            (set! timeout-count (add1 timeout-count)))
