@@ -40,6 +40,71 @@ incremental editing from day one.
 
 ---
 
+## 0. Pre-0 Benchmark Results (`b076359`)
+
+### Tokenizer performance
+
+| Input | Tokens | Time | Per-token | Scaling |
+|-------|--------|------|-----------|---------|
+| Representative (6 forms) | 46 | 17.6 μs | 382 ns/token | baseline |
+| Large (50× repeat) | 2,251 | 847 μs | 376 ns/token | 1.04× (linear) |
+| 100 identifiers | 100 | 70 μs | 700 ns/token | identifier-heavy |
+| 10-deep nested brackets | ~20 | 4.4 μs | ~220 ns/token | bracket-light |
+
+**Tokenization is 370-400 ns/token with near-linear scaling.** Our token
+cell set-once write is 3 ns (from Track 0) — 100× headroom.
+
+### Structure building
+
+| Metric | Value |
+|--------|-------|
+| Structure fraction of total reader time | 55% |
+| Deeply indented (10 levels) | 23.6 μs |
+| Bracket-heavy (nested applications) | 84.8 μs |
+
+### Constraint chain (indent resolution)
+
+| Scale | Time | Per-line | Notes |
+|-------|------|----------|-------|
+| 200 lines | 3.1 μs | 15.6 ns/line | 7× faster than current structure |
+| 2,000 lines | 32.9 μs | 16.4 ns/line | Linear scaling confirmed |
+| Incremental (edit at line 100, 200 lines) | 1.7 μs | — | 1.7× faster than full |
+| Max stack depth | 3 | — | Context cells are tiny |
+
+### E2E reader costs (real files)
+
+| File | Lines | Tokens | Reader time |
+|------|-------|--------|------------|
+| core.prologos | 60 | 233 | 0.23 ms |
+| nat.prologos | 130 | 491 | 0.46 ms |
+| list.prologos | 584 | 3,540 | 3.25 ms |
+
+### Content-addressed hashing
+
+| Operation | Time |
+|-----------|------|
+| `equal-hash-code` on `token-cell-value` | 83 ns/hash |
+| Hash table lookup (1000 entries) | 174 ns/lookup |
+
+### Golden baseline
+
+| Metric | Value |
+|--------|-------|
+| Total .prologos files | 110 (72 lib + 38 examples) |
+| Largest file | numerics-tutorial-demo.prologos (1,164 lines) |
+
+### Design implications
+
+1. **No design changes needed.** All measurements within budget.
+2. **Constraint chain is 7× faster** than current structure pass.
+3. **Performance target is generous**: current reader is 370 ns/token +
+   55% structure. New reader with constraint chain should be within 2×.
+4. **Incremental editing is 1.7× from day one.** Content-only edits: O(1).
+5. **Content hashing is affordable**: 83 ns/hash, ~100-500 cells/file = 8-40 μs.
+6. **110 files for golden comparison.** Largest: 1,164 lines.
+
+---
+
 ## 1. Architectural Center: Trees, Not Tokens
 
 The central design principle: **the cell topology IS the tree structure.**
