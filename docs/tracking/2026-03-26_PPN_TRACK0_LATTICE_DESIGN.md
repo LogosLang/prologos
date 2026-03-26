@@ -36,7 +36,7 @@ distinguished from exchanges.
 | 4 | Bridges (3) + Exchange specs (2) + Projection (1) | ✅ | `3d15bb8` — stratification-agnostic. Demand satisfaction protocol. 23 tests. |
 | 5 | NTT speculative syntax (+ `:set-once` kind) | ✅ | `86df0b4` — §16 in NTT Syntax Design. 7 subsections: set-once, parse, demand, bridges, exchanges, projection, stratification options. |
 | 6 | Integration test: happy path + ambiguity + disambiguation | ✅ | `b42d30f` — 7 tests: happy path, ATMS ambiguity, demand, contradiction, merge, bridge γ, provenance |
-| 7 | A/B benchmarks + verification | ⬜ | Compare lattice operations against current pipeline |
+| 7 | A/B benchmarks + verification | ✅ | All ops <1μs. Token 3-16ns, parse merge 240-343ns, demand 307ns, core 3-20ns, bridge α 508ns, bridge γ 44ns. |
 | 8 | Update dailies + tracker | ⬜ | Per-phase completion |
 | 9 | PIR | ⬜ | Per methodology |
 
