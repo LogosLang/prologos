@@ -124,23 +124,19 @@ cell set-once write is 3 ns (from Track 0) — 100× headroom.
 
 For nat.prologos (130 lines, 491 tokens, ~4000 chars):
 
-| Domain | Cells | Storage | Creation cost |
-|--------|-------|---------|--------------|
-| Character | ~4000 | CHAMP vector (bulk) | ~0.01 ms |
-| Token | ~491 | prop-network cells | ~0.7 ms |
+| Domain | Entries | Storage | Creation cost |
+|--------|---------|---------|--------------|
+| Character | ~4000 | RRB vector (bulk) | ~0.09 ms |
+| Token | ~491 | prop-network cells | ~0.69 ms |
 | Indent | ~100 | prop-network cells | ~0.14 ms |
 | Parent | ~100 | prop-network cells | ~0.14 ms |
-| Bracket-depth | ~491 | CHAMP vector (bulk, like chars) | ~0.01 ms |
+| Bracket-depth | ~491 | RRB vector (bulk) | ~0.01 ms |
 | Structure | ~100 | prop-network cells | ~0.14 ms |
-| **Total** | **~5282** | **mixed** | **~1.14 ms** |
+| **Total** | **~5282** | **mixed** | **~1.11 ms** |
 
-Current reader: 0.46 ms. New reader (estimated): ~1.14 ms. **2.5× slower.**
-Within the 10× budget. The CHAMP-backed bulk domains (character, bracket-
-depth) eliminate the 16× cost that individual cells would incur.
-
-**Bracket-depth can ALSO be CHAMP-backed** (D.6): it's per-position,
-set-once, many small values — same profile as characters. CHAMP bulk
-storage instead of individual cells reduces cost further.
+Current reader: 0.46 ms. New reader (estimated): ~1.11 ms. **2.4× slower.**
+Within the 10× budget. RRB-backed bulk domains (character, bracket-depth)
+provide 9× build speedup over CHAMP and 60× over individual cells.
 
 ---
 
@@ -227,11 +223,11 @@ through cells until fixpoint.
 
 | Domain | Carrier | Merge | Storage | What it represents |
 |--------|---------|-------|---------|-------------------|
-| **Character** | char at position | set-once | **CHAMP vector** | Raw input (bulk cells) |
+| **Character** | char at position | set-once | **RRB persistent vector** | Raw input (bulk cells, 3× faster seq read than CHAMP) |
 | **Token** | token-cell-value (Track 0) | set-once | prop-network cells | Token classification |
 | **Indent** | indent level (int) | set-once | prop-network cells | Leading whitespace measurement |
 | **Parent** | line-id \| 'root | set-once | prop-network cells | Tree parent assignment |
-| **Bracket-depth** | int (running sum) | set-once | prop-network cells | Bracket nesting depth |
+| **Bracket-depth** | int (running sum) | set-once | **RRB persistent vector** | Bracket nesting depth (bulk, like chars) |
 | **Structure** | structure-cell-value (Track 0) | children-accumulation | prop-network cells | Tree nodes with children |
 
 **The product of these six domains, at fixpoint, IS the parse tree.**
@@ -245,36 +241,37 @@ ALL relationships being satisfied simultaneously.
 **Insight**: A CHAMP IS a lattice. Each CHAMP entry is a cell. The
 CHAMP's structural sharing provides change tracking FOR FREE.
 
-The character domain uses a CHAMP vector (persistent, structurally
-shared) instead of individual propagator-network cells. This is the
-SAME architectural pattern as the propagator network itself —
-`prop-network-cells` is a CHAMP mapping cell-id → cell-value. Each
-entry IS a cell.
+The character domain uses an **RRB persistent vector** (not individual
+cells, not CHAMP). Benchmark (D.6):
 
-**Why this matters:**
+| Operation | CHAMP | RRB | Individual cells |
+|-----------|-------|-----|-----------------|
+| Build 4K chars | 868 μs | **93 μs** | 5,600 μs |
+| Seq read 4K | 252 μs (63 ns/char) | **75 μs (19 ns/char)** | ~12 μs (3 ns/cell-read) |
+| Point update | 135 ns | 88 ns | 3 ns (cell write) |
 
-| Individual cells | CHAMP-backed domain |
-|-----------------|---------------------|
-| 4000 allocations (~5.6 ms) | 1 CHAMP build (~0.01 ms) |
-| Per-cell overhead (cell-info struct) | Amortized in CHAMP nodes |
-| Change detection: propagator deps | Change detection: CHAMP path diff |
-| Incremental: fire dep propagators | Incremental: compare old/new CHAMP paths |
+RRB wins on build (9×) and sequential read (3×) vs CHAMP. Individual
+cells win on per-entry access but lose catastrophically on creation
+(60× slower). RRB is the sweet spot: fast build, fast sequential
+access (token producers scan spans), persistent structural sharing
+(incremental editing via path-copy + diff).
 
-Characters ARE lattice values — stored efficiently in a bulk CHAMP.
-Token propagators read from the character CHAMP. When Track 8 edits
-a character: new CHAMP (path-copy, O(log n)), diff = changed positions,
-token propagators at changed positions re-fire.
+**Why RRB over CHAMP for sequential data**: RRB's radix indexing keeps
+sequential positions in contiguous memory blocks (branching factor 32 =
+32 consecutive chars per node). CHAMP distributes by hash — consecutive
+positions scatter across trie branches, causing cache misses.
+
+**Characters ARE lattice values** (D.5): stored in an RRB persistent
+vector, which IS a lattice (entries are cells, structural sharing
+provides change tracking). No Propagator Only violation — the RRB IS
+the cell infrastructure for this domain, optimized for sequential
+access patterns.
 
 **This pattern generalizes.** Any lattice domain with many small
-set-once values (characters, per-position bracket depths, per-token
-source locations) benefits from CHAMP-backed bulk storage instead of
-individual cell allocation. The lattice semantics are identical — the
-STORAGE is optimized.
-
-**Characters are NOT outside the lattice product** (D.5 correction):
-they ARE cells, stored in a CHAMP. The CHAMP IS the cell infrastructure
-for this domain. No violation of Propagator Only — just efficient cell
-storage.
+set-once values in sequential positions (characters, bracket depths,
+source locations) benefits from RRB-backed bulk storage. Domains with
+associative access patterns (registries, meta-info) stay CHAMP-backed.
+Match the data structure to the access pattern.
 
 ### 2.2 Propagators between domains
 

@@ -1087,11 +1087,91 @@ Modeling Track 10's architecture in NTT revealed 5 findings:
 Added from PPN Track 0 design (2026-03-26). These extend Level 0 with
 parse-specific lattice kinds and Level 4 with parse bridges/exchanges.
 
-### 16.1 `:set-once` Lattice Kind (NEW)
+### 16.1 `:set-once` Lattice Kind
 
 Some cells are written once and never merged. Tokens, core AST nodes,
 and ground results have this property. The `:set-once` kind distinguishes
 them from accumulatable (`:value`) and structural (`:structural`) cells.
+
+### 16.1b `:embedded` Lattice Kind — The Pocket Universe Principle (D.6)
+
+A cell whose value IS an entire lattice. The cell holds a persistent
+data structure (CHAMP, PVec, Set) that is itself a lattice with its
+own entries, merge, and change tracking. This is a "pocket universe" —
+a complete lattice embedded inside a single cell of an outer lattice.
+
+**Why this exists**: Some lattice domains have thousands of small
+values (characters at positions, bracket depths at positions, source
+locations at tokens). Creating individual propagator-network cells
+for each is prohibitively expensive (~1.4 μs/cell × 4000 = 5.6 ms).
+An embedded lattice stores them in one CHAMP cell (~0.01 ms) with
+the same lattice semantics.
+
+**The key property**: the embedded lattice provides a `:diff` function
+that computes WHICH ENTRIES changed between the old and new value.
+Dependent propagators receive the diff and fire only for affected
+entries. Without `:diff`, any change re-fires all dependents. With
+`:diff`, only propagators that read changed entries re-fire.
+
+```prologos
+;; A cell holding an entire character lattice (RRB persistent vector)
+;; RRB chosen over CHAMP: 9× build, 3× sequential read (D.6 benchmark)
+data CharacterDomain
+  := char-domain [chars : PersistentVec Char]
+  :lattice :embedded
+  :inner   [PersistentVec Char]    ;; the embedded lattice type (RRB-backed)
+  :merge   pvec-point-update       ;; merge = update specific entry
+  :bot     (pvec-empty)
+  :diff    pvec-structural-diff    ;; compute changed positions via path comparison
+
+;; A cell holding bracket depths at all positions
+data BracketDepthDomain
+  := bracket-domain [depths : PersistentVec Int]
+  :lattice :embedded
+  :inner   [PersistentVec Int]
+  :merge   pvec-point-update
+  :bot     (pvec-empty)
+  :diff    pvec-structural-diff
+```
+
+**Implementation note**: `PersistentVec` maps to our `rrb.rkt` (RRB-tree
+with branching factor 32). For domains with SEQUENTIAL access (characters,
+bracket depths), RRB outperforms CHAMP (3× read, 9× build). For domains
+with ASSOCIATIVE access (registries, meta-info maps), CHAMP is preferred.
+The `:embedded` kind works with either backing structure — the choice is
+an optimization, not a semantic difference.
+
+**Addressing in bridges**: A bridge between an `:embedded` domain and
+a per-entry domain needs to address SPECIFIC ENTRIES:
+
+```prologos
+bridge CharToToken
+  :from CharacterDomain
+  :to   TokenValue
+  :alpha char-span-to-token       ;; reads specific span from embedded
+  :gamma token-to-char-context
+  :addressing :positional          ;; bridge addresses entries by position
+```
+
+The `:addressing :positional` annotation says the bridge α/γ operate
+on specific entries within the embedded lattice, not on the whole value.
+
+**The Pocket Universe generalizes**: Any lattice can be embedded in a
+cell. A cell holding a CHAMP of type expressions is a pocket universe
+of types. A cell holding a Set of constraints is a pocket universe of
+constraints. This is what our existing `parse-cell-value` (holding a
+Set of derivation-nodes) already IS — a pocket universe of derivations.
+
+The pattern: when a lattice domain has many entries with uniform
+structure and set-once semantics, embed it in a CHAMP/PVec cell
+instead of creating individual cells. The lattice semantics are
+identical. The cost is amortized.
+
+**Stratification connection**: A pocket universe cell can have its
+OWN propagators operating within it. The outer network sees only
+the cell's aggregate value. The inner propagators compute the
+inner fixpoint. This is "stratification within a cell" — a fiber
+operating on the entries of an embedded lattice.
 
 ```prologos
 data TokenValue
