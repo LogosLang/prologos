@@ -1,0 +1,71 @@
+#+TITLE: Standup — 2026-03-25
+#+DATE: 2026-03-25
+
+* Yesterday (since 2026-03-24 standup)
+
+** PM Track 8F: Metas as Cells (COMPLETE)
+- 8 phases: bvar detection, cell-id in expr-meta, zonk audit, zonk-at-depth cell-id,
+  freeze at boundaries, resolution key extraction, ground-expr? cell-id, instrumentation cleanup
+- Custom ~gen:equal+hash~ on ~expr-meta~ (equality by id, ignore cell-id)
+- REPL/process-string hang FIXED (~29a1fad~) — auto-create propagator network
+- 6/8 phases complete, 2 deferred to Track 10B
+- PIR: ~docs/tracking/2026-03-24_PM_8F_PIR.md~
+
+** SRE Track 1: Relation-Parameterized Decomposition (COMPLETE)
+- 6 phases: relation infra, subtype-aware, duality, subtype? delegation, session duality, verification
+- 5 structural relations (equality, subtyping, duality, coercion, isomorphism)
+- Polarity inference utilities for user-defined structural subtyping
+- Compound subtype checking: ~List Nat <: List Int~ works
+- Session duality on SRE with dual-pair dispatch
+- PIR: ~docs/tracking/2026-03-23_SRE_TRACK1_PIR.md~
+
+** SRE Track 1B: Post-Implementation Fixes (COMPLETE)
+- 5 phases: benchmarks, merge-per-relation, decomp guard, dependent duality, edge cases
+- ~flat-subtype?~ → ~subtype-merge~ (correct lattice for correct relation)
+- Direct recursive check for ground types (333μs → 0.5μs failure path)
+- PIR included in Track 1 PIR
+
+** SRE Track 2: Elaborator-on-SRE (COMPLETE)
+- 4 phases: O(1) struct-type dispatch, non-binder cases, binder cases, verification
+- ~prop:ctor-desc-tag~ on all AST nodes — O(1) vtable dispatch
+- ~classify-whnf-problem~ delegates to SRE for 10 structural cases
+- 234.6s (3.9% faster), all green
+- PIR: ~docs/tracking/2026-03-23_SRE_TRACK2_PIR.md~
+
+** PM Track 10: Module Loading on Network (COMPLETE)
+- .pnet serialization: struct->vector + write/read + tag dispatch (40/40 modules)
+- 6 serialization mechanisms: foreign-proc, gensym, coercion, capability, preparse, marshal
+- 17/28 registries serialized in unified prelude .pnet
+- Foreign function provenance: source-module + racket-name on expr-foreign-fn
+- fork-prop-network: O(1) CHAMP structural sharing
+- process-string scoping fix: box mutation leak (252 test files affected)
+- #lang prologos DROPPED: expander.rkt + main.rkt + repl-support.rkt + sexp.rkt deleted (1315 lines)
+- **240s → 134s (44% improvement)**
+- PIR: ~docs/tracking/2026-03-24_PM_TRACK10_PIR.md~
+
+** Research
+- Hypergraph Rewriting + Propagator-Native Parsing (Stage 0/1)
+- Tropical Optimization + Network Architecture
+- NTT Syntax Design: serialize/deserialize + fork forms (Level 3 extensions)
+- PPN Series (6 tracks) + OE Series (5 tracks) on Master Roadmap
+
+** Process Improvements
+- Diagnostic protocol codified in workflow.md (audit → hypothesize → test → principles → reframe)
+- "All tests green before moving on" workflow rule
+- DESIGN_METHODOLOGY: benchmark as design input (Stage 3), concrete code measurements (Stage 2)
+- DEVELOPMENT_LESSONS: non-equality relations break equality assumptions
+- "Data at rest, closures derived on demand" (6 instances, ready for codification)
+
+** Metrics
+- 7364 tests, 376 files, 133.5s (from 240.6s at interval start)
+- ~66 commits in interval
+
+* Today
+
+** Discuss Track 10 PIR findings
+** Scope Track 10B
+** Determine next priority
+
+* Blockers
+
+- None — all tracks green, all infrastructure healthy
