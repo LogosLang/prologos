@@ -26,20 +26,22 @@ Hyperlattice Conjecture.
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| Pre-0 | Microbenchmarks: reader.rkt per-function costs | ✅ | `b076359` — 370ns/token, 55% structure, chain 3μs/200 lines, 1.7× incremental. No design changes. |
-| 0 | Golden baseline: tree topology + bracket groups + datums + srcloc | ⬜ | 4-level capture for 110 .prologos files |
-| 1a | Token producers: flat patterns → token cells | ⬜ | Context-free, possibly stateful (strings, #p). 60% of tokenizer. |
-| 1b | Indent structurer: constraint chain → tree topology | ⬜ | Content lines only (blank/comment skipped). Central design. |
-| 1c | Bracket matcher: bracket depth chain → nesting | ⬜ | Bracket depth pre-computed per-token, fed to context chain. |
-| 1d | **Integration gate**: golden comparison on simple files | ⬜ | Must pass before Phases 2-5 proceed. |
-| 2 | Context-sensitive: 11 decisions → bridge γ + priority + lookahead | ⬜ | +postfix adjacency (decision 11). Mixfix: 0 files, tracked gap. |
-| 3 | Reader macros: #p, ', `, #=, dot-access, broadcast | ⬜ | #p needs bracket-counting recognizer (stateful). |
-| 4a | Read API (5 tree-walking functions) | ⬜ | `read-to-tree`, `tree-children`, `tree-parent`, etc. |
-| 4b | Write API (4 tree mutation functions) | ⬜ | `tree-replace-children`, `tree-splice`, etc. For Track 2. |
-| 4c | Compatibility wrappers (7 datum functions) | ⬜ | Same signatures as reader.rkt. |
-| 5 | Golden comparison: 4 levels (topology + brackets + datums + srcloc) | ⬜ | ZERO differences = ready for retirement. |
-| 6 | reader.rkt retirement + 50 consumers updated | ⬜ | |
-| 7 | A/B benchmarks (integrated system, not components) | ⬜ | Pre-0 is feasibility; Phase 7 is validation. |
+| Pre-0 | Microbenchmarks + RRB vs CHAMP | ✅ | `b076359`+D.6 — 370ns/token, RRB 9× build, tree-builder 4.5μs/200 lines |
+| 0 | Golden baseline: 4-level capture for 110 files | ⬜ | Topology + brackets + datums + srcloc |
+| 1a | Character + indent RRB cells | ⬜ | RRB from input string. Indent = leading whitespace per content line. |
+| 1b | Tokenizer propagator (char RRB → token RRB) | ⬜ | One propagator, O(n) scan, registered patterns. Stateful for strings/#p. |
+| 1c | Tree-builder propagator (indent+bracket RRBs → tree M-type cell) | ⬜ | One propagator. Content lines only. Bracket-depth-at-line-start. Tree = annotated S-expression in parse-cell-value. |
+| 1d | Bracket-depth RRB propagator (token RRB → bracket RRB) | ⬜ | Running sum of opens/closes. |
+| 1e | Context disambiguator (tree cell → token RRB reclassify) | ⬜ | Bridge γ. ≤2-round fixpoint in S0 (§11.4). 11 decisions. |
+| 1f | **Integration gate**: golden comparison on simple files | ⬜ | Must pass before Phase 2. |
+| 2 | Reader macros: #p, ', `, #=, dot-access, broadcast | ⬜ | Stateful recognizers in pattern registry. |
+| 3a | Read API (5 tree-walking functions) | ⬜ | Primary API. |
+| 3b | Write API (4 tree mutation functions) | ⬜ | For Track 2 SRE rewriting. |
+| 3c | Compatibility wrappers (7 functions) | ⬜ | Syntax objects (driver.rkt), datums (tests), flat tokens (tests). |
+| 4 | Golden comparison: 4 levels vs Phase 0 baseline | ⬜ | ZERO differences = ready for retirement. |
+| 5 | reader.rkt retirement + 51 consumers updated | ⬜ | |
+| 6 | `rrb-diff` implementation | ⬜ | RRB structural diff for incremental (Track 8 ready). |
+| 7 | A/B benchmarks (integrated system) | ⬜ | Target: ≤460μs (current reader). Estimated: ~306μs. |
 | 8 | Suite verify + dailies + tracker | ⬜ | |
 | 9 | PIR + dailies + tracker | ⬜ | |
 
@@ -946,7 +948,85 @@ ignores location; srcloc provides location when needed for errors.
 
 ---
 
-## 11. Completion Criteria
+## 11. Resolved Design Points (D.8b)
+
+### 11.1 Tree M-type: annotated S-expression (no new struct)
+
+The current reader produces NESTED LISTS (S-expressions):
+`(def x : Int := 42 (where (Eq x)))`. The tree M-type IS the nested
+list — the initial algebra of cons cells over atoms. No new struct
+needed.
+
+Metadata (srcloc, indent level) is carried as annotations alongside
+the datum. The compatibility API extracts plain S-expressions (drops
+metadata). The primary API returns annotated S-expressions.
+
+The tree cell's value IS a `parse-cell-value` (from Track 0) where
+each derivation-node holds a complete annotated S-expression as its
+"item." For unambiguous input: one derivation. For ambiguous: set of
+alternative derivations, resolved by ATMS (Track 5).
+
+### 11.2 Tree merge: Track 0's parse-cell-value (set-union)
+
+The tree cell uses Track 0's parse lattice directly. Merge = set-union
+of derivation-nodes (alternative parses). For unambiguous input: the
+set has one element (idempotent). For ambiguous: multiple alternatives
+accumulate monotonically.
+
+This connects D.7's "one tree cell" back to Track 0's lattice design
+cleanly. No new merge semantics needed.
+
+### 11.3 Token classification: one propagator, O(n) scan
+
+ONE tokenizer propagator reads the character RRB and writes the token
+RRB. It fires when the character RRB changes. Fire function: iterate
+positions, try registered patterns (highest priority match), write
+classified token to token RRB entry. O(n) work, ~370 ns/token.
+
+For incremental (Track 8): RRB diff tells which character positions
+changed. The tokenizer re-scans only changed spans + their context
+(patterns that span the change boundary). O(affected) not O(n).
+
+### 11.4 Disambiguation cycle: single stratum, ≤2 rounds
+
+The token → tree → disambiguation → token cycle resolves in ONE stratum
+via monotone fixpoint. Disambiguation only REFINES tokens (operator →
+delimiter, never reverse). Refinements are finite (each token reclassified
+at most once). The cycle converges in ≤2 rounds:
+
+1. Initial tokenization → tree builder fires → disambiguator fires
+   (may reclassify some tokens)
+2. If tokens changed → tree builder re-fires → disambiguator re-fires
+   (no further changes — refinement exhausted)
+3. Quiescence.
+
+No stratification needed for this cycle. Stratification is for
+non-monotone operations (Track 5 elimination, Track 6 error recovery).
+
+### 11.5 Consumer API audit (51 files)
+
+| API | Production files | Test files | Total |
+|-----|-----------------|------------|-------|
+| `prologos-read-syntax-all` (syntax objects) | driver.rkt | 3 | 4 |
+| `prologos-read-syntax` (single syntax) | repl.rkt | 1 | 2 |
+| `read-all-forms-string` (datums) | form-deps.rkt | 11 | 12 |
+| `tokenize-string` (flat tokens) | — | 12 (5 tokenize-only) | 12 |
+| `prologos-read` (single datum) | — | 5 | 5 |
+| `token-type`/`token-value` (accessors) | — | 8 | 8 |
+
+**Critical path**: driver.rkt → `prologos-read-syntax-all` → syntax
+objects with srcloc. Compatibility wrapper must produce Racket syntax
+objects via `datum->syntax` with source locations from token cells.
+
+**Simple path**: 12 test files → `read-all-forms-string` → plain
+datums. Tree cell datum extraction.
+
+**Tokenize path**: 12 test files → `tokenize-string` → flat token list.
+Token RRB → list conversion.
+
+---
+
+## 12. Completion Criteria
 
 1. Golden test: ZERO differences between old and new reader output on
    ALL `.prologos` files in the repo.
