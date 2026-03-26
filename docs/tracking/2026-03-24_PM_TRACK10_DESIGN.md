@@ -34,9 +34,9 @@
 | 3c | Fork integrated into test-support | ✅ | `81b5c21` — macro hygiene fix |
 | 3d | process-string scoping fix — ALL GREEN | ✅ | `41b67c4` — 382/382, 149.0s (38% improvement). Root: box mutation leak. |
 | 4 | Absorb PM 8F deferrals (partial) | ✅ | `f896887` — defaults at solve-time ✅. CHAMP fallback RETAINED (expander needs it). 143.9s |
-| 5 | Drop `#lang prologos` + remove CHAMP fallback | 🔄 | Pivot: expander.rkt only consumer of CHAMP fallback. Drop `#lang`, delete expander+main+repl-support, remove fallback, delete zonk-final |
-| 6 | Parameter reduction (incremental) | ⬜ | Architectural cleanup, scope TBD |
-| 7 | Verification + A/B benchmarks + PIR | ⬜ | Compare against Pre-0 baselines + per-file regression check |
+| 5 | Drop `#lang prologos` — ALL GREEN | ✅ | `ca1fe15` + `60f6395` — 1315 lines deleted. 376/376, 133.5s (44% improvement). |
+| 6 | Parameter reduction | Deferred → Track 10B | Architectural cleanup. |
+| 7 | PIR | 🔄 | |
 
 **Deferred to Track 10b**: Test-granular scheduling via Places (per-test
 work items, eliminates tail effect). Requires: test discovery infrastructure,
