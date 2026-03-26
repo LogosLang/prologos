@@ -1384,14 +1384,12 @@
 ;; Process all commands from a string
 ;; ========================================
 (define (process-string s)
-  ;; PM 8F: Ensure propagator network exists before processing.
-  ;; Track 10 Phase 3d: if no network exists, create one SCOPED to this call
-  ;; (via parameterize, not mutation). Prevents elab-network leak into caller.
-  (if (not (current-prop-net-box))
-      (parameterize ([current-prop-net-box (box (make-elaboration-network))])
-        (reset-meta-store!)
-        (process-string-inner s))
-      (process-string-inner s)))
+  ;; Track 10B Phase A1: always scope a fresh network per call.
+  ;; Network is always present (with-fresh-meta-env creates it), but each
+  ;; process-string call gets its OWN scoped network to prevent leaks.
+  (parameterize ([current-prop-net-box (box (make-elaboration-network))])
+    (reset-meta-store!)
+    (process-string-inner s)))
 
 (define (process-string-inner s)
   (define port (open-input-string s))
@@ -1433,12 +1431,10 @@
 ;; Like process-string, but uses the WS reader (indentation-sensitive).
 ;; This is the path that .prologos files use — the primary design target.
 (define (process-string-ws s)
-  ;; Track 10 Phase 3d: scoped network creation (same as process-string)
-  (if (not (current-prop-net-box))
-      (parameterize ([current-prop-net-box (box (make-elaboration-network))])
-        (reset-meta-store!)
-        (process-string-ws-inner s))
-      (process-string-ws-inner s)))
+  ;; Track 10B Phase A1: always scope a fresh network per call.
+  (parameterize ([current-prop-net-box (box (make-elaboration-network))])
+    (reset-meta-store!)
+    (process-string-ws-inner s)))
 
 (define (process-string-ws-inner s)
   (define port (open-input-string s))
@@ -1478,12 +1474,10 @@
 ;; Process all commands from a file
 ;; ========================================
 (define (process-file path #:verbose [verbose? #f])
-  ;; Track 10 Phase 4: Ensure network exists, scoped to this call
-  (if (not (current-prop-net-box))
-      (parameterize ([current-prop-net-box (box (make-elaboration-network))])
-        (reset-meta-store!)
-        (process-file-inner path #:verbose verbose?))
-      (process-file-inner path #:verbose verbose?)))
+  ;; Track 10B Phase A1: always scope a fresh network per call.
+  (parameterize ([current-prop-net-box (box (make-elaboration-network))])
+    (reset-meta-store!)
+    (process-file-inner path #:verbose verbose?)))
 
 (define (process-file-inner path #:verbose [verbose? #f])
   (define port (open-input-file path))

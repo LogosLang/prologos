@@ -1588,12 +1588,16 @@
                  [current-constraint-status-cell-id #f]
                  [current-error-descriptor-cell-id #f]
                  [current-unsolved-metas-cell-id #f]
-                 ;; CHAMP boxes + network: #f — reset-meta-store! creates fresh
-                 [current-prop-meta-info-box #f]
-                 [current-prop-net-box #f]
-                 [current-level-meta-champ-box #f]
-                 [current-mult-meta-champ-box #f]
-                 [current-sess-meta-champ-box #f])
+                 ;; Track 10B Phase A1: network-always. Every code path gets a
+                 ;; network. No more #f sentinel — CHAMP fallback eliminated.
+                 ;; Use make-elaboration-network (wraps prop-network in elab-network)
+                 ;; because process-command expects elab-network in the box.
+                 [current-prop-net-box (box (make-elaboration-network))]
+                 [current-prop-meta-info-box (box champ-empty)]
+                 [current-prop-id-map-box (box champ-empty)]
+                 [current-level-meta-champ-box (box champ-empty)]
+                 [current-mult-meta-champ-box (box champ-empty)]
+                 [current-sess-meta-champ-box (box champ-empty)])
     (reset-meta-store!)
     body ...))
 
