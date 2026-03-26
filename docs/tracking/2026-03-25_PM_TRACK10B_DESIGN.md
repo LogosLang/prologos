@@ -25,10 +25,10 @@
 |-------|-------------|--------|-------|
 | **WS-A: Foundation Cleanup** | | | |
 | A0 | Pre-0 benchmarks | ✅ | `aabb664` — see §Pre-0 Findings |
-| A0b | Acceptance file (.prologos) | ⬜ | Per workflow: acceptance file before implementation |
-| A1 | `with-fresh-meta-env` creates network. Remove CHAMP fallback (~36 sites) | ⬜ | Foundation. Grep for `(not (current-prop-net-box))` sentinels. Empty CHAMP = reads return #f. |
-| A2 | `zonk-final` → `freeze` (7 sites) + `default-metas` at solve-time (17 sites) | ⬜ | Defaults apply per-command post-resolution, before freeze. Defaults propagate to cells. |
-| A3 | id-map elimination (18 sites). Add cell-id to `hasmethod-constraint-info`. | ⬜ | D.3 finding: bare meta ID at line 625. Must fix struct before id-map removal. |
+| A0b | Acceptance file (.prologos) | ✅ | `8e1495f` — 25 sections, 143 results, 56 errors, 87 successes |
+| A1 | `with-fresh-meta-env` creates network. Scoped fresh network per call. | ✅ | `a767b50` — make-elaboration-network, sentinel checks removed, 135.5s |
+| A2 | `zonk-final` → `freeze` rename (15 sites) | ✅ | `d12eacf` — cosmetic rename, defaults at solve-time deferred to WS-B |
+| A3 | id-map elimination. Add cell-id to `hasmethod-constraint-info`. | ✅ | `cd0d708` — 3 external callers → cell-id direct. Zero external id-map callers. 139.0s |
 | A3b | process-string scoping audit (74 high-risk `set-box!` sites) | ⬜ | Moved from B0 (D.4): must precede A4 to prevent masking leaks under fork model |
 | A4 | Batch worker simplification (11→6 saved values) | ⬜ | D.4 fix: 6 not 4. Specify new batch worker structure (not just "delete and hope"). |
 | A5 | PUnify toggle flip validation | ⬜ | Runs AFTER A4 (tests against final WS-A state, not mid-migration). |
@@ -100,13 +100,14 @@ Benchmark file: `benchmarks/micro/bench-track10b-foundation.rkt`
    implementation. The "after" column should show: zonk calls=0, CHAMP
    fallback=0, id-map lookups=0.
 
-**Phase completion protocol**: Every phase ends with THREE steps:
+**Phase completion protocol**: Every phase ends with FOUR steps:
 1. Commit the code changes
-2. Update dailies with: what was done, design choices made, surprises/lessons, commit hash
-3. THEN mark the phase complete and move to the next
+2. Update this design doc's progress tracker (mark phase ✅ with commit hash)
+3. Update dailies with: what was done, design choices made, surprises/lessons, commit hash
+4. THEN move to the next phase
 
-The dailies entry is NOT a separate task — it's part of the phase.
-A phase is not DONE until the dailies capture the learning.
+A phase is not DONE until the tracker AND dailies reflect it.
+These are not separate tasks — they're part of the phase itself.
 
 ## 2. WS-A: Foundation Cleanup
 
