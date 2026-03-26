@@ -46,7 +46,7 @@
 | B5 | A/B benchmark comparison (WS-B) | ✅ | Session cell-id too small to measure. Suite: 134-139s (within ≤134s tolerance). |
 | B6 | Instrumentation cleanup | ✅ | All 4 params already gated behind #f. No active overhead. Clean from `3339fec`. |
 | B7 | Verification (full suite green) | ✅ | 376/376 verified at each phase. |
-| B8 | PIR (per methodology, own phase) | ⬜ | |
+| B8 | PIR (per methodology, own phase) | ✅ | [PIR](2026-03-26_PM_TRACK10B_PIR.md) — 16 sections, 8 PIRs cross-referenced, 5 wrong assumptions, 3 longitudinal patterns |
 
 ## 1. Vision
 
