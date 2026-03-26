@@ -3,7 +3,7 @@
 **Stage**: 3 (Design)
 **Date**: 2026-03-25
 **Series**: Propagator Migration
-**Status**: Design D.1
+**Status**: Design D.2 (Pre-0 benchmarks incorporated)
 
 **Prerequisites**:
 - PM Track 10 ✅ (`.pnet` cache, fork model, `#lang` dropped, 133.5s suite)
@@ -24,20 +24,24 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | **WS-A: Foundation Cleanup** | | | |
-| A0 | Pre-0 benchmarks (remaining zonk overhead, id-map cost) | ⬜ | |
+| A0 | Pre-0 benchmarks | ✅ | `aabb664` — see §Pre-0 Findings |
 | A1 | `with-fresh-meta-env` creates network. Remove CHAMP fallback (~36 sites) | ⬜ | Foundation for all subsequent phases |
 | A2 | `zonk-final` → `freeze` (7 sites) + `default-metas` at solve-time (17 sites) | ⬜ | Absorbs PM 8F deferred Phase 5 |
 | A3 | id-map elimination (18 sites) | ⬜ | All callers use `expr-meta.cell-id` |
 | A4 | Batch worker simplification (11→4 saved values) | ⬜ | `.pnet` + fork makes snapshot redundant |
 | A5 | PUnify toggle flip validation | ⬜ | REPL fix unblocked this; 5 known parity bugs |
-| A6 | Verification + A/B benchmarks | ⬜ | |
+| A6 | A/B benchmark comparison (WS-A before/after) | ⬜ | Compare against Pre-0 baselines: CHAMP fallback=0, id-map=0, zonk-final=0 |
+| A7 | Verification (full suite green) | ⬜ | |
 | **WS-B: Zonk Elimination + Scheduling** | | | |
 | B0 | process-string scoping audit (74 high-risk `set-box!` sites) | ⬜ | Must precede B4 (changed isolation semantics) |
 | B1 | Session meta migration (`current-sess-meta-store` hasheq → cells) | ⬜ | Enables session zonk elimination |
 | B2 | Remaining zonk elimination: type (6), resolution (4), session (18), level/mult (4) | ⬜ | Cell reads replace tree walks |
 | B3 | zonk.rkt deletion (~1300 lines) | ⬜ | Capstone: largest code deletion in codebase |
-| B4 | Test-granular scheduling via Places | ⬜ | <150s target |
-| B5 | Verification + PIR | ⬜ | |
+| B4 | Test-granular scheduling (file splitting + deferred Places) | ⬜ | Split test-stdlib; Places deferred to 10B design cycle 2 |
+| B5 | A/B benchmark comparison (WS-B before/after) | ⬜ | Compare: zonk calls=0, zonk.rkt deleted, session metas on cells |
+| B6 | Instrumentation cleanup | ⬜ | Remove Track 10 + Track 1 leftover counters (see §B6) |
+| B7 | Verification (full suite green) | ⬜ | |
+| B8 | PIR (per methodology) | ⬜ | Consult PIR methodology first. Cross-reference Track 10, 8F, SRE PIRs. |
 
 ## 1. Vision
 
@@ -52,6 +56,44 @@ substitution (zonk eliminated). ~1300 lines of zonk.rkt become dead code.
 
 Additionally: validate the PUnify toggle flip (propagator-based unification
 as default) and lay groundwork for test-granular scheduling (<150s).
+
+## Pre-0 Benchmark Findings (`aabb664`)
+
+Benchmark file: `benchmarks/micro/bench-track10b-foundation.rkt`
+
+### Key measurements:
+
+| Operation | Cost | Notes |
+|-----------|------|-------|
+| `make-prop-network` (empty) | 11 ns | Trivially cheap — A1 is safe |
+| CHAMP fallback check | 1.1 ns | Negligible — A1 value is architectural |
+| `zonk` (1 solved meta) | 862 ns | Baseline for elimination |
+| `zonk-at-depth 0` (same expr) | 302,078 ns | 350× slower than `zonk` — being deleted, not optimized |
+| `zonk-at-depth 1` (Pi codomain) | 592,313 ns | 687× slower — being deleted |
+| `zonk-final` | 2,368 ns | 2.7× `zonk` (default-metas pass) |
+| Ground expression zonk | 724 ns | Even ground pays tree walk |
+| `prop-meta-id->cell-id` | 98 ns | vs 1.5 ns direct cell-id access |
+| `meta-solution` (id-map path) | 230 ns | vs 144 ns cell-id path (37% savings) |
+| `with-fresh-meta-env` full | 79 μs | 277 calls = 22ms/suite (not a bottleneck) |
+| `process-string` (simple def) | 97 ms | Prelude loading dominates |
+
+### Design implications:
+
+1. **WS-A value is architectural, not performance.** CHAMP fallback (1.1ns)
+   and id-map (98ns) are negligible. Removing them simplifies code, doesn't
+   speed it up measurably.
+
+2. **WS-B's zonk elimination IS performance.** `zonk-at-depth` at 300-600μs
+   per call in unify's hot loop adds up. But we're DELETING it, not
+   optimizing it — the anomaly is academic.
+
+3. **Phase ordering stays dependency-driven.** The benchmarks confirm the
+   design without changing it. A1 → A2 → A3 (dependency chain). B1 → B2 →
+   B3 (dependency chain).
+
+4. **A/B comparison columns** for A6 and B5: run the same benchmarks after
+   implementation. The "after" column should show: zonk calls=0, CHAMP
+   fallback=0, id-map lookups=0.
 
 ## 2. WS-A: Foundation Cleanup
 
@@ -161,6 +203,30 @@ fix (`29a1fad`). 5 known parity bugs exist with the toggle ON: `head`, `map`,
 **Risk**: Medium. The 5 known parity bugs may have deeper roots. But the attempt
 costs nothing — the toggle reverts cleanly.
 
+### 2.6 Phase A6: A/B Benchmark Comparison (WS-A)
+
+Run `bench-track10b-foundation.rkt` after WS-A completion. Compare against
+Pre-0 baselines:
+
+| Metric | Pre-0 (before) | A6 (after) | Change |
+|--------|---------------|------------|--------|
+| CHAMP fallback check | 1.1 ns | — (removed) | N/A |
+| CHAMP fallback sites | 36 | 0 | -36 |
+| `zonk-final` cost | 2,368 ns | — (→ freeze) | measure freeze |
+| `freeze` cost | (not measured) | — | NEW baseline |
+| `prop-meta-id->cell-id` | 98 ns | — (removed) | N/A |
+| id-map sites | 18 | 0 | -18 |
+| `meta-solution` (id-map) | 230 ns | — (cell-id only) | measure |
+| Batch worker params | 11 | 4 | -7 |
+| Suite wall time | 133.5s | — | measure |
+
+**Success criteria**: All "removed" metrics show 0 sites. Suite wall time
+≤ 133.5s (no regression). `freeze` cost < `zonk-final` cost.
+
+### 2.7 Phase A7: Verification
+
+Full suite green (376/376). No regressions. Commit.
+
 ## 3. WS-B: Zonk Elimination + Scheduling
 
 ### 3.1 Phase B0: process-string scoping audit
@@ -238,6 +304,59 @@ its own design document. See Track 10 PIR §8 and D.4 critique recommendation #2
 
 **Placeholder**: Split test-stdlib (285 tests, 132s) into 3-4 files. This
 delivers partial tail-effect reduction without Places infrastructure.
+
+### 3.6 Phase B5: A/B Benchmark Comparison (WS-B)
+
+Run `bench-track10b-foundation.rkt` after WS-B completion. Compare against
+Pre-0 AND A6 baselines:
+
+| Metric | Pre-0 | Post-A6 | Post-B5 | Change |
+|--------|-------|---------|---------|--------|
+| `zonk` (1 meta) | 862 ns | — | — (removed) | N/A |
+| `zonk-at-depth 0` | 302,078 ns | — | — (removed) | N/A |
+| `zonk-at-depth 1` | 592,313 ns | — | — (removed) | N/A |
+| `zonk-session` | (not measured) | — | — (removed) | N/A |
+| zonk call sites | 47 | 24 (WS-A removes boundary) | 0 | -47 |
+| zonk.rkt lines | ~1300 | ~1300 | 0 (deleted) | -1300 |
+| `current-sess-meta-store` | mutable hasheq | mutable hasheq | cells | migrated |
+| Suite wall time | 133.5s | — | — | measure |
+
+**Success criteria**: Zero zonk calls. zonk.rkt deleted. Session metas on
+cells. Suite wall time ≤ Post-A6 (no regression from WS-B).
+
+### 3.7 Phase B6: Instrumentation Cleanup
+
+Remove leftover instrumentation from Track 10, Track 1, and earlier tracks:
+
+**Known instrumentation to audit**:
+- `current-bvar-solution-count` (PM 8F Phase 0) — default `#f`, gated. Remove?
+- `current-sre-debug?` (SRE Track 0) — default `#f`, gated. Keep for debugging?
+- `current-subtype-check-count` (SRE Track 1) — default `(cons 0 0)`. **Active cost** even when unused — increments on every `subtype?` call. Remove or gate behind `#f`.
+- `perf-inc-zonk!` / `zonk-steps` (performance-counters.rkt) — dead after B3 (zonk deleted). Remove.
+- Any `.pnet`-related debug counters added during Track 10 Phase 2.
+- Benchmark files: verify all benchmark files in `benchmarks/micro/` still compile and run after B3 (zonk deletion may break some).
+
+**Deliverables**:
+1. Audit all `make-parameter` definitions for instrumentation-only params
+2. Remove dead instrumentation (zonk counters after deletion)
+3. Gate active instrumentation behind `#f` default (zero overhead when off)
+4. Verify benchmark files compile post-B3
+5. Full suite green
+
+### 3.8 Phase B7: Verification
+
+Full suite green (376/376). All benchmarks pass. No regressions. Commit.
+
+### 3.9 Phase B8: PIR
+
+**Consult PIR methodology** (`docs/tracking/principles/POST_IMPLEMENTATION_REVIEW.org`)
+before writing. The PIR must:
+1. Follow the 16-question template (§1–§9+)
+2. Cross-reference Track 10, PM 8F, SRE Track 1+2 PIRs for longitudinal patterns
+3. Include A/B benchmark comparison tables (Pre-0 → A6 → B5)
+4. Address: what worked, what surprised, what went wrong, what we learned
+5. Distill lessons into target principles documents
+6. Note any remaining deferrals with tracking references
 
 ## 4. Performance Targets
 
