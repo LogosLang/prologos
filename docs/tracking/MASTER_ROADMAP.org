@@ -161,10 +161,30 @@ PM Track 9 = SRE Track 5
 PM Track 10                      =   SRE Track 6 (module loading)
 #+END_SRC
 
-*Recommended interleaved ordering*:
-1. SRE Track 1 → 2. PM 8E → 3. SRE Track 0.5 → 4. SRE Track 2 →
-5. SRE Tracks 3+4 (parallel) → 6. PM 8F → 7. SRE Track 5/PM 9 →
-8. SRE Track 6/PM 10 (convergence)
+*Current priority ordering* (updated 2026-03-26):
+
+*Immediate (PPN pipeline collapse — prerequisite to future syntax work):*
+1. PPN Track 0: Lattice design (parse, surface, core domains)
+2. PPN Track 1: Lexer as propagators
+3. PPN Track 2: Surface normalization as rewriting (replaces macros.rkt preparse ~7000 lines)
+4. PPN Track 3: Parser as propagators (HR productions)
+5. PPN Track 4 / SRE Track 2C: Elaboration as attribute evaluation (= elaborator-on-SRE)
+
+*Then re-evaluate. Candidates for next priority:*
+- PM Track 10C: Per-test scheduling via Places (developer velocity — saves ~20s/run)
+- SRE Track 2B: Polarity inference (user-facing: auto subtyping for data types)
+- SRE Track 3: Trait resolution on SRE
+- CIU Tracks 3-5: Collection interface (unblocked by Track 8)
+
+*Lower priority (independent improvements):*
+- PM Track 8E: 17 registries as cells (architectural cleanup)
+- BSP-LE Tracks 1-2: UnionFind + ATMS Solver
+- SRE Track PUnify: Systemic parity investigation
+- OE research tracks
+
+*Theory (ongoing, fed by application tracks):*
+- PRN: Hyperlattice rewriting formalism (grows from PPN + SRE + PReductions)
+- NTT: Network type theory (implementation deferred until PPN matures)
 
 *** Two-Layer Architecture
 
