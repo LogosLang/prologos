@@ -150,11 +150,14 @@ indentation-sensitivity and context-sensitive disambiguation.
 
 ```racket
 (struct token-cell-value
-  (type          ;; symbol: 'identifier, 'keyword, 'number, 'string, 'operator, 'delimiter, 'whitespace, 'error
+  (types         ;; seteq of symbol: possible classifications
+                 ;; e.g., (seteq 'operator 'delimiter) for ambiguous >
+                 ;; (seteq 'identifier) for unambiguous foo
    lexeme        ;; string: the actual character sequence
-   span          ;; (start . end): position in source
-   indent-level  ;; exact-nonneg-integer: column of first non-whitespace char on this line
-   indent-delta  ;; 'indent | 'dedent | 'same | #f: change from previous line
+   span-start    ;; exact-nonneg-integer: start position
+   span-end      ;; exact-nonneg-integer: end position
+   indent-level  ;; exact-nonneg-integer: column of first non-whitespace
+   indent-delta  ;; 'indent | 'dedent | 'same | #f
    )
   #:transparent)
 ```
@@ -164,17 +167,20 @@ indentation-sensitivity and context-sensitive disambiguation.
 | Carrier | `token-cell-value \| bot \| top` |
 | Bot | `'token-bot` (unclassified position) |
 | Top | `'token-error` (lexer error) |
-| Join | N/A — tokens are set-once. No join between ground values. |
-| Height | 2 (bot → value). Error is top (contradiction). |
-| Merge | Set-once: bot → value (ok). Value → different value = ATMS branch or error. |
+| Join | Set INTERSECTION on `types` field (D.9 revision: NARROWING, not set-once) |
+| Height | Bounded by |TokenType| + 2 (number of possible types per position) |
+| Merge | Set-narrowing: bot → initial set → narrowed set. Merge = INTERSECTION on types. Monotone under reversed subset order (smaller set = more information). |
 
 **Design decisions**:
-- **Set-once semantics (D.3)**: token cells are WRITTEN ONCE by the
-  lexer. Two different values at the same position create ATMS branches
-  (if ambiguous) or contradiction (if inconsistent). No lattice join
-  exists — tokens are ground values, not accumulatable. This is simpler
-  and more honest than a join operation that doesn't have natural
-  semantics.
+- **Set-narrowing semantics (D.9 revision)**: token cells hold a SET of
+  possible type classifications. The initial tokenizer writes ALL
+  matching types. The disambiguator NARROWS by intersection. Under
+  reversed subset ordering (smaller set = more information), this is
+  monotone. For unambiguous tokens (99%): the set has one element
+  (equivalent to set-once). For ambiguous tokens (e.g., `>` =
+  `{operator, delimiter}`): the set starts large and narrows.
+  This resolves the Track 0/Track 1 set-once vs reclassification
+  contradiction identified in the D.9 external critique.
 - `indent-level` and `indent-delta` are PART OF the token, not separate
   state. This avoids a separate indent lattice. The indent information
   flows forward through the token stream. Indent state (the stack) is

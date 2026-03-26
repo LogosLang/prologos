@@ -146,9 +146,10 @@ costs gives ~306 μs — still 1.5× faster than the current reader (460 μs),
 with incremental-ready architecture.
 
 **Parallelization potential**: The tree-builder's O(n) fire function is
-a PREFIX SCAN over indent levels (associative monoid action: push/pop/
-sibling). Parallel prefix scan (Blelloch 1990): O(n/p + log n) on p
-processors. For 4000 lines on 10 processors: ~8 μs vs 102 μs sequential
+a PREFIX SCAN over indent levels. The monoid is STACK-TRANSFORMING
+FUNCTIONS under composition (D.9 #4): each line contributes a function
+`stack → (parent, stack')`. Function composition is always associative.
+Parallel prefix scan (Blelloch 1990): O(n/p + log n) on p processors. For 4000 lines on 10 processors: ~8 μs vs 102 μs sequential
 (12× speedup). This requires BSP-LE's parallel scheduler with
 topological-sort rounds — Track 1 implements sequential, future tracks
 parallelize without changing the propagator interface.
@@ -267,9 +268,9 @@ through cells until fixpoint.
 | Domain | Carrier | Merge | Storage | What it represents |
 |--------|---------|-------|---------|-------------------|
 | **Character** | RRB(position → char) | RRB point-update | 1 embedded cell | Raw input |
-| **Token** | RRB(position → token-cell-value) | RRB point-update | 1 embedded cell | Token classification |
+| **Token** | RRB(position → Set(token-type)) | RRB point-update (set-NARROW) | 1 embedded cell | Token classification (set of possible types, narrowed by disambiguation) |
 | **Indent** | RRB(line → indent-level) | RRB point-update | 1 embedded cell | Leading whitespace |
-| **Bracket-depth** | RRB(position → int) | RRB point-update | 1 embedded cell | Bracket nesting |
+| **Bracket-depth** | RRB(position → (bracket-depth . qq-depth)) | RRB point-update | 1 embedded cell | Bracket nesting + quasiquote depth (D.9 #1) |
 | **Structure** | Tree (M-type) | tree-union (add nodes) | 1 cell | Parse tree topology |
 
 **5 cells total.** Parent assignments are INSIDE the tree M-type value
@@ -325,9 +326,10 @@ Match the data structure to the access pattern.
 |-----------|-------|--------|-------------|
 | Token classifier | Character RRB (span) | Token RRB (entry) | "These characters classify as this token" |
 | Indent measurer | Character RRB (line starts) | Indent RRB (entry) | "This line has N leading spaces" |
-| Bracket tracker | Token RRB (brackets) | Bracket-depth RRB (entries) | "Depth at P = depth at P-1 ± this bracket" |
+| Bracket tracker | Token RRB (brackets + backticks) | Bracket-depth RRB (bracket + qq-depth) | "Depth at P = depth at P-1 ± this bracket/backtick" |
 | Tree builder | Indent RRB + Bracket-depth RRB | Tree cell (M-type) | "Given indents + brackets, the tree topology is..." |
-| Context disambiguator | Tree cell (bridge γ) | Token RRB (reclassify) | "Given parse context, reclassify this token" |
+| Postfix adjacency | Token RRB (spans) + Tree cell | Token RRB (reclassify `[`) | "If `[` start = prev token end → postfix index, not new bracket" (D.9 #6) |
+| Context disambiguator | Tree cell (bridge γ) | Token RRB (set-narrow) | "Given parse context, narrow token type set" |
 
 **Note (D.7)**: The per-line chain of parent resolvers (D.2-D.5) is
 REPLACED by a single tree-builder propagator that reads indent + bracket
@@ -1021,11 +1023,21 @@ character RRB and writes the entire token RRB. O(n) work, ~370 ns/token.
 This is optimal for SEQUENTIAL execution (one propagator, no scheduling
 overhead).
 
+**Token cells hold SETS of possible types (D.9 #2)**: The initial
+tokenizer writes the set of ALL matching patterns for each position.
+For unambiguous tokens (99%): the set has one element (same cost as
+set-once). For ambiguous tokens (e.g., `>` = `{operator, delimiter}`):
+the set has multiple elements. The disambiguator NARROWS by intersection:
+`merge({operator, delimiter}, {delimiter}) = {delimiter}`. Under
+reversed subset ordering (smaller set = more information), narrowing is
+MONOTONE. This resolves the set-once vs reclassification contradiction
+from Track 0's lattice spec.
+
 **Parallel pivot (BSP-LE)**: Replace the one propagator with N
-per-position latches. Each reads its character span, classifies
-independently, writes its token RRB entry. Embarrassingly parallel:
-N positions on N processors = 370 ns total (one step). The cell
-topology doesn't change — only the propagator granularity.
+per-TOKEN latches (D.9 #3 correction: token granularity, not position
+granularity). Each reads its character span, classifies independently.
+Multi-character tokens require sequential scanning from start position,
+so parallelism is at token boundaries (~2 tokens/line), not per-char.
 
 **The interface is parallel-ready from day one.** The implementation
 is sequential for Track 1. The pivot to parallel is a PROPAGATOR
@@ -1050,7 +1062,52 @@ at most once). The cycle converges in ≤2 rounds:
 No stratification needed for this cycle. Stratification is for
 non-monotone operations (Track 5 elimination, Track 6 error recovery).
 
-### 11.5 Consumer API audit (51 files)
+**Termination proof (D.9 #5)** — specific to Prologos grammar:
+(a) Only `>` and `-` undergo bridge-γ reclassification.
+(b) `>` reclassification changes regular bracket-depth but NOT
+    angle-depth (separate counters in reader.rkt lines 54-55).
+(c) Angle-depth is the ONLY context that triggers `>` reclassification.
+(d) Therefore: `>` reclassification cannot trigger further `>`
+    reclassification (bracket-depth change doesn't affect angle-depth).
+(e) `-` reclassification depends on PRECEDING token type. Reclassifying
+    `-` doesn't change the preceding token. No cascade.
+(f) QED: ≤2 rounds. ∎
+
+### 11.6 One-cell tree justification (D.9 #7)
+
+Track 1 builds the tree ONCE (not incrementally). One cell is simpler
+and 300× fewer allocations than per-node cells. Track 8 (incremental)
+can decompose into per-node cells when needed. The RRB structural
+sharing inside the one-cell tree value gives granularity within the
+cell (unchanged subtrees shared between old and new values).
+
+The explicit choice: one cell for Track 1 (batch build). Per-node cells
+for Track 8 (incremental editing). The tree M-type representation
+supports both — the data is the same, the cell granularity differs.
+
+### 11.7 Token value semantics (D.9 #9)
+
+The current reader's `token.value` stores PARSED values: integer `42`,
+symbol `def`, keyword `:=`. The new `token-cell-value.lexeme` stores
+RAW STRINGS: `"42"`, `"def"`, `":="`.
+
+The compatibility wrapper for `tokenize-string` must replicate the
+parsing: `(case type [(number) (string->number lexeme)] [(symbol)
+(string->symbol lexeme)] ...)`
+
+This is bounded work (~10 cases) in the wrapper. The primary API
+exposes raw lexemes. Track 2+ consumers that need parsed values call
+a shared `parse-token-value` helper.
+
+### 11.8 Tree growth: keyed map with per-key refinement (D.9 #10)
+
+The parse-cell-value's derivation set is keyed by derivation-id.
+Within a key, a more-complete tree supersedes a less-complete tree
+(prefix ordering: more nodes = higher). Between keys, set-union
+accumulates alternatives. This is a MAP with per-key monotone
+refinement, not a bare set. Both operations are monotone.
+
+### 11.9 Consumer API audit (51 files)
 
 | API | Production files | Test files | Total |
 |-----|-----------------|------------|-------|
