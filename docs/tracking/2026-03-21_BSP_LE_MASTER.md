@@ -199,3 +199,11 @@ The Collection Interface Design's post-Track 8 phases (T1-T4) are independent of
 3. **Polynomial functor interfaces**: Directly engineering-relevant (module system for propagator networks) but research-heavy. Scope as a research document during the Series, potentially becoming a Track if the design crystallizes.
 
 4. **5 PUnify parity bugs**: Fix as Series prerequisite (PUnify Cleanup) or fold into Track 2? Recommendation: prerequisite — they must be fixed before Track 2 flips `current-punify-enabled?` to default-on.
+
+5. **Truly parallel propagator scheduling**: Current BSP is sequential BFS over the frontier. True parallelism requires: lock-free reads (CHAMP/RRB are persistent → safe), atomic writes (CAS + monotone merge), parallel worklist (work-stealing), barrier sync per stratum. The dependency graph's topological sort gives MINIMUM sequential rounds; within each round, all propagators fire in parallel. See [research note](../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md). Connects to array-programming vision (map/scan/reduce as propagator patterns) and PPN Track 1 (tree-builder as prefix scan with 12× parallel speedup potential).
+
+## Research Documents
+
+| Document | Role |
+|----------|------|
+| [Parallel Propagator Scheduling](../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md) | Topological-sort rounds, prefix scan as propagator pattern, array operations, CAS cell writes. From PPN Track 1 D.8 discussion. |
