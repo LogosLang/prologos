@@ -389,3 +389,47 @@ before the non-monotone operation in a higher stratum observes the result.
 This insight from well-founded logic programming (NAF-LE) directly
 informed the S(-1) retraction stratum design in Track 7. See
 [[file:GÖDEL_COMPLETENESS.org][GÖDEL_COMPLETENESS.org]] § "Application to the Stratified Propagator Network."
+
+** Data at Rest, Closures Derived on Demand
+
+When persistent state contains closures (Racket procedures), serialization
+fails. The fix is always the same: store the DATA from which the closure
+can be deterministically derived, and derive the closure on demand (at
+load time, at call time, or lazily).
+
+This pattern appeared 6 times in PM Track 10's =.pnet= serialization:
+1. /Foreign function procedures/ → store =(module-path . binding-name)=,
+   re-link via =dynamic-require= at deserialize time.
+2. /Preparse expander closures/ → store expander symbol name, look up
+   in expander table at call time.
+3. /Coercion functions/ → store =(coerce-via Sub Super via-fn-name)=,
+   derive the closure from the coercion spec at deserialize time.
+4. /Marshal-in / marshal-out closures/ → derive from foreign function's
+   type signature (already stored as data in =source-module= +
+   =racket-name= fields).
+5. /Capability-wrapped foreign functions/ → store unwrapped reference,
+   re-wrap with capability token pass-through at deserialize time.
+6. /Gensym identifiers/ → store as tagged interned symbols (=symbol$$N=),
+   reconstruct fresh gensyms from per-module table at deserialize time.
+
+The general principle: registries and persistent state should hold DATA
+REFERENCES, not closures. The closure is a CACHE — an optimization of the
+data reference. If the data reference is lost (not serialized), the cache
+cannot be reconstructed. If the data reference IS serialized, the cache
+can always be re-derived.
+
+This is Data Orientation applied to persistence: the serialized form IS
+the NTT-correct representation. The live form (closures) is an
+optimization cache derived from the data. When closures block
+serialization, the data model is incomplete — the closure's provenance
+(where it came from, what data generates it) is not recorded.
+
+Discovered in PM Track 10: 22/40 prelude modules failed serialization
+due to foreign function closures. The comprehensive fix (Option A:
+embed provenance in struct) solved all 22 in one pattern. The
+whack-a-mole phase (5 incremental fixes before the comprehensive audit)
+demonstrated the anti-pattern: fixing ONE closure category at a time
+reveals the next. The audit ("how many closure categories ARE there?")
+broke the cycle.
+
+See [[file:../2026-03-25_PM_TRACK10_PIR.md][PM Track 10 PIR]] and [[file:../research/2026-03-24_SELF_DESCRIBING_SERIALIZATION.md][Self-Describing Serialization Research]].
