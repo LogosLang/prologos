@@ -3,9 +3,11 @@
 **Stage**: 3 (Design)
 **Date**: 2026-03-26
 **Series**: PPN (Propagator-Parsing-Network)
-**Status**: D.2 — constraint-based tree building (Completeness revision).
-D.1 used imperative sweep; D.2 uses constraint propagation for O(1)
-incremental editing from day one.
+**Status**: D.5 — Propagator Only revision.
+D.1 sweep → D.2 constraint chain → D.3 self-critique → D.4 external
+critique → **D.5 Propagator Only**: no algorithms, only lattice
+specifications whose fixpoint IS the parse tree. Guided by the
+Hyperlattice Conjecture.
 
 **Prerequisite**: PPN Track 0 ✅ (lattice structs, bridge specs, integration test)
 **Enables**: PPN Track 2 (surface normalization), Track 3 (parser)
@@ -120,87 +122,133 @@ cell set-once write is 3 ns (from Track 0) — 100× headroom.
 
 ---
 
-## 1. Architectural Center: Trees, Not Tokens
+## 1. Architectural Center: The Fixpoint IS the Parse Tree
 
-The central design principle: **the cell topology IS the tree structure.**
-Indentation doesn't produce INDENT/DEDENT tokens in a flat stream (the
-Python model). Indentation creates PARENT-CHILD relationships between
-cells on the propagator network (the Prologos model).
+### The Hyperlattice Conjecture (Propagator Network Conjecture)
+
+**Postulate**: Any computation can be expressed as a fixpoint over
+interconnected lattice structures (propagator networks).
+
+**Corollary**: For any given computation, there exists an optimal
+propagator network expression along some axis of optimality.
+
+This is not merely a design choice — it rests on Tarski's Fixed Point
+Theorem (every monotone function on a complete lattice has a least
+fixpoint) and the CALM theorem (monotone computations are coordination-
+free, hence optimally parallelizable).
+
+### What this means for parsing
+
+There IS NO parsing algorithm. There is a LATTICE SPECIFICATION whose
+fixpoint IS the parse tree.
 
 ```
-Source:                   Cell topology:
-  def x := 42            root
-    where                   └── def-form
-      [Eq x]                    ├── "def" (token cell)
-                                ├── "x" (token cell)
-                                ├── ":=" (token cell)
-                                ├── "42" (token cell)
-                                └── where-block (structure cell)
-                                    └── "[Eq x]" (child form)
+Lattice domains:              Fixpoint:
+  Character cells               root
+  Token cells                     └── def-form
+  Indent cells                        ├── "def" (token cell)
+  Parent cells                        ├── "x" (token cell)
+  Bracket-depth cells                 ├── ":=" (token cell)
+  Structure cells                     ├── "42" (token cell)
+                                      └── where-block (structure cell)
+                                          └── "[Eq x]" (child form)
 ```
 
-Each indented block creates a STRUCTURE CELL whose children are the
-indented token/form cells. The structure cell knows its indent level
-and its parent. The tree is the network topology.
+The parse tree is the UNIQUE fixpoint of the lattice product. We don't
+BUILD the tree — we SPECIFY the lattices, install propagators that
+express the relationships between lattice domains, and the fixpoint
+computation produces the tree.
 
-**Why this matters for macros**: A `defmacro` rewrite operates on a
-SUB-TREE of this topology. The DPO rewriting framework preserves the
-interface (parent-child boundary). Indentation IS the tree → indentation
-is preserved BY CONSTRUCTION, not by careful macro implementation.
+The "algorithm" is: populate character cells → propagators fire →
+fixpoint reached → tree exists. The SCHEDULER determines firing order.
+The LATTICES determine the result. The result is the same regardless
+of firing order (monotonicity guarantees this).
 
-**Why this matters for the module forest**: Each `.prologos` file
-produces a tree. Module imports connect trees into a FOREST. The forest
-is the module dependency graph — already on the propagator network
-(Track 10 delivered persistent module networks). PPN Track 1's trees
-plug into Track 10's forest naturally.
+### Propagator Only (not Propagator First)
+
+D.5 revision: we don't merely PREFER propagators — we use ONLY
+propagators. Every aspect of parsing is a lattice domain with a
+monotone merge. Cross-domain relationships are propagators. The
+parse tree is a fixpoint. There are no imperative algorithms.
+
+**Process smell**: If we say "the algorithm does X," we're thinking
+imperatively. The propagator framing: "the fixpoint of domain X
+with respect to propagators P is the result R."
+
+### Structural preservation by fixpoint
+
+A `defmacro` rewrite is a propagator that reads tree cells, detects
+a pattern, and writes a transformed value. The tree's OTHER cells are
+unaffected (they're at their own fixpoints). After the rewrite, the
+network re-quiesces — the fixpoint adjusts to account for the rewrite.
+Indentation structure is preserved because parent-child cells are
+AT FIXPOINT and the rewrite doesn't change their inputs.
+
+### Trees compose into forests
+
+Each `.prologos` file's fixpoint is a tree. Module imports create
+cross-tree propagators. The forest is the fixpoint of ALL module
+trees connected by import edges. Track 10's `.pnet` cache serializes
+individual tree fixpoints. The forest fixpoint is computed by
+loading + connecting individual trees.
 
 ---
 
-## 2. Design Overview
+## 2. Lattice Domains and Their Product
 
-### 2.1 Three subsystems (from audit)
+### 2.1 Six lattice domains (D.5 revision)
 
-The audit identified two subsystems in reader.rkt (tokenizer 48%, parser
-52%). We split into THREE for cleaner architecture:
+The parse tree is the fixpoint of SIX interconnected lattice domains.
+Each domain has a carrier set, a merge function, and bot/top values.
+Propagators connect domains — information flows omnidirectionally
+through cells until fixpoint.
 
-**Subsystem A: Token Producers** (flat pattern matching)
-- Character sequences → token cells
-- No state, no context — pure pattern recognition
-- ~60% of current tokenizer (audit §2)
-- Maps to: token lattice set-once cells from Track 0
+| Domain | Carrier | Merge | What it represents |
+|--------|---------|-------|--------------------|
+| **Character** | char values at positions | set-once | Raw input |
+| **Token** | token-cell-value (Track 0) | set-once | Token classification |
+| **Indent** | indent level (int) | set-once | Leading whitespace measurement |
+| **Parent** | line-id \| 'root | set-once | Tree parent assignment |
+| **Bracket-depth** | int (running sum) | set-once per position | Bracket nesting depth |
+| **Structure** | structure-cell-value (Track 0) | children-accumulation | Tree nodes with children |
 
-**Subsystem B: Structure Builder** (indent-aware tree construction)
-- Indentation → parent-child cell relationships
-- Bracket matching → nesting cell relationships
-- Multi-line continuation → tree assembly
-- ~40% of current tokenizer + 100% of current parser
-- Maps to: cell topology on the propagator network
+**The product of these six domains, at fixpoint, IS the parse tree.**
 
-**Subsystem C: Context Resolver** (10 context-sensitive decisions)
-- Angle-bracket depth (> disambiguation)
-- Mixfix form override (parser manipulates tokenizer state)
-- Keyword vs identifier in context
-- Maps to: SurfaceToToken bridge γ from Track 0
+No domain is "primary." No domain "drives" the others. The propagators
+express RELATIONSHIPS between domains. The fixpoint emerges from
+ALL relationships being satisfied simultaneously.
 
-### 2.2 The coupling that must break
+### 2.2 Propagators between domains
 
-The audit found: the current parser reaches INTO the tokenizer's mutable
-state (bracket-depth, angle-depth) in the mixfix form handler. This
-coupling is WHY context-sensitive decisions are ad-hoc — the "context"
-is imperative state mutation, not information flow.
+| Propagator | Reads | Writes | Relationship |
+|-----------|-------|--------|-------------|
+| Token classifier | Character cells at span | Token cell | "These characters classify as this token" |
+| Indent measurer | Character cells at line start | Indent cell | "This line has N leading spaces" |
+| Parent resolver | Indent cells of this + preceding lines, bracket-depth cells | Parent cell | "My parent is the nearest preceding line with less indent (if bracket-depth = 0)" |
+| Bracket tracker | Token cells (open/close brackets) | Bracket-depth cells | "Bracket depth at position P = depth at P-1 ± this bracket" |
+| Structure assembler | Parent cells, token cells | Structure cells | "This structure cell's children are the tokens/structures whose parent-cell points here" |
+| Context disambiguator | Structure cells (bridge γ) | Token cells (reclassify) | "Given parse context, reclassify this token" |
 
-In the propagator model: context flows through CELLS, not mutable state.
-The parser writes to a "parse context" cell. The tokenizer reads the
-context cell via the SurfaceToToken bridge γ. No direct state coupling.
+### 2.3 The coupling dissolved (not broken)
+
+The audit found reader.rkt's parser mutates tokenizer state (bracket-
+depth). In the imperative model, this is COUPLING. In the propagator
+model, there IS no coupling to break — bracket depth is a LATTICE DOMAIN
+that both token classification and indent resolution READ. Information
+flows through cells, not through mutation. The "coupling" was an artifact
+of imperative state sharing. In the lattice product, each domain reads
+what it needs from other domains' cells. This is not coupling — it's the
+natural information flow of the fixpoint computation.
 
 ---
 
-## 3. Token Producers (Subsystem A)
+## 3. Token Classification Domain
 
 ### 3.1 Pattern inventory (from audit §2)
 
-Each pattern becomes a TOKEN PRODUCER propagator that reads character
-positions and writes token cells:
+Each pattern is a PROPAGATOR between the character domain and the token
+domain. It reads character cells at a span and writes the token cell
+for that span:
 
 | Category | Patterns | Count | Token type | Propagator complexity |
 |----------|----------|-------|------------|----------------------|
@@ -214,9 +262,12 @@ positions and writes token cells:
 | Whitespace | spaces, tabs | 1 pattern | indent tracking | Connects to Subsystem B |
 | Newlines | `\n`, `\r\n` | 1 pattern | indent tracking | Connects to Subsystem B |
 
-### 3.2 Implementation: registered pattern functions
+### 3.2 Token pattern propagators
 
-Each pattern is a REGISTERED FUNCTION (like SRE ctor-desc):
+Each pattern is a REGISTERED PROPAGATOR SPECIFICATION (like SRE
+ctor-desc). When character cells at a position are populated, the
+pattern propagators for that position fire. The highest-priority
+match writes the token cell.
 
 ```racket
 (struct token-pattern
@@ -231,33 +282,50 @@ Each pattern is a REGISTERED FUNCTION (like SRE ctor-desc):
 (define (register-token-pattern! pattern) ...)
 ```
 
-The recognizer scans characters from a position and returns how many
-characters match (or #f for no match). The classifier determines the
-token type from the matched characters. Priority resolves ambiguity
+The recognizer reads character cells from a position and returns how
+many characters match (or #f). The classifier determines the token
+type. Priority resolves when multiple patterns match the same span
 (`:=` has higher priority than `:` alone).
 
-Token producers fire in a sweep across the input: for each position,
-try each registered pattern, select the highest-priority match, write
-the token cell.
+**No sweep.** The propagators fire when their input cells (character
+cells) are populated. The scheduler determines firing order. For a
+file read sequentially, characters become available left-to-right,
+so token propagators fire left-to-right. For a pre-loaded buffer (all
+characters available), token propagators COULD fire in any order.
+The result is the same — the fixpoint is order-independent.
+
+**Some token patterns are stateful** (D.3b finding): string literals
+track escape state, `#p(...)` counts nested brackets. These patterns
+carry LOCAL state within their recognizer — they are context-free
+(don't read other cells) but stateful (track progress within their
+match). The state is INTERNAL to the recognizer function, not shared
+with other propagators.
 
 ---
 
-## 4. Structure Builder (Subsystem B) — Constraint-Based Tree Construction
+## 4. Indent, Parent, and Structure Domains — The Tree as Fixpoint
 
-### 4.1 The architectural principle (D.2 revision)
+### 4.1 The tree IS a fixpoint (D.5 revision)
 
-**D.1 used an imperative sweep** (left-to-right scan with mutable indent
-stack). D.2 replaces this with CONSTRAINT-BASED PROPAGATION:
+The parse tree is not BUILT — it is COMPUTED as the fixpoint of three
+lattice domains (indent, parent, structure) connected by propagators.
 
-- Each line's indent level is a CELL VALUE (measured from characters)
-- Parent-child relationships are CONSTRAINTS (resolved by propagation)
-- The tree topology EMERGES from constraint satisfaction at fixpoint
-- Incremental editing = re-fire affected constraints only = O(affected lines)
+- **Indent domain**: each content line holds its indent level (measured
+  from character cells). Monotone: set-once.
+- **Parent domain**: each content line holds its parent line-id
+  (computed from indent cells). Monotone: set-once.
+- **Structure domain**: each tree node holds its children (accumulated
+  from parent assignments). Monotone: children only grow.
 
-The Completeness principle says: build the foundation that makes Tracks
-2-8 easier. The constraint-based approach gives O(1) incremental editing
-from day one (Track 8 benefit), parallel-ready construction (Track 3
-benefit), and propagator-native representation (every track's benefit).
+The tree topology EMERGES from the fixpoint of these three domains.
+We don't build the tree — we specify the lattices and their
+relationships, and the fixpoint IS the tree.
+
+**Incrementality is a PROPERTY of the fixpoint**, not an optimization.
+Editing a cell value causes dependent propagators to re-fire. The
+network re-quiesces at a new fixpoint. Only AFFECTED cells change.
+This is not O(affected lines) as an algorithm — it's the DEFINITION
+of fixpoint re-computation under changed inputs.
 
 ### 4.2 Content lines vs source lines (D.4)
 
@@ -727,13 +795,19 @@ reader.rkt is DELETED upon completion. No dual-path.
 structure (cell topology) composes with Track 2 (normalization), Track 3
 (parsing), and Track 10 (serialization).
 
-**Propagator-First** (D.3 challenge): The token-pattern-registry (§3.2)
-is a Racket hash map, not a cell. Same pattern Track 8 criticized for
-trait/impl registries. Resolution: token patterns ARE static for a given
-grammar — they don't change during parsing. A Racket hash is correct for
-Track 1. If Track 7 (dynamic grammar extensions) needs dynamic patterns,
-the registry migrates to a cell then. This is the same pragmatic call
-we made for SRE Track 0 (form registry as Racket hash, not cell).
+**Propagator Only** (D.5 — upgraded from "Propagator First"): The parse
+tree is the fixpoint of six lattice domains. There are no algorithms —
+only lattice specifications, propagators expressing relationships, and
+fixpoint computation. The data flow IS the computation. The scheduler
+determines execution order; the lattices determine the result.
+
+**Process smell**: "The algorithm does X" → rephrase as "the fixpoint
+of domain X with respect to propagators P is the result R."
+
+**Token pattern registry** (D.3 note): Static registration of patterns
+as a Racket hash is acceptable — patterns are part of the SPECIFICATION,
+not the computation. They don't change during fixpoint computation. If
+Track 7 makes patterns dynamic, they become cells.
 
 **Data Orientation** (D.3 challenge): Structure cells hold `children:
 list of cell-id` — references, not embedded data. Parse trees are
