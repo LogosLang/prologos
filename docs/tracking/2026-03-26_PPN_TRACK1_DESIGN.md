@@ -116,9 +116,31 @@ cell set-once write is 3 ns (from Track 0) — 100× headroom.
 2. **Constraint chain is 7× faster** than current structure pass.
 3. **Performance target is generous**: current reader is 370 ns/token +
    55% structure. New reader with constraint chain should be within 2×.
-4. **Incremental editing is 1.7× from day one.** Content-only edits: O(1).
+4. **Incremental re-computation is a fixpoint property**, not an optimization.
 5. **Content hashing is affordable**: 83 ns/hash, ~100-500 cells/file = 8-40 μs.
 6. **110 files for golden comparison.** Largest: 1,164 lines.
+
+### Cell count and cost estimate (D.6)
+
+For nat.prologos (130 lines, 491 tokens, ~4000 chars):
+
+| Domain | Cells | Storage | Creation cost |
+|--------|-------|---------|--------------|
+| Character | ~4000 | CHAMP vector (bulk) | ~0.01 ms |
+| Token | ~491 | prop-network cells | ~0.7 ms |
+| Indent | ~100 | prop-network cells | ~0.14 ms |
+| Parent | ~100 | prop-network cells | ~0.14 ms |
+| Bracket-depth | ~491 | CHAMP vector (bulk, like chars) | ~0.01 ms |
+| Structure | ~100 | prop-network cells | ~0.14 ms |
+| **Total** | **~5282** | **mixed** | **~1.14 ms** |
+
+Current reader: 0.46 ms. New reader (estimated): ~1.14 ms. **2.5× slower.**
+Within the 10× budget. The CHAMP-backed bulk domains (character, bracket-
+depth) eliminate the 16× cost that individual cells would incur.
+
+**Bracket-depth can ALSO be CHAMP-backed** (D.6): it's per-position,
+set-once, many small values — same profile as characters. CHAMP bulk
+storage instead of individual cells reduces cost further.
 
 ---
 
@@ -203,14 +225,14 @@ Each domain has a carrier set, a merge function, and bot/top values.
 Propagators connect domains — information flows omnidirectionally
 through cells until fixpoint.
 
-| Domain | Carrier | Merge | What it represents |
-|--------|---------|-------|--------------------|
-| **Character** | char values at positions | set-once | Raw input |
-| **Token** | token-cell-value (Track 0) | set-once | Token classification |
-| **Indent** | indent level (int) | set-once | Leading whitespace measurement |
-| **Parent** | line-id \| 'root | set-once | Tree parent assignment |
-| **Bracket-depth** | int (running sum) | set-once per position | Bracket nesting depth |
-| **Structure** | structure-cell-value (Track 0) | children-accumulation | Tree nodes with children |
+| Domain | Carrier | Merge | Storage | What it represents |
+|--------|---------|-------|---------|-------------------|
+| **Character** | char at position | set-once | **CHAMP vector** | Raw input (bulk cells) |
+| **Token** | token-cell-value (Track 0) | set-once | prop-network cells | Token classification |
+| **Indent** | indent level (int) | set-once | prop-network cells | Leading whitespace measurement |
+| **Parent** | line-id \| 'root | set-once | prop-network cells | Tree parent assignment |
+| **Bracket-depth** | int (running sum) | set-once | prop-network cells | Bracket nesting depth |
+| **Structure** | structure-cell-value (Track 0) | children-accumulation | prop-network cells | Tree nodes with children |
 
 **The product of these six domains, at fixpoint, IS the parse tree.**
 
@@ -218,15 +240,51 @@ No domain is "primary." No domain "drives" the others. The propagators
 express RELATIONSHIPS between domains. The fixpoint emerges from
 ALL relationships being satisfied simultaneously.
 
+### 2.1b CHAMP-backed lattice domains (D.6)
+
+**Insight**: A CHAMP IS a lattice. Each CHAMP entry is a cell. The
+CHAMP's structural sharing provides change tracking FOR FREE.
+
+The character domain uses a CHAMP vector (persistent, structurally
+shared) instead of individual propagator-network cells. This is the
+SAME architectural pattern as the propagator network itself —
+`prop-network-cells` is a CHAMP mapping cell-id → cell-value. Each
+entry IS a cell.
+
+**Why this matters:**
+
+| Individual cells | CHAMP-backed domain |
+|-----------------|---------------------|
+| 4000 allocations (~5.6 ms) | 1 CHAMP build (~0.01 ms) |
+| Per-cell overhead (cell-info struct) | Amortized in CHAMP nodes |
+| Change detection: propagator deps | Change detection: CHAMP path diff |
+| Incremental: fire dep propagators | Incremental: compare old/new CHAMP paths |
+
+Characters ARE lattice values — stored efficiently in a bulk CHAMP.
+Token propagators read from the character CHAMP. When Track 8 edits
+a character: new CHAMP (path-copy, O(log n)), diff = changed positions,
+token propagators at changed positions re-fire.
+
+**This pattern generalizes.** Any lattice domain with many small
+set-once values (characters, per-position bracket depths, per-token
+source locations) benefits from CHAMP-backed bulk storage instead of
+individual cell allocation. The lattice semantics are identical — the
+STORAGE is optimized.
+
+**Characters are NOT outside the lattice product** (D.5 correction):
+they ARE cells, stored in a CHAMP. The CHAMP IS the cell infrastructure
+for this domain. No violation of Propagator Only — just efficient cell
+storage.
+
 ### 2.2 Propagators between domains
 
 | Propagator | Reads | Writes | Relationship |
 |-----------|-------|--------|-------------|
-| Token classifier | Character cells at span | Token cell | "These characters classify as this token" |
-| Indent measurer | Character cells at line start | Indent cell | "This line has N leading spaces" |
-| Parent resolver | Indent cells of this + preceding lines, bracket-depth cells | Parent cell | "My parent is the nearest preceding line with less indent (if bracket-depth = 0)" |
-| Bracket tracker | Token cells (open/close brackets) | Bracket-depth cells | "Bracket depth at position P = depth at P-1 ± this bracket" |
-| Structure assembler | Parent cells, token cells | Structure cells | "This structure cell's children are the tokens/structures whose parent-cell points here" |
+| Token classifier | Character CHAMP at span | Token cell | "These characters classify as this token" |
+| Indent measurer | Character CHAMP at line start | Indent cell | "This line has N leading spaces" |
+| Parent resolver | Indent cells, bracket-depth CHAMP | Parent cell | "My parent = nearest preceding line with less indent (if bracket-depth = 0)" |
+| Bracket tracker | Token cells (open/close brackets) | Bracket-depth CHAMP | "Bracket depth at position P = depth at P-1 ± this bracket" |
+| Structure assembler | Parent cells, token cells | Structure cells | "Children = tokens/structures whose parent-cell points here" |
 | Context disambiguator | Structure cells (bridge γ) | Token cells (reclassify) | "Given parse context, reclassify this token" |
 
 ### 2.3 The coupling dissolved (not broken)
