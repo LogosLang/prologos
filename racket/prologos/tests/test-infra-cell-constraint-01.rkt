@@ -147,7 +147,7 @@
 
 (test-case "Phase 1b: hasmethod constraint dual-write"
   (with-fresh-meta-env
-    (define info (hasmethod-constraint-info (expr-fvar 'P) 'eq? (list (expr-Nat)) 'dict-id))
+    (define info (hasmethod-constraint-info (expr-fvar 'P) 'eq? (list (expr-Nat)) 'dict-id #f))
     (register-hasmethod-constraint! 'hm-meta info)
     ;; Legacy hash has it
     (check-not-false (lookup-hasmethod-constraint 'hm-meta))
@@ -189,7 +189,7 @@
 (test-case "Phase 1b: registry cells are empty after reset"
   (with-fresh-meta-env
     (register-trait-constraint! 'm1 (trait-constraint-info 'Eq (list (expr-Nat))))
-    (register-hasmethod-constraint! 'hm1 (hasmethod-constraint-info (expr-fvar 'P) 'eq? '() #f))
+    (register-hasmethod-constraint! 'hm1 (hasmethod-constraint-info (expr-fvar 'P) 'eq? '() #f #f))
     (register-capability-constraint! 'cap1 (capability-constraint-info 'R (expr-fvar 'R)))
     ;; Reset
     (reset-meta-store!)
@@ -238,7 +238,7 @@
 (test-case "Phase 1c: all 7 cells empty after reset"
   (with-fresh-meta-env
     (register-trait-constraint! 'm1 (trait-constraint-info 'Eq (list (expr-Nat))))
-    (register-hasmethod-constraint! 'hm1 (hasmethod-constraint-info (expr-fvar 'P) 'eq? '() #f))
+    (register-hasmethod-constraint! 'hm1 (hasmethod-constraint-info (expr-fvar 'P) 'eq? '() #f #f))
     (register-capability-constraint! 'cap1 (capability-constraint-info 'R (expr-fvar 'R)))
     (reset-meta-store!)
     (define enet (unbox (current-prop-net-box)))

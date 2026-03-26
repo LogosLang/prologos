@@ -2394,10 +2394,11 @@
 ;; When a compound type is decomposed into sub-cells, bare metas (expr-meta id)
 ;; should reuse the meta's existing propagator cell. This callback maps
 ;; (expr-meta id) → cell-id, enabling sub-cell propagation to solve metas.
+;; Track 10B Phase A3: use cell-id directly, no id-map lookup
 (current-structural-meta-lookup
  (lambda (e)
    (and (expr-meta? e)
-        (prop-meta-id->cell-id (expr-meta-id e)))))
+        (expr-meta-cell-id e))))
 
 ;; Track 8 Phase A3d: Mult bridge callback for decompose-pi.
 ;; Looks up the mult-meta's cell-id from the id-map and creates a cross-domain

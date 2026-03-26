@@ -465,7 +465,8 @@
                      trait-var-meta
                      hm-method-name
                      type-arg-metas
-                     #f)))]  ;; dict-meta-id: not needed, resolve via impl registry
+                     #f      ;; dict-meta-id: not needed, resolve via impl registry
+                     #f)))]  ;; Track 10B: dict-meta-cell-id (set when dict-meta-id is set)
               [else
                ;; Standard trait constraint — (Eq A), (Seqable C), etc.
                (define trait-name (car wc))

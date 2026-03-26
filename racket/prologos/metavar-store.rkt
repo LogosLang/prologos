@@ -480,7 +480,8 @@
   (trait-var-expr    ;; Expr — the trait variable (typically (expr-meta ?P-id))
    method-name       ;; symbol — e.g., 'eq?
    type-arg-exprs    ;; (listof Expr) — type args [?A-meta]
-   dict-meta-id)     ;; symbol | #f — meta-id of the dict param for projection
+   dict-meta-id      ;; symbol | #f — meta-id of the dict param for projection
+   dict-meta-cell-id) ;; Track 10B Phase A3: cell-id for dict meta (avoids id-map lookup)
   #:transparent)
 
 ;; Phase 8 cleanup: current-hasmethod-constraint-map and current-hasmethod-wakeup-map
@@ -618,12 +619,15 @@
         ;; Track 8D: Call factory to produce a pure fire function.
         ;; Captures: method-name, meta-cell-id, trait-var-cell-id, dict-meta-cell-id,
         ;; dep-cell-ids, and registry cell IDs.
+        ;; Track 10B Phase A3: use cell-id directly from expr-meta struct,
+        ;; no id-map lookup needed.
         (define trait-var-cell-id
           (let ([tv-expr (hasmethod-constraint-info-trait-var-expr info)])
-            (and (expr-meta? tv-expr) (prop-meta-id->cell-id (expr-meta-id tv-expr)))))
+            (and (expr-meta? tv-expr) (expr-meta-cell-id tv-expr))))
         (define dict-meta-cell-id
-          (let ([dm-id (hasmethod-constraint-info-dict-meta-id info)])
-            (and dm-id (prop-meta-id->cell-id dm-id))))
+          ;; D.3 finding: dict-meta-id was bare symbol. Now use dict-meta-cell-id
+          ;; field (added below) which carries the cell-id from creation time.
+          (hasmethod-constraint-info-dict-meta-cell-id info))
         (define fire-fn (hm-bridge-fn (hasmethod-constraint-info-method-name info)
                                        hm-cell-id trait-var-cell-id dict-meta-cell-id
                                        dep-cids-br))
