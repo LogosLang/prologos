@@ -39,15 +39,15 @@ PPN consumes.
 | Track | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Lattice design (parse, token, surface, core lattices) | ✅ | `c41bbca` [PIR](2026-03-26_PPN_TRACK0_PIR.md). 4 lattices, 6 bridges, 57 tests. |
-| 1 | Lexer + structure as propagators (char → structured token tree) | ⬜ | Replaces reader.rkt. Tokenization + indent structure in one pass. |
-| 2 | Surface normalization as rewriting | ⬜ | Replaces macros.rkt preparse (~3000 lines). HIGHEST VALUE per effort. |
+| 1 | Lexer + structure as propagators (char → structured token tree) | 🔄 | [Design D.4](2026-03-26_PPN_TRACK1_DESIGN.md), [Audit](2026-03-26_PPN_TRACK1_STAGE2_AUDIT.md). Replaces reader.rkt. Constraint-based tree, tree mutation API for Track 2. |
+| 2 | Surface normalization as rewriting | ⬜ | Replaces macros.rkt preparse (~3000 lines). Operates on cell trees (Track 1 tree mutation API). HIGHEST VALUE per effort. |
 | 3 | Parser as propagators (chart/Earley, HR productions) | ⬜ | Replaces parser.rkt (~1500 lines) |
-| 3.5 | **Grammar Form: Research + Design** | ⬜ | [`grammar` vision](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md). Multi-view spec (parse/type/reduce/SRE/display/serialize/tooling). Subsumes `defmacro`. DPO structural preservation. Syntax design follows Tracks 1-3 implementation experience. |
+| 3.5 | **Grammar Form: Research + Design** | ⬜ | [`grammar` vision](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md). Multi-view spec. DPO structural preservation. Full theory + syntax after Tracks 1-3. |
 | 4 | Elaboration as attribute evaluation | ⬜ | IS SRE Track 2C. Dissolves parse/elab boundary. |
-| 5 | Type-directed disambiguation | ⬜ | Backward type→parse flow via Galois bridges |
-| 6 | Error recovery as lattice repair | ⬜ | Tropical semiring optimization on parse lattice (OE) |
-| 7 | User-defined grammar extensions (`grammar` form) | ⬜ | CAPSTONE: first-class language extension, richer than Lisp macros. Based on Track 3.5 research. |
-| 8 | Incremental editing (LSP-grade propagation) | ⬜ | IS PM Track 11 (partial) |
+| 5 | Type-directed disambiguation | ⬜ | Backward type→parse flow via Galois bridges. Bilattice (gfp/elimination) added here via WF-LE newtype pattern. |
+| 6 | Error recovery as lattice repair | ⬜ | Tropical semiring optimization. Track 1 writes error cells; Track 6 adds ATMS repair. |
+| 7 | User-defined grammar extensions (`grammar` form) | ⬜ | CAPSTONE. **Notes from Track 1**: token pattern registry migration from hash to cell needed here (dynamic grammar patterns). DPO framework for structural preservation. |
+| 8 | Incremental editing (LSP-grade propagation) | ⬜ | IS PM Track 11. **Notes from Track 1**: constraint chain ENABLES incrementality (O(affected lines) re-fire). Track 8 DELIVERS it (file watcher, change detection, partial re-tokenization). Structure cell serialization needed. |
 | 9 | Self-describing serialization | ⬜ | Grammar-based .pnet format. Self-hosting capstone. |
 
 ## 2. Track Details

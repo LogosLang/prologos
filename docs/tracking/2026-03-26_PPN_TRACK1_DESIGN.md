@@ -25,18 +25,21 @@ incremental editing from day one.
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | Pre-0 | Microbenchmarks: reader.rkt per-function costs | ✅ | `b076359` — 370ns/token, 55% structure, chain 3μs/200 lines, 1.7× incremental. No design changes. |
-| 0 | Golden test: capture BOTH tree structure maps AND datum output | ⬜ | Two-level baseline: topology + datums |
-| 1 | Token producers: flat patterns → token cells | ⬜ | 60% of tokenizer (audit §2) |
-| 2 | Indent structurer: indent stack → tree topology cells | ⬜ | Tree IS indentation. Central design. |
-| 3 | Bracket matcher: bracket depth → nesting cells | ⬜ | [], (), <>, {} |
-| 4 | Context-sensitive: 10 decisions → bridge γ calls | ⬜ | Audit §4. Angle-bracket, mixfix. |
-| 5 | Reader macros: #p, ', `, #=, dot-access, broadcast | ⬜ | Audit §6 |
-| 6 | API wrapper: maintain 7-function interface | ⬜ | Audit §1 exports |
-| 7 | Golden test comparison: tree structure + datums vs baseline | ⬜ | Two-level: topology (primary) + datums (compat) |
-| 8 | reader.rkt retirement + callers updated | ⬜ | 50 consumers updated |
-| 9 | A/B benchmarks | ⬜ | Compare against Pre-0 |
-| 10 | Suite verify + dailies + tracker | ⬜ | |
-| 11 | PIR + dailies + tracker | ⬜ | |
+| 0 | Golden baseline: tree topology + bracket groups + datums + srcloc | ⬜ | 4-level capture for 110 .prologos files |
+| 1a | Token producers: flat patterns → token cells | ⬜ | Context-free, possibly stateful (strings, #p). 60% of tokenizer. |
+| 1b | Indent structurer: constraint chain → tree topology | ⬜ | Content lines only (blank/comment skipped). Central design. |
+| 1c | Bracket matcher: bracket depth chain → nesting | ⬜ | Bracket depth pre-computed per-token, fed to context chain. |
+| 1d | **Integration gate**: golden comparison on simple files | ⬜ | Must pass before Phases 2-5 proceed. |
+| 2 | Context-sensitive: 11 decisions → bridge γ + priority + lookahead | ⬜ | +postfix adjacency (decision 11). Mixfix: 0 files, tracked gap. |
+| 3 | Reader macros: #p, ', `, #=, dot-access, broadcast | ⬜ | #p needs bracket-counting recognizer (stateful). |
+| 4a | Read API (5 tree-walking functions) | ⬜ | `read-to-tree`, `tree-children`, `tree-parent`, etc. |
+| 4b | Write API (4 tree mutation functions) | ⬜ | `tree-replace-children`, `tree-splice`, etc. For Track 2. |
+| 4c | Compatibility wrappers (7 datum functions) | ⬜ | Same signatures as reader.rkt. |
+| 5 | Golden comparison: 4 levels (topology + brackets + datums + srcloc) | ⬜ | ZERO differences = ready for retirement. |
+| 6 | reader.rkt retirement + 50 consumers updated | ⬜ | |
+| 7 | A/B benchmarks (integrated system, not components) | ⬜ | Pre-0 is feasibility; Phase 7 is validation. |
+| 8 | Suite verify + dailies + tracker | ⬜ | |
+| 9 | PIR + dailies + tracker | ⬜ | |
 
 ### Per-Phase Completion Protocol
 
@@ -256,9 +259,42 @@ The Completeness principle says: build the foundation that makes Tracks
 from day one (Track 8 benefit), parallel-ready construction (Track 3
 benefit), and propagator-native representation (every track's benefit).
 
-### 4.2 Per-line cells
+### 4.2 Content lines vs source lines (D.4)
 
-Each line in the source creates 3 cells:
+**"Line" in the cell topology means CONTENT LINE** — a source line that
+contains non-whitespace, non-comment content. Blank lines and comment-
+only lines do NOT create cells. They are filtered during character
+measurement (before the constraint chain fires).
+
+reader.rkt handles this at lines 160-185: `count-leading-spaces!`
+returns `#f` for blank/comment lines, and the outer loop retries. Our
+design replicates this: the character measurement phase (embarrassingly
+parallel) classifies each source line as CONTENT or SKIP. Only content
+lines create cells. The constraint chain operates on content lines only.
+
+**Implications for incremental editing**: Inserting or removing a blank
+line is O(0) — no cells affected, no propagators fire. Inserting a
+content line creates new cells and re-fires the chain from that point.
+
+**EOF handling (D.4)**: The constraint chain terminates when the last
+content line's context cell is written. The tree is "complete" when the
+propagator network reaches quiescence (no more propagators to fire).
+The API functions (read-to-tree, compatibility wrappers) extract results
+after quiescence.
+
+**Error handling (D.4)**: Malformed input (unmatched brackets, tab
+characters, invalid tokens) writes `token-top` (error) to the
+affected cell. Error cells have no children — the tree TRUNCATES at the
+error point. The tree invariant holds but the tree is INCOMPLETE.
+Error propagation through the chain: if a line produces an error,
+subsequent lines may have incorrect context (bracket depth or indent
+stack corrupted). Track 6 (error recovery) adds ATMS-based repair.
+Track 1 provides correct trees for correct input and truncated trees
+for erroneous input.
+
+### 4.3 Per-content-line cells
+
+Each content line creates 3 cells:
 
 ```racket
 ;; Line i has:
@@ -502,6 +538,8 @@ The tree is the PRIMARY output. Datums are a COMPATIBILITY layer.
 
 **Primary API (new — for Track 2, 3, 4+ consumers):**
 
+**Read operations:**
+
 | Function | Signature | Returns |
 |----------|-----------|---------|
 | `read-to-tree` | `string → parse-tree` | The cell tree (structure cells + token cells) |
@@ -510,10 +548,32 @@ The tree is the PRIMARY output. Datums are a COMPATIBILITY layer.
 | `tree-children` | `structure-cell → (listof cell-id)` | A form's children in order |
 | `tree-parent` | `cell-id → cell-id \| 'root` | A cell's parent |
 
-Track 2 (normalization) reads the tree directly — it installs
-propagators on tree cells. No datum extraction → tree reconstruction
-roundtrip. The tree flows from Track 1 to Track 2 to Track 3 as cells
-on the same network.
+**Write operations (D.4 — pulled in for Track 2 Completeness):**
+
+| Function | Signature | Purpose |
+|----------|-----------|---------|
+| `tree-replace-children` | `cell-id (listof cell-id) → void` | Replace a structure cell's children (defmacro expansion) |
+| `tree-insert-child` | `cell-id cell-id position → void` | Add a child at a specific position |
+| `tree-remove-child` | `cell-id cell-id → void` | Remove a child from a structure cell |
+| `tree-splice` | `cell-id cell-id (listof cell-id) → void` | Replace one child with multiple (macro expansion producing multiple forms) |
+
+**Why these are in Track 1, not Track 7 (D.4 Completeness revision):**
+Track 2 (surface normalization) REWRITES trees — defmacro expansion,
+let/cond desugaring, implicit map rewriting. If Track 2 operates on
+datums (extracting from the tree and working on S-expressions), the
+tree architecture is dead infrastructure until Track 8. If Track 2
+operates on the tree directly, every subsequent track benefits.
+
+The write operations are SIMPLE CELL UPDATES — update parent-id,
+update children list. No DPO framework needed. The tree invariant is
+maintained by each operation (old children orphaned → GC, new children
+get parent). Full DPO with interface preservation guarantees is
+Track 3.5/7 scope. Mechanical tree mutation is Track 1 scope.
+
+Track 2 (normalization) operates on the cell tree directly — it walks
+tree children, matches patterns, replaces sub-trees via `tree-splice`.
+The tree flows from Track 1 to Track 2 to Track 3 as cells on the
+same network. No datum extraction roundtrip.
 
 **Compatibility API (maintained — for 50 existing consumers):**
 
