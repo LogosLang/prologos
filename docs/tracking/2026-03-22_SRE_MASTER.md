@@ -43,6 +43,8 @@ PM Track 9 (reductions as DPO rewriting). All share the SRE as foundation.
 | 2B | Polarity Inference — user-defined structural subtyping | ⬜ | — | — | Wire polarity inference into `data` elaboration. Utilities exist (variance-join, variance-flip). Small scope. |
 | 2C | Cell References in Expressions — elaborator creates cell-ref not expr-meta | ⬜ | — | — | **ENABLES zonk elimination** (~1300 lines). Deferred from PM Track 10B Phase B2. Expressions reference cells directly; downstream code reads cells, not walks trees. |
 | PUnify | PUnify Parity Track — systemic regression investigation | ⬜ | — | — | Track 10B Phase A5 showed systemic failures with toggle ON (not 5 isolated bugs). Needs dedicated design cycle. |
+| 2D | Rewrite Relation — 4th SRE relation type (match LHS → produce RHS) | ⬜ | — | — | **From PPN Track 1/2**: tree rewriting IS structural unification. [Research note](../research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md). Directional: decompose against LHS, compose RHS from same sub-cells. |
+| 2E | Span-Based Decomposition — recognizer reads span of embedded lattice | ⬜ | — | — | **From PPN Track 3**: grammar productions match SPANS of tokens (RRB slices), not single cell values. SRE recognizer extended to read from embedded lattice entries. |
 | 3 | Trait Resolution-on-SRE — impl lookup via structural matching | ⬜ | — | — | Needs Track 1 ✅ (subtyping). Subsumes PM 8E resolution state. |
 | 4 | Session Types-on-SRE — duality via involution relation | ⬜ | — | — | Needs Track 1 ✅ (duality). Choice/Offer branch duality. `dual` retirement. |
 | 5 | Pattern Compilation-on-SRE — scrutinee decomposition + NF-Narrowing | ⬜ | — | — | GADT path via unified narrowing. Independent of PM tracks. |
