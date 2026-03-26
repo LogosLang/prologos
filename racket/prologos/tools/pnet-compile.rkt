@@ -30,8 +30,11 @@
  ["--check" "Report stale/missing .pnet files"
   (mode 'check)])
 
+;; Track 10B: resolve cache dir from script location, not CWD.
+;; This matches pnet-serialize.rkt's path resolution.
+(define script-dir (path-only (syntax-source #'here)))
 (define cache-dir
-  (build-path (current-directory) "data" "cache" "pnet"))
+  (simplify-path (build-path script-dir ".." "data" "cache" "pnet")))
 
 (case (mode)
   [(clean)

@@ -419,6 +419,18 @@
     (printf "Pre-compiled in ~as\n"
             (real->decimal-string (/ precomp-ms 1000.0) 1)))
 
+  ;; Track 10B: Stale .zo detection when --no-precompile is used.
+  ;; Checks if driver.rkt's .zo is older than driver.rkt source.
+  ;; If stale, warn (don't fail — the user explicitly said --no-precompile).
+  (unless (do-precompile?)
+    (let* ([driver-src (build-path project-root "driver.rkt")]
+           [driver-zo  (build-path project-root "compiled" "driver_rkt.zo")])
+      (when (and (file-exists? driver-src) (file-exists? driver-zo))
+        (when (> (file-or-directory-modify-seconds driver-src)
+                 (file-or-directory-modify-seconds driver-zo))
+          (printf "⚠ WARNING: driver.rkt is newer than compiled/driver_rkt.zo\n")
+          (printf "  Run `raco make driver.rkt` or remove --no-precompile\n")))))
+
   ;; .pnet cache: set env var for batch workers, check/generate cache
   (cond
     [(do-pnet-cache?)
@@ -590,6 +602,27 @@
       (newline))
     (printf "~a\n" (make-string 60 #\─))
     (printf "Failure logs: data/benchmarks/failures/*.log\n"))
+
+  ;; Track 10B: Write summary file for easy inspection without re-running.
+  ;; Read with: cat data/benchmarks/last-run-summary.txt
+  (let ([summary-path (build-path project-root "data" "benchmarks" "last-run-summary.txt")])
+    (with-output-to-file summary-path #:exists 'replace
+      (lambda ()
+        (printf "~a tests in ~as (~a files, ~a workers~a)\n"
+                total-tests
+                (real->decimal-string (/ total-wall-ms 1000.0) 1)
+                file-count jobs
+                (cond [bailed? (format ", ABORTED — ~a timeouts" timeout-count)]
+                      [all-pass? ", all pass"]
+                      [else (format ", ~a FAILURES" (length failed-files))]))
+        (unless all-pass?
+          (printf "\nFailed files:\n")
+          (for ([r (in-list failed-files)])
+            (printf "  ~a\n" (hash-ref r 'file))
+            (when (hash-has-key? r 'error_output)
+              (define lines (string-split (hash-ref r 'error_output) "\n"))
+              (for ([line (in-list (take lines (min 5 (length lines))))])
+                (printf "    ~a\n" line))))))))
 
   ;; Record to JSONL (unless --no-record or early bail)
   (when (and (record-timings?) (not bailed?))
