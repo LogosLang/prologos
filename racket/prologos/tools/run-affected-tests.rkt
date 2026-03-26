@@ -165,7 +165,8 @@
 (define dry-run? (make-parameter #f))
 (define against-target (make-parameter #f))
 (define run-all? (make-parameter #f))
-(define num-jobs (make-parameter 10))
+;; Track 10B: default to machine's CPU count, not hardcoded 10.
+(define num-jobs (make-parameter (processor-count)))
 (define no-skip? (make-parameter #f))
 (define skip-only? (make-parameter #f))
 (define extra-skips (make-parameter '()))
@@ -186,7 +187,7 @@
     (against-target target)]
    ["--all" "Run all tests regardless of changes"
     (run-all? #t)]
-   ["--jobs" n "Number of parallel jobs (default: 10)"
+   ["--jobs" n "Number of parallel jobs (default: CPU count)"
     (num-jobs (string->number n))]
    ["--no-skip" "Ignore .skip-tests, run all affected tests"
     (no-skip? #t)]
