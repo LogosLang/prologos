@@ -30,9 +30,9 @@ distinguished from exchanges.
 |-------|-------------|--------|-------|
 | Pre-0 | Microbenchmarks: pipeline costs + CHAMP scale test | ✅ | `8880524` — CHAMP viable at 500K (1.5μs/cell). Pipeline 99.99% elaboration. Quiescence linear. ATMS cheap. No design changes needed. |
 | 0 | Acceptance file: parse lattice exerciser | ⬜ | Exercises each lattice domain with known-ambiguous forms |
-| 1 | Token lattice (set-once) | ⬜ | `parse-lattice.rkt`: struct, set-once merge, bot/top |
-| 2 | Surface lattice (per-item cells, derivation-only) | ⬜ | `parse-lattice.rkt`: SPPF node, derivation set-union. NO elimination. |
-| 3 | Demand lattice + satisfaction protocol | ⬜ | `parse-lattice.rkt`: demand struct + satisfaction propagator pattern |
+| 1 | Token lattice (set-once) | ✅ | `20fdeb0` — set-once merge, indent fields, 7 tests |
+| 2 | Surface lattice (per-item cells, derivation-only) | ✅ | `20fdeb0` — SPPF derivation nodes, set-union merge, provenance via children. 10 tests |
+| 3 | Demand lattice + satisfaction protocol | ✅ | `20fdeb0` — domain-typed position, open specificity, priority. 6 tests. Protocol spec in §3.3 |
 | 4 | Bridges (3) + Exchange specs (2) + Projection (1) | ⬜ | Stratification-AGNOSTIC α/γ. Adjunction verification on examples. |
 | 5 | NTT speculative syntax (+ `:set-once` kind) | ⬜ | Each lattice + bridge in NTT syntax |
 | 6 | Integration test: happy path + ambiguity + disambiguation | ⬜ | Both `def x : Int := 42` AND ambiguous parse with ATMS + type resolution |
