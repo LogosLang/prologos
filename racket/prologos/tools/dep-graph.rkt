@@ -413,18 +413,7 @@
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #t)
    'test-kind-inference.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #t)
-   'test-lang-01-sexp.rkt
-   (test-dep '() #f)
-   'test-lang-02-ws.rkt
-   (test-dep '() #f)
-   'test-lang-03-macros.rkt
-   (test-dep '() #f)
-   'test-lang-04-repl.rkt
-   (test-dep '() #f)
-   'test-lang-errors-01-sexp.rkt
-   (test-dep '() #f)
-   'test-lang-errors-02-ws.rkt
-   (test-dep '() #f)
+   ;; Track 10 Phase 5: test-lang-* files removed (#lang prologos dropped)
    'test-lattice.rkt
    (test-dep '() #t)
    'test-let-arrow-syntax.rkt
@@ -913,27 +902,8 @@
 ;; ============================================================
 
 (define example-test-map
-  (hasheq
-   'hello.rkt           '(test-lang-01-sexp.rkt test-lang-04-repl.rkt)
-   'hello-ws.rkt        '(test-lang-02-ws.rkt)
-   'identity.rkt        '(test-lang-01-sexp.rkt)
-   'identity-ws.rkt     '(test-lang-02-ws.rkt)
-   'defn.rkt            '(test-lang-03-macros.rkt test-lang-04-repl.rkt)
-   'defn-ws.rkt         '(test-lang-03-macros.rkt)
-   'pairs.rkt           '(test-lang-01-sexp.rkt)
-   'pairs-ws.rkt        '(test-lang-02-ws.rkt)
-   'vectors.rkt         '(test-lang-01-sexp.rkt)
-   'vectors-ws.rkt      '(test-lang-02-ws.rkt)
-   'spec-ws.rkt         '(test-lang-03-macros.rkt)
-   'posit8.rkt          '(test-lang-01-sexp.rkt)
-   'posit8-ws.rkt       '(test-lang-02-ws.rkt)
-   'macros.rkt          '(test-lang-03-macros.rkt)
-   'macros-ws.rkt       '(test-lang-03-macros.rkt)
-   'let-arrow-ws.rkt    '(test-lang-03-macros.rkt)
-   'type-error.rkt      '(test-lang-errors-01-sexp.rkt)
-   'type-error-ws.rkt   '(test-lang-errors-02-ws.rkt)
-   'unbound-var.rkt     '(test-lang-errors-01-sexp.rkt)
-   'unbound-var-ws.rkt  '(test-lang-errors-02-ws.rkt)))
+  ;; Track 10 Phase 5: example-test-map cleared (#lang prologos examples removed)
+  (hasheq))
 
 ;; ============================================================
 ;; Layer 3: .prologos library forward-deps
