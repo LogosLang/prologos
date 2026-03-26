@@ -34,7 +34,7 @@ distinguished from exchanges.
 | 2 | Surface lattice (per-item cells, derivation-only) | ✅ | `20fdeb0` — SPPF derivation nodes, set-union merge, provenance via children. 10 tests |
 | 3 | Demand lattice + satisfaction protocol | ✅ | `20fdeb0` — domain-typed position, open specificity, priority. 6 tests. Protocol spec in §3.3 |
 | 4 | Bridges (3) + Exchange specs (2) + Projection (1) | ✅ | `3d15bb8` — stratification-agnostic. Demand satisfaction protocol. 23 tests. |
-| 5 | NTT speculative syntax (+ `:set-once` kind) | ⬜ | Each lattice + bridge in NTT syntax |
+| 5 | NTT speculative syntax (+ `:set-once` kind) | ✅ | `86df0b4` — §16 in NTT Syntax Design. 7 subsections: set-once, parse, demand, bridges, exchanges, projection, stratification options. |
 | 6 | Integration test: happy path + ambiguity + disambiguation | ⬜ | Both `def x : Int := 42` AND ambiguous parse with ATMS + type resolution |
 | 7 | A/B benchmarks + verification | ⬜ | Compare lattice operations against current pipeline |
 | 8 | Update dailies + tracker | ⬜ | Per-phase completion |
