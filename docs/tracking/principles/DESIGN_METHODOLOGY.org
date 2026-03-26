@@ -329,6 +329,30 @@ at each phase, raising design issues as they surface.
   more work than a simple boolean flag, but it produced the correct
   abstraction that composes with the rest of the trait system.
 
+- *Per-phase completion protocol*: Every phase completes with 4 steps
+  IN ORDER:
+
+  1. /Commit/: ~git add~ + ~git commit~ with descriptive message
+  2. /Tracker/: Update the design doc's progress tracker (⬜ → ✅ +
+     commit hash + key result)
+  3. /Dailies/: Append to current dailies: what was done, why, design
+     choices made, lessons/surprises encountered
+  4. /Proceed/: Move to next phase only after steps 1-3 are done
+
+  A phase is NOT complete until all 4 steps are done. This prevents
+  the pattern of batching dailies updates at session end, which loses
+  the context of /why/ decisions were made. The dailies entry should be
+  written IMMEDIATELY after the commit, while the reasoning is fresh.
+
+  Include this protocol explicitly in every design document's progress
+  tracker section, as a reminder to the implementer (including future-
+  self who may forget).
+
+  Codified from PM Track 10B, where dailies were consistently deferred
+  to end-of-session, losing decision context. The protocol was added to
+  the Track 10B design doc and proved effective for PPN Track 0
+  (dailies updated per-phase throughout).
+
 - *Phase-gated implementation with sub-phases*: Break phases into
   lettered sub-phases (a, b, c...) with explicit "done" vs.
   "remaining" tracking. The Logic Engine Phase 3 was broken into:

@@ -38,6 +38,18 @@ incremental editing from day one.
 | 10 | Suite verify + dailies + tracker | ⬜ | |
 | 11 | PIR + dailies + tracker | ⬜ | |
 
+### Per-Phase Completion Protocol
+
+Every phase completes with these 4 steps IN ORDER:
+
+1. **Commit**: `git add` + `git commit` with descriptive message
+2. **Tracker**: Update the progress tracker table above (⬜ → ✅ + commit hash + key result)
+3. **Dailies**: Append to current dailies with: what was done, design choices, lessons/surprises
+4. **Proceed**: Move to next phase only after steps 1-3 are done
+
+A phase is NOT complete until all 4 steps are done. This prevents the
+pattern of batching dailies updates at session end (loses context).
+
 ---
 
 ## 0. Pre-0 Benchmark Results (`b076359`)
