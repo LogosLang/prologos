@@ -124,19 +124,44 @@ cell set-once write is 3 ns (from Track 0) — 100× headroom.
 
 For nat.prologos (130 lines, 491 tokens, ~4000 chars):
 
-| Domain | Entries | Storage | Creation cost |
-|--------|---------|---------|--------------|
-| Character | ~4000 | RRB vector (bulk) | ~0.09 ms |
-| Token | ~491 | prop-network cells | ~0.69 ms |
-| Indent | ~100 | prop-network cells | ~0.14 ms |
-| Parent | ~100 | prop-network cells | ~0.14 ms |
-| Bracket-depth | ~491 | RRB vector (bulk) | ~0.01 ms |
-| Structure | ~100 | prop-network cells | ~0.14 ms |
-| **Total** | **~5282** | **mixed** | **~1.11 ms** |
+| Domain | Storage | Cells | Creation cost |
+|--------|---------|-------|--------------|
+| Character | RRB embedded cell | 1 | ~93 μs |
+| Token | RRB embedded cell | 1 | ~11 μs |
+| Indent | RRB embedded cell | 1 | ~2 μs |
+| Bracket-depth | RRB embedded cell | 1 | ~11 μs |
+| Structure (tree) | M-type value cell | 1 | ~1.4 μs |
+| **Total** | **5 cells, 4 RRBs** | **5** | **~119 μs** |
 
-Current reader: 0.46 ms. New reader (estimated): ~1.11 ms. **2.4× slower.**
-Within the 10× budget. RRB-backed bulk domains (character, bracket-depth)
-provide 9× build speedup over CHAMP and 60× over individual cells.
+Current reader: 460 μs. New reader (estimated): **~119 μs. 4× FASTER.**
+
+**The entire parse state in 5 cells.** Each sequential domain (characters,
+tokens, indent levels, bracket depths) is an RRB embedded cell. The tree
+structure is ONE cell holding an M-type value (initial algebra of the
+parse tree polynomial functor — the same representation the SRE uses for
+type expression trees like `expr-Pi`).
+
+**Why this works**: The Pocket Universe principle. Each RRB cell is an
+embedded lattice of positionally-indexed values. The tree cell is an
+embedded lattice of tree topologies ordered by "more nodes resolved."
+Five pocket universes, five cells, one fixpoint.
+
+**SRE decomposition on the tree cell**: When Track 2 needs to match/
+rewrite a sub-tree, the SRE decomposes the tree value:
+`structural-relate(tree-cell, def-form(name, type, body))` extracts
+sub-trees as sub-cells. Macro rewrite operates on sub-cells. SRE
+reconstructs and writes back. Same mechanism as type-level decomposition.
+
+**Tree growth is monotone**: The tree cell starts at bot (empty).
+Propagators fire and write increasingly complete trees. The merge
+function: tree union (add nodes the new tree has that the old doesn't).
+The fixpoint is the complete parse tree.
+
+**Incremental via RRB diff**: The tree-building propagator reads indent
++ bracket-depth RRBs. When an RRB entry changes (edit), the propagator
+receives the DIFF (which positions changed) via RRB structural sharing.
+It re-resolves only affected tree nodes. Unchanged nodes are structurally
+shared between old and new tree values. O(affected lines), not O(n).
 
 ---
 
@@ -223,12 +248,15 @@ through cells until fixpoint.
 
 | Domain | Carrier | Merge | Storage | What it represents |
 |--------|---------|-------|---------|-------------------|
-| **Character** | char at position | set-once | **RRB persistent vector** | Raw input (bulk cells, 3× faster seq read than CHAMP) |
-| **Token** | token-cell-value (Track 0) | set-once | prop-network cells | Token classification |
-| **Indent** | indent level (int) | set-once | prop-network cells | Leading whitespace measurement |
-| **Parent** | line-id \| 'root | set-once | prop-network cells | Tree parent assignment |
-| **Bracket-depth** | int (running sum) | set-once | **RRB persistent vector** | Bracket nesting depth (bulk, like chars) |
-| **Structure** | structure-cell-value (Track 0) | children-accumulation | prop-network cells | Tree nodes with children |
+| **Character** | RRB(position → char) | RRB point-update | 1 embedded cell | Raw input |
+| **Token** | RRB(position → token-cell-value) | RRB point-update | 1 embedded cell | Token classification |
+| **Indent** | RRB(line → indent-level) | RRB point-update | 1 embedded cell | Leading whitespace |
+| **Bracket-depth** | RRB(position → int) | RRB point-update | 1 embedded cell | Bracket nesting |
+| **Structure** | Tree (M-type) | tree-union (add nodes) | 1 cell | Parse tree topology |
+
+**5 cells total.** Parent assignments are INSIDE the tree M-type value
+(each tree node carries its parent). No separate parent domain needed —
+it's a field of the tree node, not a separate lattice.
 
 **The product of these six domains, at fixpoint, IS the parse tree.**
 
@@ -277,12 +305,17 @@ Match the data structure to the access pattern.
 
 | Propagator | Reads | Writes | Relationship |
 |-----------|-------|--------|-------------|
-| Token classifier | Character CHAMP at span | Token cell | "These characters classify as this token" |
-| Indent measurer | Character CHAMP at line start | Indent cell | "This line has N leading spaces" |
-| Parent resolver | Indent cells, bracket-depth CHAMP | Parent cell | "My parent = nearest preceding line with less indent (if bracket-depth = 0)" |
-| Bracket tracker | Token cells (open/close brackets) | Bracket-depth CHAMP | "Bracket depth at position P = depth at P-1 ± this bracket" |
-| Structure assembler | Parent cells, token cells | Structure cells | "Children = tokens/structures whose parent-cell points here" |
-| Context disambiguator | Structure cells (bridge γ) | Token cells (reclassify) | "Given parse context, reclassify this token" |
+| Token classifier | Character RRB (span) | Token RRB (entry) | "These characters classify as this token" |
+| Indent measurer | Character RRB (line starts) | Indent RRB (entry) | "This line has N leading spaces" |
+| Bracket tracker | Token RRB (brackets) | Bracket-depth RRB (entries) | "Depth at P = depth at P-1 ± this bracket" |
+| Tree builder | Indent RRB + Bracket-depth RRB | Tree cell (M-type) | "Given indents + brackets, the tree topology is..." |
+| Context disambiguator | Tree cell (bridge γ) | Token RRB (reclassify) | "Given parse context, reclassify this token" |
+
+**Note (D.7)**: The per-line chain of parent resolvers (D.2-D.5) is
+REPLACED by a single tree-builder propagator that reads indent + bracket
+RRBs and computes the entire tree M-type. Incremental behavior comes
+from RRB diff (which entries changed) → tree-builder re-resolves only
+affected nodes → structural sharing on the tree value.
 
 ### 2.3 The coupling dissolved (not broken)
 
