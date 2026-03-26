@@ -40,8 +40,8 @@
 | B1b | Session meta read migration (`sess-meta-solution/cell-id`) | ✅ | Cell-id fast path for zonk-session + zonk-session-default. 138.9s |
 | B1c | Speculation verification (session metas survive rollback) | ✅ | Verified: test-sess-inference (28 tests) + test-session-lattice pass. TMS tagging unchanged. |
 | B1d | Session default timing (`sess-end` at correct moment) | ✅ | Verified: defaults apply in freeze (boundary time), after resolution. Timing correct. |
-| B2 | Remaining zonk elimination: unify (6), resolution (4), session (18), level/mult (4), **type-lattice (8)** | ⬜ | D.4 fix: 55 total sites (not 47). type-lattice.rkt was missing from audit. |
-| B3 | zonk.rkt deletion (~1300 lines) | ⬜ | Capstone. Keep `freeze` (move to driver.rkt or standalone). |
+| B2 | Remaining zonk elimination: 55 sites | ⏸️ | BLOCKED: requires elaborator to create cell refs instead of expr-meta nodes. SRE Track 2+ scope. |
+| B3 | zonk.rkt deletion (~1300 lines) | ⏸️ | BLOCKED: depends on B2. |
 | B4 | Test-granular scheduling (file splitting only; Places deferred) | ⬜ | Split test-stdlib into 3-4 files. |
 | B5 | A/B benchmark comparison (WS-B before/after) | ⬜ | Compare: zonk calls=0, zonk.rkt deleted, session metas on cells. See §B5 table. |
 | B6 | Instrumentation cleanup | ⬜ | Comprehensive `make-parameter` audit. Gate subtype counter behind #f. Decide perf-counters.rkt survival. Archive/delete dead benchmark files. |
