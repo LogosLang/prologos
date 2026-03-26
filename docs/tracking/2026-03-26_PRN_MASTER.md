@@ -36,6 +36,7 @@ with evidence from implementation.
 | Finding | Evidence | Application | Date |
 |---------|----------|-------------|------|
 | SRE structural decomposition IS DPO hyperedge replacement | `structural-relate` replaces a constructor hyperedge with sub-cell nodes + connecting propagators. The ctor-desc form registry IS a hypergraph grammar. | SRE Track 0-2 | 2026-03-22 |
+| Tree rewriting IS structural unification | Macro `when $cond $body → if $cond $body unit` is: SRE decompose (match LHS, bind sub-cells) + SRE reconstruct (compose RHS from same sub-cells). "Rewrite" is the 4th SRE relation (after equality, subtyping, duality). [Research note](../research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md) | PPN Track 1/2 design discussion | 2026-03-26 |
 | `prop:ctor-desc-tag` guarantees no critical pairs | Each value has exactly one constructor tag → exactly one decomposition rule matches → confluence by construction | SRE Track 2 | 2026-03-24 |
 | Zonk IS a rewrite rule | `expr-meta(id) → solution(id)` applied exhaustively until no more `expr-meta` nodes. Eliminating zonk = making the rule matchless (no `expr-meta` in expressions). | PM 8F, Track 10B | 2026-03-25 |
 | Parsing IS attribute evaluation IS propagator fixpoint | Engelfriet-Heyker theorem (1992): HR term languages = attribute grammar languages. Attribute evaluation = propagator fixpoint. | Research | 2026-03-24 |
@@ -190,6 +191,7 @@ as application tracks complete PIRs.
 | [Lattice Foundations for PPN](../research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) | 2026-03-26 | Abstract interpretation, semiring parsing, Datalog, monotone frameworks, categorical connections, ATMS-guided parsing | Concrete lattice design for 6 domains + reduced product + scheduling strategy |
 | [FL-Narrowing Design](../research/2026-03-07_FL_NARROWING_DESIGN.org) | 2026-03-07 | Definitional trees, residuation-first, term lattice, needed narrowing | Strategy layer: DTs as optimal rewrite rule selection |
 | [Kan Extensions, ATMS, GFP Parsing](../research/2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md) | 2026-03-26 | Right Kan = NF-Narrowing demands, Left Kan + ATMS = 4-level search, GFP parsing bilattice, cross-network disambiguation | Deep structural connections between Kan extensions, ATMS, and parsing |
+| [Tree Rewriting as Structural Unification](../research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md) | 2026-03-26 | Macro rewriting IS SRE decompose+reconstruct. "Rewrite" as 4th SRE relation. Track 2 normalization = SRE rule registration + quiescence. | Unifies macro expansion with structural reasoning |
 
 ## 7. Watching / Emerging Patterns
 

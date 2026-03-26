@@ -570,6 +570,14 @@ maintained by each operation (old children orphaned → GC, new children
 get parent). Full DPO with interface preservation guarantees is
 Track 3.5/7 scope. Mechanical tree mutation is Track 1 scope.
 
+**SRE connection (D.4 research note)**: Tree rewriting IS structural
+unification. A `defmacro when [$cond $body] [if $cond $body unit]` is:
+decompose cell against `when(cond, body)` (SRE pattern match), compose
+`if(cond, body, unit)` from the same sub-cells (SRE reconstruction).
+Track 1's mutation functions are the MECHANICAL layer that the SRE
+calls. Track 2 wraps this in `sre-rewrite` — macro patterns register
+as SRE rewrite rules. See [research note](../research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md).
+
 Track 2 (normalization) operates on the cell tree directly — it walks
 tree children, matches patterns, replaces sub-trees via `tree-splice`.
 The tree flows from Track 1 to Track 2 to Track 3 as cells on the

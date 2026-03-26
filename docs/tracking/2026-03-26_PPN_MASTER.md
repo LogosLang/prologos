@@ -40,7 +40,7 @@ PPN consumes.
 |-------|-------------|--------|-------|
 | 0 | Lattice design (parse, token, surface, core lattices) | ✅ | `c41bbca` [PIR](2026-03-26_PPN_TRACK0_PIR.md). 4 lattices, 6 bridges, 57 tests. |
 | 1 | Lexer + structure as propagators (char → structured token tree) | 🔄 | [Design D.4](2026-03-26_PPN_TRACK1_DESIGN.md), [Audit](2026-03-26_PPN_TRACK1_STAGE2_AUDIT.md). Replaces reader.rkt. Constraint-based tree, tree mutation API for Track 2. |
-| 2 | Surface normalization as rewriting | ⬜ | Replaces macros.rkt preparse (~3000 lines). Operates on cell trees (Track 1 tree mutation API). HIGHEST VALUE per effort. |
+| 2 | Surface normalization as rewriting | ⬜ | Replaces macros.rkt preparse (~3000 lines). **Key insight**: tree rewriting IS structural unification — [research note](../research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md). defmacro patterns register as SRE rewrite rules. Normalization = SRE quiescence. ~3000 lines → ~200 rule registrations. |
 | 3 | Parser as propagators (chart/Earley, HR productions) | ⬜ | Replaces parser.rkt (~1500 lines) |
 | 3.5 | **Grammar Form: Research + Design** | ⬜ | [`grammar` vision](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md). Multi-view spec. DPO structural preservation. Full theory + syntax after Tracks 1-3. |
 | 4 | Elaboration as attribute evaluation | ⬜ | IS SRE Track 2C. Dissolves parse/elab boundary. |
