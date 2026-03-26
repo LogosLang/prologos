@@ -24,7 +24,7 @@ incremental editing from day one.
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| Pre-0 | Microbenchmarks: reader.rkt per-function costs | ⬜ | Tokenizer vs parser breakdown |
+| Pre-0 | Microbenchmarks: reader.rkt per-function costs | ✅ | `b076359` — 370ns/token, 55% structure, chain 3μs/200 lines, 1.7× incremental. No design changes. |
 | 0 | Golden test: capture BOTH tree structure maps AND datum output | ⬜ | Two-level baseline: topology + datums |
 | 1 | Token producers: flat patterns → token cells | ⬜ | 60% of tokenizer (audit §2) |
 | 2 | Indent structurer: indent stack → tree topology cells | ⬜ | Tree IS indentation. Central design. |
@@ -277,7 +277,7 @@ The TREE TOPOLOGY is encoded in `parent-id` and `children`. Walking
 the tree = following cell-id references. This is the structure that
 macros operate on and DPO rewriting preserves.
 
-### 4.6 Bracket groups
+### 4.6 Bracket groups and the bracket-indent interaction
 
 Brackets create INLINE structure (not indent-based):
 
@@ -287,9 +287,32 @@ Brackets create INLINE structure (not indent-based):
 - `<Int | String>` → structure cell (type annotation)
 
 Bracket groups are NESTED within indent blocks. A bracket group's
-parent is the enclosing indent block or bracket group. Bracket matching
-is also constraint-based: each open bracket creates a cell that is
-"resolved" when the matching close bracket is found.
+parent is the enclosing indent block or bracket group.
+
+**Critical interaction (D.3 self-critique finding)**: Bracket groups
+SUPPRESS indent tracking. A multi-line bracket group:
+
+```
+[map [fn [x : Int]
+         [int+ x 1]]
+     xs]
+```
+
+Line 2 is at indent 9, but it's a CONTINUATION of the bracket on line
+1, not a new indent child. The indent resolver must know: "am I inside
+an open bracket?" If yes, indent changes don't create new parent-child
+relationships — the line is part of the enclosing bracket group.
+
+**Resolution**: Token producers determine BRACKET DEPTH per line
+(count open - close brackets from left). The indent resolver reads
+bracket depth as an ADDITIONAL INPUT. If bracket depth > 0, the line
+is a continuation → parent = the line that opened the bracket group.
+If bracket depth = 0, normal indent resolution applies.
+
+The bracket depth propagation is ALSO a chain (line-by-line, since
+a bracket opened on line 3 affects lines 4+). This chain can be
+MERGED with the indent context chain — each line's context includes
+BOTH the indent stack AND the bracket depth. One chain, two concerns.
 
 ### 4.7 The tree invariant
 
