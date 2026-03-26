@@ -1,0 +1,323 @@
+# PM Track 10B — Foundation Cleanup + Zonk Elimination
+
+**Stage**: 3 (Design)
+**Date**: 2026-03-25
+**Series**: Propagator Migration
+**Status**: Design D.1
+
+**Prerequisites**:
+- PM Track 10 ✅ (`.pnet` cache, fork model, `#lang` dropped, 133.5s suite)
+- PM 8F ✅ (cell-id in expr-meta, cell-primary reads)
+- SRE Track 2 ✅ (O(1) struct-type dispatch)
+
+**Source Documents**:
+- [Track 10B Stage 2 Audit](2026-03-25_PM_TRACK10B_STAGE2_AUDIT.md) — concrete code measurements
+- [Track 10 Design](2026-03-24_PM_TRACK10_DESIGN.md) — parent track
+- [Track 10 PIR](2026-03-25_PM_TRACK10_PIR.md) — lessons + deferrals
+- [PM 8F PIR](2026-03-24_PM_8F_PIR.md) — deferred Phase 5 (defaults) + Phase 7 (CHAMP removal)
+- [Unified Infrastructure Roadmap](2026-03-22_PM_UNIFIED_INFRASTRUCTURE_ROADMAP.md) — on/off-network boundary
+- [SRE Master](2026-03-22_SRE_MASTER.md) — SRE series tracking
+- [PUnify Parts 1-2 PIR](2026-03-19_PUNIFY_PARTS1_2_PIR.md) — 5 parity bugs, toggle flip blocked
+
+## Progress Tracker
+
+| Phase | Description | Status | Notes |
+|-------|-------------|--------|-------|
+| **WS-A: Foundation Cleanup** | | | |
+| A0 | Pre-0 benchmarks (remaining zonk overhead, id-map cost) | ⬜ | |
+| A1 | `with-fresh-meta-env` creates network. Remove CHAMP fallback (~36 sites) | ⬜ | Foundation for all subsequent phases |
+| A2 | `zonk-final` → `freeze` (7 sites) + `default-metas` at solve-time (17 sites) | ⬜ | Absorbs PM 8F deferred Phase 5 |
+| A3 | id-map elimination (18 sites) | ⬜ | All callers use `expr-meta.cell-id` |
+| A4 | Batch worker simplification (11→4 saved values) | ⬜ | `.pnet` + fork makes snapshot redundant |
+| A5 | PUnify toggle flip validation | ⬜ | REPL fix unblocked this; 5 known parity bugs |
+| A6 | Verification + A/B benchmarks | ⬜ | |
+| **WS-B: Zonk Elimination + Scheduling** | | | |
+| B0 | process-string scoping audit (74 high-risk `set-box!` sites) | ⬜ | Must precede B4 (changed isolation semantics) |
+| B1 | Session meta migration (`current-sess-meta-store` hasheq → cells) | ⬜ | Enables session zonk elimination |
+| B2 | Remaining zonk elimination: type (6), resolution (4), session (18), level/mult (4) | ⬜ | Cell reads replace tree walks |
+| B3 | zonk.rkt deletion (~1300 lines) | ⬜ | Capstone: largest code deletion in codebase |
+| B4 | Test-granular scheduling via Places | ⬜ | <150s target |
+| B5 | Verification + PIR | ⬜ | |
+
+## 1. Vision
+
+Track 10 delivered the `.pnet` cache and fork model, reducing suite time from
+240s to 134s (44%). Track 10B completes the foundation by eliminating the
+remaining imperative infrastructure: CHAMP fallback paths, the id-map
+indirection, `zonk-final` boundary walks, and the mutable session meta store.
+
+The end state: ONE code path (cell reads), ONE meta access mechanism
+(cell-id on expr-meta), ONE boundary operation (freeze), and ZERO tree-walking
+substitution (zonk eliminated). ~1300 lines of zonk.rkt become dead code.
+
+Additionally: validate the PUnify toggle flip (propagator-based unification
+as default) and lay groundwork for test-granular scheduling (<150s).
+
+## 2. WS-A: Foundation Cleanup
+
+### 2.1 Phase A1: Network-Always (`with-fresh-meta-env` creates network)
+
+**Audit finding** (§2.2): 36 CHAMP fallback sites in metavar-store.rkt check
+`(and box (unbox box))` before falling through to cell reads. With Track 10's
+Phase 1a (live network during module loading) and `.pnet` cache, the fallback
+should never fire in production. But `with-fresh-meta-env` (277 call sites)
+sets `current-prop-meta-info-box` to `#f`, triggering the fallback in tests.
+
+**Fix**: Change `with-fresh-meta-env` to create a fresh `(make-prop-network)`
+instead of setting boxes to `#f`. Cost: ~200ns per call × 277 sites = ~55μs
+total (negligible). Then remove all 36 `(and box (unbox box))` fallback checks.
+
+**Deliverables**:
+1. `with-fresh-meta-env` parameterizes `current-prop-net-box` to `(box (make-prop-network))`
+2. Remove CHAMP fallback in `unwrap-meta-info`, `meta-solution`, `solve-meta-core!`,
+   `prop-meta-id->cell-id`, and all other `(and box (unbox box))` sites
+3. Remove `current-prop-meta-info-box`, `current-prop-id-map-box` parameters entirely
+   (they become redundant — all state lives on the network)
+4. Remove auxiliary CHAMP boxes: `current-level-meta-champ-box`,
+   `current-mult-meta-champ-box`, `current-sess-meta-champ-box`
+5. Full suite green with zero CHAMP fallback code
+
+**Risk**: Low. The fallback path is already unused in production (verified by
+Track 10's 382/382 with cache ON). Removing it is deleting dead code.
+
+### 2.2 Phase A2: zonk-final → freeze + defaults at solve-time
+
+**Audit finding** (§3.1): 7 `zonk-final` sites in driver.rkt. 17 default
+application sites (`zonk-level-default`, `zonk-mult-default`,
+`zonk-session-default`) in metavar-store.rkt.
+
+**Fix Part 1** (zonk-final → freeze): Track 10 Phase 4 already created
+`freeze` in zonk.rkt. Convert the remaining 7 `zonk-final` calls in
+driver.rkt to `freeze`. Verify that `freeze` handles all cases that
+`zonk-final` handles (level defaults, mult defaults, session defaults).
+
+**Fix Part 2** (defaults at solve-time): Instead of applying defaults
+during the boundary walk (`default-metas`), apply them when the
+stratified resolution loop completes. After S2 commit, any unsolved
+level metas → `lzero`, unsolved mult metas → `mw`. This moves 17
+default-application sites from boundary-time to solve-time.
+
+**Deliverables**:
+1. All `zonk-final` calls → `freeze`
+2. `default-metas` moved from `freeze` to post-resolution hook
+3. `zonk-final` function deleted from zonk.rkt
+4. Full suite green
+
+### 2.3 Phase A3: id-map elimination
+
+**Audit finding** (§5): 18 id-map sites across 2 files. With PM 8F's
+`cell-id` on `expr-meta`, most reads bypass the id-map via
+`meta-solution/cell-id`. The id-map persists for callers that have only
+the meta ID (not the expr-meta struct).
+
+**Fix**: Verify all `prop-meta-id->cell-id` callers have access to
+`expr-meta.cell-id`. For any that don't (they only have the ID symbol),
+add the cell-id to their call context. Then remove `current-prop-id-map-box`
+and `prop-meta-id->cell-id`.
+
+**Deliverables**:
+1. All meta reads go through `meta-solution/cell-id` (not id-map)
+2. `current-prop-id-map-box` parameter removed
+3. `prop-meta-id->cell-id` function removed
+4. Full suite green
+
+### 2.4 Phase A4: Batch worker simplification
+
+**Audit finding** (§4): 11 saved values, 9 restored via parameterize.
+With `.pnet` cache + fork model, the macros snapshot (19 registries as
+one vector) and global env are redundant — they come from `.pnet`
+deserialization + fork.
+
+**Fix**: Replace `save-macros-registry-snapshot` / `restore-macros-registry-snapshot!`
+with fork-based state restoration. The batch worker forks the prelude network
+(containing all registries as cells) instead of saving/restoring 19 individual
+registry parameters.
+
+**Deliverables**:
+1. Batch worker uses `fork-prop-network` for test isolation
+2. `save-macros-registry-snapshot` / `restore-macros-registry-snapshot!` deleted
+3. Saved values: 11 → 4 (module-loader, spec-handler, foreign-handler, ns-context)
+4. Full suite green
+
+### 2.5 Phase A5: PUnify toggle flip validation
+
+**Context**: PUnify (propagator-based unification) was implemented in Parts 1-2
+but left with `current-punify-enabled?` = `#f` (disabled). The toggle flip was
+blocked by an Option module loading hang, which was fixed by the Track 10 REPL
+fix (`29a1fad`). 5 known parity bugs exist with the toggle ON: `head`, `map`,
+`Pair`, `match`, `Vec`.
+
+**Fix**: Set `current-punify-enabled?` to `#t`. Run full suite. Classify failures:
+- Parity bugs (known 5) → fix or document
+- New failures → investigate
+- Option module hang → verify resolved
+
+**Deliverables**:
+1. Full suite run with `current-punify-enabled? #t`
+2. All parity bugs classified: fixed, documented, or deferred
+3. If all green: toggle flip becomes permanent
+4. If failures remain: document remaining gaps, revert toggle, add to Track 10B+ scope
+
+**Risk**: Medium. The 5 known parity bugs may have deeper roots. But the attempt
+costs nothing — the toggle reverts cleanly.
+
+## 3. WS-B: Zonk Elimination + Scheduling
+
+### 3.1 Phase B0: process-string scoping audit
+
+**Audit finding** (§1.1): 74 HIGH-risk `set-box!` sites in metavar-store.rkt
+and global-env.rkt. Track 10 Phase 3d found that `process-string` leaked
+`current-prop-net-box` between calls. Other boxes may have the same issue.
+
+**Fix**: For each box parameter, verify:
+1. Is it set inside `process-command`'s parameterize? (Scoped — safe)
+2. Is it set via `set-box!` outside parameterize? (Leaked — needs fix)
+3. Is it scoped by `with-fresh-meta-env`? (Scoped — safe for tests)
+
+**Deliverables**:
+1. Table of all box parameters with scoping classification
+2. Fixes for any leaked boxes (same pattern as Phase 3d: scope via parameterize)
+3. Regression tests for each fixed leak
+
+### 3.2 Phase B1: Session meta migration
+
+**Audit finding** (§3.1): `current-sess-meta-store` is the ONLY remaining
+mutable hasheq meta store. Session metas don't participate in the propagator
+network — they're stored imperatively. Session zonk (9 sites) reads from
+this mutable hash.
+
+**Fix**: Migrate `current-sess-meta-store` to propagator network cells, following
+the PM 8F pattern for type metas. Session metas get cell-ids; `zonk-session`
+becomes cell reads.
+
+**Deliverables**:
+1. `current-sess-meta-store` → cells on prop-network
+2. `zonk-session` → `session-meta-solution/cell-id` (cell reads)
+3. Session tests green with cell-based session metas
+
+### 3.3 Phase B2: Remaining zonk elimination
+
+**Audit finding** (§3.1): 23 elaboration-time zonk sites across 4 files.
+
+| File | Sites | Replacement |
+|------|-------|-------------|
+| unify.rkt | 6 | `meta-solution/cell-id` reads (type metas already cell-based) |
+| resolution.rkt | 4 | Same — constraint key extraction reads cells |
+| typing-sessions.rkt | 9 | Session cell reads (after B1) |
+| metavar-store.rkt | 4 | Level/mult cell reads |
+
+**Fix**: Replace each `zonk` / `zonk-at-depth` / `zonk-session` / `zonk-level`
+/ `zonk-mult` call with the appropriate cell-read equivalent.
+
+**Caution**: The unify.rkt `zonk-at-depth 0` → `zonk` replacement caused
+infinite loops in Track 10 (PM 8F Phase 3). The root cause was identity
+preservation (`eq?` comparison in unify's convergence check). The cell-id
+fast path in `zonk-at-depth` resolved this. For full zonk elimination,
+the convergence check must use cell reads directly, not `zonk`.
+
+**Deliverables**:
+1. All 23 elaboration-time zonk calls replaced with cell reads
+2. Identity preservation verified (no infinite loops)
+3. Full suite green
+
+### 3.4 Phase B3: zonk.rkt deletion
+
+**Deliverables**:
+1. Remove `zonk`, `zonk-at-depth`, `zonk-final`, `zonk-ctx` functions
+2. Remove `zonk-level`, `zonk-mult`, `zonk-session` and their default variants
+3. Remove `default-metas` (moved to solve-time in A2)
+4. Keep `freeze` (renamed from within zonk.rkt, or moved to driver.rkt)
+5. ~1300 lines deleted
+6. All requires of `"zonk.rkt"` updated or removed
+
+### 3.5 Phase B4: Test-granular scheduling
+
+**Deferred to Track 10B design cycle 2.** This is a separate infrastructure
+project (Places, work queues, test discovery, result collection) that deserves
+its own design document. See Track 10 PIR §8 and D.4 critique recommendation #2.
+
+**Placeholder**: Split test-stdlib (285 tests, 132s) into 3-4 files. This
+delivers partial tail-effect reduction without Places infrastructure.
+
+## 4. Performance Targets
+
+| Metric | Track 10 result | WS-A target | WS-B target |
+|--------|----------------|-------------|-------------|
+| Suite wall time | 133.5s | <130s | <120s |
+| `zonk` call count | 47 | 0 boundary + 23 elab | 0 total |
+| CHAMP fallback sites | 36 | 0 | 0 |
+| id-map sites | 18 | 0 | 0 |
+| Batch worker params | 11 | 4 | 4 |
+| zonk.rkt lines | ~1300 | ~1300 (still present) | 0 (deleted) |
+
+## 5. Completion Criteria
+
+### WS-A Complete When:
+1. ✅ Zero CHAMP fallback code in metavar-store.rkt
+2. ✅ Zero `zonk-final` calls (all → `freeze`)
+3. ✅ Zero id-map lookups (all via `expr-meta.cell-id`)
+4. ✅ Batch worker uses fork, not 19-registry snapshot
+5. ✅ PUnify toggle flip attempted and results documented
+6. ✅ Full suite green (376/376)
+7. ✅ Suite wall time < 130s
+8. ✅ A/B benchmarks compared against Track 10 baselines
+
+### WS-B Complete When:
+1. ✅ Session metas on propagator network cells
+2. ✅ Zero `zonk` / `zonk-at-depth` / `zonk-session` / `zonk-level` / `zonk-mult` calls
+3. ✅ zonk.rkt deleted (except `freeze`)
+4. ✅ process-string scoping audit: zero leaked boxes
+5. ✅ Full suite green
+6. ✅ Suite wall time < 120s
+7. ✅ PIR written per methodology
+
+## 6. Principles Alignment
+
+### Propagator-First
+- **A1**: `with-fresh-meta-env` creates a network. Every code path has a network. No more "network-optional" contexts.
+- **B1**: Session metas move onto the network. Last holdout of mutable-hash meta storage eliminated.
+- **A5**: PUnify toggle validates that propagator-based unification IS the default.
+
+### Completeness
+- **B2-B3**: Zonk elimination is the "hard thing done right." 1300 lines of tree-walking substitution → 0. Cell reads provide the same information at O(1) per meta, not O(tree-depth).
+- **A3**: id-map elimination completes the PM 8F vision. The meta IS the cell — no indirection.
+
+### Data Orientation
+- **A4**: Batch worker uses data (forked network) not imperative snapshot/restore.
+- **B1**: Session meta store becomes immutable cells, not mutable hasheq.
+
+### Correct-by-Construction
+- **A1**: CHAMP fallback removal means the system CAN'T fall back to the old path. The new path is the ONLY path — correctness by elimination of alternatives.
+- **B0**: Scoping audit ensures boxes don't leak. Leaks are structural impossibilities, not runtime checks.
+
+### Challenge: What could go wrong?
+- **A1 risk**: Some `with-fresh-meta-env` callers may depend on box=#f behavior (e.g., checking "am I in a meta context?" by testing the box). Need to audit for this pattern.
+- **A5 risk**: PUnify parity bugs may indicate deeper issues than simple missing cases. The 5 known bugs (head, map, Pair, match, Vec) span diverse features.
+- **B2 risk**: The unify.rkt infinite loop (PM 8F Phase 3) showed that `zonk` and cell reads are NOT always interchangeable — identity preservation matters. Each of the 23 replacement sites needs individual verification.
+
+## 7. NTT Speculative Syntax
+
+After Track 10B, the module loading architecture maps to NTT as:
+
+```prologos
+;; The unified prelude — no CHAMP fallback, no id-map, no zonk
+network prelude : PreludeNet
+  :lifetime :persistent
+  :serializable true                    ;; .pnet cache
+  :contains [module-defs registries persistent-cells]
+
+;; Test isolation via fork
+fork test-context : PreludeNet -> TestNet
+  :shares [all-cells]                   ;; structural sharing via CHAMP
+  :resets [worklist fuel contradiction] ;; fresh per-test
+  :isolation :copy-on-write
+
+;; No serialize/deserialize form yet — deferred to PPN Track 0
+;; (grammar-based self-describing serialization)
+```
+
+**NTT gap confirmed**: The `serialize` / `deserialize` forms proposed in
+Track 10 D.4 remain proposals. Track 10B does not implement them — the
+current ad-hoc `struct->vector` + `write`/`read` mechanism continues.
+These forms become concrete when PPN Track 0 delivers grammar-based
+serialization.
