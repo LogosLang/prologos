@@ -120,10 +120,11 @@
         (define mod-name (string-replace without-ext "/" "::"))
         (changed-prologos (string->symbol mod-name))]
        ;; lib/examples/**/*.prologos — example .prologos files
-       ;; These are tested via the test-lang-*.rkt files (they load through the driver)
+       ;; Track 10 Phase 5: #lang prologos tests removed. Example files are
+       ;; validated via .prologos acceptance files, not #lang tests.
        [(and (string-prefix? rel "lib/examples/")
              (string-suffix? rel ".prologos"))
-        (changed-test (string->symbol "test-lang-01-sexp.rkt"))]
+        'skip]  ;; no longer mapped to a specific test
        ;; info.rkt — package metadata, run all tests
        [(equal? rel "info.rkt") 'run-all]
        ;; *.rkt source files (not in tests/ or tools/)
