@@ -31,7 +31,7 @@
 | A3 | id-map elimination. Add cell-id to `hasmethod-constraint-info`. | ✅ | `cd0d708` — 3 external callers → cell-id direct. Zero external id-map callers. 139.0s |
 | A3b | process-string scoping audit (74 high-risk `set-box!` sites) | ✅ | NO LEAKS FOUND. All 69 metavar-store + 5 global-env set-box! write to parameterized boxes. |
 | A4 | Batch worker simplification (11→6 saved values) | ⏸️ | DEFERRED: macros snapshot (19 Racket params) still needed. Fork helps network cells but not params. Simplification requires WS-B (registries as cells). |
-| A5 | PUnify toggle flip validation | ⬜ | Runs AFTER A4 (tests against final WS-A state, not mid-migration). |
+| A5 | PUnify toggle flip validation | ✅ | ATTEMPTED: systemic regression (failures + timeouts). Reverted. PUnify needs dedicated track. |
 | A6 | A/B benchmark comparison (WS-A before/after) | ⬜ | Compare against Pre-0 baselines. See §A6 table. |
 | A7 | Verification (full suite green) | ⬜ | |
 | **WS-B: Zonk Elimination** | | | |

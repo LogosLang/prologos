@@ -28,6 +28,7 @@
          racket/string
          racket/system
          racket/async-channel
+         (only-in racket/future processor-count)
          json
          "dep-graph.rkt"
          "bench-lib.rkt")
@@ -572,9 +573,9 @@
             (printf "╔══════════════════════════════════════════════════════════╗\n")
             (printf "║  ⛔ SYSTEMIC REGRESSION DETECTED                       ║\n")
             (printf "║  ~a file(s) timed out in the first ~a files.~a║\n"
-                    timeout-count (+ completed-count 1)
+                    timeout-count (+ count 1)
                     (make-string (max 0 (- 26 (string-length (format "~a" timeout-count))
-                                            (string-length (format "~a" (+ completed-count 1))))) #\space))
+                                            (string-length (format "~a" (+ count 1))))) #\space))
             (printf "║                                                        ║\n")
             (printf "║  ACTION: REVERT your last change and investigate.      ║\n")
             (printf "║  This is NOT flaky tests — it's a code regression.     ║\n")

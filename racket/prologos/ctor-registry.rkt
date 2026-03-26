@@ -382,7 +382,10 @@
 
 ;; A/B toggle for PUnify. When #f (default), existing unification runs unchanged.
 ;; When #t, unify-core delegates to unify-via-propagator (cell-tree decomposition).
-;; NOT safe to flip yet: Option module loading hangs/loops with #t (punify cleanup finding).
+;; Track 10B Phase A5: Toggle flip ATTEMPTED. Result: systemic regression —
+;; multiple failures + timeouts (test-map-bridge, test-stdlib-01-data-04).
+;; The 5 known parity bugs are NOT simple fixes. PUnify needs dedicated track.
+;; Reverted to #f. See Track 10B PIR for details.
 (define current-punify-enabled? (make-parameter #f))
 
 ;; ========================================
