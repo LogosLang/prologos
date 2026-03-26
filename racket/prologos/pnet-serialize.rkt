@@ -468,9 +468,23 @@
         (format "~a:~a" source-path stat))
       "unknown"))
 
+;; Track 10B: infrastructure .zo timestamp. If driver_rkt.zo is newer than
+;; any .pnet file, the Racket infrastructure changed and all .pnet files
+;; are stale (elaboration output may differ). Simple timestamp comparison.
+(define driver-zo-path
+  (simplify-path (build-path (path-only (syntax-source #'here)) "compiled" "driver_rkt.zo")))
+
+(define (infrastructure-stale? pnet-path)
+  (and (file-exists? driver-zo-path)
+       (file-exists? pnet-path)
+       (> (file-or-directory-modify-seconds driver-zo-path)
+          (file-or-directory-modify-seconds pnet-path))))
+
 (define (pnet-stale? ns-sym source-path)
   (define pnet-path (pnet-path-for-module ns-sym))
   (or (not (file-exists? pnet-path))
+      ;; Track 10B: check infrastructure staleness (Racket code changed)
+      (infrastructure-stale? pnet-path)
       (let ([cached-data (with-handlers ([exn? (lambda (_) #f)])
                            (call-with-input-file pnet-path read))])
         (or (not cached-data)
