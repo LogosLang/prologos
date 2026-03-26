@@ -37,8 +37,8 @@ distinguished from exchanges.
 | 5 | NTT speculative syntax (+ `:set-once` kind) | ✅ | `86df0b4` — §16 in NTT Syntax Design. 7 subsections: set-once, parse, demand, bridges, exchanges, projection, stratification options. |
 | 6 | Integration test: happy path + ambiguity + disambiguation | ✅ | `b42d30f` — 7 tests: happy path, ATMS ambiguity, demand, contradiction, merge, bridge γ, provenance |
 | 7 | A/B benchmarks + verification | ✅ | All ops <1μs. Token 3-16ns, parse merge 240-343ns, demand 307ns, core 3-20ns, bridge α 508ns, bridge γ 44ns. |
-| 8 | Update dailies + tracker | ⬜ | Per-phase completion |
-| 9 | PIR | ⬜ | Per methodology |
+| 8 | Full suite verify | ✅ | 379 files, 7421 tests (+30), 150.3s, all pass. No regressions. |
+| 9 | PIR | ✅ | [PIR](2026-03-26_PPN_TRACK0_PIR.md) — 15 sections, 24 PIRs cross-referenced. 0 wrong assumptions (first PIR with empty §13). |
 
 ---
 
