@@ -271,6 +271,7 @@ PRN (theory — what ARE the universal rewriting primitives?)
 | | |
 |------------------+------|
 | *Thesis*         | Parsing IS attribute evaluation IS propagator fixpoint (Engelfriet-Heyker). The multi-phase 14-file pipeline collapses to registered rewrite rules on the network. User-defined grammar extensions as typed hyperedge replacement rules — more powerful than Lisp macros. |
+| *Master Roadmap* | [[file:2026-03-26_PPN_MASTER.md][2026-03-26_PPN_MASTER.md]] |
 | *Status*         | Stage 0 research. PRIORITY: prerequisite to future syntax/language design work. |
 | *Origin*         | [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research]], [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]] |
 | *Contributes to PRN* | Parse lattice design, ambiguity resolution, bidirectional type↔parse flow |
@@ -279,12 +280,16 @@ PRN (theory — what ARE the universal rewriting primitives?)
 
 | Track | Description | Status | Depends On |
 |-------+-------------+--------+------------|
-| 0 | Lattice design for parse state (ambiguity, token, attribute lattices) | ⬜ | SRE Track 0 (form registry) |
-| 1 | Lexer as propagators (character→token cells) | ⬜ | Track 0 |
-| 2 | Parser as propagators (chart/Earley as fixpoint, HR productions as propagators) | ⬜ | Track 1 |
-| 3 | Type-directed disambiguation (backward type→parse flow via Galois bridges) | ⬜ | Track 2, PM 8F (cell-primary types) |
-| 4 | User-defined grammar extensions (NTT-typed HR rules, richer than macros) | ⬜ | Track 3, NTT |
-| 5 | Incremental editing (LSP-grade: edit character → propagation updates affected cells) | ⬜ | Track 3; IS PM Track 11 (partial) |
+| 0 | Lattice design (parse, token, surface, core) | ⬜ | SRE Track 0 (form registry) |
+| 1 | Lexer as propagators | ⬜ | Track 0 |
+| 2 | Surface normalization as rewriting | ⬜ | Track 1. HIGHEST VALUE. |
+| 3 | Parser as propagators (chart/Earley, HR productions) | ⬜ | Track 2 |
+| 4 | Elaboration as attribute evaluation | ⬜ | Track 3. IS SRE Track 2C. |
+| 5 | Type-directed disambiguation | ⬜ | Track 4 |
+| 6 | Error recovery as lattice repair (OE) | ⬜ | Track 3 |
+| 7 | User-defined grammar extensions (CAPSTONE) | ⬜ | Track 5, NTT |
+| 8 | Incremental editing (IS PM Track 11) | ⬜ | Track 5 |
+| 9 | Self-describing serialization | ⬜ | Track 3 |
 
 *** Key Connections
 
