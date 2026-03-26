@@ -86,6 +86,28 @@ angle brackets, keywords in certain positions). The bridge γ-function
 projects parse context into token disambiguation. First concrete instance
 of "every domain is a disambiguation source."
 
+**Finding 4 (D.3): Tokens are set-once, not lattice-accumulated.** A
+token cell is written once by the lexer and never merged. Two different
+token values at the same position = ATMS branching (rare ambiguity),
+not lattice join. The token "lattice" is trivially monotone:
+`bot → value`. No join operation exists between two ground token values.
+This simplifies the token design: no merge function needed, just
+set-once semantics with ATMS for the rare ambiguous case.
+
+**Finding 5 (D.3): Parse derivations are hybrid value/structural.** The
+derivation set uses set-union merge (value lattice pattern). But the
+ELEMENTS of the set are SPPF-shared derivation trees (structural, with
+shared sub-nodes). This is a set of structural objects — not purely
+value, not purely structural. Connection to SRE: grammar productions
+ARE structural forms (Pi has [domain, codomain]; S→NP VP has [NP, VP]).
+Parse derivation nodes could be SRE-registered forms with SPPF sharing
+from get-or-create-sub-cell. Full exploration deferred to PPN Track 3.
+
+**Finding 6 (D.3): Stratification (same vs separate strata for parse
+and elaborate) is a Track 3-4 decision, not a Track 0 decision.** Track
+0 defines lattices; stratification is wiring. The NTT sketch shows the
+separate-strata option but both options are viable.
+
 ### 2.2 Token Lattice (L_token)
 
 **Purpose**: Classify character sequences into token types. Handle
@@ -107,21 +129,29 @@ indentation-sensitivity and context-sensitive disambiguation.
 | Carrier | `token-cell-value \| bot \| top` |
 | Bot | `'token-bot` (unclassified position) |
 | Top | `'token-error` (lexer error) |
-| Join | ATMS branching for ambiguous tokens (rare) |
-| Height | 3 (bot → value → error). Finite. |
-| Merge | If same type+lexeme: identity. If different: ATMS branch. |
+| Join | N/A — tokens are set-once. No join between ground values. |
+| Height | 2 (bot → value). Error is top (contradiction). |
+| Merge | Set-once: bot → value (ok). Value → different value = ATMS branch or error. |
 
 **Design decisions**:
+- **Set-once semantics (D.3)**: token cells are WRITTEN ONCE by the
+  lexer. Two different values at the same position create ATMS branches
+  (if ambiguous) or contradiction (if inconsistent). No lattice join
+  exists — tokens are ground values, not accumulatable. This is simpler
+  and more honest than a join operation that doesn't have natural
+  semantics.
 - `indent-level` and `indent-delta` are PART OF the token, not separate
   state. This avoids a separate indent lattice. The indent information
-  flows forward through the token stream.
+  flows forward through the token stream. Indent state (the stack) is
+  LEXER STATE, not lattice state — the stack generates INDENT/DEDENT
+  tokens but isn't itself a cell value.
 - Context-sensitive disambiguation (is `>` closing an angle bracket?)
   comes from the SurfaceToToken bridge γ-function, NOT from the token
   lattice itself. The token lattice is context-free; context comes from
   the bridge.
-- ATMS branching for ambiguous tokens is rare. Most tokens have unique
-  classification. The lattice is simple (height 3) with ATMS for edge
-  cases.
+- String interpolation produces a SEQUENCE of tokens (string-start,
+  expression tokens, string-middle, string-end). Reader macros are token
+  TYPES (`#p`, quote, etc.). Neither requires lattice extensions.
 
 ### 2.3 Surface Lattice (L_surface)
 
@@ -233,14 +263,18 @@ domains WITHIN the same stratum. See §3.
 
 ```racket
 (struct demand
-  (target-domain  ;; symbol: 'token, 'surface, 'type, 'narrowing
+  (target-domain  ;; symbol: 'token, 'surface, 'type, 'narrowing (open, extensible)
    position       ;; domain-specific position identifier:
                   ;;   token domain: exact-nonneg-integer (char offset)
                   ;;   surface domain: (cons origin span-end) (span)
                   ;;   type domain: cell-id
                   ;;   narrowing domain: (cons fn-name dt-path)
-   specificity    ;; symbol: 'constructor, 'type, 'value, 'any
+   specificity    ;; symbol: open (not enum). Each domain defines its own.
+                  ;;   type domain: 'constructor, 'type, 'ground
+                  ;;   parse domain: 'token, 'complete-item, 'any
+                  ;;   narrowing domain: 'constructor, 'value
    source-stratum ;; symbol: which stratum generated this demand
+   priority       ;; exact-nonneg-integer: 0 = highest (default). Connects to tropical cost.
    )
   #:transparent)
 
@@ -435,7 +469,7 @@ stratum; exchanges connect strata across a barrier.
 ```prologos
 ;; === Level 0: Parse Domain Lattices ===
 
-;; Token lattice (value lattice — simple merge)
+;; Token lattice (set-once — trivially monotone, no join)
 data TokenValue
   := token-bot
    | token [type : Symbol] [lexeme : String] [span : Span]
@@ -444,6 +478,7 @@ data TokenValue
   :lattice :value
   :bot token-bot
   :top token-error
+  ;; D.3: No join — tokens are set-once. ATMS for rare ambiguity.
 
 ;; Surface lattice (derivation-only, lfp)
 ;; Track 5 adds: newtype ParseElimination := ParseElimination (Set AssumptionId)
@@ -501,6 +536,14 @@ stratification ParseLoop
     :commit finalize-parse-and-elaborate
   :fuel :cost-bounded
   :where [WellFounded ParseLoop]
+
+;; D.3 NOTE: The above stratification is ONE option (separate strata for
+;; parse and elaborate, with exchanges). The ALTERNATIVE is: parse and
+;; elaborate in the SAME stratum (S0), with bidirectional flow via bridges
+;; (no exchange needed). The tradeoff:
+;;   Separate strata: enables Left Kan (partial results), adds barrier overhead
+;;   Same stratum: immediate bidirectional flow, no partial-result optimization
+;; Decision deferred to Track 3-4 based on implementation experience.
 ```
 
 ---
@@ -688,6 +731,15 @@ reconstructs the trace. Bidirectional grammar preserves trace in both
 directions — the derivation tree for `serialize(x)` is the provenance
 of `x`, and the derivation tree for `deserialize(bytes)` is the
 provenance of the reconstructed value.
+
+**D.3 open item: bridge adjunction verification.** The three bidirectional
+bridges (TokenToSurface, SurfaceToCore, SurfaceToType) CLAIM to be Galois
+connections (α ⊣ γ adjunction). This is plausible but NOT proven. For
+TokenToSurface: α ∘ γ ∘ α = α requires that scanning a token, disambiguating
+by parse context, and scanning again gives the same result as scanning once.
+This holds when disambiguation only SELECTS among scan results (subset ⊆ original),
+which is Galois insertion. Phase 4 should include EXPLICIT verification of
+adjunction laws for each bridge, at minimum on representative examples.
 
 ---
 
