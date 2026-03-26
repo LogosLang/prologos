@@ -162,7 +162,7 @@
     [(expr-lam m a b) (expr-lam m (holes-to-metas a) (holes-to-metas b))]
     [_ e]))
 
-;; After zonk-final, replace any remaining unsolved metas with holes.
+;; After freeze, replace any remaining unsolved metas with holes.
 ;; Prevents dangling meta references in stored types (metas are cleared
 ;; between commands by reset-meta-store!).
 (define (unsolved-metas-to-holes e)
@@ -229,7 +229,7 @@
 ;; ========================================
 ;; Call-site specialization rewriting (HKT-8)
 ;; ========================================
-;; After zonk-final, rewrite calls to generic functions with registered
+;; After freeze, rewrite calls to generic functions with registered
 ;; specializations. E.g., (new-lattice-cell Bool dict net) → (new-lattice-cell--Bool--specialized net)
 ;; Strips implicit type args and dict params, replacing with direct specialized call.
 
@@ -485,8 +485,8 @@
                                  (begin
                                    (let ([val (time-phase! reduce
                                                 (nf (rewrite-specializations
-                                                     (time-phase! zonk (zonk-final expr)))))]
-                                         [ty-nf (time-phase! reduce (nf (time-phase! zonk (zonk-final ty))))])
+                                                     (time-phase! zonk (freeze expr)))))]
+                                         [ty-nf (time-phase! reduce (nf (time-phase! zonk (freeze ty))))])
                                      ;; Check for panic at runtime
                                      (if (expr-panic? val)
                                          (prologos-error #f
@@ -506,7 +506,7 @@
                              (if (not (null? te))
                                  (car te)
                                  (begin
-                                   (pp-expr (time-phase! zonk (zonk-final ty)))))))))]
+                                   (pp-expr (time-phase! zonk (freeze ty)))))))))]
 
                   ;; (expand datum) — show preparse expansion
                   [(list 'expand datum)
@@ -531,7 +531,7 @@
 
                   ;; (elaborate expr) — show elaborated core AST
                   [(list 'elaborate expr)
-                   (pp-expr (zonk-final expr))]
+                   (pp-expr (freeze expr))]
 
                   ;; Phase 3b: Trait introspection commands
                   ;; (instances-of TraitName) — list all type instances
@@ -613,8 +613,8 @@
                              (if (not (null? te))
                                  (car te)
                                  (begin
-                                   (let ([zonked-body (time-phase! zonk (zonk-final expr))]
-                                       [zonked-type (time-phase! zonk (zonk-final ty))])
+                                   (let ([zonked-body (time-phase! zonk (freeze expr))]
+                                       [zonked-type (time-phase! zonk (freeze ty))])
                                    (global-env-add (current-prelude-env) name zonked-type zonked-body)
                                    (when (current-ns-context)
                                      (define fqn (qualify-name name
@@ -1058,17 +1058,17 @@
                       (meta-source-info-loc (constraint-provenance-meta-source prov))]
                      [(constraint-provenance? prov) (constraint-provenance-loc prov)]
                      [else srcloc-unknown]))
-                 (define lhs-str (pp-expr (zonk-final (constraint-lhs c)) names))
-                 (define rhs-str (pp-expr (zonk-final (constraint-rhs c)) names))
+                 (define lhs-str (pp-expr (freeze (constraint-lhs c)) names))
+                 (define rhs-str (pp-expr (freeze (constraint-rhs c)) names))
                  (conflicting-constraints-error
                    error-loc
                    (format "Type error in ~a: cannot satisfy constraint" name)
                    lhs-str rhs-str
                    error-loc error-loc)]
                 [else
-                 ;; zonk-final FIRST, then specialize, then QTT on zonked terms
-                 (define zonked-body (rewrite-specializations (time-phase! zonk (zonk-final body))))
-                 (define zonked-type (time-phase! zonk (zonk-final inferred-type)))
+                 ;; freeze FIRST, then specialize, then QTT on zonked terms
+                 (define zonked-body (rewrite-specializations (time-phase! zonk (freeze body))))
+                 (define zonked-type (time-phase! zonk (freeze inferred-type)))
                  ;; Skip QTT for expressions with unsupported node types (Vec/Fin)
                  (define qtt-ok
                    (if (contains-unsupported-qtt? zonked-body)
@@ -1134,7 +1134,7 @@
            ;; body is never used at runtime. The type annotation is all we need.
            (cond
              [data-type-def?
-              (let ([zonked-type (time-phase! zonk (zonk-final type))])
+              (let ([zonked-type (time-phase! zonk (freeze type))])
                 (global-env-add-type-only (current-prelude-env) name zonked-type)
                 ;; LSP Tier 2.3: record definition location
                 (register-definition-location! name def-srcloc)
@@ -1201,20 +1201,20 @@
                             (meta-source-info-loc (constraint-provenance-meta-source prov))]
                            [(constraint-provenance? prov) (constraint-provenance-loc prov)]
                            [else srcloc-unknown]))
-                       (define lhs-str (pp-expr (zonk-final (constraint-lhs c)) names))
-                       (define rhs-str (pp-expr (zonk-final (constraint-rhs c)) names))
+                       (define lhs-str (pp-expr (freeze (constraint-lhs c)) names))
+                       (define rhs-str (pp-expr (freeze (constraint-rhs c)) names))
                        (conflicting-constraints-error
                          error-loc
                          (format "Type error in ~a: cannot satisfy constraint" name)
                          lhs-str rhs-str
                          error-loc error-loc)]
                       [else
-                       ;; 6. zonk-final (resolves mult-metas to concrete values,
+                       ;; 6. freeze (resolves mult-metas to concrete values,
                        ;; defaults unsolved level-metas to lzero, mult-metas to mw).
                        ;; Then rewrite call sites to use registered specializations.
                        ;; Convert any unsolved metas back to holes (prevents dangling refs).
-                       (define zonked-body (rewrite-specializations (time-phase! zonk (zonk-final body))))
-                       (define zonked-type-raw (time-phase! zonk (zonk-final type*)))
+                       (define zonked-body (rewrite-specializations (time-phase! zonk (freeze body))))
+                       (define zonked-type-raw (time-phase! zonk (freeze type*)))
                        (define zonked-type (if has-holes? (unsolved-metas-to-holes zonked-type-raw) zonked-type-raw))
                        ;; 6.5. QTT multiplicity check (on zonked terms with concrete mults).
                        ;; Skip for expressions containing unsupported node types (Vec/Fin).
@@ -2161,7 +2161,7 @@
     (error 'foreign "Failed to elaborate type for ~a: ~a" racket-name type-expr))
 
   ;; Zonk the type to resolve any metas
-  (define zonked-type (zonk-final type-expr))
+  (define zonked-type (freeze type-expr))
 
   ;; If foreign capabilities declared, prepend :0 Pi binders.
   ;; (Pi (c :0 ReadCap) (Pi (x :w String) String)) — capability proof precedes real args.

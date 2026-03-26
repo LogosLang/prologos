@@ -21,7 +21,7 @@
          "solver.rkt"
          (only-in "namespace.rkt" ns-context?))
 
-(provide zonk zonk-ctx zonk-final zonk-at-depth)
+(provide zonk zonk-ctx zonk-final freeze zonk-at-depth)
 
 ;; ========================================
 ;; Zonk: substitute solved metavariables
@@ -908,15 +908,21 @@
                   structural?)]))
 
 ;; ========================================
-;; Zonk-final: zonk + default unsolved metas to ground values
+;; freeze: zonk + default unsolved metas to ground values
 ;; ========================================
-;; Used as the final pass before storing in global env or displaying output.
+;; Track 10B Phase A2: renamed from zonk-final → freeze.
+;; The "final pass" before storing in global env or displaying output.
 ;; Regular `zonk` preserves unsolved level/mult-metas (needed during unification).
-;; Sprint 6: defaults unsolved level-metas to lzero.
-;; Sprint 7: defaults unsolved mult-metas to 'mw.
-(define (zonk-final e)
+;; freeze defaults them to ground values (lzero, mw, sess-end).
+;;
+;; Future (WS-B): when metas ARE cells, freeze becomes a single-pass cell-read
+;; with no tree-walking. Currently it's still zonk+defaults (tree walk).
+(define (freeze e)
   (define z (zonk e))
   (default-metas z))
+
+;; Backward compatibility alias (deprecated — use freeze)
+(define zonk-final freeze)
 
 ;; Walk an expression replacing all unsolved level-metas with lzero
 ;; and all unsolved mult-metas with 'mw.
