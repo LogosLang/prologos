@@ -32,8 +32,8 @@
 | A3b | process-string scoping audit (74 high-risk `set-box!` sites) | ✅ | NO LEAKS FOUND. All 69 metavar-store + 5 global-env set-box! write to parameterized boxes. |
 | A4 | Batch worker simplification (11→6 saved values) | ⏸️ | DEFERRED: macros snapshot (19 Racket params) still needed. Fork helps network cells but not params. Simplification requires WS-B (registries as cells). |
 | A5 | PUnify toggle flip validation | ✅ | ATTEMPTED: systemic regression (failures + timeouts). Reverted. PUnify needs dedicated track. |
-| A6 | A/B benchmark comparison (WS-A before/after) | ⬜ | Compare against Pre-0 baselines. See §A6 table. |
-| A7 | Verification (full suite green) | ⬜ | |
+| A6 | A/B benchmark comparison (WS-A before/after) | ✅ | No perf change (architectural value). Suite 134.0s (≤134s target met). |
+| A7 | Verification (full suite green) | ✅ | 376/376, 134.0s, all pass. |
 | **WS-B: Zonk Elimination** | | | |
 | B0 | zonk-at-depth call-count measurement (1-hour timebox) | ⬜ | Characterize: how many calls per suite? Justifies <125s target. |
 | B1a | Session meta cell infrastructure (`fresh-sess-meta` creates cells) | ⬜ | D.4: split B1 into sub-phases |
