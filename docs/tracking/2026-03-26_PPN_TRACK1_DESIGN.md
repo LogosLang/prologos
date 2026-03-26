@@ -25,14 +25,14 @@ incremental editing from day one.
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | Pre-0 | Microbenchmarks: reader.rkt per-function costs | ⬜ | Tokenizer vs parser breakdown |
-| 0 | Golden test: capture reader.rkt output for all .prologos files | ⬜ | Baseline for comparison |
+| 0 | Golden test: capture BOTH tree structure maps AND datum output | ⬜ | Two-level baseline: topology + datums |
 | 1 | Token producers: flat patterns → token cells | ⬜ | 60% of tokenizer (audit §2) |
 | 2 | Indent structurer: indent stack → tree topology cells | ⬜ | Tree IS indentation. Central design. |
 | 3 | Bracket matcher: bracket depth → nesting cells | ⬜ | [], (), <>, {} |
 | 4 | Context-sensitive: 10 decisions → bridge γ calls | ⬜ | Audit §4. Angle-bracket, mixfix. |
 | 5 | Reader macros: #p, ', `, #=, dot-access, broadcast | ⬜ | Audit §6 |
 | 6 | API wrapper: maintain 7-function interface | ⬜ | Audit §1 exports |
-| 7 | Golden test comparison: old vs new output | ⬜ | Phase 0 baseline vs Phase 6 output |
+| 7 | Golden test comparison: tree structure + datums vs baseline | ⬜ | Two-level: topology (primary) + datums (compat) |
 | 8 | reader.rkt retirement + callers updated | ⬜ | 50 consumers updated |
 | 9 | A/B benchmarks | ⬜ | Compare against Pre-0 |
 | 10 | Suite verify + dailies + tracker | ⬜ | |
@@ -365,48 +365,87 @@ The SurfaceToToken bridge γ from Track 0 handles decisions 1, 2, 5:
 
 ---
 
-## 6. API Compatibility
+## 6. API: Primary (Tree) + Compatibility (Datum)
 
-### 6.1 Maintain the 7-function interface
+### 6.1 Two API layers
 
-The 50 consumers call these 7 functions. The new reader MUST export the
-same 7 names with the same signatures:
+The tree is the PRIMARY output. Datums are a COMPATIBILITY layer.
 
-| Function | Signature | New implementation |
-|----------|-----------|-------------------|
+**Primary API (new — for Track 2, 3, 4+ consumers):**
+
+| Function | Signature | Returns |
+|----------|-----------|---------|
+| `read-to-tree` | `string → parse-tree` | The cell tree (structure cells + token cells) |
+| `read-file-to-tree` | `path → parse-tree` | Same, from file |
+| `tree-top-level-forms` | `parse-tree → (listof structure-cell)` | Top-level form sub-trees |
+| `tree-children` | `structure-cell → (listof cell-id)` | A form's children in order |
+| `tree-parent` | `cell-id → cell-id \| 'root` | A cell's parent |
+
+Track 2 (normalization) reads the tree directly — it installs
+propagators on tree cells. No datum extraction → tree reconstruction
+roundtrip. The tree flows from Track 1 to Track 2 to Track 3 as cells
+on the same network.
+
+**Compatibility API (maintained — for 50 existing consumers):**
+
+| Function | Signature | Implementation |
+|----------|-----------|---------------|
 | `prologos-read` | `port → datum` | Build tree, extract first datum |
-| `prologos-read-syntax` | `source port → syntax` | Build tree, wrap as syntax |
-| `prologos-read-syntax-all` | `source port → (listof syntax)` | Build full tree, extract all top-level forms |
-| `tokenize-string` | `string → (listof token)` | Run token producers, return flat list |
+| `prologos-read-syntax` | `source port → syntax` | Build tree, extract + wrap |
+| `prologos-read-syntax-all` | `source port → (listof syntax)` | Build tree, extract all top-level |
+| `tokenize-string` | `string → (listof token)` | Run token producers, return flat |
 | `read-all-forms-string` | `string → (listof datum)` | Build tree, extract datums |
-| `token-type` | accessor | Unchanged (from token struct) |
-| `token-value` | accessor | Unchanged (from token struct) |
+| `token-type` | accessor | Unchanged |
+| `token-value` | accessor | Unchanged |
 
-The NEW reader builds the propagator-based tree internally. The API
-functions are WRAPPERS that extract the caller's expected format from
-the tree. This means: all callers get the same output, but the internal
-representation is a cell tree, not an imperative parse state.
+The compatibility functions are THIN WRAPPERS: they call `read-to-tree`
+internally, then extract datums/syntax from the tree. All 50 consumers
+unchanged initially. Track 2+ consumers migrate to the primary API.
 
-### 6.2 Golden test strategy
+### 6.2 Golden test strategy (D.2 revision)
 
-Phase 0 captures reader.rkt's output for EVERY `.prologos` file:
+**Two levels of golden comparison:**
+
+**Level 1 (primary — tree structure):**
+Phase 0 captures the tree's parent-child map for representative files:
 
 ```racket
 ;; For each .prologos file:
-(define old-output (read-all-forms-string (file->string path)))
-;; Serialize to a golden file
-(write old-output (open-output-file golden-path))
+;; Record: (line-number → (indent-level . parent-line-number))
+;; This captures the tree TOPOLOGY, not the datums
+(define old-tree-map (capture-tree-structure path))
+(write old-tree-map (open-output-file tree-golden-path))
 ```
 
-Phase 7 compares new reader output against golden files:
+Phase 7 compares NEW tree structure against golden:
+```racket
+(define new-tree-map (capture-new-tree-structure path))
+(check-equal? new-tree-map old-tree-map)
+```
+
+Level 1 catches: wrong parent-child assignments, indent mishandling,
+bracket matching errors — things that datum comparison MISSES because
+two different trees can produce the same datums.
+
+**Level 2 (compatibility — datum output):**
+Phase 0 ALSO captures `read-all-forms-string` datum output:
 
 ```racket
-(define new-output (new-read-all-forms-string (file->string path)))
-(check-equal? new-output old-output)
+(define old-datums (read-all-forms-string (file->string path)))
+(write old-datums (open-output-file datum-golden-path))
 ```
 
-Any difference = a bug in the new reader. Zero differences = ready
-for retirement.
+Phase 7 compares new datum output:
+```racket
+(define new-datums (new-read-all-forms-string (file->string path)))
+(check-equal? new-datums old-datums)
+```
+
+Level 2 catches: API wrapper extraction errors — the tree is right but
+the datum conversion is wrong.
+
+**Both levels must pass for retirement.** Zero differences at both
+levels = ready to delete reader.rkt.
 
 ---
 
