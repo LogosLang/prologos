@@ -100,6 +100,14 @@ Benchmark file: `benchmarks/micro/bench-track10b-foundation.rkt`
    implementation. The "after" column should show: zonk calls=0, CHAMP
    fallback=0, id-map lookups=0.
 
+**Phase completion protocol**: Every phase ends with THREE steps:
+1. Commit the code changes
+2. Update dailies with: what was done, design choices made, surprises/lessons, commit hash
+3. THEN mark the phase complete and move to the next
+
+The dailies entry is NOT a separate task — it's part of the phase.
+A phase is not DONE until the dailies capture the learning.
+
 ## 2. WS-A: Foundation Cleanup
 
 ### 2.1 Phase A1: Network-Always (`with-fresh-meta-env` creates network)
