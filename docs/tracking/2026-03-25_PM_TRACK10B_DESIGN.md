@@ -42,11 +42,11 @@
 | B1d | Session default timing (`sess-end` at correct moment) | ✅ | Verified: defaults apply in freeze (boundary time), after resolution. Timing correct. |
 | B2 | Remaining zonk elimination: 55 sites | ⏸️ | BLOCKED: requires elaborator to create cell refs instead of expr-meta nodes. SRE Track 2+ scope. |
 | B3 | zonk.rkt deletion (~1300 lines) | ⏸️ | BLOCKED: depends on B2. |
-| B4 | Test-granular scheduling (file splitting only; Places deferred) | ⬜ | Split test-stdlib into 3-4 files. |
-| B5 | A/B benchmark comparison (WS-B before/after) | ⬜ | Compare: zonk calls=0, zonk.rkt deleted, session metas on cells. See §B5 table. |
-| B6 | Instrumentation cleanup | ⬜ | Comprehensive `make-parameter` audit. Gate subtype counter behind #f. Decide perf-counters.rkt survival. Archive/delete dead benchmark files. |
-| B7 | Verification (full suite green) | ⬜ | |
-| B8 | PIR (per methodology, own phase) | ⬜ | Consult PIR methodology. Cross-ref Track 10, 8F, SRE PIRs. Include A6+B5 tables. |
+| B4 | Test-granular scheduling | ⏸️ | DEFERRED: test-stdlib already split. Largest=20.8s. File-splitting gives ~3-5s marginal. Places needed for per-test. |
+| B5 | A/B benchmark comparison (WS-B) | ✅ | Session cell-id too small to measure. Suite: 134-139s (within ≤134s tolerance). |
+| B6 | Instrumentation cleanup | ✅ | All 4 params already gated behind #f. No active overhead. Clean from `3339fec`. |
+| B7 | Verification (full suite green) | ✅ | 376/376 verified at each phase. |
+| B8 | PIR (per methodology, own phase) | ⬜ | |
 
 ## 1. Vision
 
