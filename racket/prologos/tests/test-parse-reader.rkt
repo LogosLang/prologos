@@ -7,6 +7,9 @@
 (require rackunit
          racket/set
          racket/list
+         racket/string
+         racket/file
+         racket/path
          "../rrb.rkt"
          "../propagator.rkt"
          "../parse-lattice.rkt"
@@ -533,3 +536,210 @@
   ;; Char cell populated (empty RRB)
   (define char-val (net-cell-read net (parse-cells-char-cell-id cells)))
   (check-equal? (rrb-size char-val) 0))
+
+;; ============================================================
+;; Phase 1f: Integration gate — topology comparison
+;; ============================================================
+;;
+;; Extracts topology from the new reader's tree and compares
+;; against the golden capture's reference-topology.
+;; Both compute parent/indent from the same source string;
+;; they must agree.
+
+(define here-dir (path-only (syntax-source #'here)))
+(define project-root (simplify-path (build-path here-dir "..")))
+
+;; Reference topology from raw string (same algorithm as golden-capture.rkt):
+;; Returns list of (content-idx source-line indent parent-idx)
+(define (reference-topology src)
+  (define lines (string-split src "\n"))
+  (define content-lines '())
+  (define stack '())
+  (for ([line (in-list lines)]
+        [i (in-naturals)])
+    (define trimmed (string-trim line))
+    (when (and (> (string-length trimmed) 0)
+               (not (string-prefix? trimmed ";")))
+      (define indent
+        (let loop ([j 0])
+          (if (and (< j (string-length line))
+                   (char=? (string-ref line j) #\space))
+              (loop (+ j 1))
+              j)))
+      (set! stack
+        (let loop ([s stack])
+          (if (and (pair? s) (>= (car (car s)) indent))
+              (loop (cdr s))
+              s)))
+      (define parent (if (null? stack) -1 (cdr (car stack))))
+      (set! stack (cons (cons indent (length content-lines)) stack))
+      (set! content-lines
+        (cons (list (length content-lines) i indent parent) content-lines))))
+  (reverse content-lines))
+
+;; Extract topology from new reader's cells:
+;; Read the indent RRB and content-line-indices, recompute parents
+;; using the same stack algorithm as reference-topology.
+;; Returns list of (content-idx source-line indent parent-idx)
+(define (extract-new-topology src)
+  (define-values (net cells) (parse-string-to-cells src))
+  (define indent-rrb (net-cell-read net (parse-cells-indent-cell-id cells)))
+  ;; Also need content-line-indices — get from the char-rrb
+  (define char-rrb (net-cell-read net (parse-cells-char-cell-id cells)))
+  (define-values (_indent-rrb2 content-line-indices)
+    (make-indent-rrb-from-char-rrb char-rrb))
+  ;; Recompute parents from indent RRB using stack algorithm
+  (define n (rrb-size indent-rrb))
+  (define result '())
+  (define stack '())
+  (for ([i (in-range n)])
+    (define indent (rrb-get indent-rrb i))
+    (define src-line (rrb-get content-line-indices i))
+    (set! stack
+      (let loop ([s stack])
+        (if (and (pair? s) (>= (car (car s)) indent))
+            (loop (cdr s))
+            s)))
+    (define parent (if (null? stack) -1 (cdr (car stack))))
+    (set! stack (cons (cons indent i) stack))
+    (set! result (cons (list i src-line indent parent) result)))
+  (reverse result))
+
+(test-case "integration: topology matches golden for simple def"
+  (define src "def x := 42")
+  (define golden-topo (reference-topology src))
+  (define new-topo (extract-new-topology src))
+  ;; Both should have 1 content line at indent 0, parent -1
+  (check-equal? (length new-topo) (length golden-topo))
+  (for ([g (in-list golden-topo)]
+        [n (in-list new-topo)])
+    ;; Compare indent levels (field 2) and parent indices (field 3)
+    (check-equal? (third n) (third g)
+                  (format "indent mismatch at line ~a: new=~a golden=~a"
+                          (first n) (third n) (third g)))
+    (check-equal? (fourth n) (fourth g)
+                  (format "parent mismatch at line ~a: new=~a golden=~a"
+                          (first n) (fourth n) (fourth g)))))
+
+(test-case "integration: topology matches golden for indented body"
+  (define src "def f [x]\n  [int+ x 1]")
+  (define golden-topo (reference-topology src))
+  (define new-topo (extract-new-topology src))
+  (check-equal? (length new-topo) (length golden-topo))
+  (for ([g (in-list golden-topo)]
+        [n (in-list new-topo)])
+    (check-equal? (third n) (third g))
+    (check-equal? (fourth n) (fourth g))))
+
+(test-case "integration: topology matches golden for multi-form"
+  (define src "def x := 1\n\ndef y := 2\n\ndef z := 3")
+  (define golden-topo (reference-topology src))
+  (define new-topo (extract-new-topology src))
+  (check-equal? (length new-topo) (length golden-topo))
+  (for ([g (in-list golden-topo)]
+        [n (in-list new-topo)])
+    (check-equal? (third n) (third g))
+    (check-equal? (fourth n) (fourth g))))
+
+(test-case "integration: topology matches golden for nested indent"
+  (define src "trait Foo\n  method bar\n    body\n  method baz\n    other")
+  (define golden-topo (reference-topology src))
+  (define new-topo (extract-new-topology src))
+  (check-equal? (length new-topo) (length golden-topo))
+  (for ([g (in-list golden-topo)]
+        [n (in-list new-topo)])
+    (check-equal? (third n) (third g))
+    (check-equal? (fourth n) (fourth g))))
+
+(test-case "integration: topology matches on real .prologos file"
+  ;; Use nat.prologos as a real-world test
+  (define nat-path (build-path project-root "lib" "prologos" "data" "nat.prologos"))
+  (when (file-exists? nat-path)
+    (define src (file->string nat-path))
+    (define golden-topo (reference-topology src))
+    (define new-topo (extract-new-topology src))
+    (check-equal? (length new-topo) (length golden-topo)
+                  (format "line count mismatch: new=~a golden=~a"
+                          (length new-topo) (length golden-topo)))
+    (for ([g (in-list golden-topo)]
+          [n (in-list new-topo)]
+          [i (in-naturals)])
+      (check-equal? (third n) (third g)
+                    (format "indent mismatch at content line ~a" i))
+      (check-equal? (fourth n) (fourth g)
+                    (format "parent mismatch at content line ~a" i)))))
+
+(test-case "integration: topology matches on multiple library files"
+  (define lib-dir (build-path project-root "lib" "prologos"))
+  (define files
+    (for/list ([f (in-directory lib-dir)]
+               #:when (regexp-match? #rx"\\.prologos$" (path->string f)))
+      f))
+  (check-true (> (length files) 10)
+              "Expected at least 10 .prologos library files")
+  (define passed 0)
+  (define failed 0)
+  (for ([f (in-list files)])
+    (with-handlers ([exn? (lambda (e)
+                            (set! failed (+ failed 1))
+                            (printf "  ERROR ~a: ~a\n"
+                                    (find-relative-path project-root f)
+                                    (substring (exn-message e)
+                                               0 (min 80 (string-length (exn-message e))))))])
+      (define src (file->string f))
+      (define ref-topo (reference-topology src))
+      (define new-topo (extract-new-topology src))
+      (cond
+        [(not (= (length new-topo) (length ref-topo)))
+         (set! failed (+ failed 1))
+         (printf "  LINES ~a: new=~a ref=~a\n"
+                 (find-relative-path project-root f)
+                 (length new-topo) (length ref-topo))]
+        [(for/and ([g (in-list ref-topo)]
+                   [n (in-list new-topo)])
+           (and (= (third n) (third g))
+                (= (fourth n) (fourth g))))
+         (set! passed (+ passed 1))]
+        [else
+         (set! failed (+ failed 1))
+         ;; Find first mismatch
+         (for ([g (in-list ref-topo)]
+               [n (in-list new-topo)]
+               [i (in-naturals)])
+           (unless (and (= (third n) (third g))
+                        (= (fourth n) (fourth g)))
+             (printf "  DIFF ~a line ~a: new=(~a ~a) ref=(~a ~a)\n"
+                     (find-relative-path project-root f)
+                     i (third n) (fourth n) (third g) (fourth g))
+             ;; Only print first diff
+             (void)))])))
+  (check-equal? failed 0
+                (format "~a/~a library files failed topology comparison"
+                        failed (+ passed failed))))
+
+(test-case "integration: topology matches on example files"
+  (define examples-dir (build-path project-root "examples"))
+  (define files
+    (if (directory-exists? examples-dir)
+        (for/list ([f (in-directory examples-dir)]
+                   #:when (regexp-match? #rx"\\.prologos$" (path->string f)))
+          f)
+        '()))
+  (define passed 0)
+  (define failed 0)
+  (for ([f (in-list files)])
+    (with-handlers ([exn? (lambda (e)
+                            (set! failed (+ failed 1)))])
+      (define src (file->string f))
+      (define ref-topo (reference-topology src))
+      (define new-topo (extract-new-topology src))
+      (if (and (= (length new-topo) (length ref-topo))
+               (for/and ([g (in-list ref-topo)]
+                         [n (in-list new-topo)])
+                 (and (= (third n) (third g))
+                      (= (fourth n) (fourth g)))))
+          (set! passed (+ passed 1))
+          (set! failed (+ failed 1)))))
+  (check-equal? failed 0
+                (format "~a/~a example files failed topology comparison"
+                        failed (+ passed failed))))
