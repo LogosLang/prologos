@@ -397,6 +397,19 @@
 (define (run-tests test-paths project-root)
   (define file-count (length test-paths))
 
+  ;; Step 0: Kill stale batch workers from previous runs.
+  ;; A killed test run leaves batch-worker.rkt processes alive, consuming
+  ;; resources and potentially holding file locks. Clean them up.
+  (let ([kill-result (with-handlers ([exn? (lambda (e) "")])
+                       (let-values ([(proc out in err)
+                                     (subprocess #f #f #f "/usr/bin/pkill"
+                                                 "-f" "batch-worker.rkt")])
+                         (subprocess-wait proc)
+                         (close-input-port out)
+                         (close-input-port err)
+                         "done"))])
+    (void))
+
   ;; Pre-compile modules to bytecode (reduces per-subprocess overhead)
   (when (do-precompile?)
     (printf "Pre-compiling modules...\n")
