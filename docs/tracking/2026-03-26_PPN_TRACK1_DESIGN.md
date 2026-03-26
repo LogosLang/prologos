@@ -30,8 +30,8 @@ Hyperlattice Conjecture.
 | 0 | Golden baseline: 4-level capture for 110 files | ✅ | `f677847` — 110/110, 0 failures. data/golden/ |
 | 1a | Character + indent RRB cells | ✅ | `8b7757c` — parse-reader.rkt. 21 tests. 5-cell creation on prop-network. |
 | 1b | Tokenizer propagator (char RRB → token RRB) | ✅ | `5819465` — 18 patterns, priority dispatch, set-of-types. 15 tests. |
-| 1c | Tree-builder propagator (indent+bracket RRBs → tree M-type cell) | ⬜ | One propagator. Content lines only. Bracket-depth-at-line-start. Tree = annotated S-expression in parse-cell-value. |
-| 1d | Bracket-depth RRB propagator (token RRB → bracket RRB) | ⬜ | Running sum of opens/closes. |
+| 1c | Tree-builder propagator (indent+bracket RRBs → tree M-type cell) | ✅ | `9af5b2d` — parse-tree-node with RRB children. Parent from indent + bracket suppression. 4 tests. |
+| 1d | Bracket-depth RRB propagator (token RRB → bracket RRB) | ✅ | `9af5b2d` — running sum + qq-depth channel. 4 tests. |
 | 1e | Context disambiguator (tree cell → token RRB reclassify) | ⬜ | Bridge γ. ≤2-round fixpoint in S0 (§11.4). 11 decisions. |
 | 1f | **Integration gate**: golden comparison on simple files | ⬜ | Must pass before Phase 2. |
 | 2 | Reader macros: #p, ', `, #=, dot-access, broadcast | ⬜ | Stateful recognizers in pattern registry. |
