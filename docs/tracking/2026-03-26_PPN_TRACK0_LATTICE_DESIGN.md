@@ -28,14 +28,14 @@ distinguished from exchanges.
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| Pre-0 | Microbenchmarks: current pipeline stage costs | ⬜ | Measure: reader, preparse, parse, elaborate per-form |
+| Pre-0 | Microbenchmarks: pipeline costs + CHAMP scale test | ⬜ | Pipeline per-form costs + CHAMP at 20K/100K/1M cells |
 | 0 | Acceptance file: parse lattice exerciser | ⬜ | Exercises each lattice domain with known-ambiguous forms |
-| 1 | Token lattice + IndentState struct | ⬜ | `token-cell.rkt`: lattice struct, merge, bot/top |
-| 2 | Surface lattice (per-item cells, derivation-only) | ⬜ | `parse-cell.rkt`: SPPF node, derivation ordering. Elimination deferred to Track 5. |
-| 3 | Demand lattice | ⬜ | `demand-cell.rkt`: domain-typed Position demands |
-| 4 | Bridges (3) + Exchange specs (2) + Projection (1) | ⬜ | Bridges within strata, exchanges across strata |
-| 5 | NTT speculative syntax | ⬜ | Each lattice + bridge in NTT syntax |
-| 6 | Small integration test (hand-constructed network) | ⬜ | Parse `def x : Int := 42` through lattice cells |
+| 1 | Token lattice (set-once) | ⬜ | `parse-lattice.rkt`: struct, set-once merge, bot/top |
+| 2 | Surface lattice (per-item cells, derivation-only) | ⬜ | `parse-lattice.rkt`: SPPF node, derivation set-union. NO elimination. |
+| 3 | Demand lattice + satisfaction protocol | ⬜ | `parse-lattice.rkt`: demand struct + satisfaction propagator pattern |
+| 4 | Bridges (3) + Exchange specs (2) + Projection (1) | ⬜ | Stratification-AGNOSTIC α/γ. Adjunction verification on examples. |
+| 5 | NTT speculative syntax (+ `:set-once` kind) | ⬜ | Each lattice + bridge in NTT syntax |
+| 6 | Integration test: happy path + ambiguity + disambiguation | ⬜ | Both `def x : Int := 42` AND ambiguous parse with ATMS + type resolution |
 | 7 | A/B benchmarks + verification | ⬜ | Compare lattice operations against current pipeline |
 | 8 | Update dailies + tracker | ⬜ | Per-phase completion |
 | 9 | PIR | ⬜ | Per methodology |
@@ -107,6 +107,41 @@ from get-or-create-sub-cell. Full exploration deferred to PPN Track 3.
 and elaborate) is a Track 3-4 decision, not a Track 0 decision.** Track
 0 defines lattices; stratification is wiring. The NTT sketch shows the
 separate-strata option but both options are viable.
+
+### 2.1b Cell Count Estimation (D.4)
+
+Per-item cells mean O(n² × G) POTENTIAL cells for input length n and
+grammar size G. But Earley charts are SPARSE — most items are never
+created. Typical LIVE cell counts:
+
+| Input size | Grammar size | Potential cells | Estimated LIVE cells | Notes |
+|-----------|-------------|----------------|---------------------|-------|
+| 50 tokens (1 def) | ~150 prods | 375K | ~2K-5K | Simple definition |
+| 200 tokens (1 file) | ~150 prods | 6M | ~10K-30K | Typical .prologos file |
+| 2000 tokens (large file) | ~150 prods | 600M | ~100K-500K | test-stdlib-scale |
+
+Our CHAMP was designed for ~100-1000 cells (type inference). At 30K
+cells (typical file), CHAMP operations are O(log₃₂ 30000) ≈ 3 levels
+deep. At 500K cells: 4 levels. Performance should be acceptable, but
+Pre-0 MUST benchmark CHAMP at these scales.
+
+**Pre-0 deliverable**: Create 20K, 100K, and 1M cells on a prop-network.
+Measure: insert time, lookup time, memory consumption, GC pressure.
+If 100K cells cause measurable GC pauses (>10ms), investigate: cell
+pooling, arena allocation, or vector-backed cell storage for parse cells.
+
+### 2.1c GFG Alternative Acknowledgment (D.4)
+
+Grammar Flow Graphs (GFGs) map more naturally to propagator graphs
+(each GFG node = cell, edges = propagators). GLL's descriptors with
+Graph Structured Stack are also relevant. This design chooses Earley
+items because: simpler model, well-understood O(n³) complexity, direct
+mapping to per-item cells, and extensive literature.
+
+GFG-based cell design is a Track 3 optimization option — if Earley
+item cells prove inefficient, GFG nodes are the natural alternative.
+Track 0's lattice structs work for either (the lattice values are the
+same; only the cell topology differs).
 
 ### 2.2 Token Lattice (L_token)
 
@@ -384,19 +419,32 @@ for DIFFERENT architectural boundaries:
    retract parse A's assumption (via ATMS, not lattice elimination).
 ```
 
-#### 3.1.3 SurfaceToType (bidirectional)
+#### 3.1.3 SurfaceToType (α + ATMS-mediated backward flow)
 
 ```
 α: parse-cell-value → type-cell-value
    "This parse form generates these type constraints"
    Elaboration of a parsed form creates type cells and constraints.
+   Standard lattice morphism (monotone: more parse info → more type constraints).
 
-γ: type-cell-value → parse-cell-value
-   "This type information disambiguates parsing"
-   Arity, argument types, return types constrain which parse
-   alternatives are valid. The γ-function projects type constraints
-   into ATMS assumption retraction on the surface cells.
+Backward flow (NOT classical γ — D.4 correction):
+   Type errors → ATMS retraction of parse assumptions.
+   This is NOT a Galois γ (γ(α(x)) ≥ x is not guaranteed).
+   It IS a monotone ATMS operation: more type errors → more retractions.
+   The backward flow is ATMS-mediated, not lattice-mediated.
 ```
+
+**D.4 honesty**: SurfaceToType has a proper α but its backward flow is
+ATMS assumption retraction, not a classical Galois γ. This doesn't break
+correctness — type errors correctly eliminate inconsistent parses. But
+we should not claim adjunction where we have ATMS-mediated pruning.
+Classification: α-bridge with ATMS backward flow, not full Galois
+connection.
+
+**All bridges are stratification-AGNOSTIC (D.4)**: The α/γ functions are
+pure data transformations. They do not assume whether parsing and
+elaboration share a stratum or not. The WIRING (which stratum fires
+which bridge) is a Track 3-4 decision. Phase 4 delivers pure functions.
 
 #### 3.1.4 TypeToToken (composed, not direct)
 
@@ -437,7 +485,38 @@ This is speculative: the partial parse may change as more tokens
 arrive. The elaborator's partial results are LOWER BOUNDS on the
 final type — they can only grow (monotone in the type lattice).
 
-### 3.3 One-way projections (fibrations)
+### 3.3 Demand Satisfaction Protocol (D.4)
+
+The demand struct (§2.5) defines WHAT is needed. The protocol defines
+HOW demands are matched to their satisfactions:
+
+```
+1. Higher stratum generates demand → writes to demand cell (set-union)
+2. Demand satisfaction propagator watches BOTH demand cell AND target cell
+3. When target cell transitions bot → value:
+   a. Check: does the value match any pending demand's specificity?
+   b. If yes: demand is "satisfied" — forward result to demanding stratum
+   c. The demand remains in the set (idempotent — future identical
+      demands are immediately satisfied)
+4. The forwarding mechanism is the Left Kan exchange (§3.2.2):
+   partial result flows forward from lower stratum to higher stratum
+```
+
+The demand satisfaction propagator is a standard two-input propagator:
+```racket
+(define (make-demand-satisfaction-propagator demand-cell target-cell)
+  ;; Fires when target-cell transitions from bot to a value
+  ;; Reads demand-cell to check if any demand matches
+  ;; Forwards matched results via Left Kan exchange
+  ...)
+```
+
+This is the operational semantics of Right Kan demand flow. The demand
+lattice accumulates demands (monotone). The satisfaction propagator
+detects when target cells satisfy demands. The Left Kan exchange
+forwards results. Three mechanisms compose.
+
+### 3.4 One-way projections (fibrations)
 
 #### 3.3.1 SurfaceToNarrowing (α only)
 
@@ -469,16 +548,16 @@ stratum; exchanges connect strata across a barrier.
 ```prologos
 ;; === Level 0: Parse Domain Lattices ===
 
-;; Token lattice (set-once — trivially monotone, no join)
+;; Token lattice (set-once — D.4: new NTT lattice kind)
 data TokenValue
   := token-bot
    | token [type : Symbol] [lexeme : String] [span : Span]
            [indent-level : Int] [indent-delta : IndentChange]
    | token-error
-  :lattice :value
+  :lattice :set-once        ;; D.4: distinct from :value (no join exists)
   :bot token-bot
   :top token-error
-  ;; D.3: No join — tokens are set-once. ATMS for rare ambiguity.
+  ;; Network enforces: bot → value (one write). value → different = ATMS or error.
 
 ;; Surface lattice (derivation-only, lfp)
 ;; Track 5 adds: newtype ParseElimination := ParseElimination (Set AssumptionId)
@@ -743,25 +822,96 @@ adjunction laws for each bridge, at minimum on representative examples.
 
 ---
 
-## 7. Risks
+## 7. Track 0 → Track 3 Interface Contract (D.4)
 
-| Risk | Severity | Mitigation |
-|------|----------|------------|
-| SPPF merge complexity at scale | MEDIUM | Per-item cells, not per-span. O(n³) guaranteed. |
-| Bilattice adds complexity without immediate payoff | LOW | Single additional set field. Payoff in Tracks 5-6. |
-| Bridge α/γ correctness (adjunction laws) | MEDIUM | Integration test (Phase 6) validates round-trip coherence. |
-| Demand lattice overengineered for Track 0 | LOW | Simple set-union lattice. If unused, zero overhead. |
-| Performance: lattice merge slower than current pipeline | MEDIUM | Pre-0 + Phase 7 benchmarks detect before integration. |
+Track 0 builds lattice INFRASTRUCTURE. Track 3 CONSUMES it for the
+parser. The contract specifies what Track 3 expects from Track 0:
+
+### 7.1 Cell Creation API
+
+```racket
+;; Track 3 needs: create-or-get a cell for a parse item
+(define (get-or-create-parse-cell net production dot origin span-end)
+  ;; Returns: (values updated-net cell-id)
+  ;; If cell exists for this (production, dot, origin, span-end): return it
+  ;; If not: create it with parse-cell-value bot, return new cell
+  ...)
+```
+
+**Key constraint (D.4)**: The lookup key is a 4-tuple. The implementation
+must support efficient 4-tuple lookup. Options: composite struct key
+with custom hash, or nested CHAMP (production → dot → origin → cell-id).
+Track 0 Phase 2 should prototype BOTH and benchmark.
+
+### 7.2 Propagator Installation API
+
+Track 3 installs three kinds of propagators:
+
+```racket
+;; Scanning: token at position i → advance items expecting this token
+(define (install-scan-propagator net token-cell-id target-item-cell-id)
+  ...)
+
+;; Prediction: item with dot before nonterminal → create items for that nonterminal
+(define (install-predict-propagator net item-cell-id new-item-cell-ids)
+  ...)
+
+;; Completion: item with dot at end → advance parent items
+(define (install-complete-propagator net completed-cell-id parent-cell-id)
+  ...)
+```
+
+### 7.3 Result Reading API
+
+```racket
+;; Track 3 needs: read completed parse results for a nonterminal
+(define (read-completed-items net nonterminal origin span-end)
+  ;; Returns: set of derivation-nodes for completed items of this nonterminal
+  ...)
+```
+
+### 7.4 Bridge Integration API
+
+```racket
+;; Track 3 needs: wire bridges between parse cells and type cells
+(define (install-surface-to-type-bridge net parse-cell-id type-cell-id alpha-fn)
+  ;; The alpha-fn is from Phase 4's bridge specs
+  ...)
+```
+
+These APIs are the HANDOFF contract. If Track 0 delivers structs that
+don't support these operations, Track 3 discovers the mismatch. The
+integration test (Phase 6) should exercise each API on the hand-
+constructed network.
 
 ---
 
-## 8. Completion Criteria
+## 8. Risks
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| SPPF merge complexity at scale | MEDIUM | Per-item cells. O(n³) guaranteed. Cell count estimation §2.1b. |
+| CHAMP at parse scale (20K-500K cells) | MEDIUM | Pre-0 CHAMP stress test. Fallback: vector-backed storage. |
+| Bridge specs without grammar (Phase 4) | MEDIUM | Hard-code test grammar rules. Track 3 supplies real grammar. |
+| SurfaceToType backward flow not adjunction | LOW | Documented as ATMS-mediated (D.4). Correctness unaffected. |
+| 4-tuple cell key lookup performance | MEDIUM | Phase 2 benchmarks both composite-key and nested-CHAMP. |
+| Demand satisfaction protocol untested | LOW | Phase 6 integration test includes demand scenario. |
+| Performance: aggregate throughput at scale | MEDIUM | Phase 7 includes N-cell create + quiesce benchmarks. |
+
+---
+
+## 9. Completion Criteria
 
 1. All 4 lattice structs defined with merge functions and bot/top values.
-2. All 6 bridge specifications with α/γ functions.
-3. Integration test: hand-constructed parse of `def x : Int := 42` through
-   token → surface → core → type cells with bilattice elimination.
-4. NTT speculative syntax added to NTT Syntax Design document.
-5. A/B benchmarks: lattice merge operations < 1μs per call.
-6. Suite green (no regressions from new module).
-7. PIR written per methodology.
+2. 3 bridge α/γ specs + 2 exchange specs + 1 projection spec (stratification-agnostic).
+3. Demand satisfaction protocol implemented (demand propagator watches demand + target cells).
+4. Integration test: BOTH `def x : Int := 42` (happy path) AND an ambiguous parse
+   with ATMS branching + type-directed disambiguation (critical path).
+5. NTT speculative syntax added (including `:set-once` lattice kind for tokens).
+6. Track 0 → Track 3 interface contract specified (§7): cell creation, propagator
+   installation, result reading, bridge integration APIs.
+7. Pre-0 CHAMP scale benchmark: 20K, 100K cells. Performance acceptable.
+8. A/B benchmarks: per-call merge < 1μs. Aggregate throughput: create 20K cells < 100ms.
+9. Suite green (no regressions from new module).
+10. PIR written per methodology (own phase).
+11. Update dailies + tracker (per-phase completion).
