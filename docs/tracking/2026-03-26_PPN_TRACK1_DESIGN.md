@@ -3,7 +3,9 @@
 **Stage**: 3 (Design)
 **Date**: 2026-03-26
 **Series**: PPN (Propagator-Parsing-Network)
-**Status**: D.1 — initial design from audit
+**Status**: D.2 — constraint-based tree building (Completeness revision).
+D.1 used imperative sweep; D.2 uses constraint propagation for O(1)
+incremental editing from day one.
 
 **Prerequisite**: PPN Track 0 ✅ (lattice structs, bridge specs, integration test)
 **Enables**: PPN Track 2 (surface normalization), Track 3 (parser)
@@ -160,35 +162,113 @@ the token cell.
 
 ---
 
-## 4. Structure Builder (Subsystem B)
+## 4. Structure Builder (Subsystem B) — Constraint-Based Tree Construction
 
-### 4.1 The indent tree
+### 4.1 The architectural principle (D.2 revision)
 
-The core algorithm: maintain an INDENT STACK (list of indent levels).
-When a new line starts:
+**D.1 used an imperative sweep** (left-to-right scan with mutable indent
+stack). D.2 replaces this with CONSTRAINT-BASED PROPAGATION:
 
-- If indent > top of stack → PUSH: new child level. Create structure
-  cell, set parent to current context.
-- If indent = top of stack → SIBLING: same level. Continue in current
-  context.
-- If indent < top of stack → POP: dedent. Pop stack until indent
-  matches or exceeds. Return to parent context.
+- Each line's indent level is a CELL VALUE (measured from characters)
+- Parent-child relationships are CONSTRAINTS (resolved by propagation)
+- The tree topology EMERGES from constraint satisfaction at fixpoint
+- Incremental editing = re-fire affected constraints only = O(affected lines)
 
-In the propagator model: the indent stack is a CELL whose value is the
-current stack state. The stack cell is a value lattice (the stack only
-GROWS or POPS — it's not arbitrary mutation). Each push/pop produces a
-new stack value.
+The Completeness principle says: build the foundation that makes Tracks
+2-8 easier. The constraint-based approach gives O(1) incremental editing
+from day one (Track 8 benefit), parallel-ready construction (Track 3
+benefit), and propagator-native representation (every track's benefit).
 
-### 4.2 Structure cells
+### 4.2 Per-line cells
 
-A structure cell represents a nested block:
+Each line in the source creates 3 cells:
+
+```racket
+;; Line i has:
+;; 1. indent-cell: measured indent level (set-once from characters)
+;; 2. parent-cell: resolved parent line-id (computed by propagation)
+;; 3. context-cell: indent context passed forward (the distributed stack)
+
+(struct line-info
+  (line-number     ;; exact-nonneg-integer
+   indent-cell-id  ;; cell-id: holds indent level (set-once)
+   parent-cell-id  ;; cell-id: holds parent line-id | 'root (resolved)
+   context-cell-id ;; cell-id: holds indent context for next line
+   content-cells   ;; list of cell-id: token cells on this line
+   )
+  #:transparent)
+```
+
+The indent-cell is set ONCE from character measurement (embarrassingly
+parallel — each line independently measures its leading whitespace).
+
+The parent-cell and context-cell are resolved by the indent resolver
+propagator (§4.3).
+
+### 4.3 The indent resolver propagator
+
+A CHAIN of propagators, one per line. Each reads the previous line's
+context and its own indent level, then computes its parent and the
+updated context for the next line.
+
+```racket
+;; The indent context is the distributed stack:
+;; A list of (indent-level . line-id) pairs, outermost first.
+;; Example: ((0 . 0) (2 . 1) (4 . 2)) means:
+;;   line 0 at indent 0, line 1 at indent 2, line 2 at indent 4
+
+(define (make-indent-resolver prev-context-cell my-indent-cell
+                              my-parent-cell my-context-cell my-line-id)
+  ;; Propagator: fires when prev-context AND my-indent are non-bot.
+  ;;
+  ;; Algorithm:
+  ;; 1. Read prev-context (the indent stack as a list)
+  ;; 2. Read my-indent
+  ;; 3. Pop stack entries with indent >= my-indent
+  ;; 4. Top of remaining stack = my parent (or 'root if empty)
+  ;; 5. Push (my-indent . my-line-id) onto stack
+  ;; 6. Write parent to my-parent-cell
+  ;; 7. Write updated stack to my-context-cell
+  ...)
+```
+
+**Performance**: chain propagation at 500ns/step (from Pre-0 D5).
+200-line file = 100μs. 2000-line file = 1ms. Negligible.
+
+**Incrementality**: editing line i's indent → indent-cell changes →
+resolver propagator for line i re-fires → context-cell changes →
+line i+1's resolver re-fires → ... → chain stabilizes when indent
+change's effect is fully propagated. Lines BEFORE line i are unaffected.
+Content-only edits (no indent change) = 0 propagator firings.
+
+### 4.4 Constraint formulation (the WHAT, not the HOW)
+
+The parent-child relationship IS a constraint:
+
+```
+parent(line_i) = max { line_j | j < i AND indent(line_j) < indent(line_i) }
+                 or 'root if no such line_j exists
+```
+
+This constraint is DETERMINISTIC given the indent levels. The chain
+propagator (§4.3) SOLVES this constraint efficiently (O(n) for n lines).
+But the constraint formulation is the INTERFACE — downstream consumers
+see "line 5's parent is line 3," not "the sweep computed this."
+
+A future implementation could solve the same constraint differently
+(parallel scan, GPU-accelerated, etc.) without changing the interface.
+
+### 4.5 Structure cells
+
+A structure cell represents a nested block (indent or bracket):
 
 ```racket
 (struct structure-cell-value
   (indent-level    ;; int: column of this block's indentation
-   parent-id       ;; cell-id | #f: parent structure cell
+   parent-id       ;; cell-id | 'root: parent structure cell
    children        ;; list of cell-id: child token/structure cells (in order)
    form-type       ;; symbol: 'top-level, 'indented-block, 'bracket-group, 'line
+   line-id         ;; line-info | #f: which line this structure starts at
    )
   #:transparent)
 ```
@@ -197,7 +277,7 @@ The TREE TOPOLOGY is encoded in `parent-id` and `children`. Walking
 the tree = following cell-id references. This is the structure that
 macros operate on and DPO rewriting preserves.
 
-### 4.3 Bracket groups
+### 4.6 Bracket groups
 
 Brackets create INLINE structure (not indent-based):
 
@@ -207,22 +287,33 @@ Brackets create INLINE structure (not indent-based):
 - `<Int | String>` → structure cell (type annotation)
 
 Bracket groups are NESTED within indent blocks. A bracket group's
-parent is the enclosing indent block or bracket group.
+parent is the enclosing indent block or bracket group. Bracket matching
+is also constraint-based: each open bracket creates a cell that is
+"resolved" when the matching close bracket is found.
 
-### 4.4 The tree invariant
+### 4.7 The tree invariant
 
 **Invariant**: Every token cell has exactly ONE parent structure cell.
-Every structure cell has exactly ONE parent (except the root, which
-has `#f`). The cell topology forms a TREE, not a DAG or arbitrary graph.
+Every structure cell has exactly ONE parent (except root, which has
+`'root`). The cell topology forms a TREE.
 
-This invariant is STRUCTURAL — enforced by the cell creation pattern:
-- Token producer creates token cell → immediately assigns to current
-  structure context
-- Structure builder creates structure cell → assigns parent from
-  indent stack or bracket context
+This invariant is STRUCTURAL — enforced by the constraint resolution:
+- The parent constraint (§4.4) assigns exactly one parent per line
+- Bracket matching assigns exactly one parent per bracket group
+- Token cells are children of their line's structure cell
 
-No "orphan" cells. No "multi-parent" cells. The tree is correct by
-construction.
+No orphans. No multi-parents. The tree is correct by construction.
+
+### 4.8 Content-addressed cells for structural sharing
+
+Structure cell equality is CONTENT-BASED (`gen:equal+hash` on content,
+not on cell-id). Two identical sub-trees in different modules have
+equal structure cells. The CHAMP provides implicit storage-level sharing
+for equal cells.
+
+This doesn't introduce explicit cross-tree sharing (that's PReductions
+scope with e-graphs). But it ENABLES future sharing: content-addressed
+cells can be deduplicated without changing the tree topology.
 
 ---
 
@@ -400,12 +491,28 @@ reader.rkt is DELETED upon completion. No dual-path.
 structure (cell topology) composes with Track 2 (normalization), Track 3
 (parsing), and Track 10 (serialization).
 
-**Challenge**: Is the indent stack REALLY a lattice value? Push/pop
-doesn't have a natural join. The stack is SEQUENCE state, not lattice
-state. Resolution: the indent stack is a cell with a CHAIN lattice
-(successive stack states form a total order within one parse). The
-lattice is the parse PROGRESS — earlier states ≤ later states. This
-is monotone (parse only moves forward).
+**Completeness** (D.2): The constraint-based approach does the HARD
+thing (propagator-native tree construction with O(1) incremental) so
+that everything downstream is EASIER (Track 2 normalization operates
+on live cells, Track 3 parser fires into the same network, Track 8
+gets incremental editing for free). D.1's sweep was the convenient
+choice; D.2's constraints are the complete choice.
+
+**Challenge**: The indent context chain IS sequential (line i depends
+on line i-1). This means the tree can't be built fully in parallel —
+the chain propagates left-to-right. But the MEASUREMENT of indent
+levels IS parallel (each line independently). And the CONSUMPTION of
+the tree IS parallel (Track 2/3/4 can start on completed sub-trees
+before the full chain propagates). The sequential part (chain
+propagation at 500ns/step) is fast enough that the parallelism
+concern is theoretical, not practical.
+
+**Challenge**: Content-addressed cells (§4.8) mean equal sub-trees
+are `equal?` across modules. Is this correct for source-located code?
+Two `def x := 42` in different files are structurally equal but have
+different source locations. Resolution: source location is a SEPARATE
+cell field (srcloc), not part of the content hash. Content equality
+ignores location; srcloc provides location when needed for errors.
 
 ---
 
