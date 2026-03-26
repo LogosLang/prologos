@@ -29,7 +29,7 @@
 | A1 | `with-fresh-meta-env` creates network. Scoped fresh network per call. | ✅ | `a767b50` — make-elaboration-network, sentinel checks removed, 135.5s |
 | A2 | `zonk-final` → `freeze` rename (15 sites) | ✅ | `d12eacf` — cosmetic rename, defaults at solve-time deferred to WS-B |
 | A3 | id-map elimination. Add cell-id to `hasmethod-constraint-info`. | ✅ | `cd0d708` — 3 external callers → cell-id direct. Zero external id-map callers. 139.0s |
-| A3b | process-string scoping audit (74 high-risk `set-box!` sites) | ⬜ | Moved from B0 (D.4): must precede A4 to prevent masking leaks under fork model |
+| A3b | process-string scoping audit (74 high-risk `set-box!` sites) | ✅ | NO LEAKS FOUND. All 69 metavar-store + 5 global-env set-box! write to parameterized boxes. |
 | A4 | Batch worker simplification (11→6 saved values) | ⬜ | D.4 fix: 6 not 4. Specify new batch worker structure (not just "delete and hope"). |
 | A5 | PUnify toggle flip validation | ⬜ | Runs AFTER A4 (tests against final WS-A state, not mid-migration). |
 | A6 | A/B benchmark comparison (WS-A before/after) | ⬜ | Compare against Pre-0 baselines. See §A6 table. |
