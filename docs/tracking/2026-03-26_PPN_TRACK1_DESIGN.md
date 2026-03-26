@@ -27,7 +27,7 @@ Hyperlattice Conjecture.
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | Pre-0 | Microbenchmarks + RRB vs CHAMP | ✅ | `b076359`+D.6 — 370ns/token, RRB 9× build, tree-builder 4.5μs/200 lines |
-| 0 | Golden baseline: 4-level capture for 110 files | ⬜ | Topology + brackets + datums + srcloc |
+| 0 | Golden baseline: 4-level capture for 110 files | ✅ | `f677847` — 110/110, 0 failures. data/golden/ |
 | 1a | Character + indent RRB cells | ⬜ | RRB from input string. Indent = leading whitespace per content line. |
 | 1b | Tokenizer propagator (char RRB → token RRB) | ⬜ | One propagator, O(n) scan, registered patterns. Stateful for strings/#p. |
 | 1c | Tree-builder propagator (indent+bracket RRBs → tree M-type cell) | ⬜ | One propagator. Content lines only. Bracket-depth-at-line-start. Tree = annotated S-expression in parse-cell-value. |
