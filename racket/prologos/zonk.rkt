@@ -21,13 +21,31 @@
          "solver.rkt"
          (only-in "namespace.rkt" ns-context?))
 
-(provide zonk zonk-ctx zonk-final freeze zonk-at-depth)
+(provide zonk zonk-ctx zonk-final freeze zonk-at-depth
+         ;; Track 10B Phase B0: call counters for frequency measurement
+         current-zonk-call-counts reset-zonk-call-counts!)
+
+;; ========================================
+;; Track 10B Phase B0: call frequency counters (gated behind parameter)
+;; ========================================
+(define current-zonk-call-counts (make-parameter #f))
+
+(define (reset-zonk-call-counts!)
+  (current-zonk-call-counts
+   (make-hasheq '((zonk . 0) (zonk-at-depth-0 . 0) (zonk-at-depth-1 . 0)
+                   (zonk-final . 0) (freeze . 0)
+                   (zonk-level . 0) (zonk-mult . 0) (zonk-session . 0)))))
+
+(define-syntax-rule (zonk-count! key)
+  (let ([h (current-zonk-call-counts)])
+    (when h (hash-set! h key (add1 (hash-ref h key 0))))))
 
 ;; ========================================
 ;; Zonk: substitute solved metavariables
 ;; ========================================
 (define (zonk e)
   (perf-inc-zonk!)
+  (zonk-count! 'zonk)
   (match e
     ;; THE KEY CASE: metavariable — follow solution recursively
     ;; PM 8F Phase 3: use cell-id fast path (skips 82ns id-map lookup)
@@ -467,6 +485,7 @@
 ;;   Call with depth=0 for normal behavior (equivalent to plain zonk).
 ;;   Use depth=1 when zonking a Pi/Sigma/lam codomain/body.
 (define (zonk-at-depth depth e)
+  (zonk-count! (if (= depth 0) 'zonk-at-depth-0 'zonk-at-depth-1))
   (match e
     ;; THE KEY CASE: metavariable — follow solution and shift by accumulated depth
     ;; PM 8F Phase 3: use cell-id fast path (same as zonk)
@@ -918,6 +937,7 @@
 ;; Future (WS-B): when metas ARE cells, freeze becomes a single-pass cell-read
 ;; with no tree-walking. Currently it's still zonk+defaults (tree walk).
 (define (freeze e)
+  (zonk-count! 'freeze)
   (define z (zonk e))
   (default-metas z))
 
