@@ -41,6 +41,8 @@ PM Track 9 (reductions as DPO rewriting). All share the SRE as foundation.
 | 1B | Post-implementation fixes — merge registry, direct recursive, binder guard | ✅ | [Design](2026-03-23_SRE_TRACK1B_POST_IMPLEMENTATION_FIXES_DESIGN.md) | (in Track 1 PIR) | 110× subtype failure speedup, principled decomposition guard |
 | 2 | Elaborator-on-SRE — classifier → SRE dispatch | ✅ | [Design](2026-03-23_SRE_TRACK2_ELABORATOR_ON_SRE_DESIGN.md) | [PIR](2026-03-23_SRE_TRACK2_PIR.md) | O(1) prop:ctor-desc-tag, 10/10 structural cases, ~2.5% speedup |
 | 2B | Polarity Inference — user-defined structural subtyping | ⬜ | — | — | Wire polarity inference into `data` elaboration. Utilities exist (variance-join, variance-flip). Small scope. |
+| 2C | Cell References in Expressions — elaborator creates cell-ref not expr-meta | ⬜ | — | — | **ENABLES zonk elimination** (~1300 lines). Deferred from PM Track 10B Phase B2. Expressions reference cells directly; downstream code reads cells, not walks trees. |
+| PUnify | PUnify Parity Track — systemic regression investigation | ⬜ | — | — | Track 10B Phase A5 showed systemic failures with toggle ON (not 5 isolated bugs). Needs dedicated design cycle. |
 | 3 | Trait Resolution-on-SRE — impl lookup via structural matching | ⬜ | — | — | Needs Track 1 ✅ (subtyping). Subsumes PM 8E resolution state. |
 | 4 | Session Types-on-SRE — duality via involution relation | ⬜ | — | — | Needs Track 1 ✅ (duality). Choice/Offer branch duality. `dual` retirement. |
 | 5 | Pattern Compilation-on-SRE — scrutinee decomposition + NF-Narrowing | ⬜ | — | — | GADT path via unified narrowing. Independent of PM tracks. |
@@ -366,12 +368,15 @@ PM 8D ✅ (3 registries+bridges)  →   SRE Track 0 ✅ (form registry)
                                       SRE Track 1B ✅ (post-impl fixes)
                                       SRE Track 2 ✅ (classifier → SRE)
                                       SRE Track 2B (polarity inference)
+                                      SRE Track 2C (cell refs in exprs → zonk elimination)
+                                      SRE Track PUnify (systemic parity investigation)
 PM 8E (17 registries as cells)   ↔   SRE Track 3 (trait resolution)
                                       SRE Track 4 (sessions)
-                                      SRE Track 4 (pattern compilation)
-PM 8F (meta-info as cells)       ↔   SRE Track 5 (reduction-on-SRE)
-PM Track 9 = SRE Track 5
-PM Track 10                      =   SRE Track 6 (module loading)
+                                      SRE Track 5 (pattern compilation)
+PM 8F ✅ (meta-info as cells)    ↔   SRE Track 6 (reduction-on-SRE)
+PM Track 9 = SRE Track 6
+PM Track 10 ✅ + 10B 🔄          =   SRE Track 7 (module loading)
+PM Track 10C                     =   Per-test scheduling (Places)
 ```
 
 **Key interleaving points**:
@@ -379,8 +384,10 @@ PM Track 10                      =   SRE Track 6 (module loading)
   registry access) but can proceed independently (SRE works with current box infra)
 - SRE Track 5 requires PM 8F (metas as cells — reduction reads meta solutions)
 - SRE Track 6 IS PM Track 10 (convergence)
-- PM 8E's "resolution state" migration is subsumed by SRE Track 2
-- PM Track 9 IS SRE Track 5 — these should be unified into one track
+- PM 8E's "resolution state" migration is subsumed by SRE Track 3
+- PM Track 9 IS SRE Track 6 — these should be unified into one track
+- **SRE Track 2C enables zonk elimination** — deferred from PM Track 10B. The elaborator must create cell references (not expr-meta nodes) for zonk to become unnecessary.
+- **SRE Track PUnify** — Track 10B A5 showed systemic regression. Not 5 isolated bugs — cascading failures in prelude module loading. Needs dedicated investigation.
 
 **Recommended ordering** (updated post-Track 2):
 

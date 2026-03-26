@@ -48,7 +48,8 @@ Audits) are defined.
 | [[file:2026-03-24_PM_8F_METAS_AS_CELLS_DESIGN.md][Track 8F]] | Meta-info as cells (cell-id in expr-meta, cell-id zonk paths) | [[file:2026-03-24_PM_8F_PIR.md][PIR]] ✅ | 6/8 phases; 3.5% suite improvement; Phase 5+7 deferred to Track 10 |
 | Track 9 | Reduction as Propagators — interaction nets, GoI, e-graph rewriting | Stage 1 research | [[file:2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md][Research note]]; may become Track Series |
 | [[file:2026-03-24_PM_TRACK10_DESIGN.md][Track 10]] | Module loading on network + .pnet cache + fork isolation | ✅ [[file:2026-03-24_PM_TRACK10_PIR.md][PIR]] | Phases 0-5 complete. 240→134s (44%). .pnet cache, fork model, #lang dropped. 1315 lines deleted. |
-| [[file:2026-03-25_PM_TRACK10B_DESIGN.md][Track 10B]] | Foundation cleanup + zonk elimination | [[file:2026-03-25_PM_TRACK10B_STAGE2_AUDIT.md][Audit]] 🔄 | WS-A: CHAMP removal (36 sites), freeze (7), id-map (18), batch worker, PUnify toggle. WS-B: session metas→cells, 47 zonk sites→0, zonk.rkt deletion (~1300 lines). Targets: <130s/<120s |
+| [[file:2026-03-25_PM_TRACK10B_DESIGN.md][Track 10B]] | Foundation cleanup + session meta cells | [[file:2026-03-25_PM_TRACK10B_STAGE2_AUDIT.md][Audit]] 🔄 | WS-A ✅: network-always, freeze, id-map, PUnify attempted. WS-B: session metas→cells ✅, zonk elimination DEFERRED to SRE 2C, per-test DEFERRED to 10C |
+| Track 10C | Per-test scheduling via Places | ⬜ | Depends on Track 10B. Largest file tail is 20.8s — file splitting gives ~3-5s marginal. Places needed for real per-test scheduling. Own design cycle. |
 | Track 11 | LSP Integration — incremental re-elaboration, live diagnostics | Not started | [[file:2026-03-19_TRACK10_DESIGN_NOTES.org][Early notes]]; depends on Track 9 + Track 10 |
 
 Track 8 (complete) unblocked CIU Series Tracks 3–5 and BSP-LE.
