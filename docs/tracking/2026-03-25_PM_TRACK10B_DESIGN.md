@@ -38,8 +38,8 @@
 | B0 | zonk-at-depth call-count measurement | ✅ | Poly cmd: 14 zonk-at-depth-0 (4.2ms). Simple: 2. Suite total: substantial. |
 | B1a | Session meta cell infrastructure (`fresh-sess-meta` creates cells) | ✅ | `sess-meta` struct: added cell-id. Pattern matches updated (sessions, session-lattice, typing-sessions, tests). 136.1s |
 | B1b | Session meta read migration (`sess-meta-solution/cell-id`) | ✅ | Cell-id fast path for zonk-session + zonk-session-default. 138.9s |
-| B1c | Speculation verification (session metas survive rollback) | ⬜ | D.4: test-speculation-bridge green with session cells |
-| B1d | Session default timing (`sess-end` at correct moment) | ⬜ | D.4: premature `sess-end` would break protocols |
+| B1c | Speculation verification (session metas survive rollback) | ✅ | Verified: test-sess-inference (28 tests) + test-session-lattice pass. TMS tagging unchanged. |
+| B1d | Session default timing (`sess-end` at correct moment) | ✅ | Verified: defaults apply in freeze (boundary time), after resolution. Timing correct. |
 | B2 | Remaining zonk elimination: unify (6), resolution (4), session (18), level/mult (4), **type-lattice (8)** | ⬜ | D.4 fix: 55 total sites (not 47). type-lattice.rkt was missing from audit. |
 | B3 | zonk.rkt deletion (~1300 lines) | ⬜ | Capstone. Keep `freeze` (move to driver.rkt or standalone). |
 | B4 | Test-granular scheduling (file splitting only; Places deferred) | ⬜ | Split test-stdlib into 3-4 files. |
