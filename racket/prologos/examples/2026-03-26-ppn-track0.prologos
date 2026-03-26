@@ -1,0 +1,563 @@
+;; PPN Track 0: Parse Domain Lattice Design — Acceptance File
+;; Run with: process-file "examples/2026-03-26-ppn-track0.prologos"
+;;
+;; PURPOSE: Stress-test EVERY syntax form and composition the language supports.
+;; PPN Track 0 defines lattices for parsing — it doesn't change any pipeline code.
+;; This file establishes a BASELINE of what works and what breaks, so that
+;; Tracks 1-4 (which DO change the pipeline) can detect regressions.
+;;
+;; STRATEGY:
+;; 1. Ideal syntax written first — the way we THINK things should work
+;; 2. If it doesn't work, commented out with [BROKEN: reason]
+;; 3. Working alternative below the commented version
+;; 4. Every toplevel form from the grammar is exercised
+;; 5. Compositions and edge cases designed to BREAK the language
+;;
+;; The gap between ideal and working IS the PPN Track 7 motivation:
+;; user-defined grammar extensions that fix these gaps.
+
+;; ===================================================================
+;; Section 1: Basic type inference + arithmetic
+;; ===================================================================
+ns ppn-s1
+
+;; Simple inference
+def a := 42
+def b := [int+ a 10]
+def c := [int* a b]
+
+;; Nat arithmetic (inductive)
+def n := 3N
+def m := [suc [suc 0N]]
+
+;; Bool operators — nested
+def p := [and true [or false [not true]]]
+
+;; String operations
+def greeting := "hello world"
+def upper := [str::to-upper greeting]
+def len := [str::length greeting]
+
+;; Generic arithmetic via traits
+[+ 3 4]
+[* 5 6]
+[- 10 3]
+
+;; Pipeline operator
+|> 5 [fn [x : Int] [int+ x 1]] [fn [x : Int] [int* x 2]]
+
+
+;; ===================================================================
+;; Section 2: Collections — lists, maps, sets, pvecs
+;; ===================================================================
+ns ppn-s2
+
+;; List literals and operations
+def xs := '[1 2 3 4 5]
+def ys := [map [fn [x : Int] [int+ x 10]] xs]
+[length ys]
+[head xs]
+[tail xs]
+;; IDEAL: [filter [fn [x : Int] [int> x 2]] xs]
+;; [BROKEN: > in identifier parsed as angle-bracket close — PPN Track 1 lexer issue]
+[filter [fn [x : Int] [int-gt x 2]] xs]
+[foldr [fn [x : Int] [acc : Int] [int+ x acc]] 0 xs]
+
+;; Partial application (preferred over lambda)
+def doubled := [map [int* _ 2] xs]
+
+;; Map literals and access
+def m := {:name "alice" :age 42}
+m.name
+m.age
+
+;; Set operations
+def s := [set-from-list '[1 2 3 2 1]]
+
+;; PVec operations
+;; IDEAL: def pv := #[10 20 30]  ;; [BROKEN: #[ not a recognized reader macro — no PVec literal syntax]
+;; Workaround: pvec-from-list-fn
+def pv := [pvec-from-list-fn '[10 20 30]]
+
+
+;; ===================================================================
+;; Section 3: Polymorphic functions + implicit arguments
+;; ===================================================================
+ns ppn-s3
+
+;; Explicit spec + defn with implicit type parameter
+spec my-id {A : Type} A -> A
+defn my-id [x] x
+[my-id 42]
+[my-id "hello"]
+[my-id true]
+
+;; Multi-argument polymorphic
+spec my-const {A B : Type} A -> B -> A
+defn my-const [x y] x
+[my-const 42 "ignored"]
+
+;; Higher-order: function as argument
+spec apply-twice {A : Type} [A -> A] -> A -> A
+defn apply-twice [f x] [f [f x]]
+[apply-twice [fn [x : Int] [int+ x 1]] 10]
+
+;; IDEAL: uncurried partial application
+;; [apply-twice [int+ _ 1] 10]  ;; [BROKEN: partial application of int+ needs explicit lambda wrapper]
+[apply-twice [fn [x : Int] [int+ x 1]] 10]
+
+
+;; ===================================================================
+;; Section 4: Pattern matching — multi-arity defn
+;; ===================================================================
+ns ppn-s4
+
+;; Multi-arity defn (preferred over match)
+spec is-zero Nat -> Bool
+defn is-zero
+  | zero    -> true
+  | [suc _] -> false
+[is-zero 0N]
+[is-zero 3N]
+
+;; Nested patterns
+spec list-head-or-default {A : Type} [List A] -> A -> A
+defn list-head-or-default
+  | [cons h _] _ -> h
+  | nil        d -> d
+[list-head-or-default '[1 2 3] 0]
+[list-head-or-default nil 99]
+
+;; IDEAL: deep nested pattern
+;; spec deep-match [List [List Int]] -> Int
+;; defn deep-match
+;;   | [cons [cons x _] _] -> x
+;;   | _                   -> 0
+;; [BROKEN?: nested list-of-list pattern — test if this works]
+;; [deep-match '['[10 20] '[30 40]]]
+
+;; Boolean match (prefer multi-arity over if)
+spec negate Bool -> Bool
+defn negate
+  | true  -> false
+  | false -> true
+[negate true]
+
+
+;; ===================================================================
+;; Section 5: Traits + impl + bundles
+;; ===================================================================
+ns ppn-s5
+
+;; Define a trait
+;; BROKEN: user-defined trait + impl crashes zonk (trait dict hash not handled in zonk match)
+;; trait Describable {A}
+;;   describe : A -> String
+;; impl Describable Int
+;;   defn describe [x] [str::concat "Int: " [str::from-int x]]
+;; impl Describable Bool
+;;   defn describe
+;;     | true  -> "Bool: true"
+;;     | false -> "Bool: false"
+;; [describe 42]
+;; [describe true]
+;; [BROKEN: zonk.rkt:49 — match fails on trait dict hash]
+
+;; IDEAL: bundle Printable := (Eq)  ;; [BROKEN: same zonk crash on prelude trait dict]
+
+;; IDEAL: trait with :where constraints
+;; trait Container {C : Type -> Type} {A : Type}
+;;   :where [Eq A]
+;;   spec contains [C A] -> A -> Bool
+;; [BROKEN?: HKT trait with :where — test if constraint propagates]
+
+
+;; ===================================================================
+;; Section 6: Data types — algebraic, with inference
+;; ===================================================================
+ns ppn-s6
+
+;; Simple sum type
+data Color := red | green | blue
+
+;; Product type
+data Point := point [x : Int] [y : Int]
+def origin := [point 0 0]
+def p := [point 3 4]
+
+;; IDEAL: pattern match on data type
+;; spec color-name Color -> String
+;; defn color-name
+;;   | red   -> "red"
+;;   | green -> "green"
+;;   | blue  -> "blue"
+;; [color-name red]
+
+;; Recursive data type
+data Tree := leaf | node [val : Int] [left : Tree] [right : Tree]
+def t := [node 1 [node 2 leaf leaf] [node 3 leaf leaf]]
+
+;; IDEAL: tree fold
+;; spec tree-sum Tree -> Int
+;; defn tree-sum
+;;   | leaf           -> 0
+;;   | [node v l r]   -> [int+ v [int+ [tree-sum l] [tree-sum r]]]
+;; [tree-sum t]
+
+
+;; ===================================================================
+;; Section 7: Module imports + qualified access
+;; ===================================================================
+ns ppn-s7
+
+;; Standard prelude is auto-imported
+[length '[1 2 3]]
+[head '[10 20 30]]
+
+;; Qualified module access
+[str::length "hello"]
+[char::code 'A']
+
+;; IDEAL: selective import
+;; (imports [prologos::data::nat :as nat :refer [zero?]])
+;; [zero? 0N]
+
+
+;; ===================================================================
+;; Section 8: Higher-order functions + closures
+;; ===================================================================
+ns ppn-s8
+
+;; Function returning function
+spec make-adder Int -> [Int -> Int]
+defn make-adder [n]
+  [fn [x : Int] [int+ n x]]
+
+def add5 := [make-adder 5]
+[add5 10]
+[add5 20]
+
+;; Function composition
+def inc := [fn [x : Int] [int+ x 1]]
+def dbl := [fn [x : Int] [int* x 2]]
+|> 5 inc dbl inc
+
+;; IDEAL: compose operator
+;; def inc-then-dbl := [compose dbl inc]
+;; [inc-then-dbl 5]  ;; (5+1)*2 = 12
+
+
+;; ===================================================================
+;; Section 9: Option + Result — monadic-style chaining
+;; ===================================================================
+ns ppn-s9
+
+def x := [some 42]
+def y := none
+
+;; Option operations
+[some? x]
+[none? y]
+
+;; IDEAL: option chaining / map
+;; [opt::map [int+ _ 1] x]  ;; some 43
+;; [opt::map [int+ _ 1] y]  ;; none
+
+;; Result
+def ok-val := [ok 42]
+def err-val := [err "something went wrong"]
+[ok? ok-val]
+[err? err-val]
+
+
+;; ===================================================================
+;; Section 10: Subtyping — numeric hierarchy
+;; ===================================================================
+ns ppn-s10
+
+;; Subtype relationships
+;; Int <: Rat should hold
+def i := 42
+def r := 3/4
+
+;; IDEAL: implicit coercion
+;; spec add-rat Rat -> Rat -> Rat
+;; defn add-rat [x y] [rat+ x y]
+;; [add-rat 42 3/4]  ;; [BROKEN?: implicit Int->Rat coercion]
+
+
+;; ===================================================================
+;; Section 11: Dependent types — basic Pi/Sigma
+;; ===================================================================
+ns ppn-s11
+
+;; Dependent pair (Sigma)
+;; IDEAL: Sigma type
+;; def pair := (the <(x : Int) * [x > 0]> (3, refl))
+;; [BROKEN?: Sigma type syntax in WS mode]
+
+;; Universe levels
+def ty := (the [Type 0] Int)
+
+
+;; ===================================================================
+;; Section 12: Eq proofs — equality type
+;; ===================================================================
+ns ppn-s12
+
+;; Reflexivity
+def p := (the [Eq Int 42 42] refl)
+
+;; Symmetry
+def q := [sym p]
+
+;; Transitivity
+def r := [trans p q]
+
+
+;; ===================================================================
+;; Section 13: Quote + quasiquote — code as data
+;; ===================================================================
+ns ppn-s13
+
+;; Quote — produces Datum values
+def d := '(hello world)
+def e := '42
+def f := '(+ 1 2)
+
+;; IDEAL: quasiquote with unquote
+;; def g := `(result is ,(the Int 42))
+;; [BROKEN?: quasiquote WS syntax]
+
+
+;; ===================================================================
+;; Section 14: String operations — char, string, interpolation
+;; ===================================================================
+ns ppn-s14
+
+def s := "hello"
+[str::length s]
+[str::to-upper s]
+[str::concat s " world"]
+
+;; Char operations
+def ch := 'A'
+[char::code ch]
+
+;; IDEAL: string interpolation
+;; def name := "world"
+;; def greeting := "hello ${name}"  ;; [BROKEN?: string interpolation syntax]
+
+
+;; ===================================================================
+;; Section 15: Dot access — map keys
+;; ===================================================================
+ns ppn-s15
+
+def user := {:name "alice" :age 30 :active true}
+user.name
+user.age
+user.active
+
+;; Nested dot access
+def org := {:lead {:name "bob" :role "cto"}}
+;; IDEAL: org.lead.name  ;; [BROKEN?: nested dot access chain]
+
+
+;; ===================================================================
+;; Section 16: Pipeline + partial application
+;; ===================================================================
+ns ppn-s16
+
+;; Pipeline
+|> '[1 2 3 4 5]
+   [map [int* _ 2]]
+   [filter [fn [x : Int] [int-gt x 4]]]
+   length
+
+;; IDEAL: longer pipeline with mixed operations
+;; |> "hello world"
+;;    str::to-upper
+;;    str::length
+;; [BROKEN?: pipeline with qualified module functions]
+
+
+;; ===================================================================
+;; Section 17: Multi-body defn — complex dispatch
+;; ===================================================================
+ns ppn-s17
+
+spec fib Int -> Int
+defn fib
+  | 0 -> 0
+  | 1 -> 1
+  | n -> [int+ [fib [int- n 1]] [fib [int- n 2]]]
+[fib 10]
+
+;; IDEAL: multi-argument multi-body
+;; spec zip-with {A B C : Type} [A -> B -> C] -> [List A] -> [List B] -> [List C]
+;; defn zip-with
+;;   | f [cons a as] [cons b bs] -> [cons [f a b] [zip-with f as bs]]
+;;   | _ _           _           -> nil
+;; [zip-with [int+ _ _] '[1 2 3] '[10 20 30]]
+
+
+;; ===================================================================
+;; Section 18: Let expressions
+;; ===================================================================
+ns ppn-s18
+
+;; IDEAL: let binding
+;; let x := 10
+;; let y := [int+ x 5]
+;; [int* x y]
+
+;; What works: def at top level
+def x := 10
+def y := [int+ x 5]
+[int* x y]
+
+
+;; ===================================================================
+;; Section 19: Cond / when / do — control flow
+;; ===================================================================
+ns ppn-s19
+
+;; IDEAL: cond expression
+;; cond
+;;   | [int-gt 5 3] -> "greater"
+;;   | [int= 5 3] -> "equal"
+;;   | true       -> "less"
+
+;; IDEAL: when
+;; when true "yes"
+
+;; What works: pattern match on bool
+(match true | true -> "yes" | false -> "no")
+
+
+;; ===================================================================
+;; Section 20: QTT multiplicities
+;; ===================================================================
+ns ppn-s20
+
+;; Linear function (multiplicity 1)
+spec use-once {:1 A : Type} A -> A
+defn use-once [x] x
+[use-once 42]
+
+;; Erased (multiplicity 0)
+spec erased-arg {:0 A : Type} A -> Int
+defn erased-arg [_] 42
+[erased-arg "this is erased"]
+
+
+;; ===================================================================
+;; Section 21: Session types
+;; ===================================================================
+ns ppn-s21
+
+;; IDEAL: session protocol
+;; session Adder
+;;   Send Int
+;;   Send Int
+;;   Recv Int
+;;   End
+
+;; IDEAL: process implementing session
+;; defproc adder-server : Adder
+;;   [recv x]
+;;   [recv y]
+;;   [send [int+ x y]]
+
+;; [BROKEN?: session/defproc WS syntax — these are parsed-only forms]
+
+
+;; ===================================================================
+;; Section 22: Union types
+;; ===================================================================
+ns ppn-s22
+
+;; Union type annotation
+def u := (the <Int | String> 42)
+def v := (the <Int | String> "hello")
+
+;; IDEAL: match on union
+;; spec show-union <Int | String> -> String
+;; defn show-union
+;;   | (x : Int)    -> [str::from-int x]
+;;   | (s : String) -> s
+;; [show-union u]
+
+
+;; ===================================================================
+;; Section 23: Transducers
+;; ===================================================================
+ns ppn-s23
+
+;; Transducer application
+|> '[1 2 3 4 5 6 7 8 9 10]
+   [filter [fn [x : Int] [int-gt x 3]]]
+   [map [int* _ 2]]
+   [take 3]
+
+
+;; ===================================================================
+;; Section 24: Foreign interop
+;; ===================================================================
+ns ppn-s24
+
+;; Foreign functions are auto-imported via prelude
+[str::length "hello"]            ;; calls Racket string-length
+[char::code 'A']                 ;; calls Racket char->integer
+[int+ 1 2]                       ;; calls Racket +
+
+
+;; ===================================================================
+;; Section 25: Edge cases — syntax stress tests
+;; ===================================================================
+ns ppn-s25
+
+;; Deeply nested application
+[int+ [int+ [int+ 1 2] [int+ 3 4]] [int+ [int+ 5 6] [int+ 7 8]]]
+
+;; Empty list
+def empty := (the [List Int] nil)
+[length empty]
+
+;; Single-element list
+def single := '[42]
+[head single]
+
+;; Keyword as identifier — should these work?
+;; def def := 42           ;; [BROKEN: def is a keyword]
+;; def spec := "hello"     ;; [BROKEN: spec is a keyword]
+
+;; Identifiers with special characters
+def x-plus-y := [int+ 1 2]
+def is-valid? := true
+
+;; IDEAL: identifiers with >
+;; def gt> := [int-gt 5 3]   ;; [BROKEN?: > in identifier name]
+
+;; Nat literal edge cases
+def zero-nat := 0N
+def big-nat := 999N
+
+;; Negative int
+def neg := [int- 0 42]
+
+;; IDEAL: negative literal
+;; def neg2 := -42          ;; [BROKEN?: negative literal syntax]
+
+;; Unicode identifier
+;; def nombre := 42         ;; ASCII fallback
+;; IDEAL: def φ := 3.14    ;; [BROKEN?: Unicode identifier]
+
+;; Very long pipeline
+|> 1
+   [fn [x : Int] [int+ x 1]]
+   [fn [x : Int] [int* x 2]]
+   [fn [x : Int] [int+ x 3]]
+   [fn [x : Int] [int* x 4]]
+   [fn [x : Int] [int+ x 5]]
