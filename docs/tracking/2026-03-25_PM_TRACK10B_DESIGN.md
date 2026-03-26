@@ -3,7 +3,7 @@
 **Stage**: 3 (Design)
 **Date**: 2026-03-25
 **Series**: Propagator Migration
-**Status**: Design D.2 (Pre-0 benchmarks incorporated)
+**Status**: Design D.3 (Self-critique: 7 findings, 4 actions)
 
 **Prerequisites**:
 - PM Track 10 ✅ (`.pnet` cache, fork model, `#lang` dropped, 133.5s suite)
@@ -157,11 +157,17 @@ the meta ID (not the expr-meta struct).
 add the cell-id to their call context. Then remove `current-prop-id-map-box`
 and `prop-meta-id->cell-id`.
 
+**D.3 finding**: `hasmethod-constraint-info-dict-meta-id` (metavar-store.rkt:625)
+stores a bare meta ID symbol, not an `expr-meta` struct. This is a genuine id-map
+dependency. Fix: add `dict-meta-cell-id` field to `hasmethod-constraint-info` struct,
+populated at constraint creation time from the `expr-meta.cell-id`.
+
 **Deliverables**:
-1. All meta reads go through `meta-solution/cell-id` (not id-map)
-2. `current-prop-id-map-box` parameter removed
-3. `prop-meta-id->cell-id` function removed
-4. Full suite green
+1. Add `cell-id` to `hasmethod-constraint-info` struct
+2. All meta reads go through `meta-solution/cell-id` (not id-map)
+3. `current-prop-id-map-box` parameter removed
+4. `prop-meta-id->cell-id` function removed
+5. Full suite green
 
 ### 2.4 Phase A4: Batch worker simplification
 
@@ -409,10 +415,51 @@ before writing. The PIR must:
 - **A1**: CHAMP fallback removal means the system CAN'T fall back to the old path. The new path is the ONLY path — correctness by elimination of alternatives.
 - **B0**: Scoping audit ensures boxes don't leak. Leaks are structural impossibilities, not runtime checks.
 
-### Challenge: What could go wrong?
-- **A1 risk**: Some `with-fresh-meta-env` callers may depend on box=#f behavior (e.g., checking "am I in a meta context?" by testing the box). Need to audit for this pattern.
-- **A5 risk**: PUnify parity bugs may indicate deeper issues than simple missing cases. The 5 known bugs (head, map, Pair, match, Vec) span diverse features.
-- **B2 risk**: The unify.rkt infinite loop (PM 8F Phase 3) showed that `zonk` and cell reads are NOT always interchangeable — identity preservation matters. Each of the 23 replacement sites needs individual verification.
+### Challenge: What could go wrong? (D.3 Self-Critique)
+
+**A1 — `(not (current-prop-net-box))` sentinel in driver.rkt (CONFIRMED)**:
+Lines 1390, 1437, 1482 in driver.rkt check `(if (not (current-prop-net-box)) ...)`
+to decide whether to create a network. This was Track 10 Phase 3d's defense-in-depth.
+After A1 makes networks always-available, these checks become dead code. **Action**:
+remove the sentinel checks in A1. They're defense-in-depth that A1 renders unnecessary.
+
+**A2 — Default timing unspecified**:
+"After S2 commit" is vague. Defaults must apply after EACH COMMAND's resolution loop
+(not after the entire module). A level meta unsolved after one command's S2 should be
+defaulted before the next command sees it. **Action**: specify "defaults apply in
+`process-command`'s post-resolution cleanup, before `freeze`."
+
+**A3 — `hasmethod-constraint-info` has bare meta ID, no cell-id (CONFIRMED)**:
+`hasmethod-constraint-info-dict-meta-id` stores a bare symbol ID, not an `expr-meta`
+struct. Line 625-626 of metavar-store.rkt calls `prop-meta-id->cell-id` on it — this
+is a genuine id-map dependency that can't be eliminated by just reading `expr-meta.cell-id`.
+**Action**: A3 must add `cell-id` to `hasmethod-constraint-info` struct (set at creation
+time when the expr-meta is available), or look up cell-id from the expr-meta when creating
+the constraint. Without this fix, the id-map cannot be fully eliminated.
+
+**A3 — Deserialized cell-ids and current network**:
+Deserialized `.pnet` cell-ids were assigned during original elaboration. For PRELUDE modules
+(loaded once, frozen), this is correct — the cell-ids are stable. For re-elaborated modules
+(staleness triggered), new cell-ids are assigned. This is handled by the staleness check:
+stale modules re-elaborate, getting fresh cell-ids. **Status**: already handled.
+
+**A5 — PUnify parity bugs deferred AGAIN = process smell**:
+The 5 known bugs (head, map, Pair, match, Vec) have been deferred since March 19 — over
+a week. Our own workflow rule says: "Pre-existing issue is a process smell. If cost >30
+minutes/session in workarounds, escalate." PUnify toggle is blocking the full propagator-
+first vision. **Action**: strengthen A5 — commit to FIXING the 5 bugs (not just classifying
+and deferring). If they can't be fixed in A5's scope, document WHY and create a dedicated
+PUnify Track with a design doc.
+
+**B3 — No stored zonk references (CONFIRMED SAFE)**:
+Grep confirmed all zonk usage is direct calls, not callbacks or stored references.
+Deletion produces compile-time errors for any missed sites. Correct-by-construction.
+
+**B6 — Comprehensive parameter audit needed**:
+The design lists known instrumentation params, but the lesson from Track 10 Phase 2 is:
+"audit ALL, don't list known items." **Action**: B6 should grep ALL `make-parameter`
+definitions and classify each as: core state, instrumentation, or dead. Don't rely on
+known items list — find everything.
 
 ## 7. NTT Speculative Syntax
 
