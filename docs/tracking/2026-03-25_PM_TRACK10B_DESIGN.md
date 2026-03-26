@@ -3,7 +3,7 @@
 **Stage**: 3 (Design)
 **Date**: 2026-03-25
 **Series**: Propagator Migration
-**Status**: Design D.3 (Self-critique: 7 findings, 4 actions)
+**Status**: Design D.4 (External critique: 12 recommendations incorporated)
 
 **Prerequisites**:
 - PM Track 10 ✅ (`.pnet` cache, fork model, `#lang` dropped, 133.5s suite)
@@ -25,23 +25,28 @@
 |-------|-------------|--------|-------|
 | **WS-A: Foundation Cleanup** | | | |
 | A0 | Pre-0 benchmarks | ✅ | `aabb664` — see §Pre-0 Findings |
-| A1 | `with-fresh-meta-env` creates network. Remove CHAMP fallback (~36 sites) | ⬜ | Foundation for all subsequent phases |
-| A2 | `zonk-final` → `freeze` (7 sites) + `default-metas` at solve-time (17 sites) | ⬜ | Absorbs PM 8F deferred Phase 5 |
-| A3 | id-map elimination (18 sites) | ⬜ | All callers use `expr-meta.cell-id` |
-| A4 | Batch worker simplification (11→4 saved values) | ⬜ | `.pnet` + fork makes snapshot redundant |
-| A5 | PUnify toggle flip validation | ⬜ | REPL fix unblocked this; 5 known parity bugs |
-| A6 | A/B benchmark comparison (WS-A before/after) | ⬜ | Compare against Pre-0 baselines: CHAMP fallback=0, id-map=0, zonk-final=0 |
+| A0b | Acceptance file (.prologos) | ⬜ | Per workflow: acceptance file before implementation |
+| A1 | `with-fresh-meta-env` creates network. Remove CHAMP fallback (~36 sites) | ⬜ | Foundation. Grep for `(not (current-prop-net-box))` sentinels. Empty CHAMP = reads return #f. |
+| A2 | `zonk-final` → `freeze` (7 sites) + `default-metas` at solve-time (17 sites) | ⬜ | Defaults apply per-command post-resolution, before freeze. Defaults propagate to cells. |
+| A3 | id-map elimination (18 sites). Add cell-id to `hasmethod-constraint-info`. | ⬜ | D.3 finding: bare meta ID at line 625. Must fix struct before id-map removal. |
+| A3b | process-string scoping audit (74 high-risk `set-box!` sites) | ⬜ | Moved from B0 (D.4): must precede A4 to prevent masking leaks under fork model |
+| A4 | Batch worker simplification (11→6 saved values) | ⬜ | D.4 fix: 6 not 4. Specify new batch worker structure (not just "delete and hope"). |
+| A5 | PUnify toggle flip validation | ⬜ | Runs AFTER A4 (tests against final WS-A state, not mid-migration). |
+| A6 | A/B benchmark comparison (WS-A before/after) | ⬜ | Compare against Pre-0 baselines. See §A6 table. |
 | A7 | Verification (full suite green) | ⬜ | |
-| **WS-B: Zonk Elimination + Scheduling** | | | |
-| B0 | process-string scoping audit (74 high-risk `set-box!` sites) | ⬜ | Must precede B4 (changed isolation semantics) |
-| B1 | Session meta migration (`current-sess-meta-store` hasheq → cells) | ⬜ | Enables session zonk elimination |
-| B2 | Remaining zonk elimination: type (6), resolution (4), session (18), level/mult (4) | ⬜ | Cell reads replace tree walks |
-| B3 | zonk.rkt deletion (~1300 lines) | ⬜ | Capstone: largest code deletion in codebase |
-| B4 | Test-granular scheduling (file splitting + deferred Places) | ⬜ | Split test-stdlib; Places deferred to 10B design cycle 2 |
-| B5 | A/B benchmark comparison (WS-B before/after) | ⬜ | Compare: zonk calls=0, zonk.rkt deleted, session metas on cells |
-| B6 | Instrumentation cleanup | ⬜ | Remove Track 10 + Track 1 leftover counters (see §B6) |
+| **WS-B: Zonk Elimination** | | | |
+| B0 | zonk-at-depth call-count measurement (1-hour timebox) | ⬜ | Characterize: how many calls per suite? Justifies <125s target. |
+| B1a | Session meta cell infrastructure (`fresh-sess-meta` creates cells) | ⬜ | D.4: split B1 into sub-phases |
+| B1b | Session meta read migration (`sess-meta-solution` reads cells) | ⬜ | |
+| B1c | Speculation verification (session metas survive rollback) | ⬜ | D.4: test-speculation-bridge green with session cells |
+| B1d | Session default timing (`sess-end` at correct moment) | ⬜ | D.4: premature `sess-end` would break protocols |
+| B2 | Remaining zonk elimination: unify (6), resolution (4), session (18), level/mult (4), **type-lattice (8)** | ⬜ | D.4 fix: 55 total sites (not 47). type-lattice.rkt was missing from audit. |
+| B3 | zonk.rkt deletion (~1300 lines) | ⬜ | Capstone. Keep `freeze` (move to driver.rkt or standalone). |
+| B4 | Test-granular scheduling (file splitting only; Places deferred) | ⬜ | Split test-stdlib into 3-4 files. |
+| B5 | A/B benchmark comparison (WS-B before/after) | ⬜ | Compare: zonk calls=0, zonk.rkt deleted, session metas on cells. See §B5 table. |
+| B6 | Instrumentation cleanup | ⬜ | Comprehensive `make-parameter` audit. Gate subtype counter behind #f. Decide perf-counters.rkt survival. Archive/delete dead benchmark files. |
 | B7 | Verification (full suite green) | ⬜ | |
-| B8 | PIR (per methodology) | ⬜ | Consult PIR methodology first. Cross-reference Track 10, 8F, SRE PIRs. |
+| B8 | PIR (per methodology, own phase) | ⬜ | Consult PIR methodology. Cross-ref Track 10, 8F, SRE PIRs. Include A6+B5 tables. |
 
 ## 1. Vision
 
@@ -368,33 +373,44 @@ before writing. The PIR must:
 
 | Metric | Track 10 result | WS-A target | WS-B target |
 |--------|----------------|-------------|-------------|
-| Suite wall time | 133.5s | <130s | <120s |
-| `zonk` call count | 47 | 0 boundary + 23 elab | 0 total |
+| Suite wall time | 133.5s | ≤ 134s (no regression) | ≤ 125s (pending call-count justification from B0) |
+| `zonk` call count | 55 (revised) | 0 boundary + 31 elab | 0 total |
 | CHAMP fallback sites | 36 | 0 | 0 |
 | id-map sites | 18 | 0 | 0 |
-| Batch worker params | 11 | 4 | 4 |
+| Batch worker params | 11 | 6 (D.4 fix) | 6 |
 | zonk.rkt lines | ~1300 | ~1300 (still present) | 0 (deleted) |
+| Leaked box params | unknown | 0 (A3b audit) | 0 |
+| Session metas | mutable hasheq | mutable hasheq | cells |
+
+**Note on targets** (D.4): WS-A value is architectural (code elimination), not
+performance — per-operation costs are 1-100ns. The ≤134s target means "no
+regression." WS-B's ≤125s depends on zonk call frequency in the suite — B0's
+call-count measurement will validate or adjust this target.
 
 ## 5. Completion Criteria
 
 ### WS-A Complete When:
 1. ✅ Zero CHAMP fallback code in metavar-store.rkt
 2. ✅ Zero `zonk-final` calls (all → `freeze`)
-3. ✅ Zero id-map lookups (all via `expr-meta.cell-id`)
-4. ✅ Batch worker uses fork, not 19-registry snapshot
-5. ✅ PUnify toggle flip attempted and results documented
-6. ✅ Full suite green (376/376)
-7. ✅ Suite wall time < 130s
-8. ✅ A/B benchmarks compared against Track 10 baselines
+3. ✅ Zero id-map lookups (all via `expr-meta.cell-id`); `hasmethod-constraint-info` has cell-id
+4. ✅ process-string scoping audit: all HIGH-risk `set-box!` sites classified; all identified leaks fixed with regression tests
+5. ✅ Batch worker uses fork, not 19-registry snapshot (11→6 saved values)
+6. ✅ PUnify toggle ON with zero failures, OR documented gap analysis with dedicated PUnify track + tracking reference
+7. ✅ Full suite green (376/376)
+8. ✅ Suite wall time ≤ 134s (no regression), no single-file regression > 2× median
+9. ✅ A/B benchmarks compared against Pre-0 baselines
+10. ✅ Acceptance file passes at Level 3
 
 ### WS-B Complete When:
 1. ✅ Session metas on propagator network cells
-2. ✅ Zero `zonk` / `zonk-at-depth` / `zonk-session` / `zonk-level` / `zonk-mult` calls
-3. ✅ zonk.rkt deleted (except `freeze`)
-4. ✅ process-string scoping audit: zero leaked boxes
-5. ✅ Full suite green
-6. ✅ Suite wall time < 120s
-7. ✅ PIR written per methodology
+2. ✅ Speculation tests green with session metas on cells (test-speculation-bridge + test-sess-inference)
+3. ✅ Zero `zonk` / `zonk-at-depth` / `zonk-session` / `zonk-level` / `zonk-mult` calls (55 sites)
+4. ✅ zonk.rkt deleted (except `freeze`, moved to standalone module)
+5. ✅ Instrumentation cleanup: dead counters removed, active counters gated behind `#f`
+6. ✅ Full suite green
+7. ✅ Suite wall time ≤ 125s (or justified deviation from B0 call-count data)
+8. ✅ A/B benchmarks (B5) compared against A6 baselines
+9. ✅ PIR written per methodology (separate phase B8)
 
 ## 6. Principles Alignment
 
@@ -460,6 +476,30 @@ The design lists known instrumentation params, but the lesson from Track 10 Phas
 "audit ALL, don't list known items." **Action**: B6 should grep ALL `make-parameter`
 definitions and classify each as: core state, instrumentation, or dead. Don't rely on
 known items list — find everything.
+
+### D.4 External Critique Response
+
+12 recommendations received. 10 accepted, 1 partially accepted, 1 pushed back.
+
+| # | Recommendation | Action |
+|---|---------------|--------|
+| 1 | Batch worker count: 6 not 4 | **Accept**: fixed in tracker + A4 |
+| 2 | Move B0 before A4 | **Accept**: moved to A3b |
+| 3 | Move A5 after A4 | **Accept**: tests against final WS-A state |
+| 4 | Split B1 into sub-phases | **Accept**: B1a-B1d (cell infra, reads, speculation, defaults) |
+| 5 | type-lattice.rkt 8 zonk sites | **Accept**: B2 scope expanded to 55 sites |
+| 6 | zonk-at-depth investigation timebox | **Accept**: B0 call-count measurement |
+| 7 | Firm instrumentation commitments | **Accept**: gate behind #f, decide perf-counters |
+| 8 | Revise performance targets | **Accept**: ≤134s (WS-A), ≤125s (WS-B pending B0) |
+| 9 | Strengthen criteria | **Accept**: outcome-based A5, speculation for B1, tolerance |
+| 10 | Acceptance file | **Accept**: A0b added |
+| 11 | Specify batch worker structure | **Accept**: A4 deliverables expanded |
+| 12 | .pnet stale reference risk | **Push back**: box indirection handles this (Track 10 Phase 3d verified) |
+
+**Code verification** (D.4):
+- `type-lattice.rkt` has 8 `zonk-at-depth 1` sites in merge function — CONFIRMED
+- `zonk-at-depth` has NO side effects beyond tree-walking + `shift` — CONFIRMED
+- All zonk usage is direct calls, no stored references — CONFIRMED (D.3)
 
 ## 7. NTT Speculative Syntax
 
