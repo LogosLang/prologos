@@ -133,7 +133,23 @@ For nat.prologos (130 lines, 491 tokens, ~4000 chars):
 | Structure (tree) | M-type value cell | 1 | ~1.4 μs |
 | **Total** | **5 cells, 4 RRBs** | **5** | **~119 μs** |
 
-Current reader: 460 μs. New reader (estimated): **~119 μs. 4× FASTER.**
+Current reader: 460 μs. New reader (estimated): **~306 μs. 1.5× faster.**
+
+**D.8 correction**: The 119 μs (D.7) estimate excluded propagator FIRE
+FUNCTION costs. The tree-builder propagator reads indent RRB (O(n)) and
+computes parent assignments — this IS computation, not just cell creation.
+Benchmarked: tree builder = 4.5 μs/200 lines, 102 μs/4000 lines. Token
+classification = ~182 μs (491 tokens × 370 ns). Adding fire function
+costs gives ~306 μs — still 1.5× faster than the current reader (460 μs),
+with incremental-ready architecture.
+
+**Parallelization potential**: The tree-builder's O(n) fire function is
+a PREFIX SCAN over indent levels (associative monoid action: push/pop/
+sibling). Parallel prefix scan (Blelloch 1990): O(n/p + log n) on p
+processors. For 4000 lines on 10 processors: ~8 μs vs 102 μs sequential
+(12× speedup). This requires BSP-LE's parallel scheduler with
+topological-sort rounds — Track 1 implements sequential, future tracks
+parallelize without changing the propagator interface.
 
 **The entire parse state in 5 cells.** Each sequential domain (characters,
 tokens, indent levels, bracket depths) is an RRB embedded cell. The tree
