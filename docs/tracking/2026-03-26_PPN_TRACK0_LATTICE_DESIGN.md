@@ -3,7 +3,12 @@
 **Stage**: 3 (Design)
 **Date**: 2026-03-26
 **Series**: PPN (Propagator-Parsing-Network)
-**Status**: D.1 — initial design, pending critique
+**Status**: D.2 — revised from discussion. Key changes: bilattice deferred
+to Track 5 (WF-LE pattern: build lfp first, add gfp later). SurfaceToDemand
+removed (demand is Right Kan inter-strata exchange, not inter-domain bridge).
+Dependency ordering clarified (propagator wiring, not lattice structure).
+Indent handling clarified (lexer state, not lattice). One-way bridges
+distinguished from exchanges.
 
 **Prerequisite**: SRE Track 0 ✅ (form registry — rewrite rule infrastructure)
 **Enables**: PPN Track 1 (lexer), Track 2 (surface normalization), Track 3 (parser)
@@ -26,9 +31,9 @@
 | Pre-0 | Microbenchmarks: current pipeline stage costs | ⬜ | Measure: reader, preparse, parse, elaborate per-form |
 | 0 | Acceptance file: parse lattice exerciser | ⬜ | Exercises each lattice domain with known-ambiguous forms |
 | 1 | Token lattice + IndentState struct | ⬜ | `token-cell.rkt`: lattice struct, merge, bot/top |
-| 2 | Surface bilattice (per-item cells) | ⬜ | `parse-cell.rkt`: SPPF node, derivation/elimination orderings |
-| 3 | Demand lattice | ⬜ | `demand-cell.rkt`: Position × Domain demands |
-| 4 | Bridge specifications (6 bridges) | ⬜ | α/γ for each domain pair |
+| 2 | Surface lattice (per-item cells, derivation-only) | ⬜ | `parse-cell.rkt`: SPPF node, derivation ordering. Elimination deferred to Track 5. |
+| 3 | Demand lattice | ⬜ | `demand-cell.rkt`: domain-typed Position demands |
+| 4 | Bridges (3) + Exchange specs (2) + Projection (1) | ⬜ | Bridges within strata, exchanges across strata |
 | 5 | NTT speculative syntax | ⬜ | Each lattice + bridge in NTT syntax |
 | 6 | Small integration test (hand-constructed network) | ⬜ | Parse `def x : Int := 42` through lattice cells |
 | 7 | A/B benchmarks + verification | ⬜ | Compare lattice operations against current pipeline |
@@ -118,11 +123,12 @@ indentation-sensitivity and context-sensitive disambiguation.
   classification. The lattice is simple (height 3) with ATMS for edge
   cases.
 
-### 2.3 Surface Bilattice (L_surface)
+### 2.3 Surface Lattice (L_surface)
 
-**Purpose**: Represent parse state as a bilattice combining derivation
-(what's parsed) and elimination (what's impossible). Cells are PER-ITEM
-(one per Earley item), not per-span.
+**Purpose**: Represent parse state as a derivation lattice (lfp). Cells
+are PER-ITEM (one per Earley item), not per-span. Elimination ordering
+(gfp) deferred to Track 5 — follows WF-LE pattern of building lfp first,
+adding gfp convergence later via `newtype` wrapper.
 
 ```racket
 ;; An Earley item: production + dot position + origin
@@ -134,17 +140,16 @@ indentation-sensitivity and context-sensitive disambiguation.
    )
   #:transparent)
 
-;; A parse cell value (bilattice)
+;; A parse cell value (derivation-only, lfp)
 (struct parse-cell-value
-  (derivations    ;; set of derivation-trees (lfp component)
-   eliminations   ;; set of assumption-ids that are retracted (gfp component)
+  (derivations    ;; set of derivation-node (lfp: accumulate alternatives)
    )
   #:transparent)
 
-;; A derivation tree node (SPPF-like)
+;; A derivation tree node (SPPF-like, carries provenance)
 (struct derivation-node
   (item           ;; parse-item: which item this derives
-   children       ;; list of derivation-node: sub-derivations
+   children       ;; list of derivation-node: sub-derivations (= trace/provenance)
    assumption-id  ;; assumption-id | #f: ATMS tag for this derivation
    cost           ;; real (tropical enrichment, default 0)
    )
@@ -154,27 +159,40 @@ indentation-sensitivity and context-sensitive disambiguation.
 | Property | Value |
 |----------|-------|
 | Carrier | `parse-cell-value \| bot \| top` |
-| Bot (derivation) | `(parse-cell-value (seteq) (seteq))` — no derivations, nothing eliminated |
-| Top (derivation) | `'parse-error` |
-| Join (derivation) | Set union of derivation trees (add alternatives) |
-| Join (elimination) | Set union of assumption-ids (accumulate eliminations) |
+| Bot | `(parse-cell-value (seteq))` — no derivations |
+| Top | `'parse-error` |
+| Join | Set union of derivation trees (add alternatives) |
 | Height | O(n² · G) for input length n, grammar size G |
-| Merge | Bilattice merge: union derivations AND union eliminations |
+| Merge | Union derivation sets |
 
 **Design decisions**:
 - **Per-item cells**, not per-span. Each Earley item gets its own cell.
   Completion/prediction/scanning are propagators that read input cells
   and write output cells. This gives O(n³) overall — same as standard
-  Earley.
-- **Bilattice structure**: derivation ordering (lfp: accumulate parses)
-  and elimination ordering (gfp: rule out impossibilities). The well-
-  founded parse is the combined fixpoint.
-- **ATMS integration**: each derivation-node carries an optional
-  assumption-id. Ambiguous derivations are different ATMS branches. Type
-  contradictions retract assumptions, adding to the elimination set.
+  Earley. The DEPENDENCY ORDERING between items (A at dot=1 depends on
+  A at dot=0) is encoded in the PROPAGATOR WIRING, not in the lattice
+  structure. Cell creation uses SRE-style `get-or-create` for each
+  (production, dot, origin, span-end) tuple.
+- **Derivation-only (lfp)**: Track 0 defines the derivation lattice.
+  Elimination (gfp) added in Track 5 via WF-LE pattern:
+  `newtype ParseElimination := ParseElimination (Set AssumptionId)`.
+  The two converge via well-founded operator (alternating lfp/gfp).
+  This avoids committing to bilattice merge semantics before real usage
+  validates them.
+- **ATMS handles elimination in Track 0**: For the integration test,
+  ATMS assumption retraction removes derivations via worldview filtering.
+  No explicit elimination set needed — the ATMS IS the elimination
+  mechanism. Track 5's `newtype ParseElimination` adds EXPLICIT
+  elimination as a lattice value (for gfp computation beyond what ATMS
+  provides).
+- **Provenance is structural**: `derivation-node.children` IS the
+  derivation trace. No separate provenance mechanism — the SPPF
+  structure carries provenance. Queries ("why was this parsed this
+  way?") walk the children. This is traced monoidal structure FOR FREE
+  — the SPPF IS the trace (see §6.6).
 - **Tropical cost**: each derivation-node carries a cost (default 0).
-  Error recovery assigns costs to repair actions. The tropical merge
-  (min-plus) selects cheapest surviving derivation.
+  Error recovery (Track 6) assigns costs. Tropical merge (min) selects
+  cheapest. Cost is a FIELD enrichment, not a separate lattice.
 
 ### 2.4 Core Lattice (L_core)
 
@@ -204,18 +222,30 @@ lattice is just the output — one cell per definition, set once.
 
 **Purpose**: Track what information is needed at what position. Unifies
 DT demands (narrowing), type-checking demands (bidirectional), and parse
-demands (disambiguation).
+demands (disambiguation). The demand lattice is the INTERNAL STATE of
+Right Kan inter-strata exchanges — NOT a bridge endpoint.
+
+**Key distinction (D.2 correction)**: Demands are inter-STRATA, not
+inter-DOMAIN. A demand flows from a higher stratum (S-elaborate needs
+type info) to a lower stratum (S-parse can provide it) via Right Kan
+exchange. This is different from Galois bridges, which flow between
+domains WITHIN the same stratum. See §3.
 
 ```racket
 (struct demand
-  (position     ;; exact-nonneg-integer | symbol: where in the source/AST
-   domain       ;; symbol: 'token, 'surface, 'core, 'type, 'narrowing
-   specificity  ;; symbol: 'constructor, 'type, 'value, 'any
+  (target-domain  ;; symbol: 'token, 'surface, 'type, 'narrowing
+   position       ;; domain-specific position identifier:
+                  ;;   token domain: exact-nonneg-integer (char offset)
+                  ;;   surface domain: (cons origin span-end) (span)
+                  ;;   type domain: cell-id
+                  ;;   narrowing domain: (cons fn-name dt-path)
+   specificity    ;; symbol: 'constructor, 'type, 'value, 'any
+   source-stratum ;; symbol: which stratum generated this demand
    )
   #:transparent)
 
 (struct demand-cell-value
-  (demands      ;; set of demand: accumulated demands at this point
+  (demands      ;; set of demand: accumulated demands
    )
   #:transparent)
 ```
@@ -228,10 +258,20 @@ demands (disambiguation).
 | Height | Bounded by |positions| × |domains| × |specificities| |
 | Merge | Union of demand sets |
 
-**Design decision**: Demands are MONOTONE (only grow). A demand, once
-placed, is never retracted. This is correct: "I need to know X" doesn't
-become "I don't need to know X" — once you've asked, you've asked.
-The demand lattice has no gfp/elimination component.
+**Design decisions**:
+- **Position is domain-specific** (D.2 refinement): token positions are
+  character offsets, surface positions are spans, type positions are
+  cell-ids, narrowing positions are DT paths. The demand struct uses a
+  domain-tagged position, not a conflated integer.
+- **Demands are MONOTONE** (only grow). "I need to know X" never becomes
+  "I don't need to know X." No gfp component.
+- **Demands are the Right Kan mechanism**: the demand lattice is
+  POPULATED by Right Kan exchanges (higher stratum → lower stratum).
+  The SATISFACTION of demands is forward propagation (lower stratum
+  computes result → result flows forward via Left Kan or bridge α).
+- **The demand lattice is NOT connected to bridges**: demands cross
+  STRATA, not domains. Bridges cross DOMAINS within a stratum.
+  Different mechanisms for different architectural boundaries.
 
 ### 2.6 Cost Lattice (L_cost) — OE Enrichment
 
@@ -260,12 +300,29 @@ the reduced product via Galois bridges.
 
 ---
 
-## 3. Galois Bridges
+## 3. Bridges and Exchanges
 
-Six bridges connect the parse domains to each other and to existing
-domains. Each bridge has an α (forward) and γ (backward) function.
+**Key distinction (D.2)**: Bridges and exchanges are DIFFERENT mechanisms
+for DIFFERENT architectural boundaries:
 
-### 3.1 TokenToSurface
+- **Galois bridges**: inter-DOMAIN information flow. α/γ between lattice
+  domains (token ↔ surface, surface ↔ type). Operate WITHIN a stratum.
+  Both sides fire in the same quiescence loop.
+
+- **Right Kan exchanges**: inter-STRATA demand flow. Higher stratum
+  demands information from lower stratum. Operate ACROSS strata. The
+  exchange mediates the barrier.
+
+- **Left Kan exchanges**: inter-STRATA speculative forwarding. Lower
+  stratum forwards partial results to higher stratum before fixpoint.
+
+- **One-way projections (fibrations)**: α-only information flow. Source
+  domain's state is projected to target domain. No backward flow. Not
+  an adjunction — a (co)fibration.
+
+### 3.1 Bridges (inter-domain, within stratum)
+
+#### 3.1.1 TokenToSurface (bidirectional)
 
 ```
 α: token-cell-value → parse-cell-value
@@ -279,7 +336,7 @@ domains. Each bridge has an α (forward) and γ (backward) function.
    Example: in angle-bracket context, `>` is delimiter not operator.
 ```
 
-### 3.2 SurfaceToCore
+#### 3.1.2 SurfaceToCore (bidirectional)
 
 ```
 α: parse-cell-value → core-cell-value
@@ -290,10 +347,10 @@ domains. Each bridge has an α (forward) and γ (backward) function.
 γ: core-cell-value → parse-cell-value
    "This elaboration result constrains which parse is valid"
    Type-directed disambiguation: if elaboration of parse A fails,
-   eliminate derivation A from the surface bilattice.
+   retract parse A's assumption (via ATMS, not lattice elimination).
 ```
 
-### 3.3 SurfaceToType
+#### 3.1.3 SurfaceToType (bidirectional)
 
 ```
 α: parse-cell-value → type-cell-value
@@ -304,43 +361,72 @@ domains. Each bridge has an α (forward) and γ (backward) function.
    "This type information disambiguates parsing"
    Arity, argument types, return types constrain which parse
    alternatives are valid. The γ-function projects type constraints
-   into parse elimination.
+   into ATMS assumption retraction on the surface cells.
 ```
 
-### 3.4 SurfaceToDemand
-
-```
-α: parse-cell-value → demand-cell-value
-   "Parsing this form requires this information"
-   A grammar rule that needs to see a token/type/constructor
-   generates a demand.
-
-γ: demand-cell-value → parse-cell-value
-   "This demand triggers targeted computation"
-   Right Kan: demands flow backward, triggering only the computation
-   needed to satisfy them.
-```
-
-### 3.5 TypeToToken (indirect, via Surface)
+#### 3.1.4 TypeToToken (composed, not direct)
 
 Type information constraining token classification flows through two
 bridges: TypeToSurface γ → SurfaceToToken γ. No direct TypeToToken
 bridge needed — the composition is handled by propagation through
 intermediate cells.
 
-### 3.6 DemandToNarrowing
+### 3.2 Exchanges (inter-strata)
+
+#### 3.2.1 Right Kan: Elaborate → Parse (demand-driven)
 
 ```
-α: demand-cell-value → narrowing-demand
-   "A parse/type demand triggers narrowing of a variable"
-   When disambiguation needs to know a variable's constructor,
-   demand flows into the narrowing engine.
-
-γ: narrowing-result → demand-cell-value
-   "Narrowing result satisfies a demand"
-   The narrowing engine produces a constructor → the demand is
-   satisfied → downstream computation proceeds.
+exchange S-elaborate → S-parse
+  :right  demand-from-elaboration → targeted-parse-computation
+  "The elaborator needs the type of sub-expression X.
+   This generates a demand (in the demand lattice) for parsing
+   and elaborating X. The parse stratum computes only what's
+   demanded."
 ```
+
+The demand lattice (§2.5) is the INTERNAL STATE of this exchange.
+Demands flow backward (elaborate → parse). Satisfying results flow
+forward (parse → elaborate) via the SurfaceToType bridge α.
+
+#### 3.2.2 Left Kan: Parse → Elaborate (speculative forwarding)
+
+```
+exchange S-parse → S-elaborate
+  :left   partial-parse-result → early-type-elaboration
+  "As tokens are parsed, partial results are forwarded to the
+   elaborator BEFORE the parse reaches fixpoint. The elaborator
+   starts type-checking what's available, producing partial type
+   information that feeds back into disambiguation (via bridge γ)."
+```
+
+This is speculative: the partial parse may change as more tokens
+arrive. The elaborator's partial results are LOWER BOUNDS on the
+final type — they can only grow (monotone in the type lattice).
+
+### 3.3 One-way projections (fibrations)
+
+#### 3.3.1 SurfaceToNarrowing (α only)
+
+```
+α: parse-cell-value → narrowing-request
+   "This parsed form triggers narrowing of a variable"
+   When a pattern match is parsed, the narrowing engine is
+   asked to narrow the scrutinee.
+```
+
+One-way: narrowing results flow back via the type lattice (not
+directly to the surface lattice). The surface lattice doesn't need
+narrowing results — the TYPE lattice does. So narrowing results
+use the TypeToSurface γ bridge for disambiguation, not a direct
+NarrowingToSurface γ.
+
+---
+
+**D.2 correction: SurfaceToDemand REMOVED.** Demands are inter-STRATA
+(Right Kan exchange), not inter-DOMAIN (bridge). The demand lattice is
+populated by the Right Kan exchange (§3.2.1), not by a bridge α. This
+is the key architectural distinction: bridges connect domains within a
+stratum; exchanges connect strata across a barrier.
 
 ---
 
@@ -359,17 +445,16 @@ data TokenValue
   :bot token-bot
   :top token-error
 
-;; Surface bilattice (structural lattice — bilattice merge)
+;; Surface lattice (derivation-only, lfp)
+;; Track 5 adds: newtype ParseElimination := ParseElimination (Set AssumptionId)
 data ParseValue
   := parse-bot
    | parse-cell [derivations : Set DerivationNode]
-                [eliminations : Set AssumptionId]
    | parse-error
-  :lattice :bilattice
+  :lattice :value
   :bot parse-bot
   :top parse-error
-  :derivation-join set-union
-  :elimination-join set-union
+  :join set-union
 
 ;; Demand lattice (value lattice — set accumulation)
 data DemandValue
@@ -393,32 +478,27 @@ bridge SurfaceToCore
   :alpha parse-to-type-elaborate
   :gamma type-to-parse-disambiguate
 
-bridge SurfaceToDemand
-  :from ParseValue
-  :to   DemandValue
-  :alpha parse-to-demand
-  :gamma demand-to-targeted-computation
-
 ;; === Level 5: Parse Stratification ===
 
+;; D.2: bridges within strata, exchanges across strata
 stratification ParseLoop
-  :strata [S-retract S-parse S-elaborate S-disambiguate]
+  :strata [S-retract S-parse S-elaborate S-commit]
   :fiber S-parse
     :networks [token-net surface-net]
     :bridges [TokenToSurface]
   :fiber S-elaborate
-    :networks [core-net type-net]
+    :networks [core-net type-net mult-net]
     :bridges [SurfaceToCore SurfaceToType]
-  :fiber S-disambiguate
-    :networks [demand-net]
-    :bridges [SurfaceToDemand]
-    ;; Left Kan: partial type info prunes parse branches
-    ;; Right Kan: demands focus computation
-  :exchange S-parse <-> S-elaborate
-    :left  partial-parse -> type-constraints
-    :right type-result -> parse-elimination
+  ;; Right Kan: elaborate demands from parse
+  :exchange S-elaborate -> S-parse
+    :right demand-from-elaboration -> targeted-parse
+  ;; Left Kan: parse forwards partial results to elaborate
+  :exchange S-parse -> S-elaborate
+    :left  partial-parse -> early-elaboration
   :barrier S-retract
-    :commit retract-eliminated-derivations
+    :commit retract-assumptions
+  :barrier S-commit
+    :commit finalize-parse-and-elaborate
   :fuel :cost-bounded
   :where [WellFounded ParseLoop]
 ```
@@ -571,17 +651,43 @@ elimination direction. The bilattice does the hard thing right.
 The reduced product composes automatically via propagation. No manual
 composition code.
 
-**Challenge**: Is the bilattice NECESSARY for Track 0, or is it
-premature? Counter: Track 0 defines the lattice. If we define it as
-simple (derivation only) and later need elimination, we retrofit.
-If we define it as bilattice from the start, no retrofit needed. The
-bilattice is one additional set field — negligible implementation cost,
-significant architectural benefit.
+**Challenge (D.1)**: Is the bilattice NECESSARY for Track 0?
+**Resolution (D.2)**: NO. Follow WF-LE pattern: build lfp first, add
+gfp later via `newtype` wrapper. Track 0 defines derivation lattice.
+Track 5 adds elimination. The ATMS handles elimination in the interim.
 
 **Challenge**: Is the demand lattice necessary for Track 0? It's
 cross-cutting — used by Tracks 4, 5, 8. But if we don't define it in
 Track 0, Tracks 4+ define their own ad-hoc demand mechanisms (like our
 current DT demands). Defining it now prevents the ad-hoc divergence.
+D.2 clarification: the demand lattice is the Right Kan exchange's
+internal state. It's defined in Track 0 because the STRUCT is simple
+(set-union of demands). Its WIRING (which exchanges populate it) comes
+in later tracks.
+
+**Traced monoidal structure** (D.2 addition): The SPPF derivation tree
+IS the traced monoidal structure. Each `derivation-node.children` is the
+trace — the sequence of sub-derivations that produced this node. No
+additional provenance mechanism needed. For our 6 principles:
+- **Correct-by-construction**: trace is structural (children field),
+  not maintained by discipline. Can't have a derivation without its
+  trace.
+- **Completeness**: every derivation carries its full trace. No
+  untraceable results.
+- **Composition**: traces compose via DAG structure. The SPPF DAG shares
+  sub-derivations, so trace storage is O(|SPPF|), not O(|parse trees|).
+  Cross-domain traces (parse → elaborate → type) follow bridge chains.
+
+For the TYPE domain (not Track 0): the ATMS justification DAG is the
+equivalent traced structure. For SESSION domain: the TracedCell concept
+from NTT case study (needs implementation in a future track).
+
+For serialization/deserialization (PPN Track 9): the SPPF (= trace) IS
+what gets serialized. The grammar that parses the serialized form
+reconstructs the trace. Bidirectional grammar preserves trace in both
+directions — the derivation tree for `serialize(x)` is the provenance
+of `x`, and the derivation tree for `deserialize(bytes)` is the
+provenance of the reconstructed value.
 
 ---
 
