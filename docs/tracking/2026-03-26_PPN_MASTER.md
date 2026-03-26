@@ -38,14 +38,15 @@ PPN consumes.
 
 | Track | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Lattice design (parse, token, surface, core lattices) | ⬜ | Foundational. SRE Track 0 is an instance. |
-| 1 | Lexer as propagators (character → token cells) | ⬜ | Replaces reader.rkt (~800 lines) |
+| 0 | Lattice design (parse, token, surface, core lattices) | ✅ | `c41bbca` [PIR](2026-03-26_PPN_TRACK0_PIR.md). 4 lattices, 6 bridges, 57 tests. |
+| 1 | Lexer + structure as propagators (char → structured token tree) | ⬜ | Replaces reader.rkt. Tokenization + indent structure in one pass. |
 | 2 | Surface normalization as rewriting | ⬜ | Replaces macros.rkt preparse (~3000 lines). HIGHEST VALUE per effort. |
 | 3 | Parser as propagators (chart/Earley, HR productions) | ⬜ | Replaces parser.rkt (~1500 lines) |
+| 3.5 | **Grammar Form: Research + Design** | ⬜ | [`grammar` vision](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md). Multi-view spec (parse/type/reduce/SRE/display/serialize/tooling). Subsumes `defmacro`. DPO structural preservation. Syntax design follows Tracks 1-3 implementation experience. |
 | 4 | Elaboration as attribute evaluation | ⬜ | IS SRE Track 2C. Dissolves parse/elab boundary. |
 | 5 | Type-directed disambiguation | ⬜ | Backward type→parse flow via Galois bridges |
 | 6 | Error recovery as lattice repair | ⬜ | Tropical semiring optimization on parse lattice (OE) |
-| 7 | User-defined grammar extensions (NTT-typed HR rules) | ⬜ | CAPSTONE: first-class language extension, richer than Lisp macros |
+| 7 | User-defined grammar extensions (`grammar` form) | ⬜ | CAPSTONE: first-class language extension, richer than Lisp macros. Based on Track 3.5 research. |
 | 8 | Incremental editing (LSP-grade propagation) | ⬜ | IS PM Track 11 (partial) |
 | 9 | Self-describing serialization | ⬜ | Grammar-based .pnet format. Self-hosting capstone. |
 
