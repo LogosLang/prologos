@@ -28,7 +28,7 @@ distinguished from exchanges.
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| Pre-0 | Microbenchmarks: pipeline costs + CHAMP scale test | ⬜ | Pipeline per-form costs + CHAMP at 20K/100K/1M cells |
+| Pre-0 | Microbenchmarks: pipeline costs + CHAMP scale test | ✅ | `8880524` — CHAMP viable at 500K (1.5μs/cell). Pipeline 99.99% elaboration. Quiescence linear. ATMS cheap. No design changes needed. |
 | 0 | Acceptance file: parse lattice exerciser | ⬜ | Exercises each lattice domain with known-ambiguous forms |
 | 1 | Token lattice (set-once) | ⬜ | `parse-lattice.rkt`: struct, set-once merge, bot/top |
 | 2 | Surface lattice (per-item cells, derivation-only) | ⬜ | `parse-lattice.rkt`: SPPF node, derivation set-union. NO elimination. |
