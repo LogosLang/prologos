@@ -33,7 +33,7 @@ Hyperlattice Conjecture.
 | 1c | Tree-builder propagator (indent+bracket RRBs → tree M-type cell) | ✅ | `9af5b2d` — parse-tree-node with RRB children. Parent from indent + bracket suppression. 4 tests. |
 | 1d | Bracket-depth RRB propagator (token RRB → bracket RRB) | ✅ | `9af5b2d` — running sum + qq-depth channel. 4 tests. |
 | 1e | Context disambiguator (tree cell → token RRB reclassify) | ✅ | `006ffec` — disambiguate-tokens + parse-string-to-cells. bd-before fix. 7 tests (51 total). |
-| 1f | **Integration gate**: golden comparison on simple files | ⬜ | Must pass before Phase 2. |
+| 1f | **Integration gate**: golden comparison on simple files | ✅ | `6df01a9` — topology matches all 110 .prologos files. 7 tests (58 total). |
 | 2 | Reader macros: #p, ', `, #=, dot-access, broadcast | ⬜ | Stateful recognizers in pattern registry. |
 | 3a | Read API (5 tree-walking functions) | ⬜ | Primary API. |
 | 3b | Write API (4 tree mutation functions) | ⬜ | For Track 2 SRE rewriting. |
