@@ -33,9 +33,9 @@
 | 3b | fork-prop-network + with-forked-network | ✅ | `1462fd6` — O(1) CHAMP structural sharing |
 | 3c | Fork integrated into test-support | ✅ | `81b5c21` — macro hygiene fix |
 | 3d | process-string scoping fix — ALL GREEN | ✅ | `41b67c4` — 382/382, 149.0s (38% improvement). Root: box mutation leak. |
-| 4 | Absorb PM 8F deferrals | ⬜ | CHAMP fallback removal, defaults at solve-time |
-| 5 | Eliminate dual-path (snapshot retirement) | ⬜ | module-network-ref + .pnet frozen view for non-network contexts |
-| 6 | Parameter reduction (incremental, ~41 → ~3) | ⬜ | Architectural cleanup |
+| 4 | Absorb PM 8F deferrals (partial) | ✅ | `f896887` — defaults at solve-time ✅. CHAMP fallback RETAINED (expander needs it). 143.9s |
+| 5 | Drop `#lang prologos` + remove CHAMP fallback | 🔄 | Pivot: expander.rkt only consumer of CHAMP fallback. Drop `#lang`, delete expander+main+repl-support, remove fallback, delete zonk-final |
+| 6 | Parameter reduction (incremental) | ⬜ | Architectural cleanup, scope TBD |
 | 7 | Verification + A/B benchmarks + PIR | ⬜ | Compare against Pre-0 baselines + per-file regression check |
 
 **Deferred to Track 10b**: Test-granular scheduling via Places (per-test
@@ -1325,3 +1325,66 @@ O(1): two struct allocations. All CHAMP fields structurally shared.
 | 16 | Test-granular scheduling? | **Deferred to Track 10b** (D.4 critique: separate infrastructure project) | Option C (split large files) in Track 10. Full Places-based scheduling in Track 10b. |
 | 17 | Can registries go into the prelude .pnet? | **Resolved: YES** | 4/6 clean, 2/6 need named-proc re-link. Same mechanism as foreign-proc. Persistent registry cells: 27/29 clean. Unified .pnet = modules + registries + cells. |
 | 18 | Realistic parameter count after fork? | **Resolved: 21 → 3** | D.3 classified all 21: 11→cells, 7→prelude fork reads, 3→fork mechanism. Remaining: network box, output port, module loader. |
+| 19 | expander.rkt network-awareness? | **Resolved: PIVOT** | Expander is sole consumer of CHAMP fallback. Drop `#lang prologos` support entirely — all code lives in `.prologos` files via `process-file`. Eliminates expander.rkt, main.rkt, repl-support.rkt, CHAMP fallback, 5 unconverted zonk-final sites. |
+
+---
+
+## 11. Phase 5 Pivot: Drop `#lang prologos`
+
+### Rationale
+
+The Phase 4 finding: `expander.rkt` is the ONLY consumer of the CHAMP
+fallback. It runs in Racket's compile-time phase (phase 1) where the
+propagator network, .pnet cache, and fork model don't exist. Making
+it network-native requires bridging Racket's phase boundary — a
+substantial infrastructure project for 6 test files.
+
+The alternative: drop `#lang prologos` support entirely. ALL Prologos
+code already lives in `.prologos` files processed by `process-file`.
+The `#lang` path is historical — predates our module system, LSP
+server, and .pnet cache.
+
+### What gets deleted
+
+| File | Lines | Purpose | Replacement |
+|------|-------|---------|-------------|
+| `expander.rkt` | 261 | `#lang prologos` compiler | `process-file` |
+| `main.rkt` | 73 | `#lang prologos` entry point | None needed |
+| `repl-support.rkt` | 68 | DrRacket REPL support | LSP server |
+| 6 test-lang-* files | ~400 | `#lang` integration tests | `.prologos` acceptance files |
+
+### What gets eliminated
+
+- **CHAMP fallback** in `meta-solution`, `meta-solved?`, `ground-expr?` — sole consumer removed
+- **`zonk-final`** — 5 unconverted sites in expander.rkt deleted. Zero remaining callers.
+- **Phase 5 design concern** — expander network integration becomes moot
+- **Racket phase-separation constraint** — no more phase-1 code
+
+### Impact on interactive development
+
+| Workflow | Before | After |
+|----------|--------|-------|
+| Edit in VSCode | LSP via `process-string-ws` | Same — unchanged |
+| Run a file | `process-file "foo.prologos"` | Same — unchanged |
+| REPL testing | `run-ns-last` via test-support | Same — unchanged |
+| DrRacket REPL | `#lang prologos` + repl-support | Removed — use VSCode + LSP |
+
+No impact on any actively used workflow. DrRacket REPL support is
+the only loss, and it's unused (we use VSCode + LSP).
+
+---
+
+## 12. Track 10B Scope
+
+Track 10B collects deferred items from Track 10 + related follow-on work:
+
+| Item | Source | Description |
+|------|--------|-------------|
+| Test-granular scheduling | D.4 critique | Places-based per-test scheduling. Target <150s. |
+| Remaining zonk elimination | PM 8F Phase 5+7 deferrals | 13 remaining `zonk`/`zonk-at-depth` calls in unify.rkt (5) + resolution (8). Requires metas-as-cells completion (expressions reference cells, not expr-meta). |
+| `zonk.rkt` cleanup | Track 10 Phase 5 | After `zonk-final` deleted (Phase 5) and remaining zonk calls eliminated, `zonk.rkt` (~1300 lines) can be removed entirely. `freeze` (~200 lines in driver.rkt) is the replacement. |
+| Transitive staleness | Open Q #9 | .pnet invalidation for transitive deps (module A changes → module B that imports A is stale). Currently full-rebuild. Incremental = Track 11. |
+| Per-module .pnet (vs unified) | D.4 critique #7 | Granular invalidation. Currently all modules serialize. Per-module = only stale modules re-serialize. |
+| `default-metas` at solve-time | PM 8F Phase 5 | Move defaults from boundary time to solve time. Deferred from 8F, absorbed partially in Track 10 Phase 4. Full completion requires level/mult meta solve path changes. |
+| CHAMP fallback full removal | Track 10 Phase 4/5 | After Phase 5 drops `#lang prologos`, fallback can be removed from meta-solution/meta-solved?/ground-expr?. If any remaining path needs it, tracked here. |
+| `id-map` elimination | PM 8F Phase 7 | Cell-id in expr-meta makes id-map redundant. Remove id-map, simplify meta-solution to direct cell read. |

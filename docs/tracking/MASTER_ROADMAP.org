@@ -47,12 +47,14 @@ Audits) are defined.
 | Track 8E | Remaining registries + warnings as cells (17 registries) | Scoped in [[./2026-03-22_UNIFIED_PROPAGATOR_NETWORK_ROADMAP.md][Unified Roadmap]] | Depends on Track 8D |
 | [[file:2026-03-24_PM_8F_METAS_AS_CELLS_DESIGN.md][Track 8F]] | Meta-info as cells (cell-id in expr-meta, cell-id zonk paths) | [[file:2026-03-24_PM_8F_PIR.md][PIR]] ✅ | 6/8 phases; 3.5% suite improvement; Phase 5+7 deferred to Track 10 |
 | Track 9 | Reduction as Propagators — interaction nets, GoI, e-graph rewriting | Stage 1 research | [[file:2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md][Research note]]; may become Track Series |
-| Track 10 | Network-first init + box elimination | Scoped in Unified Roadmap | Depends on Track 8F; may become Track Series |
+| [[file:2026-03-24_PM_TRACK10_DESIGN.md][Track 10]] | Module loading on network + .pnet cache + fork isolation | 🔄 [[file:2026-03-24_PM_TRACK10_DESIGN.md][Design (D.4)]] | Phases 0-4 ✅ (143.9s). Phase 5 (#lang drop) in progress. Phase 5 pivot: drop expander.rkt → CHAMP fallback removal → zonk-final deletion. |
+| Track 10B | Convergence: zonk elimination, test-granular, id-map removal | ⬜ Scoped in [[file:2026-03-24_PM_TRACK10_DESIGN.md][Track 10 §12]] | Remaining zonk calls (13), Places scheduling (<150s), transitive staleness, default-metas at solve-time |
 | Track 11 | LSP Integration — incremental re-elaboration, live diagnostics | Not started | [[file:2026-03-19_TRACK10_DESIGN_NOTES.org][Early notes]]; depends on Track 9 + Track 10 |
 
 Track 8 (complete) unblocked CIU Series Tracks 3–5 and BSP-LE.
 Track 9 enables interaction-net reduction, GoI-style fixpoint computation, e-graph equality saturation.
-Track 10 is the convergence point: no box, no dual-writes, module loading on-network.
+Track 10 is the convergence point: .pnet cache (240s→144s), fork-based isolation, #lang prologos dropped.
+Track 10B completes the convergence: zonk elimination (~1300 lines), id-map removal, test-granular scheduling (<150s).
 See [[./2026-03-22_UNIFIED_PROPAGATOR_NETWORK_ROADMAP.md][Unified Propagator Network Infrastructure Roadmap]] for the comprehensive on-network/off-network boundary analysis.
 
 *Note on PUnify*: PUnify Parts 1–2 originated as the first half of Track
