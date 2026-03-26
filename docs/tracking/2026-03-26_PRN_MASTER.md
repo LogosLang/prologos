@@ -58,6 +58,8 @@ confirmation track.
 | Type inference as attribute evaluation | Each typing rule (`infer-app`, `check-lam`, etc.) is an attribute computation on the parse tree. The elaborator IS an attribute evaluator. | PPN Track 4 / SRE Track 2C |
 | Grammar extension as rule registration | Adding new syntax = adding new rewrite rules to the grammar. The `defmacro` system is an ad-hoc version; PPN Track 7 makes it first-class and typed. | PPN Track 7 |
 | Optimization as cost-weighted rewriting | Each rewrite rule has a cost (tropical semiring). Optimal program = cheapest rewrite sequence to normal form. | PReductions Track 3, OE |
+| NF-Narrowing as DT-guided rewriting | Definitional trees ARE rewrite strategies — they determine which rule to apply at which position. Narrowing IS rewriting with unification (binding variables, not just matching ground). Residuation IS propagator waiting (input cell at bot → suspend). "Needed" narrowing = optimal strategy (provably minimal steps for inductively sequential systems). | PPN (strategy layer), PReductions, BSP-LE |
+| Needed narrowing optimality transfers to grammar rules | If grammar rules are inductively sequential (each matches a specific token/form at a specific position — which CFGs guarantee), then DT-guided rule selection is PROVABLY OPTIMAL. This means: the optimal parsing strategy may be derivable from the grammar's definitional tree. | PPN Track 3, PRN foundational |
 
 ## 3. Universal Primitives
 
@@ -170,6 +172,10 @@ as application tracks complete PIRs.
 | 2026-03-24 | PM Track 10 | .pnet serialization = rewriting in opposite directions | Bidirectional rules (DCG insight) | PPN (Track 9 self-describing) |
 | 2026-03-25 | PM Track 10B | Zonk = rewrite rule (expr-meta → solution) | Rewrite elimination by making rules matchless | SRE Track 2C |
 | 2026-03-26 | Conversation | Invariant-typed grammars (identity/structural/behavioral/value) | Rules carry type annotations constraining applicability | PPN (Track 9), NTT |
+| 2026-03-26 | Conversation | NF-Narrowing as strategy layer for rewriting | DTs = optimal rule selection; residuation = propagator waiting; needed narrowing = provably minimal | PPN, PReductions, BSP-LE |
+| 2026-03-26 | Conversation | ATMS + type network = proof-based disambiguation | Parse ambiguity → branches → type contradiction → retraction. Strictly more powerful than all existing parsers. | PPN Track 5 |
+| 2026-03-26 | Conversation | Cross-network information for parsing | Session protocols, QTT multiplicities, effect positions, module exports, trait constraints — ALL are disambiguation sources | PPN Tracks 3-5 |
+| 2026-03-26 | Research | Lattice Foundations for PPN | 6-domain reduced product, semiring parsing, Datalog stratification, ATMS-guided parsing, concrete lattice design | PPN Track 0 foundational |
 
 ## 6. Research Documents Index
 
@@ -181,6 +187,8 @@ as application tracks complete PIRs.
 | [Categorical Foundations](../research/2026-03-22_CATEGORICAL_FOUNDATIONS_TYPED_PROPAGATOR_NETWORKS.md) | 2026-03-22 | Polynomial functors, Grothendieck fibrations, Kan extensions, quantales | Categorical grounding for network types and rewriting |
 | [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md) | 2026-03-22 | Type theory for networks: lattice → cell → propagator → network → bridge → stratification | Types for rewrite rules; invariant levels |
 | [PPN Master §4: Bidirectional Typed Grammars](2026-03-26_PPN_MASTER.md) | 2026-03-26 | DCG bidirectionality, invariant levels, NTT type correspondence | Grammar-as-type; serialization/deserialization as dual rewriting |
+| [Lattice Foundations for PPN](../research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) | 2026-03-26 | Abstract interpretation, semiring parsing, Datalog, monotone frameworks, categorical connections, ATMS-guided parsing | Concrete lattice design for 6 domains + reduced product + scheduling strategy |
+| [FL-Narrowing Design](../research/2026-03-07_FL_NARROWING_DESIGN.org) | 2026-03-07 | Definitional trees, residuation-first, term lattice, needed narrowing | Strategy layer: DTs as optimal rewrite rule selection |
 
 ## 7. Watching / Emerging Patterns
 
@@ -192,6 +200,9 @@ more data points before promotion to §3 (Universal Primitives).
 | "Lattice merge IS a rewrite rule" | SRE (type merge), PM (cell write) | If PPN's parse lattice merge and PReductions' e-graph merge follow the same pattern, merge is rewriting |
 | "All rewriting is monotone + stratified non-monotone" | PM (S0 monotone + S2 commit), BSP-LE (lfp + NAF) | If PPN and PReductions follow the same monotone/barrier pattern |
 | "Rule matchlessness eliminates entire subsystems" | Zonk (matchless = deleted), SRE (matchless = no decomposition needed) | If PPN has examples of rules that become matchless after optimization |
+| "DTs are the universal strategy layer" | NF-Narrowing (DTs guide narrowing), SRE (ctor-desc dispatch = 1-level DT) | If PPN parsing uses DT-like strategy, and PReductions uses DTs for optimization rule selection — DTs are the STRATEGY primitive across all applications |
+| "Needed optimality transfers across domains" | NF-Narrowing (needed narrowing = minimal steps) | If "needed parsing" (DT-guided rule selection) is provably optimal for CFGs, the optimality result generalizes beyond logic programming |
+| "ATMS + type network = proof-based disambiguation" | Conversation insight (2026-03-26): parse ambiguity → ATMS branches → type contradiction → nogood → retraction. Strictly more powerful than PEG/GLR/GLL/Earley. | PPN Track 5 implementation |
 | "The grammar IS the type" | PPN (grammar = parse type), SRE (form = structural type) | If PReductions' rewrite rules are typed by their input/output pattern types |
 | "Self-describing formats = meta-grammars" | PPN Track 9 (grammar-as-Part-1) | Need implementation evidence |
 
