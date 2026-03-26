@@ -143,20 +143,20 @@
 ;; ========================================
 
 (test-case "merge: sess-meta with concrete → concrete"
-  (define m (sess-meta 'test-meta-1))
+  (define m (sess-meta 'test-meta-1 #f))
   (define s (sess-send (expr-Nat) (sess-end)))
   (check-equal? (session-lattice-merge m s) s)
   (check-equal? (session-lattice-merge s m) s))
 
 (test-case "merge: sess-meta with sess-bot → sess-meta"
-  (define m (sess-meta 'test-meta-2))
+  (define m (sess-meta 'test-meta-2 #f))
   (check-equal? (session-lattice-merge sess-bot m) m)
   (check-equal? (session-lattice-merge m sess-bot) m))
 
 (test-case "has-unsolved-session-meta?: detects meta in continuation"
-  (check-true (has-unsolved-session-meta? (sess-meta 'x)))
-  (check-true (has-unsolved-session-meta? (sess-send (expr-Nat) (sess-meta 'x))))
-  (check-true (has-unsolved-session-meta? (sess-recv (expr-String) (sess-meta 'x))))
+  (check-true (has-unsolved-session-meta? (sess-meta 'x #f)))
+  (check-true (has-unsolved-session-meta? (sess-send (expr-Nat) (sess-meta 'x #f))))
+  (check-true (has-unsolved-session-meta? (sess-recv (expr-String) (sess-meta 'x #f))))
   (check-false (has-unsolved-session-meta? (sess-end)))
   (check-false (has-unsolved-session-meta? (sess-send (expr-Nat) (sess-end))))
   (check-false (has-unsolved-session-meta? sess-bot)))
@@ -182,7 +182,7 @@
   (check-false (try-unify-session-pure (sess-svar 0) (sess-svar 1))))
 
 (test-case "try-unify-session-pure: meta → concrete side"
-  (define m (sess-meta 'test))
+  (define m (sess-meta 'test #f))
   (define s (sess-send (expr-Nat) (sess-end)))
   (check-equal? (try-unify-session-pure m s) s)
   (check-equal? (try-unify-session-pure s m) s))

@@ -2357,19 +2357,21 @@
   ;; Track 4 Phase 3: Allocate session cell on propagator network if available
   (define net-box (current-prop-net-box))
   (define fresh-fn (current-prop-fresh-sess-cell))
-  (when (and net-box fresh-fn)
-    (define enet (unbox net-box))
-    (define-values (enet* cid) (fresh-fn enet source))
-    (set-box! net-box enet*)
-    ;; Record mapping: sess-meta-id → cell-id in the prop id-map
-    ;; Track 8 B2b: direct elab-network-id-map / elab-network-id-map-set instead of callbacks.
-    (when net-box
-      ;; Track 8 Phase A4b: Tag id-map entry with speculation assumption.
-      (define id-map-entry-sm (if aid (tagged-entry cid aid) cid))
-      (set-box! net-box (elab-network-id-map-set (unbox net-box)
-                          (champ-insert (elab-network-id-map (unbox net-box))
-                                        (prop-meta-id-hash id) id id-map-entry-sm)))))
-  (sess-meta id))
+  ;; Track 10B Phase B1a: capture cell-id for sess-meta struct
+  (define cell-id
+    (if (and net-box fresh-fn)
+        (let ()
+          (define enet (unbox net-box))
+          (define-values (enet* cid) (fresh-fn enet source))
+          (set-box! net-box enet*)
+          ;; Record mapping: sess-meta-id → cell-id in the prop id-map
+          (define id-map-entry-sm (if aid (tagged-entry cid aid) cid))
+          (set-box! net-box (elab-network-id-map-set (unbox net-box)
+                              (champ-insert (elab-network-id-map (unbox net-box))
+                                            (prop-meta-id-hash id) id id-map-entry-sm)))
+          cid)
+        #f))
+  (sess-meta id cell-id))
 
 ;; Assign a solution to a sess metavariable.
 ;; Hash removal: Always reads/writes CHAMP.

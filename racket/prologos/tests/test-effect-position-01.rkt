@@ -121,7 +121,7 @@
   (check-equal? (session-steps s) 1))
 
 (test-case "session-steps: sess-meta → 0"
-  (check-equal? (session-steps (sess-meta 'test)) 0))
+  (check-equal? (session-steps (sess-meta 'test #f)) 0))
 
 
 ;; ========================================

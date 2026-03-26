@@ -152,7 +152,7 @@
           (and (check gamma e a)
                (type-proc gamma (chan-ctx-update delta c s-cont) p))]
          ;; Sprint 8: sess-meta → infer session from operation
-         [(sess-meta id)
+         [(sess-meta id _)
           (let ([ty (infer gamma e)])
             (and ty
                  (let ([cont-meta (fresh-sess-meta (format "send-cont-~a" c))])
@@ -182,7 +182,7 @@
                (type-proc (ctx-extend gamma a 'mw) (chan-ctx-update delta c s-cont) p))]
          ;; Sprint 8: sess-meta → infer session from operation
          ;; Requires explicit annotation to solve the meta (can't infer from nothing).
-         [(sess-meta id)
+         [(sess-meta id _)
           (and a-annot  ; can't solve meta without annotation
                (is-type gamma a-annot)
                (let ([cont-meta (fresh-sess-meta (format "recv-cont-~a" c))])
@@ -200,7 +200,7 @@
             (and (not (sess-branch-error? branch-s))
                  (type-proc gamma (chan-ctx-update delta c branch-s) p)))]
          ;; Sprint 8: sess-meta → construct choice with this branch
-         [(sess-meta id)
+         [(sess-meta id _)
           (let ([cont-meta (fresh-sess-meta (format "sel-~a-~a" label c))])
             (solve-sess-meta! id (sess-choice (list (cons label cont-meta))))
             (type-proc gamma (chan-ctx-update delta c cont-meta) p))]
@@ -213,7 +213,7 @@
          [(sess-offer sess-branches)
           (type-all-branches gamma (chan-ctx-remove delta c) c proc-branches sess-branches)]
          ;; Sprint 8: sess-meta → construct offer from process branch labels
-         [(sess-meta id)
+         [(sess-meta id _)
           (let* ([branch-metas (map (lambda (pb)
                                       (cons (car pb) (fresh-sess-meta (format "case-~a-~a" (car pb) c))))
                                     proc-branches)]

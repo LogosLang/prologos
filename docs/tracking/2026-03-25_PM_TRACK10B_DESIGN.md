@@ -36,7 +36,7 @@
 | A7 | Verification (full suite green) | ✅ | 376/376, 134.0s, all pass. |
 | **WS-B: Zonk Elimination** | | | |
 | B0 | zonk-at-depth call-count measurement | ✅ | Poly cmd: 14 zonk-at-depth-0 (4.2ms). Simple: 2. Suite total: substantial. |
-| B1a | Session meta cell infrastructure (`fresh-sess-meta` creates cells) | ⬜ | D.4: split B1 into sub-phases |
+| B1a | Session meta cell infrastructure (`fresh-sess-meta` creates cells) | ✅ | `sess-meta` struct: added cell-id. Pattern matches updated (sessions, session-lattice, typing-sessions, tests). 136.1s |
 | B1b | Session meta read migration (`sess-meta-solution` reads cells) | ⬜ | |
 | B1c | Speculation verification (session metas survive rollback) | ⬜ | D.4: test-speculation-bridge green with session cells |
 | B1d | Session default timing (`sess-end` at correct moment) | ⬜ | D.4: premature `sess-end` would break protocols |

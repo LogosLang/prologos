@@ -57,7 +57,7 @@
   (match s
     [(? sess-bot?) #f]
     [(? sess-top?) #f]
-    [(sess-meta _) #t]  ;; unsolved meta — always counts
+    [(sess-meta _ _) #t]  ;; unsolved meta — always counts
     [(sess-send ty cont)
      (or (has-unsolved-session-meta? cont))]
     [(sess-recv ty cont)
