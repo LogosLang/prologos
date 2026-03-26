@@ -6,10 +6,14 @@
 
 (require rackunit
          racket/set
+         racket/list
          "../rrb.rkt"
          "../propagator.rkt"
          "../parse-lattice.rkt"
          "../parse-reader.rkt")
+
+;; Helper: register patterns once
+(register-default-token-patterns!)
 
 ;; ============================================================
 ;; Phase 1a: Character RRB
@@ -179,3 +183,148 @@
   (define-values (net1 cells) (create-parse-cells net0))
   (define val (net-cell-read net1 (parse-cells-tree-cell-id cells)))
   (check-true (parse-bot? val)))
+
+
+;; ============================================================
+;; Phase 1b: Tokenizer
+;; ============================================================
+
+;; Helper: get token types from token RRB
+(define (token-types-from-rrb tok-rrb)
+  (for/list ([i (in-range (rrb-size tok-rrb))])
+    (define entry (rrb-get tok-rrb i))
+    (cons (set-first (token-entry-types entry))
+          (token-entry-lexeme entry))))
+
+(test-case "tokenizer: simple definition"
+  (define char-rrb (make-char-rrb-from-string "def x := 42"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define toks (token-types-from-rrb tok-rrb))
+  ;; def(sym) x(sym) :=(sym) 42(num)
+  (check-equal? (length toks) 4)
+  (check-equal? (car (list-ref toks 0)) 'symbol)
+  (check-equal? (cdr (list-ref toks 0)) "def")
+  (check-equal? (car (list-ref toks 1)) 'symbol)
+  (check-equal? (cdr (list-ref toks 1)) "x")
+  (check-equal? (car (list-ref toks 2)) 'symbol)  ;; := is a symbol
+  (check-equal? (cdr (list-ref toks 2)) ":=")
+  (check-equal? (car (list-ref toks 3)) 'number)
+  (check-equal? (cdr (list-ref toks 3)) "42"))
+
+(test-case "tokenizer: brackets"
+  (define char-rrb (make-char-rrb-from-string "[f x y]"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (length toks) 5)
+  (check-equal? (car (list-ref toks 0)) 'lbracket)
+  (check-equal? (car (list-ref toks 1)) 'symbol)
+  (check-equal? (car (list-ref toks 4)) 'rbracket))
+
+(test-case "tokenizer: string literal"
+  (define char-rrb (make-char-rrb-from-string "\"hello world\""))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (length toks) 1)
+  (check-equal? (car (list-ref toks 0)) 'string)
+  (check-equal? (cdr (list-ref toks 0)) "\"hello world\""))
+
+(test-case "tokenizer: string with escape"
+  (define char-rrb (make-char-rrb-from-string "\"hello\\nworld\""))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (length toks) 1)
+  (check-equal? (car (list-ref toks 0)) 'string))
+
+(test-case "tokenizer: nat literal"
+  (define char-rrb (make-char-rrb-from-string "42N"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (length toks) 1)
+  (check-equal? (car (list-ref toks 0)) 'number)
+  (check-equal? (cdr (list-ref toks 0)) "42N"))
+
+(test-case "tokenizer: rational literal"
+  (define char-rrb (make-char-rrb-from-string "3/4"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (length toks) 1)
+  (check-equal? (car (list-ref toks 0)) 'number)
+  (check-equal? (cdr (list-ref toks 0)) "3/4"))
+
+(test-case "tokenizer: keyword"
+  (define char-rrb (make-char-rrb-from-string ":name"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (length toks) 1)
+  (check-equal? (car (list-ref toks 0)) 'keyword)
+  (check-equal? (cdr (list-ref toks 0)) ":name"))
+
+(test-case "tokenizer: colon vs keyword vs colon-assign"
+  (define char-rrb (make-char-rrb-from-string "x : Int := 42 :name"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define toks (token-types-from-rrb tok-rrb))
+  ;; x(sym) :(colon) Int(sym) :=(sym) 42(num) :name(keyword)
+  (check-equal? (length toks) 6)
+  (check-equal? (car (list-ref toks 1)) 'colon)
+  (check-equal? (car (list-ref toks 3)) 'symbol)  ;; := classified as symbol
+  (check-equal? (cdr (list-ref toks 3)) ":=")
+  (check-equal? (car (list-ref toks 5)) 'keyword))
+
+(test-case "tokenizer: quote-lbracket"
+  (define char-rrb (make-char-rrb-from-string "'[1 2 3]"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 0)) 'quote-lbracket)
+  (check-equal? (cdr (list-ref toks 0)) "'["))
+
+(test-case "tokenizer: skips comments"
+  (define char-rrb (make-char-rrb-from-string "x ;; comment\ny"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (length toks) 2)
+  (check-equal? (cdr (list-ref toks 0)) "x")
+  (check-equal? (cdr (list-ref toks 1)) "y"))
+
+(test-case "tokenizer: skips whitespace and newlines"
+  (define char-rrb (make-char-rrb-from-string "  a  \n  b  "))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (length toks) 2)
+  (check-equal? (cdr (list-ref toks 0)) "a")
+  (check-equal? (cdr (list-ref toks 1)) "b"))
+
+(test-case "tokenizer: multi-line definition"
+  (define char-rrb (make-char-rrb-from-string "def x : Int := 42\n  where\n    [Eq x]"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define toks (token-types-from-rrb tok-rrb))
+  ;; def x : Int := 42 where [ Eq x ]
+  ;; No indent/dedent/newline tokens in the new reader
+  (check-true (> (length toks) 8))
+  ;; First token is "def"
+  (check-equal? (cdr (list-ref toks 0)) "def"))
+
+(test-case "tokenizer: char literal"
+  (define char-rrb (make-char-rrb-from-string "'A'"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (length toks) 1)
+  (check-equal? (car (list-ref toks 0)) 'char)
+  (check-equal? (cdr (list-ref toks 0)) "'A'"))
+
+(test-case "tokenizer: token-entry has set of types"
+  (define char-rrb (make-char-rrb-from-string "x"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define entry (rrb-get tok-rrb 0))
+  ;; Types is a seteq with one element
+  (check-equal? (set-count (token-entry-types entry)) 1)
+  (check-true (set-member? (token-entry-types entry) 'symbol)))
+
+(test-case "tokenizer: positions tracked"
+  (define char-rrb (make-char-rrb-from-string "ab cd"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define e0 (rrb-get tok-rrb 0))
+  (define e1 (rrb-get tok-rrb 1))
+  (check-equal? (token-entry-start-pos e0) 0)
+  (check-equal? (token-entry-end-pos e0) 2)
+  (check-equal? (token-entry-start-pos e1) 3)
+  (check-equal? (token-entry-end-pos e1) 5))
