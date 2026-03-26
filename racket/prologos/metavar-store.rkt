@@ -99,6 +99,7 @@
  solve-sess-meta!
  sess-meta-solved?
  sess-meta-solution
+ sess-meta-solution/cell-id
  zonk-session
  zonk-session-default
  ;; Sprint 9: Structured provenance
@@ -2434,16 +2435,20 @@
 
 ;; Retrieve the solution of a sess metavariable, or #f if unsolved/unknown.
 ;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
-;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
-(define (sess-meta-solution id)
+;; Track 10B Phase B1b: cell-id fast path for session meta solution.
+;; Same pattern as meta-solution/cell-id (PM 8F).
+(define (sess-meta-solution/cell-id cell-id id)
   (define net-box (current-prop-net-box))
   (cond
+    [(and cell-id net-box)
+     ;; Fast path: direct cell read, no id-map lookup
+     (define v (elab-cell-read (unbox net-box) cell-id))
+     (and (not (eq? v 'unsolved)) v)]
     [net-box
+     ;; Fallback: id-map lookup (cell-id not available)
      (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
      (cond
        [(eq? cid 'none)
-        ;; Track 8 B1: worldview-aware read
         (define box (current-sess-meta-champ-box))
         (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
         (define v (cond [(eq? raw 'none) #f]
@@ -2462,12 +2467,17 @@
                      [else raw]))
      (and v (not (eq? v 'unsolved)) v)]))
 
+;; Backward-compatible: takes bare id (no cell-id fast path)
+(define (sess-meta-solution id)
+  (sess-meta-solution/cell-id #f id))
+
 ;; Zonk a session: follow solved sess-metas, leave unsolved in place.
 ;; Use zonk-session-default for final output (defaults unsolved to sess-end).
 (define (zonk-session s)
   (cond
     [(sess-meta? s)
-     (let ([sol (sess-meta-solution (sess-meta-id s))])
+     ;; Track 10B Phase B1b: use cell-id fast path
+     (let ([sol (sess-meta-solution/cell-id (sess-meta-cell-id s) (sess-meta-id s))])
        (if sol (zonk-session sol) s))]
     [(sess-send? s) (sess-send (sess-send-type s) (zonk-session (sess-send-cont s)))]
     [(sess-recv? s) (sess-recv (sess-recv-type s) (zonk-session (sess-recv-cont s)))]
@@ -2486,7 +2496,8 @@
 (define (zonk-session-default s)
   (cond
     [(sess-meta? s)
-     (let ([sol (sess-meta-solution (sess-meta-id s))])
+     ;; Track 10B Phase B1b: use cell-id fast path
+     (let ([sol (sess-meta-solution/cell-id (sess-meta-cell-id s) (sess-meta-id s))])
        (if sol (zonk-session-default sol) (sess-end)))]
     [(sess-send? s) (sess-send (sess-send-type s) (zonk-session-default (sess-send-cont s)))]
     [(sess-recv? s) (sess-recv (sess-recv-type s) (zonk-session-default (sess-recv-cont s)))]
