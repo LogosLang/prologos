@@ -398,6 +398,218 @@
 
 
 ;; ============================================================
+;; Phase 1d: Bracket-depth Domain (RRB embedded cell)
+;; ============================================================
+;;
+;; Running sum of bracket opens/closes from the token RRB.
+;; Each entry: (bracket-depth . qq-depth) at that token position.
+;; The tree-builder reads bracket-depth-at-line-start to determine
+;; whether indent processing applies (depth 0 = yes, >0 = continuation).
+
+;; Build bracket-depth RRB from token RRB.
+;; Returns: RRB of (cons bracket-depth qq-depth) per token.
+(define (make-bracket-depth-rrb token-rrb)
+  (define n (rrb-size token-rrb))
+  (let loop ([i 0] [bd 0] [qd 0] [result rrb-empty])
+    (if (>= i n)
+        result
+        (let* ([entry (rrb-get token-rrb i)]
+               [type (set-first (token-entry-types entry))]
+               [new-bd (cond
+                         [(memq type '(lbracket lparen lbrace langle quote-lbracket))
+                          (+ bd 1)]
+                         [(memq type '(rbracket rparen rbrace rangle))
+                          (max 0 (- bd 1))]
+                         [else bd])]
+               ;; qq-depth: backtick increments, comma in qq context decrements
+               ;; (simplified — full qq handling in Phase 2/reader macros)
+               [new-qd qd])
+          (loop (+ i 1) new-bd new-qd
+                (rrb-push result (cons new-bd new-qd)))))))
+
+;; Get bracket-depth at a given token index
+(define (bracket-depth-at bracket-rrb token-idx)
+  (if (and (> (rrb-size bracket-rrb) 0) (< token-idx (rrb-size bracket-rrb)))
+      (car (rrb-get bracket-rrb token-idx))
+      0))
+
+
+;; ============================================================
+;; Phase 1c: Tree-builder (indent + bracket → tree M-type)
+;; ============================================================
+;;
+;; One propagator that reads indent RRB + bracket-depth RRB + token RRB
+;; and produces the parse tree as an annotated S-expression wrapped
+;; in a parse-cell-value.
+;;
+;; The tree is the M-type (initial algebra of parse tree polynomial
+;; functor). Same representation as SRE type trees.
+
+;; A parse tree node (RRB children for structural sharing)
+(struct parse-tree-node
+  (tag         ;; symbol: form tag (e.g., 'def-form, 'line, 'bracket-group)
+   children    ;; rrb of (parse-tree-node | token-entry): ordered children
+   srcloc      ;; (list source-line source-col start-pos end-pos) | #f
+   indent      ;; exact-nonneg-integer: indent level of this node
+   )
+  #:transparent)
+
+(provide (struct-out parse-tree-node)
+         make-bracket-depth-rrb
+         bracket-depth-at
+         build-tree-from-domains)
+
+;; Build the parse tree from indent RRB + token RRB + bracket-depth RRB.
+;; This is the fire function for the tree-builder propagator.
+;;
+;; Algorithm (expressed as fixpoint, implemented sequentially):
+;; 1. Map each token to its source line (from start-pos)
+;; 2. Group tokens by content line
+;; 3. For each content line, determine parent from indent RRB
+;;    (skip if bracket-depth-at-line-start > 0 — continuation)
+;; 4. Assemble tree: each content line becomes a node, children
+;;    are its tokens + any child lines
+;;
+;; Returns: parse-cell-value with one derivation-node holding the tree.
+
+(define (build-tree-from-domains char-rrb indent-rrb token-rrb bracket-rrb
+                                  content-line-indices)
+  (define n-lines (rrb-size indent-rrb))
+  (define n-tokens (rrb-size token-rrb))
+
+  (when (= n-lines 0)
+    (return-parse-bot))
+
+  ;; Step 1: Map each token to its content-line index
+  ;; (by comparing token start-pos to line boundaries in char-rrb)
+  (define line-boundaries
+    ;; For each content line, find its start position in the source
+    (for/list ([li (in-range (rrb-size content-line-indices))])
+      (define source-line (rrb-get content-line-indices li))
+      ;; Find the position of this source line in the char-rrb
+      ;; (count newlines to find line start)
+      (find-line-start-pos char-rrb source-line)))
+
+  ;; Step 2: Assign tokens to content lines
+  (define line-tokens (make-vector n-lines '()))
+  (for ([ti (in-range n-tokens)])
+    (define entry (rrb-get token-rrb ti))
+    (define pos (token-entry-start-pos entry))
+    ;; Find which content line this token belongs to
+    (define line-idx (find-content-line-for-pos pos line-boundaries n-lines))
+    (when (and line-idx (< line-idx n-lines))
+      (vector-set! line-tokens line-idx
+                   (cons (cons ti entry) (vector-ref line-tokens line-idx)))))
+
+  ;; Reverse token lists (they were consed in reverse order)
+  (for ([i (in-range n-lines)])
+    (vector-set! line-tokens i (reverse (vector-ref line-tokens i))))
+
+  ;; Step 3: Compute parent assignments from indent RRB
+  ;; (same as golden-capture's topology computation)
+  (define parents (make-vector n-lines -1))
+  (define stack '())
+  (for ([i (in-range n-lines)])
+    (define indent (rrb-get indent-rrb i))
+
+    ;; Check bracket-depth at this line's first token
+    ;; If > 0, this line is a continuation (parent = bracket opener's line)
+    (define first-tok-idx
+      (and (pair? (vector-ref line-tokens i))
+           (car (car (vector-ref line-tokens i)))))
+    (define bd-at-start
+      (if (and first-tok-idx (> first-tok-idx 0))
+          (bracket-depth-at bracket-rrb (- first-tok-idx 1))
+          0))
+
+    (cond
+      [(> bd-at-start 0)
+       ;; Inside brackets — parent is the line containing the open bracket
+       ;; (for now: use the stack top as parent, same as normal indent)
+       (vector-set! parents i (if (null? stack) -1 (cdr (car stack))))]
+      [else
+       ;; Normal indent resolution
+       (set! stack
+         (let loop ([s stack])
+           (if (and (pair? s) (>= (car (car s)) indent))
+               (loop (cdr s))
+               s)))
+       (vector-set! parents i (if (null? stack) -1 (cdr (car stack))))
+       (set! stack (cons (cons indent i) stack))]))
+
+  ;; Step 4: Build tree nodes (bottom-up)
+  ;; Each line becomes a parse-tree-node. Children = its tokens + child lines.
+  (define nodes (make-vector n-lines #f))
+
+  ;; Build in reverse order (children before parents)
+  (for ([i (in-range (- n-lines 1) -1 -1)])
+    (define tok-entries
+      (for/fold ([rrb rrb-empty]) ([te (in-list (vector-ref line-tokens i))])
+        (rrb-push rrb (cdr te))))  ;; push token-entry values
+
+    ;; Collect child nodes (lines whose parent is i)
+    (define child-nodes
+      (for/fold ([rrb rrb-empty]) ([j (in-range n-lines)])
+        (if (= (vector-ref parents j) i)
+            (rrb-push rrb (vector-ref nodes j))
+            rrb)))
+
+    ;; Merge: tokens first, then child nodes
+    (define all-children (rrb-concat tok-entries child-nodes))
+
+    (define indent-level (rrb-get indent-rrb i))
+    (define source-line-num
+      (if (< i (rrb-size content-line-indices))
+          (rrb-get content-line-indices i)
+          i))
+
+    (vector-set! nodes i
+                 (parse-tree-node
+                  'line
+                  all-children
+                  (list source-line-num 0 0 0)  ;; simplified srcloc
+                  indent-level)))
+
+  ;; Step 5: Collect root nodes (parent = -1)
+  (define root-children
+    (for/fold ([rrb rrb-empty]) ([i (in-range n-lines)])
+      (if (= (vector-ref parents i) -1)
+          (rrb-push rrb (vector-ref nodes i))
+          rrb)))
+
+  (define root (parse-tree-node 'root root-children #f 0))
+
+  ;; Wrap in parse-cell-value with one derivation
+  (define item (make-parse-item 'program 1 0 n-tokens))
+  (define deriv (make-derivation-node item (list root)))
+  (parse-cell-value (seteq deriv)))
+
+;; Helper: return parse-bot
+(define (return-parse-bot)
+  parse-bot)
+
+;; Helper: find the character position where source line N starts
+(define (find-line-start-pos char-rrb source-line)
+  (if (= source-line 0)
+      0
+      (let loop ([pos 0] [line 0])
+        (cond
+          [(>= pos (rrb-size char-rrb)) pos]
+          [(= line source-line) pos]
+          [(char=? (rrb-get char-rrb pos) #\newline)
+           (loop (+ pos 1) (+ line 1))]
+          [else (loop (+ pos 1) line)]))))
+
+;; Helper: find which content line a character position belongs to
+(define (find-content-line-for-pos pos line-boundaries n-lines)
+  (let loop ([i (- n-lines 1)])
+    (cond
+      [(< i 0) 0]
+      [(<= (list-ref line-boundaries i) pos) i]
+      [else (loop (- i 1))])))
+
+
+;; ============================================================
 ;; Embedded lattice merge for RRB cells
 ;; ============================================================
 

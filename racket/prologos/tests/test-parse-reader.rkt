@@ -328,3 +328,116 @@
   (check-equal? (token-entry-end-pos e0) 2)
   (check-equal? (token-entry-start-pos e1) 3)
   (check-equal? (token-entry-end-pos e1) 5))
+
+
+;; ============================================================
+;; Phase 1d: Bracket-depth RRB
+;; ============================================================
+
+(test-case "bracket-depth: simple brackets"
+  (define char-rrb (make-char-rrb-from-string "[f x]"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  ;; [ → depth 1, f → 1, x → 1, ] → 0
+  (check-equal? (rrb-size bd-rrb) (rrb-size tok-rrb))
+  (check-equal? (car (rrb-get bd-rrb 0)) 1)  ;; after [
+  (check-equal? (car (rrb-get bd-rrb 1)) 1)  ;; f inside brackets
+  (check-equal? (car (rrb-get bd-rrb 3)) 0))  ;; after ]
+
+(test-case "bracket-depth: nested brackets"
+  (define char-rrb (make-char-rrb-from-string "[[x]]"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  ;; [[ → 1,2  x → 2  ]] → 1,0
+  (check-equal? (car (rrb-get bd-rrb 0)) 1)   ;; first [
+  (check-equal? (car (rrb-get bd-rrb 1)) 2)   ;; second [
+  (check-equal? (car (rrb-get bd-rrb 2)) 2)   ;; x at depth 2
+  (check-equal? (car (rrb-get bd-rrb 3)) 1)   ;; first ]
+  (check-equal? (car (rrb-get bd-rrb 4)) 0))  ;; second ]
+
+(test-case "bracket-depth: no brackets"
+  (define char-rrb (make-char-rrb-from-string "x y z"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  (for ([i (in-range (rrb-size bd-rrb))])
+    (check-equal? (car (rrb-get bd-rrb i)) 0)))
+
+(test-case "bracket-depth-at: lookup"
+  (define char-rrb (make-char-rrb-from-string "[x]"))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  (check-equal? (bracket-depth-at bd-rrb 0) 1)
+  (check-equal? (bracket-depth-at bd-rrb 2) 0))
+
+
+;; ============================================================
+;; Phase 1c: Tree-builder
+;; ============================================================
+
+(test-case "tree-builder: single line"
+  (define src "def x := 42")
+  (define char-rrb (make-char-rrb-from-string src))
+  (define-values (indent-rrb line-indices) (make-indent-rrb-from-char-rrb char-rrb))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  (define result (build-tree-from-domains char-rrb indent-rrb tok-rrb bd-rrb line-indices))
+  (check-pred parse-cell-value? result)
+  (check-false (parse-bot? result))
+  ;; One derivation
+  (check-equal? (set-count (parse-cell-value-derivations result)) 1))
+
+(test-case "tree-builder: multi-line with indentation"
+  (define src "def x := 42\n  where\n    [Eq x]")
+  (define char-rrb (make-char-rrb-from-string src))
+  (define-values (indent-rrb line-indices) (make-indent-rrb-from-char-rrb char-rrb))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  (define result (build-tree-from-domains char-rrb indent-rrb tok-rrb bd-rrb line-indices))
+  (check-pred parse-cell-value? result)
+  ;; Root should have 1 child (the def-form at indent 0)
+  (define deriv (set-first (parse-cell-value-derivations result)))
+  (define root (car (derivation-node-children deriv)))
+  (check-pred parse-tree-node? root)
+  (check-equal? (parse-tree-node-tag root) 'root)
+  ;; Root has 1 top-level form (def x at indent 0)
+  (check-equal? (rrb-size (parse-tree-node-children root)) 1))
+
+(test-case "tree-builder: blank lines skipped"
+  (define src "def x := 42\n\ndef y := 10")
+  (define char-rrb (make-char-rrb-from-string src))
+  (define-values (indent-rrb line-indices) (make-indent-rrb-from-char-rrb char-rrb))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  (define result (build-tree-from-domains char-rrb indent-rrb tok-rrb bd-rrb line-indices))
+  (define deriv (set-first (parse-cell-value-derivations result)))
+  (define root (car (derivation-node-children deriv)))
+  ;; 2 top-level forms (both at indent 0)
+  (check-equal? (rrb-size (parse-tree-node-children root)) 2))
+
+(test-case "tree-builder: tree cell on network"
+  (define net0 (make-prop-network))
+  (define-values (net1 cells) (create-parse-cells net0))
+  (define src "def x := 42")
+  (define char-rrb (make-char-rrb-from-string src))
+  (define-values (indent-rrb line-indices) (make-indent-rrb-from-char-rrb char-rrb))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  (define tree-val (build-tree-from-domains char-rrb indent-rrb tok-rrb bd-rrb line-indices))
+  ;; Write all 5 cells
+  (define net2
+    (net-cell-write
+     (net-cell-write
+      (net-cell-write
+       (net-cell-write
+        (net-cell-write net1
+         (parse-cells-char-cell-id cells) char-rrb)
+        (parse-cells-indent-cell-id cells) indent-rrb)
+       (parse-cells-token-cell-id cells) tok-rrb)
+      (parse-cells-bracket-cell-id cells) bd-rrb)
+     (parse-cells-tree-cell-id cells) tree-val))
+  ;; All 5 cells populated
+  (check-false (rrb-empty? (net-cell-read net2 (parse-cells-char-cell-id cells))))
+  (check-false (rrb-empty? (net-cell-read net2 (parse-cells-indent-cell-id cells))))
+  (check-false (rrb-empty? (net-cell-read net2 (parse-cells-token-cell-id cells))))
+  (check-false (rrb-empty? (net-cell-read net2 (parse-cells-bracket-cell-id cells))))
+  (check-false (parse-bot? (net-cell-read net2 (parse-cells-tree-cell-id cells)))))
