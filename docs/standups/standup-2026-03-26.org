@@ -1,0 +1,63 @@
+#+TITLE: Standup — 2026-03-26
+#+DATE: 2026-03-26
+
+* Yesterday (since 2026-03-25 standup)
+
+** PM Track 10B: Foundation Cleanup (COMPLETE — WS-A)
+- Network-always: every code path has live network (~with-fresh-meta-env~ creates ~make-elaboration-network~)
+- ~freeze~ rename (signal intent, 15 sites)
+- id-map external callers eliminated (3 → 0, ~hasmethod-constraint-info~ struct fix)
+- Process-string scoping audit: 89 ~set-box!~ sites, NO LEAKS
+- PUnify toggle: SYSTEMIC REGRESSION, reverted. Needs dedicated SRE track.
+- Batch worker: 4 params reduced (11→7). Registry snapshot retained (needs cells).
+- WS-B partial: session meta cell-id (B1 complete). Zonk elimination blocked on SRE 2C.
+- Tooling: CWD-independent scripts, dead-worker detection (30s vs 600s), stale .zo warning, summary file, processor-count workers, transitive .pnet staleness
+- ~134s suite, 376/376 all pass~
+- PIR: ~docs/tracking/2026-03-26_PM_TRACK10B_PIR.md~
+
+** PPN Track 0: Parse Domain Lattice Design (COMPLETE)
+- 4 lattice domains: Token (set-once), Surface (derivation set-union), Demand (Right Kan state), Core (trivial)
+- 6 cross-domain specs: 3 bridges + 2 exchanges + 1 projection
+- 57 new tests (lattice 27, bridges 23, integration 7)
+- NTT Syntax Design §16: parse lattices, ~:set-once~ kind, stratification options
+- Pre-0 benchmarks: CHAMP viable at 500K cells. All merge ops <1μs.
+- Integration test: hand-built network — happy path + ATMS ambiguity + type disambiguation
+- ~150.3s suite, 379/379 (7421 tests), all pass~
+- PIR: ~docs/tracking/2026-03-26_PPN_TRACK0_PIR.md~
+
+** Research Program
+- PRN (Propagator-Rewriting-Network) series established: theory series, grows from application track discoveries
+- PPN (Propagator-Parsing-Network) series: 10 tracks scoped (lattice → lexer → normalization → parser → elaboration → disambiguation → error recovery → grammar extensions → incremental → serialization)
+- Lattice Foundations for PPN: 1202 lines, abstract interpretation + semiring parsing + Datalog + monotone frameworks + categorical connections + ATMS-guided parsing + concrete lattice design
+- Kan Extensions, ATMS, GFP Parsing: Right Kan = NF-Narrowing demands, Left Kan + ATMS = 4-level search, GFP/bilattice parsing (novel), residuation = propagator waiting (identity)
+- Tropical Optimization + Network Architecture: cost-bounded exploration, user-defined grammar extensions, self-describing serialization
+- Lossy bidirectional typed grammars: invariant levels (identity/structural/behavioral/value) as NTT types
+- PRN Master + PPN Master tracking documents created
+
+** Process Improvements
+- Phase completion protocol: commit → tracker → dailies → next phase
+- "Vision contaminates audit" at 6 instances — approaching codification
+- Research investment correlates with implementation smoothness (new pattern)
+
+** Deferrals Captured
+- SRE Track 2C: cell refs in expressions (enables zonk elimination)
+- SRE Track PUnify: systemic parity investigation
+- PM Track 10C: per-test scheduling via Places
+- PPN Track 5: bilattice (gfp/elimination ordering) — WF-LE pattern
+
+** Metrics
+- 7421 tests, 379 files, ~150.3s (full suite)
+- ~60 commits in interval
+- 6 new files (parse-lattice.rkt, parse-bridges.rkt, 3 test files, acceptance)
+- 3 research documents, 2 series masters, 1 PIR
+
+* Today
+
+** PPN Track 1: Lexer as Propagators
+** Consider priorities: PPN 1-4 vs 10C vs other
+
+* Blockers
+
+- PUnify toggle: systemic regression (dedicated SRE track needed)
+- Zonk elimination: blocked on SRE Track 2C (elaborator creates cell refs)
+- Acceptance file: 5 syntax gaps block full clean run (pre-existing)
