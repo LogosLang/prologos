@@ -366,8 +366,11 @@ Brackets create INLINE structure (not indent-based):
 Bracket groups are NESTED within indent blocks. A bracket group's
 parent is the enclosing indent block or bracket group.
 
-**Critical interaction (D.3 self-critique finding)**: Bracket groups
-SUPPRESS indent tracking. A multi-line bracket group:
+**Critical interaction (D.3 self-critique, confirmed by code audit)**:
+Bracket groups SUPPRESS indent tracking. reader.rkt lines 235 and 274
+check `(= 0 (tokenizer-bracket-depth tok))` — indentation processing
+is SKIPPED when bracket depth > 0. Newlines inside brackets are treated
+as whitespace (no indent/dedent tokens). A multi-line bracket group:
 
 ```
 [map [fn [x : Int]
@@ -390,6 +393,32 @@ The bracket depth propagation is ALSO a chain (line-by-line, since
 a bracket opened on line 3 affects lines 4+). This chain can be
 MERGED with the indent context chain — each line's context includes
 BOTH the indent stack AND the bracket depth. One chain, two concerns.
+
+**Bracket depth at LINE START determines behavior** (confirmed by
+reader.rkt code audit, lines 235/274): if bracket-depth > 0 at line
+start, the ENTIRE line is a continuation (no indent processing).
+Bracket depth changes WITHIN a line (opens/closes) affect the NEXT
+line's bracket-depth-at-start, not the current line's classification.
+
+### 4.9 Architectural difference from reader.rkt (D.3 code audit)
+
+reader.rkt builds the tree INCREMENTALLY: consume INDENT token →
+call `parse-indented-block` → loop reading children → consume DEDENT
+token → return children list. The tree is built BY TOKEN CONSUMPTION.
+
+Our design builds the tree BY CONSTRAINT RESOLUTION: indent levels →
+parent-child assignments → tree topology. The tree exists BEFORE any
+"parser" consumes it. There are NO INDENT/DEDENT tokens — the parent-
+child relationships ARE the indent structure.
+
+This means: Track 2 (normalization) and Track 3 (parser) don't need
+indent/dedent tokens. They operate on the PRE-BUILT cell tree. The
+current pipeline's "consume indent tokens to build tree" step is
+ELIMINATED — the tree is a GIVEN, not a computation.
+
+This is a fundamental simplification. reader.rkt's `parse-indented-block`
+(lines 1716-1732) and `parse-top-level-form`'s indent check (line 1743)
+have NO ANALOGS in the new reader. The constraint chain REPLACES them.
 
 ### 4.7 The tree invariant
 
@@ -629,6 +658,22 @@ reader.rkt is DELETED upon completion. No dual-path.
 **Composition**: Trees compose into forests via module imports. The tree
 structure (cell topology) composes with Track 2 (normalization), Track 3
 (parsing), and Track 10 (serialization).
+
+**Propagator-First** (D.3 challenge): The token-pattern-registry (§3.2)
+is a Racket hash map, not a cell. Same pattern Track 8 criticized for
+trait/impl registries. Resolution: token patterns ARE static for a given
+grammar — they don't change during parsing. A Racket hash is correct for
+Track 1. If Track 7 (dynamic grammar extensions) needs dynamic patterns,
+the registry migrates to a cell then. This is the same pragmatic call
+we made for SRE Track 0 (form registry as Racket hash, not cell).
+
+**Data Orientation** (D.3 challenge): Structure cells hold `children:
+list of cell-id` — references, not embedded data. Parse trees are
+NETWORK TOPOLOGY, not self-contained values. This means parse trees
+can't be serialized by writing the root cell alone (unlike expression
+trees). For Track 1: fine (trees are ephemeral). For Track 8
+(incremental): trees persist across edits, serialization matters. Note
+for future, don't address now.
 
 **Completeness** (D.2): The constraint-based approach does the HARD
 thing (propagator-native tree construction with O(1) incremental) so
