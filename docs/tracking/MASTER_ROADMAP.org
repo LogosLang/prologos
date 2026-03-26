@@ -223,13 +223,57 @@ When elaboration, resolution, matching, and reduction all use the SRE:
 5. Express type checker as stratified propagator network
 6. Compiler is a Prologos program that type-checks itself
 
-** PPN (Propagator-Parsing-Network)  — /Parsing and rewriting as graph transformation on the network/
+** PRN (Propagator-Rewriting-Network)  — /Theory: hyperlattice rewriting as unifying formalism/
 
 | | |
 |------------------+------|
-| *Thesis*         | Parsing IS attribute evaluation IS propagator fixpoint (Engelfriet-Heyker). The multi-phase pipeline (lex→parse→elaborate→typecheck) collapses to a single propagator network with bidirectional information flow. User-defined grammar extensions as typed hyperedge replacement rules. |
-| *Status*         | Stage 0 research. 2 research documents. |
+| *Thesis*         | Parsing, structural reasoning, reduction, and logical inference are all instances of typed hyperlattice rewriting on propagator networks. PRN is the theoretical foundation that the application series (PPN, SRE, PReductions, BSP-LE) instantiate and contribute insights back to. |
+| *Status*         | Stage 0 research. Emerges from application track discoveries. |
+| *Origin*         | [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research]], [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]], SRE Track 0 PIR (SRE = DPO hyperedge replacement) |
+
+*** Relationship to Application Series
+
+PRN is not a track you implement first. It crystallizes as the applications
+teach us what the universals are — just as NTT crystallized from PM Tracks 1-8.
+
+#+BEGIN_SRC
+PRN (theory — what ARE the universal rewriting primitives?)
+  │
+  ├── fed by PPN: parse lattice design, ambiguity patterns, bidirectional flow
+  ├── fed by SRE: form registry = rewrite rules, relation-parameterized dispatch
+  ├── fed by PReductions: e-graph saturation, tropical cost extraction, confluence
+  ├── fed by BSP-LE: bilattice rewriting, NAF as non-monotone rewrite, tabling
+  │
+  └── feeds back: when two applications discover the same primitive,
+      PRN formalizes it as shared infrastructure. Applications adopt
+      the formalization instead of reinventing.
+#+END_SRC
+
+*** Confirmed Research Findings
+
+- SRE structural decomposition IS DPO hyperedge replacement ([[file:2026-03-22_SRE_MASTER.md][SRE Master]])
+- SRE form registry IS a hypergraph grammar (=prop:ctor-desc-tag= = production rule dispatch)
+- =prop:ctor-desc-tag= guarantees no critical pairs → confluence by construction
+- Zonk IS a rewrite rule (=expr-meta(id) → solution(id)=); eliminating zonk = making the rule matchless
+- Serialization/deserialization = hypergraph rewriting in opposite directions
+- Self-describing formats: grammar rules (Part 1) + data (Part 2) = typed rewriting spec
+
+*** Open Research Questions
+
+- What is the minimal set of rewriting primitives that all applications share?
+- How do non-monotone rewrites (NAF, retraction) compose with monotone rewrites?
+- Does the CALCO 2025 result (e-graphs are adhesive) extend to our propagator networks?
+- Can rewrite rules be NTT-typed? (Rule type = input pattern type → output pattern type)
+- What is the right cost model for rewrite selection? (Tropical semiring? Interaction net optimal reduction?)
+
+** PPN (Propagator-Parsing-Network)  — /Application: grammar and parsing on the network/
+
+| | |
+|------------------+------|
+| *Thesis*         | Parsing IS attribute evaluation IS propagator fixpoint (Engelfriet-Heyker). The multi-phase 14-file pipeline collapses to registered rewrite rules on the network. User-defined grammar extensions as typed hyperedge replacement rules — more powerful than Lisp macros. |
+| *Status*         | Stage 0 research. PRIORITY: prerequisite to future syntax/language design work. |
 | *Origin*         | [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research]], [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]] |
+| *Contributes to PRN* | Parse lattice design, ambiguity resolution, bidirectional type↔parse flow |
 
 *** Tracks (Proposed)
 
@@ -248,8 +292,17 @@ When elaboration, resolution, matching, and reduction all use the SRE:
 - SRE form registry IS a hypergraph grammar
 - ATMS provides search strategy for ambiguous parses / conflicting rewrites
 - NTT types grammar rules (type-safe grammar extensions)
-- PM Track 9 (reduction) shares DPO rewriting infrastructure
+- PReductions shares DPO rewriting infrastructure (PRN convergence point)
 - Goodman's semiring parsing: same parser parameterized by semiring (Boolean→recognition, tropical→optimization, forest→all parses)
+
+*** Priority Rationale
+
+PPN is a prerequisite to future syntax/language design work. The 14-file
+pipeline is the biggest development friction: every new syntax feature
+touches all 14 files, every AST node is a pipeline exhaustiveness problem.
+PPN collapses this to: register a rewrite rule (one file). This accelerates
+CIU, NTT implementation, user-defined grammars, and the self-hosting
+trajectory.
 
 ** OE (Optimization Enrichment)  — /Tropical semirings and cost-optimal computation across all series/
 
@@ -275,6 +328,78 @@ OE is NOT a standalone implementation series — it produces lattice designs
 and enrichment patterns that OTHER series consume. Each OE track delivers
 infrastructure (a tropical lattice, a cell product type, a cost-merge
 function) that plugs into PPN, PM, SRE, or BSP-LE.
+
+** PReductions  — /Application: reduction and optimization as rewriting on the network/
+
+| | |
+|------------------+------|
+| *Thesis*         | β/δ/ι reduction, equality saturation, and optimization are DPO rewrite rules on the propagator network. E-graphs provide the equality-aware substrate. Tropical semirings provide cost-optimal extraction. Interaction nets provide strong confluence. |
+| *Status*         | Stage 1 research. Currently scoped as PM Track 9. |
+| *Origin*         | [[file:2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md][Track 9 Research Note]], [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research]], [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]] |
+| *Contributes to PRN* | E-graph saturation patterns, confluence analysis, tropical cost extraction, interaction net reduction strategies |
+
+*** Tracks (Proposed)
+
+| Track | Description | Status | Depends On |
+|-------+-------------+--------+------------|
+| 0 | E-graph lattice + equality saturation as fixpoint | ⬜ | SRE Track 0 (form registry) |
+| 1 | β/δ/ι reduction rules as DPO rewrite rules | ⬜ | Track 0 |
+| 2 | Interaction net reduction (strong confluence) | ⬜ | Track 1 |
+| 3 | Tropical extraction (cost-optimal program selection) | ⬜ | Track 1, OE Track 2 |
+| 4 | Integration with elaborator (compile-time reduction on network) | ⬜ | Track 1, SRE Track 2C |
+
+*** Relationship to PM Track 9
+
+PReductions IS PM Track 9, elevated to a named series. PM Track 9 stays in
+the PM roadmap as a cross-reference: "PM Track 9 = PReductions (see series)."
+The reduction infrastructure is shared with the SRE (structural decomposition
+is a rewrite rule) and PPN (grammar productions are rewrite rules).
+
+* Cross-Series Dependency Map
+
+#+BEGIN_SRC
+                        ┌─────────────────────────┐
+                        │     PRN (theory)         │
+                        │ Hyperlattice rewriting   │
+                        │ formalism                │
+                        └──────┬──────────────┬────┘
+                    fed by │              │ feeds back
+              ┌────────────┴──────┐   ┌───┴───────────────┐
+              │                   │   │                   │
+    ┌─────────┴────┐  ┌──────────┴───┴─┐  ┌─────────────┴──┐
+    │ PPN          │  │ SRE            │  │ PReductions    │
+    │ (parsing)    │  │ (structural)   │  │ (reduction)    │
+    │              │  │                │  │                │
+    │ PRIORITY:    │  │ Track 2C:      │  │ E-graphs,      │
+    │ 14-file      │  │ elaborator     │  │ interaction    │
+    │ pipeline     │  │ → cell refs    │  │ nets, GoI      │
+    │ collapse     │  │ → zonk death   │  │                │
+    └──────┬───────┘  └──────┬─────────┘  └───────┬────────┘
+           │                 │                     │
+           └────────┬────────┴─────────────────────┘
+                    │ all consume
+              ┌─────┴──────────┐
+              │  PM (substrate)│
+              │  Cells, .pnet, │
+              │  network infra │
+              │                │
+              │  10C: Places   │
+              └─────┬──────────┘
+                    │ enriched by
+              ┌─────┴──────┐
+              │  OE (cost) │
+              │  Tropical   │
+              │  semirings  │
+              └────────────┘
+
+    BSP-LE (logic engines) ←──── fed by all; contributes bilattice
+                                  rewriting, NAF, tabling to PRN
+
+    NTT (type theory) ←──── types everything; crystallized from PM,
+                             extended by PPN/SRE/PReductions discoveries
+
+    CIU (collections) ←──── blocked on SRE Track 2C (trait dispatch)
+#+END_SRC
 
 * Completed Standalone Tracks (not part of a Series)
 
