@@ -1,0 +1,602 @@
+;; PM Track 10B: Foundation Cleanup + Zonk Elimination — Acceptance File
+;; Run with: process-file "examples/2026-03-25-track10b.prologos"
+;;
+;; PURPOSE: Stress-test the language across every feature that Track 10B touches.
+;; Track 10B removes: CHAMP fallback, id-map, zonk-final, mutable session metas.
+;; This file exercises EVERY feature that depends on meta-variable resolution,
+;; type inference, session types, generic arithmetic, traits, and module loading.
+;;
+;; STRATEGY: Not just "does this compile?" but "does every corner of the syntax
+;; compose correctly?" Ideal syntax is tried first. If it doesn't work, it's
+;; commented out with a note explaining what broke. Working alternatives follow.
+;;
+;; The gap between ideal and working is learning for future tracks.
+;;
+;; Run BEFORE implementation (baseline) and AFTER each phase to catch regressions.
+
+;; ===================================================================
+;; Section 1: Basic inference — metas must resolve correctly
+;; ===================================================================
+ns track10b-s1
+
+;; Type inference on simple definitions
+def x := 42                           ;; infer Int
+def y := [int+ x 10]                  ;; infer Int, meta for x resolves
+def z := [int* x y]                   ;; 42 * 52 = 2184
+
+;; Nat inference
+def n := 3N                            ;; infer Nat
+def m := [suc [suc 0N]]               ;; infer Nat via suc chain
+
+;; Bool inference
+def b := [not true]                    ;; infer Bool
+def c := [and true [or false true]]    ;; nested bool ops
+
+;; String inference
+def greeting := "hello"
+def shouting := [str::to-upper greeting]
+
+;; List inference — polymorphic, meta for element type
+def xs := '[1 2 3 4 5]                ;; infer [List Int]
+def ys := [map [fn [x : Int] [int+ x 1]] xs]  ;; infer [List Int]
+[length ys]                            ;; 5
+
+;; Option inference
+def opt := [some 42]                   ;; infer [Option Int]
+def nothing := none                    ;; infer [Option ?A] — meta left unsolved → defaulted
+
+
+;; ===================================================================
+;; Section 2: Polymorphic functions — implicits, generics, spec
+;; ===================================================================
+ns track10b-s2
+
+;; Identity with implicit type
+spec my-id {A : Type} A -> A
+defn my-id [x] x
+[my-id 42]                            ;; 42 : Int
+[my-id "hello"]                        ;; "hello" : String
+[my-id true]                           ;; true : Bool
+
+;; Compose
+spec my-compose {A B C : Type} [B -> C] -> [A -> B] -> A -> C
+defn my-compose [f g x] [f [g x]]
+def inc := [fn [x : Int] [int+ x 1]]
+def dbl := [fn [x : Int] [int* x 2]]
+[my-compose dbl inc 5]                 ;; (5+1)*2 = 12
+
+;; Flip
+spec my-flip {A B C : Type} [A -> B -> C] -> B -> A -> C
+defn my-flip [f b a] [f a b]
+[my-flip int- 10 3]                    ;; 3 - 10 = -7
+
+;; Higher-rank: function that takes a polymorphic function
+;; IDEAL: spec apply-both {A B : Type} [{X : Type} -> X -> X] -> A -> B -> [A * B]
+;; WORKING:
+spec apply-both {A B : Type} [A -> A] -> [B -> B] -> A -> B -> [A * B]
+defn apply-both [fa fb a b] [fa a, fb b]
+
+
+;; ===================================================================
+;; Section 3: Trait instances — resolution must work through cell reads
+;; ===================================================================
+ns track10b-s3
+
+;; Generic arithmetic (uses Num trait bundle)
+def a := [+ 3 4]                       ;; 7 : Int via Add instance
+def b := [- 10 3]                      ;; 7 : Int via Sub instance
+def c := [* 2 5]                       ;; 10 : Int via Mul instance
+
+;; Eq trait
+[eq? 42 42]                            ;; true
+[eq? "hello" "hello"]                  ;; true
+
+;; Ord trait
+[ord-lt 3 5]                           ;; true
+[ord-compare 5 3]                      ;; gt-ord
+
+;; Pipeline with generic ops
+|> 5 inc inc inc                       ;; 8
+|> 10 [fn [x : Int] [* x x]]          ;; 100
+
+;; Partial application
+def double := [int* 2 _]
+[double 21]                            ;; 42
+
+
+;; ===================================================================
+;; Section 4: Pattern matching — exhaustiveness, dispatch
+;; ===================================================================
+ns track10b-s4
+
+;; Multi-arity defn (preferred pattern dispatch)
+spec is-zero Nat -> Bool
+defn is-zero
+  | zero  -> true
+  | suc _ -> false
+[is-zero 0N]                           ;; true
+[is-zero 3N]                           ;; false
+
+;; Match expression (mid-expression dispatch)
+def describe := [fn [n : Nat] (match n | zero -> "none" | suc _ -> "some")]
+[describe 0N]                          ;; "none"
+[describe 1N]                          ;; "some"
+
+;; List pattern matching
+spec my-head {A : Type} [List A] -> [Option A]
+defn my-head
+  | nil      -> none
+  | cons h _ -> [some h]
+[my-head '[1 2 3]]                     ;; some 1
+[my-head (the [List Int] nil)]         ;; none
+
+;; Nested patterns
+spec sum-list [List Int] -> Int
+defn sum-list
+  | nil          -> 0
+  | cons h rest  -> [int+ h [sum-list rest]]
+[sum-list '[1 2 3 4 5]]               ;; 15
+
+
+;; ===================================================================
+;; Section 5: Dependent types — Pi, Sigma, universe levels
+;; ===================================================================
+ns track10b-s5
+
+;; Type-level function
+spec Vec Type -> Nat -> Type
+def Vec := [fn [A : Type] [n : Nat] (the Type (match n | zero -> [Unit] | suc m -> [A * [Vec A m]]))]
+
+;; IDEAL: def v2 : [Vec Int 2N] := [1, [2, unit]]
+;; WORKING (Vec may not reduce correctly through match):
+def pair-int := [42, [99, unit]]
+
+;; Universe polymorphism
+spec level-poly {l : Level} [Type l] -> [Type l]
+defn level-poly [t] t
+
+;; Sigma type (dependent pair)
+;; IDEAL: def dpair : <(n : Nat) * [Vec Int n]> := <2N, [1, [2, unit]]>
+;; WORKING:
+def simple-pair := [42, true]          ;; [Int * Bool]
+[fst simple-pair]                      ;; 42
+[snd simple-pair]                      ;; true
+
+
+;; ===================================================================
+;; Section 6: Maps, sets, dot-access, path operations
+;; ===================================================================
+ns track10b-s6
+
+;; Map literals
+def person := {:name "Alice" :age 30 :active true}
+person.name                            ;; "Alice" via dot-access
+person.age                             ;; 30
+
+;; Nested maps
+def company := {:name "Acme" :ceo {:name "Bob" :title "CEO"}}
+company.ceo.name                       ;; "Bob"
+
+;; IDEAL: def updated := [update-in company [:ceo :name] [fn [s : String] [str::append s " Jr."]]]
+;; WORKING:
+def updated := [map-set company :name "Acme Corp"]
+
+;; Set operations
+def s1 := [set-from-list '[1 2 3]]
+def s2 := [set-from-list '[2 3 4]]
+
+;; PVec operations
+def pv := [pvec 1 2 3 4 5]
+[pvec-fold pv 0 int+]                 ;; 15
+
+
+;; ===================================================================
+;; Section 7: Trait definitions — custom traits with instances
+;; ===================================================================
+ns track10b-s7
+
+;; Custom trait (method syntax: name : type, not spec name type)
+trait Describable {A}
+  describe : A -> String
+
+;; Instance for Int
+impl Describable Int
+  defn describe [n : Int] <String>
+    "an integer"
+
+;; Instance for Bool
+;; IDEAL: multi-arity defn in impl
+;; impl Describable Bool
+;;   defn describe
+;;     | true  -> "truth"
+;;     | false -> "falsehood"
+;; WORKING: explicit match (multi-arity in impl may not parse)
+impl Describable Bool
+  defn describe [b : Bool] <String>
+    (match b | true -> "truth" | false -> "falsehood")
+
+;; IDEAL: [describe 42]            ;; "an integer" — would need trait resolution through cells
+;; WORKING:
+[describe (the Int 42)]               ;; "an integer"
+[describe true]                        ;; "truth"
+
+;; Bundle
+;; IDEAL:
+;; bundle Printable := (Describable Eq)
+;; WORKING:
+;; (bundles require more syntax work)
+
+
+;; ===================================================================
+;; Section 8: Module imports — cross-module resolution
+;; ===================================================================
+ns track10b-s8
+
+(imports [prologos::data::nat :as nat :refer [add sub]])
+(imports [prologos::data::pair :refer [swap bimap]])
+(imports [prologos::data::option :as opt :refer [some none]])
+
+;; Cross-module operations
+def n1 := [add 3N 4N]                 ;; 7N
+def n2 := [sub 5N 2N]                 ;; 3N
+
+;; Pair operations from imported module
+def p := [42, "hello"]
+[swap p]                               ;; ["hello", 42]
+[bimap inc str::length p]              ;; [43, 5]
+
+;; Option operations
+[opt::map [fn [x : Int] [int+ x 1]] [some 41]]  ;; some 42
+
+
+;; ===================================================================
+;; Section 9: String and Char operations — foreign function marshalling
+;; ===================================================================
+ns track10b-s9
+
+;; String operations (foreign functions — tests marshal-in/out)
+[str::length "hello world"]            ;; 11
+[str::to-upper "hello"]                ;; "HELLO"
+[str::to-lower "WORLD"]               ;; "world"
+[str::contains "hello world" "world"]  ;; true
+[str::append "foo" "bar"]              ;; "foobar"
+[str::split "a,b,c" ","]              ;; '["a" "b" "c"]
+
+;; Char operations
+[char::code 'A']                       ;; 65
+;; IDEAL: [char::from-code 65]         ;; 'A'
+;; WORKING:
+;; IDEAL: [char::upper 'a']            ;; 'A' — char literal syntax
+;; NOTE: WS-mode has no char literal syntax yet (#\a is sexp-only)
+;; This is a language gap to address in future syntax work
+
+
+;; ===================================================================
+;; Section 10: Numeric types — Int, Nat, Rat, Posit conversions
+;; ===================================================================
+ns track10b-s10
+
+;; Int arithmetic
+def i1 := [int+ 100 200]              ;; 300
+def i2 := [int* 6 7]                  ;; 42
+def i3 := [int- 10 20]                ;; -10
+
+;; Generic arithmetic across types
+def g1 := [+ 3 4]                     ;; 7 : Int
+def g2 := [- 10 3]                    ;; 7 : Int
+
+;; Subtype relationships
+;; IDEAL: def sub-check : Int := (the Nat 5N)  ;; Nat <: Int subtype coercion
+;; WORKING:
+;; (subtype coercion may not be automatic yet)
+
+;; Posit approximate arithmetic
+def p1 := ~3.14
+def p2 := ~2.71
+;; IDEAL: [+ p1 p2]                   ;; ~5.85 : Posit32 via generic arithmetic
+;; WORKING:
+;; (Posit generic arithmetic may need explicit instance)
+
+
+;; ===================================================================
+;; Section 11: Control flow — if, cond, when, do, let
+;; ===================================================================
+ns track10b-s11
+
+;; If expression (prefer pattern matching, but test it works)
+(if true 1 2)                          ;; 1
+
+;; Cond (desugars to nested if)
+;; IDEAL:
+;; cond
+;;   [eq? 1 1] -> "equal"
+;;   [eq? 1 2] -> "nope"
+;;   else      -> "fallback"
+;; NOTE: cond WS syntax needs investigation — commented out for now
+;; WORKING: use nested if
+(if [eq? 1 1] "equal" (if [eq? 1 2] "nope" "fallback"))
+
+;; When (defmacro from prelude)
+(when true "yes")                      ;; "yes" — tests preparse macro restoration from .pnet
+
+;; Let binding
+;; IDEAL: (let [x 10] [y 20] [int+ x y])
+;; NOTE: let syntax may use different binding form
+;; WORKING: use def instead
+def let-x : Int := 10
+def let-y : Int := 20
+[int+ let-x let-y]                     ;; 30
+
+;; Do block
+;; IDEAL:
+;; do
+;;   x : Int = 42
+;;   y : Int = [int+ x 1]
+;;   y
+;; NOTE: do block binding syntax is [name : type = value], not (def ...)
+;; WORKING: use sequential defs
+def do-x : Int := 42
+def do-y : Int := [int+ do-x 1]
+do-y                                    ;; 43
+
+
+;; ===================================================================
+;; Section 12: Pipeline and composition
+;; ===================================================================
+ns track10b-s12
+
+;; Pipeline operator
+|> 5 inc inc inc                       ;; 8
+|> '[1 2 3 4 5] [map [fn [x : Int] [int* x x]]] [foldr int+ 0]
+
+;; IDEAL: |> "hello" str::to-upper str::length  ;; 5
+;; WORKING:
+|> "hello" str::to-upper
+
+;; Composition
+;; IDEAL: def inc-then-double := >> inc dbl
+;; WORKING:
+;; (>> may need specific types)
+
+
+;; ===================================================================
+;; Section 13: Transducers and lazy sequences
+;; ===================================================================
+ns track10b-s13
+
+(imports [prologos::data::lseq :as lseq :refer [LSeq lseq-nil lseq-cell]])
+(imports [prologos::data::lseq-ops :refer [list-to-lseq lseq-to-list lseq-map lseq-take]])
+
+;; Lazy sequence operations
+def lazy-nats := [list-to-lseq '[1 2 3 4 5 6 7 8 9 10]]
+def first-five := [lseq-take 5 lazy-nats]
+[lseq-to-list first-five]             ;; '[1 2 3 4 5]
+
+;; Map over lazy sequence
+def doubled := [lseq-map [fn [x : Int] [int* x 2]] lazy-nats]
+[lseq-to-list [lseq-take 3 doubled]]  ;; '[2 4 6]
+
+
+;; ===================================================================
+;; Section 14: Quote and quasiquote — code as data
+;; ===================================================================
+ns track10b-s14
+
+;; Quote
+def quoted := '(foo bar baz)          ;; Datum list
+
+;; IDEAL: Quasiquote with unquote
+;; def template := `(hello ~name world)
+;; WORKING:
+def q := '(1 2 3)
+
+
+;; ===================================================================
+;; Section 15: Error paths — these should produce clean errors, not crashes
+;; ===================================================================
+ns track10b-s15
+
+;; Type error (should report cleanly, not crash)
+;; IDEAL: [int+ "hello" 42]           ;; Type error: expected Int, got String
+;; This is commented because it SHOULD error — uncomment to verify error quality
+
+;; Unbound variable (should report cleanly)
+;; IDEAL: [nonexistent-function 42]
+;; Commented — should produce "Unbound variable" error
+
+;; Arity mismatch
+;; IDEAL: [int+ 1 2 3]                ;; Too many arguments
+;; Commented
+
+
+;; ===================================================================
+;; Section 16: Subtype relationships — structural subtyping
+;; ===================================================================
+ns track10b-s16
+
+;; Numeric subtype chain: Nat <: Int
+;; IDEAL:
+;; spec accepts-int Int -> Int
+;; defn accepts-int [x] [int+ x 1]
+;; [accepts-int (the Nat 5N)]          ;; Nat coerced to Int
+;; WORKING: (subtype coercion may not be automatic)
+def just-int := [int+ 3 4]            ;; 7 : Int
+
+
+;; ===================================================================
+;; Section 17: Wildcard partial application
+;; ===================================================================
+ns track10b-s17
+
+;; Partial application with wildcards
+def add-ten := [int+ _ 10]
+[add-ten 32]                           ;; 42
+
+def multiply-by-3 := [int* 3 _]
+[multiply-by-3 14]                     ;; 42
+
+;; Nested wildcards in pipeline
+|> '[1 2 3] [map [int* 2 _]]          ;; '[2 4 6]
+
+
+;; ===================================================================
+;; Section 18: Varargs and list literals
+;; ===================================================================
+ns track10b-s18
+
+;; List literals
+def nums := '[10 20 30 40 50]
+[head nums]                            ;; some 10
+[tail nums]                            ;; '[20 30 40 50]
+[length nums]                          ;; 5
+
+;; Heterogeneous operations (should all work on List Int)
+[reverse nums]                         ;; '[50 40 30 20 10]
+[append '[1 2] '[3 4]]                 ;; '[1 2 3 4]
+;; IDEAL: [filter [fn [x : Int] [int> x 25]] nums]
+;; NOTE: `int>` has `>` which the WS reader parses as angle bracket
+;; WORKING: use ord-gt instead
+[filter [fn [x : Int] [ord-gt x 25]] nums]  ;; '[30 40 50]
+
+;; Int comparison helpers
+;; IDEAL: [filter [> _ 25] nums]       ;; partial with generic >
+;; WORKING: (needs explicit comparison function)
+
+
+;; ===================================================================
+;; Section 19: Spec metadata — where clauses, forall
+;; ===================================================================
+ns track10b-s19
+
+;; IDEAL: spec with where clause
+;; spec my-sort {A : Type} [List A] -> [List A]
+;;   :where (Ord A)
+;; defn my-sort [xs] [sort xs]
+;; NOTE: :where syntax on user-defined specs crashes at expand-bundle-constraints
+;; This is a WS-mode syntax gap — the sexp form works but WS parsing is broken
+;; WORKING: sort with concrete Int type (no generic)
+[sort '[3 1 4 1 5 9]]                 ;; '[1 1 3 4 5 9]
+[sort [dedup '[3 1 4 1 5 9 2 6 5]]]   ;; '[1 2 3 4 5 6 9]
+
+
+;; ===================================================================
+;; Section 20: Session types — protocol verification
+;; ===================================================================
+;; IDEAL: Full session type example
+;; ns track10b-s20
+;;
+;; session AddProtocol
+;;   Send Int ; Send Int ; Recv Int ; End
+;;
+;; proc add-server : AddProtocol
+;;   [x <- recv]
+;;   [y <- recv]
+;;   [send [int+ x y]]
+;;
+;; proc add-client : [dual AddProtocol]
+;;   [send 3]
+;;   [send 4]
+;;   [result <- recv]
+;;   result
+;;
+;; WORKING: Session types need proc syntax which may not be fully wired
+
+;; Basic session type annotation
+;; (the [Send Int End] (send 42))
+
+
+;; ===================================================================
+;; Section 21: Propagator network — first-class networks
+;; ===================================================================
+ns track10b-s21
+
+;; Create a propagator network
+def my-net : PropNetwork := [net-new 1000]
+(eval (net-contradict? my-net))        ;; false — no contradiction
+
+;; IDEAL: Create cells, add propagators, run to quiescence
+;; def net+cell := [net-new-cell my-net 0 int+]
+;; def net2 := [fst net+cell]
+;; def cell-id := [snd net+cell]
+;; WORKING:
+(eval (net-quiescent? my-net))         ;; true — empty network is quiescent
+
+
+;; ===================================================================
+;; Section 22: Introspection — type-of, spec-of
+;; ===================================================================
+ns track10b-s22
+
+;; Type introspection
+(type-of 42)                           ;; Int
+(type-of "hello")                      ;; String
+(type-of true)                         ;; Bool
+(type-of '[1 2 3])                     ;; [List Int]
+(type-of [some 42])                    ;; [Option Int]
+
+
+;; ===================================================================
+;; Section 23: Broadcast and path syntax
+;; ===================================================================
+ns track10b-s23
+
+;; Dot-access chaining
+;; IDEAL: List of maps
+;; def team := '[{:name "Alice" :score 100} {:name "Bob" :score 200} {:name "Charlie" :score 150}]
+;; WORKING:
+def alice := {:name "Alice" :score 100}
+def bob := {:name "Bob" :score 200}
+
+;; IDEAL: Broadcast
+;; team.*name                          ;; '["Alice" "Bob" "Charlie"]
+;; WORKING:
+alice.name                             ;; "Alice"
+bob.score                              ;; 200
+
+
+;; ===================================================================
+;; Section 24: Union types
+;; ===================================================================
+ns track10b-s24
+
+;; Union type annotation
+def u : <Int | String> := 42
+def v : <Int | String> := "hello"
+
+;; IDEAL: Pattern match on union
+;; (match u
+;;   | (the Int n)    -> [int+ n 1]
+;;   | (the String s) -> [str::length s])
+;; WORKING:
+def just-u := u                        ;; 42 : <Int | String>
+
+
+;; ===================================================================
+;; Section 25: Comprehensive composition test
+;; ===================================================================
+ns track10b-s25
+
+;; This section composes MANY features together to stress-test
+;; the pipeline end-to-end after Track 10B changes.
+
+;; Polymorphic function + trait constraint + list ops + pipeline
+;; IDEAL:
+;; spec process-and-sort {A : Type} [List A] -> [A -> Int] -> [List Int]
+;;   :where (Ord A)
+;; defn process-and-sort [xs f]
+;;   |> xs [map f] sort
+;; NOTE: :where on user specs crashes — see Section 19
+
+;; WORKING: concrete type (no generic)
+spec process-and-sort [List Int] -> [Int -> Int] -> [List Int]
+defn process-and-sort [xs f]
+  |> xs [map f] sort
+
+[process-and-sort '[3 1 4 1 5] [fn [x : Int] [int* x x]]]
+;; sort [map square '[3 1 4 1 5]] = sort '[9 1 16 1 25] = '[1 1 9 16 25]
+
+;; Nested module access + generic ops + let + pattern match
+;; IDEAL: (let [data {:x 10}] data.x)
+;; WORKING: use def
+def comp-data := {:x 10 :y 20 :z 30}
+comp-data.x                            ;; 10
