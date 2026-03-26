@@ -32,7 +32,7 @@ Hyperlattice Conjecture.
 | 1b | Tokenizer propagator (char RRB → token RRB) | ✅ | `5819465` — 18 patterns, priority dispatch, set-of-types. 15 tests. |
 | 1c | Tree-builder propagator (indent+bracket RRBs → tree M-type cell) | ✅ | `9af5b2d` — parse-tree-node with RRB children. Parent from indent + bracket suppression. 4 tests. |
 | 1d | Bracket-depth RRB propagator (token RRB → bracket RRB) | ✅ | `9af5b2d` — running sum + qq-depth channel. 4 tests. |
-| 1e | Context disambiguator (tree cell → token RRB reclassify) | ⬜ | Bridge γ. ≤2-round fixpoint in S0 (§11.4). 11 decisions. |
+| 1e | Context disambiguator (tree cell → token RRB reclassify) | ✅ | `006ffec` — disambiguate-tokens + parse-string-to-cells. bd-before fix. 7 tests (51 total). |
 | 1f | **Integration gate**: golden comparison on simple files | ⬜ | Must pass before Phase 2. |
 | 2 | Reader macros: #p, ', `, #=, dot-access, broadcast | ⬜ | Stateful recognizers in pattern registry. |
 | 3a | Read API (5 tree-walking functions) | ⬜ | Primary API. |
