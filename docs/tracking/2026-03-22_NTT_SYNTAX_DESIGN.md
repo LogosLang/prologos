@@ -1082,7 +1082,158 @@ Modeling Track 10's architecture in NTT revealed 5 findings:
    closure is a derived, non-serializable cache. The serialized form IS the
    NTT-correct representation.
 
-## 16. Next Steps
+## 16. Level 0b: Parse Domain Lattices (from PPN Track 0)
+
+Added from PPN Track 0 design (2026-03-26). These extend Level 0 with
+parse-specific lattice kinds and Level 4 with parse bridges/exchanges.
+
+### 16.1 `:set-once` Lattice Kind (NEW)
+
+Some cells are written once and never merged. Tokens, core AST nodes,
+and ground results have this property. The `:set-once` kind distinguishes
+them from accumulatable (`:value`) and structural (`:structural`) cells.
+
+```prologos
+data TokenValue
+  := token-bot
+   | token [type : Symbol] [lexeme : String] [span : Span]
+           [indent-level : Int] [indent-delta : IndentChange]
+   | token-error
+  :lattice :set-once
+  :bot token-bot
+  :top token-error
+  ;; Network enforces: bot → value (one write). value → different = error.
+```
+
+The network enforces set-once semantics: writing to a cell that already
+has a non-bot value is a contradiction (unless the new value is `equal?`
+to the existing value — idempotent). ATMS branches for the rare case
+where a cell legitimately has multiple possible values (ambiguous token).
+
+### 16.2 Parse Derivation Lattice
+
+```prologos
+;; Surface (parse) lattice — derivation-only (lfp)
+;; Track 5 adds: newtype ParseElimination := ParseElimination (Set AssumptionId)
+data ParseValue
+  := parse-bot
+   | parse-cell [derivations : Set DerivationNode]
+   | parse-error
+  :lattice :value
+  :bot parse-bot
+  :top parse-error
+  :join set-union
+
+data DerivationNode
+  := derivation-node
+       [item       : ParseItem]
+       [children   : List DerivationNode]   ;; provenance / trace
+       [assumption : Option AssumptionId]    ;; ATMS tag
+       [cost       : Rational]              ;; tropical enrichment
+```
+
+### 16.3 Demand Lattice
+
+```prologos
+data DemandValue
+  := demand-bot
+   | demands [set : Set Demand]
+  :lattice :value
+  :bot demand-bot
+  :join set-union
+
+data Demand
+  := demand
+       [target-domain  : Symbol]     ;; open, extensible
+       [position       : Any]        ;; domain-specific
+       [specificity    : Symbol]     ;; open, not enum
+       [source-stratum : Symbol]
+       [priority       : Int]        ;; 0 = highest (tropical)
+```
+
+### 16.4 Parse Bridges (within-stratum)
+
+```prologos
+bridge TokenToSurface
+  :from TokenValue
+  :to   ParseValue
+  :alpha token-to-parse-scan
+  :gamma parse-context-to-token-disambiguate
+
+bridge SurfaceToCore
+  :from ParseValue
+  :to   TypeExpr
+  :alpha parse-to-ast-construct
+  :gamma core-error-to-atms-retract
+  ;; D.4: backward flow is ATMS-mediated, NOT classical Galois γ.
+  ;; core-error-to-atms-retract returns an assumption-id to retract,
+  ;; not a lattice value to merge.
+
+;; SurfaceToType: α only (backward via ATMS, not bridge γ)
+bridge SurfaceToType
+  :from ParseValue
+  :to   TypeExpr
+  :alpha parse-to-type-constraints
+  ;; No :gamma — backward flow is ATMS assumption retraction
+```
+
+### 16.5 Parse Exchanges (cross-strata)
+
+```prologos
+;; Right Kan: elaborate demands from parse
+exchange S-elaborate -> S-parse
+  :right demand-from-elaboration -> targeted-parse
+
+;; Left Kan: parse forwards partial results to elaborate
+exchange S-parse -> S-elaborate
+  :left  partial-parse -> early-elaboration
+```
+
+### 16.6 One-way Projection (fibration)
+
+```prologos
+;; SurfaceToNarrowing: α only, no backward flow
+bridge SurfaceToNarrowing
+  :from ParseValue
+  :to   NarrowingRequest
+  :alpha parse-to-narrowing-trigger
+  ;; One-way: results flow back via TypeToSurface ATMS retraction
+```
+
+### 16.7 Parse Stratification (options)
+
+```prologos
+;; OPTION A: Separate strata (with exchanges)
+stratification ParseLoop
+  :strata [S-retract S-parse S-elaborate S-commit]
+  :fiber S-parse
+    :bridges [TokenToSurface]
+  :fiber S-elaborate
+    :bridges [SurfaceToCore SurfaceToType]
+  :exchange S-elaborate -> S-parse
+    :right demand-from-elaboration -> targeted-parse
+  :exchange S-parse -> S-elaborate
+    :left  partial-parse -> early-elaboration
+  :barrier S-retract
+    :commit retract-assumptions
+  :fuel :cost-bounded
+
+;; OPTION B: Same stratum (immediate bidirectional flow)
+stratification UnifiedLoop
+  :strata [S-retract S0 S-commit]
+  :fiber S0
+    :bridges [TokenToSurface SurfaceToCore SurfaceToType]
+    ;; No exchanges needed — all domains propagate together
+  :barrier S-retract
+    :commit retract-assumptions
+  :fuel :cost-bounded
+
+;; Decision between A and B is Track 3-4, not Track 0.
+```
+
+---
+
+## 17. Next Steps
 
 1. **Continue design iteration**: Address open questions through discussion.
    Target ~90% clarity before case studies.
@@ -1100,7 +1251,7 @@ Modeling Track 10's architecture in NTT revealed 5 findings:
 4. **Toplevel Forms Reference update**: Add finalized NTT forms to
    `TOPLEVEL_FORMS_REFERENCE.org`.
 
-## 16. Source Documents
+## 18. Source Documents
 
 | Document | Relationship |
 |----------|-------------|
