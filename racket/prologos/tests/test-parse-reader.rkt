@@ -441,3 +441,95 @@
   (check-false (rrb-empty? (net-cell-read net2 (parse-cells-token-cell-id cells))))
   (check-false (rrb-empty? (net-cell-read net2 (parse-cells-bracket-cell-id cells))))
   (check-false (parse-bot? (net-cell-read net2 (parse-cells-tree-cell-id cells)))))
+
+;; ============================================================
+;; Phase 1e: Context disambiguator
+;; ============================================================
+
+(test-case "disambiguate: no change when no ambiguity"
+  (define src "def x := 42")
+  (define char-rrb (make-char-rrb-from-string src))
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  (define-values (narrowed changed?) (disambiguate-tokens tok-rrb bd-rrb))
+  (check-false changed?)
+  (check-equal? (rrb-size narrowed) (rrb-size tok-rrb)))
+
+(test-case "disambiguate: > narrows to rangle when ambiguous at depth > 0"
+  ;; Manually build an ambiguous token RRB: [< symbol {operator,rangle}]
+  ;; with bracket-depth > 0 for the > token
+  (define lt (token-entry (seteq 'langle) "<" 0 1))
+  (define sym (token-entry (seteq 'symbol) "Int" 1 4))
+  (define gt-ambig (token-entry (seteq 'operator 'rangle) ">" 5 6))
+  (define tok-rrb (rrb-push (rrb-push (rrb-push rrb-empty lt) sym) gt-ambig))
+  ;; Bracket depth: (cons bd qd) pairs — post-processing:
+  ;; < → depth 0→1 stores (1 . 0), Int → stays 1 stores (1 . 0), > → depth 1→0 stores (0 . 0)
+  ;; disambiguator checks bd-before (index i-1) for closing delimiters
+  (define bd-rrb (rrb-push (rrb-push (rrb-push rrb-empty (cons 1 0)) (cons 1 0)) (cons 0 0)))
+  (define-values (narrowed changed?) (disambiguate-tokens tok-rrb bd-rrb))
+  (check-true changed?)
+  (define gt-result (rrb-get narrowed 2))
+  (check-equal? (token-entry-types gt-result) (seteq 'rangle)))
+
+(test-case "disambiguate: > stays ambiguous at depth 0"
+  ;; Manually build ambiguous > at bracket-depth 0
+  (define sym1 (token-entry (seteq 'symbol) "x" 0 1))
+  (define gt-ambig (token-entry (seteq 'operator 'rangle) ">" 2 3))
+  (define sym2 (token-entry (seteq 'symbol) "y" 4 5))
+  (define tok-rrb (rrb-push (rrb-push (rrb-push rrb-empty sym1) gt-ambig) sym2))
+  (define bd-rrb (rrb-push (rrb-push (rrb-push rrb-empty (cons 0 0)) (cons 0 0)) (cons 0 0)))
+  (define-values (narrowed changed?) (disambiguate-tokens tok-rrb bd-rrb))
+  ;; > at depth 0 — should NOT be narrowed
+  (check-false changed?)
+  (define gt-result (rrb-get narrowed 1))
+  (check-equal? (set-count (token-entry-types gt-result)) 2))
+
+;; ============================================================
+;; Phase 1e: Full parse pipeline
+;; ============================================================
+
+(test-case "parse-string-to-cells: simple def"
+  (define-values (net cells) (parse-string-to-cells "def x := 42"))
+  ;; All 5 cells should be populated
+  (check-false (rrb-empty? (net-cell-read net (parse-cells-char-cell-id cells))))
+  (check-false (rrb-empty? (net-cell-read net (parse-cells-indent-cell-id cells))))
+  (check-false (rrb-empty? (net-cell-read net (parse-cells-token-cell-id cells))))
+  (check-false (rrb-empty? (net-cell-read net (parse-cells-bracket-cell-id cells))))
+  (check-false (parse-bot? (net-cell-read net (parse-cells-tree-cell-id cells)))))
+
+(test-case "parse-string-to-cells: multiline with indent"
+  (define src "def f [x]\n  [int+ x 1]")
+  (define-values (net cells) (parse-string-to-cells src))
+  ;; Token cell should have tokens
+  (define tok (net-cell-read net (parse-cells-token-cell-id cells)))
+  (check-true (> (rrb-size tok) 0))
+  ;; Tree cell should have parse tree
+  (define tree-val (net-cell-read net (parse-cells-tree-cell-id cells)))
+  (check-false (parse-bot? tree-val))
+  (define deriv (set-first (parse-cell-value-derivations tree-val)))
+  (define root (car (derivation-node-children deriv)))
+  ;; Root should have 1 top-level form
+  (check-equal? (rrb-size (parse-tree-node-children root)) 1))
+
+(test-case "parse-string-to-cells: angle brackets parse correctly"
+  (define src "<Int | String>")
+  (define-values (net cells) (parse-string-to-cells src))
+  ;; All cells populated
+  (define tok (net-cell-read net (parse-cells-token-cell-id cells)))
+  (check-true (> (rrb-size tok) 0))
+  ;; Tree cell has parse tree
+  (check-false (parse-bot? (net-cell-read net (parse-cells-tree-cell-id cells))))
+  ;; Verify > is classified as rangle
+  (define n (rrb-size tok))
+  (define gt-entry
+    (for/first ([i (in-range n)]
+                #:when (string=? (token-entry-lexeme (rrb-get tok i)) ">"))
+      (rrb-get tok i)))
+  (check-pred (lambda (e) e) gt-entry)
+  (check-true (set-member? (token-entry-types gt-entry) 'rangle)))
+
+(test-case "parse-string-to-cells: empty string"
+  (define-values (net cells) (parse-string-to-cells ""))
+  ;; Char cell populated (empty RRB)
+  (define char-val (net-cell-read net (parse-cells-char-cell-id cells)))
+  (check-equal? (rrb-size char-val) 0))

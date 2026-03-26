@@ -457,7 +457,13 @@
 (provide (struct-out parse-tree-node)
          make-bracket-depth-rrb
          bracket-depth-at
-         build-tree-from-domains)
+         build-tree-from-domains
+
+         ;; Phase 1e: Disambiguator
+         disambiguate-tokens
+
+         ;; Phase 1e+: Full parse pipeline (all 5 domains)
+         parse-string-to-cells)
 
 ;; Build the parse tree from indent RRB + token RRB + bracket-depth RRB.
 ;; This is the fire function for the tree-builder propagator.
@@ -607,6 +613,113 @@
       [(< i 0) 0]
       [(<= (list-ref line-boundaries i) pos) i]
       [else (loop (- i 1))])))
+
+
+;; ============================================================
+;; Phase 1e: Context Disambiguator
+;; ============================================================
+;;
+;; Reads the bracket-depth RRB and narrows ambiguous token types.
+;; The ≤2-round cycle: tokenize → bracket-depth → disambiguate →
+;; (if changed) re-tokenize affected spans.
+;;
+;; For Track 1: disambiguation is applied as a post-pass on the
+;; token RRB (not a separate propagator yet — the propagator wiring
+;; comes when we install these on the network in Phase 1f).
+
+;; Disambiguate tokens based on bracket context.
+;; Returns a new token RRB with narrowed type sets.
+(define (disambiguate-tokens token-rrb bracket-rrb)
+  (define n (rrb-size token-rrb))
+  (let loop ([i 0] [result rrb-empty] [changed? #f])
+    (if (>= i n)
+        (values result changed?)
+        (let* ([entry (rrb-get token-rrb i)]
+               [types (token-entry-types entry)]
+               [lexeme (token-entry-lexeme entry)]
+               ;; For closing delimiters, check depth BEFORE this token
+               ;; (bracket-depth RRB stores post-processing depth)
+               [bd-before (if (> i 0) (bracket-depth-at bracket-rrb (- i 1)) 0)]
+               ;; Decision 1: > inside brackets with angle context → delimiter
+               ;; (simplified: any > at bracket-depth > 0 could be a delimiter)
+               [new-types
+                (cond
+                  ;; > that could be operator or rangle
+                  [(and (string=? lexeme ">")
+                        (set-member? types 'rangle)
+                        (> bd-before 0))
+                   ;; Inside brackets → narrow to delimiter/rangle
+                   (seteq 'rangle)]
+                  ;; - that could be operator or negative prefix
+                  ;; (if previous token is operator, delimiter, or start of line → prefix)
+                  [(and (string=? lexeme "-")
+                        (> i 0)
+                        (let ([prev (rrb-get token-rrb (- i 1))])
+                          (define pt (set-first (token-entry-types prev)))
+                          (memq pt '(lbracket lparen lbrace langle
+                                     colon quote-lbracket))))
+                   ;; After open bracket/colon → could be negative prefix
+                   ;; For now: keep as symbol (full disambiguation in Track 2)
+                   types]
+                  [else types])]
+               [entry-changed? (not (equal? new-types types))]
+               [new-entry (if entry-changed?
+                              (struct-copy token-entry entry [types new-types])
+                              entry)])
+          (loop (+ i 1)
+                (rrb-push result new-entry)
+                (or changed? entry-changed?))))))
+
+
+;; ============================================================
+;; Full parse pipeline: string → 5 cells on network
+;; ============================================================
+;;
+;; The complete fixpoint computation: character → token → indent →
+;; bracket-depth → tree. Disambiguation cycle if needed.
+
+(define (parse-string-to-cells str)
+  ;; Create network + cells
+  (define net0 (make-prop-network))
+  (define-values (net1 cells) (create-parse-cells net0))
+
+  ;; Domain 1: Character RRB
+  (define char-rrb (make-char-rrb-from-string str))
+  (define net2 (net-cell-write net1 (parse-cells-char-cell-id cells) char-rrb))
+
+  ;; Domain 2: Indent RRB
+  (define-values (indent-rrb content-line-indices)
+    (make-indent-rrb-from-char-rrb char-rrb))
+  (define net3 (net-cell-write net2 (parse-cells-indent-cell-id cells) indent-rrb))
+
+  ;; Domain 3: Token RRB
+  (define tok-rrb (tokenize-char-rrb char-rrb))
+
+  ;; Domain 4: Bracket-depth RRB
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+
+  ;; Disambiguation cycle (≤2 rounds)
+  (define-values (tok-rrb-final bd-rrb-final)
+    (let round ([tok tok-rrb] [bd bd-rrb] [rounds 0])
+      (if (>= rounds 2)
+          (values tok bd)  ;; Max rounds reached
+          (let-values ([(narrowed changed?) (disambiguate-tokens tok bd)])
+            (if changed?
+                ;; Recompute bracket-depth from narrowed tokens
+                (let ([new-bd (make-bracket-depth-rrb narrowed)])
+                  (round narrowed new-bd (+ rounds 1)))
+                (values tok bd))))))
+
+  (define net4 (net-cell-write net3 (parse-cells-token-cell-id cells) tok-rrb-final))
+  (define net5 (net-cell-write net4 (parse-cells-bracket-cell-id cells) bd-rrb-final))
+
+  ;; Domain 5: Tree M-type
+  (define tree-val
+    (build-tree-from-domains char-rrb indent-rrb tok-rrb-final bd-rrb-final
+                             content-line-indices))
+  (define net6 (net-cell-write net5 (parse-cells-tree-cell-id cells) tree-val))
+
+  (values net6 cells))
 
 
 ;; ============================================================
