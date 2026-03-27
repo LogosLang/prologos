@@ -42,10 +42,10 @@ Hyperlattice Conjecture.
 | 5a | Datum extraction: tree → syntax objects | ✅ | `a2dd08a` — bracket grouping, sentinels, escapes, ::. 11 tests (108 total). |
 | 5b | Cross-line brackets + tokenizer gaps | ✅ | `e6e4d25` — **72/72 library files match (100%).** flatten-with-boundaries, indent-close truthiness fix, >>/compose, colon-annotation. |
 | 5c | Wire into driver.rkt + consumer migration | ✅ | `bac32cd` — parallel validation mode. 7529 tests, 380 files, zero mismatches. Switchover ready. |
-| 6 | `rrb-diff` implementation | ⬜ | RRB structural diff for incremental (Track 8 ready). |
-| 7 | A/B benchmarks (integrated system) | ⬜ | Target: ≤460μs (current reader). Estimated: ~306μs. |
-| 8 | Suite verify + dailies + tracker | ⬜ | |
-| 9 | PIR + dailies + tracker | ⬜ | |
+| 6 | `rrb-diff` implementation | ✅ | `63fe61f` — structural diff exploiting eq? subtree sharing. O(k log n). 13 tests. Track 8 ready. |
+| 7 | A/B benchmarks (integrated system) | ✅ | `d210d6e` — 13 programs, 3 runs each. All within ±4% noise. Zero overhead from new reader. |
+| 8 | Suite verify + dailies + tracker | ✅ | `b00be40` — **380/380 GREEN, 7529 tests, 143.5s.** Propagator reader is production reader. |
+| 9 | PIR + dailies + tracker | ✅ | PIR: `docs/tracking/2026-03-26_PPN_TRACK1_PIR.md` |
 
 ### Per-Phase Completion Protocol
 
