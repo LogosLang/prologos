@@ -28,6 +28,7 @@
          rrb-to-list
          rrb-from-list
          rrb-equal?
+         rrb-diff
          rrb-root?
          ;; Transient builder
          (struct-out trrb)
@@ -377,6 +378,149 @@
                   #f))))))
 
 ;; ========================================
+;; rrb-diff — structural diff
+;; ========================================
+;; Returns a list of (start . end) spans where elements differ.
+;; Exploits tree structure: eq? subtrees are skipped in O(1).
+;; For same-length RRBs: O(k * log32 n) where k = number of changed leaves.
+;; For different-length RRBs: reports element diffs in the shared prefix,
+;; then a single span for the tail difference.
+
+(define (rrb-diff r1 r2 [elem-equal? equal?])
+  (define cnt1 (rrb-root-count r1))
+  (define cnt2 (rrb-root-count r2))
+  (define shared (min cnt1 cnt2))
+  (define to1 (if (> cnt1 0) (tail-offset r1) 0))
+  (define to2 (if (> cnt2 0) (tail-offset r2) 0))
+
+  ;; Collect diff spans from the trie portion (shared prefix up to min of tail offsets)
+  (define trie-end (min to1 to2 shared))
+  (define trie-spans
+    (if (and (> trie-end 0) (rrb-root-node r1) (rrb-root-node r2))
+        (diff-nodes (rrb-root-node r1) (rrb-root-node r2)
+                    (rrb-root-shift r1) (rrb-root-shift r2)
+                    0 trie-end elem-equal?)
+        '()))
+
+  ;; Diff the overlapping region beyond the trie (tail vs trie/tail crossover)
+  ;; Simple element-by-element for the region from trie-end to shared
+  (define overlap-spans
+    (element-diff-range r1 r2 trie-end shared elem-equal?))
+
+  ;; Length difference → one span at the end
+  (define length-span
+    (if (= cnt1 cnt2) '()
+        (list (cons shared (max cnt1 cnt2)))))
+
+  (merge-adjacent-spans (append trie-spans overlap-spans length-span)))
+
+;; Diff two trie nodes, returning spans of differences.
+;; base = the starting index this node covers.
+;; limit = don't report past this index.
+(define (diff-nodes n1 n2 shift1 shift2 base limit elem-equal?)
+  (cond
+    ;; Same object → identical, no diffs
+    [(eq? n1 n2) '()]
+    ;; Different shifts → can't structurally compare, fall back to element-wise
+    [(not (= shift1 shift2))
+     (element-diff-range-direct n1 n2 shift1 shift2 base limit elem-equal?)]
+    ;; Both leaves
+    [(and (rrb-leaf? n1) (rrb-leaf? n2))
+     (diff-leaves (rrb-leaf-values n1) (rrb-leaf-values n2) base limit elem-equal?)]
+    ;; Both internal nodes
+    [(and (rrb-node? n1) (rrb-node? n2))
+     (let* ([children1 (rrb-node-children n1)]
+            [children2 (rrb-node-children n2)]
+            [len (min (vector-length children1) (vector-length children2))]
+            [child-shift (- shift1 BITS)]
+            [child-span (arithmetic-shift 1 shift1)])
+       (let loop ([ci 0] [spans '()])
+         (if (>= ci len)
+             (reverse spans)
+             (let ([child-base (+ base (* ci child-span))])
+               (if (>= child-base limit)
+                   (reverse spans)
+                   (let ([child-limit (min limit (+ child-base child-span))]
+                         [c1 (vector-ref children1 ci)]
+                         [c2 (vector-ref children2 ci)])
+                     (loop (+ ci 1)
+                           (append (reverse (diff-nodes c1 c2 child-shift child-shift
+                                                        child-base child-limit elem-equal?))
+                                   spans))))))))]
+    ;; Mixed (one leaf, one node) — shouldn't happen for same-shift, fall back
+    [else (element-diff-range-direct n1 n2 shift1 shift2 base limit elem-equal?)]))
+
+;; Diff two leaf value vectors
+(define (diff-leaves v1 v2 base limit elem-equal?)
+  (define len (min (vector-length v1) (vector-length v2) (- limit base)))
+  (let loop ([i 0] [span-start #f] [spans '()])
+    (cond
+      [(>= i len)
+       (reverse (if span-start
+                    (cons (cons (+ base span-start) (+ base i)) spans)
+                    spans))]
+      [(elem-equal? (vector-ref v1 i) (vector-ref v2 i))
+       (if span-start
+           (loop (+ i 1) #f (cons (cons (+ base span-start) (+ base i)) spans))
+           (loop (+ i 1) #f spans))]
+      [else
+       (loop (+ i 1) (or span-start i) spans)])))
+
+;; Element-by-element diff for a range (fallback when structure diverges)
+(define (element-diff-range r1 r2 start end elem-equal?)
+  (let loop ([i start] [span-start #f] [spans '()])
+    (cond
+      [(>= i end)
+       (reverse (if span-start (cons (cons span-start i) spans) spans))]
+      [(elem-equal? (rrb-get r1 i) (rrb-get r2 i))
+       (if span-start
+           (loop (+ i 1) #f (cons (cons span-start i) spans))
+           (loop (+ i 1) #f spans))]
+      [else
+       (loop (+ i 1) (or span-start i) spans)])))
+
+;; Element-by-element diff via node traversal (for mismatched structure)
+(define (element-diff-range-direct n1 n2 shift1 shift2 base limit elem-equal?)
+  ;; Build temporary RRBs and delegate — simplest correct approach
+  ;; This path is rare (only when shifts mismatch)
+  (let loop ([i base] [span-start #f] [spans '()])
+    (cond
+      [(>= i limit)
+       (reverse (if span-start (cons (cons span-start i) spans) spans))]
+      [else
+       (define v1 (vector-ref (get-leaf-array-from-node n1 shift1 (- i base))
+                              (bitwise-and (- i base) MASK)))
+       (define v2 (vector-ref (get-leaf-array-from-node n2 shift2 (- i base))
+                              (bitwise-and (- i base) MASK)))
+       (if (elem-equal? v1 v2)
+           (if span-start
+               (loop (+ i 1) #f (cons (cons span-start i) spans))
+               (loop (+ i 1) #f spans))
+           (loop (+ i 1) (or span-start i) spans))])))
+
+;; Navigate node without root wrapper
+(define (get-leaf-array-from-node node shift idx)
+  (if (zero? shift)
+      (if (rrb-leaf? node) (rrb-leaf-values node) (vector node))
+      (let ([child-idx (bitwise-and (arithmetic-shift idx (- shift)) MASK)])
+        (get-leaf-array-from-node (vector-ref (rrb-node-children node) child-idx)
+                                  (- shift BITS)
+                                  idx))))
+
+;; Merge adjacent/overlapping spans: (0 . 3) (3 . 5) → (0 . 5)
+(define (merge-adjacent-spans spans)
+  (if (or (null? spans) (null? (cdr spans)))
+      spans
+      (let loop ([rest (cdr spans)] [current (car spans)] [result '()])
+        (cond
+          [(null? rest) (reverse (cons current result))]
+          [(<= (car (car rest)) (cdr current))
+           ;; Overlapping or adjacent — merge
+           (loop (cdr rest) (cons (car current) (max (cdr current) (cdr (car rest)))) result)]
+          [else
+           (loop (cdr rest) (car rest) (cons current result))]))))
+
+;; ========================================
 ;; Transient Builder — Mutable flat vector
 ;; ========================================
 ;; A transient PVec uses a mutable Racket vector with amortized
@@ -616,4 +760,71 @@
     (let ([t (rrb-transient rrb-empty)])
       (trrb-push! t 42)
       (check-exn exn:fail? (lambda () (trrb-update! t 5 99)))))
+
+  ;; ---- rrb-diff tests ----
+
+  (test-case "diff: identical vectors → empty"
+    (let ([v (rrb-from-list '(1 2 3 4 5))])
+      (check-equal? (rrb-diff v v) '())))
+
+  (test-case "diff: both empty → empty"
+    (check-equal? (rrb-diff rrb-empty rrb-empty) '()))
+
+  (test-case "diff: single element change"
+    (let* ([v1 (rrb-from-list '(1 2 3 4 5))]
+           [v2 (rrb-set v1 2 99)])
+      (check-equal? (rrb-diff v1 v2) '((2 . 3)))))
+
+  (test-case "diff: multiple scattered changes"
+    (let* ([v1 (rrb-from-list '(1 2 3 4 5 6 7 8))]
+           [v2 (rrb-set (rrb-set v1 1 99) 6 99)])
+      (check-equal? (rrb-diff v1 v2) '((1 . 2) (6 . 7)))))
+
+  (test-case "diff: adjacent changes merge"
+    (let* ([v1 (rrb-from-list '(1 2 3 4 5))]
+           [v2 (rrb-set (rrb-set v1 1 99) 2 88)])
+      (check-equal? (rrb-diff v1 v2) '((1 . 3)))))
+
+  (test-case "diff: all elements different"
+    (let ([v1 (rrb-from-list '(1 2 3))]
+          [v2 (rrb-from-list '(4 5 6))])
+      (check-equal? (rrb-diff v1 v2) '((0 . 3)))))
+
+  (test-case "diff: different lengths — v2 longer"
+    (let ([v1 (rrb-from-list '(1 2 3))]
+          [v2 (rrb-from-list '(1 2 3 4 5))])
+      (check-equal? (rrb-diff v1 v2) '((3 . 5)))))
+
+  (test-case "diff: different lengths — v1 longer"
+    (let ([v1 (rrb-from-list '(1 2 3 4 5))]
+          [v2 (rrb-from-list '(1 2 3))])
+      (check-equal? (rrb-diff v1 v2) '((3 . 5)))))
+
+  (test-case "diff: different lengths with changes in shared prefix"
+    (let ([v1 (rrb-from-list '(1 2 3))]
+          [v2 (rrb-from-list '(1 99 3 4 5))])
+      (check-equal? (rrb-diff v1 v2) '((1 . 2) (3 . 5)))))
+
+  (test-case "diff: eq? structural sharing skips shared subtrees"
+    ;; rrb-set creates path-copy: only the modified path differs.
+    ;; For a 100-element vector, most of the tree is shared.
+    (let* ([v1 (rrb-from-list (for/list ([i 100]) i))]
+           [v2 (rrb-set v1 50 999)])
+      (check-equal? (rrb-diff v1 v2) '((50 . 51)))))
+
+  (test-case "diff: large vector, change in tail"
+    (let* ([v1 (rrb-from-list (for/list ([i 100]) i))]
+           [v2 (rrb-set v1 99 999)])
+      (check-equal? (rrb-diff v1 v2) '((99 . 100)))))
+
+  (test-case "diff: large vector, change at boundary"
+    ;; Element 31 is at the leaf/tail boundary for WIDTH=32
+    (let* ([v1 (rrb-from-list (for/list ([i 64]) i))]
+           [v2 (rrb-set v1 31 999)])
+      (check-equal? (rrb-diff v1 v2) '((31 . 32)))))
+
+  (test-case "diff: empty vs non-empty"
+    (let ([v (rrb-from-list '(1 2 3))])
+      (check-equal? (rrb-diff rrb-empty v) '((0 . 3)))
+      (check-equal? (rrb-diff v rrb-empty) '((0 . 3)))))
 )
