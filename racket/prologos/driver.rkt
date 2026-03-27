@@ -28,6 +28,7 @@
          "macros.rkt"
          "sexp-readtable.rkt"
          "reader.rkt"
+         "parse-reader.rkt"
          "namespace.rkt"
          "metavar-store.rkt"
          "zonk.rkt"
@@ -75,7 +76,10 @@
          run-post-compilation-inference!
          ;; Track 10: .pnet cache feature flags
          current-use-pnet-cache?
-         current-pnet-write-enabled?)
+         current-pnet-write-enabled?
+         ;; PPN Track 1 Phase 5c: new reader validation
+         use-new-reader?
+         validate-new-reader?)
 
 ;; Track 10 Phase 1b: feature flag for .pnet caching.
 ;; #t = use .pnet cache. #f = always elaborate from source (rollback).
@@ -1302,9 +1306,42 @@
         (loop (cons stx acc)))))
 
 ;; Read all syntax objects using the whitespace-significant reader
+;; Phase 5c: parallel validation — run both old and new readers, compare
+(define use-new-reader? (make-parameter #f))
+(define validate-new-reader?
+  (make-parameter (and (getenv "PROLOGOS_VALIDATE_NEW_READER") #t)))
+
 (define (read-all-syntax-ws port [source "<port>"])
-  (port-count-lines! port)
-  (prologos-read-syntax-all source port))
+  (cond
+    [(use-new-reader?)
+     ;; New reader path
+     (register-default-token-patterns!)
+     (define str (port->string port))
+     (define pt (read-to-tree str))
+     (read-all-forms-from-tree pt str (or source "<unknown>"))]
+    [(validate-new-reader?)
+     ;; Parallel validation: run both, compare datums, use old result
+     (define str (port->string port))
+     ;; Old reader
+     (define old-port (open-input-string str))
+     (port-count-lines! old-port)
+     (define old-result (prologos-read-syntax-all source old-port))
+     ;; New reader
+     (register-default-token-patterns!)
+     (define pt (read-to-tree str))
+     (define new-result (read-all-forms-from-tree pt str (or source "<unknown>")))
+     ;; Compare datums (not syntax locations — those differ)
+     (define old-datums (map syntax->datum old-result))
+     (define new-datums (map syntax->datum new-result))
+     (unless (equal? old-datums new-datums)
+       (eprintf "WARNING: new reader datum mismatch in ~a\n" source)
+       (eprintf "  old forms: ~a, new forms: ~a\n"
+                (length old-datums) (length new-datums)))
+     old-result]
+    [else
+     ;; Old reader (default)
+     (port-count-lines! port)
+     (prologos-read-syntax-all source port)]))
 
 ;; ========================================
 ;; Post-Compilation Capability Inference (IO-H)
