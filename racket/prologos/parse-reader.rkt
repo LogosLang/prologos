@@ -511,6 +511,78 @@
       2
       #f))
 
+;; ---- Phase 5b tokenizer gaps ----
+
+(define (recognize-colon-annotation rrb pos)
+  ;; :0, :1, :w, :m — colon immediately followed by digit or w/m (no space)
+  ;; These are QTT multiplicity annotations
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\:)
+           (or (char-numeric? c2)
+               (char=? c2 #\w)
+               (char=? c2 #\m)))
+      2
+      #f))
+
+(define (recognize-session-arrow rrb pos)
+  ;; -0>, -1>, -w> — session type linear arrows
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (define c3 (rrb-char-at rrb (+ pos 2)))
+  (if (and c1 c2 c3 (char=? c1 #\-)
+           (or (char-numeric? c2) (char=? c2 #\w))
+           (char=? c3 #\>))
+      3
+      #f))
+
+(define (recognize-choice-arrow rrb pos)
+  ;; +> — session type choice
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\+) (char=? c2 #\>))
+      2
+      #f))
+
+(define (recognize-session-op rrb pos)
+  ;; ? or ! — session send/receive (standalone, not part of identifier)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 (or (char=? c1 #\?) (char=? c1 #\!))
+           ;; Must not be followed by ident-continue (else it's part of an identifier like empty?)
+           (not (and c2 (ident-continue? c2))))
+      1
+      #f))
+
+(define (recognize-negative-number rrb pos)
+  ;; -digit+ — negative number literal (only at start or after space/bracket)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\-) (char-numeric? c2)
+           ;; Check not preceded by ident-continue (would be part of identifier like x-1)
+           (or (= pos 0)
+               (let ([prev (rrb-char-at rrb (- pos 1))])
+                 (and prev (or (char=? prev #\space) (char=? prev #\newline)
+                               (char=? prev #\tab) (char=? prev #\()
+                               (char=? prev #\[) (char=? prev #\{)
+                               (char=? prev #\<))))))
+      ;; Read the number part
+      (let loop ([i (+ pos 2)])
+        (define nc (rrb-char-at rrb i))
+        (cond
+          [(and nc (char-numeric? nc)) (loop (+ i 1))]
+          [(and nc (char=? nc #\N)) (+ (- i pos) 1)]  ;; -42N
+          [(and nc (char=? nc #\/)  ;; rational
+                (let ([nc2 (rrb-char-at rrb (+ i 1))])
+                  (and nc2 (char-numeric? nc2))))
+           (let loop2 ([j (+ i 2)])
+             (define nc2 (rrb-char-at rrb j))
+             (if (and nc2 (char-numeric? nc2))
+                 (loop2 (+ j 1))
+                 (- j pos)))]
+          [else (- i pos)]))
+      #f))
+
 ;; ---- Register default patterns ----
 
 (define (register-default-token-patterns!)
@@ -523,8 +595,28 @@
    (token-pattern 'double-colon (lambda (rrb pos) (recognize-double-colon rrb pos))
                   (lambda (s p l) 'symbol) 99))
   (register-token-pattern!
+   (token-pattern 'session-arrow (lambda (rrb pos) (recognize-session-arrow rrb pos))
+                  (lambda (s p l) 'symbol) 99))  ;; -0>, -1> before arrow ->
+  (register-token-pattern!
+   (token-pattern 'choice-arrow (lambda (rrb pos) (recognize-choice-arrow rrb pos))
+                  (lambda (s p l) 'symbol) 99))  ;; +> before symbol +
+  (register-token-pattern!
    (token-pattern 'arrow (lambda (rrb pos) (recognize-arrow rrb pos))
                   (lambda (s p l) 'symbol) 98))
+  (register-token-pattern!
+   (token-pattern 'colon-annotation (lambda (rrb pos) (recognize-colon-annotation rrb pos))
+                  (lambda (s p l) 'symbol) 97))  ;; :0, :w before bare colon
+  (register-token-pattern!
+   (token-pattern 'session-op (lambda (rrb pos) (recognize-session-op rrb pos))
+                  (lambda (s p l) 'symbol) 96))  ;; ?, ! standalone
+  (register-token-pattern!
+   (token-pattern 'negative-number (lambda (rrb pos) (recognize-negative-number rrb pos))
+                  (lambda (rrb pos len)
+                    (define last-c (rrb-char-at rrb (+ pos len -1)))
+                    (if (and last-c (char=? last-c #\N))
+                        'nat-literal
+                        'number))
+                  96))  ;; -42 before symbol -
   (register-token-pattern!
    (token-pattern 'keyword (lambda (rrb pos) (recognize-keyword rrb pos))
                   (lambda (s p l) 'keyword) 95))
@@ -590,7 +682,12 @@
   ;; Numbers
   (register-token-pattern!
    (token-pattern 'number (lambda (rrb pos) (recognize-number rrb pos))
-                  (lambda (s p l) 'number) 70))
+                  (lambda (rrb pos len)
+                    (define last-c (rrb-char-at rrb (+ pos len -1)))
+                    (if (and last-c (char=? last-c #\N))
+                        'nat-literal
+                        'number))
+                  70))
   ;; Identifiers
   (register-token-pattern!
    (token-pattern 'symbol (lambda (rrb pos) (recognize-symbol rrb pos))
@@ -1256,6 +1353,7 @@
                   [(string=? lexeme "->") '->]
                   [else (string->symbol lexeme)])]
       [(number) (or (string->number lexeme) (string->symbol lexeme))]
+      [(nat-literal) (string->number (substring lexeme 0 (- (string-length lexeme) 1)))]
       [(string) (if (and (>= (string-length lexeme) 2)
                          (char=? (string-ref lexeme 0) #\")
                          (char=? (string-ref lexeme (- (string-length lexeme) 1)) #\"))
@@ -1308,6 +1406,11 @@
                      (make-stx kw-sym source line col start span))
                source line col start span)]
     ;; Simple tokens → direct syntax wrapping
+    [(nat-literal)
+     ;; 42N → ($nat-literal 42)
+     (make-stx (list (make-stx '$nat-literal source line col start 0)
+                     (make-stx value source line col start span))
+               source line col start span)]
     [else (make-stx value source line col start span)]))
 
 ;; Convert a parse-tree-node → list of syntax objects

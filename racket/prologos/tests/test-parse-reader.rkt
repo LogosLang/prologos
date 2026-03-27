@@ -248,7 +248,7 @@
   (define tok-rrb (tokenize-char-rrb char-rrb))
   (define toks (token-types-from-rrb tok-rrb))
   (check-equal? (length toks) 1)
-  (check-equal? (car (list-ref toks 0)) 'number)
+  (check-equal? (car (list-ref toks 0)) 'nat-literal)
   (check-equal? (cdr (list-ref toks 0)) "42N"))
 
 (test-case "tokenizer: rational literal"
