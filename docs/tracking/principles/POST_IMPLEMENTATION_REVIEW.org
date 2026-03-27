@@ -122,7 +122,12 @@ skip them.
     themselves, not just the methods.
 
 16. *Is this an isolated outcome or part of a pattern?* Cross-reference
-    with prior PIRs. If the same lesson recurs (e.g., "WS pipeline
+    with the *10 most recent PIRs* (not just 2-3). Patterns that span
+    3+ PIRs are ready for codification; patterns that span 5+ are
+    architectural and demand systemic response. Include a longitudinal
+    survey table (track, date, duration, test delta, commits, wrong
+    assumptions, bugs, design iterations) to make quantitative
+    comparisons possible. If the same lesson recurs (e.g., "WS pipeline
     gaps", "circular dependency management"), the response should be
     architectural, not per-project.
 
@@ -234,9 +239,14 @@ will not be encountered during future work.]
   critically, or they're uncomfortable admitting uncertainty. Both
   reduce the PIR's value.
 
-- *Reference prior PIRs.* If a lesson echoes a prior PIR, say so. If
-  three PIRs in a row identify the same WS pipeline gap pattern, the
-  response should be systemic.
+- *Reference the 10 most recent PIRs.* Include a longitudinal survey
+  table (track, date, duration, test delta, commits, wrong assumptions,
+  bugs, design iterations) in §16. If a lesson echoes prior PIRs, say
+  so explicitly with counts. Patterns spanning 3+ PIRs are
+  codification-ready; patterns spanning 5+ demand systemic/architectural
+  response. A PIR that only cross-references 2-3 prior PIRs is too
+  narrow --- the value of longitudinal analysis is in spotting slow-moving
+  trends that any 3-PIR window misses.
 
 ** Anti-Patterns in PIR Writing
 

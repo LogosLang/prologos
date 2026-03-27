@@ -48,27 +48,45 @@
 
 ---
 
-## §3 Timeline
+## §3 Timeline with Per-Phase Timing
 
-| Phase | Commit | Description | Tests |
-|-------|--------|-------------|-------|
-| 0 | `f677847` | Golden baseline capture (110 files, 4 levels) | — |
-| 1a | `8b7757c` | char-rrb + indent-rrb | 21 |
-| 1b | `5819465` | Tokenizer (18 patterns, set-of-types) | 36 |
-| 1c+1d | `9af5b2d` | Bracket-depth RRB + tree-builder | 44 |
-| 1e | `006ffec` | Context disambiguator + full pipeline | 51 |
-| 1f | `6df01a9` | Integration gate (topology 110/110) | 58 |
-| 2 | `a046558` | Reader macro token patterns (+17) | 75 |
-| 3a-c | `65fa3dd` | Read/Write/Compat APIs | 97 |
-| 4 | `801e9d1` | Golden: topology + brackets 110/110 | 97 |
-| 5a | `a2dd08a` | Datum extraction (41/72 files) | 108 |
-| 5b | `e6e4d25` | Diagnostic protocol → 72/72 files | 108 |
-| 5c | `e592109` | **Switch flip: 380/380 GREEN** | 108 |
-| 6 | `63fe61f` | rrb-diff (structural diff) | 35 in rrb |
-| 7 | `d210d6e` | A/B benchmarks (zero overhead) | — |
-| 8 | `b00be40` | Suite verify: 380/380 confirmed | — |
+Implementation timestamps from git log. All times PDT (UTC-7), 2026-03-26.
 
-Design-to-implementation ratio: ~40% design (D.1-D.9), ~60% implementation (Phases 0-8).
+| Phase | Time | Duration | Commit | Description | Tests |
+|-------|------|----------|--------|-------------|-------|
+| Design (D.1-D.9) | 09:00–16:00 | ~7h | various | 9 iterations: constraint-based → Propagator Only → 5-cell | — |
+| 0 | 16:21 | 4m | `f677847` | Golden baseline capture (110 files, 4 levels) | — |
+| 1a | 16:25 | 4m | `8b7757c` | char-rrb + indent-rrb | 21 |
+| 1b | 16:37 | 12m | `5819465` | Tokenizer (18 patterns, set-of-types) | 36 |
+| 1c+1d | 16:42 | 5m | `9af5b2d` | Bracket-depth RRB + tree-builder | 44 |
+| 1e | 16:52 | 10m | `006ffec` | Context disambiguator + full pipeline | 51 |
+| 1f | 16:58 | 6m | `6df01a9` | Integration gate (topology 110/110) | 58 |
+| 2 | 17:06 | 8m | `a046558` | Reader macro token patterns (+17) | 75 |
+| 3a-c | 17:10–17:12 | 6m | `65fa3dd` | Read/Write/Compat APIs | 97 |
+| 4 | 17:16 | 4m | `801e9d1` | Golden: topology + brackets 110/110 | 97 |
+| 5a | 17:35 | 19m | `a2dd08a` | Datum extraction (41/72 files) | 108 |
+| 5b | 17:49–18:13 | 24m | `e6e4d25` | Diagnostic protocol → 72/72 files | 108 |
+| 5c (wiring) | 18:25 | 12m | `bac32cd` | New reader wired into driver.rkt | 108 |
+| 5c (diagnostic) | 18:35–20:03 | 88m | `e592109` | **25→0 failures in 7 rounds** | 108 |
+| 6 | 20:10 | 7m | `63fe61f` | rrb-diff (structural diff) | 35 in rrb |
+| 7 | 20:10–20:49 | 39m | `d210d6e` | A/B benchmarks (zero overhead) | — |
+| 8 | 20:52 | 4m | `b00be40` | Suite verify: 380/380 confirmed | — |
+| 9 | 20:55 | 3m | `86ed133` | PIR + tracker + dailies | — |
+
+### Time Breakdown
+
+| Activity | Duration | % |
+|----------|----------|---|
+| Design (D.1–D.9, 9 iterations) | ~7h 0m | 58% |
+| Implementation (Phases 0–4, 1a–1f, 2, 3) | ~1h 18m | 11% |
+| Datum extraction + diagnostic (5a–5c) | ~2h 23m | 20% |
+| rrb-diff + benchmarks + verify (6–8) | ~0h 50m | 7% |
+| PIR + documentation | ~0h 30m | 4% |
+| **Total** | **~12h 1m** | **100%** |
+
+**Key observation**: Design was 58% of total time. Implementation of core domains (Phases 0–4) was only 11% — under 80 minutes for 5 lattice domains, tokenizer, tree-builder, and golden comparison. The diagnostic switchover (Phase 5c) at 88 minutes was longer than all core implementation combined. This validates the design investment: well-designed systems implement quickly but reveal integration surprises at the boundaries.
+
+Design-to-implementation ratio: **1.4:1** (design 7h, implementation 5h). If diagnostic time is counted as implementation: 1.4:1. If counted as integration testing: the core implementation ratio is 5.3:1.
 
 ---
 
@@ -195,7 +213,7 @@ The 380/380 green, zero-overhead result confirms the approach is sound.
 
 ## §16 Pattern Analysis
 
-### Recurring patterns from prior PIRs:
+### Track 1 patterns vs prior PIRs:
 
 | Pattern | Track 1 instance | Prior instances | Status |
 |---------|-----------------|-----------------|--------|
@@ -208,6 +226,61 @@ The 380/380 green, zero-overhead result confirms the approach is sound.
 - **PPN Track 0 PIR**: Lattice design correct, zero architectural surprises in Track 1. Research investment validated.
 - **PM Track 10 PIR**: .pnet serialization infrastructure used by golden capture. Module loading path stable.
 - **PM Track 10B PIR**: Network-always architecture enabled clean reader integration (no special-case for "reader mode").
+
+---
+
+### Longitudinal Survey: 10 Most Recent PIRs
+
+| # | Track | Date | Duration | Tests Δ | Commits | Wrong Assumptions | Bugs | Design Iters |
+|---|-------|------|----------|---------|---------|-------------------|------|--------------|
+| 1 | PPN Track 1 | 03-26 | ~12h | +108 | ~25 | 2 | 3 | D.1–D.9 (9) |
+| 2 | PPN Track 0 | 03-26 | ~4h | +30 | 8 | 0 | 2 trivial | D.1–D.4 (4) |
+| 3 | PM Track 10B | 03-26 | ~8h | 0 | ~20 | 5 | 8 | D.1–D.4 (4) |
+| 4 | PM Track 10 | 03-24 | ~12h | -37 | ~30 | 6 | 12+ | D.1–D.4 (4) |
+| 5 | PM 8F | 03-24 | ~7h | 0 | 12+3 | 5 | 5 | D.1–D.4 (4) |
+| 6 | SRE Track 2 | 03-23 | ~4h | 0 | 6 | 1 | 1 | D.1–D.4 (4) |
+| 7 | SRE Track 1+1B | 03-23 | ~8h | +43 | 21 | 3 | 7 | D.1–D.4 (4) |
+| 8 | SRE Track 0 | 03-22 | ~3h | +15 | 7 | 0 | 0 | D.1–D.2 (2) |
+| 9 | PM Track 8 | 03-22 | ~18h | +35 | 66 | 4+ | 12+ | D.1–D.4 (4) |
+| 10 | CHAMP Perf | 03-21 | ~3h | +17 | 8 | 2 | 2 | D.1–D.3 (3) |
+
+**Averages**: 7.9h duration, 3.4 design iterations, 2.8 wrong assumptions, 5.2 bugs.
+
+### Longitudinal Findings (10-PIR Survey)
+
+**1. Wrong assumptions scale with infrastructure depth.**
+Infrastructure tracks (PM 8, 8F, 10, 10B) average 5.0 wrong assumptions. Feature/extraction tracks (SRE 0, 1, 2; PPN 0) average 1.0. Infrastructure touches implicit contracts that aren't documented as explicit invariants.
+**Action**: Infrastructure designs should include an "Implicit Contracts" section verified by code inspection.
+
+**2. Benchmark-before-building is now standard practice.**
+6/10 tracks had Pre-0 benchmarks that either changed the design (PM 8F, 10; SRE T1B, T2) or confirmed it (PM 10B; BSP-LE T0 Phase 5 rejection). No track regretted having baselines.
+
+**3. Three critique rounds (D.1→D.2→D.3) is the established cycle.**
+9/10 tracks used 3+ critique rounds. Each round catches different classes of issues: D.1 (initial), D.2 (structural), D.3 (methodology/principles). PPN Track 1's 9 iterations are an outlier — driven by the Propagator Only reframing.
+
+**4. Design:implementation ratio ≥ 1.7:1 predicts smooth implementations.**
+- SRE T0: ~2:1 → 0 bugs. SRE T2: ~1.7:1 → 1 bug. PPN T0: ~1:1 → 2 trivial.
+- Track 8: ~0.5:1 → 12+ bugs. PM T10: ~0.3:1 → 12+ bugs.
+- PPN T1: 1.4:1 → 3 bugs (all position-related, not algorithmic).
+24 data points across PIRs. Ready for codification.
+
+**5. Data-oriented code extracts cleanly; imperative code requires cleanup first.**
+SRE T0 (mechanical extraction, 0 bugs), SRE T1 (data-oriented relations, clean), SRE T2 (classifier, 85 lines). Contrast: Track 8 bridges required D.4 architectural cleanup before extraction was possible.
+
+**6. Equality assumptions pervasively break for non-equality relations.**
+SRE T1: 3 of 7 bugs from this single class (lattice merge, pre-write copying, unified fallback). Every new relation type needs an "equality assumptions audit."
+
+**7. Negative results are reversible when constraints change.**
+BSP-LE T0 Phase 5 rejected (345s regression). CHAMP Phase 7 rehabilitated it (owner-ID transients). The documentation chain made this possible: rejection recorded *why*.
+
+**8. Pre-0 baselines are mandatory for performance-sensitive tracks.**
+3 instances (BSP-LE T0, CHAMP, PM 8F) show they prevent wasted optimization effort.
+
+**9. External struct changes are the #1 silent-failure vector.**
+BSP-LE T0: missed 4 external struct-copy sites causing batch-worker crashes. Module-scoped audits are insufficient — require codebase-wide grep.
+
+**10. Process improvements deliver outsized velocity gains.**
+Diagnostic protocol, dead-worker detection, Completeness rule — each delivered more value per line of code than any feature phase. PPN T1's diagnostic protocol (25→0 in 7 rounds) is the latest confirmation.
 
 ---
 
