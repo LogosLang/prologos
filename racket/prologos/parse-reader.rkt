@@ -294,10 +294,190 @@
       2
       #f))
 
+(define (recognize-quote rrb pos)
+  ;; 'expr (quote, but NOT '[)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 (char=? c1 #\')
+           (not (and c2 (char=? c2 #\[))))
+      1
+      #f))
+
+(define (recognize-at-lbracket rrb pos)
+  ;; @[ (PVec literal)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\@) (char=? c2 #\[))
+      2
+      #f))
+
+(define (recognize-tilde-lbracket rrb pos)
+  ;; ~[ (LSeq literal)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\~) (char=? c2 #\[))
+      2
+      #f))
+
+(define (recognize-hash-lbrace rrb pos)
+  ;; #{ (Set literal)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\#) (char=? c2 #\{))
+      2
+      #f))
+
+(define (recognize-hash-eq rrb pos)
+  ;; #= (narrowing operator)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\#) (char=? c2 #\=))
+      2
+      #f))
+
+(define (recognize-hash-path rrb pos)
+  ;; #p( (path literal) — recognize the prefix only, content is opaque to tokenizer
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (define c3 (rrb-char-at rrb (+ pos 2)))
+  (if (and c1 c2 c3 (char=? c1 #\#) (char=? c2 #\p) (char=? c3 #\())
+      ;; Read until matching )
+      (let loop ([i (+ pos 3)] [depth 1])
+        (define c (rrb-char-at rrb i))
+        (cond
+          [(not c) #f]  ;; unterminated
+          [(char=? c #\() (loop (+ i 1) (+ depth 1))]
+          [(char=? c #\))
+           (if (= depth 1) (- (+ i 1) pos) (loop (+ i 1) (- depth 1)))]
+          [else (loop (+ i 1) depth)]))
+      #f))
+
+(define (recognize-nil-dot-key rrb pos)
+  ;; #.:keyword OR #:keyword
+  (define c1 (rrb-char-at rrb pos))
+  (if (and c1 (char=? c1 #\#))
+      (let ([c2 (rrb-char-at rrb (+ pos 1))])
+        (cond
+          ;; #.:keyword
+          [(and c2 (char=? c2 #\.))
+           (let ([c3 (rrb-char-at rrb (+ pos 2))])
+             (and c3 (char=? c3 #\:)
+                  (let ([c4 (rrb-char-at rrb (+ pos 3))])
+                    (and c4 (ident-start? c4)
+                         (let loop ([i (+ pos 4)])
+                           (define cn (rrb-char-at rrb i))
+                           (if (and cn (ident-continue? cn))
+                               (loop (+ i 1))
+                               (- i pos)))))))]
+          ;; #:keyword
+          [(and c2 (char=? c2 #\:))
+           (let ([c3 (rrb-char-at rrb (+ pos 2))])
+             (and c3 (ident-start? c3)
+                  (let loop ([i (+ pos 3)])
+                    (define cn (rrb-char-at rrb i))
+                    (if (and cn (ident-continue? cn))
+                        (loop (+ i 1))
+                        (- i pos)))))]
+          [else #f]))
+      #f))
+
+(define (recognize-nil-dot-access rrb pos)
+  ;; #.ident (NOT #.:keyword — that's nil-dot-key)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (define c3 (rrb-char-at rrb (+ pos 2)))
+  (if (and c1 c2 c3
+           (char=? c1 #\#) (char=? c2 #\.)
+           (not (char=? c3 #\:))  ;; not #.:
+           (ident-start? c3))
+      (let loop ([i (+ pos 3)])
+        (define cn (rrb-char-at rrb i))
+        (if (and cn (ident-continue? cn))
+            (loop (+ i 1))
+            (- i pos)))
+      #f))
+
+(define (recognize-dot-access rrb pos)
+  ;; .ident (NOT .:keyword, NOT .{, NOT .*, NOT number continuation)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\.)
+           (not (char=? c2 #\:))  ;; not .:
+           (not (char=? c2 #\{))  ;; not .{
+           (not (char=? c2 #\*))  ;; not .*
+           (not (char-numeric? c2))  ;; not decimal continuation
+           (ident-start? c2))
+      (let loop ([i (+ pos 2)])
+        (define cn (rrb-char-at rrb i))
+        (if (and cn (ident-continue? cn))
+            (loop (+ i 1))
+            (- i pos)))
+      #f))
+
+(define (recognize-dot-key rrb pos)
+  ;; .:keyword
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (define c3 (rrb-char-at rrb (+ pos 2)))
+  (if (and c1 c2 c3 (char=? c1 #\.) (char=? c2 #\:) (ident-start? c3))
+      (let loop ([i (+ pos 3)])
+        (define cn (rrb-char-at rrb i))
+        (if (and cn (ident-continue? cn))
+            (loop (+ i 1))
+            (- i pos)))
+      #f))
+
+(define (recognize-dot-lbrace rrb pos)
+  ;; .{
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\.) (char=? c2 #\{))
+      2
+      #f))
+
+(define (recognize-broadcast-access rrb pos)
+  ;; .*ident
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (define c3 (rrb-char-at rrb (+ pos 2)))
+  (if (and c1 c2 c3 (char=? c1 #\.) (char=? c2 #\*) (ident-continue? c3))
+      (let loop ([i (+ pos 3)])
+        (define cn (rrb-char-at rrb i))
+        (if (and cn (ident-continue? cn))
+            (loop (+ i 1))
+            (- i pos)))
+      #f))
+
+(define (recognize-pipe-right rrb pos)
+  ;; |>
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\|) (char=? c2 #\>))
+      2
+      #f))
+
+(define (recognize-pipe rrb pos)
+  ;; | (standalone, NOT |>)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 (char=? c1 #\|)
+           (not (and c2 (char=? c2 #\>))))
+      1
+      #f))
+
+(define (recognize-arrow rrb pos)
+  ;; ->
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\-) (char=? c2 #\>))
+      2
+      #f))
+
 ;; ---- Register default patterns ----
 
 (define (register-default-token-patterns!)
   ;; Highest priority first (tried in priority order, highest wins)
+  ;; Compound patterns need higher priority than prefix patterns.
   (register-token-pattern!
    (token-pattern 'colon-assign (lambda (rrb pos) (recognize-colon-assign rrb pos))
                   (lambda (s p l) 'symbol) 100))
@@ -305,23 +485,79 @@
    (token-pattern 'double-colon (lambda (rrb pos) (recognize-double-colon rrb pos))
                   (lambda (s p l) 'symbol) 99))
   (register-token-pattern!
+   (token-pattern 'arrow (lambda (rrb pos) (recognize-arrow rrb pos))
+                  (lambda (s p l) 'symbol) 98))
+  (register-token-pattern!
    (token-pattern 'keyword (lambda (rrb pos) (recognize-keyword rrb pos))
                   (lambda (s p l) 'keyword) 95))
+  ;; Hash-prefix compound tokens (must precede simpler # patterns)
+  (register-token-pattern!
+   (token-pattern 'hash-path (lambda (rrb pos) (recognize-hash-path rrb pos))
+                  (lambda (s p l) 'path-literal) 93))
+  (register-token-pattern!
+   (token-pattern 'nil-dot-key (lambda (rrb pos) (recognize-nil-dot-key rrb pos))
+                  (lambda (s p l) 'nil-dot-key) 92))
+  (register-token-pattern!
+   (token-pattern 'nil-dot-access (lambda (rrb pos) (recognize-nil-dot-access rrb pos))
+                  (lambda (s p l) 'nil-dot-access) 92))
+  (register-token-pattern!
+   (token-pattern 'hash-lbrace (lambda (rrb pos) (recognize-hash-lbrace rrb pos))
+                  (lambda (s p l) 'hash-lbrace) 91))
+  (register-token-pattern!
+   (token-pattern 'hash-eq (lambda (rrb pos) (recognize-hash-eq rrb pos))
+                  (lambda (s p l) 'symbol) 91))
+  ;; Quote patterns: quote-lbracket > char-lit > bare quote
   (register-token-pattern!
    (token-pattern 'quote-lbracket (lambda (rrb pos) (recognize-quote-lbracket rrb pos))
-                  (lambda (s p l) 'quote-lbracket) 90))
+                  (lambda (s p l) 'quote-lbracket) 91))
+  ;; Dot-prefix compound tokens (must precede symbol/single-char)
+  (register-token-pattern!
+   (token-pattern 'dot-key (lambda (rrb pos) (recognize-dot-key rrb pos))
+                  (lambda (s p l) 'dot-key) 88))
+  (register-token-pattern!
+   (token-pattern 'dot-lbrace (lambda (rrb pos) (recognize-dot-lbrace rrb pos))
+                  (lambda (s p l) 'dot-lbrace) 87))
+  (register-token-pattern!
+   (token-pattern 'broadcast-access (lambda (rrb pos) (recognize-broadcast-access rrb pos))
+                  (lambda (s p l) 'broadcast-access) 87))
+  (register-token-pattern!
+   (token-pattern 'dot-access (lambda (rrb pos) (recognize-dot-access rrb pos))
+                  (lambda (s p l) 'dot-access) 86))
+  ;; Collection literal prefixes
+  (register-token-pattern!
+   (token-pattern 'at-lbracket (lambda (rrb pos) (recognize-at-lbracket rrb pos))
+                  (lambda (s p l) 'at-lbracket) 85))
+  (register-token-pattern!
+   (token-pattern 'tilde-lbracket (lambda (rrb pos) (recognize-tilde-lbracket rrb pos))
+                  (lambda (s p l) 'tilde-lbracket) 85))
+  ;; Pipe operators (|> must precede |)
+  (register-token-pattern!
+   (token-pattern 'pipe-right (lambda (rrb pos) (recognize-pipe-right rrb pos))
+                  (lambda (s p l) 'symbol) 84))
+  (register-token-pattern!
+   (token-pattern 'pipe (lambda (rrb pos) (recognize-pipe rrb pos))
+                  (lambda (s p l) 'pipe) 83))
+  ;; Char literal (must precede bare quote — both start with ')
+  (register-token-pattern!
+   (token-pattern 'char-lit (lambda (rrb pos) (recognize-char-literal rrb pos))
+                  (lambda (s p l) 'char) 90))
+  ;; Bare quote (lowest of the '-prefix patterns)
+  (register-token-pattern!
+   (token-pattern 'quote (lambda (rrb pos) (recognize-quote rrb pos))
+                  (lambda (s p l) 'quote) 89))
+  ;; Strings
   (register-token-pattern!
    (token-pattern 'string (lambda (rrb pos) (recognize-string rrb pos))
                   (lambda (s p l) 'string) 80))
-  (register-token-pattern!
-   (token-pattern 'char-lit (lambda (rrb pos) (recognize-char-literal rrb pos))
-                  (lambda (s p l) 'char) 79))
+  ;; Numbers
   (register-token-pattern!
    (token-pattern 'number (lambda (rrb pos) (recognize-number rrb pos))
                   (lambda (s p l) 'number) 70))
+  ;; Identifiers
   (register-token-pattern!
    (token-pattern 'symbol (lambda (rrb pos) (recognize-symbol rrb pos))
                   (lambda (s p l) 'symbol) 50))
+  ;; Colon
   (register-token-pattern!
    (token-pattern 'colon (lambda (rrb pos) (recognize-colon rrb pos))
                   (lambda (s p l) 'colon) 40))
@@ -416,7 +652,9 @@
         (let* ([entry (rrb-get token-rrb i)]
                [type (set-first (token-entry-types entry))]
                [new-bd (cond
-                         [(memq type '(lbracket lparen lbrace langle quote-lbracket))
+                         [(memq type '(lbracket lparen lbrace langle
+                                       quote-lbracket at-lbracket tilde-lbracket
+                                       hash-lbrace dot-lbrace))
                           (+ bd 1)]
                          [(memq type '(rbracket rparen rbrace rangle))
                           (max 0 (- bd 1))]

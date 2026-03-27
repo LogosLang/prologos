@@ -334,6 +334,116 @@
 
 
 ;; ============================================================
+;; Phase 2: Reader macro token patterns
+;; ============================================================
+
+(test-case "tokenizer: quote '["
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "'[1 2]")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 0)) 'quote-lbracket)
+  (check-equal? (cdr (list-ref toks 0)) "'["))
+
+(test-case "tokenizer: bare quote"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "'x")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 0)) 'quote)
+  (check-equal? (cdr (list-ref toks 0)) "'"))
+
+(test-case "tokenizer: @[ PVec literal"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "@[1 2]")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 0)) 'at-lbracket)
+  (check-equal? (cdr (list-ref toks 0)) "@["))
+
+(test-case "tokenizer: ~[ LSeq literal"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "~[1 2]")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 0)) 'tilde-lbracket)
+  (check-equal? (cdr (list-ref toks 0)) "~["))
+
+(test-case "tokenizer: #{ Set literal"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "#{1 2}")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 0)) 'hash-lbrace)
+  (check-equal? (cdr (list-ref toks 0)) "#{"))
+
+(test-case "tokenizer: #= narrowing"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "#= x")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 0)) 'symbol)
+  (check-equal? (cdr (list-ref toks 0)) "#="))
+
+(test-case "tokenizer: #p( path literal"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "#p(foo.bar)")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 0)) 'path-literal)
+  (check-equal? (cdr (list-ref toks 0)) "#p(foo.bar)"))
+
+(test-case "tokenizer: .field dot-access"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "x.name")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (length toks) 2)
+  (check-equal? (car (list-ref toks 0)) 'symbol)
+  (check-equal? (car (list-ref toks 1)) 'dot-access)
+  (check-equal? (cdr (list-ref toks 1)) ".name"))
+
+(test-case "tokenizer: .:keyword dot-key"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "m.:key")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 1)) 'dot-key)
+  (check-equal? (cdr (list-ref toks 1)) ".:key"))
+
+(test-case "tokenizer: .{ dot-lbrace"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "x.{a b}")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 1)) 'dot-lbrace)
+  (check-equal? (cdr (list-ref toks 1)) ".{"))
+
+(test-case "tokenizer: .*field broadcast"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "xs.*name")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 1)) 'broadcast-access)
+  (check-equal? (cdr (list-ref toks 1)) ".*name"))
+
+(test-case "tokenizer: |> pipe-right"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "|> x f")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 0)) 'symbol)
+  (check-equal? (cdr (list-ref toks 0)) "|>"))
+
+(test-case "tokenizer: | pipe separator"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "| x -> y")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 0)) 'pipe)
+  (check-equal? (cdr (list-ref toks 0)) "|"))
+
+(test-case "tokenizer: -> arrow"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "A -> B")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 1)) 'symbol)
+  (check-equal? (cdr (list-ref toks 1)) "->"))
+
+(test-case "tokenizer: #.field nil-dot-access"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "#.name")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 0)) 'nil-dot-access)
+  (check-equal? (cdr (list-ref toks 0)) "#.name"))
+
+(test-case "tokenizer: #:keyword nil-dot-key"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "#:key")))
+  (define toks (token-types-from-rrb tok-rrb))
+  (check-equal? (car (list-ref toks 0)) 'nil-dot-key)
+  (check-equal? (cdr (list-ref toks 0)) "#:key"))
+
+(test-case "tokenizer: bracket-depth includes compound openers"
+  (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string "'[x]")))
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  ;; '[ → depth 1, x → 1, ] → 0
+  (check-equal? (car (rrb-get bd-rrb 0)) 1)
+  (check-equal? (car (rrb-get bd-rrb 1)) 1)
+  (check-equal? (car (rrb-get bd-rrb 2)) 0))
+
+;; ============================================================
 ;; Phase 1d: Bracket-depth RRB
 ;; ============================================================
 
