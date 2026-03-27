@@ -1,0 +1,37 @@
+#+TITLE: Standup — 2026-03-27
+#+DATE: 2026-03-27
+
+* Yesterday (since 2026-03-26 standup)
+
+** PPN Track 1: Lexer + Structure as Propagators (COMPLETE)
+- 5 parse domain lattices (char-rrb, indent-rrb, token-rrb, bracket-depth-rrb, tree M-type) as RRB-embedded propagator cells
+- 31 token recognizer patterns (18 initial + 13 compound: ~&>~, ~||~, ~!:~, ~?:~, ~<=~, ~>=~, ~??~, ~!!~, ~...~, etc.)
+- Datum extraction: tree → syntax objects, 72/72 library files 100% match
+- Diagnostic switchover: 25→18→12→11→9→3→0 failures in 7 rounds
+- Key discoveries: silent char skip as common root, angle bracket lookahead, mixfix ~.{}~ suppresses angles, postfix ~xs[0]~ adjacency, position 0→1 fix
+- ~rrb-diff~: structural diff exploiting ~eq?~ subtree sharing, O(k log n)
+- A/B benchmarks: zero overhead (all within ±4% noise)
+- *380/380 GREEN, 7529 tests, 143.5s. Propagator reader is live.*
+- PIR: ~docs/tracking/2026-03-26_PPN_TRACK1_PIR.md~ (with per-phase timing + 10-PIR longitudinal survey)
+- Design: 58% of time. Core implementation: 11%. Diagnostic switchover: 20%.
+
+** PIR Methodology Enhancement
+- §16 longitudinal survey expanded to 10 most recent PIRs (was 2-3)
+- PIR methodology updated: Q16 requires 10-PIR survey, patterns ≥3 = codify, ≥5 = systemic
+- workflow.md updated with 10-PIR scope requirement
+
+** Research (from earlier in interval)
+- D.1→D.9 design evolution: constraint-based → Propagator Only → 5-cell → RRB embedded → tree M-type → set-narrowing tokens
+- "Propagator Only" (not "Propagator First") — if thinking "this algorithm says..." that's a process smell
+- Hyperlattice Conjecture: any computation as fixpoint over interconnected lattice structures
+- Tree rewriting = structural unification (4th SRE relation type)
+- Parallel propagator scheduling (topological-sort rounds, prefix scan)
+
+* Today
+
+**
+
+* Blockers
+
+- 3 position-dependent test failures (varargs, session-async ×2) — resolved after clean recompile, but root cause (position sensitivity in elaborator) needs understanding for robustness
+- bench-ab.rkt diagnostics needed (runs complete without output)
