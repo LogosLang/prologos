@@ -34,7 +34,7 @@ Hyperlattice Conjecture.
 | 1d | Bracket-depth RRB propagator (token RRB → bracket RRB) | ✅ | `9af5b2d` — running sum + qq-depth channel. 4 tests. |
 | 1e | Context disambiguator (tree cell → token RRB reclassify) | ✅ | `006ffec` — disambiguate-tokens + parse-string-to-cells. bd-before fix. 7 tests (51 total). |
 | 1f | **Integration gate**: golden comparison on simple files | ✅ | `6df01a9` — topology matches all 110 .prologos files. 7 tests (58 total). |
-| 2 | Reader macros: #p, ', `, #=, dot-access, broadcast | ⬜ | Stateful recognizers in pattern registry. |
+| 2 | Reader macros: #p, ', `, #=, dot-access, broadcast | ✅ | `a046558` — 17 new recognizers, priority ordering. 17 tests (75 total). |
 | 3a | Read API (5 tree-walking functions) | ⬜ | Primary API. |
 | 3b | Write API (4 tree mutation functions) | ⬜ | For Track 2 SRE rewriting. |
 | 3c | Compatibility wrappers (7 functions) | ⬜ | Syntax objects (driver.rkt), datums (tests), flat tokens (tests). |
