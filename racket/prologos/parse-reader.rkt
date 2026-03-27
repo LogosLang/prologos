@@ -477,18 +477,22 @@
 
 (define (recognize-rest-param rrb pos)
   ;; ...ident — rest parameter (three dots + identifier)
+  ;; ... — standalone rest marker ($rest)
   (define c1 (rrb-char-at rrb pos))
   (define c2 (rrb-char-at rrb (+ pos 1)))
   (define c3 (rrb-char-at rrb (+ pos 2)))
-  (define c4 (rrb-char-at rrb (+ pos 3)))
-  (if (and c1 c2 c3 c4
-           (char=? c1 #\.) (char=? c2 #\.) (char=? c3 #\.)
-           (ident-start? c4))
-      (let loop ([i (+ pos 4)])
-        (define cn (rrb-char-at rrb i))
-        (if (and cn (ident-continue? cn))
-            (loop (+ i 1))
-            (- i pos)))
+  (if (and c1 c2 c3
+           (char=? c1 #\.) (char=? c2 #\.) (char=? c3 #\.))
+      (let ([c4 (rrb-char-at rrb (+ pos 3))])
+        (if (and c4 (ident-start? c4))
+            ;; ...name — rest parameter
+            (let loop ([i (+ pos 4)])
+              (define cn (rrb-char-at rrb i))
+              (if (and cn (ident-continue? cn))
+                  (loop (+ i 1))
+                  (- i pos)))
+            ;; standalone ... — 3 chars
+            3))
       #f))
 
 (define (recognize-dot-access rrb pos)
@@ -644,6 +648,26 @@
       2
       #f))
 
+(define (recognize-typed-hole rrb pos)
+  ;; ?? — typed hole / async receive
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (define c3 (rrb-char-at rrb (+ pos 2)))
+  (if (and c1 c2 (char=? c1 #\?) (char=? c2 #\?)
+           (not (and c3 (or (char=? c3 #\?) (ident-continue? c3)))))
+      2
+      #f))
+
+(define (recognize-async-send rrb pos)
+  ;; !! — async send
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (define c3 (rrb-char-at rrb (+ pos 2)))
+  (if (and c1 c2 (char=? c1 #\!) (char=? c2 #\!)
+           (not (and c3 (or (char=? c3 #\!) (ident-continue? c3)))))
+      2
+      #f))
+
 (define (recognize-dep-send rrb pos)
   ;; !: — dependent session send
   (define c1 (rrb-char-at rrb pos))
@@ -669,11 +693,12 @@
       #f))
 
 (define (recognize-session-op rrb pos)
-  ;; ? or ! — session send/receive (standalone, not part of identifier, not !: or ?:)
+  ;; ? or ! — session send/receive (standalone, not !:/?:/??/!!)
   (define c1 (rrb-char-at rrb pos))
   (define c2 (rrb-char-at rrb (+ pos 1)))
   (if (and c1 (or (char=? c1 #\?) (char=? c1 #\!))
            (not (and c2 (char=? c2 #\:)))  ;; not !: or ?:
+           (not (and c2 (char=? c2 c1)))   ;; not ?? or !!
            (not (and c2 (ident-continue? c2))))  ;; not part of identifier
       1
       #f))
@@ -733,6 +758,12 @@
   (register-token-pattern!
    (token-pattern 'colon-annotation (lambda (rrb pos) (recognize-colon-annotation rrb pos))
                   (lambda (s p l) 'symbol) 97))  ;; :0, :w before bare colon
+  (register-token-pattern!
+   (token-pattern 'typed-hole (lambda (rrb pos) (recognize-typed-hole rrb pos))
+                  (lambda (s p l) 'typed-hole) 98))  ;; ?? before ?:/?
+  (register-token-pattern!
+   (token-pattern 'async-send (lambda (rrb pos) (recognize-async-send rrb pos))
+                  (lambda (s p l) 'symbol) 98))  ;; !! before !:
   (register-token-pattern!
    (token-pattern 'dep-send (lambda (rrb pos) (recognize-dep-send rrb pos))
                   (lambda (s p l) 'symbol) 97))  ;; !: before standalone !
@@ -1603,10 +1634,17 @@
                      (make-stx value source line col pos1 span))
                source line col pos1 span)]
     [(rest-param)
-     ;; ...args → ($rest-param args)
-     (define name-sym (string->symbol (substring lexeme 3)))
-     (make-stx (list (make-stx '$rest-param source line col pos1 0)
-                     (make-stx name-sym source line (+ col 3) (+ pos1 3) (- span 3)))
+     (if (string=? lexeme "...")
+         ;; standalone ... → $rest symbol
+         (make-stx '$rest source line col pos1 span)
+         ;; ...args → ($rest-param args)
+         (let ([name-sym (string->symbol (substring lexeme 3))])
+           (make-stx (list (make-stx '$rest-param source line col pos1 0)
+                           (make-stx name-sym source line (+ col 3) (+ pos1 3) (- span 3)))
+                     source line col pos1 span)))]
+    [(typed-hole)
+     ;; ?? → ($typed-hole) — wrapped in sentinel list like the old reader
+     (make-stx (list (make-stx '$typed-hole source line col pos1 2))
                source line col pos1 span)]
     [else (make-stx value source line col pos1 span)]))
 
