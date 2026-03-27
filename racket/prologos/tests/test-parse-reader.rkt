@@ -13,7 +13,8 @@
          "../rrb.rkt"
          "../propagator.rkt"
          "../parse-lattice.rkt"
-         "../parse-reader.rkt")
+         "../parse-reader.rkt"
+         (only-in "../reader.rkt" read-all-forms-string))
 
 ;; Helper: register patterns once
 (register-default-token-patterns!)
@@ -804,6 +805,70 @@
   (define dot-tok (cadr tokens))
   (check-equal? (compat-token-type dot-tok) 'dot-access)
   (check-equal? (compat-token-value dot-tok) 'name))
+
+;; ============================================================
+;; Phase 5a: Datum extraction
+;; ============================================================
+
+(test-case "datum: simple def"
+  (define old (read-all-forms-string "def x := 42"))
+  (define new (compat-read-all-forms-string "def x := 42"))
+  (check-equal? new old))
+
+(test-case "datum: bracket form"
+  (define old (read-all-forms-string "[f x y]"))
+  (define new (compat-read-all-forms-string "[f x y]"))
+  (check-equal? new old))
+
+(test-case "datum: nested brackets"
+  (define old (read-all-forms-string "[[x] [y]]"))
+  (define new (compat-read-all-forms-string "[[x] [y]]"))
+  (check-equal? new old))
+
+(test-case "datum: indented body"
+  (define old (read-all-forms-string "def f [x]\n  [int+ x 1]"))
+  (define new (compat-read-all-forms-string "def f [x]\n  [int+ x 1]"))
+  (check-equal? new old))
+
+(test-case "datum: dot-access"
+  (define old (read-all-forms-string "user.name"))
+  (define new (compat-read-all-forms-string "user.name"))
+  (check-equal? new old))
+
+(test-case "datum: pipe operator"
+  (define old (read-all-forms-string "|> 5 inc dbl"))
+  (define new (compat-read-all-forms-string "|> 5 inc dbl"))
+  (check-equal? new old))
+
+(test-case "datum: angle bracket type"
+  (define src "spec f Int -> <Bool>")
+  (define old (read-all-forms-string src))
+  (define new (compat-read-all-forms-string src))
+  (check-equal? new old))
+
+(test-case "datum: brace params"
+  (define src (string-append "{" ":name \"alice\"}"))
+  (define old (read-all-forms-string src))
+  (define new (compat-read-all-forms-string src))
+  (check-equal? new old))
+
+(test-case "datum: module path"
+  (define old (read-all-forms-string "ns prologos::data::nat"))
+  (define new (compat-read-all-forms-string "ns prologos::data::nat"))
+  (check-equal? new old))
+
+(test-case "datum: pattern match with pipe"
+  (define old (read-all-forms-string "defn f\n  | zero -> true\n  | suc _ -> false"))
+  (define new (compat-read-all-forms-string "defn f\n  | zero -> true\n  | suc _ -> false"))
+  (check-equal? new old))
+
+(test-case "datum: nat.prologos matches old reader"
+  (define nat-path (build-path project-root "lib" "prologos" "data" "nat.prologos"))
+  (when (file-exists? nat-path)
+    (define src (file->string nat-path))
+    (define old (read-all-forms-string src))
+    (define new (compat-read-all-forms-string src))
+    (check-equal? new old)))
 
 ;; ============================================================
 ;; Phase 4: Bracket matching validation
