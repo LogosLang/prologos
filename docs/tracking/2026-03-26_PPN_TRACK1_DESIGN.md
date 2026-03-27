@@ -41,7 +41,7 @@ Hyperlattice Conjecture.
 | 4 | Golden comparison: 4 levels vs Phase 0 baseline | ✅ | `801e9d1` — topology 110/110, brackets 110/110. Datums/srclocs deferred to parser integration. 3 tests (97 total). |
 | 5a | Datum extraction: tree → syntax objects | ✅ | `a2dd08a` — bracket grouping, sentinels, escapes, ::. 11 tests (108 total). |
 | 5b | Cross-line brackets + tokenizer gaps | ✅ | `e6e4d25` — **72/72 library files match (100%).** flatten-with-boundaries, indent-close truthiness fix, >>/compose, colon-annotation. |
-| 5c | Wire into driver.rkt + consumer migration | ⬜ | 11/38 example files pass. Remaining need more tokenizer patterns. |
+| 5c | Wire into driver.rkt + consumer migration | ✅ | `bac32cd` — parallel validation mode. 7529 tests, 380 files, zero mismatches. Switchover ready. |
 | 6 | `rrb-diff` implementation | ⬜ | RRB structural diff for incremental (Track 8 ready). |
 | 7 | A/B benchmarks (integrated system) | ⬜ | Target: ≤460μs (current reader). Estimated: ~306μs. |
 | 8 | Suite verify + dailies + tracker | ⬜ | |
