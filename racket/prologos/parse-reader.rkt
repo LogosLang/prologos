@@ -70,6 +70,7 @@
  pos->line-col
 
  ;; Phase 5a: Datum extraction
+ flatten-with-boundaries
  read-all-forms-from-tree
  compat-read-all-forms-string
  compat-read-syntax-all
@@ -1413,181 +1414,209 @@
                source line col start span)]
     [else (make-stx value source line col start span)]))
 
-;; Convert a parse-tree-node → list of syntax objects
-;; Handles bracket grouping: [...] → (contents), {...} → ($brace-params contents)
-(define (tree-node->stx-elements node source source-str)
+;; ---- Flatten-then-group approach for datum extraction ----
+;;
+;; The tree represents indent structure (line nodes with children).
+;; Bracket grouping crosses line boundaries. We flatten all tokens
+;; depth-first within a form's subtree, then apply sequential bracket
+;; matching. The tree structure is preserved in cells for Track 2+.
+
+;; Flatten a parse-tree-node depth-first into ordered token-entries
+(define (flatten-tokens node)
   (define children (parse-tree-node-children node))
   (define n (rrb-size children))
-
-  ;; Process children left-to-right, grouping bracket contents
   (let loop ([i 0] [result '()])
     (if (>= i n)
         (reverse result)
         (let ([child (rrb-get children i)])
           (cond
+            [(token-entry? child) (loop (+ i 1) (cons child result))]
             [(parse-tree-node? child)
-             (define child-form (tree-node->stx-form child source source-str))
-             (loop (+ i 1) (cons child-form result))]
-            [(token-entry? child)
-             (define type (set-first (token-entry-types child)))
-             (cond
-               ;; Opening brackets → collect contents until matching close
-               [(memq type '(lbracket lparen))
-                (define-values (bracket-stx end-i)
-                  (collect-bracket-contents children (+ i 1) type source source-str))
-                (loop end-i (cons bracket-stx result))]
-               ;; Angle brackets → ($angle-type contents...)
-               [(eq? type 'langle)
-                (define-values (inner-elems end-i)
-                  (collect-until-close children (+ i 1) 'rangle source source-str))
-                (define ang-tok child)
-                (define-values (al ac) (pos->line-col source-str (token-entry-start-pos ang-tok)))
-                (define all-elems
-                  (cons (make-stx '$angle-type source al ac
-                                  (token-entry-start-pos ang-tok) 1)
-                        inner-elems))
-                (define wrapped (make-stx all-elems source al ac
-                                          (token-entry-start-pos ang-tok) 1))
-                (loop end-i (cons wrapped result))]
-               [(eq? type 'lbrace)
-                (define-values (inner-elems end-i)
-                  (collect-until-close children (+ i 1) 'rbrace source source-str))
-                ;; Wrap in ($brace-params ...)
-                (define brace-tok child)
-                (define-values (bl bc) (pos->line-col source-str (token-entry-start-pos brace-tok)))
-                (define all-elems
-                  (cons (make-stx '$brace-params source bl bc
-                                  (token-entry-start-pos brace-tok) 1)
-                        inner-elems))
-                (define wrapped (make-stx all-elems source bl bc
-                                          (token-entry-start-pos brace-tok) 1))
-                (loop end-i (cons wrapped result))]
-               [(eq? type 'quote-lbracket)
-                (define-values (inner-elems end-i)
-                  (collect-until-close children (+ i 1) 'rbracket source source-str))
-                (define qt child)
-                (define-values (ql qc) (pos->line-col source-str (token-entry-start-pos qt)))
-                (define all-elems
-                  (cons (make-stx '$list-literal source ql qc
-                                  (token-entry-start-pos qt) 2)
-                        inner-elems))
-                (define wrapped (make-stx all-elems source ql qc
-                                          (token-entry-start-pos qt) 2))
-                (loop end-i (cons wrapped result))]
-               [(eq? type 'at-lbracket)
-                (define-values (inner-elems end-i)
-                  (collect-until-close children (+ i 1) 'rbracket source source-str))
-                (define at child)
-                (define-values (al ac) (pos->line-col source-str (token-entry-start-pos at)))
-                (define all-elems
-                  (cons (make-stx '$pvec-literal source al ac
-                                  (token-entry-start-pos at) 2)
-                        inner-elems))
-                (define wrapped (make-stx all-elems source al ac
-                                          (token-entry-start-pos at) 2))
-                (loop end-i (cons wrapped result))]
-               [(eq? type 'tilde-lbracket)
-                (define-values (inner-elems end-i)
-                  (collect-until-close children (+ i 1) 'rbracket source source-str))
-                (define tl child)
-                (define-values (tll tlc) (pos->line-col source-str (token-entry-start-pos tl)))
-                (define all-elems
-                  (cons (make-stx '$lseq-literal source tll tlc
-                                  (token-entry-start-pos tl) 2)
-                        inner-elems))
-                (define wrapped (make-stx all-elems source tll tlc
-                                          (token-entry-start-pos tl) 2))
-                (loop end-i (cons wrapped result))]
-               [(eq? type 'hash-lbrace)
-                (define-values (inner-elems end-i)
-                  (collect-until-close children (+ i 1) 'rbrace source source-str))
-                (define hl child)
-                (define-values (hll hlc) (pos->line-col source-str (token-entry-start-pos hl)))
-                (define all-elems
-                  (cons (make-stx '$set-literal source hll hlc
-                                  (token-entry-start-pos hl) 2)
-                        inner-elems))
-                (define wrapped (make-stx all-elems source hll hlc
-                                          (token-entry-start-pos hl) 2))
-                (loop end-i (cons wrapped result))]
-               ;; Closing brackets at top level — skip (should be consumed by collect)
-               [(memq type '(rbracket rparen rbrace rangle))
-                (loop (+ i 1) result)]
-               ;; Regular token
-               [else
-                (loop (+ i 1)
-                      (cons (token-entry->stx child source source-str) result))])])))))
+             (loop (+ i 1) (append (reverse (flatten-tokens child)) result))]
+            [else (loop (+ i 1) result)])))))
 
-;; Collect tokens/nodes from children RRB until matching close bracket
-;; Returns (values list-of-stx-elems next-index)
-(define (collect-until-close children-rrb start-i close-type source source-str)
-  (define n (rrb-size children-rrb))
-  (let loop ([i start-i] [elems '()])
-    (if (>= i n)
-        (values (reverse elems) n)
-        (let ([child (rrb-get children-rrb i)])
+;; Group tokens from vec[start..end) with bracket matching.
+;; Returns (values stx-elements next-index)
+(define (group-tokens vec start end close-type source source-str)
+  (let loop ([i start] [result '()])
+    (cond
+      [(>= i end) (values (reverse result) end)]
+      [else
+       (define entry (vector-ref vec i))
+       (define type (set-first (token-entry-types entry)))
+       (cond
+         [(and close-type (eq? type close-type))
+          (values (reverse result) (+ i 1))]
+         [(memq type '(lbracket lparen))
+          (define ct (if (eq? type 'lbracket) 'rbracket 'rparen))
+          (define-values (inner next-i) (group-tokens vec (+ i 1) end ct source source-str))
+          (loop next-i (cons (wrap-stx-list inner source) result))]
+         [(eq? type 'langle)
+          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rangle source source-str))
+          (define-values (al ac) (pos->line-col source-str (token-entry-start-pos entry)))
+          (loop next-i (cons (make-stx (cons (make-stx '$angle-type source al ac (token-entry-start-pos entry) 1) inner)
+                                       source al ac (token-entry-start-pos entry) 1) result))]
+         [(eq? type 'lbrace)
+          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbrace source source-str))
+          (define-values (bl bc) (pos->line-col source-str (token-entry-start-pos entry)))
+          (loop next-i (cons (make-stx (cons (make-stx '$brace-params source bl bc (token-entry-start-pos entry) 1) inner)
+                                       source bl bc (token-entry-start-pos entry) 1) result))]
+         [(eq? type 'quote-lbracket)
+          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbracket source source-str))
+          (define-values (ql qc) (pos->line-col source-str (token-entry-start-pos entry)))
+          (loop next-i (cons (make-stx (cons (make-stx '$list-literal source ql qc (token-entry-start-pos entry) 2) inner)
+                                       source ql qc (token-entry-start-pos entry) 2) result))]
+         [(eq? type 'at-lbracket)
+          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbracket source source-str))
+          (define-values (al ac) (pos->line-col source-str (token-entry-start-pos entry)))
+          (loop next-i (cons (make-stx (cons (make-stx '$pvec-literal source al ac (token-entry-start-pos entry) 2) inner)
+                                       source al ac (token-entry-start-pos entry) 2) result))]
+         [(eq? type 'tilde-lbracket)
+          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbracket source source-str))
+          (define-values (tl tc) (pos->line-col source-str (token-entry-start-pos entry)))
+          (loop next-i (cons (make-stx (cons (make-stx '$lseq-literal source tl tc (token-entry-start-pos entry) 2) inner)
+                                       source tl tc (token-entry-start-pos entry) 2) result))]
+         [(eq? type 'hash-lbrace)
+          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbrace source source-str))
+          (define-values (hl hc) (pos->line-col source-str (token-entry-start-pos entry)))
+          (loop next-i (cons (make-stx (cons (make-stx '$set-literal source hl hc (token-entry-start-pos entry) 2) inner)
+                                       source hl hc (token-entry-start-pos entry) 2) result))]
+         [(memq type '(rbracket rparen rbrace rangle))
+          (loop (+ i 1) result)]
+         [else
+          (loop (+ i 1) (cons (token-entry->stx entry source source-str) result))])])))
+
+(define (wrap-stx-list elems source)
+  (if (null? elems)
+      (make-stx '() source 0 0 0 0)
+      (let ([first (car elems)] [last (last-stx elems)])
+        (make-stx elems source (syntax-line first) (syntax-column first)
+                  (syntax-position first)
+                  (max 1 (- (+ (syntax-position last) (syntax-span last))
+                            (syntax-position first)))))))
+
+;; Convert a parse-tree-node to syntax elements.
+;; Uses flatten-then-group on the FULL token sequence (depth-first)
+;; to correctly handle both indent grouping and cross-line brackets.
+;; Indent grouping is recovered by treating child-node boundaries as
+;; implicit wrapping points when not inside an open bracket.
+(define (tree-node->stx-elements node source source-str)
+  ;; Collect tokens with indent-boundary markers
+  (define items (flatten-with-boundaries node))
+  (define vec (list->vector items))
+  (define-values (elems _end)
+    (group-items vec 0 (vector-length vec) #f source source-str))
+  elems)
+
+;; Flatten a node into a list of items: token-entries and 'indent-open/'indent-close markers.
+;; Child line nodes are wrapped in indent-open/indent-close pairs.
+(define (flatten-with-boundaries node)
+  (define children (parse-tree-node-children node))
+  (define n (rrb-size children))
+  ;; Build result as list of lists, then flatten
+  (apply append
+    (for/list ([i (in-range n)])
+      (define child (rrb-get children i))
+      (cond
+        [(token-entry? child) (list child)]
+        [(parse-tree-node? child)
+         (append (list 'indent-open)
+                 (flatten-with-boundaries child)
+                 (list 'indent-close))]
+        [else '()]))))
+
+;; Group items (tokens + indent markers) with bracket matching.
+;; indent-open/indent-close create implicit sub-lists ONLY when
+;; not inside an explicit bracket group (bracket groups take priority).
+(define (group-items vec start end close-type source source-str)
+  (let loop ([i start] [result '()])
+    (cond
+      [(>= i end)
+       (values (reverse result) end)]
+      [else
+       (define item (vector-ref vec i))
+       (cond
+         ;; Indent boundary markers
+         [(eq? item 'indent-open)
+          (if close-type
+              ;; Inside brackets: ignore indent boundaries (brackets win)
+              (loop (+ i 1) result)
+              ;; Not inside brackets: collect until indent-close, wrap as sub-form
+              (let-values ([(inner-elems next-i)
+                            (group-items vec (+ i 1) end 'indent-close source source-str)])
+                (cond
+                  [(null? inner-elems) (loop next-i result)]
+                  [(= (length inner-elems) 1) (loop next-i (cons (car inner-elems) result))]
+                  [else (loop next-i (cons (wrap-stx-list inner-elems source) result))])))]
+         [(eq? item 'indent-close)
+          (if (eq? close-type 'indent-close)
+              (values (reverse result) (+ i 1))
+              (loop (+ i 1) result))]
+         ;; Token processing
+         [(token-entry? item)
+          (define type (set-first (token-entry-types item)))
           (cond
-            [(parse-tree-node? child)
-             (define form (tree-node->stx-form child source source-str))
-             (loop (+ i 1) (cons form elems))]
-            [(token-entry? child)
-             (define type (set-first (token-entry-types child)))
-             (cond
-               [(eq? type close-type) (values (reverse elems) (+ i 1))]
-               ;; Nested brackets
-               [(memq type '(lbracket lparen))
-                (define-values (bracket-stx end-i)
-                  (collect-bracket-contents children-rrb (+ i 1) type source source-str))
-                (loop end-i (cons bracket-stx elems))]
-               ;; Nested angle brackets
-               [(eq? type 'langle)
-                (define-values (inner end-i)
-                  (collect-until-close children-rrb (+ i 1) 'rangle source source-str))
-                (define ang-tok child)
-                (define-values (al ac) (pos->line-col source-str (token-entry-start-pos ang-tok)))
-                (define wrapped
-                  (make-stx (cons (make-stx '$angle-type source al ac
-                                            (token-entry-start-pos ang-tok) 1)
-                                  inner)
-                            source al ac (token-entry-start-pos ang-tok) 1))
-                (loop end-i (cons wrapped elems))]
-               [(eq? type 'lbrace)
-                (define-values (inner end-i)
-                  (collect-until-close children-rrb (+ i 1) 'rbrace source source-str))
-                (define brace-tok child)
-                (define-values (bl bc) (pos->line-col source-str (token-entry-start-pos brace-tok)))
-                (define wrapped
-                  (make-stx (cons (make-stx '$brace-params source bl bc
-                                            (token-entry-start-pos brace-tok) 1)
-                                  inner)
-                            source bl bc (token-entry-start-pos brace-tok) 1))
-                (loop end-i (cons wrapped elems))]
-               [else
-                (loop (+ i 1)
-                      (cons (token-entry->stx child source source-str) elems))])])))))
+            ;; Matching close bracket
+            [(and close-type (not (eq? close-type 'indent-close)) (eq? type close-type))
+             (values (reverse result) (+ i 1))]
+            ;; Square/round brackets
+            [(memq type '(lbracket lparen))
+             (let-values ([(inner next-i)
+                           (group-items vec (+ i 1) end
+                                        (if (eq? type 'lbracket) 'rbracket 'rparen)
+                                        source source-str)])
+               (loop next-i (cons (wrap-stx-list inner source) result)))]
+            ;; Angle brackets → $angle-type sentinel
+            [(eq? type 'langle)
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rangle source source-str)])
+               (let-values ([(al ac) (pos->line-col source-str (token-entry-start-pos item))])
+                 (loop next-i
+                       (cons (make-stx (cons (make-stx '$angle-type source al ac (token-entry-start-pos item) 1) inner)
+                                       source al ac (token-entry-start-pos item) 1) result))))]
+            ;; Braces → $brace-params sentinel
+            [(eq? type 'lbrace)
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbrace source source-str)])
+               (let-values ([(bl bc) (pos->line-col source-str (token-entry-start-pos item))])
+                 (loop next-i
+                       (cons (make-stx (cons (make-stx '$brace-params source bl bc (token-entry-start-pos item) 1) inner)
+                                       source bl bc (token-entry-start-pos item) 1) result))))]
+            ;; Quote bracket → $list-literal sentinel
+            [(eq? type 'quote-lbracket)
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbracket source source-str)])
+               (let-values ([(ql qc) (pos->line-col source-str (token-entry-start-pos item))])
+                 (loop next-i
+                       (cons (make-stx (cons (make-stx '$list-literal source ql qc (token-entry-start-pos item) 2) inner)
+                                       source ql qc (token-entry-start-pos item) 2) result))))]
+            ;; At bracket → $pvec-literal sentinel
+            [(eq? type 'at-lbracket)
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbracket source source-str)])
+               (let-values ([(al ac) (pos->line-col source-str (token-entry-start-pos item))])
+                 (loop next-i
+                       (cons (make-stx (cons (make-stx '$pvec-literal source al ac (token-entry-start-pos item) 2) inner)
+                                       source al ac (token-entry-start-pos item) 2) result))))]
+            ;; Tilde bracket → $lseq-literal sentinel
+            [(eq? type 'tilde-lbracket)
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbracket source source-str)])
+               (let-values ([(tl tc) (pos->line-col source-str (token-entry-start-pos item))])
+                 (loop next-i
+                       (cons (make-stx (cons (make-stx '$lseq-literal source tl tc (token-entry-start-pos item) 2) inner)
+                                       source tl tc (token-entry-start-pos item) 2) result))))]
+            ;; Hash brace → $set-literal sentinel
+            [(eq? type 'hash-lbrace)
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbrace source source-str)])
+               (let-values ([(hl hc) (pos->line-col source-str (token-entry-start-pos item))])
+                 (loop next-i
+                       (cons (make-stx (cons (make-stx '$set-literal source hl hc (token-entry-start-pos item) 2) inner)
+                                       source hl hc (token-entry-start-pos item) 2) result))))]
+            ;; Stray closing brackets → skip
+            [(memq type '(rbracket rparen rbrace rangle))
+             (loop (+ i 1) result)]
+            ;; Regular token
+            [else
+             (loop (+ i 1) (cons (token-entry->stx item source source-str) result))])]
+         ;; Unknown item → skip
+         [else (loop (+ i 1) result)])])))
 
-;; Collect bracket contents and wrap as syntax list
-;; opener-type determines the matching closer
-(define (collect-bracket-contents children-rrb start-i opener-type source source-str)
-  (define close-type
-    (case opener-type
-      [(lbracket) 'rbracket]
-      [(lparen) 'rparen]
-      [(langle) 'rangle]))
-  (define-values (elems end-i)
-    (collect-until-close children-rrb start-i close-type source source-str))
-  ;; Wrap contents as a syntax list
-  (define stx
-    (if (null? elems)
-        (make-stx '() source 0 0 0 0)
-        (let ([first (car elems)]
-              [last (last-stx elems)])
-          (make-stx elems source
-                    (syntax-line first) (syntax-column first)
-                    (syntax-position first)
-                    (max 1 (- (+ (syntax-position last) (syntax-span last))
-                              (syntax-position first)))))))
-  (values stx end-i))
 
 ;; Convert a parse-tree-node → a single syntax object (wrapping its elements)
 (define (tree-node->stx-form node source source-str)
@@ -1608,25 +1637,6 @@
 (define (last-stx lst)
   (if (null? (cdr lst)) (car lst) (last-stx (cdr lst))))
 
-;; Extract bracket form contents as a syntax list
-;; Handles [...], (...), {...}, '[...], @[...], ~[...], #{...}
-(define (extract-bracket-form children-rrb start-idx source source-str)
-  ;; Collect all non-bracket tokens/nodes between open and close
-  (define n (rrb-size children-rrb))
-  (define elems '())
-  (for ([i (in-range start-idx n)])
-    (define child (rrb-get children-rrb i))
-    (cond
-      [(token-entry? child)
-       (define type (set-first (token-entry-types child)))
-       (unless (memq type '(lbracket rbracket lparen rparen lbrace rbrace
-                            langle rangle
-                            quote-lbracket at-lbracket tilde-lbracket
-                            hash-lbrace dot-lbrace))
-         (set! elems (cons (token-entry->stx child source source-str) elems)))]
-      [(parse-tree-node? child)
-       (set! elems (cons (tree-node->stx-form child source source-str) elems))]))
-  (reverse elems))
 
 ;; ---- Main API: read-all-forms-from-tree ----
 
