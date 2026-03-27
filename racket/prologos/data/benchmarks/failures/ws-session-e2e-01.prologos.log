@@ -1,8 +1,0 @@
-=== ws-session-e2e-01.prologos FAILED ===
-wall_ms: 0
-tests: 0 (0 failures)
-
---- Exception ---
-default-load-handler: expected a `module' declaration, but found something else
-  file: /Users/avanti/dev/projects/prologos/racket/prologos/tests/ws-session-e2e-01.prologos
-
