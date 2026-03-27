@@ -550,12 +550,20 @@
       2
       #f))
 
+(define (recognize-facts-sep rrb pos)
+  ;; || (double pipe — fact separator in defr)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\|) (char=? c2 #\|))
+      2
+      #f))
+
 (define (recognize-pipe rrb pos)
-  ;; | (standalone, NOT |>)
+  ;; | (standalone, NOT |> or ||)
   (define c1 (rrb-char-at rrb pos))
   (define c2 (rrb-char-at rrb (+ pos 1)))
   (if (and c1 (char=? c1 #\|)
-           (not (and c2 (char=? c2 #\>))))
+           (not (and c2 (or (char=? c2 #\>) (char=? c2 #\|)))))
       1
       #f))
 
@@ -799,9 +807,12 @@
   (register-token-pattern!
    (token-pattern 'comma (lambda (rrb pos) (recognize-comma rrb pos))
                   (lambda (s p l) 'comma) 85))
-  ;; Pipe operators (|> must precede |)
+  ;; Pipe operators (|> and || must precede |)
   (register-token-pattern!
    (token-pattern 'pipe-right (lambda (rrb pos) (recognize-pipe-right rrb pos))
+                  (lambda (s p l) 'symbol) 84))
+  (register-token-pattern!
+   (token-pattern 'facts-sep (lambda (rrb pos) (recognize-facts-sep rrb pos))
                   (lambda (s p l) 'symbol) 84))
   (register-token-pattern!
    (token-pattern 'pipe (lambda (rrb pos) (recognize-pipe rrb pos))
@@ -1487,10 +1498,11 @@
 
 (define (make-stx datum source line col pos span)
   ;; datum->syntax expects: line ≥ 1 or #f, col ≥ 0 or #f, pos ≥ 1 or #f, span ≥ 0 or #f
+  ;; Our positions are 0-based (from token-entry-start-pos); Racket expects 1-based.
   (datum->syntax #f datum (list source
                                 (if (> line 0) line #f)
                                 (if (>= col 0) col #f)
-                                (if (> pos 0) pos (+ pos 1))  ;; 0-based → 1-based
+                                (+ pos 1)  ;; 0-based → 1-based
                                 (if (>= span 0) span #f))))
 
 ;; Convert a token-entry → syntax object
@@ -1508,6 +1520,7 @@
                   [(string=? lexeme "|>") '$pipe-gt]
                   [(string=? lexeme ">>") '$compose]
                   [(string=? lexeme "&>") '$clause-sep]
+                  [(string=? lexeme "||") '$facts-sep]
                   [(string=? lexeme ":=") ':=]
                   [(string=? lexeme "->") '->]
                   [(string=? lexeme "->>") '->>]
@@ -1740,7 +1753,9 @@
              (loop (+ i 1) angle-depth (- other-depth 1))]
             ;; Hit the current scope's closer at depth 0 → no match
             [(and close-type (not (eq? close-type 'indent-close))
-                  (eq? type close-type) (= other-depth 0))
+                  (or (eq? type close-type)
+                      (and (eq? close-type 'mixfix-rbrace) (eq? type 'rbrace)))
+                  (= other-depth 0))
              #f]
             [else (loop (+ i 1) angle-depth other-depth)])])])))
 
@@ -1776,7 +1791,9 @@
           (define type (set-first (token-entry-types item)))
           (cond
             ;; Matching close bracket
-            [(and close-type (not (eq? close-type 'indent-close)) (eq? type close-type))
+            [(and close-type (not (eq? close-type 'indent-close))
+                  (or (eq? type close-type)
+                      (and (eq? close-type 'mixfix-rbrace) (eq? type 'rbrace))))
              (values (reverse result) (+ i 1))]
             ;; Square/round brackets
             [(memq type '(lbracket lparen))
@@ -1786,9 +1803,10 @@
                                         source source-str)])
                (loop next-i (cons (wrap-stx-list inner source) result)))]
             ;; Angle brackets → $angle-type sentinel IF matching rangle exists
-            ;; Otherwise treat < as operator symbol (e.g., inside .{1 < 2})
+            ;; AND we're not inside a dot-lbrace/mixfix group (where < > are operators)
             [(eq? type 'langle)
-             (if (has-matching-rangle? vec (+ i 1) end close-type)
+             (if (and (not (eq? close-type 'mixfix-rbrace))
+                      (has-matching-rangle? vec (+ i 1) end close-type))
                  (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rangle source source-str)])
                    (let-values ([(al ac) (pos->line-col source-str (token-entry-start-pos item))])
                      (loop next-i
@@ -1803,9 +1821,9 @@
                  (loop next-i
                        (cons (make-stx (cons (make-stx '$brace-params source bl bc (token-entry-start-pos item) 1) inner)
                                        source bl bc (token-entry-start-pos item) 1) result))))]
-            ;; Dot-brace → $mixfix sentinel
+            ;; Dot-brace → $mixfix sentinel (uses 'mixfix-rbrace to suppress angle brackets)
             [(eq? type 'dot-lbrace)
-             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbrace source source-str)])
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'mixfix-rbrace source source-str)])
                (let-values ([(ml mc) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
                        (cons (make-stx (cons (make-stx '$mixfix source ml mc (token-entry-start-pos item) 2) inner)
