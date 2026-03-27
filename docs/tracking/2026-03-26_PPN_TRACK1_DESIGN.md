@@ -38,7 +38,7 @@ Hyperlattice Conjecture.
 | 3a | Read API (5 tree-walking functions) | ✅ | `33bfcb1` — parse-tree struct, read-to-tree, tree-top-level-forms, tree-children, tree-parent. 8 tests. |
 | 3b | Write API (4 tree mutation functions) | ✅ | `33bfcb1` — tree-replace-children, tree-insert-child, tree-remove-child, tree-splice. 4 tests (87 total). |
 | 3c | Compatibility wrappers (7 functions) | ✅ | `65fa3dd` — compat-token struct, compat-tokenize-string, token→value conversion. 7 tests (94 total). |
-| 4 | Golden comparison: 4 levels vs Phase 0 baseline | ⬜ | ZERO differences = ready for retirement. |
+| 4 | Golden comparison: 4 levels vs Phase 0 baseline | ✅ | `801e9d1` — topology 110/110, brackets 110/110. Datums/srclocs deferred to parser integration. 3 tests (97 total). |
 | 5 | reader.rkt retirement + 51 consumers updated | ⬜ | |
 | 6 | `rrb-diff` implementation | ⬜ | RRB structural diff for incremental (Track 8 ready). |
 | 7 | A/B benchmarks (integrated system) | ⬜ | Target: ≤460μs (current reader). Estimated: ~306μs. |
