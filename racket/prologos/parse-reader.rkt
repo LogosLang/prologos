@@ -1715,25 +1715,34 @@
 ;; Lookahead: check if there's a matching rangle before the current scope closes.
 ;; Scans forward tracking nesting depth for <> pairs.
 (define (has-matching-rangle? vec start end close-type)
-  (let loop ([i start] [depth 0])
+  ;; Scan forward for matching rangle, tracking ALL bracket depths.
+  ;; Skip over nested [...], (...), {...} groups entirely.
+  (let loop ([i start] [angle-depth 0] [other-depth 0])
     (cond
       [(>= i end) #f]
       [else
        (define item (vector-ref vec i))
        (cond
-         [(not (token-entry? item)) (loop (+ i 1) depth)]  ;; skip indent markers
+         [(not (token-entry? item)) (loop (+ i 1) angle-depth other-depth)]
          [else
           (define type (set-first (token-entry-types item)))
           (cond
-            ;; Found matching rangle at depth 0
-            [(and (eq? type 'rangle) (= depth 0)) #t]
-            ;; Nested langle → increase depth
-            [(eq? type 'langle) (loop (+ i 1) (+ depth 1))]
-            ;; Nested rangle → decrease depth
-            [(eq? type 'rangle) (loop (+ i 1) (- depth 1))]
-            ;; Hit the current scope's closer → no match
-            [(and close-type (not (eq? close-type 'indent-close)) (eq? type close-type)) #f]
-            [else (loop (+ i 1) depth)])])])))
+            ;; Found matching rangle at angle-depth 0 and not inside other brackets
+            [(and (eq? type 'rangle) (= angle-depth 0) (= other-depth 0)) #t]
+            ;; Nested angle brackets
+            [(eq? type 'langle) (loop (+ i 1) (+ angle-depth 1) other-depth)]
+            [(and (eq? type 'rangle) (> angle-depth 0)) (loop (+ i 1) (- angle-depth 1) other-depth)]
+            ;; Other brackets — track depth to skip over them
+            [(memq type '(lbracket lparen lbrace quote-lbracket at-lbracket
+                          tilde-lbracket hash-lbrace dot-lbrace))
+             (loop (+ i 1) angle-depth (+ other-depth 1))]
+            [(and (memq type '(rbracket rparen rbrace)) (> other-depth 0))
+             (loop (+ i 1) angle-depth (- other-depth 1))]
+            ;; Hit the current scope's closer at depth 0 → no match
+            [(and close-type (not (eq? close-type 'indent-close))
+                  (eq? type close-type) (= other-depth 0))
+             #f]
+            [else (loop (+ i 1) angle-depth other-depth)])])])))
 
 ;; Group items (tokens + indent markers) with bracket matching.
 ;; indent-open/indent-close create implicit sub-lists ONLY when
@@ -1846,6 +1855,9 @@
                                result)))
                  ;; Single stray rangle → emit as > operator symbol
                  (loop (+ i 1) (cons (token-entry->stx item source source-str) result)))]
+            ;; Comma → skip (cosmetic separator in brace-params, etc.)
+            [(eq? type 'comma)
+             (loop (+ i 1) result)]
             ;; Other stray closing brackets → skip
             [(memq type '(rbracket rparen rbrace))
              (loop (+ i 1) result)]
