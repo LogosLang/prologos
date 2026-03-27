@@ -1426,7 +1426,7 @@
                      (make-stx field-sym source line (+ col 1) (+ start 1) (- span 1)))
                source line col start span)]
     [(dot-key)
-     (define kw-sym (string->symbol lexeme))
+     (define kw-sym (string->symbol (substring lexeme 1)))  ;; .:name → :name
      (make-stx (list (make-stx '$dot-key source line col start 0)
                      (make-stx kw-sym source line (+ col 1) (+ start 1) (- span 1)))
                source line col start span)]
@@ -1530,7 +1530,7 @@
          [(eq? type 'at-lbracket)
           (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbracket source source-str))
           (define-values (al ac) (pos->line-col source-str (token-entry-start-pos entry)))
-          (loop next-i (cons (make-stx (cons (make-stx '$pvec-literal source al ac (token-entry-start-pos entry) 2) inner)
+          (loop next-i (cons (make-stx (cons (make-stx '$vec-literal source al ac (token-entry-start-pos entry) 2) inner)
                                        source al ac (token-entry-start-pos entry) 2) result))]
          [(eq? type 'tilde-lbracket)
           (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbracket source source-str))
@@ -1660,7 +1660,7 @@
              (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbracket source source-str)])
                (let-values ([(al ac) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
-                       (cons (make-stx (cons (make-stx '$pvec-literal source al ac (token-entry-start-pos item) 2) inner)
+                       (cons (make-stx (cons (make-stx '$vec-literal source al ac (token-entry-start-pos item) 2) inner)
                                        source al ac (token-entry-start-pos item) 2) result))))]
             ;; Tilde bracket → $lseq-literal sentinel
             [(eq? type 'tilde-lbracket)
