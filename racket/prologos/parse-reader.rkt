@@ -198,7 +198,9 @@
            (char=? c #\*)
            (char=? c #\/)
            (char=? c #\=)
-           (char=? c #\$))))
+           (char=? c #\$)
+           (char=? c #\?)
+           (char=? c #\!))))
 
 (define (ident-continue? c)
   (and (char? c)
@@ -436,6 +438,22 @@
             (- i pos)))
       #f))
 
+(define (recognize-rest-param rrb pos)
+  ;; ...ident — rest parameter (three dots + identifier)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (define c3 (rrb-char-at rrb (+ pos 2)))
+  (define c4 (rrb-char-at rrb (+ pos 3)))
+  (if (and c1 c2 c3 c4
+           (char=? c1 #\.) (char=? c2 #\.) (char=? c3 #\.)
+           (ident-start? c4))
+      (let loop ([i (+ pos 4)])
+        (define cn (rrb-char-at rrb i))
+        (if (and cn (ident-continue? cn))
+            (loop (+ i 1))
+            (- i pos)))
+      #f))
+
 (define (recognize-dot-access rrb pos)
   ;; .ident (NOT .:keyword, NOT .{, NOT .*, NOT number continuation)
   (define c1 (rrb-char-at rrb pos))
@@ -502,6 +520,15 @@
   (if (and c1 (char=? c1 #\|)
            (not (and c2 (char=? c2 #\>))))
       1
+      #f))
+
+(define (recognize-double-arrow rrb pos)
+  ;; ->> (session double arrow)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (define c3 (rrb-char-at rrb (+ pos 2)))
+  (if (and c1 c2 c3 (char=? c1 #\-) (char=? c2 #\>) (char=? c3 #\>))
+      3
       #f))
 
 (define (recognize-arrow rrb pos)
@@ -613,6 +640,9 @@
    (token-pattern 'choice-arrow (lambda (rrb pos) (recognize-choice-arrow rrb pos))
                   (lambda (s p l) 'symbol) 99))  ;; +> before symbol +
   (register-token-pattern!
+   (token-pattern 'double-arrow (lambda (rrb pos) (recognize-double-arrow rrb pos))
+                  (lambda (s p l) 'symbol) 99))  ;; ->> before ->
+  (register-token-pattern!
    (token-pattern 'arrow (lambda (rrb pos) (recognize-arrow rrb pos))
                   (lambda (s p l) 'symbol) 98))
   (register-token-pattern!
@@ -652,6 +682,10 @@
   (register-token-pattern!
    (token-pattern 'quote-lbracket (lambda (rrb pos) (recognize-quote-lbracket rrb pos))
                   (lambda (s p l) 'quote-lbracket) 91))
+  ;; Rest parameter ...ident (must precede dot-access)
+  (register-token-pattern!
+   (token-pattern 'rest-param (lambda (rrb pos) (recognize-rest-param rrb pos))
+                  (lambda (s p l) 'rest-param) 89))
   ;; Dot-prefix compound tokens (must precede symbol/single-char)
   (register-token-pattern!
    (token-pattern 'dot-key (lambda (rrb pos) (recognize-dot-key rrb pos))
@@ -1427,6 +1461,12 @@
      (make-stx (list (make-stx '$nat-literal source line col start 0)
                      (make-stx value source line col start span))
                source line col start span)]
+    [(rest-param)
+     ;; ...args → ($rest-param args)
+     (define name-sym (string->symbol (substring lexeme 3)))
+     (make-stx (list (make-stx '$rest-param source line col start 0)
+                     (make-stx name-sym source line (+ col 3) (+ start 3) (- span 3)))
+               source line col start span)]
     [else (make-stx value source line col start span)]))
 
 ;; ---- Flatten-then-group approach for datum extraction ----
@@ -1476,6 +1516,12 @@
           (define-values (bl bc) (pos->line-col source-str (token-entry-start-pos entry)))
           (loop next-i (cons (make-stx (cons (make-stx '$brace-params source bl bc (token-entry-start-pos entry) 1) inner)
                                        source bl bc (token-entry-start-pos entry) 1) result))]
+         [(eq? type 'dot-lbrace)
+          ;; .{a b} → ($mixfix a b)
+          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbrace source source-str))
+          (define-values (ml mc) (pos->line-col source-str (token-entry-start-pos entry)))
+          (loop next-i (cons (make-stx (cons (make-stx '$mixfix source ml mc (token-entry-start-pos entry) 2) inner)
+                                       source ml mc (token-entry-start-pos entry) 2) result))]
          [(eq? type 'quote-lbracket)
           (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbracket source source-str))
           (define-values (ql qc) (pos->line-col source-str (token-entry-start-pos entry)))
@@ -1595,6 +1641,13 @@
                  (loop next-i
                        (cons (make-stx (cons (make-stx '$brace-params source bl bc (token-entry-start-pos item) 1) inner)
                                        source bl bc (token-entry-start-pos item) 1) result))))]
+            ;; Dot-brace → $mixfix sentinel
+            [(eq? type 'dot-lbrace)
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbrace source source-str)])
+               (let-values ([(ml mc) (pos->line-col source-str (token-entry-start-pos item))])
+                 (loop next-i
+                       (cons (make-stx (cons (make-stx '$mixfix source ml mc (token-entry-start-pos item) 2) inner)
+                                       source ml mc (token-entry-start-pos item) 2) result))))]
             ;; Quote bracket → $list-literal sentinel
             [(eq? type 'quote-lbracket)
              (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbracket source source-str)])
@@ -1670,6 +1723,34 @@
   (if (null? (cdr lst)) (car lst) (last-stx (cdr lst))))
 
 
+;; ---- Infix = rewriting ----
+;; If a form's elements contain a bare `=` or `#=` (not `:=`),
+;; rewrite from infix to prefix: A ... = B ... → (= A... B...)
+(define (maybe-rewrite-infix-eq-stx elems source)
+  ;; Find := position (if present and before =, don't rewrite)
+  (define assign-pos
+    (for/first ([e (in-list elems)] [i (in-naturals)]
+                #:when (and (syntax? e) (symbol? (syntax-e e))
+                            (eq? (syntax-e e) ':=)))
+      i))
+  (define eq-pos
+    (for/first ([e (in-list elems)] [i (in-naturals)]
+                #:when (and (syntax? e) (symbol? (syntax-e e))
+                            (or (eq? (syntax-e e) '=)
+                                (eq? (syntax-e e) '$narrow-eq))
+                            (> i 0)))
+      i))
+  (if (and eq-pos (not (and assign-pos (> eq-pos assign-pos))))
+      (let* ([lhs (take elems eq-pos)]
+             [eq-stx (list-ref elems eq-pos)]
+             [rhs (drop elems (+ eq-pos 1))]
+             [lhs-stx (if (= (length lhs) 1) (car lhs)
+                          (wrap-stx-list lhs source))]
+             [rhs-stx (if (= (length rhs) 1) (car rhs)
+                          (wrap-stx-list rhs source))])
+        (list (wrap-stx-list (list eq-stx lhs-stx rhs-stx) source)))
+      elems))
+
 ;; ---- Main API: read-all-forms-from-tree ----
 
 ;; Convert a parse-tree → list of syntax objects (matching old reader output)
@@ -1677,7 +1758,8 @@
   (define root (parse-tree-root pt))
   (define forms (tree-top-level-forms pt))
   (for/list ([form (in-list forms)])
-    (define elems (tree-node->stx-elements form source source-str))
+    (define raw-elems (tree-node->stx-elements form source source-str))
+    (define elems (maybe-rewrite-infix-eq-stx raw-elems source))
     (cond
       [(null? elems) (make-stx '() source 0 0 0 0)]
       ;; Single paren-form — don't double-wrap
