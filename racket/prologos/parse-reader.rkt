@@ -515,14 +515,17 @@
 ;; ---- Phase 5b tokenizer gaps ----
 
 (define (recognize-colon-annotation rrb pos)
-  ;; :0, :1, :w, :m — colon immediately followed by digit or w/m (no space)
-  ;; These are QTT multiplicity annotations
+  ;; :0, :1, :w, :m — colon immediately followed by digit or w/m
+  ;; ONLY when NOT followed by ident-continue (else it's a keyword like :where, :write)
   (define c1 (rrb-char-at rrb pos))
   (define c2 (rrb-char-at rrb (+ pos 1)))
+  (define c3 (rrb-char-at rrb (+ pos 2)))
   (if (and c1 c2 (char=? c1 #\:)
            (or (char-numeric? c2)
                (char=? c2 #\w)
-               (char=? c2 #\m)))
+               (char=? c2 #\m))
+           ;; Must NOT be followed by ident-continue
+           (not (and c3 (ident-continue? c3))))
       2
       #f))
 
@@ -1538,8 +1541,8 @@
        (cond
          ;; Indent boundary markers
          [(eq? item 'indent-open)
-          (if close-type
-              ;; Inside brackets: ignore indent boundaries (brackets win)
+          (if (and close-type (not (eq? close-type 'indent-close)))
+              ;; Inside EXPLICIT brackets: ignore indent boundaries (brackets win)
               (loop (+ i 1) result)
               ;; Not inside brackets: collect until indent-close, wrap as sub-form
               (let-values ([(inner-elems next-i)
