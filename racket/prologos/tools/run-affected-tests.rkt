@@ -177,6 +177,7 @@
 (define do-pnet-cache? (make-parameter #t))
 (define show-failures? (make-parameter #f))
 (define bail-timeout-threshold (make-parameter 3))
+(define force-rerun? (make-parameter #f))
 
 (define (main)
   (command-line
@@ -208,6 +209,8 @@
     (bail-timeout-threshold (string->number n))]
    ["--no-bail" "Disable early-bail on timeouts"
     (bail-timeout-threshold 0)]
+   ["--force-rerun" "Override rerun guard (force full suite even if no changes)"
+    (force-rerun? #t)]
    #:multi
    ["--skip" file "Skip an additional test file (additive with .skip-tests)"
     (extra-skips (cons (string->symbol file) (extra-skips)))])
@@ -249,6 +252,30 @@
             (display (file->string log-path))
             (newline))])])
     (exit 0))
+
+  ;; Guard: block redundant full-suite re-runs (correct-by-construction, not discipline).
+  ;; If --all and timings.jsonl was written <5min ago and no .rkt files changed since,
+  ;; print a warning and exit. Use --force-rerun to override.
+  (when (and (run-all?) (not (force-rerun?)))
+    (define timings-path (build-path project-root "data" "benchmarks" "timings.jsonl"))
+    (when (file-exists? timings-path)
+      (define last-mod (file-or-directory-modify-seconds timings-path))
+      (define now (current-seconds))
+      (define elapsed (- now last-mod))
+      (when (< elapsed 300)  ;; less than 5 minutes
+        (define src-dir (build-path project-root))
+        (define any-changed?
+          (for/or ([f (in-directory src-dir)]
+                   #:when (regexp-match? #rx"\\.rkt$" (path->string f)))
+            (> (file-or-directory-modify-seconds f) last-mod)))
+        (unless any-changed?
+          (printf "\n~a\n" (make-string 60 #\═))
+          (printf "GUARD: No .rkt files changed since last suite run (~as ago).\n" elapsed)
+          (printf "Read failure logs:  racket tools/run-affected-tests.rkt --failures\n")
+          (printf "Run one test:       raco test tests/test-NAME.rkt\n")
+          (printf "Force full re-run:  add --force-rerun flag\n")
+          (printf "~a\n\n" (make-string 60 #\═))
+          (exit 0)))))
 
   (cond
     ;; --all: run everything (subject to skip filter)
