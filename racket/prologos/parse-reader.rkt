@@ -1795,13 +1795,29 @@
                   (or (eq? type close-type)
                       (and (eq? close-type 'mixfix-rbrace) (eq? type 'rbrace))))
              (values (reverse result) (+ i 1))]
-            ;; Square/round brackets
+            ;; Square/round brackets — check for postfix index (xs[0] with no space)
             [(memq type '(lbracket lparen))
+             (define is-postfix?
+               (and (eq? type 'lbracket)
+                    (pair? result)
+                    ;; Previous item must be adjacent (no whitespace gap)
+                    (> i 0)
+                    (let ([prev-item (vector-ref vec (- i 1))])
+                      (and (token-entry? prev-item)
+                           (= (token-entry-end-pos prev-item)
+                              (token-entry-start-pos item))))))
              (let-values ([(inner next-i)
                            (group-items vec (+ i 1) end
                                         (if (eq? type 'lbracket) 'rbracket 'rparen)
                                         source source-str)])
-               (loop next-i (cons (wrap-stx-list inner source) result)))]
+               (if is-postfix?
+                   ;; Postfix: xs[0] → emit $postfix-index sentinel as separate element
+                   (let-values ([(pl pc) (pos->line-col source-str (token-entry-start-pos item))])
+                     (loop next-i
+                           (cons (make-stx (cons (make-stx '$postfix-index source pl pc (token-entry-start-pos item) 1) inner)
+                                           source pl pc (token-entry-start-pos item) 1) result)))
+                   ;; Normal bracket group
+                   (loop next-i (cons (wrap-stx-list inner source) result))))]
             ;; Angle brackets → $angle-type sentinel IF matching rangle exists
             ;; AND we're not inside a dot-lbrace/mixfix group (where < > are operators)
             [(eq? type 'langle)
