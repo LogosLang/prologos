@@ -512,6 +512,14 @@
       2
       #f))
 
+(define (recognize-compose rrb pos)
+  ;; >> (compose operator)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\>) (char=? c2 #\>))
+      2
+      #f))
+
 ;; ---- Phase 5b tokenizer gaps ----
 
 (define (recognize-colon-annotation rrb pos)
@@ -719,6 +727,9 @@
   (register-token-pattern!
    (token-pattern 'rbrace (lambda (rrb pos) (recognize-single-char rrb pos #\} 'rbrace))
                   (lambda (s p l) 'rbrace) 30))
+  ;; NOTE: >> (compose) is NOT a token pattern — it's ambiguous with >>
+  ;; (two rangle closers). Handled in disambiguator: two consecutive
+  ;; rangle at bracket-depth 0 → merge into $compose symbol.
   (register-token-pattern!
    (token-pattern 'langle (lambda (rrb pos) (recognize-single-char rrb pos #\< 'langle))
                   (lambda (s p l) 'langle) 25))
@@ -1353,6 +1364,7 @@
     (case type
       [(symbol) (cond
                   [(string=? lexeme "|>") '$pipe-gt]
+                  [(string=? lexeme ">>") '$compose]
                   [(string=? lexeme ":=") ':=]
                   [(string=? lexeme "->") '->]
                   [else (string->symbol lexeme)])]
@@ -1611,8 +1623,25 @@
                  (loop next-i
                        (cons (make-stx (cons (make-stx '$set-literal source hl hc (token-entry-start-pos item) 2) inner)
                                        source hl hc (token-entry-start-pos item) 2) result))))]
-            ;; Stray closing brackets → skip
-            [(memq type '(rbracket rparen rbrace rangle))
+            ;; Stray rangle: check for >> (compose)
+            ;; Two consecutive rangle at bracket-depth 0 = >> compose operator
+            [(eq? type 'rangle)
+             (if (and (< (+ i 1) end)
+                      (let ([next (vector-ref vec (+ i 1))])
+                        (and (token-entry? next)
+                             (eq? (set-first (token-entry-types next)) 'rangle)
+                             ;; Adjacent positions (no space between)
+                             (= (token-entry-end-pos item)
+                                (token-entry-start-pos next)))))
+                 ;; Merge two > into $compose
+                 (let-values ([(al ac) (pos->line-col source-str (token-entry-start-pos item))])
+                   (loop (+ i 2)
+                         (cons (make-stx '$compose source al ac (token-entry-start-pos item) 2)
+                               result)))
+                 ;; Single stray rangle → skip
+                 (loop (+ i 1) result))]
+            ;; Other stray closing brackets → skip
+            [(memq type '(rbracket rparen rbrace))
              (loop (+ i 1) result)]
             ;; Regular token
             [else
