@@ -19,6 +19,7 @@
 (require racket/string
          racket/list
          racket/set
+         racket/file
          "rrb.rkt"
          "propagator.rkt"
          "parse-lattice.rkt")
@@ -46,6 +47,20 @@
 
  ;; Embedded lattice merge functions
  rrb-embedded-merge
+
+ ;; Phase 3a: Read API
+ (struct-out parse-tree)
+ read-to-tree
+ read-file-to-tree
+ tree-top-level-forms
+ tree-children
+ tree-parent
+
+ ;; Phase 3b: Write API
+ tree-replace-children
+ tree-insert-child
+ tree-remove-child
+ tree-splice
  )
 
 
@@ -1012,3 +1027,97 @@
     (net-new-cell net4 parse-bot parse-lattice-merge parse-contradicts?))
   (values net5
           (parse-cells char-id indent-id token-id bracket-id tree-id)))
+
+
+;; ============================================================
+;; Phase 3a: Read API (primary tree-walking functions)
+;; ============================================================
+
+;; A parse-tree wraps the network + cells + extracted root node.
+;; This is the PRIMARY API type for the propagator reader.
+(struct parse-tree
+  (net       ;; prop-network with all 5 cells populated
+   cells     ;; parse-cells struct (cell ids)
+   root      ;; parse-tree-node: the root node
+   )
+  #:transparent)
+
+;; Read a string → parse-tree
+(define (read-to-tree str)
+  (define-values (net cells) (parse-string-to-cells str))
+  (define tree-val (net-cell-read net (parse-cells-tree-cell-id cells)))
+  (define deriv (set-first (parse-cell-value-derivations tree-val)))
+  (define root (car (derivation-node-children deriv)))
+  (parse-tree net cells root))
+
+;; Read a file → parse-tree
+(define (read-file-to-tree path)
+  (read-to-tree (file->string path)))
+
+;; Get top-level form nodes from a parse-tree
+(define (tree-top-level-forms pt)
+  (define root (parse-tree-root pt))
+  (define children (parse-tree-node-children root))
+  (for/list ([i (in-range (rrb-size children))])
+    (rrb-get children i)))
+
+;; Get children of a parse-tree-node
+;; Returns a list of (parse-tree-node | token-entry)
+(define (tree-children node)
+  (define children (parse-tree-node-children node))
+  (for/list ([i (in-range (rrb-size children))])
+    (rrb-get children i)))
+
+;; Find the parent of a node by walking the tree.
+;; Returns: parse-tree-node | 'root | #f (not found)
+;; Note: O(n) walk — for frequent use, build a parent index.
+(define (tree-parent pt target-node)
+  (define root (parse-tree-root pt))
+  (let search ([node root] [parent 'root])
+    (cond
+      [(eq? node target-node) parent]
+      [(parse-tree-node? node)
+       (define children (parse-tree-node-children node))
+       (for/or ([i (in-range (rrb-size children))])
+         (define child (rrb-get children i))
+         (search child node))]
+      [else #f])))
+
+
+;; ============================================================
+;; Phase 3b: Write API (tree mutation functions)
+;; ============================================================
+
+;; Replace a node's children with a new list.
+;; Returns a new parse-tree-node (functional update).
+(define (tree-replace-children node new-children-list)
+  (struct-copy parse-tree-node node
+    [children (rrb-from-list new-children-list)]))
+
+;; Insert a child at a specific position.
+;; Returns a new parse-tree-node.
+(define (tree-insert-child node child position)
+  (define old-children (tree-children node))
+  (define new-list
+    (append (take old-children (min position (length old-children)))
+            (list child)
+            (drop old-children (min position (length old-children)))))
+  (tree-replace-children node new-list))
+
+;; Remove a child from a node (by eq? identity).
+;; Returns a new parse-tree-node.
+(define (tree-remove-child node target-child)
+  (define new-list
+    (filter (lambda (c) (not (eq? c target-child)))
+            (tree-children node)))
+  (tree-replace-children node new-list))
+
+;; Splice: replace one child with multiple children.
+;; Returns a new parse-tree-node.
+(define (tree-splice node old-child new-children-list)
+  (define result '())
+  (for ([c (in-list (tree-children node))])
+    (if (eq? c old-child)
+        (set! result (append (reverse new-children-list) result))
+        (set! result (cons c result))))
+  (tree-replace-children node (reverse result)))

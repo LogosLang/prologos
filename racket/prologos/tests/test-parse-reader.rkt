@@ -18,6 +18,10 @@
 ;; Helper: register patterns once
 (register-default-token-patterns!)
 
+;; Path resolution (CWD-independent)
+(define here-dir (path-only (syntax-source #'here)))
+(define project-root (simplify-path (build-path here-dir "..")))
+
 ;; ============================================================
 ;; Phase 1a: Character RRB
 ;; ============================================================
@@ -648,6 +652,111 @@
   (check-equal? (rrb-size char-val) 0))
 
 ;; ============================================================
+;; Phase 3a: Read API
+;; ============================================================
+
+(test-case "read-to-tree: returns parse-tree struct"
+  (define pt (read-to-tree "def x := 42"))
+  (check-pred parse-tree? pt)
+  (check-pred parse-tree-node? (parse-tree-root pt)))
+
+(test-case "tree-top-level-forms: single def"
+  (define pt (read-to-tree "def x := 42"))
+  (define forms (tree-top-level-forms pt))
+  (check-equal? (length forms) 1)
+  (check-pred parse-tree-node? (car forms)))
+
+(test-case "tree-top-level-forms: multiple defs"
+  (define pt (read-to-tree "def x := 1\n\ndef y := 2\n\ndef z := 3"))
+  (define forms (tree-top-level-forms pt))
+  (check-equal? (length forms) 3))
+
+(test-case "tree-children: line node has tokens"
+  (define pt (read-to-tree "def x := 42"))
+  (define forms (tree-top-level-forms pt))
+  (define children (tree-children (car forms)))
+  ;; Should have token-entry children (def, x, :=, 42)
+  (check-true (> (length children) 0))
+  (check-pred token-entry? (car children)))
+
+(test-case "tree-children: nested node has sub-nodes"
+  (define pt (read-to-tree "def f [x]\n  [int+ x 1]"))
+  (define forms (tree-top-level-forms pt))
+  (define children (tree-children (car forms)))
+  ;; Top-level form has tokens AND a child line node
+  (check-true (ormap parse-tree-node? children)))
+
+(test-case "tree-parent: finds parent of child"
+  (define pt (read-to-tree "def f [x]\n  body"))
+  (define forms (tree-top-level-forms pt))
+  (define top (car forms))
+  ;; Find a child line node
+  (define children (tree-children top))
+  (define sub-node (findf parse-tree-node? children))
+  (when sub-node
+    (define parent (tree-parent pt sub-node))
+    (check-eq? parent top)))
+
+(test-case "tree-parent: root children have root as parent"
+  (define pt (read-to-tree "def x := 42"))
+  (define forms (tree-top-level-forms pt))
+  (define parent (tree-parent pt (car forms)))
+  (check-pred parse-tree-node? parent)
+  (check-equal? (parse-tree-node-tag parent) 'root))
+
+(test-case "read-file-to-tree: reads real file"
+  (define nat-path
+    (build-path project-root "lib" "prologos" "data" "nat.prologos"))
+  (when (file-exists? nat-path)
+    (define pt (read-file-to-tree nat-path))
+    (check-pred parse-tree? pt)
+    (define forms (tree-top-level-forms pt))
+    (check-true (> (length forms) 5))))
+
+;; ============================================================
+;; Phase 3b: Write API
+;; ============================================================
+
+(test-case "tree-replace-children: replaces all children"
+  (define pt (read-to-tree "def x := 42"))
+  (define form (car (tree-top-level-forms pt)))
+  (define new-node (tree-replace-children form '()))
+  (check-equal? (length (tree-children new-node)) 0))
+
+(test-case "tree-insert-child: inserts at position"
+  (define pt (read-to-tree "def x := 42"))
+  (define form (car (tree-top-level-forms pt)))
+  (define children-before (tree-children form))
+  (define dummy (token-entry (seteq 'symbol) "inserted" 0 8))
+  (define new-node (tree-insert-child form dummy 1))
+  (define children-after (tree-children new-node))
+  (check-equal? (length children-after) (+ 1 (length children-before)))
+  (check-eq? (list-ref children-after 1) dummy))
+
+(test-case "tree-remove-child: removes by identity"
+  (define pt (read-to-tree "def x := 42"))
+  (define form (car (tree-top-level-forms pt)))
+  (define children (tree-children form))
+  (define target (car children))
+  (define new-node (tree-remove-child form target))
+  (check-equal? (length (tree-children new-node))
+                (- (length children) 1)))
+
+(test-case "tree-splice: replaces one child with multiple"
+  (define pt (read-to-tree "def x := 42"))
+  (define form (car (tree-top-level-forms pt)))
+  (define children (tree-children form))
+  (define target (car children))
+  (define r1 (token-entry (seteq 'symbol) "a" 0 1))
+  (define r2 (token-entry (seteq 'symbol) "b" 0 1))
+  (define new-node (tree-splice form target (list r1 r2)))
+  (define new-children (tree-children new-node))
+  ;; One child replaced by two → length + 1
+  (check-equal? (length new-children) (+ 1 (length children)))
+  (check-eq? (car new-children) r1)
+  (check-eq? (cadr new-children) r2))
+
+;; ============================================================
 ;; Phase 1f: Integration gate — topology comparison
 ;; ============================================================
 ;;
@@ -655,9 +764,6 @@
 ;; against the golden capture's reference-topology.
 ;; Both compute parent/indent from the same source string;
 ;; they must agree.
-
-(define here-dir (path-only (syntax-source #'here)))
-(define project-root (simplify-path (build-path here-dir "..")))
 
 ;; Reference topology from raw string (same algorithm as golden-capture.rkt):
 ;; Returns list of (content-idx source-line indent parent-idx)
