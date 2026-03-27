@@ -438,6 +438,43 @@
             (- i pos)))
       #f))
 
+(define (recognize-backslash-char rrb pos)
+  ;; \a, \newline, \space, \tab, \uNNNN — WS-mode char literals
+  (define c1 (rrb-char-at rrb pos))
+  (if (and c1 (char=? c1 #\\))
+      (let ([c2 (rrb-char-at rrb (+ pos 1))])
+        (cond
+          [(not c2) #f]
+          ;; \uNNNN — unicode
+          [(char=? c2 #\u)
+           (let loop ([i (+ pos 2)] [count 0])
+             (define cn (rrb-char-at rrb i))
+             (if (and cn (or (char-numeric? cn)
+                             (memq cn '(#\a #\b #\c #\d #\e #\f
+                                        #\A #\B #\C #\D #\E #\F)))
+                       (< count 4))
+                 (loop (+ i 1) (+ count 1))
+                 (if (> count 0) (- i pos) #f)))]
+          ;; \charname — multi-char name like \newline, \space, \tab
+          [(char-alphabetic? c2)
+           (let loop ([i (+ pos 2)])
+             (define cn (rrb-char-at rrb i))
+             (if (and cn (char-alphabetic? cn))
+                 (loop (+ i 1))
+                 (- i pos)))]
+          [else #f]))
+      #f))
+
+(define (recognize-backtick rrb pos)
+  ;; ` (quasiquote)
+  (define c (rrb-char-at rrb pos))
+  (if (and c (char=? c #\`)) 1 #f))
+
+(define (recognize-comma rrb pos)
+  ;; , (unquote)
+  (define c (rrb-char-at rrb pos))
+  (if (and c (char=? c #\,)) 1 #f))
+
 (define (recognize-rest-param rrb pos)
   ;; ...ident — rest parameter (three dots + identifier)
   (define c1 (rrb-char-at rrb pos))
@@ -539,6 +576,22 @@
       2
       #f))
 
+(define (recognize-lte rrb pos)
+  ;; <= (less-than-or-equal)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\<) (char=? c2 #\=))
+      2
+      #f))
+
+(define (recognize-gte rrb pos)
+  ;; >= (greater-than-or-equal)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\>) (char=? c2 #\=))
+      2
+      #f))
+
 (define (recognize-compose rrb pos)
   ;; >> (compose operator)
   (define c1 (rrb-char-at rrb pos))
@@ -583,13 +636,37 @@
       2
       #f))
 
+(define (recognize-dep-send rrb pos)
+  ;; !: — dependent session send
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\!) (char=? c2 #\:))
+      2
+      #f))
+
+(define (recognize-dep-recv rrb pos)
+  ;; ?: — dependent session receive
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\?) (char=? c2 #\:))
+      2
+      #f))
+
+(define (recognize-clause-sep rrb pos)
+  ;; &> — session offer/clause separator
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\&) (char=? c2 #\>))
+      2
+      #f))
+
 (define (recognize-session-op rrb pos)
-  ;; ? or ! — session send/receive (standalone, not part of identifier)
+  ;; ? or ! — session send/receive (standalone, not part of identifier, not !: or ?:)
   (define c1 (rrb-char-at rrb pos))
   (define c2 (rrb-char-at rrb (+ pos 1)))
   (if (and c1 (or (char=? c1 #\?) (char=? c1 #\!))
-           ;; Must not be followed by ident-continue (else it's part of an identifier like empty?)
-           (not (and c2 (ident-continue? c2))))
+           (not (and c2 (char=? c2 #\:)))  ;; not !: or ?:
+           (not (and c2 (ident-continue? c2))))  ;; not part of identifier
       1
       #f))
 
@@ -649,6 +726,15 @@
    (token-pattern 'colon-annotation (lambda (rrb pos) (recognize-colon-annotation rrb pos))
                   (lambda (s p l) 'symbol) 97))  ;; :0, :w before bare colon
   (register-token-pattern!
+   (token-pattern 'dep-send (lambda (rrb pos) (recognize-dep-send rrb pos))
+                  (lambda (s p l) 'symbol) 97))  ;; !: before standalone !
+  (register-token-pattern!
+   (token-pattern 'dep-recv (lambda (rrb pos) (recognize-dep-recv rrb pos))
+                  (lambda (s p l) 'symbol) 97))  ;; ?: before standalone ?
+  (register-token-pattern!
+   (token-pattern 'clause-sep (lambda (rrb pos) (recognize-clause-sep rrb pos))
+                  (lambda (s p l) 'symbol) 97))  ;; &>
+  (register-token-pattern!
    (token-pattern 'session-op (lambda (rrb pos) (recognize-session-op rrb pos))
                   (lambda (s p l) 'symbol) 96))  ;; ?, ! standalone
   (register-token-pattern!
@@ -706,6 +792,13 @@
   (register-token-pattern!
    (token-pattern 'tilde-lbracket (lambda (rrb pos) (recognize-tilde-lbracket rrb pos))
                   (lambda (s p l) 'tilde-lbracket) 85))
+  ;; Backtick and comma (quasiquote/unquote)
+  (register-token-pattern!
+   (token-pattern 'backtick (lambda (rrb pos) (recognize-backtick rrb pos))
+                  (lambda (s p l) 'backtick) 85))
+  (register-token-pattern!
+   (token-pattern 'comma (lambda (rrb pos) (recognize-comma rrb pos))
+                  (lambda (s p l) 'comma) 85))
   ;; Pipe operators (|> must precede |)
   (register-token-pattern!
    (token-pattern 'pipe-right (lambda (rrb pos) (recognize-pipe-right rrb pos))
@@ -713,7 +806,11 @@
   (register-token-pattern!
    (token-pattern 'pipe (lambda (rrb pos) (recognize-pipe rrb pos))
                   (lambda (s p l) 'pipe) 83))
-  ;; Char literal (must precede bare quote — both start with ')
+  ;; Backslash char literal (\a, \newline, \space, \tab, \uNNNN)
+  (register-token-pattern!
+   (token-pattern 'backslash-char (lambda (rrb pos) (recognize-backslash-char rrb pos))
+                  (lambda (s p l) 'char) 91))
+  ;; Char literal 'X' (must precede bare quote — both start with ')
   (register-token-pattern!
    (token-pattern 'char-lit (lambda (rrb pos) (recognize-char-literal rrb pos))
                   (lambda (s p l) 'char) 90))
@@ -761,6 +858,13 @@
   (register-token-pattern!
    (token-pattern 'rbrace (lambda (rrb pos) (recognize-single-char rrb pos #\} 'rbrace))
                   (lambda (s p l) 'rbrace) 30))
+  ;; Comparison operators (must precede langle/rangle)
+  (register-token-pattern!
+   (token-pattern 'lte (lambda (rrb pos) (recognize-lte rrb pos))
+                  (lambda (s p l) 'symbol) 26))
+  (register-token-pattern!
+   (token-pattern 'gte (lambda (rrb pos) (recognize-gte rrb pos))
+                  (lambda (s p l) 'symbol) 26))
   ;; NOTE: >> (compose) is NOT a token pattern — it's ambiguous with >>
   ;; (two rangle closers). Handled in disambiguator: two consecutive
   ;; rangle at bracket-depth 0 → merge into $compose symbol.
@@ -813,8 +917,12 @@
                                    (rrb-get char-rrb i)))]
                         [entry (token-entry (seteq type) lexeme pos (+ pos len))])
                    (loop (+ pos len) (rrb-push token-rrb entry)))
-                 ;; No pattern matched — skip character (error recovery)
-                 (loop (+ pos 1) token-rrb))])))))
+                 ;; No pattern matched — emit as single-character symbol token.
+                 ;; The reader preserves ALL input; the parser decides what's valid.
+                 ;; Silent skipping causes datum mismatches (characters lost).
+                 (let* ([lexeme (string c)]
+                        [entry (token-entry (seteq 'symbol) lexeme pos (+ pos 1))])
+                   (loop (+ pos 1) (rrb-push token-rrb entry))))])))))
 
 
 ;; ============================================================
@@ -1399,8 +1507,10 @@
       [(symbol) (cond
                   [(string=? lexeme "|>") '$pipe-gt]
                   [(string=? lexeme ">>") '$compose]
+                  [(string=? lexeme "&>") '$clause-sep]
                   [(string=? lexeme ":=") ':=]
                   [(string=? lexeme "->") '->]
+                  [(string=? lexeme "->>") '->>]
                   [else (string->symbol lexeme)])]
       [(number) (or (string->number lexeme) (string->symbol lexeme))]
       [(nat-literal) (string->number (substring lexeme 0 (- (string-length lexeme) 1)))]
@@ -1411,9 +1521,25 @@
                      (substring lexeme 1 (- (string-length lexeme) 1)))
                     lexeme)]
       [(keyword) (string->symbol lexeme)]
-      [(char) (if (= (string-length lexeme) 3)
-                  (string-ref lexeme 1)
-                  lexeme)]
+      [(char) (cond
+                ;; 'X' char literal → the char
+                [(and (= (string-length lexeme) 3)
+                      (char=? (string-ref lexeme 0) #\'))
+                 (string-ref lexeme 1)]
+                ;; \a → #\a, \newline → #\newline, etc.
+                [(char=? (string-ref lexeme 0) #\\)
+                 (define name (substring lexeme 1))
+                 (cond
+                   [(= (string-length name) 1) (string-ref name 0)]
+                   [(string=? name "newline") #\newline]
+                   [(string=? name "space") #\space]
+                   [(string=? name "tab") #\tab]
+                   [(string=? name "return") #\return]
+                   [(string=? name "nul") #\nul]
+                   [(and (> (string-length name) 1) (char=? (string-ref name 0) #\u))
+                    (integer->char (string->number (substring name 1) 16))]
+                   [else (string->symbol lexeme)])]
+                [else lexeme])]
       [(colon) ':]
       [(pipe) '$pipe]
       [else (string->symbol lexeme)]))
@@ -1586,6 +1712,29 @@
                  (list 'indent-close))]
         [else '()]))))
 
+;; Lookahead: check if there's a matching rangle before the current scope closes.
+;; Scans forward tracking nesting depth for <> pairs.
+(define (has-matching-rangle? vec start end close-type)
+  (let loop ([i start] [depth 0])
+    (cond
+      [(>= i end) #f]
+      [else
+       (define item (vector-ref vec i))
+       (cond
+         [(not (token-entry? item)) (loop (+ i 1) depth)]  ;; skip indent markers
+         [else
+          (define type (set-first (token-entry-types item)))
+          (cond
+            ;; Found matching rangle at depth 0
+            [(and (eq? type 'rangle) (= depth 0)) #t]
+            ;; Nested langle → increase depth
+            [(eq? type 'langle) (loop (+ i 1) (+ depth 1))]
+            ;; Nested rangle → decrease depth
+            [(eq? type 'rangle) (loop (+ i 1) (- depth 1))]
+            ;; Hit the current scope's closer → no match
+            [(and close-type (not (eq? close-type 'indent-close)) (eq? type close-type)) #f]
+            [else (loop (+ i 1) depth)])])])))
+
 ;; Group items (tokens + indent markers) with bracket matching.
 ;; indent-open/indent-close create implicit sub-lists ONLY when
 ;; not inside an explicit bracket group (bracket groups take priority).
@@ -1627,13 +1776,17 @@
                                         (if (eq? type 'lbracket) 'rbracket 'rparen)
                                         source source-str)])
                (loop next-i (cons (wrap-stx-list inner source) result)))]
-            ;; Angle brackets → $angle-type sentinel
+            ;; Angle brackets → $angle-type sentinel IF matching rangle exists
+            ;; Otherwise treat < as operator symbol (e.g., inside .{1 < 2})
             [(eq? type 'langle)
-             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rangle source source-str)])
-               (let-values ([(al ac) (pos->line-col source-str (token-entry-start-pos item))])
-                 (loop next-i
-                       (cons (make-stx (cons (make-stx '$angle-type source al ac (token-entry-start-pos item) 1) inner)
-                                       source al ac (token-entry-start-pos item) 1) result))))]
+             (if (has-matching-rangle? vec (+ i 1) end close-type)
+                 (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rangle source source-str)])
+                   (let-values ([(al ac) (pos->line-col source-str (token-entry-start-pos item))])
+                     (loop next-i
+                           (cons (make-stx (cons (make-stx '$angle-type source al ac (token-entry-start-pos item) 1) inner)
+                                           source al ac (token-entry-start-pos item) 1) result))))
+                 ;; No matching > → treat < as operator
+                 (loop (+ i 1) (cons (token-entry->stx item source source-str) result)))]
             ;; Braces → $brace-params sentinel
             [(eq? type 'lbrace)
              (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbrace source source-str)])
@@ -1691,8 +1844,8 @@
                    (loop (+ i 2)
                          (cons (make-stx '$compose source al ac (token-entry-start-pos item) 2)
                                result)))
-                 ;; Single stray rangle → skip
-                 (loop (+ i 1) result))]
+                 ;; Single stray rangle → emit as > operator symbol
+                 (loop (+ i 1) (cons (token-entry->stx item source source-str) result)))]
             ;; Other stray closing brackets → skip
             [(memq type '(rbracket rparen rbrace))
              (loop (+ i 1) result)]
