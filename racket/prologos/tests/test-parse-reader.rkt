@@ -757,6 +757,55 @@
   (check-eq? (cadr new-children) r2))
 
 ;; ============================================================
+;; Phase 3c: Compatibility wrappers
+;; ============================================================
+
+(test-case "compat-tokenize-string: produces compat-tokens"
+  (define tokens (compat-tokenize-string "def x := 42"))
+  (check-true (> (length tokens) 0))
+  (check-pred compat-token? (car tokens))
+  (check-equal? (compat-token-type (car tokens)) 'symbol)
+  (check-equal? (compat-token-value (car tokens)) 'def))
+
+(test-case "compat-tokenize-string: token positions"
+  (define tokens (compat-tokenize-string "x y"))
+  (define t0 (car tokens))
+  (define t1 (cadr tokens))
+  (check-equal? (compat-token-pos t0) 0)
+  (check-equal? (compat-token-span t0) 1)
+  (check-equal? (compat-token-pos t1) 2)
+  (check-equal? (compat-token-span t1) 1))
+
+(test-case "compat-tokenize-string: line/col computation"
+  (define tokens (compat-tokenize-string "a\nb"))
+  (define t0 (car tokens))
+  (define t1 (cadr tokens))
+  (check-equal? (compat-token-line t0) 1)
+  (check-equal? (compat-token-col t0) 0)
+  (check-equal? (compat-token-line t1) 2)
+  (check-equal? (compat-token-col t1) 0))
+
+(test-case "compat-tokenize-string: number value"
+  (define tokens (compat-tokenize-string "42"))
+  (check-equal? (compat-token-type (car tokens)) 'number)
+  (check-equal? (compat-token-value (car tokens)) 42))
+
+(test-case "compat-tokenize-string: string value"
+  (define tokens (compat-tokenize-string "\"hello\""))
+  (check-equal? (compat-token-type (car tokens)) 'string))
+
+(test-case "compat-tokenize-string: keyword value"
+  (define tokens (compat-tokenize-string ":name"))
+  (check-equal? (compat-token-type (car tokens)) 'keyword)
+  (check-equal? (compat-token-value (car tokens)) ':name))
+
+(test-case "compat-tokenize-string: dot-access value"
+  (define tokens (compat-tokenize-string "x.name"))
+  (define dot-tok (cadr tokens))
+  (check-equal? (compat-token-type dot-tok) 'dot-access)
+  (check-equal? (compat-token-value dot-tok) 'name))
+
+;; ============================================================
 ;; Phase 1f: Integration gate — topology comparison
 ;; ============================================================
 ;;
