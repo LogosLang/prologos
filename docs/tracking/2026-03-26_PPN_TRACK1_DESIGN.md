@@ -35,8 +35,8 @@ Hyperlattice Conjecture.
 | 1e | Context disambiguator (tree cell → token RRB reclassify) | ✅ | `006ffec` — disambiguate-tokens + parse-string-to-cells. bd-before fix. 7 tests (51 total). |
 | 1f | **Integration gate**: golden comparison on simple files | ✅ | `6df01a9` — topology matches all 110 .prologos files. 7 tests (58 total). |
 | 2 | Reader macros: #p, ', `, #=, dot-access, broadcast | ✅ | `a046558` — 17 new recognizers, priority ordering. 17 tests (75 total). |
-| 3a | Read API (5 tree-walking functions) | ⬜ | Primary API. |
-| 3b | Write API (4 tree mutation functions) | ⬜ | For Track 2 SRE rewriting. |
+| 3a | Read API (5 tree-walking functions) | ✅ | `33bfcb1` — parse-tree struct, read-to-tree, tree-top-level-forms, tree-children, tree-parent. 8 tests. |
+| 3b | Write API (4 tree mutation functions) | ✅ | `33bfcb1` — tree-replace-children, tree-insert-child, tree-remove-child, tree-splice. 4 tests (87 total). |
 | 3c | Compatibility wrappers (7 functions) | ⬜ | Syntax objects (driver.rkt), datums (tests), flat tokens (tests). |
 | 4 | Golden comparison: 4 levels vs Phase 0 baseline | ⬜ | ZERO differences = ready for retirement. |
 | 5 | reader.rkt retirement + 51 consumers updated | ⬜ | |
