@@ -1498,11 +1498,12 @@
 
 (define (make-stx datum source line col pos span)
   ;; datum->syntax expects: line ≥ 1 or #f, col ≥ 0 or #f, pos ≥ 1 or #f, span ≥ 0 or #f
-  ;; Our positions are 0-based (from token-entry-start-pos); Racket expects 1-based.
+  ;; pos must be ≥ 1 (1-based). Callers pass either 0-based token positions
+  ;; (converted via make-stx-from-token) or already-1-based positions from syntax objects.
   (datum->syntax #f datum (list source
                                 (if (> line 0) line #f)
                                 (if (>= col 0) col #f)
-                                (+ pos 1)  ;; 0-based → 1-based
+                                (if (> pos 0) pos 1)
                                 (if (>= span 0) span #f))))
 
 ;; Convert a token-entry → syntax object
@@ -1512,6 +1513,7 @@
   (define start (token-entry-start-pos entry))
   (define end (token-entry-end-pos entry))
   (define span (- end start))
+  (define pos1 (+ start 1))  ;; 0-based → 1-based for syntax positions
   (define-values (line col) (pos->line-col source-str start))
 
   (define value
@@ -1561,29 +1563,29 @@
     ;; Compound tokens that produce sentinel syntax lists
     [(dot-access)
      (define field-sym (string->symbol (substring lexeme 1)))
-     (make-stx (list (make-stx '$dot-access source line col start 0)
-                     (make-stx field-sym source line (+ col 1) (+ start 1) (- span 1)))
-               source line col start span)]
+     (make-stx (list (make-stx '$dot-access source line col pos1 0)
+                     (make-stx field-sym source line (+ col 1) (+ pos1 1) (- span 1)))
+               source line col pos1 span)]
     [(dot-key)
      (define kw-sym (string->symbol (substring lexeme 1)))  ;; .:name → :name
-     (make-stx (list (make-stx '$dot-key source line col start 0)
-                     (make-stx kw-sym source line (+ col 1) (+ start 1) (- span 1)))
-               source line col start span)]
+     (make-stx (list (make-stx '$dot-key source line col pos1 0)
+                     (make-stx kw-sym source line (+ col 1) (+ pos1 1) (- span 1)))
+               source line col pos1 span)]
     [(broadcast-access)
      (define field-sym (string->symbol (substring lexeme 2)))
-     (make-stx (list (make-stx '$broadcast-access source line col start 0)
-                     (make-stx field-sym source line (+ col 2) (+ start 2) (- span 2)))
-               source line col start span)]
+     (make-stx (list (make-stx '$broadcast-access source line col pos1 0)
+                     (make-stx field-sym source line (+ col 2) (+ pos1 2) (- span 2)))
+               source line col pos1 span)]
     [(nil-dot-access)
      (define field-sym (string->symbol (substring lexeme 2)))
-     (make-stx (list (make-stx '$nil-dot-access source line col start 0)
-                     (make-stx field-sym source line (+ col 2) (+ start 2) (- span 2)))
-               source line col start span)]
+     (make-stx (list (make-stx '$nil-dot-access source line col pos1 0)
+                     (make-stx field-sym source line (+ col 2) (+ pos1 2) (- span 2)))
+               source line col pos1 span)]
     [(nil-dot-key)
      (define kw-sym (string->symbol lexeme))
-     (make-stx (list (make-stx '$nil-dot-key source line col start 0)
-                     (make-stx kw-sym source line (+ col 2) (+ start 2) (- span 2)))
-               source line col start span)]
+     (make-stx (list (make-stx '$nil-dot-key source line col pos1 0)
+                     (make-stx kw-sym source line (+ col 2) (+ pos1 2) (- span 2)))
+               source line col pos1 span)]
     [(path-literal)
      ;; #p(foo.bar) → (path :foo.bar)
      (define raw (substring lexeme 3 (- (string-length lexeme) 1)))
@@ -1591,22 +1593,22 @@
                               (char=? (string-ref raw 0) #\:))
                          (substring raw 1) raw))
      (define kw-sym (string->symbol (string-append ":" cleaned)))
-     (make-stx (list (make-stx 'path source line col start 4)
-                     (make-stx kw-sym source line col start span))
-               source line col start span)]
+     (make-stx (list (make-stx 'path source line col pos1 4)
+                     (make-stx kw-sym source line col pos1 span))
+               source line col pos1 span)]
     ;; Simple tokens → direct syntax wrapping
     [(nat-literal)
      ;; 42N → ($nat-literal 42)
-     (make-stx (list (make-stx '$nat-literal source line col start 0)
-                     (make-stx value source line col start span))
-               source line col start span)]
+     (make-stx (list (make-stx '$nat-literal source line col pos1 0)
+                     (make-stx value source line col pos1 span))
+               source line col pos1 span)]
     [(rest-param)
      ;; ...args → ($rest-param args)
      (define name-sym (string->symbol (substring lexeme 3)))
-     (make-stx (list (make-stx '$rest-param source line col start 0)
-                     (make-stx name-sym source line (+ col 3) (+ start 3) (- span 3)))
-               source line col start span)]
-    [else (make-stx value source line col start span)]))
+     (make-stx (list (make-stx '$rest-param source line col pos1 0)
+                     (make-stx name-sym source line (+ col 3) (+ pos1 3) (- span 3)))
+               source line col pos1 span)]
+    [else (make-stx value source line col pos1 span)]))
 
 ;; ---- Flatten-then-group approach for datum extraction ----
 ;;
@@ -1648,39 +1650,39 @@
          [(eq? type 'langle)
           (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rangle source source-str))
           (define-values (al ac) (pos->line-col source-str (token-entry-start-pos entry)))
-          (loop next-i (cons (make-stx (cons (make-stx '$angle-type source al ac (token-entry-start-pos entry) 1) inner)
-                                       source al ac (token-entry-start-pos entry) 1) result))]
+          (loop next-i (cons (make-stx (cons (make-stx '$angle-type source al ac (+ (token-entry-start-pos entry) 1) 1) inner)
+                                       source al ac (+ (token-entry-start-pos entry) 1) 1) result))]
          [(eq? type 'lbrace)
           (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbrace source source-str))
           (define-values (bl bc) (pos->line-col source-str (token-entry-start-pos entry)))
-          (loop next-i (cons (make-stx (cons (make-stx '$brace-params source bl bc (token-entry-start-pos entry) 1) inner)
-                                       source bl bc (token-entry-start-pos entry) 1) result))]
+          (loop next-i (cons (make-stx (cons (make-stx '$brace-params source bl bc (+ (token-entry-start-pos entry) 1) 1) inner)
+                                       source bl bc (+ (token-entry-start-pos entry) 1) 1) result))]
          [(eq? type 'dot-lbrace)
           ;; .{a b} → ($mixfix a b)
           (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbrace source source-str))
           (define-values (ml mc) (pos->line-col source-str (token-entry-start-pos entry)))
-          (loop next-i (cons (make-stx (cons (make-stx '$mixfix source ml mc (token-entry-start-pos entry) 2) inner)
-                                       source ml mc (token-entry-start-pos entry) 2) result))]
+          (loop next-i (cons (make-stx (cons (make-stx '$mixfix source ml mc (+ (token-entry-start-pos entry) 1) 2) inner)
+                                       source ml mc (+ (token-entry-start-pos entry) 1) 2) result))]
          [(eq? type 'quote-lbracket)
           (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbracket source source-str))
           (define-values (ql qc) (pos->line-col source-str (token-entry-start-pos entry)))
-          (loop next-i (cons (make-stx (cons (make-stx '$list-literal source ql qc (token-entry-start-pos entry) 2) inner)
-                                       source ql qc (token-entry-start-pos entry) 2) result))]
+          (loop next-i (cons (make-stx (cons (make-stx '$list-literal source ql qc (+ (token-entry-start-pos entry) 1) 2) inner)
+                                       source ql qc (+ (token-entry-start-pos entry) 1) 2) result))]
          [(eq? type 'at-lbracket)
           (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbracket source source-str))
           (define-values (al ac) (pos->line-col source-str (token-entry-start-pos entry)))
-          (loop next-i (cons (make-stx (cons (make-stx '$vec-literal source al ac (token-entry-start-pos entry) 2) inner)
-                                       source al ac (token-entry-start-pos entry) 2) result))]
+          (loop next-i (cons (make-stx (cons (make-stx '$vec-literal source al ac (+ (token-entry-start-pos entry) 1) 2) inner)
+                                       source al ac (+ (token-entry-start-pos entry) 1) 2) result))]
          [(eq? type 'tilde-lbracket)
           (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbracket source source-str))
           (define-values (tl tc) (pos->line-col source-str (token-entry-start-pos entry)))
-          (loop next-i (cons (make-stx (cons (make-stx '$lseq-literal source tl tc (token-entry-start-pos entry) 2) inner)
-                                       source tl tc (token-entry-start-pos entry) 2) result))]
+          (loop next-i (cons (make-stx (cons (make-stx '$lseq-literal source tl tc (+ (token-entry-start-pos entry) 1) 2) inner)
+                                       source tl tc (+ (token-entry-start-pos entry) 1) 2) result))]
          [(eq? type 'hash-lbrace)
           (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbrace source source-str))
           (define-values (hl hc) (pos->line-col source-str (token-entry-start-pos entry)))
-          (loop next-i (cons (make-stx (cons (make-stx '$set-literal source hl hc (token-entry-start-pos entry) 2) inner)
-                                       source hl hc (token-entry-start-pos entry) 2) result))]
+          (loop next-i (cons (make-stx (cons (make-stx '$set-literal source hl hc (+ (token-entry-start-pos entry) 1) 2) inner)
+                                       source hl hc (+ (token-entry-start-pos entry) 1) 2) result))]
          [(memq type '(rbracket rparen rbrace rangle))
           (loop (+ i 1) result)]
          [else
@@ -1814,8 +1816,8 @@
                    ;; Postfix: xs[0] → emit $postfix-index sentinel as separate element
                    (let-values ([(pl pc) (pos->line-col source-str (token-entry-start-pos item))])
                      (loop next-i
-                           (cons (make-stx (cons (make-stx '$postfix-index source pl pc (token-entry-start-pos item) 1) inner)
-                                           source pl pc (token-entry-start-pos item) 1) result)))
+                           (cons (make-stx (cons (make-stx '$postfix-index source pl pc (+ (token-entry-start-pos item) 1) 1) inner)
+                                           source pl pc (+ (token-entry-start-pos item) 1) 1) result)))
                    ;; Normal bracket group
                    (loop next-i (cons (wrap-stx-list inner source) result))))]
             ;; Angle brackets → $angle-type sentinel IF matching rangle exists
@@ -1826,8 +1828,8 @@
                  (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rangle source source-str)])
                    (let-values ([(al ac) (pos->line-col source-str (token-entry-start-pos item))])
                      (loop next-i
-                           (cons (make-stx (cons (make-stx '$angle-type source al ac (token-entry-start-pos item) 1) inner)
-                                           source al ac (token-entry-start-pos item) 1) result))))
+                           (cons (make-stx (cons (make-stx '$angle-type source al ac (+ (token-entry-start-pos item) 1) 1) inner)
+                                           source al ac (+ (token-entry-start-pos item) 1) 1) result))))
                  ;; No matching > → treat < as operator
                  (loop (+ i 1) (cons (token-entry->stx item source source-str) result)))]
             ;; Braces → $brace-params sentinel
@@ -1835,43 +1837,43 @@
              (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbrace source source-str)])
                (let-values ([(bl bc) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
-                       (cons (make-stx (cons (make-stx '$brace-params source bl bc (token-entry-start-pos item) 1) inner)
-                                       source bl bc (token-entry-start-pos item) 1) result))))]
+                       (cons (make-stx (cons (make-stx '$brace-params source bl bc (+ (token-entry-start-pos item) 1) 1) inner)
+                                       source bl bc (+ (token-entry-start-pos item) 1) 1) result))))]
             ;; Dot-brace → $mixfix sentinel (uses 'mixfix-rbrace to suppress angle brackets)
             [(eq? type 'dot-lbrace)
              (let-values ([(inner next-i) (group-items vec (+ i 1) end 'mixfix-rbrace source source-str)])
                (let-values ([(ml mc) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
-                       (cons (make-stx (cons (make-stx '$mixfix source ml mc (token-entry-start-pos item) 2) inner)
-                                       source ml mc (token-entry-start-pos item) 2) result))))]
+                       (cons (make-stx (cons (make-stx '$mixfix source ml mc (+ (token-entry-start-pos item) 1) 2) inner)
+                                       source ml mc (+ (token-entry-start-pos item) 1) 2) result))))]
             ;; Quote bracket → $list-literal sentinel
             [(eq? type 'quote-lbracket)
              (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbracket source source-str)])
                (let-values ([(ql qc) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
-                       (cons (make-stx (cons (make-stx '$list-literal source ql qc (token-entry-start-pos item) 2) inner)
-                                       source ql qc (token-entry-start-pos item) 2) result))))]
+                       (cons (make-stx (cons (make-stx '$list-literal source ql qc (+ (token-entry-start-pos item) 1) 2) inner)
+                                       source ql qc (+ (token-entry-start-pos item) 1) 2) result))))]
             ;; At bracket → $pvec-literal sentinel
             [(eq? type 'at-lbracket)
              (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbracket source source-str)])
                (let-values ([(al ac) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
-                       (cons (make-stx (cons (make-stx '$vec-literal source al ac (token-entry-start-pos item) 2) inner)
-                                       source al ac (token-entry-start-pos item) 2) result))))]
+                       (cons (make-stx (cons (make-stx '$vec-literal source al ac (+ (token-entry-start-pos item) 1) 2) inner)
+                                       source al ac (+ (token-entry-start-pos item) 1) 2) result))))]
             ;; Tilde bracket → $lseq-literal sentinel
             [(eq? type 'tilde-lbracket)
              (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbracket source source-str)])
                (let-values ([(tl tc) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
-                       (cons (make-stx (cons (make-stx '$lseq-literal source tl tc (token-entry-start-pos item) 2) inner)
-                                       source tl tc (token-entry-start-pos item) 2) result))))]
+                       (cons (make-stx (cons (make-stx '$lseq-literal source tl tc (+ (token-entry-start-pos item) 1) 2) inner)
+                                       source tl tc (+ (token-entry-start-pos item) 1) 2) result))))]
             ;; Hash brace → $set-literal sentinel
             [(eq? type 'hash-lbrace)
              (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbrace source source-str)])
                (let-values ([(hl hc) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
-                       (cons (make-stx (cons (make-stx '$set-literal source hl hc (token-entry-start-pos item) 2) inner)
-                                       source hl hc (token-entry-start-pos item) 2) result))))]
+                       (cons (make-stx (cons (make-stx '$set-literal source hl hc (+ (token-entry-start-pos item) 1) 2) inner)
+                                       source hl hc (+ (token-entry-start-pos item) 1) 2) result))))]
             ;; Stray rangle: check for >> (compose)
             ;; Two consecutive rangle at bracket-depth 0 = >> compose operator
             [(eq? type 'rangle)
@@ -1885,7 +1887,7 @@
                  ;; Merge two > into $compose
                  (let-values ([(al ac) (pos->line-col source-str (token-entry-start-pos item))])
                    (loop (+ i 2)
-                         (cons (make-stx '$compose source al ac (token-entry-start-pos item) 2)
+                         (cons (make-stx '$compose source al ac (+ (token-entry-start-pos item) 1) 2)
                                result)))
                  ;; Single stray rangle → emit as > operator symbol
                  (loop (+ i 1) (cons (token-entry->stx item source source-str) result)))]
