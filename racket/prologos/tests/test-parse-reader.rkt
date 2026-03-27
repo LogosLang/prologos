@@ -806,6 +806,77 @@
   (check-equal? (compat-token-value dot-tok) 'name))
 
 ;; ============================================================
+;; Phase 4: Bracket matching validation
+;; ============================================================
+;;
+;; Verifies that the new tokenizer produces properly balanced
+;; brackets across real .prologos files.
+
+(define (bracket-balance tok-rrb)
+  ;; Returns 0 if balanced, positive if unclosed, negative if over-closed
+  ;; Excludes langle/rangle — these are context-dependent (operator vs delimiter)
+  ;; and handled by the disambiguator, not by simple bracket counting.
+  (define n (rrb-size tok-rrb))
+  (let loop ([i 0] [depth 0])
+    (if (>= i n)
+        depth
+        (let* ([entry (rrb-get tok-rrb i)]
+               [type (set-first (token-entry-types entry))]
+               [d (cond
+                    [(memq type '(lbracket lparen lbrace
+                                  quote-lbracket at-lbracket tilde-lbracket
+                                  hash-lbrace dot-lbrace))
+                     (+ depth 1)]
+                    [(memq type '(rbracket rparen rbrace))
+                     (- depth 1)]
+                    [else depth])])
+          (loop (+ i 1) d)))))
+
+(test-case "bracket-balance: simple expressions"
+  (define test-strings
+    (list "[f x]" "[[x]]" "(match x)" "{:a 1}" "'[1 2]" "@[1]"))
+  (for ([s (in-list test-strings)])
+    (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string s)))
+    (check-equal? (bracket-balance tok-rrb) 0
+                  (format "Unbalanced brackets in: ~a" s))))
+
+(test-case "bracket-balance: all library .prologos files balanced"
+  (define lib-dir (build-path project-root "lib" "prologos"))
+  (define files
+    (for/list ([f (in-directory lib-dir)]
+               #:when (regexp-match? #rx"\\.prologos$" (path->string f)))
+      f))
+  (define unbalanced 0)
+  (for ([f (in-list files)])
+    (with-handlers ([exn? (lambda (e) (set! unbalanced (+ unbalanced 1)))])
+      (define src (file->string f))
+      (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string src)))
+      (define bal (bracket-balance tok-rrb))
+      (unless (= bal 0)
+        (set! unbalanced (+ unbalanced 1)))))
+  (check-equal? unbalanced 0
+                (format "~a library files have unbalanced brackets" unbalanced)))
+
+(test-case "bracket-balance: all example files balanced"
+  (define examples-dir (build-path project-root "examples"))
+  (define files
+    (if (directory-exists? examples-dir)
+        (for/list ([f (in-directory examples-dir)]
+                   #:when (regexp-match? #rx"\\.prologos$" (path->string f)))
+          f)
+        '()))
+  (define unbalanced 0)
+  (for ([f (in-list files)])
+    (with-handlers ([exn? (lambda (e) (set! unbalanced (+ unbalanced 1)))])
+      (define src (file->string f))
+      (define tok-rrb (tokenize-char-rrb (make-char-rrb-from-string src)))
+      (define bal (bracket-balance tok-rrb))
+      (unless (= bal 0)
+        (set! unbalanced (+ unbalanced 1)))))
+  (check-equal? unbalanced 0
+                (format "~a example files have unbalanced brackets" unbalanced)))
+
+;; ============================================================
 ;; Phase 1f: Integration gate — topology comparison
 ;; ============================================================
 ;;
