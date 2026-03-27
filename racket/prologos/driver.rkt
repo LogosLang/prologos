@@ -1307,7 +1307,7 @@
 
 ;; Read all syntax objects using the whitespace-significant reader
 ;; Phase 5c: parallel validation — run both old and new readers, compare
-(define use-new-reader? (make-parameter #f))
+(define use-new-reader? (make-parameter #t))
 (define validate-new-reader?
   (make-parameter (and (getenv "PROLOGOS_VALIDATE_NEW_READER") #t)))
 
