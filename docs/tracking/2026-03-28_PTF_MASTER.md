@@ -1,0 +1,68 @@
+# PTF Series: Propagator Theory Foundations
+
+**Created**: 2026-03-28
+**Purpose**: Theoretical underpinnings of propagator networks — what propagators ARE, how they compose, and their parallel profiles. Informs both NTT (syntax/description) and runtime scheduling.
+
+**Relationship to other series**:
+- **PRN** (Propagator-Rewriting-Network): How propagators rewrite — hypergraph grammars, e-graphs, tree rewriting
+- **NTT** (Network Type Theory): How propagators are described — syntax, type declarations, network specifications
+- **PTF** (this series): What propagators are — kinds, composition patterns, parallel profiles, lattice morphology
+- **PAR** (Parallel Scheduling): Runtime scheduling informed by PTF theory
+- **PPN** (Propagator-Parsing-Network): Application track that exercises PTF patterns
+
+---
+
+## Research Documents
+
+| # | Document | Date | Status | Key Contribution |
+|---|----------|------|--------|-----------------|
+| 0 | [Propagator Taxonomy — Parallel Profiles](2026-03-28_PROPAGATOR_TAXONOMY.md) | 03-28 | Draft | 5 propagator kinds (Map, Reduce, Broadcast, Scatter, Gather), 3 compound patterns, array programming connection |
+
+## Existing Related Work (to be integrated)
+
+- **NTT Syntax Design** (`docs/research/` or design docs) — `:lattice`, `:propagator`, `:cell` declarations. PTF adds `:kind` annotations.
+- **Hyperlattice Conjecture** (`docs/research/2026-03-26_LATTICE_FOUNDATIONS.md`) — "Any computation as fixpoint over interconnected lattice structures." PTF describes the morphology (shapes of interconnections).
+- **CALM Topology Lesson** (`docs/tracking/principles/DEVELOPMENT_LESSONS.org`) — Fixed topology for CALM correctness. PTF's Scatter kind (topology-creating) is the exception that requires stratification.
+- **PPN Track 1 Set-Latch** — The Reduce/Barrier pattern discovered in practice. PTF formalizes it.
+- **PAR Track 2 Stress Tests** — Empirical parallel profiles (fan-out vs chain). PTF explains why.
+
+---
+
+## Planned Tracks
+
+| Track | Topic | Status | Dependencies |
+|-------|-------|--------|-------------|
+| 0 | Propagator Kind Taxonomy | Research note complete | — |
+| 1 | Kind Annotation in Propagator Struct | Not started | Track 0 |
+| 2 | Pipeline Detection at Construction Time | Not started | Track 1 |
+| 3 | Kind-Aware `:auto` Scheduling Heuristic | Not started | Track 2, PAR Track 2 |
+| 4 | Array Programming Sublanguage Design | Not started | Tracks 0-3, NTT |
+| 5 | Lattice Morphology Formalization | Not started | Hyperlattice Conjecture |
+
+---
+
+## Open Research Questions
+
+1. **Can propagator kinds be inferred?** Given a fire function's input/output declaration, can we automatically classify it as Map/Reduce/Broadcast/Scatter? Or must the programmer annotate?
+
+2. **Composition laws**: Do propagator kinds compose predictably? Is Map-Reduce always a two-round pipeline? What about Scatter-Map-Gather (three rounds)?
+
+3. **Optimal pipeline scheduling**: Given a pipeline of known kinds, can we compute the optimal BSP round structure? (Timely Dataflow does this for its operators.)
+
+4. **Kind polymorphism**: Can a propagator be Map in one context and Reduce in another? (e.g., a propagator with optional inputs — Map when 1 input connected, Reduce when N connected.)
+
+5. **Topology-creating propagators and parallelism**: Scatter propagators create topology (deferred in BSP). Can we pre-compute the expected topology and create it eagerly, converting Scatter to Map+Broadcast?
+
+6. **Array programming compilation**: How does `map f |> fold g` compile to a propagator network? Is the compilation deterministic (always produces Map→Reduce), or does it depend on the data flow?
+
+7. **Connection to CRDTs**: Propagator kinds map to CRDT operation types. Map = state-based CRDT update. Reduce = merge. Can we formalize this connection for distributed propagator networks?
+
+---
+
+## Principles
+
+PTF research is guided by:
+- **Propagator-Only**: Everything is a propagator. Kinds are properties of propagators, not separate mechanisms.
+- **Data Orientation**: Kinds are data (annotations on propagator structs), not behavior (no runtime dispatch on kinds unless scheduling).
+- **Completeness**: The taxonomy should cover ALL propagators in the codebase. If a propagator doesn't fit a kind, the taxonomy is incomplete.
+- **Composition**: Compound patterns (Map-Reduce, Scatter-Gather) should be derivable from individual kinds, not special-cased.

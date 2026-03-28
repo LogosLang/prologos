@@ -98,18 +98,24 @@ Solver) and is the foundation for the SRE Series.
 |------------------+------|
 | *Master Roadmap* | [[file:2026-03-27_PAR_MASTER.md][2026-03-27_PAR_MASTER.md]] |
 | *Thesis*         | CALM guarantees order-independence only on fixed topologies. Dynamic topology (cell/propagator creation during fire) requires stratification. BSP with stratified topology enables true parallel scheduling. |
-| *Status*         | Scoping. CALM topology guard implemented (=current-bsp-fire-round?=). Audit needed. |
+| *Status*         | Track 0 ✅, Track 1 ✅, Track 2 R1-R2 ✅. BSP is production default. True parallel execution proven (380/380 GREEN, 4.45x speedup at scale). |
 | *Origin*         | BSP scheduler vs SRE subtype decomposition (CALM violation discovered 2026-03-27), [[file:../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md][Parallel Scheduling Research]], BSP-LE Track 4 (superseded) |
-| *Relates to*     | BSP-LE (supersedes Track 4), PM (substrate), SRE (decomposition = topology change), PPN (hypergraph rewriting = topology change) |
+| *Relates to*     | BSP-LE (supersedes Track 4), PM (substrate), SRE (decomposition = topology change), PPN (hypergraph rewriting = topology change), PTF (parallel profiles inform scheduling) |
 
-*** Tracks (Proposed)
+*** Completed Tracks
+
+| Track | Description | PIR | Key Result |
+|-------+-------------+-----+------------|
+| 0 | CALM topology audit | [[file:2026-03-27_PAR_TRACK0_CALM_AUDIT.md][Audit]] | 2 violators (SRE, narrowing), 7+ safe. LKan/RKan CALM-safe. |
+| 1 | BSP-as-default + stratified topology | [[file:2026-03-28_PAR_TRACK1_PIR.md][PIR]] | 380/380 GREEN. 10 bugs via diagnostic protocol. Structural propagator capture. BSP 2.3% faster than DFS. |
+| 2 (R1-R2) | True parallel execution proof-of-concept | — | Racket 9 parallel threads. 13/13 stress tests PASS. 4.45x speedup (synthetic). 1.42x on graph coloring/constraint grids. |
+
+*** Planned Tracks
 
 | Track | Description | Status | Depends On |
 |-------+-------------+--------+------------|
-| 0 | CALM topology audit + stratified topology design | ⬜ | CALM guard (=af35f5e=) |
-| 1 | BSP-as-default (topology strata resolve all CALM violations) | ⬜ | Track 0 |
-| 2 | True parallelism mechanism (Racket futures limitations → FFI or custom) | ⬜ | Track 1 |
-| 3 | =:auto= heuristic (BSP vs DFS, network size threshold) | ⬜ | Track 1 |
+| 2 (R3-R5) | Contention analysis + literature survey + design doc | ⬜ | R1-R2 data |
+| 3 | =:auto= heuristic (kind-aware, threshold-based) | ⬜ | Track 2, PTF Track 3 |
 
 *** Key Insight (2026-03-27)
 
@@ -284,6 +290,32 @@ When elaboration, resolution, matching, and reduction all use the SRE:
 4. Express elaborator as SRE =structural-relate= calls
 5. Express type checker as stratified propagator network
 6. Compiler is a Prologos program that type-checks itself
+
+** PTF (Propagator Theory Foundations)  — /What propagators ARE: kinds, composition, parallel profiles/
+
+| | |
+|------------------+------|
+| *Master Tracker* | [[file:2026-03-28_PTF_MASTER.md][2026-03-28_PTF_MASTER.md]] |
+| *Thesis*         | Propagators have structural kinds (Map, Reduce, Broadcast, Scatter, Gather) that determine their parallel profile and composition behavior. The kind taxonomy is the morphology of the hyperlattice — describing how lattice cells interconnect. Informs both NTT syntax (kind annotations) and PAR runtime (scheduling heuristics). |
+| *Status*         | Track 0 research note complete. Taxonomy: 5 kinds, 3 compound patterns, array programming connection. |
+| *Cross-links*    | NTT (syntax for kinds), PRN (rewriting as Scatter), PAR (parallel profiles), PPN (set-latch = Reduce) |
+
+*** Research Documents
+
+| Document | Date | Contribution |
+|----------+------+-------------|
+| [[file:../research/2026-03-28_PROPAGATOR_TAXONOMY.md][Propagator Taxonomy]] | 03-28 | 5 kinds, 3 compound patterns, array programming primitives map, Hyperlattice morphology |
+
+*** Planned Tracks
+
+| Track | Topic | Status | Dependencies |
+|-------+-------+--------+-------------|
+| 0 | Kind Taxonomy | Research note ✅ | — |
+| 1 | Kind Annotation in Propagator Struct | ⬜ | Track 0 |
+| 2 | Pipeline Detection | ⬜ | Track 1 |
+| 3 | Kind-Aware ~:auto~ Scheduling | ⬜ | Track 2, PAR |
+| 4 | Array Programming Sublanguage | ⬜ | Tracks 0-3, NTT |
+| 5 | Lattice Morphology Formalization | ⬜ | Hyperlattice Conjecture |
 
 ** PRN (Propagator-Rewriting-Network)  — /Theory: hyperlattice rewriting as unifying formalism/
 
@@ -533,6 +565,8 @@ See =docs/research/= for the full set.
 
 | Document | Date | Stage | Feeds Into |
 |----------+------+-------+------------|
+| [[file:../research/2026-03-28_PROPAGATOR_TAXONOMY.md][Propagator Taxonomy — Parallel Profiles]] | 2026-03-28 | 0 | PTF Series Track 0 |
+| [[file:../research/2026-03-28_PARALLEL_PROPAGATOR_SCHEDULING.md][Parallel Propagator Scheduling]] | 2026-03-28 | 0-1 | PAR Track 2 |
 | [[file:../research/2026-03-22_STRUCTURAL_REASONING_ENGINE.md][Structural Reasoning Engine]] | 2026-03-22 | 0-1 | SRE Series scoping |
 | Categorical Foundations of Typed Propagator Networks | 2026-03-22 | 0-1 🔄 | NTT Research Doc 1 |
 | Network Type Theory for Prologos | — | 1-2 ⬜ | NTT Research Doc 2 |
