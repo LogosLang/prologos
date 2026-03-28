@@ -3,269 +3,489 @@
 **Date**: 2026-03-27
 **Series**: PAR (Parallel Scheduling)
 **Stage**: 3 (Design Iteration D.1)
-**Prerequisites**: PAR Track 0 CALM Audit (✅ `2f3c160`), Stage 2 Audit (`813634a`)
+**Prerequisites**: PAR Track 0 CALM Audit (✅ `2f3c160`), [Stage 2 Audit](2026-03-27_PAR_TRACK1_STAGE2_AUDIT.md) (`813634a`)
+
+## Progress Tracker
+
+| Phase | Description | Status | Notes |
+|-------|-------------|--------|-------|
+| 0 | Narrowing CALM validation (empirical) | ⬜ | |
+| 0b | Pre-0 benchmark: BSP vs DFS overhead | ⬜ | |
+| 1 | Decomposition-request cell infrastructure | ⬜ | |
+| 2 | SRE decomposition → request emission | ⬜ | |
+| 3 | Narrowing branch → request emission | ⬜ | Scope depends on Phase 0 |
+| 4 | Topology stratum in BSP loop | ⬜ | |
+| 5 | BSP-as-default + full suite verification | ⬜ | |
+| 6 | CALM guard hardening | ⬜ | |
+| 7 | Constraint-propagators contract | ⬜ | |
+| 8 | PIR + tracker + dailies | ⬜ | |
 
 ---
 
-## Goal
+## §1 Goal
 
-Make the BSP scheduler the default for `run-to-quiescence`, producing identical results to DFS for all 380 test files. This requires resolving all CALM topology violations identified in the Track 0 audit.
+Make the BSP scheduler the default for `run-to-quiescence`, producing identical results to DFS for all 380 test files. This requires resolving the 2 CALM topology violations identified in the [Track 0 audit](2026-03-27_PAR_TRACK0_CALM_AUDIT.md): `sre-core.rkt` (structural decomposition) and `narrowing.rkt` (branch/rule installation).
 
-## Deliverables
+### Deliverables
 
 1. **380/380 green under BSP** — `current-use-bsp-scheduler? #t` with zero test failures
-2. **Stratified topology protocol** — decomposition requests as cell values, topology stratum between BSP rounds
-3. **CALM guard active** — `current-bsp-fire-round?` enforced in production
-4. **Narrowing CALM validation** — empirical confirmation that cell-only creation is CALM-safe (or refactoring if not)
+2. **Stratified topology protocol** — decomposition requests as cell values, topology stratum processes between BSP rounds
+3. **CALM guard active in production** — `current-bsp-fire-round?` catches future violations at runtime
+4. **Narrowing CALM classification** — empirical confirmation of whether cell-only creation is CALM-safe
 
-## Non-Deliverables (deferred)
+### Non-Deliverables (deferred)
 
-- `:auto` heuristic (PAR Track 3 — needs benchmarking data)
+- `:auto` heuristic (PAR Track 3 — needs benchmarking data from this track)
 - True parallelism / futures (PAR Track 2 — research)
-- Performance improvement (Track 1 is about correctness, not speed)
+- Performance improvement over DFS (Track 1 is correctness, not speed)
 
 ---
 
-## Architecture: Two-Fixpoint BSP Loop
+## §2 Stage 2 Audit Summary
 
-The current BSP loop is:
+Source: [PAR Track 1 Stage 2 Audit](2026-03-27_PAR_TRACK1_STAGE2_AUDIT.md)
+
+### Violator 1: sre-core.rkt — Structural Decomposition
+
+**3 fire function entry points**: `sre-make-equality-propagator` (line 528), `sre-make-subtype-propagator` (line 570), `sre-make-duality-propagator` (line 622).
+
+**Topology ops per decomposition** (for arity-N compound type):
+
+| Operation | Count | Lines |
+|-----------|-------|-------|
+| `net-new-cell` | up to 2×N | sre-core.rkt:288, 291, 294 (via `sre-identify-sub-cell`) |
+| `net-add-propagator` (sub-relate) | N | sre-core.rkt:423-427 |
+| `net-add-propagator` (reconstructor-a) | 1 | sre-core.rkt:431-433 |
+| `net-add-propagator` (reconstructor-b) | 1 | sre-core.rkt:434-436 |
+| `net-cell-decomp-insert` | 2 | sre-core.rkt:322 (via `sre-get-or-create-sub-cells`) |
+| `net-pair-decomp-insert` | 1 | sre-core.rkt:438 |
+| **Total** | **3N + 5** | |
+
+**Critical property**: The fire function creates topology but does NOT read from it in the same firing. Sub-cells are populated in subsequent firings. This confirms clean separation — topology creation and value propagation are independent.
+
+**Guard**: `net-pair-decomp?` (line 467) prevents redundant decomposition. Idempotent.
+
+### Violator 2: narrowing.rkt — Branch/Rule Installation
+
+**2 fire function entry points**: `make-branch-fire-fn` (line 228), `make-rule-fire-fn` (line 275).
+
+**Branch path**: Calls `install-narrowing-propagators` (line 246) which recursively calls `net-add-propagator` — installs entire subtrees of the definitional tree.
+
+**Rule path**: Calls `eval-rhs` (line 286) which calls `net-new-cell` (lines 323, 338, 386) to create cells for constructor sub-terms. **Unlike SRE, the fire function immediately references created cell-ids** in `term-ctor` return values.
+
+**Key distinction**: Branch creates propagators (CALM-unsafe). Rule creates cells only (possibly CALM-safe).
+
+### Latent: constraint-propagators.rkt
+
+`install-constraint->method-propagator` (line 266) takes an `install-fn` callback called from a fire function. **Currently unused** (no callers). Needs contract documentation.
+
+### Network Registry Operations
+
+`net-cell-decomp-insert` and `net-pair-decomp-insert` are called from fire functions. These modify `warm` layer CHAMPs, not cells/propagators. BSP's diff-only collection drops them. Must be handled by topology stratum.
+
+---
+
+## §3 Architecture: Two-Fixpoint BSP Loop
+
+### Current BSP Loop (broken for dynamic topology)
+
 ```
 repeat:
   fire all worklist propagators against snapshot
-  bulk-merge writes
+  bulk-merge VALUE writes
 until worklist empty
 ```
 
-The new loop separates value fixpoint from topology fixpoint:
+Problem: fire functions that create cells/propagators produce structural changes in their returned `result-net`, but `fire-and-collect-writes` only extracts cell value diffs (propagator.rkt:1179-1185). Structural changes are silently dropped.
+
+### Proposed: Stratified BSP Loop
+
 ```
 repeat:
-  VALUE STRATUM (BSP-safe, parallelizable):
+  VALUE STRATUM (BSP-safe):
     repeat:
-      fire all worklist propagators against snapshot
-      bulk-merge VALUE writes only
+      fire all worklist propagators (CALM guard active)
+      bulk-merge value writes
     until worklist empty
 
   TOPOLOGY STRATUM (sequential):
-    read decomposition-request cells
+    read decomposition-request cell
     for each unprocessed request:
-      create sub-cells (net-new-cell)
-      create sub-propagators (net-add-propagator)
-      register in decomp registries
-    clear processed requests
-    (new propagators are on worklist for next value stratum)
+      create sub-cells via sre-get-or-create-sub-cells / install-narrowing-propagators
+      create sub-propagators via net-add-propagator
+      write decomp registry entries
+    clear processed requests → new propagators on worklist
 
 until neither value nor topology changed
 ```
 
-The outer loop runs until stable — no value changes AND no topology changes. Each inner value stratum runs BSP to quiescence on a fixed topology. The topology stratum processes accumulated requests and may add to the worklist. If it does, the next value stratum fires.
+### Termination Argument
+
+**Value stratum**: Terminates by standard propagator monotonicity — each cell value can only increase in lattice order, finite lattice height, so worklist eventually empties. (Existing guarantee, unchanged.)
+
+**Topology stratum**: Terminates because decomposition is guarded by `net-pair-decomp?` — each (cell-a, cell-b, relation) triple decomposes at most once. The number of such triples is bounded by the number of cell pairs × relation types. Each decomposition creates a finite number of sub-cells (bounded by constructor arity). No decomposition creates new compound types that weren't already in the type domain.
+
+**Outer loop**: Each iteration either:
+- Adds topology (finite, bounded by type nesting depth), OR
+- Reaches fixpoint (no requests, no worklist changes)
+
+The type nesting depth is bounded (no infinite types in a well-typed program). Therefore the outer loop terminates.
+
+### Where This Lives in the Stratification Hierarchy
+
+Current strata: S(-1) retraction → S(0) monotone → S(1) constraint retry → S(2) cleanup.
+
+The topology stratum is NOT a new S-level. It is WITHIN S(0), between BSP rounds. The S(-1)/S(0)/S(1)/S(2) hierarchy handles non-monotone operations across the constraint lifecycle. The topology stratum handles network construction within S(0)'s monotone value propagation.
+
+**Why not a new S-level**: Decomposition requests and their processing are monotone (the set of decompositions only grows). The topology stratum is a monotone operation that extends the network. It doesn't retract, negate, or clean up. It belongs inside S(0).
 
 ---
 
-## Design: Decomposition-Request Protocol
+## §4 Decomposition-Request Protocol
 
-### Request Cell
+### Alternative Approaches Considered
 
-A single cell per network: `decomp-request-cell`. Lattice: set-union of request structs. Merge: set-union (monotone under subset ordering). Bot: empty set.
+| Approach | Description | Tradeoff |
+|----------|-------------|----------|
+| **A. Single request cell** | One cell per network, set-union lattice of request structs | Simple. One cell to check. But all requests in one cell means the topology stratum processes everything in one batch. |
+| **B. Per-domain request cells** | Separate cells for SRE type, SRE term, narrowing | More targeted. But adds complexity — multiple cells to check, domain routing. |
+| **C. Request queue (non-lattice)** | Mutable queue outside the network | Not on-network. Violates Propagator-Only. Invisible to BSP. |
+| **D. Structural diff in BSP** | BSP diffs full network, not just values | Fixes the symptom but doesn't address the principle. Fire functions remain unrestricted. Parallel fire functions would have merge conflicts for structural changes. |
+
+**Choice: A (single request cell)**. Rationale:
+- Simplest — one cell, one merge function, one check in the topology stratum
+- Monotone (set-union under subset ordering)
+- The topology stratum processes all requests in one pass regardless of source
+- Per-domain routing isn't needed — the request struct carries its domain
+- Aligns with Data Orientation: requests are data values, not imperative calls
+
+### Request Struct
 
 ```racket
-(struct decomp-request (kind domain cell-a cell-b va vb unified pair-key desc relation) #:transparent)
-;; kind: 'sre-structural | 'narrowing-branch | 'narrowing-rule-cells
+(struct decomp-request
+  (kind        ;; 'sre-structural | 'narrowing-branch
+   domain      ;; SRE domain struct (for sre) or #f (for narrowing)
+   cell-a      ;; cell-id
+   cell-b      ;; cell-id (or #f for narrowing)
+   va vb       ;; current values at request time
+   unified     ;; unified value (for sre) or #f
+   pair-key    ;; decomp guard key
+   desc        ;; ctor-desc (for sre) or dt-node (for narrowing)
+   relation    ;; sre-relation (for sre) or #f
+   ;; Narrowing-specific:
+   arg-cells   ;; (listof cell-id) or #f
+   result-cell ;; cell-id or #f
+   bindings)   ;; (listof cell-id) or #f
+  #:transparent)
 ```
 
-Fire functions write decomposition requests to this cell instead of calling `net-new-cell` / `net-add-propagator` directly.
+**Concern**: Carrying `va`, `vb`, `unified` in the request means the request captures cell values at emission time. If cells evolve between emission and processing, the topology stratum uses stale values for component extraction.
 
-### Request Emission (replaces inline topology)
+**Mitigation**: The topology stratum re-reads cell values before processing. The request identifies WHICH cells to decompose; the stratum reads current values. The request struct should carry cell-ids and metadata (pair-key, desc, relation), not values.
 
-**SRE path** — `sre-decompose-generic` becomes `sre-emit-decomposition-request`:
+**Revised request struct**:
+
 ```racket
-(define (sre-emit-decomposition-request net domain cell-a cell-b va vb unified pair-key desc
-                                         #:relation [relation sre-equality])
-  ;; Guard: already decomposed? → skip
-  (if (net-pair-decomp? net pair-key)
-      net
-      ;; Write request to decomp-request cell
-      (let ([req (decomp-request 'sre-structural domain cell-a cell-b va vb unified pair-key desc relation)])
-        (net-cell-write net (prop-network-decomp-request-cell net) (set-add (set) req)))))
+(struct decomp-request
+  (kind        ;; 'sre-structural | 'narrowing-branch
+   pair-key    ;; decomp guard key (also serves as dedup)
+   ;; SRE fields:
+   domain      ;; SRE domain struct or #f
+   cell-a      ;; cell-id
+   cell-b      ;; cell-id or #f
+   desc        ;; ctor-desc or #f
+   relation    ;; sre-relation or #f
+   ;; Narrowing fields:
+   tree        ;; dt-node or #f
+   arg-cells   ;; (listof cell-id) or #f
+   result-cell ;; cell-id or #f
+   bindings)   ;; (listof cell-id) or #f
+  #:transparent)
 ```
 
-**Narrowing branch path** — `make-branch-fire-fn` emits request instead of calling `install-narrowing-propagators`:
+The topology stratum reads `va`, `vb`, `unified` from cells at processing time.
+
+### Merge Function
+
 ```racket
-;; Inside the branch fire function lambda:
-(let ([req (decomp-request 'narrowing-branch ...)])
-  (net-cell-write net (prop-network-decomp-request-cell net) (set-add (set) req)))
+(define (decomp-request-set-merge a b)
+  (set-union a b))
 ```
 
-### Topology Stratum Handler
+Bot: `(set)` (empty set). Contradiction: none (requests can't contradict).
 
-```racket
-(define (process-topology-requests net)
-  (define req-cell (prop-network-decomp-request-cell net))
-  (define requests (net-cell-read net req-cell))
-  (if (or (not requests) (set-empty? requests))
-      (values net #f)  ;; no requests → no topology change
-      (let ([net* (for/fold ([n net]) ([req (in-set requests)])
-                    (match (decomp-request-kind req)
-                      ['sre-structural
-                       (sre-decompose-generic n (decomp-request-domain req) ...)]
-                      ['narrowing-branch
-                       (install-narrowing-propagators n ...)]
-                      ['narrowing-rule-cells
-                       ;; Create cells, return mapping
-                       ...]))])
-        ;; Clear processed requests
-        (values (net-cell-write net* req-cell (set)) #t))))  ;; topology changed
+### Request Cell Creation
+
+Added to `make-prop-network` (or `make-elaboration-network`). One cell per network.
+
+---
+
+## §5 Concrete Walkthrough: SRE Subtype Decomposition
+
+Current (broken under BSP):
+```
+1. Subtype propagator fires for PVec Int <: PVec Nat
+2. Fire function calls sre-maybe-decompose
+3. sre-decompose-generic creates:
+   - Sub-cell for Int (cell-a's element)
+   - Sub-cell for Nat (cell-b's element)
+   - Sub-relate propagator: Int-cell <: Nat-cell
+   - Reconstructor: Int-cell → PVec cell-a
+   - Reconstructor: Nat-cell → PVec cell-b
+4. Returns modified network
+5. BSP extracts only value diffs → nothing (no value writes to cell-a or cell-b)
+6. Topology lost. Quiescence. No contradiction. Wrong answer: true.
 ```
 
-### Integration into BSP Loop
-
-```racket
-(define (run-to-quiescence-bsp net #:executor [executor sequential-fire-all])
-  (let outer-loop ([net net])
-    ;; Value stratum: BSP rounds until worklist empty
-    (define net-value-stable (run-value-stratum-bsp net executor))
-    ;; Topology stratum: process decomposition requests
-    (define-values (net-topo-done topology-changed?)
-      (process-topology-requests net-value-stable))
-    (if topology-changed?
-        (outer-loop net-topo-done)  ;; new topology → re-run value stratum
-        net-topo-done)))            ;; stable → done
+Proposed (stratified):
+```
+1. Subtype propagator fires for PVec Int <: PVec Nat
+2. Fire function calls sre-emit-decomposition-request
+3. Request written to decomp-request cell: {kind: sre-structural, cell-a, cell-b, desc: PVec, relation: subtype}
+4. BSP extracts value diff: decomp-request cell changed (∅ → {request})
+5. Value stratum quiesces (no more value work)
+6. Topology stratum reads request:
+   - Re-reads cell-a (PVec Int), cell-b (PVec Nat)
+   - Calls sre-decompose-generic: creates sub-cells, sub-propagators, reconstructors
+   - Clears request
+7. New propagators on worklist → back to value stratum
+8. Value stratum fires sub-relate propagator: Int <: Nat
+9. Int is NOT <: Nat → contradiction written to sub-cell
+10. Reconstructor fires → contradiction propagates to PVec cell
+11. Quiescence. Contradiction detected. Correct answer: false.
 ```
 
 ---
 
-## Narrowing: Cell-Only Creation CALM Analysis
+## §6 Concrete Walkthrough: Narrowing Branch
 
-The Stage 2 audit identified that `make-rule-fire-fn` creates cells (via `eval-rhs` → `net-new-cell`) but NOT propagators. The question: is cell-only creation CALM-safe?
+Current (broken under BSP):
+```
+1. Branch propagator fires, watched cell has term-ctor 'suc
+2. Fire function calls install-narrowing-propagators for child subtree
+3. net-add-propagator creates child rule propagator
+4. BSP extracts only value diffs → nothing
+5. Child rule propagator never fires. Result cell stays bot.
+```
+
+Proposed (stratified):
+```
+1. Branch propagator fires, watched cell has term-ctor 'suc
+2. Fire function writes request to decomp-request cell: {kind: narrowing-branch, tree: child-subtree, arg-cells, result-cell, bindings}
+3. Value stratum quiesces
+4. Topology stratum reads request:
+   - Calls install-narrowing-propagators for the child subtree
+   - New propagators on worklist
+5. Value stratum fires child rule propagator
+6. Rule propagator evaluates RHS, writes to result cell
+```
+
+---
+
+## §7 Narrowing Cell-Only CALM Analysis
+
+Phase 0 validates empirically whether `net-new-cell` (without `net-add-propagator`) is CALM-safe during BSP fire rounds.
 
 **Argument for CALM-safety**:
-- A cell without dependents (no propagator watches it) doesn't affect the worklist
-- Other propagators can't read a cell they don't know about (cell-id is local)
-- The cell-id appears in a value written to `result-cell`, but that's a value operation, not a topology dependency
-- The cell is storage — it holds a value but triggers nothing
+- A cell without dependents doesn't affect the worklist
+- No propagator can read a cell it doesn't know about (cell-id is local to the creating fire function)
+- The cell-id appears in a value written to another cell — but that's a value operation, not a scheduling dependency
+- The cell is pure storage, not a scheduling entity
 
 **Argument against**:
-- The cell exists in the network's `cells` CHAMP — BSP's `fire-and-collect-writes` would not capture it
-- If another propagator later adds the cell as a dependent (in a future topology stratum), the cell must exist
+- BSP's `fire-and-collect-writes` diffs only declared output cells. A newly created cell is not in `propagator-outputs`, so its initial value isn't captured in the write list. However, the cell's value IS in the returned `result-net` — it just isn't extracted.
+- If a future topology stratum adds a propagator watching this cell, the propagator expects the cell to exist with its value. Under BSP, the cell doesn't exist in the canonical network.
 
-**Resolution**: Phase 0 validates empirically. If narrowing tests pass under BSP with the CALM guard relaxed for `net-new-cell` (but NOT `net-add-propagator`), cell-only creation is confirmed CALM-safe. If they fail, narrowing needs the full request protocol.
+**Conclusion**: Cell-only creation is NOT safe under the current BSP implementation, because the cell's existence is lost in the diff. Even though it doesn't affect scheduling order, the cell must exist for future propagators to reference it. The topology stratum must create cells.
 
-**If CALM-safe**: Relax the guard to only block `net-add-propagator` during fire rounds, not `net-new-cell`. Simpler fix for narrowing (no refactoring needed).
+**However**: If `make-rule-fire-fn` creates cells AND writes values referencing those cell-ids to the result cell, and BSP captures the result-cell write but NOT the new cells — the result cell contains dangling references to nonexistent cells. This produces errors, not silent wrong results. The CALM guard should catch this.
 
-**If NOT CALM-safe**: Narrowing rule evaluation needs pre-allocated cell IDs or the two-phase protocol from the Stage 2 audit.
+**Design decision**: Treat all `net-new-cell` in fire functions as CALM violations. Narrowing rule evaluation needs refactoring: either pre-allocate cell IDs or move cell creation to the topology stratum.
+
+**Phase 0 still validates**: Run narrowing tests under BSP to confirm the failure mode and classify which narrowing operations actually trigger during the test suite.
 
 ---
 
-## Implementation Phases
+## §8 Implementation Phases
 
 ### Phase 0: Narrowing CALM Validation (empirical)
-- Temporarily relax `current-bsp-fire-round?` guard to allow `net-new-cell` but block `net-add-propagator`
-- Run narrowing tests under BSP: `raco test tests/test-narrowing-*.rkt` with `current-use-bsp-scheduler? #t`
-- If all pass → cell-only creation is CALM-safe. Proceed with simplified design.
-- If failures → narrowing needs the full request protocol. Expand Phase 3.
+
+**What**: Run narrowing and SRE tests under BSP to characterize the exact failure modes.
+**How**: Temporarily set `current-use-bsp-scheduler? #t`, run `raco test` on narrowing and SRE test files individually.
+**Success**: Catalogue of which tests fail, which pass, and classification of each failure as topology-related or not.
+**Lines changed**: 0 (parameter tweak only).
+
+### Phase 0b: Pre-0 Benchmark — BSP vs DFS Overhead
+
+**What**: Measure the overhead of the two-fixpoint BSP loop vs current DFS on the comparative benchmark suite.
+**How**: `bench-ab.rkt` with `--runs 5`, comparing DFS (current) vs BSP (with topology stratum) on non-decomposing benchmarks (simple-typed, nat-arithmetic — no SRE decomposition involved).
+**Success**: BSP overhead is ≤5% of DFS wall time for non-decomposing workloads.
+**Lines changed**: 0 (benchmarking only).
+**Design impact**: If overhead is >10%, the `:auto` heuristic (Track 3) becomes higher priority.
 
 ### Phase 1: Decomposition-Request Cell Infrastructure
-- Add `decomp-request` struct to propagator.rkt
-- Add `decomp-request-cell` to `prop-network` (created in `make-prop-network`)
-- Merge function: set-union. Bot: empty set.
-- Export: `prop-network-decomp-request-cell`
+
+**What**: Add `decomp-request` struct, merge function, and request cell to `prop-network`.
+**Where**: `propagator.rkt`
+**Lines**: ~25
+
+Specific changes:
+- `decomp-request` struct definition
+- `decomp-request-set-merge` function (set-union)
+- Add `decomp-request-cell` field to `prop-network` (or allocate in `make-prop-network`)
+- Export: struct, merge, cell accessor
+
+**Test**: Unit test — create network, write request, read back, verify set-union merge.
 
 ### Phase 2: SRE Decomposition → Request Emission
-- Replace `sre-decompose-generic` call in fire functions with `sre-emit-decomposition-request`
-- `sre-emit-decomposition-request` writes to decomp-request cell
-- Move `sre-decompose-generic` to be called from topology stratum handler only
-- Keep `sre-get-or-create-sub-cells`, `sre-identify-sub-cell` unchanged (called from topology handler)
-- Update `sre-maybe-decompose` to emit request instead of decompose inline
-- ~50 lines changed in sre-core.rkt
 
-### Phase 3: Narrowing Branch → Request Emission (if needed)
-- If Phase 0 shows cell-only is CALM-safe: only refactor `make-branch-fire-fn` to emit requests (it calls `install-narrowing-propagators` which adds propagators)
-- If Phase 0 shows cell-only is NOT safe: also refactor `make-rule-fire-fn`
-- ~30 lines changed in narrowing.rkt
+**What**: Replace inline topology creation in SRE fire functions with request emission.
+**Where**: `sre-core.rkt`
+**Lines**: ~50
+
+Specific changes:
+- New function `sre-emit-decomposition-request` (~15 lines): checks `net-pair-decomp?` guard, writes request struct to decomp-request cell
+- Modify `sre-maybe-decompose` (line 456): replace call to `sre-decompose-generic` with call to `sre-emit-decomposition-request`
+- `sre-decompose-generic` remains unchanged — called from topology stratum, not from fire functions
+- Duality-specific path (`sre-duality-decompose-dual-pair` ~line 700): same treatment
+
+**Test**: Run `raco test tests/test-sre-core.rkt tests/test-sre-subtype.rkt tests/test-sre-duality.rkt` under DFS — must still pass (request emission + immediate processing = same behavior).
+
+### Phase 3: Narrowing → Request Emission
+
+**What**: Replace inline topology creation in narrowing fire functions with request emission.
+**Where**: `narrowing.rkt`
+**Lines**: ~30
+
+Specific changes:
+- `make-branch-fire-fn` lambda (line 230): replace `install-narrowing-propagators` call at line 246 with request emission to decomp-request cell
+- `make-rule-fire-fn` lambda (line 276): replace `eval-rhs` → `net-new-cell` calls with request emission for cell creation
+- `install-narrowing-propagators` remains unchanged — called from topology stratum
+- `eval-rhs` needs refactoring: separate "compute what cells are needed" from "create cells and return values referencing them"
+
+**The `eval-rhs` challenge**: The function creates cells AND immediately uses their IDs. Options:
+1. **Split into two phases**: `eval-rhs-plan` returns a description of needed cells + a continuation that builds the term given cell-ids. `eval-rhs-execute` creates cells and calls the continuation. Plan phase runs in fire function; execute phase runs in topology stratum.
+2. **Pre-allocate cell IDs**: Topology stratum allocates IDs, fire function uses them. Requires cell-ID reservation API.
+3. **Emit rule-eval request**: The entire rule evaluation becomes a topology-stratum operation. The fire function only checks "are bindings ready?" and emits the request.
+
+**Preferred: Option 3**. The fire function becomes a pure readiness check. The topology stratum handles all cell creation and value construction. Simplest, cleanest separation.
+
+**Test**: Run `raco test tests/test-narrowing-*.rkt` under DFS — must still pass.
 
 ### Phase 4: Topology Stratum in BSP Loop
-- Implement `process-topology-requests` in propagator.rkt
-- Modify `run-to-quiescence-bsp` to add outer loop (value stratum → topology stratum → repeat)
-- Handle decomp registry writes (`net-pair-decomp-insert`, `net-cell-decomp-insert`) in topology stratum
-- ~40 lines in propagator.rkt
+
+**What**: Add outer loop to `run-to-quiescence-bsp` that processes decomposition requests between BSP rounds.
+**Where**: `propagator.rkt`
+**Lines**: ~40
+
+Specific changes:
+- New function `process-topology-requests` (~25 lines): reads decomp-request cell, dispatches by kind, calls `sre-decompose-generic` / `install-narrowing-propagators` / `eval-rhs`, clears processed requests
+- Modify `run-to-quiescence-bsp` (line 1193): wrap existing BSP loop in outer loop that alternates value stratum and topology stratum
+- Import SRE/narrowing topology functions (or use a callback registry to avoid circular deps)
+
+**Circular dependency concern**: `propagator.rkt` cannot import `sre-core.rkt` (sre-core imports propagator). Solution: topology handler is a parameter (`current-topology-handler`) set by `sre-core.rkt` at module load time. Same pattern as `current-bsp-observer`.
+
+**Test**: `test-sre-subtype.rkt` under BSP — the 2 previously failing tests must now pass.
 
 ### Phase 5: BSP-as-Default + Full Suite Verification
-- Flip `current-use-bsp-scheduler?` to `#t`
-- Run individual failing tests first (test-sre-subtype.rkt)
-- Then full suite regression gate
-- Verify 380/380 green, 72/72 library files correct
+
+**What**: Flip default, verify everything.
+**How**:
+1. Set `current-use-bsp-scheduler? #t` in propagator.rkt
+2. Run individual known-sensitive tests: `test-sre-subtype.rkt`, `test-sre-core.rkt`, `test-sre-duality.rkt`, `test-narrowing-*.rkt`
+3. Full suite regression gate (ONE run, read failure logs)
+**Success**: 380/380 green, zero failures.
+**Lines**: 1 (parameter flip).
 
 ### Phase 6: CALM Guard Hardening
-- Keep `current-bsp-fire-round?` active in production (not just during testing)
-- If Phase 0 confirmed cell-only CALM-safe: guard blocks `net-add-propagator` only
-- If not: guard blocks both `net-add-propagator` AND `net-new-cell`
-- Document the CALM contract in propagator.rkt header
+
+**What**: Finalize guard behavior for production.
+**Lines**: ~10
+
+- `net-add-propagator`: ERROR during BSP fire rounds (already implemented)
+- `net-new-cell`: ERROR during BSP fire rounds (already implemented — keep)
+- `net-cell-decomp-insert`, `net-pair-decomp-insert`: ERROR during BSP fire rounds (add guards)
+- Document the CALM contract in propagator.rkt header comment
 
 ### Phase 7: Constraint-Propagators Contract
-- Document `install-fn` callback contract: must not call `net-add-propagator`
-- Add runtime assertion in `install-constraint->method-propagator`
+
+**What**: Document `install-fn` callback contract.
+**Where**: `constraint-propagators.rkt` line 265
+**Lines**: ~5 (comments + optional runtime assertion)
 
 ### Phase 8: PIR + Tracker + Dailies
 
 ---
 
-## Risk Assessment
+## §9 Risk Assessment
 
 | Risk | Probability | Impact | Mitigation |
 |------|------------|--------|------------|
-| Narrowing cell-only is NOT CALM-safe | Low | Medium — adds Phase 3 scope | Phase 0 validates empirically before design commits |
-| Decomp registry writes cause subtle BSP issues | Medium | Low — registries are guards, not scheduling | Topology stratum handles them alongside cell/propagator creation |
-| Performance regression from outer loop overhead | Low | Low — outer loop fires ≤ depth of type nesting | Benchmark before/after |
-| Fire functions that we missed in audit | Low | Caught by CALM guard at runtime | Guard is correct-by-construction |
+| Circular dependency: propagator.rkt ↔ sre-core.rkt | High | Medium | Parameter-based topology handler (like current-bsp-observer) |
+| eval-rhs refactoring more complex than estimated | Medium | Medium | Option 3 (emit entire eval as request) simplifies |
+| BSP overhead from outer loop | Low | Low | Pre-0 benchmark validates. Outer loop fires ≤ type nesting depth |
+| Missed topology site in audit | Low | Caught at runtime | CALM guard is correct-by-construction |
+| Decomp request stale values | Medium | Low | Topology stratum re-reads cells at processing time |
 
-## Estimated Scope
+## §10 Termination Arguments
 
-| Component | Lines | Time |
-|-----------|-------|------|
-| Phase 0 (validation) | 0 (parameter tweak) | 10 min |
-| Phase 1 (infrastructure) | ~20 | 15 min |
-| Phase 2 (SRE refactor) | ~50 | 30 min |
-| Phase 3 (narrowing, if needed) | ~30 | 20 min |
-| Phase 4 (BSP loop) | ~40 | 20 min |
-| Phase 5 (verification) | 0 | 15 min |
-| Phase 6-7 (hardening) | ~10 | 10 min |
-| Phase 8 (PIR) | — | 15 min |
-| **Total** | **~150 lines** | **~2h 15m** |
+**Value stratum (inner BSP loop)**: Standard monotone propagator termination. Each cell value increases in lattice order. Finite lattice height. Worklist empties.
+
+**Topology stratum**: `net-pair-decomp?` guard ensures each (cell-a, cell-b, relation) triple decomposes at most once. Constructor arity is finite. No decomposition creates new compound types outside the existing type domain.
+
+**Outer loop**: Each iteration either adds topology (bounded by type nesting depth × cell pair count) or reaches fixpoint. Type nesting depth is bounded in well-typed programs. Therefore the outer loop terminates.
+
+**Narrowing topology**: Each definitional tree node installs propagators at most once (branch fire checks constructor tag, which is deterministic). Tree depth is finite. Recursive installation is bounded by tree size.
 
 ---
 
-## NTT Speculative Syntax
+## §11 NTT Speculative Syntax
 
 ```
-;; Decomposition request as a lattice value
+;; Decomposition request lattice
 :lattice :set DecompRequest
   :merge set-union
   :bot   empty-set
 
-;; The decomp-request cell
+;; The decomp-request cell — one per network
 :cell decomp-requests : (Set DecompRequest)
   :lattice :set DecompRequest
 
-;; Value stratum propagator (fire function)
+;; Value stratum propagator (emits requests, never creates topology)
 :propagator sre-subtype-check
   :reads  [cell-a cell-b]
-  :writes [cell-a cell-b decomp-requests]  ;; may emit request
-  :monotone  ;; value-only writes
+  :writes [cell-a cell-b decomp-requests]
+  :where  Monotone  ;; value-only writes, CALM-safe
 
-;; Topology stratum handler (between BSP rounds)
+;; Topology stratum handler (creates topology, sequential)
 :stratum topology
   :reads  [decomp-requests]
-  :creates [sub-cells sub-propagators]  ;; topology changes
-  :sequential  ;; not parallelizable
+  :creates [sub-cells sub-propagators decomp-registries]
+  :where  Sequential  ;; not parallelizable
+  :fires-when (not (set-empty? decomp-requests))
 ```
 
 ---
 
-## Principles Alignment
+## §12 Principles Challenge
 
-| Principle | How This Design Serves It |
-|-----------|--------------------------|
-| **Propagator-Only** | Decomposition requests ARE cell values on the network. No side-channel. |
-| **Data Orientation** | Requests are data (structs in a set cell), not imperative side effects. |
-| **Correct-by-Construction** | CALM guard enforces the invariant structurally. BSP can't silently drop topology. |
-| **Decomplection** | Value propagation and topology construction are separated into distinct strata. |
-| **Completeness** | We fix the root cause (stratified topology) rather than working around it (reverting BSP). |
+| Principle | Challenge | Response |
+|-----------|-----------|----------|
+| **Propagator-Only** | Are decomposition requests truly on-network, or are we just moving the side effect one level up? | Yes — requests are cell values with a lattice (set-union). The topology stratum reads them via `net-cell-read`. Everything flows through cells. |
+| **Data Orientation** | The request struct carries metadata (desc, relation) that could go stale. | Topology stratum re-reads cell values at processing time. Metadata (desc, relation) is immutable. |
+| **Correct-by-Construction** | Can a request be processed twice? Can a request reference a nonexistent cell? | Guard: `net-pair-decomp?` prevents double processing. Cell-ids in requests are guaranteed to exist (they were valid at emission time and cells are never removed). |
+| **Decomplection** | Value propagation and topology construction are now in separate strata. But the topology stratum handler must know about SRE and narrowing. Is that a coupling? | Yes, but it's the same coupling as S(-1) knowing about retraction. The topology handler dispatches by `kind` field. New topology sources register handlers. |
+| **Completeness** | We're fixing the root cause (stratified topology) rather than working around it (structural diff in BSP). | Confirmed. Option D (structural diff) was explicitly rejected — it fixes the symptom but leaves fire functions unrestricted. |
+| **First-Class by Default** | Is the decomp-request protocol a first-class construct, or a special case? | Currently special-case (one specific cell). Could be generalized: any propagator can request topology changes via a typed request protocol. That's PAR Track 2+ territory. |
+
+---
+
+## §13 Cross-References
+
+- [PAR Track 0 CALM Audit](2026-03-27_PAR_TRACK0_CALM_AUDIT.md)
+- [PAR Track 1 Stage 2 Audit](2026-03-27_PAR_TRACK1_STAGE2_AUDIT.md)
+- [PAR Series Master](2026-03-27_PAR_MASTER.md)
+- [DEVELOPMENT_LESSONS.org](principles/DEVELOPMENT_LESSONS.org) § "CALM Requires Fixed Topology"
+- BSP scheduler: propagator.rkt lines 1193-1232
+- CALM guard: propagator.rkt `current-bsp-fire-round?` (commit `af35f5e`)
+- [Parallel Scheduling Research](../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md)
