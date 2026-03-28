@@ -10,7 +10,7 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Pre-0 benchmarks: tail analysis + per-test timing | ✅ | 32.3% idle, LPT → 22.5% improvement |
-| 1 | Work-stealing queue + historical sort | ⬜ | ~30 lines |
+| 1 | Work-stealing queue + historical sort | ✅ | `ad72c0e` — 150s→133s (11.3%) |
 | 2 | Per-test splitting for slow files | ⬜ | Scope depends on Phase 0 data |
 | 3 | A/B benchmark: work-stealing vs round-robin | ⬜ | |
 | 4 | PIR + tracker + dailies | ⬜ | |
