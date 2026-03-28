@@ -332,24 +332,55 @@ The eval-rhs audit (`6eeb73b`) found:
 
 Therefore: `net-new-cell` during BSP fire rounds is **CALM-safe**. `net-add-propagator` is **CALM-unsafe**.
 
-### BSP Implementation Concern
+### D.3 Correct-by-Construction Cell Capture
 
-BSP's `fire-and-collect-writes` diffs only declared output cells. A newly created cell is not in `propagator-outputs`, so its value isn't captured. **BUT**: the cell-id appears in a term-ctor written to a declared output cell. BSP captures that write. The cell itself exists in the fire function's returned `result-net`.
+**Concern (D.3 critique)**: D.2's "net-new-cell is CALM-safe" is a property that holds today but isn't structurally enforced. If someone later adds a propagator that iterates all cells, or uses cell count for termination, the argument breaks silently. Relying on "cells without dependents are safe" is maintained-by-discipline, not correct-by-construction.
 
-**The fix**: `fire-and-collect-writes` must diff the full cell CHAMP, not just declared outputs. New cells appear as new keys in the CHAMP. This is a small change (~5 lines in `bulk-merge-writes`).
+**Structural approach**: Fire functions may call `net-new-cell` normally (no API change to eval-rhs). But BSP's merge phase **explicitly captures** new cells rather than relying on a full CHAMP diff. It compares `next-cell-id` before and after the fire:
 
-### D.2 Design Decision
+```
+snapshot-next-id = (prop-network-next-cell-id snapshot)
+result-next-id  = (prop-network-next-cell-id result-net)
 
-- `net-new-cell`: **ALLOWED** during BSP fire rounds (CALM-safe)
-- `net-add-propagator`: **ERROR** during BSP fire rounds (CALM-unsafe)
-- `fire-and-collect-writes`: **EXPANDED** to diff full cell CHAMP (captures new cells)
-- `eval-rhs`: **NO REFACTORING NEEDED** — continues to work as-is under BSP
+if result-next-id > snapshot-next-id:
+  ;; Fire function created cells. Extract them by id range.
+  for id in [snapshot-next-id .. result-next-id):
+    extract cell from result-net → apply to canonical network
+```
 
-This eliminates Phase 3's most complex refactoring (eval-rhs). The branch fire function still needs request emission (it calls `net-add-propagator`). The rule fire function works unchanged.
+This is structurally enforced:
+- No full CHAMP diff needed (O(new cells), not O(all cells))
+- New cells are explicitly enumerated — can't be "sneaked" through an unchecked path
+- The fire function doesn't need any API change — it calls `net-new-cell` as before
+- BSP's merge is the enforcement point, not the fire function's code
+
+**Implementation**: ~10 lines in `fire-and-collect-writes`. Compare `next-cell-id` counters, extract cells with ids in the gap.
+
+### D.3 Registry Dedup Strategy
+
+**Problem**: SRE fire functions currently call `net-pair-decomp-insert` to record decomposed pairs in `cold.pair-decomps`. Under BSP, these registry writes are dropped (BSP only diffs `warm.cells`). Result: stale snapshot → duplicate requests.
+
+**Resolution**: Under the stratified topology design, fire functions emit requests — they don't decompose or write registries. The topology stratum owns all registry state:
+
+1. **Fire function**: Emits request. Does NOT check `pair-decomps`. Does NOT write registries. Maximally simple: "I see compound types → emit request."
+2. **Topology stratum**: Checks `pair-decomps` before processing. Skips already-decomposed pairs. Writes `pair-decomps` after processing. **Single source of truth.**
+3. **Duplicate requests are harmless**: Set-union merge in the request cell deduplicates by `pair-key`. Even if two fire functions emit the same request, the set contains it once. The topology stratum processes it once.
+
+This eliminates the registry staleness concern entirely. Fire functions are pure (reads + value/cell writes only). The topology stratum owns all topology state AND all registry state.
+
+### D.3 Design Decision (Revised from D.2)
+
+| Operation | During BSP fire round | Rationale |
+|-----------|----------------------|-----------|
+| `net-new-cell` | **ALLOWED** — captured via next-cell-id comparison | Structurally enforced by BSP merge |
+| `net-add-propagator` | **ERROR** | Changes scheduling topology — CALM-unsafe |
+| `net-pair-decomp-insert` | **NOT CALLED** from fire functions | Moved to topology stratum (single source of truth) |
+| `net-cell-decomp-insert` | **NOT CALLED** from fire functions | Moved to topology stratum |
+| `eval-rhs` | **NO REFACTORING** | Continues as-is; new cells captured structurally |
 
 ### Phase 0b Validation
 
-Still needed: run narrowing tests under BSP with relaxed guard to confirm the expanded CHAMP diff captures new cells correctly.
+Still needed: run narrowing tests under BSP with next-cell-id capture to confirm new cells are correctly propagated.
 
 ---
 
@@ -678,14 +709,14 @@ Specific changes:
 
 ### Phase 6: CALM Guard Hardening
 
-**What**: Finalize guard behavior for production based on D.2 audit findings.
+**What**: Finalize guard behavior for production based on D.3 analysis.
 **Lines**: ~10
 
-Guard behavior (D.2 revised — based on scheduling topology analysis):
+Guard behavior (D.3 revised — correct-by-construction):
 - `net-add-propagator`: **ERROR** during BSP fire rounds (changes scheduling topology — CALM-unsafe)
-- `net-new-cell`: **ALLOWED** during BSP fire rounds (no scheduling effect — cells without dependents are inert)
-- `net-cell-decomp-insert`, `net-pair-decomp-insert`: **ALLOWED** during BSP fire rounds (registry metadata, not scheduling topology)
-- Document the CALM contract in propagator.rkt header: "The CALM invariant is: fixed scheduling topology within a BSP round. Scheduling topology = the set of (propagator, input-cells, output-cells) triples. Cell creation and metadata writes are permitted; propagator creation is not."
+- `net-new-cell`: **ALLOWED** during BSP fire rounds. New cells captured structurally via `next-cell-id` comparison in `fire-and-collect-writes`. No discipline required — BSP merge is the enforcement point.
+- `net-cell-decomp-insert`, `net-pair-decomp-insert`: **NOT CALLED** from fire functions (moved to topology stratum). If called during BSP fire round: **WARNING** (not error — harmless but indicates design drift).
+- Document the CALM contract in propagator.rkt header: "The CALM invariant is: fixed scheduling topology within a BSP round. Scheduling topology = the set of (propagator, input-cells, output-cells) triples. Cell creation is permitted and captured structurally. Registry writes belong to the topology stratum. Propagator creation is forbidden."
 
 **Completion**: commit → tracker → dailies → proceed.
 
