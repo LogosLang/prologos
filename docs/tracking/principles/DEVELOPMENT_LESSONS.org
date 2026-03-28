@@ -433,3 +433,64 @@ reveals the next. The audit ("how many closure categories ARE there?")
 broke the cycle.
 
 See [[file:../2026-03-25_PM_TRACK10_PIR.md][PM Track 10 PIR]] and [[file:../research/2026-03-24_SELF_DESCRIBING_SERIALIZATION.md][Self-Describing Serialization Research]].
+
+** CALM Requires Fixed Topology — Dynamic Topology Requires Stratification
+
+The CALM theorem (Consistency As Logical Monotonicity) guarantees that
+monotone computations over a *fixed* lattice converge to the same
+fixpoint regardless of evaluation order. This is the theoretical
+foundation for BSP scheduling, parallelism, and order-independent
+propagation. The key word is FIXED.
+
+If a propagator's fire function creates new cells or propagators
+(dynamic topology), the lattice itself changes during computation.
+CALM says nothing about convergence over a changing lattice. In
+practice, BSP scheduling silently drops structural changes (new
+cells, propagators) because =fire-and-collect-writes= only diffs cell
+VALUES. The structural changes exist in the returned network but are
+discarded during bulk merge. This produces wrong results — not errors,
+not crashes, just silently wrong answers.
+
+*Discovered in*: BSP scheduler vs SRE subtype decomposition.
+=sre-decompose-generic= creates sub-cells and sub-propagators inside
+fire functions. Under DFS, this works because the full returned
+network is used. Under BSP, the structural changes are lost:
+=PVec Int <: PVec Nat= returned =true= (should be =false=) because
+the decomposition that would detect the violation never materialized.
+
+*The invariant*: Within a stratum, the network topology is FIXED.
+Propagator fire functions may only write cell values
+(=net-cell-write=). Creating cells (=net-new-cell=) or propagators
+(=net-add-propagator=) requires a stratum boundary. A dynamic guard
+(=current-bsp-fire-round?=) enforces this — violation produces an
+immediate error rather than a silent wrong result.
+
+*The architectural pattern*: Separate two fixpoints.
+1. *Topology fixpoint*: what cells and propagators exist. The set of
+   cells/propagators grows monotonically (a lattice under subset
+   ordering). Topology changes are processed in a dedicated stratum.
+2. *Value fixpoint*: what values cells hold. BSP-safe, parallelizable,
+   order-independent. Runs within a stratum over the fixed topology.
+
+The cycle: value stratum (BSP) → topology stratum (sequential:
+process decomposition requests, create cells/propagators) → value
+stratum (BSP over expanded topology) → repeat until neither changes.
+
+*Implications*:
+- *SRE decomposition*: Must emit decomposition REQUESTS as cell
+  values, not directly create cells/propagators. A topology stratum
+  reads requests and builds structure.
+- *Hypergraph rewriting (PPN, PRN)*: Rewrite rules that add nodes or
+  edges are topology changes. They must be stratified — rewrite
+  application in one stratum, value propagation in the next.
+- *Tabling/memoization*: If tabling creates new cells for cached
+  results, that's a topology change requiring stratification.
+- *Any future construct* that dynamically extends the network: the
+  CALM guard will catch it at the API level, preventing silent
+  incorrectness.
+
+This is the Correct-by-Construction principle applied to scheduling:
+the guard makes the invariant structural (error on violation) rather
+than maintained by discipline (hoping fire functions don't add cells).
+
+See commit =af35f5e= (CALM topology guard implementation).
