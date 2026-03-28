@@ -119,6 +119,7 @@
  decomp-request-cell-id
  register-topology-handler!
  net-cell-reset
+ (struct-out callback-topology-request)
  ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
  net-cell-read-raw
  ;; Track 6 Phase 2+3: Network-wide TMS commit
@@ -222,6 +223,14 @@
    rhs         ;; expr (opaque — the RHS expression)
    bindings    ;; (listof cell-id) — binding cells to read
    result-cell) ;; cell-id — where to write the final term
+  #:transparent)
+
+;; Generic callback topology request: for fire functions that call opaque
+;; install callbacks (e.g., constraint-propagators install-fn).
+;; The topology stratum calls the callback outside the BSP fire round.
+(struct callback-topology-request
+  (callback    ;; (prop-network → prop-network) — the topology-creating function
+   pair-key)   ;; dedup key
   #:transparent)
 
 ;; Decomp-request cell merge: set-union. Bot: empty set.
@@ -1363,6 +1372,17 @@
         net  ;; No handler matched — return net unchanged
         (let ([result ((car handlers) net req)])
           (if result result (loop (cdr handlers)))))))
+
+;; PAR Track 1: Built-in handler for callback-topology-request.
+;; Calls the opaque callback outside BSP fire rounds.
+(register-topology-handler!
+ (lambda (net req)
+   (and (callback-topology-request? req)
+        (let ([pair-key (callback-topology-request-pair-key req)])
+          (if (net-pair-decomp? net pair-key)
+              net  ;; Already processed — dedup
+              (let ([net* ((callback-topology-request-callback req) net)])
+                (net-pair-decomp-insert net* pair-key)))))))
 
 ;; BSP run-to-quiescence: two-fixpoint loop (D.4 stratified topology).
 ;; Outer loop: alternates value stratum (BSP rounds) and topology stratum.

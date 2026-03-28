@@ -17,8 +17,10 @@
 ;;;
 
 (require racket/list
+         racket/set
          "propagator.rkt"
          "type-lattice.rkt"
+         (only-in "sre-core.rkt" sre-equality)  ;; PAR Track 1: for request emission
          "mult-lattice.rkt"
          "prelude.rkt"       ;; P5c: mult-meta? for Pi mult extraction
          "champ.rkt"
@@ -845,20 +847,28 @@
     [(not tag) net]  ;; Not a compound type — nothing to decompose
     [else
      (define pair-key (decomp-key cell-a cell-b))
-     (cond
-       [(net-pair-decomp? net pair-key) net]  ;; Already decomposed for this pair
-       [else
-        (case tag
-          ;; Binder + mult types: keep existing decomposers
-          [(Pi)    (decompose-pi    net cell-a cell-b va vb unified pair-key)]
-          [(Sigma) (decompose-sigma net cell-a cell-b va vb unified pair-key)]
-          [(lam)   (decompose-lam   net cell-a cell-b va vb unified pair-key)]
-          ;; All other registered types: generic descriptor-driven decompose
-          [else
-           (define desc (lookup-ctor-desc tag #:domain 'type))
-           (if (and desc (= (ctor-desc-binder-depth desc) 0))
-               (decompose-generic net cell-a cell-b va vb unified pair-key desc)
-               net)])])]))
+     ;; PAR Track 1 D.4: dual-path BSP/DFS
+     (if (current-bsp-fire-round?)
+         ;; BSP: emit decomposition request (topology stratum processes)
+         (net-cell-write net decomp-request-cell-id
+                         (set (sre-decomp-request pair-key
+                                                  #f  ;; no SRE domain — elaborator path
+                                                  cell-a cell-b
+                                                  sre-equality  ;; equality relation
+                                                  '())))
+         ;; DFS: decompose inline (unchanged)
+         (cond
+           [(net-pair-decomp? net pair-key) net]
+           [else
+            (case tag
+              [(Pi)    (decompose-pi    net cell-a cell-b va vb unified pair-key)]
+              [(Sigma) (decompose-sigma net cell-a cell-b va vb unified pair-key)]
+              [(lam)   (decompose-lam   net cell-a cell-b va vb unified pair-key)]
+              [else
+               (define desc (lookup-ctor-desc tag #:domain 'type))
+               (if (and desc (= (ctor-desc-binder-depth desc) 0))
+                   (decompose-generic net cell-a cell-b va vb unified pair-key desc)
+                   net)])]))]))
 
 ;; Structural unify propagator: replacement for make-unify-propagator.
 ;; Same merge logic, but after writing unified values, triggers structural
@@ -1036,3 +1046,35 @@
     (elab-network-meta-info enet))
    pid-alpha
    pid-gamma))
+
+;; ========================================================================
+;; PAR Track 1: Elaborator-network topology handler (self-registering)
+;; ========================================================================
+;; Handles sre-decomp-request with domain=#f (elaborator path, not SRE).
+;; Calls the same decomposition functions as the DFS maybe-decompose path.
+(register-topology-handler!
+ (lambda (net req)
+   (and (sre-decomp-request? req)
+        (not (sre-decomp-request-domain req))  ;; domain=#f → elaborator path
+        (let ([pair-key (sre-decomp-request-pair-key req)]
+              [cell-a (sre-decomp-request-cell-a req)]
+              [cell-b (sre-decomp-request-cell-b req)])
+          (if (net-pair-decomp? net pair-key)
+              net  ;; Already processed — dedup
+              ;; Re-read cell values and decompose
+              (let* ([va (net-cell-read net cell-a)]
+                     [vb (net-cell-read net cell-b)]
+                     [unified (type-lattice-merge va vb)])
+                (if (type-top? unified)
+                    (net-cell-write net cell-a type-top)
+                    (let ([tag (type-constructor-tag unified)])
+                      (if (not tag) net
+                          (case tag
+                            [(Pi)    (decompose-pi    net cell-a cell-b va vb unified pair-key)]
+                            [(Sigma) (decompose-sigma net cell-a cell-b va vb unified pair-key)]
+                            [(lam)   (decompose-lam   net cell-a cell-b va vb unified pair-key)]
+                            [else
+                             (let ([desc (lookup-ctor-desc tag #:domain 'type)])
+                               (if (and desc (= (ctor-desc-binder-depth desc) 0))
+                                   (decompose-generic net cell-a cell-b va vb unified pair-key desc)
+                                   net))]))))))))))

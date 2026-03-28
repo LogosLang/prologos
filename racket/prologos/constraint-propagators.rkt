@@ -18,6 +18,7 @@
 ;;;
 
 (require racket/string
+         racket/set
          "constraint-cell.rkt"
          "global-env.rkt"
          "macros.rkt"
@@ -271,7 +272,15 @@
    (lambda (n)
      (define cv (net-cell-read n constraint-cell))
      (if (constraint-one? cv)
-         (install-fn n (constraint-one-candidate cv))
+         ;; PAR Track 1 D.4: dual-path BSP/DFS
+         (if (current-bsp-fire-round?)
+             ;; BSP: emit callback request (topology stratum calls install-fn)
+             (net-cell-write n decomp-request-cell-id
+                             (set (callback-topology-request
+                                   (lambda (net2) (install-fn net2 (constraint-one-candidate cv)))
+                                   (list 'constraint-method constraint-cell))))
+             ;; DFS: call install-fn inline (unchanged)
+             (install-fn n (constraint-one-candidate cv)))
          n))))
 
 ;; P4: Result → Constraint
