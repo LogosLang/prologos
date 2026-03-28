@@ -13,11 +13,11 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Submodule validation experiment | ✅ | PREMATURE. 20 cells, 0 propagators. Constraint solving is imperative. Revisit after PPN/SRE migration. |
-| 1 | Residuation computability check | ⬜ | ~2h. Manual residual computation on 3-4 narrowing examples |
-| 2 | Decision gate: interpret findings | ⬜ | Findings from 0-1 determine scope of 3-5 |
+| 1 | Residuation computability check | ✅ | PARTIAL. Works for first-order pattern match. Equal cost for recursive. Cheaper for non-matching rejection. |
+| 2 | Decision gate: interpret findings | ✅ | Phase 3 proceeds. Phase 4 deferred (modest ROI until larger ADTs). Phase 5 deferred (Phase 0). |
 | 3 | SRE algebraic-kind annotation | ⬜ | ~3h. Add kind derivation to ctor-desc. Generic decomposition. |
-| 4 | Residuation prototype (if Phase 1 confirms) | ⬜ | Scope TBD by Phase 1 findings |
-| 5 | Submodule-informed architecture review (if Phase 0 reveals gaps) | ⬜ | Scope TBD by Phase 0 findings |
+| 4 | Residuation prototype | ⏸️ | DEFERRED. Modest ROI for current programs. Revisit when larger ADTs or automatic backward propagators needed. |
+| 5 | Submodule architecture review | ⏸️ | DEFERRED. Network lacks propagator density. Revisit after PPN/SRE migration. |
 | 6 | Synthesis: update PTF Master + PRN + design principles | ⬜ | Capture confirmed/refuted conjectures |
 | 7 | PIR | ⬜ | |
 
@@ -105,6 +105,33 @@ For typical programs, these don't fire (no compound subtyping, no delayed constr
 - This phase is MANUAL — pen-and-paper (or comment-block) computation, not code
 - The point is to understand the algebraic structure before committing to implementation
 - If the manual computation reveals that residuation requires information not available in the current narrowing context (e.g., it needs the full definitional tree, not just the current branch), that shapes Phase 4's scope
+
+---
+
+### Phase 1 Findings (commit `e5d2af6`)
+
+Four narrowing examples traced through both current narrowing and structural residuation:
+
+| Example | Narrowing | Residuation | Same answer? | Cheaper? |
+|---------|-----------|-------------|-------------|----------|
+| `not(?) = true` | 2 tries, 1 backtrack | 2 clause checks | ✓ | Equal |
+| `add(?, ?) = 0` | 2 tries + sub-search | 2 clause checks | ✓ | **Yes** (no reduction) |
+| `add(?, ?) = 3` | 4 recursive branches | 4 recursive residuals | ✓ | Equal (recursive) |
+| `pred(?) = zero` | 2 tries, 1 fail | 2 clause checks | ✓ | Slightly |
+
+**Confirmed**: Residuation is computable for first-order, constructor-based pattern matching — exactly the definitional tree fragment.
+
+**Where residuation wins**: Non-matching cases. Residuation checks RHS constructor head against target — O(1) rejection. Narrowing evaluates the function first — O(reduction) rejection. For types with many constructors where few match, residuation is significantly cheaper.
+
+**Where residuation equals narrowing**: Recursive cases. Both do the same structural decomposition (peel target, recurse on sub-terms). Same tree of sub-problems.
+
+**Boundary**: Residuation does NOT extend to higher-order functions (inverse beta-reduction is undecidable), guarded/conditional functions (requires inverting arbitrary guards), or non-injective functions (residual is ⊤, not useful for search).
+
+**Architectural implications**:
+1. Existing bidirectional propagators (infer/check) ARE computing residuals — the theory validates what we already do.
+2. Residuation gives a formal correctness argument: backward direction = unique greatest pre-image under lattice ordering.
+3. Automatic backward propagators (derive residual from forward definition) are feasible for the definitional-tree fragment.
+4. Implementation deferred — modest ROI for current programs. Becomes valuable with larger ADTs or when building automatic backward propagator infrastructure.
 
 ---
 
