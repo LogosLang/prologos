@@ -32,6 +32,7 @@
 
 (require racket/match
          racket/list
+         racket/set
          "propagator.rkt"
          "term-lattice.rkt"
          "definitional-tree.rkt"
@@ -238,12 +239,17 @@
       [(term-ctor tag sub-cells)
        (define child-entry (assq tag children))
        (if child-entry
-           ;; Found matching branch — extend bindings with sub-cells
-           ;; and recursively install propagators for the child subtree.
-           ;; Sub-cells are prepended to bindings (de Bruijn: newest first).
            (let ([child-tree (cdr child-entry)]
                  [new-bindings (append (reverse sub-cells) bindings)])
-             (install-narrowing-propagators net child-tree arg-cells result-cell new-bindings))
+             ;; PAR Track 1 D.4: dual-path BSP/DFS
+             (if (current-bsp-fire-round?)
+                 ;; BSP: emit topology request
+                 (net-cell-write net decomp-request-cell-id
+                                 (set (narrowing-branch-request
+                                       (list 'narrow-branch watched-cell pos)
+                                       child-tree arg-cells result-cell new-bindings)))
+                 ;; DFS: install inline (unchanged)
+                 (install-narrowing-propagators net child-tree arg-cells result-cell new-bindings)))
            ;; No matching constructor in the tree — exempt (partial function)
            (net-cell-write net result-cell term-top))]
 
@@ -282,11 +288,18 @@
     ;; If any binding is still bot, residuate
     (if (ormap term-bot? binding-vals)
         net
-        ;; All bindings determined — evaluate RHS
-        (let-values ([(net1 result-term) (eval-rhs rhs bindings net)])
-          (if (term-bot? result-term)
-              net1  ;; couldn't evaluate — residuate
-              (net-cell-write net1 result-cell result-term))))))
+        ;; PAR Track 1 D.4: dual-path BSP/DFS
+        (if (current-bsp-fire-round?)
+            ;; BSP: emit rule-eval request (topology stratum calls eval-rhs)
+            (net-cell-write net decomp-request-cell-id
+                            (set (narrowing-rule-request
+                                  (list 'narrow-rule result-cell (length bindings))
+                                  rhs bindings result-cell)))
+            ;; DFS: evaluate inline (unchanged)
+            (let-values ([(net1 result-term) (eval-rhs rhs bindings net)])
+              (if (term-bot? result-term)
+                  net1
+                  (net-cell-write net1 result-cell result-term)))))))
 
 ;; eval-rhs : expr × (listof cell-id) × prop-network → (values prop-network term-value)
 ;;
