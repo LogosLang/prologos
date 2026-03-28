@@ -1,0 +1,83 @@
+;; scheduler-adversarial.prologos — PAR Track 1 Phase 0a
+;;
+;; Adversarial benchmark for BSP scheduler overhead.
+;; Exercises: deep type nesting, wide compound types, mixed
+;; decomposition + constraint resolution, narrowing + SRE together,
+;; and pure computation (no decomposition baseline).
+
+ns sched-adv
+
+;; ─── A1: Deep Compound Type Nesting (Topology Ping-Pong) ───
+;; Each Option/List nesting level may trigger decomposition.
+;; Tests: maximum topology→value→topology rounds.
+
+spec deep-id (Option (Option (Option (Option Nat)))) -> (Option (Option (Option (Option Nat))))
+defn deep-id [x] x
+
+def deep-val := some (some (some (some 42N)))
+eval [deep-id deep-val]
+
+;; ─── A2: Wide Compound Type (Many Simultaneous Decompositions) ───
+;; Pair nesting: each level has 2 sub-cells.
+
+spec wide-fst (Pair (Pair Nat Bool) (Pair Int String)) -> (Pair Nat Bool)
+defn wide-fst [p] [fst p]
+
+def wide-val := (pair (pair 1N true) (pair 2 "hello"))
+eval [wide-fst wide-val]
+
+;; ─── A3: Mixed Decomposition + Constraint Resolution ───
+;; Polymorphic function: implicit resolution interleaves with type checking.
+;; Trait resolution (S1) may fire between type decomposition rounds.
+
+spec poly-map {A B : Type} [A -> B] (List A) -> (List B)
+defn poly-map [f xs]
+  match xs
+    | nil -> nil
+    | cons h t -> cons [f h] [poly-map f t]
+
+eval [poly-map [fn [x : Nat] [nat+ x 1N]] '[1N 2N 3N]]
+
+;; ─── A4: Narrowing + Decomposition Together ───
+;; Pattern matching (narrowing) on compound types (SRE).
+;; Both CALM violators active simultaneously.
+
+spec sum-options (List (Option Nat)) -> Nat
+defn sum-options [xs]
+  match xs
+    | nil -> 0N
+    | cons h t ->
+      match h
+        | none   -> [sum-options t]
+        | some n -> [nat+ n [sum-options t]]
+
+eval [sum-options (cons (some 1N) (cons none (cons (some 2N) nil)))]
+
+;; ─── A5: No-Decomposition Baseline (Pure Scheduling Overhead) ───
+;; Heavy computation, zero decomposition.
+;; Many propagator firings, zero topology changes.
+;; This measures PURE BSP vs DFS overhead.
+
+spec fib Nat -> Nat
+defn fib
+  | zero -> zero
+  | suc zero -> suc zero
+  | suc (suc n) -> [nat+ [fib n] [fib [suc n]]]
+
+eval [fib 5N]
+
+;; ─── A6: Many small commands (quiescence call overhead) ───
+;; Each def/eval is a separate quiescence call.
+;; 20 commands = 20 quiescence calls, amplifying per-call overhead.
+
+def x1 := [nat+ 1N 2N]
+def x2 := [nat+ x1 3N]
+def x3 := [nat+ x2 4N]
+def x4 := [nat+ x3 5N]
+def x5 := [nat+ x4 6N]
+def x6 := [nat+ x5 7N]
+def x7 := [nat+ x6 8N]
+def x8 := [nat+ x7 9N]
+def x9 := [nat+ x8 10N]
+def x10 := [nat+ x9 11N]
+eval x10
