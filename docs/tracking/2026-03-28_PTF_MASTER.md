@@ -4,11 +4,11 @@
 **Purpose**: Theoretical underpinnings of propagator networks — what propagators ARE, how they compose, and their parallel profiles. Informs both NTT (syntax/description) and runtime scheduling.
 
 **Relationship to other series**:
-- **PRN** (Propagator-Rewriting-Network): How propagators rewrite — hypergraph grammars, e-graphs, tree rewriting
-- **NTT** (Network Type Theory): How propagators are described — syntax, type declarations, network specifications
+- **[PRN](2026-03-26_PRN_MASTER.md)** (Propagator-Rewriting-Network): How propagators rewrite — hypergraph grammars, e-graphs, tree rewriting
+- **[NTT](2026-03-22_NTT_SYNTAX_DESIGN.md)** (Network Type Theory): How propagators are described — syntax, type declarations, network specifications
 - **PTF** (this series): What propagators are — kinds, composition patterns, parallel profiles, lattice morphology
-- **PAR** (Parallel Scheduling): Runtime scheduling informed by PTF theory
-- **PPN** (Propagator-Parsing-Network): Application track that exercises PTF patterns
+- **[PAR](2026-03-27_PAR_MASTER.md)** (Parallel Scheduling): Runtime scheduling informed by PTF theory
+- **[PPN](2026-03-26_PPN_MASTER.md)** (Propagator-Parsing-Network): Application track that exercises PTF patterns
 
 ---
 
@@ -16,15 +16,17 @@
 
 | # | Document | Date | Status | Key Contribution |
 |---|----------|------|--------|-----------------|
-| 0 | [Propagator Taxonomy — Parallel Profiles](2026-03-28_PROPAGATOR_TAXONOMY.md) | 03-28 | Draft | 5 propagator kinds (Map, Reduce, Broadcast, Scatter, Gather), 3 compound patterns, array programming connection |
+| 0 | [Propagator Network Taxonomy](../research/2026-03-21_PROPAGATOR_NETWORK_TAXONOMY.md) | 03-21 | Complete | Foundations survey: Radul, Kmett, Kuper LVars, category theory, lattice taxonomy, diagrammatic formalisms |
+| 1 | [Propagator Taxonomy — Parallel Profiles](../research/2026-03-28_PROPAGATOR_TAXONOMY.md) | 03-28 | Draft | 5 propagator kinds (Map, Reduce, Broadcast, Scatter, Gather), 3 compound patterns, array programming connection |
 
-## Existing Related Work (to be integrated)
+## Related Work (cross-linked)
 
-- **NTT Syntax Design** (`docs/research/` or design docs) — `:lattice`, `:propagator`, `:cell` declarations. PTF adds `:kind` annotations.
-- **Hyperlattice Conjecture** (`docs/research/2026-03-26_LATTICE_FOUNDATIONS.md`) — "Any computation as fixpoint over interconnected lattice structures." PTF describes the morphology (shapes of interconnections).
-- **CALM Topology Lesson** (`docs/tracking/principles/DEVELOPMENT_LESSONS.org`) — Fixed topology for CALM correctness. PTF's Scatter kind (topology-creating) is the exception that requires stratification.
-- **PPN Track 1 Set-Latch** — The Reduce/Barrier pattern discovered in practice. PTF formalizes it.
-- **PAR Track 2 Stress Tests** — Empirical parallel profiles (fan-out vs chain). PTF explains why.
+- **[NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md)** — `:lattice`, `:propagator`, `:cell` declarations. PTF adds `:kind` annotations.
+- **[Lattice Foundations / Hyperlattice Conjecture](../research/2026-03-26_LATTICE_FOUNDATIONS.md)** — "Any computation as fixpoint over interconnected lattice structures." PTF describes the morphology (shapes of interconnections).
+- **[Parallel Propagator Scheduling](../research/2026-03-28_PARALLEL_PROPAGATOR_SCHEDULING.md)** — Racket 9 landscape, Soufflé, Timely Dataflow. PTF kinds inform scheduling decisions.
+- **[CALM Topology Lesson](principles/DEVELOPMENT_LESSONS.org)** — Fixed topology for CALM correctness. PTF's Scatter kind (topology-creating) is the exception that requires stratification.
+- **[PPN Track 1 Design](2026-03-26_PPN_TRACK1_DESIGN.md)** — Set-latch pattern = Reduce/Barrier kind. Parse pipeline = Map-Reduce-Broadcast.
+- **[PAR Track 1 PIR](2026-03-28_PAR_TRACK1_PIR.md)** — BSP structural propagator capture. Empirical parallel profiles (fan-out vs chain).
 
 ---
 
