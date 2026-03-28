@@ -416,33 +416,7 @@
     (define fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
     (global-env-remove! fqn)))
 
-;; PAR Track 1: SRE topology handler (registered at module load time).
-;; driver.rkt imports sre-core.rkt and can access sre-decompose-generic.
-(register-topology-handler!
- (lambda (net req)
-   (and (sre-decomp-request? req)
-        (let ([pair-key (sre-decomp-request-pair-key req)])
-          (if (net-pair-decomp? net pair-key)
-              net  ;; Already processed — dedup
-              (let* ([domain (sre-decomp-request-domain req)]
-                     [cell-a (sre-decomp-request-cell-a req)]
-                     [cell-b (sre-decomp-request-cell-b req)]
-                     [relation (sre-decomp-request-relation req)]
-                     [va (net-cell-read net cell-a)]
-                     [vb (net-cell-read net cell-b)]
-                     [bot? (sre-domain-bot? domain)])
-                (if (or (bot? va) (bot? vb))
-                    net
-                    ;; Derive lhs based on relation direction (subtype vs subtype-reverse)
-                    (let* ([rel-name (sre-relation-name relation)]
-                           [reversed? (eq? rel-name 'subtype-reverse)]
-                           [lhs (if reversed? vb va)]
-                           [tag (sre-constructor-tag domain lhs)]
-                           [desc (and tag (lookup-ctor-desc tag #:domain (sre-domain-name domain)))])
-                      (if (not desc)
-                          net
-                          (sre-decompose-generic net domain cell-a cell-b va vb lhs
-                                                 pair-key desc #:relation relation))))))))))
+;; PAR Track 1: SRE topology handler moved to sre-core.rkt (self-registering).
 
 ;; Returns a result string, or a prologos-error.
 ;; Side effect: may update current-prelude-env for 'def'.
