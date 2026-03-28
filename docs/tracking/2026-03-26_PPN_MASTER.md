@@ -256,6 +256,10 @@ PPN consumes from PRN:
 - Fixpoint termination guarantees
 - Cost-weighted rule selection (tropical)
 
+### Module Theory ↔ PPN
+
+[Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md): PPN domains form a filtration (Token ⊆ Surface ⊆ Core). Cross-level bridges are module homomorphisms. Parse ambiguity = quotient-module extraction.
+
 ## 4. Research: Lossy Bidirectional Typed Grammars
 
 ### The DCG Insight

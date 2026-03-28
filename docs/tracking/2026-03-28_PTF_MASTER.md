@@ -27,6 +27,7 @@
 - **[CALM Topology Lesson](principles/DEVELOPMENT_LESSONS.org)** — Fixed topology for CALM correctness. PTF's Scatter kind (topology-creating) is the exception that requires stratification.
 - **[PPN Track 1 Design](2026-03-26_PPN_TRACK1_DESIGN.md)** — Set-latch pattern = Reduce/Barrier kind. Parse pipeline = Map-Reduce-Broadcast.
 - **[PAR Track 1 PIR](2026-03-28_PAR_TRACK1_PIR.md)** — BSP structural propagator capture. Empirical parallel profiles (fan-out vs chain).
+- **[Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md)** — Propagator kinds gain algebraic grounding. Map = monotone endomorphism. Reduce = meet. Independent sub-ring elements commute = parallel-safe.
 
 ---
 

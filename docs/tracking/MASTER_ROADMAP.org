@@ -578,6 +578,12 @@ See =docs/research/= for the full set.
 | [[file:../research/2026-03-26_TREE_REWRITING_STRUCTURAL_UNIFICATION.md][Tree Rewriting = Structural Unification]] | 2026-03-26 | 0 | SRE Track 2D (rewrite relation) |
 | [[file:../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md][Parallel Propagator Scheduling]] | 2026-03-26 | 0-1 | PAR Series, BSP-LE Track 4 |
 
+** Cross-Cutting Theory
+
+| Document | Date | Scope |
+|----------+------+-------|
+| [[file:../research/2026-03-28_MODULE_THEORY_LATTICES.md][Module Theory on Lattices]] | 2026-03-28 | Foundational algebraic framework: endomorphism rings, quotient modules (e-graphs), residuation. Cross-cuts PRN (rewriting formalism), SRE (relations as sub-rings), BSP-LE (e-graphs, ATMS), CIU (trait morphisms), PM (submodule decomposition), PAR (independence = parallelizability), PTF (propagator kind algebra), PPN (filtration, parse ambiguity). |
+
 ** Completed/Background Research
 
 | Document | Date | Relevance |

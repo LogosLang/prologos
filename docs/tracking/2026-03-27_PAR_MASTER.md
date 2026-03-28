@@ -126,3 +126,7 @@ PAR is cross-cutting — it affects the scheduling substrate that ALL series run
 - **PReductions**: E-graph saturation adds equality nodes → topology change
 - **BSP-LE**: ATMS hypothesis creation → topology change
 - **PM**: Network construction during elaboration → topology audit scope
+
+### Module Theory
+
+[Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md): Submodule independence = parallelizability. CALM = monotone endomorphism fixpoint. `:auto` heuristic has formal basis via submodule decomposition.

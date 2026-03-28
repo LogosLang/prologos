@@ -474,3 +474,9 @@ scheduling does when cells with new information fire their dependents.
 If the SRE generates network topology correctly (from type definitions, function
 definitions, and program structure), the generated network captures this optimality
 for every structural reasoning task. Each SRE track is a test of this conjecture.
+
+---
+
+## Research: Module Theory
+
+[Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md): Four SRE relations = four sub-rings of endomorphism ring (Krull-Schmidt canonical). Variance = algebraic kind. Duality hardness is algebraically fundamental (antitone mixing).

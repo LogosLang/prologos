@@ -573,3 +573,9 @@ Each track follows the established pattern:
 6. **Dailies/standup updates** — track progress in living documents
 
 The Layered Recovery Principle (demonstrated in Tracks 1 and 2): if a phase reveals unexpected complexity, the dual-write/shadow pattern allows safe retreat. Each phase must leave the system in a working state with all tests passing.
+
+---
+
+## Research: Module Theory
+
+[Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md): Each subsystem migrated is a submodule. Migration = computing direct sum decomposition. Migration order follows filtration.

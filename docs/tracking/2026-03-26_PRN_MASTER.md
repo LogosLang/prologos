@@ -195,6 +195,7 @@ as application tracks complete PIRs.
 | [FL-Narrowing Design](../research/2026-03-07_FL_NARROWING_DESIGN.org) | 2026-03-07 | Definitional trees, residuation-first, term lattice, needed narrowing | Strategy layer: DTs as optimal rewrite rule selection |
 | [Kan Extensions, ATMS, GFP Parsing](../research/2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md) | 2026-03-26 | Right Kan = NF-Narrowing demands, Left Kan + ATMS = 4-level search, GFP parsing bilattice, cross-network disambiguation | Deep structural connections between Kan extensions, ATMS, and parsing |
 | [Tree Rewriting as Structural Unification](../research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md) | 2026-03-26 | Macro rewriting IS SRE decompose+reconstruct. "Rewrite" as 4th SRE relation. Track 2 normalization = SRE rule registration + quiescence. | Unifies macro expansion with structural reasoning |
+| [Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md) | 2026-03-28 | Endomorphism ring decomposition, quotient modules (e-graphs), residuation | Foundational algebraic framework. Theory home for module-theoretic lens on rewriting |
 
 ## 7. Watching / Emerging Patterns
 

@@ -284,3 +284,9 @@ They share Track 8 as a common dependency. No direct inter-Series dependencies.
 3. **Backward compatibility during migration**: Tracks 3-4 must preserve existing behavior while transitioning dispatch. The `expr-get` fallback (retain constructor matching as backward compat) provides a migration path, but how long does it persist?
 
 4. **Performance benchmarking**: Trait-dispatched access adds a dict lookup where constructor matching is currently zero-cost. Benchmark comparison required after Tracks 3-4. The expectation: trait dispatch is one indirection, vs constructor matching which is pattern-match depth. Should be comparable, but needs measurement.
+
+---
+
+## Research: Module Theory
+
+[Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md): Collection traits are module morphisms. Seq protocol = homomorphism from container to abstract sequential module.
