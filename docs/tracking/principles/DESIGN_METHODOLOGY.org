@@ -163,9 +163,25 @@ This is an iterative cycle:
    can you point to the specific lines of code it changes? If not,
    the scope is speculative.
 5. *Respond*: Address critiques --- accept, refine, or justify
-6. *Self-Critique (D.4)*: Challenge against all 10 principles. Also
-   ask: does this design match what the codebase ACTUALLY does, or
-   does it design against a vision of what we WANT it to do?
+6. *Self-Critique (D.4)*: Two explicit lenses, both mandatory:
+
+   *Lens 1 — Principles Challenge*: Take each major design decision
+   and challenge it against the 10 load-bearing principles. Not
+   cataloguing ("✓ we use cells") but genuinely challenging: "could
+   this be MORE aligned? Is there a principle being violated that
+   we're rationalizing?" Red-flag phrases ("temporary bridge",
+   "keeping the old path") demand scrutiny. A decision that doesn't
+   clearly serve any principle should be questioned. A decision that
+   conflicts with a principle must name and justify the conflict.
+
+   *Lens 2 — Codebase Reality Check*: For each phase and each claim
+   in the design, verify it against the actual code. Read the
+   functions. Run the greps. Check that signatures, call counts,
+   and data flow match what the design assumes --- not what the
+   audit said (audits can be wrong too), but what the code ACTUALLY
+   does right now. This is a redundant fallback against both design
+   speculation and audit error. If you can't point to the specific
+   lines of code a phase changes, the scope is speculative.
 7. *Repeat*: Continue until all parties have clarity and confidence
 
 *** Key practices
@@ -238,14 +254,19 @@ This is an iterative cycle:
   regressions; pre-implementation benchmarking discovers whether the
   approach is correct.
 
-- *Codebase reality check in self-critique*: The self-critique round
-  (D.4) must ask: "for each phase in this design, can I point to the
-  specific lines of code it changes?" If the answer is "approximately"
-  or "I think so," the design is speculative. Run the greps. Check the
-  call counts. Verify the function signatures match what the design
-  assumes. PM 8F's D.1 assumed ~225 zonk sites; a grep found 31.
-  SRE Track 2 assumed 158 typing-core cases; an audit found 0.
-  Speculation that isn't grounded in code measurements will be wrong.
+- *Self-critique has two lenses, both mandatory*: (1) Principles
+  Challenge — challenge each major decision against the 10 principles.
+  (2) Codebase Reality Check — for each phase, point to the specific
+  lines of code it changes. If the answer is "approximately" or "I
+  think so," the design is speculative. Run the greps. Check the call
+  counts. Read the actual functions and verify signatures match what
+  the design assumes. This is a redundant fallback --- even the Stage 2
+  audit can be wrong. PM 8F's D.1 assumed ~225 zonk sites; a grep
+  found 31. SRE Track 2 assumed 158 typing-core cases; an audit found
+  0. PAR Track 1's D.2 audit found eval-rhs creates cells but not
+  propagators --- this changed the entire Phase 3 scope from 60 lines
+  to 20. Speculation that isn't grounded in code measurements will be
+  wrong.
 
 *** The critique cycle in practice
 
