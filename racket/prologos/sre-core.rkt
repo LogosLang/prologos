@@ -839,6 +839,7 @@
 (register-topology-handler!
  (lambda (net req)
    (and (sre-decomp-request? req)
+        (sre-decomp-request-domain req)  ;; Only handle SRE-domain requests (non-#f)
         (let ([pair-key (sre-decomp-request-pair-key req)])
           (if (net-pair-decomp? net pair-key)
               net  ;; Already processed — dedup
