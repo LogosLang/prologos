@@ -2,7 +2,7 @@
 
 **Date**: 2026-03-27
 **Series**: PAR (Parallel Scheduling)
-**Stage**: 3 (Design Iteration D.2)
+**Stage**: 3 (Design Iteration D.3)
 **Prerequisites**: PAR Track 0 CALM Audit (✅ `2f3c160`), [Stage 2 Audit](2026-03-27_PAR_TRACK1_STAGE2_AUDIT.md) (`813634a`)
 
 ## Progress Tracker
@@ -10,7 +10,7 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0a | Pre-0 microbenchmarks: BSP overhead, empty topology check cost | ✅ | `2bfb656` — data below |
-| 0b | Narrowing CALM validation (empirical) | ⬜ | Parallel with 0a |
+| 0b | Narrowing CALM validation (empirical) | ✅ | `f6a3048` — 23/31 pass, 0 cell errors |
 | 1 | Decomposition-request cell infrastructure | ⬜ | |
 | 2 | SRE decomposition → request emission | ⬜ | |
 | 3 | Narrowing branch → request emission | ⬜ | Scope depends on Phase 0b |
@@ -378,9 +378,67 @@ This eliminates the registry staleness concern entirely. Fire functions are pure
 | `net-cell-decomp-insert` | **NOT CALLED** from fire functions | Moved to topology stratum |
 | `eval-rhs` | **NO REFACTORING** | Continues as-is; new cells captured structurally |
 
-### Phase 0b Validation
+---
 
-Still needed: run narrowing tests under BSP with next-cell-id capture to confirm new cells are correctly propagated.
+### §7.1 D.3 Self-Critique Findings
+
+#### Lens 1: Principles Challenge
+
+**Decision: net-new-cell allowed during BSP**
+- *Decomplection* challenge: fire functions that create cells are doing two things (computing values AND allocating storage). These are separable concerns braided together. Counter: the structural capture makes it correct without separation. The braiding is an implementation detail of term construction, not an architectural coupling. **Verdict**: Pragmatic — correct-by-construction via BSP merge enforcement.
+
+**Decision: ctor-chain occurs check**
+- *Completeness* challenge: Who seeds the initial chain? The first SRE propagator fire doesn't have a chain. **Resolution**: The initial request's `ctor-chain` is `(list ctor-name)`. The topology stratum extends it when creating sub-propagators. Sub-propagator fire functions include the extended chain in their requests.
+
+**Decision: pair-key dedup in set-union**
+- *Correct-by-Construction* challenge: If two requests have the same `pair-key` but different metadata (e.g., different `desc`), `set-union` keeps both (they're not `equal?`). **Resolution**: `pair-key` is derived from `(cell-a, cell-b, relation)` which uniquely identifies a decomposition. The `desc` (ctor-desc) is determined by the cell values at processing time, not at emission time. Two requests with the same `pair-key` but different `desc` means the cell values changed between emissions — the topology stratum re-reads values anyway, so the `desc` in the request doesn't matter. **Action**: Remove `desc` from the request struct. The topology stratum derives it from cell values at processing time.
+
+#### Lens 2: Codebase Reality Check
+
+**Gap 1 (CRITICAL): Incomplete cell capture in `fire-and-collect-writes`**
+
+The current implementation captures 4 per-cell fields: (cid, cell, merge-fn, contra-fn). Missing:
+- `widen-fns` (cold layer) — widening function for descending lattices
+- `cell-dirs` (cold layer) — cell direction metadata (WFLE)
+
+This is the same class of bug as the original BSP value-only diff — silent data loss. Currently eval-rhs only creates cells via `net-new-cell` (which doesn't set widen-fns/cell-dirs), so the gap is latent. But incomplete capture breaks if future code uses `net-new-cell-desc`.
+
+**Fix**: Capture all 6 per-cell cold-layer fields. Apply all 6 in `bulk-merge-writes`. ~10 additional lines.
+
+**Gap 2: Phase 2 must explicitly split `sre-decompose-generic`**
+
+`sre-decompose-generic` currently does three things in one call:
+1. Creates sub-cells via `sre-get-or-create-sub-cells`
+2. Creates sub-propagators via `net-add-propagator`
+3. Writes registry via `net-pair-decomp-insert`
+
+Phase 2 must split this: fire functions emit requests (step 0). Topology stratum calls `sre-decompose-generic` for steps 1+2, then writes registry (step 3). The `net-pair-decomp-insert` call at line 438 moves from inside `sre-decompose-generic` to the topology stratum's processing loop.
+
+**Gap 3: `sre-decomp-request` should NOT carry `desc`**
+
+Per the principles challenge finding: `desc` (ctor-desc) is derived from cell values at processing time. Carrying it in the request struct creates a stale-data risk (cell values may evolve between emission and processing). The topology stratum already re-reads cell values — it should also derive `desc` from those values.
+
+**Revised `sre-decomp-request`:**
+```racket
+(struct sre-decomp-request
+  (pair-key    ;; decomp guard key (dedup)
+   domain      ;; SRE domain struct
+   cell-a      ;; cell-id
+   cell-b      ;; cell-id
+   relation    ;; sre-relation
+   ctor-chain) ;; (listof symbol) — for recursive type occurs check
+  #:transparent)
+```
+
+`desc` removed — derived from cell values by topology stratum at processing time.
+
+### Phase 0b Validation (COMPLETE — `f6a3048`)
+
+Narrowing tests under BSP with next-cell-id capture:
+- **23/31 pass**: Cell creation via eval-rhs works correctly under BSP
+- **8/31 fail**: All from `net-add-propagator` CALM guard (branch path) — expected
+- **Zero cell-related errors**: next-cell-id capture confirmed working
+- BSP reverted to off after validation
 
 ---
 
