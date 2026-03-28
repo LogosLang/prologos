@@ -1207,7 +1207,11 @@
                                          (cell-id-hash cid) cid))
           (define contra-fn (champ-lookup (prop-network-contradiction-fns result-net)
                                           (cell-id-hash cid) cid))
-          (list cid cell merge-fn contra-fn))))
+          (define widen-fn (champ-lookup (prop-network-widen-fns result-net)
+                                         (cell-id-hash cid) cid))
+          (define cell-dir (champ-lookup (prop-network-cell-dirs result-net)
+                                         (cell-id-hash cid) cid))
+          (list cid cell merge-fn contra-fn widen-fn cell-dir))))
   (fire-result value-writes new-cells))
 
 ;; Apply collected writes from all propagators to a network.
@@ -1232,6 +1236,8 @@
         (define cell (cadr cell-spec))
         (define merge-fn (caddr cell-spec))
         (define contra-fn (cadddr cell-spec))
+        (define widen-fn (list-ref cell-spec 4))
+        (define cell-dir (list-ref cell-spec 5))
         (define h (cell-id-hash cid))
         ;; Only add if cell doesn't already exist (idempotent)
         (if (not (eq? 'none (champ-lookup (prop-network-cells n) h cid)))
@@ -1240,13 +1246,21 @@
                    [merges* (champ-insert (prop-network-merge-fns n) h cid merge-fn)]
                    [contras* (if (eq? contra-fn 'none)
                                  (prop-network-contradiction-fns n)
-                                 (champ-insert (prop-network-contradiction-fns n) h cid contra-fn))])
+                                 (champ-insert (prop-network-contradiction-fns n) h cid contra-fn))]
+                   [widens* (if (eq? widen-fn 'none)
+                                (prop-network-widen-fns n)
+                                (champ-insert (prop-network-widen-fns n) h cid widen-fn))]
+                   [dirs* (if (eq? cell-dir 'none)
+                              (prop-network-cell-dirs n)
+                              (champ-insert (prop-network-cell-dirs n) h cid cell-dir))])
               (struct-copy prop-network n
                 [warm (struct-copy prop-net-warm (prop-network-warm n)
                         [cells cells*])]
                 [cold (struct-copy prop-net-cold (prop-network-cold n)
                         [merge-fns merges*]
                         [contradiction-fns contras*]
+                        [widen-fns widens*]
+                        [cell-dirs dirs*]
                         [next-cell-id (max (prop-network-next-cell-id n)
                                            (+ (cell-id-n cid) 1))])])))))
     ;; Then apply value writes
