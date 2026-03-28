@@ -2,7 +2,7 @@
 
 **Date**: 2026-03-27
 **Series**: PAR (Parallel Scheduling)
-**Stage**: 3 (Design Iteration D.3)
+**Stage**: 3 (Design Iteration D.4)
 **Prerequisites**: PAR Track 0 CALM Audit (✅ `2f3c160`), [Stage 2 Audit](2026-03-27_PAR_TRACK1_STAGE2_AUDIT.md) (`813634a`)
 
 ## Progress Tracker
@@ -109,7 +109,7 @@ repeat:
   VALUE STRATUM (BSP-safe):
     repeat:
       fire all worklist propagators (CALM guard active)
-      bulk-merge value writes
+      bulk-merge: new cells FIRST, then value writes (load-bearing ordering)
     until worklist empty
 
   TOPOLOGY STRATUM (sequential):
@@ -154,7 +154,7 @@ The topology stratum is NOT a new S-level. It is WITHIN S(0), between BSP rounds
 | **A. Single request cell** | One cell per network, set-union lattice of request structs | Simple. One cell to check. But all requests in one cell means the topology stratum processes everything in one batch. |
 | **B. Per-domain request cells** | Separate cells for SRE type, SRE term, narrowing | More targeted. But adds complexity — multiple cells to check, domain routing. |
 | **C. Request queue (non-lattice)** | Mutable queue outside the network | Not on-network. Violates Propagator-Only. Invisible to BSP. |
-| **D. Structural diff in BSP** | BSP diffs full network, not just values | Fixes the symptom but doesn't address the principle. Fire functions remain unrestricted. Parallel fire functions would have merge conflicts for structural changes. |
+| **D. Structural diff in BSP** | BSP diffs full network, not just values | Fixes the symptom but not the principle. The deeper reason to reject: newly created propagators should NOT fire in the same BSP round that created them — they need a snapshot that includes the topology they depend on. Structural diff would need an explicit "defer new propagators to next round" mechanism, which is the two-fixpoint loop in disguise. |
 
 **Choice: A (single request cell)**. Rationale:
 - Simplest — one cell, one merge function, one check in the topology stratum
@@ -221,9 +221,11 @@ Added to `make-prop-network` (or `make-elaboration-network`). One cell per netwo
 
 The `sre-decomp-request` carries a `ctor-chain` field — the list of constructor names in the current decomposition chain. When emitting a request, the fire function appends the current `ctor-desc` name to the chain from the parent decomposition.
 
-The topology stratum checks: if the request's `ctor-chain` contains a duplicate (the same constructor appearing twice), this is a recursive type. The stratum can:
-1. Stop decomposing and mark the sub-cells as co-inductive (recursive subtyping), OR
-2. Emit a contradiction (recursive types not supported in this context)
+The topology stratum checks: if the request's `ctor-chain` contains a duplicate (the same constructor appearing twice), this is a recursive type.
+
+**D.4 policy decision: co-inductive assumption.** When a cycle is detected, the topology stratum assumes the relation holds (co-inductive hypothesis) and skips decomposition. If a contradiction is later found in sub-cells, it propagates up normally and invalidates the assumption. This is the standard co-inductive subtyping approach. Emitting a contradiction would incorrectly reject valid recursive types like `PVec (PVec Int) <: PVec (PVec Int)`.
+
+Note: `(member ctor-name chain)` on a list is O(|chain|). Chain length is bounded by the number of distinct constructors in the type domain (K). Total cost O(K) per emission, O(K³) across all pairs. For practical K (<50), negligible.
 
 The `ctor-chain` makes the recursion detection structural — it's a property of the request set, not a runtime depth counter. The merge function can even detect cycles: `set-union` on requests whose `ctor-chain` contains duplicates → filter or flag them.
 
@@ -244,6 +246,12 @@ This means:
 The decomp-request cell is per-network (shared across strata), but the topology stratum only processes requests emitted during its own quiescence call. **Implementation**: the topology stratum tracks which requests it has already processed (via the `pair-key` dedup in the request set). New requests from inner quiescence calls appear as new set members.
 
 **Interaction with ATMS**: Constraint resolution (S(1)) uses ATMS for speculation/retraction. ATMS is itself stratification-like. Decomposition requests emitted during ATMS-managed speculation are scoped to that speculation's network fork. If the speculation is retracted, the decomposition (and its sub-cells/propagators) are discarded with the fork. No special handling needed — network forking already handles this.
+
+**Interaction with `save-meta-state`/`restore-meta-state!`** (D.4): Speculative type-checking via the meta-state save/restore mechanism operates on `current-elab-network-box`. If speculation modifies the network (including the request cell), restoring meta state reverts the network to its pre-speculation value. The request cell's value reverts with it. Speculation safety is inherited from network immutability — no special handling needed.
+
+**Request cell lifecycle** (D.4): The request cell does NOT follow the monotone lattice discipline. The topology stratum clears processed requests by writing the empty set — a non-monotone operation. This is permitted because the topology stratum runs sequentially outside BSP rounds, where non-monotone operations are allowed (same as S(-1) retraction). The request cell is topology-stratum-managed, not propagator-managed.
+
+**Topology handler installation** (D.4): The `current-topology-handler` parameter must be set in the `parameterize` block of `process-command` (where all propagator parameters are set), NOT at module load time. Module load order is not deterministic — `propagator.rkt` loads before `sre-core.rkt`. The handler must be installed before any `run-to-quiescence-bsp` call that might produce decomposition requests.
 
 ---
 
@@ -858,7 +866,9 @@ Specific retentions:
 1. `net-pair-decomp?` guard ensures each (cell-a, cell-b, relation) triple decomposes at most once. Constructor arity is finite.
 2. **Recursive type occurs check** (§4.1): the `ctor-chain` in each request detects when the same constructor appears twice in a decomposition chain. Recursive types are caught structurally — the topology stratum stops decomposing and marks the result as co-inductive or contradictory. This replaces the D.1 assumption "type nesting depth is bounded in well-typed programs" with a structural guarantee that works even for ill-typed inputs during type-checking.
 
-**Outer loop**: Each iteration either adds topology (bounded by unique constructor sequences in the type domain) or reaches fixpoint. The `ctor-chain` occurs check provides a structural upper bound: the number of distinct constructors in scope. Therefore the outer loop terminates for all inputs, not just well-typed ones.
+**Outer loop**: Each iteration either adds topology or reaches fixpoint. D.4 concern: decomposition creates new cells, and new cells create new pairs that could trigger further decomposition (combinatorial growth). However, each new pair can only decompose if BOTH cells contain compound types — and sub-cells contain structurally simpler types (lower nesting). The bound is type nesting depth × constructor arity, not cells². Combined with the `ctor-chain` occurs check (which catches recursive constructors), the outer loop terminates for all inputs.
+
+**D.4: Outer loop cost estimate**: For a type with nesting depth N and max constructor arity A, the outer loop runs at most N iterations. Each iteration creates at most A sub-cells and A+2 sub-propagators. Total topology operations: N × (A+2) × (cost per operation). At N=5, A=2, that's ~20 operations × 2μs = 40μs per full decomposition. Negligible.
 
 **Narrowing topology**: Each definitional tree node installs propagators at most once (branch fire checks constructor tag, which is deterministic). Tree depth is finite. Recursive installation is bounded by tree size.
 
