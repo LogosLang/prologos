@@ -140,6 +140,9 @@
  register-topology-handler!
  net-cell-reset
  (struct-out callback-topology-request)
+ ;; PAR Track 2 R1: BSP round statistics
+ current-bsp-round-stats
+ make-bsp-stats-accumulator
  ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
  net-cell-read-raw
  ;; Track 6 Phase 2+3: Network-wide TMS commit
@@ -333,6 +336,18 @@
 ;; The scheduler calls this at the end of each BSP round with a bsp-round record.
 ;; What happens to the record is the caller's concern (accumulate, stream, filter).
 (define current-bsp-observer (make-parameter #f))
+
+;; PAR Track 2 R1: BSP round statistics accumulator.
+;; When set, the BSP inner loop records per-round stats:
+;;   (list worklist-size fire-time-ms merge-time-ms write-count deferred-prop-count)
+;; Zero overhead when #f (default).
+(define current-bsp-round-stats (make-parameter #f))
+
+(define (make-bsp-stats-accumulator)
+  (define stats (box '()))
+  (values
+   stats
+   (lambda () (reverse (unbox stats)))))
 
 ;; Convenience: create an accumulating observer + getter pair.
 ;; Returns (values observer-fn get-rounds-fn).
@@ -1528,15 +1543,34 @@
                                  [hot (struct-copy prop-net-hot (prop-network-hot net)
                                         [worklist '()]
                                         [fuel (- (prop-network-fuel net) n)])])]
+                     ;; R1: time fire phase
+                     [t-fire-start (current-inexact-monotonic-milliseconds)]
                      [all-writes (executor snapshot pids)]
+                     [t-fire-end (current-inexact-monotonic-milliseconds)]
+                     ;; R1: time merge phase
+                     [t-merge-start t-fire-end]
                      [merged (bulk-merge-writes snapshot all-writes)]
-                     ;; Apply deferred propagators (created during fire, not yet on network)
+                     [t-merge-end (current-inexact-monotonic-milliseconds)]
+                     ;; Apply deferred propagators
                      [deferred-props (collect-deferred-propagators all-writes)]
                      [merged-with-props
                       (for/fold ([n merged])
                                 ([spec (in-list deferred-props)])
                         (let-values ([(n* _pid) (net-add-propagator n (car spec) (cadr spec) (caddr spec))])
-                          n*))])
+                          n*))]
+                     ;; R1: record stats if accumulator is active
+                     [_ (let ([stats-box (current-bsp-round-stats)])
+                          (when stats-box
+                            (define write-count
+                              (for/sum ([r (in-list all-writes)])
+                                (length (if (fire-result? r) (fire-result-value-writes r) r))))
+                            (set-box! stats-box
+                              (cons (list n
+                                          (- t-fire-end t-fire-start)
+                                          (- t-merge-end t-merge-start)
+                                          write-count
+                                          (length deferred-props))
+                                    (unbox stats-box)))))])
                 ;; Observer notification
                 (when observer
                   (define writes-for-observer
