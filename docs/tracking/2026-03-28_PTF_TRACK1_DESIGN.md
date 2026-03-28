@@ -18,8 +18,7 @@
 | 3 | SRE algebraic-kind → SRE Track 3 design recommendation | ✅ | Audit revealed this is a track-sized effort, not a phase. Design recommendation captured. SRE Track 3 created. |
 | 4 | Residuation prototype | ⏸️ | DEFERRED. Modest ROI for current programs. Revisit when larger ADTs or automatic backward propagators needed. |
 | 5 | Submodule architecture review | ⏸️ | DEFERRED. Network lacks propagator density. Revisit after PPN/SRE migration. |
-| 6 | Synthesis: update PTF Master + PRN + design principles | ⬜ | Capture confirmed/refuted conjectures |
-| 7 | PIR | ⬜ | |
+| 6 | Synthesis | ✅ | Three findings captured. SRE Track 2F spawned. Track closed. |
 
 **Phase completion protocol**: commit → tracker → dailies → proceed.
 
@@ -281,21 +280,29 @@ This phase produces a design recommendation, not code changes. The actual restru
 
 ---
 
-## Phase 6: Synthesis
+## Phase 6: Synthesis — TRACK COMPLETE
 
-**Goal**: Capture confirmed/refuted conjectures, update theory documents, inform future tracks.
+### Three findings from this track
 
-1. Update PTF Master with confirmed findings
-2. Update PRN Master with module-theoretic grounding
-3. Update relevant series masters if findings change their scope
-4. Distill lessons into DEVELOPMENT_LESSONS.org and/or DESIGN_PRINCIPLES.org
-5. Identify follow-on tracks spawned by findings (residuation track in BSP-LE, algebraic-kind in SRE, etc.)
+**1. The network is empty.** The per-command elaboration network has 20 cells but 0 propagators for typical programs. Constraint solving is entirely imperative (`solve-meta!`, resolution loop in `metavar-store.rkt`). The propagator network is infrastructure waiting for workload. PPN/SRE migration is the critical path to leveraging both the module-theoretic decomposition and true parallelism. The architecture is ahead of the implementation — the lattice-ordered module structure IS the right foundation, but the elaboration hasn't migrated onto it yet.
 
----
+**2. Residuation validates our bidirectional architecture.** The `infer`/`check` duality in type inference IS residuation — computing the greatest pre-image under the lattice ordering. The theory confirms what the engineering built: backward type inference is algebraically correct, not just heuristically useful. This has future implications for constraint solving and satisfaction: residuation gives a formal framework for any "given the output, what input?" computation, including narrowing (constructor-based pattern matching), logic engine (backward chaining), and eventually higher-order pattern unification. These are research directions for BSP-LE and future PTF tracks.
 
-## Phase 7: PIR
+**3. The architecture is ahead of the implementation.** The SRE's endomorphism ring decomposition is algebraically correct (Krull-Schmidt canonical for our lattice). The four relations ARE the four irreducible sub-rings. The variance annotations ARE the per-component kind derivation. But this algebraic structure is encoded in ad-hoc closures, not in self-documenting data. SRE Track 2F will make the structure visible. This is the Completeness principle applied to our own codebase: the correct foundations are there, they need to be expressed, not rebuilt.
 
-Standard post-implementation review following the methodology (16 questions, 10-PIR longitudinal survey).
+### Tracks spawned
+
+- **SRE Track 2F: Algebraic Foundation** — endomorphism ring decomposition as data. Kind-variance table. Unified duality variances. Nomenclature cleanup. Marked FOUNDATIONAL (precedes SRE Tracks 3-7).
+
+### Deferred items
+
+- **Phase 4 (Residuation prototype)** → BSP-LE or future PTF track. Becomes valuable when larger ADTs or automatic backward propagators are needed.
+- **Phase 5 (Submodule architecture review)** → Post-PPN/SRE migration. Network needs propagator density for the connected-component analysis to be meaningful.
+- **Submodule validation as `:auto` heuristic basis** → PAR Track 3. Formal parallel partition via irreducible decomposition.
+
+### Cross-references updated
+
+Module theory research note cross-referenced in all 9 series masters (PRN, PPN, SRE, PTF, PAR, BSP-LE, CIU, NTT/PM). SRE Track 2F added to SRE Master and MASTER_ROADMAP. Design methodology updated (two-lens self-critique). PIR methodology updated (10-PIR longitudinal).
 
 ---
 
