@@ -1253,7 +1253,7 @@
 ;; invisible in BSP mode.
 ;; PAR Track 1 D.3: fire-result bundles value writes AND new cells.
 ;; New cells are captured structurally via next-cell-id comparison.
-(struct fire-result (value-writes new-cells new-propagators contradiction) #:transparent)
+(struct fire-result (value-writes new-cells new-propagators contradiction undeclared-writes) #:transparent)
 
 (define (fire-and-collect-writes snapshot-net pid)
   (define prop (champ-lookup (prop-network-propagators snapshot-net)
@@ -1266,28 +1266,41 @@
     (parameterize ([current-bsp-fire-round? #t])
       ((propagator-fire-fn prop) snapshot-net)))
   (define result-next-id (prop-network-next-cell-id result-net))
-  ;; Diff ALL cells for value changes, not just declared outputs.
-  ;; PAR Track 1: Fire functions may write to cells not in their outputs list
-  ;; (e.g., contradiction writes to input cells, decomp-request cell writes).
-  ;; Under DFS, the full returned network is applied. Under BSP, we must
-  ;; capture all changes. Diff the full cell CHAMP via structural comparison.
+  ;; Diff output cells for value writes (correct delta for merge-based cells).
+  ;; Also check the decomp-request cell (cell-id 0).
+  (define output-cids (cons decomp-request-cell-id (propagator-outputs prop)))
   (define value-writes
+    (for/fold ([writes '()])
+              ([cid (in-list output-cids)])
+      (define old (net-cell-read snapshot-net cid))
+      (define new (net-cell-read result-net cid))
+      (if (equal? old new)
+          writes
+          (cons (cons cid new) writes))))
+  ;; Also check for undeclared writes (e.g., contradiction writes to input cells).
+  ;; These are captured as direct-set operations (bypass merge in bulk-merge-writes)
+  ;; to avoid double-merging with non-idempotent merge functions like append.
+  (define undeclared-writes
     (let ([snap-cells (prop-network-cells snapshot-net)]
-          [result-cells (prop-network-cells result-net)])
+          [result-cells (prop-network-cells result-net)]
+          [output-set (for/hasheq ([cid (in-list output-cids)]) (values cid #t))])
       (if (eq? snap-cells result-cells)
-          '()  ;; Same CHAMP node — no changes (fast path via eq?)
-          ;; Scan result cells for changes vs snapshot
+          '()
           (champ-fold/hash
            result-cells
            (lambda (h cid cell acc)
-             (define old-cell (champ-lookup snap-cells h cid))
-             (if (eq? old-cell 'none)
-                 acc  ;; New cell — handled by next-cell-id capture
-                 (let ([old-val (prop-cell-value old-cell)]
-                       [new-val (prop-cell-value cell)])
-                   (if (equal? old-val new-val)
-                       acc
-                       (cons (cons cid new-val) acc)))))
+             (cond
+               [(hash-has-key? output-set cid) acc]  ;; Already in value-writes
+               [(< (cell-id-n cid) snapshot-next-id) ;; Existing cell, not new
+                (let ([old-cell (champ-lookup snap-cells h cid)])
+                  (if (eq? old-cell 'none)
+                      acc
+                      (let ([old-val (prop-cell-value old-cell)]
+                            [new-val (prop-cell-value cell)])
+                        (if (equal? old-val new-val)
+                            acc
+                            (cons (cons cid new-val) acc)))))]
+               [else acc]))
            '()))))  ;; PAR Track 1 D.3: Capture new cells via next-cell-id comparison.
   ;; Cells with ids in [snapshot-next-id .. result-next-id) were created
   ;; by the fire function. Extract them from result-net.
@@ -1325,7 +1338,7 @@
     (and (prop-network-contradiction result-net)
          (not (prop-network-contradiction snapshot-net))
          (prop-network-contradiction result-net)))
-  (fire-result value-writes new-cells new-propagators new-contradiction))
+  (fire-result value-writes new-cells new-propagators new-contradiction undeclared-writes))
 
 ;; Apply collected writes from all propagators to a network.
 ;; net-cell-write handles merge, dependent enqueuing, and contradiction.
@@ -1336,13 +1349,14 @@
   (for/fold ([net net])
             ([result (in-list all-results)])
     ;; Handle both old-style write lists and new fire-result structs
-    (define-values (writes new-cells new-props contradiction)
+    (define-values (writes new-cells new-props contradiction undecl-writes)
       (if (fire-result? result)
           (values (fire-result-value-writes result)
                   (fire-result-new-cells result)
                   (fire-result-new-propagators result)
-                  (fire-result-contradiction result))
-          (values result '() '() #f)))
+                  (fire-result-contradiction result)
+                  (fire-result-undeclared-writes result))
+          (values result '() '() #f '())))
     ;; Apply new cells first (they may be referenced by value writes)
     (define net-with-cells
       (for/fold ([n net])
@@ -1383,13 +1397,41 @@
       (for/fold ([n net-with-cells])
                 ([w (in-list writes)])
         (net-cell-write n (car w) (cdr w))))
+    ;; Apply undeclared writes (e.g., contradiction writes to input cells).
+    ;; These use net-cell-reset + manual dependent enqueue to avoid double-merge.
+    (define net-with-undeclared
+      (for/fold ([n net-with-values])
+                ([w (in-list undecl-writes)])
+        (define cid (car w))
+        (define new-val (cdr w))
+        (define h (cell-id-hash cid))
+        (define cell (champ-lookup (prop-network-cells n) h cid))
+        (if (eq? cell 'none) n
+            (let* ([old-val (prop-cell-value cell)]
+                   ;; Skip if no change
+                   [_ (if (equal? old-val new-val) (void) (void))])
+              (if (equal? old-val new-val) n
+                  (let* ([new-cell (struct-copy prop-cell cell [value new-val])]
+                         [new-cells (champ-insert (prop-network-cells n) h cid new-cell)]
+                         [deps (champ-keys (prop-cell-dependents cell))]
+                         [new-wl (append deps (prop-network-worklist n))]
+                         ;; Check contradiction
+                         [cfn (champ-lookup (prop-network-contradiction-fns n) h cid)]
+                         [contradicted? (and (not (eq? cfn 'none)) (cfn new-val))])
+                    (struct-copy prop-network n
+                      [warm (struct-copy prop-net-warm (prop-network-warm n)
+                              [cells new-cells]
+                              [contradiction (or (prop-network-contradiction n)
+                                                 (and contradicted? cid))])]
+                      [hot (struct-copy prop-net-hot (prop-network-hot n)
+                             [worklist new-wl])])))))))
     ;; Apply direct contradiction if fire function set it via struct-copy
     (define net-with-contradiction
-      (if (and contradiction (not (prop-network-contradiction net-with-values)))
-          (struct-copy prop-network net-with-values
-            [warm (struct-copy prop-net-warm (prop-network-warm net-with-values)
+      (if (and contradiction (not (prop-network-contradiction net-with-undeclared)))
+          (struct-copy prop-network net-with-undeclared
+            [warm (struct-copy prop-net-warm (prop-network-warm net-with-undeclared)
                     [contradiction contradiction])])
-          net-with-values))
+          net-with-undeclared))
     ;; New propagators are NOT applied here — they're collected and
     ;; applied by the topology stratum via net-add-propagator (which
     ;; handles dependency registration correctly).

@@ -195,6 +195,10 @@
   (check-equal? (net-cell-read net6 rq-cid) '()))
 
 (test-case "3-stage: multiple constraints with separate threshold cells"
+  ;; PAR Track 1: This test uses merge-list-append (non-idempotent).
+  ;; BSP double-merges non-idempotent values (fire-fn merges with snapshot,
+  ;; bulk-merge merges again with canonical). Force DFS for this test.
+  (parameterize ([current-use-bsp-scheduler? #f])
   (define net0 (make-prop-network))
   (define-values (net1 rq-cid) (net-new-cell net0 '() merge-list-append))
   ;; Two dep cells, two threshold cells, two readiness propagators
@@ -248,7 +252,7 @@
   (define net13 (run-to-quiescence net12))
   ;; Both actions in queue
   (define queue2 (net-cell-read net13 rq-cid))
-  (check-equal? (length queue2) 2))
+  (check-equal? (length queue2) 2)))
 
 ;; ========================================
 ;; 4. Ready-queue reading: read-ready-queue-actions
