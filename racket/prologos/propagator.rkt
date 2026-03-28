@@ -108,6 +108,8 @@
  current-speculation-stack
  ;; Track 8 C5a: Global BSP scheduler override for A/B benchmarking
  current-use-bsp-scheduler?
+ ;; CALM topology guard: #t during BSP fire rounds
+ current-bsp-fire-round?
  ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
  net-cell-read-raw
  ;; Track 6 Phase 2+3: Network-wide TMS commit
@@ -338,6 +340,11 @@
 ;; contradicts?: optional (val → Bool) predicate for contradiction detection
 ;; Returns: (values new-network cell-id)
 (define (net-new-cell net initial-value merge-fn [contradicts? #f])
+  ;; CALM topology guard: dynamic topology violates order-independence.
+  (when (current-bsp-fire-round?)
+    (error 'net-new-cell
+           "CALM violation: cannot create cells during BSP fire round. ~
+            Topology changes require stratum boundaries."))
   (perf-inc-cell-alloc!)  ;; Track 7 Phase 0b
   (define id (cell-id (prop-network-next-cell-id net)))
   (define cell (prop-cell initial-value champ-empty))
@@ -837,6 +844,11 @@
 ;; invocation (unify.rkt, elab-speculation.rkt, bridges, tabling, not just metavar-store).
 (define current-use-bsp-scheduler? (make-parameter #f))
 
+;; CALM topology guard: when #t, fire functions must not modify network topology.
+;; net-add-propagator and net-new-cell will error during BSP fire rounds.
+;; Topology changes require stratum boundaries (stratification).
+(define current-bsp-fire-round? (make-parameter #f))
+
 ;; B2f Phase 0: Per-quiescence cell-write instrumentation.
 ;; When non-#f, these are boxes that net-cell-write increments.
 ;; - write-counter: every net-cell-write call
@@ -857,6 +869,11 @@
 ;; The propagator is registered as a dependent of each input cell,
 ;; and scheduled for initial firing on the worklist.
 (define (net-add-propagator net input-ids output-ids fire-fn)
+  ;; CALM topology guard: dynamic topology violates order-independence.
+  (when (current-bsp-fire-round?)
+    (error 'net-add-propagator
+           "CALM violation: cannot add propagators during BSP fire round. ~
+            Topology changes require stratum boundaries."))
   (define pid (prop-id (prop-network-next-prop-id net)))
   (define prop (propagator input-ids output-ids fire-fn))
   (define ph (prop-id-hash pid))
@@ -1158,8 +1175,10 @@
                               (prop-id-hash pid) pid))
   (when (eq? prop 'none)
     (error 'fire-and-collect-writes "unknown propagator: ~a" pid))
-  ;; Fire propagator against snapshot
-  (define result-net ((propagator-fire-fn prop) snapshot-net))
+  ;; Fire propagator against snapshot (with CALM topology guard)
+  (define result-net
+    (parameterize ([current-bsp-fire-round? #t])
+      ((propagator-fire-fn prop) snapshot-net)))
   ;; Diff output cells: extract (cell-id . new-value) for changed cells
   (for/fold ([writes '()])
             ([cid (in-list (propagator-outputs prop))])
