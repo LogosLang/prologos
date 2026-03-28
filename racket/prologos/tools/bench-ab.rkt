@@ -221,6 +221,28 @@
 (define num-runs (make-parameter 15))
 (define output-file (make-parameter #f))
 
+;; Pre-process args: reorder so flags come before positional args.
+;; racket/cmdline requires flags before positional args — silently treating
+;; misplaced flags as paths caused a hard-to-diagnose "no output" bug.
+(define (reorder-args args)
+  (define flags '())
+  (define paths '())
+  (let loop ([rest (vector->list args)])
+    (cond
+      [(null? rest) (list->vector (append (reverse flags) (reverse paths)))]
+      [(string-prefix? (car rest) "--")
+       ;; Flag + its value (next arg)
+       (if (null? (cdr rest))
+           (loop '()) ;; dangling flag, let command-line handle the error
+           (begin
+             (set! flags (cons (cadr rest) (cons (car rest) flags)))
+             (loop (cddr rest))))]
+      [else
+       (set! paths (cons (car rest) paths))
+       (loop (cdr rest))])))
+
+(current-command-line-arguments (reorder-args (current-command-line-arguments)))
+
 (define program-paths
   (command-line
    #:program "bench-ab"
