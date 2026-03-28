@@ -14,7 +14,7 @@
 | 1 | Decomposition-request cell infrastructure | ✅ | `bf2fff0` — cell-id 0, 3 request structs |
 | 2 | SRE decomposition → request emission | ✅ | `482516a` — dual-path BSP/DFS |
 | 3 | Narrowing branch + rule → request emission | ✅ | `21a9949` — both paths emit, eval-rhs unchanged |
-| 4 | Topology stratum in BSP loop | 🔄 | `775de00`→`8a9551f` — 110/111 pass. 1 remaining: mu duality |
+| 4 | Topology stratum in BSP loop | ✅ | `775de00`→`cffeaa9` — 111/111 targeted tests GREEN |
 | 5 | BSP-as-default + individual test verification | ⬜ | |
 | 6 | CALM guard hardening | ⬜ | |
 | 7 | Constraint-propagators contract | ⬜ | |
