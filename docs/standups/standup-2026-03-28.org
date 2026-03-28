@@ -1,0 +1,52 @@
+#+TITLE: Standup — 2026-03-28
+#+DATE: 2026-03-28
+
+* Yesterday (since 2026-03-27 standup)
+
+** PAR Track 1: Stratified Topology — BSP-as-Default (COMPLETE)
+- 380/380 GREEN under BSP. 10 bugs found via diagnostic protocol.
+- Structural propagator capture: net-add-propagator allowed during BSP, deferred to next round.
+- Full CHAMP diff for value writes. Direct contradiction capture.
+- Self-registering topology handlers (SRE, narrowing, elaborator-network).
+- BSP 2.3% faster than DFS. Zero overhead from topology stratum.
+- PIR: ~docs/tracking/2026-03-28_PAR_TRACK1_PIR.md~ (18 sections, 10-PIR longitudinal)
+
+** PAR Track 2: True Parallel Execution (R1-R2 COMPLETE)
+- Racket 9 parallel threads (~#:pool 'own~). 40 lines of code.
+- 380/380 GREEN under true parallel execution. CALM empirically validated.
+- Stress tests: 13/13 PASS. 4.45x speedup at N=500 (fan-out).
+- Real demos: graph coloring 1.42x, constraint grid 1.42x at 3000 propagators.
+- R1 finding: only 18 BSP rounds across 14 programs — workload not propagator-heavy yet.
+- Vega-Lite charts: ~data/benchmarks/parallel-demo-chart.html~
+
+** PTF Series: Propagator Theory Foundations (NEW)
+- 5 propagator kinds: Map, Reduce, Broadcast, Scatter, Gather
+- 3 compound patterns: Map-Reduce, Reduce-Broadcast, Scatter-Gather
+- Set-latch from PPN Track 1 = Reduce kind. Parse pipeline = Map-Reduce-Broadcast.
+- Array programming primitives map to propagator kinds.
+- Master: ~docs/tracking/2026-03-28_PTF_MASTER.md~
+
+** PM Track 10C: Work-Stealing Test Parallelism (Phase 1 COMPLETE)
+- Work-stealing dispatch + LPT historical sort: 150s -> 133s (11%)
+- Split 3 whale files (21.9s, 19.8s, 17.3s) into 6 smaller files
+- 383/383 GREEN. Tail reduced from 21.9s to ~11s.
+
+** Research
+- Parallel Propagator Scheduling (Racket 9 landscape, Soufflé, Timely Dataflow)
+- Propagator Taxonomy (parallel profiles, lattice morphology)
+
+** Process Improvements
+- PIR methodology: 10-PIR longitudinal survey codified
+- Design methodology: two-lens self-critique (principles + code grounding)
+- bench-ab arg reorder (correct-by-construction)
+- Suite rerun guard (workflow rule enforcement)
+- Targeted test investigation rule (workflow.md)
+
+* Today
+
+**
+
+* Blockers
+
+- WS-mode solver syntax gaps (~=~ as unification, ~is~ bridging, arithmetic in goals) — deferred to post-PPN infrastructure
+- test-structural-decomp: meta-solving via imperative state under BSP — deferred to SRE/PPN elaborator-on-network
