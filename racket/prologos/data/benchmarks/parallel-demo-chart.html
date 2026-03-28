@@ -42,13 +42,16 @@
 <h2>1. Speedup vs Problem Size</h2>
 <div id="chart-speedup" class="chart"></div>
 
-<h2>2. Sequential vs Parallel Wall Time</h2>
+<h2>2. At a Glance: Parallel vs Sequential at Scale</h2>
+<div id="chart-sidebyside" class="chart"></div>
+
+<h2>3. Sequential vs Parallel Wall Time</h2>
 <div id="chart-time" class="chart"></div>
 
-<h2>3. Stress Test: Fan-Out Scaling</h2>
+<h2>4. Stress Test: Fan-Out Scaling</h2>
 <div id="chart-stress" class="chart"></div>
 
-<h2>4. Data Tables</h2>
+<h2>5. Data Tables</h2>
 
 <h3>Graph Coloring (arc consistency, 4 colors)</h3>
 <table>
@@ -146,6 +149,36 @@ vegaEmbed('#chart-speedup', {
       "encoding": {"y": {"datum": 1}}
     }
   ]
+}, embedOpts);
+
+// Side-by-side bar chart: concrete comparison at largest size
+vegaEmbed('#chart-sidebyside', {
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "width": 600, "height": 350,
+  "background": "#161b22",
+  "title": {"text": "Time to Solve: Sequential vs Parallel (largest problem size)", "color": "#e6edf3"},
+  "data": {
+    "values": [
+      {"problem": "Graph Color\n500 vertices\n3000 props", "mode": "Sequential", "time_ms": 2.83},
+      {"problem": "Graph Color\n500 vertices\n3000 props", "mode": "Parallel", "time_ms": 1.99},
+      {"problem": "Constraint Grid\n12x12\n3168 props", "mode": "Sequential", "time_ms": 3.05},
+      {"problem": "Constraint Grid\n12x12\n3168 props", "mode": "Parallel", "time_ms": 2.15},
+      {"problem": "Stress Test\n500 props\n100 iter each", "mode": "Sequential", "time_ms": 17.62},
+      {"problem": "Stress Test\n500 props\n100 iter each", "mode": "Parallel", "time_ms": 3.96},
+      {"problem": "Wave Chain\n1000 props\n(worst case)", "mode": "Sequential", "time_ms": 73.35},
+      {"problem": "Wave Chain\n1000 props\n(worst case)", "mode": "Parallel", "time_ms": 72.68}
+    ]
+  },
+  "mark": {"type": "bar", "cornerRadiusTopLeft": 3, "cornerRadiusTopRight": 3},
+  "encoding": {
+    "x": {"field": "problem", "type": "nominal", "title": null,
+           "axis": {"labelAngle": 0, "labelFontSize": 11}},
+    "y": {"field": "time_ms", "type": "quantitative", "title": "Wall Time (ms)"},
+    "color": {"field": "mode", "type": "nominal", "title": "Execution",
+              "scale": {"domain": ["Sequential", "Parallel"],
+                        "range": ["#f85149", "#3fb950"]}},
+    "xOffset": {"field": "mode"}
+  }
 }, embedOpts);
 
 // Time comparison chart
