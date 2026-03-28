@@ -14,12 +14,12 @@
 | 1 | Decomposition-request cell infrastructure | ✅ | `bf2fff0` — cell-id 0, 3 request structs |
 | 2 | SRE decomposition → request emission | ✅ | `482516a` — dual-path BSP/DFS |
 | 3 | Narrowing branch + rule → request emission | ✅ | `21a9949` — both paths emit, eval-rhs unchanged |
-| 4 | Topology stratum in BSP loop | ✅ | `775de00`→`cffeaa9` — 111/111 targeted tests GREEN |
-| 5 | BSP-as-default + individual test verification | ⬜ | |
-| 6 | CALM guard hardening | ⬜ | |
-| 7 | Constraint-propagators contract | ⬜ | |
-| 8 | A/B benchmarks: BSP vs DFS comparative + adversarial + micro | ⬜ | Compare against Phase 0a baselines |
-| 9 | Instrumentation cleanup | ⬜ | Remove benchmark-only scaffolding |
+| 4 | Topology stratum in BSP loop | ✅ | `775de00`→`cffeaa9` — 111/111 targeted, 380/380 full suite |
+| 5 | BSP-as-default + full suite verification | ✅ | `ef22799` — 380/380 GREEN, 7529 tests, 148.0s |
+| 6 | CALM guard hardening | ✅ | `3e0748b` — contract documented, structural capture |
+| 7 | Constraint-propagators contract | ✅ | `c6a42b5` — callback-topology-request documented |
+| 8 | A/B benchmarks: BSP vs DFS comparative + adversarial + micro | 🔄 | Running |
+| 9 | Instrumentation cleanup | ⬜ | Remove debug prints |
 | 10 | PIR + tracker + dailies | ⬜ | |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → proceed.
