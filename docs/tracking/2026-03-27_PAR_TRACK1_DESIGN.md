@@ -19,7 +19,7 @@
 | 6 | CALM guard hardening | ⬜ | |
 | 7 | Constraint-propagators contract | ⬜ | |
 | 8 | A/B benchmarks: BSP vs DFS comparative + adversarial + micro | ⬜ | Compare against Phase 0a baselines |
-| 9 | Full suite regression gate | ⬜ | ONE run, 380/380 green |
+| 9 | Instrumentation cleanup | ⬜ | Remove benchmark-only scaffolding |
 | 10 | PIR + tracker + dailies | ⬜ | |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → proceed.
@@ -316,22 +316,164 @@ Phase 0 validates empirically whether `net-new-cell` (without `net-add-propagato
 
 **What**: Measure baseline overhead of BSP scheduling vs DFS, BEFORE implementing the topology stratum. This is design input — the data feeds D.2.
 
-**Microbenchmarks** (using `bench-micro.rkt` infrastructure):
-1. **Empty quiescence cost**: Create a network with N propagators that all return `net` unchanged (no-op). Measure `run-to-quiescence` under DFS vs BSP. This isolates scheduling overhead from propagator work.
-2. **Single-write quiescence**: N propagators each write one cell. Measure DFS vs BSP. This measures the diff/merge overhead in BSP's `fire-and-collect-writes` + `bulk-merge-writes`.
-3. **Multi-round convergence**: N propagators that trigger each other (chain: P1 writes cell-A, P2 watches cell-A and writes cell-B, etc.). Measures BSP round overhead for multi-round fixpoints vs DFS's single-pass chaining.
-4. **Empty topology check cost**: Measure the cost of reading an empty set-cell (the decomp-request cell check). This is the per-quiescence tax of the outer loop.
+**File**: `benchmarks/micro/bench-bsp-overhead.rkt` (~120 lines)
+**Infrastructure**: Uses `bench` macro from `bench-micro.rkt` (warmup, multi-sample, GC between, mean/median/stddev/CV/IQR/95% CI, Tukey outlier detection).
+**New instrumentation required**: None for M1-M4. M5 needs a counter box (see below).
 
-**Adversarial benchmarks** (using `bench-ab.rkt` on `.prologos` programs):
-5. **Non-decomposing workload**: `simple-typed.prologos`, `nat-arithmetic.prologos` — no SRE decomposition. Measures pure scheduling overhead on real programs.
-6. **Decomposition-heavy workload**: `dependent-types.prologos`, `type-adversarial.prologos` — many compound types that trigger SRE decomposition. Measures the cost of the current inline decomposition under DFS (baseline for what the stratified approach must match).
+#### Measurement M1: Empty Quiescence Call
 
-**E2E validation**:
-7. **Full suite wall time**: One run under DFS (baseline), one under BSP (current, broken for SRE). Compare total wall time. Even though BSP fails some tests, the passing tests reveal scheduling overhead.
+A network with cells and propagators already at fixpoint. Call `run-to-quiescence` — nothing fires.
 
-**Success criteria**: BSP overhead ≤5% of DFS for non-decomposing workloads. If >10%, the empty topology check needs optimization (boolean flag instead of cell read).
+- **Measures**: Loop entry/exit overhead — checking the dirty set, finding nothing, returning.
+- **DFS path**: check dirty set → empty → return.
+- **BSP path**: check dirty set → empty → return.
+- **Post-Track-1 path**: check dirty set → empty → check decomp-request cell → empty → return.
+- **Design impact**: The delta between BSP and BSP+topology-check is the **per-call tax** of the two-fixpoint loop on the common case (no work). This multiplies by thousands of calls per test file. If >1μs, need faster guard (boolean flag vs cell read).
+- **Setup**: `make-elaboration-network`, add 5 cells, 3 propagators (all watching cells that won't change). Parameterize `current-use-bsp-scheduler?` for DFS vs BSP.
 
-**Lines changed**: New benchmark file `benchmarks/micro/bench-bsp-overhead.rkt` (~50 lines).
+#### Measurement M2: Single-Propagator Fire
+
+One propagator on the dirty list, fires once, writes one cell, quiesces.
+
+- **Measures**: Minimal work unit — one fire function invocation + one cell write + re-checking for quiescence.
+- **DFS path**: pop dirty → fire → write cell → check dirty → empty → return.
+- **BSP path**: collect round → fire all (1) → apply writes → check dirty → empty → return.
+- **Design impact**: The per-fire BSP overhead. If >10% over DFS, BSP needs optimization before defaulting.
+- **Setup**: Network with cell A (value 0), propagator P that writes A to 1. Mark P dirty. Time `run-to-quiescence`.
+
+#### Measurement M3: Chain Propagation (depth 10)
+
+Cell A → prop1 → Cell B → prop2 → Cell C → ... → Cell K. Writing Cell A triggers a chain of 10 fires.
+
+- **Measures**: How scheduling strategy affects propagation depth. BSP's weak case — linear chains.
+- **DFS path**: Fires 10 propagators in 10 sequential steps (follows the chain immediately).
+- **BSP path**: Fires in rounds — round 1 fires prop1, round 2 fires prop2, ... 10 rounds.
+- **Design impact**: BSP should be ~equal or slightly worse (round overhead × 10). Establishes worst-case ratio. If >25% worse, chain workloads need DFS fast-path.
+- **Setup**: Build chain of 10 cells + 10 propagators. Write seed value to cell A. Time `run-to-quiescence`.
+
+#### Measurement M4: Fan-Out Propagation (width 10)
+
+Cell A watched by 10 propagators that each write to independent cells B1...B10.
+
+- **Measures**: BSP's strong case — all 10 are independent, fire in one round.
+- **DFS path**: Fires 10 propagators sequentially.
+- **BSP path**: Fires all 10 in one round, bulk-merges all writes.
+- **Design impact**: Baseline for parallelism benefit in PAR Track 2. In sequential BSP the round cost should be similar to DFS. If BSP is faster here (batch amortization), that's a signal.
+- **Setup**: Network with cell A + 10 cells B1-B10 + 10 propagators. Write to cell A. Time `run-to-quiescence`.
+
+#### Measurement M5: Decomposition Baseline (current inline cost)
+
+A propagator that triggers SRE structural decomposition — the operation Track 1 moves to the topology stratum.
+
+- **Measures**: Current inline decomposition cost (DFS only, since BSP drops the topology). This is the baseline that the topology-stratum approach must match.
+- **What to capture**: Wall time for the full decomposition path: `sre-maybe-decompose` → `sre-decompose-generic` → N × `net-new-cell` + N × `net-add-propagator` + reconstructors.
+- **Design impact**: If inline decomposition is <10μs, the topology stratum's request→process overhead is a larger fraction of total cost. If >100μs, the overhead is negligible.
+- **Setup**: Network with two cells (val: `PVec Int`, `PVec Nat`), SRE subtype propagator. Time a single fire that triggers decomposition.
+- **Instrumentation**: Wrap the decomposition call path with `current-inexact-monotonic-milliseconds` timing. No permanent instrumentation needed — the bench file instruments directly.
+
+#### Post-Track-1 Re-measurements
+
+After implementation, re-run M1-M5 to compare:
+- M1 delta: cost of empty topology-stratum check
+- M2/M3/M4 delta: overhead of CALM guard + decomp-request cell existence
+- M5 comparison: inline decomposition (pre) vs request→topology-stratum (post)
+
+### Phase 0a: Adversarial Benchmarks
+
+**File**: `benchmarks/comparative/scheduler-adversarial.prologos` (~60 lines)
+
+Adversarial testing targets the specific failure modes and worst cases for BSP:
+
+#### A1: Deep Compound Type Nesting (Topology Ping-Pong)
+
+```
+;; Each level triggers a decomposition round in the topology stratum
+;; Depth N = N outer-loop iterations
+type Deep5 := PVec (PVec (PVec (PVec (PVec Nat))))
+spec deep-id Deep5 -> Deep5
+defn deep-id [x] x
+
+;; Subtype check: Deep5 <: Deep5 requires 5 decomposition rounds
+;; This is the worst case for the two-fixpoint loop
+```
+
+- **What it tests**: Maximum number of topology→value→topology ping-pongs. Each nesting level produces a decomposition request that creates sub-propagators whose next firing may produce another request.
+- **Design impact**: If N levels take O(N²) time (each round re-processes the full worklist), the outer loop needs optimization. Expected: O(N) — each round processes only new propagators.
+
+#### A2: Wide Compound Type (Many Simultaneous Decompositions)
+
+```
+;; Single level but high arity — many decomposition requests in one round
+type Wide := Record10 Int Nat Bool String Int Nat Bool String Int Nat
+spec wide-check <Wide -> Wide>
+```
+
+- **What it tests**: Topology stratum processing many requests in one batch. Tests the set-union merge cost for large request sets and the batch creation of sub-cells/propagators.
+
+#### A3: Mixed Decomposition + Constraint Resolution
+
+```
+;; Decomposition interleaved with trait resolution
+;; Subtype check triggers decomposition, which creates new cells,
+;; which trigger trait constraint resolution (S(1)), which may
+;; trigger more decomposition
+spec polymorphic-nest {A : Type} (PVec A) -> (PVec A)
+```
+
+- **What it tests**: Interaction between topology stratum (within S(0)) and constraint resolution stratum (S(1)). Does the stratification hierarchy handle this correctly? Are decomposition requests from S(1) constraint-retry propagators processed correctly?
+
+#### A4: Narrowing + Decomposition Together
+
+```
+;; Pattern matching on compound types — narrowing branches + SRE decomposition
+spec match-pvec (PVec Nat) -> Nat
+defn match-pvec
+  | '[] -> 0N
+  | [cons x _] -> x
+```
+
+- **What it tests**: Both CALM violators active simultaneously. Narrowing emits branch requests AND SRE emits decomposition requests in the same quiescence call. The topology stratum must process both correctly in one pass.
+
+#### A5: No-Decomposition Baseline (Pure Scheduling Overhead)
+
+```
+;; Heavy computation, zero decomposition
+;; Many propagator firings, many constraint resolutions, zero topology changes
+;; This measures the PURE overhead of BSP vs DFS on a realistic workload
+spec fib Nat -> Nat
+defn fib
+  | zero -> zero
+  | suc zero -> suc zero
+  | suc (suc n) -> [nat+ [fib n] [fib [suc n]]]
+
+[fib 5N]
+```
+
+- **What it tests**: BSP overhead on workloads that never touch the topology stratum. The decomp-request cell check must be negligible. If this is measurably slower under BSP, the guard needs optimization.
+
+### Phase 0a: E2E Validation
+
+Run `bench-ab.rkt` on the existing 13 comparative programs under DFS vs BSP (using `bench-scheduler-ab.rkt` which parameterizes the scheduler). This captures real-world overhead across diverse workloads.
+
+**Note**: BSP will fail SRE-decomposition-dependent programs (the current bug). We capture wall time for PASSING programs only. Failing programs are excluded from the timing comparison but their failure mode is catalogued.
+
+### Phase 0a: Instrumentation Summary
+
+| Item | Type | Permanent? | Location |
+|------|------|-----------|----------|
+| `bench-bsp-overhead.rkt` | Micro-benchmark file | Yes (permanent benchmark) | `benchmarks/micro/` |
+| `scheduler-adversarial.prologos` | Adversarial benchmark file | Yes (permanent benchmark) | `benchmarks/comparative/` |
+| Topology-stratum round counter | `box` behind parameter | No — cleanup Phase 9 | `propagator.rkt` |
+| Topology-stratum request counter | `box` behind parameter | No — cleanup Phase 9 | `propagator.rkt` |
+| `current-topology-stratum-counters` | Parameter (`#f` default) | No — cleanup Phase 9 | `propagator.rkt` |
+
+**Success criteria**:
+- M1-M4: BSP overhead ≤5% of DFS for non-decomposing workloads
+- M5: Inline decomposition baseline captured (μs)
+- A1-A5: All pass under DFS; A5 establishes BSP overhead baseline
+- If BSP overhead >10% on M1, the empty topology check needs boolean-flag optimization
+
+**Lines changed**: ~120 (bench file) + ~60 (adversarial file)
 
 **Completion**: commit → tracker → dailies → proceed.
 
@@ -448,38 +590,53 @@ Specific changes:
 
 **Completion**: commit → tracker → dailies → proceed.
 
-### Phase 8: A/B Benchmarks — BSP vs DFS Comparative
+### Phase 8: A/B Benchmarks — BSP vs DFS Final Comparison
 
-**What**: Final performance comparison now that BSP is the default and all tests pass. Validates that the stratified topology approach doesn't regress performance.
+**What**: Final performance comparison now that BSP is the default and all tests pass. Compares Phase 0a baselines (pre-implementation) against post-implementation measurements.
+
+**Micro-benchmarks** (re-run M1-M5 from Phase 0a):
+- M1 delta: cost of empty topology-stratum check added to quiescence
+- M2/M3/M4 delta: overhead of CALM guard + decomp-request cell existence on simple workloads
+- M5 comparison: inline decomposition (Phase 0a baseline) vs request→topology-stratum→process (post)
+
+**Adversarial benchmarks** (re-run A1-A5 from Phase 0a):
+- A1: Deep nesting now exercises the actual topology stratum rounds
+- A2: Wide arity exercises batch request processing
+- A3: Mixed decomposition + constraint — validates cross-strata interaction
+- A4: Narrowing + decomposition together — both violators exercised
+- A5: No-decomposition baseline — pure scheduling overhead comparison
 
 **Comparative benchmarks** (`bench-ab.rkt`):
-- All 13 programs in `benchmarks/comparative/`, 5 runs each
-- Compare HEAD (BSP default) vs pre-BSP commit (DFS)
+- All 13+ programs in `benchmarks/comparative/` (including `scheduler-adversarial.prologos`), 5 runs each
+- Compare HEAD (BSP default) vs pre-BSP commit (DFS) using `--ref`
 - Mann-Whitney U test for statistical significance
-- Report: per-program wall time, heartbeat counts, p-values
-
-**Adversarial benchmarks**:
-- `constraints-adversarial.prologos`: exercises prelude loading, per-command cell allocation, polymorphic resolution — heavy quiescence workload
-- `type-adversarial.prologos`: deep compound types that trigger SRE decomposition — exercises the topology stratum round-trip
-- `solve-adversarial.prologos`: logic engine workload — exercises narrowing propagators
-
-**Micro-benchmarks** (compare against Phase 0a baselines):
-- Re-run the 4 microbenchmarks from Phase 0a
-- Compare: did the topology stratum add measurable overhead?
-- The empty topology check should be ≤1μs per quiescence call
 
 **Success criteria**:
-- Non-decomposing workloads: ≤5% overhead vs DFS
-- Decomposition-heavy workloads: ≤15% overhead vs DFS (topology stratum round-trip is inherently more expensive than inline — we're trading correctness for a small cost)
-- No program ≥2× slower
+- M1 (empty quiescence): topology check adds ≤1μs
+- M2/M3/M4: BSP overhead ≤5% of DFS
+- M5: topology-stratum decomposition ≤2× inline decomposition cost
+- A1-A4: all pass under BSP, wall time ≤15% of DFS
+- A5: BSP overhead ≤5% of DFS (no decomposition workload)
+- Comparative suite: no program ≥2× slower, median overhead ≤5%
 
 **Completion**: commit → tracker → dailies → proceed.
 
-### Phase 9: Full Suite Regression Gate
+### Phase 9: Instrumentation Cleanup
 
-**What**: One full suite run confirming 380/380 green under BSP.
-**How**: `racket tools/run-affected-tests.rkt --all` (ONE run, read failure logs if any).
-**Success**: 380/380 green. Suite wall time within 10% of DFS baseline.
+**What**: Remove benchmark-only scaffolding that shouldn't persist in production.
+
+Specific removals:
+- `current-topology-stratum-counters` parameter (if not useful for production observability)
+- Round counter / request counter boxes (unless promoted to permanent PERF-COUNTERS)
+
+Specific retentions:
+- `bench-bsp-overhead.rkt` — permanent micro-benchmark (regression detection)
+- `scheduler-adversarial.prologos` — permanent adversarial benchmark
+- CALM guard (`current-bsp-fire-round?`) — permanent production guard
+
+**Decision**: If the round/request counters are cheap (<1% overhead with parameter `#f`), promote them to permanent observability behind `PERF-COUNTERS` output. If measurable overhead, remove.
+
+**Lines changed**: ~5-15 (remove or promote)
 
 **Completion**: commit → tracker → dailies → proceed.
 
