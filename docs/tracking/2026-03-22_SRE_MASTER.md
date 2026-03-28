@@ -481,3 +481,13 @@ for every structural reasoning task. Each SRE track is a test of this conjecture
 ## Research: Module Theory
 
 [Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md): Four SRE relations = four sub-rings of endomorphism ring (Krull-Schmidt canonical). Variance = algebraic kind. Duality hardness is algebraically fundamental (antitone mixing).
+
+## Research: Algebraic Embeddings
+
+[Algebraic Embeddings on Lattices](../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md): The type lattice may carry richer algebraic structure than just ordering. Key implications for SRE:
+
+- **Heyting algebra → error reporting**: If the type lattice is a Heyting algebra, contradictions become pseudo-complement lattice elements that carry precise incompatibility information (not just a boolean flag). SRE contradiction cells would hold the pseudo-complement, enabling "the type `String` conflicts with `Nat` at the numeric/string boundary" rather than "Expected Nat, got String."
+- **Residuated lattice → automatic backward propagators**: Forward decomposition functions automatically derive backward (check/narrow) directions via residuation formula. Register one direction, get both. Confirmed computable for first-order pattern matching (PTF Track 1 Phase 1).
+- **Quantale module → unified resource tracking**: Domain merge registries ARE quantale module actions. Making this explicit would let us derive merge functions from domain algebraic structure rather than hand-coding per domain per relation.
+- **Ideal lattice → subsystem boundaries**: The ideal lattice of the propagator ring formally maps which propagator subsystems are independent. Dead propagators belong to the zero ideal.
+- **Kind-variance table extensibility**: Tags algebraic properties (order-preserving, involutive, idempotent) not just names, so future Heyting/residuated extensions slot in naturally.
