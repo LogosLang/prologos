@@ -275,7 +275,8 @@
            (let ([child-tree (cdr child-entry)]
                  [new-bindings (append (reverse sub-cells) bindings)])
              ;; PAR Track 1 D.4: dual-path BSP/DFS
-             (define branch-key (list 'narrow-branch watched-cell pos tag))
+             ;; Use decomp-key format for pair-decomps compatibility
+             (define branch-key (decomp-key watched-cell result-cell 'narrow-branch))
              (if (current-bsp-fire-round?)
                  ;; BSP: emit topology request (with dedup via pair-decomps)
                  (if (net-pair-decomp? net branch-key)
@@ -321,7 +322,8 @@
       (for/list ([cid (in-list bindings)])
         (term-walk (net-cell-read net cid)
                    (lambda (c) (net-cell-read net c)))))
-    (define rule-key (list 'narrow-rule result-cell (length bindings)))
+    ;; Use decomp-key format for pair-decomps compatibility
+    (define rule-key (decomp-key result-cell result-cell 'narrow-rule))
     ;; If any binding is still bot, residuate
     (if (ormap term-bot? binding-vals)
         net

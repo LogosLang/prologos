@@ -1372,7 +1372,7 @@
   (define observer (current-bsp-observer))
   (define has-topo-handlers? (pair? (unbox topology-handlers)))
   ;; Outer loop: value stratum → topology stratum → repeat
-  (let outer-loop ([net net])
+  (let outer-loop ([net net] [outer-round 0])
     (cond
       [(prop-network-contradiction net) net]
       [(<= (prop-network-fuel net) 0) net]
@@ -1430,7 +1430,10 @@
                      ;; Clear request cell (non-monotone reset — bypasses merge)
                      [cleared-net (net-cell-reset processed-net decomp-request-cell-id (set))])
                 ;; New propagators are on the worklist → back to value stratum
-                (outer-loop cleared-net)))])])))
+                (when (> outer-round 20)
+                  (error 'run-to-quiescence-bsp
+                         "topology stratum: >20 outer iterations — possible infinite loop"))
+                (outer-loop cleared-net (add1 outer-round))))])])))
 
 ;; ========================================
 ;; Parallel Executor (Phase 2.5c)

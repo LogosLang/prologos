@@ -62,7 +62,7 @@
                   pnet-stale? relink-foreign-marshallers!)
          (only-in "sre-core.rkt"         ;; PAR Track 1: topology stratum handler
                   sre-decompose-generic sre-constructor-tag
-                  sre-domain-bot? sre-domain-name)
+                  sre-domain-bot? sre-domain-name sre-relation-name)
          (only-in "narrowing.rkt"        ;; PAR Track 1: topology stratum handler
                   install-narrowing-propagators eval-rhs)
          (only-in "term-lattice.rkt" term-bot?)
@@ -433,11 +433,15 @@
                      [bot? (sre-domain-bot? domain)])
                 (if (or (bot? va) (bot? vb))
                     net
-                    (let* ([tag (sre-constructor-tag domain va)]
+                    ;; Derive lhs based on relation direction (subtype vs subtype-reverse)
+                    (let* ([rel-name (sre-relation-name relation)]
+                           [reversed? (eq? rel-name 'subtype-reverse)]
+                           [lhs (if reversed? vb va)]
+                           [tag (sre-constructor-tag domain lhs)]
                            [desc (and tag (lookup-ctor-desc tag #:domain (sre-domain-name domain)))])
                       (if (not desc)
                           net
-                          (sre-decompose-generic net domain cell-a cell-b va vb va
+                          (sre-decompose-generic net domain cell-a cell-b va vb lhs
                                                  pair-key desc #:relation relation))))))))))
 
 ;; Returns a result string, or a prologos-error.
