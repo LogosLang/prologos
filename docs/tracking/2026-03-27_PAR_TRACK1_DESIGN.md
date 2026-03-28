@@ -309,27 +309,47 @@ Proposed (stratified):
 
 ---
 
-## §7 Narrowing Cell-Only CALM Analysis
+## §7 Narrowing Cell-Only CALM Analysis (D.2 Revised)
 
-Phase 0 validates empirically whether `net-new-cell` (without `net-add-propagator`) is CALM-safe during BSP fire rounds.
+### D.1 Conclusion (SUPERSEDED)
 
-**Argument for CALM-safety**:
-- A cell without dependents doesn't affect the worklist
-- No propagator can read a cell it doesn't know about (cell-id is local to the creating fire function)
-- The cell-id appears in a value written to another cell — but that's a value operation, not a scheduling dependency
-- The cell is pure storage, not a scheduling entity
+D.1 concluded that ALL `net-new-cell` in fire functions should be treated as CALM violations. This was overly conservative.
 
-**Argument against**:
-- BSP's `fire-and-collect-writes` diffs only declared output cells. A newly created cell is not in `propagator-outputs`, so its initial value isn't captured in the write list. However, the cell's value IS in the returned `result-net` — it just isn't extracted.
-- If a future topology stratum adds a propagator watching this cell, the propagator expects the cell to exist with its value. Under BSP, the cell doesn't exist in the canonical network.
+### D.2 Audit Findings
 
-**Conclusion**: Cell-only creation is NOT safe under the current BSP implementation, because the cell's existence is lost in the diff. Even though it doesn't affect scheduling order, the cell must exist for future propagators to reference it. The topology stratum must create cells.
+The eval-rhs audit (`6eeb73b`) found:
+- **4 `net-new-cell` call sites** in eval-rhs (lines 124, 323, 338, 386)
+- **Zero `net-add-propagator` calls** in eval-rhs
+- All created cells are **inert storage** — no dependents, no scheduling effect
+- Cell-ids are used immediately in returned `term-ctor` values (written to output cells)
 
-**However**: If `make-rule-fire-fn` creates cells AND writes values referencing those cell-ids to the result cell, and BSP captures the result-cell write but NOT the new cells — the result cell contains dangling references to nonexistent cells. This produces errors, not silent wrong results. The CALM guard should catch this.
+### D.2 CALM Safety Analysis
 
-**Design decision**: Treat all `net-new-cell` in fire functions as CALM violations. Narrowing rule evaluation needs refactoring: either pre-allocate cell IDs or move cell creation to the topology stratum.
+**The CALM theorem guarantees order-independence for monotone operations over a fixed scheduling topology.** The scheduling topology is the set of (propagator, input-cells, output-cells) triples.
 
-**Phase 0 still validates**: Run narrowing tests under BSP to confirm the failure mode and classify which narrowing operations actually trigger during the test suite.
+- `net-new-cell`: Adds a cell to the cell CHAMP. Does NOT add propagator edges. The scheduling topology is **unchanged**. CALM applies.
+- `net-add-propagator`: Adds propagator edges. The scheduling topology **changes**. CALM does NOT apply.
+
+Therefore: `net-new-cell` during BSP fire rounds is **CALM-safe**. `net-add-propagator` is **CALM-unsafe**.
+
+### BSP Implementation Concern
+
+BSP's `fire-and-collect-writes` diffs only declared output cells. A newly created cell is not in `propagator-outputs`, so its value isn't captured. **BUT**: the cell-id appears in a term-ctor written to a declared output cell. BSP captures that write. The cell itself exists in the fire function's returned `result-net`.
+
+**The fix**: `fire-and-collect-writes` must diff the full cell CHAMP, not just declared outputs. New cells appear as new keys in the CHAMP. This is a small change (~5 lines in `bulk-merge-writes`).
+
+### D.2 Design Decision
+
+- `net-new-cell`: **ALLOWED** during BSP fire rounds (CALM-safe)
+- `net-add-propagator`: **ERROR** during BSP fire rounds (CALM-unsafe)
+- `fire-and-collect-writes`: **EXPANDED** to diff full cell CHAMP (captures new cells)
+- `eval-rhs`: **NO REFACTORING NEEDED** — continues to work as-is under BSP
+
+This eliminates Phase 3's most complex refactoring (eval-rhs). The branch fire function still needs request emission (it calls `net-add-propagator`). The rule fire function works unchanged.
+
+### Phase 0b Validation
+
+Still needed: run narrowing tests under BSP with relaxed guard to confirm the expanded CHAMP diff captures new cells correctly.
 
 ---
 
@@ -588,22 +608,42 @@ Specific changes:
 
 **What**: Replace inline topology creation in narrowing fire functions with request emission.
 **Where**: `narrowing.rkt`
-**Lines**: ~30
 
-Specific changes:
-- `make-branch-fire-fn` lambda (line 230): replace `install-narrowing-propagators` call at line 246 with request emission to decomp-request cell
-- `make-rule-fire-fn` lambda (line 276): replace `eval-rhs` → `net-new-cell` calls with request emission for cell creation
-- `install-narrowing-propagators` remains unchanged — called from topology stratum
-- `eval-rhs` needs refactoring: separate "compute what cells are needed" from "create cells and return values referencing them"
+#### D.2 Audit Findings (eval-rhs)
 
-**The `eval-rhs` challenge**: The function creates cells AND immediately uses their IDs. Options:
-1. **Split into two phases**: `eval-rhs-plan` returns a description of needed cells + a continuation that builds the term given cell-ids. `eval-rhs-execute` creates cells and calls the continuation. Plan phase runs in fire function; execute phase runs in topology stratum.
-2. **Pre-allocate cell IDs**: Topology stratum allocates IDs, fire function uses them. Requires cell-ID reservation API.
-3. **Emit rule-eval request**: The entire rule evaluation becomes a topology-stratum operation. The fire function only checks "are bindings ready?" and emits the request.
+The audit (`6eeb73b`) revealed two distinct CALM violation patterns in narrowing:
 
-**Preferred: Option 3**. The fire function becomes a pure readiness check. The topology stratum handles all cell creation and value construction. Simplest, cleanest separation.
+**Branch fire function** (line 228): Calls `install-narrowing-propagators` recursively → `net-add-propagator` for child subtrees. This installs new propagators — a clear CALM violation (changes scheduling). **Must be moved to topology stratum.**
 
-**Test**: Run `raco test tests/test-narrowing-*.rkt` under DFS — must still pass.
+**Rule fire function** (line 275): Calls `eval-rhs` → `net-new-cell` at 4 sites (lines 124, 323, 338, 386). Creates cells for constructor sub-terms. **No `net-add-propagator` calls** in eval-rhs. The cells are pure storage with no dependents — inert until a future topology stratum adds propagators watching them.
+
+**Key insight**: Cell-only creation (`net-new-cell` without `net-add-propagator`) is structurally harmless for BSP. A cell with no dependents can't affect which propagators fire or in what order. The CALM concern is about scheduling order — and cells without dependents are scheduling-invisible.
+
+#### Revised Options for Rule Fire Function
+
+| Option | Description | Lines | Invasiveness |
+|--------|-------------|-------|--------------|
+| **3a** | Move eval-rhs entirely to topology stratum | ~60 | High — carries full expr + bindings in request |
+| **3b** | Pre-allocate cell-ids in topology stratum, pass to fire fn | ~40 | Medium — cell-ID reservation API |
+| **3c** | Allow `net-new-cell` during BSP fire rounds; guard only `net-add-propagator` | ~5 | **Minimal** — relax guard for cell-only creation |
+
+**Preferred: Option 3c** for rule fire functions. Rationale:
+- The audit confirms eval-rhs creates cells but never propagators
+- Cells without dependents are CALM-safe (inert storage, no scheduling effect)
+- The CALM guard distinguishes: `net-add-propagator` = unsafe (changes scheduling), `net-new-cell` = safe (no scheduling effect)
+- Zero refactoring of eval-rhs required — it continues to work as-is
+- The guard remains strict for propagator creation (the actual CALM violation)
+
+**Principled justification**: CALM guarantees order-independence for monotone operations over a fixed SCHEDULING TOPOLOGY. The scheduling topology is the set of (propagator, input-cells, output-cells) triples. `net-new-cell` adds a cell to the network but adds no propagator edges — the scheduling topology is unchanged. `net-add-propagator` adds edges — the scheduling topology changes. The guard should enforce fixed scheduling topology, not fixed cell count.
+
+**Implementation**:
+- Branch fire function: emit `narrowing-decomp-request` with child subtree → topology stratum calls `install-narrowing-propagators`. (~15 lines change)
+- Rule fire function: no change needed. Guard relaxed to allow `net-new-cell` during BSP rounds.
+- CALM guard: `net-add-propagator` errors during BSP rounds. `net-new-cell` allowed. `net-cell-decomp-insert`/`net-pair-decomp-insert` — these modify registry CHAMPs, not scheduling topology. Allow during BSP rounds (they're value-like metadata writes).
+
+**Lines**: ~20 (branch emission + guard relaxation)
+
+**Test**: Run `raco test tests/test-narrowing-*.rkt` under BSP — must pass with guard relaxation.
 
 **Completion**: commit → tracker → dailies → proceed.
 
@@ -638,13 +678,14 @@ Specific changes:
 
 ### Phase 6: CALM Guard Hardening
 
-**What**: Finalize guard behavior for production.
+**What**: Finalize guard behavior for production based on D.2 audit findings.
 **Lines**: ~10
 
-- `net-add-propagator`: ERROR during BSP fire rounds (already implemented)
-- `net-new-cell`: ERROR during BSP fire rounds (already implemented — keep)
-- `net-cell-decomp-insert`, `net-pair-decomp-insert`: ERROR during BSP fire rounds (add guards)
-- Document the CALM contract in propagator.rkt header comment
+Guard behavior (D.2 revised — based on scheduling topology analysis):
+- `net-add-propagator`: **ERROR** during BSP fire rounds (changes scheduling topology — CALM-unsafe)
+- `net-new-cell`: **ALLOWED** during BSP fire rounds (no scheduling effect — cells without dependents are inert)
+- `net-cell-decomp-insert`, `net-pair-decomp-insert`: **ALLOWED** during BSP fire rounds (registry metadata, not scheduling topology)
+- Document the CALM contract in propagator.rkt header: "The CALM invariant is: fixed scheduling topology within a BSP round. Scheduling topology = the set of (propagator, input-cells, output-cells) triples. Cell creation and metadata writes are permitted; propagator creation is not."
 
 **Completion**: commit → tracker → dailies → proceed.
 
