@@ -947,11 +947,11 @@
 ;; The propagator is registered as a dependent of each input cell,
 ;; and scheduled for initial firing on the worklist.
 (define (net-add-propagator net input-ids output-ids fire-fn)
-  ;; CALM topology guard: dynamic topology violates order-independence.
-  (when (current-bsp-fire-round?)
-    (error 'net-add-propagator
-           "CALM violation: cannot add propagators during BSP fire round. ~
-            Topology changes require stratum boundaries."))
+  ;; PAR Track 1: During BSP fire rounds, propagator creation is allowed
+  ;; but the new propagator is NOT scheduled on the worklist. It exists
+  ;; in the result-net's propagator CHAMP. fire-and-collect-writes captures
+  ;; it via next-prop-id comparison. The topology stratum applies new
+  ;; propagators to the canonical network and schedules them.
   (define pid (prop-id (prop-network-next-prop-id net)))
   (define prop (propagator input-ids output-ids fire-fn))
   (define ph (prop-id-hash pid))
@@ -983,9 +983,12 @@
      [cold (struct-copy prop-net-cold (prop-network-cold net)
              [propagators (champ-insert (prop-network-propagators net) ph pid prop)]
              [next-prop-id (+ 1 (prop-network-next-prop-id net))])]
-     ;; Schedule initial firing
-     [hot (struct-copy prop-net-hot (prop-network-hot net)
-            [worklist (cons pid (prop-network-worklist net))])])
+     ;; Schedule initial firing — but NOT during BSP fire rounds.
+     ;; During BSP, new propagators are deferred to the topology stratum.
+     [hot (if (current-bsp-fire-round?)
+              (prop-network-hot net)  ;; Don't modify worklist during BSP
+              (struct-copy prop-net-hot (prop-network-hot net)
+                [worklist (cons pid (prop-network-worklist net))]))])
    pid))
 
 ;; ========================================
@@ -1250,7 +1253,7 @@
 ;; invisible in BSP mode.
 ;; PAR Track 1 D.3: fire-result bundles value writes AND new cells.
 ;; New cells are captured structurally via next-cell-id comparison.
-(struct fire-result (value-writes new-cells) #:transparent)
+(struct fire-result (value-writes new-cells new-propagators) #:transparent)
 
 (define (fire-and-collect-writes snapshot-net pid)
   (define prop (champ-lookup (prop-network-propagators snapshot-net)
@@ -1304,7 +1307,20 @@
           (define cell-dir (champ-lookup (prop-network-cell-dirs result-net)
                                          (cell-id-hash cid) cid))
           (list cid cell merge-fn contra-fn widen-fn cell-dir))))
-  (fire-result value-writes new-cells))
+  ;; PAR Track 1: Capture new propagators via next-prop-id comparison.
+  ;; Propagators created during BSP are NOT on the worklist (deferred).
+  ;; The topology stratum adds them to the canonical network and schedules them.
+  (define snapshot-next-prop-id (prop-network-next-prop-id snapshot-net))
+  (define result-next-prop-id (prop-network-next-prop-id result-net))
+  (define new-propagators
+    (if (= snapshot-next-prop-id result-next-prop-id)
+        '()
+        (for/list ([i (in-range snapshot-next-prop-id result-next-prop-id)])
+          (define pid (prop-id i))
+          (define prop (champ-lookup (prop-network-propagators result-net)
+                                     (prop-id-hash pid) pid))
+          (list pid prop))))
+  (fire-result value-writes new-cells new-propagators))
 
 ;; Apply collected writes from all propagators to a network.
 ;; net-cell-write handles merge, dependent enqueuing, and contradiction.
@@ -1315,11 +1331,12 @@
   (for/fold ([net net])
             ([result (in-list all-results)])
     ;; Handle both old-style write lists and new fire-result structs
-    (define-values (writes new-cells)
+    (define-values (writes new-cells new-props)
       (if (fire-result? result)
           (values (fire-result-value-writes result)
-                  (fire-result-new-cells result))
-          (values result '())))
+                  (fire-result-new-cells result)
+                  (fire-result-new-propagators result))
+          (values result '() '())))
     ;; Apply new cells first (they may be referenced by value writes)
     (define net-with-cells
       (for/fold ([n net])
@@ -1356,9 +1373,25 @@
                         [next-cell-id (max (prop-network-next-cell-id n)
                                            (+ (cell-id-n cid) 1))])])))))
     ;; Then apply value writes
-    (for/fold ([n net-with-cells])
-              ([w (in-list writes)])
-      (net-cell-write n (car w) (cdr w)))))
+    (define net-with-values
+      (for/fold ([n net-with-cells])
+                ([w (in-list writes)])
+        (net-cell-write n (car w) (cdr w))))
+    ;; New propagators are NOT applied here — they're collected and
+    ;; applied by the topology stratum via net-add-propagator (which
+    ;; handles dependency registration correctly).
+    net-with-values))
+
+;; Collect all deferred propagators from fire results.
+;; Returns list of (list input-ids output-ids fire-fn) specs.
+(define (collect-deferred-propagators all-results)
+  (for*/list ([result (in-list all-results)]
+              #:when (fire-result? result)
+              [prop-spec (in-list (fire-result-new-propagators result))]
+              #:when (and (pair? prop-spec) (cadr prop-spec) (not (eq? (cadr prop-spec) 'none))))
+    (define prop (cadr prop-spec))
+    (list (propagator-inputs prop) (propagator-outputs prop) (propagator-fire-fn prop))))
+
 
 ;; Fire all propagators sequentially against the same snapshot.
 ;; Returns a list of write-lists, one per propagator.
@@ -1421,7 +1454,14 @@
                                         [worklist '()]
                                         [fuel (- (prop-network-fuel net) n)])])]
                      [all-writes (executor snapshot pids)]
-                     [merged (bulk-merge-writes snapshot all-writes)])
+                     [merged (bulk-merge-writes snapshot all-writes)]
+                     ;; Apply deferred propagators (created during fire, not yet on network)
+                     [deferred-props (collect-deferred-propagators all-writes)]
+                     [merged-with-props
+                      (for/fold ([n merged])
+                                ([spec (in-list deferred-props)])
+                        (let-values ([(n* _pid) (net-add-propagator n (car spec) (cadr spec) (caddr spec))])
+                          n*))])
                 ;; Observer notification
                 (when observer
                   (define writes-for-observer
@@ -1438,9 +1478,9 @@
                                          (cdr w)
                                          pid)
                               acc))))
-                  (observer (bsp-round round-number merged (reverse diffs) pids
-                                       (prop-network-contradiction merged) '())))
-                (inner-loop merged (add1 round-number)))])))
+                  (observer (bsp-round round-number merged-with-props (reverse diffs) pids
+                                       (prop-network-contradiction merged-with-props) '())))
+                (inner-loop merged-with-props (add1 round-number)))])))
        ;; TOPOLOGY STRATUM: process decomposition requests (sequential, outside BSP)
        (cond
          [(prop-network-contradiction value-result) value-result]
