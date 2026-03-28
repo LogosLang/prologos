@@ -12,6 +12,26 @@
 ;;;
 ;;; Design reference: docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.md §2
 ;;;
+;;; PAR Track 1 CALM Contract:
+;;; Fire functions are pure state transformers: (prop-network → prop-network).
+;;; During BSP fire rounds (current-bsp-fire-round? = #t):
+;;;   - net-cell-read: allowed (reads from snapshot)
+;;;   - net-cell-write: allowed (value writes captured by CHAMP diff)
+;;;   - net-new-cell: allowed (captured via next-cell-id comparison)
+;;;   - net-add-propagator: allowed but DEFERRED (not on worklist until
+;;;     next BSP round; captured via next-prop-id comparison)
+;;; The BSP infrastructure handles all structural changes transparently.
+;;; No module needs explicit BSP awareness — the infrastructure is the
+;;; enforcement point.
+;;;
+;;; Known BSP limitation: non-idempotent merge functions (e.g., list-append)
+;;; may double-merge values due to snapshot vs canonical divergence. Use
+;;; DFS wrapper for tests that rely on non-idempotent merges.
+;;;
+;;; Known BSP limitation: meta-solving via imperative state
+;;; (current-meta-info box) doesn't propagate through BSP's snapshot
+;;; isolation. Will resolve when elaboration moves onto the network.
+;;;
 
 (require "champ.rkt"
          "performance-counters.rkt"
