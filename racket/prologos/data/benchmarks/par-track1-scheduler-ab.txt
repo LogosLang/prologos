@@ -1,0 +1,1519 @@
+PERF-COUNTERS:{"cell_allocs":400,"constraint_count":0,"constraint_retries":0,"elaborate_steps":92,"infer_steps":126,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":138,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":44,"zonk_steps":101}
+PHASE-TIMINGS:{"elaborate_ms":18,"parse_ms":0,"qtt_ms":2,"reduce_ms":59,"trait_resolve_ms":0,"type_check_ms":47,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":111073904,"mem_before_bytes":108811456,"mem_retained_bytes":2262448}
+CELL-METRICS:{"cells":27,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":464,"constraint_count":0,"constraint_retries":0,"elaborate_steps":92,"infer_steps":126,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":138,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":44,"zonk_steps":101}
+PHASE-TIMINGS:{"elaborate_ms":16,"parse_ms":0,"qtt_ms":1,"reduce_ms":50,"trait_resolve_ms":0,"type_check_ms":44,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":37,"mem_after_bytes":111217936,"mem_before_bytes":111210408,"mem_retained_bytes":7528}
+CELL-METRICS:{"cells":27,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":464,"constraint_count":0,"constraint_retries":0,"elaborate_steps":92,"infer_steps":126,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":138,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":44,"zonk_steps":101}
+PHASE-TIMINGS:{"elaborate_ms":16,"parse_ms":0,"qtt_ms":1,"reduce_ms":48,"trait_resolve_ms":0,"type_check_ms":42,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":36,"mem_after_bytes":111208304,"mem_before_bytes":111205496,"mem_retained_bytes":2808}
+CELL-METRICS:{"cells":27,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":464,"constraint_count":0,"constraint_retries":0,"elaborate_steps":92,"infer_steps":126,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":138,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":44,"zonk_steps":101}
+PHASE-TIMINGS:{"elaborate_ms":16,"parse_ms":0,"qtt_ms":1,"reduce_ms":49,"trait_resolve_ms":0,"type_check_ms":42,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":36,"mem_after_bytes":111198080,"mem_before_bytes":111195880,"mem_retained_bytes":2200}
+CELL-METRICS:{"cells":27,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":464,"constraint_count":0,"constraint_retries":0,"elaborate_steps":92,"infer_steps":126,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":138,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":44,"zonk_steps":101}
+PHASE-TIMINGS:{"elaborate_ms":15,"parse_ms":0,"qtt_ms":1,"reduce_ms":48,"trait_resolve_ms":0,"type_check_ms":41,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":35,"mem_after_bytes":111249232,"mem_before_bytes":111249176,"mem_retained_bytes":56}
+CELL-METRICS:{"cells":27,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":464,"constraint_count":0,"constraint_retries":0,"elaborate_steps":92,"infer_steps":126,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":138,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":44,"zonk_steps":101}
+PHASE-TIMINGS:{"elaborate_ms":15,"parse_ms":0,"qtt_ms":1,"reduce_ms":48,"trait_resolve_ms":0,"type_check_ms":41,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":35,"mem_after_bytes":111237720,"mem_before_bytes":111236616,"mem_retained_bytes":1104}
+CELL-METRICS:{"cells":27,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":464,"constraint_count":0,"constraint_retries":0,"elaborate_steps":92,"infer_steps":126,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":138,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":44,"zonk_steps":101}
+PHASE-TIMINGS:{"elaborate_ms":15,"parse_ms":0,"qtt_ms":1,"reduce_ms":46,"trait_resolve_ms":0,"type_check_ms":42,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":36,"mem_after_bytes":111227208,"mem_before_bytes":111225304,"mem_retained_bytes":1904}
+CELL-METRICS:{"cells":27,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":464,"constraint_count":0,"constraint_retries":0,"elaborate_steps":92,"infer_steps":126,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":138,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":44,"zonk_steps":101}
+PHASE-TIMINGS:{"elaborate_ms":22,"parse_ms":0,"qtt_ms":1,"reduce_ms":50,"trait_resolve_ms":0,"type_check_ms":44,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":37,"mem_after_bytes":111214808,"mem_before_bytes":111214800,"mem_retained_bytes":8}
+CELL-METRICS:{"cells":27,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":464,"constraint_count":0,"constraint_retries":0,"elaborate_steps":92,"infer_steps":126,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":138,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":44,"zonk_steps":101}
+PHASE-TIMINGS:{"elaborate_ms":16,"parse_ms":0,"qtt_ms":1,"reduce_ms":50,"trait_resolve_ms":0,"type_check_ms":44,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":37,"mem_after_bytes":111265000,"mem_before_bytes":111262688,"mem_retained_bytes":2312}
+CELL-METRICS:{"cells":27,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":464,"constraint_count":0,"constraint_retries":0,"elaborate_steps":92,"infer_steps":126,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":138,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":44,"zonk_steps":101}
+PHASE-TIMINGS:{"elaborate_ms":16,"parse_ms":0,"qtt_ms":1,"reduce_ms":50,"trait_resolve_ms":0,"type_check_ms":42,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":38,"mem_after_bytes":111253736,"mem_before_bytes":111252576,"mem_retained_bytes":1160}
+CELL-METRICS:{"cells":27,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":200,"constraint_count":0,"constraint_retries":0,"elaborate_steps":122,"infer_steps":56,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":30,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":21,"zonk_steps":18}
+PHASE-TIMINGS:{"elaborate_ms":20,"parse_ms":0,"qtt_ms":2,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":47,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":37,"mem_after_bytes":111270824,"mem_before_bytes":111280608,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":29,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":200,"constraint_count":0,"constraint_retries":0,"elaborate_steps":122,"infer_steps":56,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":30,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":21,"zonk_steps":18}
+PHASE-TIMINGS:{"elaborate_ms":19,"parse_ms":0,"qtt_ms":2,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":48,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":35,"mem_after_bytes":111308336,"mem_before_bytes":111324120,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":29,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":200,"constraint_count":0,"constraint_retries":0,"elaborate_steps":122,"infer_steps":56,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":30,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":21,"zonk_steps":18}
+PHASE-TIMINGS:{"elaborate_ms":31,"parse_ms":0,"qtt_ms":2,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":70,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":37,"mem_after_bytes":111286256,"mem_before_bytes":111297816,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":29,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":200,"constraint_count":0,"constraint_retries":0,"elaborate_steps":122,"infer_steps":56,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":30,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":21,"zonk_steps":18}
+PHASE-TIMINGS:{"elaborate_ms":19,"parse_ms":0,"qtt_ms":2,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":46,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":34,"mem_after_bytes":111325696,"mem_before_bytes":111339944,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":29,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":200,"constraint_count":0,"constraint_retries":0,"elaborate_steps":122,"infer_steps":56,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":30,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":21,"zonk_steps":18}
+PHASE-TIMINGS:{"elaborate_ms":19,"parse_ms":0,"qtt_ms":2,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":46,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":35,"mem_after_bytes":111302432,"mem_before_bytes":111315176,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":29,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":200,"constraint_count":0,"constraint_retries":0,"elaborate_steps":122,"infer_steps":56,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":30,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":21,"zonk_steps":18}
+PHASE-TIMINGS:{"elaborate_ms":19,"parse_ms":0,"qtt_ms":2,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":51,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":35,"mem_after_bytes":111342472,"mem_before_bytes":111355392,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":29,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":200,"constraint_count":0,"constraint_retries":0,"elaborate_steps":122,"infer_steps":56,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":30,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":21,"zonk_steps":18}
+PHASE-TIMINGS:{"elaborate_ms":19,"parse_ms":0,"qtt_ms":2,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":45,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":35,"mem_after_bytes":111318904,"mem_before_bytes":111331952,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":29,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":200,"constraint_count":0,"constraint_retries":0,"elaborate_steps":122,"infer_steps":56,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":30,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":21,"zonk_steps":18}
+PHASE-TIMINGS:{"elaborate_ms":19,"parse_ms":0,"qtt_ms":2,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":46,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":35,"mem_after_bytes":111359960,"mem_before_bytes":111308376,"mem_retained_bytes":51584}
+CELL-METRICS:{"cells":29,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":200,"constraint_count":0,"constraint_retries":0,"elaborate_steps":122,"infer_steps":56,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":30,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":21,"zonk_steps":18}
+PHASE-TIMINGS:{"elaborate_ms":24,"parse_ms":0,"qtt_ms":2,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":54,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":37,"mem_after_bytes":111335512,"mem_before_bytes":111349440,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":29,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":200,"constraint_count":0,"constraint_retries":0,"elaborate_steps":122,"infer_steps":56,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":30,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":21,"zonk_steps":18}
+PHASE-TIMINGS:{"elaborate_ms":23,"parse_ms":0,"qtt_ms":2,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":54,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":38,"mem_after_bytes":111376520,"mem_before_bytes":111324984,"mem_retained_bytes":51536}
+CELL-METRICS:{"cells":29,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":5304,"constraint_count":0,"constraint_retries":0,"elaborate_steps":460,"infer_steps":521,"meta_created":54,"meta_solved":29,"prop_allocs":0,"prop_firings":0,"reduce_steps":482,"resolution_cycles":29,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":245,"zonk_steps":619}
+PHASE-TIMINGS:{"elaborate_ms":183,"parse_ms":0,"qtt_ms":157,"reduce_ms":48,"trait_resolve_ms":0,"type_check_ms":308,"zonk_ms":4}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":80,"mem_after_bytes":132441576,"mem_before_bytes":131361272,"mem_retained_bytes":1080304}
+CELL-METRICS:{"cells":98,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":6476,"constraint_count":0,"constraint_retries":0,"elaborate_steps":460,"infer_steps":521,"meta_created":54,"meta_solved":29,"prop_allocs":0,"prop_firings":0,"reduce_steps":482,"resolution_cycles":29,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":245,"zonk_steps":619}
+PHASE-TIMINGS:{"elaborate_ms":168,"parse_ms":0,"qtt_ms":131,"reduce_ms":42,"trait_resolve_ms":0,"type_check_ms":283,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":68,"mem_after_bytes":132461920,"mem_before_bytes":132424848,"mem_retained_bytes":37072}
+CELL-METRICS:{"cells":98,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":6476,"constraint_count":0,"constraint_retries":0,"elaborate_steps":460,"infer_steps":521,"meta_created":54,"meta_solved":29,"prop_allocs":0,"prop_firings":0,"reduce_steps":482,"resolution_cycles":29,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":245,"zonk_steps":619}
+PHASE-TIMINGS:{"elaborate_ms":164,"parse_ms":0,"qtt_ms":129,"reduce_ms":43,"trait_resolve_ms":0,"type_check_ms":272,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":67,"mem_after_bytes":132484992,"mem_before_bytes":132445824,"mem_retained_bytes":39168}
+CELL-METRICS:{"cells":98,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":6476,"constraint_count":0,"constraint_retries":0,"elaborate_steps":460,"infer_steps":521,"meta_created":54,"meta_solved":29,"prop_allocs":0,"prop_firings":0,"reduce_steps":482,"resolution_cycles":29,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":245,"zonk_steps":619}
+PHASE-TIMINGS:{"elaborate_ms":166,"parse_ms":0,"qtt_ms":131,"reduce_ms":41,"trait_resolve_ms":0,"type_check_ms":277,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":68,"mem_after_bytes":132504160,"mem_before_bytes":132468736,"mem_retained_bytes":35424}
+CELL-METRICS:{"cells":98,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":6476,"constraint_count":0,"constraint_retries":0,"elaborate_steps":460,"infer_steps":521,"meta_created":54,"meta_solved":29,"prop_allocs":0,"prop_firings":0,"reduce_steps":482,"resolution_cycles":29,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":245,"zonk_steps":619}
+PHASE-TIMINGS:{"elaborate_ms":174,"parse_ms":0,"qtt_ms":132,"reduce_ms":46,"trait_resolve_ms":0,"type_check_ms":270,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":70,"mem_after_bytes":132523936,"mem_before_bytes":132488032,"mem_retained_bytes":35904}
+CELL-METRICS:{"cells":98,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":6476,"constraint_count":0,"constraint_retries":0,"elaborate_steps":460,"infer_steps":521,"meta_created":54,"meta_solved":29,"prop_allocs":0,"prop_firings":0,"reduce_steps":482,"resolution_cycles":29,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":245,"zonk_steps":619}
+PHASE-TIMINGS:{"elaborate_ms":159,"parse_ms":0,"qtt_ms":134,"reduce_ms":41,"trait_resolve_ms":0,"type_check_ms":264,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":69,"mem_after_bytes":132483224,"mem_before_bytes":132507568,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":98,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":6476,"constraint_count":0,"constraint_retries":0,"elaborate_steps":460,"infer_steps":521,"meta_created":54,"meta_solved":29,"prop_allocs":0,"prop_firings":0,"reduce_steps":482,"resolution_cycles":29,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":245,"zonk_steps":619}
+PHASE-TIMINGS:{"elaborate_ms":152,"parse_ms":0,"qtt_ms":119,"reduce_ms":42,"trait_resolve_ms":0,"type_check_ms":256,"zonk_ms":2}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":66,"mem_after_bytes":132504424,"mem_before_bytes":132527040,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":98,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":6476,"constraint_count":0,"constraint_retries":0,"elaborate_steps":460,"infer_steps":521,"meta_created":54,"meta_solved":29,"prop_allocs":0,"prop_firings":0,"reduce_steps":482,"resolution_cycles":29,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":245,"zonk_steps":619}
+PHASE-TIMINGS:{"elaborate_ms":154,"parse_ms":0,"qtt_ms":129,"reduce_ms":40,"trait_resolve_ms":0,"type_check_ms":256,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":66,"mem_after_bytes":132532008,"mem_before_bytes":132552032,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":98,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":6476,"constraint_count":0,"constraint_retries":0,"elaborate_steps":460,"infer_steps":521,"meta_created":54,"meta_solved":29,"prop_allocs":0,"prop_firings":0,"reduce_steps":482,"resolution_cycles":29,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":245,"zonk_steps":619}
+PHASE-TIMINGS:{"elaborate_ms":154,"parse_ms":0,"qtt_ms":128,"reduce_ms":40,"trait_resolve_ms":0,"type_check_ms":264,"zonk_ms":2}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":67,"mem_after_bytes":132552024,"mem_before_bytes":132580160,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":98,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":6476,"constraint_count":0,"constraint_retries":0,"elaborate_steps":460,"infer_steps":521,"meta_created":54,"meta_solved":29,"prop_allocs":0,"prop_firings":0,"reduce_steps":482,"resolution_cycles":29,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":245,"zonk_steps":619}
+PHASE-TIMINGS:{"elaborate_ms":150,"parse_ms":0,"qtt_ms":115,"reduce_ms":39,"trait_resolve_ms":0,"type_check_ms":244,"zonk_ms":2}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":65,"mem_after_bytes":132574808,"mem_before_bytes":132599824,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":98,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":701,"constraint_count":0,"constraint_retries":0,"elaborate_steps":63,"infer_steps":39,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":22,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":8,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":11,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":18,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":132750456,"mem_before_bytes":132552448,"mem_retained_bytes":198008}
+CELL-METRICS:{"cells":107,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":713,"constraint_count":0,"constraint_retries":0,"elaborate_steps":63,"infer_steps":39,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":22,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":8,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":13,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":23,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":132789400,"mem_before_bytes":132748568,"mem_retained_bytes":40832}
+CELL-METRICS:{"cells":107,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":713,"constraint_count":0,"constraint_retries":0,"elaborate_steps":63,"infer_steps":39,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":22,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":8,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":10,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":17,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":132746424,"mem_before_bytes":132767584,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":107,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":713,"constraint_count":0,"constraint_retries":0,"elaborate_steps":63,"infer_steps":39,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":22,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":8,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":11,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":18,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":132763768,"mem_before_bytes":132786456,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":107,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":713,"constraint_count":0,"constraint_retries":0,"elaborate_steps":63,"infer_steps":39,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":22,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":8,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":11,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":17,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":132784840,"mem_before_bytes":132742080,"mem_retained_bytes":42760}
+CELL-METRICS:{"cells":107,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":713,"constraint_count":0,"constraint_retries":0,"elaborate_steps":63,"infer_steps":39,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":22,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":8,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":10,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":18,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":132808536,"mem_before_bytes":132762960,"mem_retained_bytes":45576}
+CELL-METRICS:{"cells":107,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":713,"constraint_count":0,"constraint_retries":0,"elaborate_steps":63,"infer_steps":39,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":22,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":8,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":10,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":18,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":44,"mem_after_bytes":132832920,"mem_before_bytes":132786680,"mem_retained_bytes":46240}
+CELL-METRICS:{"cells":107,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":713,"constraint_count":0,"constraint_retries":0,"elaborate_steps":63,"infer_steps":39,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":22,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":8,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":10,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":18,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":132855672,"mem_before_bytes":132811064,"mem_retained_bytes":44608}
+CELL-METRICS:{"cells":107,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":713,"constraint_count":0,"constraint_retries":0,"elaborate_steps":63,"infer_steps":39,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":22,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":8,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":10,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":18,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":132815568,"mem_before_bytes":132833976,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":107,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":713,"constraint_count":0,"constraint_retries":0,"elaborate_steps":63,"infer_steps":39,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":22,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":8,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":10,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":17,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":42,"mem_after_bytes":132839448,"mem_before_bytes":132793864,"mem_retained_bytes":45584}
+CELL-METRICS:{"cells":107,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1116,"constraint_count":0,"constraint_retries":0,"elaborate_steps":144,"infer_steps":82,"meta_created":5,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":53,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":28,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":33,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":58,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":46,"mem_after_bytes":132852712,"mem_before_bytes":132813720,"mem_retained_bytes":38992}
+CELL-METRICS:{"cells":96,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1106,"constraint_count":0,"constraint_retries":0,"elaborate_steps":144,"infer_steps":82,"meta_created":5,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":53,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":28,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":33,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":57,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":47,"mem_after_bytes":132864744,"mem_before_bytes":132827544,"mem_retained_bytes":37200}
+CELL-METRICS:{"cells":96,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1106,"constraint_count":0,"constraint_retries":0,"elaborate_steps":144,"infer_steps":82,"meta_created":5,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":53,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":28,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":32,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":57,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":46,"mem_after_bytes":132878088,"mem_before_bytes":132839632,"mem_retained_bytes":38456}
+CELL-METRICS:{"cells":96,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1106,"constraint_count":0,"constraint_retries":0,"elaborate_steps":144,"infer_steps":82,"meta_created":5,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":53,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":28,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":33,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":61,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":48,"mem_after_bytes":132891160,"mem_before_bytes":132852976,"mem_retained_bytes":38184}
+CELL-METRICS:{"cells":96,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1106,"constraint_count":0,"constraint_retries":0,"elaborate_steps":144,"infer_steps":82,"meta_created":5,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":53,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":28,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":32,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":55,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":132903528,"mem_before_bytes":132866048,"mem_retained_bytes":37480}
+CELL-METRICS:{"cells":96,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1106,"constraint_count":0,"constraint_retries":0,"elaborate_steps":144,"infer_steps":82,"meta_created":5,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":53,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":28,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":31,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":55,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":44,"mem_after_bytes":132916600,"mem_before_bytes":132878216,"mem_retained_bytes":38384}
+CELL-METRICS:{"cells":96,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1106,"constraint_count":0,"constraint_retries":0,"elaborate_steps":144,"infer_steps":82,"meta_created":5,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":53,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":28,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":31,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":55,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":132929416,"mem_before_bytes":132891496,"mem_retained_bytes":37920}
+CELL-METRICS:{"cells":96,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1106,"constraint_count":0,"constraint_retries":0,"elaborate_steps":144,"infer_steps":82,"meta_created":5,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":53,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":28,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":31,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":55,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":132941176,"mem_before_bytes":132904312,"mem_retained_bytes":36864}
+CELL-METRICS:{"cells":96,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1106,"constraint_count":0,"constraint_retries":0,"elaborate_steps":144,"infer_steps":82,"meta_created":5,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":53,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":28,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":30,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":55,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":132952744,"mem_before_bytes":132916072,"mem_retained_bytes":36672}
+CELL-METRICS:{"cells":96,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1106,"constraint_count":0,"constraint_retries":0,"elaborate_steps":144,"infer_steps":82,"meta_created":5,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":53,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":28,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":31,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":55,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":132965544,"mem_before_bytes":132927640,"mem_retained_bytes":37904}
+CELL-METRICS:{"cells":96,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":915,"constraint_count":0,"constraint_retries":0,"elaborate_steps":111,"infer_steps":97,"meta_created":10,"meta_solved":4,"prop_allocs":0,"prop_firings":0,"reduce_steps":113,"resolution_cycles":4,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":36,"zonk_steps":57}
+PHASE-TIMINGS:{"elaborate_ms":33,"parse_ms":0,"qtt_ms":3,"reduce_ms":10,"trait_resolve_ms":0,"type_check_ms":71,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":46,"mem_after_bytes":132971240,"mem_before_bytes":132941992,"mem_retained_bytes":29248}
+CELL-METRICS:{"cells":100,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":914,"constraint_count":0,"constraint_retries":0,"elaborate_steps":111,"infer_steps":97,"meta_created":10,"meta_solved":4,"prop_allocs":0,"prop_firings":0,"reduce_steps":113,"resolution_cycles":4,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":36,"zonk_steps":57}
+PHASE-TIMINGS:{"elaborate_ms":33,"parse_ms":0,"qtt_ms":3,"reduce_ms":9,"trait_resolve_ms":0,"type_check_ms":63,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":46,"mem_after_bytes":132970952,"mem_before_bytes":132946096,"mem_retained_bytes":24856}
+CELL-METRICS:{"cells":100,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":914,"constraint_count":0,"constraint_retries":0,"elaborate_steps":111,"infer_steps":97,"meta_created":10,"meta_solved":4,"prop_allocs":0,"prop_firings":0,"reduce_steps":113,"resolution_cycles":4,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":36,"zonk_steps":57}
+PHASE-TIMINGS:{"elaborate_ms":32,"parse_ms":0,"qtt_ms":6,"reduce_ms":10,"trait_resolve_ms":0,"type_check_ms":72,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":132971688,"mem_before_bytes":132945808,"mem_retained_bytes":25880}
+CELL-METRICS:{"cells":100,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":914,"constraint_count":0,"constraint_retries":0,"elaborate_steps":111,"infer_steps":97,"meta_created":10,"meta_solved":4,"prop_allocs":0,"prop_firings":0,"reduce_steps":113,"resolution_cycles":4,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":36,"zonk_steps":57}
+PHASE-TIMINGS:{"elaborate_ms":35,"parse_ms":0,"qtt_ms":3,"reduce_ms":10,"trait_resolve_ms":0,"type_check_ms":66,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":47,"mem_after_bytes":132971416,"mem_before_bytes":132946536,"mem_retained_bytes":24880}
+CELL-METRICS:{"cells":100,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":914,"constraint_count":0,"constraint_retries":0,"elaborate_steps":111,"infer_steps":97,"meta_created":10,"meta_solved":4,"prop_allocs":0,"prop_firings":0,"reduce_steps":113,"resolution_cycles":4,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":36,"zonk_steps":57}
+PHASE-TIMINGS:{"elaborate_ms":33,"parse_ms":0,"qtt_ms":3,"reduce_ms":10,"trait_resolve_ms":0,"type_check_ms":65,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":47,"mem_after_bytes":133033512,"mem_before_bytes":133009896,"mem_retained_bytes":23616}
+CELL-METRICS:{"cells":100,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":914,"constraint_count":0,"constraint_retries":0,"elaborate_steps":111,"infer_steps":97,"meta_created":10,"meta_solved":4,"prop_allocs":0,"prop_firings":0,"reduce_steps":113,"resolution_cycles":4,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":36,"zonk_steps":57}
+PHASE-TIMINGS:{"elaborate_ms":34,"parse_ms":0,"qtt_ms":3,"reduce_ms":9,"trait_resolve_ms":0,"type_check_ms":65,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":46,"mem_after_bytes":133031512,"mem_before_bytes":133008160,"mem_retained_bytes":23352}
+CELL-METRICS:{"cells":100,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":914,"constraint_count":0,"constraint_retries":0,"elaborate_steps":111,"infer_steps":97,"meta_created":10,"meta_solved":4,"prop_allocs":0,"prop_firings":0,"reduce_steps":113,"resolution_cycles":4,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":36,"zonk_steps":57}
+PHASE-TIMINGS:{"elaborate_ms":35,"parse_ms":0,"qtt_ms":3,"reduce_ms":10,"trait_resolve_ms":0,"type_check_ms":66,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":47,"mem_after_bytes":133030040,"mem_before_bytes":133006368,"mem_retained_bytes":23672}
+CELL-METRICS:{"cells":100,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":914,"constraint_count":0,"constraint_retries":0,"elaborate_steps":111,"infer_steps":97,"meta_created":10,"meta_solved":4,"prop_allocs":0,"prop_firings":0,"reduce_steps":113,"resolution_cycles":4,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":36,"zonk_steps":57}
+PHASE-TIMINGS:{"elaborate_ms":32,"parse_ms":0,"qtt_ms":3,"reduce_ms":9,"trait_resolve_ms":0,"type_check_ms":62,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":46,"mem_after_bytes":133030312,"mem_before_bytes":133004896,"mem_retained_bytes":25416}
+CELL-METRICS:{"cells":100,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":914,"constraint_count":0,"constraint_retries":0,"elaborate_steps":111,"infer_steps":97,"meta_created":10,"meta_solved":4,"prop_allocs":0,"prop_firings":0,"reduce_steps":113,"resolution_cycles":4,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":36,"zonk_steps":57}
+PHASE-TIMINGS:{"elaborate_ms":32,"parse_ms":0,"qtt_ms":3,"reduce_ms":10,"trait_resolve_ms":0,"type_check_ms":65,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":133030536,"mem_before_bytes":133005176,"mem_retained_bytes":25360}
+CELL-METRICS:{"cells":100,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":914,"constraint_count":0,"constraint_retries":0,"elaborate_steps":111,"infer_steps":97,"meta_created":10,"meta_solved":4,"prop_allocs":0,"prop_firings":0,"reduce_steps":113,"resolution_cycles":4,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":36,"zonk_steps":57}
+PHASE-TIMINGS:{"elaborate_ms":31,"parse_ms":0,"qtt_ms":3,"reduce_ms":10,"trait_resolve_ms":0,"type_check_ms":64,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":133030376,"mem_before_bytes":133005392,"mem_retained_bytes":24984}
+CELL-METRICS:{"cells":100,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":616,"constraint_count":0,"constraint_retries":0,"elaborate_steps":57,"infer_steps":63,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":18,"zonk_steps":48}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":20,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":3,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":133053208,"mem_before_bytes":133071320,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":622,"constraint_count":0,"constraint_retries":0,"elaborate_steps":57,"infer_steps":63,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":18,"zonk_steps":48}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":19,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":3,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":41,"mem_after_bytes":133074424,"mem_before_bytes":133033744,"mem_retained_bytes":40680}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":622,"constraint_count":0,"constraint_retries":0,"elaborate_steps":57,"infer_steps":63,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":18,"zonk_steps":48}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":19,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":3,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":42,"mem_after_bytes":133095880,"mem_before_bytes":133055088,"mem_retained_bytes":40792}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":622,"constraint_count":0,"constraint_retries":0,"elaborate_steps":57,"infer_steps":63,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":18,"zonk_steps":48}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":19,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":3,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":42,"mem_after_bytes":133117592,"mem_before_bytes":133076544,"mem_retained_bytes":41048}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":622,"constraint_count":0,"constraint_retries":0,"elaborate_steps":57,"infer_steps":63,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":18,"zonk_steps":48}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":20,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":3,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":42,"mem_after_bytes":133140312,"mem_before_bytes":133098256,"mem_retained_bytes":42056}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":622,"constraint_count":0,"constraint_retries":0,"elaborate_steps":57,"infer_steps":63,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":18,"zonk_steps":48}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":19,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":3,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":42,"mem_after_bytes":133097672,"mem_before_bytes":133120792,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":622,"constraint_count":0,"constraint_retries":0,"elaborate_steps":57,"infer_steps":63,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":18,"zonk_steps":48}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":19,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":3,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":133118400,"mem_before_bytes":133141336,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":622,"constraint_count":0,"constraint_retries":0,"elaborate_steps":57,"infer_steps":63,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":18,"zonk_steps":48}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":19,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":3,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":41,"mem_after_bytes":133139256,"mem_before_bytes":133099080,"mem_retained_bytes":40176}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":622,"constraint_count":0,"constraint_retries":0,"elaborate_steps":57,"infer_steps":63,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":18,"zonk_steps":48}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":19,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":3,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":133159784,"mem_before_bytes":133119888,"mem_retained_bytes":39896}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":622,"constraint_count":0,"constraint_retries":0,"elaborate_steps":57,"infer_steps":63,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":18,"zonk_steps":48}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":20,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":3,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":42,"mem_after_bytes":133181720,"mem_before_bytes":133140448,"mem_retained_bytes":41272}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":966,"constraint_count":0,"constraint_retries":0,"elaborate_steps":146,"infer_steps":94,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":62,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":19,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":23,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":48,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":133148184,"mem_before_bytes":133161032,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":966,"constraint_count":0,"constraint_retries":0,"elaborate_steps":146,"infer_steps":94,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":62,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":19,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":23,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":54,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":46,"mem_after_bytes":133165272,"mem_before_bytes":133183672,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":966,"constraint_count":0,"constraint_retries":0,"elaborate_steps":146,"infer_steps":94,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":62,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":19,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":22,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":50,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":133183976,"mem_before_bytes":133202760,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":966,"constraint_count":0,"constraint_retries":0,"elaborate_steps":146,"infer_steps":94,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":62,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":19,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":23,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":58,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":44,"mem_after_bytes":133203208,"mem_before_bytes":133157096,"mem_retained_bytes":46112}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":966,"constraint_count":0,"constraint_retries":0,"elaborate_steps":146,"infer_steps":94,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":62,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":19,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":23,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":48,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":133221304,"mem_before_bytes":133176320,"mem_retained_bytes":44984}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":966,"constraint_count":0,"constraint_retries":0,"elaborate_steps":146,"infer_steps":94,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":62,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":19,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":23,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":54,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":44,"mem_after_bytes":133175464,"mem_before_bytes":133194216,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":966,"constraint_count":0,"constraint_retries":0,"elaborate_steps":146,"infer_steps":94,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":62,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":19,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":23,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":47,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":44,"mem_after_bytes":133195568,"mem_before_bytes":133212280,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":966,"constraint_count":0,"constraint_retries":0,"elaborate_steps":146,"infer_steps":94,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":62,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":19,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":23,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":47,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":133212792,"mem_before_bytes":133231360,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":966,"constraint_count":0,"constraint_retries":0,"elaborate_steps":146,"infer_steps":94,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":62,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":19,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":23,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":48,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":44,"mem_after_bytes":133232072,"mem_before_bytes":133185920,"mem_retained_bytes":46152}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":966,"constraint_count":0,"constraint_retries":0,"elaborate_steps":146,"infer_steps":94,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":62,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":19,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":23,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":48,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":133247816,"mem_before_bytes":133205200,"mem_retained_bytes":42616}
+CELL-METRICS:{"cells":103,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1106,"constraint_count":0,"constraint_retries":0,"elaborate_steps":162,"infer_steps":93,"meta_created":12,"meta_solved":2,"prop_allocs":0,"prop_firings":0,"reduce_steps":75,"resolution_cycles":2,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":30,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":41,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":68,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":7,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":47,"mem_after_bytes":133240840,"mem_before_bytes":133226864,"mem_retained_bytes":13976}
+CELL-METRICS:{"cells":107,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1109,"constraint_count":0,"constraint_retries":0,"elaborate_steps":162,"infer_steps":93,"meta_created":12,"meta_solved":2,"prop_allocs":0,"prop_firings":0,"reduce_steps":75,"resolution_cycles":2,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":30,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":41,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":69,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":7,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":46,"mem_after_bytes":133284520,"mem_before_bytes":133277096,"mem_retained_bytes":7424}
+CELL-METRICS:{"cells":107,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1109,"constraint_count":0,"constraint_retries":0,"elaborate_steps":162,"infer_steps":93,"meta_created":12,"meta_solved":2,"prop_allocs":0,"prop_firings":0,"reduce_steps":75,"resolution_cycles":2,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":30,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":53,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":119,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":7,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":49,"mem_after_bytes":133263896,"mem_before_bytes":133256712,"mem_retained_bytes":7184}
+CELL-METRICS:{"cells":107,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1109,"constraint_count":0,"constraint_retries":0,"elaborate_steps":162,"infer_steps":93,"meta_created":12,"meta_solved":2,"prop_allocs":0,"prop_firings":0,"reduce_steps":75,"resolution_cycles":2,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":30,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":43,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":72,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":7,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":47,"mem_after_bytes":133307960,"mem_before_bytes":133300440,"mem_retained_bytes":7520}
+CELL-METRICS:{"cells":107,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1109,"constraint_count":0,"constraint_retries":0,"elaborate_steps":162,"infer_steps":93,"meta_created":12,"meta_solved":2,"prop_allocs":0,"prop_firings":0,"reduce_steps":75,"resolution_cycles":2,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":30,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":42,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":73,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":7,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":46,"mem_after_bytes":133288264,"mem_before_bytes":133280152,"mem_retained_bytes":8112}
+CELL-METRICS:{"cells":107,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":1109,"constraint_count":0,"constraint_retries":0,"elaborate_steps":162,"infer_steps":93,"meta_created":12,"meta_solved":2,"prop_allocs":0,"prop_firings":0,"reduce_steps":75,"resolution_cycles":2,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":30,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":44,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":72,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":7,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":47,"mem_after_bytes":133331336,"mem_before_bytes":133323680,"mem_retained_bytes":7656}
+CELL-METRICS:{"cells":107,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":1109,"constraint_count":0,"constraint_retries":0,"elaborate_steps":162,"infer_steps":93,"meta_created":12,"meta_solved":2,"prop_allocs":0,"prop_firings":0,"reduce_steps":75,"resolution_cycles":2,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":30,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":43,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":73,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":7,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":47,"mem_after_bytes":133313144,"mem_before_bytes":133303528,"mem_retained_bytes":9616}
+CELL-METRICS:{"cells":107,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":1109,"constraint_count":0,"constraint_retries":0,"elaborate_steps":162,"infer_steps":93,"meta_created":12,"meta_solved":2,"prop_allocs":0,"prop_firings":0,"reduce_steps":75,"resolution_cycles":2,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":30,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":41,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":70,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":7,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":133358600,"mem_before_bytes":133349712,"mem_retained_bytes":8888}
+CELL-METRICS:{"cells":107,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":1109,"constraint_count":0,"constraint_retries":0,"elaborate_steps":162,"infer_steps":93,"meta_created":12,"meta_solved":2,"prop_allocs":0,"prop_firings":0,"reduce_steps":75,"resolution_cycles":2,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":30,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":42,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":74,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":7,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":47,"mem_after_bytes":133340456,"mem_before_bytes":133330792,"mem_retained_bytes":9664}
+CELL-METRICS:{"cells":107,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":1109,"constraint_count":0,"constraint_retries":0,"elaborate_steps":162,"infer_steps":93,"meta_created":12,"meta_solved":2,"prop_allocs":0,"prop_firings":0,"reduce_steps":75,"resolution_cycles":2,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":30,"zonk_steps":8}
+PHASE-TIMINGS:{"elaborate_ms":42,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":73,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":7,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":47,"mem_after_bytes":133385544,"mem_before_bytes":133312656,"mem_retained_bytes":72888}
+CELL-METRICS:{"cells":107,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1360,"constraint_count":0,"constraint_retries":0,"elaborate_steps":137,"infer_steps":44,"meta_created":2,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":16,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":15,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":26,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":17,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":133372856,"mem_before_bytes":133357744,"mem_retained_bytes":15112}
+CELL-METRICS:{"cells":114,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1391,"constraint_count":0,"constraint_retries":0,"elaborate_steps":141,"infer_steps":52,"meta_created":4,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":23,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":17,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":30,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":24,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":49,"mem_after_bytes":133410824,"mem_before_bytes":133346856,"mem_retained_bytes":63968}
+CELL-METRICS:{"cells":114,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1391,"constraint_count":0,"constraint_retries":0,"elaborate_steps":141,"infer_steps":52,"meta_created":4,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":23,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":17,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":27,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":22,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":46,"mem_after_bytes":133382264,"mem_before_bytes":133383056,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":114,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1391,"constraint_count":0,"constraint_retries":0,"elaborate_steps":141,"infer_steps":52,"meta_created":4,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":23,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":17,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":26,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":23,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":133417352,"mem_before_bytes":133417832,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":114,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1391,"constraint_count":0,"constraint_retries":0,"elaborate_steps":141,"infer_steps":52,"meta_created":4,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":23,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":17,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":27,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":22,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":44,"mem_after_bytes":133454440,"mem_before_bytes":133389552,"mem_retained_bytes":64888}
+CELL-METRICS:{"cells":114,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1391,"constraint_count":0,"constraint_retries":0,"elaborate_steps":141,"infer_steps":52,"meta_created":4,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":23,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":17,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":27,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":23,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":46,"mem_after_bytes":133426104,"mem_before_bytes":133426440,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":114,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1391,"constraint_count":0,"constraint_retries":0,"elaborate_steps":141,"infer_steps":52,"meta_created":4,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":23,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":17,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":26,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":23,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":44,"mem_after_bytes":133461016,"mem_before_bytes":133462656,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":114,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1391,"constraint_count":0,"constraint_retries":0,"elaborate_steps":141,"infer_steps":52,"meta_created":4,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":23,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":17,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":25,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":23,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":133432456,"mem_before_bytes":133433224,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":114,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1391,"constraint_count":0,"constraint_retries":0,"elaborate_steps":141,"infer_steps":52,"meta_created":4,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":23,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":17,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":26,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":22,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":133467048,"mem_before_bytes":133467184,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":114,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1391,"constraint_count":0,"constraint_retries":0,"elaborate_steps":141,"infer_steps":52,"meta_created":4,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":23,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":17,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":26,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":22,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":8,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":45,"mem_after_bytes":133502392,"mem_before_bytes":133439264,"mem_retained_bytes":63128}
+CELL-METRICS:{"cells":114,"propagators":0}
+Hole ??__match-fail : Nat
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":3023,"constraint_count":0,"constraint_retries":0,"elaborate_steps":168,"infer_steps":85,"meta_created":11,"meta_solved":8,"prop_allocs":0,"prop_firings":0,"reduce_steps":100,"resolution_cycles":8,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":40,"zonk_steps":164}
+PHASE-TIMINGS:{"elaborate_ms":40,"parse_ms":0,"qtt_ms":25,"reduce_ms":7,"trait_resolve_ms":0,"type_check_ms":60,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":49,"mem_after_bytes":133573416,"mem_before_bytes":133552312,"mem_retained_bytes":21104}
+CELL-METRICS:{"cells":122,"propagators":0}
+Hole ??__match-fail : Nat
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":3059,"constraint_count":0,"constraint_retries":0,"elaborate_steps":168,"infer_steps":85,"meta_created":11,"meta_solved":8,"prop_allocs":0,"prop_firings":0,"reduce_steps":100,"resolution_cycles":8,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":40,"zonk_steps":164}
+PHASE-TIMINGS:{"elaborate_ms":38,"parse_ms":0,"qtt_ms":25,"reduce_ms":9,"trait_resolve_ms":0,"type_check_ms":61,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":49,"mem_after_bytes":133612120,"mem_before_bytes":133580808,"mem_retained_bytes":31312}
+CELL-METRICS:{"cells":122,"propagators":0}
+Hole ??__match-fail : Nat
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":3059,"constraint_count":0,"constraint_retries":0,"elaborate_steps":168,"infer_steps":85,"meta_created":11,"meta_solved":8,"prop_allocs":0,"prop_firings":0,"reduce_steps":100,"resolution_cycles":8,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":40,"zonk_steps":164}
+PHASE-TIMINGS:{"elaborate_ms":39,"parse_ms":0,"qtt_ms":26,"reduce_ms":8,"trait_resolve_ms":0,"type_check_ms":60,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":49,"mem_after_bytes":133587016,"mem_before_bytes":133619896,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":122,"propagators":0}
+Hole ??__match-fail : Nat
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":3059,"constraint_count":0,"constraint_retries":0,"elaborate_steps":168,"infer_steps":85,"meta_created":11,"meta_solved":8,"prop_allocs":0,"prop_firings":0,"reduce_steps":100,"resolution_cycles":8,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":40,"zonk_steps":164}
+PHASE-TIMINGS:{"elaborate_ms":39,"parse_ms":0,"qtt_ms":34,"reduce_ms":8,"trait_resolve_ms":0,"type_check_ms":60,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":49,"mem_after_bytes":133625976,"mem_before_bytes":133594152,"mem_retained_bytes":31824}
+CELL-METRICS:{"cells":122,"propagators":0}
+Hole ??__match-fail : Nat
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":3059,"constraint_count":0,"constraint_retries":0,"elaborate_steps":168,"infer_steps":85,"meta_created":11,"meta_solved":8,"prop_allocs":0,"prop_firings":0,"reduce_steps":100,"resolution_cycles":8,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":40,"zonk_steps":164}
+PHASE-TIMINGS:{"elaborate_ms":38,"parse_ms":0,"qtt_ms":24,"reduce_ms":8,"trait_resolve_ms":0,"type_check_ms":59,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":47,"mem_after_bytes":133664168,"mem_before_bytes":133633800,"mem_retained_bytes":30368}
+CELL-METRICS:{"cells":122,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+Hole ??__match-fail : Nat
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":3059,"constraint_count":0,"constraint_retries":0,"elaborate_steps":168,"infer_steps":85,"meta_created":11,"meta_solved":8,"prop_allocs":0,"prop_firings":0,"reduce_steps":100,"resolution_cycles":8,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":40,"zonk_steps":164}
+PHASE-TIMINGS:{"elaborate_ms":40,"parse_ms":0,"qtt_ms":25,"reduce_ms":7,"trait_resolve_ms":0,"type_check_ms":62,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":48,"mem_after_bytes":133638184,"mem_before_bytes":133671696,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":122,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+Hole ??__match-fail : Nat
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":3059,"constraint_count":0,"constraint_retries":0,"elaborate_steps":168,"infer_steps":85,"meta_created":11,"meta_solved":8,"prop_allocs":0,"prop_firings":0,"reduce_steps":100,"resolution_cycles":8,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":40,"zonk_steps":164}
+PHASE-TIMINGS:{"elaborate_ms":39,"parse_ms":0,"qtt_ms":24,"reduce_ms":8,"trait_resolve_ms":0,"type_check_ms":62,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":49,"mem_after_bytes":133675448,"mem_before_bytes":133645840,"mem_retained_bytes":29608}
+CELL-METRICS:{"cells":122,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+Hole ??__match-fail : Nat
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":3059,"constraint_count":0,"constraint_retries":0,"elaborate_steps":168,"infer_steps":85,"meta_created":11,"meta_solved":8,"prop_allocs":0,"prop_firings":0,"reduce_steps":100,"resolution_cycles":8,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":40,"zonk_steps":164}
+PHASE-TIMINGS:{"elaborate_ms":40,"parse_ms":0,"qtt_ms":26,"reduce_ms":8,"trait_resolve_ms":0,"type_check_ms":65,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":49,"mem_after_bytes":133710968,"mem_before_bytes":133681152,"mem_retained_bytes":29816}
+CELL-METRICS:{"cells":122,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+Hole ??__match-fail : Nat
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":3059,"constraint_count":0,"constraint_retries":0,"elaborate_steps":168,"infer_steps":85,"meta_created":11,"meta_solved":8,"prop_allocs":0,"prop_firings":0,"reduce_steps":100,"resolution_cycles":8,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":40,"zonk_steps":164}
+PHASE-TIMINGS:{"elaborate_ms":40,"parse_ms":0,"qtt_ms":25,"reduce_ms":8,"trait_resolve_ms":0,"type_check_ms":71,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":49,"mem_after_bytes":133684904,"mem_before_bytes":133718320,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":122,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+Hole ??__match-fail : Nat
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":3059,"constraint_count":0,"constraint_retries":0,"elaborate_steps":168,"infer_steps":85,"meta_created":11,"meta_solved":8,"prop_allocs":0,"prop_firings":0,"reduce_steps":100,"resolution_cycles":8,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":40,"zonk_steps":164}
+PHASE-TIMINGS:{"elaborate_ms":38,"parse_ms":0,"qtt_ms":26,"reduce_ms":8,"trait_resolve_ms":0,"type_check_ms":63,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":6,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":50,"mem_after_bytes":133723432,"mem_before_bytes":133692144,"mem_retained_bytes":31288}
+CELL-METRICS:{"cells":122,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":879,"constraint_count":0,"constraint_retries":0,"elaborate_steps":56,"infer_steps":66,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":22,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":1,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":22,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":133716040,"mem_before_bytes":133677928,"mem_retained_bytes":38112}
+CELL-METRICS:{"cells":125,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":886,"constraint_count":0,"constraint_retries":0,"elaborate_steps":56,"infer_steps":66,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":22,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":1,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":22,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":133725128,"mem_before_bytes":133691728,"mem_retained_bytes":33400}
+CELL-METRICS:{"cells":125,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":886,"constraint_count":0,"constraint_retries":0,"elaborate_steps":56,"infer_steps":66,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":22,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":1,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":22,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":133735160,"mem_before_bytes":133700928,"mem_retained_bytes":34232}
+CELL-METRICS:{"cells":125,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":886,"constraint_count":0,"constraint_retries":0,"elaborate_steps":56,"infer_steps":66,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":22,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":1,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":22,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":133745624,"mem_before_bytes":133711000,"mem_retained_bytes":34624}
+CELL-METRICS:{"cells":125,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":886,"constraint_count":0,"constraint_retries":0,"elaborate_steps":56,"infer_steps":66,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":22,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":1,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":23,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":44,"mem_after_bytes":133755000,"mem_before_bytes":133721456,"mem_retained_bytes":33544}
+CELL-METRICS:{"cells":125,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":886,"constraint_count":0,"constraint_retries":0,"elaborate_steps":56,"infer_steps":66,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":22,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":10,"parse_ms":0,"qtt_ms":1,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":23,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":44,"mem_after_bytes":133763832,"mem_before_bytes":133730664,"mem_retained_bytes":33168}
+CELL-METRICS:{"cells":125,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":886,"constraint_count":0,"constraint_retries":0,"elaborate_steps":56,"infer_steps":66,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":22,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":9,"parse_ms":0,"qtt_ms":1,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":23,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":42,"mem_after_bytes":133774104,"mem_before_bytes":133739712,"mem_retained_bytes":34392}
+CELL-METRICS:{"cells":125,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":886,"constraint_count":0,"constraint_retries":0,"elaborate_steps":56,"infer_steps":66,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":22,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":10,"parse_ms":0,"qtt_ms":1,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":23,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":133785432,"mem_before_bytes":133749976,"mem_retained_bytes":35456}
+CELL-METRICS:{"cells":125,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":886,"constraint_count":0,"constraint_retries":0,"elaborate_steps":56,"infer_steps":66,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":22,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":10,"parse_ms":0,"qtt_ms":1,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":23,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":43,"mem_after_bytes":133731888,"mem_before_bytes":133761320,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":125,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":886,"constraint_count":0,"constraint_retries":0,"elaborate_steps":56,"infer_steps":66,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":24,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":22,"zonk_steps":45}
+PHASE-TIMINGS:{"elaborate_ms":10,"parse_ms":0,"qtt_ms":1,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":23,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":44,"mem_after_bytes":133741816,"mem_before_bytes":133770384,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":125,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":11870,"constraint_count":0,"constraint_retries":0,"elaborate_steps":730,"infer_steps":721,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":633,"resolution_cycles":0,"solver_backtracks":37,"solver_unifies":410,"trait_resolve_steps":0,"unify_steps":35,"zonk_steps":808}
+PHASE-TIMINGS:{"elaborate_ms":120,"parse_ms":0,"qtt_ms":0,"reduce_ms":173,"trait_resolve_ms":0,"type_check_ms":108,"zonk_ms":4}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":56,"mem_after_bytes":133895720,"mem_before_bytes":133882360,"mem_retained_bytes":13360}
+CELL-METRICS:{"cells":147,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":13432,"constraint_count":0,"constraint_retries":0,"elaborate_steps":730,"infer_steps":721,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":633,"resolution_cycles":0,"solver_backtracks":37,"solver_unifies":410,"trait_resolve_steps":0,"unify_steps":35,"zonk_steps":808}
+PHASE-TIMINGS:{"elaborate_ms":126,"parse_ms":0,"qtt_ms":0,"reduce_ms":180,"trait_resolve_ms":0,"type_check_ms":109,"zonk_ms":5}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":58,"mem_after_bytes":133870336,"mem_before_bytes":133913936,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":147,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":13432,"constraint_count":0,"constraint_retries":0,"elaborate_steps":730,"infer_steps":721,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":633,"resolution_cycles":0,"solver_backtracks":37,"solver_unifies":410,"trait_resolve_steps":0,"unify_steps":35,"zonk_steps":808}
+PHASE-TIMINGS:{"elaborate_ms":125,"parse_ms":0,"qtt_ms":0,"reduce_ms":181,"trait_resolve_ms":0,"type_check_ms":113,"zonk_ms":5}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":58,"mem_after_bytes":133907856,"mem_before_bytes":133953120,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":147,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":13432,"constraint_count":0,"constraint_retries":0,"elaborate_steps":730,"infer_steps":721,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":633,"resolution_cycles":0,"solver_backtracks":37,"solver_unifies":410,"trait_resolve_steps":0,"unify_steps":35,"zonk_steps":808}
+PHASE-TIMINGS:{"elaborate_ms":138,"parse_ms":0,"qtt_ms":0,"reduce_ms":181,"trait_resolve_ms":0,"type_check_ms":119,"zonk_ms":5}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":61,"mem_after_bytes":133886704,"mem_before_bytes":133933088,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":147,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":13432,"constraint_count":0,"constraint_retries":0,"elaborate_steps":730,"infer_steps":721,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":633,"resolution_cycles":0,"solver_backtracks":37,"solver_unifies":410,"trait_resolve_steps":0,"unify_steps":35,"zonk_steps":808}
+PHASE-TIMINGS:{"elaborate_ms":130,"parse_ms":0,"qtt_ms":0,"reduce_ms":187,"trait_resolve_ms":0,"type_check_ms":121,"zonk_ms":5}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":60,"mem_after_bytes":133922976,"mem_before_bytes":133969376,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":147,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":13432,"constraint_count":0,"constraint_retries":0,"elaborate_steps":730,"infer_steps":721,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":633,"resolution_cycles":0,"solver_backtracks":37,"solver_unifies":410,"trait_resolve_steps":0,"unify_steps":35,"zonk_steps":808}
+PHASE-TIMINGS:{"elaborate_ms":125,"parse_ms":0,"qtt_ms":0,"reduce_ms":178,"trait_resolve_ms":0,"type_check_ms":112,"zonk_ms":5}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":57,"mem_after_bytes":133903016,"mem_before_bytes":133947008,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":147,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":13432,"constraint_count":0,"constraint_retries":0,"elaborate_steps":730,"infer_steps":721,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":633,"resolution_cycles":0,"solver_backtracks":37,"solver_unifies":410,"trait_resolve_steps":0,"unify_steps":35,"zonk_steps":808}
+PHASE-TIMINGS:{"elaborate_ms":124,"parse_ms":0,"qtt_ms":0,"reduce_ms":175,"trait_resolve_ms":0,"type_check_ms":109,"zonk_ms":5}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":57,"mem_after_bytes":133940984,"mem_before_bytes":133985056,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":147,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":13432,"constraint_count":0,"constraint_retries":0,"elaborate_steps":730,"infer_steps":721,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":633,"resolution_cycles":0,"solver_backtracks":37,"solver_unifies":410,"trait_resolve_steps":0,"unify_steps":35,"zonk_steps":808}
+PHASE-TIMINGS:{"elaborate_ms":124,"parse_ms":0,"qtt_ms":0,"reduce_ms":185,"trait_resolve_ms":0,"type_check_ms":113,"zonk_ms":5}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":59,"mem_after_bytes":133915384,"mem_before_bytes":133959008,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":147,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":13432,"constraint_count":0,"constraint_retries":0,"elaborate_steps":730,"infer_steps":721,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":633,"resolution_cycles":0,"solver_backtracks":37,"solver_unifies":410,"trait_resolve_steps":0,"unify_steps":35,"zonk_steps":808}
+PHASE-TIMINGS:{"elaborate_ms":126,"parse_ms":0,"qtt_ms":0,"reduce_ms":182,"trait_resolve_ms":0,"type_check_ms":111,"zonk_ms":5}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":59,"mem_after_bytes":133952424,"mem_before_bytes":133997568,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":147,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":13432,"constraint_count":0,"constraint_retries":0,"elaborate_steps":730,"infer_steps":721,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":633,"resolution_cycles":0,"solver_backtracks":37,"solver_unifies":410,"trait_resolve_steps":0,"unify_steps":35,"zonk_steps":808}
+PHASE-TIMINGS:{"elaborate_ms":120,"parse_ms":0,"qtt_ms":0,"reduce_ms":171,"trait_resolve_ms":0,"type_check_ms":107,"zonk_ms":4}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":57,"mem_after_bytes":133929640,"mem_before_bytes":133974720,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":147,"propagators":0}
+Hole ??__match-fail : Int
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta7494
+Context:
+  x : Vec  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta7494
+Context:
+  x : [Type 0]  (w)
+  y : Nat  (w)
+  z : Vec  (w)
+  a : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":16662,"constraint_count":0,"constraint_retries":0,"elaborate_steps":489,"infer_steps":589,"meta_created":73,"meta_solved":66,"prop_allocs":0,"prop_firings":54,"reduce_steps":1542,"resolution_cycles":62,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":239,"zonk_steps":797}
+PHASE-TIMINGS:{"elaborate_ms":251,"parse_ms":0,"qtt_ms":96,"reduce_ms":3159,"trait_resolve_ms":0,"type_check_ms":417,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":12,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":190,"mem_after_bytes":134075272,"mem_before_bytes":133977832,"mem_retained_bytes":97440}
+CELL-METRICS:{"cells":209,"propagators":0}
+QUIESCENCE-WRITES:{"avg_changes":3.8,"avg_writes":4.0,"change_ratio":0.95,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":5,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":5,"total_changes":19,"total_writes":20}
+Hole ??__match-fail : Int
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta7660
+Context:
+  x : Vec  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta7660
+Context:
+  x : [Type 0]  (w)
+  y : Nat  (w)
+  z : Vec  (w)
+  a : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":19497,"constraint_count":0,"constraint_retries":0,"elaborate_steps":489,"infer_steps":589,"meta_created":73,"meta_solved":66,"prop_allocs":0,"prop_firings":54,"reduce_steps":1542,"resolution_cycles":62,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":239,"zonk_steps":797}
+PHASE-TIMINGS:{"elaborate_ms":253,"parse_ms":0,"qtt_ms":93,"reduce_ms":3061,"trait_resolve_ms":0,"type_check_ms":413,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":12,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":192,"mem_after_bytes":134059872,"mem_before_bytes":134089808,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":209,"propagators":0}
+QUIESCENCE-WRITES:{"avg_changes":3.8,"avg_writes":4.0,"change_ratio":0.95,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":5,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":5,"total_changes":19,"total_writes":20}
+Hole ??__match-fail : Int
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta7826
+Context:
+  x : Vec  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta7826
+Context:
+  x : [Type 0]  (w)
+  y : Nat  (w)
+  z : Vec  (w)
+  a : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":19497,"constraint_count":0,"constraint_retries":0,"elaborate_steps":489,"infer_steps":589,"meta_created":73,"meta_solved":66,"prop_allocs":0,"prop_firings":54,"reduce_steps":1542,"resolution_cycles":62,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":239,"zonk_steps":797}
+PHASE-TIMINGS:{"elaborate_ms":250,"parse_ms":0,"qtt_ms":94,"reduce_ms":3032,"trait_resolve_ms":0,"type_check_ms":419,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":12,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":194,"mem_after_bytes":134113688,"mem_before_bytes":134074920,"mem_retained_bytes":38768}
+CELL-METRICS:{"cells":209,"propagators":0}
+QUIESCENCE-WRITES:{"avg_changes":3.8,"avg_writes":4.0,"change_ratio":0.95,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":5,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":5,"total_changes":19,"total_writes":20}
+Hole ??__match-fail : Int
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta7992
+Context:
+  x : Vec  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta7992
+Context:
+  x : [Type 0]  (w)
+  y : Nat  (w)
+  z : Vec  (w)
+  a : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":19497,"constraint_count":0,"constraint_retries":0,"elaborate_steps":489,"infer_steps":589,"meta_created":73,"meta_solved":66,"prop_allocs":0,"prop_firings":54,"reduce_steps":1542,"resolution_cycles":62,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":239,"zonk_steps":797}
+PHASE-TIMINGS:{"elaborate_ms":252,"parse_ms":0,"qtt_ms":92,"reduce_ms":3077,"trait_resolve_ms":0,"type_check_ms":430,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":12,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":191,"mem_after_bytes":134106560,"mem_before_bytes":134128784,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":209,"propagators":0}
+QUIESCENCE-WRITES:{"avg_changes":3.8,"avg_writes":4.0,"change_ratio":0.95,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":5,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":5,"total_changes":19,"total_writes":20}
+Hole ??__match-fail : Int
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta8158
+Context:
+  x : Vec  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta8158
+Context:
+  x : [Type 0]  (w)
+  y : Nat  (w)
+  z : Vec  (w)
+  a : Nat  (w)
+PERF-COUNTERS:{"cell_allocs":19497,"constraint_count":0,"constraint_retries":0,"elaborate_steps":489,"infer_steps":589,"meta_created":73,"meta_solved":66,"prop_allocs":0,"prop_firings":54,"reduce_steps":1542,"resolution_cycles":62,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":239,"zonk_steps":797}
+PHASE-TIMINGS:{"elaborate_ms":272,"parse_ms":0,"qtt_ms":114,"reduce_ms":3746,"trait_resolve_ms":0,"type_check_ms":474,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":12,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":206,"mem_after_bytes":134090632,"mem_before_bytes":134121880,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":209,"propagators":0}
+QUIESCENCE-WRITES:{"avg_changes":3.8,"avg_writes":4.0,"change_ratio":0.95,"hist_0":0,"hist_1":0,"hist_11_50":0,"hist_2_5":5,"hist_51_plus":0,"hist_6_10":0,"max_changes":4,"max_writes":4,"runs":5,"total_changes":19,"total_writes":20}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+Hole ??__match-fail : Int
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta8324
+Context:
+  x : Vec  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta8324
+Context:
+  x : [Type 0]  (w)
+  y : Nat  (w)
+  z : Vec  (w)
+  a : Nat  (w)
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":19497,"constraint_count":0,"constraint_retries":0,"elaborate_steps":489,"infer_steps":589,"meta_created":73,"meta_solved":66,"prop_allocs":0,"prop_firings":0,"reduce_steps":1542,"resolution_cycles":62,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":239,"zonk_steps":797}
+PHASE-TIMINGS:{"elaborate_ms":296,"parse_ms":0,"qtt_ms":117,"reduce_ms":3538,"trait_resolve_ms":0,"type_check_ms":475,"zonk_ms":4}
+PROVENANCE-STATS:{"atms_hypothesis_count":12,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":215,"mem_after_bytes":134160904,"mem_before_bytes":134105648,"mem_retained_bytes":55256}
+CELL-METRICS:{"cells":209,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+Hole ??__match-fail : Int
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta8490
+Context:
+  x : Vec  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta8490
+Context:
+  x : [Type 0]  (w)
+  y : Nat  (w)
+  z : Vec  (w)
+  a : Nat  (w)
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":19497,"constraint_count":0,"constraint_retries":0,"elaborate_steps":489,"infer_steps":589,"meta_created":73,"meta_solved":66,"prop_allocs":0,"prop_firings":0,"reduce_steps":1542,"resolution_cycles":62,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":239,"zonk_steps":797}
+PHASE-TIMINGS:{"elaborate_ms":266,"parse_ms":0,"qtt_ms":104,"reduce_ms":3146,"trait_resolve_ms":0,"type_check_ms":447,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":12,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":199,"mem_after_bytes":134224376,"mem_before_bytes":134180240,"mem_retained_bytes":44136}
+CELL-METRICS:{"cells":209,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+Hole ??__match-fail : Int
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta8656
+Context:
+  x : Vec  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta8656
+Context:
+  x : [Type 0]  (w)
+  y : Nat  (w)
+  z : Vec  (w)
+  a : Nat  (w)
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":19497,"constraint_count":0,"constraint_retries":0,"elaborate_steps":489,"infer_steps":589,"meta_created":73,"meta_solved":66,"prop_allocs":0,"prop_firings":0,"reduce_steps":1542,"resolution_cycles":62,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":239,"zonk_steps":797}
+PHASE-TIMINGS:{"elaborate_ms":248,"parse_ms":0,"qtt_ms":92,"reduce_ms":2960,"trait_resolve_ms":0,"type_check_ms":423,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":12,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":184,"mem_after_bytes":134231256,"mem_before_bytes":134183856,"mem_retained_bytes":47400}
+CELL-METRICS:{"cells":209,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+Hole ??__match-fail : Int
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta8822
+Context:
+  x : Vec  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta8822
+Context:
+  x : [Type 0]  (w)
+  y : Nat  (w)
+  z : Vec  (w)
+  a : Nat  (w)
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":19497,"constraint_count":0,"constraint_retries":0,"elaborate_steps":489,"infer_steps":589,"meta_created":73,"meta_solved":66,"prop_allocs":0,"prop_firings":0,"reduce_steps":1542,"resolution_cycles":62,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":239,"zonk_steps":797}
+PHASE-TIMINGS:{"elaborate_ms":250,"parse_ms":0,"qtt_ms":99,"reduce_ms":2987,"trait_resolve_ms":0,"type_check_ms":416,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":12,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":180,"mem_after_bytes":134244936,"mem_before_bytes":134193120,"mem_retained_bytes":51816}
+CELL-METRICS:{"cells":209,"propagators":0}
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+Hole ??__match-fail : Int
+Context:
+  x : Nat  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta8988
+Context:
+  x : Vec  (w)
+  y : Nat  (w)
+Hole ??__match-fail : ?meta8988
+Context:
+  x : [Type 0]  (w)
+  y : Nat  (w)
+  z : Vec  (w)
+  a : Nat  (w)
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+OUTER[0]: req-count=0 worklist=0
+PERF-COUNTERS:{"cell_allocs":19497,"constraint_count":0,"constraint_retries":0,"elaborate_steps":489,"infer_steps":589,"meta_created":73,"meta_solved":66,"prop_allocs":0,"prop_firings":0,"reduce_steps":1542,"resolution_cycles":62,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":239,"zonk_steps":797}
+PHASE-TIMINGS:{"elaborate_ms":247,"parse_ms":0,"qtt_ms":98,"reduce_ms":2948,"trait_resolve_ms":0,"type_check_ms":410,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":12,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":182,"mem_after_bytes":134259384,"mem_before_bytes":134208816,"mem_retained_bytes":50568}
+CELL-METRICS:{"cells":209,"propagators":0}
+Track 8 C5a: Scheduler A/B Comparison
+======================================
+Runs per benchmark: 5
+
+Benchmark                                 GS (ms)       BSP (ms)      Ratio
+----------------------------------------------------------------------------
+bool-logic.prologos                       182.8         185.6         1.015
+church-folds.prologos                     143.8         145.3         1.011
+constraints-adversarial.prologos          790.6         730.2         0.924
+dependent-types.prologos                  121.7         120.5         0.990
+higher-order.prologos                     186.5         179.5         0.962
+implicit-args.prologos                    210.9         205.6         0.975
+nat-arithmetic.prologos                   116.2         116.4         1.002
+pairs-sigma.prologos                      166.9         164.4         0.985
+pattern-matching.prologos                 212.7         213.0         1.001
+recursive-types.prologos                  147.6         148.5         1.006
+scheduler-adversarial.prologos            255.8         264.0         1.032
+simple-typed.prologos                     123.5         125.8         1.019
+solve-adversarial.prologos                659.1         647.1         0.982
+type-adversarial.prologos                 4043.3        3945.8        0.976
+----------------------------------------------------------------------------
+TOTAL                                     7361.5        7191.7        0.977
+
+Verdict: Within noise (<5% difference)
