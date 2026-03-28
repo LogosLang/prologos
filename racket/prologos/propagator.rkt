@@ -15,7 +15,8 @@
 
 (require "champ.rkt"
          "performance-counters.rkt"
-         racket/future)   ;; for future, touch, processor-count
+         racket/future   ;; for future, touch, processor-count
+         racket/set)     ;; PAR Track 1: set-union for decomp-request cell
 
 (provide
  ;; Identity types
@@ -110,6 +111,12 @@
  current-use-bsp-scheduler?
  ;; CALM topology guard: #t during BSP fire rounds
  current-bsp-fire-round?
+ ;; PAR Track 1: Decomposition request protocol
+ (struct-out sre-decomp-request)
+ (struct-out narrowing-branch-request)
+ (struct-out narrowing-rule-request)
+ decomp-request-merge
+ decomp-request-cell-id
  ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
  net-cell-read-raw
  ;; Track 6 Phase 2+3: Network-wide TMS commit
@@ -182,6 +189,48 @@
                        cell-decomps pair-decomps cell-dirs)
   #:transparent)
 (struct prop-network (hot warm cold) #:transparent)
+
+;; PAR Track 1: Decomposition request structs.
+;; Fire functions emit these as values to the decomp-request cell.
+;; The topology stratum processes them between BSP rounds.
+;; Variant structs — each carries exactly its fields (D.2 revision).
+
+;; SRE decomposition request (subtype, equality, duality)
+(struct sre-decomp-request
+  (pair-key    ;; decomp guard key (dedup)
+   domain      ;; SRE domain struct (opaque to propagator.rkt)
+   cell-a      ;; cell-id
+   cell-b      ;; cell-id
+   relation    ;; sre-relation (opaque)
+   ctor-chain) ;; (listof symbol) — recursive type occurs check (§4.1)
+  #:transparent)
+
+;; Narrowing branch request: install child subtree propagators
+(struct narrowing-branch-request
+  (pair-key    ;; dedup
+   tree        ;; dt-node (opaque — child subtree to install)
+   arg-cells   ;; (listof cell-id)
+   result-cell ;; cell-id
+   bindings)   ;; (listof cell-id)
+  #:transparent)
+
+;; Narrowing rule request: evaluate RHS, create cells, write result
+(struct narrowing-rule-request
+  (pair-key    ;; dedup
+   rhs         ;; expr (opaque — the RHS expression)
+   bindings    ;; (listof cell-id) — binding cells to read
+   result-cell) ;; cell-id — where to write the final term
+  #:transparent)
+
+;; Decomp-request cell merge: set-union. Bot: empty set.
+;; Lifecycle: fire functions add requests (monotone). Topology stratum
+;; clears by writing empty set (non-monotone, permitted outside BSP).
+(define (decomp-request-merge old new)
+  (set-union old new))
+
+;; Well-known cell-id for the decomp-request cell.
+;; Convention: cell-id 0 in every network is the request cell.
+(define decomp-request-cell-id (cell-id 0))
 
 ;; Stable accessor macros — zero-cost (compile-time inlined).
 ;; Public API for reading prop-network fields. Decouples consumers from
@@ -286,14 +335,19 @@
 ;; Create an empty propagator network.
 ;; fuel: maximum number of propagator firings before run-to-quiescence stops.
 (define (make-prop-network [fuel 1000000])
+  ;; PAR Track 1: cell-id 0 is the decomp-request cell (well-known convention).
+  ;; Pre-allocated with empty set as initial value and set-union as merge.
+  (define req-cid decomp-request-cell-id)
+  (define req-h (cell-id-hash req-cid))
+  (define req-cell (prop-cell (set) champ-empty))  ;; empty set, no dependents
   (prop-network
-   (prop-net-hot '() fuel)           ;; hot: worklist, fuel
-   (prop-net-warm champ-empty #f)    ;; warm: cells, contradiction
-   (prop-net-cold champ-empty        ;; cold: merge-fns
+   (prop-net-hot '() fuel)
+   (prop-net-warm (champ-insert champ-empty req-h req-cid req-cell) #f)
+   (prop-net-cold (champ-insert champ-empty req-h req-cid decomp-request-merge)
                   champ-empty        ;;   contradiction-fns
                   champ-empty        ;;   widen-fns
                   champ-empty        ;;   propagators
-                  0                  ;;   next-cell-id
+                  1                  ;;   next-cell-id (0 is taken by request cell)
                   0                  ;;   next-prop-id
                   champ-empty        ;;   cell-decomps
                   champ-empty        ;;   pair-decomps
