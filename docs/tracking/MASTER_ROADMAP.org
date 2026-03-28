@@ -176,8 +176,9 @@ partially dissolves (the SRE propagates both directions).
 | [[file:2026-03-22_SRE_TRACK0_FORM_REGISTRY_DESIGN.md][0]] | SRE Form Registry — domain-parameterized structural decomposition | ✅ [[file:2026-03-22_SRE_TRACK0_PIR.md][PIR]] | sre-core.rkt: 6 functions, 23 type ctor-descs, term-value validated |
 | [[file:2026-03-23_SRE_TRACK1_RELATION_PARAMETERIZED_DECOMPOSITION_DESIGN.md][1]] | Structural Relation Engine — equality, subtyping (variance), duality (constructor pairing) | ✅ [[file:2026-03-23_SRE_TRACK1_PIR.md][PIR]] | 5 relations, 28 ctor-descs, session duality on SRE, 110× failure speedup |
 | [[file:2026-03-23_SRE_TRACK1B_POST_IMPLEMENTATION_FIXES_DESIGN.md][1B]] | Post-impl fixes — merge-registry, decomp guard, dependent duality, benchmarks | ✅ | 7401 tests, 244.8s |
-| 2 | Elaborator-on-SRE — typing-core as structural-relate calls | ⬜ | Track 1 |
-| 3 | Trait Resolution-on-SRE — impl lookup via structural matching | ⬜ | Track 1 (subtyping) |
+| [[file:2026-03-23_SRE_TRACK2_ELABORATOR_ON_SRE_DESIGN.md][2]] | Elaborator-on-SRE — classifier → SRE dispatch | ✅ [[file:2026-03-23_SRE_TRACK2_PIR.md][PIR]] | O(1) prop:ctor-desc-tag, 10/10 structural cases |
+| 2F | *Algebraic Foundation* — endomorphism ring decomposition as data | ⬜ | Track 1. [[file:2026-03-28_PTF_TRACK1_DESIGN.md][PTF Track 1 §Phase 3]]. [[file:../research/2026-03-28_MODULE_THEORY_LATTICES.md][Module Theory §3]]. *FOUNDATIONAL — should precede Tracks 3-7.* |
+| 3 | Trait Resolution-on-SRE — impl lookup via structural matching | ⬜ | Track 1, *ideally 2F* |
 | 4 | Session Types-on-SRE — duality integration complete | ⬜ | Track 1 (duality) — basic integration done in 1/1B |
 | 4 | Pattern Compilation-on-SRE — scrutinee decomposition via SRE | ⬜ | Track 0 |
 | 5 | Reduction-on-SRE — interaction nets, e-graph, GoI | ⬜ | Track 1, PM 8F; IS PM Track 9 |

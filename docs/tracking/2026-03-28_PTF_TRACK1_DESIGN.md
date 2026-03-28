@@ -15,7 +15,7 @@
 | 0 | Submodule validation experiment | ✅ | PREMATURE. 20 cells, 0 propagators. Constraint solving is imperative. Revisit after PPN/SRE migration. |
 | 1 | Residuation computability check | ✅ | PARTIAL. Works for first-order pattern match. Equal cost for recursive. Cheaper for non-matching rejection. |
 | 2 | Decision gate: interpret findings | ✅ | Phase 3 proceeds. Phase 4 deferred (modest ROI until larger ADTs). Phase 5 deferred (Phase 0). |
-| 3 | SRE algebraic-kind annotation | ⬜ | ~3h. Add kind derivation to ctor-desc. Generic decomposition. |
+| 3 | SRE algebraic-kind → SRE Track 3 design recommendation | ✅ | Audit revealed this is a track-sized effort, not a phase. Design recommendation captured. SRE Track 3 created. |
 | 4 | Residuation prototype | ⏸️ | DEFERRED. Modest ROI for current programs. Revisit when larger ADTs or automatic backward propagators needed. |
 | 5 | Submodule architecture review | ⏸️ | DEFERRED. Network lacks propagator density. Revisit after PPN/SRE migration. |
 | 6 | Synthesis: update PTF Master + PRN + design principles | ⬜ | Capture confirmed/refuted conjectures |
@@ -154,7 +154,60 @@ Phase 0 result: **premature** — network lacks propagator structure. Phase 5 de
 
 ---
 
-## Phase 3: SRE Algebraic-Kind Annotation
+## Phase 3: SRE Algebraic-Kind → Design Recommendation for SRE Track 3
+
+### Phase 3 Findings
+
+The audit of `sre-core.rkt` revealed that the algebraic-kind generalization is a **track-sized effort, not a phase**. The current architecture is "mostly generic" via `sub-relation-fn` closures, but the genericity is accidental — it works without expressing its algebraic structure.
+
+**What the code does (historical accident):**
+- 5 relation structs (`sre-equality`, `sre-subtype`, `sre-subtype-reverse`, `sre-duality`, `sre-phantom`), each with a hand-written `sub-relation-fn` closure
+- `sre-subtype`'s closure reads `component-variances` from `ctor-desc` and maps: `+ → subtype`, `- → subtype-reverse`, `= → equality`, `ø → phantom`
+- `sre-subtype-reverse`'s closure mirrors the above
+- `sre-duality`'s closure reads `component-lattices` (NOT variances!) and maps: `type → equality`, `else → duality`
+- 6 explicit `(eq? rel-name ...)` checks survive where the generic dispatch breaks down
+- The topology handler has a 2-path fork: duality vs everything else
+
+**What the code SHOULD express (algebraic structure):**
+- A single **kind-variance table** — the endomorphism ring decomposition as data:
+
+  | Variance | Equality | Subtype | Duality | Rewriting |
+  |----------|----------|---------|---------|-----------|
+  | covariant | identity | monotone | antitone | idempotent |
+  | contravariant | identity | antitone | monotone | idempotent |
+  | invariant | identity | identity | identity | idempotent |
+  | dual-continuation | identity | — | duality | — |
+  | type-component | identity | — | equality | — |
+  | phantom | phantom | phantom | phantom | phantom |
+
+- Relations derived FROM the table, not hand-written closures
+- Duality using the SAME variance mechanism as subtyping — session constructors get duality-specific variances (`'d` for dual-continuation, `'t` for type-component) in `component-variances`
+- The topology handler dispatching on algebraic properties (antitone? → read both cells), not on relation names
+
+**Why this is track-sized:**
+1. Unifying duality's `component-lattices` dispatch with the variance mechanism requires updating 19 constructor registrations in `ctor-registry.rkt`
+2. The kind-variance table replaces 3 closures + 6 dispatch checks — non-trivial refactoring
+3. Nomenclature cleanup (`sre-relation` → algebraic kind naming) touches all SRE consumers
+4. The topology handler unification removes the last duality special case — must be tested across all PAR Track 1 bug categories
+5. This is fundamental infrastructure — getting it wrong breaks all structural reasoning. Deserves full design methodology (Stage 2 audit → Stage 3 design → critique → implement).
+
+### Design Recommendation: SRE Track 3 — Algebraic Foundation
+
+**Objective**: Make the SRE's endomorphism ring decomposition self-documenting. The algebraic structure should be visible in the code, not hidden in ad-hoc closures.
+
+**Deliverables**:
+1. **Kind-variance table as data** — single lookup function: `(algebraic-kind-for variance relation-kind) → sub-relation-kind`. Replaces all `sub-relation-fn` closures.
+2. **Unified variance for duality** — session constructors use duality-specific variance annotations (`'d`, `'t`) in the same `component-variances` field. Duality reads variances, not `component-lattices`.
+3. **Nomenclature cleanup** — `sre-relation` → naming that reflects algebraic kind. `sub-relation-fn` → derived from table.
+4. **Topology handler unification** — duality/non-duality fork → kind-property-dispatched. "Needs both cells" is a property of antitone kinds, not a check on `'duality`.
+5. **New relation extensibility** — adding a relation kind = adding a column to the table. No new closures, propagator constructors, or topology handler branches.
+
+**Cross-references**:
+- Module theory: `docs/research/2026-03-28_MODULE_THEORY_LATTICES.md` §3 (endomorphism ring decomposition)
+- PAR Track 1 experience: duality was hardest (3 of 10 bugs). Algebraic-kind dispatch would have prevented the topology handler's duality-specific bugs.
+- PTF Track 1: Phase 1 residuation analysis confirmed the algebraic structure; Phase 3 audit revealed the implementation gap.
+
+---
 
 **Goal**: Add algebraic-kind derivation to `ctor-desc`. Make SRE decomposition generic (kind-dispatched instead of per-relation case dispatch).
 
