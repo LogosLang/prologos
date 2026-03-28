@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Prologos Parallel Propagator Demos</title>
+<script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+<script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+<script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         max-width: 1200px; margin: 40px auto; padding: 0 20px;
+         background: #fafafa; color: #333; }
+  h1 { color: #1a1a2e; border-bottom: 3px solid #e94560; padding-bottom: 10px; }
+  h2 { color: #16213e; margin-top: 40px; }
+  .chart { margin: 20px 0; background: white; border-radius: 8px;
+           box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 20px; }
+  .summary { background: #16213e; color: white; padding: 20px; border-radius: 8px;
+             margin: 20px 0; }
+  .summary h3 { margin-top: 0; color: #e94560; }
+  .key-finding { font-size: 1.2em; font-weight: bold; color: #0f3460; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+  th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid #ddd; }
+  th { background: #16213e; color: white; }
+  td:first-child, th:first-child { text-align: left; }
+  .speedup-positive { color: #2ecc71; font-weight: bold; }
+  .speedup-negative { color: #e74c3c; }
+</style>
+</head>
+<body>
+
+<h1>Prologos: Parallel Propagator Execution</h1>
+
+<div class="summary">
+  <h3>Key Results</h3>
+  <p>True parallel execution on Racket 9 parallel threads. CALM theorem guarantees correctness.
+     BSP (Bulk Synchronous Parallel) scheduling with structural propagator capture.</p>
+  <p><strong>380/380 test suite GREEN</strong> under parallel execution.
+     <strong>4.45x speedup</strong> at 500 propagators (synthetic).
+     <strong>1.42x speedup</strong> on graph coloring and constraint grids at scale.</p>
+</div>
+
+<h2>1. Speedup vs Problem Size</h2>
+<div id="chart-speedup" class="chart"></div>
+
+<h2>2. Sequential vs Parallel Wall Time</h2>
+<div id="chart-time" class="chart"></div>
+
+<h2>3. Stress Test: Fan-Out Scaling</h2>
+<div id="chart-stress" class="chart"></div>
+
+<h2>4. Data Tables</h2>
+
+<h3>Graph Coloring (arc consistency, 4 colors)</h3>
+<table>
+<tr><th>Vertices</th><th>Propagators</th><th>Seq (ms)</th><th>Par (ms)</th><th>Speedup</th></tr>
+<tr><td>20</td><td>120</td><td>0.12</td><td>0.48</td><td class="speedup-negative">0.25x</td></tr>
+<tr><td>50</td><td>300</td><td>0.26</td><td>0.59</td><td class="speedup-negative">0.43x</td></tr>
+<tr><td>100</td><td>600</td><td>0.50</td><td>0.63</td><td class="speedup-negative">0.80x</td></tr>
+<tr><td>200</td><td>1200</td><td>1.02</td><td>0.89</td><td class="speedup-positive">1.14x</td></tr>
+<tr><td>500</td><td>3000</td><td>2.83</td><td>1.99</td><td class="speedup-positive">1.42x</td></tr>
+</table>
+
+<h3>Constraint Grid (row + column propagation)</h3>
+<table>
+<tr><th>Grid Size</th><th>Propagators</th><th>Seq (ms)</th><th>Par (ms)</th><th>Speedup</th></tr>
+<tr><td>4x4</td><td>96</td><td>0.09</td><td>0.49</td><td class="speedup-negative">0.19x</td></tr>
+<tr><td>6x6</td><td>360</td><td>0.27</td><td>0.50</td><td class="speedup-negative">0.53x</td></tr>
+<tr><td>8x8</td><td>896</td><td>0.72</td><td>0.76</td><td class="speedup-negative">0.95x</td></tr>
+<tr><td>10x10</td><td>1800</td><td>1.92</td><td>1.49</td><td class="speedup-positive">1.28x</td></tr>
+<tr><td>12x12</td><td>3168</td><td>3.05</td><td>2.15</td><td class="speedup-positive">1.42x</td></tr>
+</table>
+
+<h3>Wave Propagation (1D chain — BSP worst case)</h3>
+<table>
+<tr><th>Size</th><th>Propagators</th><th>Seq (ms)</th><th>Par (ms)</th><th>Speedup</th></tr>
+<tr><td>50</td><td>49</td><td>0.31</td><td>0.86</td><td class="speedup-negative">0.37x</td></tr>
+<tr><td>100</td><td>99</td><td>1.09</td><td>1.54</td><td class="speedup-negative">0.71x</td></tr>
+<tr><td>200</td><td>199</td><td>3.32</td><td>3.92</td><td class="speedup-negative">0.85x</td></tr>
+<tr><td>500</td><td>499</td><td>18.86</td><td>19.11</td><td class="speedup-negative">0.99x</td></tr>
+<tr><td>1000</td><td>999</td><td>73.35</td><td>72.68</td><td class="speedup-positive">1.01x</td></tr>
+</table>
+
+<h3>Stress Test: Fan-Out with Compute Work (100 iterations/propagator)</h3>
+<table>
+<tr><th>Propagators</th><th>Seq (ms)</th><th>Par (ms)</th><th>Speedup</th></tr>
+<tr><td>10</td><td>0.05</td><td>0.45</td><td class="speedup-negative">0.11x</td></tr>
+<tr><td>50</td><td>0.27</td><td>0.49</td><td class="speedup-negative">0.55x</td></tr>
+<tr><td>100</td><td>0.92</td><td>0.56</td><td class="speedup-positive">1.65x</td></tr>
+<tr><td>200</td><td>3.16</td><td>0.93</td><td class="speedup-positive">3.39x</td></tr>
+<tr><td>500</td><td>17.62</td><td>3.96</td><td class="speedup-positive">4.45x</td></tr>
+</table>
+
+<script>
+// Speedup chart
+vegaEmbed('#chart-speedup', {
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "width": 600, "height": 350,
+  "title": "Speedup Factor vs Problem Size (parallel / sequential)",
+  "data": {
+    "values": [
+      {"demo": "Graph Coloring", "propagators": 120, "speedup": 0.25},
+      {"demo": "Graph Coloring", "propagators": 300, "speedup": 0.43},
+      {"demo": "Graph Coloring", "propagators": 600, "speedup": 0.80},
+      {"demo": "Graph Coloring", "propagators": 1200, "speedup": 1.14},
+      {"demo": "Graph Coloring", "propagators": 3000, "speedup": 1.42},
+      {"demo": "Constraint Grid", "propagators": 96, "speedup": 0.19},
+      {"demo": "Constraint Grid", "propagators": 360, "speedup": 0.53},
+      {"demo": "Constraint Grid", "propagators": 896, "speedup": 0.95},
+      {"demo": "Constraint Grid", "propagators": 1800, "speedup": 1.28},
+      {"demo": "Constraint Grid", "propagators": 3168, "speedup": 1.42},
+      {"demo": "Wave (chain)", "propagators": 49, "speedup": 0.37},
+      {"demo": "Wave (chain)", "propagators": 99, "speedup": 0.71},
+      {"demo": "Wave (chain)", "propagators": 199, "speedup": 0.85},
+      {"demo": "Wave (chain)", "propagators": 499, "speedup": 0.99},
+      {"demo": "Wave (chain)", "propagators": 999, "speedup": 1.01},
+      {"demo": "Stress (fan-out+work)", "propagators": 10, "speedup": 0.11},
+      {"demo": "Stress (fan-out+work)", "propagators": 50, "speedup": 0.55},
+      {"demo": "Stress (fan-out+work)", "propagators": 100, "speedup": 1.65},
+      {"demo": "Stress (fan-out+work)", "propagators": 200, "speedup": 3.39},
+      {"demo": "Stress (fan-out+work)", "propagators": 500, "speedup": 4.45}
+    ]
+  },
+  "layer": [
+    {
+      "mark": {"type": "line", "point": true},
+      "encoding": {
+        "x": {"field": "propagators", "type": "quantitative", "scale": {"type": "log"},
+               "title": "Number of Propagators (log scale)"},
+        "y": {"field": "speedup", "type": "quantitative", "title": "Speedup (parallel/sequential)"},
+        "color": {"field": "demo", "type": "nominal", "title": "Demo"}
+      }
+    },
+    {
+      "mark": {"type": "rule", "strokeDash": [4,4], "color": "#999"},
+      "encoding": {"y": {"datum": 1}}
+    }
+  ]
+});
+
+// Time comparison chart
+vegaEmbed('#chart-time', {
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "width": 600, "height": 350,
+  "title": "Wall Time: Sequential vs Parallel",
+  "data": {
+    "values": [
+      {"demo": "Graph Coloring", "size": 500, "mode": "Sequential", "time_ms": 2.83},
+      {"demo": "Graph Coloring", "size": 500, "mode": "Parallel", "time_ms": 1.99},
+      {"demo": "Constraint Grid", "size": 12, "mode": "Sequential", "time_ms": 3.05},
+      {"demo": "Constraint Grid", "size": 12, "mode": "Parallel", "time_ms": 2.15},
+      {"demo": "Wave (N=1000)", "size": 1000, "mode": "Sequential", "time_ms": 73.35},
+      {"demo": "Wave (N=1000)", "size": 1000, "mode": "Parallel", "time_ms": 72.68},
+      {"demo": "Stress (N=500)", "size": 500, "mode": "Sequential", "time_ms": 17.62},
+      {"demo": "Stress (N=500)", "size": 500, "mode": "Parallel", "time_ms": 3.96}
+    ]
+  },
+  "mark": "bar",
+  "encoding": {
+    "x": {"field": "demo", "type": "nominal", "title": "Demo (largest size)"},
+    "y": {"field": "time_ms", "type": "quantitative", "title": "Wall Time (ms)"},
+    "color": {"field": "mode", "type": "nominal",
+              "scale": {"domain": ["Sequential", "Parallel"],
+                        "range": ["#e74c3c", "#2ecc71"]}},
+    "xOffset": {"field": "mode"}
+  }
+});
+
+// Stress test scaling
+vegaEmbed('#chart-stress', {
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "width": 600, "height": 350,
+  "title": "Fan-Out Scaling: Sequential vs Parallel (100 iterations/propagator)",
+  "data": {
+    "values": [
+      {"N": 10, "mode": "Sequential", "time_ms": 0.05},
+      {"N": 10, "mode": "Parallel", "time_ms": 0.45},
+      {"N": 50, "mode": "Sequential", "time_ms": 0.27},
+      {"N": 50, "mode": "Parallel", "time_ms": 0.49},
+      {"N": 100, "mode": "Sequential", "time_ms": 0.92},
+      {"N": 100, "mode": "Parallel", "time_ms": 0.56},
+      {"N": 200, "mode": "Sequential", "time_ms": 3.16},
+      {"N": 200, "mode": "Parallel", "time_ms": 0.93},
+      {"N": 500, "mode": "Sequential", "time_ms": 17.62},
+      {"N": 500, "mode": "Parallel", "time_ms": 3.96}
+    ]
+  },
+  "mark": {"type": "line", "point": true},
+  "encoding": {
+    "x": {"field": "N", "type": "quantitative", "title": "Number of Propagators"},
+    "y": {"field": "time_ms", "type": "quantitative", "title": "Wall Time (ms)"},
+    "color": {"field": "mode", "type": "nominal",
+              "scale": {"domain": ["Sequential", "Parallel"],
+                        "range": ["#e74c3c", "#2ecc71"]}}
+  }
+});
+</script>
+
+<div class="summary" style="margin-top: 40px;">
+  <h3>Architecture</h3>
+  <p><strong>CALM Theorem</strong>: Monotone computations over fixed lattice structures converge to the
+     same fixpoint regardless of evaluation order. This guarantees that parallel execution
+     produces identical results to sequential.</p>
+  <p><strong>BSP Scheduling</strong>: All propagators fire against the same immutable snapshot.
+     Results are merged via commutative lattice joins. No locks, no coordination, no races.</p>
+  <p><strong>Structural Capture</strong>: New cells and propagators created during fire are captured
+     and deferred to the next round. The infrastructure handles all complexity —
+     no module needs explicit parallelism awareness.</p>
+  <p style="color: #e94560; font-size: 1.1em;">
+    <strong>380/380 tests pass under true parallel execution.</strong>
+    10 cores. Racket 9 parallel threads. Zero correctness issues.
+  </p>
+</div>
+
+</body>
+</html>

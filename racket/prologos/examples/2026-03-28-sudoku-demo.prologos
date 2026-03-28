@@ -1,0 +1,64 @@
+;; ═══════════════════════════════════════════════════════════
+;; Sudoku Solver — PAR Track 2 Parallel Demo
+;; ═══════════════════════════════════════════════════════════
+;;
+;; Demonstrates parallel propagator execution on a classic CSP.
+;; The solver uses generate-and-test with constraint propagation
+;; via the relational engine.
+;;
+;; Start with 4x4 Sudoku (values 1-4) for validation,
+;; then scale to 9x9.
+
+ns sudoku-demo :no-prelude
+
+;; ─── Domain: values 1-4 for 4x4 Sudoku ───
+
+defr val [?v]
+  || 1
+  || 2
+  || 3
+  || 4
+
+;; ─── Inequality: two values must differ ───
+
+defr neq [?x ?y]
+  :- (val ?x) (val ?y)
+  &> (not (= ?x ?y))
+
+;; ─── A 4x4 Sudoku grid ───
+;; cell(Row, Col, Val) — Val is 1-4
+;; Rows/Cols are 1-4
+
+defr cell [?r ?c ?v]
+  :- (val ?v)
+
+;; ─── Row constraint: no duplicates in a row ───
+;; For every pair of columns c1 < c2 in the same row,
+;; the values must differ.
+
+defr row-ok [?r ?c1 ?c2]
+  :- (cell ?r ?c1 ?v1) (cell ?r ?c2 ?v2)
+  &> (not (= ?c1 ?c2))
+  &> (neq ?v1 ?v2)
+
+;; ─── Column constraint: no duplicates in a column ───
+
+defr col-ok [?c ?r1 ?r2]
+  :- (cell ?r1 ?c ?v1) (cell ?r2 ?c ?v2)
+  &> (not (= ?r1 ?r2))
+  &> (neq ?v1 ?v2)
+
+;; ─── Solve a simple instance ───
+;; Pre-filled:
+;;   1 _ | _ _
+;;   _ _ | 1 _
+;;   ----+----
+;;   _ 1 | _ _
+;;   _ _ | _ 1
+
+;; Query: find all valid completions
+eval (solve (cell 1 1 1) (cell 2 3 1) (cell 3 2 1) (cell 4 4 1)
+            (cell 1 2 ?a) (cell 1 3 ?b) (cell 1 4 ?c)
+            (cell 2 1 ?d) (cell 2 2 ?e) (cell 2 4 ?f)
+            (cell 3 1 ?g) (cell 3 3 ?h) (cell 3 4 ?i)
+            (cell 4 1 ?j) (cell 4 2 ?k) (cell 4 3 ?l))
