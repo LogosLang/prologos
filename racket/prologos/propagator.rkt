@@ -1253,7 +1253,7 @@
 ;; invisible in BSP mode.
 ;; PAR Track 1 D.3: fire-result bundles value writes AND new cells.
 ;; New cells are captured structurally via next-cell-id comparison.
-(struct fire-result (value-writes new-cells new-propagators) #:transparent)
+(struct fire-result (value-writes new-cells new-propagators contradiction) #:transparent)
 
 (define (fire-and-collect-writes snapshot-net pid)
   (define prop (champ-lookup (prop-network-propagators snapshot-net)
@@ -1320,7 +1320,12 @@
           (define prop (champ-lookup (prop-network-propagators result-net)
                                      (prop-id-hash pid) pid))
           (list pid prop))))
-  (fire-result value-writes new-cells new-propagators))
+  ;; Capture contradiction if result-net has one that snapshot didn't
+  (define new-contradiction
+    (and (prop-network-contradiction result-net)
+         (not (prop-network-contradiction snapshot-net))
+         (prop-network-contradiction result-net)))
+  (fire-result value-writes new-cells new-propagators new-contradiction))
 
 ;; Apply collected writes from all propagators to a network.
 ;; net-cell-write handles merge, dependent enqueuing, and contradiction.
@@ -1331,12 +1336,13 @@
   (for/fold ([net net])
             ([result (in-list all-results)])
     ;; Handle both old-style write lists and new fire-result structs
-    (define-values (writes new-cells new-props)
+    (define-values (writes new-cells new-props contradiction)
       (if (fire-result? result)
           (values (fire-result-value-writes result)
                   (fire-result-new-cells result)
-                  (fire-result-new-propagators result))
-          (values result '() '())))
+                  (fire-result-new-propagators result)
+                  (fire-result-contradiction result))
+          (values result '() '() #f)))
     ;; Apply new cells first (they may be referenced by value writes)
     (define net-with-cells
       (for/fold ([n net])
@@ -1377,10 +1383,17 @@
       (for/fold ([n net-with-cells])
                 ([w (in-list writes)])
         (net-cell-write n (car w) (cdr w))))
+    ;; Apply direct contradiction if fire function set it via struct-copy
+    (define net-with-contradiction
+      (if (and contradiction (not (prop-network-contradiction net-with-values)))
+          (struct-copy prop-network net-with-values
+            [warm (struct-copy prop-net-warm (prop-network-warm net-with-values)
+                    [contradiction contradiction])])
+          net-with-values))
     ;; New propagators are NOT applied here — they're collected and
     ;; applied by the topology stratum via net-add-propagator (which
     ;; handles dependency registration correctly).
-    net-with-values))
+    net-with-contradiction))
 
 ;; Collect all deferred propagators from fire results.
 ;; Returns list of (list input-ids output-ids fire-fn) specs.
