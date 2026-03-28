@@ -1563,10 +1563,6 @@
          [else
           ;; Read decomp-request cell
           (define req-val (net-cell-read value-result decomp-request-cell-id))
-          (eprintf "OUTER[~a]: req-count=~a worklist=~a\n"
-                   outer-round
-                   (if (and req-val (set? req-val)) (set-count req-val) 0)
-                   (length (prop-network-worklist value-result)))
           (if (or (not req-val) (set-empty? req-val))
               value-result  ;; No requests — outer fixpoint reached
               ;; Process requests via registered handlers
