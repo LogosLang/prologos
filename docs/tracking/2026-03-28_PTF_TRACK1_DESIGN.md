@@ -12,7 +12,7 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Submodule validation experiment | ⬜ | ~1h. Empirical: compute network decomposition, compare to subsystem boundaries |
+| 0 | Submodule validation experiment | ✅ | PREMATURE. 20 cells, 0 propagators. Constraint solving is imperative. Revisit after PPN/SRE migration. |
 | 1 | Residuation computability check | ⬜ | ~2h. Manual residual computation on 3-4 narrowing examples |
 | 2 | Decision gate: interpret findings | ⬜ | Findings from 0-1 determine scope of 3-5 |
 | 3 | SRE algebraic-kind annotation | ⬜ | ~3h. Add kind derivation to ctor-desc. Generic decomposition. |
@@ -59,6 +59,27 @@ The track follows the Completeness principle: do the hard theoretical work first
 - Connected components via union-find on cids: for each propagator, union all its input and output cids
 - Group propagators by which component their outputs land in
 
+### Phase 0 Findings (commit `f9ea509`)
+
+**The experiment was premature.** The per-command elab-network has cells (20 for a polymorphic program) but **zero propagators**. Constraint solving is entirely imperative — `solve-meta!` and the resolution loop in `metavar-store.rkt` do the work, not propagator firing.
+
+Infrastructure built:
+- `current-network-capture-box` parameter in `driver.rkt` — fires after each `process-command`, stores the `elab-network` in a box for external analysis.
+- Union-find analysis script validated on synthetic networks (correctly identifies 2 components from 6 cells + 3 propagators).
+
+**Why zero propagators**: The elaboration creates cells for metavariables and infrastructure (global-env, namespace, macros, warnings, narrowing). But the constraint resolution between metavariables is imperative — `solve-meta!` reads the `meta-info` CHAMP and calls `unify`, `resolve-trait-constraints!`, etc. These are not propagators on the network. They're imperative functions called from the resolution loop.
+
+The propagators that DO exist on the network are:
+- SRE decomposition sub-propagators (from PAR Track 1) — only for compound types
+- Readiness propagators (from constraint-propagators.rkt) — for delayed constraints
+- Infrastructure cell watchers (global-env, namespace) — from `register-*-cells!`
+
+For typical programs, these don't fire (no compound subtyping, no delayed constraints). The elaboration is imperative with a thin propagator veneer.
+
+**Implication for PTF Track 1**: The submodule decomposition is meaningful ONLY after SRE/PPN migration puts real subsystems on the network. Phase 5 (architecture review) is deferred.
+
+**Implication for the broader architecture**: This confirms PAR Track 2 R1's finding (18 BSP rounds across 14 programs). The parallel infrastructure is ready. The workload isn't. PPN/SRE migration is the critical path to leveraging both the module-theoretic decomposition AND true parallelism.
+
 ---
 
 ## Phase 1: Residuation Computability Check
@@ -91,17 +112,18 @@ The track follows the Completeness principle: do the hard theoretical work first
 
 **Goal**: Interpret findings from Phases 0-1 and determine scope of subsequent phases.
 
-**Decision matrix**:
+**Decision matrix (revised after Phase 0)**:
 
-| Phase 0 finding | Phase 1 finding | Action |
-|----------------|----------------|--------|
-| Components match subsystems | Residuation works | Phase 3 (algebraic kind) + Phase 4 (residuation prototype) + Phase 6 (synthesis). Skip Phase 5. |
-| Components match subsystems | Residuation partial | Phase 3 + Phase 4 (scoped to working fragment) + Phase 6 |
-| Components match subsystems | Residuation fails | Phase 3 + Phase 6. Skip Phase 4. Document why. |
-| Components DIFFER from subsystems | Residuation works | Phase 3 + Phase 4 + Phase 5 (architecture review) + Phase 6 |
-| Components DIFFER from subsystems | Residuation fails | Phase 3 + Phase 5 + Phase 6. Skip Phase 4. |
+Phase 0 result: **premature** — network lacks propagator structure. Phase 5 deferred to post-PPN/SRE migration. The decision now rests on Phase 1 alone:
+
+| Phase 1 finding | Action |
+|----------------|--------|
+| Residuation works (correct + cheaper) | Phase 3 (algebraic kind) + Phase 4 (residuation prototype) + Phase 6 (synthesis) |
+| Residuation partial (works for some cases) | Phase 3 + Phase 4 (scoped to working fragment) + Phase 6. Document boundary. |
+| Residuation fails (incorrect or not cheaper) | Phase 3 + Phase 6. Skip Phase 4. Document why. |
 
 **Phase 3 (algebraic-kind) always proceeds** — it's independently valuable regardless of other findings.
+**Phase 5 (architecture review) deferred** — revisit when network has propagator density (post-PPN Track 2+).
 
 ---
 
