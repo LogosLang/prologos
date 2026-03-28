@@ -877,9 +877,14 @@
                                             h)]
                                 [tag-a (sre-constructor-tag domain va)]
                                 [tag-b (sre-constructor-tag domain vb)]
-                                ;; One cell may be bot — derive missing tag from dual map
-                                [tag-a* (or tag-a (and tag-b (hash-ref dual-map tag-b #f)))]
-                                [tag-b* (or tag-b (and tag-a (hash-ref dual-map tag-a #f)))]
+                                ;; One cell may be bot — derive missing tag from dual map.
+                                ;; Self-dual constructors (no dual mapping): same tag both sides.
+                                [tag-a* (or tag-a
+                                            (and tag-b (hash-ref dual-map tag-b #f))
+                                            tag-b)]  ;; self-dual fallback
+                                [tag-b* (or tag-b
+                                            (and tag-a (hash-ref dual-map tag-a #f))
+                                            tag-a)]  ;; self-dual fallback
                                 [desc-a (and tag-a* (lookup-ctor-desc tag-a* #:domain (sre-domain-name domain)))]
                                 [desc-b (and tag-b* (lookup-ctor-desc tag-b* #:domain (sre-domain-name domain)))])
                            (if (and desc-a desc-b)
