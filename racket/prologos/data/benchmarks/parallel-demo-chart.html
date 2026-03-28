@@ -41,17 +41,25 @@
 
 <h2>1. Speedup vs Problem Size</h2>
 <div id="chart-speedup" class="chart"></div>
+<p style="color: #8b949e; font-size: 0.95em; margin-top: -10px; padding: 0 20px;">
+  <strong>How to read this:</strong> Each line tracks a different problem type as the network grows.
+  Above the dashed line (1.0x) = parallel is faster. Below = sequential wins.
+  The <span style="color: #f97583;">red line</span> (stress test) shows what happens with compute-heavy
+  propagators — near-linear speedup. The <span style="color: #f0883e;">orange</span> and
+  <span style="color: #79c0ff;">blue</span> lines show real constraint problems with lightweight propagators —
+  they cross the breakeven line around 800-1000 propagators.
+  The <span style="color: #56d4dd;">teal line</span> (wave/chain) stays flat — sequential dependencies can't parallelize.
+  As more of the language moves onto the network (heavier fire functions), the real-world
+  lines will curve upward toward the red line.
+</p>
 
-<h2>2. At a Glance: Parallel vs Sequential at Scale</h2>
-<div id="chart-sidebyside" class="chart"></div>
-
-<h2>3. Sequential vs Parallel Wall Time</h2>
+<h2>2. Sequential vs Parallel Wall Time</h2>
 <div id="chart-time" class="chart"></div>
 
-<h2>4. Stress Test: Fan-Out Scaling</h2>
+<h2>3. Stress Test: Fan-Out Scaling</h2>
 <div id="chart-stress" class="chart"></div>
 
-<h2>5. Data Tables</h2>
+<h2>4. Data Tables</h2>
 
 <h3>Graph Coloring (arc consistency, 4 colors)</h3>
 <table>
@@ -151,59 +159,29 @@ vegaEmbed('#chart-speedup', {
   ]
 }, embedOpts);
 
-// Side-by-side bar chart: concrete comparison at largest size
-vegaEmbed('#chart-sidebyside', {
+// Time comparison bar chart (merged: rounded corners from chart-2, labels from chart-3)
+vegaEmbed('#chart-time', {
   "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
   "width": 600, "height": 350,
   "background": "#161b22",
   "title": {"text": "Time to Solve: Sequential vs Parallel (largest problem size)", "color": "#e6edf3"},
   "data": {
     "values": [
-      {"problem": "Graph Color\n500 vertices\n3000 props", "mode": "Sequential", "time_ms": 2.83},
-      {"problem": "Graph Color\n500 vertices\n3000 props", "mode": "Parallel", "time_ms": 1.99},
-      {"problem": "Constraint Grid\n12x12\n3168 props", "mode": "Sequential", "time_ms": 3.05},
-      {"problem": "Constraint Grid\n12x12\n3168 props", "mode": "Parallel", "time_ms": 2.15},
-      {"problem": "Stress Test\n500 props\n100 iter each", "mode": "Sequential", "time_ms": 17.62},
-      {"problem": "Stress Test\n500 props\n100 iter each", "mode": "Parallel", "time_ms": 3.96},
-      {"problem": "Wave Chain\n1000 props\n(worst case)", "mode": "Sequential", "time_ms": 73.35},
-      {"problem": "Wave Chain\n1000 props\n(worst case)", "mode": "Parallel", "time_ms": 72.68}
+      {"demo": "Graph Coloring (500v)", "mode": "Sequential", "time_ms": 2.83},
+      {"demo": "Graph Coloring (500v)", "mode": "Parallel", "time_ms": 1.99},
+      {"demo": "Constraint Grid (12x12)", "mode": "Sequential", "time_ms": 3.05},
+      {"demo": "Constraint Grid (12x12)", "mode": "Parallel", "time_ms": 2.15},
+      {"demo": "Stress Test (500 props)", "mode": "Sequential", "time_ms": 17.62},
+      {"demo": "Stress Test (500 props)", "mode": "Parallel", "time_ms": 3.96},
+      {"demo": "Wave Chain (1000)", "mode": "Sequential", "time_ms": 73.35},
+      {"demo": "Wave Chain (1000)", "mode": "Parallel", "time_ms": 72.68}
     ]
   },
   "mark": {"type": "bar", "cornerRadiusTopLeft": 3, "cornerRadiusTopRight": 3},
   "encoding": {
-    "x": {"field": "problem", "type": "nominal", "title": null,
-           "axis": {"labelAngle": 0, "labelFontSize": 11}},
+    "x": {"field": "demo", "type": "nominal", "title": null},
     "y": {"field": "time_ms", "type": "quantitative", "title": "Wall Time (ms)"},
     "color": {"field": "mode", "type": "nominal", "title": "Execution",
-              "scale": {"domain": ["Sequential", "Parallel"],
-                        "range": ["#f85149", "#3fb950"]}},
-    "xOffset": {"field": "mode"}
-  }
-}, embedOpts);
-
-// Time comparison chart
-vegaEmbed('#chart-time', {
-  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
-  "width": 600, "height": 350,
-  "background": "#161b22",
-  "title": {"text": "Wall Time: Sequential vs Parallel", "color": "#e6edf3"},
-  "data": {
-    "values": [
-      {"demo": "Graph Coloring", "size": 500, "mode": "Sequential", "time_ms": 2.83},
-      {"demo": "Graph Coloring", "size": 500, "mode": "Parallel", "time_ms": 1.99},
-      {"demo": "Constraint Grid", "size": 12, "mode": "Sequential", "time_ms": 3.05},
-      {"demo": "Constraint Grid", "size": 12, "mode": "Parallel", "time_ms": 2.15},
-      {"demo": "Wave (N=1000)", "size": 1000, "mode": "Sequential", "time_ms": 73.35},
-      {"demo": "Wave (N=1000)", "size": 1000, "mode": "Parallel", "time_ms": 72.68},
-      {"demo": "Stress (N=500)", "size": 500, "mode": "Sequential", "time_ms": 17.62},
-      {"demo": "Stress (N=500)", "size": 500, "mode": "Parallel", "time_ms": 3.96}
-    ]
-  },
-  "mark": "bar",
-  "encoding": {
-    "x": {"field": "demo", "type": "nominal", "title": "Demo (largest size)"},
-    "y": {"field": "time_ms", "type": "quantitative", "title": "Wall Time (ms)"},
-    "color": {"field": "mode", "type": "nominal",
               "scale": {"domain": ["Sequential", "Parallel"],
                         "range": ["#f85149", "#3fb950"]}},
     "xOffset": {"field": "mode"}
