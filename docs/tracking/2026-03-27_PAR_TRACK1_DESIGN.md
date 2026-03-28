@@ -9,16 +9,20 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Narrowing CALM validation (empirical) | ⬜ | |
-| 0b | Pre-0 benchmark: BSP vs DFS overhead | ⬜ | |
+| 0a | Pre-0 microbenchmarks: BSP overhead, empty topology check cost | ⬜ | Design input — feeds D.2 |
+| 0b | Narrowing CALM validation (empirical) | ⬜ | Parallel with 0a |
 | 1 | Decomposition-request cell infrastructure | ⬜ | |
 | 2 | SRE decomposition → request emission | ⬜ | |
-| 3 | Narrowing branch → request emission | ⬜ | Scope depends on Phase 0 |
+| 3 | Narrowing branch → request emission | ⬜ | Scope depends on Phase 0b |
 | 4 | Topology stratum in BSP loop | ⬜ | |
-| 5 | BSP-as-default + full suite verification | ⬜ | |
+| 5 | BSP-as-default + individual test verification | ⬜ | |
 | 6 | CALM guard hardening | ⬜ | |
 | 7 | Constraint-propagators contract | ⬜ | |
-| 8 | PIR + tracker + dailies | ⬜ | |
+| 8 | A/B benchmarks: BSP vs DFS comparative + adversarial + micro | ⬜ | Compare against Phase 0a baselines |
+| 9 | Full suite regression gate | ⬜ | ONE run, 380/380 green |
+| 10 | PIR + tracker + dailies | ⬜ | |
+
+**Phase completion protocol**: After each phase: commit → update tracker → update dailies → proceed.
 
 ---
 
@@ -308,20 +312,37 @@ Phase 0 validates empirically whether `net-new-cell` (without `net-add-propagato
 
 ## §8 Implementation Phases
 
-### Phase 0: Narrowing CALM Validation (empirical)
+### Phase 0a: Pre-0 Microbenchmarks — BSP vs DFS Overhead
 
-**What**: Run narrowing and SRE tests under BSP to characterize the exact failure modes.
+**What**: Measure baseline overhead of BSP scheduling vs DFS, BEFORE implementing the topology stratum. This is design input — the data feeds D.2.
+
+**Microbenchmarks** (using `bench-micro.rkt` infrastructure):
+1. **Empty quiescence cost**: Create a network with N propagators that all return `net` unchanged (no-op). Measure `run-to-quiescence` under DFS vs BSP. This isolates scheduling overhead from propagator work.
+2. **Single-write quiescence**: N propagators each write one cell. Measure DFS vs BSP. This measures the diff/merge overhead in BSP's `fire-and-collect-writes` + `bulk-merge-writes`.
+3. **Multi-round convergence**: N propagators that trigger each other (chain: P1 writes cell-A, P2 watches cell-A and writes cell-B, etc.). Measures BSP round overhead for multi-round fixpoints vs DFS's single-pass chaining.
+4. **Empty topology check cost**: Measure the cost of reading an empty set-cell (the decomp-request cell check). This is the per-quiescence tax of the outer loop.
+
+**Adversarial benchmarks** (using `bench-ab.rkt` on `.prologos` programs):
+5. **Non-decomposing workload**: `simple-typed.prologos`, `nat-arithmetic.prologos` — no SRE decomposition. Measures pure scheduling overhead on real programs.
+6. **Decomposition-heavy workload**: `dependent-types.prologos`, `type-adversarial.prologos` — many compound types that trigger SRE decomposition. Measures the cost of the current inline decomposition under DFS (baseline for what the stratified approach must match).
+
+**E2E validation**:
+7. **Full suite wall time**: One run under DFS (baseline), one under BSP (current, broken for SRE). Compare total wall time. Even though BSP fails some tests, the passing tests reveal scheduling overhead.
+
+**Success criteria**: BSP overhead ≤5% of DFS for non-decomposing workloads. If >10%, the empty topology check needs optimization (boolean flag instead of cell read).
+
+**Lines changed**: New benchmark file `benchmarks/micro/bench-bsp-overhead.rkt` (~50 lines).
+
+**Completion**: commit → tracker → dailies → proceed.
+
+### Phase 0b: Narrowing CALM Validation (empirical)
+
+**What**: Run narrowing and SRE tests under BSP to characterize the exact failure modes. Can run in parallel with Phase 0a.
 **How**: Temporarily set `current-use-bsp-scheduler? #t`, run `raco test` on narrowing and SRE test files individually.
 **Success**: Catalogue of which tests fail, which pass, and classification of each failure as topology-related or not.
 **Lines changed**: 0 (parameter tweak only).
 
-### Phase 0b: Pre-0 Benchmark — BSP vs DFS Overhead
-
-**What**: Measure the overhead of the two-fixpoint BSP loop vs current DFS on the comparative benchmark suite.
-**How**: `bench-ab.rkt` with `--runs 5`, comparing DFS (current) vs BSP (with topology stratum) on non-decomposing benchmarks (simple-typed, nat-arithmetic — no SRE decomposition involved).
-**Success**: BSP overhead is ≤5% of DFS wall time for non-decomposing workloads.
-**Lines changed**: 0 (benchmarking only).
-**Design impact**: If overhead is >10%, the `:auto` heuristic (Track 3) becomes higher priority.
+**Completion**: commit → tracker → dailies → proceed.
 
 ### Phase 1: Decomposition-Request Cell Infrastructure
 
@@ -337,6 +358,8 @@ Specific changes:
 
 **Test**: Unit test — create network, write request, read back, verify set-union merge.
 
+**Completion**: commit → tracker → dailies → proceed.
+
 ### Phase 2: SRE Decomposition → Request Emission
 
 **What**: Replace inline topology creation in SRE fire functions with request emission.
@@ -350,6 +373,8 @@ Specific changes:
 - Duality-specific path (`sre-duality-decompose-dual-pair` ~line 700): same treatment
 
 **Test**: Run `raco test tests/test-sre-core.rkt tests/test-sre-subtype.rkt tests/test-sre-duality.rkt` under DFS — must still pass (request emission + immediate processing = same behavior).
+
+**Completion**: commit → tracker → dailies → proceed.
 
 ### Phase 3: Narrowing → Request Emission
 
@@ -372,6 +397,8 @@ Specific changes:
 
 **Test**: Run `raco test tests/test-narrowing-*.rkt` under DFS — must still pass.
 
+**Completion**: commit → tracker → dailies → proceed.
+
 ### Phase 4: Topology Stratum in BSP Loop
 
 **What**: Add outer loop to `run-to-quiescence-bsp` that processes decomposition requests between BSP rounds.
@@ -387,15 +414,19 @@ Specific changes:
 
 **Test**: `test-sre-subtype.rkt` under BSP — the 2 previously failing tests must now pass.
 
-### Phase 5: BSP-as-Default + Full Suite Verification
+**Completion**: commit → tracker → dailies → proceed.
 
-**What**: Flip default, verify everything.
+### Phase 5: BSP-as-Default + Individual Test Verification
+
+**What**: Flip default, verify known-sensitive tests individually.
 **How**:
 1. Set `current-use-bsp-scheduler? #t` in propagator.rkt
 2. Run individual known-sensitive tests: `test-sre-subtype.rkt`, `test-sre-core.rkt`, `test-sre-duality.rkt`, `test-narrowing-*.rkt`
-3. Full suite regression gate (ONE run, read failure logs)
-**Success**: 380/380 green, zero failures.
+3. Read failure logs for any issues — do NOT run the full suite here (that's Phase 9)
+**Success**: All individually-tested files pass.
 **Lines**: 1 (parameter flip).
+
+**Completion**: commit → tracker → dailies → proceed.
 
 ### Phase 6: CALM Guard Hardening
 
@@ -407,13 +438,52 @@ Specific changes:
 - `net-cell-decomp-insert`, `net-pair-decomp-insert`: ERROR during BSP fire rounds (add guards)
 - Document the CALM contract in propagator.rkt header comment
 
+**Completion**: commit → tracker → dailies → proceed.
+
 ### Phase 7: Constraint-Propagators Contract
 
 **What**: Document `install-fn` callback contract.
 **Where**: `constraint-propagators.rkt` line 265
 **Lines**: ~5 (comments + optional runtime assertion)
 
-### Phase 8: PIR + Tracker + Dailies
+**Completion**: commit → tracker → dailies → proceed.
+
+### Phase 8: A/B Benchmarks — BSP vs DFS Comparative
+
+**What**: Final performance comparison now that BSP is the default and all tests pass. Validates that the stratified topology approach doesn't regress performance.
+
+**Comparative benchmarks** (`bench-ab.rkt`):
+- All 13 programs in `benchmarks/comparative/`, 5 runs each
+- Compare HEAD (BSP default) vs pre-BSP commit (DFS)
+- Mann-Whitney U test for statistical significance
+- Report: per-program wall time, heartbeat counts, p-values
+
+**Adversarial benchmarks**:
+- `constraints-adversarial.prologos`: exercises prelude loading, per-command cell allocation, polymorphic resolution — heavy quiescence workload
+- `type-adversarial.prologos`: deep compound types that trigger SRE decomposition — exercises the topology stratum round-trip
+- `solve-adversarial.prologos`: logic engine workload — exercises narrowing propagators
+
+**Micro-benchmarks** (compare against Phase 0a baselines):
+- Re-run the 4 microbenchmarks from Phase 0a
+- Compare: did the topology stratum add measurable overhead?
+- The empty topology check should be ≤1μs per quiescence call
+
+**Success criteria**:
+- Non-decomposing workloads: ≤5% overhead vs DFS
+- Decomposition-heavy workloads: ≤15% overhead vs DFS (topology stratum round-trip is inherently more expensive than inline — we're trading correctness for a small cost)
+- No program ≥2× slower
+
+**Completion**: commit → tracker → dailies → proceed.
+
+### Phase 9: Full Suite Regression Gate
+
+**What**: One full suite run confirming 380/380 green under BSP.
+**How**: `racket tools/run-affected-tests.rkt --all` (ONE run, read failure logs if any).
+**Success**: 380/380 green. Suite wall time within 10% of DFS baseline.
+
+**Completion**: commit → tracker → dailies → proceed.
+
+### Phase 10: PIR + Tracker + Dailies
 
 ---
 
