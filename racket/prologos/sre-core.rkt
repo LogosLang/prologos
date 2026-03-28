@@ -18,6 +18,7 @@
 ;; connections) is the caller's responsibility. See design §4.3.
 
 (require racket/list
+         racket/set
          "propagator.rkt"
          "ctor-registry.rkt")
 
@@ -459,36 +460,38 @@
   (cond
     [(not tag) net]  ;; Not compound — nothing to decompose
     [else
-     ;; SRE Track 1: decomp key includes relation name so equality and
-     ;; subtype decompositions don't collide in the cache.
      (define rel-name (sre-relation-name relation))
      (define pair-key (decomp-key cell-a cell-b rel-name))
-     (cond
-       [(net-pair-decomp? net pair-key) net]  ;; Already decomposed
-       [else
-        (define desc (lookup-ctor-desc tag #:domain (sre-domain-name domain)))
-        (cond
-          [(not desc) net]
-          ;; Binder-depth=0: generic descriptor-driven decomposition
-          [(zero? (ctor-desc-binder-depth desc))
-           (sre-decompose-generic net domain cell-a cell-b va vb unified pair-key desc
-                                  #:relation relation)]
-          ;; Binder-depth>0: decomposition depends on relation.
-          ;; For equality (live elaboration): binder opening needed, fall through
-          ;; to PUnify dispatch which handles Pi/Sigma/lam binders directly.
-          ;; For subtype/duality (ground type checking): binder opening NOT needed —
-          ;; both values are concrete, extract components directly.
-          ;; Track 1B Phase 3: principled check via requires-binder-opening?
-          ;; (replaces ad-hoc name-check on 'equality)
-          [(sre-relation-requires-binder-opening? relation)
-           ;; Relation needs fresh metas for binder opening (e.g., equality).
-           ;; Fall through to PUnify dispatch for Pi/Sigma/lam binders.
-           net]
-          ;; Relation operates on ground types (e.g., subtype, duality):
-          ;; decompose directly — no binder opening needed.
-          [else
-           (sre-decompose-generic net domain cell-a cell-b va vb unified pair-key desc
-                                  #:relation relation)])])]))
+     ;; PAR Track 1 D.4: Check if BSP fire round is active.
+     ;; If yes → emit request to decomp-request cell (topology stratum processes).
+     ;; If no (DFS) → decompose inline (existing behavior, unchanged).
+     (if (current-bsp-fire-round?)
+         ;; BSP path: emit decomposition request
+         (cond
+           ;; Binder-depth>0 + requires binder opening → fall through to PUnify
+           [(let ([desc (lookup-ctor-desc tag #:domain (sre-domain-name domain))])
+              (and desc (> (ctor-desc-binder-depth desc) 0)
+                   (sre-relation-requires-binder-opening? relation)))
+            net]
+           [else
+            (net-cell-write net decomp-request-cell-id
+                            (set (sre-decomp-request pair-key domain cell-a cell-b
+                                                     relation '())))])
+         ;; DFS path: decompose inline (unchanged from pre-PAR)
+         (cond
+           [(net-pair-decomp? net pair-key) net]  ;; Already decomposed
+           [else
+            (define desc (lookup-ctor-desc tag #:domain (sre-domain-name domain)))
+            (cond
+              [(not desc) net]
+              [(zero? (ctor-desc-binder-depth desc))
+               (sre-decompose-generic net domain cell-a cell-b va vb unified pair-key desc
+                                      #:relation relation)]
+              [(sre-relation-requires-binder-opening? relation)
+               net]
+              [else
+               (sre-decompose-generic net domain cell-a cell-b va vb unified pair-key desc
+                                      #:relation relation)])]))]))
 
 ;; ========================================================================
 ;; sre-make-structural-relate-propagator
