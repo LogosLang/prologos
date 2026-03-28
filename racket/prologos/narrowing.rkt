@@ -65,7 +65,40 @@
  ;; Helpers (for testing)
  term-from-ground-expr
  nat->term
+ ;; PAR Track 1: called by topology stratum
+ eval-rhs
  bindings-to-read-fn)
+
+;; PAR Track 1: Register narrowing topology handlers at module load time.
+;; These handle narrowing-branch-request and narrowing-rule-request
+;; in the BSP topology stratum.
+(register-topology-handler!
+ (lambda (net req)
+   (cond
+     [(narrowing-branch-request? req)
+      (define key (narrowing-branch-request-pair-key req))
+      (if (net-pair-decomp? net key)
+          net  ;; Already processed — dedup
+          (let ([net* (install-narrowing-propagators
+                       net
+                       (narrowing-branch-request-tree req)
+                       (narrowing-branch-request-arg-cells req)
+                       (narrowing-branch-request-result-cell req)
+                       (narrowing-branch-request-bindings req))])
+            (net-pair-decomp-insert net* key)))]
+     [(narrowing-rule-request? req)
+      (define key (narrowing-rule-request-pair-key req))
+      (if (net-pair-decomp? net key)
+          net  ;; Already processed — dedup
+          (let-values ([(net1 result-term)
+                        (eval-rhs (narrowing-rule-request-rhs req)
+                                  (narrowing-rule-request-bindings req)
+                                  net)])
+            (define net2 (net-pair-decomp-insert net1 key))
+            (if (term-bot? result-term)
+                net2
+                (net-cell-write net2 (narrowing-rule-request-result-cell req) result-term))))]
+     [else #f])))  ;; Not a narrowing request — return #f to try next handler
 
 ;; ========================================
 ;; Term construction from ground expressions
@@ -242,12 +275,15 @@
            (let ([child-tree (cdr child-entry)]
                  [new-bindings (append (reverse sub-cells) bindings)])
              ;; PAR Track 1 D.4: dual-path BSP/DFS
+             (define branch-key (list 'narrow-branch watched-cell pos tag))
              (if (current-bsp-fire-round?)
-                 ;; BSP: emit topology request
-                 (net-cell-write net decomp-request-cell-id
-                                 (set (narrowing-branch-request
-                                       (list 'narrow-branch watched-cell pos)
-                                       child-tree arg-cells result-cell new-bindings)))
+                 ;; BSP: emit topology request (with dedup via pair-decomps)
+                 (if (net-pair-decomp? net branch-key)
+                     net  ;; Already emitted — skip
+                     (net-cell-write net decomp-request-cell-id
+                                     (set (narrowing-branch-request
+                                           branch-key
+                                           child-tree arg-cells result-cell new-bindings))))
                  ;; DFS: install inline (unchanged)
                  (install-narrowing-propagators net child-tree arg-cells result-cell new-bindings)))
            ;; No matching constructor in the tree — exempt (partial function)
@@ -285,16 +321,18 @@
       (for/list ([cid (in-list bindings)])
         (term-walk (net-cell-read net cid)
                    (lambda (c) (net-cell-read net c)))))
+    (define rule-key (list 'narrow-rule result-cell (length bindings)))
     ;; If any binding is still bot, residuate
     (if (ormap term-bot? binding-vals)
         net
         ;; PAR Track 1 D.4: dual-path BSP/DFS
         (if (current-bsp-fire-round?)
-            ;; BSP: emit rule-eval request (topology stratum calls eval-rhs)
-            (net-cell-write net decomp-request-cell-id
-                            (set (narrowing-rule-request
-                                  (list 'narrow-rule result-cell (length bindings))
-                                  rhs bindings result-cell)))
+            ;; BSP: emit rule-eval request (with dedup via pair-decomps)
+            (if (net-pair-decomp? net rule-key)
+                net  ;; Already emitted — skip
+                (net-cell-write net decomp-request-cell-id
+                                (set (narrowing-rule-request
+                                      rule-key rhs bindings result-cell))))
             ;; DFS: evaluate inline (unchanged)
             (let-values ([(net1 result-term) (eval-rhs rhs bindings net)])
               (if (term-bot? result-term)

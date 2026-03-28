@@ -117,6 +117,8 @@
  (struct-out narrowing-rule-request)
  decomp-request-merge
  decomp-request-cell-id
+ register-topology-handler!
+ net-cell-reset
  ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
  net-cell-read-raw
  ;; Track 6 Phase 2+3: Network-wide TMS commit
@@ -535,6 +537,20 @@
 ;; propagator or solve-meta!), wraps it via tms-write at the current speculation
 ;; depth. This allows all existing code to write plain values to TMS cells.
 ;; If the merged value equals the old value, returns the network unchanged.
+;; PAR Track 1: Direct cell value replacement (no merge, no dependent enqueue).
+;; Used by the topology stratum to clear the decomp-request cell.
+;; This is a NON-MONOTONE operation — only permitted outside BSP fire rounds.
+(define (net-cell-reset net cid new-val)
+  (define cells (prop-network-cells net))
+  (define h (cell-id-hash cid))
+  (define cell (champ-lookup cells h cid))
+  (when (eq? cell 'none)
+    (error 'net-cell-reset "unknown cell: ~a" cid))
+  (define new-cell (prop-cell new-val (prop-cell-dependents cell)))
+  (struct-copy prop-network net
+    [warm (struct-copy prop-net-warm (prop-network-warm net)
+            [cells (champ-insert cells h cid new-cell)])]))
+
 ;; Otherwise: updates the cell, enqueues dependent propagators, and
 ;; optionally checks the contradiction predicate.
 (define (net-cell-write net cid new-val)
@@ -1238,10 +1254,14 @@
     (parameterize ([current-bsp-fire-round? #t])
       ((propagator-fire-fn prop) snapshot-net)))
   (define result-next-id (prop-network-next-cell-id result-net))
-  ;; Diff output cells: extract (cell-id . new-value) for changed cells
+  ;; Diff output cells: extract (cell-id . new-value) for changed cells.
+  ;; PAR Track 1: Also check the decomp-request cell (cell-id 0) —
+  ;; fire functions may write requests to it, but it's not in propagator-outputs.
+  (define cells-to-check
+    (cons decomp-request-cell-id (propagator-outputs prop)))
   (define value-writes
     (for/fold ([writes '()])
-              ([cid (in-list (propagator-outputs prop))])
+              ([cid (in-list cells-to-check)])
       (define old (net-cell-read snapshot-net cid))
       (define new (net-cell-read result-net cid))
       (if (equal? old new)
@@ -1328,50 +1348,89 @@
   (map (lambda (pid) (fire-and-collect-writes snapshot-net pid))
        pids))
 
-;; BSP run-to-quiescence: fire all worklist propagators per round.
-;; executor: (snapshot-net pids → (listof (listof (cons cell-id value))))
-;; Defaults to sequential-fire-all. Use make-parallel-fire-all for parallelism.
-;; When current-bsp-observer is set, emits a bsp-round record after each round.
+;; PAR Track 1 D.4: Topology request handlers.
+;; Each module registers a handler for its request type at module load time.
+;; Signature: (prop-network × request) → prop-network (or #f if not handled)
+;; The topology stratum tries each handler until one succeeds.
+(define topology-handlers (box '()))
+
+(define (register-topology-handler! handler)
+  (set-box! topology-handlers (cons handler (unbox topology-handlers))))
+
+(define (process-topology-request net req)
+  (let loop ([handlers (unbox topology-handlers)])
+    (if (null? handlers)
+        net  ;; No handler matched — return net unchanged
+        (let ([result ((car handlers) net req)])
+          (if result result (loop (cdr handlers)))))))
+
+;; BSP run-to-quiescence: two-fixpoint loop (D.4 stratified topology).
+;; Outer loop: alternates value stratum (BSP rounds) and topology stratum.
+;; Inner loop: standard BSP — fire all worklist propagators per round.
+;; executor: (snapshot-net pids → (listof fire-result | write-list))
 (define (run-to-quiescence-bsp net #:executor [executor sequential-fire-all])
   (define observer (current-bsp-observer))
-  (let loop ([net net] [round-number 0])
+  (define has-topo-handlers? (pair? (unbox topology-handlers)))
+  ;; Outer loop: value stratum → topology stratum → repeat
+  (let outer-loop ([net net])
     (cond
-      ;; Already contradicted — stop
       [(prop-network-contradiction net) net]
-      ;; Fuel exhausted — stop
       [(<= (prop-network-fuel net) 0) net]
-      ;; Worklist empty — quiescent (fixed point reached)
-      [(null? (prop-network-worklist net)) net]
-      ;; Fire all worklist propagators in one BSP round
       [else
-       (let* (;; 1. Deduplicate worklist
-              [pids (dedup-pids (prop-network-worklist net))]
-              [n (length pids)]
-              ;; 2. Clear worklist and decrease fuel
-              [snapshot (struct-copy prop-network net
-                          [hot (struct-copy prop-net-hot (prop-network-hot net)
-                                 [worklist '()]
-                                 [fuel (- (prop-network-fuel net) n)])])]
-              ;; 3. Fire all propagators against snapshot
-              [all-writes (executor snapshot pids)]
-              ;; 4. Bulk-merge writes into snapshot
-              [merged (bulk-merge-writes snapshot all-writes)])
-         ;; 5. Notify observer if present (zero cost when #f)
-         (when observer
-           (define diffs
-             (for/fold ([acc '()])
-                       ([writes (in-list all-writes)]
-                        [pid (in-list pids)])
-               (for/fold ([acc acc])
-                         ([w (in-list writes)])
-                 (cons (cell-diff (car w)
-                                  (net-cell-read snapshot (car w))
-                                  (cdr w)
-                                  pid)
-                       acc))))
-           (observer (bsp-round round-number merged (reverse diffs) pids
-                                (prop-network-contradiction merged) '())))
-         (loop merged (add1 round-number)))])))
+       ;; VALUE STRATUM: standard BSP inner loop
+       (define value-result
+         (let inner-loop ([net net] [round-number 0])
+           (cond
+             [(prop-network-contradiction net) net]
+             [(<= (prop-network-fuel net) 0) net]
+             [(null? (prop-network-worklist net)) net]
+             [else
+              (let* ([pids (dedup-pids (prop-network-worklist net))]
+                     [n (length pids)]
+                     [snapshot (struct-copy prop-network net
+                                 [hot (struct-copy prop-net-hot (prop-network-hot net)
+                                        [worklist '()]
+                                        [fuel (- (prop-network-fuel net) n)])])]
+                     [all-writes (executor snapshot pids)]
+                     [merged (bulk-merge-writes snapshot all-writes)])
+                ;; Observer notification
+                (when observer
+                  (define writes-for-observer
+                    (for/list ([result (in-list all-writes)])
+                      (if (fire-result? result) (fire-result-value-writes result) result)))
+                  (define diffs
+                    (for/fold ([acc '()])
+                              ([writes (in-list writes-for-observer)]
+                               [pid (in-list pids)])
+                      (for/fold ([acc acc])
+                                ([w (in-list writes)])
+                        (cons (cell-diff (car w)
+                                         (net-cell-read snapshot (car w))
+                                         (cdr w)
+                                         pid)
+                              acc))))
+                  (observer (bsp-round round-number merged (reverse diffs) pids
+                                       (prop-network-contradiction merged) '())))
+                (inner-loop merged (add1 round-number)))])))
+       ;; TOPOLOGY STRATUM: process decomposition requests (sequential, outside BSP)
+       (cond
+         [(prop-network-contradiction value-result) value-result]
+         [(not has-topo-handlers?) value-result]  ;; No handlers registered — skip topology
+         [else
+          ;; Read decomp-request cell
+          (define req-val (net-cell-read value-result decomp-request-cell-id))
+          ;; Debug removed
+          (if (or (not req-val) (set-empty? req-val))
+              value-result  ;; No requests — outer fixpoint reached
+              ;; Process requests via registered handlers
+              (let* ([processed-net
+                      (for/fold ([n value-result])
+                                ([req (in-set req-val)])
+                        (process-topology-request n req))]
+                     ;; Clear request cell (non-monotone reset — bypasses merge)
+                     [cleared-net (net-cell-reset processed-net decomp-request-cell-id (set))])
+                ;; New propagators are on the worklist → back to value stratum
+                (outer-loop cleared-net)))])])))
 
 ;; ========================================
 ;; Parallel Executor (Phase 2.5c)

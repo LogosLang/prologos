@@ -41,6 +41,7 @@
  sre-constructor-tag
  sre-make-structural-relate-propagator
  sre-maybe-decompose
+ sre-decompose-generic  ;; PAR Track 1: called by topology stratum
  sre-decompose-generic
  sre-make-generic-reconstructor
 

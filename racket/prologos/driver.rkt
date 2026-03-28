@@ -59,7 +59,14 @@
          "prop-observatory.rkt"   ;; Observatory: capture protocol
          (only-in "pnet-serialize.rkt"   ;; Track 10: .pnet serialization
                   serialize-module-state deserialize-module-state
-                  pnet-stale? relink-foreign-marshallers!))
+                  pnet-stale? relink-foreign-marshallers!)
+         (only-in "sre-core.rkt"         ;; PAR Track 1: topology stratum handler
+                  sre-decompose-generic sre-constructor-tag
+                  sre-domain-bot? sre-domain-name)
+         (only-in "narrowing.rkt"        ;; PAR Track 1: topology stratum handler
+                  install-narrowing-propagators eval-rhs)
+         (only-in "term-lattice.rkt" term-bot?)
+         (only-in "ctor-registry.rkt" lookup-ctor-desc))
 
 (provide process-command
          process-file
@@ -408,6 +415,30 @@
   (when (current-ns-context)
     (define fqn (qualify-name name (ns-context-current-ns (current-ns-context))))
     (global-env-remove! fqn)))
+
+;; PAR Track 1: SRE topology handler (registered at module load time).
+;; driver.rkt imports sre-core.rkt and can access sre-decompose-generic.
+(register-topology-handler!
+ (lambda (net req)
+   (and (sre-decomp-request? req)
+        (let ([pair-key (sre-decomp-request-pair-key req)])
+          (if (net-pair-decomp? net pair-key)
+              net  ;; Already processed — dedup
+              (let* ([domain (sre-decomp-request-domain req)]
+                     [cell-a (sre-decomp-request-cell-a req)]
+                     [cell-b (sre-decomp-request-cell-b req)]
+                     [relation (sre-decomp-request-relation req)]
+                     [va (net-cell-read net cell-a)]
+                     [vb (net-cell-read net cell-b)]
+                     [bot? (sre-domain-bot? domain)])
+                (if (or (bot? va) (bot? vb))
+                    net
+                    (let* ([tag (sre-constructor-tag domain va)]
+                           [desc (and tag (lookup-ctor-desc tag #:domain (sre-domain-name domain)))])
+                      (if (not desc)
+                          net
+                          (sre-decompose-generic net domain cell-a cell-b va vb va
+                                                 pair-key desc #:relation relation))))))))))
 
 ;; Returns a result string, or a prologos-error.
 ;; Side effect: may update current-prelude-env for 'def'.
