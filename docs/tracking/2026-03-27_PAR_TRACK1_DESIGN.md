@@ -13,7 +13,7 @@
 | 0b | Narrowing CALM validation (empirical) | ✅ | `f6a3048` — 23/31 pass, 0 cell errors |
 | 1 | Decomposition-request cell infrastructure | ✅ | `bf2fff0` — cell-id 0, 3 request structs |
 | 2 | SRE decomposition → request emission | ✅ | `482516a` — dual-path BSP/DFS |
-| 3 | Narrowing branch → request emission | ⬜ | Scope depends on Phase 0b |
+| 3 | Narrowing branch + rule → request emission | ✅ | `21a9949` — both paths emit, eval-rhs unchanged |
 | 4 | Topology stratum in BSP loop | ⬜ | |
 | 5 | BSP-as-default + individual test verification | ⬜ | |
 | 6 | CALM guard hardening | ⬜ | |
