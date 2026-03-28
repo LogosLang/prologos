@@ -340,11 +340,10 @@
 ;; contradicts?: optional (val → Bool) predicate for contradiction detection
 ;; Returns: (values new-network cell-id)
 (define (net-new-cell net initial-value merge-fn [contradicts? #f])
-  ;; CALM topology guard: dynamic topology violates order-independence.
-  (when (current-bsp-fire-round?)
-    (error 'net-new-cell
-           "CALM violation: cannot create cells during BSP fire round. ~
-            Topology changes require stratum boundaries."))
+  ;; PAR Track 1 D.3: net-new-cell is CALM-safe during BSP fire rounds.
+  ;; Cells without dependents don't affect scheduling topology.
+  ;; New cells are captured structurally via next-cell-id comparison
+  ;; in fire-and-collect-writes.
   (perf-inc-cell-alloc!)  ;; Track 7 Phase 0b
   (define id (cell-id (prop-network-next-cell-id net)))
   (define cell (prop-cell initial-value champ-empty))
@@ -1170,34 +1169,90 @@
 ;;
 ;; Contract: outputs must be complete. Writes to unlisted cells are
 ;; invisible in BSP mode.
+;; PAR Track 1 D.3: fire-result bundles value writes AND new cells.
+;; New cells are captured structurally via next-cell-id comparison.
+(struct fire-result (value-writes new-cells) #:transparent)
+
 (define (fire-and-collect-writes snapshot-net pid)
   (define prop (champ-lookup (prop-network-propagators snapshot-net)
                               (prop-id-hash pid) pid))
   (when (eq? prop 'none)
     (error 'fire-and-collect-writes "unknown propagator: ~a" pid))
+  (define snapshot-next-id (prop-network-next-cell-id snapshot-net))
   ;; Fire propagator against snapshot (with CALM topology guard)
   (define result-net
     (parameterize ([current-bsp-fire-round? #t])
       ((propagator-fire-fn prop) snapshot-net)))
+  (define result-next-id (prop-network-next-cell-id result-net))
   ;; Diff output cells: extract (cell-id . new-value) for changed cells
-  (for/fold ([writes '()])
-            ([cid (in-list (propagator-outputs prop))])
-    (define old (net-cell-read snapshot-net cid))
-    (define new (net-cell-read result-net cid))
-    (if (equal? old new)
-        writes
-        (cons (cons cid new) writes))))
+  (define value-writes
+    (for/fold ([writes '()])
+              ([cid (in-list (propagator-outputs prop))])
+      (define old (net-cell-read snapshot-net cid))
+      (define new (net-cell-read result-net cid))
+      (if (equal? old new)
+          writes
+          (cons (cons cid new) writes))))
+  ;; PAR Track 1 D.3: Capture new cells via next-cell-id comparison.
+  ;; Cells with ids in [snapshot-next-id .. result-next-id) were created
+  ;; by the fire function. Extract them from result-net.
+  (define new-cells
+    (if (= snapshot-next-id result-next-id)
+        '()  ;; No new cells — common case, zero overhead
+        (for/list ([i (in-range snapshot-next-id result-next-id)])
+          (define cid (cell-id i))
+          (define cell (champ-lookup (prop-network-cells result-net)
+                                     (cell-id-hash cid) cid))
+          (define merge-fn (champ-lookup (prop-network-merge-fns result-net)
+                                         (cell-id-hash cid) cid))
+          (define contra-fn (champ-lookup (prop-network-contradiction-fns result-net)
+                                          (cell-id-hash cid) cid))
+          (list cid cell merge-fn contra-fn))))
+  (fire-result value-writes new-cells))
 
 ;; Apply collected writes from all propagators to a network.
 ;; net-cell-write handles merge, dependent enqueuing, and contradiction.
 ;; Multiple writes to the same cell from different propagators are fine —
 ;; lattice join is commutative and associative, so order doesn't matter.
-(define (bulk-merge-writes net all-writes)
+;; PAR Track 1 D.3: also applies new cells from fire-result structs.
+(define (bulk-merge-writes net all-results)
   (for/fold ([net net])
-            ([writes (in-list all-writes)])
-    (for/fold ([net net])
+            ([result (in-list all-results)])
+    ;; Handle both old-style write lists and new fire-result structs
+    (define-values (writes new-cells)
+      (if (fire-result? result)
+          (values (fire-result-value-writes result)
+                  (fire-result-new-cells result))
+          (values result '())))
+    ;; Apply new cells first (they may be referenced by value writes)
+    (define net-with-cells
+      (for/fold ([n net])
+                ([cell-spec (in-list new-cells)])
+        (define cid (car cell-spec))
+        (define cell (cadr cell-spec))
+        (define merge-fn (caddr cell-spec))
+        (define contra-fn (cadddr cell-spec))
+        (define h (cell-id-hash cid))
+        ;; Only add if cell doesn't already exist (idempotent)
+        (if (not (eq? 'none (champ-lookup (prop-network-cells n) h cid)))
+            n  ;; Cell already exists (from another propagator in same round)
+            (let* ([cells* (champ-insert (prop-network-cells n) h cid cell)]
+                   [merges* (champ-insert (prop-network-merge-fns n) h cid merge-fn)]
+                   [contras* (if (eq? contra-fn 'none)
+                                 (prop-network-contradiction-fns n)
+                                 (champ-insert (prop-network-contradiction-fns n) h cid contra-fn))])
+              (struct-copy prop-network n
+                [warm (struct-copy prop-net-warm (prop-network-warm n)
+                        [cells cells*])]
+                [cold (struct-copy prop-net-cold (prop-network-cold n)
+                        [merge-fns merges*]
+                        [contradiction-fns contras*]
+                        [next-cell-id (max (prop-network-next-cell-id n)
+                                           (+ (cell-id-n cid) 1))])])))))
+    ;; Then apply value writes
+    (for/fold ([n net-with-cells])
               ([w (in-list writes)])
-      (net-cell-write net (car w) (cdr w)))))
+      (net-cell-write n (car w) (cdr w)))))
 
 ;; Fire all propagators sequentially against the same snapshot.
 ;; Returns a list of write-lists, one per propagator.
