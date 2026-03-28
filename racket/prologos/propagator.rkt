@@ -36,7 +36,8 @@
 (require "champ.rkt"
          "performance-counters.rkt"
          racket/future   ;; for future, touch, processor-count
-         racket/set)     ;; PAR Track 1: set-union for decomp-request cell
+         racket/set      ;; PAR Track 1: set-union for decomp-request cell
+         racket/list)    ;; PAR Track 2: split-at for chunk partitioning
 
 (provide
  ;; Identity types
@@ -143,6 +144,9 @@
  ;; PAR Track 2 R1: BSP round statistics
  current-bsp-round-stats
  make-bsp-stats-accumulator
+ ;; PAR Track 2 R2: Parallel thread executor
+ make-parallel-thread-fire-all
+ current-parallel-executor
  ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
  net-cell-read-raw
  ;; Track 6 Phase 2+3: Network-wide TMS commit
@@ -1520,7 +1524,8 @@
 ;; Outer loop: alternates value stratum (BSP rounds) and topology stratum.
 ;; Inner loop: standard BSP — fire all worklist propagators per round.
 ;; executor: (snapshot-net pids → (listof fire-result | write-list))
-(define (run-to-quiescence-bsp net #:executor [executor sequential-fire-all])
+(define (run-to-quiescence-bsp net #:executor [executor (or (current-parallel-executor)
+                                                             sequential-fire-all)])
   (define observer (current-bsp-observer))
   (define has-topo-handlers? (pair? (unbox topology-handlers)))
   ;; Outer loop: value stratum → topology stratum → repeat
@@ -1636,6 +1641,57 @@
                      pids)]
                [results (map touch futures)])
           results))))
+
+;; PAR Track 2 R2: Parallel executor parameter.
+;; When set, BSP uses this executor instead of sequential-fire-all.
+;; Set to (make-parallel-thread-fire-all) for true parallelism.
+(define current-parallel-executor (make-parameter #f))
+
+;; PAR Track 2 R2: Parallel Thread Executor
+;; Uses Racket 9 parallel threads (#:pool 'own) for true parallelism.
+;; Unlike futures, parallel threads support allocation, parameters,
+;; and mutable hash table operations — no blocking restrictions.
+;;
+;; Architecture:
+;;   1. Partition worklist into K chunks (K = core count)
+;;   2. Fire each chunk on a parallel thread
+;;   3. Each thread runs sequential-fire-all on its chunk
+;;   4. Join all threads, concatenate results
+;;   5. bulk-merge-writes processes all results (sequential)
+;;
+;; Correctness: BSP snapshot isolation guarantees order-independence.
+;; All threads see the same snapshot. Results are merged commutatively.
+(define (make-parallel-thread-fire-all [min-parallel 8])
+  (define ncores (processor-count))
+  (lambda (snapshot-net pids)
+    (define n (length pids))
+    (if (< n min-parallel)
+        ;; Below threshold: sequential (avoid thread overhead)
+        (sequential-fire-all snapshot-net pids)
+        ;; Above threshold: parallel via Racket 9 parallel threads
+        (let* ([chunk-size (max 1 (quotient n ncores))]
+               [chunks (let loop ([remaining pids] [acc '()])
+                         (if (null? remaining) (reverse acc)
+                             (let-values ([(chunk rest) (split-at remaining (min chunk-size (length remaining)))])
+                               (loop rest (cons chunk acc)))))]
+               ;; Fire each chunk on a parallel thread
+               [result-channels
+                (for/list ([chunk (in-list chunks)])
+                  (define ch (make-channel))
+                  (thread #:pool 'own
+                    (lambda ()
+                      (define results
+                        (map (lambda (pid)
+                               (fire-and-collect-writes snapshot-net pid))
+                             chunk))
+                      (channel-put ch results)))
+                  ch)]
+               ;; Join all threads by reading from channels
+               [all-results
+                (apply append
+                       (for/list ([ch (in-list result-channels)])
+                         (channel-get ch)))])
+          all-results))))
 
 ;; ========================================
 ;; Convenience Queries

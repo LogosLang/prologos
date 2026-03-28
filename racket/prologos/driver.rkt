@@ -418,6 +418,11 @@
 
 ;; PAR Track 1: SRE topology handler moved to sre-core.rkt (self-registering).
 
+;; PAR Track 2 R2: Enable parallel thread executor globally.
+;; The BSP scheduler uses parallel threads for worklists > 8 propagators.
+;; Below threshold, falls back to sequential (no thread overhead).
+(current-parallel-executor (make-parallel-thread-fire-all))
+
 ;; Returns a result string, or a prologos-error.
 ;; Side effect: may update current-prelude-env for 'def'.
 ;;
