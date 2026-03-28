@@ -196,18 +196,21 @@ PM Track 10                      =   SRE Track 6 (module loading)
 
 *Current priority ordering* (updated 2026-03-27):
 
-*Immediate (PPN pipeline collapse — prerequisite to future syntax work):*
+*Immediate (PAR — correct parallelism foundation before more topology-changing work):*
+1. PAR Track 0: CALM topology audit + stratified topology design (Stage 0/1 research + implementation)
+2. PAR Track 1: BSP-as-default (after topology stratification resolves CALM violations)
+
+*Then PPN (pipeline collapse — prerequisite to future syntax work):*
 1. ✅ PPN Track 0: Lattice design — COMPLETE (4 lattices, 6 bridges, 57 tests)
 2. ✅ PPN Track 1: Lexer + structure as propagators — COMPLETE (5-cell reader, 380/380 green)
 3. PPN Track 2: Surface normalization as rewriting (replaces macros.rkt preparse ~7000 lines)
 4. PPN Track 3: Parser as propagators (HR productions)
 5. PPN Track 4 / SRE Track 2C: Elaboration as attribute evaluation (= elaborator-on-SRE)
 
-*Parallel priority (PAR Series — true parallel scheduling):*
-1. PAR Track 0: CALM topology audit + stratified topology design
-2. PAR Track 1: BSP-as-default (after topology stratification resolves CALM violations)
-3. PAR Track 2: True parallelism mechanism (Racket futures limitations → FFI or custom)
-4. PAR Track 3: ~:auto~ heuristic (when BSP vs DFS, network size threshold)
+*Research (parallel with implementation):*
+- PAR Track 2: True parallelism mechanism (STM, WAL cells, FFI — Stage 0/1 research)
+- PAR Track 3: ~:auto~ heuristic (empirical calibration after Track 1)
+- PAR Q2: Multi-strata towers / parallel topology rewrites (connects to PRN/e-graphs)
 
 *Then re-evaluate. Candidates for next priority:*
 - PM Track 10C: Per-test scheduling via Places (developer velocity — saves ~20s/run)
