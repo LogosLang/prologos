@@ -810,6 +810,12 @@
 ;; Run All
 ;; ========================================
 
+;; PAR Track 1: Force DFS for structural-decomp tests.
+;; Meta-solving uses imperative state (current-meta-info box) outside the
+;; propagator network. BSP's snapshot isolation prevents meta-solution
+;; callbacks from propagating through the sub-propagator chain.
+;; Will resolve when elaboration moves onto the network (SRE/PPN series).
+(parameterize ([current-use-bsp-scheduler? #f])
 (run-tests
  (test-suite
   "Phase 4c: Structural Decomposition"
@@ -833,4 +839,4 @@
   map-tests
   pair-tests
   lam-tests)
- 'verbose)
+ 'verbose))
