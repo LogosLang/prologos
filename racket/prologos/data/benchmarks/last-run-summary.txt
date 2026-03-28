@@ -1,5 +1,1 @@
-7529 tests in 149.4s (380 files, 10 workers, 2 FAILURES)
-
-Failed files:
-  test-structural-decomp.rkt
-  test-readiness-propagator.rkt
+7529 tests in 148.0s (380 files, 10 workers, all pass)
