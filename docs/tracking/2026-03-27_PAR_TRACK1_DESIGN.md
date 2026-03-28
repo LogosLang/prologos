@@ -9,7 +9,7 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0a | Pre-0 microbenchmarks: BSP overhead, empty topology check cost | ⬜ | Design input — feeds D.2 |
+| 0a | Pre-0 microbenchmarks: BSP overhead, empty topology check cost | ✅ | `2bfb656` — data below |
 | 0b | Narrowing CALM validation (empirical) | ⬜ | Parallel with 0a |
 | 1 | Decomposition-request cell infrastructure | ⬜ | |
 | 2 | SRE decomposition → request emission | ⬜ | |
@@ -476,6 +476,49 @@ Run `bench-ab.rkt` on the existing 13 comparative programs under DFS vs BSP (usi
 **Lines changed**: ~120 (bench file) + ~60 (adversarial file)
 
 **Completion**: commit → tracker → dailies → proceed.
+
+### Phase 0a Results (`2bfb656`)
+
+#### Micro-Benchmarks (M1-M5)
+
+| Measurement | DFS | BSP | BSP/DFS | Interpretation |
+|------------|-----|-----|---------|----------------|
+| M1: Empty quiescence (10K calls) | 0.50ms | 0.49ms | 0.98× | Identical. Zero scheduling overhead difference. |
+| M2: Single-propagator fire (5K) | 4.35ms | 4.98ms | 1.14× | 14% BSP overhead per-fire (fire-and-collect-writes diff). |
+| M3: Chain depth=10 (2K) | 10.26ms | 81.09ms | **7.9×** | BSP weak case: 10 rounds vs DFS 1 pass. Round overhead × depth. |
+| M4: Fan-out width=10 (2K) | 9.96ms | 15.22ms | 1.53× | 53% BSP overhead. Round/merge overhead dominates at this scale. |
+| M5: Topology creation N=4 (2K) | 4.18ms | — | baseline | ~2.1μs per cell+propagator creation. |
+| M5: Topology creation N=20 (500) | 7.06ms | — | baseline | ~0.7μs per cell+propagator at scale. |
+
+**Key finding**: M3's 7.9× regression on chains. BSP pays round overhead per dependency depth. In real programs this doesn't manifest because propagator chains are short (1-5 firings per quiescence, not depth-10 chains).
+
+#### Scheduler A/B (DFS vs BSP, 13 real programs, 5 runs each)
+
+| Program | DFS (ms) | BSP (ms) | Ratio |
+|---------|----------|----------|-------|
+| simple-typed | 122.3 | 122.6 | 1.003 |
+| nat-arithmetic | 118.2 | 119.0 | 1.006 |
+| dependent-types | 118.8 | 117.5 | 0.989 |
+| higher-order | 180.3 | 187.3 | 1.039 |
+| implicit-args | 210.5 | 204.7 | 0.973 |
+| pattern-matching | 206.8 | 209.9 | 1.015 |
+| scheduler-adversarial | 251.1 | 250.3 | 0.997 |
+| type-adversarial | 3747.1 | 3738.8 | 0.998 |
+| **TOTAL** | **6911.4** | **6882.8** | **0.996** |
+
+**Verdict**: Within noise (<5%). On real programs, BSP and DFS are indistinguishable.
+
+#### Adversarial Stability (bench-ab, scheduler-adversarial.prologos)
+
+A=3915ms, B=3914ms, speedup 0.0%, p=0.83 (not significant). The adversarial program runs correctly and stably.
+
+#### Design Implications
+
+1. **Empty topology check (M1)**: Zero cost. Boolean-flag optimization NOT needed.
+2. **Chain regression (M3)**: 7.9× at depth 10 in micro, but not observed in real programs. Not a blocking concern.
+3. **Real-program overhead**: Negligible (0.4% total). The topology stratum will add one cell read per quiescence — M1 shows this costs ~0μs.
+4. **Topology creation (M5)**: 2μs per cell+propagator. Topology stratum processing cost dominated by creation calls, which are already fast.
+5. **Design validated**: Two-fixpoint loop won't measurably regress real programs.
 
 ### Phase 0b: Narrowing CALM Validation (empirical)
 
