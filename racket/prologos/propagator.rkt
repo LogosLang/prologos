@@ -911,7 +911,7 @@
 ;; When #t, ALL run-to-quiescence calls use BSP scheduling instead of Gauss-Seidel.
 ;; This is the correct level for a full A/B comparison — it catches every quiescence
 ;; invocation (unify.rkt, elab-speculation.rkt, bridges, tabling, not just metavar-store).
-(define current-use-bsp-scheduler? (make-parameter #f))
+(define current-use-bsp-scheduler? (make-parameter #t))  ;; PAR Track 1 Phase 5: BSP is the default
 
 ;; CALM topology guard: when #t, fire functions must not modify network topology.
 ;; net-add-propagator and net-new-cell will error during BSP fire rounds.
