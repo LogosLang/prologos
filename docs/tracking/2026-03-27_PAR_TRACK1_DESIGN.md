@@ -2,7 +2,7 @@
 
 **Date**: 2026-03-27
 **Series**: PAR (Parallel Scheduling)
-**Stage**: 3 (Design Iteration D.1)
+**Stage**: 3 (Design Iteration D.2)
 **Prerequisites**: PAR Track 0 CALM Audit (✅ `2f3c160`), [Stage 2 Audit](2026-03-27_PAR_TRACK1_STAGE2_AUDIT.md) (`813634a`)
 
 ## Progress Tracker
@@ -163,51 +163,42 @@ The topology stratum is NOT a new S-level. It is WITHIN S(0), between BSP rounds
 - Per-domain routing isn't needed — the request struct carries its domain
 - Aligns with Data Orientation: requests are data values, not imperative calls
 
-### Request Struct
+### Request Structs (D.2: Variant Structs)
+
+D.1 used a flat struct with 11 fields and many `#f` values depending on kind. D.2 critique identified this as a data-orientation violation — the struct's shape doesn't match its content.
+
+**Revised: two variant structs in one cell.** Each variant carries exactly its fields. The topology stratum dispatches on `struct?` predicate. Same cell, same `set-union` merge. This follows the existing Prologos pattern (expr-Pi, expr-Sigma, etc.).
 
 ```racket
-(struct decomp-request
-  (kind        ;; 'sre-structural | 'narrowing-branch
-   domain      ;; SRE domain struct (for sre) or #f (for narrowing)
+;; SRE decomposition request (subtype, equality, duality)
+(struct sre-decomp-request
+  (pair-key    ;; decomp guard key (dedup)
+   domain      ;; SRE domain struct
    cell-a      ;; cell-id
-   cell-b      ;; cell-id (or #f for narrowing)
-   va vb       ;; current values at request time
-   unified     ;; unified value (for sre) or #f
-   pair-key    ;; decomp guard key
-   desc        ;; ctor-desc (for sre) or dt-node (for narrowing)
-   relation    ;; sre-relation (for sre) or #f
-   ;; Narrowing-specific:
-   arg-cells   ;; (listof cell-id) or #f
-   result-cell ;; cell-id or #f
-   bindings)   ;; (listof cell-id) or #f
+   cell-b      ;; cell-id
+   desc        ;; ctor-desc
+   relation    ;; sre-relation
+   ctor-chain) ;; (listof symbol) — constructor chain for occurs check (§4.1)
+  #:transparent)
+
+;; Narrowing topology request (branch installation, rule evaluation)
+(struct narrowing-decomp-request
+  (pair-key    ;; decomp guard key (dedup)
+   tree        ;; dt-node (subtree to install)
+   arg-cells   ;; (listof cell-id)
+   result-cell ;; cell-id
+   bindings)   ;; (listof cell-id)
   #:transparent)
 ```
 
-**Concern**: Carrying `va`, `vb`, `unified` in the request means the request captures cell values at emission time. If cells evolve between emission and processing, the topology stratum uses stale values for component extraction.
-
-**Mitigation**: The topology stratum re-reads cell values before processing. The request identifies WHICH cells to decompose; the stratum reads current values. The request struct should carry cell-ids and metadata (pair-key, desc, relation), not values.
-
-**Revised request struct**:
-
+No `#f` fields, no kind tag needed. The topology stratum:
 ```racket
-(struct decomp-request
-  (kind        ;; 'sre-structural | 'narrowing-branch
-   pair-key    ;; decomp guard key (also serves as dedup)
-   ;; SRE fields:
-   domain      ;; SRE domain struct or #f
-   cell-a      ;; cell-id
-   cell-b      ;; cell-id or #f
-   desc        ;; ctor-desc or #f
-   relation    ;; sre-relation or #f
-   ;; Narrowing fields:
-   tree        ;; dt-node or #f
-   arg-cells   ;; (listof cell-id) or #f
-   result-cell ;; cell-id or #f
-   bindings)   ;; (listof cell-id) or #f
-  #:transparent)
+(cond
+  [(sre-decomp-request? req) (process-sre-decomposition net req)]
+  [(narrowing-decomp-request? req) (process-narrowing-topology net req)])
 ```
 
-The topology stratum reads `va`, `vb`, `unified` from cells at processing time.
+**Stale values**: Requests carry cell-ids and metadata, NOT values. The topology stratum re-reads cell values at processing time.
 
 ### Merge Function
 
@@ -221,6 +212,38 @@ Bot: `(set)` (empty set). Contradiction: none (requests can't contradict).
 ### Request Cell Creation
 
 Added to `make-prop-network` (or `make-elaboration-network`). One cell per network.
+
+### §4.1 Recursive Type Occurs Check (D.2: Structural Termination)
+
+**Problem**: The outer loop termination argument assumes bounded type nesting depth. But recursive types (`type T = PVec T`) create unbounded nesting. The `net-pair-decomp?` guard prevents re-decomposing the SAME (cell-a, cell-b) pair, but each decomposition creates NEW cells, producing new pairs that pass the guard.
+
+**Structural approach** (correct-by-construction, not a depth-limit guard):
+
+The `sre-decomp-request` carries a `ctor-chain` field — the list of constructor names in the current decomposition chain. When emitting a request, the fire function appends the current `ctor-desc` name to the chain from the parent decomposition.
+
+The topology stratum checks: if the request's `ctor-chain` contains a duplicate (the same constructor appearing twice), this is a recursive type. The stratum can:
+1. Stop decomposing and mark the sub-cells as co-inductive (recursive subtyping), OR
+2. Emit a contradiction (recursive types not supported in this context)
+
+The `ctor-chain` makes the recursion detection structural — it's a property of the request set, not a runtime depth counter. The merge function can even detect cycles: `set-union` on requests whose `ctor-chain` contains duplicates → filter or flag them.
+
+**Where the chain comes from**: The parent propagator's request included a `ctor-chain`. When the topology stratum creates sub-propagators, it passes the extended chain as context. The sub-propagator's fire function includes it in its request.
+
+**Implementation**: ~10 lines — a `(member ctor-name chain)` check in the topology stratum before processing.
+
+### §4.2 Topology Stratum Scoping (D.2: Per-Quiescence, Not Per-Network)
+
+**D.2 finding**: The topology stratum operates per-`run-to-quiescence` call, not per-network. Each invocation of `run-to-quiescence` (whether from S(0), S(1) constraint retry, or speculation) has its own value→topology outer loop.
+
+This means:
+- S(0) decomposition requests are processed within S(0)'s quiescence call
+- If S(1) constraint retry fires a propagator that emits a decomposition request, that request is processed within S(1)'s quiescence call
+- Speculation's `run-to-quiescence` has its own topology stratum
+- No cross-strata request leakage
+
+The decomp-request cell is per-network (shared across strata), but the topology stratum only processes requests emitted during its own quiescence call. **Implementation**: the topology stratum tracks which requests it has already processed (via the `pair-key` dedup in the request set). New requests from inner quiescence calls appear as new set members.
+
+**Interaction with ATMS**: Constraint resolution (S(1)) uses ATMS for speculation/retraction. ATMS is itself stratification-like. Decomposition requests emitted during ATMS-managed speculation are scoped to that speculation's network fork. If the speculation is retracted, the decomposition (and its sub-cells/propagators) are discarded with the fork. No special handling needed — network forking already handles this.
 
 ---
 
@@ -701,9 +724,11 @@ Specific retentions:
 
 **Value stratum (inner BSP loop)**: Standard monotone propagator termination. Each cell value increases in lattice order. Finite lattice height. Worklist empties.
 
-**Topology stratum**: `net-pair-decomp?` guard ensures each (cell-a, cell-b, relation) triple decomposes at most once. Constructor arity is finite. No decomposition creates new compound types outside the existing type domain.
+**Topology stratum**: Two termination mechanisms:
+1. `net-pair-decomp?` guard ensures each (cell-a, cell-b, relation) triple decomposes at most once. Constructor arity is finite.
+2. **Recursive type occurs check** (§4.1): the `ctor-chain` in each request detects when the same constructor appears twice in a decomposition chain. Recursive types are caught structurally — the topology stratum stops decomposing and marks the result as co-inductive or contradictory. This replaces the D.1 assumption "type nesting depth is bounded in well-typed programs" with a structural guarantee that works even for ill-typed inputs during type-checking.
 
-**Outer loop**: Each iteration either adds topology (bounded by type nesting depth × cell pair count) or reaches fixpoint. Type nesting depth is bounded in well-typed programs. Therefore the outer loop terminates.
+**Outer loop**: Each iteration either adds topology (bounded by unique constructor sequences in the type domain) or reaches fixpoint. The `ctor-chain` occurs check provides a structural upper bound: the number of distinct constructors in scope. Therefore the outer loop terminates for all inputs, not just well-typed ones.
 
 **Narrowing topology**: Each definitional tree node installs propagators at most once (branch fire checks constructor tag, which is deterministic). Tree depth is finite. Recursive installation is bounded by tree size.
 
