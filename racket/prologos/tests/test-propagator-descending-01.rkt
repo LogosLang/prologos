@@ -171,6 +171,9 @@
   ;; Propagator A→D: write asc+1 to desc (narrowing via min)
   ;; Propagator D→A: write desc-1 to asc (accumulating via max)
   ;; Should converge: asc=5, desc=5 (or close, depending on firing order)
+  ;; PAR Track 1: This test is DFS-specific (order-dependent convergence).
+  ;; Force DFS for this test. BSP convergence is tested separately.
+  (parameterize ([current-use-bsp-scheduler? #f])
   (define net (make-prop-network))
   (define-values (net1 asc-id) (net-new-cell net 0 max-merge))
   (define-values (net2 desc-id) (net-new-cell-desc net1 10 min-merge))
@@ -196,7 +199,7 @@
   ;; p1: asc=9 → writes 10 to desc → min(10,10)=10. No change.
   ;; Quiescent: asc=9, desc=10
   (check-equal? (net-cell-read net5 asc-id) 9)
-  (check-equal? (net-cell-read net5 desc-id) 10))
+  (check-equal? (net-cell-read net5 desc-id) 10)))
 
 (test-case "desc/bsp-mixed-convergence"
   ;; Same setup as Gauss-Seidel, but using BSP scheduler

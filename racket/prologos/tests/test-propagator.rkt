@@ -39,7 +39,7 @@
   (check-true (prop-network? net))
   (check-true (net-quiescent? net))
   (check-false (net-contradiction? net))
-  (check-equal? (prop-network-next-cell-id net) 0)
+  (check-equal? (prop-network-next-cell-id net) 1)  ;; PAR Track 1: cell-id 0 is decomp-request cell
   (check-equal? (prop-network-next-prop-id net) 0))
 
 (test-case "make-prop-network: custom fuel"
@@ -69,16 +69,16 @@
   (define-values (net1 cid) (net-new-cell net 'bot flat-merge))
   (check-true (prop-network? net1))
   (check-true (cell-id? cid))
-  (check-equal? (cell-id-n cid) 0))
+  (check-equal? (cell-id-n cid) 1))  ;; PAR Track 1: first user cell is 1 (0 = request cell)
 
 (test-case "net-new-cell: sequential cell ids"
   (define net (make-prop-network))
   (define-values (net1 cid1) (net-new-cell net 'bot flat-merge))
   (define-values (net2 cid2) (net-new-cell net1 'bot flat-merge))
   (define-values (net3 cid3) (net-new-cell net2 'bot flat-merge))
-  (check-equal? (cell-id-n cid1) 0)
-  (check-equal? (cell-id-n cid2) 1)
-  (check-equal? (cell-id-n cid3) 2))
+  (check-equal? (cell-id-n cid1) 1)  ;; PAR Track 1: offset by 1
+  (check-equal? (cell-id-n cid2) 2)
+  (check-equal? (cell-id-n cid3) 3))
 
 (test-case "net-new-cell: initial value accessible"
   (define-values (net cid) (net-new-cell (make-prop-network) 42 max-merge))
@@ -196,12 +196,12 @@
                       (list 'bot flat-merge)))
   (define-values (net* ids) (net-new-cells-batch net specs))
   (check-equal? (length ids) 3)
-  (check-equal? (map cell-id-n ids) '(0 1 2))
+  (check-equal? (map cell-id-n ids) '(1 2 3))  ;; PAR Track 1: offset by 1
   ;; All cells readable with initial values
   (for ([cid (in-list ids)])
     (check-equal? (net-cell-read net* cid) 'bot))
-  ;; next-cell-id advanced by 3
-  (check-equal? (prop-network-next-cell-id net*) 3))
+  ;; next-cell-id advanced by 3 from 1
+  (check-equal? (prop-network-next-cell-id net*) 4))
 
 (test-case "net-new-cells-batch: cells are writable and merge correctly"
   (define net (make-prop-network))
@@ -233,7 +233,7 @@
   (define specs (list (list 'bot flat-merge)
                       (list 'bot flat-merge)))
   (define-values (net2 ids) (net-new-cells-batch net1 specs))
-  ;; existing cell was ID 0, batch should start at 1
-  (check-equal? (cell-id-n existing-id) 0)
-  (check-equal? (map cell-id-n ids) '(1 2))
-  (check-equal? (prop-network-next-cell-id net2) 3))
+  ;; PAR Track 1: existing cell is ID 1 (0 = request cell), batch starts at 2
+  (check-equal? (cell-id-n existing-id) 1)
+  (check-equal? (map cell-id-n ids) '(2 3))
+  (check-equal? (prop-network-next-cell-id net2) 4))
