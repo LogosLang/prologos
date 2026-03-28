@@ -18,9 +18,9 @@
 | 5 | BSP-as-default + full suite verification | ✅ | `ef22799` — 380/380 GREEN, 7529 tests, 148.0s |
 | 6 | CALM guard hardening | ✅ | `3e0748b` — contract documented, structural capture |
 | 7 | Constraint-propagators contract | ✅ | `c6a42b5` — callback-topology-request documented |
-| 8 | A/B benchmarks: BSP vs DFS comparative + adversarial + micro | 🔄 | Running |
-| 9 | Instrumentation cleanup | ⬜ | Remove debug prints |
-| 10 | PIR + tracker + dailies | ⬜ | |
+| 8 | A/B benchmarks: BSP vs DFS | ✅ | `f0c626f` — BSP 2.3% faster, no regressions |
+| 9 | Instrumentation cleanup | ✅ | `90e293b` — debug eprintf removed |
+| 10 | PIR + tracker + dailies | ✅ | TRACK COMPLETE |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → proceed.
 
