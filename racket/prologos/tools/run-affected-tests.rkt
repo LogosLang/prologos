@@ -290,7 +290,12 @@
                                     (string-suffix? s ".rkt"))))
              (string->symbol (path->string p)))
            '()))
-     (define all-tests (sort (remove-duplicates (append known-tests disk-tests)) symbol<?))
+     ;; PM Track 10C: filter to files that actually exist (dep-graph may have stale entries)
+     (define all-tests
+       (sort (filter (lambda (sym)
+                       (file-exists? (build-path tests-dir (symbol->string sym))))
+                     (remove-duplicates (append known-tests disk-tests)))
+             symbol<?))
      (define-values (to-run skipped) (apply-skip-filter all-tests tests-dir))
      (cond
        [(null? to-run)
