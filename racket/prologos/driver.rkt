@@ -86,7 +86,9 @@
          current-pnet-write-enabled?
          ;; PPN Track 1 Phase 5c: new reader validation
          use-new-reader?
-         validate-new-reader?)
+         validate-new-reader?
+         ;; PTF Track 1 Phase 0: network capture hook for analysis
+         current-network-capture-box)
 
 ;; Track 10 Phase 1b: feature flag for .pnet caching.
 ;; #t = use .pnet cache. #f = always elaborate from source (rollback).
@@ -422,6 +424,10 @@
 ;; The BSP scheduler uses parallel threads for worklists > 8 propagators.
 ;; Below threshold, falls back to sequential (no thread overhead).
 (current-parallel-executor (make-parallel-thread-fire-all))
+
+;; PTF Track 1 Phase 0: If set to a box, after each process-command the
+;; elab-network is stored there for analysis. Default #f (no capture).
+(define current-network-capture-box (make-parameter #f))
 
 ;; Returns a result string, or a prologos-error.
 ;; Side effect: may update current-prelude-env for 'def'.
@@ -988,6 +994,11 @@
                      (current-inexact-milliseconds)
                      (observatory-next-sequence! obs)
                      #f))))
+  ;; PTF Track 1 Phase 0: capture network for analysis
+  (let ([cap (current-network-capture-box)]
+        [nb (current-prop-net-box)])
+    (when (and cap nb)
+      (set-box! cap (unbox nb))))
   ;; Append warnings to result string (if any)
   (define coercion-warns (reverse (read-coercion-warnings)))
   (define deprecation-warns (reverse (read-deprecation-warnings)))
