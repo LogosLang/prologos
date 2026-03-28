@@ -797,34 +797,38 @@
     [else
      (define expected-dual-a (lookup-dual-tag tag-a))
      (define pair-key (decomp-key cell-a cell-b (sre-relation-name relation)))
-     ;; PAR Track 1 D.4: dual-path BSP/DFS for the "both compound" case
-     (if (current-bsp-fire-round?)
-         ;; BSP: emit request for all compound duality cases
-         (net-cell-write net decomp-request-cell-id
-                         (set (sre-decomp-request pair-key domain cell-a cell-b
-                                                  relation '())))
-         ;; DFS: inline decomposition
-         (cond
-           ;; Already decomposed
-           [(net-pair-decomp? net pair-key) net]
-           ;; Tags are duals → decompose with dual-pair decomposition
-           [(and expected-dual-a (eq? expected-dual-a tag-b))
-            (define desc-a (lookup-ctor-desc tag-a #:domain (sre-domain-name domain)))
-            (define desc-b (lookup-ctor-desc tag-b #:domain (sre-domain-name domain)))
-            (if (and desc-a desc-b)
-                (sre-duality-decompose-dual-pair
-                 net domain cell-a cell-b va vb desc-a desc-b pair-key relation)
-                net)]
-           ;; Same tag, self-dual (e.g., mu) → decompose with sre-decompose-generic
-           [(and (eq? tag-a tag-b) (not expected-dual-a))
-            (define desc (lookup-ctor-desc tag-a #:domain (sre-domain-name domain)))
-            (if (and desc (zero? (ctor-desc-binder-depth desc)))
-                (sre-decompose-generic net domain cell-a cell-b va vb va pair-key desc
-                                       #:relation relation)
-                net)]
-           ;; Wrong pairing → contradiction
-           [else
-            (net-cell-write net cell-a (sre-domain-top-value domain))]))]))
+     ;; PAR Track 1 D.4: BSP does case analysis, emits requests ONLY for decomposition.
+     ;; Contradictions are value writes — BSP captures them directly.
+     (cond
+       [(net-pair-decomp? net pair-key) net]
+       ;; Tags are duals → decomposition needed (emit request under BSP)
+       [(and expected-dual-a (eq? expected-dual-a tag-b))
+        (if (current-bsp-fire-round?)
+            (net-cell-write net decomp-request-cell-id
+                            (set (sre-decomp-request pair-key domain cell-a cell-b
+                                                     relation '())))
+            ;; DFS: decompose inline
+            (let ([desc-a (lookup-ctor-desc tag-a #:domain (sre-domain-name domain))]
+                  [desc-b (lookup-ctor-desc tag-b #:domain (sre-domain-name domain))])
+              (if (and desc-a desc-b)
+                  (sre-duality-decompose-dual-pair
+                   net domain cell-a cell-b va vb desc-a desc-b pair-key relation)
+                  net)))]
+       ;; Same tag, self-dual → decomposition needed
+       [(and (eq? tag-a tag-b) (not expected-dual-a))
+        (if (current-bsp-fire-round?)
+            (net-cell-write net decomp-request-cell-id
+                            (set (sre-decomp-request pair-key domain cell-a cell-b
+                                                     relation '())))
+            ;; DFS: decompose inline
+            (let ([desc (lookup-ctor-desc tag-a #:domain (sre-domain-name domain))])
+              (if (and desc (zero? (ctor-desc-binder-depth desc)))
+                  (sre-decompose-generic net domain cell-a cell-b va vb va pair-key desc
+                                         #:relation relation)
+                  net)))]
+       ;; Wrong pairing → contradiction (value write, BSP captures directly)
+       [else
+        (net-cell-write net cell-a (sre-domain-top-value domain))])]))
 
 ;; ========================================================================
 ;; PAR Track 1: SRE topology handler (self-registering at module load time)
@@ -845,28 +849,47 @@
                      [va (net-cell-read net cell-a)]
                      [vb (net-cell-read net cell-b)]
                      [bot? (sre-domain-bot? domain)])
-                (if (or (bot? va) (bot? vb))
+                (let* ([rel-name (sre-relation-name relation)]
+                       ;; For duality, one cell may be bot (propagate-one case).
+                       ;; For equality/subtype, both must be non-bot.
+                       [both-needed? (not (eq? rel-name 'duality))])
+                (if (and both-needed? (or (bot? va) (bot? vb)))
                     net
-                    (let* ([rel-name (sre-relation-name relation)]
+                    (let* (
                            [reversed? (eq? rel-name 'subtype-reverse)]
                            [lhs (if reversed? vb va)]
                            [tag (sre-constructor-tag domain lhs)]
                            [desc (and tag (lookup-ctor-desc tag
                                            #:domain (sre-domain-name domain)))])
                       (cond
-                        [(not desc) net]
-                        ;; Duality: needs dual-pair decomposition with BOTH descriptors
+                        ;; Duality: the topology handler calls sre-duality-decompose-dual-pair
+                        ;; directly. Both descriptors are derived here.
+                        ;; The fire function already did case analysis — only dual-pair
+                        ;; decomposition requests reach here (contradictions and self-dual
+                        ;; are handled as value writes in the fire function).
                         [(eq? rel-name 'duality)
-                         (let* ([tag-a (sre-constructor-tag domain va)]
+                         (let* ([pairs (sre-domain-dual-pairs domain)]
+                                [dual-map (let ([h (make-hasheq)])
+                                            (when pairs
+                                              (for ([p (in-list pairs)])
+                                                (hash-set! h (car p) (cdr p))
+                                                (hash-set! h (cdr p) (car p))))
+                                            h)]
+                                [tag-a (sre-constructor-tag domain va)]
                                 [tag-b (sre-constructor-tag domain vb)]
-                                [desc-a (and tag-a (lookup-ctor-desc tag-a #:domain (sre-domain-name domain)))]
-                                [desc-b (and tag-b (lookup-ctor-desc tag-b #:domain (sre-domain-name domain)))])
+                                ;; One cell may be bot — derive missing tag from dual map
+                                [tag-a* (or tag-a (and tag-b (hash-ref dual-map tag-b #f)))]
+                                [tag-b* (or tag-b (and tag-a (hash-ref dual-map tag-a #f)))]
+                                [desc-a (and tag-a* (lookup-ctor-desc tag-a* #:domain (sre-domain-name domain)))]
+                                [desc-b (and tag-b* (lookup-ctor-desc tag-b* #:domain (sre-domain-name domain)))])
                            (if (and desc-a desc-b)
                                (sre-duality-decompose-dual-pair net domain cell-a cell-b va vb
                                                                  desc-a desc-b pair-key relation)
                                net))]
                         ;; Equality/subtype: standard decomposition
+                        [(not desc) net]
+                        ;; Equality/subtype: standard decomposition
                         [else
                          (sre-decompose-generic net domain cell-a cell-b va vb lhs
                                                 pair-key desc
-                                                #:relation relation)])))))))))
+                                                #:relation relation)]))))))))))
