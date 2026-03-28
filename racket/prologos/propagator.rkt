@@ -1263,20 +1263,29 @@
     (parameterize ([current-bsp-fire-round? #t])
       ((propagator-fire-fn prop) snapshot-net)))
   (define result-next-id (prop-network-next-cell-id result-net))
-  ;; Diff output cells: extract (cell-id . new-value) for changed cells.
-  ;; PAR Track 1: Also check the decomp-request cell (cell-id 0) —
-  ;; fire functions may write requests to it, but it's not in propagator-outputs.
-  (define cells-to-check
-    (cons decomp-request-cell-id (propagator-outputs prop)))
+  ;; Diff ALL cells for value changes, not just declared outputs.
+  ;; PAR Track 1: Fire functions may write to cells not in their outputs list
+  ;; (e.g., contradiction writes to input cells, decomp-request cell writes).
+  ;; Under DFS, the full returned network is applied. Under BSP, we must
+  ;; capture all changes. Diff the full cell CHAMP via structural comparison.
   (define value-writes
-    (for/fold ([writes '()])
-              ([cid (in-list cells-to-check)])
-      (define old (net-cell-read snapshot-net cid))
-      (define new (net-cell-read result-net cid))
-      (if (equal? old new)
-          writes
-          (cons (cons cid new) writes))))
-  ;; PAR Track 1 D.3: Capture new cells via next-cell-id comparison.
+    (let ([snap-cells (prop-network-cells snapshot-net)]
+          [result-cells (prop-network-cells result-net)])
+      (if (eq? snap-cells result-cells)
+          '()  ;; Same CHAMP node — no changes (fast path via eq?)
+          ;; Scan result cells for changes vs snapshot
+          (champ-fold/hash
+           result-cells
+           (lambda (h cid cell acc)
+             (define old-cell (champ-lookup snap-cells h cid))
+             (if (eq? old-cell 'none)
+                 acc  ;; New cell — handled by next-cell-id capture
+                 (let ([old-val (prop-cell-value old-cell)]
+                       [new-val (prop-cell-value cell)])
+                   (if (equal? old-val new-val)
+                       acc
+                       (cons (cons cid new-val) acc)))))
+           '()))))  ;; PAR Track 1 D.3: Capture new cells via next-cell-id comparison.
   ;; Cells with ids in [snapshot-next-id .. result-next-id) were created
   ;; by the fire function. Extract them from result-net.
   (define new-cells
