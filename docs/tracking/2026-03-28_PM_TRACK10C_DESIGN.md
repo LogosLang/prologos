@@ -9,7 +9,7 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Pre-0 benchmarks: tail analysis + per-test timing | ⬜ | Design input — feeds D.2 |
+| 0 | Pre-0 benchmarks: tail analysis + per-test timing | ✅ | 32.3% idle, LPT → 22.5% improvement |
 | 1 | Work-stealing queue + historical sort | ⬜ | ~30 lines |
 | 2 | Per-test splitting for slow files | ⬜ | Scope depends on Phase 0 data |
 | 3 | A/B benchmark: work-stealing vs round-robin | ⬜ | |
@@ -181,6 +181,18 @@ t=38:  All 380 files processed. Last file was ~1s.
 **How**: Add per-worker timing to `run-affected-tests.rkt`. Record `(worker-id, file, start-ms, end-ms)` for each file. Post-process to compute idle time.
 
 **Success criteria**: Quantify the tail waste. If <5% of wall time, work-stealing won't help much. If >15%, it's worth the change.
+
+### Phase 0 Results
+
+| Metric | Round-Robin | LPT Work-Stealing |
+|--------|-------------|-------------------|
+| Slowest worker | 147.9s | 114.7s |
+| Fastest worker | 100.2s | 114.6s |
+| Tail spread | 47.7s | 0.049s |
+| Idle time (% of wall) | 32.3% | ~0% |
+| **Predicted improvement** | — | **22.5%** (148s → 115s) |
+
+**Finding**: Tail waste is 32.3% — worse than the 15% estimate. LPT achieves near-perfect balance (49ms spread). Phase 1 is strongly justified.
 
 **Lines changed**: ~20 (timing instrumentation only)
 
