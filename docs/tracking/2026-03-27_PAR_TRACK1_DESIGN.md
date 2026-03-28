@@ -331,102 +331,54 @@ The eval-rhs audit (`6eeb73b`) found:
 - All created cells are **inert storage** — no dependents, no scheduling effect
 - Cell-ids are used immediately in returned `term-ctor` values (written to output cells)
 
-### D.2 CALM Safety Analysis
+### D.2-D.3 Analysis: net-new-cell During BSP (SUPERSEDED BY D.4)
 
-**The CALM theorem guarantees order-independence for monotone operations over a fixed scheduling topology.** The scheduling topology is the set of (propagator, input-cells, output-cells) triples.
+D.2 argued `net-new-cell` is CALM-safe (doesn't affect scheduling topology). D.3 proposed structural capture via `next-cell-id` comparison. Phase 0b validated: 23/31 narrowing tests pass, zero cell errors.
 
-- `net-new-cell`: Adds a cell to the cell CHAMP. Does NOT add propagator edges. The scheduling topology is **unchanged**. CALM applies.
-- `net-add-propagator`: Adds propagator edges. The scheduling topology **changes**. CALM does NOT apply.
+**D.4 external critique found a critical flaw**: Under BSP, all fire functions receive the same snapshot. `next-cell-id` is in the immutable cold layer. If two fire functions both call `net-new-cell`, they both start from `next-cell-id = N` and create overlapping cell-ids. `bulk-merge-writes` first-writer-wins silently drops the second's cells. The second fire function's `term-ctor` references now point to the wrong cell.
 
-Therefore: `net-new-cell` during BSP fire rounds is **CALM-safe**. `net-add-propagator` is **CALM-unsafe**.
+This triggers when two narrowing rule fire functions are in the same BSP worklist — which happens when the topology stratum installs sibling rules in the same round.
 
-### D.3 Correct-by-Construction Cell Capture
+**Four options considered:**
 
-**Concern (D.3 critique)**: D.2's "net-new-cell is CALM-safe" is a property that holds today but isn't structurally enforced. If someone later adds a propagator that iterates all cells, or uses cell count for termination, the argument breaks silently. Relying on "cells without dependents are safe" is maintained-by-discipline, not correct-by-construction.
+| Option | Approach | Principles assessment |
+|--------|----------|----------------------|
+| 1. Pre-partition ID space | Each fire function gets reserved range | *Correct-by-Construction*: partial (magic number). *Completeness*: workaround, not root fix. *Data Orientation*: violates (hidden allocation scheme). |
+| 2. Cell-id remapping | bulk-merge remaps local ids to global unique ids | *Correct-by-Construction*: yes. *Decomplection*: violates (BSP merge coupled to term representation for id patching). |
+| 3. Defer ALL cell creation to topology stratum | Rule fire functions emit requests too. Zero cells during BSP. | *Correct-by-Construction*: yes (collision impossible). *Completeness*: root cause fix. *Decomplection*: clean (fire = values, topology = structure). |
+| 4. Sequential cell-creating fire functions | BSP partitions worklist by cell-creation capability | *Correct-by-Construction*: yes. *Decomplection*: partial (classification burden on propagator authors, unreliable for conditional creators). |
 
-**Structural approach**: Fire functions may call `net-new-cell` normally (no API change to eval-rhs). But BSP's merge phase **explicitly captures** new cells rather than relying on a full CHAMP diff. It compares `next-cell-id` before and after the fire:
+**D.4 Decision: Option 3.** Defer ALL network mutation (cells AND propagators) to the topology stratum. Fire functions are purely value-level: read cells, compute, write values to existing cells. This is the cleanest separation and eliminates the entire class of snapshot-isolation problems.
 
-```
-snapshot-next-id = (prop-network-next-cell-id snapshot)
-result-next-id  = (prop-network-next-cell-id result-net)
+This reverses D.2's finding that eval-rhs needs no refactoring. The eval-rhs audit showed the refactoring is tractable: 4 `net-new-cell` sites, all creating cells for constructor sub-terms. The topology stratum calls eval-rhs sequentially (no snapshot-isolation concern).
 
-if result-next-id > snapshot-next-id:
-  ;; Fire function created cells. Extract them by id range.
-  for id in [snapshot-next-id .. result-next-id):
-    extract cell from result-net → apply to canonical network
-```
+### D.4 Design: Pure Fire Functions
 
-This is structurally enforced:
-- No full CHAMP diff needed (O(new cells), not O(all cells))
-- New cells are explicitly enumerated — can't be "sneaked" through an unchecked path
-- The fire function doesn't need any API change — it calls `net-new-cell` as before
-- BSP's merge is the enforcement point, not the fire function's code
+**Invariant**: During a BSP fire round, fire functions may ONLY:
+- Read cell values via `net-cell-read`
+- Write values to EXISTING cells via `net-cell-write`
+- Write decomposition requests to the request cell
 
-**Implementation**: ~10 lines in `fire-and-collect-writes`. Compare `next-cell-id` counters, extract cells with ids in the gap.
-
-### D.3 Registry Dedup Strategy
-
-**Problem**: SRE fire functions currently call `net-pair-decomp-insert` to record decomposed pairs in `cold.pair-decomps`. Under BSP, these registry writes are dropped (BSP only diffs `warm.cells`). Result: stale snapshot → duplicate requests.
-
-**Resolution**: Under the stratified topology design, fire functions emit requests — they don't decompose or write registries. The topology stratum owns all registry state:
-
-1. **Fire function**: Emits request. Does NOT check `pair-decomps`. Does NOT write registries. Maximally simple: "I see compound types → emit request."
-2. **Topology stratum**: Checks `pair-decomps` before processing. Skips already-decomposed pairs. Writes `pair-decomps` after processing. **Single source of truth.**
-3. **Duplicate requests are harmless**: Set-union merge in the request cell deduplicates by `pair-key`. Even if two fire functions emit the same request, the set contains it once. The topology stratum processes it once.
-
-This eliminates the registry staleness concern entirely. Fire functions are pure (reads + value/cell writes only). The topology stratum owns all topology state AND all registry state.
-
-### D.3 Design Decision (Revised from D.2)
+Fire functions may NOT:
+- `net-new-cell` — **ERROR** (restored from D.1)
+- `net-add-propagator` — **ERROR** (unchanged)
+- `net-pair-decomp-insert` / `net-cell-decomp-insert` — **NOT CALLED** (topology stratum)
 
 | Operation | During BSP fire round | Rationale |
 |-----------|----------------------|-----------|
-| `net-new-cell` | **ALLOWED** — captured via next-cell-id comparison | Structurally enforced by BSP merge |
+| `net-cell-read` | **ALLOWED** | Pure read from snapshot |
+| `net-cell-write` | **ALLOWED** | Value operation, captured by BSP diff |
+| `net-new-cell` | **ERROR** | Snapshot isolation: cell-id collision between concurrent fire functions |
 | `net-add-propagator` | **ERROR** | Changes scheduling topology — CALM-unsafe |
-| `net-pair-decomp-insert` | **NOT CALLED** from fire functions | Moved to topology stratum (single source of truth) |
-| `net-cell-decomp-insert` | **NOT CALLED** from fire functions | Moved to topology stratum |
-| `eval-rhs` | **NO REFACTORING** | Continues as-is; new cells captured structurally |
+| `net-pair-decomp-insert` | **NOT CALLED** | Moved to topology stratum |
+| `net-cell-decomp-insert` | **NOT CALLED** | Moved to topology stratum |
 
----
+### D.4 Registry Dedup Strategy
 
-### §7.1 D.3 Self-Critique Findings
+(Unchanged from D.3) Fire functions emit requests unconditionally. The topology stratum is the single source of truth for `pair-decomps` and `cell-decomps`. Duplicate requests are harmless — set-union dedup by `pair-key`, topology stratum checks `pair-decomps` before processing.
 
-#### Lens 1: Principles Challenge
+### D.4 `sre-decomp-request` (Revised)
 
-**Decision: net-new-cell allowed during BSP**
-- *Decomplection* challenge: fire functions that create cells are doing two things (computing values AND allocating storage). These are separable concerns braided together. Counter: the structural capture makes it correct without separation. The braiding is an implementation detail of term construction, not an architectural coupling. **Verdict**: Pragmatic — correct-by-construction via BSP merge enforcement.
-
-**Decision: ctor-chain occurs check**
-- *Completeness* challenge: Who seeds the initial chain? The first SRE propagator fire doesn't have a chain. **Resolution**: The initial request's `ctor-chain` is `(list ctor-name)`. The topology stratum extends it when creating sub-propagators. Sub-propagator fire functions include the extended chain in their requests.
-
-**Decision: pair-key dedup in set-union**
-- *Correct-by-Construction* challenge: If two requests have the same `pair-key` but different metadata (e.g., different `desc`), `set-union` keeps both (they're not `equal?`). **Resolution**: `pair-key` is derived from `(cell-a, cell-b, relation)` which uniquely identifies a decomposition. The `desc` (ctor-desc) is determined by the cell values at processing time, not at emission time. Two requests with the same `pair-key` but different `desc` means the cell values changed between emissions — the topology stratum re-reads values anyway, so the `desc` in the request doesn't matter. **Action**: Remove `desc` from the request struct. The topology stratum derives it from cell values at processing time.
-
-#### Lens 2: Codebase Reality Check
-
-**Gap 1 (CRITICAL): Incomplete cell capture in `fire-and-collect-writes`**
-
-The current implementation captures 4 per-cell fields: (cid, cell, merge-fn, contra-fn). Missing:
-- `widen-fns` (cold layer) — widening function for descending lattices
-- `cell-dirs` (cold layer) — cell direction metadata (WFLE)
-
-This is the same class of bug as the original BSP value-only diff — silent data loss. Currently eval-rhs only creates cells via `net-new-cell` (which doesn't set widen-fns/cell-dirs), so the gap is latent. But incomplete capture breaks if future code uses `net-new-cell-desc`.
-
-**Fix**: Capture all 6 per-cell cold-layer fields. Apply all 6 in `bulk-merge-writes`. ~10 additional lines.
-
-**Gap 2: Phase 2 must explicitly split `sre-decompose-generic`**
-
-`sre-decompose-generic` currently does three things in one call:
-1. Creates sub-cells via `sre-get-or-create-sub-cells`
-2. Creates sub-propagators via `net-add-propagator`
-3. Writes registry via `net-pair-decomp-insert`
-
-Phase 2 must split this: fire functions emit requests (step 0). Topology stratum calls `sre-decompose-generic` for steps 1+2, then writes registry (step 3). The `net-pair-decomp-insert` call at line 438 moves from inside `sre-decompose-generic` to the topology stratum's processing loop.
-
-**Gap 3: `sre-decomp-request` should NOT carry `desc`**
-
-Per the principles challenge finding: `desc` (ctor-desc) is derived from cell values at processing time. Carrying it in the request struct creates a stale-data risk (cell values may evolve between emission and processing). The topology stratum already re-reads cell values — it should also derive `desc` from those values.
-
-**Revised `sre-decomp-request`:**
 ```racket
 (struct sre-decomp-request
   (pair-key    ;; decomp guard key (dedup)
@@ -438,15 +390,40 @@ Per the principles challenge finding: `desc` (ctor-desc) is derived from cell va
   #:transparent)
 ```
 
-`desc` removed — derived from cell values by topology stratum at processing time.
+`desc` removed (D.3 finding) — topology stratum derives from cell values at processing time.
 
-### Phase 0b Validation (COMPLETE — `f6a3048`)
+### D.4 `narrowing-decomp-request` (Revised)
 
-Narrowing tests under BSP with next-cell-id capture:
-- **23/31 pass**: Cell creation via eval-rhs works correctly under BSP
-- **8/31 fail**: All from `net-add-propagator` CALM guard (branch path) — expected
-- **Zero cell-related errors**: next-cell-id capture confirmed working
-- BSP reverted to off after validation
+```racket
+;; Branch request: install child subtree propagators
+(struct narrowing-branch-request
+  (pair-key    ;; dedup
+   tree        ;; dt-node (child subtree to install)
+   arg-cells   ;; (listof cell-id)
+   result-cell ;; cell-id
+   bindings)   ;; (listof cell-id)
+  #:transparent)
+
+;; Rule request: evaluate RHS, create cells, write result
+(struct narrowing-rule-request
+  (pair-key    ;; dedup
+   rhs         ;; expr (the RHS expression to evaluate)
+   bindings    ;; (listof cell-id) — binding cells to read
+   result-cell ;; cell-id — where to write the final term
+   )
+  #:transparent)
+```
+
+The rule request carries the RHS expression and binding cell-ids. The topology stratum:
+1. Reads binding values from cells (current, not stale)
+2. Calls `eval-rhs` (which creates cells and builds term-ctor)
+3. Writes the result to `result-cell`
+
+eval-rhs runs in the topology stratum (sequential, real network), so `net-new-cell` uses the real `next-cell-id` counter. No collision.
+
+### Phase 0b Validation (Historical — `f6a3048`)
+
+Phase 0b validated the D.3 cell-capture approach (23/31 pass, 0 cell errors). D.4 supersedes this approach — no cells during BSP at all. The Phase 0b code (next-cell-id capture in `fire-and-collect-writes`) will be reverted in Phase 1, replaced by the strict CALM guard (`net-new-cell` → ERROR during BSP).
 
 ---
 
@@ -701,46 +678,47 @@ Specific changes:
 
 **Completion**: commit → tracker → dailies → proceed.
 
-### Phase 3: Narrowing → Request Emission
+### Phase 3: Narrowing → Request Emission (D.4 Revised)
 
-**What**: Replace inline topology creation in narrowing fire functions with request emission.
+**What**: Replace ALL topology creation in narrowing fire functions with request emission. Both branch AND rule fire functions emit requests.
 **Where**: `narrowing.rkt`
+**Lines**: ~40
 
 #### D.2 Audit Findings (eval-rhs)
 
-The audit (`6eeb73b`) revealed two distinct CALM violation patterns in narrowing:
+The audit (`6eeb73b`) revealed two distinct patterns:
 
-**Branch fire function** (line 228): Calls `install-narrowing-propagators` recursively → `net-add-propagator` for child subtrees. This installs new propagators — a clear CALM violation (changes scheduling). **Must be moved to topology stratum.**
+**Branch fire function** (line 228): Calls `install-narrowing-propagators` → `net-add-propagator`. CALM violation.
 
-**Rule fire function** (line 275): Calls `eval-rhs` → `net-new-cell` at 4 sites (lines 124, 323, 338, 386). Creates cells for constructor sub-terms. **No `net-add-propagator` calls** in eval-rhs. The cells are pure storage with no dependents — inert until a future topology stratum adds propagators watching them.
+**Rule fire function** (line 275): Calls `eval-rhs` → `net-new-cell` at 4 sites (lines 124, 323, 338, 386). D.2 classified this as CALM-safe. **D.4 found this is NOT safe under BSP snapshot isolation** — two rule fire functions in the same worklist produce overlapping cell-ids.
 
-**Key insight**: Cell-only creation (`net-new-cell` without `net-add-propagator`) is structurally harmless for BSP. A cell with no dependents can't affect which propagators fire or in what order. The CALM concern is about scheduling order — and cells without dependents are scheduling-invisible.
+#### D.4 Decision: Both Paths Emit Requests
 
-#### Revised Options for Rule Fire Function
+**Branch fire function** → emits `narrowing-branch-request`:
+- Fire function reads watched cell, checks constructor tag, finds matching child
+- Emits request with child subtree, arg-cells, result-cell, bindings
+- Topology stratum calls `install-narrowing-propagators`
 
-| Option | Description | Lines | Invasiveness |
-|--------|-------------|-------|--------------|
-| **3a** | Move eval-rhs entirely to topology stratum | ~60 | High — carries full expr + bindings in request |
-| **3b** | Pre-allocate cell-ids in topology stratum, pass to fire fn | ~40 | Medium — cell-ID reservation API |
-| **3c** | Allow `net-new-cell` during BSP fire rounds; guard only `net-add-propagator` | ~5 | **Minimal** — relax guard for cell-only creation |
+**Rule fire function** → emits `narrowing-rule-request`:
+- Fire function reads all binding cells, checks readiness (no `term-bot?`)
+- If ready: emits request with RHS expression + binding cell-ids + result-cell
+- If not ready: residuates (returns net unchanged) — no request emitted
+- Topology stratum calls `eval-rhs` (which creates cells safely — sequential, real counter)
+- Topology stratum writes result to `result-cell`
 
-**Preferred: Option 3c** for rule fire functions. Rationale:
-- The audit confirms eval-rhs creates cells but never propagators
-- Cells without dependents are CALM-safe (inert storage, no scheduling effect)
-- The CALM guard distinguishes: `net-add-propagator` = unsafe (changes scheduling), `net-new-cell` = safe (no scheduling effect)
-- Zero refactoring of eval-rhs required — it continues to work as-is
-- The guard remains strict for propagator creation (the actual CALM violation)
-
-**Principled justification**: CALM guarantees order-independence for monotone operations over a fixed SCHEDULING TOPOLOGY. The scheduling topology is the set of (propagator, input-cells, output-cells) triples. `net-new-cell` adds a cell to the network but adds no propagator edges — the scheduling topology is unchanged. `net-add-propagator` adds edges — the scheduling topology changes. The guard should enforce fixed scheduling topology, not fixed cell count.
+**Why the rule path is tractable** (D.2 audit data):
+- eval-rhs is a recursive tree builder with 4 `net-new-cell` sites
+- The fire function's readiness check (lines 278-284) is pure — only reads cells
+- The request carries: `rhs` (the AST expression), `bindings` (cell-ids), `result-cell`
+- The topology stratum re-reads binding values (current, not stale)
+- eval-rhs itself needs zero changes — it runs in the topology stratum against the real network
 
 **Implementation**:
-- Branch fire function: emit `narrowing-decomp-request` with child subtree → topology stratum calls `install-narrowing-propagators`. (~15 lines change)
-- Rule fire function: no change needed. Guard relaxed to allow `net-new-cell` during BSP rounds.
-- CALM guard: `net-add-propagator` errors during BSP rounds. `net-new-cell` allowed. `net-cell-decomp-insert`/`net-pair-decomp-insert` — these modify registry CHAMPs, not scheduling topology. Allow during BSP rounds (they're value-like metadata writes).
+- `make-branch-fire-fn` lambda: replace `install-narrowing-propagators` call with request emission (~10 lines)
+- `make-rule-fire-fn` lambda: replace `eval-rhs` + `net-cell-write` with readiness check + request emission (~15 lines)
+- Both `install-narrowing-propagators` and `eval-rhs` remain unchanged — called from topology stratum
 
-**Lines**: ~20 (branch emission + guard relaxation)
-
-**Test**: Run `raco test tests/test-narrowing-*.rkt` under BSP — must pass with guard relaxation.
+**Test**: Run `raco test tests/test-narrowing-*.rkt` under DFS — must still pass (request emission + immediate processing = same behavior).
 
 **Completion**: commit → tracker → dailies → proceed.
 
@@ -775,14 +753,15 @@ Specific changes:
 
 ### Phase 6: CALM Guard Hardening
 
-**What**: Finalize guard behavior for production based on D.3 analysis.
+**What**: Finalize guard behavior for production based on D.4 analysis.
 **Lines**: ~10
 
-Guard behavior (D.3 revised — correct-by-construction):
+Guard behavior (D.4 — pure fire functions, strict guard):
+- `net-new-cell`: **ERROR** during BSP fire rounds (snapshot isolation: cell-id collision between concurrent fire functions)
 - `net-add-propagator`: **ERROR** during BSP fire rounds (changes scheduling topology — CALM-unsafe)
-- `net-new-cell`: **ALLOWED** during BSP fire rounds. New cells captured structurally via `next-cell-id` comparison in `fire-and-collect-writes`. No discipline required — BSP merge is the enforcement point.
-- `net-cell-decomp-insert`, `net-pair-decomp-insert`: **NOT CALLED** from fire functions (moved to topology stratum). If called during BSP fire round: **WARNING** (not error — harmless but indicates design drift).
-- Document the CALM contract in propagator.rkt header: "The CALM invariant is: fixed scheduling topology within a BSP round. Scheduling topology = the set of (propagator, input-cells, output-cells) triples. Cell creation is permitted and captured structurally. Registry writes belong to the topology stratum. Propagator creation is forbidden."
+- `net-cell-decomp-insert`, `net-pair-decomp-insert`: **NOT CALLED** from fire functions (moved to topology stratum). If called during BSP fire round: **WARNING** (indicates design drift).
+- Revert the D.3 cell-capture code in `fire-and-collect-writes` (next-cell-id comparison, `fire-result` struct). No longer needed — fire functions create zero cells.
+- Document the CALM contract in propagator.rkt header: "Fire functions are pure: read cells, write values to existing cells, emit decomposition requests. ALL network mutation (cells, propagators, registries) occurs in the topology stratum."
 
 **Completion**: commit → tracker → dailies → proceed.
 
