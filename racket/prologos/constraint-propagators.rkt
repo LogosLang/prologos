@@ -264,6 +264,12 @@
 ;; When constraint resolves to one candidate, call install-fn to set up
 ;; the concrete function's propagators.
 ;; install-fn: (net × constraint-candidate → net)
+;; PAR Track 1 CALM contract: install-fn may call net-add-propagator.
+;; Under BSP, the fire function emits a callback-topology-request instead
+;; of calling install-fn inline. The topology stratum calls the callback
+;; outside BSP fire rounds, where net-add-propagator schedules normally.
+;; NOTE: Currently unused (no callers in production). The hasmethod path
+;; goes through resolution.rkt → metavar-store.rkt, not through P3.
 (define (install-constraint->method-propagator net constraint-cell install-fn)
   (net-add-propagator
    net
