@@ -120,12 +120,16 @@
 ;; Set to 0 to disable.
 (define per-file-timeout-secs (make-parameter 120))
 
+(define use-stdin? (make-parameter #f))
+
 (define files
   (command-line
    #:program "batch-worker"
    #:once-each
    ["--file-timeout" secs "Per-file timeout in seconds (default: 120, 0=disable)"
     (per-file-timeout-secs (string->number secs))]
+   ["--stdin" "Read file paths from stdin (work-stealing mode)"
+    (use-stdin? #t)]
    #:args files
    files))
 
@@ -156,7 +160,28 @@
 ;; Save the real stdout for JSON output
 (define real-stdout (current-output-port))
 
-(for ([file (in-list files)])
+;; PM Track 10C: Support work-stealing mode (--stdin).
+;; In stdin mode, read one file path per line, process it, repeat until EOF.
+;; In batch mode (default), process command-line args as before.
+(define (next-file-generator)
+  (if (use-stdin?)
+      ;; Work-stealing: read from stdin
+      (lambda ()
+        (define line (read-line (current-input-port) 'any))
+        (if (eof-object? line) #f (string-trim line)))
+      ;; Batch: iterate command-line args
+      (let ([remaining (box files)])
+        (lambda ()
+          (if (null? (unbox remaining)) #f
+              (let ([f (car (unbox remaining))])
+                (set-box! remaining (cdr (unbox remaining)))
+                f))))))
+
+(define get-next-file (next-file-generator))
+
+(let loop ()
+  (define file (get-next-file))
+  (when file
   ;; Snapshot test-log counters: (failures . total)
   (define pre-log (test-log))
   (define pre-fail (car pre-log))
@@ -379,4 +404,5 @@
   ;; Write JSON line to real stdout
   (write-json result-final real-stdout)
   (newline real-stdout)
-  (flush-output real-stdout))
+  (flush-output real-stdout)
+  (loop)))

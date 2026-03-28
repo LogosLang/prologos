@@ -498,36 +498,68 @@
   ;; Check PRELUDE manifest against namespace.rkt (catch drift early)
   (check-prelude-drift! project-root)
 
-  ;; Distribute files across batches (round-robin for load balance)
+  ;; PM Track 10C: Work-stealing dispatch with LPT scheduling.
+  ;; Sort files by historical wall time (heaviest first) for optimal
+  ;; load balance. Workers pull files from a shared queue via stdin.
   (define jobs (min (num-jobs) file-count))
-  (define batches (make-vector jobs '()))
-  (for ([path (in-list test-paths)]
-        [i (in-naturals)])
-    (define slot (modulo i jobs))
-    (vector-set! batches slot (cons path (vector-ref batches slot))))
-  ;; Reverse each batch to restore original order
-  (for ([i (in-range jobs)])
-    (vector-set! batches i (reverse (vector-ref batches i))))
+
+  ;; Read historical timings for LPT sort
+  (define timings-path (build-path project-root "data" "benchmarks" "timings.jsonl"))
+  (define historical-times
+    (if (file-exists? timings-path)
+        (with-handlers ([exn? (lambda (e) (hasheq))])
+          (define lines
+            (with-input-from-file timings-path
+              (lambda ()
+                (let loop ([acc '()])
+                  (define line (read-line))
+                  (if (eof-object? line) (reverse acc) (loop (cons line acc)))))))
+          ;; Use last run's per-file times
+          (define last-run
+            (with-input-from-string (last lines) read-json))
+          (define results (hash-ref last-run 'results '()))
+          (for/hasheq ([r (in-list results)])
+            (values (hash-ref r 'file "") (hash-ref r 'wall_ms 0))))
+        (hasheq)))
+
+  ;; Sort: heaviest first. Unknown files get +inf.0 (conservative).
+  (define sorted-paths
+    (sort test-paths >
+          #:key (lambda (p)
+                  (define name (path->string (file-name-from-path (string->path p))))
+                  (hash-ref historical-times name +inf.0))))
 
   ;; Resolve batch worker path
   (define batch-worker-path
     (path->string (build-path project-root "tools" "batch-worker.rkt")))
 
-  (printf "\n--- Running ~a files (~a batch workers, timeout: ~as) ---\n"
+  (printf "\n--- Running ~a files (~a batch workers, work-stealing, timeout: ~as) ---\n"
           file-count jobs (timeout-secs))
 
-  ;; Spawn all batch workers and reader threads
+  ;; Shared work queue: workers pull files from here.
+  ;; Sentinel 'done signals each worker to exit (one per worker).
+  (define work-queue (make-async-channel))
+  (for ([path (in-list sorted-paths)])
+    (async-channel-put work-queue path))
+  (for ([_ (in-range jobs)])
+    (async-channel-put work-queue 'done))
+
+  ;; Spawn all batch workers in --stdin mode
   (define result-ch (make-async-channel))
   (define t0 (current-inexact-monotonic-milliseconds))
   (define all-procs '())
+  (define all-stdins '())
 
-  (for ([i (in-range jobs)]
-        #:when (pair? (vector-ref batches i)))
-    (define batch (vector-ref batches i))
+  (for ([i (in-range jobs)])
     (define-values (proc stdout stdin stderr)
-      (apply subprocess #f #f #f racket-path batch-worker-path batch))
-    (close-output-port stdin)
+      (subprocess #f #f #f racket-path batch-worker-path "--stdin"))
     (set! all-procs (cons proc all-procs))
+    (set! all-stdins (cons stdin all-stdins))
+    ;; Send first file to each worker to get them started
+    (define first-file (async-channel-try-get work-queue))
+    (when first-file
+      (displayln first-file stdin)
+      (flush-output stdin))
     ;; Reader thread: parse JSONL from worker stdout → result channel
     (thread
      (λ ()
@@ -543,7 +575,8 @@
               (with-handlers ([exn:fail? void])
                 (define r (with-input-from-string trimmed read-json))
                 (when (hash? r)
-                  (async-channel-put result-ch r))))
+                  ;; PM Track 10C: tag result with worker stdin for work-stealing dispatch
+                  (async-channel-put result-ch (cons stdin r)))))
             (loop)])))))
 
   ;; Collect results with progress output
@@ -558,9 +591,22 @@
       (define first-result-timeout 30)
       (define effective-timeout
         (if (= count 0) first-result-timeout (timeout-secs)))
-      (define r (sync/timeout (* effective-timeout 1.0) result-ch))
+      (define raw (sync/timeout (* effective-timeout 1.0) result-ch))
       (cond
-        [r
+        [raw
+         ;; PM Track 10C: unpack (cons worker-stdin result-hash)
+         (define worker-stdin (car raw))
+         (define r (cdr raw))
+         ;; Dispatch next file to this worker
+         (define next-file (async-channel-try-get work-queue))
+         (cond
+           [(and next-file (not (eq? next-file 'done)))
+            (displayln next-file worker-stdin)
+            (flush-output worker-stdin)]
+           [else
+            ;; No more files — close this worker's stdin
+            (with-handlers ([exn? void])
+              (close-output-port worker-stdin))])
          (define ms (hash-ref r 'wall_ms))
          (define status (hash-ref r 'status))
          (printf "[~a/~a] ~a ~a (~as)\n"
