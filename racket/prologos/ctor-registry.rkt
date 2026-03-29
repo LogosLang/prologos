@@ -214,12 +214,13 @@
            "~a: component-variances has ~a entries, expected ~a"
            tag (length cv) arity))
 
-  ;; SRE Track 1: Validate variance values
+  ;; SRE Track 1 + Track 2F: Validate variance values
+  ;; Track 2F adds 'same-domain and 'cross-domain for antitone (duality) kinds.
   (when cv
     (for ([v (in-list cv)])
-      (unless (memq v '(+ - = ø))
+      (unless (memq v '(+ - = ø same-domain cross-domain))
         (error 'validate-ctor-desc!
-               "~a: invalid variance ~a (expected +, -, =, or ø)"
+               "~a: invalid variance ~a (expected +, -, =, ø, same-domain, or cross-domain)"
                tag v))))
 
   ;; SRE Track 1: binder-open-fn should be present iff binder-depth > 0
@@ -692,6 +693,7 @@
   #:extract (λ (v) (list (sess-send-type v) (sess-send-cont v)))
   #:reconstruct (λ (cs) (sess-send (first cs) (second cs)))
   #:component-lattices (list type-lattice-spec session-lattice-spec)
+  #:component-variances '(cross-domain same-domain)  ;; Track 2F: payload crosses domains, continuation stays
   #:domain 'session
   #:sample (sess-send (expr-tycon 'Int) (sess-end)))
 
@@ -702,6 +704,7 @@
   #:extract (λ (v) (list (sess-recv-type v) (sess-recv-cont v)))
   #:reconstruct (λ (cs) (sess-recv (first cs) (second cs)))
   #:component-lattices (list type-lattice-spec session-lattice-spec)
+  #:component-variances '(cross-domain same-domain)
   #:domain 'session
   #:sample (sess-recv (expr-tycon 'Int) (sess-end)))
 
@@ -714,6 +717,7 @@
   #:extract (λ (v) (list (sess-dsend-type v) (sess-dsend-cont v)))
   #:reconstruct (λ (cs) (sess-dsend (first cs) (second cs)))
   #:component-lattices (list type-lattice-spec session-lattice-spec)
+  #:component-variances '(cross-domain same-domain)
   #:binder-depth 1
   #:domain 'session
   #:sample (sess-dsend (expr-tycon 'Int) (sess-end))
@@ -733,6 +737,7 @@
   #:extract (λ (v) (list (sess-drecv-type v) (sess-drecv-cont v)))
   #:reconstruct (λ (cs) (sess-drecv (first cs) (second cs)))
   #:component-lattices (list type-lattice-spec session-lattice-spec)
+  #:component-variances '(cross-domain same-domain)
   #:binder-depth 1
   #:domain 'session
   #:sample (sess-drecv (expr-tycon 'Int) (sess-end))
@@ -751,6 +756,7 @@
   #:extract (λ (v) (list (sess-async-send-type v) (sess-async-send-cont v)))
   #:reconstruct (λ (cs) (sess-async-send (first cs) (second cs)))
   #:component-lattices (list type-lattice-spec session-lattice-spec)
+  #:component-variances '(cross-domain same-domain)
   #:domain 'session
   #:sample (sess-async-send (expr-tycon 'Int) (sess-end)))
 
@@ -761,6 +767,7 @@
   #:extract (λ (v) (list (sess-async-recv-type v) (sess-async-recv-cont v)))
   #:reconstruct (λ (cs) (sess-async-recv (first cs) (second cs)))
   #:component-lattices (list type-lattice-spec session-lattice-spec)
+  #:component-variances '(cross-domain same-domain)
   #:domain 'session
   #:sample (sess-async-recv (expr-tycon 'Int) (sess-end)))
 
@@ -773,5 +780,6 @@
   #:extract (λ (v) (list (sess-mu-body v)))
   #:reconstruct (λ (cs) (sess-mu (first cs)))
   #:component-lattices (list session-lattice-spec)
+  #:component-variances '(same-domain)  ;; Track 2F: recursive body stays in session domain
   #:domain 'session
   #:sample (sess-mu (sess-svar 0)))
