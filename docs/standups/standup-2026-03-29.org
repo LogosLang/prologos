@@ -1,0 +1,45 @@
+#+TITLE: Standup — 2026-03-29
+#+DATE: 2026-03-29
+
+* Yesterday (since 2026-03-28 standup)
+
+** PTF Track 1: Module-Theoretic Foundations (COMPLETE)
+- Research-driven interleaved track (Phase 0→Phase 6)
+- Phase 0: submodule validation premature (network empty — elaboration is imperative)
+- Phase 1: residuation computable for first-order pattern matching; infer/check IS residuation
+- Phase 3 finding: algebraic-kind generalization → spawned SRE Track 2F
+- Three key findings: (1) network is empty, (2) residuation validates architecture, (3) architecture ahead of implementation
+
+** SRE Track 2F: Algebraic Foundation (COMPLETE)
+- 3 critique rounds (D.1→D.3 + external). Pre-0 benchmarks: SRE <0.1% of elaboration.
+- 8 phases: extended sre-relation, derive-sub-relation table, duality variance unification (~same-domain~/~cross-domain~), table-driven propagator dispatch, topology handler unification, merge registry alignment, legacy field removal
+- sub-relation-fn DELETED. sre-relation: 5→4 fields.
+- *383/383 GREEN. 7529 tests. Zero behavioral change.*
+
+** Research Program (3 foundational notes)
+- Module Theory on Lattices: endomorphism rings, Krull-Schmidt, residuation
+- Algebraic Embeddings on Lattices: Heyting, Boolean, quantale, matroid, topology. Universal engine vision.
+- Universal Constraint Solving: Bulatov-Zhuk dichotomy, DPLL(T), ~#=~ operator
+
+** New Series + Tracks
+- UCS (Universal Constraint Solving) series created with master tracker
+- SRE Track 2G (Algebraic Domain Awareness) added to SRE master
+- PTF Master updated with algebraic embeddings cross-references
+
+** PPN Track 2: Surface Normalization (IN PROGRESS)
+- Stage 2 audit COMPLETE: macros.rkt (9763 lines, 48 functions, 24 registries)
+- 18 pure rewrites, 5-pass stratified pipeline, CALM-safe rewrite layer
+- Dual-write cell infrastructure already in place
+- D.1 design drafted: 8 phases (rewrite registry → engine → registries → injection → fixpoint → L2 → retirement → benchmarks)
+- Pre-0 benchmarks + adversarial testing pending
+
+* Today
+
+** PPN Track 2 continuation
+- Pre-0 benchmarks (preparse timing, rewrite overhead)
+- D.2 self-critique (principles challenge + codebase grounding)
+
+* Blockers
+
+- test-structural-decomp: meta-solving via imperative state under BSP — deferred to SRE/PPN elaborator-on-network
+- WS-mode solver syntax gaps (~=~ as unification, ~is~ bridging) — deferred to post-PPN
