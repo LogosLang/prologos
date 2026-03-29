@@ -220,9 +220,49 @@ The registry is open — any module can call `register-algebraic-kind!`:
   'heyting))
 ```
 
-The `'has-pseudo-complement` property tells the infrastructure that precise contradiction information is available. Error reporting can read the pseudo-complement instead of a generic "type mismatch" message.
+### 3.8 Separation of Domain Algebraic Class from Relation Properties
 
-Similarly for residuated, quantale, etc. Each brings its own properties, its own variance map, its own propagator constructor. The infrastructure dispatches on properties, not names.
+**Critical design principle** (from Algebraic Embeddings research): Properties belong at TWO levels, not one.
+
+**Domain level** — the algebraic structure of the carrier lattice:
+- Is the type lattice Heyting? (→ has pseudo-complements → precise error reporting)
+- Is it residuated? (→ automatic backward propagator derivation)
+- Is it Boolean? (→ SAT/CDCL optimization for ATMS)
+- Is it a quantale? (→ resource-aware constraint solving)
+
+**Relation level** — the algebraic properties of the endomorphism:
+- Order-preserving (monotone)? → standard forward propagation
+- Order-reversing (antitone)? → dual-tag swap, asymmetric decomposition
+- Involutive? → `f(f(x)) = x`, self-inverse
+- Idempotent? → `f(f(x)) = f(x)`, rewriting/normalization
+
+The current design puts everything on the relation (`sre-algebraic-kind`). The future design (SRE Track 2G) adds domain-level declarations:
+
+```racket
+(sre-domain 'type
+  #:algebraic-class 'heyting-algebra  ;; domain-level
+  #:merge-registry type-merge-registry
+  ...)
+```
+
+The algebraic class sits in a hierarchy:
+```
+Boolean ⊂ Heyting ⊂ Distributive ⊂ Modular ⊂ Lattice
+Quantale ⊂ Residuated ⊂ Lattice
+```
+
+When a domain declares `'heyting-algebra`, the infrastructure derives:
+- `has-pseudo-complement? → #t` (precise error reporting available)
+- `distributive? → #t` (efficient join/meet algorithms apply)
+- `residuated? → depends` (Heyting IS residuated for ∧/→; check additional axioms for general residuation)
+
+**Track 2F scope**: The `sre-algebraic-kind` struct carries RELATION-level properties. The variance-map encodes how the relation's algebraic type interacts with component variance. This is correct and complete for the endomorphism ring.
+
+**Track 2G scope** (out of scope for 2F, but 2F must not preclude it): The `sre-domain` struct gains `algebraic-class`. Capabilities are DERIVED from class, not listed. The relation's propagator constructor can query the domain's algebraic class to select strategy (e.g., "if domain is residuated, derive backward propagator automatically").
+
+**Track 2F design rule**: Do NOT put domain-level properties on the relation. The `sre-algebraic-kind` property set contains ONLY endomorphism properties (`'order-preserving`, `'antitone`, `'involutive`, `'idempotent`). Domain properties (`'has-pseudo-complement`, `'distributive`) will go on the domain in Track 2G.
+
+**UCS connection**: The domain-polymorphic `#=` operator selects solving strategy based on domain algebraic class + relation endomorphism type. Track 2F provides the relation dispatch table. Track 2G provides the domain class. UCS combines both to select the right constraint solver.
 
 ### 3.8 Nomenclature
 

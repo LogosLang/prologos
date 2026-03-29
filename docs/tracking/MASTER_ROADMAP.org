@@ -584,6 +584,15 @@ See =docs/research/= for the full set.
 | Document | Date | Scope |
 |----------+------+-------|
 | [[file:../research/2026-03-28_MODULE_THEORY_LATTICES.md][Module Theory on Lattices]] | 2026-03-28 | Foundational algebraic framework: endomorphism rings, quotient modules (e-graphs), residuation. Cross-cuts PRN (rewriting formalism), SRE (relations as sub-rings), BSP-LE (e-graphs, ATMS), CIU (trait morphisms), PM (submodule decomposition), PAR (independence = parallelizability), PTF (propagator kind algebra), PPN (filtration, parse ambiguity). |
+| [[file:../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md][Algebraic Embeddings on Lattices]] | 2026-03-28 | Heyting (errors), Boolean (ATMS/SAT), residuated (backward propagation), quantale (resources), matroid (constraints), topology (domains). Universal engine vision: one propagator engine, many algebraic theories. |
+| [[file:../research/2026-03-28_UNIVERSAL_CONSTRAINT_SOLVING.md][Universal Constraint Solving]] | 2026-03-28 | Bulatov-Zhuk dichotomy, DPLL(T), lattice-based solving, residuated constraints. Domain-polymorphic ~#=~ operator. Connects SRE algebraic foundation to UCS series. |
+
+** UCS Series: Universal Constraint Solving
+
+| Track | Description | Status | Master |
+|-------+-------------+--------+--------|
+| R0-R2 | Research: foundations, NF-Narrowing, ~#=~ design | ⬜ | [[file:2026-03-28_UCS_MASTER.md][UCS Master]] |
+| 1-4 | Implementation: ~#=~ prototype, residuation, CDCL, quantale | ⬜ | |
 
 ** Completed/Background Research
 
