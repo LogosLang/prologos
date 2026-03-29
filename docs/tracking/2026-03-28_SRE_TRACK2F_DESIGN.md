@@ -12,15 +12,15 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Pre-0 benchmarks | ⬜ | Baseline elaboration timing |
-| 1 | Algebraic-kind registry | ⬜ | `sre-algebraic-kind` struct + registration |
-| 2 | Kind-variance table | ⬜ | `derive-sub-relation` replaces closures |
-| 3 | Duality variance unification | ⬜ | `'d`/`'t` variances, retire `component-lattices` dispatch |
-| 4 | Table-driven propagator dispatch | ⬜ | Replace 4-way `case` at line 522 |
-| 5 | Topology handler unification | ⬜ | Kind-property dispatch, not name dispatch |
-| 6 | Merge registry alignment | ⬜ | Explore table-driven merge selection |
-| 7 | Nomenclature alignment | ⬜ | Algebraic annotations on existing names |
-| 8 | Cleanup + A/B benchmarks | ⬜ | Performance-neutral verification |
+| 0 | Pre-0 benchmarks | ✅ | `26d0cb2`. M1-M6 + A1-A4 + E1-E4. SRE <0.1% of elaboration. |
+| 1 | Extend sre-relation | ✅ | `b0e1812`. properties, propagator-ctor, merge-key fields. |
+| 2 | derive-sub-relation | ✅ | `581428e`. Table-driven sub-relation at 2 call sites. |
+| 3 | Duality variance unification | ✅ | `1883020`. 7 session ctors: 'same-domain/'cross-domain. |
+| 4 | Table-driven propagator dispatch | ✅ | `a33bd03`. propagator-ctor-table replaces 4-way case. |
+| 5 | Topology handler unification | ✅ | `c4d38a0`. Property + domain dispatch, not name dispatch. |
+| 6 | Merge registry alignment | ⏸️ | Deferred — current closures work fine. Cosmetic only. |
+| 7 | Legacy field removal | ⏸️ | Deferred — sub-relation-fn kept for backward compat. |
+| 8 | Full suite verification | ✅ | 383/383 GREEN. 7529 tests. Zero behavioral change. |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
 
