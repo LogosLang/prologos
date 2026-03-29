@@ -562,14 +562,12 @@
 
 (define (sre-make-structural-relate-propagator domain cell-a cell-b
                                                 #:relation [relation sre-equality])
-  (define rel-name (sre-relation-name relation))
-  (case rel-name
-    [(equality) (sre-make-equality-propagator domain cell-a cell-b relation)]
-    [(subtype subtype-reverse) (sre-make-subtype-propagator domain cell-a cell-b relation)]
-    [(duality) (sre-make-duality-propagator domain cell-a cell-b relation)]
-    [(phantom) (lambda (net) net)]  ;; no constraint
-    [else (error 'sre-make-structural-relate-propagator
-                 "unknown relation: ~a" rel-name)]))
+  ;; Track 2F Phase 4: table-driven dispatch (table defined after propagator constructors).
+  (define ctor (hash-ref propagator-ctor-table (sre-relation-name relation) #f))
+  (if ctor
+      (ctor domain cell-a cell-b relation)
+      (error 'sre-make-structural-relate-propagator
+             "unknown relation: ~a" (sre-relation-name relation))))
 
 ;; --- Equality propagator (Track 0 behavior, unchanged) ---
 (define (sre-make-equality-propagator domain cell-a cell-b relation)
@@ -874,6 +872,20 @@
        ;; Wrong pairing → contradiction (value write, BSP captures directly)
        [else
         (net-cell-write net cell-a (sre-domain-top-value domain))])]))
+
+;; ========================================================================
+;; Track 2F Phase 4: Propagator constructor table
+;; ========================================================================
+;; Defined AFTER all propagator constructors (forward-reference safe).
+;; Maps relation name → fire function factory.
+;; Adding a new relation kind: add one entry here.
+(define propagator-ctor-table
+  (hasheq
+   'equality        sre-make-equality-propagator
+   'subtype         sre-make-subtype-propagator
+   'subtype-reverse sre-make-subtype-propagator
+   'duality         sre-make-duality-propagator
+   'phantom         (λ (domain cell-a cell-b relation) (λ (net) net))))
 
 ;; ========================================================================
 ;; PAR Track 1: SRE topology handler (self-registering at module load time)
