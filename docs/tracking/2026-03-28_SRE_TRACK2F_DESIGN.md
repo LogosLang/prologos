@@ -239,13 +239,42 @@ This preserves readability in error messages, test assertions, and decomposition
 
 ## §4 Phase Details
 
-### Phase 0: Pre-0 Benchmarks
+### Phase 0: Pre-0 Benchmarks ✅
 
-**Deliverable**: Baseline timing for elaboration on comparative benchmarks.
+**Deliverable**: Baseline timing. Benchmark file: `benchmarks/micro/bench-sre-track2f.rkt`.
 
-Measure per-program elaboration time using `bench-ab.rkt --runs 5`. This is the "before" snapshot. Phase 8 measures "after" and compares.
+#### Micro-benchmarks (M1-M6)
 
-Also measure: SRE dispatch overhead specifically. How many times is `sre-make-structural-relate-propagator` called per program? What fraction of elaboration time is spent in SRE dispatch? If <1%, the refactoring can be arbitrarily complex without measurable impact.
+| Measurement | Current | Proposed | Ratio | Impact |
+|-------------|---------|----------|-------|--------|
+| M1: sub-relation (closure vs hash-ref) | 0.009 μs | 0.032 μs | 3.5× | 0.023ms/1000 decomps — invisible |
+| M2: propagator dispatch (case vs field) | 0.002 μs | 0.002 μs (field) | 1.0× | Zero cost via struct field |
+| M3: property check (eq? vs set-member?) | 0.002 μs | 0.053 μs | 26× | Use boolean field for hot path |
+| M4: merge registry (case vs hash-ref) | 0.002 μs | 0.025 μs | 12× | Cold path — invisible |
+| M5: full decomposition | 1.9-3.3 μs | — | baseline | Dispatch is <5% of total |
+| M6: session processing | ~55 ms | — | baseline | SRE dispatch invisible |
+
+**Design implication**: Use struct field access for hot paths (propagator-ctor, antitone? boolean). Hash-ref acceptable for cold paths. `set-member?` for properties is fine for non-hot paths but add `antitone?` boolean field to `sre-algebraic-kind` for the topology handler.
+
+#### Adversarial benchmarks (A1-A4)
+
+| Test | Result | Notes |
+|------|--------|-------|
+| A1: PVec depth 1-4 | 2.0→2.4→26.9→3.8 μs | Depth-3 spike = GC. Otherwise linear. |
+| A2: Pi wide (3+6 comp) | 0.5→0.4 μs | Width doesn't stress dispatch |
+| A3: Session 2-4 deep | 54→58 ms | Dominated by process-string |
+| A4: Mixed relations | 57 ms | No cross-relation interference |
+
+#### E2E benchmarks (E1-E4)
+
+| Test | Baseline | Notes |
+|------|----------|-------|
+| E1: 14 comparative programs | ±3% noise | bench-ab 5 runs, saved to JSON |
+| E2: 72 library files | 33.3s total | Top: generic-ops 3.7s, list 3.5s |
+| E3: Session e2e files | 89-91 ms each | Stable |
+| E4: Full suite | ~136s (383 files) | From PM Track 10C baseline |
+
+**Conclusion**: SRE dispatch overhead is <5% of decomposition cost and <0.1% of elaboration cost. The refactoring is performance-free to use any dispatch mechanism. All baselines recorded for post-implementation comparison.
 
 ### Phase 1: Algebraic-Kind Registry
 
