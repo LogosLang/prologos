@@ -66,29 +66,47 @@ Replace the ad-hoc relation dispatch throughout SRE with a data-driven algebraic
 
 ## §3 Design
 
-### 3.1 Algebraic-Kind Registry
+### D.2 Self-Critique Findings (incorporated)
 
-A new struct captures the algebraic properties of each relation kind:
+| # | Finding | Resolution |
+|---|---------|------------|
+| 1 | Separate kind struct is unnecessary indirection | **Extend `sre-relation` directly** with new fields. The relation IS the kind. No lookup needed. |
+| 2 | Property set is fine for Track 2F scope | Keep `seteq`. Document valid relation-level properties. |
+| 3 | Variance map is clearer than derivation | Keep table. Add comments showing mathematical derivation. |
+| 4 | `'d`/`'t` are duality-specific names | **Use `'same-domain`/`'cross-domain`** — works for any antitone kind. |
+| 5 | Topology handler should check domain, not kind | **Derive from domain's `dual-pairs` field**, not `'antitone` property. |
+| 6 | `requires-binder-opening?` → property | **Add to property set** as `'requires-binder-opening`. Remove struct field. |
+| 7 | `(not variances)` fallback needs handling | **`#f` → `'equality`** in `derive-sub-relation`. Explicit default. |
+| G2 | Duality sentinel check is fragile | **Phase 3 fixes this** — `'same-domain`/`'cross-domain` replaces sentinel. |
+
+### 3.1 Extended `sre-relation` (D.2: no separate kind struct)
+
+The `sre-relation` struct gains new fields directly. No separate `sre-algebraic-kind` struct — the relation IS the kind. This eliminates the lookup indirection and the synchronization concern.
 
 ```racket
-(struct sre-algebraic-kind
-  (name              ; symbol: 'equality, 'subtype, 'duality, 'phantom, ...
-   properties        ; (seteq symbol): 'order-preserving, 'involutive, 'idempotent,
-                     ;   'antitone, 'identity, 'requires-binder-opening, ...
-   variance-map      ; (hash variance → kind-name): how variances derive sub-kinds
-   propagator-ctor   ; (domain cell-a cell-b relation → (net → net)): fire function factory
-   merge-key)        ; symbol or #f: key for domain merge-registry lookup
+(struct sre-relation
+  (name                    ; symbol: 'equality, 'subtype, 'duality, 'phantom, ...
+   sub-relation-fn         ; LEGACY — replaced by derive-sub-relation in Phase 2
+   ;; New fields (Track 2F):
+   properties              ; (seteq symbol): 'order-preserving, 'antitone, 'involutive,
+                           ;   'idempotent, 'identity, 'requires-binder-opening, ...
+                           ;   ONLY relation-level properties (not domain-level)
+   variance-map            ; (hash variance → relation-ref): endomorphism ring decomposition
+   propagator-ctor         ; (domain cell-a cell-b relation → (net → net)): fire function factory
+   merge-key)              ; symbol or #f: key for domain merge-registry lookup
   #:transparent)
 ```
 
-Registration is declarative:
+The 5 built-in relations are redefined:
 
 ```racket
-(register-algebraic-kind!
- (sre-algebraic-kind
-  'subtype
-  (seteq 'order-preserving)
-  (hash '+ 'subtype  '- 'subtype-reverse  '= 'equality  'ø 'phantom)
+(define sre-subtype
+  (sre-relation
+   'subtype
+   #f  ;; sub-relation-fn: legacy, not used (derive-sub-relation reads variance-map)
+   (seteq 'order-preserving)
+   (hash '+ 'subtype  '- 'subtype-reverse  '= 'equality  'ø 'phantom
+         'same-domain 'subtype  'cross-domain 'equality  #f 'equality)
   sre-make-subtype-propagator
   'subtype))
 ```
@@ -100,17 +118,24 @@ The `sre-relation` struct gains an `algebraic-kind` field (or the kind IS the re
 The table is the data form of the endomorphism ring decomposition:
 
 ```
-| Variance | equality | subtype | subtype-reverse | duality | phantom |
-|----------|----------|---------|-----------------|---------|---------|
-| +  (co)  | equality | subtype | subtype-reverse | duality*| phantom |
-| -  (contra)| equality | subtype-reverse | subtype | duality*| phantom |
-| =  (inv) | equality | equality | equality | equality | phantom |
-| ø  (phantom)| phantom | phantom | phantom | phantom | phantom |
-| d  (dual-cont)| — | — | — | duality | — |
-| t  (type-comp)| — | — | — | equality | — |
+| Variance      | equality | subtype | subtype-reverse | duality  | phantom |
+|---------------|----------|---------|-----------------|----------|---------|
+| + (covariant) | equality | subtype | subtype-reverse | —        | phantom |
+| - (contra)    | equality | sub-rev | subtype         | —        | phantom |
+| = (invariant) | equality | equality| equality        | equality | phantom |
+| ø (phantom)   | phantom  | phantom | phantom         | phantom  | phantom |
+| same-domain   | —        | —       | —               | duality  | —       |
+| cross-domain  | —        | —       | —               | equality | —       |
+| #f (unspec)   | equality | equality| equality        | equality | phantom |
 ```
 
-*`duality` for `+`/`-` is the session-domain interpretation (continuation components). Type-domain components under duality use `equality` (via `'t` variance). The `'d'`/`'t'` variances unify duality's current `component-lattices` dispatch.*
+`'same-domain`/`'cross-domain` replace the duality-specific `'d`/`'t` from D.1. They're general — any antitone kind across domain boundaries uses the same variance values. `#f` (unspecified variances) defaults to equality — the safety fallback from the current code (line 190-191 of sre-core.rkt).
+
+**Mathematical derivation this table encodes**:
+- Identity endomorphism (equality): preserves everything → always identity sub-relation
+- Monotone endomorphism (subtype): covariant = same direction, contravariant = reversed
+- Antitone endomorphism (duality): same-domain = continues in antitone, cross-domain = drops to identity
+- Zero endomorphism (phantom): maps everything to zero → no constraint
 
 `derive-sub-relation` replaces all `sub-relation-fn` closures:
 
@@ -122,7 +147,7 @@ The table is the data form of the endomorphism ring decomposition:
                               variance (sre-algebraic-kind-name parent-kind)))))
 ```
 
-### 3.3 Duality Variance Unification
+### 3.3 Duality Variance Unification (D.2: `'same-domain`/`'cross-domain`)
 
 **Before**: Session constructors provide `component-lattices`:
 ```racket
@@ -131,21 +156,31 @@ The table is the data form of the endomorphism ring decomposition:
   ...)
 ```
 
-Duality's `sub-relation-fn` reads these lattices and maps:
-- `type-lattice-spec` → `sre-equality`
-- `session-lattice-spec` → `sre-duality`
+Duality's `sub-relation-fn` reads these lattices and uses a fragile sentinel check:
+```racket
+(define cross-domain? (eq? comp-lat 'type))  ;; sentinel — breaks if type-lattice-spec changes
+```
 
-**After**: Session constructors provide `component-variances` with new values:
+**After**: Session constructors provide `component-variances` with general values:
 ```racket
 (register-ctor! 'sess-send
-  #:component-variances '(t d)   ;; type-component, dual-continuation
+  #:component-variances '(cross-domain same-domain)  ;; payload crosses to type domain, continuation stays
   #:component-lattices (list type-lattice-spec session-lattice-spec)  ;; kept for merge
   ...)
 ```
 
-The `'t` and `'d` variances are handled by the kind-variance table. No special `component-lattices` dispatch in the sub-relation function.
+`'same-domain` and `'cross-domain` are general — any future antitone kind can use them, not just duality. The names are self-documenting: no need to remember that `'d` means "dual-continuation."
 
-**Note**: `component-lattices` is NOT retired entirely — it's still needed for merge function selection (which lattice-spec to use per component). Only its role in sub-relation derivation is replaced by variances.
+Duality's variance-map:
+```racket
+(hash 'same-domain 'duality     ;; continuation stays in session domain → duality
+      'cross-domain 'equality   ;; payload crosses to type domain → equality
+      '= 'equality              ;; invariant → equality
+      'ø 'phantom               ;; phantom → phantom
+      #f 'equality)             ;; unspecified → equality (safety default)
+```
+
+**Note**: `component-lattices` is NOT retired — still needed for merge function selection. Only its role in sub-relation derivation is replaced by variances.
 
 ### 3.4 Table-Driven Propagator Dispatch
 
@@ -167,21 +202,22 @@ The `'t` and `'d` variances are handled by the kind-variance table. No special `
 
 One line. Adding a new kind means registering its propagator constructor, not editing a `case` statement.
 
-### 3.5 Topology Handler Unification
+### 3.5 Topology Handler Unification (D.2: check domain, not kind)
 
 **Before**: Two branches — `(eq? rel-name 'duality)` triggers dual-pair-specific decomposition.
 
-**After**: The handler reads the algebraic kind's properties:
+**After**: The handler checks the DOMAIN's `dual-pairs` field, not the kind's properties:
 
 ```racket
-(if (set-member? (sre-algebraic-kind-properties kind) 'antitone)
-    ;; Antitone kind: needs both cell values, dual-tag derivation
+(if (and (sre-domain-dual-pairs domain)
+         (set-member? (sre-relation-properties relation) 'antitone))
+    ;; Domain has dual-pairs AND relation is antitone → dual-pair decomposition
     (sre-decompose-antitone ...)
-    ;; Non-antitone: standard generic decomposition
+    ;; Standard generic decomposition
     (sre-decompose-generic ...))
 ```
 
-The `'antitone` property is the structural reason duality needs different handling — not the name `'duality`. Future antitone kinds (if any) automatically get the right path.
+**D.2 rationale**: An antitone kind WITHOUT dual-pairs (e.g., a contravariant functor on a non-session domain) should NOT be dispatched to the dual-pair path. The dual-pair path requires `(sre-domain-dual-pairs domain)` to derive constructor swaps. Checking the domain is correct-by-construction — if the domain has no dual-pairs, the handler can't construct dual tags and would crash. The domain check prevents this structurally.
 
 ### 3.6 Merge Registry Alignment
 
@@ -264,16 +300,17 @@ When a domain declares `'heyting-algebra`, the infrastructure derives:
 
 **UCS connection**: The domain-polymorphic `#=` operator selects solving strategy based on domain algebraic class + relation endomorphism type. Track 2F provides the relation dispatch table. Track 2G provides the domain class. UCS combines both to select the right constraint solver.
 
-### 3.8 Nomenclature
+### 3.8 Nomenclature (D.2: relation IS the kind)
 
-The relation names stay as-is (`'equality`, `'subtype`, `'duality`, `'phantom`). The algebraic kind is a DERIVED property, not a replacement:
+The relation names stay as-is (`'equality`, `'subtype`, `'duality`, `'phantom`). Since D.2 eliminated the separate kind struct, the relation IS the kind — no separate nomenclature needed. The algebraic properties are accessed directly:
 
 ```racket
-(define (sre-relation-algebraic-kind rel)
-  (lookup-algebraic-kind (sre-relation-name rel)))
+(sre-relation-properties rel)      ;; → (seteq 'antitone 'involutive)
+(sre-relation-variance-map rel)    ;; → (hash 'same-domain 'duality ...)
+(sre-relation-propagator-ctor rel) ;; → sre-make-duality-propagator
 ```
 
-This preserves readability in error messages, test assertions, and decomposition pair-keys while gaining algebraic dispatch.
+The `requires-binder-opening?` field is retired. Its information moves to the property set as `'requires-binder-opening`.
 
 ---
 
@@ -316,13 +353,13 @@ This preserves readability in error messages, test assertions, and decomposition
 
 **Conclusion**: SRE dispatch overhead is <5% of decomposition cost and <0.1% of elaboration cost. The refactoring is performance-free to use any dispatch mechanism. All baselines recorded for post-implementation comparison.
 
-### Phase 1: Algebraic-Kind Registry
+### Phase 1: Extend `sre-relation` struct (D.2: no separate kind)
 
-**Deliverable**: `sre-algebraic-kind` struct, `register-algebraic-kind!`, `lookup-algebraic-kind`. Five built-in kinds registered.
+**Deliverable**: `sre-relation` gains 4 new fields: `properties`, `variance-map`, `propagator-ctor`, `merge-key`. The `requires-binder-opening?` field is replaced by `'requires-binder-opening` in the property set. All 5 built-in relations updated with the new fields.
 
-**Scope**: New file `sre-algebraic-kinds.rkt` (or section in `sre-core.rkt`). No behavior change — the registry exists but nothing reads it yet.
+**Scope**: Modify `sre-relation` struct in `sre-core.rkt`. Update all 5 `(define sre-*)` relation definitions. Run `raco make driver.rkt` to catch all struct-copy and pattern-match sites (pipeline exhaustiveness checklist: new struct field). The `sub-relation-fn` field stays for backward compatibility — Phase 2 replaces its callers.
 
-**Tests**: Unit tests for registration and lookup. Verify all 5 kinds registered at module load time.
+**Tests**: All 177 SRE tests must pass (struct change is additive). Add tests for property access and variance-map access on each relation.
 
 ### Phase 2: Kind-Variance Table (`derive-sub-relation`)
 
@@ -371,11 +408,11 @@ This preserves readability in error messages, test assertions, and decomposition
 
 **Tests**: All tests. Merge behavior unchanged.
 
-### Phase 7: Nomenclature Alignment
+### Phase 7: Legacy field removal + documentation
 
-**Deliverable**: Each `sre-relation` gains an `algebraic-kind` accessor. Documentation updated to reference algebraic properties alongside domain names.
+**Deliverable**: Remove `sub-relation-fn` and `requires-binder-opening?` fields from `sre-relation` (all callers migrated in Phases 2-3). Update documentation and comments to reference algebraic properties.
 
-**Scope**: Add derived accessor. Update comments. No behavioral change.
+**Scope**: Struct field removal triggers pipeline exhaustiveness checklist (grep for struct-copy and pattern-match on `sre-relation`). All callers already migrated. Documentation update.
 
 ### Phase 8: Cleanup + A/B Benchmarks
 
