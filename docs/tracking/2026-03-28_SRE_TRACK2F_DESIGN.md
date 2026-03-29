@@ -66,6 +66,16 @@ Replace the ad-hoc relation dispatch throughout SRE with a data-driven algebraic
 
 ## §3 Design
 
+### D.3 External Critique Findings (incorporated)
+
+| # | Finding | Severity | Resolution |
+|---|---------|----------|------------|
+| E1 | Variance-map stores symbols, consumers need structs | HIGH | **Define relations first, then construct maps.** Racket module-level `define` is sequential — maps reference already-defined structs. No circular dependency. |
+| E2 | Phase 3 text uses `'d`/`'t` despite D.2 renaming | HIGH | **Fixed.** Phase 3 text updated to `'same-domain`/`'cross-domain`. |
+| E3 | `'same-domain`/`'cross-domain` generality overstated | MEDIUM | **Scoped.** Binary distinction is correct for decomposition (parent→child is inherently binary). Note added: extension needed for hypothetical multi-domain relations (not decomposition). |
+| E4 | 3-phase `sub-relation-fn` migration can simplify | MEDIUM | **Accepted.** Phase 2 changes the call site, not the closures. Closures become dead code, removed in Phase 7. |
+| E5 | Phase 3 failure modes under-specified | LOW-MED | **Accepted.** 4 specific failure mode tests added. Registration-time validation for variance/lattice count consistency. |
+
 ### D.2 Self-Critique Findings (incorporated)
 
 | # | Finding | Resolution |
@@ -97,21 +107,26 @@ The `sre-relation` struct gains new fields directly. No separate `sre-algebraic-
   #:transparent)
 ```
 
-The 5 built-in relations are redefined:
+The 5 built-in relations are defined FIRST with `#f` variance-maps, then maps are constructed post-definition (D.3 E1 resolution — avoids circular reference):
 
 ```racket
-(define sre-subtype
-  (sre-relation
-   'subtype
-   #f  ;; sub-relation-fn: legacy, not used (derive-sub-relation reads variance-map)
-   (seteq 'order-preserving)
-   (hash '+ 'subtype  '- 'subtype-reverse  '= 'equality  'ø 'phantom
-         'same-domain 'subtype  'cross-domain 'equality  #f 'equality)
-  sre-make-subtype-propagator
-  'subtype))
+;; Step 1: Define all relations (variance-map = #f initially)
+(define sre-equality  (sre-relation 'equality #f (seteq 'identity 'requires-binder-opening) #f sre-make-equality-propagator 'equality))
+(define sre-subtype   (sre-relation 'subtype  #f (seteq 'order-preserving) #f sre-make-subtype-propagator 'subtype))
+(define sre-subtype-reverse (sre-relation 'subtype-reverse #f (seteq 'order-preserving) #f sre-make-subtype-propagator 'subtype))
+(define sre-duality   (sre-relation 'duality  #f (seteq 'antitone 'involutive) #f sre-make-duality-propagator 'duality))
+(define sre-phantom   (sre-relation 'phantom  #f (seteq 'trivial) #f (lambda (d a b r) (lambda (net) net)) 'phantom))
+
+;; Step 2: Construct variance-maps referencing the now-defined structs
+(define equality-variance-map
+  (hasheq '+ sre-equality '- sre-equality '= sre-equality 'ø sre-phantom
+          'same-domain sre-equality 'cross-domain sre-equality #f sre-equality))
+;; ... (similarly for subtype, subtype-reverse, duality, phantom)
+
+;; Step 3: Set the maps (requires mutable field or wrapper — design choice TBD)
 ```
 
-The `sre-relation` struct gains an `algebraic-kind` field (or the kind IS the relation — to be determined in D.2).
+**D.3 E1 note**: Racket module-level `define` is sequential. By step 2, all 5 relation values exist. The maps can reference them directly — no symbol lookup registry needed. The remaining question is how step 3 "installs" the maps. Options: (a) make `variance-map` mutable (`#:mutable`), (b) use a separate hash from relation→map, (c) reconstruct the struct with `struct-copy`. Option (b) is cleanest — `derive-sub-relation` reads from a module-level hash, not from the struct field. This means the variance-map field on the struct can be removed entirely, with the module-level hash as the single source of truth.
 
 ### 3.2 Kind-Variance Table
 
@@ -361,28 +376,41 @@ The `requires-binder-opening?` field is retired. Its information moves to the pr
 
 **Tests**: All 177 SRE tests must pass (struct change is additive). Add tests for property access and variance-map access on each relation.
 
-### Phase 2: Kind-Variance Table (`derive-sub-relation`)
+### Phase 2: Kind-Variance Table (`derive-sub-relation`) (D.3: simplified)
 
-**Deliverable**: `derive-sub-relation` function. The 3 `sub-relation-fn` closures in `sre-relation` definitions call `derive-sub-relation` instead of hand-coding the variance map.
+**Deliverable**: `derive-sub-relation` function. The ONE call site that invokes `sub-relation-fn` switches to `derive-sub-relation` instead. The closures become dead code (removed in Phase 7).
 
-**Scope**: Replace closure bodies in lines 178-262 of sre-core.rkt. The `sre-relation` struct's `sub-relation-fn` field becomes `(lambda (rel desc idx domain-name) (derive-sub-relation kind variance))` where `kind` is looked up from the relation and `variance` from `(list-ref (ctor-desc-component-variances desc) idx)`.
+**Scope (D.3 E4)**: Change the single call site in `sre-decompose-generic` from `((sre-relation-sub-relation-fn rel) rel desc idx domain-name)` to `(derive-sub-relation rel (list-ref (ctor-desc-component-variances desc) idx))`. The closures are NOT rewritten — they just stop being called.
 
-**Risk**: Duality currently reads `component-lattices`, not `component-variances`. Phase 2 changes equality/subtype only. Duality unchanged until Phase 3.
+**`derive-sub-relation`**: Looks up the relation's variance-map (from the module-level hash, per D.3 E1), returns the `sre-relation` struct value for the given variance. Falls back to `sre-equality` for `#f` (unspecified variance).
+
+**Risk**: Duality currently reads `component-lattices`, not `component-variances`. Phase 2 changes equality/subtype only. Duality uses the `sub-relation-fn` closure until Phase 3 adds `'same-domain`/`'cross-domain` variances.
+
+**Compatibility**: The call site checks: if `component-variances` exists, use `derive-sub-relation`. Otherwise, fall back to `sub-relation-fn` (for duality in Phase 2, before Phase 3 adds variances).
 
 **Tests**: All 177 SRE tests must pass. Add tests for `derive-sub-relation` directly.
 
-### Phase 3: Duality Variance Unification
+### Phase 3: Duality Variance Unification (D.2 + D.3)
 
-**Deliverable**: Session constructors gain `component-variances` (`'d`, `'t`). Duality's `sub-relation-fn` uses `derive-sub-relation` like all other kinds.
+**Deliverable**: Session constructors gain `component-variances` (`'same-domain`, `'cross-domain`). `derive-sub-relation` handles duality like all other kinds.
 
 **Scope**:
-- Update 7 session constructor registrations in `ctor-registry.rkt`
-- Update duality's sub-relation-fn to use variances
-- `'d` maps to `'duality`, `'t` maps to `'equality` in duality's variance-map
+- Update 7 session constructor registrations in `ctor-registry.rkt` to add `#:component-variances`
+- Phase 2's call site already uses `derive-sub-relation` — duality just needs the variance-map populated (done in Phase 1)
+- `'same-domain` maps to `sre-duality`, `'cross-domain` maps to `sre-equality`
 
-**Risk**: This is the highest-risk phase. Duality tests are comprehensive (62+ cases) so regressions will be caught. The `component-lattices` field stays for merge function selection — only its role in sub-relation derivation is replaced.
+**D.3 scope note**: `'same-domain`/`'cross-domain` is general for decomposition (parent→child is inherently binary: same domain as parent, or different). Extension needed only for hypothetical multi-domain relations, which are not decomposition.
 
-**Tests**: All 62+ duality tests must pass. Add tests for `'d`/`'t` variance derivation.
+**Risk**: Highest-risk phase. Mitigated by:
+- 62+ duality tests run individually before suite
+- Registration-time validation: `component-variances` count must match arity
+- 4 specific failure mode tests (D.3 E5):
+  1. Variance/lattice disagreement detection (validate at registration)
+  2. `#f` variance on session constructor → explicit error, not silent equality fallback
+  3. Mu constructor: `'same-domain` for recursive body (correct: mu's body IS session domain)
+  4. Merge function reads `component-lattices` independently of variance (both paths exercised)
+
+**Tests**: All 62+ duality tests. Add 4 failure mode tests. Add validation check in `register-ctor!`.
 
 ### Phase 4: Table-Driven Propagator Dispatch
 
