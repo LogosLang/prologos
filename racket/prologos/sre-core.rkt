@@ -449,8 +449,10 @@
   (define-values (net1 subs-a) (sre-get-or-create-sub-cells net domain cell-a tag comps-a))
   (define-values (net2 subs-b) (sre-get-or-create-sub-cells net1 domain cell-b tag comps-b))
   ;; Add structural-relate propagators for each component pair
-  ;; SRE Track 1: sub-cell relation derived via relation's sub-relation-fn
-  (define sub-rel-fn (sre-relation-sub-relation-fn relation))
+  ;; Track 2F Phase 2: sub-cell relation from variance-map table.
+  ;; Falls back to legacy sub-relation-fn if no component-variances
+  ;; (duality until Phase 3 adds 'same-domain/'cross-domain).
+  (define variances (ctor-desc-component-variances desc))
   (define net3
     (for/fold ([n net2])
               ([sa (in-list subs-a)]
@@ -458,9 +460,9 @@
                [idx (in-naturals)])
       (if (equal? sa sb)
           n
-          (let* ([sub-rel (sub-rel-fn relation desc idx domain-name)]
-                 [_ (void)]  ;; phantom relation → skip entirely
-                 )
+          (let* ([sub-rel (if variances
+                              (derive-sub-relation relation (list-ref variances idx))
+                              ((sre-relation-sub-relation-fn relation) relation desc idx domain-name))])
             (if (eq? (sre-relation-name sub-rel) 'phantom)
                 n  ;; no constraint for phantom components
                 (let-values ([(n* _pid)
@@ -791,9 +793,9 @@
     (sre-get-or-create-sub-cells net domain cell-a tag-a comps-a))
   (define-values (net2 subs-b)
     (sre-get-or-create-sub-cells net1 domain cell-b tag-b comps-b))
-  ;; Install sub-relation propagators for each component pair
-  ;; Use desc-a for sub-relation derivation (both descs have same component structure)
-  (define sub-rel-fn (sre-relation-sub-relation-fn relation))
+  ;; Track 2F Phase 2: sub-relation from variance-map table.
+  ;; Duality path falls back to legacy until Phase 3 adds variances.
+  (define variances-a (ctor-desc-component-variances desc-a))
   (define net3
     (for/fold ([n net2])
               ([sa (in-list subs-a)]
@@ -801,7 +803,9 @@
                [idx (in-naturals)])
       (if (equal? sa sb)
           n
-          (let* ([sub-rel (sub-rel-fn relation desc-a idx domain-name)])
+          (let* ([sub-rel (if variances-a
+                              (derive-sub-relation relation (list-ref variances-a idx))
+                              ((sre-relation-sub-relation-fn relation) relation desc-a idx domain-name))])
             (if (eq? (sre-relation-name sub-rel) 'phantom)
                 n
                 (let-values ([(n* _pid)
