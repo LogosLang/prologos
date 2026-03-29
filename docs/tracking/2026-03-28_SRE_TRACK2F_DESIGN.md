@@ -18,8 +18,8 @@
 | 3 | Duality variance unification | ✅ | `1883020`. 7 session ctors: 'same-domain/'cross-domain. |
 | 4 | Table-driven propagator dispatch | ✅ | `a33bd03`. propagator-ctor-table replaces 4-way case. |
 | 5 | Topology handler unification | ✅ | `c4d38a0`. Property + domain dispatch, not name dispatch. |
-| 6 | Merge registry alignment | ⏸️ | Deferred — current closures work fine. Cosmetic only. |
-| 7 | Legacy field removal | ⏸️ | Deferred — sub-relation-fn kept for backward compat. |
+| 6 | Merge registry alignment | ✅ | `2bae1a2`. 3 registries: case → hasheq. |
+| 7 | Legacy field removal | ✅ | `673c19d`. sub-relation-fn DELETED. Struct: 5→4 fields. Tests updated. |
 | 8 | Full suite verification | ✅ | 383/383 GREEN. 7529 tests. Zero behavioral change. |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
