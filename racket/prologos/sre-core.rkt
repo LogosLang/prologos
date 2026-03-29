@@ -907,25 +907,26 @@
                      [va (net-cell-read net cell-a)]
                      [vb (net-cell-read net cell-b)]
                      [bot? (sre-domain-bot? domain)])
-                (let* ([rel-name (sre-relation-name relation)]
-                       ;; For duality, one cell may be bot (propagate-one case).
-                       ;; For equality/subtype, both must be non-bot.
-                       [both-needed? (not (eq? rel-name 'duality))])
+                ;; Track 2F Phase 5: property-driven dispatch, not name-driven.
+                (let* ([is-antitone? (sre-relation-has-property? relation 'antitone)]
+                       [has-dual-pairs? (and (sre-domain-dual-pairs domain) #t)]
+                       ;; Antitone kinds with dual-pairs: one cell may be bot (propagate-one).
+                       ;; Non-antitone: both must be non-bot.
+                       [both-needed? (not (and is-antitone? has-dual-pairs?))])
                 (if (and both-needed? (or (bot? va) (bot? vb)))
                     net
                     (let* (
-                           [reversed? (eq? rel-name 'subtype-reverse)]
+                           [reversed? (eq? (sre-relation-name relation) 'subtype-reverse)]
                            [lhs (if reversed? vb va)]
                            [tag (sre-constructor-tag domain lhs)]
                            [desc (and tag (lookup-ctor-desc tag
                                            #:domain (sre-domain-name domain)))])
                       (cond
-                        ;; Duality: the topology handler calls sre-duality-decompose-dual-pair
-                        ;; directly. Both descriptors are derived here.
-                        ;; The fire function already did case analysis — only dual-pair
-                        ;; decomposition requests reach here (contradictions and self-dual
-                        ;; are handled as value writes in the fire function).
-                        [(eq? rel-name 'duality)
+                        ;; Track 2F Phase 5: antitone + dual-pairs → dual-pair decomposition
+                        ;; (was: eq? rel-name 'duality)
+                        ;; Domain-driven: if domain has dual-pairs AND relation is antitone,
+                        ;; use the dual-pair-specific decomposition path.
+                        [(and is-antitone? has-dual-pairs?)
                          (let* ([pairs (sre-domain-dual-pairs domain)]
                                 [dual-map (let ([h (make-hasheq)])
                                             (when pairs
