@@ -27,13 +27,16 @@
  (struct-out sre-domain)
  sre-domain-merge
 
- ;; Relation spec (SRE Track 1)
+ ;; Relation spec (SRE Track 1 + Track 2F)
  (struct-out sre-relation)
  sre-equality
  sre-subtype
  sre-subtype-reverse
  sre-duality
  sre-phantom
+ ;; Track 2F: algebraic foundation
+ derive-sub-relation
+ sre-relation-has-property?
 
  ;; Core SRE functions
  sre-identify-sub-cell
@@ -165,101 +168,139 @@
 
 (struct sre-relation
   (name
-   sub-relation-fn
-   requires-binder-opening?)  ;; SRE Track 1B Phase 3: does this relation need
-                              ;; fresh meta variables during binder decomposition?
-                              ;; #t: equality (needs fresh metas for opened binders)
-                              ;; #f: subtype, duality (operate on ground types, extract directly)
+   sub-relation-fn            ;; LEGACY (Track 2F Phase 7: remove). Closure for sub-relation derivation.
+   ;; --- Track 2F: Algebraic Foundation ---
+   properties                 ;; (seteq symbol): algebraic properties of this endomorphism.
+                              ;; Relation-level ONLY (not domain-level — see Track 2G).
+                              ;; Valid: 'identity, 'order-preserving, 'antitone, 'involutive,
+                              ;;   'idempotent, 'trivial, 'requires-binder-opening
+   propagator-ctor            ;; (domain cell-a cell-b relation → (net → net)) or #f
+                              ;; Fire function factory for this relation kind.
+   merge-key)                 ;; symbol: key for domain merge-registry lookup.
+                              ;; Allows subtype/subtype-reverse to share a merge entry.
   #:transparent)
 
 ;; --- Built-in relations ---
+;;
+;; Track 2F: Each relation carries algebraic properties and a merge-key.
+;; The sub-relation-fn closures are LEGACY — callers migrating to
+;; derive-sub-relation (Phase 2). Closures removed in Phase 7.
+;;
+;; Endomorphism ring decomposition (the variance-map table):
+;;
+;; | Variance      | equality | subtype | sub-reverse | duality  | phantom |
+;; |---------------|----------|---------|-------------|----------|---------|
+;; | + (covariant) | equality | subtype | sub-reverse | —        | phantom |
+;; | - (contra)    | equality | sub-rev | subtype     | —        | phantom |
+;; | = (invariant) | equality | equality| equality    | equality | phantom |
+;; | ø (phantom)   | phantom  | phantom | phantom     | phantom  | phantom |
+;; | same-domain   | —        | —       | —           | duality  | —       |
+;; | cross-domain  | —        | —       | —           | equality | —       |
+;; | #f (unspec)   | equality | equality| equality    | equality | phantom |
 
 ;; Equality: symmetric merge. Sub-relation is always equality.
 (define sre-equality
   (sre-relation
    'equality
-   (λ (rel desc idx domain-name) sre-equality)
-   #t))  ;; requires binder opening (creates fresh metas)
+   (λ (rel desc idx domain-name) sre-equality)  ;; LEGACY
+   (seteq 'identity 'requires-binder-opening)
+   #f  ;; propagator-ctor: wired in Phase 4 (defined later in file)
+   'equality))
 
 ;; Subtype: directional check a ≤ b. Sub-relation from variance.
 (define sre-subtype
   (sre-relation
    'subtype
-   (λ (rel desc idx domain-name)
-     (define variances (ctor-desc-component-variances desc))
-     (if (not variances)
-         sre-equality  ;; no variance info → treat as invariant
-         (case (list-ref variances idx)
-           [(+) sre-subtype]          ;; covariant: same direction
-           [(-) sre-subtype-reverse]  ;; contravariant: flip
-           [(=) sre-equality]         ;; invariant: equality
-           [(ø) sre-phantom])))
-   #f))  ;; ground types: no binder opening needed     ;; phantom: no constraint
-
-;; Subtype-reverse: flipped direction (b ≤ a instead of a ≤ b).
-;; Used for contravariant positions under subtyping.
-(define sre-subtype-reverse
-  (sre-relation
-   'subtype-reverse
-   (λ (rel desc idx domain-name)
+   (λ (rel desc idx domain-name)                ;; LEGACY
      (define variances (ctor-desc-component-variances desc))
      (if (not variances)
          sre-equality
          (case (list-ref variances idx)
-           [(+) sre-subtype-reverse]  ;; covariant: same direction (still reversed)
-           [(-) sre-subtype]          ;; contravariant: flip back to normal
+           [(+) sre-subtype]
+           [(-) sre-subtype-reverse]
            [(=) sre-equality]
            [(ø) sre-phantom])))
-   #f))  ;; ground types: no binder opening needed
+   (seteq 'order-preserving)
+   #f  ;; propagator-ctor: wired in Phase 4
+   'subtype))
 
-;; Duality: constructor pairing with involution. Sub-relation derived
-;; from component lattice type (same domain → duality, cross → equality).
-;; Assumption: same-domain components are continuations.
-;; See design §2.5 for documented fragility and mitigation.
-;; Duality: constructor pairing with involution. Sub-relation derived
-;; from component lattice type (same domain → duality, cross → equality).
-;; Assumption: same-domain components are continuations.
-;; See design §2.5 for documented fragility and mitigation.
-;;
-;; Domain identity: each domain has a "canonical" lattice-spec.
-;; - Type domain: the symbol 'type (sentinel)
-;; - Session domain: session-lattice-spec (a lattice-spec struct)
-;; - Mult domain: mult-lattice-spec, Term domain: term-lattice-spec
-;; The sub-relation-fn checks if a component's lattice-spec is the domain's
-;; own spec. For this to work, the domain must register its canonical spec.
-;; This is done via a domain-level constant, not a field on sre-domain.
-;;
-;; For session constructors:
-;;   - payload components have type-lattice-spec ('type sentinel) → cross-domain → equality
-;;   - continuation components have session-lattice-spec → same domain → duality
+;; Subtype-reverse: flipped direction (b ≤ a instead of a ≤ b).
+(define sre-subtype-reverse
+  (sre-relation
+   'subtype-reverse
+   (λ (rel desc idx domain-name)                ;; LEGACY
+     (define variances (ctor-desc-component-variances desc))
+     (if (not variances)
+         sre-equality
+         (case (list-ref variances idx)
+           [(+) sre-subtype-reverse]
+           [(-) sre-subtype]
+           [(=) sre-equality]
+           [(ø) sre-phantom])))
+   (seteq 'order-preserving)
+   #f  ;; propagator-ctor: wired in Phase 4
+   'subtype))  ;; same merge-key as subtype
+
+;; Duality: constructor pairing with involution.
+;; Sub-relation: same-domain → duality, cross-domain → equality.
+;; Session constructors use component-lattices for legacy dispatch;
+;; Track 2F Phase 3 adds 'same-domain/'cross-domain variances.
 (define sre-duality
   (sre-relation
    'duality
-   (λ (rel desc idx domain-name)
+   (λ (rel desc idx domain-name)                ;; LEGACY — replaced by Phase 3
      (define lats (ctor-desc-component-lattices desc))
      (define comp-lat (list-ref lats idx))
-     ;; Determine if this component's lattice is the same domain.
-     ;; Strategy: the component's lattice-spec is the domain's own spec
-     ;; iff it's NOT one of the known cross-domain specs.
-     ;; Known cross-domain: 'type (type lattice sentinel).
-     ;; If comp-lat is 'type → cross-domain → equality.
-     ;; If comp-lat is anything else in a session domain → same domain → duality.
-     ;; This works because session constructor components are either
-     ;; type-lattice (payload) or session-lattice (continuation).
-     (define cross-domain?
-       (eq? comp-lat 'type))  ;; 'type sentinel = type domain, always cross-domain for session
-     (if cross-domain?
-         sre-equality    ;; cross-domain: payload type → equality
-         sre-duality)    ;; same domain: continuation → duality
-     )
-   #f))  ;; ground types: no binder opening needed
+     (define cross-domain? (eq? comp-lat 'type))
+     (if cross-domain? sre-equality sre-duality))
+   (seteq 'antitone 'involutive)
+   #f  ;; propagator-ctor: wired in Phase 4
+   'duality))
 
 ;; Phantom: no constraint. Used for phantom type parameters.
 (define sre-phantom
   (sre-relation
    'phantom
-   (λ (rel desc idx domain-name) sre-phantom)
-   #f))  ;; no binder opening
+   (λ (rel desc idx domain-name) sre-phantom)   ;; LEGACY
+   (seteq 'trivial)
+   #f  ;; propagator-ctor: wired in Phase 4
+   'phantom))
+
+;; --- Track 2F: Variance-map registry ---
+;; Defined AFTER all 5 relations (D.3 E1: avoids circular reference).
+;; Maps (relation, variance) → sub-relation struct value.
+;; The endomorphism ring decomposition as data.
+
+(define variance-maps
+  (hasheq
+   'equality       (hasheq '+ sre-equality  '- sre-equality  '= sre-equality  'ø sre-phantom
+                           'same-domain sre-equality  'cross-domain sre-equality  #f sre-equality)
+   'subtype        (hasheq '+ sre-subtype  '- sre-subtype-reverse  '= sre-equality  'ø sre-phantom
+                           'same-domain sre-subtype  'cross-domain sre-equality  #f sre-equality)
+   'subtype-reverse (hasheq '+ sre-subtype-reverse  '- sre-subtype  '= sre-equality  'ø sre-phantom
+                            'same-domain sre-subtype-reverse  'cross-domain sre-equality  #f sre-equality)
+   'duality        (hasheq 'same-domain sre-duality  'cross-domain sre-equality  '= sre-equality
+                           'ø sre-phantom  #f sre-equality)
+   'phantom        (hasheq '+ sre-phantom  '- sre-phantom  '= sre-phantom  'ø sre-phantom
+                           'same-domain sre-phantom  'cross-domain sre-phantom  #f sre-phantom)))
+
+;; derive-sub-relation: table-driven sub-relation derivation.
+;; Replaces the 3 hand-written sub-relation-fn closures.
+;; Returns an sre-relation struct value, not a symbol.
+(define (derive-sub-relation relation variance)
+  (define rel-name (sre-relation-name relation))
+  (define vmap (hash-ref variance-maps rel-name #f))
+  (if vmap
+      (hash-ref vmap variance
+                (λ () (error 'derive-sub-relation
+                             "no sub-relation for variance ~a under ~a"
+                             variance rel-name)))
+      ;; Fallback for unregistered relations: use legacy closure
+      ((sre-relation-sub-relation-fn relation) relation #f 0 #f)))
+
+;; Property check helper
+(define (sre-relation-has-property? relation prop)
+  (set-member? (sre-relation-properties relation) prop))
 
 ;; ========================================================================
 ;; sre-identify-sub-cell
@@ -396,7 +437,7 @@
   (define src-a (if (recog va) va unified))
   (define use-bot-for-b?
     (and (not (recog vb))
-         (not (sre-relation-requires-binder-opening? relation))))
+         (not (sre-relation-has-property? relation 'requires-binder-opening))))
   (define src-b (if (recog vb) vb unified))
   ;; Extract components
   (define comps-a (extract src-a))
@@ -472,7 +513,7 @@
            ;; Binder-depth>0 + requires binder opening → fall through to PUnify
            [(let ([desc (lookup-ctor-desc tag #:domain (sre-domain-name domain))])
               (and desc (> (ctor-desc-binder-depth desc) 0)
-                   (sre-relation-requires-binder-opening? relation)))
+                   (sre-relation-has-property? relation 'requires-binder-opening)))
             net]
            [else
             (net-cell-write net decomp-request-cell-id
@@ -488,7 +529,7 @@
               [(zero? (ctor-desc-binder-depth desc))
                (sre-decompose-generic net domain cell-a cell-b va vb unified pair-key desc
                                       #:relation relation)]
-              [(sre-relation-requires-binder-opening? relation)
+              [(sre-relation-has-property? relation 'requires-binder-opening)
                net]
               [else
                (sre-decompose-generic net domain cell-a cell-b va vb unified pair-key desc
