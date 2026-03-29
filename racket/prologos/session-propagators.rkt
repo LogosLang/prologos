@@ -253,10 +253,13 @@
 ;; Session domain spec (SRE Track 1 Phase 5)
 ;; ========================================
 
+;; Track 2F Phase 6: merge registry as data (hash).
+(define session-merge-table
+  (hasheq 'equality session-lattice-merge
+          'duality  session-lattice-merge))
 (define (session-merge-registry rel-name)
-  (case rel-name
-    [(equality duality) session-lattice-merge]
-    [else (error 'session-merge-registry "no merge for: ~a" rel-name)]))
+  (hash-ref session-merge-table rel-name
+            (λ () (error 'session-merge-registry "no merge for: ~a" rel-name))))
 
 (define session-sre-domain
   (sre-domain 'session

@@ -65,11 +65,14 @@
 ;; meta-recognizer is pure (expr-meta?); meta-resolver reads from elab-network
 ;; via current-structural-meta-lookup (rebound per-command).
 ;; Type domain merge registry: case dispatch for zero overhead
+;; Track 2F Phase 6: merge registry as data (hash), not code (case).
+(define type-merge-table
+  (hasheq 'equality type-lattice-merge
+          'subtype  subtype-lattice-merge
+          'subtype-reverse subtype-lattice-merge))
 (define (type-merge-registry rel-name)
-  (case rel-name
-    [(equality) type-lattice-merge]
-    [(subtype subtype-reverse) subtype-lattice-merge]
-    [else (error 'type-merge-registry "no merge for relation: ~a" rel-name)]))
+  (hash-ref type-merge-table rel-name
+            (λ () (error 'type-merge-registry "no merge for relation: ~a" rel-name))))
 
 (define type-sre-domain
   (sre-domain 'type

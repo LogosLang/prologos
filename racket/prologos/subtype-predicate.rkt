@@ -204,11 +204,14 @@
 
 ;; Domain spec for structural subtype queries (used by sre-structural-subtype-check above).
 ;; Defined after subtype-lattice-merge since it references it.
+;; Track 2F Phase 6: merge registry as data (hash).
+(define subtype-query-merge-table
+  (hasheq 'equality type-lattice-merge
+          'subtype  subtype-lattice-merge
+          'subtype-reverse subtype-lattice-merge))
 (define (subtype-query-merge-registry rel-name)
-  (case rel-name
-    [(equality) type-lattice-merge]
-    [(subtype subtype-reverse) subtype-lattice-merge]
-    [else (error 'subtype-query-merge "no merge for: ~a" rel-name)]))
+  (hash-ref subtype-query-merge-table rel-name
+            (λ () (error 'subtype-query-merge "no merge for: ~a" rel-name))))
 
 (define type-sre-domain-for-subtype
   (sre-domain 'type
