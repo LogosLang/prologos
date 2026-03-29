@@ -168,7 +168,6 @@
 
 (struct sre-relation
   (name
-   sub-relation-fn            ;; LEGACY (Track 2F Phase 7: remove). Closure for sub-relation derivation.
    ;; --- Track 2F: Algebraic Foundation ---
    properties                 ;; (seteq symbol): algebraic properties of this endomorphism.
                               ;; Relation-level ONLY (not domain-level — see Track 2G).
@@ -198,70 +197,43 @@
 ;; | cross-domain  | —        | —       | —           | equality | —       |
 ;; | #f (unspec)   | equality | equality| equality    | equality | phantom |
 
-;; Equality: symmetric merge. Sub-relation is always equality.
+;; Equality: identity endomorphism. Sub-relation always equality.
 (define sre-equality
   (sre-relation
    'equality
-   (λ (rel desc idx domain-name) sre-equality)  ;; LEGACY
    (seteq 'identity 'requires-binder-opening)
    #f  ;; propagator-ctor: wired in Phase 4 (defined later in file)
    'equality))
 
-;; Subtype: directional check a ≤ b. Sub-relation from variance.
+;; Subtype: monotone endomorphism (order-preserving). Sub-relation from variance.
 (define sre-subtype
   (sre-relation
    'subtype
-   (λ (rel desc idx domain-name)                ;; LEGACY
-     (define variances (ctor-desc-component-variances desc))
-     (if (not variances)
-         sre-equality
-         (case (list-ref variances idx)
-           [(+) sre-subtype]
-           [(-) sre-subtype-reverse]
-           [(=) sre-equality]
-           [(ø) sre-phantom])))
    (seteq 'order-preserving)
    #f  ;; propagator-ctor: wired in Phase 4
    'subtype))
 
-;; Subtype-reverse: flipped direction (b ≤ a instead of a ≤ b).
+;; Subtype-reverse: flipped monotone (contravariant positions).
 (define sre-subtype-reverse
   (sre-relation
    'subtype-reverse
-   (λ (rel desc idx domain-name)                ;; LEGACY
-     (define variances (ctor-desc-component-variances desc))
-     (if (not variances)
-         sre-equality
-         (case (list-ref variances idx)
-           [(+) sre-subtype-reverse]
-           [(-) sre-subtype]
-           [(=) sre-equality]
-           [(ø) sre-phantom])))
    (seteq 'order-preserving)
    #f  ;; propagator-ctor: wired in Phase 4
    'subtype))  ;; same merge-key as subtype
 
-;; Duality: constructor pairing with involution.
+;; Duality: antitone involution. Constructor pairing (Send ↔ Recv).
 ;; Sub-relation: same-domain → duality, cross-domain → equality.
-;; Session constructors use component-lattices for legacy dispatch;
-;; Track 2F Phase 3 adds 'same-domain/'cross-domain variances.
 (define sre-duality
   (sre-relation
    'duality
-   (λ (rel desc idx domain-name)                ;; LEGACY — replaced by Phase 3
-     (define lats (ctor-desc-component-lattices desc))
-     (define comp-lat (list-ref lats idx))
-     (define cross-domain? (eq? comp-lat 'type))
-     (if cross-domain? sre-equality sre-duality))
    (seteq 'antitone 'involutive)
    #f  ;; propagator-ctor: wired in Phase 4
    'duality))
 
-;; Phantom: no constraint. Used for phantom type parameters.
+;; Phantom: zero endomorphism. No constraint.
 (define sre-phantom
   (sre-relation
    'phantom
-   (λ (rel desc idx domain-name) sre-phantom)   ;; LEGACY
    (seteq 'trivial)
    #f  ;; propagator-ctor: wired in Phase 4
    'phantom))
@@ -295,8 +267,8 @@
                 (λ () (error 'derive-sub-relation
                              "no sub-relation for variance ~a under ~a"
                              variance rel-name)))
-      ;; Fallback for unregistered relations: use legacy closure
-      ((sre-relation-sub-relation-fn relation) relation #f 0 #f)))
+      (error 'derive-sub-relation
+             "no variance-map registered for relation: ~a" rel-name)))
 
 ;; Property check helper
 (define (sre-relation-has-property? relation prop)
@@ -449,9 +421,8 @@
   (define-values (net1 subs-a) (sre-get-or-create-sub-cells net domain cell-a tag comps-a))
   (define-values (net2 subs-b) (sre-get-or-create-sub-cells net1 domain cell-b tag comps-b))
   ;; Add structural-relate propagators for each component pair
-  ;; Track 2F Phase 2: sub-cell relation from variance-map table.
-  ;; Falls back to legacy sub-relation-fn if no component-variances
-  ;; (duality until Phase 3 adds 'same-domain/'cross-domain).
+    ;; Track 2F: sub-cell relation from variance-map table via derive-sub-relation.
+  ;; If no component-variances, passes #f → defaults to equality.
   (define variances (ctor-desc-component-variances desc))
   (define net3
     (for/fold ([n net2])
@@ -460,9 +431,7 @@
                [idx (in-naturals)])
       (if (equal? sa sb)
           n
-          (let* ([sub-rel (if variances
-                              (derive-sub-relation relation (list-ref variances idx))
-                              ((sre-relation-sub-relation-fn relation) relation desc idx domain-name))])
+          (let* ([sub-rel (derive-sub-relation relation (if variances (list-ref variances idx) #f))])
             (if (eq? (sre-relation-name sub-rel) 'phantom)
                 n  ;; no constraint for phantom components
                 (let-values ([(n* _pid)
@@ -801,9 +770,7 @@
                [idx (in-naturals)])
       (if (equal? sa sb)
           n
-          (let* ([sub-rel (if variances-a
-                              (derive-sub-relation relation (list-ref variances-a idx))
-                              ((sre-relation-sub-relation-fn relation) relation desc-a idx domain-name))])
+          (let* ([sub-rel (derive-sub-relation relation (if variances-a (list-ref variances-a idx) #f))])
             (if (eq? (sre-relation-name sub-rel) 'phantom)
                 n
                 (let-values ([(n* _pid)

@@ -128,17 +128,12 @@
 (test-case "Duality sub-relation: type component → equality"
   ;; Send's first component (payload) is type-lattice-spec ('type sentinel)
   ;; → cross-domain → equality
-  (define desc (lookup-ctor-desc 'sess-send #:domain 'session))
-  (check-not-false desc)
-  (define sub-fn (sre-relation-sub-relation-fn sre-duality))
-  (check-eq? (sre-relation-name (sub-fn sre-duality desc 0 'session)) 'equality))
+  ;; Send's first component variance is 'cross-domain → equality
+  (check-eq? (sre-relation-name (derive-sub-relation sre-duality 'cross-domain)) 'equality))
 
-(test-case "Duality sub-relation: session component → duality"
-  ;; Send's second component (continuation) is session-lattice-spec ('session sentinel)
-  ;; → same domain → duality
-  (define desc (lookup-ctor-desc 'sess-send #:domain 'session))
-  (define sub-fn (sre-relation-sub-relation-fn sre-duality))
-  (check-eq? (sre-relation-name (sub-fn sre-duality desc 1 'session)) 'duality))
+(test-case "Duality sub-relation: session component → duality (via derive-sub-relation)"
+  ;; Send's second component variance is 'same-domain → duality
+  (check-eq? (sre-relation-name (derive-sub-relation sre-duality 'same-domain)) 'duality))
 
 ;; ========================================================================
 ;; F. Dependent session duality (SRE Track 1B Phase 4)

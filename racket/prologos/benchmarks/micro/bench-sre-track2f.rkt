@@ -65,23 +65,20 @@
 
 (displayln "--- M1: Sub-relation derivation ---")
 
-;; Current: closure call
-(bench "M1a closure (subtype, covariant)"
+;; Track 2F: derive-sub-relation (table-driven, replaces closures)
+(bench "M1a derive-sub-relation (covariant)"
   100000
-  ((sre-relation-sub-relation-fn sre-subtype)
-   sre-subtype pi-desc 2 'type))  ;; codomain, covariant → subtype
+  (derive-sub-relation sre-subtype '+))
 
-(bench "M1b closure (subtype, contravariant)"
+(bench "M1b derive-sub-relation (contravariant)"
   100000
-  ((sre-relation-sub-relation-fn sre-subtype)
-   sre-subtype pi-desc 1 'type))  ;; domain, contravariant → subtype-reverse
+  (derive-sub-relation sre-subtype '-))
 
-(bench "M1c closure (subtype, invariant)"
+(bench "M1c derive-sub-relation (invariant)"
   100000
-  ((sre-relation-sub-relation-fn sre-subtype)
-   sre-subtype pi-desc 0 'type))  ;; mult, invariant → equality
+  (derive-sub-relation sre-subtype '=))
 
-;; Proposed: hash-ref
+;; Raw hash-ref baseline
 (bench "M1d hash-ref (covariant)"
   100000
   (hash-ref subtype-variance-table

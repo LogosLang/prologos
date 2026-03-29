@@ -69,23 +69,17 @@
 ;; C. Sub-relation derivation for subtyping
 ;; ========================================================================
 
-(test-case "Subtype sub-relation: covariant → subtype"
-  (define pi-desc (lookup-ctor-desc 'Pi #:domain 'type))
-  (define sub-fn (sre-relation-sub-relation-fn sre-subtype))
-  ;; Pi component 2 (codomain) is covariant (+)
-  (check-eq? (sre-relation-name (sub-fn sre-subtype pi-desc 2 'type)) 'subtype))
+(test-case "Subtype sub-relation: covariant → subtype (via derive-sub-relation)"
+  ;; Pi component 2 (codomain) is covariant (+) → subtype
+  (check-eq? (sre-relation-name (derive-sub-relation sre-subtype '+)) 'subtype))
 
-(test-case "Subtype sub-relation: contravariant → subtype-reverse"
-  (define pi-desc (lookup-ctor-desc 'Pi #:domain 'type))
-  (define sub-fn (sre-relation-sub-relation-fn sre-subtype))
-  ;; Pi component 1 (domain) is contravariant (-)
-  (check-eq? (sre-relation-name (sub-fn sre-subtype pi-desc 1 'type)) 'subtype-reverse))
+(test-case "Subtype sub-relation: contravariant → subtype-reverse (via derive-sub-relation)"
+  ;; Pi component 1 (domain) is contravariant (-) → subtype-reverse
+  (check-eq? (sre-relation-name (derive-sub-relation sre-subtype '-)) 'subtype-reverse))
 
-(test-case "Subtype sub-relation: invariant → equality"
-  (define pi-desc (lookup-ctor-desc 'Pi #:domain 'type))
-  (define sub-fn (sre-relation-sub-relation-fn sre-subtype))
-  ;; Pi component 0 (mult) is invariant (=)
-  (check-eq? (sre-relation-name (sub-fn sre-subtype pi-desc 0 'type)) 'equality))
+(test-case "Subtype sub-relation: invariant → equality (via derive-sub-relation)"
+  ;; Pi component 0 (mult) is invariant (=) → equality
+  (check-eq? (sre-relation-name (derive-sub-relation sre-subtype '=)) 'equality))
 
 ;; ========================================================================
 ;; D. Polarity inference utilities
