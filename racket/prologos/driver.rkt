@@ -1350,26 +1350,19 @@
      ;; (read-all-forms-from-tree) ignores tags and extracts by token structure,
      ;; so refinement is additive — no behavioral change until Phase 6 wiring.
      (define refined-root (refine-tag (parse-tree-root pt)))
-     ;; V(0): Tree-level rewriting BLOCKED — design concern.
-     ;; Parse tree nodes represent LINES (indent structure), not FORMS
-     ;; (bracket-delimited expressions). An `if` inside a function body
-     ;; is a line node whose children include the entire line's tokens,
-     ;; not just if's 3 arguments. Rewrite rules expect form-level
-     ;; arity (if: 4 children) but tree nodes have line-level arity
-     ;; (all tokens on the line). This mismatch causes wrong rewrites.
+     ;; G(0) + V(0) rewriting: IMPLEMENTED but NOT YET ACTIVE in production.
+     ;; G(0) changes tree structure (bracket groups as sub-nodes), which
+     ;; changes the datums that read-all-forms-from-tree produces, which
+     ;; changes what preparse-expand-all sees. This causes failures because
+     ;; the datum extraction + preparse are calibrated to the INDENT tree,
+     ;; not the FORM tree.
      ;;
-     ;; Resolution options:
-     ;; (a) Add bracket-group nodes to the tree (PPN Track 1 Phase 5b
-     ;;     "Option C" — was deferred then). Tree structure would then
-     ;;     match form structure.
-     ;; (b) Rewrite DATUMS after bracket grouping (datum extraction does
-     ;;     the grouping). This means the rewrite engine operates on
-     ;;     datums, not tree nodes — losing the "Pocket Universe" benefit.
-     ;; (c) Hybrid: tag refinement at tree level, rewriting at datum level.
-     ;;     The tree carries form identity; the datums carry form structure.
+     ;; The activation requires the use-propagator-preparse? dual-path:
+     ;; when #t, G(0) + rewrite-tree fire AND preparse-expand-all is
+     ;; SKIPPED entirely (the tree-level pipeline handles ALL normalization).
+     ;; This is Phase 6b scope.
      ;;
-     ;; This needs design discussion before proceeding.
-     ;; For now: tag refinement only, no rewriting.
+     ;; For now: tag refinement only, G(0) and rewriting not active.
      (define refined-pt (struct-copy parse-tree pt [root refined-root]))
      (read-all-forms-from-tree refined-pt str (or source "<unknown>"))]
     [(validate-new-reader?)
