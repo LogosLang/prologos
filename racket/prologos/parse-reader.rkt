@@ -260,6 +260,7 @@
 
 (define (recognize-number rrb pos)
   ;; Number: digit+, optionally followed by N (nat) or /digit+ (rat)
+  ;; Does NOT match digit+.digit+ — that's decimal-literal (higher priority)
   (define c (rrb-char-at rrb pos))
   (if (and c (char-numeric? c))
       (let loop ([i (+ pos 1)])
@@ -277,6 +278,29 @@
                  (loop2 (+ j 1))
                  (- j pos)))]
           [else (- i pos)]))
+      #f))
+
+(define (recognize-decimal-literal rrb pos)
+  ;; Decimal literal: digit+.digit+ (bare, no tilde prefix)
+  ;; Must have digits on BOTH sides of the dot
+  (define c (rrb-char-at rrb pos))
+  (if (and c (char-numeric? c))
+      (let loop ([i (+ pos 1)])
+        (define nc (rrb-char-at rrb i))
+        (cond
+          [(and nc (char-numeric? nc)) (loop (+ i 1))]
+          [(and nc (char=? nc #\.))
+           ;; Check for digit after dot
+           (let ([after-dot (rrb-char-at rrb (+ i 1))])
+             (if (and after-dot (char-numeric? after-dot))
+                 ;; Consume remaining digits after dot
+                 (let loop2 ([j (+ i 2)])
+                   (define nc2 (rrb-char-at rrb j))
+                   (if (and nc2 (char-numeric? nc2))
+                       (loop2 (+ j 1))
+                       (- j pos)))
+                 #f))]  ;; dot not followed by digit — not a decimal
+          [else #f]))  ;; no dot found — not a decimal
       #f))
 
 (define (recognize-string rrb pos)
@@ -384,11 +408,12 @@
                (and (char=? c2 #\-) ;; negative: ~-5
                     (let ([c3 (rrb-char-at rrb (+ pos 2))])
                       (and c3 (char-numeric? c3))))))
-      ;; Scan forward for the full number
+      ;; Scan forward for the full number (including trailing N for Nat)
       (let loop ([i (+ pos 1)])
         (define c (rrb-char-at rrb i))
         (if (and c (or (char-numeric? c) (char=? c #\.) (char=? c #\/)
-                       (char=? c #\-) (char=? c #\e) (char=? c #\E)))
+                       (char=? c #\-) (char=? c #\e) (char=? c #\E)
+                       (char=? c #\N)))
             (loop (+ i 1))
             (- i pos)))
       #f))
@@ -682,13 +707,23 @@
       #f))
 
 (define (recognize-typed-hole rrb pos)
-  ;; ?? — typed hole / async receive
+  ;; ?? — unnamed typed hole; ??name — named typed hole
   (define c1 (rrb-char-at rrb pos))
   (define c2 (rrb-char-at rrb (+ pos 1)))
   (define c3 (rrb-char-at rrb (+ pos 2)))
-  (if (and c1 c2 (char=? c1 #\?) (char=? c2 #\?)
-           (not (and c3 (or (char=? c3 #\?) (ident-continue? c3)))))
-      2
+  (if (and c1 c2 (char=? c1 #\?) (char=? c2 #\?))
+      (cond
+        ;; ??? — not a typed hole (triple question mark)
+        [(and c3 (char=? c3 #\?)) #f]
+        ;; ??name — named typed hole
+        [(and c3 (ident-start? c3))
+         (let loop ([i (+ pos 3)])
+           (define cn (rrb-char-at rrb i))
+           (if (and cn (ident-continue? cn))
+               (loop (+ i 1))
+               (- i pos)))]
+        ;; ?? alone — unnamed typed hole
+        [else 2])
       #f))
 
 (define (recognize-async-send rrb pos)
@@ -754,7 +789,15 @@
         (cond
           [(and nc (char-numeric? nc)) (loop (+ i 1))]
           [(and nc (char=? nc #\N)) (+ (- i pos) 1)]  ;; -42N
-          [(and nc (char=? nc #\/)  ;; rational
+          [(and nc (char=? nc #\/)  ;; rational -3/7
+                (let ([nc2 (rrb-char-at rrb (+ i 1))])
+                  (and nc2 (char-numeric? nc2))))
+           (let loop2 ([j (+ i 2)])
+             (define nc2 (rrb-char-at rrb j))
+             (if (and nc2 (char-numeric? nc2))
+                 (loop2 (+ j 1))
+                 (- j pos)))]
+          [(and nc (char=? nc #\.)  ;; decimal -3.14
                 (let ([nc2 (rrb-char-at rrb (+ i 1))])
                   (and nc2 (char-numeric? nc2))))
            (let loop2 ([j (+ i 2)])
@@ -813,9 +856,14 @@
    (token-pattern 'negative-number (lambda (rrb pos) (recognize-negative-number rrb pos))
                   (lambda (rrb pos len)
                     (define last-c (rrb-char-at rrb (+ pos len -1)))
-                    (if (and last-c (char=? last-c #\N))
-                        'nat-literal
-                        'number))
+                    (define lexeme-str
+                      (list->string
+                       (for/list ([i (in-range pos (+ pos len))])
+                         (rrb-char-at rrb i))))
+                    (cond
+                      [(and last-c (char=? last-c #\N)) 'nat-literal]
+                      [(string-contains? lexeme-str ".") 'decimal-literal]
+                      [else 'number]))
                   96))  ;; -42 before symbol -
   (register-token-pattern!
    (token-pattern 'keyword (lambda (rrb pos) (recognize-keyword rrb pos))
@@ -900,6 +948,10 @@
   (register-token-pattern!
    (token-pattern 'string (lambda (rrb pos) (recognize-string rrb pos))
                   (lambda (s p l) 'string) 80))
+  ;; Decimal literals (3.14, 0.5) — higher priority than plain number
+  (register-token-pattern!
+   (token-pattern 'decimal-literal (lambda (rrb pos) (recognize-decimal-literal rrb pos))
+                  (lambda (s p l) 'decimal-literal) 75))
   ;; Numbers
   (register-token-pattern!
    (token-pattern 'number (lambda (rrb pos) (recognize-number rrb pos))
@@ -1491,28 +1543,80 @@
 
 ;; Convert token-entry → compat-token
 (define (token-entry->compat entry source-str)
-  (define type (set-first (token-entry-types entry)))
+  (define raw-type (set-first (token-entry-types entry)))
+  ;; Remap internal token types to match old reader's type scheme
+  ;; The old reader used 'symbol for most operator-like tokens
   (define lexeme (token-entry-lexeme entry))
+  (define type
+    (case raw-type
+      [(pipe pipe-right facts-sep clause-sep) 'symbol]
+      ;; rest-param: bare ... → symbol, ...name → rest-param
+      [(rest-param)
+       (if (equal? lexeme "...") 'symbol 'rest-param)]
+      [else raw-type]))
   (define start (token-entry-start-pos entry))
   (define end (token-entry-end-pos entry))
   ;; Compute line/col from start position
   (define-values (line col)
     (pos->line-col source-str start))
+  ;; Value conversion uses raw-type (before remapping) for correct dispatch
   (define value
-    (case type
-      [(symbol) (string->symbol lexeme)]
+    (case raw-type
+      [(symbol)
+       ;; Map specific operator symbols to their $-prefixed forms
+       (define sym (string->symbol lexeme))
+       (cond
+         [(equal? lexeme "|>") '$pipe-gt]
+         [(equal? lexeme "||") '$facts-sep]
+         [(equal? lexeme "&>") '$clause-sep]
+         [else sym])]
       [(number) (or (string->number lexeme) (string->symbol lexeme))]
-      [(string) lexeme]
+      [(string)
+       ;; Strip surrounding quotes if present (old reader returned raw content)
+       (if (and (>= (string-length lexeme) 2)
+                (char=? (string-ref lexeme 0) #\")
+                (char=? (string-ref lexeme (- (string-length lexeme) 1)) #\"))
+           (substring lexeme 1 (- (string-length lexeme) 1))
+           lexeme)]
       [(keyword) (string->symbol lexeme)]
       [(char) (if (= (string-length lexeme) 3)
                   (string-ref lexeme 1)  ;; 'X' → X
                   lexeme)]
       [(path-literal) lexeme]
-      [(approx-literal) (or (string->number (substring lexeme 1)) lexeme)]  ;; ~42 → 42
+      [(decimal-literal)
+       ;; Parse as exact rational: "3.14" → 157/50, "-3.14" → -157/50
+       (define exact-str (string-append "#e" lexeme))
+       (or (string->number exact-str) (string->number lexeme) lexeme)]
+      [(approx-literal)
+       (define num-str (substring lexeme 1))
+       ;; Parse as exact: prepend #e to get exact rational (3.14 → 157/50)
+       (define exact-str (string-append "#e" num-str))
+       (or (string->number exact-str) (string->number num-str) lexeme)]
+      [(pipe) '$pipe]
+      [(pipe-right) '$pipe-gt]
+      [(facts-sep) '$facts-sep]
+      [(clause-sep) '$clause-sep]
       [(dot-access nil-dot-access broadcast-access)
        (string->symbol (substring lexeme (if (string-prefix? lexeme "#") 2 1)))]
-      [(dot-key nil-dot-key)
-       (string->symbol lexeme)]
+      [(dot-key)
+       ;; .:name → :name (strip leading dot)
+       (string->symbol (substring lexeme 1))]
+      [(nil-dot-key)
+       ;; #:name → :name, #.:name → :name (extract keyword part)
+       (cond
+         [(string-prefix? lexeme "#.:") (string->symbol (substring lexeme 2))]  ;; #.:name → :name
+         [(string-prefix? lexeme "#:")  (string->symbol (substring lexeme 1))]  ;; #:name → :name
+         [else (string->symbol lexeme)])]
+      [(typed-hole)
+       ;; ?? → #f (unnamed), ??name → name (named)
+       (if (> (string-length lexeme) 2)
+           (string->symbol (substring lexeme 2))
+           #f)]
+      [(rest-param)
+       ;; ... → $rest, ...name → name
+       (if (> (string-length lexeme) 3)
+           (string->symbol (substring lexeme 3))
+           '$rest)]
       [else (if (> (string-length lexeme) 0) (string->symbol lexeme) #f)]))
   (compat-token type value line col start (- end start)))
 
@@ -1526,11 +1630,63 @@
       [else (loop (+ i 1) line (+ col 1))])))
 
 ;; tokenize-string compatibility: string → (listof compat-token)
+;; Prepends a newline token and appends an eof token to match old reader format.
+;; Also runs disambiguation and merges >> into $compose.
 (define (compat-tokenize-string str)
+  (register-default-token-patterns!)  ;; ensure patterns registered
   (define char-rrb (make-char-rrb-from-string str))
   (define tok-rrb (tokenize-char-rrb char-rrb))
-  (for/list ([i (in-range (rrb-size tok-rrb))])
-    (token-entry->compat (rrb-get tok-rrb i) str)))
+  ;; Run disambiguation
+  (define bd-rrb (make-bracket-depth-rrb tok-rrb))
+  (define-values (disamb-rrb _) (disambiguate-tokens tok-rrb bd-rrb))
+  ;; Validate: reject invalid tokens
+  (for ([i (in-range (rrb-size disamb-rrb))])
+    (define entry (rrb-get disamb-rrb i))
+    (define type (set-first (token-entry-types entry)))
+    (define lexeme (token-entry-lexeme entry))
+    ;; Reject negative Nats (-3N, ~-3N)
+    (when (and (eq? type 'nat-literal)
+               (string-contains? lexeme "-"))
+      (error 'tokenize-string "Negative Nat literal not allowed: ~a" lexeme))
+    (when (and (eq? type 'approx-literal)
+               (let ([num-str (substring lexeme 1)])
+                 (and (string-contains? num-str "-")
+                      (string-suffix? num-str "N"))))
+      (error 'tokenize-string "Negative Nat literal not allowed: ~a" lexeme))
+    ;; Reject standalone & (must use &> for rule clauses)
+    (when (and (eq? type 'symbol) (equal? lexeme "&"))
+      (error 'prologos-reader "Unexpected & — use &> for rule clauses"))
+    ;; Reject standalone . (must use .name for dot-access)
+    (when (and (eq? type 'symbol) (equal? lexeme "."))
+      (error 'prologos-reader "Unexpected character: .")))
+  ;; Convert to compat-tokens
+  (define raw-tokens
+    (for/list ([i (in-range (rrb-size disamb-rrb))])
+      (token-entry->compat (rrb-get disamb-rrb i) str)))
+  ;; Post-pass: merge consecutive rangle rangle at bracket-depth 0 → $compose
+  (define tokens (compat-merge-compose raw-tokens))
+  (append
+   (list (compat-token 'newline #f 1 0 0 0))
+   tokens
+   (list (compat-token 'eof #f 1 (string-length str) (string-length str) 0))))
+
+;; Merge consecutive rangle tokens into $compose symbol
+(define (compat-merge-compose tokens)
+  (let loop ([rest tokens] [acc '()])
+    (cond
+      [(null? rest) (reverse acc)]
+      [(and (not (null? (cdr rest)))
+            (eq? (compat-token-type (car rest)) 'rangle)
+            (eq? (compat-token-type (cadr rest)) 'rangle))
+       ;; Merge two > into $compose
+       (define t1 (car rest))
+       (loop (cddr rest)
+             (cons (compat-token 'symbol '$compose
+                                 (compat-token-line t1) (compat-token-col t1)
+                                 (compat-token-pos t1)
+                                 (+ (compat-token-span t1) (compat-token-span (cadr rest))))
+                   acc))]
+      [else (loop (cdr rest) (cons (car rest) acc))])))
 
 ;; Accessors matching old reader API names
 ;; (compat-token-type and compat-token-value are auto-generated by struct)
@@ -1836,6 +1992,32 @@
              #f]
             [else (loop (+ i 1) angle-depth other-depth)])])])))
 
+;; Convert | inside list literals to ($list-tail ...) form
+;; '[1 2 | ys] → '($list-literal 1 2 ($list-tail ys))
+(define (convert-list-tail-pipe items source)
+  (let loop ([rest items] [acc '()])
+    (cond
+      [(null? rest) (reverse acc)]
+      ;; Check if current item is $pipe
+      [(and (syntax? (car rest))
+            (let ([d (syntax-e (car rest))])
+              (eq? d '$pipe)))
+       ;; Everything after $pipe becomes ($list-tail tail-items...)
+       (define tail-items (cdr rest))
+       (cond
+         [(= (length tail-items) 1)
+          ;; Single tail element: ($list-tail elem)
+          (define elem (car tail-items))
+          (define tail-stx
+            (datum->syntax #f (list (datum->syntax #f '$list-tail) elem)))
+          (reverse (cons tail-stx acc))]
+         [else
+          ;; Multiple tail elements: ($list-tail (items...))
+          (define tail-stx
+            (datum->syntax #f (cons (datum->syntax #f '$list-tail) tail-items)))
+          (reverse (cons tail-stx acc))])]
+      [else (loop (cdr rest) (cons (car rest) acc))])))
+
 ;; Group items (tokens + indent markers) with bracket matching.
 ;; indent-open/indent-close create implicit sub-lists ONLY when
 ;; not inside an explicit bracket group (bracket groups take priority).
@@ -1926,11 +2108,13 @@
                        (cons (make-stx (cons (make-stx '$mixfix source ml mc (+ (token-entry-start-pos item) 1) 2) inner)
                                        source ml mc (+ (token-entry-start-pos item) 1) 2) result))))]
             ;; Quote bracket → $list-literal sentinel
+            ;; Also converts `| elem` inside list to ($list-tail elem)
             [(eq? type 'quote-lbracket)
              (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbracket source source-str qq-depth)])
+               (define processed-inner (convert-list-tail-pipe inner source))
                (let-values ([(ql qc) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
-                       (cons (make-stx (cons (make-stx '$list-literal source ql qc (+ (token-entry-start-pos item) 1) 2) inner)
+                       (cons (make-stx (cons (make-stx '$list-literal source ql qc (+ (token-entry-start-pos item) 1) 2) processed-inner)
                                        source ql qc (+ (token-entry-start-pos item) 1) 2) result))))]
             ;; At bracket → $pvec-literal sentinel
             [(eq? type 'at-lbracket)
@@ -2005,11 +2189,29 @@
             ;; Other stray closing brackets → skip
             [(memq type '(rbracket rparen rbrace))
              (loop (+ i 1) result)]
+            ;; Decimal-literal compound token: 3.14 → ($decimal-literal 157/50)
+            [(eq? type 'decimal-literal)
+             (define lex (token-entry-lexeme item))
+             ;; Parse as exact rational: 3.14 → 157/50 (matching old reader)
+             (define num-val (or (string->number (string-append "#e" lex))
+                                 (string->number lex)
+                                 (string->symbol lex)))
+             (define spos (token-entry-start-pos item))
+             (define epos (token-entry-end-pos item))
+             (define-values (vl vc) (pos->line-col source-str spos))
+             (loop (+ i 1)
+                   (cons (make-stx (list (make-stx '$decimal-literal source vl vc (+ spos 1) 1)
+                                         (make-stx num-val source vl vc spos (- epos spos)))
+                                   source vl vc spos (- epos spos))
+                         result))]
             ;; Approx-literal compound token: ~42 → ($approx-literal 42)
             [(eq? type 'approx-literal)
              (define lex (token-entry-lexeme item))
              (define num-str (substring lex 1))
-             (define num-val (or (string->number num-str) (string->symbol num-str)))
+             ;; Parse as exact rational: 3.14 → 157/50 (matching old reader)
+             (define num-val (or (string->number (string-append "#e" num-str))
+                                 (string->number num-str)
+                                 (string->symbol num-str)))
              (define spos (token-entry-start-pos item))
              (define epos (token-entry-end-pos item))
              (define-values (vl vc) (pos->line-col source-str spos))

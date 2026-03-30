@@ -9,7 +9,7 @@
          racket/string
          racket/list
          "test-support.rkt"
-         "../reader.rkt"
+         "../parse-reader.rkt"
          "../driver.rkt")
 
 ;; ========================================
@@ -17,10 +17,10 @@
 ;; ========================================
 
 (define (tok-type tokens i)
-  (vector-ref (struct->vector (list-ref tokens i)) 1))
+  (token-type (list-ref tokens i)))
 
 (define (tok-val tokens i)
-  (vector-ref (struct->vector (list-ref tokens i)) 2))
+  (token-value (list-ref tokens i)))
 
 (define (check-contains actual substr [msg #f])
   (define actual-str (if (string? actual) actual (format "~a" actual)))

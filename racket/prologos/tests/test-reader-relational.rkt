@@ -6,17 +6,17 @@
 ;;;
 
 (require rackunit
-         "../reader.rkt")
+         "../parse-reader.rkt")
 
 ;; ========================================
 ;; Helpers (same as test-reader.rkt)
 ;; ========================================
 
 (define (tok-type tokens i)
-  (vector-ref (struct->vector (list-ref tokens i)) 1))
+  (token-type (list-ref tokens i)))
 
 (define (tok-val tokens i)
-  (vector-ref (struct->vector (list-ref tokens i)) 2))
+  (token-value (list-ref tokens i)))
 
 ;; ========================================
 ;; || (fact-block separator)

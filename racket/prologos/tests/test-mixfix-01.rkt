@@ -33,7 +33,7 @@
          (prefix-in tc: "../typing-core.rkt")
          "../namespace.rkt"
          "../trait-resolution.rkt"
-         "../reader.rkt")
+         "../parse-reader.rkt")
 
 ;; ========================================
 ;; A. Tokenizer tests

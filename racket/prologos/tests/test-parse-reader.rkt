@@ -761,17 +761,23 @@
 ;; Phase 3c: Compatibility wrappers
 ;; ============================================================
 
-(test-case "compat-tokenize-string: produces compat-tokens"
+(test-case "compat-tokenize-string: produces compat-tokens with newline/eof padding"
   (define tokens (compat-tokenize-string "def x := 42"))
-  (check-true (> (length tokens) 0))
-  (check-pred compat-token? (car tokens))
-  (check-equal? (compat-token-type (car tokens)) 'symbol)
-  (check-equal? (compat-token-value (car tokens)) 'def))
+  (check-true (> (length tokens) 2))
+  ;; First token is synthetic newline
+  (check-equal? (compat-token-type (car tokens)) 'newline)
+  ;; Content tokens start at index 1
+  (check-pred compat-token? (cadr tokens))
+  (check-equal? (compat-token-type (cadr tokens)) 'symbol)
+  (check-equal? (compat-token-value (cadr tokens)) 'def)
+  ;; Last token is synthetic eof
+  (check-equal? (compat-token-type (last tokens)) 'eof))
 
 (test-case "compat-tokenize-string: token positions"
   (define tokens (compat-tokenize-string "x y"))
-  (define t0 (car tokens))
-  (define t1 (cadr tokens))
+  ;; Skip newline at index 0; content starts at index 1
+  (define t0 (cadr tokens))     ;; x
+  (define t1 (caddr tokens))    ;; y
   (check-equal? (compat-token-pos t0) 0)
   (check-equal? (compat-token-span t0) 1)
   (check-equal? (compat-token-pos t1) 2)
@@ -779,8 +785,9 @@
 
 (test-case "compat-tokenize-string: line/col computation"
   (define tokens (compat-tokenize-string "a\nb"))
-  (define t0 (car tokens))
-  (define t1 (cadr tokens))
+  ;; Skip newline at index 0; content starts at index 1
+  (define t0 (cadr tokens))     ;; a
+  (define t1 (caddr tokens))    ;; b
   (check-equal? (compat-token-line t0) 1)
   (check-equal? (compat-token-col t0) 0)
   (check-equal? (compat-token-line t1) 2)
@@ -788,21 +795,22 @@
 
 (test-case "compat-tokenize-string: number value"
   (define tokens (compat-tokenize-string "42"))
-  (check-equal? (compat-token-type (car tokens)) 'number)
-  (check-equal? (compat-token-value (car tokens)) 42))
+  (check-equal? (compat-token-type (cadr tokens)) 'number)
+  (check-equal? (compat-token-value (cadr tokens)) 42))
 
 (test-case "compat-tokenize-string: string value"
   (define tokens (compat-tokenize-string "\"hello\""))
-  (check-equal? (compat-token-type (car tokens)) 'string))
+  (check-equal? (compat-token-type (cadr tokens)) 'string))
 
 (test-case "compat-tokenize-string: keyword value"
   (define tokens (compat-tokenize-string ":name"))
-  (check-equal? (compat-token-type (car tokens)) 'keyword)
-  (check-equal? (compat-token-value (car tokens)) ':name))
+  (check-equal? (compat-token-type (cadr tokens)) 'keyword)
+  (check-equal? (compat-token-value (cadr tokens)) ':name))
 
 (test-case "compat-tokenize-string: dot-access value"
   (define tokens (compat-tokenize-string "x.name"))
-  (define dot-tok (cadr tokens))
+  ;; Skip newline, first content is x at index 1, dot-access at index 2
+  (define dot-tok (caddr tokens))
   (check-equal? (compat-token-type dot-tok) 'dot-access)
   (check-equal? (compat-token-value dot-tok) 'name))
 

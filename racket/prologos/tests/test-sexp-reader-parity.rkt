@@ -17,7 +17,7 @@
          racket/path
          "test-support.rkt"
          "../sexp-readtable.rkt"
-         "../reader.rkt"
+         "../parse-reader.rkt"
          "../macros.rkt"
          "../prelude.rkt"
          "../syntax.rkt"

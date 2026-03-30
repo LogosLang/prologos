@@ -11,7 +11,7 @@
 (require rackunit
          racket/list
          "../macros.rkt"
-         "../reader.rkt")
+         "../parse-reader.rkt")
 
 ;; ========================================
 ;; A. Unit tests: rewrite-dot-access

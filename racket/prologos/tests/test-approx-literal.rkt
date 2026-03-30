@@ -13,7 +13,7 @@
          "../syntax.rkt"
          "../prelude.rkt"
          "../surface-syntax.rkt"
-         "../reader.rkt"
+         "../parse-reader.rkt"
          "../parser.rkt"
          "../driver.rkt"
          "../global-env.rkt"
@@ -26,8 +26,8 @@
     (process-string s)))
 
 ;; Token accessors via struct->vector (token struct is not exported)
-(define (tok-type t) (vector-ref (struct->vector t) 1))
-(define (tok-val t) (vector-ref (struct->vector t) 2))
+(define tok-type token-type)
+(define tok-val token-value)
 
 ;; ========================================
 ;; Reader: WS mode tokenization

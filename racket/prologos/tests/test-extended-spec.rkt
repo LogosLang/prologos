@@ -23,7 +23,7 @@
          "../global-env.rkt"
          "../driver.rkt"
          "../macros.rkt"
-         "../reader.rkt"
+         "../parse-reader.rkt"
          "../source-location.rkt"
          "../warnings.rkt")
 

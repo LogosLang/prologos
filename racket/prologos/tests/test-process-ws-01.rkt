@@ -10,7 +10,7 @@
          racket/list
          racket/string
          racket/port
-         "../reader.rkt"
+         "../parse-reader.rkt"
          "../macros.rkt"
          "../surface-syntax.rkt"
          "../parser.rkt"

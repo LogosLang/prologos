@@ -15,7 +15,7 @@
 (require rackunit
          racket/string
          "../macros.rkt"
-         "../reader.rkt")
+         "../parse-reader.rkt")
 
 ;; ========================================
 ;; A. Reader Tokenization (6 tests)

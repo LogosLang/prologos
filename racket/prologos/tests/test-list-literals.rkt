@@ -12,7 +12,7 @@
          racket/list
          racket/path
          "test-support.rkt"
-         "../reader.rkt"
+         "../parse-reader.rkt"
          "../macros.rkt"
          "../sexp-readtable.rkt"
          "../pretty-print.rkt"
@@ -28,10 +28,10 @@
 
 ;; Token type at index
 (define (tok-type tokens i)
-  (vector-ref (struct->vector (list-ref tokens i)) 1))
+  (token-type (list-ref tokens i)))
 
 (define (tok-val tokens i)
-  (vector-ref (struct->vector (list-ref tokens i)) 2))
+  (token-value (list-ref tokens i)))
 
 ;; Compute lib directory path
 ;; Run prologos code with full namespace/module system

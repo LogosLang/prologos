@@ -20,7 +20,7 @@
          "../errors.rkt"
          "../global-env.rkt"
          "../driver.rkt"
-         "../reader.rkt"
+         "../parse-reader.rkt"
          "../source-location.rkt")
 
 ;; ========================================
