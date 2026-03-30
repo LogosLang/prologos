@@ -1,0 +1,56 @@
+#+TITLE: Standup — 2026-03-30
+#+DATE: 2026-03-30
+
+* Yesterday (since 2026-03-29 standup)
+
+** PPN Track 2: Phase 8a — Compat Token Migration (COMPLETE)
+- ALL 53 test files migrated from reader.rkt to parse-reader.rkt
+- 11 compound token types fixed: decimal-literal, typed-hole (??name), negative-decimal, tilde-neg-nat, $pipe→($list-tail), >>→$compose, |>→$pipe-gt, ||→$facts-sep, &>→$clause-sep, ...→$rest, dot-key/nil-dot-key
+- Compat wrapper: leading newline + trailing eof, type remapping, value mapping, disambiguation, validation
+- Commit =94e0f099=. 7529 tests, 383 files, ALL PASS (126.8s)
+
+** PPN Track 2: Phase 8b — Production Migration (COMPLETE)
+- All 7 production files migrated off reader.rkt: driver.rkt, repl.rkt, 2 tools, 3 benchmarks
+- reader.rkt now internal-only (parse-reader.rkt wrapper + test-reader.rkt)
+- Commit =bb09f4e9=. 7529 tests, 383 files, ALL PASS (132.1s)
+
+** PPN Track 2: Phase 10 Design Addendum
+- §8 added to Track 2 design doc: sexp pipeline retirement (Phases 10-11)
+- Design decision: compat shim at process-string boundary (Option B) chosen over mass migration of 350 test files
+- Key finding: process-string sexp path uses sexp-readtable.rkt (Racket's native reader), NOT reader.rkt
+- reader.rkt's WS tokenizer was only used by: WS REPL path, driver validation/fallback, parse-reader.rkt wrapper
+- Commit =cd6aa2d1=
+
+** PPN Track 2: Phase 10 — reader.rkt DELETED (COMPLETE)
+- reader.rkt (1898 lines) + test-reader.rkt (449 lines) DELETED
+- Native prologos-read-syntax/prologos-read implemented in parse-reader.rkt
+- driver.rkt old-reader fallback paths (use-new-reader?, validate-new-reader?) removed
+- Net: -2330 lines
+- Commit =469e2276=. 7454 tests, 382 files, ALL PASS (125.3s — faster)
+
+** PPN Track 2: Phase 9 A/B Overhead Clarification
+- 16% dual-pipeline overhead was =use-tree-parser?=#t= (development/validation) — NOT production default
+- Production path (=use-tree-parser?=#f=) has zero overhead: new reader → preparse → parse-datum
+- A/B stability test confirms: all benchmarks within ±0.5% noise
+- Track 7 dual writes (hash + cell) remain — architecturally necessary until Track 8E+
+
+** PPN Master Updated
+- Track 2 marked ✅ with all delivered artifacts
+- Track 3 prerequisite documented: Phase 11 (macros.rkt sexp expander retirement)
+- 4-step plan in Track 3 detail: extend tree-parser for all forms → move registration → delete preparse-expand-all → retain expand-top-level
+- Commit =f5934f35=
+
+** PIR Addendum
+- Phase 8-10 outcomes documented. 2 open questions resolved. §8 updated.
+- Commit =295c657a=
+
+* Today
+
+** Next work priorities
+1. (per priority ordering from Mar 28): SRE Track 2B, PPN Track 3, SRE Track 2G, PPN Track 4 / SRE Track 2C
+
+* Blockers
+
+- test-structural-decomp: meta-solving via imperative state under BSP — deferred to SRE/PPN elaborator-on-network
+- WS-mode solver syntax gaps (~=~ as unification, ~is~ bridging) — deferred to post-PPN
+- Phase 11 (macros.rkt sexp expanders): blocked on tree parser handling all form types — documented as Track 3 prerequisite
