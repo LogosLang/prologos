@@ -255,7 +255,7 @@
 ;; For now, they provide the structure for the dispatch.
 
 (define (parse-error-result loc msg)
-  (prologos-error loc msg #f))
+  (prologos-error loc msg))
 
 (define (parse-def-tree args loc)
   ;; Tree args (after def token): [name, maybe-type-annotation, body]
@@ -313,14 +313,24 @@
                    (let ([bd (parse-application-tree (cdr args) loc)])
                      (if (prologos-error? bd) bd
                          (surf-def name #f bd loc)))))))]
-    ;; 4+ args: (def name : type body) or (def name <type> body...)
+    ;; 4+ args: various forms with type annotations and/or :=
     [(>= (length args) 4)
      (define name (token-symbol (car args)))
      (if (not name)
          (parse-error-result loc "def: expected name")
          (let ([second (cadr args)])
            (cond
-             ;; Colon annotation
+             ;; (def name : type := body) — 5+ args, colon + assign
+             [(and (token-is? second ":")
+                   (>= (length args) 5)
+                   (token-is? (list-ref args 3) ":="))
+              (let ([ty (parse-form-tree (caddr args))]
+                    [bd (parse-form-tree (list-ref args 4))])
+                (cond
+                  [(prologos-error? ty) ty]
+                  [(prologos-error? bd) bd]
+                  [else (surf-def name ty bd loc)]))]
+             ;; (def name : type body) — 4 args, colon without :=
              [(token-is? second ":")
               (let ([ty (parse-form-tree (caddr args))]
                     [bd (parse-form-tree (cadddr args))])
@@ -328,7 +338,18 @@
                   [(prologos-error? ty) ty]
                   [(prologos-error? bd) bd]
                   [else (surf-def name ty bd loc)]))]
-             ;; Angle annotation + body
+             ;; (def name <type> := body) — angle + assign
+             [(and (parse-tree-node? second)
+                   (eq? (parse-tree-node-tag second) 'angle-group)
+                   (>= (length args) 4)
+                   (token-is? (caddr args) ":="))
+              (let ([ty (parse-form-tree second)]
+                    [bd (parse-form-tree (cadddr args))])
+                (cond
+                  [(prologos-error? ty) ty]
+                  [(prologos-error? bd) bd]
+                  [else (surf-def name ty bd loc)]))]
+             ;; (def name <type> body) — angle without :=
              [(and (parse-tree-node? second)
                    (eq? (parse-tree-node-tag second) 'angle-group))
               (let ([ty (parse-form-tree second)]

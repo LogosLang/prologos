@@ -30,6 +30,7 @@
          "reader.rkt"
          "parse-reader.rkt"
          "surface-rewrite.rkt"  ;; PPN Track 2: tag refinement + rewrite rules
+         "tree-parser.rkt"     ;; PPN Track 2 Phase 6c: tree → surf-* directly
          "namespace.rkt"
          "metavar-store.rkt"
          "zonk.rkt"
@@ -87,6 +88,7 @@
          current-pnet-write-enabled?
          ;; PPN Track 1 Phase 5c: new reader validation
          use-new-reader?
+         use-tree-parser?
          validate-new-reader?
          ;; PTF Track 1 Phase 0: network capture hook for analysis
          current-network-capture-box)
@@ -1350,19 +1352,11 @@
      ;; (read-all-forms-from-tree) ignores tags and extracts by token structure,
      ;; so refinement is additive — no behavioral change until Phase 6 wiring.
      (define refined-root (refine-tag (parse-tree-root pt)))
-     ;; G(0) + V(0) rewriting: IMPLEMENTED but NOT YET ACTIVE in production.
-     ;; G(0) changes tree structure (bracket groups as sub-nodes), which
-     ;; changes the datums that read-all-forms-from-tree produces, which
-     ;; changes what preparse-expand-all sees. This causes failures because
-     ;; the datum extraction + preparse are calibrated to the INDENT tree,
-     ;; not the FORM tree.
-     ;;
-     ;; The activation requires the use-propagator-preparse? dual-path:
-     ;; when #t, G(0) + rewrite-tree fire AND preparse-expand-all is
-     ;; SKIPPED entirely (the tree-level pipeline handles ALL normalization).
-     ;; This is Phase 6b scope.
-     ;;
-     ;; For now: tag refinement only, G(0) and rewriting not active.
+     ;; The tree is tag-refined but NOT form-grouped or rewritten here.
+     ;; G(0) form grouping + tree rewriting + tree→surf-* parsing happen
+     ;; in a SEPARATE path (use-tree-parser?) that bypasses datum extraction.
+     ;; The datum extraction path (read-all-forms-from-tree) feeds the OLD
+     ;; preparse-expand-all + parse-datum pipeline.
      (define refined-pt (struct-copy parse-tree pt [root refined-root]))
      (read-all-forms-from-tree refined-pt str (or source "<unknown>"))]
     [(validate-new-reader?)
@@ -1519,12 +1513,48 @@
     (reset-meta-store!)
     (process-string-ws-inner s)))
 
+;; PPN Track 2 Phase 6d: dual-path switch
+(define use-tree-parser? (make-parameter #f))
+
 (define (process-string-ws-inner s)
   (define port (open-input-string s))
-  ;; Use WS reader (indentation -> nested lists)
-  (define raw-stxs (read-all-syntax-ws port "<ws-string>"))
-  (define expanded-stxs (preparse-expand-all raw-stxs))
-  (define surfs (map parse-datum expanded-stxs))
+  (cond
+    [(use-tree-parser?)
+     ;; NEW PATH: tree → surf-* directly (PPN Track 2)
+     ;; 1. Read parse tree
+     (register-default-token-patterns!)
+     (define str (port->string port))
+     (define pt (read-to-tree str))
+     ;; 2. Run preparse for REGISTRATION SIDE EFFECTS only
+     ;;    (populate registries: trait, ctor, spec, impl, etc.)
+     ;;    The datum output is discarded — we use tree parser for surf-*.
+     (define datum-port (open-input-string str))
+     (define raw-stxs (read-all-syntax-ws datum-port "<ws-string>"))
+     (preparse-expand-all raw-stxs)  ;; side effects only, result discarded
+     ;; 3. Tree pipeline: refine → group → parse
+     (define refined-root (refine-tag (parse-tree-root pt)))
+     (define grouped-root (group-tree-node refined-root))
+     (define surfs (parse-top-level-forms-from-tree grouped-root))
+     ;; 4. Filter out preparse-consumed forms (ns, data, trait, spec, impl, etc.)
+     ;;    These return prologos-error with "consumed by preparse" message.
+     ;;    In the old path, preparse removes them from the output.
+     (define filtered-surfs
+       (filter (lambda (s)
+                 (not (and (prologos-error? s)
+                           (let ([msg (prologos-error-message s)])
+                             (and (string? msg)
+                                  (string-contains? msg "consumed by preparse"))))))
+               surfs))
+     (process-surfs filtered-surfs)]
+    [else
+     ;; OLD PATH: datum → preparse → parse
+     (define raw-stxs (read-all-syntax-ws port "<ws-string>"))
+     (define expanded-stxs (preparse-expand-all raw-stxs))
+     (define surfs (map parse-datum expanded-stxs))
+     (process-surfs surfs)]))
+
+(define (process-surfs surfs)
+  ;; Common tail for both old and new paths.
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define qs (make-quiescence-stats))
