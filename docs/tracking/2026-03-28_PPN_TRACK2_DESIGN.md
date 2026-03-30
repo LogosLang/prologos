@@ -12,7 +12,7 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Pre-0 benchmarks + adversarial | ⬜ | Preparse timing, rewrite overhead |
+| 0 | Pre-0 benchmarks + adversarial | ✅ | `a0fd523`. Preparse invisible vs elaboration. 22-35μs/rule. |
 | 1 | Rewrite rule registry | ⬜ | Rule struct, registration, cell-based lookup |
 | 2 | Pure rewrite engine | ⬜ | 18 built-in rules as registered rewrites |
 | 3 | Registry propagators | ⬜ | process-data/trait/spec → cell writes |
@@ -223,20 +223,63 @@ Phase 5b becomes unnecessary. The hoisting is implicit in propagator firing orde
 
 ## §4 Phase Details
 
-### Phase 0: Pre-0 Benchmarks
+### Phase 0: Pre-0 Benchmarks ✅
 
-**Deliverable**: Baseline timing for preparse pipeline.
+**Deliverable**: Baseline timing. Benchmark file: `benchmarks/micro/bench-ppn-track2.rkt` (`a0fd523`).
 
-Measure:
-- M1: `preparse-expand-all` wall time per file (on comparative suite)
-- M2: Per-rule expansion time (how long does each `expand-*` take?)
-- M3: Registry lookup time (how long does `lookup-trait`, `lookup-spec` take?)
-- M4: Fixpoint convergence (how many iterations of preparse-expand-form per form?)
+#### Micro-benchmarks (M1-M5)
 
-Adversarial:
-- A1: File with 100+ defmacro definitions (stress rule registry)
-- A2: Deeply nested macro expansion (stress fixpoint convergence)
-- A3: File with many spec+defn pairs (stress cross-pass injection)
+| Measurement | Result | Design Impact |
+|-------------|--------|---------------|
+| M1: Pipeline total (warm) | 111-122 ms per program | Preparse is a fraction; elaboration dominates |
+| M2: Per-rule expansion | 22-35 μs median | Propagator fire function budget: ~30μs/rule |
+| M3: Registry read (param) | 5 μs | Cell read (~25μs CHAMP) is 5× slower — acceptable |
+| M3: lookup-spec (miss) | 8 μs | Scan cost per defn for spec injection |
+| M4: Fixpoint convergence | Most forms: 1 iteration | Propagator fires once per form (common case) |
+| M4: Non-matching forms | 0 iterations | No rule matches → no propagator fire needed |
+| M5: Rule scan (no-match, symbol) | 10 μs | Floor cost for forms that don't match any rule |
+| M5: Rule scan (no-match, list) | 21-24 μs | Nested list scanning more expensive |
+
+**Key finding**: Per-rule expansion is 22-35μs. This is the propagator fire function cost. With 18 rules, a full scan on a non-matching form costs 10-24μs. Most forms converge in 0-1 iterations — the propagator fires at most once per form.
+
+#### Adversarial benchmarks (A1-A4)
+
+| Test | Median (ms) | Notes |
+|------|-------------|-------|
+| A1: 100 defmacros + 100 uses | 176 | Registry growth + scan: ~1.8ms for 100 macro lookups |
+| A2: 30-deep macro chain | 104 | Fixpoint depth 30: ~3.5ms expansion overhead |
+| A3: 50 spec+defn pairs | 409 | Spec injection is the most expensive cross-pass operation |
+| A4: 20-clause defn | 203 | Pattern clause compilation dominates, not preparse |
+
+**Key finding**: A3 (50 spec+defn pairs, 409ms) shows that spec injection scales linearly with defn count. This is the most performance-sensitive path — each defn triggers a spec lookup + datum splicing. The propagator design's residuation pattern (watch spec-store cell, fire when spec available) must not add overhead to this path.
+
+#### E2E benchmarks (E1)
+
+| Program | Total (ms) | Notes |
+|---------|-----------|-------|
+| simple-typed | 123 | Baseline: minimal program |
+| bool-logic | 197 | Medium: data + pattern matching |
+| church-folds | 155 | Medium: higher-order + recursion |
+| dependent-types | 119 | Light: few forms |
+| higher-order | 176 | Medium |
+| implicit-args | 232 | Medium-heavy: implicit resolution |
+| nat-arithmetic | 123 | Light |
+| pairs-sigma | 175 | Medium |
+| pattern-matching | 212 | Medium: multi-clause defn |
+| recursive-types | 140 | Light-medium |
+| constraints-adversarial | 699 | Heavy: many trait constraints |
+| solve-adversarial | 620 | Heavy: relational search |
+| type-adversarial | 3771 | Very heavy: reduction-dominated (reduce_ms=2838) |
+
+**Key finding**: Preparse is invisible compared to elaboration for complex programs. The heaviest programs spend >90% of time in type checking, reduction, and constraint resolution — not in surface normalization. This gives the design **complete performance freedom**: any approach that doesn't add >10% to the simple-typed baseline (123ms) is acceptable.
+
+#### Design implications from benchmarks
+
+1. **Performance-free design space.** Preparse overhead is lost in noise relative to elaboration. Use whatever approach is clearest and most extensible — don't micro-optimize.
+2. **Spec injection is the sensitive path.** 50 spec+defn = 409ms. The propagator design's residuation pattern must not add per-defn overhead. One cell-read (25μs) per defn × 50 defns = 1.25ms — acceptable.
+3. **Rule scan cost is bounded.** 18 rules × 24μs = 432μs per form at worst. With ~100 forms per file, that's 43ms — within the 123ms baseline. Acceptable but not trivial.
+4. **Fixpoint convergence is fast.** Most forms need 0-1 iterations. The propagator fires once per form, quiesces, done. No need for complex fuel-limit mechanisms for typical programs.
+5. **Complex rules (pipe fusion, mixfix) dominate their own cost.** These should be specialized propagators, not pattern→template rules.
 
 ### Phase 1: Rewrite Rule Registry
 
