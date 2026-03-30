@@ -19,7 +19,7 @@
          racket/file
          racket/cmdline
          racket/format
-         "../reader.rkt"
+         "../parse-reader.rkt"
          "../stratify.rkt")
 
 ;; ============================================================

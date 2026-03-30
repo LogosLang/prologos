@@ -20,7 +20,7 @@
          "../../atms.rkt"
          "../../driver.rkt"
          "../../macros.rkt"
-         "../../reader.rkt"
+         "../../parse-reader.rkt"
          "../../tests/test-support.rkt"
          racket/set)
 

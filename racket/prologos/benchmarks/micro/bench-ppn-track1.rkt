@@ -10,7 +10,7 @@
 ;;;   "/Applications/Racket v9.0/bin/racket" benchmarks/micro/bench-ppn-track1.rkt
 ;;;
 
-(require "../../reader.rkt"
+(require "../../parse-reader.rkt"
          "../../driver.rkt"
          "../../propagator.rkt"
          "../../parse-lattice.rkt"

@@ -15,7 +15,7 @@
          "driver.rkt"
          "pretty-print.rkt"
          "global-env.rkt"
-         "reader.rkt"
+         "parse-reader.rkt"  ;; prologos-read-syntax (sexp mode)
          "macros.rkt"
          "sexp-readtable.rkt"
          "trait-resolution.rkt")

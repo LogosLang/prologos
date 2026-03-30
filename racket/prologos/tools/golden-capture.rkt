@@ -17,7 +17,7 @@
          racket/string
          racket/list
          racket/port
-         "../reader.rkt")
+         "../parse-reader.rkt")
 
 (provide capture-golden-baseline
          capture-golden-for-file
