@@ -163,24 +163,66 @@ The form-grouping stratum G(0) is the bridge between indent structure and form s
 
 **The Pocket Universe principle still applies**: the form-grouped tree is a structured value in a cell. SRE decomposes form nodes by tag + arity. The difference from the original design: the Pocket Universe contains FORM nodes (with known arity), not LINE nodes (with variable tokens).
 
-**Form pipeline cells**: Each top-level form (a subtree of the form-grouped tree) progresses through a pipeline of **set-once cells**, one per rewrite stratum:
+**Form pipeline cells — stratified pipeline as lattice value (Pocket Universe):**
+
+Each top-level form gets ONE cell. That cell holds a **pipeline value** — the form's current processing stage + its tree node at that stage. The stages form a finite chain (lattice):
 
 ```
-raw-tree-cell (⊥ → indent-tree-node, set-once)           [level 2]
-    → [T(0) tag refinement]
-tagged-tree-cell (⊥ → tag-refined indent-tree-node, set-once)
-    → [G(0) form grouping]
-form-tree-cell (⊥ → bracket-grouped form-tree-node, set-once)  [level 3]
-    → [V(0,0)→V(0,1)→V(0,2) structural rewrites]
-v0-tree-cell (⊥ → structurally rewritten form-tree-node, set-once)
-    → [V(1) macro expansion]
-v1-tree-cell (⊥ → macro-expanded form-tree-node, set-once)
-    → [V(2) spec/where injection]
-v2-tree-cell (⊥ → injected form-tree-node, set-once)     [level 4]
-    → [consumed by parser / elaborator]
+'raw < 'tagged < 'grouped < 'v0-0 < 'v0-1 < 'v0-2 < 'v1 < 'v2 < 'done
 ```
 
-Each cell is set-once: ⊥ → value, never overwritten. This is trivially monotone. The "replacement" that rewrites perform happens BETWEEN strata — each stratum reads the previous stratum's output cell and writes to its own output cell. No cell is ever written twice.
+```racket
+(struct form-pipeline-value
+  (stage        ;; symbol: position in the stage chain
+   tree-node    ;; parse-tree-node at this stage
+   registrations ;; (listof registry-entry) extracted from this form
+   source-pos)  ;; source position for provenance (D.3 E9)
+  #:transparent)
+```
+
+The merge function advances monotonically: writing a value at a LATER stage supersedes the earlier stage. Writing at the SAME or earlier stage is a no-op (already processed). This IS a lattice — the stage chain is a finite total order.
+
+```racket
+(define (form-pipeline-merge old new)
+  (if (stage>? (form-pipeline-value-stage new)
+               (form-pipeline-value-stage old))
+      new    ;; advance: take later stage
+      old))  ;; no-op: already at or past this stage
+```
+
+A **single form-pipeline propagator** watches the cell and fires whenever the stage advances. Each firing applies the NEXT transformation:
+
+```
+'raw      → refine-tag           → write 'tagged
+'tagged   → group-tree-node      → write 'grouped
+'grouped  → apply V(0,0) rules   → write 'v0-0
+'v0-0     → apply V(0,1) rules   → write 'v0-1
+'v0-1     → apply V(0,2) rules   → write 'v0-2
+'v0-2     → apply V(1) macros    → write 'v1
+'v1       → apply V(2) injection → write 'v2
+'v2       → extract registrations → write 'done
+```
+
+**Why this is correct (CALM)**:
+- Stage progression is monotone (stages only increase). Each fire advances the stage by exactly one step.
+- Within each stage, the transformation is a pure function of the input tree node + registry cells.
+- The cell's merge resolves competing writes by taking the later stage — no ambiguity, no conflict.
+- The propagator fires at most 9 times per form (one per stage). Bounded termination.
+
+**Why this is parallelizable (Module Theory)**:
+- Each form's pipeline cell is INDEPENDENT. Form A and Form B advance their pipelines concurrently via BSP.
+- Cross-form dependencies (spec injection in V(2)) are mediated by REGISTRY CELLS: the V(2) stage reads the spec-store cell. If the spec isn't registered yet (another form's 'done stage hasn't fired), the V(2) propagator residuates — it waits.
+- Independent forms process in parallel. Dependent forms serialize naturally via cell watching. No explicit ordering needed — data flow IS the ordering.
+
+**Why this resolves the atomicity problem**:
+- There is no "old path OR new path" switch. There is ONE path: the form pipeline cell.
+- Migration is per-STAGE, not per-form: initially the pipeline goes 'raw → 'tagged → 'done (tag refinement only, datum extraction handles the rest). Each implementation phase extends the pipeline to handle one more stage.
+- Adding a stage is ADDITIVE — it doesn't break earlier stages or require a switch.
+- When ALL stages are implemented, the pipeline goes 'raw → ... → 'done and datum extraction reads the 'done stage's tree node. `preparse-expand-all` becomes a no-op (all forms are already at 'done).
+
+**Connection to Pocket Universe**: The pipeline IS the lattice embedded in the cell. The cell value is `(stage, tree-node, registrations)`. The stage ordering is the lattice ordering. The Pocket Universe contains the entire pipeline state — one cell, one value, one lattice.
+
+**Recursive macros (V(1) sub-stages)**: A macro that expands to another macro creates sub-stages: 'v1-0, 'v1-1, ..., 'v1-N. The stage chain extends dynamically up to depth limit N=100. Each sub-stage is a macro expansion step. The cell value at 'v1-K is "K macro expansions applied." Merge takes the higher K. Bounded by fuel.
 
 **The registry cells**: 24 cells, one per registry. Already exist from `init-macros-cells!`. Currently secondary (dual-write); become primary. Each registry cell holds a CHAMP map (name → entry). Registry cells use set-union merge (adding entries is monotone).
 
@@ -347,92 +389,38 @@ Stratum R(1): Dependent registration
   Writes to: spec-store cell, impl-registry cell
   CALM-safe: reads are of cells written in prior stratum (fixed)
 
---- TAG REFINEMENT (D.2 finding P1) ---
+--- PIPELINE-AS-CELL MODEL (supersedes separate strata) ---
 
-Stratum T(0): Form-tag refinement
-  Input cells: raw-tree-cells ('line tags, from parse tree)
-  Output cells: tagged-tree-cells (form-head tags: ':let-assign, ':defn, etc.)
-  Rules: tag-assignment rules (first-token inspection + structure guard)
-  Mechanism: SRE subtype refinement ('line → ':let-assign is monotone)
-  Topology: fixed
-  CALM-safe: reads input, writes set-once output (refined tags)
+Registration strata (R(-1), R(0), R(1)):
+  Run BEFORE form pipeline cells are created.
+  Populate registry cells from raw parse tree.
+  Same as current preparse Passes -1, 0, 1.
 
---- FORM GROUPING (Phase 6 finding: line ≠ form structure) ---
-
-Stratum G(0): Form grouping — bracket-delimited arity assignment
-  Input cells: tagged-tree-cells (line nodes with form-head tags)
-  Output cells: form-tree-cells (form nodes with bracket-grouped children)
-  Mechanism: reads tagged tree + bracket-depth RRB domain. Groups children
-    by bracket matching: [f x y] → form node with children [f, x, y].
-    Nested brackets create nested form nodes.
-  WHAT THIS DOES: converts level-2 structure (indent lines with flat tokens)
-    to level-3 structure (forms with known arity). This is what group-items
-    (in datum extraction) currently does, but as a propagator stratum.
-  WHY NEEDED: rewrite rules expect form-level arity (if: 4 children).
-    Line nodes have line-level arity (all tokens on the line). G(0) bridges
-    the gap. Without it, rewrite rules see wrong arity and produce wrong
-    results (Phase 6 finding: filter-xf's if had 8+ children).
-  CALM-safe: reads set-once input, writes set-once output. Fixed topology.
-
---- REWRITE STRATA (Layered Recovery) ---
-
-Stratum V(0): Structural rewrites (3 sub-strata — D.3 finding E7)
-  The audit (Section C) identified an ESSENTIAL ordering:
-  implicit-map → dot-access → infix (each reshapes form for the next).
-  This is a DATA DEPENDENCY, not a priority hint. Masking it as priority
-  ordering within one BSP round violates CALM — BSP could fire them in
-  any order, producing wrong results. Sub-strata enforce the dependency
-  structurally (correct-by-construction).
-
-  Sub-stratum V(0,0): implicit-map
-    Input cells: form-tree-cells (from G(0))
-    Output cells: v00-tree-cells (set-once)
-    CALM-safe: set-once in → set-once out
-
-  Sub-stratum V(0,1): dot-access
-    Input cells: v00-tree-cells (from V(0,0))
-    Output cells: v01-tree-cells (set-once)
-    CALM-safe: set-once in → set-once out
-
-  Sub-stratum V(0,2): infix operators
-    Input cells: v01-tree-cells (from V(0,1))
-    Output cells: v0-tree-cells (set-once)
-    CALM-safe: set-once in → set-once out
-
-Stratum V(1): Macro expansion
-  Input cells: v0-datum-cells (set-once, from V(0))
-  Output cells: v1-datum-cells (set-once, written here)
-  Rules: preparse-registry lookup + template substitution
-  Topology: fixed
-  CALM-safe: reads input + registry cells, writes output cell
-
-  RECURSIVE MACROS: A macro that expands to another macro form
-  creates a CHAIN of V(1) sub-strata:
-    V(1,0): first expansion
-    V(1,1): expand the expansion
-    V(1,2): expand again
-    ...
-    V(1,N): no more macros match → terminal
-  Each sub-stratum reads the previous sub-stratum's output cell.
-  Depth limit: N ≤ 100 (same as current guard).
-  This is the Layered Recovery Principle applied recursively:
-  each macro expansion is a non-monotone step (replacement)
-  recovered by a stratum boundary.
-
-Stratum V(2): Spec/where injection
-  Input cells: v1-datum-cells (set-once, from V(1))
-  + spec-store cell (from R(1))
-  + trait-registry cell (from R(0))
-  + bundle-registry cell (from R(0))
-  Output cells: v2-datum-cells (set-once, written here)
-  Rules: spec injection, where-clause expansion
-  Topology: fixed
-  CALM-safe: reads from prior strata, writes set-once output
+Form pipeline stages (per-form cell, monotone stage chain):
+  'raw      → T(0): tag refinement (first-token → form-head tag)
+  'tagged   → G(0): form grouping (bracket matching → known arity)
+  'grouped  → V(0,0): implicit-map rewrite
+  'v0-0     → V(0,1): dot-access rewrite
+  'v0-1     → V(0,2): infix + simple + recursive rewrites
+  'v0-2     → V(1): macro expansion (registry lookup + template)
+  'v1       → V(2): spec/where injection (cross-form, residuating)
+  'v2       → extract registrations + mark 'done
+  'done     → consumed by parser / elaborator
 ```
 
-**Why this is correct**: Every cell is set-once. Every merge is monotone (⊥ → value for form cells, set-union for registry cells). Every stratum has fixed topology. CALM applies within each stratum. Rewrites happen at stratum boundaries — the Layered Recovery Principle. The same architectural pattern that PAR Track 1 used for SRE decomposition requests.
+**V(0) data dependency is structural (D.3 E7)**: implicit-map → dot-access → infix ordering is enforced by the stage chain. Stage 'v0-0 MUST complete before 'v0-1. No priority mechanism. Correct-by-construction.
 
-**Connection to PRN/PReductions**: This pipeline-of-strata pattern is exactly how e-graph rewriting would work. Each saturation round adds equivalences (monotone within the round). Extraction (choosing a representative) is non-monotone — it's the stratum boundary. PPN Track 2's rewrite strata are a specialized instance of the general pattern that PReductions will generalize to arbitrary rewrite systems.
+**V(1) recursive macros**: extends stage chain: 'v1 → 'v1-1 → ... → 'v1-N. Merge takes higher N. Fuel limit 100.
+
+**V(2) cross-form dependency**: V(2) reads spec-store cell. If spec unavailable, propagator residuates. When spec form reaches 'done, V(2) re-fires.
+
+**Why this is correct (CALM)**: Stage progression is monotone. Each fire advances by one step. Merge takes later stage. Bounded termination (9 base stages + fuel for V(1)). Each stage's transformation is pure function of input + registry cells.
+
+**Why this is parallelizable**: Independent forms advance pipelines concurrently via BSP. Cross-form dependencies serialize via registry cell watching. Submodule independence from Module Theory.
+
+**Why this resolves atomicity**: No "old path OR new path" switch. ONE path: the pipeline cell. Migration is per-stage: initially 'raw → 'tagged → 'done. Each phase extends to handle one more stage. Adding a stage is additive. When ALL stages implemented, preparse-expand-all becomes a no-op.
+
+**Connection to PRN/PReductions**: The pipeline-as-cell pattern generalizes to e-graph rewriting. Each saturation round adds equivalences (stage advance). Extraction chooses representative (reading 'done stage). PPN Track 2's form pipeline is a specialized instance.
 
 ### 3.5 Spec/Where Injection as Data Flow (Stratum V(2))
 
