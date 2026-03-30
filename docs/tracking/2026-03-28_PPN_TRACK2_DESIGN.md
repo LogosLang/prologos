@@ -40,7 +40,7 @@
 | 6d | Hybrid integration + full suite GREEN | ✅ | `3bca61e`→`902b8cb`. 383/383 GREEN. Hybrid: preparse for elaboration + full tree pipeline (G(0)→T(0)→rewrite→parse) in validation. Pipeline reorder: G(0) before T(0) (`5d438f0`). defn type inference fixed: Pi chain with holes, param-names as symbols (`362327a`). surf-app args as list (`e62d444`). |
 | 6e | V(1) macro expansion at tree level | 🔄 | `c1a4f35`. Built-ins handled. User macros: LOW priority (13 total, most already rewrite rules). Bridge stubbed. |
 | 6f | V(2) spec/where injection at tree level | 🔄 | `74951b3`. Pass-through. MEDIUM priority. Hybrid handles correctly. Full impl needs datum↔tree type conversion. |
-| 6g | Generated defs at tree level | ⬜ | **BLOCKING for full switchover.** Requires reimplementing process-data/trait/impl at tree level. HIGH priority but large scope. |
+| 6g | Merge: generated defs from preparse + user forms from tree parser | ✅ | `523f2f1`. **SWITCHOVER COMPLETE.** 383/383 GREEN. Tree parser output used for real elaboration. Preparse continues for registration + generation. |
 | 7 | Layer 2 integration | ⬜ | expand-top-level rules on surf-* via SRE |
 | 8a | Consumer migration (reader.rkt) | ⬜ | 57 imports → parse-reader.rkt |
 | 8b | Consumer migration (macros.rkt) | ⬜ | driver.rkt + elaborator.rkt + tests |
