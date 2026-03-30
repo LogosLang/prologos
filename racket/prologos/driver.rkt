@@ -29,6 +29,7 @@
          "sexp-readtable.rkt"
          "reader.rkt"
          "parse-reader.rkt"
+         "surface-rewrite.rkt"  ;; PPN Track 2: tag refinement + rewrite rules
          "namespace.rkt"
          "metavar-store.rkt"
          "zonk.rkt"
@@ -1343,7 +1344,14 @@
      (register-default-token-patterns!)
      (define str (port->string port))
      (define pt (read-to-tree str))
-     (read-all-forms-from-tree pt str (or source "<unknown>"))]
+     ;; T(0): Tag refinement — 'line → form-specific tags (PPN Track 2 Phase 1b)
+     ;; Refines the parse tree before datum extraction. Tags are used by
+     ;; the surface rewrite engine (Phases 2+). Currently the compat layer
+     ;; (read-all-forms-from-tree) ignores tags and extracts by token structure,
+     ;; so refinement is additive — no behavioral change until Phase 6 wiring.
+     (define refined-root (refine-tag (parse-tree-root pt)))
+     (define refined-pt (struct-copy parse-tree pt [root refined-root]))
+     (read-all-forms-from-tree refined-pt str (or source "<unknown>"))]
     [(validate-new-reader?)
      ;; Parallel validation: run both, compare datums, use old result
      (define str (port->string port))
