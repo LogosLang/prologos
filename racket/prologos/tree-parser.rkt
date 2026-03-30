@@ -99,6 +99,7 @@
 
        ;; --- Expression forms ---
        [(if) (parse-if-tree args loc)]
+       [(when) (parse-when-tree args loc)]
        [(expr) (parse-expr-tree children loc)]
        [(bracket-group) (parse-bracket-group-tree children loc)]
        [(angle-group) (parse-angle-group-tree children loc)]
@@ -210,6 +211,31 @@
     [else (surf-var s loc)]))
 
 ;; ========================================
+;; Built-in operation dispatch tables
+;; ========================================
+
+(define builtin-binary-ops
+  (hash
+   "int+" surf-int-add  "int-" surf-int-sub  "int*" surf-int-mul
+   "int/" surf-int-div  "int%" surf-int-mod
+   "int=" surf-int-eq   "int<" surf-int-lt   "int<=" surf-int-le
+   "+" surf-generic-add  "-" surf-generic-sub  "*" surf-generic-mul
+   "/" surf-generic-div  "%" surf-generic-mod
+   "=" surf-generic-eq   "<" surf-generic-lt   "<=" surf-generic-le
+   ">" surf-generic-gt   ">=" surf-generic-ge
+   "eq?" surf-generic-eq
+   "map-get" surf-map-get
+   ))
+
+(define builtin-unary-ops
+  (hash
+   "int-neg" surf-int-neg  "int-abs" surf-int-abs
+   "negate" surf-generic-negate  "abs" surf-generic-abs
+   "fst" surf-fst  "snd" surf-snd
+   "not" surf-not
+   ))
+
+;; ========================================
 ;; Stub implementations for form parsing
 ;; ========================================
 ;; These will be fleshed out as we translate each parse-* function.
@@ -319,6 +345,150 @@
       (surf-infer (parse-form-tree (car args)) loc)
       (parse-error-result loc "infer: need exactly 1 arg")))
 
+(define (parse-when-tree args loc)
+  ;; (when cond body) → boolrec with unit else
+  (if (>= (length args) 2)
+      (let ([cond-e (parse-form-tree (car args))]
+            [body-e (parse-form-tree (cadr args))])
+        (cond
+          [(prologos-error? cond-e) cond-e]
+          [(prologos-error? body-e) body-e]
+          [else (surf-boolrec (surf-hole loc) body-e (surf-unit loc) cond-e loc)]))
+      (parse-error-result loc "when: need cond body")))
+
+;; --- fn: lambda expressions ---
+;; Tree children after fn token:
+;;   [bracket-group, body] — single binder group
+;;   [bracket-group, angle-group, body] — binder + return type
+;;   [bracket-group, bracket-group, ..., body] — multi-binder groups
+;;   [bare-symbol, bare-symbol, ..., body] — bare params (uncurried)
+(define (parse-fn-tree args loc)
+  (cond
+    [(< (length args) 2)
+     (parse-error-result loc "fn: need at least binder + body")]
+    ;; Single binder bracket + body (most common)
+    [(and (= (length args) 2)
+          (parse-tree-node? (car args))
+          (eq? (parse-tree-node-tag (car args)) 'bracket-group))
+     (define binders (parse-binder-bracket (car args) loc))
+     (define body (parse-form-tree (cadr args)))
+     (cond
+       [(prologos-error? binders) binders]
+       [(prologos-error? body) body]
+       [else
+        (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
+               body binders)])]
+    ;; Binder bracket + angle-group (return type) + body
+    [(and (= (length args) 3)
+          (parse-tree-node? (car args))
+          (eq? (parse-tree-node-tag (car args)) 'bracket-group)
+          (parse-tree-node? (cadr args))
+          (eq? (parse-tree-node-tag (cadr args)) 'angle-group))
+     (define binders (parse-binder-bracket (car args) loc))
+     (define ret-type (parse-form-tree (cadr args)))
+     (define body (parse-form-tree (caddr args)))
+     (cond
+       [(prologos-error? binders) binders]
+       [(prologos-error? ret-type) ret-type]
+       [(prologos-error? body) body]
+       [else
+        (define full-type
+          (foldr (lambda (bnd rest-ty) (surf-pi bnd rest-ty loc))
+                 ret-type binders))
+        (define nested-lam
+          (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
+                 body binders))
+        (surf-ann full-type nested-lam loc)])]
+    ;; Multi-binder groups: all-but-last are bracket-groups, last is body
+    [(let ([params (drop-right args 1)])
+       (andmap (lambda (a)
+                 (and (parse-tree-node? a)
+                      (eq? (parse-tree-node-tag a) 'bracket-group)))
+               params))
+     (define param-groups (drop-right args 1))
+     (define body (parse-form-tree (last args)))
+     (if (prologos-error? body) body
+         (let loop ([groups param-groups] [inner body])
+           (if (null? groups) inner
+               (let ([binders (parse-binder-bracket (car groups) loc)])
+                 (if (prologos-error? binders) binders
+                     (loop (cdr groups)
+                           (foldr (lambda (bnd i) (surf-lam bnd i loc))
+                                  inner binders)))))))]
+    ;; Bare symbols: (fn x y body) — uncurried
+    [else
+     (define params (drop-right args 1))
+     (define body (parse-form-tree (last args)))
+     (if (prologos-error? body) body
+         (let ([binders
+                (for/list ([p (in-list params)])
+                  (define name (token-symbol p))
+                  (if name
+                      (binder-info name #f (surf-hole loc))
+                      (parse-error-result loc (format "fn: expected param name, got ~a" p))))])
+           (if (ormap prologos-error? binders)
+               (findf prologos-error? binders)
+               (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
+                      body binders))))]))
+
+;; Parse a bracket-group as binder list: [x : T, y : T] → (list binder-info ...)
+(define (parse-binder-bracket bracket-node loc)
+  (define children (node-children bracket-node))
+  (if (null? children)
+      '()
+      ;; Simple case: [name] or [name : type]
+      ;; For now, handle bare names and name:type pairs
+      (let loop ([remaining children] [binders '()])
+        (cond
+          [(null? remaining) (reverse binders)]
+          ;; name : type
+          [(and (>= (length remaining) 3)
+                (token-entry? (car remaining))
+                (token-is? (cadr remaining) ":"))
+           ;; Collect type tokens until next name or end
+           (define name (token-symbol (car remaining)))
+           (define type-item (caddr remaining))
+           (define type-parsed (parse-form-tree type-item))
+           (if (or (not name) (prologos-error? type-parsed))
+               (list (or (and (not name)
+                              (parse-error-result loc "binder: expected name"))
+                         type-parsed))
+               (loop (cdddr remaining)
+                     (cons (binder-info name #f type-parsed) binders)))]
+          ;; Multiplicity annotation: name :0 or name :w
+          [(and (>= (length remaining) 2)
+                (token-entry? (car remaining))
+                (token-entry? (cadr remaining))
+                (let ([lex (token-entry-lexeme (cadr remaining))])
+                  (member lex '(":0" ":1" ":w"))))
+           (define name (token-symbol (car remaining)))
+           (define mult-lex (token-entry-lexeme (cadr remaining)))
+           (define mult (case (string->symbol mult-lex)
+                          [(:0) 'm0] [(:1) 'm1] [(:w) 'mw] [else #f]))
+           ;; Check for : type after mult
+           (if (and (>= (length remaining) 4)
+                    (token-is? (caddr remaining) ":"))
+               (let ([type-parsed (parse-form-tree (cadddr remaining))])
+                 (loop (cddddr remaining)
+                       (cons (binder-info name mult type-parsed) binders)))
+               (loop (cddr remaining)
+                     (cons (binder-info name mult (surf-hole loc)) binders)))]
+          ;; Bare name
+          [(token-entry? (car remaining))
+           (define name (token-symbol (car remaining)))
+           (if name
+               (loop (cdr remaining)
+                     (cons (binder-info name #f (surf-hole loc)) binders))
+               (loop (cdr remaining) binders))]
+          ;; Sub-node (nested bracket, angle, etc.)
+          [(parse-tree-node? (car remaining))
+           ;; Could be a type annotation in angle brackets
+           (loop (cdr remaining) binders)]
+          [else (loop (cdr remaining) binders)]))))
+
+;; Helper: cddddr
+(define (cddddr lst) (cdr (cdddr lst)))
+
 (define (parse-if-tree args loc)
   ;; After rewriting: should be boolrec form. But if not rewritten:
   ;; (if cond then else) → surf-boolrec
@@ -332,17 +502,85 @@
     [else (parse-error-result loc "if: need cond then else")]))
 
 (define (parse-expr-tree children loc)
-  ;; Generic expression: first child is head, rest are args
+  ;; Generic expression: check first child for keyword dispatch
   (cond
     [(null? children) (parse-error-result loc "empty expression")]
     [(= (length children) 1) (parse-form-tree (car children))]
-    [else (parse-application-tree children loc)]))
+    [else
+     ;; Check if first child is a keyword token
+     (define head (car children))
+     (define head-lex (token-lexeme head))
+     (define args (cdr children))
+     (cond
+       ;; Keyword dispatch (mirrors parser.rkt parse-list case dispatch)
+       [(and head-lex (equal? head-lex "fn")) (parse-fn-tree args loc)]
+       [(and head-lex (equal? head-lex "the"))
+        (if (>= (length args) 2)
+            (let ([ty (parse-form-tree (car args))]
+                  [bd (parse-form-tree (cadr args))])
+              (cond [(prologos-error? ty) ty]
+                    [(prologos-error? bd) bd]
+                    [else (surf-ann ty bd loc)]))
+            (parse-error-result loc "the: need type expr"))]
+       [(and head-lex (equal? head-lex "suc"))
+        (if (= (length args) 1)
+            (let ([e (parse-form-tree (car args))])
+              (if (prologos-error? e) e (surf-suc e loc)))
+            (parse-error-result loc "suc: need exactly 1 arg"))]
+       [(and head-lex (equal? head-lex "boolrec"))
+        ;; (boolrec motive then else cond) — 4 args
+        (if (>= (length args) 4)
+            (let ([motive (parse-form-tree (car args))]
+                  [then-e (parse-form-tree (cadr args))]
+                  [else-e (parse-form-tree (caddr args))]
+                  [cond-e (parse-form-tree (cadddr args))])
+              (cond [(prologos-error? motive) motive]
+                    [(prologos-error? then-e) then-e]
+                    [(prologos-error? else-e) else-e]
+                    [(prologos-error? cond-e) cond-e]
+                    [else (surf-boolrec motive then-e else-e cond-e loc)]))
+            (parse-error-result loc "boolrec: need 4 args"))]
+       [(and head-lex (equal? head-lex "cons"))
+        (if (= (length args) 2)
+            (let ([a (parse-form-tree (car args))]
+                  [b (parse-form-tree (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else (surf-pair a b loc)]))
+            ;; 3-arg cons: (cons Type head tail) — typed
+            (if (= (length args) 3)
+                (let ([ty (parse-form-tree (car args))]
+                      [hd (parse-form-tree (cadr args))]
+                      [tl (parse-form-tree (caddr args))])
+                  (cond [(prologos-error? ty) ty]
+                        [(prologos-error? hd) hd]
+                        [(prologos-error? tl) tl]
+                        [else (surf-pair hd tl loc)]))  ;; type implicit
+                (parse-application-tree children loc)))]
+       ;; Built-in binary operations: int+, int-, etc.
+       [(and head-lex (hash-has-key? builtin-binary-ops head-lex))
+        (if (= (length args) 2)
+            (let ([a (parse-form-tree (car args))]
+                  [b (parse-form-tree (cadr args))])
+              (cond [(prologos-error? a) a]
+                    [(prologos-error? b) b]
+                    [else ((hash-ref builtin-binary-ops head-lex) a b loc)]))
+            (parse-application-tree children loc))]
+       ;; Built-in unary operations
+       [(and head-lex (hash-has-key? builtin-unary-ops head-lex))
+        (if (= (length args) 1)
+            (let ([a (parse-form-tree (car args))])
+              (if (prologos-error? a) a
+                  ((hash-ref builtin-unary-ops head-lex) a loc)))
+            (parse-application-tree children loc))]
+       ;; Default: application
+       [else (parse-application-tree children loc)])]))
 
 (define (parse-bracket-group-tree children loc)
-  ;; [f x y] → application
+  ;; [f x y] → application (with keyword dispatch)
   (if (null? children)
       (surf-nil loc)  ;; empty brackets = nil
-      (parse-application-tree children loc)))
+      (parse-expr-tree children loc)))  ;; dispatch through keyword check
 
 (define (parse-angle-group-tree children loc)
   ;; <Type> → type annotation
@@ -503,6 +741,37 @@
     (check-eq? (surf-def-name result) 'x)
     (check-true (surf-int-type? (surf-def-type result)))
     (check-true (surf-int-lit? (surf-def-body result))))
+
+  (test-case "parse-fn: bracket-binder + body"
+    (define binder (tnode 'bracket-group (tok "x") (tok ":") (tok "Int")))
+    (define node (tnode 'expr (tok "fn") binder (tok "x")))
+    (define result (parse-form-tree node))
+    (check-true (surf-lam? result)))
+
+  (test-case "parse-fn: bare params + body"
+    (define node (tnode 'expr (tok "fn") (tok "x") (tok "x")))
+    (define result (parse-form-tree node))
+    (check-true (surf-lam? result)))
+
+  (test-case "parse-suc: suc x"
+    (define node (tnode 'expr (tok "suc") (tok "x")))
+    (define result (parse-form-tree node))
+    (check-true (surf-suc? result)))
+
+  (test-case "parse-the: type annotation"
+    (define node (tnode 'expr (tok "the") (tok "Int") (tok "42")))
+    (define result (parse-form-tree node))
+    (check-true (surf-ann? result)))
+
+  (test-case "parse-boolrec: from rewritten if"
+    (define node (tnode 'expr (tok "boolrec") (tok "_") (tok "1") (tok "0") (tok "true")))
+    (define result (parse-form-tree node))
+    (check-true (surf-boolrec? result)))
+
+  (test-case "parse-int+: builtin binary"
+    (define node (tnode 'bracket-group (tok "int+") (tok "1") (tok "2")))
+    (define result (parse-form-tree node))
+    (check-true (surf-int-add? result)))
 
   (test-case "parse-def: name + colon + type + body (4 args)"
     (define node (tnode 'def (tok "def") (tok "x") (tok ":") (tok "Int") (tok "42")))
