@@ -313,7 +313,105 @@
      (parse-error-result loc "def: need at least name + body")]))
 
 (define (parse-defn-tree args loc)
-  (parse-error-result loc "parse-defn-tree: not yet implemented"))
+  ;; args (after defn token): [name, params-bracket, maybe-return-type, body...]
+  ;; Variants:
+  ;;   [name, [params], body] — bare params, type inferred
+  ;;   [name, [params], <RetType>, body] — typed params + return type
+  ;;   [name, [params], :, type, body] — colon return type
+  ;; Multi-clause: handled by expand-top-level (defn-multi) at Layer 2
+  (cond
+    [(< (length args) 2)
+     (parse-error-result loc "defn: need name + params + body")]
+    [else
+     (define name (token-symbol (car args)))
+     (when (not name)
+       (parse-error-result loc (format "defn: expected name, got ~a" (car args))))
+     (cond
+       [(not name)
+        (parse-error-result loc "defn: expected name")]
+       ;; Check if second arg is a bracket-group (param list)
+       [(and (>= (length args) 3)
+             (parse-tree-node? (cadr args))
+             (eq? (parse-tree-node-tag (cadr args)) 'bracket-group))
+        (define param-node (cadr args))
+        (define binders (parse-binder-bracket param-node loc))
+        (cond
+          [(prologos-error? binders) binders]
+          [else
+           (define rest (cddr args))
+           (cond
+             ;; [name, [params], <RetType>, body]
+             [(and (>= (length rest) 2)
+                   (parse-tree-node? (car rest))
+                   (eq? (parse-tree-node-tag (car rest)) 'angle-group))
+              (define ret-type (parse-form-tree (car rest)))
+              (define body (if (= (length rest) 2)
+                              (parse-form-tree (cadr rest))
+                              (parse-application-tree (cdr rest) loc)))
+              (cond
+                [(prologos-error? ret-type) ret-type]
+                [(prologos-error? body) body]
+                [else
+                 ;; Build: (def name (the (Pi binders RetType) (fn binders body)))
+                 (define full-type
+                   (foldr (lambda (bnd rest-ty) (surf-pi bnd rest-ty loc))
+                          ret-type binders))
+                 (define nested-lam
+                   (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
+                          body binders))
+                 (surf-def name full-type nested-lam loc)])]
+             ;; [name, [params], :, type, body]
+             [(and (>= (length rest) 3)
+                   (token-is? (car rest) ":"))
+              (define type-parsed (parse-form-tree (cadr rest)))
+              (define body (parse-form-tree (caddr rest)))
+              (cond
+                [(prologos-error? type-parsed) type-parsed]
+                [(prologos-error? body) body]
+                [else
+                 (define full-type
+                   (foldr (lambda (bnd rest-ty) (surf-pi bnd rest-ty loc))
+                          type-parsed binders))
+                 (define nested-lam
+                   (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
+                          body binders))
+                 (surf-def name full-type nested-lam loc)])]
+             ;; [name, [params], body] — type inferred
+             [(= (length rest) 1)
+              (define body (parse-form-tree (car rest)))
+              (if (prologos-error? body) body
+                  (let ([nested-lam
+                         (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
+                                body binders)])
+                    (surf-def name #f nested-lam loc)))]
+             ;; [name, [params], body1, body2, ...] — multi-expr body
+             [(>= (length rest) 1)
+              (define body (parse-form-tree (car rest)))
+              (if (prologos-error? body) body
+                  (let ([nested-lam
+                         (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
+                                body binders)])
+                    (surf-def name #f nested-lam loc)))]
+             [else
+              (parse-error-result loc "defn: need body after params")])])]
+       ;; Bare symbols as params (no bracket group)
+       [else
+        ;; Try: all-but-last are symbols (bare params), last is body
+        (define param-tokens (drop-right (cdr args) 1))
+        (define body-item (last (cdr args)))
+        (define param-names
+          (for/list ([p (in-list param-tokens)])
+            (token-symbol p)))
+        (if (ormap not param-names)
+            (parse-error-result loc "defn: expected param names")
+            (let* ([binders (map (lambda (n) (binder-info n #f (surf-hole loc)))
+                                 param-names)]
+                   [body (parse-form-tree body-item)]
+                   [nested-lam
+                    (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
+                           body binders)])
+              (if (prologos-error? body) body
+                  (surf-def name #f nested-lam loc))))])]))
 
 (define (parse-spec-tree args loc)
   (parse-error-result loc "parse-spec-tree: not yet implemented"))
@@ -741,6 +839,24 @@
     (check-eq? (surf-def-name result) 'x)
     (check-true (surf-int-type? (surf-def-type result)))
     (check-true (surf-int-lit? (surf-def-body result))))
+
+  (test-case "parse-defn: bare params + body"
+    (define params (tnode 'bracket-group (tok "x") (tok "y")))
+    (define body (tnode 'bracket-group (tok "int+") (tok "x") (tok "y")))
+    (define node (tnode 'defn (tok "defn") (tok "add") params body))
+    (define result (parse-form-tree node))
+    (check-true (surf-def? result))
+    (check-eq? (surf-def-name result) 'add))
+
+  (test-case "parse-defn: typed params + return type"
+    (define params (tnode 'bracket-group (tok "x") (tok ":") (tok "Int")))
+    (define ret-type (tnode 'angle-group (tok "Int")))
+    (define body (tok "x"))
+    (define node (tnode 'defn (tok "defn") (tok "id") params ret-type body))
+    (define result (parse-form-tree node))
+    (check-true (surf-def? result) (format "expected surf-def, got ~a" result))
+    (check-eq? (surf-def-name result) 'id)
+    (check-not-false (surf-def-type result)))  ;; has type annotation
 
   (test-case "parse-fn: bracket-binder + body"
     (define binder (tnode 'bracket-group (tok "x") (tok ":") (tok "Int")))
