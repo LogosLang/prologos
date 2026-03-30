@@ -45,7 +45,7 @@
 | 8a | Consumer migration (reader.rkt) | 🔄 | Attempted `50f60c3`. Compat-token type mismatch — 23 test failures. REVERTED. Needs compat-token → token matching or selective migration. |
 | 8b | Consumer migration (macros.rkt) | ⬜ | Preparse still runs for registration + generation + spec injection + specialized forms. Partial retirement only — remove unused expand-* functions. |
 | 8c | reader.rkt deletion | ⬜ | Blocked by 8a. 1898 lines. |
-| 9 | A/B benchmarks + suite verify + PIR | ⬜ | Performance comparison, 383/383 GREEN, PIR |
+| 9 | A/B benchmarks + suite verify + PIR | 🔄 | A/B: 16% overhead from dual pipeline (expected — both preparse + tree parser run). Suite: 383/383 GREEN, 7529 tests. PIR pending. |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
 
