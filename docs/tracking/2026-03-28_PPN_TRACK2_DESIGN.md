@@ -72,13 +72,28 @@ Replace the imperative preparse pipeline in `macros.rkt` (9763 lines) with regis
 
 ## §3 Design
 
-### 3.1 Architecture: Embedded Lattice Cells (PPN Track 1 Pattern)
+### 3.1 Architecture: Pipeline of Set-Once Cells (CALM-Compliant)
 
-Following PPN Track 1's 5-cell architecture, PPN Track 2 uses **embedded lattice cells** — each cell holds a rich value that represents the full state of its domain.
+**CALM constraint (from DEVELOPMENT_LESSONS.org)**: Within a stratum, topology is fixed and all operations are monotone. Rewrites are NOT monotone (they replace values). Therefore rewrites MUST happen at stratum boundaries, not within a BSP round.
 
-**The form cell**: One cell per top-level form, holding the form's current datum. Rewrite rules fire against this cell. When a rule matches, it writes the transformed datum back. Quiescence = the form is fully expanded.
+**The Layered Recovery Principle (from EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org)**: Non-monotone behavior is recovered by inserting control layers between phases of monotone computation. Rewrites are the control layer; value propagation is the monotone substrate.
 
-**The registry cells**: 24 cells, one per registry. Already exist from `init-macros-cells!`. Currently secondary (dual-write); become primary. Each registry cell holds a CHAMP map (name → entry).
+**Form pipeline cells**: Each form progresses through a pipeline of **set-once cells**, one per rewrite stratum. A form that passes through 3 rewrite stages has 3 cells:
+
+```
+raw-datum-cell (⊥ → raw datum, set-once)
+    → [V0 structural rewrite stratum]
+v0-datum-cell (⊥ → structurally rewritten datum, set-once)
+    → [V1 macro expansion stratum]
+v1-datum-cell (⊥ → macro-expanded datum, set-once)
+    → [V2 spec/where injection stratum]
+v2-datum-cell (⊥ → injected datum, set-once)
+    → [consumed by parser]
+```
+
+Each cell is set-once: ⊥ → value, never overwritten. This is trivially monotone. The "replacement" that rewrites perform happens BETWEEN strata — each stratum reads the previous stratum's output cell and writes to its own output cell. No cell is ever written twice.
+
+**The registry cells**: 24 cells, one per registry. Already exist from `init-macros-cells!`. Currently secondary (dual-write); become primary. Each registry cell holds a CHAMP map (name → entry). Registry cells use set-union merge (adding entries is monotone).
 
 **The dependency cell**: Tracks which forms depend on which registry entries. When a form references a constructor/trait/spec, a dependency edge is recorded. The elaborator processes forms in dependency order — no Phase 5b hoisting needed.
 
@@ -122,70 +137,130 @@ This reuses existing SRE machinery:
 
 The only new piece: the rewriting relation is **directional** (match LHS → produce RHS, not bidirectional unification). This is the SRE Track 2D relation kind — already designed in the algebraic foundation (Track 2F's endomorphism ring has an 'idempotent row in the variance-map).
 
-### 3.4 Stratified Execution
+### 3.4 Stratified Execution (CALM-Compliant)
 
-The 5-pass pipeline maps to propagator strata:
+The pipeline maps to propagator strata. Each stratum has FIXED topology and monotone operations within it. Rewrites happen AT stratum boundaries (Layered Recovery Principle).
 
 ```
-Stratum -1: Namespace/imports
+Stratum R(-1): Namespace/imports
   Propagators: ns-loader, import-resolver
   Writes to: trait-registry cell (prelude), module-registry cell
+  Topology: fixed (no new cells/propagators)
 
-Stratum 0: Declaration pre-registration
+Stratum R(0): Declaration pre-registration
   Propagators: data-registrar, trait-registrar, deftype-registrar,
                defmacro-registrar, bundle-registrar, etc.
-  Reads: form cells (raw datums)
+  Reads: raw-datum-cells
   Writes to: ctor-registry cell, trait-registry cell, preparse-registry cell, etc.
-  CALM-safe: all WRITE only, no cross-reads
+  CALM-safe: all WRITE to registry cells (set-union merge, monotone)
 
-Stratum 1: Dependent registration
+Stratum R(1): Dependent registration
   Propagators: spec-registrar, impl-registrar
-  Reads: trait-registry cell, bundle-registry cell (from stratum 0)
+  Reads: trait-registry cell, bundle-registry cell (from R(0))
   Writes to: spec-store cell, impl-registry cell
+  CALM-safe: reads are of cells written in prior stratum (fixed)
 
-Value stratum: Rewrite convergence
-  Propagators: rewrite-rule propagators (one per rule)
-  Reads: form cells + rewrite-rule registry cell
-  Writes to: form cells (transformed datums)
-  Fixpoint: quiescence when no rule matches any form cell
+--- REWRITE STRATA (Layered Recovery) ---
 
-  Sub-strata within value stratum:
-    V0: structural rewrites (implicit-map → dot-access → infix)
-    V1: macro expansion (preparse-registry lookup + template substitution)
-    V2: spec/where injection (reads spec-store, trait-registry)
+Stratum V(0): Structural rewrites
+  Input cells: raw-datum-cells (set-once, from R(0))
+  Output cells: v0-datum-cells (set-once, written here)
+  Rules: implicit-map → dot-access → infix (priority-ordered WITHIN stratum)
+  Topology: fixed (input cells + output cells created at stratum setup)
+  CALM-safe: each propagator READS input cell, WRITES output cell (both set-once)
+  Priority ordering within V(0):
+    1. implicit-map (reshapes form structure — must fire first)
+    2. dot-access (depends on implicit-map output)
+    3. infix operators (depends on dot-access output)
+  These are priorities, not sub-strata — they fire in priority order
+  within one BSP round on fixed topology.
+
+Stratum V(1): Macro expansion
+  Input cells: v0-datum-cells (set-once, from V(0))
+  Output cells: v1-datum-cells (set-once, written here)
+  Rules: preparse-registry lookup + template substitution
+  Topology: fixed
+  CALM-safe: reads input + registry cells, writes output cell
+
+  RECURSIVE MACROS: A macro that expands to another macro form
+  creates a CHAIN of V(1) sub-strata:
+    V(1,0): first expansion
+    V(1,1): expand the expansion
+    V(1,2): expand again
+    ...
+    V(1,N): no more macros match → terminal
+  Each sub-stratum reads the previous sub-stratum's output cell.
+  Depth limit: N ≤ 100 (same as current guard).
+  This is the Layered Recovery Principle applied recursively:
+  each macro expansion is a non-monotone step (replacement)
+  recovered by a stratum boundary.
+
+Stratum V(2): Spec/where injection
+  Input cells: v1-datum-cells (set-once, from V(1))
+  + spec-store cell (from R(1))
+  + trait-registry cell (from R(0))
+  + bundle-registry cell (from R(0))
+  Output cells: v2-datum-cells (set-once, written here)
+  Rules: spec injection, where-clause expansion
+  Topology: fixed
+  CALM-safe: reads from prior strata, writes set-once output
 ```
 
-The sub-strata within the value stratum enforce the ordering constraint from the audit: implicit-map must precede dot-access must precede infix. These become priority levels, not separate strata — higher priority rules fire first within the same BSP round.
+**Why this is correct**: Every cell is set-once. Every merge is monotone (⊥ → value for form cells, set-union for registry cells). Every stratum has fixed topology. CALM applies within each stratum. Rewrites happen at stratum boundaries — the Layered Recovery Principle. The same architectural pattern that PAR Track 1 used for SRE decomposition requests.
 
-### 3.5 Spec/Where Injection as Data Flow
+**Connection to PRN/PReductions**: This pipeline-of-strata pattern is exactly how e-graph rewriting would work. Each saturation round adds equivalences (monotone within the round). Extraction (choosing a representative) is non-monotone — it's the stratum boundary. PPN Track 2's rewrite strata are a specialized instance of the general pattern that PReductions will generalize to arbitrary rewrite systems.
+
+### 3.5 Spec/Where Injection as Data Flow (Stratum V(2))
 
 Currently imperative: "look up spec by name, if found, splice type tokens into defn."
 
-As propagator: a **spec-injection propagator** watches:
-- The form cell (contains the defn datum)
-- The spec-store cell (contains registered specs)
+As propagator in stratum V(2): a **spec-injection propagator** watches:
+- The v1-datum-cell (macro-expanded form from V(1))
+- The spec-store cell (from R(1))
 
 When both have values AND the defn's name matches a spec entry:
 1. Extract spec type tokens
 2. Splice into the defn datum
-3. Write the injected form back to the form cell
+3. Write the injected form to the **v2-datum-cell** (NOT back to the input cell)
 
-If the spec doesn't exist yet (being processed in a later form), the propagator **residuates** — it waits for the spec-store cell to update. When a spec is registered (from another form), the propagator re-fires. This is the narrowing pattern from BSP-LE.
+The output cell (v2-datum-cell) is set-once. The input cell (v1-datum-cell) is never modified. This is CALM-compliant — no replacement, only forward progression through the pipeline.
 
-Where-clause injection works the same way: watches form cell + trait-registry + bundle-registry. Fires when all available. Writes the injected form.
+If the spec doesn't exist yet (form processed before its spec is registered), the propagator **residuates** — it waits for the spec-store cell to update. When a spec is registered (from processing another form's R(1) stratum), the injection propagator re-fires. This is the narrowing pattern from BSP-LE, operating across strata.
 
-### 3.6 Fixpoint = Quiescence
+Where-clause injection works the same way: watches v1-datum-cell + trait-registry + bundle-registry. Fires when all available. Writes to v2-datum-cell.
 
-`preparse-expand-form` currently runs a recursive loop with depth-100 guard. In propagator terms:
+### 3.6 Fixpoint = Stratified Quiescence
 
-1. A rewrite-rule propagator fires, matching a form cell's datum
-2. It writes the transformed datum to the form cell
-3. The cell's merge is **replacement** (the new datum replaces the old — idempotent rewriting)
-4. The write triggers other rewrite propagators to re-check
-5. If any match, they fire and write
-6. Repeat until no rule matches → quiescence
+`preparse-expand-form` currently runs a recursive loop with depth-100 guard. In propagator terms, this becomes **stratified quiescence** — each stratum reaches its own fixpoint, then the next stratum begins.
 
-The depth-100 guard becomes a **fuel limit** on the form cell — after 100 writes, the cell refuses further writes and signals an error. This is correct-by-construction termination.
+**Within a stratum (e.g., V(0) structural rewrites)**:
+
+1. Propagators read input cells (set-once, from prior stratum)
+2. Rules match against input datum, priority-ordered
+3. Highest-priority matching rule fires, computes result
+4. Result written to output cell (set-once)
+5. Quiescence: all output cells written → stratum complete
+
+No re-firing within a stratum. Each propagator fires at most once (reads set-once input, writes set-once output). CALM is trivially satisfied.
+
+**Across strata (the outer loop)**:
+
+1. R(-1) completes → R(0) begins (topology: create registration propagators)
+2. R(0) completes → R(1) begins (topology: create dependent-registration propagators)
+3. R(1) completes → V(0) begins (topology: create structural rewrite propagators)
+4. V(0) completes → V(1) begins (topology: create macro expansion propagators)
+5. V(1) completes → V(2) begins (topology: create injection propagators)
+6. V(2) completes → forms ready for parser
+
+Each transition is a Layered Recovery boundary: the previous stratum's monotone computation reaches fixpoint, then a control layer sets up the next stratum's topology (new cells, new propagators), then the next stratum's monotone computation begins.
+
+**Recursive macros (V(1) sub-strata)**:
+
+A macro that expands to another macro creates chained V(1) sub-strata. Each sub-stratum reads the previous sub-stratum's output and writes to a new cell. The chain terminates when no macro matches the current output.
+
+Termination: bounded by depth limit (100 chained sub-strata). Each sub-stratum produces a structurally smaller or different datum (macros consume their head symbol). The depth limit is a correct-by-construction guard — same as the current `preparse-expand-form` depth parameter, but expressed as a stratum count.
+
+**Connection to e-graph rewriting (PReductions)**: In an e-graph, each saturation round adds equivalences to e-classes (monotone: e-classes grow). Extraction chooses a representative (non-monotone: selection discards alternatives). PPN Track 2's pipeline-of-strata is the same pattern: each stratum adds information (writing a set-once cell), and the transition to the next stratum is the "extraction" step (choosing which representation to process next). PReductions will generalize this from a linear pipeline to a lattice of strata.
 
 ### 3.7 Layer 2: Post-Parse Expansion
 
