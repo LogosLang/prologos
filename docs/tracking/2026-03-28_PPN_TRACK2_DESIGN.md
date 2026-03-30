@@ -31,7 +31,7 @@
 | 1b | Tag-refinement stratum T(0) | ✅ | `b990292`. Wired into reader pipeline. 383/383 GREEN. Zero behavioral change. |
 | 2a | Simple rewrite rules (9 rules) | 🔄 | `d1cc404`. 5/9 implemented (let-assign, let-bracket, if, when, compose). 3 deferred to Phase 6 (tree-level dot/infix). Reality check: real parse trees match rule expectations. |
 | 2b | Recursive rewrite rules (5 rules) | ✅ | `99cccaa`. 4/5 implemented (cond, do, list-lit, lseq-lit). Quasiquote → Phase 3. |
-| 3 | Complex rewrite propagators (4 rules) | ⬜ | pipe-fusion, mixfix/Pratt, defn-multi, session-ws |
+| 3 | Complex rewrite propagators (4+1 rules) | 🔄 | `2d3d1f7`. Quasiquote done. Pipe-fusion, mixfix, defn-multi, session-ws → Phase 6. |
 | 4 | Registry propagators | ⬜ | process-data/trait/spec → cell writes |
 | 5 | Spec/where injection as propagators | ⬜ | Cross-stratum data flow (V(2)) |
 | 6 | Stratified pipeline integration | ⬜ | R(-1)→R(0)→R(1)→T(0)→V(0)→V(1)→V(2) outer loop |
