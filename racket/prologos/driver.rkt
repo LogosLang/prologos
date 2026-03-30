@@ -1350,6 +1350,14 @@
      ;; (read-all-forms-from-tree) ignores tags and extracts by token structure,
      ;; so refinement is additive — no behavioral change until Phase 6 wiring.
      (define refined-root (refine-tag (parse-tree-root pt)))
+     ;; V(0): Tree-level rewriting is implemented (surface-rewrite.rkt)
+     ;; but NOT yet active. The rules would double-apply with the
+     ;; datum-level preparse-expand-all rules. Phase 6 completion
+     ;; requires the use-propagator-preparse? dual-path switch:
+     ;; when #t, tree-level rewrites fire AND datum-level preparse is
+     ;; SKIPPED for the rules that are tree-implemented.
+     ;; For now: tag refinement only, no tree rewriting.
+     ;; (define rewritten-root (rewrite-tree refined-root))
      (define refined-pt (struct-copy parse-tree pt [root refined-root]))
      (read-all-forms-from-tree refined-pt str (or source "<unknown>"))]
     [(validate-new-reader?)

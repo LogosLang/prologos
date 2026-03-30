@@ -376,6 +376,64 @@
  (tag-rule "$mixfix" #f tag-mixfix))
 
 ;; ========================================
+;; Phase 6: Tree-level rewriting pipeline
+;; ========================================
+;; Apply rewrite rules to every node in a tag-refined tree.
+;; Each stratum applies its rules to all nodes (bottom-up),
+;; producing a new tree. Strata run in sequence per CALM.
+
+(provide rewrite-tree)
+
+;; Apply all rules for a given stratum to a single node.
+;; Returns the rewritten node (or original if no rules match).
+(define (rewrite-node node stratum)
+  (if (not (parse-tree-node? node))
+      node
+      (let-values ([(result matched?) (apply-rules node stratum)])
+        result)))
+
+;; Apply rewrite rules for a stratum to an entire tree (bottom-up).
+;; Bottom-up: children rewritten first, then the node itself.
+;; This ensures that inner forms (e.g., let inside defn body) are
+;; rewritten before outer forms see their results.
+(define (rewrite-tree-stratum tree stratum)
+  (cond
+    [(not (parse-tree-node? tree)) tree]
+    [else
+     ;; First, recursively rewrite children
+     (define old-children (parse-tree-node-children tree))
+     (define new-children
+       (let loop ([i 0] [acc rrb-empty])
+         (if (>= i (rrb-size old-children))
+             acc
+             (let ([child (rrb-get old-children i)])
+               (loop (+ i 1)
+                     (rrb-push acc
+                               (if (parse-tree-node? child)
+                                   (rewrite-tree-stratum child stratum)
+                                   child)))))))
+     ;; Then rewrite this node
+     (define with-children
+       (if (equal? old-children new-children)
+           tree
+           (parse-tree-node (parse-tree-node-tag tree)
+                            new-children
+                            (parse-tree-node-srcloc tree)
+                            (parse-tree-node-indent tree))))
+     (rewrite-node with-children stratum)]))
+
+;; Apply the full rewrite pipeline: V(0,0) → V(0,1) → V(0,2) → V(1) → V(2)
+;; Each stratum is a separate pass over the tree (CALM: set-once between strata).
+(define (rewrite-tree tree)
+  (define pass0 (rewrite-tree-stratum tree 'V0-0))  ;; implicit-map
+  (define pass1 (rewrite-tree-stratum pass0 'V0-1)) ;; dot-access
+  (define pass2 (rewrite-tree-stratum pass1 'V0-2)) ;; infix + simple + recursive rules
+  ;; V(1) macro expansion and V(2) spec injection are Phase 6 scope
+  ;; when form cells and registry cell watching are wired.
+  ;; For now, the datum-level preparse-expand-all handles these.
+  pass2)
+
+;; ========================================
 ;; Phase 2a: Simple rewrite rules (9 rules)
 ;; ========================================
 ;; These rules match tag-refined parse tree nodes and produce new nodes.
