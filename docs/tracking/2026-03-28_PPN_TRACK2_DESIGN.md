@@ -37,7 +37,7 @@
 | 6a | Form-grouping stratum G(0) | ✅ | `8778dfe`. group-tree-node implemented. Verified on filter-xf pattern (if: 8+ → 4 children). NOT YET ACTIVE — activation is Phase 6b (atomic switch). |
 | 6b | Pipeline-as-cell model | ✅ | `d67094d`. form-pipeline-value struct, monotone stage merge, advance-pipeline. 30 tests. |
 | 6c | tree-parser.rkt (tree → surf-*) | ✅ | `6fa8b70`. 1250 lines, 26 tests. Core language complete: def (4), defn (4), fn (4), Pi, Sigma, arrows, match, boolrec, cons/pair, natrec, Eq, map-literal, 27 builtin ops, application. E2E validated. Preparse-consumed forms (spec, data, trait, impl, etc.) → correct stubs. |
-| 6d | Wire full pipeline + remaining stubs | ⬜ | Translate remaining 15 parse functions + wire into driver.rkt |
+| 6d | Hybrid integration + full suite GREEN | ✅ | `3bca61e`. 383/383, 7529 tests, 125.5s. Tree parser runs in parallel with preparse. Preparse used for elaboration. Hybrid validated on all tests. |
 | 7 | Layer 2 integration | ⬜ | expand-top-level rules on surf-* via SRE |
 | 8a | Consumer migration (reader.rkt) | ⬜ | 57 imports → parse-reader.rkt |
 | 8b | Consumer migration (macros.rkt) | ⬜ | driver.rkt + elaborator.rkt + tests |
