@@ -42,9 +42,9 @@
 | 6f | V(2) spec injection | ✅ | Spec-aware merge: preparse for spec-annotated, tree parser for inferred. |
 | 6g | **SWITCHOVER** | ✅ | `523f2f1`→`8d80c27`. **Tree parser output used for elaboration.** Merge: generated defs (preparse) + user forms (tree parser) + spec forms (preparse). 383/383 GREEN, 7529 tests. |
 | 7 | Layer 2 integration | ✅ | ALREADY WORKING. expand-top-level processes tree parser's surf-* identically to parse-datum's. Verified: auto-implicits, defn desugaring. |
-| 8a | Consumer migration (reader.rkt) | ⬜ | 57 imports → parse-reader.rkt |
-| 8b | Consumer migration (macros.rkt) | ⬜ | driver.rkt + elaborator.rkt + tests |
-| 8c | reader.rkt deletion | ⬜ | 1898 lines removed |
+| 8a | Consumer migration (reader.rkt) | 🔄 | Attempted `50f60c3`. Compat-token type mismatch — 23 test failures. REVERTED. Needs compat-token → token matching or selective migration. |
+| 8b | Consumer migration (macros.rkt) | ⬜ | Preparse still runs for registration + generation + spec injection + specialized forms. Partial retirement only — remove unused expand-* functions. |
+| 8c | reader.rkt deletion | ⬜ | Blocked by 8a. 1898 lines. |
 | 9 | A/B benchmarks + suite verify + PIR | ⬜ | Performance comparison, 383/383 GREEN, PIR |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
