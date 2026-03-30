@@ -1532,11 +1532,12 @@
      (define raw-stxs (read-all-syntax-ws datum-port "<ws-string>"))
      (define expanded-stxs (preparse-expand-all raw-stxs))
      (define preparse-surfs (map parse-datum expanded-stxs))
-     ;; New path: tree → refine → group → parse-form-tree (validation only)
+     ;; New path: tree → G(0) → T(0) → rewrite → parse-form-tree (validation)
      (define pt (read-to-tree str))
-     (define refined-root (refine-tag (parse-tree-root pt)))
-     (define grouped-root (group-tree-node refined-root))
-     (define tree-surfs (parse-top-level-forms-from-tree grouped-root))
+     (define grouped-root (group-tree-node (parse-tree-root pt)))
+     (define refined-root (refine-tag grouped-root))
+     (define rewritten-root (rewrite-tree refined-root))
+     (define tree-surfs (parse-top-level-forms-from-tree rewritten-root))
      ;; MERGE strategy: take generated defs from preparse (data constructors,
      ;; trait accessors, dict defs, etc.) + take user defs from tree parser
      ;; (def, defn, eval, check, infer).
