@@ -32,8 +32,8 @@
 | 2a | Simple rewrite rules (9 rules) | 🔄 | `d1cc404`. 5/9 implemented (let-assign, let-bracket, if, when, compose). 3 deferred to Phase 6 (tree-level dot/infix). Reality check: real parse trees match rule expectations. |
 | 2b | Recursive rewrite rules (5 rules) | ✅ | `99cccaa`. 4/5 implemented (cond, do, list-lit, lseq-lit). Quasiquote → Phase 3. |
 | 3 | Complex rewrite propagators (4+1 rules) | 🔄 | `2d3d1f7`. Quasiquote done. Pipe-fusion, mixfix, defn-multi, session-ws → Phase 6. |
-| 4 | Registry propagators | ⬜ | process-data/trait/spec → cell writes |
-| 5 | Spec/where injection as propagators | ⬜ | Cross-stratum data flow (V(2)) |
+| 4 | Registry propagators | ✅ | ALREADY DONE (Track 7 Phase 2). 24 cells exist. Cell-primary reads. Dual-write. True propagators (watching form cells) → Phase 6. |
+| 5 | Spec/where injection as propagators | ⬜ | Cross-stratum data flow (V(2)). Requires form cells from Phase 6. Imperative versions continue via dual-write until then. |
 | 6 | Stratified pipeline integration | ⬜ | R(-1)→R(0)→R(1)→T(0)→V(0)→V(1)→V(2) outer loop |
 | 7 | Layer 2 integration | ⬜ | expand-top-level rules on surf-* via SRE |
 | 8a | Consumer migration (reader.rkt) | ⬜ | 57 imports → parse-reader.rkt |
