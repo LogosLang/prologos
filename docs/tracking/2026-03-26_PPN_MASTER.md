@@ -39,8 +39,8 @@ PPN consumes.
 | Track | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Lattice design (parse, token, surface, core lattices) | ✅ | `c41bbca` [PIR](2026-03-26_PPN_TRACK0_PIR.md). 4 lattices, 6 bridges, 57 tests. |
-| 1 | Lexer + structure as propagators (char → structured token tree) | 🔄 | [Design D.7](2026-03-26_PPN_TRACK1_DESIGN.md), [Audit](2026-03-26_PPN_TRACK1_STAGE2_AUDIT.md). **5-cell architecture**: 4 RRB embedded cells + 1 tree M-type cell. ~119 μs (4× faster than reader.rkt). Replaces reader.rkt (1898 lines). |
-| 2 | Surface normalization as rewriting | ⬜ | Replaces macros.rkt preparse (~3000 lines). Tree rewriting IS structural unification — [research note](../research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md). **From Track 1**: mixfix deferred here. Token struct field migration: consumers transition from reader.rkt `(type value line col pos span)` to Track 0's `(type lexeme span-start span-end indent-level indent-delta)`. Syntax-object elimination: change preparse to accept raw datums+srcloc from tree cells instead of Racket syntax objects (touches macros.rkt ~7000 lines). |
+| 1 | Lexer + structure as propagators (char → structured token tree) | ✅ | [Design D.9](2026-03-26_PPN_TRACK1_DESIGN.md), [Audit](2026-03-26_PPN_TRACK1_STAGE2_AUDIT.md), [PIR](2026-03-26_PPN_TRACK1_PIR.md). **5-cell architecture**: 4 RRB embedded cells + 1 tree M-type cell. 380/380 GREEN. 108 tests. reader.rkt switchover complete. |
+| 2 | Surface normalization as rewriting | 🔄 | [Design D.1c](2026-03-28_PPN_TRACK2_DESIGN.md), [Audit](2026-03-28_PPN_TRACK2_STAGE2_AUDIT.md). **Parse tree as Pocket Universe**: SRE operates directly on `parse-tree-node` via `ctor-desc`. 14 simple rules + 4 specialized propagators. CALM-compliant stratified pipeline (Layered Recovery). Eliminates datum layer, compat layer, syntax objects. Retires reader.rkt (1898 lines) + macros.rkt preparse (~3000-5000 lines). |
 | 3 | Parser as propagators (chart/Earley, HR productions) | ⬜ | Replaces parser.rkt (~1500 lines). **From Track 1**: needs span-based SRE decomposition (recognizer reads span of embedded RRB lattice, not single cell value). |
 | 3.5 | **Grammar Form: Research + Design** | ⬜ | [`grammar` vision](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md). Multi-view spec. DPO structural preservation. Full theory + syntax after Tracks 1-3. **From Track 1**: typed productions (NTT-typed rewrite rules). |
 | 4 | Elaboration as attribute evaluation | ⬜ | IS SRE Track 2C. Dissolves parse/elab boundary. |
@@ -86,35 +86,29 @@ indentation level is a cell that the lexer rules read.
 
 ### Track 2: Surface Normalization as Rewriting
 
+**Design**: [PPN Track 2 Design D.1c](2026-03-28_PPN_TRACK2_DESIGN.md)
+**Audit**: [PPN Track 2 Stage 2 Audit](2026-03-28_PPN_TRACK2_STAGE2_AUDIT.md)
+**Status**: 🔄 Design phase (D.1c complete, pre-0 benchmarks complete, D.2 pending)
+
 **What**: Replace the preparse expansion pipeline in `macros.rkt` with
-registered rewrite rules on the network.
+SRE rewrite rules operating directly on the parse tree from Track 1.
+
+**Key design decisions (D.1c)**:
+- **Parse tree as Pocket Universe**: SRE operates directly on `parse-tree-node` via `ctor-desc`. No datum layer, no compat layer, no syntax objects.
+- **CALM-compliant stratified pipeline**: Rewrites at stratum boundaries (Layered Recovery). Set-once cells between strata. R(-1)→R(0)→R(1)→V(0)→V(1)→V(2).
+- **14 simple rules** (pattern→template via SRE descriptors) + **4 specialized propagators** (pipe fusion, mixfix Pratt, defn-multi, session-ws).
+- **Module Theory lens**: Parse tree is a module over the endomorphism ring of rewrite rules. Submodule independence = parallelizability.
+- **Retirement**: reader.rkt (1898 lines) + macros.rkt preparse (~3000-5000 lines). Total ~5000-7000 lines eliminated.
 
 **Replaces**: `preparse-expand-form`, `preparse-expand-all`,
 `preparse-expand-single`, `preparse-expand-subforms` (~3000 lines).
 Also: `flatten-ws-kv-pairs`, `rewrite-implicit-map`, dot-access
 transformation, broadcast transformation, all surface-level desugaring.
 
-**HIGHEST VALUE per effort**: macros.rkt is 7000+ lines, the most complex
-file in the codebase. Every syntax change touches it. Converting preparse
-from imperative tree-walking to registered rewrite rules would be
-transformative for development velocity.
+**Deferred items incorporated**: Mixfix (specialized Pratt propagator), token struct migration (eliminated — parse tree IS the representation), syntax-object elimination (parse tree nodes carry srcloc directly), reader.rkt retirement (explicit Phase 8c).
 
-**Current preparse rules that become rewrite rules**:
-
-| Current | Rewrite rule |
-|---------|-------------|
-| `expand-if` | `(if cond then else) → (match cond \| true → then \| false → else)` |
-| `expand-let` | `(let [x := val] body) → ((fn [x] body) val)` |
-| `expand-cond` | `(cond \| p1 → e1 \| p2 → e2) → (if p1 e1 (if p2 e2 ...))` |
-| `expand-when` | `(when cond body) → (if cond body unit)` |
-| `expand-do` | `(do e1 e2 ... en) → (let [_ := e1] (let [_ := e2] ... en))` |
-| `expand-pipe-block` | `(\|> x f g) → (g (f x))` |
-| `expand-list-literal` | `'[1 2 3] → (cons 1 (cons 2 (cons 3 nil)))` |
-| `expand-compose-sexp` | `(compose f g) → (fn [x] (f (g x)))` |
-| `defmacro` templates | User-defined pattern → template substitution |
-
-Each of these IS a DPO rewrite rule. The preparse phase IS hypergraph
-rewriting. We're just doing it imperatively today.
+Each rewrite IS a DPO rewrite rule. The preparse phase IS hypergraph
+rewriting on the parse tree — we're just doing it imperatively today.
 
 ### Track 3: Parser as Propagators
 

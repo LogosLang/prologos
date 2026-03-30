@@ -1,16 +1,24 @@
 # PPN Track 2: Surface Normalization as Propagators — Stage 3 Design (D.1)
 
 **Date**: 2026-03-28
-**Series**: PPN (Propagator-Parsing-Network)
-**Prerequisite**: PPN Track 1 ✅ (propagator reader), SRE Track 2F ✅ (algebraic foundation)
-**Audit**: `docs/tracking/2026-03-28_PPN_TRACK2_STAGE2_AUDIT.md`
+**Series**: [PPN (Propagator-Parsing-Network)](2026-03-26_PPN_MASTER.md)
+**Prerequisite**: [PPN Track 1 ✅](2026-03-26_PPN_TRACK1_DESIGN.md) (propagator reader), [SRE Track 2F ✅](2026-03-28_SRE_TRACK2F_DESIGN.md) (algebraic foundation)
+**Audit**: [PPN Track 2 Stage 2 Audit](2026-03-28_PPN_TRACK2_STAGE2_AUDIT.md)
+**PIR (predecessor)**: [PPN Track 1 PIR](2026-03-26_PPN_TRACK1_PIR.md) — deferred items §8
+
 **Research**:
-- `docs/research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md` — rewriting IS SRE decomposition
-- `docs/research/2026-03-28_MODULE_THEORY_LATTICES.md` — parse tree as module over rewrite ring
-- `docs/research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md` — lattice embedding (Pocket Universe)
-- `docs/research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md` — DPO/adhesive, Engelfriet-Heyker
-- `docs/tracking/principles/DEVELOPMENT_LESSONS.org` — CALM fixed topology invariant
-- `docs/tracking/principles/EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org` — Layered Recovery Principle
+- [Tree Rewriting as Structural Unification](../research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md) — rewriting IS SRE decomposition
+- [Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md) — parse tree as module over rewrite ring
+- [Algebraic Embeddings on Lattices](../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md) — lattice embedding (Pocket Universe)
+- [Hypergraph Rewriting + Propagator Parsing](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md) — DPO/adhesive, Engelfriet-Heyker
+- [Development Lessons](principles/DEVELOPMENT_LESSONS.org) — CALM fixed topology invariant
+- [Effectful Computation on Propagators](principles/EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org) — Layered Recovery Principle
+
+**Cross-series**:
+- [SRE Master](2026-03-22_SRE_MASTER.md) — SRE Track 2D (rewrite relation), Track 2F (algebraic foundation)
+- [PRN Master](2026-03-26_PRN_MASTER.md) — hypergraph rewriting theory
+- [PTF Master](2026-03-28_PTF_MASTER.md) — propagator kinds (Map, Reduce for rewrite pipeline)
+- [PAR Master](2026-03-27_PAR_MASTER.md) — parallel rewriting (submodule independence)
 
 ---
 
