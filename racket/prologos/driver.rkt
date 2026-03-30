@@ -1538,25 +1538,10 @@
      (define refined-root (refine-tag grouped-root))
      (define rewritten-root (rewrite-tree refined-root))
      (define tree-surfs (parse-top-level-forms-from-tree rewritten-root))
-     ;; MERGE strategy: take generated defs from preparse (data constructors,
-     ;; trait accessors, dict defs, etc.) + take user defs from tree parser
-     ;; (def, defn, eval, check, infer).
-     ;;
-     ;; Preparse forms fall into two categories:
-     ;; (a) Generated defs: surf-def/surf-defn whose names were generated
-     ;;     by data/trait/impl processing (not in original source)
-     ;; (b) User forms: surf-def/surf-defn/surf-eval from user's source code
-     ;;
-     ;; Tree parser forms: all original source forms, some parsed successfully
-     ;; (surf-def, surf-defn, surf-eval) and some as errors (consumed forms).
-     ;;
-     ;; Merge: ALL preparse forms (includes generated + expanded user forms).
-     ;; The tree parser validates but doesn't yet replace.
-     ;; Reason: preparse applies spec injection, macro expansion, auto-implicits
-     ;; to user forms. The tree parser doesn't. Using tree parser output for
-     ;; user forms would skip these transformations.
-     ;;
-     ;; Full switchover = when tree parser handles spec injection + macros.
+     ;; Preparse output used for elaboration (proven correct).
+     ;; Tree parser runs the full pipeline (G(0)→T(0)→rewrite→parse)
+     ;; in validation mode. Full switchover when ALL forms handled at
+     ;; tree level (5 specialized forms + spec injection + generated defs).
      (process-surfs preparse-surfs)]
     [else
      ;; OLD PATH: datum → preparse → parse
