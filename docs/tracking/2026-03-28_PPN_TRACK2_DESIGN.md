@@ -962,15 +962,40 @@ This uses existing NTT (`functor` + `embed`) but the instantiation is data-drive
 
 **Tests**: All spec injection tests. Where-clause tests. Cross-form dependency tests.
 
-### Phase 5: Fixpoint Convergence
+### Phase 5: Spec/Where Injection as Propagators
 
-**Deliverable**: `preparse-expand-form` replaced by propagator quiescence.
+**Deliverable**: `maybe-inject-spec` and `maybe-inject-where` as data-flow propagators in stratum V(2).
 
-**Scope**: A "form expansion" propagator watches the form cell and the rule registry cell. When the form matches any rule, applies the rule and writes the result. The form cell's merge is replacement (idempotent). Quiescence = no more matches. Fuel limit = 100 writes per cell.
+**Scope**: A propagator watches (form-cell, spec-store-cell). When both have values and names match, writes the injected form to v2-tree-cell. For where-clause: watches (form-cell, trait-registry-cell, bundle-registry-cell).
 
-**Tests**: Recursive macro expansion tests. Depth limit tests. User-defined macro tests.
+**Tests**: All spec injection tests. Where-clause tests. Cross-form dependency tests.
 
-### Phase 6: Layer 2 Integration
+### Phase 6: Stratified Pipeline Integration
+
+**Deliverable**: Wire the full propagator pipeline into `driver.rkt`. The parse tree flows through R(-1)→R(0)→R(1)→T(0)→V(0,0)→V(0,1)→V(0,2)→V(1)→V(2), producing rewritten tree nodes. `use-propagator-preparse?` parameter for dual-path dispatch.
+
+**DEFERRED WORK CONSOLIDATED HERE** (from Phases 2a, 2b, 3):
+
+| Rule | Deferred from | Why deferred | What Phase 6 must do |
+|------|---------------|-------------|---------------------|
+| rewrite-dot-access | Phase 2a | Tree has flat sentinel tokens; need tree-level sentinel detection | Adapt rule to read `$dot-access` token-entry type from tree children |
+| rewrite-dot-key | Phase 2a | Same as dot-access | Adapt rule to read `$dot-key` token-entry type |
+| rewrite-infix-pipe | Phase 2a | `$pipe-gt` at non-head position needs tree-level detection | Adapt rule to scan children for `$pipe-gt` tokens not at position 0 |
+| expand-pipe-block | Phase 3 | Loop fusion deeply tied to datum structure (car/cdr inspection) | Either (a) adapt fusion logic to tree children, or (b) extract datum from tagged tree node, apply existing expand-pipe-block, convert result back |
+| expand-mixfix-form | Phase 3 | Pratt parser needs operator/precedence registry cells | Wire registry cells into propagator; adapt Pratt parser to read from tree children as token sequence |
+| desugar-defn-multi | Phase 3 | Pattern clause compilation tied to datum format | Adapt pattern compiler to tree node format |
+| desugar-session-ws | Phase 3 | WS pipe restructuring tied to reader output format | Adapt session desugaring to tree indent+pipe structure |
+| desugar-defproc-ws | Phase 3 | Same as session-ws | Adapt process desugaring to tree structure |
+
+**Integration strategy**: For each deferred rule, Phase 6 chooses between:
+- **(a) Tree-native**: Adapt the rule logic to operate directly on `parse-tree-node` children. Preferred when the adaptation is straightforward.
+- **(b) Datum bridge**: Extract datums from the tagged tree node (via existing `flatten-with-boundaries` + `group-items`), apply the existing macros.rkt function, convert the result back to a tree node. Pragmatic when the logic is complex and datum-native.
+
+Option (b) is a temporary bridge — it reuses existing tested logic while the tree-native version is developed. Phase 7-8 retires the bridges.
+
+**Tests**: Full suite under `use-propagator-preparse? #t`. Dual-path comparison.
+
+### Phase 7: Layer 2 Integration
 
 **Deliverable**: `expand-top-level` operations as rewrite rules on surf-* forms.
 
@@ -978,15 +1003,15 @@ This uses existing NTT (`functor` + `embed`) but the instantiation is data-drive
 
 **Tests**: All Layer 2 expansion tests.
 
-### Phase 7: macros.rkt Retirement
+### Phase 8a-8c: Retirement
 
-**Deliverable**: Consumer migration. Dead code removal.
+**Phase 8a**: Consumer migration — 57 files importing `reader.rkt` → import from `parse-reader.rkt`.
+**Phase 8b**: Consumer migration — `driver.rkt` + `elaborator.rkt` + tests → use propagator pipeline. Disable `use-propagator-preparse?` fallback.
+**Phase 8c**: Delete `reader.rkt` (1898 lines) + imperative preparse logic in `macros.rkt` (~3000-5000 lines).
 
-**Scope**: driver.rkt calls the new propagator-based expansion. elaborator.rkt reads cells directly. Tests updated. macros.rkt reduced to registration-only code (no imperative expansion logic).
+**Tests**: 383/383 GREEN after each sub-phase.
 
-**Tests**: 383/383 GREEN.
-
-### Phase 8: A/B Benchmarks + Suite Verify
+### Phase 9: A/B Benchmarks + Suite Verify
 
 **Deliverable**: Performance comparison (before vs after). Full suite verification.
 
