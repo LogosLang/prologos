@@ -37,7 +37,10 @@
 | 6a | Form-grouping stratum G(0) | ✅ | `8778dfe`. group-tree-node implemented. Verified on filter-xf pattern (if: 8+ → 4 children). NOT YET ACTIVE — activation is Phase 6b (atomic switch). |
 | 6b | Pipeline-as-cell model | ✅ | `d67094d`. form-pipeline-value struct, monotone stage merge, advance-pipeline. 30 tests. |
 | 6c | tree-parser.rkt (tree → surf-*) | ✅ | `6fa8b70`. 1250 lines, 26 tests. Core language complete: def (4), defn (4), fn (4), Pi, Sigma, arrows, match, boolrec, cons/pair, natrec, Eq, map-literal, 27 builtin ops, application. E2E validated. Preparse-consumed forms (spec, data, trait, impl, etc.) → correct stubs. |
-| 6d | Hybrid integration + full suite GREEN | ✅ | `3bca61e`. 383/383, 7529 tests, 125.5s. Tree parser runs in parallel with preparse. Preparse used for elaboration. Hybrid validated on all tests. |
+| 6d | Hybrid integration + full suite GREEN | ✅ | `3bca61e`→`902b8cb`. 383/383 GREEN. Hybrid: preparse for elaboration + full tree pipeline (G(0)→T(0)→rewrite→parse) in validation. Pipeline reorder: G(0) before T(0) (`5d438f0`). defn type inference fixed: Pi chain with holes, param-names as symbols (`362327a`). surf-app args as list (`e62d444`). |
+| 6e | V(1) macro expansion at tree level | ⬜ | Rewrite rules for user macros (from preparse-registry). Built-in macros already handled by rewrite-tree. |
+| 6f | V(2) spec/where injection at tree level | ⬜ | Registry cell watching. Cross-form dependency (spec→defn). Residuation pattern. |
+| 6g | Generated defs at tree level | ⬜ | data constructors, trait accessors, dict defs. Currently produced by preparse's process-data/trait/impl. |
 | 7 | Layer 2 integration | ⬜ | expand-top-level rules on surf-* via SRE |
 | 8a | Consumer migration (reader.rkt) | ⬜ | 57 imports → parse-reader.rkt |
 | 8b | Consumer migration (macros.rkt) | ⬜ | driver.rkt + elaborator.rkt + tests |
