@@ -29,7 +29,8 @@
 | 0 | Pre-0 benchmarks + adversarial | ✅ | `a0fd523`. Preparse invisible vs elaboration. 22-35μs/rule. |
 | 1 | Parse tree node descriptors + rewrite infrastructure | ⬜ | `ctor-desc` for surface tags, `rewrite-rule` struct, `surface-rewrite.rkt` |
 | 1b | Tag-refinement stratum T(0) | ⬜ | `'line` → form-head tags via first-token inspection + SRE subtype |
-| 2 | Simple rewrite rules (14 rules) | ⬜ | Pattern→template on parse tree nodes via SRE |
+| 2a | Simple rewrite rules (9 rules) | ⬜ | Static binding map on parse tree nodes via SRE |
+| 2b | Recursive rewrite rules (5 rules) | ⬜ | template-fn for cond, do, list-lit, lseq-lit, quasiquote |
 | 3 | Complex rewrite propagators (4 rules) | ⬜ | pipe-fusion, mixfix/Pratt, defn-multi, session-ws |
 | 4 | Registry propagators | ⬜ | process-data/trait/spec → cell writes |
 | 5 | Spec/where injection as propagators | ⬜ | Cross-stratum data flow (V(2)) |
@@ -114,6 +115,21 @@ Four principles ground this design:
 | P6 | Rewrite LHS and RHS have different `ctor-desc` (different tag, different arity) | LOW | Explicit in SRE idempotent relation: LHS-desc decomposes, RHS-desc reconstructs. Different descriptors, shared bindings. |
 | P7 | Form identity: one-shot (Approach 3) vs lattice-narrowing (Approach 4) | DESIGN | **Approach 3 for Track 2** (tag as struct field, SRE subtype refinement). **Approach 4 awareness** for Track 3+ (tag as lattice cell, set-narrowing). Migration: field → cell read. See §3.10. |
 
+### D.3 External Critique Findings
+
+| # | Finding | Severity | Resolution |
+|---|---------|----------|------------|
+| E1 | T(0) under-specified for non-keyword forms and nested groups | HIGH | **Accept.** Add `tag-expr` catch-all for non-keyword lines. T(0) MUST recurse into all `parse-tree-node` children, not just top-level lines. Enumerate full tag list (no "..." elisions). |
+| E2 | "14 simple rules" — at least 5 need recursive templates | HIGH | **Accept.** Reclassify: **9 simple** (static binding map), **5 recursive** (fold over children — cond, do, list-literal, lseq-literal, quasiquote), **4 specialized** (pipe-fusion, mixfix, defn-multi, session-ws). Add `template-fn` field to `rewrite-rule` for recursive rules. |
+| E3 | O(forms × strata) cell allocation unnecessary | MEDIUM | **Reject.** Cells enable residuation — spec-injection propagator watches form cell + spec-store cell, fires when both available. Function composition cannot express "wait for a future value." Overhead (12.5ms for 100 forms × 5 strata) is within performance-free budget. |
+| E4 | `ctor-desc` impedance mismatch with parse tree nodes | MEDIUM | **Accept partially.** Dead-weight fields (`binder-depth: 0`, `binder-open-fn: #f`) are cost of uniformity. Mixed children types handled by per-position lattice specs. Reconstructor closure cost is per-decomposition (cheap). Document as deliberate choice. |
+| E5 | Dual-path dispatch unspecified | MEDIUM | **Accept.** Add `use-propagator-preparse?` parameter. Dual-path testing in Phase 6. Disable fallback in Phase 8b. Delete in Phase 8c. Learn from PPN Track 1's `use-new-reader?` experience. |
+| E6 | Scope should split into two tracks | MEDIUM | **Reject.** Design is complete; implementation proceeds as one track. PIR covers the full scope. Splitting adds overhead without value. |
+| E7 | V(0) priority ordering masks data dependency — CALM violation | HIGH | **Accept.** Promote to sub-strata V(0,0) implicit-map, V(0,1) dot-access, V(0,2) infix. Set-once cells between sub-strata. Priority reserved for independent rule conflicts, not data dependencies. BSP scheduler as default would catch this as wrong results — correct-by-construction fix is sub-strata. |
+| E8 | NTT `rewrite` form is less "data" than claimed | LOW | **Accept.** 9 rules are inspectable data. 5 recursive rules need `template-fn`. Acknowledge in NTT §17.1. |
+| E9 | Source ordering elimination untested | LOW | **Accept via provenance.** Source ordering for error messages is subsumed by provenance tracking — each cell write carries source position. The elaborator reads provenance, not form ordering. Add `source-position` field on form cells for provenance chain. Heyting algebra lens: errors carry structural conflict information derived from provenance. |
+| E10 | Duplicate section numbers | LOW | **Accept.** Fix numbering. |
+
 ### 3.1 Architecture: Parse Tree as Pocket Universe
 
 **Core insight**: The parse tree from PPN Track 1 IS the right representation for surface normalization. We don't need a new intermediate representation. The parse tree is:
@@ -167,6 +183,8 @@ Stratum T(0): Form-tag refinement
   Mechanism: SRE subtype relation ('line → ':let is a refinement)
   CALM-safe: produces new tree nodes with refined tags (set-once output cell)
 ```
+
+**Scope (D.3 finding E1)**: T(0) MUST recurse into ALL `parse-tree-node` children — not just top-level lines. Bracket groups, indented blocks, and nested forms all need tag refinement. Non-keyword-headed lines receive `tag-expr` as the catch-all (bare expressions, applications, pipe at expression level). An unrefined `'line` node that matches NO keyword gets `tag-expr` and flows through V(0)→V(1)→V(2) without triggering any rewrite rules.
 
 The refinement is a set of registered **tag-assignment rules**:
 
@@ -233,13 +251,21 @@ Each variant has fixed arity — the `ctor-desc` system works without modificati
 (struct rewrite-rule
   (name          ; symbol — for debugging/tracing
    lhs-desc      ; ctor-desc for LHS pattern (SRE decomposition)
-   rhs-desc      ; ctor-desc for RHS template (SRE reconstruction)
-   binding-map   ; (hash lhs-idx → rhs-idx) — which LHS children become which RHS children
+   ;; EITHER static template (simple rules) OR template function (recursive rules):
+   rhs-desc      ; ctor-desc for RHS template (SRE reconstruction) | #f for recursive
+   binding-map   ; (hash lhs-idx → rhs-idx) | #f for recursive
+   template-fn   ; (list-of-children → parse-tree-node) | #f for simple
+   ;; Metadata:
    guard         ; (parse-tree-node → boolean) or #f — additional match condition
-   priority      ; natural — higher fires first (for overlapping patterns)
-   stratum)      ; natural — which rewrite stratum this rule belongs to
+   priority      ; natural — higher fires first (for overlapping independent patterns)
+   stratum       ; symbol — which rewrite stratum this rule belongs to
+   source-pos)   ; source position of the rule definition (provenance — D.3 E9)
   #:transparent)
 ```
+
+**Simple rules** use `rhs-desc` + `binding-map` (inspectable data).
+**Recursive rules** use `template-fn` (pure function, not inspectable as data but inspectable as signature).
+At most one of `{rhs-desc, binding-map}` or `template-fn` is non-`#f`.
 
 Registration:
 
@@ -260,9 +286,13 @@ The 18 pure rewrites from the audit become 18 rule registrations. No functions, 
 
 Not all rewrites are simple pattern→template transformations. The audit identified two categories:
 
-**Simple rules** (14): `expand-let`, `expand-if`, `expand-cond`, `expand-do`, `expand-list-literal`, `expand-lseq-literal`, `expand-compose-sexp`, `expand-quote`, `expand-quasiquote`, `rewrite-dot-access`, `rewrite-nil-dot-access`, `rewrite-infix-pipe`, `rewrite-implicit-map`, `expand-when`. These are captured fully by `rewrite-rule` structs with SRE descriptors.
+**Simple rules** (9) — static binding map, pure pattern→template (D.3 finding E2):
+`expand-let-assign`, `expand-let-bracket`, `expand-if`, `expand-when`, `expand-compose-sexp`, `rewrite-dot-access`, `rewrite-dot-key`, `rewrite-infix-pipe`, `rewrite-implicit-map`. These are captured fully by `rewrite-rule` structs with SRE descriptors and `binding-map`.
 
-**Complex rules** (4): These require specialized propagator fire functions because they involve analysis beyond pattern matching:
+**Recursive rules** (5) — fold over variable-length children (D.3 finding E2):
+`expand-cond` (nested if-chain), `expand-do` (nested let-chain), `expand-list-literal` (nested cons-chain), `expand-lseq-literal` (nested lseq-cell-chain), `expand-quasiquote` (tree walk with unquote holes). These use `rewrite-rule` structs with a `template-fn` field instead of static `rhs-desc` + `binding-map`. The `template-fn` is a pure function from matched children to output tree — inspectable as a function signature but not as static data.
+
+**Complex rules** (4) — analysis + synthesis, require specialized propagator fire functions:
 
 1. **`expand-pipe-block`** (loop fusion): Classifies pipe steps (fusible/terminal/barrier/plain), builds fused inline reducers, emits optimized code. A specialized propagator in stratum V(0) that reads the `:pipe-gt` node, runs the fusion analysis, and writes the optimized tree.
 
@@ -313,18 +343,28 @@ Stratum T(0): Form-tag refinement
 
 --- REWRITE STRATA (Layered Recovery) ---
 
-Stratum V(0): Structural rewrites
-  Input cells: tagged-tree-cells (set-once, from T(0))
-  Output cells: v0-datum-cells (set-once, written here)
-  Rules: implicit-map → dot-access → infix (priority-ordered WITHIN stratum)
-  Topology: fixed (input cells + output cells created at stratum setup)
-  CALM-safe: each propagator READS input cell, WRITES output cell (both set-once)
-  Priority ordering within V(0):
-    1. implicit-map (reshapes form structure — must fire first)
-    2. dot-access (depends on implicit-map output)
-    3. infix operators (depends on dot-access output)
-  These are priorities, not sub-strata — they fire in priority order
-  within one BSP round on fixed topology.
+Stratum V(0): Structural rewrites (3 sub-strata — D.3 finding E7)
+  The audit (Section C) identified an ESSENTIAL ordering:
+  implicit-map → dot-access → infix (each reshapes form for the next).
+  This is a DATA DEPENDENCY, not a priority hint. Masking it as priority
+  ordering within one BSP round violates CALM — BSP could fire them in
+  any order, producing wrong results. Sub-strata enforce the dependency
+  structurally (correct-by-construction).
+
+  Sub-stratum V(0,0): implicit-map
+    Input cells: tagged-tree-cells (from T(0))
+    Output cells: v00-tree-cells (set-once)
+    CALM-safe: set-once in → set-once out
+
+  Sub-stratum V(0,1): dot-access
+    Input cells: v00-tree-cells (from V(0,0))
+    Output cells: v01-tree-cells (set-once)
+    CALM-safe: set-once in → set-once out
+
+  Sub-stratum V(0,2): infix operators
+    Input cells: v01-tree-cells (from V(0,1))
+    Output cells: v0-tree-cells (set-once)
+    CALM-safe: set-once in → set-once out
 
 Stratum V(1): Macro expansion
   Input cells: v0-datum-cells (set-once, from V(0))
@@ -452,6 +492,8 @@ For Track 2: **Option A**. The parser bridge (parse tree → surf-*) is existing
 
 At no point does the entire pipeline switch at once. Each phase adds capability, and the existing path remains as fallback until the new path is verified.
 
+**Dual-path dispatch (D.3 finding E5)**: A `use-propagator-preparse?` parameter (default `#f`) controls which path is active. Learning from PPN Track 1's `use-new-reader?` experience: Phase 6 flips to `#t` and runs full suite under both paths. Phase 8b disables the fallback. Phase 8c deletes the old code. Do NOT maintain two paths for more than 2 phases — the maintenance burden of keeping both paths correct is worse than the safety benefit.
+
 ### 3.10 Approach 4 Awareness: Form Tags as Lattice Cells (Future)
 
 Track 2 uses Approach 3: form tags as struct fields, assigned once by SRE subtype refinement in stratum T(0). This is sufficient for current needs — form identity is determined by the first token, no ambiguity.
@@ -467,7 +509,22 @@ The structural transition is the same pattern as PM Track 8 (parameters → cell
 
 **When Approach 4 is needed**: When form identity is genuinely ambiguous (user-defined macros that shadow built-in forms, grammar extensions that add new form types, contextual disambiguation). Track 2's one-shot assignment is the degenerate case of set-narrowing where the set immediately reaches a singleton.
 
-### 3.11 Deferred Items Incorporated (from PPN Master + Track 1 PIR)
+### 3.11 Source Ordering via Provenance (D.3 finding E9)
+
+Dependency ordering replaces Phase 5b hoisting (§3.12). But source ordering has secondary uses:
+- Error messages reported in source order (user expectation)
+- `eval` forms execute in source order (side effects)
+- Multi-clause `defn` clauses merged in source order
+
+**Resolution via provenance**: Each form cell carries a `source-position` field inherited from the parse tree node's `srcloc`. The provenance chain (which propagator wrote which cell, from what source) preserves source ordering information throughout the pipeline. The elaborator reads provenance for error reporting — errors are located by source position, not by processing order.
+
+For `eval` execution order: the driver processes V(2) output cells in source-position order. Dependency ordering determines WHEN a form is ready; source-position determines the ORDER in which ready forms are elaborated.
+
+For multi-clause `defn` merging: clauses carry source positions. The merger sorts by position. No explicit source ordering in the pipeline needed.
+
+**Connection to Heyting algebra error reporting (from [Algebraic Embeddings](../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md))**: Errors carry structural conflict information derived from the provenance chain — WHAT conflicted and WHY, not just WHERE. Pseudo-complement of the expected type in the actual type lattice gives the precise incompatibility. Source position is one dimension of provenance; algebraic conflict is another.
+
+### 3.12 Deferred Items Incorporated (from PPN Master + Track 1 PIR)
 
 | Source | Item | How addressed |
 |--------|------|---------------|
