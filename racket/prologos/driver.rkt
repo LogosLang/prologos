@@ -1566,21 +1566,41 @@
                [(surf-defn? s) (surf-defn-name s)]
                [(surf-defn-multi? s) (surf-defn-multi-name s)]
                [else #f])))
+     ;; For defns with specs: preparse's version has spec type injected.
+     ;; Tree parser's version has Pi-chain-with-holes. Use preparse's.
+     ;; For defns WITHOUT specs: tree parser's version is correct (inferred).
+     ;; For everything else: generated defs from preparse, eval from tree parser.
+     (define spec-store (current-spec-store))
+     (define (has-spec? name)
+       (and (symbol? name) (hash-ref spec-store name #f)))
+
      (define generated-surfs
        (filter (lambda (s)
                  (cond
                    [(surf-eval? s) #f]  ;; eval = user form, use tree parser's
                    [(surf-def? s)
-                    (not (memq (surf-def-name s) tree-user-names))]
+                    (or (not (memq (surf-def-name s) tree-user-names))
+                        (has-spec? (surf-def-name s)))]  ;; keep spec-annotated defs
                    [(surf-defn? s)
-                    (not (memq (surf-defn-name s) tree-user-names))]
+                    (or (not (memq (surf-defn-name s) tree-user-names))
+                        (has-spec? (surf-defn-name s)))]  ;; keep spec-annotated defns
                    [(surf-defn-multi? s)
-                    (not (memq (surf-defn-multi-name s) tree-user-names))]
-                   [(prologos-error? s) #f]  ;; skip errors
-                   [else #t]))  ;; keep unknown forms from preparse
+                    (or (not (memq (surf-defn-multi-name s) tree-user-names))
+                        (has-spec? (surf-defn-multi-name s)))]
+                   [(prologos-error? s) #f]
+                   [else #t]))
                preparse-surfs))
-     ;; Merge: generated (hoisted) + user forms (from tree parser)
-     (define merged-surfs (append generated-surfs tree-user-surfs))
+     ;; User forms from tree parser: EXCLUDE those with specs (preparse handles them)
+     (define tree-user-surfs-filtered
+       (filter (lambda (s)
+                 (cond
+                   [(surf-def? s) (not (has-spec? (surf-def-name s)))]
+                   [(surf-defn? s) (not (has-spec? (surf-defn-name s)))]
+                   [(surf-defn-multi? s) (not (has-spec? (surf-defn-multi-name s)))]
+                   [else #t]))  ;; keep eval, check, infer from tree parser
+               tree-user-surfs))
+     ;; Merge: generated + spec-annotated (from preparse) + non-spec user (from tree parser)
+     (define merged-surfs (append generated-surfs tree-user-surfs-filtered))
      (process-surfs merged-surfs)]
     [else
      ;; OLD PATH: datum → preparse → parse
