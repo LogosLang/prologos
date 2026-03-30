@@ -45,8 +45,8 @@
 | 8a | Consumer migration (compat tokens) | ✅ | `94e0f099`. ALL 53 test files migrated. 11 compound token types fixed. Compat wrapper: newline/eof padding, type remapping, value mapping, disambiguation, validation. |
 | 8b | Consumer migration (reader.rkt imports) | ✅ | `bb09f4e9`. All production code uses parse-reader.rkt. reader.rkt internal-only (parse-reader.rkt wrapper + test-reader.rkt). |
 | 9 | A/B benchmarks + suite verify + PIR | ✅ | A/B: 16% overhead from dual pipeline (expected). Suite: 383/383 GREEN, 7529 tests. PIR: `2026-03-29_PPN_TRACK2_PIR.md`. |
-| 10 | Sexp pipeline retirement: compat shim | 🔄 | See §8 Addendum. `process-string` routes through WS pipeline internally. |
-| 11 | Sexp pipeline retirement: deletion | ⬜ | Blocked by 10. Delete sexp expanders (~1000 lines macros.rkt), WS tokenizer (~1800 lines reader.rkt), sexp parser path (~500 lines parser.rkt). |
+| 10 | reader.rkt deletion | ✅ | `469e2276`. reader.rkt (1898) + test-reader.rkt (449) DELETED. Native prologos-read-syntax in parse-reader.rkt. driver.rkt fallbacks removed. -2330 lines. |
+| 11 | Sexp expander retirement | ⬜ | macros.rkt expand-* functions (~1000 lines). Blocked: preparse-expand-all still used by both sexp and WS paths. Requires tree parser handling ALL form types. |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
 
