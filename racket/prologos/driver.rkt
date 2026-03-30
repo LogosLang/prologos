@@ -1537,17 +1537,25 @@
      (define refined-root (refine-tag (parse-tree-root pt)))
      (define grouped-root (group-tree-node refined-root))
      (define tree-surfs (parse-top-level-forms-from-tree grouped-root))
-     ;; Validation: count how many forms the tree parser handles
-     ;; (non-error, non-consumed results) vs preparse total.
-     ;; This tracks progress toward full tree-parser coverage.
-     (define tree-handled
-       (length (filter (lambda (s) (not (prologos-error? s))) tree-surfs)))
-     (define preparse-total (length preparse-surfs))
-     (when (getenv "PROLOGOS_TREE_PARSER_VALIDATE")
-       (eprintf "TREE-PARSER: ~a/~a forms handled by tree parser\n"
-                tree-handled (+ tree-handled
-                                (length (filter prologos-error? tree-surfs)))))
-     ;; Use preparse output (proven correct)
+     ;; MERGE strategy: take generated defs from preparse (data constructors,
+     ;; trait accessors, dict defs, etc.) + take user defs from tree parser
+     ;; (def, defn, eval, check, infer).
+     ;;
+     ;; Preparse forms fall into two categories:
+     ;; (a) Generated defs: surf-def/surf-defn whose names were generated
+     ;;     by data/trait/impl processing (not in original source)
+     ;; (b) User forms: surf-def/surf-defn/surf-eval from user's source code
+     ;;
+     ;; Tree parser forms: all original source forms, some parsed successfully
+     ;; (surf-def, surf-defn, surf-eval) and some as errors (consumed forms).
+     ;;
+     ;; Merge: ALL preparse forms (includes generated + expanded user forms).
+     ;; The tree parser validates but doesn't yet replace.
+     ;; Reason: preparse applies spec injection, macro expansion, auto-implicits
+     ;; to user forms. The tree parser doesn't. Using tree parser output for
+     ;; user forms would skip these transformations.
+     ;;
+     ;; Full switchover = when tree parser handles spec injection + macros.
      (process-surfs preparse-surfs)]
     [else
      ;; OLD PATH: datum → preparse → parse
