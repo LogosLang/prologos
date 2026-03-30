@@ -1861,10 +1861,14 @@
                                         (if (eq? type 'lbracket) 'rbracket 'rparen)
                                         source source-str)])
                (if is-postfix?
-                   ;; Postfix: xs[0] → emit $postfix-index sentinel as separate element
+                   ;; Postfix: xs[f x] → ($postfix-index (f x)) — wrap inner as sub-form
                    (let-values ([(pl pc) (pos->line-col source-str (token-entry-start-pos item))])
+                     (define wrapped-inner
+                       (if (= (length inner) 1)
+                           inner  ;; single element: ($postfix-index elem)
+                           (list (wrap-stx-list inner source))))  ;; multi: ($postfix-index (f x))
                      (loop next-i
-                           (cons (make-stx (cons (make-stx '$postfix-index source pl pc (+ (token-entry-start-pos item) 1) 1) inner)
+                           (cons (make-stx (cons (make-stx '$postfix-index source pl pc (+ (token-entry-start-pos item) 1) 1) wrapped-inner)
                                            source pl pc (+ (token-entry-start-pos item) 1) 1) result)))
                    ;; Normal bracket group
                    (loop next-i (cons (wrap-stx-list inner source) result))))]
@@ -1945,6 +1949,59 @@
             ;; Other stray closing brackets → skip
             [(memq type '(rbracket rparen rbrace))
              (loop (+ i 1) result)]
+            ;; Tilde prefix: ~ followed by token → $approx-literal sentinel
+            ;; ~42 → ($approx-literal 42), ~[1 2] handled by tilde-lbracket
+            [(and (eq? type 'symbol)
+                  (equal? (token-entry-lexeme item) "~")
+                  (< (+ i 1) end)
+                  (let ([next (vector-ref vec (+ i 1))])
+                    (and (token-entry? next)
+                         ;; Adjacent: no whitespace gap
+                         (= (token-entry-end-pos item)
+                            (token-entry-start-pos next)))))
+             (let* ([next-item (vector-ref vec (+ i 1))]
+                    [next-stx (token-entry->stx next-item source source-str)])
+               (define-values (vl vc) (pos->line-col source-str (token-entry-start-pos item)))
+               (loop (+ i 2)
+                     (cons (make-stx (list (make-stx '$approx-literal source vl vc (+ (token-entry-start-pos item) 1) 1)
+                                           next-stx)
+                                     source vl vc (+ (token-entry-start-pos item) 1) 1)
+                           result)))]
+            ;; Backtick prefix: ` followed by element → $quasiquote sentinel
+            [(eq? type 'backtick)
+             (if (< (+ i 1) end)
+                 (let* ([next-item (vector-ref vec (+ i 1))])
+                   (cond
+                     ;; Next is a bracket group → consume it as quasiquoted form
+                     [(and (token-entry? next-item)
+                           (memq (set-first (token-entry-types next-item)) '(lparen lbracket)))
+                      (let-values ([(inner next-i)
+                                    (group-items vec (+ i 1) end
+                                                 (if (eq? (set-first (token-entry-types next-item)) 'lparen)
+                                                     'rparen 'rbracket)
+                                                 source source-str)])
+                        (let-values ([(bl bc) (pos->line-col source-str (token-entry-start-pos item))])
+                          (loop next-i
+                                (cons (make-stx (cons (make-stx '$quasiquote source bl bc (+ (token-entry-start-pos item) 1) 1)
+                                                      inner)
+                                                source bl bc (+ (token-entry-start-pos item) 1) 1) result))))]
+                     ;; Next is a regular token → consume as single quasiquoted atom
+                     [(token-entry? next-item)
+                      (let ([next-stx (token-entry->stx next-item source source-str)])
+                        (let-values ([(bl bc) (pos->line-col source-str (token-entry-start-pos item))])
+                          (loop (+ i 2)
+                                (cons (make-stx (list (make-stx '$quasiquote source bl bc (+ (token-entry-start-pos item) 1) 1)
+                                                      next-stx)
+                                                source bl bc (+ (token-entry-start-pos item) 1) 1) result))))]
+                     [else (loop (+ i 1) result)]))
+                 (loop (+ i 1) result))]
+            ;; Comma inside quasiquote context → $unquote sentinel
+            ;; Note: comma is normally skipped (cosmetic separator).
+            ;; But inside quasiquote (`` ` ``), commas become unquote.
+            ;; This requires quasiquote depth tracking — for now, this is
+            ;; handled by the tokenizer's qq-depth channel. The datum
+            ;; extraction (group-items) sees comma tokens that the tokenizer
+            ;; decided NOT to skip.
             ;; Regular token
             [else
              (loop (+ i 1) (cons (token-entry->stx item source source-str) result))])]

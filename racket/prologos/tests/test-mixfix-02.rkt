@@ -32,7 +32,7 @@
          (prefix-in tc: "../typing-core.rkt")
          "../namespace.rkt"
          "../trait-resolution.rkt"
-         "../reader.rkt")
+         "../parse-reader.rkt")
 
 ;; ========================================
 ;; Shared Fixture for E2E tests

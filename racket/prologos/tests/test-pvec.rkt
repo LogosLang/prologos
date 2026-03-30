@@ -20,7 +20,7 @@
          "../namespace.rkt"
          "../macros.rkt"
          "../rrb.rkt"
-         "../reader.rkt"
+         "../parse-reader.rkt"
          "../sexp-readtable.rkt")
 
 ;; Compute the lib directory path for namespace loading

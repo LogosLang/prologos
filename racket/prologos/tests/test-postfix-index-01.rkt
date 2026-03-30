@@ -8,7 +8,7 @@
 ;;;
 
 (require rackunit
-         "../reader.rkt")
+         "../parse-reader.rkt")
 
 ;; ========================================
 ;; A. Adjacency detection — sentinel emission

@@ -15,7 +15,7 @@
          "../syntax.rkt"
          "../prelude.rkt"
          "../surface-syntax.rkt"
-         "../reader.rkt"
+         "../parse-reader.rkt"
          "../parser.rkt"
          "../driver.rkt"
          "../global-env.rkt"

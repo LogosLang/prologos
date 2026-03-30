@@ -25,7 +25,7 @@
          "../global-env.rkt"
          "../driver.rkt"
          "../sexp-readtable.rkt"
-         "../reader.rkt"
+         "../parse-reader.rkt"
          "../namespace.rkt"
          "../trait-resolution.rkt")
 

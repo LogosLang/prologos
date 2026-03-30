@@ -28,7 +28,7 @@
          "../namespace.rkt"
          "../metavar-store.rkt"
          "../trait-resolution.rkt"
-         "../reader.rkt"
+         "../parse-reader.rkt"
          "../macros.rkt")
 
 ;; ========================================

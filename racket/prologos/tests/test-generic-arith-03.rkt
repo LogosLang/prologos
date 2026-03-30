@@ -24,7 +24,7 @@
          "../global-env.rkt"
          "../driver.rkt"
          "../namespace.rkt"
-         "../reader.rkt")
+         "../parse-reader.rkt")
 
 ;; ========================================
 ;; Helpers

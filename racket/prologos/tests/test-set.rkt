@@ -15,7 +15,7 @@
          "../driver.rkt"
          "../global-env.rkt"
          "../champ.rkt"
-         "../reader.rkt"
+         "../parse-reader.rkt"
          "../sexp-readtable.rkt")
 
 ;; Helper to run with clean global env

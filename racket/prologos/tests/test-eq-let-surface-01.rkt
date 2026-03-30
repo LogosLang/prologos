@@ -28,7 +28,7 @@
          "../global-env.rkt"
          "../driver.rkt"
          "../namespace.rkt"
-         "../reader.rkt")
+         "../parse-reader.rkt")
 
 ;; ========================================
 ;; Shared Fixture (prelude loaded once)

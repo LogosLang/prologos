@@ -25,7 +25,7 @@
          "../driver.rkt"
          "../namespace.rkt"
          "../multi-dispatch.rkt"
-         "../reader.rkt"
+         "../parse-reader.rkt"
          "../sexp-readtable.rkt")
 
 ;; ========================================

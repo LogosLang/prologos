@@ -24,7 +24,7 @@
          "../metavar-store.rkt"
          "../relations.rkt"
          "../trait-resolution.rkt"
-         "../reader.rkt"
+         "../parse-reader.rkt"
          "../macros.rkt")
 
 ;; ========================================
