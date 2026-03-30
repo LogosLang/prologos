@@ -216,23 +216,36 @@
 
 (define builtin-binary-ops
   (hash
+   ;; Integer arithmetic
    "int+" surf-int-add  "int-" surf-int-sub  "int*" surf-int-mul
    "int/" surf-int-div  "int%" surf-int-mod
    "int=" surf-int-eq   "int<" surf-int-lt   "int<=" surf-int-le
+   ;; Generic arithmetic (trait-dispatched)
    "+" surf-generic-add  "-" surf-generic-sub  "*" surf-generic-mul
    "/" surf-generic-div  "%" surf-generic-mod
    "=" surf-generic-eq   "<" surf-generic-lt   "<=" surf-generic-le
    ">" surf-generic-gt   ">=" surf-generic-ge
    "eq?" surf-generic-eq
-   "map-get" surf-map-get
+   ;; Map operations
+   "map-get" surf-map-get  "map-assoc" surf-map-assoc
+   ;; Pair
+   "pair" surf-pair
+   ;; From-int / from-nat
+   "from-int" surf-from-int  "from-nat" surf-from-nat
    ))
 
 (define builtin-unary-ops
   (hash
+   ;; Integer
    "int-neg" surf-int-neg  "int-abs" surf-int-abs
+   ;; Generic
    "negate" surf-generic-negate  "abs" surf-generic-abs
+   ;; Pair projections
    "fst" surf-fst  "snd" surf-snd
+   ;; Boolean
    "not" surf-not
+   ;; Nat
+   "suc" surf-suc
    ))
 
 ;; ========================================
