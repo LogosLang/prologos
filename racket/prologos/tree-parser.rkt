@@ -259,6 +259,25 @@
          (let ([bd (parse-form-tree (cadr args))])
            (if (prologos-error? bd) bd
                (surf-def name #f bd loc))))]
+    ;; 3 args with := : (def name := body)
+    [(and (= (length args) 3)
+          (token-is? (cadr args) ":="))
+     (define name (token-symbol (car args)))
+     (if (not name)
+         (parse-error-result loc "def: expected name")
+         (let ([bd (parse-form-tree (caddr args))])
+           (if (prologos-error? bd) bd
+               (surf-def name #f bd loc))))]
+    ;; 4 args with := and type: (def name <type> := body) or (def name := <type> body)
+    [(and (>= (length args) 4)
+          (token-is? (cadr args) ":="))
+     ;; (def name := ... body) — skip :=, rest is body
+     (define name (token-symbol (car args)))
+     (if (not name)
+         (parse-error-result loc "def: expected name")
+         (let ([bd (parse-form-tree (caddr args))])
+           (if (prologos-error? bd) bd
+               (surf-def name #f bd loc))))]
     ;; 3 args: (def name <type> body) or (def name body-expr)
     [(= (length args) 3)
      (define name (token-symbol (car args)))
@@ -414,7 +433,15 @@
                   (surf-def name #f nested-lam loc))))])]))
 
 (define (parse-spec-tree args loc)
-  (parse-error-result loc "parse-spec-tree: not yet implemented"))
+  ;; spec is consumed by preparse-expand-all (registers type info).
+  ;; At this level, it's already been processed. If it reaches the
+  ;; tree parser, treat as a pass-through (the elaborator handles it
+  ;; via the spec registry cell).
+  ;; For now: return a placeholder that the elaborator can recognize.
+  ;; The spec form is: (spec name type-tokens...)
+  ;; After preparse injection, specs are consumed — they don't appear
+  ;; in the parsed output. If they DO appear here, they weren't consumed.
+  (parse-error-result loc "spec: should have been consumed by preparse"))
 
 (define (parse-eval-tree args loc)
   ;; Simple: (eval expr) → surf-eval
