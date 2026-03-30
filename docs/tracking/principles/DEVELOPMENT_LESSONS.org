@@ -434,6 +434,83 @@ broke the cycle.
 
 See [[file:../2026-03-25_PM_TRACK10_PIR.md][PM Track 10 PIR]] and [[file:../research/2026-03-24_SELF_DESCRIBING_SERIALIZATION.md][Self-Describing Serialization Research]].
 
+** Validated Is Not Deployed — Flip the Switch or Delete the Parameter
+
+When new infrastructure is built alongside old infrastructure (hybrid
+paths, dual pipelines, feature-flagged switchovers), a common pattern
+emerges: the new path is validated (all tests pass) and the track is
+declared complete — but the parameter controlling the switch defaults to
+the OLD path. The new code runs in test configurations but never in
+production. This creates four compounding costs:
+
+1. *Invisible technical debt*: the old path can't be deleted because
+   it's still the production default
+2. *False confidence*: the track's PIR says "switchover complete" but
+   the switchover is parameterized, not actual
+3. *Deferred cleanup accumulates*: each subsequent track inherits
+   the dual paths and must work around both
+4. *Context loss*: when the switch is finally attempted (tracks later),
+   the implementation context is gone and edge cases resurface
+
+*The rule*: when a validation phase proves the new path works (full
+suite GREEN), the NEXT phase MUST either (a) flip the default to the
+new path and re-validate, or (b) delete the parameter entirely if the
+old path is no longer needed. A parameter that defaults to the old
+path is not a "safety net" — it's an admission that the switchover
+isn't complete. Name it honestly: "Phase N: validated (not deployed)."
+
+*Discovered in*: PPN Track 2 Phase 6g. ~use-tree-parser?~ validated
+at ~#t~ (383/383 GREEN) but defaulted to ~#f~. The tree parser — the
+entire point of the track — never ran in ~process-file~ or the default
+~process-string-ws~ path. Three follow-on commits were needed to
+clean up what should have been one phase: flip the switch, validate,
+delete the parameter.
+
+*Red-flag phrases*: "defaults to #f for safety", "validated but keeping
+the old path as fallback", "can be enabled via environment variable",
+"opt-in for now." These all mean: not actually deployed.
+
+*Anti-pattern*: ~use-new-reader?~, ~use-tree-parser?~, ~use-propagator-X?~
+parameters that default to ~#f~. Each one represents a completed
+architecture that isn't running. The parameter itself is the debt.
+
+** "Pragmatic" Is a Rationalization for Incomplete
+
+When the word "pragmatic" appears in a design document or commit message
+to justify keeping both old and new code paths alive, it is almost always
+a signal that the Completeness principle is being violated. Audit the
+specific claims:
+
+- "The merge is a *pragmatic* bridge" → the new path can't handle all
+  cases. What cases are missing? Can they be addressed in the current
+  track? If not, is the gap explicitly tracked with a concrete plan?
+- "A *pragmatic* approach is to keep preparse for X" → X is a
+  responsibility not yet migrated. Is migration blocked by a genuine
+  dependency, or by effort avoidance? Genuine dependency = acceptable
+  deferral. Effort avoidance = Completeness violation.
+- "The *pragmatic* path is ..." → rephrase as "the INCOMPLETE path is
+  ..." and see if the sentence still feels acceptable.
+
+*The test*: replace "pragmatic" with "incomplete" in every design
+decision. If the rephrased sentence is alarming, the original decision
+needs revisiting. If it's genuinely acceptable (e.g., "the incomplete
+path is appropriate because X is blocked by unbuilt Track 4
+infrastructure"), then the deferral is principled and should say
+"deferred to Track 4 because [specific dependency]" not "pragmatic."
+
+*Discovered in*: PPN Track 2 PIR analysis. The merge strategy was
+described as "pragmatic" 4 times in the design doc. Rephrased: "the
+INCOMPLETE path maintains two code paths because the tree parser doesn't
+handle data/trait/impl." This reframing immediately clarifies that the
+gap is the tree parser's form coverage, and the fix is extending it —
+not accepting dual paths as an architecture.
+
+*The discipline*: the word "pragmatic" is banned from design documents
+and commit messages when used to justify keeping old code paths. Use
+"incomplete (deferred to Track N because [reason])" instead. This forces
+the deferral to be specific, tracked, and justified — rather than
+rationalized.
+
 ** CALM Requires Fixed Topology — Dynamic Topology Requires Stratification
 
 The CALM theorem (Consistency As Logical Monotonicity) guarantees that
