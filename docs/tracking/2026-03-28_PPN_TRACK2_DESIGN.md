@@ -27,7 +27,7 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Pre-0 benchmarks + adversarial | ✅ | `a0fd523`. Preparse invisible vs elaboration. 22-35μs/rule. |
-| 1 | Parse tree node descriptors + rewrite infrastructure | ⬜ | `ctor-desc` for surface tags, `rewrite-rule` struct, `surface-rewrite.rkt` |
+| 1 | Parse tree node descriptors + rewrite infrastructure | ✅ | `27e8870`. surface-rewrite.rkt: 350 lines, 14 tests. 38 tag rules + rewrite-rule struct + apply-rules. |
 | 1b | Tag-refinement stratum T(0) | ⬜ | `'line` → form-head tags via first-token inspection + SRE subtype |
 | 2a | Simple rewrite rules (9 rules) | ⬜ | Static binding map on parse tree nodes via SRE |
 | 2b | Recursive rewrite rules (5 rules) | ⬜ | template-fn for cond, do, list-lit, lseq-lit, quasiquote |
