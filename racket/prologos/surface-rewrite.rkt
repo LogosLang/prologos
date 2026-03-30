@@ -532,6 +532,208 @@
         (build-node 'error (list (make-token "compose: need at least 2 fns")) srcloc indent)))
   #f 100 'V0-2))
 
+;; ========================================
+;; Phase 2b: Recursive rewrite rules (5 rules)
+;; ========================================
+;; These rules fold over variable-length children. The rhs-builder
+;; contains a recursive function, not a static binding map.
+
+;; --- expand-cond: (cond | guard -> body | guard -> body ...) → nested if ---
+;; Each arm is a $pipe-prefixed or bare (guard -> body) pair.
+;; Recursively builds: (if guard1 body1 (if guard2 body2 ...))
+(register-rewrite-rule!
+ (rewrite-rule
+  'expand-cond
+  tag-cond
+  (lambda (children srcloc indent)
+    ;; children: [cond-token, arm1, arm2, ...]
+    ;; Each arm is either a ($pipe guard -> body) node or bare tokens
+    (define arms (cdr children))  ;; drop cond token
+    (if (null? arms)
+        (build-node 'error (list (make-token "cond: need at least one arm")) srcloc indent)
+        ;; Build nested if chain from arms
+        (let loop ([remaining arms])
+          (cond
+            [(null? remaining)
+             ;; No more arms — terminal case. Should have been caught, but
+             ;; as fallback: unit (unreachable if cond is exhaustive)
+             (make-token "unit")]
+            [(null? (cdr remaining))
+             ;; Last arm — extract guard and body, no else branch
+             (define arm (car remaining))
+             (define parts (if (and (parse-tree-node? arm)
+                                   (let ([children (parse-tree-node-children arm)])
+                                     (and (> (rrb-size children) 0)
+                                          (let ([first (rrb-get children 0)])
+                                            (and (token-entry? first)
+                                                 (equal? (token-entry-lexeme first) "$pipe"))))))
+                               ;; Strip $pipe prefix
+                               (cdr (rrb-to-list (parse-tree-node-children arm)))
+                               (if (parse-tree-node? arm)
+                                   (rrb-to-list (parse-tree-node-children arm))
+                                   (list arm))))
+             ;; Find -> separator
+             (define arrow-idx
+               (for/first ([p (in-list parts)] [i (in-naturals)]
+                           #:when (and (token-entry? p)
+                                       (equal? (token-entry-lexeme p) "->")))
+                 i))
+             (if arrow-idx
+                 (let ([guard-parts (take parts arrow-idx)]
+                       [body-parts (drop parts (+ arrow-idx 1))])
+                   ;; Last arm: just the body (guard assumed true, or wrap in if)
+                   (if (= (length guard-parts) 1)
+                       (build-node tag-if
+                                   (list (make-token "if")
+                                         (car guard-parts)
+                                         (if (= (length body-parts) 1)
+                                             (car body-parts)
+                                             (build-node tag-expr body-parts srcloc indent))
+                                         (make-token "unit"))
+                                   srcloc indent)
+                       (build-node tag-expr
+                                   (append guard-parts (list (make-token "->")) body-parts)
+                                   srcloc indent)))
+                 ;; No arrow — malformed arm, pass through
+                 arm)]
+            [else
+             ;; Non-last arm — extract guard and body, recurse for else
+             (define arm (car remaining))
+             (define parts (if (and (parse-tree-node? arm)
+                                   (let ([children (parse-tree-node-children arm)])
+                                     (and (> (rrb-size children) 0)
+                                          (let ([first (rrb-get children 0)])
+                                            (and (token-entry? first)
+                                                 (equal? (token-entry-lexeme first) "$pipe"))))))
+                               (cdr (rrb-to-list (parse-tree-node-children arm)))
+                               (if (parse-tree-node? arm)
+                                   (rrb-to-list (parse-tree-node-children arm))
+                                   (list arm))))
+             (define arrow-idx
+               (for/first ([p (in-list parts)] [i (in-naturals)]
+                           #:when (and (token-entry? p)
+                                       (equal? (token-entry-lexeme p) "->")))
+                 i))
+             (if arrow-idx
+                 (let ([guard-parts (take parts arrow-idx)]
+                       [body-parts (drop parts (+ arrow-idx 1))]
+                       [else-branch (loop (cdr remaining))])
+                   (build-node tag-if
+                               (list (make-token "if")
+                                     (if (= (length guard-parts) 1)
+                                         (car guard-parts)
+                                         (build-node tag-expr guard-parts srcloc indent))
+                                     (if (= (length body-parts) 1)
+                                         (car body-parts)
+                                         (build-node tag-expr body-parts srcloc indent))
+                                     else-branch)
+                               srcloc indent))
+                 ;; No arrow — malformed, pass through
+                 arm)]))))
+  #f 90 'V0-2))
+
+;; --- expand-list-literal: ($list-literal e1 e2 ...) → (cons e1 (cons e2 ... nil)) ---
+(register-rewrite-rule!
+ (rewrite-rule
+  'expand-list-literal
+  tag-list-literal
+  (lambda (children srcloc indent)
+    ;; children: [$list-literal-token, e1, e2, ...]
+    (define elems (cdr children))  ;; drop sentinel
+    (if (null? elems)
+        (make-token "nil")
+        ;; Check for $list-tail sentinel at end
+        (let-values ([(proper tail)
+                      (let ([last-elem (last elems)])
+                        (if (and (parse-tree-node? last-elem)
+                                 (let ([c (parse-tree-node-children last-elem)])
+                                   (and (> (rrb-size c) 0)
+                                        (let ([f (rrb-get c 0)])
+                                          (and (token-entry? f)
+                                               (equal? (token-entry-lexeme f) "$list-tail"))))))
+                            ;; Has tail: last child's second element
+                            (values (drop-right elems 1)
+                                    (rrb-get (parse-tree-node-children last-elem) 1))
+                            ;; No tail: nil
+                            (values elems (make-token "nil"))))])
+          (foldr (lambda (elem rest)
+                   (build-node tag-expr
+                               (list (make-token "cons") elem rest)
+                               srcloc indent))
+                 tail
+                 proper))))
+  #f 100 'V0-2))
+
+;; --- expand-lseq-literal: ($lseq-literal e1 e2 ...) → nested lseq-cell + thunks ---
+(register-rewrite-rule!
+ (rewrite-rule
+  'expand-lseq-literal
+  tag-lseq-literal
+  (lambda (children srcloc indent)
+    ;; children: [$lseq-literal-token, e1, e2, ...]
+    (define elems (cdr children))
+    (if (null? elems)
+        (make-token "lseq-nil")
+        (foldr (lambda (elem rest)
+                 (build-node tag-expr
+                             (list (make-token "lseq-cell")
+                                   elem
+                                   ;; Wrap tail in thunk: (fn [_ : _] rest)
+                                   (build-node tag-expr
+                                               (list (make-token "fn")
+                                                     (build-node tag-expr
+                                                                 (list (make-token "_")
+                                                                       (make-token ":")
+                                                                       (make-token "_"))
+                                                                 srcloc indent)
+                                                     rest)
+                                               srcloc indent))
+                             srcloc indent))
+               (make-token "lseq-nil")
+               elems)))
+  #f 100 'V0-2))
+
+;; --- expand-do: (do e1 e2 ... en) → (let [_ := e1] (let [_ := e2] ... en)) ---
+(register-rewrite-rule!
+ (rewrite-rule
+  'expand-do
+  tag-do
+  (lambda (children srcloc indent)
+    ;; children: [do-token, e1, e2, ..., en]
+    (define body (cdr children))  ;; drop do token
+    (if (null? body)
+        (make-token "unit")
+        (if (null? (cdr body))
+            ;; Single expression — just return it
+            (car body)
+            ;; Multiple: (let [_ := e1] (let [_ := e2] ... en))
+            (let loop ([remaining body])
+              (if (null? (cdr remaining))
+                  ;; Last expression — the value
+                  (car remaining)
+                  ;; Non-last — wrap in let
+                  (build-node tag-expr
+                              (list (make-token "let")
+                                    (make-token "_")
+                                    (make-token ":=")
+                                    (car remaining)
+                                    (loop (cdr remaining)))
+                              srcloc indent))))))
+  #f 100 'V0-2))
+
+;; --- expand-quasiquote: ($quasiquote datum) → datum constructor chain ---
+;; This is the most complex recursive rule — walks the datum tree
+;; converting to Datum constructor calls with unquote holes.
+;; DEFERRED to Phase 3 (specialized propagator) — the tree walk
+;; requires understanding nested quasiquote/unquote which is beyond
+;; simple recursion over children.
+
+;; --- Placeholder notes for deferred rules ---
+;; rewrite-dot-access: ($dot-access field) target → (map-get target :field)
+;; rewrite-implicit-map: keyword-block restructuring
+;; rewrite-infix-pipe: |> canonicalization
+;; These require tree-level integration with token sentinels (Phase 6).
+
 ;; --- rewrite-dot-access: ($dot-access field) target → (map-get target :field) ---
 ;; Note: dot-access is a sentinel from the reader. The tree has:
 ;; [target, ($dot-access field)] → rewrite to [map-get target :field]
@@ -749,6 +951,82 @@
     (define first-child (rrb-get (parse-tree-node-children result) 0))
     (check-true (token-entry? first-child))
     (check-equal? (token-entry-lexeme first-child) "fn"))
+
+  ;; --- Phase 2b: Recursive rule tests ---
+
+  (test-case "expand-list-literal: 3 elements → nested cons"
+    (define node (parse-tree-node
+                  tag-list-literal
+                  (rrb-from-list
+                   (list (make-token "$list-literal")
+                         (make-token "1")
+                         (make-token "2")
+                         (make-token "3")))
+                  #f 0))
+    (define-values (result matched?) (apply-rules node 'V0-2))
+    (check-true matched?)
+    ;; Result should be (cons 1 (cons 2 (cons 3 nil)))
+    (check-true (parse-tree-node? result))
+    (check-eq? (parse-tree-node-tag result) tag-expr)
+    ;; First child should be "cons"
+    (define first-child (rrb-get (parse-tree-node-children result) 0))
+    (check-equal? (token-entry-lexeme first-child) "cons"))
+
+  (test-case "expand-list-literal: empty → nil"
+    (define node (parse-tree-node
+                  tag-list-literal
+                  (rrb-from-list (list (make-token "$list-literal")))
+                  #f 0))
+    (define-values (result matched?) (apply-rules node 'V0-2))
+    (check-true matched?)
+    ;; Result should be nil token
+    (check-true (token-entry? result))
+    (check-equal? (token-entry-lexeme result) "nil"))
+
+  (test-case "expand-do: sequence → nested let"
+    (define node (parse-tree-node
+                  tag-do
+                  (rrb-from-list
+                   (list (make-token "do")
+                         (make-token "e1")
+                         (make-token "e2")
+                         (make-token "e3")))
+                  #f 0))
+    (define-values (result matched?) (apply-rules node 'V0-2))
+    (check-true matched?)
+    ;; Result should be (let _ := e1 (let _ := e2 e3))
+    (check-true (parse-tree-node? result))
+    (check-eq? (parse-tree-node-tag result) tag-expr)
+    (define c0 (rrb-get (parse-tree-node-children result) 0))
+    (check-equal? (token-entry-lexeme c0) "let"))
+
+  (test-case "expand-do: single expression → pass through"
+    (define node (parse-tree-node
+                  tag-do
+                  (rrb-from-list
+                   (list (make-token "do")
+                         (make-token "e1")))
+                  #f 0))
+    (define-values (result matched?) (apply-rules node 'V0-2))
+    (check-true matched?)
+    ;; Result should be just e1
+    (check-true (token-entry? result))
+    (check-equal? (token-entry-lexeme result) "e1"))
+
+  (test-case "expand-lseq-literal: 2 elements → nested lseq-cell"
+    (define node (parse-tree-node
+                  tag-lseq-literal
+                  (rrb-from-list
+                   (list (make-token "$lseq-literal")
+                         (make-token "1")
+                         (make-token "2")))
+                  #f 0))
+    (define-values (result matched?) (apply-rules node 'V0-2))
+    (check-true matched?)
+    (check-true (parse-tree-node? result))
+    (check-eq? (parse-tree-node-tag result) tag-expr)
+    (define c0 (rrb-get (parse-tree-node-children result) 0))
+    (check-equal? (token-entry-lexeme c0) "lseq-cell"))
 
   (test-case "rewrite-rule: guard filters matches"
     (define guarded-rule
