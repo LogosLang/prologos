@@ -1520,32 +1520,35 @@
   (define port (open-input-string s))
   (cond
     [(use-tree-parser?)
-     ;; NEW PATH: tree → surf-* directly (PPN Track 2)
-     ;; 1. Read parse tree
+     ;; HYBRID PATH (PPN Track 2 Phase 6d):
+     ;; Run BOTH preparse (old) and tree parser (new).
+     ;; Use preparse output (proven correct).
+     ;; Tree parser runs in parallel for validation — logged but not used for elaboration.
+     ;; When tree parser produces matching results for all handled forms, switch.
      (register-default-token-patterns!)
      (define str (port->string port))
-     (define pt (read-to-tree str))
-     ;; 2. Run preparse for REGISTRATION SIDE EFFECTS only
-     ;;    (populate registries: trait, ctor, spec, impl, etc.)
-     ;;    The datum output is discarded — we use tree parser for surf-*.
+     ;; Old path: datum → preparse → parse-datum
      (define datum-port (open-input-string str))
      (define raw-stxs (read-all-syntax-ws datum-port "<ws-string>"))
-     (preparse-expand-all raw-stxs)  ;; side effects only, result discarded
-     ;; 3. Tree pipeline: refine → group → parse
+     (define expanded-stxs (preparse-expand-all raw-stxs))
+     (define preparse-surfs (map parse-datum expanded-stxs))
+     ;; New path: tree → refine → group → parse-form-tree (validation only)
+     (define pt (read-to-tree str))
      (define refined-root (refine-tag (parse-tree-root pt)))
      (define grouped-root (group-tree-node refined-root))
-     (define surfs (parse-top-level-forms-from-tree grouped-root))
-     ;; 4. Filter out preparse-consumed forms (ns, data, trait, spec, impl, etc.)
-     ;;    These return prologos-error with "consumed by preparse" message.
-     ;;    In the old path, preparse removes them from the output.
-     (define filtered-surfs
-       (filter (lambda (s)
-                 (not (and (prologos-error? s)
-                           (let ([msg (prologos-error-message s)])
-                             (and (string? msg)
-                                  (string-contains? msg "consumed by preparse"))))))
-               surfs))
-     (process-surfs filtered-surfs)]
+     (define tree-surfs (parse-top-level-forms-from-tree grouped-root))
+     ;; Validation: count how many forms the tree parser handles
+     ;; (non-error, non-consumed results) vs preparse total.
+     ;; This tracks progress toward full tree-parser coverage.
+     (define tree-handled
+       (length (filter (lambda (s) (not (prologos-error? s))) tree-surfs)))
+     (define preparse-total (length preparse-surfs))
+     (when (getenv "PROLOGOS_TREE_PARSER_VALIDATE")
+       (eprintf "TREE-PARSER: ~a/~a forms handled by tree parser\n"
+                tree-handled (+ tree-handled
+                                (length (filter prologos-error? tree-surfs)))))
+     ;; Use preparse output (proven correct)
+     (process-surfs preparse-surfs)]
     [else
      ;; OLD PATH: datum → preparse → parse
      (define raw-stxs (read-all-syntax-ws port "<ws-string>"))
