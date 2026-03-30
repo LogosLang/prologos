@@ -34,7 +34,8 @@
 | 3 | Complex rewrite propagators (4+1 rules) | 🔄 | `2d3d1f7`. Quasiquote done. Pipe-fusion, mixfix, defn-multi, session-ws → Phase 6. |
 | 4 | Registry propagators | ✅ | ALREADY DONE (Track 7 Phase 2). 24 cells exist. Cell-primary reads. Dual-write. True propagators (watching form cells) → Phase 6. |
 | 5 | Spec/where injection as propagators | ⬜ | Cross-stratum data flow (V(2)). Requires form cells from Phase 6. Imperative versions continue via dual-write until then. |
-| 6 | Stratified pipeline integration | ⬜ | R(-1)→R(0)→R(1)→T(0)→V(0)→V(1)→V(2) outer loop |
+| 6a | Form-grouping stratum G(0) | ⬜ | Line nodes → bracket-grouped form nodes. Bridge between indent tree and form tree. |
+| 6b | Stratified pipeline integration | ⬜ | R(-1)→R(0)→R(1)→T(0)→G(0)→V(0)→V(1)→V(2) outer loop. 8 deferred rules. |
 | 7 | Layer 2 integration | ⬜ | expand-top-level rules on surf-* via SRE |
 | 8a | Consumer migration (reader.rkt) | ⬜ | 57 imports → parse-reader.rkt |
 | 8b | Consumer migration (macros.rkt) | ⬜ | driver.rkt + elaborator.rkt + tests |
@@ -132,35 +133,50 @@ Four principles ground this design:
 
 ### 3.1 Architecture: Parse Tree as Pocket Universe
 
-**Core insight**: The parse tree from PPN Track 1 IS the right representation for surface normalization. We don't need a new intermediate representation. The parse tree is:
+**Core insight (revised after Phase 6 finding)**: The parse tree from PPN Track 1 has THREE levels of structure, each built on the last:
 
-- A **structured value in a cell** (Pocket Universe — one cell holds the full tree)
-- **Decomposable by the SRE** (tag + children pattern matching via `ctor-desc`)
-- **Efficient under transformation** (RRB structural sharing — rewrite one subtree, share the rest)
-- **A tree** (PVec of PVecs — `parse-tree-node` contains an RRB of children, some of which are `parse-tree-node` values)
+1. **Tokens** — characters classified into token entries (PPN Track 1: tokenizer)
+2. **Indent tree** — tokens grouped into line nodes by indent level (PPN Track 1: tree-builder)
+3. **Form tree** — line nodes grouped into form nodes by brackets + grammar (NEW: form-grouping stratum)
+4. **Normalized form tree** — forms rewritten by surface normalization rules (PPN Track 2: rewriting)
+5. **Typed AST** — forms elaborated with types (PPN Track 3/4: parser + elaborator)
 
-**The pipeline eliminates the datum layer entirely:**
+**The Phase 6 finding**: PPN Track 1's tree has levels 1-2 but NOT level 3. Line nodes contain ALL tokens on a line — `if (pred x) (rf acc x) acc` is one line node with 8+ children, not an `if` form with 3 argument sub-forms. Rewrite rules expect FORM structure (known arity), but the indent tree has LINE structure (variable tokens).
+
+**Level 3 is the missing piece.** The current pipeline gets form structure from `group-items` (bracket grouping during datum extraction). This is an imperative function that walks the indent tree and groups tokens by bracket matching. In the Propagator Only architecture, level 3 becomes a **form-grouping stratum G(0)** that reads the indent tree + bracket-depth domain and writes a form-structured tree.
+
+**The pipeline with all 5 levels:**
 
 ```
-source text → PPN Track 1 reader → parse tree cell
-    → [SRE rewrite rules operate on parse tree nodes]
-    → rewritten parse tree cell (per stratum)
+source text → PPN Track 1 reader → indent tree cell (level 2)
+    → [T(0): tag refinement — 'line → form-specific tags]
+    → [G(0): form grouping — line nodes → bracket-grouped form nodes]
+    → [V(0,0)→V(0,1)→V(0,2): structural rewrites on form nodes]
+    → [V(1): macro expansion]
+    → [V(2): spec/where injection]
+    → form-structured tree cell (level 4)
     → [parser extracts surf-* from rewritten tree]
     → elaborator
 ```
 
-No `compat-read-all-forms-string`. No datum conversion. No syntax objects. The parse tree is the canonical representation from reader through normalization through parsing. PPN Tracks 1, 2, and 3 all operate on the same structure.
+The form-grouping stratum G(0) is the bridge between indent structure and form structure. It produces nodes with KNOWN arity (determined by bracket matching + form head), which rewrite rules can safely match against.
 
-**Form pipeline cells**: Each top-level form (a subtree of the parse tree) progresses through a pipeline of **set-once cells**, one per rewrite stratum:
+**The Pocket Universe principle still applies**: the form-grouped tree is a structured value in a cell. SRE decomposes form nodes by tag + arity. The difference from the original design: the Pocket Universe contains FORM nodes (with known arity), not LINE nodes (with variable tokens).
+
+**Form pipeline cells**: Each top-level form (a subtree of the form-grouped tree) progresses through a pipeline of **set-once cells**, one per rewrite stratum:
 
 ```
-raw-tree-cell (⊥ → parse-tree-node, set-once)
-    → [V0 structural rewrite stratum]
-v0-tree-cell (⊥ → structurally rewritten parse-tree-node, set-once)
-    → [V1 macro expansion stratum]
-v1-tree-cell (⊥ → macro-expanded parse-tree-node, set-once)
-    → [V2 spec/where injection stratum]
-v2-tree-cell (⊥ → injected parse-tree-node, set-once)
+raw-tree-cell (⊥ → indent-tree-node, set-once)           [level 2]
+    → [T(0) tag refinement]
+tagged-tree-cell (⊥ → tag-refined indent-tree-node, set-once)
+    → [G(0) form grouping]
+form-tree-cell (⊥ → bracket-grouped form-tree-node, set-once)  [level 3]
+    → [V(0,0)→V(0,1)→V(0,2) structural rewrites]
+v0-tree-cell (⊥ → structurally rewritten form-tree-node, set-once)
+    → [V(1) macro expansion]
+v1-tree-cell (⊥ → macro-expanded form-tree-node, set-once)
+    → [V(2) spec/where injection]
+v2-tree-cell (⊥ → injected form-tree-node, set-once)     [level 4]
     → [consumed by parser / elaborator]
 ```
 
@@ -341,6 +357,23 @@ Stratum T(0): Form-tag refinement
   Topology: fixed
   CALM-safe: reads input, writes set-once output (refined tags)
 
+--- FORM GROUPING (Phase 6 finding: line ≠ form structure) ---
+
+Stratum G(0): Form grouping — bracket-delimited arity assignment
+  Input cells: tagged-tree-cells (line nodes with form-head tags)
+  Output cells: form-tree-cells (form nodes with bracket-grouped children)
+  Mechanism: reads tagged tree + bracket-depth RRB domain. Groups children
+    by bracket matching: [f x y] → form node with children [f, x, y].
+    Nested brackets create nested form nodes.
+  WHAT THIS DOES: converts level-2 structure (indent lines with flat tokens)
+    to level-3 structure (forms with known arity). This is what group-items
+    (in datum extraction) currently does, but as a propagator stratum.
+  WHY NEEDED: rewrite rules expect form-level arity (if: 4 children).
+    Line nodes have line-level arity (all tokens on the line). G(0) bridges
+    the gap. Without it, rewrite rules see wrong arity and produce wrong
+    results (Phase 6 finding: filter-xf's if had 8+ children).
+  CALM-safe: reads set-once input, writes set-once output. Fixed topology.
+
 --- REWRITE STRATA (Layered Recovery) ---
 
 Stratum V(0): Structural rewrites (3 sub-strata — D.3 finding E7)
@@ -352,7 +385,7 @@ Stratum V(0): Structural rewrites (3 sub-strata — D.3 finding E7)
   structurally (correct-by-construction).
 
   Sub-stratum V(0,0): implicit-map
-    Input cells: tagged-tree-cells (from T(0))
+    Input cells: form-tree-cells (from G(0))
     Output cells: v00-tree-cells (set-once)
     CALM-safe: set-once in → set-once out
 
