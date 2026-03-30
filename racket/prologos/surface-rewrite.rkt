@@ -376,6 +376,154 @@
  (tag-rule "$mixfix" #f tag-mixfix))
 
 ;; ========================================
+;; Phase 6a: Form-grouping stratum G(0)
+;; ========================================
+;; Converts indent-tree nodes (line structure, flat tokens) into
+;; form-tree nodes (bracket-grouped, known arity).
+;;
+;; This is what group-items (datum extraction) does, but producing
+;; parse-tree-node values instead of syntax objects.
+;;
+;; The key operation: walk a tag-refined tree, flatten each line node's
+;; children into tokens + indent markers, then group by bracket matching
+;; into nested form nodes.
+
+(provide group-tree-node)
+
+;; Group a tag-refined tree node's children by bracket matching.
+;; Produces a new tree node with bracket-grouped children.
+;; Each bracket group becomes a nested parse-tree-node.
+(define (group-tree-node node)
+  (cond
+    [(not (parse-tree-node? node)) node]
+    [(eq? (parse-tree-node-tag node) 'root)
+     ;; Root node: recurse into children, group each top-level form
+     (define old-children (parse-tree-node-children node))
+     (define new-children
+       (let loop ([i 0] [acc rrb-empty])
+         (if (>= i (rrb-size old-children))
+             acc
+             (loop (+ i 1)
+                   (rrb-push acc (group-tree-node (rrb-get old-children i)))))))
+     (parse-tree-node 'root new-children
+                      (parse-tree-node-srcloc node)
+                      (parse-tree-node-indent node))]
+    [else
+     ;; Non-root node: flatten to items, group by brackets, rebuild
+     (define items (flatten-node-to-items node))
+     (define vec (list->vector items))
+     (define-values (children _end)
+       (group-items-to-tree vec 0 (vector-length vec) #f
+                            (parse-tree-node-srcloc node)
+                            (parse-tree-node-indent node)))
+     ;; Rebuild node with grouped children and preserved tag
+     (parse-tree-node (parse-tree-node-tag node)
+                      (list->rrb children)
+                      (parse-tree-node-srcloc node)
+                      (parse-tree-node-indent node))]))
+
+;; Helper: convert list to rrb
+(define (list->rrb lst)
+  (for/fold ([rrb rrb-empty]) ([item (in-list lst)])
+    (rrb-push rrb item)))
+
+;; Flatten a tree node into a list of (token-entry | 'indent-open | 'indent-close)
+;; Same logic as flatten-with-boundaries in parse-reader.rkt
+(define (flatten-node-to-items node)
+  (define children (parse-tree-node-children node))
+  (define n (rrb-size children))
+  (apply append
+    (for/list ([i (in-range n)])
+      (define child (rrb-get children i))
+      (cond
+        [(token-entry? child) (list child)]
+        [(parse-tree-node? child)
+         (append (list 'indent-open)
+                 (flatten-node-to-items child)
+                 (list 'indent-close))]
+        [else '()]))))
+
+;; Group items by bracket matching → list of (parse-tree-node | token-entry)
+;; Parallel to group-items in parse-reader.rkt but produces tree nodes.
+(define (group-items-to-tree vec start end close-type srcloc indent)
+  (let loop ([i start] [result '()])
+    (cond
+      [(>= i end)
+       (values (reverse result) end)]
+      [else
+       (define item (vector-ref vec i))
+       (cond
+         ;; Indent boundary markers → sub-group
+         [(eq? item 'indent-open)
+          (define-values (inner-items next-i)
+            (group-items-to-tree vec (+ i 1) end 'indent-close srcloc indent))
+          (cond
+            [(null? inner-items) (loop next-i result)]
+            [(= (length inner-items) 1) (loop next-i (cons (car inner-items) result))]
+            [else
+             (define sub-node (parse-tree-node 'group (list->rrb inner-items) srcloc indent))
+             (loop next-i (cons sub-node result))])]
+         [(eq? item 'indent-close)
+          (if (eq? close-type 'indent-close)
+              (values (reverse result) (+ i 1))
+              (loop (+ i 1) result))]
+         ;; Token entry → check for brackets
+         [(token-entry? item)
+          (define type (set-first (token-entry-types item)))
+          (cond
+            ;; Opening brackets → recurse for bracket group
+            [(memq type '(lbracket lparen))
+             (define close (if (eq? type 'lbracket) 'rbracket 'rparen))
+             (define-values (inner next-i)
+               (group-items-to-tree vec (+ i 1) end close srcloc indent))
+             (define group-tag (if (eq? type 'lbracket) 'bracket-group 'paren-group))
+             (define group-node (parse-tree-node group-tag (list->rrb inner) srcloc indent))
+             (loop next-i (cons group-node result))]
+            ;; Closing bracket → end of group
+            [(and close-type (memq type '(rbracket rparen rbrace rangle))
+                  (or (eq? type close-type)
+                      (and (eq? close-type 'mixfix-rbrace) (eq? type 'rbrace))))
+             (values (reverse result) (+ i 1))]
+            ;; Langle → check for matching rangle (angle type group)
+            [(eq? type 'langle)
+             (define-values (inner next-i)
+               (group-items-to-tree vec (+ i 1) end 'rangle srcloc indent))
+             (define group-node (parse-tree-node 'angle-group (list->rrb inner) srcloc indent))
+             (loop next-i (cons group-node result))]
+            ;; Lbrace → brace group
+            [(memq type '(lbrace dot-lbrace hash-lbrace))
+             (define group-close (if (eq? type 'dot-lbrace) 'mixfix-rbrace 'rbrace))
+             (define-values (inner next-i)
+               (group-items-to-tree vec (+ i 1) end group-close srcloc indent))
+             (define group-tag (cond [(eq? type 'lbrace) 'brace-group]
+                                     [(eq? type 'dot-lbrace) 'mixfix-group]
+                                     [(eq? type 'hash-lbrace) 'set-group]
+                                     [else 'brace-group]))
+             (define group-node (parse-tree-node group-tag (list->rrb inner) srcloc indent))
+             (loop next-i (cons group-node result))]
+            ;; Quote-bracket, at-bracket, tilde-bracket → special groups
+            [(memq type '(quote-lbracket at-lbracket tilde-lbracket))
+             (define-values (inner next-i)
+               (group-items-to-tree vec (+ i 1) end 'rbracket srcloc indent))
+             (define group-tag (cond [(eq? type 'quote-lbracket) 'list-literal-group]
+                                     [(eq? type 'at-lbracket) 'at-group]
+                                     [(eq? type 'tilde-lbracket) 'tilde-group]
+                                     [else 'bracket-group]))
+             (define group-node (parse-tree-node group-tag (list->rrb inner) srcloc indent))
+             (loop next-i (cons group-node result))]
+            ;; Stray closing brackets → skip
+            [(memq type '(rbracket rparen rbrace rangle))
+             (loop (+ i 1) result)]
+            ;; Comma → skip (cosmetic separator)
+            [(eq? type 'comma)
+             (loop (+ i 1) result)]
+            ;; Regular token → add to result
+            [else
+             (loop (+ i 1) (cons item result))])]
+         ;; Unknown → skip
+         [else (loop (+ i 1) result)])])))
+
+;; ========================================
 ;; Phase 6: Tree-level rewriting pipeline
 ;; ========================================
 ;; Apply rewrite rules to every node in a tag-refined tree.
