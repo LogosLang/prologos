@@ -4,7 +4,13 @@
 **Series**: PPN (Propagator-Parsing-Network)
 **Prerequisite**: PPN Track 1 ✅ (propagator reader), SRE Track 2F ✅ (algebraic foundation)
 **Audit**: `docs/tracking/2026-03-28_PPN_TRACK2_STAGE2_AUDIT.md`
-**Research**: `docs/research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md`
+**Research**:
+- `docs/research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md` — rewriting IS SRE decomposition
+- `docs/research/2026-03-28_MODULE_THEORY_LATTICES.md` — parse tree as module over rewrite ring
+- `docs/research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md` — lattice embedding (Pocket Universe)
+- `docs/research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md` — DPO/adhesive, Engelfriet-Heyker
+- `docs/tracking/principles/DEVELOPMENT_LESSONS.org` — CALM fixed topology invariant
+- `docs/tracking/principles/EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org` — Layered Recovery Principle
 
 ---
 
@@ -13,14 +19,17 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Pre-0 benchmarks + adversarial | ✅ | `a0fd523`. Preparse invisible vs elaboration. 22-35μs/rule. |
-| 1 | Rewrite rule registry | ⬜ | Rule struct, registration, cell-based lookup |
-| 2 | Pure rewrite engine | ⬜ | 18 built-in rules as registered rewrites |
-| 3 | Registry propagators | ⬜ | process-data/trait/spec → cell writes |
-| 4 | Spec/where injection as propagators | ⬜ | Cross-stratum data flow |
-| 5 | Fixpoint convergence | ⬜ | preparse-expand-form → propagator quiescence |
-| 6 | Layer 2 integration | ⬜ | expand-top-level on network |
-| 7 | macros.rkt retirement | ⬜ | Consumer migration, dead code removal |
-| 8 | A/B benchmarks + suite verify | ⬜ | Performance-neutral, 383/383 GREEN |
+| 1 | Parse tree node descriptors + rewrite infrastructure | ⬜ | `ctor-desc` for surface tags, `rewrite-rule` struct, `surface-rewrite.rkt` |
+| 2 | Simple rewrite rules (14 rules) | ⬜ | Pattern→template on parse tree nodes via SRE |
+| 3 | Complex rewrite propagators (4 rules) | ⬜ | pipe-fusion, mixfix/Pratt, defn-multi, session-ws |
+| 4 | Registry propagators | ⬜ | process-data/trait/spec → cell writes |
+| 5 | Spec/where injection as propagators | ⬜ | Cross-stratum data flow (V(2)) |
+| 6 | Stratified pipeline integration | ⬜ | R(-1)→R(0)→R(1)→V(0)→V(1)→V(2) outer loop |
+| 7 | Layer 2 integration | ⬜ | expand-top-level rules on surf-* via SRE |
+| 8a | Consumer migration (reader.rkt) | ⬜ | 51 imports → parse-reader.rkt |
+| 8b | Consumer migration (macros.rkt) | ⬜ | driver.rkt + elaborator.rkt + tests |
+| 8c | reader.rkt deletion | ⬜ | 1898 lines removed |
+| 9 | A/B benchmarks + suite verify | ⬜ | Performance-neutral, 383/383 GREEN |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
 
@@ -72,23 +81,48 @@ Replace the imperative preparse pipeline in `macros.rkt` (9763 lines) with regis
 
 ## §3 Design
 
-### 3.1 Architecture: Pipeline of Set-Once Cells (CALM-Compliant)
+### 3.0 Theoretical Grounding
 
-**CALM constraint (from DEVELOPMENT_LESSONS.org)**: Within a stratum, topology is fixed and all operations are monotone. Rewrites are NOT monotone (they replace values). Therefore rewrites MUST happen at stratum boundaries, not within a BSP round.
+Three principles ground this design:
+
+**CALM (from DEVELOPMENT_LESSONS.org)**: Within a stratum, topology is fixed and all operations are monotone. Rewrites are NOT monotone (they replace values). Therefore rewrites MUST happen at stratum boundaries, not within a BSP round.
 
 **The Layered Recovery Principle (from EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org)**: Non-monotone behavior is recovered by inserting control layers between phases of monotone computation. Rewrites are the control layer; value propagation is the monotone substrate.
 
-**Form pipeline cells**: Each form progresses through a pipeline of **set-once cells**, one per rewrite stratum. A form that passes through 3 rewrite stages has 3 cells:
+**The Pocket Universe Principle (from Lattice Embeddings research)**: A cell value IS an entire lattice unto itself. An RRB vector of structured values is a lattice (ordered by subset/refinement). The SRE can decompose into this embedded lattice, operating on sub-structures without requiring per-element cells. PPN Track 1 proved this: 5 cells hold the entire parse state for a file. A `parse-tree-node` with RRB children IS a tree — a PVec of PVecs. Structural sharing makes transformations efficient (O(log n) path-copy per rewrite).
+
+### 3.1 Architecture: Parse Tree as Pocket Universe
+
+**Core insight**: The parse tree from PPN Track 1 IS the right representation for surface normalization. We don't need a new intermediate representation. The parse tree is:
+
+- A **structured value in a cell** (Pocket Universe — one cell holds the full tree)
+- **Decomposable by the SRE** (tag + children pattern matching via `ctor-desc`)
+- **Efficient under transformation** (RRB structural sharing — rewrite one subtree, share the rest)
+- **A tree** (PVec of PVecs — `parse-tree-node` contains an RRB of children, some of which are `parse-tree-node` values)
+
+**The pipeline eliminates the datum layer entirely:**
 
 ```
-raw-datum-cell (⊥ → raw datum, set-once)
+source text → PPN Track 1 reader → parse tree cell
+    → [SRE rewrite rules operate on parse tree nodes]
+    → rewritten parse tree cell (per stratum)
+    → [parser extracts surf-* from rewritten tree]
+    → elaborator
+```
+
+No `compat-read-all-forms-string`. No datum conversion. No syntax objects. The parse tree is the canonical representation from reader through normalization through parsing. PPN Tracks 1, 2, and 3 all operate on the same structure.
+
+**Form pipeline cells**: Each top-level form (a subtree of the parse tree) progresses through a pipeline of **set-once cells**, one per rewrite stratum:
+
+```
+raw-tree-cell (⊥ → parse-tree-node, set-once)
     → [V0 structural rewrite stratum]
-v0-datum-cell (⊥ → structurally rewritten datum, set-once)
+v0-tree-cell (⊥ → structurally rewritten parse-tree-node, set-once)
     → [V1 macro expansion stratum]
-v1-datum-cell (⊥ → macro-expanded datum, set-once)
+v1-tree-cell (⊥ → macro-expanded parse-tree-node, set-once)
     → [V2 spec/where injection stratum]
-v2-datum-cell (⊥ → injected datum, set-once)
-    → [consumed by parser]
+v2-tree-cell (⊥ → injected parse-tree-node, set-once)
+    → [consumed by parser / elaborator]
 ```
 
 Each cell is set-once: ⊥ → value, never overwritten. This is trivially monotone. The "replacement" that rewrites perform happens BETWEEN strata — each stratum reads the previous stratum's output cell and writes to its own output cell. No cell is ever written twice.
@@ -97,45 +131,80 @@ Each cell is set-once: ⊥ → value, never overwritten. This is trivially monot
 
 **The dependency cell**: Tracks which forms depend on which registry entries. When a form references a constructor/trait/spec, a dependency edge is recorded. The elaborator processes forms in dependency order — no Phase 5b hoisting needed.
 
-### 3.2 Rewrite Rules as Data
+**Module Theory lens**: The parse tree is a module over the endomorphism ring of rewrite rules (from `docs/research/2026-03-28_MODULE_THEORY_LATTICES.md`). Each rewrite rule is a ring element (an endomorphism). Applying a rule is scalar action on the module. Sub-tree decomposition is the module's direct-sum decomposition. Independent sub-trees can be rewritten in parallel (submodule independence = parallelizability from PAR Track 2).
 
-A rewrite rule is a first-class value:
+### 3.2 SRE Decomposition on Parse Tree Nodes
+
+Parse tree nodes are registered as SRE `ctor-desc` entries. Each form head (`:let`, `:defn`, `:if`, `:cond`, etc.) gets a descriptor:
+
+```racket
+;; Example: let-form descriptor
+(register-ctor! ':let
+  #:arity 4   ;; name, :=, val, body (or variant arities via guard)
+  #:recognizer (lambda (v) (and (parse-tree-node? v)
+                                (eq? (parse-tree-node-tag v) ':let)))
+  #:extract (lambda (v) (rrb-to-list (parse-tree-node-children v)))
+  #:reconstruct (lambda (cs) (make-parse-tree-node ':let (rrb-from-list cs)
+                                                    (current-srcloc) 0))
+  #:component-lattices (list tree-lattice-spec tree-lattice-spec
+                             tree-lattice-spec tree-lattice-spec)
+  #:domain 'surface
+  #:sample (make-sample-let-node)
+  #:component-variances '(= = = =))  ;; all invariant for rewriting
+```
+
+The SRE decomposes a `:let` node into sub-cells for each child. Rewrite rules match against the tag + children pattern. The reconstruction propagator builds the output from the same sub-cells with a new tag/structure.
+
+**Variable-arity forms**: Some forms have variable arity (e.g., `(let x := val body)` vs `(let [bindings] body)`). These register as SEPARATE descriptors with different tags: `:let-assign` (arity 4), `:let-bracket` (arity 2). The parse tree builder (PPN Track 1) assigns the specific tag based on structure. This avoids the fixed-arity problem — each variant has its own descriptor with known arity.
+
+**Rewrite rules as SRE idempotent relations**: A rewrite rule is a **directional** SRE relation — match LHS (decompose), produce RHS (compose), using the same sub-cell bindings. This is the SRE Track 2D relation kind (idempotent endomorphism in Track 2F's algebraic foundation).
 
 ```racket
 (struct rewrite-rule
   (name          ; symbol — for debugging/tracing
-   pattern       ; datum pattern with holes (e.g., '(let $name := $val $body))
-   template      ; datum template with same holes (e.g., '((fn [$name] $body) $val))
-   guard         ; (datum → boolean) or #f — additional match condition
+   lhs-desc      ; ctor-desc for LHS pattern (SRE decomposition)
+   rhs-desc      ; ctor-desc for RHS template (SRE reconstruction)
+   binding-map   ; (hash lhs-idx → rhs-idx) — which LHS children become which RHS children
+   guard         ; (parse-tree-node → boolean) or #f — additional match condition
    priority      ; natural — higher fires first (for overlapping patterns)
-   stratum)      ; natural — which pass/stratum this rule belongs to
+   stratum)      ; natural — which rewrite stratum this rule belongs to
   #:transparent)
 ```
 
-Registration is declarative:
+Registration:
 
 ```racket
 (register-rewrite-rule!
- (rewrite-rule 'expand-let
-               '(let $name := $val . $body)
-               '((fn [$name] . $body) $val)
-               #f    ;; no guard
-               100   ;; priority
-               0))   ;; stratum 0 (pure rewrite)
+ (rewrite-rule 'expand-let-assign
+               let-assign-desc        ;; matches :let-assign nodes
+               fn-application-desc    ;; produces :fn-application nodes
+               (hash 0 1 1 0 2 2)    ;; name→param, val→arg, body→body
+               #f                     ;; no guard
+               100                    ;; priority
+               'V0))                  ;; stratum V0 (structural rewrites)
 ```
 
-The 18 pure rewrites from the audit become 18 rule registrations. No functions, no closures — just data describing the transformation.
+The 18 pure rewrites from the audit become 18 rule registrations. No functions, no closures — SRE descriptors + binding maps describing the transformation.
 
-### 3.3 Pattern Matching via SRE
+### 3.3 Specialized Propagators for Complex Rules
 
-Rewrite rule matching uses the SRE's **idempotent relation** (Track 2D: rewriting). The pattern is the LHS, the template is the RHS. SRE decomposition extracts bindings (the `$name`, `$val`, `$body` holes). SRE reconstruction builds the output from the same bindings.
+Not all rewrites are simple pattern→template transformations. The audit identified two categories:
 
-This reuses existing SRE machinery:
-- `sre-decompose-generic` for LHS matching
-- Reconstruction propagators for RHS composition
-- Sub-cell binding for shared variables
+**Simple rules** (14): `expand-let`, `expand-if`, `expand-cond`, `expand-do`, `expand-list-literal`, `expand-lseq-literal`, `expand-compose-sexp`, `expand-quote`, `expand-quasiquote`, `rewrite-dot-access`, `rewrite-nil-dot-access`, `rewrite-infix-pipe`, `rewrite-implicit-map`, `expand-when`. These are captured fully by `rewrite-rule` structs with SRE descriptors.
 
-The only new piece: the rewriting relation is **directional** (match LHS → produce RHS, not bidirectional unification). This is the SRE Track 2D relation kind — already designed in the algebraic foundation (Track 2F's endomorphism ring has an 'idempotent row in the variance-map).
+**Complex rules** (4): These require specialized propagator fire functions because they involve analysis beyond pattern matching:
+
+1. **`expand-pipe-block`** (loop fusion): Classifies pipe steps (fusible/terminal/barrier/plain), builds fused inline reducers, emits optimized code. A specialized propagator in stratum V(0) that reads the `:pipe-gt` node, runs the fusion analysis, and writes the optimized tree.
+
+2. **`expand-mixfix-form`** (Pratt parser): Reads user-operator and precedence-group registries, runs a Pratt parser on the token sequence, produces prefix form. A specialized propagator in stratum V(0) that reads the `:mixfix` node + registry cells and writes the parsed tree.
+
+3. **`desugar-defn-multi`** (pattern clause compilation): Multi-arity defn with pattern matching clauses compiled to single defn with match expression. A specialized propagator in stratum V(2) or Layer 2.
+
+4. **`desugar-session-ws` / `desugar-defproc-ws`** (WS-mode session/process desugaring): Restructures flat WS pipe tokens into nested session/process structure. A specialized propagator in stratum V(0).
+
+These are registered as propagators (not rewrite rules) attached to their specific node tags. They read from the same pipeline cells and write to the same output cells. The SRE's `ctor-desc` system handles their input/output decomposition — only the transformation logic is custom.
+
+**Mixfix as design validation target**: The rewrite rule registry must support future syntax extensions (advanced mixfix, unicode operators, user-defined forms) via `register-rewrite-rule!` alone. If a future mixfix extension requires editing the engine, the architecture is wrong. The Pratt parser propagator reads operator/precedence registry cells — adding operators is a cell write, not an engine change.
 
 ### 3.4 Stratified Execution (CALM-Compliant)
 
@@ -264,23 +333,42 @@ Termination: bounded by depth limit (100 chained sub-strata). Each sub-stratum p
 
 ### 3.7 Layer 2: Post-Parse Expansion
 
-Layer 2 (`expand-top-level`, `expand-expression`) operates on surf-* structs, not datums. Two approaches:
+Layer 2 (`expand-top-level`, `expand-expression`) operates on surf-* structs. With the parse tree as the canonical representation, two options:
 
-**Option A: Separate rewrite engine for surf-* forms.** Layer 2 rules match surf-* patterns. The SRE already handles arbitrary structs via `ctor-desc`. Register surf-defn, surf-def, surf-the-fn as constructors with rewrite rules.
+**Option A: Parse tree → surf-* → Layer 2 rewrite rules.** The parser converts rewritten parse tree nodes to surf-* ASTs (existing code). Layer 2 rules are registered as SRE `ctor-desc` on surf-* structs (these are already fixed-arity structs — ideal for SRE). `desugar-defn`, `desugar-the-fn`, `infer-auto-implicits` become rewrite rules on surf-* constructors.
 
-**Option B: Unify representations.** Don't parse to surf-* at all — keep datums through elaboration. The parser becomes a datum-to-datum transformer (a rewrite rule itself). Elaboration reads datums directly.
+**Option B (PPN Track 3): Eliminate surf-*.** The parser becomes another rewrite stratum on the same parse tree. Elaboration reads parse tree nodes directly. No representation change between normalization and elaboration.
 
-Option A is the incremental path (keeps existing parser). Option B is the principled path (removes the parser as a separate stage — it becomes another rewrite stratum). PPN Track 3 (parser as propagators) would implement Option B. For Track 2, Option A is sufficient.
+For Track 2: **Option A**. The parser bridge (parse tree → surf-*) is existing working code. Layer 2 rules on surf-* are a clean application of SRE. Option B is PPN Track 3's scope.
 
-### 3.8 macros.rkt Retirement Strategy
+### 3.8 reader.rkt + macros.rkt Retirement Strategy
 
-Phase 7 migrates consumers from macros.rkt functions to the propagator-based system. The audit identified the consumers:
+**Phase 7 has three sub-phases for explicit retirement:**
 
-- `driver.rkt` calls `preparse-expand-all` → calls the new propagator-based expand
-- `elaborator.rkt` reads registries → reads cells directly
-- Tests reference `expand-*` functions → updated to test rewrite rules
+**Phase 7a: Consumer import migration (reader.rkt).** 51 files import from `reader.rkt` for `tokenize-string`, `read-all-forms-string`, `prologos-read-syntax-all`. Change all imports to `parse-reader.rkt` compat wrappers. This is mechanical (grep + replace). After this phase, no file imports `reader.rkt` directly.
 
-The migration is incremental: each Phase (2-6) replaces a subset of macros.rkt functions. The file shrinks progressively. Phase 7 removes what remains.
+**Code eliminated**: 0 lines (imports change only). But UNBLOCKS Phase 7c.
+
+**Phase 7b: Consumer migration (macros.rkt).** `driver.rkt` calls `preparse-expand-all` → calls the new propagator-based expand. `elaborator.rkt` reads registries → reads cells directly. Tests reference `expand-*` functions → updated to test rewrite rules.
+
+**Code eliminated**: ~3000-5000 lines of imperative preparse logic in macros.rkt. Registration functions remain (they write to cells).
+
+**Phase 7c: reader.rkt deletion.** Remove the `use-new-reader?` parameter dispatch in `driver.rkt`. Delete `reader.rkt` (1898 lines). The new reader (parse-reader.rkt) is the only reader.
+
+**Code eliminated**: 1898 lines (reader.rkt) + ~50 lines of dispatch logic.
+
+**Total code elimination across Track 2**: ~5000-7000 lines (macros.rkt preparse + reader.rkt + dispatch logic).
+
+### 3.9 Deferred Items Incorporated (from PPN Master + Track 1 PIR)
+
+| Source | Item | How addressed |
+|--------|------|---------------|
+| PPN Master line 43 | Mixfix deferred to Track 2 | §3.3: specialized Pratt parser propagator in V(0). Reads operator/precedence registry cells. |
+| PPN Master line 43 | Token struct field migration | §3.1: eliminated. Parse tree IS the representation. No token struct migration needed — tree nodes contain RRB children. |
+| PPN Master line 43 | Syntax-object elimination | §3.1: eliminated. Parse tree nodes carry srcloc directly. No syntax objects in the pipeline. |
+| Track 1 PIR §8 | reader.rkt retirement (1898 lines) | §3.8 Phase 7c: explicit deletion phase after consumer migration. |
+| Track 1 PIR §8 | Compat layer removal | §3.1: compat layer unnecessary. Parse tree is canonical. Phase 7a migrates remaining consumers. |
+| DEFERRED.md | Advanced mixfix (unicode, postfix) | §3.3: design validation target. Future extensions via `register-rewrite-rule!` only. |
 
 ### 3.9 Dependency Ordering Replaces Source Ordering
 
@@ -356,21 +444,43 @@ Phase 5b becomes unnecessary. The hoisting is implicit in propagator firing orde
 4. **Fixpoint convergence is fast.** Most forms need 0-1 iterations. The propagator fires once per form, quiesces, done. No need for complex fuel-limit mechanisms for typical programs.
 5. **Complex rules (pipe fusion, mixfix) dominate their own cost.** These should be specialized propagators, not pattern→template rules.
 
-### Phase 1: Rewrite Rule Registry
+### Phase 1: Parse Tree Node Descriptors + Rewrite Infrastructure
 
-**Deliverable**: `rewrite-rule` struct, registration, cell-based lookup.
+**Deliverable**: `ctor-desc` registrations for surface form tags. `rewrite-rule` struct. `register-rewrite-rule!`. New module `surface-rewrite.rkt`.
 
-**Scope**: New module (or section in a new `surface-rewrite.rkt`). The rule registry is a cell holding a list of rules. `register-rewrite-rule!` writes to this cell. Rule lookup scans the list for matching patterns.
+**Scope**:
+- Register `parse-tree-node` variants as SRE `ctor-desc` entries in a new `'surface` domain. Tags: `:let-assign`, `:let-bracket`, `:if`, `:cond`, `:do`, `:list-literal`, `:lseq-literal`, `:pipe-gt`, `:compose`, `:quote`, `:quasiquote`, `:dot-access`, `:dot-key`, `:infix-pipe`, `:implicit-map`, `:mixfix`, `:defn`, `:def`, `:spec`, `:data`, `:trait`, `:impl`, etc.
+- Each descriptor has: recognizer (tag check), extractor (RRB children → list), reconstructor (list → parse-tree-node with new tag), lattice specs, variances.
+- `rewrite-rule` struct with `lhs-desc`, `rhs-desc`, `binding-map`, `guard`, `priority`, `stratum`.
+- `register-rewrite-rule!` writes to a rewrite-rule registry cell.
+- Rule matching: scan registry cell, find first rule whose `lhs-desc` recognizer matches the input node.
 
-**Tests**: Unit tests for rule registration, pattern matching, template substitution.
+**Tests**: Unit tests for descriptor registration, rule registration, pattern matching on parse tree nodes, template reconstruction.
 
-### Phase 2: Pure Rewrite Engine
+### Phase 2: Simple Rewrite Rules (14 rules)
 
-**Deliverable**: 18 built-in rules registered as rewrite rules. A `rewrite-form` function applies all matching rules to a datum.
+**Deliverable**: 14 simple rules registered as `rewrite-rule` structs with SRE descriptors.
 
-**Scope**: Replace the 18 `expand-*` functions with 18 rule registrations. The `rewrite-form` function takes a datum, scans registered rules, applies the first match, returns the result. This is the core of the propagator fire function.
+**Scope**: Replace the 14 simple `expand-*` functions with rule registrations that operate on parse tree nodes:
 
-**Tests**: All existing preparse tests must pass. Each rule tested individually.
+| Rule | LHS tag | RHS construction |
+|------|---------|-----------------|
+| expand-let-assign | `:let-assign` | `((fn [name] body) val)` tree |
+| expand-let-bracket | `:let-bracket` | nested fn applications |
+| expand-if | `:if` | `(match cond \| true → then \| false → else)` tree |
+| expand-cond | `:cond` | nested if tree |
+| expand-do | `:do` | nested let tree |
+| expand-list-literal | `:list-literal` | nested cons tree |
+| expand-lseq-literal | `:lseq-literal` | nested lseq-cell tree |
+| expand-compose | `:compose` | nested fn tree |
+| expand-quote | `:quote` | datum constructor tree |
+| expand-quasiquote | `:quasiquote` | datum constructor with unquote holes |
+| rewrite-dot-access | `:dot-access` | `(map-get target :field)` tree |
+| rewrite-dot-key | `:dot-key` | `(map-get target kw)` tree |
+| rewrite-infix-pipe | `:infix-pipe` | canonicalized pipe tree |
+| rewrite-implicit-map | `:implicit-map` | `$brace-params` restructured tree |
+
+**Tests**: All existing preparse tests must pass. Each rule tested individually on parse tree node inputs.
 
 ### Phase 3: Registry Propagators
 
