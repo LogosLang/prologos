@@ -85,10 +85,7 @@
          ;; Track 10: .pnet cache feature flags
          current-use-pnet-cache?
          current-pnet-write-enabled?
-         ;; PPN Track 1 Phase 5c: new reader validation
-         use-new-reader?
          use-tree-parser?
-         validate-new-reader?
          ;; PTF Track 1 Phase 0: network capture hook for analysis
          current-network-capture-box)
 
@@ -1332,55 +1329,16 @@
         (reverse acc)
         (loop (cons stx acc)))))
 
-;; Read all syntax objects using the whitespace-significant reader
-;; Phase 5c: parallel validation — run both old and new readers, compare
-(define use-new-reader? (make-parameter #t))
-(define validate-new-reader?
-  (make-parameter (and (getenv "PROLOGOS_VALIDATE_NEW_READER") #t)))
-
+;; Read all syntax objects using the whitespace-significant reader.
+;; PPN Track 2 Phase 10: uses parse-reader.rkt exclusively (reader.rkt retired).
 (define (read-all-syntax-ws port [source "<port>"])
-  (cond
-    [(use-new-reader?)
-     ;; New reader path
-     (register-default-token-patterns!)
-     (define str (port->string port))
-     (define pt (read-to-tree str))
-     ;; T(0): Tag refinement — 'line → form-specific tags (PPN Track 2 Phase 1b)
-     ;; Refines the parse tree before datum extraction. Tags are used by
-     ;; the surface rewrite engine (Phases 2+). Currently the compat layer
-     ;; (read-all-forms-from-tree) ignores tags and extracts by token structure,
-     ;; so refinement is additive — no behavioral change until Phase 6 wiring.
-     (define refined-root (refine-tag (parse-tree-root pt)))
-     ;; The tree is tag-refined but NOT form-grouped or rewritten here.
-     ;; G(0) form grouping + tree rewriting + tree→surf-* parsing happen
-     ;; in a SEPARATE path (use-tree-parser?) that bypasses datum extraction.
-     ;; The datum extraction path (read-all-forms-from-tree) feeds the OLD
-     ;; preparse-expand-all + parse-datum pipeline.
-     (define refined-pt (struct-copy parse-tree pt [root refined-root]))
-     (read-all-forms-from-tree refined-pt str (or source "<unknown>"))]
-    [(validate-new-reader?)
-     ;; Parallel validation: run both, compare datums, use old result
-     (define str (port->string port))
-     ;; Old reader
-     (define old-port (open-input-string str))
-     (port-count-lines! old-port)
-     (define old-result (prologos-read-syntax-all source old-port))
-     ;; New reader
-     (register-default-token-patterns!)
-     (define pt (read-to-tree str))
-     (define new-result (read-all-forms-from-tree pt str (or source "<unknown>")))
-     ;; Compare datums (not syntax locations — those differ)
-     (define old-datums (map syntax->datum old-result))
-     (define new-datums (map syntax->datum new-result))
-     (unless (equal? old-datums new-datums)
-       (eprintf "WARNING: new reader datum mismatch in ~a\n" source)
-       (eprintf "  old forms: ~a, new forms: ~a\n"
-                (length old-datums) (length new-datums)))
-     old-result]
-    [else
-     ;; Old reader (default)
-     (port-count-lines! port)
-     (prologos-read-syntax-all source port)]))
+  (register-default-token-patterns!)
+  (define str (port->string port))
+  (define pt (read-to-tree str))
+  ;; T(0): Tag refinement — 'line → form-specific tags
+  (define refined-root (refine-tag (parse-tree-root pt)))
+  (define refined-pt (struct-copy parse-tree pt [root refined-root]))
+  (read-all-forms-from-tree refined-pt str (or source "<unknown>")))
 
 ;; ========================================
 ;; Post-Compilation Capability Inference (IO-H)

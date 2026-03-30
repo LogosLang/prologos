@@ -24,8 +24,7 @@
          "rrb.rkt"
          "propagator.rkt"
          "parse-lattice.rkt"
-         ;; PPN Track 2 Phase 8a: re-export sexp reader for backward compat
-         (only-in "reader.rkt" prologos-read prologos-read-syntax))
+)
 
 (provide
  ;; Phase 1a: Character + indent domains
@@ -2384,3 +2383,56 @@
   (define str (port->string port))
   (define pt (read-to-tree str))
   (read-all-forms-from-tree pt str (or source "<unknown>")))
+
+;; ============================================================
+;; Phase 10: Native prologos-read / prologos-read-syntax
+;; ============================================================
+;; These replace reader.rkt's WS reader functions.
+;; Pattern: parse all on first call, cache remaining forms.
+
+(define prologos-stx-cache (make-weak-hasheq))
+(define prologos-form-cache (make-weak-hasheq))
+
+;; Read one WS-mode syntax object (with source locations).
+;; On first call: reads all forms and caches the rest.
+;; Subsequent calls on same port return from cache.
+(define (prologos-read-syntax source in)
+  (define cached (hash-ref prologos-stx-cache in #f))
+  (cond
+    [(and cached (pair? cached))
+     (hash-set! prologos-stx-cache in (cdr cached))
+     (car cached)]
+    [(and cached (null? cached))
+     eof]
+    [else
+     ;; First call: parse everything using new reader
+     (register-default-token-patterns!)
+     (define str (port->string in))
+     (define pt (read-to-tree str))
+     (define all-forms (read-all-forms-from-tree pt str (or source "<unknown>")))
+     (cond
+       [(null? all-forms) eof]
+       [else
+        (hash-set! prologos-stx-cache in (cdr all-forms))
+        (car all-forms)])]))
+
+;; Read one WS-mode datum (no source locations).
+(define (prologos-read in)
+  (define cached (hash-ref prologos-form-cache in #f))
+  (cond
+    [(and cached (pair? cached))
+     (hash-set! prologos-form-cache in (cdr cached))
+     (syntax->datum (car cached))]
+    [(and cached (null? cached))
+     eof]
+    [else
+     ;; First call: parse everything using new reader
+     (register-default-token-patterns!)
+     (define str (port->string in))
+     (define pt (read-to-tree str))
+     (define all-forms (read-all-forms-from-tree pt str "<unknown>"))
+     (cond
+       [(null? all-forms) eof]
+       [else
+        (hash-set! prologos-form-cache in (cdr all-forms))
+        (syntax->datum (car all-forms))])]))
