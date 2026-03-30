@@ -492,6 +492,305 @@ Phase 5b becomes unnecessary. The hoisting is implicit in propagator firing orde
 
 ---
 
+## §3.12 NTT Speculative Syntax — Full Pipeline Model
+
+Following PPN Track 0's precedent (NTT Syntax Design §16), this section expresses the Track 2 architecture in [NTT syntax](2026-03-22_NTT_SYNTAX_DESIGN.md). This serves as: (a) design clarity check, (b) correctness reference for implementation, (c) NTT refinement — gaps identified feed back into the NTT design.
+
+### Lattice Declarations
+
+```prologos
+;; The parse tree as an embedded lattice (Pocket Universe)
+data SurfaceTree
+  := surface-bot
+   | surface-tree [nodes : PersistentVec SurfaceNode]
+   | surface-error
+  :lattice :embedded
+  :inner   [PersistentVec SurfaceNode]
+  :merge   pvec-point-update
+  :bot     surface-bot
+  :top     surface-error
+  :diff    pvec-structural-diff
+
+;; A surface node — the tree M-type from PPN Track 1
+data SurfaceNode
+  := node [tag : FormTag] [children : PersistentVec SurfaceChild]
+         [srcloc : SrcLoc] [indent : Int]
+  :lattice :structural
+  :bot     node-bot
+  :top     node-error
+
+;; Children are either nodes or tokens
+data SurfaceChild
+  := child-node [n : SurfaceNode]
+   | child-token [t : TokenEntry]
+  :lattice :set-once
+  :bot child-bot
+
+;; Form tag lattice (Approach 3: field; Approach 4: cell)
+data FormTag
+  := tag-bot          ;; unrefined ('line from tree-builder)
+   | tag-line         ;; indent-structural
+   | tag-let-assign | tag-let-bracket | tag-let-inline
+   | tag-defn | tag-def | tag-spec | tag-data | tag-trait | tag-impl
+   | tag-if | tag-cond | tag-do | tag-when
+   | tag-pipe-gt | tag-compose | tag-mixfix
+   | tag-list-literal | tag-lseq-literal
+   | tag-quote | tag-quasiquote
+   | tag-session | tag-defproc | tag-proc
+   | tag-defr | tag-solver | tag-eval
+   | tag-ns | tag-imports | tag-exports | tag-foreign
+   | tag-error         ;; contradictory / unrecognizable
+  :lattice :value
+  :bot tag-bot
+  :top tag-error
+
+;; Registry cells as embedded lattices
+data RegistryCell {K V : Type}
+  := registry-bot
+   | registry [entries : Map K V]
+  :lattice :embedded
+  :inner   [Map K V]
+  :merge   map-union
+  :bot     registry-bot
+  :diff    map-key-diff
+```
+
+### Rewrite Rules (PROPOSED NTT extension — see §3.12.1)
+
+```prologos
+;; PROPOSED FORM: rewrite — first-class DPO rewrite rule declaration
+;; Represents the SRE idempotent relation: match LHS, produce RHS, shared bindings
+
+rewrite expand-let-assign
+  :lhs    [node tag-let-assign [$name $assign $val . $body]]
+  :rhs    [node tag-fn-application [[fn [$name] . $body] $val]]
+  :bind   {name -> fn-param, val -> arg, body -> fn-body}
+  :stratum V0
+  :priority 100
+
+rewrite expand-if
+  :lhs    [node tag-if [$cond $then $else]]
+  :rhs    [node tag-match [$cond [clause true $then] [clause false $else]]]
+  :bind   {cond -> scrutinee, then -> branch-1, else -> branch-2}
+  :stratum V0
+  :priority 100
+
+rewrite expand-cond
+  :lhs    [node tag-cond [$pipe $guard -> $body . $rest]]
+  :rhs    [node tag-if [$guard $body [expand-cond-rest $rest]]]
+  :bind   {guard -> cond, body -> then, rest -> else-chain}
+  :stratum V0
+  :priority 90
+
+rewrite expand-list-literal
+  :lhs    [node tag-list-literal [$x . $xs]]
+  :rhs    [cons $x [expand-list-literal $xs]]
+  :bind   {x -> head, xs -> tail}
+  :stratum V0
+  :priority 100
+
+rewrite expand-dot-access
+  :lhs    [node tag-dot-access [$target $field]]
+  :rhs    [map-get $target $field]
+  :bind   {target -> obj, field -> key}
+  :stratum V0
+  :priority 110   ;; higher than infix (must fire first)
+```
+
+### Tag Refinement Rules (PROPOSED NTT extension — see §3.12.2)
+
+```prologos
+;; PROPOSED FORM: refine — tag refinement via SRE subtype relation
+;; Narrows a general tag to a specific variant based on structure inspection
+
+refine FormTag
+  :from tag-line
+  :to   tag-let-assign
+  :when [first-child-token-is "let"] [nth-child-token-is 2 ":="]
+  :stratum T0
+
+refine FormTag
+  :from tag-line
+  :to   tag-let-bracket
+  :when [first-child-token-is "let"] [second-child-is-bracket]
+  :stratum T0
+
+refine FormTag
+  :from tag-line
+  :to   tag-defn
+  :when [first-child-token-is "defn"]
+  :stratum T0
+
+refine FormTag
+  :from tag-line
+  :to   tag-data
+  :when [first-child-token-is "data"]
+  :stratum T0
+
+;; ... (one refine per form head)
+```
+
+### Specialized Propagators
+
+```prologos
+;; Pipe fusion — complex analysis, not a simple rewrite
+propagator pipe-fusion
+  :reads  [pipe-in : Cell SurfaceNode]
+  :writes [pipe-out : Cell SurfaceNode]
+  :guard  [tag-is? pipe-in tag-pipe-gt]
+  (let [steps := [classify-pipe-steps [node-children [read pipe-in]]]]
+    [write pipe-out [fuse-pipe-steps steps]])
+
+;; Mixfix Pratt parser — reads operator/precedence registries
+propagator mixfix-parse
+  :reads  [mixfix-in : Cell SurfaceNode]
+          [op-registry : Cell (RegistryCell Symbol OpInfo)]
+          [prec-groups : Cell (RegistryCell Symbol PrecGroup)]
+  :writes [mixfix-out : Cell SurfaceNode]
+  :guard  [tag-is? mixfix-in tag-mixfix]
+  (let [ops := [read op-registry]
+        precs := [read prec-groups]
+        tokens := [node-children [read mixfix-in]]]
+    [write mixfix-out [pratt-parse tokens ops precs]])
+```
+
+### Stratified Pipeline
+
+```prologos
+stratification SurfaceNormalization
+  :strata [R-neg1 R0 R1 T0 V0 V1 V2]
+  :scheduler :bsp
+
+  :fiber R-neg1
+    :mode monotone
+    :networks [ns-loader import-resolver]
+
+  :fiber R0
+    :mode monotone
+    :networks [data-registrar trait-registrar deftype-registrar
+               defmacro-registrar bundle-registrar schema-registrar
+               selection-registrar property-registrar functor-registrar]
+
+  :fiber R1
+    :mode monotone
+    :networks [spec-registrar impl-registrar]
+
+  :fiber T0
+    :mode monotone
+    :networks [tag-refiner]
+    ;; Tag refinement: 'line → form-specific tags via SRE subtype
+
+  :fiber V0
+    :mode monotone
+    :networks [structural-rewriter]
+    ;; Priority-ordered: implicit-map (110) > dot-access (105) > infix (100)
+
+  :fiber V1
+    :mode monotone
+    :networks [macro-expander]
+    :recurse
+      :trigger
+        :condition [output-matches-macro-pattern]
+        :when [lfp-reached]
+      :grows-by 1
+      :halts-when [no-match]
+
+  :fiber V2
+    :mode monotone
+    :networks [spec-injector where-injector]
+
+  :fuel 100
+  :where [WellFounded SurfaceNormalization]
+```
+
+### Bridges
+
+```prologos
+;; Spec injection: registry → form (one-way)
+bridge SpecToForm
+  :from RegistryCell Symbol SpecEntry
+  :to   SurfaceNode
+  :alpha spec-inject-into-defn
+  ;; No gamma — injection is one-way
+
+;; Where-clause injection: reads from trait + bundle registries
+bridge WhereToForm
+  :from RegistryCell Symbol TraitEntry
+  :to   SurfaceNode
+  :alpha where-expand-constraints
+
+;; Tag refinement: tree structure → tag lattice
+bridge TreeToTag
+  :from SurfaceNode
+  :to   FormTag
+  :alpha first-token-to-tag
+  ;; No gamma — refinement is one-way (subtype)
+```
+
+### §3.12.1 NTT Gap: `rewrite` Form
+
+NTT currently has `propagator` (fire function with `:reads`/`:writes`) but no way to declare a **rewrite rule** as a first-class form. Rewrite rules are data — LHS pattern, RHS template, binding map — not fire functions. The proposed `rewrite` form fills this gap:
+
+| Keyword | Type | Description |
+|---------|------|-------------|
+| `:lhs` | Pattern | SRE decomposition pattern (LHS `ctor-desc`) |
+| `:rhs` | Template | SRE reconstruction template (RHS `ctor-desc`) |
+| `:bind` | Map | Sub-cell binding map (LHS child idx → RHS child idx) |
+| `:stratum` | Symbol | Which rewrite stratum this rule belongs to |
+| `:priority` | Nat | Higher fires first (for overlapping patterns) |
+| `:guard` | Predicate | Optional additional match condition |
+
+The `rewrite` form is the NTT surface syntax for `rewrite-rule` structs. The SRE's idempotent relation handles matching (`:lhs`) and reconstruction (`:rhs`). The `:bind` map connects sub-cells across arity changes.
+
+**Why not just `propagator`?** A propagator has an opaque fire function body. A rewrite rule is INSPECTABLE DATA — the LHS and RHS patterns can be analyzed, composed, inverted (for bidirectional rewriting), and optimized (rule ordering, confluence checking). Making rules first-class enables: rule composition (`rewrite A := compose [rule1 rule2]`), rule inversion (`:bidirectional` flag), and static confluence analysis.
+
+**Connection to PRN**: The `rewrite` form IS a DPO (Double-Pushout) rewrite rule in NTT syntax. PRN's hypergraph rewriting grammars would use the same form for graph transformation rules. PPN Track 2 is the first consumer; PRN generalizes.
+
+### §3.12.2 NTT Gap: `refine` Form
+
+NTT has no form for declaring **tag refinement** — monotone narrowing of a lattice value from general to specific based on structural inspection. The proposed `refine` form:
+
+| Keyword | Type | Description |
+|---------|------|-------------|
+| `:from` | Lattice value | General tag (e.g., `tag-line`) |
+| `:to` | Lattice value | Specific tag (e.g., `tag-let-assign`) |
+| `:when` | Predicate list | Structural conditions for refinement |
+| `:stratum` | Symbol | Which stratum performs the refinement |
+
+**Why not `rewrite`?** Refinement changes the TAG but preserves children. Rewriting changes the STRUCTURE (different children, different arity). Refinement is monotone within a stratum (tag lattice narrows). Rewriting is non-monotone (requires stratum boundary). They are different algebraic operations — refinement is subtyping, rewriting is endomorphism.
+
+**Connection to Approach 4**: When form tags become lattice cells (PPN Track 3+), `refine` declarations become set-narrowing propagators. The `refine` form is the declarative surface for both Approach 3 (struct field assignment) and Approach 4 (cell narrowing). The implementation changes; the declaration doesn't.
+
+### §3.12.3 NTT Gap: Dynamic Pipeline Wiring
+
+NTT's `connect` (in `network`) models static wiring between known cells. The form pipeline (V0→V1→V2) creates cells dynamically — each form gets a chain of set-once cells, one per stratum. The number of cells depends on the number of forms in the file.
+
+This is the `functor` pattern — the pipeline is parameterized by the form list:
+
+```prologos
+;; PROPOSED: functor-parameterized pipeline
+functor FormPipeline {form : SurfaceNode}
+  interface
+    :inputs  [raw : Cell SurfaceNode]
+    :outputs [t0-out : Cell SurfaceNode
+              v0-out : Cell SurfaceNode
+              v1-out : Cell SurfaceNode
+              v2-out : Cell SurfaceNode]
+
+;; Instantiation: one pipeline per top-level form
+network preparse-net : PreparseInterface
+  embed pipeline-1 : FormPipeline form-1
+        pipeline-2 : FormPipeline form-2
+        ...
+  connect parse-tree.form-1 -> pipeline-1.raw
+          parse-tree.form-2 -> pipeline-2.raw
+          ...
+```
+
+This uses existing NTT (`functor` + `embed`) but the instantiation is data-driven (one per form). The `...` is the gap — NTT doesn't have a way to express "one per element of a collection." This is the polynomial functor's data-dependent arity, already noted as an NTT design challenge (§5.3 in the NTT doc).
+
+---
+
 ## §4 Phase Details
 
 ### Phase 0: Pre-0 Benchmarks ✅

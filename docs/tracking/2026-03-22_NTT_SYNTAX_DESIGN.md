@@ -1313,7 +1313,105 @@ stratification UnifiedLoop
 
 ---
 
-## 17. Next Steps
+## 17. Proposed Extensions from PPN Track 2 (Surface Normalization)
+
+PPN Track 2 ([design document](2026-03-28_PPN_TRACK2_DESIGN.md) §3.12) modeled the surface normalization pipeline in NTT syntax, revealing three gaps. These proposed extensions are needed for the PPN/PRN vision of rewriting-as-propagators.
+
+### 17.1 `rewrite` Form — First-Class DPO Rewrite Rules
+
+**Gap**: NTT has `propagator` (fire functions with `:reads`/`:writes`) but no way to declare a **rewrite rule** as inspectable data. Rewrite rules have LHS patterns, RHS templates, and binding maps — they are not opaque functions.
+
+**Proposed syntax**:
+
+```prologos
+rewrite expand-let-assign
+  :lhs    [node tag-let-assign [$name $assign $val . $body]]
+  :rhs    [node tag-fn-application [[fn [$name] . $body] $val]]
+  :bind   {name -> fn-param, val -> arg, body -> fn-body}
+  :stratum V0
+  :priority 100
+```
+
+| Keyword | Type | Default | Description |
+|---------|------|---------|-------------|
+| `:lhs` | Pattern | required | SRE decomposition pattern (LHS `ctor-desc`) |
+| `:rhs` | Template | required | SRE reconstruction template (RHS `ctor-desc`) |
+| `:bind` | Map | required | Sub-cell binding map (LHS children → RHS children) |
+| `:stratum` | Symbol | required | Which rewrite stratum this rule fires in |
+| `:priority` | Nat | 0 | Higher fires first (for overlapping patterns) |
+| `:guard` | Predicate | none | Optional additional match condition |
+| `:bidirectional` | flag | unidirectional | If set, rule can also match RHS → produce LHS |
+
+**Why not `propagator`?** A `propagator` has an opaque fire function body. A `rewrite` rule is INSPECTABLE DATA — the patterns can be analyzed, composed, inverted, and optimized:
+- **Rule composition**: `rewrite A := compose [rule1 rule2]`
+- **Rule inversion**: `:bidirectional` flag for reversible transformations
+- **Confluence checking**: Static analysis on rule overlap
+- **Cost annotation**: `:cost` for tropical-semiring optimization (PRN)
+
+**Connection to SRE**: A `rewrite` rule IS the SRE's idempotent relation. `:lhs` maps to a `ctor-desc` recognizer+extractor. `:rhs` maps to a `ctor-desc` reconstructor. `:bind` maps to the sub-cell binding graph.
+
+**Connection to PRN**: The `rewrite` form IS a DPO (Double-Pushout) rewrite rule in NTT syntax. PRN's hypergraph rewriting grammars use the same form for graph transformation. PPN Track 2 is the first consumer; PRN and PReductions generalize to arbitrary rewrite systems.
+
+**Level**: 2 (same as `propagator`). Rewrite rules live alongside propagators in network declarations.
+
+### 17.2 `refine` Form — Monotone Tag Refinement
+
+**Gap**: NTT has no form for declaring **tag refinement** — monotone narrowing of a lattice value from general to specific based on structural inspection. Tag refinement is different from rewriting: it changes the TAG (identity) but preserves children (structure). It is monotone within a stratum (subtyping), while rewriting is non-monotone (requires stratum boundary).
+
+**Proposed syntax**:
+
+```prologos
+refine FormTag
+  :from tag-line
+  :to   tag-let-assign
+  :when [first-child-token-is "let"] [nth-child-token-is 2 ":="]
+  :stratum T0
+```
+
+| Keyword | Type | Default | Description |
+|---------|------|---------|-------------|
+| `:from` | Lattice value | required | General tag (source of refinement) |
+| `:to` | Lattice value | required | Specific tag (target of refinement) |
+| `:when` | Predicate list | required | Structural conditions for refinement |
+| `:stratum` | Symbol | required | Which stratum performs the refinement |
+
+**Why not `rewrite`?** Refinement is **monotone** — it refines identity without changing structure. Rewriting is **non-monotone** — it replaces structure. In algebraic terms: refinement is a subtype relation (tag lattice narrows), rewriting is an idempotent endomorphism (structure changes). They have different CALM properties — refinement is safe within a stratum, rewriting requires a stratum boundary.
+
+**Connection to Approach 4**: When form tags become lattice cells with set-narrowing (PPN Track 3+), `refine` declarations become set-narrowing propagators. The form is the declarative surface for both Approach 3 (struct field) and Approach 4 (cell). Implementation changes; declaration doesn't.
+
+**Level**: 1.5 (between lattice types and propagators). Refinement is derived from lattice structure — similar to how SRE decomposition is derived from type definitions.
+
+### 17.3 Data-Dependent Instantiation — `foreach` in `network`
+
+**Gap**: NTT's `connect` models static wiring. The form pipeline creates cells dynamically — one chain of set-once cells per top-level form. The number of cells depends on the input (number of forms in the file). NTT's `functor` handles parameterized networks, but instantiation is explicit (`embed`). There's no way to express "one instance per element of a collection."
+
+**Proposed syntax**:
+
+```prologos
+network preparse-net : PreparseInterface
+  :foreach form in parse-tree.top-level-forms
+    embed pipeline : FormPipeline form
+    connect parse-tree[form] -> pipeline.raw
+```
+
+| Keyword | Type | Description |
+|---------|------|-------------|
+| `:foreach` | `var in collection` | Data-dependent instantiation over a collection |
+
+This is the polynomial functor's data-dependent arity: the number of output positions depends on the input data. The `:foreach` keyword makes this explicit in NTT syntax.
+
+**Connection to existing patterns**: The SRE's structural decomposition already does data-dependent instantiation — the number of sub-cells depends on the constructor's arity, which depends on the data. The `functor` form (§5.3) parameterizes by type. `:foreach` parameterizes by runtime collection.
+
+**Level**: 3 (network level). This extends the `network` form, not the `functor` form — it's about dynamic composition at instantiation time.
+
+### 17.4 Open Questions
+
+1. Should `rewrite` support **cost annotations** for tropical-semiring optimization? (`:cost 1` for cheap rules, `:cost 100` for expensive transformations.) PRN would need this for optimal rewrite strategy selection.
+2. Should `refine` support **multiple `:to` targets** with priorities? (A node could refine to multiple possible tags, with disambiguation selecting the best match.)
+3. Is `:foreach` sufficient for data-dependent instantiation, or do we need full dependent types in network declarations? (The polynomial functor's Σ-type expressiveness.)
+4. Should `rewrite` rules compose with `bridge` declarations? (A bridge that also rewrites — e.g., a domain-crossing transformation.) Or should composition be explicit via `stratification`?
+
+## 18. Next Steps
 
 1. **Continue design iteration**: Address open questions through discussion.
    Target ~90% clarity before case studies.
@@ -1324,14 +1422,15 @@ stratification UnifiedLoop
    - The session-type bridge as a `bridge` declaration
    - The NAF-LE as an inductive `stratification`
    - A PUnify structural decomposition as derived-from-type
+   - ✅ **PPN Track 2 surface normalization** as `rewrite` rules + `refine` + `stratification` (§17)
 
 3. **Grammar integration**: Add NTT forms to `grammar.ebnf` and
-   `grammar.org` once syntax stabilizes.
+   `grammar.org` once syntax stabilizes. Include proposed `rewrite`, `refine`, `:foreach` from §17.
 
 4. **Toplevel Forms Reference update**: Add finalized NTT forms to
    `TOPLEVEL_FORMS_REFERENCE.org`.
 
-## 18. Source Documents
+## 19. Source Documents
 
 | Document | Relationship |
 |----------|-------------|
@@ -1342,3 +1441,6 @@ stratification UnifiedLoop
 | [Unified Infrastructure Roadmap](2026-03-22_PM_UNIFIED_INFRASTRUCTURE_ROADMAP.md) | On-network / off-network boundary analysis |
 | [PM Track 10 Design](2026-03-24_PM_TRACK10_DESIGN.md) | Discovered serialize/fork gaps; NTT case study §15.4 |
 | [PM Track 10 Stage 2 Audit](2026-03-24_PM_TRACK10_STAGE2_AUDIT.md) | Module loading infrastructure analysis |
+| [PPN Track 2 Design](2026-03-28_PPN_TRACK2_DESIGN.md) | Surface normalization NTT modeling (§3.12); proposed `rewrite`, `refine`, `:foreach` extensions (§17) |
+| [Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md) | Parse tree as module over rewrite ring — module theory grounding for §17 |
+| [Algebraic Embeddings on Lattices](../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md) | Pocket Universe principle — lattice embedding grounding for `:embedded` kind |
