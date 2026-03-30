@@ -2005,6 +2005,19 @@
             ;; Other stray closing brackets → skip
             [(memq type '(rbracket rparen rbrace))
              (loop (+ i 1) result)]
+            ;; Approx-literal compound token: ~42 → ($approx-literal 42)
+            [(eq? type 'approx-literal)
+             (define lex (token-entry-lexeme item))
+             (define num-str (substring lex 1))
+             (define num-val (or (string->number num-str) (string->symbol num-str)))
+             (define spos (token-entry-start-pos item))
+             (define epos (token-entry-end-pos item))
+             (define-values (vl vc) (pos->line-col source-str spos))
+             (loop (+ i 1)
+                   (cons (make-stx (list (make-stx '$approx-literal source vl vc (+ spos 1) 1)
+                                         (make-stx num-val source vl (+ vc 1) (+ spos 2) (- epos spos 1)))
+                                   source vl vc (+ spos 1) (- epos spos))
+                         result))]
             ;; Tilde prefix: ~ followed by token → $approx-literal sentinel
             ;; ~42 → ($approx-literal 42), ~[1 2] handled by tilde-lbracket
             [(and (eq? type 'symbol)
