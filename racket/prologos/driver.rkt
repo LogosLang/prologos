@@ -1350,14 +1350,26 @@
      ;; (read-all-forms-from-tree) ignores tags and extracts by token structure,
      ;; so refinement is additive — no behavioral change until Phase 6 wiring.
      (define refined-root (refine-tag (parse-tree-root pt)))
-     ;; V(0): Tree-level rewriting is implemented (surface-rewrite.rkt)
-     ;; but NOT yet active. The rules would double-apply with the
-     ;; datum-level preparse-expand-all rules. Phase 6 completion
-     ;; requires the use-propagator-preparse? dual-path switch:
-     ;; when #t, tree-level rewrites fire AND datum-level preparse is
-     ;; SKIPPED for the rules that are tree-implemented.
-     ;; For now: tag refinement only, no tree rewriting.
-     ;; (define rewritten-root (rewrite-tree refined-root))
+     ;; V(0): Tree-level rewriting BLOCKED — design concern.
+     ;; Parse tree nodes represent LINES (indent structure), not FORMS
+     ;; (bracket-delimited expressions). An `if` inside a function body
+     ;; is a line node whose children include the entire line's tokens,
+     ;; not just if's 3 arguments. Rewrite rules expect form-level
+     ;; arity (if: 4 children) but tree nodes have line-level arity
+     ;; (all tokens on the line). This mismatch causes wrong rewrites.
+     ;;
+     ;; Resolution options:
+     ;; (a) Add bracket-group nodes to the tree (PPN Track 1 Phase 5b
+     ;;     "Option C" — was deferred then). Tree structure would then
+     ;;     match form structure.
+     ;; (b) Rewrite DATUMS after bracket grouping (datum extraction does
+     ;;     the grouping). This means the rewrite engine operates on
+     ;;     datums, not tree nodes — losing the "Pocket Universe" benefit.
+     ;; (c) Hybrid: tag refinement at tree level, rewriting at datum level.
+     ;;     The tree carries form identity; the datums carry form structure.
+     ;;
+     ;; This needs design discussion before proceeding.
+     ;; For now: tag refinement only, no rewriting.
      (define refined-pt (struct-copy parse-tree pt [root refined-root]))
      (read-all-forms-from-tree refined-pt str (or source "<unknown>"))]
     [(validate-new-reader?)
