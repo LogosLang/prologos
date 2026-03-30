@@ -1812,7 +1812,7 @@
 ;; Group items (tokens + indent markers) with bracket matching.
 ;; indent-open/indent-close create implicit sub-lists ONLY when
 ;; not inside an explicit bracket group (bracket groups take priority).
-(define (group-items vec start end close-type source source-str)
+(define (group-items vec start end close-type source source-str [qq-depth 0])
   (let loop ([i start] [result '()])
     (cond
       [(>= i end)
@@ -1827,7 +1827,7 @@
               (loop (+ i 1) result)
               ;; Not inside brackets: collect until indent-close, wrap as sub-form
               (let-values ([(inner-elems next-i)
-                            (group-items vec (+ i 1) end 'indent-close source source-str)])
+                            (group-items vec (+ i 1) end 'indent-close source source-str qq-depth)])
                 (cond
                   [(null? inner-elems) (loop next-i result)]
                   [(= (length inner-elems) 1) (loop next-i (cons (car inner-elems) result))]
@@ -1859,7 +1859,7 @@
              (let-values ([(inner next-i)
                            (group-items vec (+ i 1) end
                                         (if (eq? type 'lbracket) 'rbracket 'rparen)
-                                        source source-str)])
+                                        source source-str qq-depth)])
                (if is-postfix?
                    ;; Postfix: xs[f x] → ($postfix-index (f x)) — wrap inner as sub-form
                    (let-values ([(pl pc) (pos->line-col source-str (token-entry-start-pos item))])
@@ -1877,7 +1877,7 @@
             [(eq? type 'langle)
              (if (and (not (eq? close-type 'mixfix-rbrace))
                       (has-matching-rangle? vec (+ i 1) end close-type))
-                 (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rangle source source-str)])
+                 (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rangle source source-str qq-depth)])
                    (let-values ([(al ac) (pos->line-col source-str (token-entry-start-pos item))])
                      (loop next-i
                            (cons (make-stx (cons (make-stx '$angle-type source al ac (+ (token-entry-start-pos item) 1) 1) inner)
@@ -1886,42 +1886,42 @@
                  (loop (+ i 1) (cons (token-entry->stx item source source-str) result)))]
             ;; Braces → $brace-params sentinel
             [(eq? type 'lbrace)
-             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbrace source source-str)])
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbrace source source-str qq-depth)])
                (let-values ([(bl bc) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
                        (cons (make-stx (cons (make-stx '$brace-params source bl bc (+ (token-entry-start-pos item) 1) 1) inner)
                                        source bl bc (+ (token-entry-start-pos item) 1) 1) result))))]
             ;; Dot-brace → $mixfix sentinel (uses 'mixfix-rbrace to suppress angle brackets)
             [(eq? type 'dot-lbrace)
-             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'mixfix-rbrace source source-str)])
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'mixfix-rbrace source source-str qq-depth)])
                (let-values ([(ml mc) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
                        (cons (make-stx (cons (make-stx '$mixfix source ml mc (+ (token-entry-start-pos item) 1) 2) inner)
                                        source ml mc (+ (token-entry-start-pos item) 1) 2) result))))]
             ;; Quote bracket → $list-literal sentinel
             [(eq? type 'quote-lbracket)
-             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbracket source source-str)])
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbracket source source-str qq-depth)])
                (let-values ([(ql qc) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
                        (cons (make-stx (cons (make-stx '$list-literal source ql qc (+ (token-entry-start-pos item) 1) 2) inner)
                                        source ql qc (+ (token-entry-start-pos item) 1) 2) result))))]
             ;; At bracket → $pvec-literal sentinel
             [(eq? type 'at-lbracket)
-             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbracket source source-str)])
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbracket source source-str qq-depth)])
                (let-values ([(al ac) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
                        (cons (make-stx (cons (make-stx '$vec-literal source al ac (+ (token-entry-start-pos item) 1) 2) inner)
                                        source al ac (+ (token-entry-start-pos item) 1) 2) result))))]
             ;; Tilde bracket → $lseq-literal sentinel
             [(eq? type 'tilde-lbracket)
-             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbracket source source-str)])
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbracket source source-str qq-depth)])
                (let-values ([(tl tc) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
                        (cons (make-stx (cons (make-stx '$lseq-literal source tl tc (+ (token-entry-start-pos item) 1) 2) inner)
                                        source tl tc (+ (token-entry-start-pos item) 1) 2) result))))]
             ;; Hash brace → $set-literal sentinel
             [(eq? type 'hash-lbrace)
-             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbrace source source-str)])
+             (let-values ([(inner next-i) (group-items vec (+ i 1) end 'rbrace source source-str qq-depth)])
                (let-values ([(hl hc) (pos->line-col source-str (token-entry-start-pos item))])
                  (loop next-i
                        (cons (make-stx (cons (make-stx '$set-literal source hl hc (+ (token-entry-start-pos item) 1) 2) inner)
