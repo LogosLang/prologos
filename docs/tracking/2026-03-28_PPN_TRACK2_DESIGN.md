@@ -28,13 +28,14 @@
 |-------|-------------|--------|-------|
 | 0 | Pre-0 benchmarks + adversarial | ✅ | `a0fd523`. Preparse invisible vs elaboration. 22-35μs/rule. |
 | 1 | Parse tree node descriptors + rewrite infrastructure | ⬜ | `ctor-desc` for surface tags, `rewrite-rule` struct, `surface-rewrite.rkt` |
+| 1b | Tag-refinement stratum T(0) | ⬜ | `'line` → form-head tags via first-token inspection + SRE subtype |
 | 2 | Simple rewrite rules (14 rules) | ⬜ | Pattern→template on parse tree nodes via SRE |
 | 3 | Complex rewrite propagators (4 rules) | ⬜ | pipe-fusion, mixfix/Pratt, defn-multi, session-ws |
 | 4 | Registry propagators | ⬜ | process-data/trait/spec → cell writes |
 | 5 | Spec/where injection as propagators | ⬜ | Cross-stratum data flow (V(2)) |
-| 6 | Stratified pipeline integration | ⬜ | R(-1)→R(0)→R(1)→V(0)→V(1)→V(2) outer loop |
+| 6 | Stratified pipeline integration | ⬜ | R(-1)→R(0)→R(1)→T(0)→V(0)→V(1)→V(2) outer loop |
 | 7 | Layer 2 integration | ⬜ | expand-top-level rules on surf-* via SRE |
-| 8a | Consumer migration (reader.rkt) | ⬜ | 51 imports → parse-reader.rkt |
+| 8a | Consumer migration (reader.rkt) | ⬜ | 57 imports → parse-reader.rkt |
 | 8b | Consumer migration (macros.rkt) | ⬜ | driver.rkt + elaborator.rkt + tests |
 | 8c | reader.rkt deletion | ⬜ | 1898 lines removed |
 | 9 | A/B benchmarks + suite verify | ⬜ | Performance-neutral, 383/383 GREEN |
@@ -91,13 +92,27 @@ Replace the imperative preparse pipeline in `macros.rkt` (9763 lines) with regis
 
 ### 3.0 Theoretical Grounding
 
-Three principles ground this design:
+Four principles ground this design:
 
-**CALM (from DEVELOPMENT_LESSONS.org)**: Within a stratum, topology is fixed and all operations are monotone. Rewrites are NOT monotone (they replace values). Therefore rewrites MUST happen at stratum boundaries, not within a BSP round.
+**CALM (from [DEVELOPMENT_LESSONS.org](principles/DEVELOPMENT_LESSONS.org))**: Within a stratum, topology is fixed and all operations are monotone. Rewrites are NOT monotone (they replace values). Therefore rewrites MUST happen at stratum boundaries, not within a BSP round.
 
-**The Layered Recovery Principle (from EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org)**: Non-monotone behavior is recovered by inserting control layers between phases of monotone computation. Rewrites are the control layer; value propagation is the monotone substrate.
+**The Layered Recovery Principle (from [EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org](principles/EFFECTFUL_COMPUTATION_ON_PROPAGATORS.org))**: Non-monotone behavior is recovered by inserting control layers between phases of monotone computation. Rewrites are the control layer; value propagation is the monotone substrate.
 
-**The Pocket Universe Principle (from Lattice Embeddings research)**: A cell value IS an entire lattice unto itself. An RRB vector of structured values is a lattice (ordered by subset/refinement). The SRE can decompose into this embedded lattice, operating on sub-structures without requiring per-element cells. PPN Track 1 proved this: 5 cells hold the entire parse state for a file. A `parse-tree-node` with RRB children IS a tree — a PVec of PVecs. Structural sharing makes transformations efficient (O(log n) path-copy per rewrite).
+**The Pocket Universe Principle (from [Lattice Embeddings research](../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md))**: A cell value IS an entire lattice unto itself. An RRB vector of structured values is a lattice (ordered by subset/refinement). The SRE can decompose into this embedded lattice, operating on sub-structures without requiring per-element cells. PPN Track 1 proved this: 5 cells hold the entire parse state for a file. A `parse-tree-node` with RRB children IS a tree — a PVec of PVecs. Structural sharing makes transformations efficient (O(log n) path-copy per rewrite).
+
+**The Module Theory lens (from [Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md))**: The parse tree is a module over the endomorphism ring of rewrite rules. Each rewrite rule is a ring element. Sub-tree decomposition is the module's direct-sum decomposition. Independent sub-trees can be rewritten in parallel (submodule independence = parallelizability).
+
+### D.2 Self-Critique Findings
+
+| # | Finding | Severity | Resolution |
+|---|---------|----------|------------|
+| P1 | Parse tree nodes only have `'line`/`'root` tags — no form-head tags | HIGH | **Tag-refinement stratum T(0)** between R(1) and V(0). SRE subtype refinement: `'line` → `':let`, `':defn`, etc. based on first-token inspection. See §3.1b. |
+| P2 | Tree nodes have variable children count — `ctor-desc` needs fixed arity | MEDIUM | Per-variant descriptors (`:let-assign` arity 4, `:let-bracket` arity 2). Recognizer inspects first-child token + structure. |
+| P3 | Big-bang vs incremental migration not specified | MEDIUM | **Incremental**: Phase 1-2 operate on tree nodes for NEW rules. Existing preparse continues on datums via compat. Phase 6 integrates pipeline. Phase 8 retires compat+datums. |
+| P4 | 57 files import `reader.rkt` directly (not 51) | LOW | Phase 8a scope corrected. |
+| P5 | Mixfix Pratt parser as specialized propagator violates Most General Interface | LOW | Technical debt noted. Future: Pratt parser expressible as rewrite rules when PRN gives expressive strategies. |
+| P6 | Rewrite LHS and RHS have different `ctor-desc` (different tag, different arity) | LOW | Explicit in SRE idempotent relation: LHS-desc decomposes, RHS-desc reconstructs. Different descriptors, shared bindings. |
+| P7 | Form identity: one-shot (Approach 3) vs lattice-narrowing (Approach 4) | DESIGN | **Approach 3 for Track 2** (tag as struct field, SRE subtype refinement). **Approach 4 awareness** for Track 3+ (tag as lattice cell, set-narrowing). Migration: field → cell read. See §3.10. |
 
 ### 3.1 Architecture: Parse Tree as Pocket Universe
 
@@ -139,31 +154,78 @@ Each cell is set-once: ⊥ → value, never overwritten. This is trivially monot
 
 **The dependency cell**: Tracks which forms depend on which registry entries. When a form references a constructor/trait/spec, a dependency edge is recorded. The elaborator processes forms in dependency order — no Phase 5b hoisting needed.
 
-**Module Theory lens**: The parse tree is a module over the endomorphism ring of rewrite rules (from `docs/research/2026-03-28_MODULE_THEORY_LATTICES.md`). Each rewrite rule is a ring element (an endomorphism). Applying a rule is scalar action on the module. Sub-tree decomposition is the module's direct-sum decomposition. Independent sub-trees can be rewritten in parallel (submodule independence = parallelizability from PAR Track 2).
+### 3.1b Tag-Refinement Stratum T(0) (D.2 finding P1)
+
+**Problem**: PPN Track 1's tree-builder assigns only `'line` and `'root` tags based on indent structure. It doesn't know about form heads (`let`, `defn`, `data`, etc.). SRE `ctor-desc` dispatch needs form-specific tags.
+
+**Solution**: A **tag-refinement stratum T(0)** runs between R(1) (dependent registration) and V(0) (structural rewrites). For each `'line` node, T(0) inspects the first child token and assigns a form-specific tag via SRE subtype refinement.
+
+```
+Stratum T(0): Form-tag refinement
+  Input: parse tree with 'line tags
+  Output: parse tree with form-head tags (':let, ':defn, ':def, ':spec, etc.)
+  Mechanism: SRE subtype relation ('line → ':let is a refinement)
+  CALM-safe: produces new tree nodes with refined tags (set-once output cell)
+```
+
+The refinement is a set of registered **tag-assignment rules**:
+
+```racket
+;; Tag assignment: 'line node whose first token is 'let → ':let-assign or ':let-bracket
+(register-tag-rule!
+ 'let                                ;; first-token lexeme
+ (lambda (children)                  ;; guard: inspect children for variant
+   (and (>= (rrb-size children) 4)
+        (token-entry? (rrb-get children 2))
+        (equal? (token-entry-lexeme (rrb-get children 2)) ":=")))
+ ':let-assign)                       ;; refined tag (arity 4: name, :=, val, body)
+
+(register-tag-rule!
+ 'let
+ (lambda (children)
+   (and (>= (rrb-size children) 2)
+        (parse-tree-node? (rrb-get children 1))))  ;; second child is bracket group
+ ':let-bracket)                      ;; refined tag (arity 2: bindings, body)
+```
+
+**Why SRE subtype, not a custom mechanism**: Tag refinement IS structural subtyping — `':let-assign` is a subtype of `'line` (more specific, more structure known). Using SRE's existing subtype relation means:
+- The algebraic-kind machinery (Track 2F) applies: tag refinement is a monotone endomorphism.
+- The topology is fixed within T(0) — no new cells or propagators created.
+- Future: Approach 4 (tag as lattice cell with set-narrowing) replaces T(0) with a within-stratum narrowing propagator. The migration is: `(parse-tree-node-tag node)` field read → `(net-cell-read net tag-cell-id)` cell read. Tag-assignment rules become narrowing propagators.
+
+**Connection to PTF**: Tag refinement is a **Reduce** propagator in the taxonomy — reads multiple children to determine the whole node's identity. The Map-Reduce composition (tree-builder Maps lines → tag-refiner Reduces to form identity) is the same pattern as tokenizer→tree-builder in PPN Track 1.
 
 ### 3.2 SRE Decomposition on Parse Tree Nodes
 
-Parse tree nodes are registered as SRE `ctor-desc` entries. Each form head (`:let`, `:defn`, `:if`, `:cond`, etc.) gets a descriptor:
+After tag-refinement (stratum T(0)), parse tree nodes carry form-specific tags (`:let-assign`, `:defn`, etc.). These are registered as SRE `ctor-desc` entries in a `'surface` domain:
 
 ```racket
-;; Example: let-form descriptor
-(register-ctor! ':let
-  #:arity 4   ;; name, :=, val, body (or variant arities via guard)
+;; Example: let-assign descriptor (after T(0) has tagged the node)
+(register-ctor! ':let-assign
+  #:arity 4   ;; name, :=, val, body
   #:recognizer (lambda (v) (and (parse-tree-node? v)
-                                (eq? (parse-tree-node-tag v) ':let)))
+                                (eq? (parse-tree-node-tag v) ':let-assign)))
   #:extract (lambda (v) (rrb-to-list (parse-tree-node-children v)))
-  #:reconstruct (lambda (cs) (make-parse-tree-node ':let (rrb-from-list cs)
-                                                    (current-srcloc) 0))
+  #:reconstruct (lambda (cs) (make-parse-tree-node ':let-assign (rrb-from-list cs)
+                                                    (parse-tree-node-srcloc v)
+                                                    (parse-tree-node-indent v)))
   #:component-lattices (list tree-lattice-spec tree-lattice-spec
                              tree-lattice-spec tree-lattice-spec)
   #:domain 'surface
-  #:sample (make-sample-let-node)
+  #:sample (make-sample-let-assign-node)
   #:component-variances '(= = = =))  ;; all invariant for rewriting
 ```
 
-The SRE decomposes a `:let` node into sub-cells for each child. Rewrite rules match against the tag + children pattern. The reconstruction propagator builds the output from the same sub-cells with a new tag/structure.
+The SRE decomposes a `:let-assign` node into sub-cells for each child. Rewrite rules match against the tag + children pattern. The reconstruction propagator builds the output from the same sub-cells with a new tag/structure.
 
-**Variable-arity forms**: Some forms have variable arity (e.g., `(let x := val body)` vs `(let [bindings] body)`). These register as SEPARATE descriptors with different tags: `:let-assign` (arity 4), `:let-bracket` (arity 2). The parse tree builder (PPN Track 1) assigns the specific tag based on structure. This avoids the fixed-arity problem — each variant has its own descriptor with known arity.
+**Variable-arity forms (D.2 finding P2)**: Forms with multiple syntactic variants register as SEPARATE descriptors with different tags. Tag-refinement stratum T(0) assigns the specific variant tag:
+- `:let-assign` (arity 4: name, `:=`, val, body)
+- `:let-bracket` (arity 2: bindings-bracket, body)
+- `:let-inline` (arity 3: name, type-annotation, val)
+
+Each variant has fixed arity — the `ctor-desc` system works without modification.
+
+**LHS ≠ RHS arity (D.2 finding P6)**: Rewrite rules have DIFFERENT descriptors for LHS and RHS. `expand-let-assign` matches `:let-assign` (arity 4) and produces `:fn-application` (arity 2: fn-form, arg). The SRE's idempotent (rewrite) relation handles this: LHS-desc decomposes, RHS-desc reconstructs, binding-map connects sub-cells across the arity change.
 
 **Rewrite rules as SRE idempotent relations**: A rewrite rule is a **directional** SRE relation — match LHS (decompose), produce RHS (compose), using the same sub-cell bindings. This is the SRE Track 2D relation kind (idempotent endomorphism in Track 2F's algebraic foundation).
 
@@ -214,6 +276,8 @@ These are registered as propagators (not rewrite rules) attached to their specif
 
 **Mixfix as design validation target**: The rewrite rule registry must support future syntax extensions (advanced mixfix, unicode operators, user-defined forms) via `register-rewrite-rule!` alone. If a future mixfix extension requires editing the engine, the architecture is wrong. The Pratt parser propagator reads operator/precedence registry cells — adding operators is a cell write, not an engine change.
 
+**Technical debt (D.2 finding P5)**: The Pratt parser as a specialized propagator means mixfix doesn't use the rewrite rule mechanism — it uses a different mechanism. This violates Most General Interface. Future work (when PRN gives expressive rewrite strategies): the Pratt parser should be expressible as a chain of rewrite rules (each precedence level as a rule). This would validate the architecture's generality and eliminate the specialized propagator.
+
 ### 3.4 Stratified Execution (CALM-Compliant)
 
 The pipeline maps to propagator strata. Each stratum has FIXED topology and monotone operations within it. Rewrites happen AT stratum boundaries (Layered Recovery Principle).
@@ -237,10 +301,20 @@ Stratum R(1): Dependent registration
   Writes to: spec-store cell, impl-registry cell
   CALM-safe: reads are of cells written in prior stratum (fixed)
 
+--- TAG REFINEMENT (D.2 finding P1) ---
+
+Stratum T(0): Form-tag refinement
+  Input cells: raw-tree-cells ('line tags, from parse tree)
+  Output cells: tagged-tree-cells (form-head tags: ':let-assign, ':defn, etc.)
+  Rules: tag-assignment rules (first-token inspection + structure guard)
+  Mechanism: SRE subtype refinement ('line → ':let-assign is monotone)
+  Topology: fixed
+  CALM-safe: reads input, writes set-once output (refined tags)
+
 --- REWRITE STRATA (Layered Recovery) ---
 
 Stratum V(0): Structural rewrites
-  Input cells: raw-datum-cells (set-once, from R(0))
+  Input cells: tagged-tree-cells (set-once, from T(0))
   Output cells: v0-datum-cells (set-once, written here)
   Rules: implicit-map → dot-access → infix (priority-ordered WITHIN stratum)
   Topology: fixed (input cells + output cells created at stratum setup)
@@ -367,7 +441,33 @@ For Track 2: **Option A**. The parser bridge (parse tree → surf-*) is existing
 
 **Total code elimination across Track 2**: ~5000-7000 lines (macros.rkt preparse + reader.rkt + dispatch logic).
 
-### 3.9 Deferred Items Incorporated (from PPN Master + Track 1 PIR)
+### 3.9 Migration Strategy (D.2 finding P3)
+
+**Incremental, not big-bang.** The design operates on parse tree nodes for NEW infrastructure (rule registry, tag refinement, rewrite engine). Existing preparse continues on datums via the compat layer during development. The transition is:
+
+1. **Phases 1-3**: Build new infrastructure (descriptors, rules, tag refinement) alongside existing macros.rkt. Both code paths exist. New rules tested on parse tree nodes independently.
+2. **Phase 4-5**: Registry propagators + spec injection as propagators. These replace macros.rkt's Pass 0/1/2 registration logic. The compat-layer datum extraction still feeds the parser.
+3. **Phase 6**: Integration — wire the propagator pipeline into `driver.rkt`. The parse tree flows through T(0)→V(0)→V(1)→V(2), producing rewritten tree nodes. The compat layer extracts datums from the rewritten tree for the parser.
+4. **Phase 7-8**: Retire compat layer. Parser reads rewritten tree directly (or via a thin bridge). Delete reader.rkt. Delete preparse logic in macros.rkt.
+
+At no point does the entire pipeline switch at once. Each phase adds capability, and the existing path remains as fallback until the new path is verified.
+
+### 3.10 Approach 4 Awareness: Form Tags as Lattice Cells (Future)
+
+Track 2 uses Approach 3: form tags as struct fields, assigned once by SRE subtype refinement in stratum T(0). This is sufficient for current needs — form identity is determined by the first token, no ambiguity.
+
+**Approach 4** (for PPN Track 3+): form tags become **lattice cells** with set-narrowing, paralleling PPN Track 1's token type narrowing (`seteq` of possible types, narrowed by intersection). Migration path:
+
+- `(parse-tree-node-tag node)` (field read) → `(net-cell-read net (node-tag-cell-id node))` (cell read)
+- Tag-assignment rules → narrowing propagators (write set intersections to tag cells)
+- The parser contributes additional narrowing (grammar productions constrain form possibilities)
+- The elaborator contributes type-derived narrowing (PPN Track 4)
+
+The structural transition is the same pattern as PM Track 8 (parameters → cells). The refinement propagators don't change — they just write to cells instead of producing new structs.
+
+**When Approach 4 is needed**: When form identity is genuinely ambiguous (user-defined macros that shadow built-in forms, grammar extensions that add new form types, contextual disambiguation). Track 2's one-shot assignment is the degenerate case of set-narrowing where the set immediately reaches a singleton.
+
+### 3.11 Deferred Items Incorporated (from PPN Master + Track 1 PIR)
 
 | Source | Item | How addressed |
 |--------|------|---------------|
