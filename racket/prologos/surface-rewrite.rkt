@@ -569,7 +569,8 @@
 
 ;; Advance a pipeline value by one stage.
 ;; Returns a new form-pipeline-value at the next stage, or #f if already 'done.
-(define (advance-pipeline pv)
+;; Optional registries parameter for V(1) and V(2) stages.
+(define (advance-pipeline pv #:registries [registries #f])
   (define stage (form-pipeline-value-stage pv))
   (define node (form-pipeline-value-tree-node pv))
   (define regs (form-pipeline-value-registrations pv))
@@ -602,13 +603,27 @@
      (form-pipeline-value 'v0-2 result regs spos)]
 
     [(v0-2)
-     ;; V(1): macro expansion — for now, pass through
-     ;; Full macro expansion requires registry cell watching (Phase 6b)
+     ;; V(1): macro expansion
+     ;; If registries provided, check preparse-registry for macro match.
+     ;; For now: pass through (macros handled by datum-level preparse).
+     ;; Tree-level macro expansion requires:
+     ;; 1. Reading preparse-registry cell for registered macros
+     ;; 2. Matching tree node's head against macro patterns
+     ;; 3. Applying template substitution on tree nodes
+     ;; This is the rewrite-rule infrastructure (Phase 2a) applied to
+     ;; user-defined macros registered during preparse Pass 0.
+     ;; DEFERRED: requires registry-cell-watching in pipeline-as-cell model.
      (form-pipeline-value 'v1 node regs spos)]
 
     [(v1)
-     ;; V(2): spec/where injection — for now, pass through
-     ;; Full injection requires cross-form cell watching (Phase 6b)
+     ;; V(2): spec/where injection
+     ;; If registries provided, check spec-store for matching spec.
+     ;; For now: pass through (spec injection handled by datum-level preparse).
+     ;; Tree-level spec injection requires:
+     ;; 1. Reading spec-store cell for registered specs
+     ;; 2. Matching defn name against spec entries
+     ;; 3. Adding type annotation to defn's surf-defn type field
+     ;; DEFERRED: requires registry-cell-watching in pipeline-as-cell model.
      (form-pipeline-value 'v2 node regs spos)]
 
     [(v2)
@@ -620,11 +635,12 @@
 
 ;; Run a form through the entire pipeline to 'done.
 ;; Returns the final form-pipeline-value.
-(define (run-form-pipeline node)
+;; Optional registries for V(1)/V(2) stages.
+(define (run-form-pipeline node #:registries [registries #f])
   (let loop ([pv (form-pipeline-value 'raw node '()
                                        (and (parse-tree-node? node)
                                             (parse-tree-node-srcloc node)))])
-    (define next (advance-pipeline pv))
+    (define next (advance-pipeline pv #:registries registries))
     (if next
         (loop next)
         pv)))
