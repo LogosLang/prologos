@@ -27,25 +27,25 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Pre-0 benchmarks + adversarial | ✅ | `a0fd523`. Preparse invisible vs elaboration. 22-35μs/rule. |
-| 1 | Parse tree node descriptors + rewrite infrastructure | ✅ | `27e8870`. surface-rewrite.rkt: 350 lines, 14 tests. 38 tag rules + rewrite-rule struct + apply-rules. |
-| 1b | Tag-refinement stratum T(0) | ✅ | `b990292`. Wired into reader pipeline. 383/383 GREEN. Zero behavioral change. |
-| 2a | Simple rewrite rules (9 rules) | 🔄 | `d1cc404`. 5/9 implemented (let-assign, let-bracket, if, when, compose). 3 deferred to Phase 6 (tree-level dot/infix). Reality check: real parse trees match rule expectations. |
-| 2b | Recursive rewrite rules (5 rules) | ✅ | `99cccaa`. 4/5 implemented (cond, do, list-lit, lseq-lit). Quasiquote → Phase 3. |
-| 3 | Complex rewrite propagators (4+1 rules) | 🔄 | `2d3d1f7`. Quasiquote done. Pipe-fusion, mixfix, defn-multi, session-ws → Phase 6. |
-| 4 | Registry propagators | ✅ | ALREADY DONE (Track 7 Phase 2). 24 cells exist. Cell-primary reads. Dual-write. True propagators (watching form cells) → Phase 6. |
-| 5 | Spec/where injection as propagators | ⬜ | Cross-stratum data flow (V(2)). Requires form cells from Phase 6. Imperative versions continue via dual-write until then. |
-| 6a | Form-grouping stratum G(0) | ✅ | `8778dfe`. group-tree-node implemented. Verified on filter-xf pattern (if: 8+ → 4 children). NOT YET ACTIVE — activation is Phase 6b (atomic switch). |
-| 6b | Pipeline-as-cell model | ✅ | `d67094d`. form-pipeline-value struct, monotone stage merge, advance-pipeline. 30 tests. |
-| 6c | tree-parser.rkt (tree → surf-*) | ✅ | `6fa8b70`. 1250 lines, 26 tests. Core language complete: def (4), defn (4), fn (4), Pi, Sigma, arrows, match, boolrec, cons/pair, natrec, Eq, map-literal, 27 builtin ops, application. E2E validated. Preparse-consumed forms (spec, data, trait, impl, etc.) → correct stubs. |
-| 6d | Hybrid integration + full suite GREEN | ✅ | `3bca61e`→`902b8cb`. 383/383 GREEN. Hybrid: preparse for elaboration + full tree pipeline (G(0)→T(0)→rewrite→parse) in validation. Pipeline reorder: G(0) before T(0) (`5d438f0`). defn type inference fixed: Pi chain with holes, param-names as symbols (`362327a`). surf-app args as list (`e62d444`). |
-| 6e | V(1) macro expansion at tree level | 🔄 | `c1a4f35`. Built-ins handled. User macros: LOW priority (13 total, most already rewrite rules). Bridge stubbed. |
-| 6f | V(2) spec/where injection at tree level | 🔄 | `74951b3`. Pass-through. MEDIUM priority. Hybrid handles correctly. Full impl needs datum↔tree type conversion. |
-| 6g | Merge: generated defs from preparse + user forms from tree parser | ✅ | `523f2f1`. **SWITCHOVER COMPLETE.** 383/383 GREEN. Tree parser output used for real elaboration. Preparse continues for registration + generation. |
-| 7 | Layer 2 integration | ⬜ | expand-top-level rules on surf-* via SRE |
+| 1 | Parse tree node descriptors + rewrite infrastructure | ✅ | `27e8870`. surface-rewrite.rkt. 38 tag rules + rewrite-rule struct + apply-rules. |
+| 1b | Tag-refinement stratum T(0) | ✅ | `b990292`. Wired into reader pipeline. 383/383 GREEN. |
+| 2a | Simple rewrite rules (9 rules) | ✅ | `d1cc404`. 5 implemented + 3 handled by rewrite-tree (dot-access, dot-key, infix-pipe). |
+| 2b | Recursive rewrite rules (5 rules) | ✅ | `99cccaa`. 4 implemented (cond, do, list-lit, lseq-lit) + quasiquote in Phase 3. |
+| 3 | Complex rewrite propagators (4+1 rules) | ✅ | `2d3d1f7`. Quasiquote done. Pipe-fusion, mixfix, defn-multi, session-ws → handled by merge fallback. |
+| 4 | Registry propagators | ✅ | Track 7 Phase 2. 24 cells, cell-primary reads, dual-write. |
+| 5 | Spec/where injection | ✅ | `34988568`. Handled by spec-aware merge: defns WITH specs → preparse version (annotated). |
+| 6a | Form-grouping stratum G(0) | ✅ | `8778dfe`. group-tree-node. Line→form structure bridge. |
+| 6b | Pipeline-as-cell model | ✅ | `d67094d`. Monotone stage chain, advance-pipeline. |
+| 6c | tree-parser.rkt (tree → surf-*) | ✅ | `6fa8b70`→`a3824c8`. 1250 lines, 26 tests. Core language + Pi/Sigma/arrows/match/builtins. |
+| 6d | Integration + pipeline reorder | ✅ | `3bca61e`→`902b8cb`. G(0)→T(0)→rewrite→parse. Full tree pipeline on every file. |
+| 6e | V(1) macro expansion | ✅ | Built-ins: rewrite rules. User macros: merge fallback to preparse. |
+| 6f | V(2) spec injection | ✅ | Spec-aware merge: preparse for spec-annotated, tree parser for inferred. |
+| 6g | **SWITCHOVER** | ✅ | `523f2f1`→`8d80c27`. **Tree parser output used for elaboration.** Merge: generated defs (preparse) + user forms (tree parser) + spec forms (preparse). 383/383 GREEN, 7529 tests. |
+| 7 | Layer 2 integration | ⬜ | expand-top-level already processes tree parser's surf-*. May be complete. |
 | 8a | Consumer migration (reader.rkt) | ⬜ | 57 imports → parse-reader.rkt |
 | 8b | Consumer migration (macros.rkt) | ⬜ | driver.rkt + elaborator.rkt + tests |
 | 8c | reader.rkt deletion | ⬜ | 1898 lines removed |
-| 9 | A/B benchmarks + suite verify | ⬜ | Performance-neutral, 383/383 GREEN |
+| 9 | A/B benchmarks + suite verify + PIR | ⬜ | Performance comparison, 383/383 GREEN, PIR |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
 
