@@ -77,6 +77,16 @@
  token-entry->stx
  tree-node->stx-form
  tree-node->stx-elements
+
+ ;; PPN Track 2 Phase 8a: backward-compatible aliases for reader.rkt migration
+ ;; These allow test files to import from parse-reader.rkt using the same
+ ;; function names they used from reader.rkt.
+ (rename-out [compat-tokenize-string tokenize-string]
+             [compat-read-all-forms-string read-all-forms-string]
+             [compat-read-syntax-all prologos-read-syntax-all])
+ ;; Token accessor compatibility (old reader used token struct with type/value fields)
+ (rename-out [compat-token-type token-type]
+             [compat-token-value token-value])
  )
 
 

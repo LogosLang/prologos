@@ -14,7 +14,7 @@
          "../propagator.rkt"
          "../parse-lattice.rkt"
          "../parse-reader.rkt"
-         (only-in "../reader.rkt" read-all-forms-string))
+         (only-in "../parse-reader.rkt" read-all-forms-string))
 
 ;; Helper: register patterns once
 (register-default-token-patterns!)

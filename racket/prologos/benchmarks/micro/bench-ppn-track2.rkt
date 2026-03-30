@@ -20,7 +20,7 @@
          "../../driver.rkt"
          "../../macros.rkt"
          "../../reader.rkt"
-         "../../parse-reader.rkt"
+         "../../reader.rkt"
          "../../metavar-store.rkt"
          "../../propagator.rkt"
          "../../global-env.rkt")

@@ -27,8 +27,13 @@
          "global-env.rkt"
          "macros.rkt"
          "sexp-readtable.rkt"
-         "reader.rkt"
-         "parse-reader.rkt"
+         (only-in "reader.rkt"
+                  prologos-read-syntax       ;; sexp mode: read one form
+                  prologos-read-syntax-all)  ;; sexp mode: read all forms
+         (except-in "parse-reader.rkt"
+                    prologos-read-syntax-all  ;; avoid collision with reader.rkt
+                    read-all-forms-string     ;; avoid collision with reader.rkt
+                    tokenize-string)          ;; avoid collision with reader.rkt
          "surface-rewrite.rkt"  ;; PPN Track 2: tag refinement + rewrite rules
          "tree-parser.rkt"     ;; PPN Track 2 Phase 6c: tree → surf-* directly
          "namespace.rkt"

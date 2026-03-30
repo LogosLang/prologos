@@ -41,7 +41,7 @@
 | 6e | V(1) macro expansion | ✅ | Built-ins: rewrite rules. User macros: merge fallback to preparse. |
 | 6f | V(2) spec injection | ✅ | Spec-aware merge: preparse for spec-annotated, tree parser for inferred. |
 | 6g | **SWITCHOVER** | ✅ | `523f2f1`→`8d80c27`. **Tree parser output used for elaboration.** Merge: generated defs (preparse) + user forms (tree parser) + spec forms (preparse). 383/383 GREEN, 7529 tests. |
-| 7 | Layer 2 integration | ⬜ | expand-top-level already processes tree parser's surf-*. May be complete. |
+| 7 | Layer 2 integration | ✅ | ALREADY WORKING. expand-top-level processes tree parser's surf-* identically to parse-datum's. Verified: auto-implicits, defn desugaring. |
 | 8a | Consumer migration (reader.rkt) | ⬜ | 57 imports → parse-reader.rkt |
 | 8b | Consumer migration (macros.rkt) | ⬜ | driver.rkt + elaborator.rkt + tests |
 | 8c | reader.rkt deletion | ⬜ | 1898 lines removed |
