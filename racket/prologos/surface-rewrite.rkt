@@ -614,13 +614,19 @@
 
     [(v1)
      ;; V(2): spec/where injection
-     ;; If registries provided, check spec-store for matching spec.
-     ;; For now: pass through (spec injection handled by datum-level preparse).
-     ;; Tree-level spec injection requires:
-     ;; 1. Reading spec-store cell for registered specs
-     ;; 2. Matching defn name against spec entries
-     ;; 3. Adding type annotation to defn's surf-defn type field
-     ;; DEFERRED: requires registry-cell-watching in pipeline-as-cell model.
+     ;; If registries provided with a spec-store lookup function,
+     ;; check if this node is a defn whose name has a matching spec.
+     ;; If so, the spec type replaces the defn's hole types.
+     ;;
+     ;; For tree-level: this would modify the defn node's type annotation.
+     ;; For pipeline-as-cell: this would be a propagator watching
+     ;; form-cell + spec-store-cell, firing when both have values.
+     ;;
+     ;; For now: pass through. Spec injection is handled by datum-level
+     ;; preparse (maybe-inject-spec). The defn's type in the tree parser
+     ;; has Pi chain with holes; the preparse injects the spec type into
+     ;; the DATUM which parse-datum sees. The hybrid path uses preparse's
+     ;; output so spec types are correct in elaboration.
      (form-pipeline-value 'v2 node regs spos)]
 
     [(v2)
