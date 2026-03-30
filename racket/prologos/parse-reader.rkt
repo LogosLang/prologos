@@ -23,7 +23,9 @@
          racket/port
          "rrb.rkt"
          "propagator.rkt"
-         "parse-lattice.rkt")
+         "parse-lattice.rkt"
+         ;; PPN Track 2 Phase 8a: re-export sexp reader for backward compat
+         (only-in "reader.rkt" prologos-read prologos-read-syntax))
 
 (provide
  ;; Phase 1a: Character + indent domains
@@ -87,6 +89,9 @@
  ;; Token accessor compatibility (old reader used token struct with type/value fields)
  (rename-out [compat-token-type token-type]
              [compat-token-value token-value])
+ ;; Sexp reader re-export (from reader.rkt — until sexp reader extracted)
+ prologos-read
+ prologos-read-syntax
  )
 
 
@@ -368,6 +373,24 @@
   (define c2 (rrb-char-at rrb (+ pos 1)))
   (if (and c1 c2 (char=? c1 #\~) (char=? c2 #\[))
       2
+      #f))
+
+(define (recognize-tilde-number rrb pos)
+  ;; ~42 or ~3/7 or ~3.14 (approx-literal)
+  (define c1 (rrb-char-at rrb pos))
+  (define c2 (rrb-char-at rrb (+ pos 1)))
+  (if (and c1 c2 (char=? c1 #\~)
+           (or (char-numeric? c2)
+               (and (char=? c2 #\-) ;; negative: ~-5
+                    (let ([c3 (rrb-char-at rrb (+ pos 2))])
+                      (and c3 (char-numeric? c3))))))
+      ;; Scan forward for the full number
+      (let loop ([i (+ pos 1)])
+        (define c (rrb-char-at rrb i))
+        (if (and c (or (char-numeric? c) (char=? c #\.) (char=? c #\/)
+                       (char=? c #\-) (char=? c #\e) (char=? c #\E)))
+            (loop (+ i 1))
+            (- i pos)))
       #f))
 
 (define (recognize-hash-lbrace rrb pos)
@@ -841,6 +864,9 @@
   (register-token-pattern!
    (token-pattern 'tilde-lbracket (lambda (rrb pos) (recognize-tilde-lbracket rrb pos))
                   (lambda (s p l) 'tilde-lbracket) 85))
+  (register-token-pattern!
+   (token-pattern 'tilde-number (lambda (rrb pos) (recognize-tilde-number rrb pos))
+                  (lambda (s p l) 'approx-literal) 86))  ;; higher priority than tilde-lbracket
   ;; Backtick and comma (quasiquote/unquote)
   (register-token-pattern!
    (token-pattern 'backtick (lambda (rrb pos) (recognize-backtick rrb pos))
@@ -1482,6 +1508,7 @@
                   (string-ref lexeme 1)  ;; 'X' → X
                   lexeme)]
       [(path-literal) lexeme]
+      [(approx-literal) (or (string->number (substring lexeme 1)) lexeme)]  ;; ~42 → 42
       [(dot-access nil-dot-access broadcast-access)
        (string->symbol (substring lexeme (if (string-prefix? lexeme "#") 2 1)))]
       [(dot-key nil-dot-key)
