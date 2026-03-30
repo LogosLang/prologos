@@ -219,8 +219,72 @@
   (prologos-error loc msg #f))
 
 (define (parse-def-tree args loc)
-  ;; TODO: translate from parser.rkt parse-def
-  (parse-error-result loc "parse-def-tree: not yet implemented"))
+  ;; Tree args (after def token): [name, maybe-type-annotation, body]
+  ;; Variants:
+  ;;   [name, body] — 2 args, type inferred
+  ;;   [name, <angle-group>, body] — 3 args, angle-type annotation
+  ;;   [name, :, type, body] — 4+ args, colon annotation
+  (cond
+    ;; 2 args: (def name body)
+    [(= (length args) 2)
+     (define name (token-symbol (car args)))
+     (if (not name)
+         (parse-error-result loc (format "def: expected name, got ~a" (car args)))
+         (let ([bd (parse-form-tree (cadr args))])
+           (if (prologos-error? bd) bd
+               (surf-def name #f bd loc))))]
+    ;; 3 args: (def name <type> body) or (def name body-expr)
+    [(= (length args) 3)
+     (define name (token-symbol (car args)))
+     (if (not name)
+         (parse-error-result loc "def: expected name")
+         (let ([second (cadr args)])
+           (if (and (parse-tree-node? second)
+                    (eq? (parse-tree-node-tag second) 'angle-group))
+               ;; Angle-type annotation
+               (let ([ty (parse-form-tree second)]
+                     [bd (parse-form-tree (caddr args))])
+                 (cond
+                   [(prologos-error? ty) ty]
+                   [(prologos-error? bd) bd]
+                   [else (surf-def name ty bd loc)]))
+               ;; Not angle — might be colon annotation or body
+               (if (token-is? second ":")
+                   (parse-error-result loc "def with : needs type AND body (4 args)")
+                   ;; Treat as (def name expr1 expr2) — application?
+                   (let ([bd (parse-application-tree (cdr args) loc)])
+                     (if (prologos-error? bd) bd
+                         (surf-def name #f bd loc)))))))]
+    ;; 4+ args: (def name : type body) or (def name <type> body...)
+    [(>= (length args) 4)
+     (define name (token-symbol (car args)))
+     (if (not name)
+         (parse-error-result loc "def: expected name")
+         (let ([second (cadr args)])
+           (cond
+             ;; Colon annotation
+             [(token-is? second ":")
+              (let ([ty (parse-form-tree (caddr args))]
+                    [bd (parse-form-tree (cadddr args))])
+                (cond
+                  [(prologos-error? ty) ty]
+                  [(prologos-error? bd) bd]
+                  [else (surf-def name ty bd loc)]))]
+             ;; Angle annotation + body
+             [(and (parse-tree-node? second)
+                   (eq? (parse-tree-node-tag second) 'angle-group))
+              (let ([ty (parse-form-tree second)]
+                    [bd (if (= (length args) 4)
+                            (parse-form-tree (caddr args))
+                            (parse-application-tree (cddr args) loc))])
+                (cond
+                  [(prologos-error? ty) ty]
+                  [(prologos-error? bd) bd]
+                  [else (surf-def name ty bd loc)]))]
+             [else
+              (parse-error-result loc "def: unexpected format")])))]
+    [else
+     (parse-error-result loc "def: need at least name + body")]))
 
 (define (parse-defn-tree args loc)
   (parse-error-result loc "parse-defn-tree: not yet implemented"))
@@ -420,4 +484,31 @@
     (define node (tnode 'expr (tok "f") (tok "x")))
     (define result (parse-form-tree node))
     (check-true (surf-app? result)))
+
+  ;; --- Form-specific tests ---
+
+  (test-case "parse-def: name + body (2 args)"
+    (define node (tnode 'def (tok "def") (tok "x") (tok "42")))
+    (define result (parse-form-tree node))
+    (check-true (surf-def? result))
+    (check-eq? (surf-def-name result) 'x)
+    (check-false (surf-def-type result))  ;; type inferred
+    (check-true (surf-int-lit? (surf-def-body result))))
+
+  (test-case "parse-def: name + angle-type + body (3 args)"
+    (define angle (tnode 'angle-group (tok "Int")))
+    (define node (tnode 'def (tok "def") (tok "x") angle (tok "42")))
+    (define result (parse-form-tree node))
+    (check-true (surf-def? result))
+    (check-eq? (surf-def-name result) 'x)
+    (check-true (surf-int-type? (surf-def-type result)))
+    (check-true (surf-int-lit? (surf-def-body result))))
+
+  (test-case "parse-def: name + colon + type + body (4 args)"
+    (define node (tnode 'def (tok "def") (tok "x") (tok ":") (tok "Int") (tok "42")))
+    (define result (parse-form-tree node))
+    (check-true (surf-def? result))
+    (check-eq? (surf-def-name result) 'x)
+    (check-true (surf-int-type? (surf-def-type result)))
+    (check-true (surf-int-lit? (surf-def-body result))))
 )
