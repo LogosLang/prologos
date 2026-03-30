@@ -1538,11 +1538,50 @@
      (define refined-root (refine-tag grouped-root))
      (define rewritten-root (rewrite-tree refined-root))
      (define tree-surfs (parse-top-level-forms-from-tree rewritten-root))
-     ;; Preparse output used for elaboration (proven correct).
-     ;; Tree parser runs the full pipeline (G(0)→T(0)→rewrite→parse)
-     ;; in validation mode. Full switchover when ALL forms handled at
-     ;; tree level (5 specialized forms + spec injection + generated defs).
-     (process-surfs preparse-surfs)]
+     ;; MERGE: generated defs from preparse + user forms from tree parser.
+     ;;
+     ;; Tree parser produces non-error surfs for user forms (def, defn, eval,
+     ;; check, infer) and errors for consumed forms (data, trait, spec, impl,
+     ;; ns, imports, exports). Preparse produces generated defs (constructors,
+     ;; accessors, dict defs) + expanded user forms.
+     ;;
+     ;; Strategy: partition preparse output into generated vs user.
+     ;; Generated = forms whose names are NOT in the source tree (constructors,
+     ;; :=, |, accessor defs). User = forms that correspond to source forms.
+     ;; Use generated from preparse, user from tree parser.
+     ;;
+     ;; Simple heuristic: preparse surfs that are surf-def/surf-defn-multi
+     ;; whose position matches a tree parser non-error surf → user form.
+     ;; Everything else → generated (keep from preparse).
+     ;;
+     ;; For now: collect tree parser's non-error surfs (user forms).
+     ;; Collect preparse's surfs that DON'T have matching user forms (generated).
+     ;; Merge: generated first (Phase 5b hoisting), then user forms.
+     (define tree-user-surfs
+       (filter (lambda (s) (not (prologos-error? s))) tree-surfs))
+     (define tree-user-names
+       (for/list ([s (in-list tree-user-surfs)]
+                  #:when (or (surf-def? s) (surf-defn? s) (surf-defn-multi? s)))
+         (cond [(surf-def? s) (surf-def-name s)]
+               [(surf-defn? s) (surf-defn-name s)]
+               [(surf-defn-multi? s) (surf-defn-multi-name s)]
+               [else #f])))
+     (define generated-surfs
+       (filter (lambda (s)
+                 (cond
+                   [(surf-eval? s) #f]  ;; eval = user form, use tree parser's
+                   [(surf-def? s)
+                    (not (memq (surf-def-name s) tree-user-names))]
+                   [(surf-defn? s)
+                    (not (memq (surf-defn-name s) tree-user-names))]
+                   [(surf-defn-multi? s)
+                    (not (memq (surf-defn-multi-name s) tree-user-names))]
+                   [(prologos-error? s) #f]  ;; skip errors
+                   [else #t]))  ;; keep unknown forms from preparse
+               preparse-surfs))
+     ;; Merge: generated (hoisted) + user forms (from tree parser)
+     (define merged-surfs (append generated-surfs tree-user-surfs))
+     (process-surfs merged-surfs)]
     [else
      ;; OLD PATH: datum → preparse → parse
      (define raw-stxs (read-all-syntax-ws port "<ws-string>"))
