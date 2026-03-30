@@ -30,7 +30,7 @@
 | 1 | Parse tree node descriptors + rewrite infrastructure | ✅ | `27e8870`. surface-rewrite.rkt: 350 lines, 14 tests. 38 tag rules + rewrite-rule struct + apply-rules. |
 | 1b | Tag-refinement stratum T(0) | ✅ | `b990292`. Wired into reader pipeline. 383/383 GREEN. Zero behavioral change. |
 | 2a | Simple rewrite rules (9 rules) | 🔄 | `d1cc404`. 5/9 implemented (let-assign, let-bracket, if, when, compose). 3 deferred to Phase 6 (tree-level dot/infix). Reality check: real parse trees match rule expectations. |
-| 2b | Recursive rewrite rules (5 rules) | ⬜ | template-fn for cond, do, list-lit, lseq-lit, quasiquote |
+| 2b | Recursive rewrite rules (5 rules) | ✅ | `99cccaa`. 4/5 implemented (cond, do, list-lit, lseq-lit). Quasiquote → Phase 3. |
 | 3 | Complex rewrite propagators (4 rules) | ⬜ | pipe-fusion, mixfix/Pratt, defn-multi, session-ws |
 | 4 | Registry propagators | ⬜ | process-data/trait/spec → cell writes |
 | 5 | Spec/where injection as propagators | ⬜ | Cross-stratum data flow (V(2)) |
