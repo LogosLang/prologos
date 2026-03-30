@@ -1945,7 +1945,36 @@
                  (loop (+ i 1) (cons (token-entry->stx item source source-str) result)))]
             ;; Comma → skip (cosmetic separator in brace-params, etc.)
             [(eq? type 'comma)
-             (loop (+ i 1) result)]
+             (if (> qq-depth 0)
+                 ;; Inside quasiquote: comma is unquote
+                 (if (< (+ i 1) end)
+                     (let ([next-item (vector-ref vec (+ i 1))])
+                       (cond
+                         ;; ,( or ,[ → unquote of bracket group
+                         [(and (token-entry? next-item)
+                               (memq (set-first (token-entry-types next-item)) '(lparen lbracket)))
+                          (let-values ([(inner next-i)
+                                        (group-items vec (+ i 2) end  ;; skip , + (
+                                                     (if (eq? (set-first (token-entry-types next-item)) 'lparen)
+                                                         'rparen 'rbracket)
+                                                     source source-str 0)])  ;; qq-depth 0: commas inside unquote are separators
+                            (let-values ([(ul uc) (pos->line-col source-str (token-entry-start-pos item))])
+                              (loop next-i
+                                    (cons (make-stx (list (make-stx '$unquote source ul uc (+ (token-entry-start-pos item) 1) 1)
+                                                          (wrap-stx-list inner source))
+                                                    source ul uc (+ (token-entry-start-pos item) 1) 1) result))))]
+                         ;; ,x → unquote of single token
+                         [(token-entry? next-item)
+                          (let ([next-stx (token-entry->stx next-item source source-str)])
+                            (let-values ([(ul uc) (pos->line-col source-str (token-entry-start-pos item))])
+                              (loop (+ i 2)
+                                    (cons (make-stx (list (make-stx '$unquote source ul uc (+ (token-entry-start-pos item) 1) 1)
+                                                          next-stx)
+                                                    source ul uc (+ (token-entry-start-pos item) 1) 1) result))))]
+                         [else (loop (+ i 1) result)]))
+                     (loop (+ i 1) result))
+                 ;; Outside quasiquote: cosmetic separator, skip
+                 (loop (+ i 1) result))]
             ;; Other stray closing brackets → skip
             [(memq type '(rbracket rparen rbrace))
              (loop (+ i 1) result)]
@@ -1972,18 +2001,37 @@
              (if (< (+ i 1) end)
                  (let* ([next-item (vector-ref vec (+ i 1))])
                    (cond
-                     ;; Next is a bracket group → consume it as quasiquoted form
+                     ;; Next is a bracket group → consume CONTENTS as quasiquoted form
+                     ;; Skip backtick + open bracket, collect until close, qq-depth+1
                      [(and (token-entry? next-item)
                            (memq (set-first (token-entry-types next-item)) '(lparen lbracket)))
                       (let-values ([(inner next-i)
-                                    (group-items vec (+ i 1) end
+                                    (group-items vec (+ i 2) end  ;; skip ` + (
                                                  (if (eq? (set-first (token-entry-types next-item)) 'lparen)
                                                      'rparen 'rbracket)
-                                                 source source-str)])
+                                                 source source-str (+ qq-depth 1))])
                         (let-values ([(bl bc) (pos->line-col source-str (token-entry-start-pos item))])
                           (loop next-i
-                                (cons (make-stx (cons (make-stx '$quasiquote source bl bc (+ (token-entry-start-pos item) 1) 1)
-                                                      inner)
+                                (cons (make-stx (list (make-stx '$quasiquote source bl bc (+ (token-entry-start-pos item) 1) 1)
+                                                      (wrap-stx-list inner source))
+                                                source bl bc (+ (token-entry-start-pos item) 1) 1) result))))]
+                     ;; Next is comma → `,x → ($quasiquote ($unquote x))
+                     [(and (token-entry? next-item)
+                           (eq? (set-first (token-entry-types next-item)) 'comma)
+                           (< (+ i 2) end))
+                      (let* ([unquoted-item (vector-ref vec (+ i 2))]
+                             [unquoted-stx (if (token-entry? unquoted-item)
+                                               (token-entry->stx unquoted-item source source-str)
+                                               (make-stx '_ source 0 0 0 0))])
+                        (let-values ([(bl bc) (pos->line-col source-str (token-entry-start-pos item))]
+                                     [(ul uc) (pos->line-col source-str (token-entry-start-pos next-item))])
+                          (define unquote-form
+                            (make-stx (list (make-stx '$unquote source ul uc (+ (token-entry-start-pos next-item) 1) 1)
+                                            unquoted-stx)
+                                      source ul uc (+ (token-entry-start-pos next-item) 1) 1))
+                          (loop (+ i 3)
+                                (cons (make-stx (list (make-stx '$quasiquote source bl bc (+ (token-entry-start-pos item) 1) 1)
+                                                      unquote-form)
                                                 source bl bc (+ (token-entry-start-pos item) 1) 1) result))))]
                      ;; Next is a regular token → consume as single quasiquoted atom
                      [(token-entry? next-item)
