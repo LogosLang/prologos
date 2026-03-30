@@ -918,13 +918,14 @@
   (parse-expr-tree children loc))
 
 (define (parse-application-tree items loc)
-  ;; (f x y) → surf-app chain
+  ;; (f x y) → (surf-app f (list x y) loc)
+  ;; surf-app takes func + args-LIST + loc
   (define parsed (map parse-form-tree items))
-  (if (null? parsed)
-      (parse-error-result loc "empty application")
-      (foldl (lambda (arg func) (surf-app func arg loc))
-             (car parsed)
-             (cdr parsed))))
+  (cond
+    [(null? parsed) (parse-error-result loc "empty application")]
+    [(ormap prologos-error? parsed) (findf prologos-error? parsed)]
+    [(= (length parsed) 1) (car parsed)]  ;; single item, no application
+    [else (surf-app (car parsed) (cdr parsed) loc)]))
 
 (define (parse-list-literal-tree args loc)
   ;; Already rewritten by expand-list-literal to cons chain
