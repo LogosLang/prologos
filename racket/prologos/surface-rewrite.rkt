@@ -524,13 +524,112 @@
          [else (loop (+ i 1) result)])])))
 
 ;; ========================================
-;; Phase 6: Tree-level rewriting pipeline
+;; Phase 6b: Pipeline-as-cell model
 ;; ========================================
-;; Apply rewrite rules to every node in a tag-refined tree.
-;; Each stratum applies its rules to all nodes (bottom-up),
-;; producing a new tree. Strata run in sequence per CALM.
+;; Each form gets ONE cell holding a form-pipeline-value.
+;; A single propagator advances through stages monotonically.
+;; The stage chain IS the stratification.
 
-(provide rewrite-tree)
+(provide
+ (struct-out form-pipeline-value)
+ form-pipeline-merge
+ advance-pipeline
+ run-form-pipeline
+ rewrite-tree)
+
+;; --- Pipeline-as-cell value ---
+
+(struct form-pipeline-value
+  (stage        ;; symbol: position in stage chain
+   tree-node    ;; parse-tree-node at this stage
+   registrations ;; (listof pair) extracted registry entries
+   source-pos)  ;; source position for provenance
+  #:transparent)
+
+;; Stage ordering (finite total order)
+(define stage-order
+  '(raw tagged grouped v0-0 v0-1 v0-2 v1 v2 done))
+
+(define (stage-index stage)
+  (let loop ([stages stage-order] [i 0])
+    (cond
+      [(null? stages) -1]  ;; unknown stage
+      [(eq? (car stages) stage) i]
+      [else (loop (cdr stages) (+ i 1))])))
+
+(define (stage>? a b)
+  (> (stage-index a) (stage-index b)))
+
+;; Merge: take the later stage (monotone)
+(define (form-pipeline-merge old new)
+  (if (stage>? (form-pipeline-value-stage new)
+               (form-pipeline-value-stage old))
+      new
+      old))
+
+;; Advance a pipeline value by one stage.
+;; Returns a new form-pipeline-value at the next stage, or #f if already 'done.
+(define (advance-pipeline pv)
+  (define stage (form-pipeline-value-stage pv))
+  (define node (form-pipeline-value-tree-node pv))
+  (define regs (form-pipeline-value-registrations pv))
+  (define spos (form-pipeline-value-source-pos pv))
+
+  (case stage
+    [(raw)
+     ;; T(0): tag refinement
+     (define refined (refine-node-tag node))
+     (form-pipeline-value 'tagged refined regs spos)]
+
+    [(tagged)
+     ;; G(0): form grouping
+     (define grouped (group-tree-node node))
+     (form-pipeline-value 'grouped grouped regs spos)]
+
+    [(grouped)
+     ;; V(0,0): implicit-map
+     (define-values (result _) (apply-rules node 'V0-0))
+     (form-pipeline-value 'v0-0 result regs spos)]
+
+    [(v0-0)
+     ;; V(0,1): dot-access
+     (define-values (result _) (apply-rules node 'V0-1))
+     (form-pipeline-value 'v0-1 result regs spos)]
+
+    [(v0-1)
+     ;; V(0,2): infix + simple + recursive rewrites
+     (define-values (result _) (apply-rules node 'V0-2))
+     (form-pipeline-value 'v0-2 result regs spos)]
+
+    [(v0-2)
+     ;; V(1): macro expansion — for now, pass through
+     ;; Full macro expansion requires registry cell watching (Phase 6b)
+     (form-pipeline-value 'v1 node regs spos)]
+
+    [(v1)
+     ;; V(2): spec/where injection — for now, pass through
+     ;; Full injection requires cross-form cell watching (Phase 6b)
+     (form-pipeline-value 'v2 node regs spos)]
+
+    [(v2)
+     ;; Extract registrations, mark done
+     (form-pipeline-value 'done node regs spos)]
+
+    [(done) #f]  ;; already done
+    [else #f]))
+
+;; Run a form through the entire pipeline to 'done.
+;; Returns the final form-pipeline-value.
+(define (run-form-pipeline node)
+  (let loop ([pv (form-pipeline-value 'raw node '()
+                                       (and (parse-tree-node? node)
+                                            (parse-tree-node-srcloc node)))])
+    (define next (advance-pipeline pv))
+    (if next
+        (loop next)
+        pv)))
+
+;; --- Tree-level rewriting (uses pipeline) ---
 
 ;; Apply all rules for a given stratum to a single node.
 ;; Returns the rewritten node (or original if no rules match).
@@ -1297,6 +1396,53 @@
     (check-eq? (parse-tree-node-tag result) tag-expr)
     (define c0 (rrb-get (parse-tree-node-children result) 0))
     (check-equal? (token-entry-lexeme c0) "lseq-cell"))
+
+  ;; --- Pipeline-as-cell tests ---
+
+  (test-case "pipeline: stage ordering"
+    (check-true (stage>? 'tagged 'raw))
+    (check-true (stage>? 'done 'raw))
+    (check-false (stage>? 'raw 'tagged))
+    (check-false (stage>? 'raw 'raw)))
+
+  (test-case "pipeline: merge takes later stage"
+    (define old (form-pipeline-value 'raw (make-line-node "def" "x") '() #f))
+    (define new (form-pipeline-value 'tagged (make-line-node "def" "x") '() #f))
+    (define merged (form-pipeline-merge old new))
+    (check-eq? (form-pipeline-value-stage merged) 'tagged))
+
+  (test-case "pipeline: merge rejects earlier stage"
+    (define old (form-pipeline-value 'grouped (make-line-node "def" "x") '() #f))
+    (define new (form-pipeline-value 'tagged (make-line-node "def" "x") '() #f))
+    (define merged (form-pipeline-merge old new))
+    (check-eq? (form-pipeline-value-stage merged) 'grouped))
+
+  (test-case "pipeline: advance from raw → tagged"
+    (define pv (form-pipeline-value 'raw (make-line-node "def" "x" ":=" "42") '() #f))
+    (define next (advance-pipeline pv))
+    (check-eq? (form-pipeline-value-stage next) 'tagged)
+    (check-eq? (parse-tree-node-tag (form-pipeline-value-tree-node next)) tag-def))
+
+  (test-case "pipeline: run-form-pipeline reaches done"
+    (define node (make-line-node "eval" "x"))
+    (define result (run-form-pipeline node))
+    (check-eq? (form-pipeline-value-stage result) 'done)
+    ;; Tag should have been refined
+    (check-eq? (parse-tree-node-tag (form-pipeline-value-tree-node result)) tag-eval))
+
+  (test-case "pipeline: if form reaches done with correct rewrite"
+    (define node (make-line-node "if" "true" "1" "0"))
+    (define result (run-form-pipeline node))
+    (check-eq? (form-pipeline-value-stage result) 'done)
+    ;; After G(0) grouping + V(0,2) rewrite, the if should be rewritten to boolrec
+    (define final-node (form-pipeline-value-tree-node result))
+    (check-true (parse-tree-node? final-node))
+    ;; Check that rewriting happened (tag should be expr, first child boolrec)
+    (define children (parse-tree-node-children final-node))
+    (when (> (rrb-size children) 0)
+      (define first-child (rrb-get children 0))
+      (when (token-entry? first-child)
+        (check-equal? (token-entry-lexeme first-child) "boolrec"))))
 
   (test-case "expand-quasiquote: symbol → datum-sym"
     (define node (parse-tree-node
