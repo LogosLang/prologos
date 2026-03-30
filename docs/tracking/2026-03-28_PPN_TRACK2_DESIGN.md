@@ -35,7 +35,9 @@
 | 4 | Registry propagators | ✅ | ALREADY DONE (Track 7 Phase 2). 24 cells exist. Cell-primary reads. Dual-write. True propagators (watching form cells) → Phase 6. |
 | 5 | Spec/where injection as propagators | ⬜ | Cross-stratum data flow (V(2)). Requires form cells from Phase 6. Imperative versions continue via dual-write until then. |
 | 6a | Form-grouping stratum G(0) | ✅ | `8778dfe`. group-tree-node implemented. Verified on filter-xf pattern (if: 8+ → 4 children). NOT YET ACTIVE — activation is Phase 6b (atomic switch). |
-| 6b | Stratified pipeline integration | ⬜ | R(-1)→R(0)→R(1)→T(0)→G(0)→V(0)→V(1)→V(2) outer loop. 8 deferred rules. |
+| 6b | Pipeline-as-cell model | ✅ | `d67094d`. form-pipeline-value struct, monotone stage merge, advance-pipeline. 30 tests. |
+| 6c | tree-parser.rkt (tree → surf-*) | 🔄 | `879d4df`. 783 lines, 20 tests. Core forms: def (3 variants), fn (4 variants), atoms, builtins (24 ops), keyword dispatch. 15 stubs remaining (defn, spec, data, trait, impl, session, etc.). |
+| 6d | Wire full pipeline + remaining stubs | ⬜ | Translate remaining 15 parse functions + wire into driver.rkt |
 | 7 | Layer 2 integration | ⬜ | expand-top-level rules on surf-* via SRE |
 | 8a | Consumer migration (reader.rkt) | ⬜ | 57 imports → parse-reader.rkt |
 | 8b | Consumer migration (macros.rkt) | ⬜ | driver.rkt + elaborator.rkt + tests |
