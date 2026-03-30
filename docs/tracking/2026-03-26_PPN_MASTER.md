@@ -40,8 +40,8 @@ PPN consumes.
 |-------|-------------|--------|-------|
 | 0 | Lattice design (parse, token, surface, core lattices) | ✅ | `c41bbca` [PIR](2026-03-26_PPN_TRACK0_PIR.md). 4 lattices, 6 bridges, 57 tests. |
 | 1 | Lexer + structure as propagators (char → structured token tree) | ✅ | [Design D.9](2026-03-26_PPN_TRACK1_DESIGN.md), [Audit](2026-03-26_PPN_TRACK1_STAGE2_AUDIT.md), [PIR](2026-03-26_PPN_TRACK1_PIR.md). **5-cell architecture**: 4 RRB embedded cells + 1 tree M-type cell. 380/380 GREEN. 108 tests. reader.rkt switchover complete. |
-| 2 | Surface normalization as rewriting | 🔄 | [Design D.1c](2026-03-28_PPN_TRACK2_DESIGN.md), [Audit](2026-03-28_PPN_TRACK2_STAGE2_AUDIT.md). **Parse tree as Pocket Universe**: SRE operates directly on `parse-tree-node` via `ctor-desc`. 14 simple rules + 4 specialized propagators. CALM-compliant stratified pipeline (Layered Recovery). Eliminates datum layer, compat layer, syntax objects. Retires reader.rkt (1898 lines) + macros.rkt preparse (~3000-5000 lines). |
-| 3 | Parser as propagators (chart/Earley, HR productions) | ⬜ | Replaces parser.rkt (~1500 lines). **From Track 1**: needs span-based SRE decomposition (recognizer reads span of embedded RRB lattice, not single cell value). |
+| 2 | Surface normalization as rewriting | ✅ | [Design D.1c+§8](2026-03-28_PPN_TRACK2_DESIGN.md), [Audit](2026-03-28_PPN_TRACK2_STAGE2_AUDIT.md), [PIR](2026-03-29_PPN_TRACK2_PIR.md). **Parse tree as Pocket Universe**. Switchover complete. reader.rkt DELETED (1898 lines). ~2700 lines new code. 57 module tests. Phase 11 (macros.rkt expander retirement) deferred to Track 3 prerequisite. |
+| 3 | Parser as propagators (chart/Earley, HR productions) | ⬜ | Replaces parser.rkt (~1500 lines). **From Track 1**: needs span-based SRE decomposition. **From Track 2 Phase 11**: retire macros.rkt sexp expanders (~1000 lines) — requires tree parser handling ALL form types (data/trait/impl/spec), making `preparse-expand-all` obsolete. |
 | 3.5 | **Grammar Form: Research + Design** | ⬜ | [`grammar` vision](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md). Multi-view spec. DPO structural preservation. Full theory + syntax after Tracks 1-3. **From Track 1**: typed productions (NTT-typed rewrite rules). |
 | 4 | Elaboration as attribute evaluation | ⬜ | IS SRE Track 2C. Dissolves parse/elab boundary. |
 | 5 | Type-directed disambiguation | ⬜ | Backward type→parse flow via Galois bridges. Bilattice (gfp/elimination) added here via WF-LE newtype pattern. |
@@ -84,31 +84,25 @@ sensitivity. This is context-dependent lexing (indentation level affects
 token boundaries). The propagator model handles this naturally — the
 indentation level is a cell that the lexer rules read.
 
-### Track 2: Surface Normalization as Rewriting
+### Track 2: Surface Normalization as Rewriting ✅
 
-**Design**: [PPN Track 2 Design D.1c](2026-03-28_PPN_TRACK2_DESIGN.md)
+**Design**: [PPN Track 2 Design D.1c + §8 Addendum](2026-03-28_PPN_TRACK2_DESIGN.md)
 **Audit**: [PPN Track 2 Stage 2 Audit](2026-03-28_PPN_TRACK2_STAGE2_AUDIT.md)
-**Status**: 🔄 Design phase (D.1c complete, pre-0 benchmarks complete, D.2 pending)
+**PIR**: [PPN Track 2 PIR](2026-03-29_PPN_TRACK2_PIR.md)
+**Status**: ✅ COMPLETE. reader.rkt deleted. Switchover live. Phase 11 deferred to Track 3 prerequisite.
 
-**What**: Replace the preparse expansion pipeline in `macros.rkt` with
-SRE rewrite rules operating directly on the parse tree from Track 1.
+**Delivered**:
+- **surface-rewrite.rkt** (~1200 lines, 31 tests): Tag refinement T(0), form grouping G(0), pipeline-as-cell model, 10 rewrite rules
+- **tree-parser.rkt** (~1250 lines, 26 tests): Core language tree→surf-* (def, defn, fn, Pi, Sigma, arrows, match, builtins)
+- **parse-reader.rkt**: Full compat wrapper (tokenize-string, read-all-forms-string, prologos-read-syntax), native implementations replacing reader.rkt
+- **reader.rkt DELETED** (1898 lines) — Phase 10 (`469e2276`)
+- **Switchover**: Tree parser output used for elaboration via spec-aware merge
+- **Remaining (deferred to Track 3)**: macros.rkt sexp expander retirement (~1000 lines) — blocked on tree parser handling all form types
 
-**Key design decisions (D.1c)**:
-- **Parse tree as Pocket Universe**: SRE operates directly on `parse-tree-node` via `ctor-desc`. No datum layer, no compat layer, no syntax objects.
-- **CALM-compliant stratified pipeline**: Rewrites at stratum boundaries (Layered Recovery). Set-once cells between strata. R(-1)→R(0)→R(1)→V(0)→V(1)→V(2).
-- **14 simple rules** (pattern→template via SRE descriptors) + **4 specialized propagators** (pipe fusion, mixfix Pratt, defn-multi, session-ws).
-- **Module Theory lens**: Parse tree is a module over the endomorphism ring of rewrite rules. Submodule independence = parallelizability.
-- **Retirement**: reader.rkt (1898 lines) + macros.rkt preparse (~3000-5000 lines). Total ~5000-7000 lines eliminated.
-
-**Replaces**: `preparse-expand-form`, `preparse-expand-all`,
-`preparse-expand-single`, `preparse-expand-subforms` (~3000 lines).
-Also: `flatten-ws-kv-pairs`, `rewrite-implicit-map`, dot-access
-transformation, broadcast transformation, all surface-level desugaring.
-
-**Deferred items incorporated**: Mixfix (specialized Pratt propagator), token struct migration (eliminated — parse tree IS the representation), syntax-object elimination (parse tree nodes carry srcloc directly), reader.rkt retirement (explicit Phase 8c).
-
-Each rewrite IS a DPO rewrite rule. The preparse phase IS hypergraph
-rewriting on the parse tree — we're just doing it imperatively today.
+**Key design decisions**:
+- **Parse tree as Pocket Universe**: SRE operates directly on `parse-tree-node` via `ctor-desc`
+- **CALM-compliant stratified pipeline**: Set-once cells between strata
+- **Spec-aware merge**: Generated defs from preparse + user forms from tree parser
 
 ### Track 3: Parser as Propagators
 
@@ -118,6 +112,20 @@ the network. Each grammar production installs propagators. Parse forests
 
 **Replaces**: `parser.rkt` (~1500 lines), `parse-datum`, all the
 `parse-*` functions.
+
+**Prerequisite from Track 2 (Phase 11 — sexp expander retirement)**:
+Track 2 deleted reader.rkt but could NOT delete macros.rkt's sexp
+expanders (~1000 lines: `expand-if`, `expand-when`, `expand-cond`,
+`expand-let`, etc.) because `preparse-expand-all` is still called by
+both the sexp and WS processing paths. These expanders become deletable
+once the tree parser (from Track 2) handles ALL form types — including
+`data`, `trait`, `impl`, `spec`, and generated defs (constructors,
+accessors, type definitions) — making `preparse-expand-all` obsolete.
+Track 3's early phases should include:
+1. Extend tree-parser.rkt to handle all preparse-consumed forms
+2. Move registration (data/trait/impl → registries) to tree-level
+3. Delete `preparse-expand-all` + sexp-specific expanders from macros.rkt
+4. Retain `expand-top-level` and `expand-expression` (post-parse, shared)
 
 **Key mechanism**: Chart parsing / Earley as fixpoint. Each chart entry
 is a cell. Completion/prediction/scanning are propagators. The grammar
