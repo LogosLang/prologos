@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Characters and Strings — Prologos Standard Library</title>
+  <style>
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
+  --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
+  --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
+  color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
+}
+h1.chapter-title {
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
+  padding-bottom: .5rem; margin-bottom: .3rem;
+}
+h2.part-header {
+  font-size: 1.35rem; border-top: 1px solid var(--border);
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
+}
+h3.section-title {
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
+  padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
+}
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
+.module-badge {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: .78rem; background: var(--badge-bg); color: var(--accent);
+  border: 1px solid var(--badge-border); border-radius: 3px;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
+}
+pre {
+  background: var(--code-bg); border-left: 3px solid var(--border);
+  padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
+}
+code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
+pre code { background: none; color: var(--fg); }
+p code {
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
+  font-size: .88em;
+}
+.prose { margin: .5rem 0; }
+.prose p { margin: .6rem 0; }
+nav.chapter-nav {
+  font-size: .9rem; color: var(--muted);
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
+}
+nav.chapter-nav a { color: var(--accent); text-decoration: none; }
+nav.chapter-nav a:hover { text-decoration: underline; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
+nav.bottom-nav {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
+  font-size: .9rem; color: var(--muted);
+}
+nav.bottom-nav a { color: var(--accent); text-decoration: none; }
+nav.bottom-nav a:hover { text-decoration: underline; }
+.preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* TOC page */
+.toc-part-label {
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
+  margin-top: 1.8rem; margin-bottom: .3rem;
+}
+ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
+ol.toc-chapters li { margin: .3rem 0; }
+ol.toc-chapters a { color: var(--accent); text-decoration: none; }
+ol.toc-chapters a:hover { text-decoration: underline; }
+.toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+.book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
+  </style>
+
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\u2600':'\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\u2600':'\u263E';
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="chapter-nav"><a href="pairs-and-options.html">← Pairs And Options</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="arithmetic-traits.html">Arithmetic Traits →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<article>
+<h1 class="chapter-title">Characters and Strings</h1>
+<div class="prose"><p>Characters (<code>Char</code>) and strings (<code>String</code>) in Prologos are
+backed by Racket's Unicode-aware character and string types.
+The core operations are foreign imports from Racket's standard
+library, while higher-level operations (splitting, trimming,
+searching, mapping) are pure Prologos built on those primitives.</p>
+<p>Character literals: <code>'a'</code>, <code>'Z'</code>, <code>' '</code>
+String literals: <code>"hello"</code>, <code>"world\n"</code></p></div>
+<h2 class="part-header">Part I — Character Primitives</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::char</div>
+<h3 class="section-title">Character Operations</h3>
+<div class="prose"><p>Foreign imports from Racket's <code>racket/base</code>. Note that Racket
+function names containing <code>&lt;</code> and <code>&gt;</code> use string-quoted <code>:as</code>
+names since the WS reader treats <code>&lt;</code> and <code>&gt;</code> as bracket syntax.</p></div>
+<h3 class="section-title">Comparison</h3>
+<pre><code class="prologos"><span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [char=? <span class="hl-kwlit">:as</span> eq : <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [<span class="hl-str">"char&lt;?"</span> <span class="hl-kwlit">:as</span> lt : <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>]</code></pre>
+<h3 class="section-title">Conversion</h3>
+<pre><code class="prologos"><span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [<span class="hl-str">"char-&gt;integer"</span> <span class="hl-kwlit">:as</span> code : <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [<span class="hl-str">"integer-&gt;char"</span> <span class="hl-kwlit">:as</span> from-code : <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span>]</code></pre>
+<h3 class="section-title">Classification</h3>
+<pre><code class="prologos"><span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [char-alphabetic? <span class="hl-kwlit">:as</span> alpha? : <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [char-numeric? <span class="hl-kwlit">:as</span> numeric? : <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [char-whitespace? <span class="hl-kwlit">:as</span> whitespace? : <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [char-upper-case? <span class="hl-kwlit">:as</span> upper? : <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [char-lower-case? <span class="hl-kwlit">:as</span> lower? : <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>]</code></pre>
+<h3 class="section-title">Case conversion</h3>
+<pre><code class="prologos"><span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [char-upcase <span class="hl-kwlit">:as</span> upper : <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [char-downcase <span class="hl-kwlit">:as</span> lower : <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span>]</code></pre>
+</section>
+<h2 class="part-header">Part II — String Primitives</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::string</div>
+<h3 class="section-title">String Primitives</h3>
+<div class="prose"><p>Foreign imports providing the basic string operations. These
+are the building blocks for the higher-level string-ops module.</p></div>
+<h3 class="section-title">Comparison</h3>
+<pre><code class="prologos"><span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [string=? <span class="hl-kwlit">:as</span> eq : <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [<span class="hl-str">"string&lt;?"</span> <span class="hl-kwlit">:as</span> lt : <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>]</code></pre>
+<h3 class="section-title">Length &amp; access</h3>
+<pre><code class="prologos"><span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [string-length <span class="hl-kwlit">:as</span> length : <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [string-ref <span class="hl-kwlit">:as</span> ref : <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span>]</code></pre>
+<h3 class="section-title">Construction</h3>
+<pre><code class="prologos"><span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [string-append <span class="hl-kwlit">:as</span> append : <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [substring <span class="hl-kwlit">:as</span> slice : <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [make-string <span class="hl-kwlit">:as</span> repeat-char : <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>]</code></pre>
+<h3 class="section-title">Conversion</h3>
+<pre><code class="prologos"><span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [string <span class="hl-kwlit">:as</span> from-char : <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [<span class="hl-str">"number-&gt;string"</span> <span class="hl-kwlit">:as</span> from-int : <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>]</code></pre>
+<h3 class="section-title">Search (racket/string)</h3>
+<pre><code class="prologos"><span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/string"</span> [string-contains? <span class="hl-kwlit">:as</span> contains? : <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/string"</span> [string-prefix? <span class="hl-kwlit">:as</span> starts-with? : <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/string"</span> [string-suffix? <span class="hl-kwlit">:as</span> ends-with? : <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>]</code></pre>
+<h3 class="section-title">Case conversion (racket/base)</h3>
+<pre><code class="prologos"><span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [string-upcase <span class="hl-kwlit">:as</span> upper : <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [string-downcase <span class="hl-kwlit">:as</span> lower : <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">foreign</span> racket <span class="hl-str">"racket/base"</span> [string-titlecase <span class="hl-kwlit">:as</span> capitalize : <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>]</code></pre>
+</section>
+<h2 class="part-header">Part III — String Operations</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::string-ops</div>
+<h3 class="section-title">Higher-Level String Functions</h3>
+<div class="prose"><p>Pure Prologos string operations built on the FFI primitives.
+Includes predicates, searching, trimming, splitting/joining,
+replacement, transformation, and folding.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::string  <span class="hl-kwlit">:as</span> str <span class="hl-kwlit">:refer</span> []]
+<span class="hl-kw">require</span> [prologos::data::char    <span class="hl-kwlit">:as</span> char <span class="hl-kwlit">:refer</span> []]
+<span class="hl-kw">require</span> [prologos::data::list    <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons foldr]]
+<span class="hl-kw">require</span> [prologos::data::option  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
+<span class="hl-kw">require</span> [prologos::data::pair    <span class="hl-kwlit">:refer</span> []]</code></pre>
+<h3 class="section-title">Folding &amp; Predicates</h3>
+<div class="prose"><p>all? : (Char -&gt; Bool) -&gt; String -&gt; Bool</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> all-loop [<span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> all-loop [pred s len i]
+  <span class="hl-kw">if</span> [int-eq i len] true [<span class="hl-kw">if</span> [pred [str::ref s i]] [all-loop pred s len [int+ i <span class="hl-num">1</span>]] false]
+
+<span class="hl-kw">spec</span> all? [<span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> all? [pred s]
+  all-loop pred s [str::length s] <span class="hl-num">0</span></code></pre>
+<div class="prose"><p>any? : (Char -&gt; Bool) -&gt; String -&gt; Bool</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> any-loop [<span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> any-loop [pred s len i]
+  <span class="hl-kw">if</span> [int-eq i len] false [<span class="hl-kw">if</span> [pred [str::ref s i]] true [any-loop pred s len [int+ i <span class="hl-num">1</span>]]]
+
+<span class="hl-kw">spec</span> any? [<span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> any? [pred s]
+  any-loop pred s [str::length s] <span class="hl-num">0</span></code></pre>
+<h3 class="section-title">Predicates</h3>
+<pre><code class="prologos"><span class="hl-kw">spec</span> empty? <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> empty? [s]
+  int-eq [str::length s] <span class="hl-num">0</span>
+
+<span class="hl-kw">spec</span> blank? <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> blank? [s]
+  <span class="hl-kw">if</span> [empty? s] true [all? char::whitespace? s]</code></pre>
+<h3 class="section-title">Search</h3>
+<pre><code class="prologos"><span class="hl-kw">spec</span> index-of-loop <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">Int</span>]
+<span class="hl-kw">defn</span> index-of-loop [haystack needle nlen limit i]
+  <span class="hl-kw">if</span> [int-lt limit i] [none <span class="hl-ty">Int</span>] [<span class="hl-kw">if</span> [str::eq [str::slice haystack i [int+ i nlen]] needle] [some <span class="hl-ty">Int</span> i] [index-of-loop haystack needle nlen limit [int+ i <span class="hl-num">1</span>]]]
+
+<span class="hl-kw">spec</span> index-of-dispatch <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">Int</span>]
+<span class="hl-kw">defn</span> index-of-dispatch [haystack needle nlen hlen]
+  <span class="hl-kw">if</span> [int-eq nlen <span class="hl-num">0</span>] [some <span class="hl-ty">Int</span> <span class="hl-num">0</span>] [<span class="hl-kw">if</span> [int-lt hlen nlen] [none <span class="hl-ty">Int</span>] [index-of-loop haystack needle nlen [int- hlen nlen] <span class="hl-num">0</span>]]
+
+<span class="hl-kw">spec</span> index-of <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">Int</span>]
+<span class="hl-kw">defn</span> index-of [haystack needle]
+  index-of-dispatch haystack needle [str::length needle] [str::length haystack]</code></pre>
+<h3 class="section-title">Trimming</h3>
+<pre><code class="prologos"><span class="hl-kw">spec</span> trim-start-idx <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span>
+<span class="hl-kw">defn</span> trim-start-idx [s len i]
+  <span class="hl-kw">if</span> [int-eq i len] len [<span class="hl-kw">if</span> [char::whitespace? [str::ref s i]] [trim-start-idx s len [int+ i <span class="hl-num">1</span>]] i]
+
+<span class="hl-kw">spec</span> trim-start-apply <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> trim-start-apply [s len]
+  str::slice s [trim-start-idx s len <span class="hl-num">0</span>] len
+
+<span class="hl-kw">spec</span> trim-start <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> trim-start [s]
+  trim-start-apply s [str::length s]
+
+<span class="hl-kw">spec</span> trim-end-idx <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span>
+<span class="hl-kw">defn</span> trim-end-idx [s i]
+  <span class="hl-kw">if</span> [int-lt i <span class="hl-num">0</span>] [int-neg <span class="hl-num">1</span>] [<span class="hl-kw">if</span> [char::whitespace? [str::ref s i]] [trim-end-idx s [int- i <span class="hl-num">1</span>]] i]
+
+<span class="hl-kw">spec</span> trim-end-apply <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> trim-end-apply [s len]
+  str::slice s <span class="hl-num">0</span> [int+ [trim-end-idx s [int- len <span class="hl-num">1</span>]] <span class="hl-num">1</span>]
+
+<span class="hl-kw">spec</span> trim-end <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> trim-end [s]
+  trim-end-apply s [str::length s]
+
+<span class="hl-kw">spec</span> trim <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> trim [s]
+  trim-end [trim-start s]</code></pre>
+<div class="prose"><p>strip-prefix : String -&gt; String -&gt; Option String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> strip-prefix <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">defn</span> strip-prefix [prefix s]
+  <span class="hl-kw">if</span> [str::starts-with? s prefix]
+    [some <span class="hl-ty">String</span> [str::slice s [str::length prefix] [str::length s]]]
+    [none <span class="hl-ty">String</span>]</code></pre>
+<div class="prose"><p>strip-suffix : String -&gt; String -&gt; Option String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> strip-suffix <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">defn</span> strip-suffix [suffix s]
+  <span class="hl-kw">if</span> [str::ends-with? s suffix]
+    [some <span class="hl-ty">String</span> [str::slice s <span class="hl-num">0</span> [int- [str::length s] [str::length suffix]]]]
+    [none <span class="hl-ty">String</span>]</code></pre>
+<h3 class="section-title">Splitting &amp; Joining</h3>
+<div class="prose"><p>find-from helpers</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> find-from-loop <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">Int</span>]
+<span class="hl-kw">defn</span> find-from-loop [haystack needle nlen limit i]
+  <span class="hl-kw">if</span> [int-lt limit i] [none <span class="hl-ty">Int</span>] [<span class="hl-kw">if</span> [str::eq [str::slice haystack i [int+ i nlen]] needle] [some <span class="hl-ty">Int</span> i] [find-from-loop haystack needle nlen limit [int+ i <span class="hl-num">1</span>]]]
+
+<span class="hl-kw">spec</span> find-from <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">Int</span>]
+<span class="hl-kw">defn</span> find-from [haystack needle nlen hlen start]
+  <span class="hl-kw">if</span> [int-lt [int- hlen nlen] start]
+    [none <span class="hl-ty">Int</span>]
+    [find-from-loop haystack needle nlen [int- hlen nlen] start]</code></pre>
+<div class="prose"><p>split : String -&gt; String -&gt; List String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> split-chars <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">defn</span> split-chars [s len i]
+  <span class="hl-kw">if</span> [int-eq i len]
+    [nil <span class="hl-ty">String</span>]
+    [cons <span class="hl-ty">String</span> [str::from-char [str::ref s i]] [split-chars s len [int+ i <span class="hl-num">1</span>]]]
+
+<span class="hl-kw">spec</span> split-loop <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">defn</span> split-loop [sep s seplen slen start]
+  <span class="hl-kw">match</span> [find-from s sep seplen slen start]
+    | none   <span class="hl-op">-&gt;</span> cons <span class="hl-ty">String</span> [str::slice s start slen] [nil <span class="hl-ty">String</span>]
+    | some i <span class="hl-op">-&gt;</span> cons <span class="hl-ty">String</span> [str::slice s start i] [split-loop sep s seplen slen [int+ i seplen]]
+
+<span class="hl-kw">spec</span> split-dispatch <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">defn</span> split-dispatch [sep s seplen slen]
+  <span class="hl-kw">if</span> [int-eq seplen <span class="hl-num">0</span>]
+    [split-chars s slen <span class="hl-num">0</span>]
+    [split-loop sep s seplen slen <span class="hl-num">0</span>]
+
+<span class="hl-kw">spec</span> split <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">defn</span> split [sep s]
+  split-dispatch sep s [str::length sep] [str::length s]</code></pre>
+<div class="prose"><p>join : String -&gt; List String -&gt; String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> join-rest <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">String</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> join-rest [sep acc xs]
+  <span class="hl-kw">match</span> xs
+    | nil      <span class="hl-op">-&gt;</span> acc
+    | cons h t <span class="hl-op">-&gt;</span> join-rest sep [str::append acc [str::append sep h]] t
+
+<span class="hl-kw">spec</span> join <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">String</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> join [sep xs]
+  <span class="hl-kw">match</span> xs
+    | nil      <span class="hl-op">-&gt;</span> <span class="hl-str">""</span>
+    | cons h t <span class="hl-op">-&gt;</span> join-rest sep h t</code></pre>
+<div class="prose"><p>lines : String -&gt; List String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> lines <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">defn</span> lines [s]
+  split <span class="hl-str">"\n"</span> s</code></pre>
+<div class="prose"><p>words : String -&gt; List String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> words-filter [<span class="hl-ty">List</span> <span class="hl-ty">String</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">defn</span> words-filter [xs]
+  <span class="hl-kw">match</span> xs
+    | nil      <span class="hl-op">-&gt;</span> nil <span class="hl-ty">String</span>
+    | cons h t <span class="hl-op">-&gt;</span> <span class="hl-kw">if</span> [empty? h] [words-filter t] [cons <span class="hl-ty">String</span> h [words-filter t]]
+
+<span class="hl-kw">spec</span> words <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">defn</span> words [s]
+  words-filter [split <span class="hl-str">" "</span> [trim s]]</code></pre>
+<div class="prose"><p>unlines : List String -&gt; String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> unlines [<span class="hl-ty">List</span> <span class="hl-ty">String</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> unlines [xs]
+  join <span class="hl-str">"\n"</span> xs</code></pre>
+<div class="prose"><p>unwords : List String -&gt; String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> unwords [<span class="hl-ty">List</span> <span class="hl-ty">String</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> unwords [xs]
+  join <span class="hl-str">" "</span> xs</code></pre>
+<div class="prose"><p>split-once : String -&gt; String -&gt; Option (Sigma String String)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> split-once-with-found <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">Int</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">String</span>&gt;] <span class="hl-ty">String</span>]]
+<span class="hl-kw">defn</span> split-once-with-found [sep s found]
+  <span class="hl-kw">match</span> found
+    | none   <span class="hl-op">-&gt;</span> none [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">String</span>&gt;] <span class="hl-ty">String</span>]
+    | some i <span class="hl-op">-&gt;</span> some [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">String</span>&gt;] <span class="hl-ty">String</span>] [pair [str::slice s <span class="hl-num">0</span> i] [str::slice s [int+ i [str::length sep]] [str::length s]]]
+
+<span class="hl-kw">spec</span> split-once <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">String</span>&gt;] <span class="hl-ty">String</span>]]
+<span class="hl-kw">defn</span> split-once [sep s]
+  split-once-with-found sep s [index-of s sep]</code></pre>
+<h3 class="section-title">Replacement</h3>
+<div class="prose"><p>replace : String -&gt; String -&gt; String -&gt; String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> replace <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> replace [pat repl s]
+  join repl [split pat s]</code></pre>
+<div class="prose"><p>replace-first : String -&gt; String -&gt; String -&gt; String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> replace-first-with-found <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">Int</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> replace-first-with-found [pat repl s found]
+  <span class="hl-kw">match</span> found
+    | none   <span class="hl-op">-&gt;</span> s
+    | some i <span class="hl-op">-&gt;</span> str::append [str::slice s <span class="hl-num">0</span> i] [str::append repl [str::slice s [int+ i [str::length pat]] [str::length s]]]
+
+<span class="hl-kw">spec</span> replace-first <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> replace-first [pat repl s]
+  replace-first-with-found pat repl s [index-of s pat]</code></pre>
+<h3 class="section-title">Transformation</h3>
+<div class="prose"><p>str-map : (Char -&gt; Char) -&gt; String -&gt; String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> str-map-loop [<span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-ty">Char</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> str-map-loop [f s len i acc]
+  <span class="hl-kw">if</span> [int-eq i len]
+    acc
+    [str-map-loop f s len [int+ i <span class="hl-num">1</span>] [str::append acc [str::from-char [f [str::ref s i]]]]]
+
+<span class="hl-kw">spec</span> str-map [<span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-ty">Char</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> str-map [f s]
+  str-map-loop f s [str::length s] <span class="hl-num">0</span> <span class="hl-str">""</span></code></pre>
+<div class="prose"><p>str-filter : (Char -&gt; Bool) -&gt; String -&gt; String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> str-filter-loop [<span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> str-filter-loop [pred s len i acc]
+  <span class="hl-kw">if</span> [int-eq i len] acc [<span class="hl-kw">if</span> [pred [str::ref s i]] [str-filter-loop pred s len [int+ i <span class="hl-num">1</span>] [str::append acc [str::from-char [str::ref s i]]]] [str-filter-loop pred s len [int+ i <span class="hl-num">1</span>] acc]]
+
+<span class="hl-kw">spec</span> str-filter [<span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> str-filter [pred s]
+  str-filter-loop pred s [str::length s] <span class="hl-num">0</span> <span class="hl-str">""</span></code></pre>
+<div class="prose"><p>str-reverse : String -&gt; String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> str-reverse-loop <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> str-reverse-loop [s i acc]
+  <span class="hl-kw">if</span> [int-lt i <span class="hl-num">0</span>]
+    acc
+    [str-reverse-loop s [int- i <span class="hl-num">1</span>] [str::append acc [str::from-char [str::ref s i]]]]
+
+<span class="hl-kw">spec</span> str-reverse <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> str-reverse [s]
+  str-reverse-loop s [int- [str::length s] <span class="hl-num">1</span>] <span class="hl-str">""</span></code></pre>
+<div class="prose"><p>str-repeat : Int -&gt; String -&gt; String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> str-repeat-loop <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> str-repeat-loop [n s i acc]
+  <span class="hl-kw">if</span> [int-eq i n]
+    acc
+    [str-repeat-loop n s [int+ i <span class="hl-num">1</span>] [str::append acc s]]
+
+<span class="hl-kw">spec</span> str-repeat <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> str-repeat [n s]
+  str-repeat-loop n s <span class="hl-num">0</span> <span class="hl-str">""</span></code></pre>
+<div class="prose"><p>pad-start : Int -&gt; Char -&gt; String -&gt; String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> pad-start-with-len <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> pad-start-with-len [n c s len]
+  <span class="hl-kw">if</span> [int-lt len n]
+    [str::append [str::repeat-char [int- n len] c] s]
+    s
+
+<span class="hl-kw">spec</span> pad-start <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> pad-start [n c s]
+  pad-start-with-len n c s [str::length s]</code></pre>
+<div class="prose"><p>pad-end : Int -&gt; Char -&gt; String -&gt; String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> pad-end-with-len <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> pad-end-with-len [n c s len]
+  <span class="hl-kw">if</span> [int-lt len n]
+    [str::append s [str::repeat-char [int- n len] c]]
+    s
+
+<span class="hl-kw">spec</span> pad-end <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> pad-end [n c s]
+  pad-end-with-len n c s [str::length s]</code></pre>
+<h3 class="section-title">Folding</h3>
+<div class="prose"><p>str-foldl : (A -&gt; Char -&gt; A) -&gt; A -&gt; String -&gt; A</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> str-foldl-loop {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> [<span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-ty">A</span>]] <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> str-foldl-loop [f acc s len i]
+  <span class="hl-kw">if</span> [int-eq i len]
+    acc
+    [str-foldl-loop f [f acc [str::ref s i]] s len [int+ i <span class="hl-num">1</span>]]
+
+<span class="hl-kw">spec</span> str-foldl {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> [<span class="hl-op">-&gt;</span> <span class="hl-ty">Char</span> <span class="hl-ty">A</span>]] <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> str-foldl [f z s]
+  str-foldl-loop f z s [str::length s] <span class="hl-num">0</span></code></pre>
+<h3 class="section-title">Conversion</h3>
+<div class="prose"><p>to-list : String -&gt; List Char</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> to-list-loop <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">Char</span>]
+<span class="hl-kw">defn</span> to-list-loop [s len i]
+  <span class="hl-kw">if</span> [int-eq i len]
+    [nil <span class="hl-ty">Char</span>]
+    [cons <span class="hl-ty">Char</span> [str::ref s i] [to-list-loop s len [int+ i <span class="hl-num">1</span>]]]
+
+<span class="hl-kw">spec</span> to-list <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">Char</span>]
+<span class="hl-kw">defn</span> to-list [s]
+  to-list-loop s [str::length s] <span class="hl-num">0</span></code></pre>
+<div class="prose"><p>from-list : List Char -&gt; String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> from-list [<span class="hl-ty">List</span> <span class="hl-ty">Char</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> from-list [xs]
+  foldr <span class="hl-ty">Char</span> <span class="hl-ty">String</span> [<span class="hl-kw">fn</span> [c : <span class="hl-ty">Char</span>] [acc : <span class="hl-ty">String</span>] [str::append [str::from-char c] acc]] <span class="hl-str">""</span> xs</code></pre>
+<div class="prose"><p>take : Int -&gt; String -&gt; String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> take-with-len <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> take-with-len [n s len]
+  <span class="hl-kw">if</span> [int-lt len n] s [str::slice s <span class="hl-num">0</span> n]
+
+<span class="hl-kw">spec</span> take <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> take [n s]
+  take-with-len n s [str::length s]</code></pre>
+<div class="prose"><p>drop : Int -&gt; String -&gt; String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> drop-with-len <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> drop-with-len [n s len]
+  <span class="hl-kw">if</span> [int-lt len n] <span class="hl-str">""</span> [str::slice s n len]
+
+<span class="hl-kw">spec</span> drop <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span>
+<span class="hl-kw">defn</span> drop [n s]
+  drop-with-len n s [str::length s]</code></pre>
+<div class="prose"><p>chunks : Int -&gt; String -&gt; List String</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> chunks-loop <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">defn</span> chunks-loop [n s len i]
+  <span class="hl-kw">if</span> [int-lt len [int+ i <span class="hl-num">1</span>]] [nil <span class="hl-ty">String</span>] [<span class="hl-kw">if</span> [int-lt len [int+ i n]] [cons <span class="hl-ty">String</span> [str::slice s i len] [nil <span class="hl-ty">String</span>]] [cons <span class="hl-ty">String</span> [str::slice s i [int+ i n]] [chunks-loop n s len [int+ i n]]]]
+
+<span class="hl-kw">spec</span> chunks-dispatch <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">defn</span> chunks-dispatch [n s len]
+  <span class="hl-kw">if</span> [int-eq len <span class="hl-num">0</span>]
+    [nil <span class="hl-ty">String</span>]
+    [chunks-loop n s len <span class="hl-num">0</span>]
+
+<span class="hl-kw">spec</span> chunks <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">String</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">String</span>]
+<span class="hl-kw">defn</span> chunks [n s]
+  chunks-dispatch n s [str::length s]</code></pre>
+</section>
+</article>
+<nav class="bottom-nav"><a href="pairs-and-options.html">← Pairs And Options</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="arithmetic-traits.html">Arithmetic Traits →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+
+</body>
+</html>

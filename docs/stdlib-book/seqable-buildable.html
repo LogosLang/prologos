@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seqable, Buildable, and Friends — Prologos Standard Library</title>
+  <style>
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
+  --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
+  --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
+  color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
+}
+h1.chapter-title {
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
+  padding-bottom: .5rem; margin-bottom: .3rem;
+}
+h2.part-header {
+  font-size: 1.35rem; border-top: 1px solid var(--border);
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
+}
+h3.section-title {
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
+  padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
+}
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
+.module-badge {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: .78rem; background: var(--badge-bg); color: var(--accent);
+  border: 1px solid var(--badge-border); border-radius: 3px;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
+}
+pre {
+  background: var(--code-bg); border-left: 3px solid var(--border);
+  padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
+}
+code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
+pre code { background: none; color: var(--fg); }
+p code {
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
+  font-size: .88em;
+}
+.prose { margin: .5rem 0; }
+.prose p { margin: .6rem 0; }
+nav.chapter-nav {
+  font-size: .9rem; color: var(--muted);
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
+}
+nav.chapter-nav a { color: var(--accent); text-decoration: none; }
+nav.chapter-nav a:hover { text-decoration: underline; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
+nav.bottom-nav {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
+  font-size: .9rem; color: var(--muted);
+}
+nav.bottom-nav a { color: var(--accent); text-decoration: none; }
+nav.bottom-nav a:hover { text-decoration: underline; }
+.preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* TOC page */
+.toc-part-label {
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
+  margin-top: 1.8rem; margin-bottom: .3rem;
+}
+ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
+ol.toc-chapters li { margin: .3rem 0; }
+ol.toc-chapters a { color: var(--accent); text-decoration: none; }
+ol.toc-chapters a:hover { text-decoration: underline; }
+.toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+.book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
+  </style>
+
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\u2600':'\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\u2600':'\u263E';
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="chapter-nav"><a href="foldable.html">← Foldable</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="collection-functions.html">Collection Functions →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<article>
+<h1 class="chapter-title">Seqable, Buildable, and Friends</h1>
+<div class="prose"><p>Where Foldable and Functor describe what you can <strong>do</strong> with a
+container, the traits in this chapter describe how containers
+<strong>convert</strong> between representations and how they <strong>expose</strong> their
+elements.</p>
+<p>The key insight: all collection interop flows through <code>LSeq</code>.
+A Seqable type can become an LSeq; a Buildable type can be
+constructed from an LSeq. Together, they enable the pattern:</p>
+<p>    to-seq → transform → from-seq</p>
+<p>This chapter also defines the Seq, Indexed, Keyed, and Setlike
+traits — specialized interfaces for sequences, indexed containers,
+key-value stores, and set-like collections. The Collection bundle
+ties the three core traits (Seqable + Buildable + Foldable) into
+a single constraint.</p></div>
+<section class="module-container">
+<div class="module-badge">prologos::core::seqable-trait</div>
+<h3 class="section-title">The Seqable Trait</h3>
+<div class="prose"><p>A Seqable collection can be converted to a lazy sequence.
+This is the "out" direction: any collection → LSeq.</p>
+<p>Single-method trait: the dict IS the <code>to-seq</code> function.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::lseq <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
+
+<span class="hl-kw">trait</span> <span class="hl-ty">Seqable</span> {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>}
+  to-seq : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>]]]
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Convert a collection to a lazy sequence (LSeq)"</span></code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::buildable-trait</div>
+<h3 class="section-title">The Buildable Trait</h3>
+<div class="prose"><p>A Buildable collection can be constructed from a lazy sequence
+and provides an empty collection. This is the "in" direction:
+LSeq → any collection.</p>
+<p>Two-method trait, so the dict is a Sigma pair:
+  <code>(pair from-seq empty-coll)</code></p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::lseq <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
+
+<span class="hl-kw">trait</span> <span class="hl-ty">Buildable</span> {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>}
+  from-seq   : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>] [<span class="hl-ty">C</span> <span class="hl-ty">A</span>]]]
+  empty-coll : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-ty">C</span> <span class="hl-ty">A</span>]]
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Construct a collection from a lazy sequence"</span></code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::seq-trait</div>
+<h3 class="section-title">The Seq Trait</h3>
+<div class="prose"><p>A Seq dict bundles three operations for sequential access:
+  • <code>first</code>  : S A → Option A
+  • <code>rest</code>   : S A → S A
+  • <code>empty?</code> : S A → Bool</p>
+<p>Dict layout: <code>(Sigma first-fn (Sigma rest-fn empty?-fn))</code>
+This is defined via <code>deftype</code> rather than <code>trait</code> because the
+nested Sigma encoding is specified manually.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
+
+<span class="hl-kw">deftype</span> [<span class="hl-ty">Seq</span> $<span class="hl-ty">S</span>] [<span class="hl-ty">Sigma</span> [_ &lt;[<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [$<span class="hl-ty">S</span> <span class="hl-ty">A</span>] [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>]]]&gt;] [<span class="hl-ty">Sigma</span> [_ &lt;[<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [$<span class="hl-ty">S</span> <span class="hl-ty">A</span>] [$<span class="hl-ty">S</span> <span class="hl-ty">A</span>]]]&gt;] [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [$<span class="hl-ty">S</span> <span class="hl-ty">A</span>] <span class="hl-ty">Bool</span>]]]]</code></pre>
+<div class="prose"><p>Accessors: project from the dictionary</p>
+<p>seq-first : (Seq S) -&gt; S A -&gt; Option A</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> seq-first [<span class="hl-ty">Seq</span> <span class="hl-ty">S</span>] [<span class="hl-ty">S</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> seq-first [dict xs]
+  [first dict] <span class="hl-ty">A</span> xs</code></pre>
+<div class="prose"><p>seq-rest : (Seq S) -&gt; S A -&gt; S A</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> seq-rest [<span class="hl-ty">Seq</span> <span class="hl-ty">S</span>] [<span class="hl-ty">S</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">S</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> seq-rest [dict xs]
+  [first [second dict]] <span class="hl-ty">A</span> xs</code></pre>
+<div class="prose"><p>seq-empty? : (Seq S) -&gt; S A -&gt; Bool</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> seq-empty? [<span class="hl-ty">Seq</span> <span class="hl-ty">S</span>] [<span class="hl-ty">S</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> seq-empty? [dict xs]
+  [second [second dict]] <span class="hl-ty">A</span> xs</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::indexed-trait</div>
+<h3 class="section-title">The Indexed Trait</h3>
+<div class="prose"><p>An Indexed collection supports positional access by natural
+number index. Three methods:
+  • <code>idx-nth</code>    : C A → Nat → Option A
+  • <code>idx-length</code> : C A → Nat
+  • <code>idx-update</code> : C A → Nat → A → C A</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span>]]
+
+<span class="hl-kw">trait</span> <span class="hl-ty">Indexed</span> {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>}
+  idx-nth    : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] [<span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span> [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>]]]]
+  idx-length : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] <span class="hl-ty">Nat</span>]]
+  idx-update : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] [<span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span> [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>]]]]]
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Access elements by index"</span></code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::keyed-trait</div>
+<h3 class="section-title">The Keyed Trait</h3>
+<div class="prose"><p>A Keyed collection supports key-value operations. Unlike
+the other traits, <code>C</code> is a <strong>two-parameter</strong> type constructor:
+<code>C K V</code>. Three methods:
+  • <code>kv-get</code>    : C K V → K → Option V
+  • <code>kv-assoc</code>  : C K V → K → V → C K V
+  • <code>kv-dissoc</code> : C K V → K → C K V</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span>]]
+
+<span class="hl-kw">trait</span> <span class="hl-ty">Keyed</span> {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>}
+  kv-get    : [<span class="hl-ty">Pi</span> [<span class="hl-ty">K</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-ty">Pi</span> [<span class="hl-ty">V</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] [<span class="hl-op">-&gt;</span> <span class="hl-ty">K</span> [<span class="hl-ty">Option</span> <span class="hl-ty">V</span>]]]]]
+  kv-assoc  : [<span class="hl-ty">Pi</span> [<span class="hl-ty">K</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-ty">Pi</span> [<span class="hl-ty">V</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] [<span class="hl-op">-&gt;</span> <span class="hl-ty">K</span> [<span class="hl-op">-&gt;</span> <span class="hl-ty">V</span> [<span class="hl-ty">C</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>]]]]]]
+  kv-dissoc : [<span class="hl-ty">Pi</span> [<span class="hl-ty">K</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-ty">Pi</span> [<span class="hl-ty">V</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] [<span class="hl-op">-&gt;</span> <span class="hl-ty">K</span> [<span class="hl-ty">C</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>]]]]]</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::setlike-trait</div>
+<h3 class="section-title">The Setlike Trait</h3>
+<div class="prose"><p>A Setlike collection supports membership test, insertion,
+and removal. Three methods:
+  • <code>set-member?</code> : C A → A → Bool
+  • <code>set-insert</code>  : C A → A → C A
+  • <code>set-remove</code>  : C A → A → C A</p></div>
+<pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">Setlike</span> {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>}
+  set-member? : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">Bool</span>]]]
+  set-insert  : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>]]]]
+  set-remove  : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>]]]]</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::collection-bundle</div>
+<h3 class="section-title">The Collection Bundle</h3>
+<div class="prose"><p>A bundle is syntactic sugar for multiple trait constraints.
+<code>Collection C</code> expands to <code>(Seqable C, Buildable C, Foldable C)</code>
+in any <code>spec</code> that uses it — a collection is anything that
+can be converted to/from LSeq and supports fold.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seqable-trait    <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seqable</span>]]
+<span class="hl-kw">require</span> [prologos::core::buildable-trait  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Buildable</span>]]
+<span class="hl-kw">require</span> [prologos::core::foldable-trait   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Foldable</span>]]
+
+<span class="hl-kw">bundle</span> <span class="hl-ty">Collection</span> <span class="hl-op">:=</span> (<span class="hl-ty">Seqable</span>, <span class="hl-ty">Buildable</span>, <span class="hl-ty">Foldable</span>)</code></pre>
+</section>
+</article>
+<nav class="bottom-nav"><a href="foldable.html">← Foldable</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="collection-functions.html">Collection Functions →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+
+</body>
+</html>

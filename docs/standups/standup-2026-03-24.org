@@ -39,6 +39,24 @@
 
 * Today
 
+
+
+** Algebraic embeddings
+
+On hypergraphs
+
+
+
+
+
+** The Hyperlattice Postulate
+
+For any given 
+
+
+
+
+
 ** Research program (user-directed)
 ** Code-sleuthing
 ** Track 10 design considerations

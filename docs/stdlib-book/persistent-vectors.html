@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Persistent Vectors — Prologos Standard Library</title>
+  <style>
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
+  --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
+  --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
+  color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
+}
+h1.chapter-title {
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
+  padding-bottom: .5rem; margin-bottom: .3rem;
+}
+h2.part-header {
+  font-size: 1.35rem; border-top: 1px solid var(--border);
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
+}
+h3.section-title {
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
+  padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
+}
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
+.module-badge {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: .78rem; background: var(--badge-bg); color: var(--accent);
+  border: 1px solid var(--badge-border); border-radius: 3px;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
+}
+pre {
+  background: var(--code-bg); border-left: 3px solid var(--border);
+  padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
+}
+code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
+pre code { background: none; color: var(--fg); }
+p code {
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
+  font-size: .88em;
+}
+.prose { margin: .5rem 0; }
+.prose p { margin: .6rem 0; }
+nav.chapter-nav {
+  font-size: .9rem; color: var(--muted);
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
+}
+nav.chapter-nav a { color: var(--accent); text-decoration: none; }
+nav.chapter-nav a:hover { text-decoration: underline; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
+nav.bottom-nav {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
+  font-size: .9rem; color: var(--muted);
+}
+nav.bottom-nav a { color: var(--accent); text-decoration: none; }
+nav.bottom-nav a:hover { text-decoration: underline; }
+.preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* TOC page */
+.toc-part-label {
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
+  margin-top: 1.8rem; margin-bottom: .3rem;
+}
+ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
+ol.toc-chapters li { margin: .3rem 0; }
+ol.toc-chapters a { color: var(--accent); text-decoration: none; }
+ol.toc-chapters a:hover { text-decoration: underline; }
+.toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+.book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
+  </style>
+
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\u2600':'\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\u2600':'\u263E';
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="chapter-nav"><a href="lists.html">← Lists</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="maps.html">Maps →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<article>
+<h1 class="chapter-title">Persistent Vectors</h1>
+<div class="prose"><p>Persistent vectors (<code>PVec</code>) are Prologos's indexed, immutable
+array type, built on a <strong>Relaxed-Radix Balanced tree</strong> (RRB-tree)
+with a branching factor of 32. They provide:</p>
+<p>  • O(log32 n) lookup, update, and append
+  • O(n) fold and map (via the flat leaf structure)
+  • O(1) length
+  • Structural sharing — updates produce new vectors that share
+    most of their structure with the original</p>
+<p>PVec is a <strong>built-in type</strong>: the core operations (<code>pvec-empty</code>,
+<code>pvec-push</code>, <code>pvec-nth</code>, <code>pvec-update</code>, <code>pvec-length</code>, <code>pvec-map</code>,
+<code>pvec-filter</code>, <code>pvec-fold</code>, <code>pvec-to-list</code>, <code>pvec-from-list</code>) are
+AST-level keywords that reduce directly via Racket's <code>rrb</code> library.
+This chapter defines the <strong>trait instances</strong> and <strong>derived operations</strong>
+that integrate PVec into the generic collection framework.</p>
+<p>Literal syntax: <code>@[1N 2N 3N]</code> creates a PVec of natural numbers.</p></div>
+<h2 class="part-header">Part I — Trait Instances</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::seqable-pvec</div>
+<h3 class="section-title">Seqable Instance</h3>
+<div class="prose"><p>Converts a PVec to an LSeq by first materializing to a List
+(via native <code>pvec-to-list</code>), then wrapping with <code>list-to-lseq</code>.
+This two-step conversion is necessary because PVec's RRB-tree
+structure doesn't naturally produce a lazy sequence.</p>
+<p>Because Seqable is a single-method trait, the dictionary IS the
+conversion function itself — no wrapper struct.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seqable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seqable</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq          <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq-ops      <span class="hl-kwlit">:refer</span> [list-to-lseq]]
+<span class="hl-kw">require</span> [prologos::data::list           <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span>]]
+
+(<span class="hl-kw">def</span> <span class="hl-ty">PVec--Seqable--dict</span> : [<span class="hl-ty">Seqable</span> <span class="hl-ty">PVec</span>]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (v : (<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>))
+    (list-to-lseq <span class="hl-ty">A</span> (pvec-to-list v)))))</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::foldable-pvec</div>
+<h3 class="section-title">Foldable Instance</h3>
+<div class="prose"><p>Uses native <code>pvec-fold</code> (a left fold via <code>rrb-fold</code>) for O(n)
+traversal without List conversion. This is more efficient than
+going through Seqable.</p>
+<p><strong>Argument flip</strong>: <code>pvec-fold</code> is accumulator-first <code>(B -&gt; A -&gt; B)</code>,
+but Foldable's fold method is element-first <code>(A -&gt; B -&gt; B)</code>. We
+flip the arguments. This changes semantics from right-fold to
+left-fold, which is acceptable for PVec (indexed, left-to-right
+is the natural traversal order).</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::foldable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Foldable</span>]]
+
+(<span class="hl-kw">def</span> pvec-foldable : [<span class="hl-ty">Foldable</span> <span class="hl-ty">PVec</span>]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-ty">B</span>))) (<span class="hl-kw">fn</span> (z : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (v : (<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>))
+    (pvec-fold (<span class="hl-kw">fn</span> (acc : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (elem : <span class="hl-ty">A</span>) (f elem acc))) z v)))))))</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::buildable-pvec</div>
+<h3 class="section-title">Buildable Instance</h3>
+<div class="prose"><p>Builds a PVec from a lazy sequence by materializing to a List
+(via <code>lseq-to-list</code>), then converting with native <code>pvec-from-list</code>.
+Also provides an empty PVec via <code>pvec-empty</code>.</p>
+<p>Buildable is a two-method trait, so the dict is a Sigma pair:
+  <code>(pair from-seq empty-coll)</code></p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::buildable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Buildable</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq            <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq-ops        <span class="hl-kwlit">:refer</span> [lseq-to-list]]
+<span class="hl-kw">require</span> [prologos::data::list             <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span>]]
+
+(<span class="hl-kw">spec</span> <span class="hl-ty">PVec--Buildable--dict</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">PVec</span>))
+(<span class="hl-kw">def</span> <span class="hl-ty">PVec--Buildable--dict</span>
+  (pair
+    (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
+      (pvec-from-list (lseq-to-list <span class="hl-ty">A</span> xs))))
+    (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (pvec-empty <span class="hl-ty">A</span>))))</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::functor-pvec</div>
+<h3 class="section-title">Functor Instance</h3>
+<div class="prose"><p>Uses native <code>pvec-map</code> for O(n) element-wise mapping without
+List conversion. This is the most efficient way to transform
+a PVec's contents.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::functor-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Functor</span>]]
+
+(<span class="hl-kw">def</span> pvec-functor : [<span class="hl-ty">Functor</span> <span class="hl-ty">PVec</span>]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>)) (<span class="hl-kw">fn</span> (v : (<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>))
+    (pvec-map f v))))))</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::indexed-pvec</div>
+<h3 class="section-title">Indexed Instance</h3>
+<div class="prose"><p>O(log32 n) implementations via native PVec primitives. The Indexed
+trait provides positional access — nth, length, and update — which
+is the natural interface for an array-like structure.</p>
+<p><code>idx-nth</code> is bounds-checked: returns <code>some</code> if in bounds, <code>none</code>
+otherwise. The native <code>pvec-nth</code> does not check bounds, so we
+guard with <code>lt?</code>.</p>
+<p>The Indexed dict is a triple (idx-nth, idx-length, idx-update)
+packed as a nested Sigma: <code>(pair nth (pair length update))</code>.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::indexed-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Indexed</span> <span class="hl-ty">Indexed-idx-nth</span> <span class="hl-ty">Indexed-idx-length</span> <span class="hl-ty">Indexed-idx-update</span>]]
+<span class="hl-kw">require</span> [prologos::data::option        <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
+<span class="hl-kw">require</span> [prologos::data::nat            <span class="hl-kwlit">:refer</span> [lt?]]</code></pre>
+<div class="prose"><p>idx-nth : PVec A -&gt; Nat -&gt; Option A</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> pvec-idx-nth : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>] [<span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span> [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>]]]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (v : (<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>)) (<span class="hl-kw">fn</span> (n : <span class="hl-ty">Nat</span>)
+    (<span class="hl-kw">if</span> [lt? n [pvec-length v]]
+      [some <span class="hl-ty">A</span> [pvec-nth v n]]
+      [none <span class="hl-ty">A</span>])))))</code></pre>
+<div class="prose"><p>idx-length : PVec A -&gt; Nat</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> pvec-idx-length : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>] <span class="hl-ty">Nat</span>]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (v : (<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>))
+    (pvec-length v))))</code></pre>
+<div class="prose"><p>idx-update : PVec A -&gt; Nat -&gt; A -&gt; PVec A</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> pvec-idx-update : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>] [<span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span> [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> [<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>]]]]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (v : (<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>)) (<span class="hl-kw">fn</span> (n : <span class="hl-ty">Nat</span>) (<span class="hl-kw">fn</span> (x : <span class="hl-ty">A</span>)
+    (pvec-update v n x))))))</code></pre>
+<div class="prose"><p>Indexed dict: triple (idx-nth, idx-length, idx-update) as nested Sigma</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> <span class="hl-ty">PVec--Indexed--dict</span> : (<span class="hl-ty">Indexed</span> <span class="hl-ty">PVec</span>)
+  (pair pvec-idx-nth (pair pvec-idx-length pvec-idx-update)))</code></pre>
+</section>
+<h2 class="part-header">Part II — Derived Operations</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::pvec-ops</div>
+<h3 class="section-title">PVec Operations</h3>
+<div class="prose"><p><code>pvec-map</code>, <code>pvec-filter</code>, and <code>pvec-fold</code> are native AST primitives
+(parser keywords) that reduce via <code>rrb-fold</code> in the reduction engine.
+This module provides derived operations and function wrappers around
+AST keywords.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::list    <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons]]
+<span class="hl-kw">require</span> [prologos::data::option  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]</code></pre>
+<div class="prose"><p>pvec-any? : (A -&gt; Bool) -&gt; PVec A -&gt; Bool</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> pvec-any? {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> pvec-any? [pred v]
+  pvec-fold [<span class="hl-kw">fn</span> acc x [<span class="hl-kw">if</span> [pred x] true acc]] false v</code></pre>
+<div class="prose"><p>pvec-all? : (A -&gt; Bool) -&gt; PVec A -&gt; Bool</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> pvec-all? {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> pvec-all? [pred v]
+  pvec-fold [<span class="hl-kw">fn</span> acc x [<span class="hl-kw">if</span> [pred x] acc false]] true v</code></pre>
+<div class="prose"><p>pvec-from-list-fn : List A -&gt; PVec A  (wraps AST pvec-from-list as a function)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> pvec-from-list-fn {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> pvec-from-list-fn [xs]
+  pvec-from-list xs</code></pre>
+<div class="prose"><p>pvec-to-list-fn : PVec A -&gt; List A  (wraps AST pvec-to-list as a function)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> pvec-to-list-fn {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">PVec</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> pvec-to-list-fn [v]
+  pvec-to-list v</code></pre>
+</section>
+</article>
+<nav class="bottom-nav"><a href="lists.html">← Lists</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="maps.html">Maps →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+
+</body>
+</html>

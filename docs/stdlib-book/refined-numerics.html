@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Refined Numerics — Prologos Standard Library</title>
+  <style>
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
+  --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
+  --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
+  color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
+}
+h1.chapter-title {
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
+  padding-bottom: .5rem; margin-bottom: .3rem;
+}
+h2.part-header {
+  font-size: 1.35rem; border-top: 1px solid var(--border);
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
+}
+h3.section-title {
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
+  padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
+}
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
+.module-badge {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: .78rem; background: var(--badge-bg); color: var(--accent);
+  border: 1px solid var(--badge-border); border-radius: 3px;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
+}
+pre {
+  background: var(--code-bg); border-left: 3px solid var(--border);
+  padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
+}
+code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
+pre code { background: none; color: var(--fg); }
+p code {
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
+  font-size: .88em;
+}
+.prose { margin: .5rem 0; }
+.prose p { margin: .6rem 0; }
+nav.chapter-nav {
+  font-size: .9rem; color: var(--muted);
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
+}
+nav.chapter-nav a { color: var(--accent); text-decoration: none; }
+nav.chapter-nav a:hover { text-decoration: underline; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
+nav.bottom-nav {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
+  font-size: .9rem; color: var(--muted);
+}
+nav.bottom-nav a { color: var(--accent); text-decoration: none; }
+nav.bottom-nav a:hover { text-decoration: underline; }
+.preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* TOC page */
+.toc-part-label {
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
+  margin-top: 1.8rem; margin-bottom: .3rem;
+}
+ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
+ol.toc-chapters li { margin: .3rem 0; }
+ol.toc-chapters a { color: var(--accent); text-decoration: none; }
+ol.toc-chapters a:hover { text-decoration: underline; }
+.toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+.book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
+  </style>
+
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\u2600':'\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\u2600':'\u263E';
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="chapter-nav"><a href="hashable.html">← Hashable</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="datum-and-homoiconicity.html">Datum And Homoiconicity →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<article>
+<h1 class="chapter-title">Refined Numerics</h1>
+<div class="prose"><p>Prologos supports <strong>refined numeric types</strong> — wrapper types that
+carry sign constraints at the type level. A <code>PosInt</code> is provably
+positive, a <code>NegRat</code> provably negative. These refine the standard
+numeric tower (<code>Nat &lt;: Int &lt;: Rat</code>) with finer subtyping:</p>
+<p>             Int                    Rat
+           /  |  \                /   \
+     NegInt Zero PosInt    NegRat     PosRat</p>
+<p>Smart constructors validate at runtime and return <code>Option</code>;
+unsafe constructors trust the caller. The <code>subtype</code> declaration
+registers coercions so a <code>PosInt</code> can be used wherever <code>Int</code> is
+expected — the type checker inserts the unwrapping automatically.</p>
+<p>This chapter also defines two <strong>abstract domains</strong> — <code>Parity</code> and
+<code>Sign</code> — which are data types used by the lattice framework for
+static analysis. They appear here because they are pure data types
+with no dependencies on the lattice machinery; their lattice
+instances live in the Lattices chapter.</p></div>
+<h2 class="part-header">Part I — Refined Integers</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::refined-int</div>
+<h3 class="section-title">Refined Integer Types</h3>
+<div class="prose"><p>Wrapper types for expressing numeric sign constraints at the type level.
+Smart constructors validate at runtime; unsafe constructors trust the caller.</p>
+<p>Subtyping lattice (enforced by the type system via <code>subtype</code> declarations):</p>
+<p>             Int
+           /  |  \
+     NegInt Zero PosInt</p>
+<p><code>PosInt</code>, <code>NegInt</code>, <code>Zero</code> are subtypes of <code>Int</code> — they can be used
+anywhere <code>Int</code> is expected.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]</code></pre>
+<div class="prose"><p>Positive integers (value &gt; 0)</p></div>
+<pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">PosInt</span>
+  pos-int <span class="hl-ty">Int</span></code></pre>
+<div class="prose"><p>Negative integers (value &lt; 0)</p></div>
+<pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">NegInt</span>
+  neg-int <span class="hl-ty">Int</span></code></pre>
+<div class="prose"><p>Zero singleton</p></div>
+<pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">Zero</span>
+  mk-zero</code></pre>
+<h3 class="section-title">Smart Constructors</h3>
+<div class="prose"><p>Runtime-checked constructors that return <code>Option</code>. Use these when
+the sign of a value is not statically known.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> to-pos-int <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">PosInt</span>]
+<span class="hl-kw">defn</span> to-pos-int [n]
+  <span class="hl-kw">if</span> [int-lt <span class="hl-num">0</span> n]
+    [some [pos-int n]]
+    none
+
+<span class="hl-kw">spec</span> to-neg-int <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">NegInt</span>]
+<span class="hl-kw">defn</span> to-neg-int [n]
+  <span class="hl-kw">if</span> [int-lt n <span class="hl-num">0</span>]
+    [some [neg-int n]]
+    none
+
+<span class="hl-kw">spec</span> is-zero? <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> is-zero? [n]
+  int-eq n <span class="hl-num">0</span></code></pre>
+<h3 class="section-title">Unsafe Constructors</h3>
+<div class="prose"><p>These bypass runtime checks — the caller guarantees the invariant.
+Use only when the sign is known from context (e.g., after a guard).</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> unsafe-pos-int <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">PosInt</span>
+<span class="hl-kw">defn</span> unsafe-pos-int [n]
+  pos-int n
+
+<span class="hl-kw">spec</span> unsafe-neg-int <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">NegInt</span>
+<span class="hl-kw">defn</span> unsafe-neg-int [n]
+  neg-int n</code></pre>
+<h3 class="section-title">Extractors</h3>
+<pre><code class="prologos"><span class="hl-kw">spec</span> pos-int-val <span class="hl-ty">PosInt</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span>
+<span class="hl-kw">defn</span> pos-int-val [p]
+  <span class="hl-kw">match</span> p
+    | pos-int n <span class="hl-op">-&gt;</span> n
+
+<span class="hl-kw">spec</span> neg-int-val <span class="hl-ty">NegInt</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span>
+<span class="hl-kw">defn</span> neg-int-val [p]
+  <span class="hl-kw">match</span> p
+    | neg-int n <span class="hl-op">-&gt;</span> n
+
+<span class="hl-kw">spec</span> zero-to-int <span class="hl-ty">Zero</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span>
+<span class="hl-kw">defn</span> zero-to-int [z]
+  <span class="hl-kw">match</span> z
+    | mk-zero <span class="hl-op">-&gt;</span> <span class="hl-num">0</span></code></pre>
+<h3 class="section-title">Subtype Declarations</h3>
+<div class="prose"><p><code>PosInt &lt;: Int</code> and <code>NegInt &lt;: Int</code> are auto-inferred: single-field
+wrapper constructors automatically unwrap. <code>Zero &lt;: Int</code> needs an
+explicit coercion since <code>mk-zero</code> is nullary.</p></div>
+<pre><code class="prologos"><span class="hl-kw">subtype</span> <span class="hl-ty">PosInt</span> <span class="hl-ty">Int</span>
+<span class="hl-kw">subtype</span> <span class="hl-ty">NegInt</span> <span class="hl-ty">Int</span>
+<span class="hl-kw">subtype</span> <span class="hl-ty">Zero</span> <span class="hl-ty">Int</span> via zero-to-int</code></pre>
+</section>
+<h2 class="part-header">Part II — Refined Rationals</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::refined-rat</div>
+<h3 class="section-title">Refined Rational Types</h3>
+<div class="prose"><p>The same pattern as refined integers, applied to <code>Rat</code>:</p>
+<p>          Rat
+         /   \
+   NegRat     PosRat</p>
+<p>No <code>ZeroRat</code> — zero is already representable as <code>0/1 : Rat</code>.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]</code></pre>
+<div class="prose"><p>Positive rationals (value &gt; 0)</p></div>
+<pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">PosRat</span>
+  pos-rat <span class="hl-ty">Rat</span></code></pre>
+<div class="prose"><p>Negative rationals (value &lt; 0)</p></div>
+<pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">NegRat</span>
+  neg-rat <span class="hl-ty">Rat</span></code></pre>
+<h3 class="section-title">Smart Constructors</h3>
+<pre><code class="prologos"><span class="hl-kw">spec</span> to-pos-rat <span class="hl-ty">Rat</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">PosRat</span>]
+<span class="hl-kw">defn</span> to-pos-rat [r]
+  <span class="hl-kw">if</span> [rat-lt <span class="hl-num">0/1</span> r]
+    [some [pos-rat r]]
+    none
+
+<span class="hl-kw">spec</span> to-neg-rat <span class="hl-ty">Rat</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">NegRat</span>]
+<span class="hl-kw">defn</span> to-neg-rat [r]
+  <span class="hl-kw">if</span> [rat-lt r <span class="hl-num">0/1</span>]
+    [some [neg-rat r]]
+    none
+
+<span class="hl-kw">spec</span> is-zero-rat? <span class="hl-ty">Rat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> is-zero-rat? [r]
+  rat-eq r <span class="hl-num">0/1</span></code></pre>
+<h3 class="section-title">Unsafe Constructors</h3>
+<pre><code class="prologos"><span class="hl-kw">spec</span> unsafe-pos-rat <span class="hl-ty">Rat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">PosRat</span>
+<span class="hl-kw">defn</span> unsafe-pos-rat [r]
+  pos-rat r
+
+<span class="hl-kw">spec</span> unsafe-neg-rat <span class="hl-ty">Rat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">NegRat</span>
+<span class="hl-kw">defn</span> unsafe-neg-rat [r]
+  neg-rat r</code></pre>
+<h3 class="section-title">Extractors</h3>
+<pre><code class="prologos"><span class="hl-kw">spec</span> pos-rat-val <span class="hl-ty">PosRat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Rat</span>
+<span class="hl-kw">defn</span> pos-rat-val [p]
+  <span class="hl-kw">match</span> p
+    | pos-rat r <span class="hl-op">-&gt;</span> r
+
+<span class="hl-kw">spec</span> neg-rat-val <span class="hl-ty">NegRat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Rat</span>
+<span class="hl-kw">defn</span> neg-rat-val [p]
+  <span class="hl-kw">match</span> p
+    | neg-rat r <span class="hl-op">-&gt;</span> r</code></pre>
+<h3 class="section-title">Subtype Declarations</h3>
+<div class="prose"><p>Auto-inferred coercions: unwrap single-field constructors.</p></div>
+<pre><code class="prologos"><span class="hl-kw">subtype</span> <span class="hl-ty">PosRat</span> <span class="hl-ty">Rat</span>
+<span class="hl-kw">subtype</span> <span class="hl-ty">NegRat</span> <span class="hl-ty">Rat</span></code></pre>
+</section>
+<h2 class="part-header">Part III — Refined Integer Instances</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::refined-int-instances</div>
+<h3 class="section-title">Eq and Ord for Refined Integers</h3>
+<div class="prose"><p>Each instance delegates to the underlying <code>Int</code> comparison.
+<code>Zero</code> is a singleton — all values are equal, all comparisons
+return <code>eq-ord</code>.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::eq-trait   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Eq</span> <span class="hl-ty">Eq-eq?</span>]]
+<span class="hl-kw">require</span> [prologos::core::ord-trait  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ord</span> <span class="hl-ty">Ord-compare</span>]]
+<span class="hl-kw">require</span> [prologos::data::ordering   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ordering</span> lt-ord eq-ord gt-ord]]
+<span class="hl-kw">require</span> [prologos::data::refined-int <span class="hl-kwlit">:refer</span> [<span class="hl-ty">PosInt</span> pos-int <span class="hl-ty">NegInt</span> neg-int <span class="hl-ty">Zero</span> mk-zero]]</code></pre>
+<div class="prose"><p>Eq PosInt — delegate to underlying Int</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">PosInt</span>
+  <span class="hl-kw">defn</span> eq? [x &lt;<span class="hl-ty">PosInt</span>&gt; y &lt;<span class="hl-ty">PosInt</span>&gt;] &lt;<span class="hl-ty">Bool</span>&gt;
+    <span class="hl-kw">match</span> x
+      | pos-int a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
+                       | pos-int b <span class="hl-op">-&gt;</span> int-eq a b</code></pre>
+<div class="prose"><p>Eq NegInt — delegate to underlying Int</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">NegInt</span>
+  <span class="hl-kw">defn</span> eq? [x &lt;<span class="hl-ty">NegInt</span>&gt; y &lt;<span class="hl-ty">NegInt</span>&gt;] &lt;<span class="hl-ty">Bool</span>&gt;
+    <span class="hl-kw">match</span> x
+      | neg-int a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
+                       | neg-int b <span class="hl-op">-&gt;</span> int-eq a b</code></pre>
+<div class="prose"><p>Eq Zero — singleton, always equal</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">Zero</span>
+  <span class="hl-kw">defn</span> eq? [x &lt;<span class="hl-ty">Zero</span>&gt; y &lt;<span class="hl-ty">Zero</span>&gt;] &lt;<span class="hl-ty">Bool</span>&gt;
+    true</code></pre>
+<div class="prose"><p>Ord PosInt — delegate to underlying Int</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">PosInt</span>
+  <span class="hl-kw">defn</span> compare [x &lt;<span class="hl-ty">PosInt</span>&gt; y &lt;<span class="hl-ty">PosInt</span>&gt;] &lt;<span class="hl-ty">Ordering</span>&gt;
+    <span class="hl-kw">match</span> x
+      | pos-int a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
+                       | pos-int b <span class="hl-op">-&gt;</span> <span class="hl-kw">if</span> [int-lt a b] lt-ord [<span class="hl-kw">if</span> [int-eq a b] eq-ord gt-ord]</code></pre>
+<div class="prose"><p>Ord NegInt — delegate to underlying Int</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">NegInt</span>
+  <span class="hl-kw">defn</span> compare [x &lt;<span class="hl-ty">NegInt</span>&gt; y &lt;<span class="hl-ty">NegInt</span>&gt;] &lt;<span class="hl-ty">Ordering</span>&gt;
+    <span class="hl-kw">match</span> x
+      | neg-int a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
+                       | neg-int b <span class="hl-op">-&gt;</span> <span class="hl-kw">if</span> [int-lt a b] lt-ord [<span class="hl-kw">if</span> [int-eq a b] eq-ord gt-ord]</code></pre>
+<div class="prose"><p>Ord Zero — singleton, always eq-ord</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Zero</span>
+  <span class="hl-kw">defn</span> compare [x &lt;<span class="hl-ty">Zero</span>&gt; y &lt;<span class="hl-ty">Zero</span>&gt;] &lt;<span class="hl-ty">Ordering</span>&gt;
+    eq-ord</code></pre>
+</section>
+<h2 class="part-header">Part IV — Refined Rational Instances</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::refined-rat-instances</div>
+<h3 class="section-title">Eq and Ord for Refined Rationals</h3>
+<div class="prose"><p>Same delegation pattern as refined integers.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::eq-trait   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Eq</span> <span class="hl-ty">Eq-eq?</span>]]
+<span class="hl-kw">require</span> [prologos::core::ord-trait  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ord</span> <span class="hl-ty">Ord-compare</span>]]
+<span class="hl-kw">require</span> [prologos::data::ordering   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ordering</span> lt-ord eq-ord gt-ord]]
+<span class="hl-kw">require</span> [prologos::data::refined-rat <span class="hl-kwlit">:refer</span> [<span class="hl-ty">PosRat</span> pos-rat <span class="hl-ty">NegRat</span> neg-rat]]</code></pre>
+<div class="prose"><p>Eq PosRat — delegate to underlying Rat</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">PosRat</span>
+  <span class="hl-kw">defn</span> eq? [x &lt;<span class="hl-ty">PosRat</span>&gt; y &lt;<span class="hl-ty">PosRat</span>&gt;] &lt;<span class="hl-ty">Bool</span>&gt;
+    <span class="hl-kw">match</span> x
+      | pos-rat a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
+                       | pos-rat b <span class="hl-op">-&gt;</span> rat-eq a b</code></pre>
+<div class="prose"><p>Eq NegRat — delegate to underlying Rat</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">NegRat</span>
+  <span class="hl-kw">defn</span> eq? [x &lt;<span class="hl-ty">NegRat</span>&gt; y &lt;<span class="hl-ty">NegRat</span>&gt;] &lt;<span class="hl-ty">Bool</span>&gt;
+    <span class="hl-kw">match</span> x
+      | neg-rat a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
+                       | neg-rat b <span class="hl-op">-&gt;</span> rat-eq a b</code></pre>
+<div class="prose"><p>Ord PosRat — delegate to underlying Rat</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">PosRat</span>
+  <span class="hl-kw">defn</span> compare [x &lt;<span class="hl-ty">PosRat</span>&gt; y &lt;<span class="hl-ty">PosRat</span>&gt;] &lt;<span class="hl-ty">Ordering</span>&gt;
+    <span class="hl-kw">match</span> x
+      | pos-rat a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
+                       | pos-rat b <span class="hl-op">-&gt;</span> <span class="hl-kw">if</span> [rat-lt a b] lt-ord [<span class="hl-kw">if</span> [rat-eq a b] eq-ord gt-ord]</code></pre>
+<div class="prose"><p>Ord NegRat — delegate to underlying Rat</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Ord</span> <span class="hl-ty">NegRat</span>
+  <span class="hl-kw">defn</span> compare [x &lt;<span class="hl-ty">NegRat</span>&gt; y &lt;<span class="hl-ty">NegRat</span>&gt;] &lt;<span class="hl-ty">Ordering</span>&gt;
+    <span class="hl-kw">match</span> x
+      | neg-rat a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
+                       | neg-rat b <span class="hl-op">-&gt;</span> <span class="hl-kw">if</span> [rat-lt a b] lt-ord [<span class="hl-kw">if</span> [rat-eq a b] eq-ord gt-ord]</code></pre>
+</section>
+<h2 class="part-header">Part V — Abstract Domains</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::parity</div>
+<h3 class="section-title">The Parity Domain</h3>
+<div class="prose"><p>A four-element lattice for abstract parity analysis.
+Used by the lattice framework to track whether a numeric
+value is provably even, provably odd, or unknown.</p>
+<p>      parity-top        (unknown parity)
+       /     \
+ parity-even  parity-odd
+       \     /
+      parity-bot        (unreachable / no information)</p></div>
+<pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">Parity</span>
+  parity-bot
+  parity-even
+  parity-odd
+  parity-top</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::data::sign</div>
+<h3 class="section-title">The Sign Domain</h3>
+<div class="prose"><p>A five-element lattice for abstract sign analysis.
+Used by Galois connections to abstract numeric intervals
+into sign information.</p>
+<p>         sign-top           (unknown sign)
+        /   |   \
+  sign-neg sign-zero sign-pos
+        \   |   /
+         sign-bot           (unreachable / no information)</p></div>
+<pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">Sign</span>
+  sign-bot
+  sign-neg
+  sign-zero
+  sign-pos
+  sign-top</code></pre>
+</section>
+</article>
+<nav class="bottom-nav"><a href="hashable.html">← Hashable</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="datum-and-homoiconicity.html">Datum And Homoiconicity →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+
+</body>
+</html>

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sets — Prologos Standard Library</title>
+  <style>
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
+  --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
+  --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
+  color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
+}
+h1.chapter-title {
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
+  padding-bottom: .5rem; margin-bottom: .3rem;
+}
+h2.part-header {
+  font-size: 1.35rem; border-top: 1px solid var(--border);
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
+}
+h3.section-title {
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
+  padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
+}
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
+.module-badge {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: .78rem; background: var(--badge-bg); color: var(--accent);
+  border: 1px solid var(--badge-border); border-radius: 3px;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
+}
+pre {
+  background: var(--code-bg); border-left: 3px solid var(--border);
+  padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
+}
+code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
+pre code { background: none; color: var(--fg); }
+p code {
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
+  font-size: .88em;
+}
+.prose { margin: .5rem 0; }
+.prose p { margin: .6rem 0; }
+nav.chapter-nav {
+  font-size: .9rem; color: var(--muted);
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
+}
+nav.chapter-nav a { color: var(--accent); text-decoration: none; }
+nav.chapter-nav a:hover { text-decoration: underline; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
+nav.bottom-nav {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
+  font-size: .9rem; color: var(--muted);
+}
+nav.bottom-nav a { color: var(--accent); text-decoration: none; }
+nav.bottom-nav a:hover { text-decoration: underline; }
+.preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* TOC page */
+.toc-part-label {
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
+  margin-top: 1.8rem; margin-bottom: .3rem;
+}
+ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
+ol.toc-chapters li { margin: .3rem 0; }
+ol.toc-chapters a { color: var(--accent); text-decoration: none; }
+ol.toc-chapters a:hover { text-decoration: underline; }
+.toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+.book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
+  </style>
+
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\u2600':'\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\u2600':'\u263E';
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="chapter-nav"><a href="maps.html">← Maps</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="pairs-and-options.html">Pairs And Options →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<article>
+<h1 class="chapter-title">Sets</h1>
+<div class="prose"><p>Sets (<code>Set A</code>) are Prologos's persistent, immutable unordered
+collection of unique elements, built on the same <strong>CHAMP trie</strong>
+as Maps (with <code>#t</code> sentinel values). They provide:</p>
+<p>  • O(1) amortized membership test, insert, and delete
+  • Set-algebra operations: union, intersection, difference,
+    symmetric difference
+  • Structural sharing — updates produce new sets that share
+    most of their structure with the original</p>
+<p>Core operations are AST-level keywords:
+  <code>Set</code>, <code>set-empty</code>, <code>set-insert</code>, <code>set-member?</code>, <code>set-delete</code>,
+  <code>set-size</code>, <code>set-union</code>, <code>set-intersect</code>, <code>set-diff</code>,
+  <code>set-to-list</code>, <code>set-fold</code>, <code>set-filter</code></p>
+<p>Literal syntax: <code>#{1N 2N 3N}</code> creates a Set of natural numbers.</p>
+<p>This chapter covers derived set operations, trait instances, and
+higher-order functions over sets.</p></div>
+<h2 class="part-header">Part I — Core Set Operations</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::set</div>
+<h3 class="section-title">Constructors and Set Algebra</h3>
+<div class="prose"><p>The fundamental set operations (<code>set-empty</code>, <code>set-insert</code>,
+<code>set-member?</code>, etc.) are built-in AST keywords. This module
+provides derived constructors and algebraic operations.</p>
+<p>Note: <code>set-singleton</code> and <code>set-from-list</code> use sexp-mode <code>def</code>
+because <code>set-empty</code> needs the type argument at runtime for the
+CHAMP trie, so <code>A</code> must be <code>:w</code> (not <code>:0</code> erased).</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::list <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons reduce]]</code></pre>
+<div class="prose"><p>Create a singleton set containing one element.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> set-singleton : (<span class="hl-ty">Pi</span> (<span class="hl-ty">A</span> <span class="hl-kwlit">:w</span> (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>)))
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> <span class="hl-kwlit">:w</span> (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (a : <span class="hl-ty">A</span>) (set-insert (set-empty <span class="hl-ty">A</span>) a))))</code></pre>
+<div class="prose"><p>Build a set from a list of elements.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> set-from-list : (<span class="hl-ty">Pi</span> (<span class="hl-ty">A</span> <span class="hl-kwlit">:w</span> (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-op">-&gt;</span> (<span class="hl-ty">List</span> <span class="hl-ty">A</span>) (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>)))
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> <span class="hl-kwlit">:w</span> (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">List</span> <span class="hl-ty">A</span>))
+    (<span class="hl-kw">the</span> (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>)
+      (<span class="hl-kw">match</span> xs
+        (nil <span class="hl-op">-&gt;</span> (set-empty <span class="hl-ty">A</span>))
+        (cons hd tl <span class="hl-op">-&gt;</span> (set-insert (set-from-list <span class="hl-ty">A</span> tl) hd)))))))</code></pre>
+<div class="prose"><p>Symmetric difference: elements in exactly one of the two sets.
+set-symmetric-diff s1 s2 = union (diff s1 s2) (diff s2 s1)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> set-symmetric-diff [<span class="hl-ty">Set</span> <span class="hl-ty">A</span>] [<span class="hl-ty">Set</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Set</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> set-symmetric-diff [s1 s2]
+  set-union [set-diff s1 s2] [set-diff s2 s1]</code></pre>
+</section>
+<h2 class="part-header">Part II — Trait Instances</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::seqable-set</div>
+<h3 class="section-title">Seqable Instance</h3>
+<div class="prose"><p>Converts a Set to an LSeq by materializing to a List (via native
+<code>set-to-list</code>), then wrapping with <code>list-to-lseq</code>. Element order
+is determined by the CHAMP trie's internal hash ordering — it is
+*not* insertion-ordered.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seqable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seqable</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq          <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq-ops      <span class="hl-kwlit">:refer</span> [list-to-lseq]]
+<span class="hl-kw">require</span> [prologos::data::list           <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span>]]
+
+(<span class="hl-kw">def</span> <span class="hl-ty">Set--Seqable--dict</span> : [<span class="hl-ty">Seqable</span> <span class="hl-ty">Set</span>]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (s : (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>))
+    (list-to-lseq <span class="hl-ty">A</span> (set-to-list s)))))</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::foldable-set</div>
+<h3 class="section-title">Foldable Instance</h3>
+<div class="prose"><p>Uses native <code>set-fold</code> (a left fold via <code>champ-fold</code>) for O(n)
+traversal without List conversion.</p>
+<p><strong>Argument flip</strong>: <code>set-fold</code> is accumulator-first <code>(B -&gt; A -&gt; B)</code>,
+but Foldable's fold method is element-first <code>(A -&gt; B -&gt; B)</code>. We
+flip the arguments, just like the PVec Foldable instance.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::foldable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Foldable</span>]]
+
+(<span class="hl-kw">def</span> set-foldable : [<span class="hl-ty">Foldable</span> <span class="hl-ty">Set</span>]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-ty">B</span>))) (<span class="hl-kw">fn</span> (z : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (s : (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>))
+    (set-fold (<span class="hl-kw">fn</span> (acc : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (elem : <span class="hl-ty">A</span>) (f elem acc))) z s)))))))</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::buildable-set</div>
+<h3 class="section-title">Buildable Instance</h3>
+<div class="prose"><p>Builds a Set from a lazy sequence by materializing to a List
+(via <code>lseq-to-list</code>), then folding with <code>set-insert</code>.</p>
+<p><strong>Why not <code>set-from-list</code>?</strong> Because <code>set-from-list</code> declares
+<code>A :w</code> (runtime type arg for the CHAMP trie), but the Buildable
+trait binding uses <code>A :0</code> (erased). Instead we fold manually
+using <code>set-insert</code> + <code>set-empty</code> which have erased type args
+at the QTT level.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::buildable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Buildable</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq            <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq-ops        <span class="hl-kwlit">:refer</span> [lseq-to-list]]
+<span class="hl-kw">require</span> [prologos::data::list             <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> foldr]]
+
+(<span class="hl-kw">spec</span> <span class="hl-ty">Set--Buildable--dict</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">Set</span>))
+(<span class="hl-kw">def</span> <span class="hl-ty">Set--Buildable--dict</span>
+  (pair
+    (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
+      (foldr <span class="hl-ty">A</span> (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>) (<span class="hl-kw">fn</span> (a : <span class="hl-ty">A</span>) (<span class="hl-kw">fn</span> (acc : (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>)) (set-insert acc a))) (set-empty <span class="hl-ty">A</span>) (lseq-to-list <span class="hl-ty">A</span> xs))))
+    (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (set-empty <span class="hl-ty">A</span>))))</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::setlike-set</div>
+<h3 class="section-title">Setlike Instance</h3>
+<div class="prose"><p>The <code>Setlike</code> trait provides the natural set-membership interface:
+  <code>set-member? : Set A -&gt; A -&gt; Bool</code>
+  <code>set-insert  : Set A -&gt; A -&gt; Set A</code>
+  <code>set-remove  : Set A -&gt; A -&gt; Set A</code></p>
+<p>All three methods delegate directly to AST primitives. Note that
+<code>set-remove</code> maps to the AST keyword <code>set-delete</code> (the trait uses
+a more standard name).</p>
+<p>Setlike is a three-method trait, so the dict is a nested Sigma:
+  <code>(pair set-member? (pair set-insert set-remove))</code></p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::setlike-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Setlike</span>]]
+
+(<span class="hl-kw">spec</span> <span class="hl-ty">Set--Setlike--dict</span> (<span class="hl-ty">Setlike</span> <span class="hl-ty">Set</span>))
+(<span class="hl-kw">def</span> <span class="hl-ty">Set--Setlike--dict</span>
+  (pair</code></pre>
+<div class="prose"><p>set-member? : Pi(A :0 Type) Set A -&gt; A -&gt; Bool</p></div>
+<pre><code class="prologos">    (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (s : (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>)) (<span class="hl-kw">fn</span> (a : <span class="hl-ty">A</span>)
+      (set-member? s a))))
+    (pair</code></pre>
+<div class="prose"><p>set-insert : Pi(A :0 Type) Set A -&gt; A -&gt; Set A</p></div>
+<pre><code class="prologos">      (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (s : (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>)) (<span class="hl-kw">fn</span> (a : <span class="hl-ty">A</span>)
+        (set-insert s a))))</code></pre>
+<div class="prose"><p>set-remove : Pi(A :0 Type) Set A -&gt; A -&gt; Set A</p></div>
+<pre><code class="prologos">      (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (s : (<span class="hl-ty">Set</span> <span class="hl-ty">A</span>)) (<span class="hl-kw">fn</span> (a : <span class="hl-ty">A</span>)
+        (set-delete s a)))))))</code></pre>
+</section>
+<h2 class="part-header">Part III — Derived Operations</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::set-ops</div>
+<h3 class="section-title">Higher-Order Set Functions</h3>
+<div class="prose"><p><code>set-fold</code> and <code>set-filter</code> are native AST primitives (parser
+keywords) that reduce via <code>champ-fold</code> in the reduction engine.
+This module provides derived operations and function wrappers
+built on those primitives.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::list    <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> foldr]]</code></pre>
+<div class="prose"><p>set-map : (A -&gt; B) -&gt; Set A -&gt; Set B
+Applies f to every element, collecting results into a new set.
+Uses native set-fold to avoid List conversion.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> set-map {<span class="hl-ty">A</span> <span class="hl-ty">B</span> : <span class="hl-ty">Type</span>} [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Set</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Set</span> <span class="hl-ty">B</span>]
+<span class="hl-kw">defn</span> set-map [f s]
+  set-fold [<span class="hl-kw">fn</span> acc x [set-insert acc [f x]]] [set-empty <span class="hl-ty">B</span>] s</code></pre>
+<div class="prose"><p>set-any? : (A -&gt; Bool) -&gt; Set A -&gt; Bool</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> set-any? {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Set</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> set-any? [pred s]
+  set-fold [<span class="hl-kw">fn</span> acc x [<span class="hl-kw">if</span> [pred x] true acc]] false s</code></pre>
+<div class="prose"><p>set-all? : (A -&gt; Bool) -&gt; Set A -&gt; Bool</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> set-all? {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Set</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> set-all? [pred s]
+  set-fold [<span class="hl-kw">fn</span> acc x [<span class="hl-kw">if</span> [pred x] acc false]] true s</code></pre>
+<div class="prose"><p>set-to-list-fn : Set A -&gt; List A  (wraps AST set-to-list as a function)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> set-to-list-fn {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">Set</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> set-to-list-fn [s]
+  set-to-list s</code></pre>
+<div class="prose"><p>set-from-list-fn : List A -&gt; Set A  (wraps via fold, erased type arg)
+Note: We avoid calling set-from-list directly because it declares A :w,
+but spec/defn generates A :0 (erased). Instead we fold with set-insert.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> set-from-list-fn {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Set</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> set-from-list-fn [xs]
+  foldr <span class="hl-ty">A</span> [<span class="hl-ty">Set</span> <span class="hl-ty">A</span>] [<span class="hl-kw">fn</span> a acc [set-insert acc a]] [set-empty <span class="hl-ty">A</span>] xs</code></pre>
+</section>
+</article>
+<nav class="bottom-nav"><a href="maps.html">← Maps</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="pairs-and-options.html">Pairs And Options →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+
+</body>
+</html>

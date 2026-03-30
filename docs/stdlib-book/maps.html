@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Maps — Prologos Standard Library</title>
+  <style>
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
+  --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
+  --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
+  color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
+}
+h1.chapter-title {
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
+  padding-bottom: .5rem; margin-bottom: .3rem;
+}
+h2.part-header {
+  font-size: 1.35rem; border-top: 1px solid var(--border);
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
+}
+h3.section-title {
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
+  padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
+}
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
+.module-badge {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: .78rem; background: var(--badge-bg); color: var(--accent);
+  border: 1px solid var(--badge-border); border-radius: 3px;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
+}
+pre {
+  background: var(--code-bg); border-left: 3px solid var(--border);
+  padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
+}
+code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
+pre code { background: none; color: var(--fg); }
+p code {
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
+  font-size: .88em;
+}
+.prose { margin: .5rem 0; }
+.prose p { margin: .6rem 0; }
+nav.chapter-nav {
+  font-size: .9rem; color: var(--muted);
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
+}
+nav.chapter-nav a { color: var(--accent); text-decoration: none; }
+nav.chapter-nav a:hover { text-decoration: underline; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
+nav.bottom-nav {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
+  font-size: .9rem; color: var(--muted);
+}
+nav.bottom-nav a { color: var(--accent); text-decoration: none; }
+nav.bottom-nav a:hover { text-decoration: underline; }
+.preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* TOC page */
+.toc-part-label {
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
+  margin-top: 1.8rem; margin-bottom: .3rem;
+}
+ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
+ol.toc-chapters li { margin: .3rem 0; }
+ol.toc-chapters a { color: var(--accent); text-decoration: none; }
+ol.toc-chapters a:hover { text-decoration: underline; }
+.toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+.book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
+  </style>
+
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\u2600':'\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\u2600':'\u263E';
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="chapter-nav"><a href="persistent-vectors.html">← Persistent Vectors</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="sets.html">Sets →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<article>
+<h1 class="chapter-title">Maps</h1>
+<div class="prose"><p>Maps (<code>Map K V</code>) are Prologos's persistent, immutable key-value
+store, built on a <strong>Compressed Hash-Array Mapped Prefix-tree</strong>
+(CHAMP trie). They provide:</p>
+<p>  • O(1) amortized lookup, insert, and delete
+  • Structural sharing — updates produce new maps that share
+    most of their structure with the original
+  • Order-independent equality (two maps with the same entries
+    are equal regardless of insertion order)</p>
+<p>Core operations are AST-level keywords:
+  <code>Map</code>, <code>map-empty</code>, <code>map-assoc</code>, <code>map-get</code>, <code>map-has-key?</code>,
+  <code>map-dissoc</code>, <code>map-count</code>, <code>map-keys</code>, <code>map-vals</code>,
+  <code>map-map-vals</code>, <code>map-fold-entries</code>, <code>map-filter-entries</code></p>
+<p>Literal syntax: <code>{:name "alice" :age 30N}</code> creates a Map from
+keywords to values.</p>
+<p><strong>The HKT bridge</strong>: Maps have *two* type parameters (K and V),
+but the generic collection traits (Seqable, Buildable, Foldable)
+expect type constructors with *one* parameter. The <code>MapEntry K V</code>
+type bridges this gap — when you iterate over a Map, each element
+is a <code>MapEntry</code> containing a key-value pair. The <code>Keyed</code> trait
+provides the native key-value interface without this wrapping.</p></div>
+<h2 class="part-header">Part I — The MapEntry Bridge Type</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::map-entry</div>
+<h3 class="section-title">MapEntry — Key-Value Pair Type</h3>
+<div class="prose"><p>A simple product type representing a key-value pair.
+Used as the element type when iterating over Maps
+via Seqable/Foldable traits, bridging the 2-type-param
+<code>Map K V</code> to the 1-type-param trait world:</p>
+<p>  <code>Map K V  →  Seqable over (MapEntry K V)</code></p>
+<p>Constructors:
+  <code>mk-entry : K -&gt; V -&gt; MapEntry K V</code></p>
+<p>Accessors:
+  <code>entry-key : MapEntry K V -&gt; K</code>
+  <code>entry-val : MapEntry K V -&gt; V</code></p></div>
+<pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">MapEntry</span> {<span class="hl-ty">K</span> <span class="hl-ty">V</span>}
+  mk-entry : <span class="hl-ty">K</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">V</span></code></pre>
+<div class="prose"><p>Extract the key from a MapEntry.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> entry-key {<span class="hl-ty">K</span> <span class="hl-ty">V</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">MapEntry</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">K</span>
+<span class="hl-kw">defn</span> entry-key [e]
+  <span class="hl-kw">match</span> e
+    | mk-entry k _ <span class="hl-op">-&gt;</span> k</code></pre>
+<div class="prose"><p>Extract the value from a MapEntry.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> entry-val {<span class="hl-ty">K</span> <span class="hl-ty">V</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">MapEntry</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">V</span>
+<span class="hl-kw">defn</span> entry-val [e]
+  <span class="hl-kw">match</span> e
+    | mk-entry _ v <span class="hl-op">-&gt;</span> v</code></pre>
+</section>
+<h2 class="part-header">Part II — The Keyed Trait Instance</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::keyed-map</div>
+<h3 class="section-title">Keyed Instance for Map</h3>
+<div class="prose"><p>The <code>Keyed</code> trait provides the natural key-value interface:
+  <code>kv-get    : Map K V -&gt; K -&gt; Option V</code>
+  <code>kv-assoc  : Map K V -&gt; K -&gt; V -&gt; Map K V</code>
+  <code>kv-dissoc : Map K V -&gt; K -&gt; Map K V</code></p>
+<p>This is how you interact with maps when you know you're working
+with a map. The trait-based interface avoids the need to pattern
+match on MapEntry — you just use keys directly.</p>
+<p>Keyed is a three-method trait, so the dict is a nested Sigma:
+  <code>(pair kv-get (pair kv-assoc kv-dissoc))</code></p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::keyed-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Keyed</span>]]
+<span class="hl-kw">require</span> [prologos::data::option      <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
+
+(<span class="hl-kw">spec</span> <span class="hl-ty">Map--Keyed--dict</span> (<span class="hl-ty">Keyed</span> <span class="hl-ty">Map</span>))
+(<span class="hl-kw">def</span> <span class="hl-ty">Map--Keyed--dict</span>
+  (pair</code></pre>
+<div class="prose"><p>kv-get : Pi(K :0 Type) Pi(V :0 Type) Map K V -&gt; K -&gt; Option V</p></div>
+<pre><code class="prologos">    (<span class="hl-kw">fn</span> (<span class="hl-ty">K</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">V</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (m : (<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>)) (<span class="hl-kw">fn</span> (k : <span class="hl-ty">K</span>)
+      (<span class="hl-kw">if</span> (map-has-key? m k)
+          (some <span class="hl-ty">V</span> (map-get m k))
+          (none <span class="hl-ty">V</span>))))))
+    (pair</code></pre>
+<div class="prose"><p>kv-assoc : Pi(K :0 Type) Pi(V :0 Type) Map K V -&gt; K -&gt; V -&gt; Map K V</p></div>
+<pre><code class="prologos">      (<span class="hl-kw">fn</span> (<span class="hl-ty">K</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">V</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (m : (<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>)) (<span class="hl-kw">fn</span> (k : <span class="hl-ty">K</span>) (<span class="hl-kw">fn</span> (v : <span class="hl-ty">V</span>)
+        (map-assoc m k v))))))</code></pre>
+<div class="prose"><p>kv-dissoc : Pi(K :0 Type) Pi(V :0 Type) Map K V -&gt; K -&gt; Map K V</p></div>
+<pre><code class="prologos">      (<span class="hl-kw">fn</span> (<span class="hl-ty">K</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">V</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (m : (<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>)) (<span class="hl-kw">fn</span> (k : <span class="hl-ty">K</span>)
+        (map-dissoc m k))))))))</code></pre>
+</section>
+<h2 class="part-header">Part III — Map Operations</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::map-ops</div>
+<h3 class="section-title">Derived Operations</h3>
+<div class="prose"><p><code>map-map-vals</code>, <code>map-fold-entries</code>, and <code>map-filter-entries</code> are
+native AST primitives (parser keywords) that reduce via <code>champ-fold</code>
+in the reduction engine. This module provides derived operations
+built on those primitives.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::list      <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons foldr]]
+<span class="hl-kw">require</span> [prologos::data::map-entry <span class="hl-kwlit">:refer</span> [<span class="hl-ty">MapEntry</span> mk-entry entry-key entry-val]]
+<span class="hl-kw">require</span> [prologos::data::lseq      <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span> lseq-nil]]
+<span class="hl-kw">require</span> [prologos::data::lseq-ops  <span class="hl-kwlit">:refer</span> [list-to-lseq lseq-to-list]]</code></pre>
+<h3 class="section-title">Filtering and Projection</h3>
+<div class="prose"><p>map-filter-vals : (V -&gt; Bool) -&gt; Map K V -&gt; Map K V
+Keeps only entries whose value satisfies pred.
+Uses native map-filter-entries with a key-ignoring predicate.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> map-filter-vals {<span class="hl-ty">K</span> <span class="hl-ty">V</span> : <span class="hl-ty">Type</span>} [<span class="hl-op">-&gt;</span> <span class="hl-ty">V</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>]
+<span class="hl-kw">defn</span> map-filter-vals [pred m]
+  map-filter-entries [<span class="hl-kw">fn</span> k v [pred v]] m</code></pre>
+<div class="prose"><p>map-keys-list : Map K V -&gt; List K  (wraps AST map-keys as a function)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> map-keys-list {<span class="hl-ty">K</span> <span class="hl-ty">V</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">K</span>]
+<span class="hl-kw">defn</span> map-keys-list [m]
+  map-keys m</code></pre>
+<div class="prose"><p>map-vals-list : Map K V -&gt; List V  (wraps AST map-vals as a function)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> map-vals-list {<span class="hl-ty">K</span> <span class="hl-ty">V</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">V</span>]
+<span class="hl-kw">defn</span> map-vals-list [m]
+  map-vals m</code></pre>
+<h3 class="section-title">Merging</h3>
+<div class="prose"><p>map-merge : Map K V -&gt; Map K V -&gt; Map K V
+Merge two maps. Right map wins on key collision.
+Uses native map-fold-entries to fold over m2's entries.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> map-merge {<span class="hl-ty">K</span> <span class="hl-ty">V</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>]
+<span class="hl-kw">defn</span> map-merge [m1 m2]
+  map-fold-entries [<span class="hl-kw">fn</span> acc k v [map-assoc acc k v]] m1 m2</code></pre>
+<h3 class="section-title">LSeq Bridge Functions</h3>
+<div class="prose"><p>Bridge the 2-type-param <code>Map K V</code> to the 1-type-param
+Seqable/Buildable world via <code>MapEntry K V</code> as the element type.
+All conversions flow through LSeq as the pivot representation.</p>
+<p>Uses sexp-mode bodies because constructing MapEntry/LSeq/List
+values requires explicit type arguments.</p>
+<p>map-to-entry-list : Map K V -&gt; List (MapEntry K V)
+Convert a map to a list of key-value entries.
+Uses native map-fold-entries to avoid key-list intermediary.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> map-to-entry-list : [<span class="hl-ty">Pi</span> [<span class="hl-ty">K</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-ty">Pi</span> [<span class="hl-ty">V</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] [<span class="hl-ty">List</span> [<span class="hl-ty">MapEntry</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>]]]]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">K</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">V</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (m : (<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>))
+    (map-fold-entries
+      (<span class="hl-kw">fn</span> (acc : (<span class="hl-ty">List</span> (<span class="hl-ty">MapEntry</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>))) (<span class="hl-kw">fn</span> (k : <span class="hl-ty">K</span>) (<span class="hl-kw">fn</span> (v : <span class="hl-ty">V</span>)
+        (cons (<span class="hl-ty">MapEntry</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>) (mk-entry <span class="hl-ty">K</span> <span class="hl-ty">V</span> k v) acc))))
+      (nil (<span class="hl-ty">MapEntry</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>))
+      m)))))</code></pre>
+<div class="prose"><p>map-seq : Map K V -&gt; LSeq (MapEntry K V)
+Convert a map to a lazy sequence of key-value entries.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> map-seq : [<span class="hl-ty">Pi</span> [<span class="hl-ty">K</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-ty">Pi</span> [<span class="hl-ty">V</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>] [<span class="hl-ty">LSeq</span> [<span class="hl-ty">MapEntry</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>]]]]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">K</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">V</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (m : (<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>))
+    (list-to-lseq (<span class="hl-ty">MapEntry</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>) (map-to-entry-list <span class="hl-ty">K</span> <span class="hl-ty">V</span> m))))))</code></pre>
+<div class="prose"><p>map-from-seq : LSeq (MapEntry K V) -&gt; Map K V
+Build a map from a lazy sequence of key-value entries.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> map-from-seq : [<span class="hl-ty">Pi</span> [<span class="hl-ty">K</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-ty">Pi</span> [<span class="hl-ty">V</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">LSeq</span> [<span class="hl-ty">MapEntry</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>]] [<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>]]]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">K</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">V</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (entries : (<span class="hl-ty">LSeq</span> (<span class="hl-ty">MapEntry</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>)))
+    (foldr (<span class="hl-ty">MapEntry</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>) (<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>)
+      (<span class="hl-kw">fn</span> (e : (<span class="hl-ty">MapEntry</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>)) (<span class="hl-kw">fn</span> (acc : (<span class="hl-ty">Map</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>))
+        (<span class="hl-kw">match</span> e
+          (mk-entry k v <span class="hl-op">-&gt;</span> (map-assoc acc k v)))))
+      (map-empty <span class="hl-ty">K</span> <span class="hl-ty">V</span>)
+      (lseq-to-list (<span class="hl-ty">MapEntry</span> <span class="hl-ty">K</span> <span class="hl-ty">V</span>) entries))))))</code></pre>
+</section>
+</article>
+<nav class="bottom-nav"><a href="persistent-vectors.html">← Persistent Vectors</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="sets.html">Sets →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+
+</body>
+</html>

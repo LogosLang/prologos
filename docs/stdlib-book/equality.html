@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Equality — Prologos Standard Library</title>
+  <style>
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
+  --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
+  --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
+  color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
+}
+h1.chapter-title {
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
+  padding-bottom: .5rem; margin-bottom: .3rem;
+}
+h2.part-header {
+  font-size: 1.35rem; border-top: 1px solid var(--border);
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
+}
+h3.section-title {
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
+  padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
+}
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
+.module-badge {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: .78rem; background: var(--badge-bg); color: var(--accent);
+  border: 1px solid var(--badge-border); border-radius: 3px;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
+}
+pre {
+  background: var(--code-bg); border-left: 3px solid var(--border);
+  padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
+}
+code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
+pre code { background: none; color: var(--fg); }
+p code {
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
+  font-size: .88em;
+}
+.prose { margin: .5rem 0; }
+.prose p { margin: .6rem 0; }
+nav.chapter-nav {
+  font-size: .9rem; color: var(--muted);
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
+}
+nav.chapter-nav a { color: var(--accent); text-decoration: none; }
+nav.chapter-nav a:hover { text-decoration: underline; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
+nav.bottom-nav {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
+  font-size: .9rem; color: var(--muted);
+}
+nav.bottom-nav a { color: var(--accent); text-decoration: none; }
+nav.bottom-nav a:hover { text-decoration: underline; }
+.preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* TOC page */
+.toc-part-label {
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
+  margin-top: 1.8rem; margin-bottom: .3rem;
+}
+ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
+ol.toc-chapters li { margin: .3rem 0; }
+ol.toc-chapters a { color: var(--accent); text-decoration: none; }
+ol.toc-chapters a:hover { text-decoration: underline; }
+.toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+.book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
+  </style>
+
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\u2600':'\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\u2600':'\u263E';
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="chapter-nav"><span style="color:#ccc">← Prev</span><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="ordering.html">Ordering →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<article>
+<h1 class="chapter-title">Equality</h1>
+<div class="prose"><p>Prologos distinguishes two kinds of equality:</p>
+<p>  1. <strong>Decidable equality</strong> — the Eq trait, which compares two values
+     of the same type and returns Bool. This is the equality you use
+     in programs: <code>eq? 3N 3N</code> evaluates to <code>true</code>.</p>
+<p>  2. <strong>Propositional equality</strong> — the built-in Eq type, which lives
+     in the type theory. <code>Eq Nat a b</code> is a *type* that is inhabited
+     (by <code>refl</code>) when <code>a</code> and <code>b</code> are definitionally equal. This is
+     the equality you use in proofs.</p>
+<p>This chapter covers both. We begin with the Eq trait and its instances
+for all standard types, then close with propositional equality lemmas
+derived from the J eliminator.</p></div>
+<h2 class="part-header">Part I — The Eq Trait</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::eq-trait</div>
+<h3 class="section-title">The Eq Trait</h3>
+<div class="prose"><p>The Eq trait is the foundation of comparison in Prologos.
+Any type that supports decidable equality implements this
+single-method trait.</p>
+<p>Laws:
+  • Reflexive:  eq? x x ≡ true
+  • Symmetric:  eq? x y ≡ eq? y x
+  • Transitive: eq? x y ∧ eq? y z ⟹ eq? x z</p>
+<p>Because Eq is a single-method trait, the dictionary IS the
+function — there is no wrapper struct. When you write
+<code>[eq? 3N 3N]</code> and Eq Nat is in scope, the compiler passes
+<code>nat-eq?</code> directly.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::nat <span class="hl-kwlit">:refer</span> [nat-eq?]]
+<span class="hl-kw">require</span> [prologos::data::bool <span class="hl-kwlit">:refer</span> [not]]
+
+<span class="hl-kw">trait</span> <span class="hl-ty">Eq</span> {<span class="hl-ty">A</span>}
+  eq? : <span class="hl-ty">A</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Structural equality: returns true when two values of the same type are equal"</span>
+  <span class="hl-kwlit">:laws</span>
+    - <span class="hl-kwlit">:name</span> <span class="hl-str">"reflexive"</span>
+      <span class="hl-kwlit">:forall</span> {x : <span class="hl-ty">A</span>}
+      <span class="hl-kwlit">:holds</span> [eq? x x]
+    - <span class="hl-kwlit">:name</span> <span class="hl-str">"symmetric"</span>
+      <span class="hl-kwlit">:forall</span> {x y : <span class="hl-ty">A</span>}
+      <span class="hl-kwlit">:holds</span> [eq? [eq? x y] [eq? y x]]
+    - <span class="hl-kwlit">:name</span> <span class="hl-str">"transitive"</span>
+      <span class="hl-kwlit">:forall</span> {x y z : <span class="hl-ty">A</span>}
+      <span class="hl-kwlit">:holds</span> [<span class="hl-kw">if</span> [and [eq? x y] [eq? y z]] [eq? x z] true]</code></pre>
+<h3 class="section-title">Eq for Natural Numbers</h3>
+<div class="prose"><p>Natural numbers have decidable equality via structural
+recursion: Z = Z, S n = S m iff n = m. The primitive
+<code>nat-eq?</code> is defined in prologos::data::nat.</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">Nat</span>
+  <span class="hl-kw">defn</span> eq? [x y] &lt;<span class="hl-ty">Bool</span>&gt;
+    nat-eq? x y</code></pre>
+<div class="prose"><p>Backward-compatible alias</p></div>
+<pre><code class="prologos"><span class="hl-kw">def</span> nat-eq <span class="hl-ty">Nat--Eq--dict</span></code></pre>
+<h3 class="section-title">Negation of Equality</h3>
+<div class="prose"><p>A generic not-equal function, defined once for all Eq types.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> eq-neq [<span class="hl-ty">Eq</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Not-equal: negation of eq?"</span>
+<span class="hl-kw">defn</span> eq-neq [dict x y]
+  not [dict x y]</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::eq-instances</div>
+<h3 class="section-title">Eq for Booleans</h3>
+<div class="prose"><p>Boolean equality is trivial: true = true, false = false.
+We reuse <code>bool-eq</code> from prologos::data::bool.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::eq-trait   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Eq</span> <span class="hl-ty">Eq-eq?</span>]]
+<span class="hl-kw">require</span> [prologos::data::bool       <span class="hl-kwlit">:refer</span> [bool-eq not]]
+<span class="hl-kw">require</span> [prologos::data::ordering   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ordering</span> lt-ord eq-ord gt-ord]]
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">Bool</span>
+  <span class="hl-kw">defn</span> eq? [x : <span class="hl-ty">Bool</span> y : <span class="hl-ty">Bool</span>] &lt;<span class="hl-ty">Bool</span>&gt;
+    bool-eq x y</code></pre>
+<h3 class="section-title">Eq for Ordering</h3>
+<div class="prose"><p>The Ordering type has three constructors: lt-ord, eq-ord,
+gt-ord. Equality is a 9-case match: equal only when the
+same constructor.</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">Ordering</span>
+  <span class="hl-kw">defn</span> eq? [x : <span class="hl-ty">Ordering</span> y : <span class="hl-ty">Ordering</span>] &lt;<span class="hl-ty">Bool</span>&gt;
+    <span class="hl-kw">match</span> x
+      | lt-ord <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
+                    | lt-ord <span class="hl-op">-&gt;</span> true
+                    | eq-ord <span class="hl-op">-&gt;</span> false
+                    | gt-ord <span class="hl-op">-&gt;</span> false
+      | eq-ord <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
+                    | lt-ord <span class="hl-op">-&gt;</span> false
+                    | eq-ord <span class="hl-op">-&gt;</span> true
+                    | gt-ord <span class="hl-op">-&gt;</span> false
+      | gt-ord <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
+                    | lt-ord <span class="hl-op">-&gt;</span> false
+                    | eq-ord <span class="hl-op">-&gt;</span> false
+                    | gt-ord <span class="hl-op">-&gt;</span> true</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::eq-numeric-instances</div>
+<h3 class="section-title">Eq for Numeric Types</h3>
+<div class="prose"><p>Each numeric type delegates to a foreign primitive:
+  Int  → int-eq    (Racket =)
+  Rat  → rat-eq    (exact rational =)
+  Posit8..64 → p8-eq..p64-eq (IEEE-like comparison)</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::eq-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Eq</span> <span class="hl-ty">Eq-eq?</span>]]
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">Int</span>
+  <span class="hl-kw">defn</span> eq? [x : <span class="hl-ty">Int</span>  y : <span class="hl-ty">Int</span>] &lt;<span class="hl-ty">Bool</span>&gt;
+    int-eq x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">Rat</span>
+  <span class="hl-kw">defn</span> eq? [x : <span class="hl-ty">Rat</span>  y : <span class="hl-ty">Rat</span>] &lt;<span class="hl-ty">Bool</span>&gt;
+    rat-eq x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">Posit8</span>
+  <span class="hl-kw">defn</span> eq? [x : <span class="hl-ty">Posit8</span>  y : <span class="hl-ty">Posit8</span>] &lt;<span class="hl-ty">Bool</span>&gt;
+    p8-eq x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">Posit16</span>
+  <span class="hl-kw">defn</span> eq? [x : <span class="hl-ty">Posit16</span>  y : <span class="hl-ty">Posit16</span>] &lt;<span class="hl-ty">Bool</span>&gt;
+    p16-eq x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">Posit32</span>
+  <span class="hl-kw">defn</span> eq? [x : <span class="hl-ty">Posit32</span>  y : <span class="hl-ty">Posit32</span>] &lt;<span class="hl-ty">Bool</span>&gt;
+    p32-eq x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">Posit64</span>
+  <span class="hl-kw">defn</span> eq? [x : <span class="hl-ty">Posit64</span>  y : <span class="hl-ty">Posit64</span>] &lt;<span class="hl-ty">Bool</span>&gt;
+    p64-eq x y</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::eq-char-instance</div>
+<h3 class="section-title">Eq for Characters</h3>
+<div class="prose"><p>Character equality delegates to the char module's <code>eq</code>
+function, which wraps Racket's <code>char=?</code>.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::eq-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Eq</span>]]
+<span class="hl-kw">require</span> [prologos::data::char     <span class="hl-kwlit">:as</span> char <span class="hl-kwlit">:refer</span> []]
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">Char</span>
+  <span class="hl-kw">defn</span> eq? [x : <span class="hl-ty">Char</span>  y : <span class="hl-ty">Char</span>] &lt;<span class="hl-ty">Bool</span>&gt;
+    char::eq x y</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::eq-string-instance</div>
+<h3 class="section-title">Eq for Strings</h3>
+<div class="prose"><p>String equality delegates to the string module's <code>eq</code>
+function, which wraps Racket's <code>string=?</code>.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::eq-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Eq</span>]]
+<span class="hl-kw">require</span> [prologos::data::string   <span class="hl-kwlit">:as</span> str <span class="hl-kwlit">:refer</span> []]
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Eq</span> <span class="hl-ty">String</span>
+  <span class="hl-kw">defn</span> eq? [x : <span class="hl-ty">String</span>  y : <span class="hl-ty">String</span>] &lt;<span class="hl-ty">Bool</span>&gt;
+    str::eq x y</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::eq-derived</div>
+<h3 class="section-title">Derived Equality for Parameterized Types</h3>
+<div class="prose"><p>For parameterized types like Option A and List A, we can't
+write <code>impl Eq (Option A)</code> directly — that would require
+higher-kinded trait instances. Instead, we provide functions
+that take an Eq dictionary for the element type as an
+explicit argument.</p>
+<p>These mirror the pattern used by <code>elem</code> in list.prologos.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::eq-trait  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Eq</span> <span class="hl-ty">Eq-eq?</span>]]
+<span class="hl-kw">require</span> [prologos::data::option    <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
+<span class="hl-kw">require</span> [prologos::data::list      <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons]]
+<span class="hl-kw">require</span> [prologos::data::bool      <span class="hl-kwlit">:refer</span> [and]]</code></pre>
+<div class="prose"><p>option-eq: compare two Option A values using an Eq A dict.
+none == none, some a == some b iff eq? a b, else false.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> option-eq [<span class="hl-ty">Eq</span> <span class="hl-ty">A</span>] [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> option-eq [eq-a x y]
+  <span class="hl-kw">match</span> x
+    | none   <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
+                  | none   <span class="hl-op">-&gt;</span> true
+                  | some _ <span class="hl-op">-&gt;</span> false
+    | some a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> y
+                  | none   <span class="hl-op">-&gt;</span> false
+                  | some b <span class="hl-op">-&gt;</span> eq-a a b</code></pre>
+<div class="prose"><p>list-eq: compare two List A values using an Eq A dict.
+nil == nil, cons a as == cons b bs iff eq? a b &amp;&amp; list-eq as bs, else false.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> list-eq [<span class="hl-ty">Eq</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> list-eq [eq-a xs ys]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> ys
+                     | nil      <span class="hl-op">-&gt;</span> true
+                     | cons _ _ <span class="hl-op">-&gt;</span> false
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> ys
+                     | nil      <span class="hl-op">-&gt;</span> false
+                     | cons b bs <span class="hl-op">-&gt;</span> and [eq-a a b] [list-eq eq-a as bs]</code></pre>
+</section>
+<h2 class="part-header">Part II — Propositional Equality</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::eq</div>
+<h3 class="section-title">Propositional Equality Lemmas</h3>
+<div class="prose"><p>While the Eq trait gives us *decidable* equality (a Bool),
+propositional equality lives in the type theory. The built-in
+type <code>Eq A a b</code> is inhabited by <code>refl</code> when <code>a</code> and <code>b</code> are
+definitionally equal.</p>
+<p>The J eliminator (Martin-Löf's elimination principle for
+identity types) lets us derive the standard lemmas:</p>
+<p>  sym   : Eq A a b → Eq A b a
+  cong  : (f : A → B) → Eq A a b → Eq B (f a) (f b)
+  trans : Eq A a b → Eq A b c → Eq A a c</p>
+<p>These are the building blocks for equational reasoning in
+dependent type theory.</p>
+<p>Symmetry: Eq(A, a, b) -&gt; Eq(A, b, a)</p></div>
+<pre><code class="prologos"><span class="hl-kw">defn</span> sym {<span class="hl-ty">A</span>} [a :0 : <span class="hl-ty">A</span>, b :0 : <span class="hl-ty">A</span>, prf : [<span class="hl-ty">Eq</span> <span class="hl-ty">A</span> a b]] : [<span class="hl-ty">Eq</span> <span class="hl-ty">A</span> b a]
+  [<span class="hl-ty">J</span> [<span class="hl-kw">fn</span> x y _ [<span class="hl-ty">Eq</span> <span class="hl-ty">A</span> y x]]
+     [<span class="hl-kw">fn</span> x refl]
+     a b prf]</code></pre>
+<div class="prose"><p>Congruence: f : A -&gt; B, Eq(A, a, b) -&gt; Eq(B, f(a), f(b))</p></div>
+<pre><code class="prologos"><span class="hl-kw">defn</span> cong {<span class="hl-ty">A</span> <span class="hl-ty">B</span>} [a :0 : <span class="hl-ty">A</span>, b :0 : <span class="hl-ty">A</span>, f :0 : <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>, prf : [<span class="hl-ty">Eq</span> <span class="hl-ty">A</span> a b]] : [<span class="hl-ty">Eq</span> <span class="hl-ty">B</span> [f a] [f b]]
+  [<span class="hl-ty">J</span> [<span class="hl-kw">fn</span> x y _ [<span class="hl-ty">Eq</span> <span class="hl-ty">B</span> [f x] [f y]]]
+     [<span class="hl-kw">fn</span> x refl]
+     a b prf]</code></pre>
+<div class="prose"><p>Transitivity: Eq(A, a, b) -&gt; Eq(A, b, c) -&gt; Eq(A, a, c)</p></div>
+<pre><code class="prologos"><span class="hl-kw">defn</span> trans {<span class="hl-ty">A</span>} [a :0 : <span class="hl-ty">A</span>, b :0 : <span class="hl-ty">A</span>, c :0 : <span class="hl-ty">A</span>, prf1 : [<span class="hl-ty">Eq</span> <span class="hl-ty">A</span> a b], prf2 : [<span class="hl-ty">Eq</span> <span class="hl-ty">A</span> b c]] : [<span class="hl-ty">Eq</span> <span class="hl-ty">A</span> a c]
+  [<span class="hl-ty">J</span> [<span class="hl-kw">fn</span> x y _ [<span class="hl-op">-&gt;</span> [<span class="hl-ty">Eq</span> <span class="hl-ty">A</span> y c] [<span class="hl-ty">Eq</span> <span class="hl-ty">A</span> x c]]]
+     [<span class="hl-kw">fn</span> x p p]
+     a b prf1] prf2</code></pre>
+</section>
+</article>
+<nav class="bottom-nav"><span style="color:#ccc">← Prev</span><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="ordering.html">Ordering →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+
+</body>
+</html>

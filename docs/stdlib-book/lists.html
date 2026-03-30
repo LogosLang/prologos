@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lists — Prologos Standard Library</title>
+  <style>
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
+  --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
+  --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
+  color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
+}
+h1.chapter-title {
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
+  padding-bottom: .5rem; margin-bottom: .3rem;
+}
+h2.part-header {
+  font-size: 1.35rem; border-top: 1px solid var(--border);
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
+}
+h3.section-title {
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
+  padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
+}
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
+.module-badge {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: .78rem; background: var(--badge-bg); color: var(--accent);
+  border: 1px solid var(--badge-border); border-radius: 3px;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
+}
+pre {
+  background: var(--code-bg); border-left: 3px solid var(--border);
+  padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
+}
+code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
+pre code { background: none; color: var(--fg); }
+p code {
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
+  font-size: .88em;
+}
+.prose { margin: .5rem 0; }
+.prose p { margin: .6rem 0; }
+nav.chapter-nav {
+  font-size: .9rem; color: var(--muted);
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
+}
+nav.chapter-nav a { color: var(--accent); text-decoration: none; }
+nav.chapter-nav a:hover { text-decoration: underline; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
+nav.bottom-nav {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
+  font-size: .9rem; color: var(--muted);
+}
+nav.bottom-nav a { color: var(--accent); text-decoration: none; }
+nav.bottom-nav a:hover { text-decoration: underline; }
+.preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* TOC page */
+.toc-part-label {
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
+  margin-top: 1.8rem; margin-bottom: .3rem;
+}
+ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
+ol.toc-chapters li { margin: .3rem 0; }
+ol.toc-chapters a { color: var(--accent); text-decoration: none; }
+ol.toc-chapters a:hover { text-decoration: underline; }
+.toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+.book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
+  </style>
+
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\u2600':'\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\u2600':'\u263E';
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="chapter-nav"><a href="collection-functions.html">← Collection Functions</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="persistent-vectors.html">Persistent Vectors →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<article>
+<h1 class="chapter-title">Lists</h1>
+<div class="prose"><p>The List is the workhorse data structure of functional programming.
+Prologos's List is a singly-linked algebraic data type with two
+constructors: <code>nil</code> (empty) and <code>cons</code> (an element prepended to
+a tail). List literals like <code>'[1N 2N 3N]</code> desugar to nested cons.</p>
+<p>This chapter is the largest in the standard library. It defines
+~60 functions covering folds, mapping, filtering, slicing, zipping,
+sorting, searching, and accumulating transforms. It also defines
+all trait instances that make List a first-class citizen of the
+collection hierarchy: Foldable, Seqable, Buildable, Functor,
+Seq, and Indexed.</p>
+<p>The Eq and Ord instances for List live in their respective
+trait chapters.</p></div>
+<h2 class="part-header">Part I — Core Operations</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::list</div>
+<h3 class="section-title">List Type and Folds</h3>
+<div class="prose"><p>The List type and its two fundamental elimination forms:
+right fold (<code>foldr</code>) and left fold (<code>reduce</code>). Every other
+list operation can be expressed in terms of these.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::eq-trait <span class="hl-kwlit">:refer</span> [nat-eq]]
+        [prologos::data::option   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> none some]]
+        [prologos::data::nat      <span class="hl-kwlit">:refer</span> [add mult pred zero?]]
+
+<span class="hl-kw">data</span> <span class="hl-ty">List</span> {<span class="hl-ty">A</span>}
+  nil
+  cons : <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+
+<span class="hl-kw">spec</span> foldr [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>] <span class="hl-ty">B</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Right fold: combine elements right-to-left with an accumulator"</span>
+<span class="hl-kw">defn</span> foldr [f z xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> z
+    | cons a as <span class="hl-op">-&gt;</span> f a [foldr f z as]</code></pre>
+<div class="prose"><p>reduce f z [a,b,c] = f (f (f z a) b) c</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> reduce [<span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>] <span class="hl-ty">B</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Left fold: combine elements left-to-right (tail-recursive)"</span>
+<span class="hl-kw">defn</span> reduce [f z xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> z
+    | cons a as <span class="hl-op">-&gt;</span> reduce f [f z a] as</code></pre>
+<h3 class="section-title">Basic Operations</h3>
+<pre><code class="prologos"><span class="hl-kw">spec</span> length [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Number of elements in the list"</span>
+<span class="hl-kw">defn</span> length [xs]
+  <span class="hl-kw">match</span> xs
+    | nil      <span class="hl-op">-&gt;</span> zero
+    | cons _ as <span class="hl-op">-&gt;</span> suc [length as]
+
+<span class="hl-kw">spec</span> map [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">B</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Apply a function to every element of a list"</span>
+<span class="hl-kw">defn</span> map [f xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> nil
+    | cons a as <span class="hl-op">-&gt;</span> cons [f a] [map f as]
+
+<span class="hl-kw">spec</span> filter [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Keep only elements satisfying the predicate"</span>
+<span class="hl-kw">defn</span> filter [pred xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> nil
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [pred a]
+      | true  <span class="hl-op">-&gt;</span> cons a [filter pred as]
+      | false <span class="hl-op">-&gt;</span> filter pred as
+
+<span class="hl-kw">spec</span> append [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Concatenate two lists"</span>
+<span class="hl-kw">defn</span> append [xs ys]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> ys
+    | cons a as <span class="hl-op">-&gt;</span> cons a [append as ys]
+
+<span class="hl-kw">spec</span> head <span class="hl-ty">A</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"First element of a list, or the default if empty"</span>
+<span class="hl-kw">defn</span> head [default xs]
+  <span class="hl-kw">match</span> xs
+    | nil      <span class="hl-op">-&gt;</span> default
+    | cons a _ <span class="hl-op">-&gt;</span> a
+
+<span class="hl-kw">spec</span> tail [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"All elements except the first, or None if empty"</span>
+<span class="hl-kw">defn</span> tail [xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> none
+    | cons _ as <span class="hl-op">-&gt;</span> some as</code></pre>
+<div class="prose"><p>Singleton list: a list containing one element.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> singleton <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> singleton [x]
+  cons x nil
+
+<span class="hl-kw">spec</span> elem [<span class="hl-ty">Eq</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Check if an element is in the list using equality"</span>
+<span class="hl-kw">defn</span> elem [eqf x xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> false
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [eqf x a]
+                     | true  <span class="hl-op">-&gt;</span> true
+                     | false <span class="hl-op">-&gt;</span> elem eqf x as</code></pre>
+<h3 class="section-title">Derived from foldl</h3>
+<div class="prose"><p>Reverse a list (using helper with accumulator).</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> reverse-acc [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> reverse-acc [acc xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> acc
+    | cons a as <span class="hl-op">-&gt;</span> reverse-acc [cons a acc] as
+
+<span class="hl-kw">spec</span> reverse [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Reverse the order of elements"</span>
+<span class="hl-kw">defn</span> reverse [xs]
+  reverse-acc nil xs</code></pre>
+<div class="prose"><p>Sum of a list of naturals.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> sum [<span class="hl-ty">List</span> <span class="hl-ty">Nat</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> sum [xs]
+  reduce add zero xs</code></pre>
+<div class="prose"><p>Product of a list of naturals.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> product [<span class="hl-ty">List</span> <span class="hl-ty">Nat</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> product [xs]
+  reduce mult [suc zero] xs</code></pre>
+<h3 class="section-title">Predicates and Search</h3>
+<div class="prose"><p>Does any element satisfy the predicate?</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> any? [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> any? [p xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> false
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [p a]
+      | true  <span class="hl-op">-&gt;</span> true
+      | false <span class="hl-op">-&gt;</span> any? p as</code></pre>
+<div class="prose"><p>Do all elements satisfy the predicate?</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> all? [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> all? [p xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> true
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [p a]
+      | true  <span class="hl-op">-&gt;</span> all? p as
+      | false <span class="hl-op">-&gt;</span> false
+
+<span class="hl-kw">spec</span> find [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Find the first element satisfying the predicate"</span>
+<span class="hl-kw">defn</span> find [p xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> none
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [p a]
+      | true  <span class="hl-op">-&gt;</span> some a
+      | false <span class="hl-op">-&gt;</span> find p as</code></pre>
+<h3 class="section-title">Accessors</h3>
+<div class="prose"><p>0-indexed element lookup.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> nth <span class="hl-ty">Nat</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> nth [n xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> none
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [zero? n]
+      | true  <span class="hl-op">-&gt;</span> some a
+      | false <span class="hl-op">-&gt;</span> nth [pred n] as</code></pre>
+<div class="prose"><p>Last element of a list.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> last [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> last [xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> none
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> as
+      | nil     <span class="hl-op">-&gt;</span> some a
+      | cons _ _ <span class="hl-op">-&gt;</span> last as</code></pre>
+<h3 class="section-title">Construction</h3>
+<div class="prose"><p>N copies of a value.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> replicate <span class="hl-ty">Nat</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> replicate [n x]
+  <span class="hl-kw">match</span> n
+    | zero  <span class="hl-op">-&gt;</span> nil
+    | suc k <span class="hl-op">-&gt;</span> cons x [replicate k x]</code></pre>
+<div class="prose"><p>Helper for range: builds [0..n-1] via accumulator.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> range-helper <span class="hl-ty">Nat</span> [<span class="hl-ty">List</span> <span class="hl-ty">Nat</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> range-helper [n acc]
+  <span class="hl-kw">match</span> n
+    | zero  <span class="hl-op">-&gt;</span> acc
+    | suc k <span class="hl-op">-&gt;</span> range-helper k [cons k acc]</code></pre>
+<div class="prose"><p>List of naturals [0, 1, ..., n-1].</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> range <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> range [n]
+  range-helper n nil
+
+<span class="hl-kw">spec</span> concat [<span class="hl-ty">List</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Flatten a list of lists into a single list"</span>
+<span class="hl-kw">defn</span> concat [xss]
+  <span class="hl-kw">match</span> xss
+    | nil        <span class="hl-op">-&gt;</span> nil
+    | cons xs rest <span class="hl-op">-&gt;</span> append xs [concat rest]</code></pre>
+<div class="prose"><p>Map then flatten (flatMap/bind).</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> concat-map [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">B</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">B</span>
+<span class="hl-kw">defn</span> concat-map [f xs]
+  concat [map f xs]</code></pre>
+<h3 class="section-title">Slicing</h3>
+<pre><code class="prologos"><span class="hl-kw">spec</span> take <span class="hl-ty">Nat</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Take the first n elements"</span>
+<span class="hl-kw">defn</span> take [n xs]
+  <span class="hl-kw">match</span> n
+    | zero  <span class="hl-op">-&gt;</span> nil
+    | suc k <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> xs
+      | nil       <span class="hl-op">-&gt;</span> nil
+      | cons a as <span class="hl-op">-&gt;</span> cons a [take k as]
+
+<span class="hl-kw">spec</span> drop <span class="hl-ty">Nat</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Drop the first n elements"</span>
+<span class="hl-kw">defn</span> drop [n xs]
+  <span class="hl-kw">match</span> n
+    | zero  <span class="hl-op">-&gt;</span> xs
+    | suc k <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> xs
+      | nil       <span class="hl-op">-&gt;</span> nil
+      | cons _ as <span class="hl-op">-&gt;</span> drop k as</code></pre>
+<div class="prose"><p>Split a list at position n. Returns a pair (take n xs, drop n xs).</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> split-at <span class="hl-ty">Nat</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">List</span> <span class="hl-ty">A</span>&gt;] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]]
+<span class="hl-kw">defn</span> split-at [n xs]
+  pair [take n xs] [drop n xs]</code></pre>
+<div class="prose"><p>Take elements while the predicate holds.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> take-while [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> take-while [p xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> nil
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [p a]
+      | true  <span class="hl-op">-&gt;</span> cons a [take-while p as]
+      | false <span class="hl-op">-&gt;</span> nil</code></pre>
+<div class="prose"><p>Drop elements while the predicate holds.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> drop-while [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> drop-while [p xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> nil
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [p a]
+      | true  <span class="hl-op">-&gt;</span> drop-while p as
+      | false <span class="hl-op">-&gt;</span> xs</code></pre>
+<h3 class="section-title">Partitioning</h3>
+<div class="prose"><p>Split a list by predicate. Returns (satisfy, don't-satisfy).</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> partition-helper [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">List</span> <span class="hl-ty">A</span>&gt;] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]]
+<span class="hl-kw">defn</span> partition-helper [p yes no xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> pair [reverse yes] [reverse no]
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [p a]
+      | true  <span class="hl-op">-&gt;</span> partition-helper p [cons a yes] no as
+      | false <span class="hl-op">-&gt;</span> partition-helper p yes [cons a no] as
+
+<span class="hl-kw">spec</span> partition [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">List</span> <span class="hl-ty">A</span>&gt;] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]]
+<span class="hl-kw">defn</span> partition [p xs]
+  partition-helper p nil nil xs</code></pre>
+<h3 class="section-title">Zipping</h3>
+<pre><code class="prologos"><span class="hl-kw">spec</span> zip-with [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">C</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Combine two lists element-wise with a function"</span>
+<span class="hl-kw">defn</span> zip-with [f xs ys]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> nil
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> ys
+      | nil       <span class="hl-op">-&gt;</span> nil
+      | cons b bs <span class="hl-op">-&gt;</span> cons [f a b] [zip-with f as bs]
+
+<span class="hl-kw">spec</span> zip [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>]
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Pair corresponding elements of two lists"</span>
+<span class="hl-kw">defn</span> zip [xs ys]
+  zip-with <span class="hl-ty">A</span> <span class="hl-ty">B</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>] [<span class="hl-kw">fn</span> a b [pair a b]] xs ys</code></pre>
+<div class="prose"><p>Unzip pairs into two lists.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> unzip-helper [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">B</span>] [<span class="hl-ty">List</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>]] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">List</span> <span class="hl-ty">A</span>&gt;] [<span class="hl-ty">List</span> <span class="hl-ty">B</span>]]
+<span class="hl-kw">defn</span> unzip-helper [ls rs ps]
+  <span class="hl-kw">match</span> ps
+    | nil       <span class="hl-op">-&gt;</span> pair [reverse ls] [reverse rs]
+    | cons p rest <span class="hl-op">-&gt;</span> unzip-helper [cons [first p] ls] [cons [second p] rs] rest
+
+<span class="hl-kw">spec</span> unzip [<span class="hl-ty">List</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>]] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">List</span> <span class="hl-ty">A</span>&gt;] [<span class="hl-ty">List</span> <span class="hl-ty">B</span>]]
+<span class="hl-kw">defn</span> unzip [ps]
+  unzip-helper nil nil ps</code></pre>
+<h3 class="section-title">Transformations</h3>
+<div class="prose"><p>Insert separator between elements.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> intersperse <span class="hl-ty">A</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> intersperse [sep xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> nil
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> as
+      | nil     <span class="hl-op">-&gt;</span> cons a nil
+      | cons _ _ <span class="hl-op">-&gt;</span> cons a [cons sep [intersperse sep as]]</code></pre>
+<h3 class="section-title">Sorting</h3>
+<div class="prose"><p>Merge sort: split the list in half, sort each half, merge.
+<code>halve</code> splits by alternating assignment (not by counting),
+which avoids an extra traversal to compute the midpoint.</p>
+<p>Split list into two halves by alternating assignment.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> halve-helper [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">List</span> <span class="hl-ty">A</span>&gt;] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]]
+<span class="hl-kw">defn</span> halve-helper [left right xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> pair [reverse left] [reverse right]
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> as
+      | nil     <span class="hl-op">-&gt;</span> pair [reverse [cons a left]] [reverse right]
+      | cons b rest <span class="hl-op">-&gt;</span> halve-helper [cons a left] [cons b right] rest
+
+<span class="hl-kw">spec</span> halve [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">List</span> <span class="hl-ty">A</span>&gt;] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]]
+<span class="hl-kw">defn</span> halve [xs]
+  halve-helper nil nil xs</code></pre>
+<div class="prose"><p>Merge two sorted lists using a comparator.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> merge [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> merge [lte xs ys]
+  <span class="hl-kw">match</span> xs
+    | nil <span class="hl-op">-&gt;</span> ys
+    | cons x xs2 <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> ys
+      | nil <span class="hl-op">-&gt;</span> xs
+      | cons y ys2 <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [lte x y]
+        | true  <span class="hl-op">-&gt;</span> cons x [merge lte xs2 ys]
+        | false <span class="hl-op">-&gt;</span> cons y [merge lte xs ys2]
+
+<span class="hl-kw">spec</span> sort [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Sort a list using a less-than-or-equal comparator (merge sort)"</span>
+<span class="hl-kw">defn</span> sort [lte xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> nil
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> as
+      | nil     <span class="hl-op">-&gt;</span> cons a nil
+      | cons _ _ <span class="hl-op">-&gt;</span> merge lte [sort lte [first [halve xs]]] [sort lte [second [halve xs]]]</code></pre>
+<h3 class="section-title">Non-empty Folds</h3>
+<div class="prose"><p>Left fold on non-empty list (first element is the initial accumulator).</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> reduce1 [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> reduce1 [f xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> none
+    | cons a as <span class="hl-op">-&gt;</span> some [reduce f a as]</code></pre>
+<div class="prose"><p>Right fold on non-empty list (last element is the base).</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> foldr1-step [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> foldr1-step [f a acc]
+  <span class="hl-kw">match</span> acc
+    | none   <span class="hl-op">-&gt;</span> some a
+    | some r <span class="hl-op">-&gt;</span> some [f a r]
+
+<span class="hl-kw">spec</span> foldr1 [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> foldr1 [f xs]
+  foldr <span class="hl-ty">A</span> [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] [foldr1-step <span class="hl-ty">A</span> f] [none <span class="hl-ty">A</span>] xs</code></pre>
+<h3 class="section-title">Splitting</h3>
+<div class="prose"><p>All elements except the last. Returns none for empty list.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> init-helper [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> init-helper [acc xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> reverse acc
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> as
+      | nil     <span class="hl-op">-&gt;</span> reverse acc
+      | cons _ _ <span class="hl-op">-&gt;</span> init-helper [cons a acc] as
+
+<span class="hl-kw">spec</span> init [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> init [xs]
+  <span class="hl-kw">match</span> xs
+    | nil      <span class="hl-op">-&gt;</span> none
+    | cons _ _ <span class="hl-op">-&gt;</span> some [init-helper nil xs]</code></pre>
+<div class="prose"><p>Split where predicate first fails: returns (passing-prefix, rest).</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> span-helper [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">List</span> <span class="hl-ty">A</span>&gt;] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]]
+<span class="hl-kw">defn</span> span-helper [p acc xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> pair [reverse acc] nil
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [p a]
+      | true  <span class="hl-op">-&gt;</span> span-helper p [cons a acc] as
+      | false <span class="hl-op">-&gt;</span> pair [reverse acc] xs
+
+<span class="hl-kw">spec</span> span [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">List</span> <span class="hl-ty">A</span>&gt;] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]]
+<span class="hl-kw">defn</span> span [p xs]
+  span-helper p nil xs</code></pre>
+<div class="prose"><p>Split where predicate first succeeds (complement of span).</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> break-helper [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">List</span> <span class="hl-ty">A</span>&gt;] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]]
+<span class="hl-kw">defn</span> break-helper [p acc xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> pair [reverse acc] nil
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [p a]
+      | true  <span class="hl-op">-&gt;</span> pair [reverse acc] xs
+      | false <span class="hl-op">-&gt;</span> break-helper p [cons a acc] as
+
+<span class="hl-kw">spec</span> break [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">List</span> <span class="hl-ty">A</span>&gt;] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]]
+<span class="hl-kw">defn</span> break [p xs]
+  break-helper p nil xs</code></pre>
+<h3 class="section-title">Equality-Based Operations</h3>
+<div class="prose"><p>Remove consecutive duplicates (like Unix uniq).</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> dedup-helper [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] <span class="hl-ty">A</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> dedup-helper [eqf prev xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> nil
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [eqf prev a]
+      | true  <span class="hl-op">-&gt;</span> dedup-helper eqf prev as
+      | false <span class="hl-op">-&gt;</span> cons a [dedup-helper eqf a as]
+
+<span class="hl-kw">spec</span> dedup [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> dedup [eqf xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> nil
+    | cons a as <span class="hl-op">-&gt;</span> cons a [dedup-helper eqf a as]</code></pre>
+<div class="prose"><p>Check if one list is a prefix of another.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> prefix-of? [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> prefix-of? [eqf prefix xs]
+  <span class="hl-kw">match</span> prefix
+    | nil       <span class="hl-op">-&gt;</span> true
+    | cons p ps <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> xs
+      | nil       <span class="hl-op">-&gt;</span> false
+      | cons x rest <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [eqf p x]
+        | true  <span class="hl-op">-&gt;</span> prefix-of? eqf ps rest
+        | false <span class="hl-op">-&gt;</span> false</code></pre>
+<div class="prose"><p>Check if one list is a suffix of another.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> suffix-of? [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> suffix-of? [eqf suffix xs]
+  prefix-of? eqf [reverse suffix] [reverse xs]</code></pre>
+<div class="prose"><p>Remove first occurrence of an element.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> delete [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] <span class="hl-ty">A</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> delete [eqf x xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> nil
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [eqf x a]
+      | true  <span class="hl-op">-&gt;</span> as
+      | false <span class="hl-op">-&gt;</span> cons a [delete eqf x as]</code></pre>
+<h3 class="section-title">Search and Counting</h3>
+<div class="prose"><p>Index of first element satisfying predicate.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> find-index-helper [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] <span class="hl-ty">Nat</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> find-index-helper [p n xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> none
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [p a]
+      | true  <span class="hl-op">-&gt;</span> some n
+      | false <span class="hl-op">-&gt;</span> find-index-helper p [suc n] as
+
+<span class="hl-kw">spec</span> find-index [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> find-index [p xs]
+  find-index-helper p zero xs</code></pre>
+<div class="prose"><p>Count elements satisfying predicate.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> count-helper [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] <span class="hl-ty">Nat</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> count-helper [p n xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> n
+    | cons a as <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [p a]
+      | true  <span class="hl-op">-&gt;</span> count-helper p [suc n] as
+      | false <span class="hl-op">-&gt;</span> count-helper p n as
+
+<span class="hl-kw">spec</span> count [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> count [p xs]
+  count-helper p zero xs</code></pre>
+<h3 class="section-title">Accumulating Transforms</h3>
+<div class="prose"><p>Left fold with intermediate results.
+scanl add 0 [1,2,3] = [0,1,3,6]</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> scanl [<span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>] <span class="hl-ty">B</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">B</span>
+<span class="hl-kw">defn</span> scanl [f z xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> cons z nil
+    | cons a as <span class="hl-op">-&gt;</span> cons z [scanl f [f z a] as]</code></pre>
+<div class="prose"><p>Generate N values by repeated function application.
+iterate-n 4 suc 0 = [0,1,2,3]</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> iterate-n <span class="hl-ty">Nat</span> [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> iterate-n [n f x]
+  <span class="hl-kw">match</span> n
+    | zero  <span class="hl-op">-&gt;</span> nil
+    | suc k <span class="hl-op">-&gt;</span> cons x [iterate-n k f [f x]]</code></pre>
+<div class="prose"><p>Concat with separator list between each sublist.
+intercalate [0] [[1,2],[3,4]] = [1,2,0,3,4]</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> intercalate [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> intercalate [sep xss]
+  concat [intersperse sep xss]</code></pre>
+<div class="prose"><p>Sort by derived key using an existing comparator.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> sort-on [<span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">List</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> sort-on [lte key xs]
+  sort <span class="hl-ty">A</span> [<span class="hl-kw">fn</span> a b [lte [key a] [key b]]] xs</code></pre>
+</section>
+<h2 class="part-header">Part II — Trait Instances</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::seqable-list</div>
+<h3 class="section-title">Seqable List</h3>
+<div class="prose"><p>Convert a List to an LSeq via <code>list-to-lseq</code>. Single-method
+trait: the dict IS the conversion function.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seqable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seqable</span> <span class="hl-ty">Seqable-to-seq</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq          <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq-ops      <span class="hl-kwlit">:refer</span> [list-to-lseq]]
+<span class="hl-kw">require</span> [prologos::data::list           <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span>]]
+
+<span class="hl-kw">def</span> <span class="hl-ty">List--Seqable--dict</span> : [<span class="hl-ty">Seqable</span> <span class="hl-ty">List</span>] <span class="hl-op">:=</span> list-to-lseq</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::foldable-list</div>
+<h3 class="section-title">Foldable List</h3>
+<div class="prose"><p>List's fold delegates directly to <code>foldr</code> — no conversion
+needed. Single-method trait: the dict IS <code>foldr</code>.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::foldable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Foldable</span>]]
+<span class="hl-kw">require</span> [prologos::data::list <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> foldr]]
+
+<span class="hl-kw">spec</span> list-foldable [<span class="hl-ty">Foldable</span> <span class="hl-ty">List</span>]
+<span class="hl-kw">def</span> list-foldable foldr</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::buildable-list</div>
+<h3 class="section-title">Buildable List</h3>
+<div class="prose"><p>Build a List from an LSeq via <code>lseq-to-list</code>; the empty
+collection is <code>nil</code>. Buildable is a two-method trait, so
+the dict is a Sigma pair.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::buildable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Buildable</span> <span class="hl-ty">Buildable-from-seq</span> <span class="hl-ty">Buildable-empty-coll</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq            <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq-ops        <span class="hl-kwlit">:refer</span> [lseq-to-list]]
+<span class="hl-kw">require</span> [prologos::data::list             <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil]]
+
+(<span class="hl-kw">def</span> <span class="hl-ty">List--Buildable--from-seq</span> : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]]]
+  lseq-to-list)
+
+(<span class="hl-kw">def</span> <span class="hl-ty">List--Buildable--empty-coll</span> : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (nil <span class="hl-ty">A</span>)))</code></pre>
+<div class="prose"><p>Assemble the dictionary: inline lambdas so pair can type-check</p></div>
+<pre><code class="prologos">(<span class="hl-kw">spec</span> <span class="hl-ty">List--Buildable--dict</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">List</span>))
+(<span class="hl-kw">def</span> <span class="hl-ty">List--Buildable--dict</span>
+  (pair
+    (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>)) (lseq-to-list <span class="hl-ty">A</span> xs)))
+    (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (nil <span class="hl-ty">A</span>))))</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::seq-list</div>
+<h3 class="section-title">Seq List</h3>
+<div class="prose"><p>The Seq trait provides first/rest/empty? for sequential access.
+Dict layout: <code>(pair first-fn (pair rest-fn empty?-fn))</code>.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seq-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seq</span>]]
+<span class="hl-kw">require</span> [prologos::data::list <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons]]
+<span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
+
+<span class="hl-kw">spec</span> list-seq-first [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> list-seq-first [xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> none <span class="hl-ty">A</span>
+    | cons a _  <span class="hl-op">-&gt;</span> some <span class="hl-ty">A</span> a
+
+<span class="hl-kw">spec</span> list-seq-rest [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> list-seq-rest [xs]
+  <span class="hl-kw">match</span> xs
+    | nil       <span class="hl-op">-&gt;</span> nil <span class="hl-ty">A</span>
+    | cons _ as <span class="hl-op">-&gt;</span> as
+
+<span class="hl-kw">spec</span> list-seq-empty? [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> list-seq-empty? [xs]
+  <span class="hl-kw">match</span> xs
+    | nil      <span class="hl-op">-&gt;</span> true
+    | cons _ _ <span class="hl-op">-&gt;</span> false</code></pre>
+<div class="prose"><p>Assemble the dictionary: (pair first-fn (pair rest-fn empty?-fn))</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> list-seq [<span class="hl-ty">Seq</span> <span class="hl-ty">List</span>]
+<span class="hl-kw">def</span> list-seq [pair list-seq-first [pair list-seq-rest list-seq-empty?]]</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::functor-list</div>
+<h3 class="section-title">Functor List</h3>
+<div class="prose"><p>List's fmap delegates directly to <code>map</code>. Single-method
+trait: the dict IS <code>map</code>.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::functor-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Functor</span>]]
+<span class="hl-kw">require</span> [prologos::data::list <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> map]]
+
+<span class="hl-kw">spec</span> list-functor [<span class="hl-ty">Functor</span> <span class="hl-ty">List</span>]
+<span class="hl-kw">def</span> list-functor map</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::indexed-list</div>
+<h3 class="section-title">Indexed List</h3>
+<div class="prose"><p>O(n) positional access for linked lists. Three methods:
+nth, length, and update — all by structural recursion.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::indexed-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Indexed</span> <span class="hl-ty">Indexed-idx-nth</span> <span class="hl-ty">Indexed-idx-length</span> <span class="hl-ty">Indexed-idx-update</span>]]
+<span class="hl-kw">require</span> [prologos::data::option        <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
+<span class="hl-kw">require</span> [prologos::data::list           <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons]]
+<span class="hl-kw">require</span> [prologos::data::nat            <span class="hl-kwlit">:refer</span> [zero?]]</code></pre>
+<div class="prose"><p>idx-nth : List A -&gt; Nat -&gt; Option A</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> list-idx-nth : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span> [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>]]]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">List</span> <span class="hl-ty">A</span>)) (<span class="hl-kw">fn</span> (n : <span class="hl-ty">Nat</span>)
+    (<span class="hl-kw">match</span> xs
+      (nil <span class="hl-op">-&gt;</span> (none <span class="hl-ty">A</span>))
+      (cons a as <span class="hl-op">-&gt;</span> (<span class="hl-kw">match</span> n
+        (zero <span class="hl-op">-&gt;</span> (some <span class="hl-ty">A</span> a))
+        (suc k <span class="hl-op">-&gt;</span> (list-idx-nth <span class="hl-ty">A</span> as k)))))))))</code></pre>
+<div class="prose"><p>idx-length : List A -&gt; Nat</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> list-idx-length : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-ty">Nat</span>]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">List</span> <span class="hl-ty">A</span>))
+    (<span class="hl-kw">match</span> xs
+      (nil <span class="hl-op">-&gt;</span> zero)
+      (cons _ as <span class="hl-op">-&gt;</span> (suc (list-idx-length <span class="hl-ty">A</span> as)))))))</code></pre>
+<div class="prose"><p>idx-update : List A -&gt; Nat -&gt; A -&gt; List A</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> list-idx-update : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span> [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]]]]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">List</span> <span class="hl-ty">A</span>)) (<span class="hl-kw">fn</span> (n : <span class="hl-ty">Nat</span>) (<span class="hl-kw">fn</span> (v : <span class="hl-ty">A</span>)
+    (<span class="hl-kw">match</span> xs
+      (nil <span class="hl-op">-&gt;</span> (nil <span class="hl-ty">A</span>))
+      (cons a as <span class="hl-op">-&gt;</span> (<span class="hl-kw">match</span> n
+        (zero <span class="hl-op">-&gt;</span> (cons <span class="hl-ty">A</span> v as))
+        (suc k <span class="hl-op">-&gt;</span> (cons <span class="hl-ty">A</span> a (list-idx-update <span class="hl-ty">A</span> as k v)))))))))))</code></pre>
+<div class="prose"><p>Indexed dict: triple (idx-nth, idx-length, idx-update) as nested Sigma</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> <span class="hl-ty">List--Indexed--dict</span> : (<span class="hl-ty">Indexed</span> <span class="hl-ty">List</span>)
+  (pair list-idx-nth (pair list-idx-length list-idx-update)))</code></pre>
+</section>
+</article>
+<nav class="bottom-nav"><a href="collection-functions.html">← Collection Functions</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="persistent-vectors.html">Persistent Vectors →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+
+</body>
+</html>

@@ -54,6 +54,173 @@
 * Today
 
 ** PPN Track 1: Lexer as Propagators
+
+Notes
+Q1
+`The indent stack as chain lattice is a stretch`
+
+This consideration is a bit tricky, isn't it. I'm going to say a lot of things, but ultimately I don't think they pan out to any more than your conclusion.
+
+- State-based CRDTs...
+
+- Left-Right scanning is a hard concept to break from--the only other idea that comes to mind: "what if we could read each symbol's byte-offset in the document and read it all in parallel, all at once--then it wouldn't be a left-to-right scan--but so what? what then?" (It's a silly idea... I'm just grasping, generating novelty at the hope of some clarity breaking through)
+
+- Does the body of hypergraph grammars say anything about parsing into those hypergraphs? (I doubt it's anything other than what you're proposing, and that I'm struggling to find any better alternative to)
+
+- How is our NF-Narrower getting into DTs?
+
+- Does it even matter that the parse gets instantiated through an impertive-style sweep? Most definitions don't change (but in live-coding, incremental sessions, it would and it does matter)
+
+
+
+---
+
+
+Some more open-ish questions:
+
+- What does our current work on SRE tell us about composition and decomposition? Our research?
+
+- What if two trees have the same substructure? Is there a way to share across trees? This will be crucial considerations for PReductions, but still an interesting test-ground to explore this concept now, perhaps?
+
+--
+
+Let's just keep discussing and revolving this around at a research+design level until we consider all angles and issues, and come to better clarity through dialectics.
+
+
+
+---
+
+Our "completeness" principle says "do the hard thing first, so everything else is easier"... that would imply building the parser that we know we'll need (quite soon and thereafter), not the convenient that fills in some assignment.
+
+I'm leaning more into the constraint based approach that could be embarrassingly parallel. And that would get us O(1) incremental editing on day one.
+
+
+
+---
+
+
+
+In the above you mentioned:
+
+```
+D.3b committed (`c1fee06`). The thorough self-critique found:
+
+1. **Token pattern registry as hash vs cell** — pragmatic choice, same as SRE Track 0
+2. **Structure cells as topology** — references, not self-contained data. Serialization concern noted for Track 8.
+3. **Bracket-indent interaction confirmed by code** — `bracket-depth = 0` check at line start, lines 235/274
+4. **Fundamental architectural difference** — no INDENT/DEDENT tokens exist in the new design. Tree is PRE-BUILT by constraint chain. `parse-indented-block` has no analog.
+
+Ready for external critique now.
+```
+
+
+Points 1 and 2 should be captured as notes in the PPN master tracking document for their respective Tracks 7 and 8.
+
+There are multiple pushes of work offloaded to identified future tracks in this critique response. Those should also be tracked as notes in the master document under those tracks.
+
+
+That all said, some of this work that is being pushed out to 6 tracks from now is uncomfortable to me; and I wonder how we could pull these in to near-er considerations, so we have more of a foundation getting through higher value deliverables like tracks 3 or 4.
+
+If Tracks 2, 3 and 4, and onward, want to be parsing over trees, we should pull the work necessary and sufficiently in front of it, to be doing so fundamentally; rather than shifting it off to a later concern as an after thought. This statement can be seen as a pushback to some of the above, and a seen as a refutation of "completeness" -- especially if they're usefully productive in near-on tracks.
+
+If we need a track 1B follow up to scope out some of this work and get everything into the proper tree form, then let's do that. If it can be fit into our current scope, then let's consider it. I want to hear your thoughts on this, balanced with the critique rounds.
+
+
+
+
+---
+
+I think too much of our lens has been dominated by imperative algorithmic thinking, and not thinking principally about the paradigm that we are in. We need to consider every aspect of our design through the lens of structural analysis on omni-directional cells and omni-directional data-flows.
+
+If you're thinking "this algorithm says... "  that's a process smell in propagators.
+
+If you say, on the other hand, "This fixpoint computation over monotonic data flow guarantees... " (or similar), you know you're in the right design territory.
+
+The data flow IS the algorithm. The data flow is the OPTIMAL expression of solving the computation.
+
+
+Strong Postulate: Any computation can be expressed as a fixpoint over some interconnected lattice structures (our propagator networks).
+
+Corollary: For any given computation, along some axis of "optimality", there is an optimal computation on such structure.
+
+
+Now, I think this Postulate and it Corollary, we can poke at, strengthen, and refine. But I think the gist of it should be our guiding consideration when building on propagators. We can call this the Hyperlattice Conjecture (Or the Propagator Network Conjecture).
+
+
+I would like for us to audit our current design through this lens, and consider if we are fulfilling it. This is what it means to be Propagator First. We should really change that principle to "Propagator Only".
+
+I feel that the design for this has stepped back from this number one, core principle; and I think we can do better.
+
+
+---
+
+
+Finding 1
+I lean more now than later.
+
+Finding 2
+Question: will this be "cleaned up" later? When?
+
+Finding 3
+Let's open this one up for greater scrutiny. Tradeoffs, options.
+
+
+Finding 4
+sounds doable.
+
+
+Finding 5
+Is there some way to conceive of this as an array-programming challenge, where broadcasts can be applied in one-shot over an entire array? Would we be able to recover one-shot parallelism with a truly-parallel computation (something that BSP-LE envisions?)
+
+
+Can we benchmark for what we have now, regardless?
+
+
+Finding 6
+one more test file. good catch.
+
+
+
+
+
+---
+
+
+1.
+On the nested S-expression... Would it not be most efficient for this to be a nested PVec?  We've encountered this pattern as well. I believe the issue came up in SRE series somewhere. A nested collection type with collections as values is always a tree. PVec is probably our best representation. Thoughts? Measurements to validate or refute?
+
+
+2.
+Again, I believe this issue came up in SRE. I think we looked at Mult lattice for considering tree merge semantics. Dig into SRE on this. Is it set union? Double check me and you on this point. Verify. Ground reasoning. Explain.
+
+
+3. Is this the best we can do?
+
+The set-latch, although different, comes to mind
+
+I suppose without true parallel semantics, we're a bit ham-strung. I'd want to revisit this point when we have parallel semantics. (Maybe we pivot to that after this... make everything parallel by default if we can prove correctness, and develop speedup heuristics/optimality)
+
+4. If it is a fixpoint without conflict, then there's no issue. B) is obvious win.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ** Consider priorities: PPN 1-4 vs 10C vs other
 
 * Blockers

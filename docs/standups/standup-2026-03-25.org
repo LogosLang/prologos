@@ -62,9 +62,240 @@
 
 * Today
 
-** Discuss Track 10 PIR findings
-** Scope Track 10B
-** Determine next priority
+
+
+** Track 10B
+
+
+One question on process before we continue with the implementation:
+
+We seem to get errors around "wrong path" a lot...
+
+I think that our `pnet-compile.rkt`
+
+and our `run-affected-tests.rkt` should not have to worry about what directory they are run from. Do you think we should or could change these scripts so they capture the relative paths to themselves that they care about, and not inherit the CWD that they're run from?
+
+What else can we do to eliminate this class of errors interfering with our debug cycle? Are there other repeating patterns that prevent us from a tighter debug cycle? Our error reporting allows us to check recent error output rather than re-run tests with larger `tail`s to capture full context.
+
+
+---
+
+The first point:
+
+Is there a way to not have overhead from compilation and pnet regeneration pollute the wall-time of the test suite?
+
+--
+
+Let's also make sure to be updating the progress tracker and your dailies as phases land
+
+--
+
+I'd like to hear from you what you think the *intent* of the dailies are: What should be captured, when should they be written to, what are they used for?
+
+
+--
+
+What's a way that we can detect the errors that come up with `0 tests in 600s`, so we're not losing that time in our debug cycles?
+
+Also, I noticed we got another "wrong directory" error in compiling. Can we make `driver.rkt` not sensitive to CWD? (or is that a bad idea for some reason?)
+
+What was the recent issue with wrong paths again? We just tried to address this. It depends on where and how `raco make` was invoked? Can we make sure that any of our `raco make`s are run as a script in a place that would make our other tools resolve correctly?
+
+
+
+** Propagator Rewriting Network (PRN)
+
+*** 🗣️
+Your last point is the most pressing one in my considerations – and I want to get to addressing it as fundamentally as we can...
+
+
+It took us a while to discern the architectural patterns involved with building architectures on propagators. Only through working through our first few did we recognize the "Layered Recovery Principle", and confirmed it. Post-hoc research began to clarify the categorical structures that could describe the deeper mathematical structures that our systems were inhabiting. I'm sure there's even more clarity to come later. But only then were we able to put specific words and constructs to it with NTT... A specification language we have yet to put to actual test... And I'm sure we'll learn more once we do.
+
+With these three tracts: structural unification, parsing, and reduction -- we're early enough to recognize the common formalism that informs each. I think even the BSP-LE (and other LE) probably also could benefit from seeing themselves as hyper(lattice) rewriting systems. The question is, do we build the one general thing that unites them FIRST; and instantiate application instance over them? Or build out these separate track series INFORMED by this rich theoretical body.
+
+My hunch is that we will learn more by converging these efforts separately -- much like NTT emerged only after deeper consideration among our propagator network infrastructures. Different aspects of each application may need different considerations and at different times (Like, I think optimization efforts may come into a bigger need for PReductions, but would also benefit parsing and structural unification considerations).
+
+I don't know if we know how to build that general unified hyperlattice rewrite system that will fit the needs of everything we're considering today, a priori. But I think we'll come to know it in time. And it will be better and better informed because of multiple systems to have observed and gone through a process.
+
+
+That said, I think the related series may have interleavings. I think PRN may subsume some aspects of SRE. I think PRedue will look much like PRN.
+
+I think PRN has an elevated priority consideration. Being able to collapse the complex parsing pipeline of changing things through a 14-stage pipeline could immensely help our language-design and syntax implementation process. And it can give us better observability and reasoning on the well-understood grounds of propagators as fixpoint computations over lattices that we've established for ourselves.
+
+I think it should be a prerequisite to any future language/syntax design, to have PRN in a "good-enough" state, so that we make the most of our efforts.
+
+I'd like to hear your thoughts on this; then I'd like to share more vision and consider approaches.
+
+
+---
+
+Well... question... Should we reserve "PRN" to the more-general vision of hypergraph (bzw. hyperlattice) rewriting? And keep PPN as the track that focuses on grammar? As we gain more interleaved understanding through PPN, SRE, PReductions, we can fill in the details of what PRN is – and when we need more theoretical basis and foundation to inform those tracks, that's either foundational pieces that PRN picks up, or more fundamental research or analysis?
+
+Thoughts in how to conceptually map all this? Reflections?
+
+
+*** 🤖
+#+begin_src markdown
+```markdown
+Response:
+```
+Yes — that's a cleaner separation. PRN is the THEORY (hypergraph/hyperlattice rewriting as a unifying formalism). PPN, SRE, PReductions are APPLICATIONS that each contribute instances and insights back to the theory.
+
+The relationship:
+
+```markdown
+PRN (theory — hyperlattice rewriting formalism)
+  "What ARE the universal primitives for typed rewriting on propagator networks?"
+  Informed by: all application tracks
+  Delivers: foundational research, categorical grounding, shared abstractions
+
+PPN (application — grammar/parsing)
+  "How do we express parsing as lattice rewriting?"
+  Contributes to PRN: parse lattice design, ambiguity resolution patterns,
+    bidirectional information flow (type-directed disambiguation)
+  Consumes from PRN: rewrite rule registration, fixpoint semantics
+
+SRE (application — structural reasoning)
+  "How do we express structural decomposition/composition as rewriting?"
+  Contributes to PRN: form registry = rewrite rules, relation-parameterized
+    dispatch, the ctor-desc model
+  Consumes from PRN: when PRN provides better abstractions than what SRE
+    built ad-hoc
+
+PReductions (application — reduction/optimization)
+  "How do we express β/δ/ι reduction and optimization as rewriting?"
+  Contributes to PRN: e-graph saturation patterns, tropical cost extraction,
+    confluence analysis
+  Consumes from PRN: rewrite rule infrastructure, termination guarantees
+
+BSP-LE (application — logic engines)
+  "How do we express logical inference as lattice rewriting?"
+  Contributes to PRN: bilattice rewriting, NAF as non-monotone rewrite,
+    tabling as memoized rewriting
+  Consumes from PRN: stratified rewriting, ATMS-guided search
+```
+
+PRN isn't a track you "implement" first. It's a research series that CRYSTALLIZES as the applications teach us what the universals are. Just like NTT crystallized from PM Tracks 1-8. You build the applications, observe the patterns, and PRN is where you NAME and FORMALIZE those patterns.
+
+The practical consequence: PRN doesn't block anything. PPN Track 0 proceeds with its own lattice design, informed by SRE's existing form registry. SRE Track 2C proceeds with elaborator changes. PReductions Track 0 proceeds with e-graph research. When two applications discover they need the same primitive (rewrite rule registration, fixpoint termination, cost-weighted selection), that's a PRN research item — formalize the shared primitive, then both applications adopt it.
+
+The interleaving rhythm:
+- PPN builds something → discovers a pattern → PRN research note captures it
+- SRE builds something → discovers the SAME pattern → PRN formalizes it as shared
+- PReductions needs it → consumes the PRN formalization instead of reinventing
+
+This is exactly how NTT worked: Track 8 built bridges → NTT named "Galois connection." SRE built decomposition → NTT named "polynomial functor dispatch." The naming happened AFTER the building, and the named abstractions then made future building faster.
+
+For the master roadmap, PRN would be:
+
+```markdown
+PRN (Propagator-Rewriting-Network) — Theory series
+  Status: Stage 0 research
+  Thesis: Parsing, structural reasoning, reduction, and logical inference
+    are all instances of typed hyperlattice rewriting on propagator networks.
+  Tracks: Emerge from application track discoveries.
+  Current research:
+    - Hypergraph rewriting document (2026-03-24)
+    - Tropical optimization document (2026-03-24)
+    - SRE = DPO hyperedge replacement (confirmed)
+  Feeds into: PPN, SRE, PReductions, BSP-LE, OE
+  Fed by: all application tracks
+```
+
+And PPN stays as the grammar/parsing application series with its own concrete tracks (lattice design → lexer → parser → disambiguation → extensions → incremental).
+
+Does this mapping feel right? And what's the vision you wanted to share?
+
+#+end_src
+
+
+*** 🗣️
+
+A follow up question first:
+
+So demand-driven applies to Right Kan... propagation is residuation... How does that map to what our NF-Narrowing does, implementation-wise? Are we structurally doing what our Right Kan NTT captures? Or is it a bit more ad hoc in its implementation? Is that ad-hoc approach better than what we'd do if we had been building NTT with RKan?
+
+Also, what would a LKan look like here? "speculative" is the keyword for LKan, yes? Our ATMS does speculative exploration; how is that different from LKan inter-strata connections? Could LKan help inform optimality in the search space, along with tropical semirings?
+
+If rule application is inductively sequential... DT gives us optimality.
+
+What does coinducitve/greatest fixpoint (gfp) analysis do for us? (Given a language... here are the possible parser rules? ... Could we apply this to `foreign`? What other areas do gfp apply to our current considerations?)
+
+
+--
+
+
+
+
+
+Notes on Open Q:
+
+1.
+What if we consider the bilattice instead as two lattices: the PARSE lattice with lfp and the ELIMINATION lattice on gfp, which when run together could form a mult lattice? Are there lessons or insights form WF-LE that apply here? When we made WF-LE, I believe we also just built on the existing lattice... so maybe we can concern ourselves with the coinductive side of it later in Track 5... but we want to make sure we can converge smoothly when they "meet"
+
+
+2.
+How are we handling indentation? Is that a mult lattice?
+
+If semirings can handle multiple domain products... is there a semiring lattice structure that is able encode n-ary state concerns, without being "too-much" or needing to to do unnecessary cross-domain bridging?
+
+
+3.
+Ordering of parse items can be important... Our subset lattice work on subtyping faced some of these concerns and considerations. What can we learn from that when approaching parsing ordering concerns?
+
+
+
+4.
+We have many bridge network deployed, some with bidirectionality. We can check whether alpha of gamma of alpha => alpha...
+
+One-directional bridges are deemed reasonable and fine. They're not adjuncts in that sense; but either fibrations or co-fibrations (something like that--right?).
+
+
+
+5.
+One concept I've considered... What does it mean to have on stratum that shares a network that is partitioned over different stratification concerns (different strata-towers)? Is there conceptual need to explore this concept in our considerations for PPN?
+
+
+
+6.
+Any design direction to traced monoidal categories? How "heavy" would it be to carry this information? Is it bearable? Or is there some other data-oriented approach to recover this information? How would that impact correct-by-construction, completeness, composability principles? How would grammar parsing/generating; serialization/deserialization be effected?
+
+
+
+---
+
+Yes, let's incorporate these considerations.
+
+
+Additional notes that you can respond to:
+3.
+This dependency relationship... does it have any bearing on our current design?
+
+
+4.
+Right Kan wouldn't be a bridge between networks. It would be an inter-strata interaction. Unless the demand is coming from a different network... Then it could be a Right Kan across networks... We haven't really encountered that pattern yet in our considerations (in theory or practice)
+
+
+
+
+
+
+
+*** 🤖
+
+
+
+
+
+
+** Algebraic embeddings
+
+On hypergraphs
+
+
+
+
+
 
 * Blockers
 

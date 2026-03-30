@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lazy Sequences — Prologos Standard Library</title>
+  <style>
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
+  --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
+  --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
+  color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
+}
+h1.chapter-title {
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
+  padding-bottom: .5rem; margin-bottom: .3rem;
+}
+h2.part-header {
+  font-size: 1.35rem; border-top: 1px solid var(--border);
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
+}
+h3.section-title {
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
+  padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
+}
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
+.module-badge {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: .78rem; background: var(--badge-bg); color: var(--accent);
+  border: 1px solid var(--badge-border); border-radius: 3px;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
+}
+pre {
+  background: var(--code-bg); border-left: 3px solid var(--border);
+  padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
+}
+code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
+pre code { background: none; color: var(--fg); }
+p code {
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
+  font-size: .88em;
+}
+.prose { margin: .5rem 0; }
+.prose p { margin: .6rem 0; }
+nav.chapter-nav {
+  font-size: .9rem; color: var(--muted);
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
+}
+nav.chapter-nav a { color: var(--accent); text-decoration: none; }
+nav.chapter-nav a:hover { text-decoration: underline; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
+nav.bottom-nav {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
+  font-size: .9rem; color: var(--muted);
+}
+nav.bottom-nav a { color: var(--accent); text-decoration: none; }
+nav.bottom-nav a:hover { text-decoration: underline; }
+.preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* TOC page */
+.toc-part-label {
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
+  margin-top: 1.8rem; margin-bottom: .3rem;
+}
+ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
+ol.toc-chapters li { margin: .3rem 0; }
+ol.toc-chapters a { color: var(--accent); text-decoration: none; }
+ol.toc-chapters a:hover { text-decoration: underline; }
+.toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+.book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
+  </style>
+
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\u2600':'\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\u2600':'\u263E';
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="chapter-nav"><a href="natural-numbers.html">← Natural Numbers</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="foldable.html">Foldable →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<article>
+<h1 class="chapter-title">Lazy Sequences</h1>
+<div class="prose"><p>The lazy sequence — <code>LSeq</code> — is the universal intermediate
+representation for collection operations in Prologos. When you
+<code>map</code> over a PVec or <code>filter</code> a Set, the data flows through
+LSeq: the source collection converts to LSeq, the transformation
+runs lazily, and the result rebuilds into the target type.</p>
+<p>LSeq has two constructors:
+  • <code>lseq-nil</code> — the empty sequence
+  • <code>lseq-cell</code> — a head element plus a <strong>thunk</strong> producing the tail</p>
+<p>The thunk (<code>Unit -&gt; LSeq A</code>) is the source of laziness: the tail
+is computed only when forced. This means <code>lseq-map</code> and
+<code>lseq-filter</code> construct new cells without traversing the input —
+work is deferred until someone forces the thunks.</p>
+<p>This chapter defines the LSeq type, its core operations, and
+the trait instances that plug it into the collection hierarchy.</p></div>
+<h2 class="part-header">Part I — The LSeq Type</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::lseq</div>
+<h3 class="section-title">LSeq Definition</h3>
+<div class="prose"><p>A lazy sequence with two constructors. The thunk field in
+<code>lseq-cell</code> provides laziness: <code>Unit -&gt; LSeq A</code> means the
+tail is only computed when forced by applying to <code>unit</code>.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> none some]]
+
+<span class="hl-kw">data</span> <span class="hl-ty">LSeq</span> {<span class="hl-ty">A</span>}
+  lseq-nil
+  lseq-cell : <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Unit</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>]</code></pre>
+<div class="prose"><p>Get the head element as an Option.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> lseq-head [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> lseq-head [xs]
+  <span class="hl-kw">match</span> xs
+    | lseq-nil      <span class="hl-op">-&gt;</span> none
+    | lseq-cell a _t <span class="hl-op">-&gt;</span> some a</code></pre>
+<div class="prose"><p>Get the tail, forcing the thunk. Returns lseq-nil for empty.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> lseq-rest [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> lseq-rest [xs]
+  <span class="hl-kw">match</span> xs
+    | lseq-nil       <span class="hl-op">-&gt;</span> lseq-nil
+    | lseq-cell _a t <span class="hl-op">-&gt;</span> t unit</code></pre>
+<div class="prose"><p>Check if the lazy sequence is empty.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> lseq-empty? [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> lseq-empty? [xs]
+  <span class="hl-kw">match</span> xs
+    | lseq-nil      <span class="hl-op">-&gt;</span> true
+    | lseq-cell _ _ <span class="hl-op">-&gt;</span> false</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::data::lseq-ops</div>
+<h3 class="section-title">LSeq Operations</h3>
+<div class="prose"><p>Conversion, mapping, filtering, slicing, folding, and length.
+Functions that construct <code>lseq-cell</code> use explicit sexp-mode
+<code>(def ...)</code> bodies because the thunk field requires explicit
+type arguments passed to the constructors.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::lseq   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span> lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
+        [prologos::data::option  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> none some]]
+        [prologos::data::list    <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons]]</code></pre>
+<div class="prose"><p>Convert a List to an LSeq (preserves order, lazy tail thunks).</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> list-to-lseq : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>]]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">List</span> <span class="hl-ty">A</span>))
+    (<span class="hl-kw">match</span> xs
+      (nil <span class="hl-op">-&gt;</span> (lseq-nil <span class="hl-ty">A</span>))
+      (cons a as <span class="hl-op">-&gt;</span> (lseq-cell <span class="hl-ty">A</span> a (<span class="hl-kw">fn</span> (_ : <span class="hl-ty">Unit</span>) (list-to-lseq <span class="hl-ty">A</span> as))))))))</code></pre>
+<div class="prose"><p>Convert an LSeq to a List (strict — forces all thunks).</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> lseq-to-list : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>] [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
+    (<span class="hl-kw">match</span> xs
+      (lseq-nil <span class="hl-op">-&gt;</span> (nil <span class="hl-ty">A</span>))
+      (lseq-cell a t <span class="hl-op">-&gt;</span> (cons <span class="hl-ty">A</span> a (lseq-to-list <span class="hl-ty">A</span> (t unit))))))))</code></pre>
+<div class="prose"><p>Map a function over an LSeq (lazy).</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> lseq-map : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-ty">Pi</span> [<span class="hl-ty">B</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>] [<span class="hl-ty">LSeq</span> <span class="hl-ty">B</span>]]]]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
+    (<span class="hl-kw">match</span> xs
+      (lseq-nil <span class="hl-op">-&gt;</span> (lseq-nil <span class="hl-ty">B</span>))
+      (lseq-cell a t <span class="hl-op">-&gt;</span> (lseq-cell <span class="hl-ty">B</span> (f a) (<span class="hl-kw">fn</span> (_ : <span class="hl-ty">Unit</span>) (lseq-map <span class="hl-ty">A</span> <span class="hl-ty">B</span> f (t unit)))))))))))</code></pre>
+<div class="prose"><p>Filter an LSeq (lazy — skips non-matching elements).</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> lseq-filter : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">Bool</span>] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>] [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>]]]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (pred : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">Bool</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
+    (<span class="hl-kw">match</span> xs
+      (lseq-nil <span class="hl-op">-&gt;</span> (lseq-nil <span class="hl-ty">A</span>))
+      (lseq-cell a t <span class="hl-op">-&gt;</span> (<span class="hl-kw">match</span> (pred a)
+        (true <span class="hl-op">-&gt;</span> (lseq-cell <span class="hl-ty">A</span> a (<span class="hl-kw">fn</span> (_ : <span class="hl-ty">Unit</span>) (lseq-filter <span class="hl-ty">A</span> pred (t unit)))))
+        (false <span class="hl-op">-&gt;</span> (lseq-filter <span class="hl-ty">A</span> pred (t unit))))))))))</code></pre>
+<div class="prose"><p>Take the first n elements (lazy).</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> lseq-take : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span> [<span class="hl-op">-&gt;</span> [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>] [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>]]]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (n : <span class="hl-ty">Nat</span>) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
+    (<span class="hl-kw">match</span> n
+      (zero <span class="hl-op">-&gt;</span> (lseq-nil <span class="hl-ty">A</span>))
+      (suc k <span class="hl-op">-&gt;</span> (<span class="hl-kw">match</span> xs
+        (lseq-nil <span class="hl-op">-&gt;</span> (lseq-nil <span class="hl-ty">A</span>))
+        (lseq-cell a t <span class="hl-op">-&gt;</span> (lseq-cell <span class="hl-ty">A</span> a (<span class="hl-kw">fn</span> (_ : <span class="hl-ty">Unit</span>) (lseq-take <span class="hl-ty">A</span> k (t unit))))))))))))</code></pre>
+<div class="prose"><p>Drop the first n elements (strict on the dropped portion).</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> lseq-drop : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span> [<span class="hl-op">-&gt;</span> [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>] [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>]]]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (n : <span class="hl-ty">Nat</span>) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
+    (<span class="hl-kw">match</span> n
+      (zero <span class="hl-op">-&gt;</span> xs)
+      (suc k <span class="hl-op">-&gt;</span> (<span class="hl-kw">match</span> xs
+        (lseq-nil <span class="hl-op">-&gt;</span> (lseq-nil <span class="hl-ty">A</span>))
+        (lseq-cell _ t <span class="hl-op">-&gt;</span> (lseq-drop <span class="hl-ty">A</span> k (t unit))))))))))</code></pre>
+<div class="prose"><p>Append two LSeqs (lazy).</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> lseq-append : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>] [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>]]]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>)) (<span class="hl-kw">fn</span> (ys : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
+    (<span class="hl-kw">match</span> xs
+      (lseq-nil <span class="hl-op">-&gt;</span> ys)
+      (lseq-cell a t <span class="hl-op">-&gt;</span> (lseq-cell <span class="hl-ty">A</span> a (<span class="hl-kw">fn</span> (_ : <span class="hl-ty">Unit</span>) (lseq-append <span class="hl-ty">A</span> (t unit) ys)))))))))</code></pre>
+<div class="prose"><p>Left fold (strict — forces all elements).</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> lseq-fold : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-ty">Pi</span> [<span class="hl-ty">B</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> [<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-ty">A</span>]] [<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> [<span class="hl-op">-&gt;</span> [<span class="hl-ty">LSeq</span> <span class="hl-ty">B</span>] <span class="hl-ty">A</span>]]]]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-ty">A</span>))) (<span class="hl-kw">fn</span> (acc : <span class="hl-ty">A</span>) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">B</span>))
+    (<span class="hl-kw">match</span> xs
+      (lseq-nil <span class="hl-op">-&gt;</span> acc)
+      (lseq-cell b t <span class="hl-op">-&gt;</span> (lseq-fold <span class="hl-ty">A</span> <span class="hl-ty">B</span> f (f acc b) (t unit))))))))))</code></pre>
+<div class="prose"><p>Length (strict — forces all elements).</p></div>
+<pre><code class="prologos">(<span class="hl-kw">def</span> lseq-length : [<span class="hl-ty">Pi</span> [<span class="hl-ty">A</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [<span class="hl-op">-&gt;</span> [<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>] <span class="hl-ty">Nat</span>]]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
+    (lseq-fold <span class="hl-ty">Nat</span> <span class="hl-ty">A</span> (<span class="hl-kw">fn</span> (n : <span class="hl-ty">Nat</span>) (<span class="hl-kw">fn</span> (_ : <span class="hl-ty">A</span>) (suc n))) zero xs))))</code></pre>
+</section>
+<h2 class="part-header">Part II — Trait Instances</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::seqable-lseq</div>
+<h3 class="section-title">Seqable LSeq (Identity)</h3>
+<div class="prose"><p><code>to-seq</code> for LSeq is the identity function — LSeq is already
+a lazy sequence, so no conversion is needed.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seqable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seqable</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq          <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
+
+(<span class="hl-kw">def</span> <span class="hl-ty">LSeq--Seqable--dict</span> : [<span class="hl-ty">Seqable</span> <span class="hl-ty">LSeq</span>]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>)) xs)))</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::foldable-lseq</div>
+<h3 class="section-title">Foldable LSeq</h3>
+<div class="prose"><p>Strict foldr: forces all elements via <code>lseq-to-list</code>, then
+delegates to list <code>foldr</code>. Adequate since fold always needs
+all elements.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::foldable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Foldable</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq           <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq-ops       <span class="hl-kwlit">:refer</span> [lseq-to-list]]
+<span class="hl-kw">require</span> [prologos::data::list            <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> foldr]]
+
+(<span class="hl-kw">def</span> lseq-foldable : [<span class="hl-ty">Foldable</span> <span class="hl-ty">LSeq</span>]
+  (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (<span class="hl-ty">B</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-ty">B</span>))) (<span class="hl-kw">fn</span> (z : <span class="hl-ty">B</span>) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
+    (foldr <span class="hl-ty">A</span> <span class="hl-ty">B</span> f z (lseq-to-list <span class="hl-ty">A</span> xs))))))))</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::buildable-lseq</div>
+<h3 class="section-title">Buildable LSeq (Identity)</h3>
+<div class="prose"><p><code>from-seq</code> for LSeq is the identity — the input is already
+an LSeq. <code>empty-coll</code> returns <code>lseq-nil</code>. Buildable is a
+two-method trait, so the dict is a Sigma pair.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::buildable-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Buildable</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq            <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span> lseq-nil]]
+
+(<span class="hl-kw">spec</span> <span class="hl-ty">LSeq--Buildable--dict</span> (<span class="hl-ty">Buildable</span> <span class="hl-ty">LSeq</span>))
+(<span class="hl-kw">def</span> <span class="hl-ty">LSeq--Buildable--dict</span>
+  (pair
+    (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>)) xs))
+    (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (lseq-nil <span class="hl-ty">A</span>))))</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::seq-lseq</div>
+<h3 class="section-title">Seq LSeq</h3>
+<div class="prose"><p>The Seq trait provides a three-method interface (first, rest,
+empty?) for any sequence type. For LSeq, these delegate
+directly to <code>lseq-head</code>, <code>lseq-rest</code>, and <code>lseq-empty?</code>.
+The dict is a nested Sigma: <code>(pair first-fn (pair rest-fn empty?-fn))</code>.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seq-trait  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seq</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq       <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span> lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
+<span class="hl-kw">require</span> [prologos::data::option     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none]]
+
+(<span class="hl-kw">spec</span> <span class="hl-ty">LSeq--Seq--dict</span> (<span class="hl-ty">Seq</span> <span class="hl-ty">LSeq</span>))
+(<span class="hl-kw">def</span> <span class="hl-ty">LSeq--Seq--dict</span>
+  (pair</code></pre>
+<div class="prose"><p>first : Pi(A :0 Type) LSeq A -&gt; Option A</p></div>
+<pre><code class="prologos">    (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
+      (<span class="hl-kw">match</span> xs
+        (lseq-nil <span class="hl-op">-&gt;</span> (none <span class="hl-ty">A</span>))
+        (lseq-cell a _ <span class="hl-op">-&gt;</span> (some <span class="hl-ty">A</span> a)))))
+    (pair</code></pre>
+<div class="prose"><p>rest : Pi(A :0 Type) LSeq A -&gt; LSeq A</p></div>
+<pre><code class="prologos">      (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
+        (<span class="hl-kw">match</span> xs
+          (lseq-nil <span class="hl-op">-&gt;</span> (lseq-nil <span class="hl-ty">A</span>))
+          (lseq-cell _ t <span class="hl-op">-&gt;</span> (t unit)))))</code></pre>
+<div class="prose"><p>empty? : Pi(A :0 Type) LSeq A -&gt; Bool</p></div>
+<pre><code class="prologos">      (<span class="hl-kw">fn</span> (<span class="hl-ty">A</span> :0 (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)) (<span class="hl-kw">fn</span> (xs : (<span class="hl-ty">LSeq</span> <span class="hl-ty">A</span>))
+        (lseq-empty? <span class="hl-ty">A</span> xs))))))</code></pre>
+</section>
+</article>
+<nav class="bottom-nav"><a href="natural-numbers.html">← Natural Numbers</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="foldable.html">Foldable →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+
+</body>
+</html>

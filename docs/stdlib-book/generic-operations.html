@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Generic Operations — Prologos Standard Library</title>
+  <style>
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
+  --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
+  --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
+  color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
+}
+h1.chapter-title {
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
+  padding-bottom: .5rem; margin-bottom: .3rem;
+}
+h2.part-header {
+  font-size: 1.35rem; border-top: 1px solid var(--border);
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
+}
+h3.section-title {
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
+  padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
+}
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
+.module-badge {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: .78rem; background: var(--badge-bg); color: var(--accent);
+  border: 1px solid var(--badge-border); border-radius: 3px;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
+}
+pre {
+  background: var(--code-bg); border-left: 3px solid var(--border);
+  padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
+}
+code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
+pre code { background: none; color: var(--fg); }
+p code {
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
+  font-size: .88em;
+}
+.prose { margin: .5rem 0; }
+.prose p { margin: .6rem 0; }
+nav.chapter-nav {
+  font-size: .9rem; color: var(--muted);
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
+}
+nav.chapter-nav a { color: var(--accent); text-decoration: none; }
+nav.chapter-nav a:hover { text-decoration: underline; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
+nav.bottom-nav {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
+  font-size: .9rem; color: var(--muted);
+}
+nav.bottom-nav a { color: var(--accent); text-decoration: none; }
+nav.bottom-nav a:hover { text-decoration: underline; }
+.preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* TOC page */
+.toc-part-label {
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
+  margin-top: 1.8rem; margin-bottom: .3rem;
+}
+ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
+ol.toc-chapters li { margin: .3rem 0; }
+ol.toc-chapters a { color: var(--accent); text-decoration: none; }
+ol.toc-chapters a:hover { text-decoration: underline; }
+.toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+.book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
+  </style>
+
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\u2600':'\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\u2600':'\u263E';
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="chapter-nav"><a href="identity-and-algebra.html">← Identity And Algebra</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="type-conversions.html">Type Conversions →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<article>
+<h1 class="chapter-title">Generic Operations</h1>
+<div class="prose"><p>This chapter collects several modules that provide generic
+operations over collections and numbers:</p>
+<p>  • <strong>generic-ops</strong> — HKT-dispatched collection operations
+    (gmap, gfilter, gfold, etc.) — the prototype that led to
+    the refined versions in collection-fns
+  • <strong>generic-arith</strong> — first-class wrappers around parser
+    keyword arithmetic (plus, minus, times, divide, etc.)
+  • <strong>generic-numeric-ops</strong> — sum, product, int-range using
+    identity traits
+  • <strong>seq-functions</strong> — operations using the Seq trait interface
+  • <strong>type-functors</strong> — named type abstractions (Xf, AppResult)</p></div>
+<h2 class="part-header">Part I — Generic Collection Operations</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::generic-ops</div>
+<h3 class="section-title">HKT-Dispatched Collection Operations</h3>
+<div class="prose"><p>These operate on any collection type implementing Seqable,
+Buildable, or Foldable. Named with <code>g</code> prefix to avoid
+shadowing the collection-fns versions.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seqable-trait    <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seqable</span>]]
+<span class="hl-kw">require</span> [prologos::core::buildable-trait  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Buildable</span> <span class="hl-ty">Buildable-from-seq</span>]]
+<span class="hl-kw">require</span> [prologos::core::foldable-trait   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Foldable</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq             <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span>]]
+<span class="hl-kw">require</span> [prologos::data::lseq-ops         <span class="hl-kwlit">:refer</span> [lseq-map lseq-filter lseq-length
+                                                  lseq-append lseq-to-list]]
+<span class="hl-kw">require</span> [prologos::data::list             <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span>]]</code></pre>
+<div class="prose"><p>gmap : (A -&gt; B) -&gt; C A -&gt; C B</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> gmap {<span class="hl-ty">A</span> <span class="hl-ty">B</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} [<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Buildable</span> <span class="hl-ty">C</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">B</span>]
+<span class="hl-kw">defn</span> gmap [$seq $build f xs]
+  <span class="hl-ty">Buildable-from-seq</span> $build <span class="hl-ty">B</span> [lseq-map <span class="hl-ty">A</span> <span class="hl-ty">B</span> f [$seq <span class="hl-ty">A</span> xs]]</code></pre>
+<div class="prose"><p>gfilter : (A -&gt; Bool) -&gt; C A -&gt; C A</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> gfilter {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} [<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Buildable</span> <span class="hl-ty">C</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> gfilter [$seq $build pred xs]
+  <span class="hl-ty">Buildable-from-seq</span> $build <span class="hl-ty">A</span> [lseq-filter <span class="hl-ty">A</span> pred [$seq <span class="hl-ty">A</span> xs]]</code></pre>
+<div class="prose"><p>gfold : (A -&gt; B -&gt; B) -&gt; B -&gt; C A -&gt; B</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> gfold {<span class="hl-ty">A</span> <span class="hl-ty">B</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} [<span class="hl-ty">Foldable</span> <span class="hl-ty">C</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>
+<span class="hl-kw">defn</span> gfold [$foldable f z xs]
+  $foldable <span class="hl-ty">A</span> <span class="hl-ty">B</span> f z xs</code></pre>
+<div class="prose"><p>glength : C A -&gt; Nat</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> glength {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} [<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> glength [$seq xs]
+  lseq-length [$seq <span class="hl-ty">A</span> xs]</code></pre>
+<div class="prose"><p>gconcat : C A -&gt; C A -&gt; C A</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> gconcat {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} [<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Buildable</span> <span class="hl-ty">C</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> gconcat [$seq $build xs ys]
+  <span class="hl-ty">Buildable-from-seq</span> $build <span class="hl-ty">A</span> [lseq-append <span class="hl-ty">A</span> [$seq <span class="hl-ty">A</span> xs] [$seq <span class="hl-ty">A</span> ys]]</code></pre>
+<div class="prose"><p>gany? : (A -&gt; Bool) -&gt; C A -&gt; Bool</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> gany? {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} [<span class="hl-ty">Foldable</span> <span class="hl-ty">C</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> gany? [$foldable pred xs]
+  $foldable <span class="hl-ty">A</span> <span class="hl-ty">Bool</span> (<span class="hl-kw">fn</span> [a] [acc] (<span class="hl-kw">if</span> [pred a] true acc)) false xs</code></pre>
+<div class="prose"><p>gall? : (A -&gt; Bool) -&gt; C A -&gt; Bool</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> gall? {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} [<span class="hl-ty">Foldable</span> <span class="hl-ty">C</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> gall? [$foldable pred xs]
+  $foldable <span class="hl-ty">A</span> <span class="hl-ty">Bool</span> (<span class="hl-kw">fn</span> [a] [acc] (<span class="hl-kw">if</span> [pred a] acc false)) true xs</code></pre>
+<div class="prose"><p>gto-list : C A -&gt; List A</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> gto-list {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} {<span class="hl-ty">C</span> : <span class="hl-ty">Type</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Type</span>} [<span class="hl-ty">Seqable</span> <span class="hl-ty">C</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">C</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> gto-list [$seq xs]
+  lseq-to-list [$seq <span class="hl-ty">A</span> xs]</code></pre>
+</section>
+<h2 class="part-header">Part II — First-Class Arithmetic</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::generic-arith</div>
+<h3 class="section-title">First-Class Generic Arithmetic</h3>
+<div class="prose"><p>Parser keywords (+, -, *, /, negate, abs) dispatch at the AST
+level and can't be passed to higher-order functions like reduce,
+map, or fold. These wrappers are proper first-class values.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::add-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Add</span> <span class="hl-ty">Add-add</span>]]
+<span class="hl-kw">require</span> [prologos::core::sub-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Sub</span> <span class="hl-ty">Sub-sub</span>]]
+<span class="hl-kw">require</span> [prologos::core::mul-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Mul</span> <span class="hl-ty">Mul-mul</span>]]
+<span class="hl-kw">require</span> [prologos::core::div-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Div</span> <span class="hl-ty">Div-div</span>]]
+<span class="hl-kw">require</span> [prologos::core::neg-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Neg</span> <span class="hl-ty">Neg-neg</span>]]
+<span class="hl-kw">require</span> [prologos::core::abs-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Abs</span> <span class="hl-ty">Abs-abs</span>]]
+
+<span class="hl-kw">spec</span> plus [<span class="hl-ty">Add</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"First-class addition — pass to higher-order functions like reduce, map"</span>
+<span class="hl-kw">defn</span> plus [dict x y]
+  <span class="hl-ty">Add-add</span> dict x y
+
+<span class="hl-kw">spec</span> minus [<span class="hl-ty">Sub</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"First-class subtraction"</span>
+<span class="hl-kw">defn</span> minus [dict x y]
+  <span class="hl-ty">Sub-sub</span> dict x y
+
+<span class="hl-kw">spec</span> times [<span class="hl-ty">Mul</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"First-class multiplication"</span>
+<span class="hl-kw">defn</span> times [dict x y]
+  <span class="hl-ty">Mul-mul</span> dict x y
+
+<span class="hl-kw">spec</span> divide [<span class="hl-ty">Div</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"First-class division"</span>
+<span class="hl-kw">defn</span> divide [dict x y]
+  <span class="hl-ty">Div-div</span> dict x y
+
+<span class="hl-kw">spec</span> negate-fn [<span class="hl-ty">Neg</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"First-class negation"</span>
+<span class="hl-kw">defn</span> negate-fn [dict x]
+  <span class="hl-ty">Neg-neg</span> dict x
+
+<span class="hl-kw">spec</span> abs-fn [<span class="hl-ty">Abs</span> <span class="hl-ty">A</span>] <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"First-class absolute value"</span>
+<span class="hl-kw">defn</span> abs-fn [dict x]
+  <span class="hl-ty">Abs-abs</span> dict x</code></pre>
+</section>
+<h2 class="part-header">Part III — Numeric Fold Operations</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::generic-numeric-ops</div>
+<h3 class="section-title">Sum, Product, and Range</h3>
+<div class="prose"><p>Generic folds over lists using identity traits for the
+initial value. Also provides <code>int-range</code> for generating
+integer sequences.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::list                            <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons reduce]]
+<span class="hl-kw">require</span> [prologos::core::add-trait                       <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Add</span> <span class="hl-ty">Add-add</span>]]
+<span class="hl-kw">require</span> [prologos::core::mul-trait                       <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Mul</span> <span class="hl-ty">Mul-mul</span>]]
+<span class="hl-kw">require</span> [prologos::core::additive-identity-trait         <span class="hl-kwlit">:refer</span> [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">AdditiveIdentity-zero</span>]]
+<span class="hl-kw">require</span> [prologos::core::multiplicative-identity-trait   <span class="hl-kwlit">:refer</span> [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">MultiplicativeIdentity-one</span>]]</code></pre>
+<div class="prose"><p>sum : (Add A) (AdditiveIdentity A) -&gt; List A -&gt; A</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> sum [<span class="hl-ty">Add</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Sum a list using generic addition and an additive identity as zero"</span>
+<span class="hl-kw">defn</span> sum [add-dict id-dict xs]
+  reduce <span class="hl-ty">A</span> <span class="hl-ty">A</span> [<span class="hl-kw">fn</span> acc x [<span class="hl-ty">Add-add</span> add-dict acc x]] [<span class="hl-ty">AdditiveIdentity-zero</span> id-dict] xs</code></pre>
+<div class="prose"><p>product : (Mul A) (MultiplicativeIdentity A) -&gt; List A -&gt; A</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> product [<span class="hl-ty">Mul</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Multiply a list using generic multiplication and a multiplicative identity as one"</span>
+<span class="hl-kw">defn</span> product [mul-dict id-dict xs]
+  reduce <span class="hl-ty">A</span> <span class="hl-ty">A</span> [<span class="hl-kw">fn</span> acc x [<span class="hl-ty">Mul-mul</span> mul-dict acc x]] [<span class="hl-ty">MultiplicativeIdentity-one</span> id-dict] xs</code></pre>
+<div class="prose"><p>int-range : Int -&gt; Int -&gt; List Int</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> int-range <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Int</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">Int</span>]
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Generate a list of integers from start (inclusive) to end (exclusive)"</span>
+<span class="hl-kw">defn</span> int-range [start end]
+  <span class="hl-kw">if</span> [int-lt start end]
+    cons <span class="hl-ty">Int</span> start [int-range [int+ start <span class="hl-num">1</span>] end]
+    nil <span class="hl-ty">Int</span></code></pre>
+</section>
+<h2 class="part-header">Part IV — Seq Functions</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::seq-functions</div>
+<h3 class="section-title">Generic Seq Functions</h3>
+<div class="prose"><p>Operations using the Seq trait interface (first/rest/empty?).
+All take an explicit Seq dictionary. When auto-resolution is
+available, the dict param becomes implicit.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::seq-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Seq</span> seq-first seq-rest seq-empty?]]
+<span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> some none some? unwrap-or map]]
+<span class="hl-kw">require</span> [prologos::data::list <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> cons nil]]</code></pre>
+<div class="prose"><p>seq-length : Seq S -&gt; S A -&gt; Nat</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> seq-length [<span class="hl-ty">Seq</span> <span class="hl-ty">S</span>] [<span class="hl-ty">S</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> seq-length [dict xs]
+  <span class="hl-kw">if</span> [seq-empty? dict xs]
+    zero
+    suc [seq-length dict [seq-rest dict xs]]</code></pre>
+<div class="prose"><p>seq-drop : Seq S -&gt; Nat -&gt; S A -&gt; S A</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> seq-drop [<span class="hl-ty">Seq</span> <span class="hl-ty">S</span>] <span class="hl-ty">Nat</span> [<span class="hl-ty">S</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">S</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> seq-drop [dict n xs]
+  <span class="hl-kw">match</span> n
+    | zero   <span class="hl-op">-&gt;</span> xs
+    | suc k  <span class="hl-op">-&gt;</span>
+        <span class="hl-kw">if</span> [seq-empty? dict xs]
+          xs
+          seq-drop dict k [seq-rest dict xs]</code></pre>
+<div class="prose"><p>seq-any? : Seq S -&gt; [A -&gt; Bool] -&gt; S A -&gt; Bool</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> seq-any? [<span class="hl-ty">Seq</span> <span class="hl-ty">S</span>] [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">S</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> seq-any? [dict pred xs]
+  <span class="hl-kw">if</span> [seq-empty? dict xs]
+    false
+    <span class="hl-kw">if</span> [unwrap-or false [map pred [seq-first dict xs]]]
+      true
+      seq-any? dict pred [seq-rest dict xs]</code></pre>
+<div class="prose"><p>seq-all? : Seq S -&gt; [A -&gt; Bool] -&gt; S A -&gt; Bool</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> seq-all? [<span class="hl-ty">Seq</span> <span class="hl-ty">S</span>] [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">S</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> seq-all? [dict pred xs]
+  <span class="hl-kw">if</span> [seq-empty? dict xs]
+    true
+    <span class="hl-kw">if</span> [unwrap-or true [map pred [seq-first dict xs]]]
+      seq-all? dict pred [seq-rest dict xs]
+      false</code></pre>
+<div class="prose"><p>seq-find : Seq S -&gt; [A -&gt; Bool] -&gt; S A -&gt; Option A</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> seq-find [<span class="hl-ty">Seq</span> <span class="hl-ty">S</span>] [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">S</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> seq-find [dict pred xs]
+  <span class="hl-kw">if</span> [seq-empty? dict xs]
+    none <span class="hl-ty">A</span>
+    <span class="hl-kw">if</span> [some? [seq-first dict xs]]
+      <span class="hl-kw">if</span> [unwrap-or false [map pred [seq-first dict xs]]]
+        seq-first dict xs
+        seq-find dict pred [seq-rest dict xs]
+      none <span class="hl-ty">A</span></code></pre>
+</section>
+<h2 class="part-header">Part V — Type Functors</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::type-functors</div>
+<h3 class="section-title">Named Type Abstractions</h3>
+<div class="prose"><p>Type functors are metadata-only: they register in the functor
+store and as deftypes for transparent expansion. The <code>:compose</code>
+and <code>:identity</code> features are reserved for future phases.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">ns</span> prologos::core::type-functors <span class="hl-kwlit">:no-prelude</span>)</code></pre>
+<div class="prose"><p>Xf A B = forall R. (R -&gt; B -&gt; R) -&gt; R -&gt; A -&gt; R
+A transducer: transforms A-reductions into B-reductions.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">functor</span> <span class="hl-ty">Xf</span> ($brace-params <span class="hl-ty">A</span> : (<span class="hl-ty">Type</span> <span class="hl-num">0</span>) <span class="hl-ty">B</span> : (<span class="hl-ty">Type</span> <span class="hl-num">0</span>))
+  <span class="hl-kwlit">:unfolds</span> &lt;(<span class="hl-ty">S</span> :0 <span class="hl-ty">Type</span>) <span class="hl-op">-&gt;</span> [<span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>&gt;
+  ($brace-params <span class="hl-kwlit">:doc</span> <span class="hl-str">"A transducer: transforms A-reductions into B-reductions"</span>))</code></pre>
+<div class="prose"><p>AppResult A = Either String A
+A computation that may fail with a string error.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">functor</span> <span class="hl-ty">AppResult</span> ($brace-params <span class="hl-ty">A</span> : (<span class="hl-ty">Type</span> <span class="hl-num">0</span>))
+  <span class="hl-kwlit">:unfolds</span> (<span class="hl-ty">Either</span> <span class="hl-ty">String</span> <span class="hl-ty">A</span>)
+  ($brace-params <span class="hl-kwlit">:doc</span> <span class="hl-str">"A computation that may fail with a string error"</span>))</code></pre>
+</section>
+</article>
+<nav class="bottom-nav"><a href="identity-and-algebra.html">← Identity And Algebra</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="type-conversions.html">Type Conversions →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+
+</body>
+</html>

@@ -1,6 +1,7 @@
-% Created 2026-03-05 Thu 16:17
+% Created 2026-03-28 Sat 19:24
 % Intended LaTeX compiler: pdflatex
 \documentclass[11pt]{article}
+
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{graphicx}
@@ -21,7 +22,7 @@
  pdftitle={The AT Protocol as Composable Session Types},
  pdfkeywords={},
  pdfsubject={},
- pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdfcreator={},
  pdflang={English}}
 \begin{document}
 
@@ -29,7 +30,7 @@
 \tableofcontents
 
 \section{Abstract}
-\label{sec:org5d13439}
+\label{sec:org6752801}
 
 The Authenticated Transfer Protocol (AT Protocol, atproto) is a decentralized
 social networking protocol powering Bluesky and its federation network. It
@@ -48,7 +49,7 @@ The result is a complete, type-checked specification of a real-world
 distributed protocol --- one that would catch protocol violations, state
 machine errors, and capability misuse at compile time.
 \section{1. AT Protocol Architecture Overview}
-\label{sec:org6d4f9f1}
+\label{sec:orga363c2f}
 
 The AT Protocol is a layered architecture for decentralized social networking:
 
@@ -57,19 +58,19 @@ The AT Protocol is a layered architecture for decentralized social networking:
 │                  Applications                   │
 │          (Bluesky, feeds, labelers)             │
 ├─────────────────────────────────────────────────┤
-│              Lexicon (Schema Layer)             │
+│              Lexicon (Schema Layer)              │
 │     NSID-keyed schemas, record types, RPCs      │
 ├─────────────────────────────────────────────────┤
 │          XRPC (HTTP API Layer)                  │
 │     Query (GET) / Procedure (POST) / Stream     │
 ├─────────────────────────────────────────────────┤
-│         Identity (DID + Handle Layer)           │
+│         Identity (DID + Handle Layer)            │
 │   did:plc / did:web, DNS handles, key rotation  │
 ├─────────────────────────────────────────────────┤
-│      Repository (Data Layer)                    │
+│      Repository (Data Layer)                     │
 │   MST, signed commits, CAR exports, records     │
 ├─────────────────────────────────────────────────┤
-│        Sync (Federation Layer)                  │
+│        Sync (Federation Layer)                   │
 │   Event streams (firehose), repo diffs, relays  │
 ├─────────────────────────────────────────────────┤
 │    Auth (OAuth 2.1 + DPoP + PKCE)               │
@@ -77,7 +78,7 @@ The AT Protocol is a layered architecture for decentralized social networking:
 └─────────────────────────────────────────────────┘
 \end{verbatim}
 \subsection{1.1 Key Participants}
-\label{sec:org4d82253}
+\label{sec:org5981b42}
 
 \begin{center}
 \begin{tabular}{lll}
@@ -91,7 +92,7 @@ Labeler & Content moderation metadata service & Labeler\\
 \end{tabular}
 \end{center}
 \subsection{1.2 Key Data Types}
-\label{sec:org8072867}
+\label{sec:orgd5c27d4}
 
 \begin{verbatim}
 ;; --- AT Protocol Core Data Types ---
@@ -128,7 +129,7 @@ type ServiceEndpoint
   :endpoint         String               ;; https://pds.example.com
 \end{verbatim}
 \section{2. Identity Resolution as Session Types}
-\label{sec:orga9c958b}
+\label{sec:orgf91427b}
 
 Identity resolution in atproto is a multi-step verification process:
 handle → DID → DID document → verify handle claim (bidirectional).
@@ -136,7 +137,7 @@ handle → DID → DID document → verify handle claim (bidirectional).
 This is our first composition target. The resolution process has distinct
 phases, each of which becomes a named session type.
 \subsection{2.1 Handle Resolution Phase}
-\label{sec:orga5bd498}
+\label{sec:org4261296}
 
 \begin{verbatim}
 ;; Client resolves a handle to a DID via DNS TXT or HTTPS well-known.
@@ -155,7 +156,7 @@ type ResolveError
    | :handle-not-found
 \end{verbatim}
 \subsection{2.2 DID Document Resolution Phase}
-\label{sec:orga29d9ef}
+\label{sec:org4684456}
 
 \begin{verbatim}
 ;; Given a DID, resolve to a DID Document.
@@ -168,7 +169,7 @@ session DIDResolve
   end
 \end{verbatim}
 \subsection{2.3 Bidirectional Verification (Composed)}
-\label{sec:org7f3ae10}
+\label{sec:org1d031be}
 
 The full identity verification composes both phases and adds a verification
 step. This is where protocol composition shines:
@@ -206,7 +207,7 @@ type VerificationError
    | :pds-endpoint-missing               ;; no #atproto_pds service
 \end{verbatim}
 \subsection{2.4 Analysis}
-\label{sec:org5108d79}
+\label{sec:org416be0d}
 
 The \texttt{IdentityVerification} session type encodes the AT Protocol's critical
 security property — bidirectional verification — directly in the type. A
@@ -219,13 +220,13 @@ type's choice operators (\texttt{+>}) make the failure modes explicit in the typ
 A consumer of this protocol sees exactly which phases can fail and must handle
 each case.
 \section{3. OAuth Authentication as Session Types}
-\label{sec:org0dc099d}
+\label{sec:org0f3c7b8}
 
 The AT Protocol's OAuth 2.1 flow is a complex multi-phase protocol involving
 client discovery, PAR (Pushed Authorization Requests), PKCE challenge,
 user consent, and token exchange with DPoP binding.
 \subsection{3.1 Foundational Types}
-\label{sec:orgb6a4d21}
+\label{sec:orge6ec34c}
 
 \begin{verbatim}
 type ClientId := String                  ;; https://app.example.com/oauth-client-metadata.json
@@ -254,7 +255,7 @@ type AuthError
    | :temporarily-unavailable
 \end{verbatim}
 \subsection{3.2 Server Discovery Phase}
-\label{sec:orge7326d8}
+\label{sec:org8e6b04a}
 
 \begin{verbatim}
 ;; Discover the Authorization Server for a given PDS.
@@ -274,7 +275,7 @@ type AuthServerMetadata
   :scopes-supported       [List Scope]
 \end{verbatim}
 \subsection{3.3 Pushed Authorization Request Phase}
-\label{sec:org0fdbf41}
+\label{sec:orgc2b892e}
 
 \begin{verbatim}
 ;; PAR: client submits authorization parameters server-side,
@@ -289,7 +290,7 @@ session PushedAuthRequest
   end
 \end{verbatim}
 \subsection{3.4 Token Exchange Phase}
-\label{sec:org83e0dcb}
+\label{sec:org48e245c}
 
 \begin{verbatim}
 ;; After user consent, client exchanges auth code for tokens.
@@ -303,7 +304,7 @@ session TokenExchange
   end
 \end{verbatim}
 \subsection{3.5 Token Refresh Phase}
-\label{sec:orgc3bf3fb}
+\label{sec:org9b4a595}
 
 \begin{verbatim}
 ;; Refresh an expired access token using the refresh token.
@@ -319,7 +320,7 @@ session TokenRefresh
       | :expired   -> end                ;; refresh token expired, re-auth needed
 \end{verbatim}
 \subsection{3.6 Full OAuth Flow (Composed)}
-\label{sec:org4f8c448}
+\label{sec:org5dd8305}
 
 Now we compose the phases into the full OAuth flow. This is the key
 demonstration: each phase is a named session type, and the full flow
@@ -360,7 +361,7 @@ session AuthenticatedSession
     | :logout        -> end
 \end{verbatim}
 \subsection{3.7 Analysis}
-\label{sec:org8b97499}
+\label{sec:orge290839}
 
 The composed \texttt{OAuthFlow} session type captures the \textbf{entire} OAuth 2.1 + DPoP +
 PKCE flow as a single verifiable type. Key observations:
@@ -384,12 +385,12 @@ modeling the repeated refresh cycle. When the refresh token expires, the
 session terminates — the client must re-authenticate.
 \end{enumerate}
 \section{4. XRPC Request/Response as Session Types}
-\label{sec:org8f454ad}
+\label{sec:orga4635b8}
 
 XRPC is the HTTP API layer. Queries (GET) and Procedures (POST) are the
 two operation types.
 \subsection{4.1 XRPC Types}
-\label{sec:org6842e81}
+\label{sec:org7c2c14b}
 
 \begin{verbatim}
 type XRPCMethod := NSID                  ;; e.g. com.atproto.repo.createRecord
@@ -409,7 +410,7 @@ type XRPCResponse (A : Type)
    | :server-error HTTPStatus XRPCError  ;; 500, 501, 502, 503, 504
 \end{verbatim}
 \subsection{4.2 Query Session (Cacheable, No Side Effects)}
-\label{sec:orgaf375c2}
+\label{sec:org778e493}
 
 \begin{verbatim}
 ;; An XRPC query: client sends method + params, server responds.
@@ -422,7 +423,7 @@ session XRPCQuery
   end
 \end{verbatim}
 \subsection{4.3 Procedure Session (May Mutate State)}
-\label{sec:org672547e}
+\label{sec:org51c8767}
 
 \begin{verbatim}
 ;; An XRPC procedure: client sends method + params + body,
@@ -436,7 +437,7 @@ session XRPCProcedure
   end
 \end{verbatim}
 \subsection{4.4 Paginated Query (Recursive)}
-\label{sec:org21bc2d7}
+\label{sec:org8442f90}
 
 \begin{verbatim}
 ;; Many XRPC queries support cursor-based pagination.
@@ -457,7 +458,7 @@ session PaginatedQuery
     | :done -> end
 \end{verbatim}
 \subsection{4.5 Analysis}
-\label{sec:org0ab976f}
+\label{sec:org0503c64}
 
 Note how \texttt{PaginatedQuery} uses self-reference for recursion: the client can
 keep requesting pages until it selects \texttt{:done}. The session type guarantees
@@ -468,13 +469,13 @@ The \texttt{XRPCResponse} union type captures all possible HTTP outcomes, forcin
 the consumer to handle rate limiting (429), authentication failures (401),
 and server errors.
 \section{5. Repository Operations as Session Types}
-\label{sec:org0799ad3}
+\label{sec:orgb3bac6f}
 
 The AT Protocol repository is a Merkle Search Tree (MST) of records, signed
 with the account's key. Repository operations include creating, updating,
 and deleting records.
 \subsection{5.1 Repository Types}
-\label{sec:orgea96975}
+\label{sec:org7a02fd6}
 
 \begin{verbatim}
 type RepoCommit
@@ -503,7 +504,7 @@ type RepoOp
    | :delete RepoPath
 \end{verbatim}
 \subsection{5.2 Record CRUD Session}
-\label{sec:org779b02e}
+\label{sec:orgd9e98c8}
 
 \begin{verbatim}
 ;; Client ↔ PDS session for repository record operations.
@@ -547,7 +548,7 @@ type RepoDescription
   :did-doc          DIDDocument
 \end{verbatim}
 \subsection{5.3 Analysis: Capabilities}
-\label{sec:org739f97e}
+\label{sec:org1fd9eb3}
 
 Note the \texttt{\{auth :0 AuthCap\}} on \texttt{RepoSession}. This is a capability
 constraint: the session requires proof of authentication. It is \texttt{:0} (erased)
@@ -559,12 +560,12 @@ Write operations (\texttt{:create-record}, \texttt{:update-record}, \texttt{:del
 could further require \texttt{\{write :0 RepoWriteCap\}}, enabling fine-grained
 authority separation between read and write operations.
 \section{6. Data Sync and Firehose as Session Types}
-\label{sec:org7041191}
+\label{sec:org24c1851}
 
 The sync layer is the heart of AT Protocol federation. PDS instances emit
 repository events; Relays aggregate them; App Views consume them.
 \subsection{6.1 Sync Event Types}
-\label{sec:orgcee6d29}
+\label{sec:org77d4455}
 
 \begin{verbatim}
 type SyncEvent
@@ -612,7 +613,7 @@ type SyncResetEvent
   :time    String
 \end{verbatim}
 \subsection{6.2 Firehose Subscription Session}
-\label{sec:org5c56664}
+\label{sec:org73e5343}
 
 This is the most interesting session type in the entire AT Protocol from a
 composition standpoint. The firehose is a long-lived, server-push stream
@@ -647,7 +648,7 @@ type FirehoseError
    | :internal-error String
 \end{verbatim}
 \subsection{6.3 Full Repository Sync Session}
-\label{sec:org1aa488c}
+\label{sec:orgf6a5104}
 
 \begin{verbatim}
 ;; com.atproto.sync.getRepo — download a full repository as a CAR file.
@@ -666,7 +667,7 @@ type RepoExportError
    | :export-too-large
 \end{verbatim}
 \subsection{6.4 Relay Aggregation (Multi-Source Composition)}
-\label{sec:org79baa51}
+\label{sec:org463d6bc}
 
 A Relay subscribes to multiple PDS firehoses and produces a single aggregated
 stream. This is protocol composition at the infrastructure level:
@@ -699,7 +700,7 @@ session RelayUpstreamStream
 ;; (same type, same protocol — consumers see no difference)
 \end{verbatim}
 \subsection{6.5 Analysis: Protocol Reuse}
-\label{sec:org1a516cf}
+\label{sec:orgae428c6}
 
 The Relay demonstrates a key property of protocol composition: \textbf{the same
 session type serves different roles at different points in the architecture}.
@@ -721,12 +722,12 @@ This is composition through branching: the Relay's client-side protocol is
 a \textbf{superset} of the basic consumer protocol, with additional operational
 modes.
 \section{7. Account Lifecycle as Session Types}
-\label{sec:org5d48234}
+\label{sec:org68441df}
 
 Account management — creation, migration, deactivation, deletion — is a
 state machine with well-defined transitions.
 \subsection{7.1 Account State Machine}
-\label{sec:orgb039121}
+\label{sec:org8073e48}
 
 \begin{verbatim}
 ;; Account states as a session type state machine.
@@ -764,7 +765,7 @@ session AccountDeleted
   end                                    ;; terminal — no operations possible
 \end{verbatim}
 \subsection{7.2 Account Migration (Cross-PDS)}
-\label{sec:org4e97230}
+\label{sec:orgacfc7ae}
 
 \begin{verbatim}
 ;; Account migration is a multi-phase protocol between old PDS, new PDS,
@@ -821,7 +822,7 @@ type MigrationError
    | :rollback-failed
 \end{verbatim}
 \subsection{7.3 Analysis: Capability Tracking Through Migration}
-\label{sec:org4a3988a}
+\label{sec:org4679262}
 
 Account migration is particularly interesting for capability analysis.
 The \texttt{\{owner :0 AccountOwnerCap\}} constraint ensures only the account owner
@@ -841,7 +842,7 @@ The \texttt{MigrationRollback} session type handles the failure case — if DID
 update or import fails, the protocol transitions to rollback. This is
 error handling as a protocol phase, not as an exception.
 \section{8. Blob Management as Session Types}
-\label{sec:org6323798}
+\label{sec:org896e53a}
 
 Blobs (media files) are uploaded separately from records and referenced by CID.
 
@@ -872,7 +873,7 @@ session BlobDownload
   end
 \end{verbatim}
 \section{9. Lexicon Validation as a Type-Level Concern}
-\label{sec:org6a3882d}
+\label{sec:orgd99672a}
 
 Lexicons define the schema for records and XRPC endpoints. In ATP, Lexicon
 validation happens at record creation time. In Prologos, we can express
@@ -902,7 +903,7 @@ schemas at runtime (JSON Schema-like validation). Prologos encodes the
 schema in the type system — invalid records are \textbf{type errors}, caught at
 compile time.
 \subsection{9.1 Lexicon Schema as Type (Sketch)}
-\label{sec:org627c86b}
+\label{sec:org8fc51a7}
 
 \begin{verbatim}
 ;; A Bluesky post record, typed
@@ -941,13 +942,13 @@ type FollowRecord
   :created-at String
 \end{verbatim}
 \section{10. The Full Client Session: Composition at Scale}
-\label{sec:orgc8d3471}
+\label{sec:orge0def6f}
 
 Now we bring it all together. A full ATP client session composes identity
 resolution, authentication, repository operations, blob management, and
 sync subscription into a single session type.
 \subsection{10.1 Client ↔ PDS Full Session}
-\label{sec:org00b4863}
+\label{sec:orgeb82e56}
 
 \begin{verbatim}
 ;; The full client-to-PDS protocol, composed from all sub-protocols.
@@ -1021,7 +1022,7 @@ type ProfileView
   :posts         Int
 \end{verbatim}
 \subsection{10.2 The Protocol Graph}
-\label{sec:org7a795ed}
+\label{sec:org6b290b0}
 
 The full \texttt{ATPClientSession} forms a protocol graph:
 
@@ -1062,7 +1063,7 @@ Each box is a named session type. Each arrow is a type-checked transition.
 The entire protocol --- from handle resolution through OAuth through CRUD
 through firehose subscription --- is a single verified state machine.
 \section{11. Federation as Multi-Party Protocol Composition}
-\label{sec:org6b38c3f}
+\label{sec:org47c8cfd}
 
 The AT Protocol's federation model involves multiple parties:
 Client ↔ PDS ↔ Relay ↔ App View. Each pair communicates via session-typed
@@ -1109,7 +1110,7 @@ defproc relay-node [config : RelayConfig] {sys : IOCap}
     rec
 \end{verbatim}
 \subsection{11.1 Analysis: Same Protocol, Different Roles}
-\label{sec:org8caab0e}
+\label{sec:orgc293917}
 
 The \texttt{Firehose} session type appears three times in the federation:
 
@@ -1128,10 +1129,10 @@ This is the power of protocols-as-types in a real federation:
 \textbf{the same type specification governs every firehose in the network},
 regardless of which service implements it.
 \section{12. Key Findings}
-\label{sec:orgcdad672}
+\label{sec:org27d5237}
 
 \subsection{12.1 Every ATP Sub-Protocol Maps to a Session Type}
-\label{sec:org9bcfca6}
+\label{sec:org0ab4d3d}
 
 \begin{center}
 \begin{tabular}{lll}
@@ -1152,7 +1153,7 @@ Application & BlueskyClient, CreatePost, LikePost, etc. & Hub + sub-protocols\\
 Every layer of the AT Protocol can be expressed as one or more named session
 types. Complex protocols compose from simpler ones through named continuations.
 \subsection{12.2 Composition Patterns Observed}
-\label{sec:org51b1b8f}
+\label{sec:org8d78132}
 
 The AT Protocol exercise reveals several composition patterns:
 
@@ -1184,7 +1185,7 @@ machine.
 on failure. Error recovery is a named protocol phase, not an exception.
 \end{enumerate}
 \subsection{12.3 What Session Types Catch That ATP Cannot}
-\label{sec:org9efa013}
+\label{sec:org74b983e}
 
 The AT Protocol specification is informal prose supplemented by Lexicon
 schemas (JSON Schema-like). It describes protocol flows in natural language
@@ -1205,7 +1206,7 @@ Firehose consumer lag & Connection dropped & Protocol-level backpressure\\
 \end{tabular}
 \end{center}
 \subsection{12.4 Dependent Types Add Schema Safety}
-\label{sec:orgdce1dae}
+\label{sec:orgd77b420}
 
 The \texttt{TypedRecordCreate} session (§9) demonstrates something ATP cannot
 express today: the record type depends on the collection NSID. In ATP,
@@ -1221,7 +1222,7 @@ This eliminates an entire class of runtime errors — posting a \texttt{LikeReco
 to the \texttt{app.bsky.feed.post} collection is a \textbf{type error}, not a 400
 response.
 \subsection{12.5 Capability Integration Is Natural}
-\label{sec:orge9288a9}
+\label{sec:orgb0d377e}
 
 Every session type that requires authentication carries \texttt{\{auth :0 AuthCap\}}.
 Write operations carry \texttt{\{write :0 RepoWriteCap\}}. Admin operations carry
@@ -1239,17 +1240,17 @@ compiler, and erased at runtime. This is exactly the POLA (Principle of
 Least Authority) model from \texttt{CAPABILITY\_SECURITY.md} applied to a real
 distributed protocol.
 \section{13. Implications for Prologos}
-\label{sec:org26c4b54}
+\label{sec:orgbafd08e}
 
 \subsection{13.1 Protocols-as-Types Is Practical}
-\label{sec:org937f71a}
+\label{sec:orga7c415a}
 
 This exercise demonstrates that protocols-as-types composition is not merely
 theoretical --- it scales to a real-world protocol with 10+ interacting
 sub-protocols, multiple transport mechanisms (HTTP, WebSocket), complex
 authentication flows, and federated multi-party interactions.
 \subsection{13.2 Session Type Libraries Enable Protocol Ecosystems}
-\label{sec:org7484283}
+\label{sec:org1729b01}
 
 If Prologos provides a standard library of protocol building blocks
 (\texttt{Handshake}, \texttt{CursorPagination}, \texttt{TokenRefresh}, \texttt{ServerPushStream}),
@@ -1264,21 +1265,21 @@ case study suggests a reusable set:
 \item \texttt{MultiPhaseWithRollback} — sequential phases with rollback branch
 \end{itemize}
 \subsection{13.3 Federation Is Natural}
-\label{sec:orgc4573c3}
+\label{sec:org5ea830c}
 
 The AT Protocol's federation model --- same protocol, different roles,
 duality handling role reversal --- maps perfectly to session type duality.
 Prologos's existing duality mechanism handles federation without any new
 infrastructure.
 \subsection{13.4 Dependent Sessions Enable Schema-Safe APIs}
-\label{sec:org594f6bc}
+\label{sec:org8e963c0}
 
 The \texttt{TypedRecordCreate} session demonstrates the value of dependent send/
 receive (\texttt{!:\textasciitilde{}/}?:\textasciitilde{}). Schema-typed APIs catch structural errors at compile
 time. This is a strong argument for prioritizing dependent send/receive
 implementation (Phase C in the IO Library roadmap).
 \subsection{13.5 The Intentionality Principle Holds}
-\label{sec:org808c264}
+\label{sec:org9cdc404}
 
 Throughout this exercise, the intentionality principle from
 \texttt{PROTOCOLS\_AS\_TYPES.org} proved its worth. Protocols that end with \texttt{end} are
@@ -1287,7 +1288,7 @@ with named continuations are genuinely transitional (\texttt{OAuthFlow →
 AuthenticatedSession}). The distinction was never ambiguous. End-splicing
 was never needed.
 \section{14. References}
-\label{sec:orgb74d577}
+\label{sec:org516a371}
 
 \begin{itemize}
 \item AT Protocol Specification: \url{https://atproto.com/specs/atp}
@@ -1303,7 +1304,7 @@ was never needed.
 \item Bluesky Documentation: \url{https://docs.bsky.app/docs/advanced-guides/atproto}
 \end{itemize}
 \subsection{Prologos References}
-\label{sec:org5ab8516}
+\label{sec:org4527981}
 
 \begin{itemize}
 \item Protocols as Types: \texttt{docs/tracking/principles/PROTOCOLS\_AS\_TYPES.org}

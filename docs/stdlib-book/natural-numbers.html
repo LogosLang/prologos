@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Natural Numbers — Prologos Standard Library</title>
+  <style>
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
+  --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
+  --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
+  color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
+}
+h1.chapter-title {
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
+  padding-bottom: .5rem; margin-bottom: .3rem;
+}
+h2.part-header {
+  font-size: 1.35rem; border-top: 1px solid var(--border);
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
+}
+h3.section-title {
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
+  padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
+}
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
+.module-badge {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: .78rem; background: var(--badge-bg); color: var(--accent);
+  border: 1px solid var(--badge-border); border-radius: 3px;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
+}
+pre {
+  background: var(--code-bg); border-left: 3px solid var(--border);
+  padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
+}
+code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
+pre code { background: none; color: var(--fg); }
+p code {
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
+  font-size: .88em;
+}
+.prose { margin: .5rem 0; }
+.prose p { margin: .6rem 0; }
+nav.chapter-nav {
+  font-size: .9rem; color: var(--muted);
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
+}
+nav.chapter-nav a { color: var(--accent); text-decoration: none; }
+nav.chapter-nav a:hover { text-decoration: underline; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
+nav.bottom-nav {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
+  font-size: .9rem; color: var(--muted);
+}
+nav.bottom-nav a { color: var(--accent); text-decoration: none; }
+nav.bottom-nav a:hover { text-decoration: underline; }
+.preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* TOC page */
+.toc-part-label {
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
+  margin-top: 1.8rem; margin-bottom: .3rem;
+}
+ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
+ol.toc-chapters li { margin: .3rem 0; }
+ol.toc-chapters a { color: var(--accent); text-decoration: none; }
+ol.toc-chapters a:hover { text-decoration: underline; }
+.toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+.book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
+  </style>
+
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\u2600':'\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\u2600':'\u263E';
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="chapter-nav"><a href="booleans.html">← Booleans</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="lazy-sequences.html">Lazy Sequences →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<article>
+<h1 class="chapter-title">Natural Numbers</h1>
+<div class="prose"><p>The natural numbers are the simplest infinite data type:
+<code>zero</code> and <code>suc</code>. Every natural number is either zero or
+the successor of another natural number — this is the
+Peano representation.</p>
+<p>Nat is a built-in type in Prologos (like Bool), wired into
+the type checker and reduction engine. Numeric literals
+like <code>3N</code> desugar to <code>suc (suc (suc zero))</code>.</p>
+<p>This chapter defines the standard arithmetic and comparison
+operations on Nat. Every function is total and defined by
+structural recursion on the Peano representation — there
+are no partial functions, no exceptions. Subtraction is
+*saturating*: <code>sub 2N 5N</code> yields <code>zero</code>, not an error.</p>
+<p>The Eq and Ord instances for Nat live in their respective
+chapters. Here we define the primitive <code>nat-eq?</code>, <code>lt?</code>,
+and <code>le?</code> functions that those instances delegate to.</p></div>
+<section class="module-container">
+<div class="module-badge">prologos::data::nat</div>
+<h3 class="section-title">Basic Operations</h3>
+<div class="prose"><p>The fundamental operations on Peano naturals. Each is
+defined by structural recursion — matching on one argument
+and recurring on its predecessor.</p>
+<p>Addition: add x y = x + y (by recursion on y)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> add <span class="hl-ty">Nat</span> <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> add [x y]
+  <span class="hl-kw">match</span> y
+    | zero  <span class="hl-op">-&gt;</span> x
+    | suc k <span class="hl-op">-&gt;</span> suc [add x k]</code></pre>
+<div class="prose"><p>Multiplication: mult x y = x * y (by recursion on y)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> mult <span class="hl-ty">Nat</span> <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> mult [x y]
+  <span class="hl-kw">match</span> y
+    | zero  <span class="hl-op">-&gt;</span> zero
+    | suc k <span class="hl-op">-&gt;</span> add x [mult x k]</code></pre>
+<div class="prose"><p>Double: double n = n + n</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> double <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> double [n]
+  <span class="hl-kw">match</span> n
+    | zero  <span class="hl-op">-&gt;</span> zero
+    | suc k <span class="hl-op">-&gt;</span> suc [suc [double k]]</code></pre>
+<div class="prose"><p>Predecessor: pred(0) = 0, pred(suc(k)) = k</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> pred <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> pred [n]
+  <span class="hl-kw">match</span> n
+    | zero  <span class="hl-op">-&gt;</span> zero
+    | suc k <span class="hl-op">-&gt;</span> k</code></pre>
+<div class="prose"><p>Zero predicate: zero?(0) = true, zero?(suc(k)) = false</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> zero? <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> zero? [n]
+  <span class="hl-kw">match</span> n
+    | zero  <span class="hl-op">-&gt;</span> true
+    | suc _ <span class="hl-op">-&gt;</span> false</code></pre>
+<h3 class="section-title">Arithmetic</h3>
+<div class="prose"><p>Subtraction and exponentiation. Note that subtraction on
+naturals is *saturating*: <code>sub x y</code> returns <code>max(x - y, 0)</code>.
+This keeps the function total — we never leave Nat.</p>
+<p>Saturating subtraction: sub(x, y) = max(x - y, 0)
+Iterates pred y times starting from x.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> sub <span class="hl-ty">Nat</span> <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> sub [x y]
+  <span class="hl-kw">match</span> y
+    | zero  <span class="hl-op">-&gt;</span> x
+    | suc k <span class="hl-op">-&gt;</span> pred [sub x k]</code></pre>
+<div class="prose"><p>Exponentiation: power(base, exp) = base^exp</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> pow <span class="hl-ty">Nat</span> <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> pow [base exp]
+  <span class="hl-kw">match</span> exp
+    | zero  <span class="hl-op">-&gt;</span> suc zero
+    | suc k <span class="hl-op">-&gt;</span> mult base [pow base k]</code></pre>
+<h3 class="section-title">Comparison</h3>
+<div class="prose"><p>Comparison operators defined in terms of saturating
+subtraction. The key insight: <code>x ≤ y</code> iff <code>sub x y = 0</code>.
+From <code>le?</code> we derive <code>lt?</code>, <code>gt?</code>, <code>ge?</code>, and <code>nat-eq?</code>.
+These primitives are used by the Eq and Ord instances
+in the Equality and Ordering chapters.</p>
+<p>Less-than-or-equal: le?(x, y) iff sub(x, y) == 0</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> le? <span class="hl-ty">Nat</span> <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> le? [x y]
+  zero? [sub x y]</code></pre>
+<div class="prose"><p>Less-than: lt?(x, y) iff not(le?(y, x))</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> lt? <span class="hl-ty">Nat</span> <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> lt? [x y]
+  <span class="hl-kw">match</span> [le? y x]
+    | true  <span class="hl-op">-&gt;</span> false
+    | false <span class="hl-op">-&gt;</span> true</code></pre>
+<div class="prose"><p>Greater-than: gt?(x, y) = lt?(y, x)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> gt? <span class="hl-ty">Nat</span> <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> gt? [x y]
+  lt? y x</code></pre>
+<div class="prose"><p>Greater-than-or-equal: ge?(x, y) = le?(y, x)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> ge? <span class="hl-ty">Nat</span> <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> ge? [x y]
+  le? y x</code></pre>
+<div class="prose"><p>Nat equality: nat-eq?(x, y) iff le?(x, y) and le?(y, x)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> nat-eq? <span class="hl-ty">Nat</span> <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> nat-eq? [x y]
+  <span class="hl-kw">match</span> [le? x y]
+    | true  <span class="hl-op">-&gt;</span> le? y x
+    | false <span class="hl-op">-&gt;</span> false</code></pre>
+<h3 class="section-title">Min, Max, and Clamp</h3>
+<div class="prose"><p>Selection operators built on <code>le?</code>. The <code>clamp</code> function
+returns a curried function that restricts a value to the
+interval <code>[low, high]</code> — useful for bounded arithmetic.</p>
+<p>Minimum of two naturals</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> min <span class="hl-ty">Nat</span> <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> min [x y]
+  <span class="hl-kw">match</span> [le? x y]
+    | true  <span class="hl-op">-&gt;</span> x
+    | false <span class="hl-op">-&gt;</span> y</code></pre>
+<div class="prose"><p>Maximum of two naturals</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> max <span class="hl-ty">Nat</span> <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> max [x y]
+  <span class="hl-kw">match</span> [le? x y]
+    | true  <span class="hl-op">-&gt;</span> y
+    | false <span class="hl-op">-&gt;</span> x</code></pre>
+<h3 class="section-title">Conversion</h3>
+<div class="prose"><p>Converting between Nat and other types. <code>bool-to-nat</code>
+maps the two-element type into the naturals.</p>
+<p>Bool to Nat: true -&gt; 1, false -&gt; 0</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> bool-to-nat <span class="hl-ty">Bool</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> bool-to-nat [b]
+  <span class="hl-kw">match</span> b
+    | true  <span class="hl-op">-&gt;</span> suc zero
+    | false <span class="hl-op">-&gt;</span> zero</code></pre>
+<div class="prose"><p>Clamp: clamp low high returns a function that clamps x to [low, high]</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> clamp <span class="hl-ty">Nat</span> <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Nat</span>
+<span class="hl-kw">defn</span> clamp [low high]
+  <span class="hl-kw">fn</span> [x]
+    max low [min x high]</code></pre>
+</section>
+</article>
+<nav class="bottom-nav"><a href="booleans.html">← Booleans</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="lazy-sequences.html">Lazy Sequences →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+
+</body>
+</html>

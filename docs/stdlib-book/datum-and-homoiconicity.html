@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Datum and Homoiconicity — Prologos Standard Library</title>
+  <style>
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
+  --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
+  --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
+  color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
+}
+h1.chapter-title {
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
+  padding-bottom: .5rem; margin-bottom: .3rem;
+}
+h2.part-header {
+  font-size: 1.35rem; border-top: 1px solid var(--border);
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
+}
+h3.section-title {
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
+  padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
+}
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
+.module-badge {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: .78rem; background: var(--badge-bg); color: var(--accent);
+  border: 1px solid var(--badge-border); border-radius: 3px;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
+}
+pre {
+  background: var(--code-bg); border-left: 3px solid var(--border);
+  padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
+}
+code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
+pre code { background: none; color: var(--fg); }
+p code {
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
+  font-size: .88em;
+}
+.prose { margin: .5rem 0; }
+.prose p { margin: .6rem 0; }
+nav.chapter-nav {
+  font-size: .9rem; color: var(--muted);
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
+}
+nav.chapter-nav a { color: var(--accent); text-decoration: none; }
+nav.chapter-nav a:hover { text-decoration: underline; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
+nav.bottom-nav {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
+  font-size: .9rem; color: var(--muted);
+}
+nav.bottom-nav a { color: var(--accent); text-decoration: none; }
+nav.bottom-nav a:hover { text-decoration: underline; }
+.preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* TOC page */
+.toc-part-label {
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
+  margin-top: 1.8rem; margin-bottom: .3rem;
+}
+ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
+ol.toc-chapters li { margin: .3rem 0; }
+ol.toc-chapters a { color: var(--accent); text-decoration: none; }
+ol.toc-chapters a:hover { text-decoration: underline; }
+.toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+.book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
+  </style>
+
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\u2600':'\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\u2600':'\u263E';
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="chapter-nav"><a href="refined-numerics.html">← Refined Numerics</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="lattices.html">Lattices →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<article>
+<h1 class="chapter-title">Datum and Homoiconicity</h1>
+<div class="prose"><p>Prologos is <strong>homoiconic</strong>: code and data share the same
+representation. The <code>Datum</code> type is the runtime form of quoted
+code — what you get when you write <code>'(f x y)</code> or <code>`(f ,x y)</code>.</p>
+<p>A Datum is an algebraic data type with constructors for every
+literal form (symbols, keywords, numbers, booleans) plus <code>nil</code>
+and <code>cons</code> for building lists. The quote operator <code>'</code> converts
+surface syntax to a Datum value; quasiquote <code>`</code> allows
+splicing computed values into quoted templates.</p>
+<p>This chapter also covers <strong>transducers</strong> — composable stream
+transformers that decouple the "what" (map, filter) from the
+"how" (reduce into list, fold into sum). Transducers use
+higher-rank polymorphism: a transducer is a function polymorphic
+in the accumulator type <code>R</code>, so it can be applied to any
+reduction regardless of the target collection.</p></div>
+<h2 class="part-header">Part I — The Datum Type</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::datum</div>
+<h3 class="section-title">Runtime Representation of Quoted Code</h3>
+<div class="prose"><p>Eight constructors cover the full surface syntax:</p>
+<p>  <code>datum-sym</code>   — symbols (identifiers, operators)
+  <code>datum-kw</code>    — keywords (<code>:name</code>, <code>:type</code>)
+  <code>datum-nat</code>   — natural number literals
+  <code>datum-int</code>   — integer literals
+  <code>datum-rat</code>   — rational literals
+  <code>datum-bool</code>  — <code>true</code> / <code>false</code>
+  <code>datum-nil</code>   — empty list <code>'()</code>
+  <code>datum-cons</code>  — cons cell (head : Datum, tail : Datum)</p>
+<p>Note on predicates: explicit exhaustive patterns are used instead
+of wildcard <code>_</code> because match with wildcard on user data types
+triggers a type-inference limitation that causes module loading
+to fail.</p></div>
+<pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">Datum</span>
+  datum-sym  : <span class="hl-ty">Symbol</span>
+  datum-kw   : <span class="hl-ty">Keyword</span>
+  datum-nat  : <span class="hl-ty">Nat</span>
+  datum-int  : <span class="hl-ty">Int</span>
+  datum-rat  : <span class="hl-ty">Rat</span>
+  datum-bool : <span class="hl-ty">Bool</span>
+  datum-nil
+  datum-cons : <span class="hl-ty">Datum</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Datum</span></code></pre>
+<h3 class="section-title">Datum Predicates</h3>
+<pre><code class="prologos"><span class="hl-kw">spec</span> sym? <span class="hl-ty">Datum</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> sym? [d]
+  <span class="hl-kw">match</span> d
+    | datum-sym _    <span class="hl-op">-&gt;</span> true
+    | datum-kw _     <span class="hl-op">-&gt;</span> false
+    | datum-nat _    <span class="hl-op">-&gt;</span> false
+    | datum-int _    <span class="hl-op">-&gt;</span> false
+    | datum-rat _    <span class="hl-op">-&gt;</span> false
+    | datum-bool _   <span class="hl-op">-&gt;</span> false
+    | datum-nil      <span class="hl-op">-&gt;</span> false
+    | datum-cons _ _ <span class="hl-op">-&gt;</span> false
+
+<span class="hl-kw">spec</span> kw? <span class="hl-ty">Datum</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> kw? [d]
+  <span class="hl-kw">match</span> d
+    | datum-sym _    <span class="hl-op">-&gt;</span> false
+    | datum-kw _     <span class="hl-op">-&gt;</span> true
+    | datum-nat _    <span class="hl-op">-&gt;</span> false
+    | datum-int _    <span class="hl-op">-&gt;</span> false
+    | datum-rat _    <span class="hl-op">-&gt;</span> false
+    | datum-bool _   <span class="hl-op">-&gt;</span> false
+    | datum-nil      <span class="hl-op">-&gt;</span> false
+    | datum-cons _ _ <span class="hl-op">-&gt;</span> false
+
+<span class="hl-kw">spec</span> nat? <span class="hl-ty">Datum</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> nat? [d]
+  <span class="hl-kw">match</span> d
+    | datum-sym _    <span class="hl-op">-&gt;</span> false
+    | datum-kw _     <span class="hl-op">-&gt;</span> false
+    | datum-nat _    <span class="hl-op">-&gt;</span> true
+    | datum-int _    <span class="hl-op">-&gt;</span> false
+    | datum-rat _    <span class="hl-op">-&gt;</span> false
+    | datum-bool _   <span class="hl-op">-&gt;</span> false
+    | datum-nil      <span class="hl-op">-&gt;</span> false
+    | datum-cons _ _ <span class="hl-op">-&gt;</span> false
+
+<span class="hl-kw">spec</span> int? <span class="hl-ty">Datum</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> int? [d]
+  <span class="hl-kw">match</span> d
+    | datum-sym _    <span class="hl-op">-&gt;</span> false
+    | datum-kw _     <span class="hl-op">-&gt;</span> false
+    | datum-nat _    <span class="hl-op">-&gt;</span> false
+    | datum-int _    <span class="hl-op">-&gt;</span> true
+    | datum-rat _    <span class="hl-op">-&gt;</span> false
+    | datum-bool _   <span class="hl-op">-&gt;</span> false
+    | datum-nil      <span class="hl-op">-&gt;</span> false
+    | datum-cons _ _ <span class="hl-op">-&gt;</span> false
+
+<span class="hl-kw">spec</span> rat? <span class="hl-ty">Datum</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> rat? [d]
+  <span class="hl-kw">match</span> d
+    | datum-sym _    <span class="hl-op">-&gt;</span> false
+    | datum-kw _     <span class="hl-op">-&gt;</span> false
+    | datum-nat _    <span class="hl-op">-&gt;</span> false
+    | datum-int _    <span class="hl-op">-&gt;</span> false
+    | datum-rat _    <span class="hl-op">-&gt;</span> true
+    | datum-bool _   <span class="hl-op">-&gt;</span> false
+    | datum-nil      <span class="hl-op">-&gt;</span> false
+    | datum-cons _ _ <span class="hl-op">-&gt;</span> false
+
+<span class="hl-kw">spec</span> bool? <span class="hl-ty">Datum</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> bool? [d]
+  <span class="hl-kw">match</span> d
+    | datum-sym _    <span class="hl-op">-&gt;</span> false
+    | datum-kw _     <span class="hl-op">-&gt;</span> false
+    | datum-nat _    <span class="hl-op">-&gt;</span> false
+    | datum-int _    <span class="hl-op">-&gt;</span> false
+    | datum-rat _    <span class="hl-op">-&gt;</span> false
+    | datum-bool _   <span class="hl-op">-&gt;</span> true
+    | datum-nil      <span class="hl-op">-&gt;</span> false
+    | datum-cons _ _ <span class="hl-op">-&gt;</span> false
+
+<span class="hl-kw">spec</span> nil? <span class="hl-ty">Datum</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> nil? [d]
+  <span class="hl-kw">match</span> d
+    | datum-sym _    <span class="hl-op">-&gt;</span> false
+    | datum-kw _     <span class="hl-op">-&gt;</span> false
+    | datum-nat _    <span class="hl-op">-&gt;</span> false
+    | datum-int _    <span class="hl-op">-&gt;</span> false
+    | datum-rat _    <span class="hl-op">-&gt;</span> false
+    | datum-bool _   <span class="hl-op">-&gt;</span> false
+    | datum-nil      <span class="hl-op">-&gt;</span> true
+    | datum-cons _ _ <span class="hl-op">-&gt;</span> false
+
+<span class="hl-kw">spec</span> cons? <span class="hl-ty">Datum</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> cons? [d]
+  <span class="hl-kw">match</span> d
+    | datum-sym _    <span class="hl-op">-&gt;</span> false
+    | datum-kw _     <span class="hl-op">-&gt;</span> false
+    | datum-nat _    <span class="hl-op">-&gt;</span> false
+    | datum-int _    <span class="hl-op">-&gt;</span> false
+    | datum-rat _    <span class="hl-op">-&gt;</span> false
+    | datum-bool _   <span class="hl-op">-&gt;</span> false
+    | datum-nil      <span class="hl-op">-&gt;</span> false
+    | datum-cons _ _ <span class="hl-op">-&gt;</span> true</code></pre>
+</section>
+<h2 class="part-header">Part II — Transducers</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::transducer</div>
+<h3 class="section-title">Composable Stream Transformers</h3>
+<div class="prose"><p>A transducer transforms one "reducing function" into another:</p>
+<p>  <code>Xf A B = forall R. (R -&gt; B -&gt; R) -&gt; (R -&gt; A -&gt; R)</code></p>
+<p>This type is <strong>higher-rank</strong>: the transducer is polymorphic in
+<code>R</code>, so it works with any accumulator type. You can compose
+transducers with <code>xf-compose</code> and run them with <code>transduce</code>.</p>
+<p>Key advantage over chained map/filter: **no intermediate
+collections**. A pipeline <code>(xf-compose (filter-xf p) (map-xf f))</code>
+applies filter and map in a single pass, allocating only the
+final result.</p>
+<p>Composition order: <code>xf-compose xf1 xf2</code> applies <code>xf1</code> first,
+then <code>xf2</code>. This is reversed from function composition because
+transducers transform reducers "from the outside in."</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::lseq     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">LSeq</span> lseq-nil lseq-cell lseq-head lseq-rest lseq-empty?]]
+        [prologos::data::lseq-ops <span class="hl-kwlit">:refer</span> [lseq-fold list-to-lseq lseq-to-list]]
+        [prologos::data::list     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">List</span> nil cons reverse]]</code></pre>
+<h3 class="section-title">Transducer Constructors</h3>
+<div class="prose"><p>map-xf : transform each element through f before passing to reducer.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> map-xf {<span class="hl-ty">A</span> <span class="hl-ty">B</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> &lt;(<span class="hl-ty">R</span> :0 <span class="hl-ty">Type</span>) <span class="hl-op">-&gt;</span> [<span class="hl-ty">R</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">R</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">R</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">R</span>&gt;
+<span class="hl-kw">defn</span> map-xf [f]
+  <span class="hl-kw">fn</span> [<span class="hl-ty">R</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [rf : &lt;<span class="hl-ty">R</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">R</span>&gt;] [acc : &lt;<span class="hl-ty">R</span>&gt;] [x : &lt;<span class="hl-ty">A</span>&gt;]
+    rf acc [f x]</code></pre>
+<div class="prose"><p>filter-xf : only pass elements satisfying pred to the reducer.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> filter-xf {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> &lt;(<span class="hl-ty">R</span> :0 <span class="hl-ty">Type</span>) <span class="hl-op">-&gt;</span> [<span class="hl-ty">R</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">R</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">R</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">R</span>&gt;
+<span class="hl-kw">defn</span> filter-xf [pred]
+  <span class="hl-kw">fn</span> [<span class="hl-ty">R</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [rf : &lt;<span class="hl-ty">R</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">R</span>&gt;] [acc : &lt;<span class="hl-ty">R</span>&gt;] [x : &lt;<span class="hl-ty">A</span>&gt;]
+    <span class="hl-kw">if</span> [pred x] [rf acc x] acc</code></pre>
+<div class="prose"><p>remove-xf : opposite of filter — remove elements satisfying pred.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> remove-xf {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] <span class="hl-op">-&gt;</span> &lt;(<span class="hl-ty">R</span> :0 <span class="hl-ty">Type</span>) <span class="hl-op">-&gt;</span> [<span class="hl-ty">R</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">R</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">R</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">R</span>&gt;
+<span class="hl-kw">defn</span> remove-xf [pred]
+  <span class="hl-kw">fn</span> [<span class="hl-ty">R</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [rf : &lt;<span class="hl-ty">R</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">R</span>&gt;] [acc : &lt;<span class="hl-ty">R</span>&gt;] [x : &lt;<span class="hl-ty">A</span>&gt;]
+    <span class="hl-kw">if</span> [pred x] acc [rf acc x]</code></pre>
+<h3 class="section-title">Transducer Composition</h3>
+<div class="prose"><p>xf-compose : compose two transducers (apply xf1 first, then xf2).
+(xf-compose xf1 xf2) R rf = xf1 R (xf2 R rf)</p>
+<p>In transducer algebra, composition is reversed from function composition:
+xf1 transforms the input first, xf2 transforms the reducer wrapping.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> xf-compose {<span class="hl-ty">A</span> <span class="hl-ty">B</span> <span class="hl-ty">C</span> : <span class="hl-ty">Type</span>} &lt;(<span class="hl-ty">S</span> :0 <span class="hl-ty">Type</span>) <span class="hl-op">-&gt;</span> [<span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>&gt; &lt;(<span class="hl-ty">S</span> :0 <span class="hl-ty">Type</span>) <span class="hl-op">-&gt;</span> [<span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>&gt; <span class="hl-op">-&gt;</span> &lt;(<span class="hl-ty">S</span> :0 <span class="hl-ty">Type</span>) <span class="hl-op">-&gt;</span> [<span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>&gt;
+<span class="hl-kw">defn</span> xf-compose [xf1 xf2]
+  <span class="hl-kw">fn</span> [<span class="hl-ty">R</span> :0 &lt;<span class="hl-ty">Type</span>&gt;] [rf : &lt;<span class="hl-ty">R</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">R</span>&gt;]
+    xf1 <span class="hl-ty">R</span> [xf2 <span class="hl-ty">R</span> rf]</code></pre>
+<h3 class="section-title">Reducers</h3>
+<div class="prose"><p>list-conj : a cons-to-front reducer for building lists.
+Result is reversed since we fold left.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> list-conj {<span class="hl-ty">A</span> : <span class="hl-ty">Type</span>} [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> list-conj [acc x]
+  cons <span class="hl-ty">A</span> x acc</code></pre>
+<h3 class="section-title">Running Transducers</h3>
+<div class="prose"><p>transduce : apply a polymorphic transducer xf to list xs,
+using reducer rf and initial accumulator init.
+The xf is polymorphic in R — transduce specializes it internally.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> transduce {<span class="hl-ty">A</span> <span class="hl-ty">B</span> <span class="hl-ty">R</span> : <span class="hl-ty">Type</span>} &lt;(<span class="hl-ty">S</span> :0 <span class="hl-ty">Type</span>) <span class="hl-op">-&gt;</span> [<span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>&gt; [<span class="hl-ty">R</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">R</span>] <span class="hl-ty">R</span> [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">R</span>
+<span class="hl-kw">defn</span> transduce [xf rf init xs]
+  lseq-fold <span class="hl-ty">R</span> <span class="hl-ty">A</span> [xf <span class="hl-ty">R</span> rf] init [list-to-lseq <span class="hl-ty">A</span> xs]</code></pre>
+<div class="prose"><p>into-list-rev : transduce into a reversed list (fold-left with cons).
+The xf is polymorphic in R — into-list-rev specializes it to (List B).</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> into-list-rev {<span class="hl-ty">A</span> <span class="hl-ty">B</span> : <span class="hl-ty">Type</span>} &lt;(<span class="hl-ty">S</span> :0 <span class="hl-ty">Type</span>) <span class="hl-op">-&gt;</span> [<span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>&gt; [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">B</span>]
+<span class="hl-kw">defn</span> into-list-rev [xf xs]
+  lseq-fold [<span class="hl-ty">List</span> <span class="hl-ty">B</span>] <span class="hl-ty">A</span> [xf [<span class="hl-ty">List</span> <span class="hl-ty">B</span>] [list-conj <span class="hl-ty">B</span>]] [nil <span class="hl-ty">B</span>] [list-to-lseq <span class="hl-ty">A</span> xs]</code></pre>
+<div class="prose"><p>into-list : transduce into a correctly-ordered list.
+Uses into-list-rev then reverses for correct element order.
+One extra O(n) reverse, but fusion saves N-1 intermediate list allocations.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> into-list {<span class="hl-ty">A</span> <span class="hl-ty">B</span> : <span class="hl-ty">Type</span>} &lt;(<span class="hl-ty">S</span> :0 <span class="hl-ty">Type</span>) <span class="hl-op">-&gt;</span> [<span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">S</span>&gt; [<span class="hl-ty">List</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">List</span> <span class="hl-ty">B</span>]
+<span class="hl-kw">defn</span> into-list [xf xs]
+  reverse <span class="hl-ty">B</span> [into-list-rev xf xs]</code></pre>
+</section>
+</article>
+<nav class="bottom-nav"><a href="refined-numerics.html">← Refined Numerics</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="lattices.html">Lattices →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+
+</body>
+</html>

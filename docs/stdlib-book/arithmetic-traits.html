@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arithmetic Traits — Prologos Standard Library</title>
+  <style>
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
+  --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
+  --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
+  color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
+}
+h1.chapter-title {
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
+  padding-bottom: .5rem; margin-bottom: .3rem;
+}
+h2.part-header {
+  font-size: 1.35rem; border-top: 1px solid var(--border);
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
+}
+h3.section-title {
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
+  padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
+}
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
+.module-badge {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: .78rem; background: var(--badge-bg); color: var(--accent);
+  border: 1px solid var(--badge-border); border-radius: 3px;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
+}
+pre {
+  background: var(--code-bg); border-left: 3px solid var(--border);
+  padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
+}
+code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
+pre code { background: none; color: var(--fg); }
+p code {
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
+  font-size: .88em;
+}
+.prose { margin: .5rem 0; }
+.prose p { margin: .6rem 0; }
+nav.chapter-nav {
+  font-size: .9rem; color: var(--muted);
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
+}
+nav.chapter-nav a { color: var(--accent); text-decoration: none; }
+nav.chapter-nav a:hover { text-decoration: underline; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
+nav.bottom-nav {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
+  font-size: .9rem; color: var(--muted);
+}
+nav.bottom-nav a { color: var(--accent); text-decoration: none; }
+nav.bottom-nav a:hover { text-decoration: underline; }
+.preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* TOC page */
+.toc-part-label {
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
+  margin-top: 1.8rem; margin-bottom: .3rem;
+}
+ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
+ol.toc-chapters li { margin: .3rem 0; }
+ol.toc-chapters a { color: var(--accent); text-decoration: none; }
+ol.toc-chapters a:hover { text-decoration: underline; }
+.toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+.book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
+  </style>
+
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\u2600':'\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\u2600':'\u263E';
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="chapter-nav"><a href="characters-and-strings.html">← Characters And Strings</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="identity-and-algebra.html">Identity And Algebra →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<article>
+<h1 class="chapter-title">Arithmetic Traits</h1>
+<div class="prose"><p>Prologos provides generic arithmetic through six single-method
+traits: <strong>Add</strong>, <strong>Sub</strong>, <strong>Mul</strong>, <strong>Div</strong>, <strong>Neg</strong>, and <strong>Abs</strong>.
+Each trait defines one operation, and instances provide the
+implementation for each numeric type.</p>
+<p>The parser keywords <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>negate</code>, and <code>abs</code>
+dispatch at the AST level based on the type of their arguments.
+These traits provide the same operations as first-class values
+that can be passed to higher-order functions like <code>reduce</code>.</p>
+<p>Because each is a single-method trait, the dictionary IS the
+function — no wrapper struct needed.</p>
+<p>Instance coverage:
+  • <strong>Nat</strong>: Add, Sub (saturating), Mul — no Div, Neg, or Abs
+  • <strong>Int</strong>: Add, Sub, Mul, Div, Neg, Abs
+  • <strong>Rat</strong>: Add, Sub, Mul, Div, Neg, Abs
+  • <strong>Posit8–64</strong>: Add, Sub, Mul, Div, Neg, Abs
+  • <strong>String</strong>: Add (concatenation) — no others</p></div>
+<h2 class="part-header">Part I — Addition</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::add-trait</div>
+<h3 class="section-title">The Add Trait</h3>
+<div class="prose"><p>Binary addition. Laws: commutative and associative.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::nat <span class="hl-kwlit">:refer</span> [add]]
+
+<span class="hl-kw">trait</span> <span class="hl-ty">Add</span> {<span class="hl-ty">A</span>}
+  add : <span class="hl-ty">A</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Binary addition over type A"</span>
+  <span class="hl-kwlit">:laws</span>
+    - <span class="hl-kwlit">:name</span> <span class="hl-str">"commutative"</span>
+      <span class="hl-kwlit">:forall</span> {x y : <span class="hl-ty">A</span>}
+      <span class="hl-kwlit">:holds</span> [eq? [add x y] [add y x]]
+    - <span class="hl-kwlit">:name</span> <span class="hl-str">"associative"</span>
+      <span class="hl-kwlit">:forall</span> {x y z : <span class="hl-ty">A</span>}
+      <span class="hl-kwlit">:holds</span> [eq? [add [add x y] z] [add x [add y z]]]</code></pre>
+<div class="prose"><p>Nat instance — delegates to prologos::data::nat/add</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Nat</span>
+  <span class="hl-kw">defn</span> add [x y] &lt;<span class="hl-ty">Nat</span>&gt;
+    add x y</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::add-instances</div>
+<h3 class="section-title">Add Instances for Numeric Types</h3>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::add-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Add</span> <span class="hl-ty">Add-add</span>]]
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Int</span>
+  <span class="hl-kw">defn</span> add [x : <span class="hl-ty">Int</span>  y : <span class="hl-ty">Int</span>] &lt;<span class="hl-ty">Int</span>&gt;
+    int+ x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Rat</span>
+  <span class="hl-kw">defn</span> add [x : <span class="hl-ty">Rat</span>  y : <span class="hl-ty">Rat</span>] &lt;<span class="hl-ty">Rat</span>&gt;
+    rat+ x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Posit8</span>
+  <span class="hl-kw">defn</span> add [x : <span class="hl-ty">Posit8</span>  y : <span class="hl-ty">Posit8</span>] &lt;<span class="hl-ty">Posit8</span>&gt;
+    p8+ x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Posit16</span>
+  <span class="hl-kw">defn</span> add [x : <span class="hl-ty">Posit16</span>  y : <span class="hl-ty">Posit16</span>] &lt;<span class="hl-ty">Posit16</span>&gt;
+    p16+ x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Posit32</span>
+  <span class="hl-kw">defn</span> add [x : <span class="hl-ty">Posit32</span>  y : <span class="hl-ty">Posit32</span>] &lt;<span class="hl-ty">Posit32</span>&gt;
+    p32+ x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">Posit64</span>
+  <span class="hl-kw">defn</span> add [x : <span class="hl-ty">Posit64</span>  y : <span class="hl-ty">Posit64</span>] &lt;<span class="hl-ty">Posit64</span>&gt;
+    p64+ x y</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::add-string-instance</div>
+<h3 class="section-title">Add String — Concatenation</h3>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::add-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Add</span>]]
+<span class="hl-kw">require</span> [prologos::data::string    <span class="hl-kwlit">:as</span> str <span class="hl-kwlit">:refer</span> []]
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Add</span> <span class="hl-ty">String</span>
+  <span class="hl-kw">defn</span> add [x : <span class="hl-ty">String</span>  y : <span class="hl-ty">String</span>] &lt;<span class="hl-ty">String</span>&gt;
+    str::append x y</code></pre>
+</section>
+<h2 class="part-header">Part II — Subtraction</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::sub-trait</div>
+<h3 class="section-title">The Sub Trait</h3>
+<div class="prose"><p>Binary subtraction. Nat subtraction is saturating:
+<code>sub(x, y) = max(x - y, 0)</code>.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::nat <span class="hl-kwlit">:refer</span> [sub]]
+
+<span class="hl-kw">trait</span> <span class="hl-ty">Sub</span> {<span class="hl-ty">A</span>}
+  sub : <span class="hl-ty">A</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Binary subtraction over type A"</span></code></pre>
+<div class="prose"><p>Nat instance — saturating subtraction</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Nat</span>
+  <span class="hl-kw">defn</span> sub [x y] &lt;<span class="hl-ty">Nat</span>&gt;
+    sub x y</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::sub-instances</div>
+<h3 class="section-title">Sub Instances for Numeric Types</h3>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::sub-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Sub</span> <span class="hl-ty">Sub-sub</span>]]
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Int</span>
+  <span class="hl-kw">defn</span> sub [x : <span class="hl-ty">Int</span>  y : <span class="hl-ty">Int</span>] &lt;<span class="hl-ty">Int</span>&gt;
+    int- x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Rat</span>
+  <span class="hl-kw">defn</span> sub [x : <span class="hl-ty">Rat</span>  y : <span class="hl-ty">Rat</span>] &lt;<span class="hl-ty">Rat</span>&gt;
+    rat- x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Posit8</span>
+  <span class="hl-kw">defn</span> sub [x : <span class="hl-ty">Posit8</span>  y : <span class="hl-ty">Posit8</span>] &lt;<span class="hl-ty">Posit8</span>&gt;
+    p8- x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Posit16</span>
+  <span class="hl-kw">defn</span> sub [x : <span class="hl-ty">Posit16</span>  y : <span class="hl-ty">Posit16</span>] &lt;<span class="hl-ty">Posit16</span>&gt;
+    p16- x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Posit32</span>
+  <span class="hl-kw">defn</span> sub [x : <span class="hl-ty">Posit32</span>  y : <span class="hl-ty">Posit32</span>] &lt;<span class="hl-ty">Posit32</span>&gt;
+    p32- x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Posit64</span>
+  <span class="hl-kw">defn</span> sub [x : <span class="hl-ty">Posit64</span>  y : <span class="hl-ty">Posit64</span>] &lt;<span class="hl-ty">Posit64</span>&gt;
+    p64- x y</code></pre>
+</section>
+<h2 class="part-header">Part III — Multiplication</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::mul-trait</div>
+<h3 class="section-title">The Mul Trait</h3>
+<div class="prose"><p>Binary multiplication. Laws: commutative and associative.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::nat <span class="hl-kwlit">:refer</span> [mult]]
+
+<span class="hl-kw">trait</span> <span class="hl-ty">Mul</span> {<span class="hl-ty">A</span>}
+  mul : <span class="hl-ty">A</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Binary multiplication over type A"</span>
+  <span class="hl-kwlit">:laws</span>
+    - <span class="hl-kwlit">:name</span> <span class="hl-str">"commutative"</span>
+      <span class="hl-kwlit">:forall</span> {x y : <span class="hl-ty">A</span>}
+      <span class="hl-kwlit">:holds</span> [eq? [mul x y] [mul y x]]
+    - <span class="hl-kwlit">:name</span> <span class="hl-str">"associative"</span>
+      <span class="hl-kwlit">:forall</span> {x y z : <span class="hl-ty">A</span>}
+      <span class="hl-kwlit">:holds</span> [eq? [mul [mul x y] z] [mul x [mul y z]]]</code></pre>
+<div class="prose"><p>Nat instance — delegates to prologos::data::nat/mult</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Nat</span>
+  <span class="hl-kw">defn</span> mul [x y] &lt;<span class="hl-ty">Nat</span>&gt;
+    mult x y</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::mul-instances</div>
+<h3 class="section-title">Mul Instances for Numeric Types</h3>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::mul-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Mul</span> <span class="hl-ty">Mul-mul</span>]]
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Int</span>
+  <span class="hl-kw">defn</span> mul [x : <span class="hl-ty">Int</span>  y : <span class="hl-ty">Int</span>] &lt;<span class="hl-ty">Int</span>&gt;
+    int* x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Rat</span>
+  <span class="hl-kw">defn</span> mul [x : <span class="hl-ty">Rat</span>  y : <span class="hl-ty">Rat</span>] &lt;<span class="hl-ty">Rat</span>&gt;
+    rat* x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Posit8</span>
+  <span class="hl-kw">defn</span> mul [x : <span class="hl-ty">Posit8</span>  y : <span class="hl-ty">Posit8</span>] &lt;<span class="hl-ty">Posit8</span>&gt;
+    p8* x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Posit16</span>
+  <span class="hl-kw">defn</span> mul [x : <span class="hl-ty">Posit16</span>  y : <span class="hl-ty">Posit16</span>] &lt;<span class="hl-ty">Posit16</span>&gt;
+    p16* x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Posit32</span>
+  <span class="hl-kw">defn</span> mul [x : <span class="hl-ty">Posit32</span>  y : <span class="hl-ty">Posit32</span>] &lt;<span class="hl-ty">Posit32</span>&gt;
+    p32* x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Posit64</span>
+  <span class="hl-kw">defn</span> mul [x : <span class="hl-ty">Posit64</span>  y : <span class="hl-ty">Posit64</span>] &lt;<span class="hl-ty">Posit64</span>&gt;
+    p64* x y</code></pre>
+</section>
+<h2 class="part-header">Part IV — Division</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::div-trait</div>
+<h3 class="section-title">The Div Trait</h3>
+<div class="prose"><p>Binary division. No Nat instance (no integer division primitive).
+Int division is truncating (toward zero).</p></div>
+<pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">Div</span> {<span class="hl-ty">A</span>}
+  div : <span class="hl-ty">A</span> <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Binary division over type A"</span></code></pre>
+<div class="prose"><p>Int instance — integer division</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Int</span>
+  <span class="hl-kw">defn</span> div [x : <span class="hl-ty">Int</span>  y : <span class="hl-ty">Int</span>] &lt;<span class="hl-ty">Int</span>&gt;
+    int/ x y</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::div-instances</div>
+<h3 class="section-title">Div Instances for Numeric Types</h3>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::div-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Div</span> <span class="hl-ty">Div-div</span>]]
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Rat</span>
+  <span class="hl-kw">defn</span> div [x : <span class="hl-ty">Rat</span>  y : <span class="hl-ty">Rat</span>] &lt;<span class="hl-ty">Rat</span>&gt;
+    rat/ x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Posit8</span>
+  <span class="hl-kw">defn</span> div [x : <span class="hl-ty">Posit8</span>  y : <span class="hl-ty">Posit8</span>] &lt;<span class="hl-ty">Posit8</span>&gt;
+    p8/ x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Posit16</span>
+  <span class="hl-kw">defn</span> div [x : <span class="hl-ty">Posit16</span>  y : <span class="hl-ty">Posit16</span>] &lt;<span class="hl-ty">Posit16</span>&gt;
+    p16/ x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Posit32</span>
+  <span class="hl-kw">defn</span> div [x : <span class="hl-ty">Posit32</span>  y : <span class="hl-ty">Posit32</span>] &lt;<span class="hl-ty">Posit32</span>&gt;
+    p32/ x y
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Div</span> <span class="hl-ty">Posit64</span>
+  <span class="hl-kw">defn</span> div [x : <span class="hl-ty">Posit64</span>  y : <span class="hl-ty">Posit64</span>] &lt;<span class="hl-ty">Posit64</span>&gt;
+    p64/ x y</code></pre>
+</section>
+<h2 class="part-header">Part V — Negation and Absolute Value</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::neg-trait</div>
+<h3 class="section-title">The Neg Trait</h3>
+<div class="prose"><p>Unary negation. No Nat instance (negation leaves the Nat domain).
+Law: involution (<code>neg (neg x) = x</code>).</p></div>
+<pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">Neg</span> {<span class="hl-ty">A</span>}
+  neg : <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Unary negation over type A"</span>
+  <span class="hl-kwlit">:laws</span>
+    - <span class="hl-kwlit">:name</span> <span class="hl-str">"involution"</span>
+      <span class="hl-kwlit">:forall</span> {x : <span class="hl-ty">A</span>}
+      <span class="hl-kwlit">:holds</span> [eq? [neg [neg x]] x]</code></pre>
+<div class="prose"><p>Int instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Int</span>
+  <span class="hl-kw">defn</span> neg [x : <span class="hl-ty">Int</span>] &lt;<span class="hl-ty">Int</span>&gt;
+    int-neg x</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::neg-instances</div>
+<h3 class="section-title">Neg Instances for Numeric Types</h3>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::neg-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Neg</span> <span class="hl-ty">Neg-neg</span>]]
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Rat</span>
+  <span class="hl-kw">defn</span> neg [x : <span class="hl-ty">Rat</span>] &lt;<span class="hl-ty">Rat</span>&gt;
+    rat-neg x
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Posit8</span>
+  <span class="hl-kw">defn</span> neg [x : <span class="hl-ty">Posit8</span>] &lt;<span class="hl-ty">Posit8</span>&gt;
+    p8-neg x
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Posit16</span>
+  <span class="hl-kw">defn</span> neg [x : <span class="hl-ty">Posit16</span>] &lt;<span class="hl-ty">Posit16</span>&gt;
+    p16-neg x
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Posit32</span>
+  <span class="hl-kw">defn</span> neg [x : <span class="hl-ty">Posit32</span>] &lt;<span class="hl-ty">Posit32</span>&gt;
+    p32-neg x
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Posit64</span>
+  <span class="hl-kw">defn</span> neg [x : <span class="hl-ty">Posit64</span>] &lt;<span class="hl-ty">Posit64</span>&gt;
+    p64-neg x</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::abs-trait</div>
+<h3 class="section-title">The Abs Trait</h3>
+<div class="prose"><p>Absolute value. No Nat instance (Nat is always non-negative).
+Laws: non-negative and idempotent.</p></div>
+<pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">Abs</span> {<span class="hl-ty">A</span>}
+  abs : <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Absolute value over type A"</span>
+  <span class="hl-kwlit">:laws</span>
+    - <span class="hl-kwlit">:name</span> <span class="hl-str">"non-negative"</span>
+      <span class="hl-kwlit">:forall</span> {x : <span class="hl-ty">A</span>}
+      <span class="hl-kwlit">:holds</span> [gte? [abs x] <span class="hl-num">0</span>]
+    - <span class="hl-kwlit">:name</span> <span class="hl-str">"idempotent"</span>
+      <span class="hl-kwlit">:forall</span> {x : <span class="hl-ty">A</span>}
+      <span class="hl-kwlit">:holds</span> [eq? [abs [abs x]] [abs x]]</code></pre>
+<div class="prose"><p>Int instance</p></div>
+<pre><code class="prologos"><span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Int</span>
+  <span class="hl-kw">defn</span> abs [x : <span class="hl-ty">Int</span>] &lt;<span class="hl-ty">Int</span>&gt;
+    int-abs x</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::abs-instances</div>
+<h3 class="section-title">Abs Instances for Numeric Types</h3>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::abs-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Abs</span> <span class="hl-ty">Abs-abs</span>]]
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Rat</span>
+  <span class="hl-kw">defn</span> abs [x : <span class="hl-ty">Rat</span>] &lt;<span class="hl-ty">Rat</span>&gt;
+    rat-abs x
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Posit8</span>
+  <span class="hl-kw">defn</span> abs [x : <span class="hl-ty">Posit8</span>] &lt;<span class="hl-ty">Posit8</span>&gt;
+    p8-abs x
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Posit16</span>
+  <span class="hl-kw">defn</span> abs [x : <span class="hl-ty">Posit16</span>] &lt;<span class="hl-ty">Posit16</span>&gt;
+    p16-abs x
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Posit32</span>
+  <span class="hl-kw">defn</span> abs [x : <span class="hl-ty">Posit32</span>] &lt;<span class="hl-ty">Posit32</span>&gt;
+    p32-abs x
+
+<span class="hl-kw">impl</span> <span class="hl-ty">Abs</span> <span class="hl-ty">Posit64</span>
+  <span class="hl-kw">defn</span> abs [x : <span class="hl-ty">Posit64</span>] &lt;<span class="hl-ty">Posit64</span>&gt;
+    p64-abs x</code></pre>
+</section>
+</article>
+<nav class="bottom-nav"><a href="characters-and-strings.html">← Characters And Strings</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="identity-and-algebra.html">Identity And Algebra →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+
+</body>
+</html>

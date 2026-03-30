@@ -50,3 +50,680 @@
 
 - WS-mode solver syntax gaps (~=~ as unification, ~is~ bridging, arithmetic in goals) — deferred to post-PPN infrastructure
 - test-structural-decomp: meta-solving via imperative state under BSP — deferred to SRE/PPN elaborator-on-network
+
+
+
+
+* Outside Conversation
+
+** Module Theoretics
+*** 🗣️
+
+I have some books and research papers on module theories as being generalized on lattices.
+
+As Prologos' propagator network infrastructure is implemented on lattices, I'd like to understand the nature of module theory better—what it is, what it's main findings are, it's applications—and how we may benefit from the study of this field and it's connections to lattices; and how we might find application on propagator networks practically in Prologos.
+
+*** 🤖
+
+#+begin_src markdown
+```markdown
+Respponse:
+```
+
+Module theory is a rich area that spans abstract algebra, lattice theory, and computer science. Let me build it up carefully, because the connections to your work are deeper than they might appear at first glance.
+
+---
+
+## What Module Theory Is
+
+### The Algebraic Foundation
+
+A module is a generalization of a vector space. Where a vector space has scalars from a field (like the real numbers), a module has scalars from a ring (which might not have division).
+
+Formally, a left R-module M over a ring R is an abelian group (M, +) equipped with a scalar action R × M → M satisfying:
+
+- r · (m₁ + m₂) = r · m₁ + r · m₂ (scalar distributes over module addition)
+- (r₁ + r₂) · m = r₁ · m + r₂ · m (module addition distributes over scalar addition)
+- (r₁ · r₂) · m = r₁ · (r₂ · m) (scalar action is associative)
+- 1 · m = m (unit scalar acts as identity)
+
+The ring R acts on the module M by "scaling" its elements. The module elements can be added together. The interaction between scaling and addition is governed by distributivity.
+
+### Why This Matters Beyond Algebra
+
+The module concept abstracts a pattern that appears everywhere: a structured set of things (the module elements) acted on by an algebra of transformations (the ring). The transformations compose (ring multiplication), they can be added (ring addition), and they interact with the module's own structure (distributivity).
+
+Examples that are secretly modules:
+
+**Abelian groups** are Z-modules (modules over the integers). Scaling by n ∈ Z means adding an element to itself n times.
+
+**Vector spaces** are F-modules (modules over a field). This is the classical case.
+
+**Ideals in a ring** are modules over the ring itself. The ideal I ⊆ R is an R-module under the ring's own multiplication.
+
+**Representations of a group** are modules over the group algebra. A group G acting on a vector space V is the same as a k[G]-module structure on V.
+
+---
+
+## Module Theory on Lattices
+
+### Lattice-Ordered Modules
+
+A lattice-ordered module (l-module) is a module M that is also a lattice, where the module operations are compatible with the lattice ordering. Specifically:
+
+- M is a lattice under some partial order ≤
+- Addition is order-preserving: if m₁ ≤ m₂ then m₁ + n ≤ m₂ + n
+- Scalar action by positive elements is order-preserving: if r ≥ 0 and m₁ ≤ m₂ then r · m₁ ≤ r · m₂
+
+This is where the connection to your work begins. Your propagator network cells hold lattice values. If those lattice values form a module over some ring of transformations, then the transformations (propagators) have algebraic structure that constrains how they can interact.
+
+### Quantale Modules
+
+A quantale module is a complete lattice M equipped with an action of a quantale Q on M:
+
+Q ⊗ M → M
+
+satisfying:
+
+- q ⊗ (⊔ S) = ⊔ {q ⊗ s | s ∈ S} (action distributes over arbitrary joins)
+- (q₁ ⊗ q₂) ⊗ m = q₁ ⊗ (q₂ ⊗ m) (action is associative)
+- e ⊗ m = m (unit of quantale acts as identity)
+
+You already have quantales in your architecture (effect ordering, session types). The quantale module structure says: your cell values (in lattice M) are acted on by your effect/session algebra (quantale Q), and this action is well-behaved (distributes over joins, associates).
+
+This is directly relevant. When a session type step "transforms" a cell value — sending a message changes the session state, which constrains what types are valid — that transformation is a quantale action on the type lattice. The type lattice is a module over the session quantale.
+
+### Residuated Lattices and Their Modules
+
+A residuated lattice is a lattice equipped with a multiplication (·) and two division operations (\ and /) satisfying:
+
+a · b ≤ c if and only if a ≤ c / b if and only if b ≤ a \ c
+
+The divisions (residuals) are the "best approximation" of undoing the multiplication. This is the algebraic structure underlying linear logic's multiplicative connectives, and it connects directly to your linear types and resource tracking.
+
+A module over a residuated lattice inherits the residuation: the scalar action has a "best approximation of inverse," which means you can ask "what scalar would produce this result?" and get a well-defined (lattice-theoretic) answer.
+
+For your system: if your propagators form a residuated lattice (which they do, if the propagator algebra has the right structure), then you can ask "what input would produce this output?" — which is backward reasoning, which is what your logic engine does. The residuation IS the logical inverse of forward propagation.
+
+---
+
+## Main Findings of Module Theory Relevant to You
+
+### Finding 1: Submodule Lattice
+
+The submodules of a module M form a lattice under inclusion. This is a fundamental structural result: the "parts" of a module are organized as a lattice.
+
+For your system: the "subnetworks" of a propagator network are organized as a lattice. The join of two subnetworks is their union (with shared cells merged). The meet is their intersection (shared cells only). This lattice structure is what makes your Galois connections between subsystems work — a Galois connection is an adjunction between submodule lattices.
+
+The submodule lattice also gives you a precise notion of "module boundary": a submodule is a self-contained part of the network that interacts with the rest only through its boundary cells. Your polynomial functor typing of network interfaces is capturing exactly this — the interface IS the boundary of the submodule.
+
+### Finding 2: Decomposition Theorems
+
+Module theory has powerful decomposition results. The most relevant:
+
+**Direct sum decomposition**: M ≅ M₁ ⊕ M₂ ⊕ ... ⊕ Mₖ, where the Mᵢ are "simple" (indecomposable) modules. This says: every module can be broken into irreducible pieces.
+
+For your system: every propagator network can be decomposed into irreducible subnetworks that interact only through their boundaries. The decomposition is the natural modularization of the network. Your subsystems (type inference, session checking, effect tracking) are the irreducible components. The Galois bridges are the boundary interactions.
+
+**Krull-Schmidt theorem**: for modules with both chain conditions (ascending and descending), the direct sum decomposition is unique up to isomorphism and reordering. This means the decomposition into irreducible pieces is canonical — there's one right way to decompose.
+
+For your system: if your propagator networks satisfy both chain conditions (which they do, if your lattices have finite height and your networks are finite), then the decomposition into subsystems is canonical. This supports your intuition that the architecture you've found is "natural" — it's the unique decomposition of the network into irreducible components.
+
+### Finding 3: Morita Equivalence
+
+Two rings R and S are Morita equivalent if their module categories are equivalent: R-Mod ≅ S-Mod. Morita equivalent rings have "the same module theory" — they produce the same structured collections of things, even if the rings themselves look different.
+
+For your system: two different lattice substrates might be Morita equivalent — they produce the same structured propagator networks, even if the lattices themselves have different elements. This means you could swap out one lattice for another (perhaps simpler, or more efficient) without changing the network's behavior, as long as the lattices are Morita equivalent.
+
+This is relevant to your optimization story. If you find that a complex lattice (used for precision) is Morita equivalent to a simpler one (used for efficiency), you can use the simpler one without loss of expressiveness. The Morita equivalence guarantees that everything you could compute with the complex lattice, you can also compute with the simple one.
+
+### Finding 4: Tensor Products of Modules
+
+The tensor product M ⊗_R N of two R-modules is the "universal bilinear construction." It captures "all the ways M and N can interact through R."
+
+For your system: the tensor product of two propagator networks (over a shared lattice substrate) is the network that captures all the ways the two networks can interact. If your subsystems interact through a shared lattice (which they do — the type lattice is shared between type inference and session checking), the tensor product describes the full interaction space.
+
+The tensor product is also how you'd formalize your cross-domain bridges categorically. A Galois connection between lattice M and lattice N, mediated by ring R (the shared operations), is a morphism in the tensor product M ⊗_R N.
+
+### Finding 5: Homological Algebra
+
+Module theory is the foundation of homological algebra — the study of "obstructions" to extending partial solutions. The key constructions:
+
+**Exact sequences**: 0 → A → B → C → 0 says "B is built from A and C, and the way they fit together is classified by an extension group Ext¹(C, A)."
+
+For your system: the obstructions to extending a partial computation from one stratum to the next (your "error theory" from the fibration analysis) live in extension groups. The extension group tells you not just "can this extend?" but "in how many ways can it extend?" — which is relevant to ambiguous type inference (multiple valid extensions) and error reporting (the obstruction classifies the type of failure).
+
+**Derived functors**: Ext and Tor are derived functors that measure "how far a functor is from being exact." In your system, a propagator that's "almost monotone" (monotone on most inputs, non-monotone on a few edge cases) would have nontrivial derived functors that measure the non-monotonicity.
+
+---
+
+## Applications to Prologos
+
+### Application 1: QTT as Module Structure
+
+Your QTT (Quantitative Type Theory) with multiplicities {0, 1, ω} is already a module theory. The multiplicity semiring R = {0, 1, ω} (with + and ×) acts on your type lattice. A type used with multiplicity m is the scalar action m · T.
+
+The module structure tells you:
+
+- **Submodules correspond to usage patterns.** The submodule of "linearly used types" (multiplicity 1) is a submodule of the full type module. The submodule of "erased types" (multiplicity 0) is another. The submodule lattice organizes all usage patterns.
+
+- **The residuation gives you usage inference.** If you know the result type and the function type, the residual tells you the required argument multiplicity. This is what your QTT checker computes — but the module theory gives it an algebraic foundation.
+
+- **Tensor product captures interaction.** The tensor product of two QTT-typed terms describes how their usages interact. This is relevant to your resource tracking — two linear resources combined have usage that's the tensor product of their individual usages.
+
+### Application 2: Module Loading as Module Theory
+
+Your .pnet cached module loading is literally module theory. A Prologos module is a collection of definitions, types, and constraints — a structured collection of things. Loading a module into a context is an action of the module on the context — it extends the context with new definitions.
+
+The module-theoretic structure:
+
+- **Modules form a lattice.** The submodule lattice orders modules by "contains." Module A ≤ Module B if everything defined in A is also defined in B.
+
+- **Module composition is module sum.** Loading module A then module B produces a module A + B. If they share definitions, the shared parts are identified (lattice join on the shared cells).
+
+- **Module interfaces are quotient modules.** The public interface of a module is a quotient — the module modulo its internal definitions. The quotient is a module homomorphism from the full module to the interface. This is your polynomial functor interface typing, expressed module-theoretically.
+
+- **Cached loading is module memoization.** The .pnet file is a serialized module. Loading it is faster than recomputing it. Module theory tells you when two loading sequences produce the same result (when the modules commute, i.e., their tensor product is symmetric) — which is relevant to parallel module loading.
+
+### Application 3: The Submodule Lattice as Network Organization
+
+The submodule lattice of your propagator network gives you a formal tool for understanding and organizing the network's structure.
+
+Each submodule is a self-contained subnetwork. The submodule lattice tells you:
+
+- **Which subnetworks are independent** (their meet is trivial — they share no cells). Independent subnetworks can be computed in parallel.
+
+- **Which subnetworks are entangled** (their meet is nontrivial — they share cells). Entangled subnetworks must be coordinated.
+
+- **The minimal decomposition** (the irreducible submodules — subnetworks that can't be further decomposed). These are the natural "units" of your system.
+
+- **The maximal compositions** (the largest submodules — subnetworks that are self-contained). These are the natural "subsystems."
+
+For your architecture, the submodule lattice would give you a formal answer to "what are the right subsystem boundaries?" — a question you've been answering by engineering intuition (type inference, session checking, effect tracking, logic engine, etc.). The module theory would either validate your decomposition (showing it's the unique irreducible decomposition) or suggest a different one (showing that some of your subsystems are further decomposable, or that some should be merged).
+
+### Application 4: Residuated Lattices for Bidirectional Reasoning
+
+Your propagator networks are already bidirectional — information flows both ways through cells. The residuated lattice structure formalizes this.
+
+A propagator f : A → B computes forward: given input a, produce output f(a). The residual f \ b computes backward: given desired output b, what input is needed? The residuation guarantees that these are consistent: a ≤ f \ b if and only if f(a) ≤ b.
+
+For your type inference: if you know the result type of a function application and the function's type, the residual tells you the required argument type. This IS type inference — computing the argument type from the result type and the function type. The residuated lattice structure says this is algebraically well-defined and has a unique best answer (the residual is the greatest element satisfying the constraint).
+
+For your logic engine: backward chaining (given a goal, find premises that prove it) is residuation. Forward chaining (given premises, derive conclusions) is the forward action. The residuated lattice structure unifies forward and backward reasoning in a single algebraic framework.
+
+For your narrowing: narrowing an unknown (given a function application where the argument is unknown, enumerate constructors that make the function reduce) is a form of residuation. The residual of the reduction function at the target value gives you the set of arguments that produce that value.
+
+### Application 5: Homological Module Theory for Error Reporting
+
+Your error reporting could benefit from homological algebra. When type inference fails, the failure is an obstruction — something that prevents the construction of a consistent type assignment. Homological algebra classifies obstructions.
+
+The simplest case: a short exact sequence 0 → A → B → C → 0 represents "B is an extension of C by A." If the sequence doesn't split (B ≠ A ⊕ C), then there's an obstruction to decomposing B. The obstruction lives in Ext¹(C, A).
+
+For your type checker: when two type constraints can't be simultaneously satisfied, the failure is an obstruction to extending a partial type assignment. The Ext group classifies the failure — it tells you not just "these constraints are incompatible" but "the incompatibility is of this specific algebraic type." Different types of incompatibility correspond to different Ext elements, which could drive different error messages.
+
+This is speculative but potentially powerful. If you could classify type errors by their homological type (Ext¹ for simple incompatibility, Ext² for incompatibility that arises from the interaction of three or more constraints, etc.), you'd have a principled error taxonomy that goes beyond ad hoc error message engineering.
+
+---
+
+## Practical Recommendations for Prologos
+
+**First: recognize that your QTT multiplicity semiring is already a module-theoretic structure.** The action of {0, 1, ω} on your type lattice is a module action. Making this explicit in your type system (typing the multiplicity action as a module structure) would give you algebraic tools for reasoning about resource usage that go beyond what QTT provides on its own.
+
+**Second: formalize your module loading as module composition.** The .pnet serialization is a serialized module. Module loading is module action on a context. The module interface is a quotient module. Making this explicit would give you formal tools for reasoning about module compatibility, parallel loading, and incremental compilation.
+
+**Third: investigate residuated lattice structure for your propagator algebra.** If your propagators form a residuated lattice (which I suspect they do, given your bidirectional information flow), the residuation gives you backward reasoning for free — algebraically guaranteed to be consistent with forward reasoning. This could simplify your narrowing implementation and give it a cleaner theoretical foundation.
+
+**Fourth: explore the submodule lattice of your propagator network.** Compute the irreducible decomposition of your network (or a representative subnetwork). Compare it to your current subsystem decomposition. If they match, your architecture is canonically justified by module theory. If they don't, the discrepancy might suggest better subsystem boundaries.
+
+**Fifth: file away the homological error theory for later.** It's the deepest application but also the most speculative. When your error reporting matures to the point where you need a principled taxonomy of failure types, the Ext group classification is waiting.
+
+The module-theoretic perspective is not a replacement for your lattice-and-propagator approach — it's a refinement. It gives you algebraic tools (decomposition, residuation, tensor products, homological classification) that operate on top of your existing lattice infrastructure, adding structure rather than changing the foundation.
+
+#+end_src
+
+
+*** 🗣️
+
+I shared this insight with my colleague, asking particularly how it applies to our current architecture and future roadmap.
+
+Currently we have work on what we're calling the "Structural Reasoning Engine", which came out of our Unification on Propagators (PUnify) work... recognizing that unification was structural... and that it could be extended with greater structural decomposition/composition reasoning.
+
+PPN: "Parsing on Propagator Networks" is our effort to bring our entire parsing onto lattice-fixpoint reasoning, collapsing our 14-pipeline parsing-to-compiler onto a single network.
+
+I wonder if you can respond to this, developing it out further, explicating for me as well the implications and connections to our current efforts.
+
+
+*** 🤖 Module Considerations, Part 2
+
+#+begin_src markdown
+```markdown
+Respponse:
+```
+This analysis from your colleague is sharp. Let me develop the threads that have the most practical and theoretical weight for where you are right now.
+
+---
+
+## The Endomorphism Ring Decomposition for SRE
+
+Your colleague's observation that the four SRE relations correspond to sub-rings of the endomorphism ring is algebraically precise and worth unpacking further, because it has implications for how you implement and extend the SRE.
+
+The endomorphism ring End(M) of a module M consists of all structure-preserving maps from M to itself. For your type lattice M, these endomorphisms are the transformations that the SRE can apply. The ring operations are:
+
+- **Multiplication** (composition): applying two transformations in sequence
+- **Addition** (pointwise join): combining the effects of two transformations
+
+The four relation types decompose this ring into components with distinct algebraic signatures:
+
+**Equality endomorphisms** satisfy f(x) = x for all relevant x. They're the kernel of the "how much does this change things" measure. In your SRE, equality is structural unification — two cell-trees are merged by identifying corresponding cells. The endomorphism is the identity on the merged cells. This is the simplest algebraic component.
+
+**Subtyping endomorphisms** satisfy f(x) ≤ f(y) whenever x ≤ y. They preserve the lattice ordering. In your SRE, subtyping propagates covariance and contravariance through type constructors. When you decompose `PVec Int <: PVec Nat`, the subtyping endomorphism on PVec *distributes* over the constructor — it becomes a subtyping endomorphism on the parameter. This distribution is the module-theoretic direct sum decomposition applied to the endomorphism.
+
+The variance annotations on your type constructors (covariant, contravariant, invariant) are telling the SRE which sub-ring of endomorphisms to use for each parameter position. Covariant parameters use the order-preserving sub-ring. Contravariant parameters use the order-reversing sub-ring. Invariant parameters use the identity sub-ring (equality only). This is not an ad hoc design choice — it's the canonical decomposition of the endomorphism ring restricted to that constructor.
+
+**Duality endomorphisms** satisfy f(x ⊔ y) = f(x) ⊓ f(y) — they swap joins and meets. They're antitone (order-reversing). In session types, duality swaps send and receive, swaps internal and external choice. The reason duality is the hardest SRE path is algebraically fundamental: antitone maps don't distribute over direct sums the same way monotone maps do. For a direct sum M = A ⊕ B, a monotone map decomposes as f = f_A ⊕ f_B (apply independently to each component). An antitone map may not decompose this way — it can *mix* the components, mapping elements of A into B and vice versa. This mixing is exactly what session duality does: the dual of a send (which lives in the "output" component) is a receive (which lives in the "input" component).
+
+For your SRE implementation, this means duality decomposition requires tracking cross-component interactions that equality and subtyping decomposition don't need. The SRE's structural decomposition must handle not just "decompose each component independently" (which works for monotone relations) but "decompose with component swapping" (which is needed for antitone relations). This is a genuinely harder algorithmic problem, which validates your experience that duality is the hardest path.
+
+**Rewriting endomorphisms** satisfy f(f(x)) = f(x) — they're idempotent. Applying the rewrite twice gives the same result as applying it once. In your system, this is normalization — reducing a term to normal form. Once the term is in normal form, reducing again doesn't change it. The idempotent sub-ring is the set of "projection-like" maps that collapse the lattice onto a sublattice of normal forms.
+
+The idempotence condition is important for termination: if your rewriting endomorphisms are idempotent, the rewriting process converges in at most one step (per cell). If they're not idempotent (a rewrite can produce new redexes), you need iteration — and the lattice structure guarantees convergence only if the iteration is ascending (each rewrite moves the cell up in the lattice).
+
+### What This Means for SRE Extensions
+
+Your colleague's criterion for deciding whether a fifth relation type is needed is exactly right: compute the endomorphism ring and check its decomposition. But let me make this more concrete.
+
+The endomorphism ring decomposes into **indecomposable summands** via the Krull-Schmidt theorem (since your lattices have finite height, the chain conditions are satisfied). Each summand is a "primitive" relation type. If you find a transformation that doesn't fit into any of the four existing sub-rings, it must be a new summand — a new primitive relation type.
+
+Candidate fifth relations to watch for:
+
+**Coercion**: a non-surjective, non-injective map. Neither order-preserving (like subtyping) nor order-reversing (like duality). Example: coercing `Int` to `Float` — this is a one-way embedding that's not a subtype relation (you lose precision). Algebraically, this is a module homomorphism that's neither mono nor epi. It would be a new sub-ring of End(M).
+
+**Parametric polymorphism**: instantiating a polymorphic type `∀α. F(α)` at a specific type `T` is a map from the polymorphic lattice to the monomorphic lattice. This is not an endomorphism of a single lattice — it's a **morphism between different lattices** (the polymorphic module and the monomorphic module). It doesn't fit the endomorphism ring decomposition because it's not an endomorphism. It would require extending the SRE from endomorphisms (single lattice) to morphisms (between lattices).
+
+**Galois connections between domains**: your α/γ bridges are not endomorphisms of a single lattice — they're morphisms between different lattices. The SRE currently handles these via the Galois bridge mechanism, which is separate from the four relation types. Module theory suggests they should be unified: the SRE should handle intra-lattice relations (the four types) and inter-lattice relations (Galois bridges) in a single framework. The unified framework is **the category of modules**, not just the endomorphism ring of a single module.
+
+---
+
+## The PPN Filtration and Associated Graded Module
+
+Your colleague's observation that the PPN's four domains form a filtration of the parse module is structurally important. Let me develop it.
+
+A **filtration** of a module M is a sequence of submodules:
+
+M₀ ⊆ M₁ ⊆ ... ⊆ Mₙ = M
+
+Each level includes everything from the previous level plus new structure. The **associated graded module** is:
+
+gr(M) = ⊕ᵢ (Mᵢ / Mᵢ₋₁)
+
+Each graded piece Mᵢ / Mᵢ₋₁ captures "what level i adds beyond level i-1." The graded module decomposes the total module into independent layers.
+
+For PPN:
+
+```
+M₀ = Token lattice (characters → tokens)
+M₁ = Surface lattice (tokens → bracketed structure + whitespace significance)
+M₂ = Core lattice (surface → fully elaborated AST)
+```
+
+With the Demand lattice branching:
+
+```
+M_D = Demand lattice (what the type checker needs from parsing)
+```
+
+The graded pieces:
+
+- gr₀ = M₀ = Token (lexing)
+- gr₁ = M₁ / M₀ = structural grouping (what surface adds beyond tokens)
+- gr₂ = M₂ / M₁ = type annotations + macro expansion (what core adds beyond surface)
+- gr_D = M_D ∩ M₂ = elaboration requirements (what demand adds to core)
+
+### Why the Filtration Matters for Collapsing Your Pipeline
+
+Your current 14-stage pipeline is a sequence of transformations:
+
+```
+source → lex → parse → desugar → ... → core AST → elaborate → typed AST
+```
+
+Each stage is a function from one representation to the next. The filtration perspective says: these 14 stages are **not** independent — they're computing successive approximations of the same module element (the fully parsed, elaborated program).
+
+The propagator network approach to PPN says: represent the program as a single network of cells. The cells hold lattice values at different levels of the filtration. Propagators move information between levels (and within levels). Run to fixpoint. The fixpoint is the fully parsed, elaborated program.
+
+The key advantage: information flows **bidirectionally** between levels. In a pipeline, information flows only forward (tokens → surface → core). In the propagator network, later stages can constrain earlier stages. If the type checker (core level) discovers that an expression must have a certain type, this information flows back to the surface level, potentially disambiguating a parse that was ambiguous at the token level.
+
+This is where the module theory pays off. The filtration structure tells you:
+
+**Each level can be computed independently to fixpoint, then the results are joined.** This is because the graded pieces are independent (the associated graded module is a direct sum). Level 0 (lexing) reaches fixpoint independently of level 1 (surface parsing). Level 1 reaches fixpoint using level 0's results. And so on. But the propagator network allows all levels to propagate simultaneously, with cross-level propagators handling the information flow.
+
+**The Galois bridges between levels are module homomorphisms.** The bridge from Token to Surface is not arbitrary — it preserves the module structure. This means the bridge is determined by its action on generators (a finite number of cases), not on all elements. You can verify the bridge by checking it on generators and relying on the module homomorphism property to guarantee correctness on all inputs.
+
+**The filtration is refinable.** If you find that one of your 14 stages is "too coarse" (it conflates things that should be separate), you can refine the filtration by inserting a new level. The module theory tells you where: compute the graded piece for the coarse level, and if it decomposes further, the decomposition tells you what the new levels should be.
+
+### Practical Implications for PPN
+
+The 14-stage pipeline collapse becomes:
+
+**Step 1**: define four lattices (Token, Surface, Demand, Core) with their ordering and join operations.
+
+**Step 2**: register constructor descriptors for each syntactic form at each level. A `defn` form at the Surface level has components (name, params, body). A `defn` form at the Core level has additional components (type annotation, elaborated body). The SRE's domain-parameterized decomposition handles both — same mechanism, different domain.
+
+**Step 3**: define cross-level propagators (the filtration transitions). Token → Surface propagators handle structural grouping. Surface → Core propagators handle macro expansion and type annotation. Demand → Core propagators handle elaboration requirements.
+
+**Step 4**: define same-level propagators (within-level reasoning). Surface-level propagators handle whitespace significance, bracket matching, indentation. Core-level propagators handle type inference, name resolution, trait dispatch.
+
+**Step 5**: compose all propagators into a single network. Run to fixpoint. The fixpoint is the parsed, elaborated program.
+
+The 14-stage pipeline becomes a single propagator network with four domains, cross-domain bridges, and within-domain propagators. The stages are not sequential — they're overlapping lattice fixpoints connected by the filtration structure.
+
+---
+
+## Residuation as Narrowing: The Transformative Insight
+
+Your colleague's observation about residuation deserves special emphasis because it could change how your logic engine fundamentally operates.
+
+Currently, narrowing works by enumeration: given `f(?) = v`, try each constructor C, check if `f(C(...))` can reduce to `v`. This is search — it explores the space of constructors.
+
+Residuation says: given `f(?) = v`, compute `f \ v` directly. The residual `f \ v` is the greatest element `x` such that `f(x) ≤ v`. On a finite lattice with computable meet, this is a single lattice operation.
+
+But there's a subtlety that your colleague flags correctly: this works **if the propagator algebra is residuated.** Let me examine whether yours is.
+
+### Is Your Propagator Algebra Residuated?
+
+A residuated lattice has, for each pair (a, b), a greatest element x such that a · x ≤ b (the right residual a \ b) and a greatest element y such that y · a ≤ b (the left residual b / a).
+
+In your system:
+- The lattice elements are cell values (type expressions, term values, etc.)
+- The "multiplication" is propagator application: applying propagator f to input a gives f(a)
+- The residual f \ b asks: what is the greatest input that produces an output ≤ b?
+
+For **monotone propagators on finite lattices**, the residual exists and is computable. Here's why: on a finite lattice, the set {x | f(x) ≤ b} is downward-closed (because f is monotone: if f(x) ≤ b and y ≤ x, then f(y) ≤ f(x) ≤ b). A downward-closed set in a finite lattice has a greatest element (the join of all its elements). This greatest element is the residual.
+
+Computing the residual: on a finite lattice with n elements, you could enumerate all x and check f(x) ≤ b. This is O(n) — no better than enumeration. But if the lattice has structure (it's a product lattice, or a powerset lattice, or has a compact representation), you can compute the residual more efficiently.
+
+For your type lattice: types are structured (products, sums, function types, etc.). The lattice structure follows the type structure (subtyping is componentwise). The residual of a function type constructor can be computed componentwise — the residual of `(A → B) \ (A' → B')` is `(A' → A) × (B \ B')` (contravariant in the domain, covariant in the codomain). This IS variance-directed narrowing, but computed algebraically rather than by enumeration.
+
+For your term lattice: terms are trees of constructors. The residual of a constructor application `C(a₁, ..., aₖ) \ v` is: if v = C(b₁, ..., bₖ), then C(a₁ \ b₁, ..., aₖ \ bₖ) (componentwise residual). If v has a different head constructor, the residual is ⊥ (no input works). This is **pattern matching**, computed as residuation.
+
+### The Practical Consequence
+
+If you implement residuation for your type and term lattices, your narrowing engine transforms from:
+
+```
+enumerate constructors C₁, C₂, ..., Cₙ
+for each Cᵢ:
+  try to reduce f(Cᵢ(...)) to target v
+  if success: yield solution
+  if fail: backtrack
+```
+
+to:
+
+```
+compute residual f \ v
+if residual = ⊥: no solution
+if residual = Cᵢ(x₁, ..., xₖ): unique solution
+if residual = Cᵢ(x₁, ..., xₖ) ⊔ Cⱼ(y₁, ..., yₘ): multiple solutions (join = union)
+```
+
+The residual computation is a single lattice operation (computed structurally, following the type/term decomposition). No enumeration. No backtracking. The answer is computed directly.
+
+For higher-order narrowing (narrowing on functions, not just data constructors), the residuation becomes more complex — you need residuals of function application, which involves computing "what function, applied to this argument, gives this result?" This is higher-order unification, which is undecidable in general but tractable for specific patterns (Miller's higher-order pattern unification). The residuated lattice framework tells you exactly which cases are tractable (the cases where the residual exists and is computable) and which are not (the cases where the residual is ⊤ — meaning "any function works" — or nonexistent).
+
+### How This Connects to Your Propagator Architecture
+
+The residuation can be implemented as a propagator. Given a propagator f : A → B, the residual propagator f⁻ : B → A computes: when the output cell has value b, write f \ b into the input cell.
+
+This is bidirectional propagation, which you already do. The residuated lattice theory tells you that your bidirectional propagators are computing residuals — and that the residuals are the optimal (greatest) backward inferences. You're already doing it. The theory just tells you that what you're doing is optimal.
+
+The practical refinement: make the residual computation explicit in the propagator API. Instead of each bidirectional propagator implementing its own backward direction ad hoc, compute the backward direction automatically from the forward direction using residuation. For each forward propagator f, the residual propagator f⁻ is derived. This is analogous to automatic differentiation — computing the "backward pass" automatically from the "forward pass."
+
+For the SRE specifically: the structural decomposition of a relation (equality, subtyping, duality, rewriting) can be computed from the residual of the composition endomorphism. When the SRE decomposes `PVec Int <: PVec Nat`, it's computing the residual of the `PVec` constructor's subtyping endomorphism at `(Int, Nat)`. The variance annotations tell the SRE which residual formula to use (covariant: same direction; contravariant: opposite direction; invariant: equality).
+
+---
+
+## The E-Graph as Quotient Module
+
+Your colleague's observation that e-graphs are quotient modules and extraction is finding a section of the quotient map is elegant and has practical consequences.
+
+A quotient module M/N consists of equivalence classes of elements that differ by elements of N. In the e-graph setting, N is the equivalence relation generated by the rewrite rules. Two terms in the same e-class are "the same modulo rewrites."
+
+The quotient map π : M → M/N sends each term to its equivalence class. A section s : M/N → M picks a representative from each class. The extraction problem is: find the section that minimizes some cost function.
+
+The module theory gives you:
+
+**The quotient is well-defined if N is a submodule.** This means the equivalence relation must be compatible with the module operations (if a ≡ b and c ≡ d, then a + c ≡ b + d and r · a ≡ r · b). For rewrite rules, this means: if you can rewrite a subterm, you can rewrite it in any context. This is the standard "congruence" requirement for rewriting — and it's automatically satisfied if your rewrite rules are expressed as propagators (because propagators respect cell structure).
+
+**Sections correspond to normal form strategies.** Each section picks one representative per e-class. Different sections correspond to different normal form strategies (leftmost-outermost, rightmost-innermost, etc.). The "optimal" section is the one that picks the cheapest representative — which is your tropical semiring extraction.
+
+**The quotient module has its own lattice structure.** The e-classes form a lattice (ordered by the induced ordering from M). This lattice is typically smaller than M's lattice — the quotient collapses equivalent elements. This smaller lattice is the "essence" of the computation — the equivalence-free view. Working in the quotient lattice (the e-graph) is more efficient than working in the full lattice (the term lattice) because you never represent equivalent terms separately.
+
+For your PPN: parsing produces an e-graph (quotient module) where different parse trees for the same program are in the same e-class. Ambiguous parses are e-classes with multiple elements. Disambiguation is extraction — picking the best parse from each ambiguous e-class. The cost function for extraction is your disambiguation rules (precedence, associativity, whitespace significance).
+
+This means: **PPN's ambiguity resolution is e-graph extraction on the parse quotient module.** You don't need separate ambiguity resolution logic — it's a consequence of the e-graph structure.
+
+---
+
+## Connecting Everything: The Unified Vision
+
+Let me try to draw the connections together.
+
+Your propagator network is a **module** over the **endomorphism ring** of transformations. The module elements are cell values. The ring elements are propagators. The module structure (addition = lattice join, scalar action = propagator application) governs how everything interacts.
+
+The **SRE** decomposes the endomorphism ring into four sub-rings (equality, subtyping, duality, rewriting), each handling a different algebraic kind of structural transformation. The Krull-Schmidt theorem guarantees this decomposition is canonical.
+
+The **PPN** organizes the module into a filtration (Token ⊆ Surface ⊆ Core), where each level adds structure. Cross-level propagators are module homomorphisms. The associated graded module decomposes parsing into independent layers.
+
+The **logic engine** uses residuation on the module to compute backward inferences. Narrowing is residual computation. The residuated lattice structure guarantees that backward inference is algebraically consistent with forward propagation.
+
+The **e-graph** is the quotient module — the module modulo rewrite equivalences. Reduction is working in the quotient. Extraction is finding a section. The tropical semiring optimizes the section.
+
+The **Galois bridges** between subsystems are module homomorphisms between different modules (type lattice, session lattice, effect lattice). The adjunction property guarantees round-trip consistency.
+
+The **Layered Recovery Principle** organizes the module into strata where each stratum is a sub-module with monotone operations, and the non-monotone transitions between strata are module endomorphisms that don't preserve the ordering (antitone or idempotent maps applied at stratum boundaries).
+
+All of this is module theory applied to propagator networks. The module is your network. The ring is your propagator algebra. The theory gives you decomposition, composition, residuation, quotients, filtrations, and homological error classification — all operating on the same substrate.
+
+The fact that module theory provides such a comprehensive lens on your architecture is itself evidence for your Hyperlattice Conjecture: the computational problems you're solving have natural lattice (module) structure, and your propagator network architecture captures that structure faithfully. The module theory isn't being imposed from outside — it's describing what you've already built.
+
+#+end_src
+
+** Algebraic Embeddings on Lattices
+*** 🗣️
+
+*** 🤖
+
+#+begin_src markdown
+```markdown
+Response:
+```
+This is a fundamental question, and the answer is surprisingly comprehensive. Lattices are not just one algebraic structure among many — they are a universal host for embedding algebraic structures. Let me build up the picture systematically.
+
+---
+
+## The Embedding Principle
+
+The reason algebraic structures embed so naturally on lattices is a deep fact: **every algebraic structure can be represented as a collection of operations on a partially ordered set, and every partially ordered set embeds into a lattice** (its Dedekind-MacNeille completion). This means that the "information ordering" inherent in partial knowledge is sufficient to capture arbitrary algebraic computation.
+
+But this abstract fact is less interesting than the specific embeddings, which preserve different amounts of structure and have different computational consequences.
+
+---
+
+## Structures That Embed on Lattices
+
+### Groups via Subgroup Lattices
+
+Every group G has a **subgroup lattice** Sub(G): the set of all subgroups of G, ordered by inclusion. This lattice captures enormous information about the group:
+
+- The lattice is modular if and only if G is a modular group (every subgroup is permutable)
+- The lattice is distributive if and only if G is locally cyclic
+- The lattice determines G up to isomorphism for finite groups (the Suzuki theorem, with known exceptions)
+
+For your system: if you have a group acting on your data (symmetries of types, permutation groups on type parameters, automorphism groups of data structures), the subgroup lattice gives you a lattice-valued representation of the group's structure. Propagators on this lattice can reason about symmetry — "which symmetries are preserved by this operation?" is a lattice computation.
+
+The practical application: **symmetry breaking in constraint satisfaction.** If your constraint network has symmetries (e.g., two type variables that can be swapped without changing the constraints), the subgroup lattice of the symmetry group tells you which symmetry-breaking constraints to add. Each symmetry-breaking constraint removes a subgroup from the lattice. Propagation on the subgroup lattice identifies redundant constraints.
+
+### Rings via Ideal Lattices
+
+Every ring R has an **ideal lattice** Id(R): the set of all ideals of R, ordered by inclusion. This lattice is always modular (a nontrivial structural result).
+
+The ideal lattice captures the "divisibility structure" of the ring:
+- Prime ideals correspond to irreducible elements
+- Maximal ideals correspond to simple quotients
+- The lattice operations (join = sum, meet = intersection) correspond to algebraic operations on ideals
+
+For your system: your propagator algebra (the ring of propagator transformations) has an ideal lattice. Each ideal corresponds to a "subsystem" of propagators that is closed under composition with arbitrary propagators. The ideal lattice organizes your subsystems by inclusion.
+
+The practical application: **propagator garbage collection.** A propagator that belongs to a zero ideal (an ideal consisting of propagators that have no effect) is dead — it can be removed without changing the fixpoint. The ideal lattice tells you which propagators are dead and which are live.
+
+### Semigroups and Monoids via Green's Relations
+
+Every semigroup S has a collection of **Green's relations** (L, R, J, H, D) that partition S into cells based on how elements relate under left multiplication, right multiplication, and both. These relations form a lattice structure called the **egg-box diagram**.
+
+For your system: your propagators form a monoid under composition (compose two propagators to get a third). Green's relations tell you which propagators are "equivalent" in terms of their left context, right context, or both. Propagators in the same H-class have the same "effect signature" — they do the same thing, just through different intermediate steps.
+
+The practical application: **propagator optimization.** If two propagators are in the same H-class, they compute the same function. You can replace one with the other (if one is more efficient). Green's relations give you a systematic way to identify redundant propagators and replace them with optimal representatives.
+
+### Boolean Algebras as Lattices
+
+Every Boolean algebra is a complemented distributive lattice. Boolean algebras embed directly — they ARE lattices with extra structure (complements, distributivity).
+
+For your system: your ATMS assumption management is a Boolean algebra. Each assumption is a Boolean variable. Assumption sets are conjunctions (meets in the Boolean algebra). The ATMS tracks which conclusions depend on which assumptions — this is a function from the conclusion lattice to the assumption Boolean algebra.
+
+The practical application: **SAT/SMT solving as lattice propagation.** Your observation that your system "already comes close to a CDCL SAT/SMT solver" is algebraically precise: CDCL operates on a Boolean lattice of partial assignments, with unit propagation as the propagator and conflict analysis as the non-monotone transition (Layered Recovery). The Boolean lattice embedding means SAT solving is literally a special case of your propagator architecture.
+
+### Topologies via Lattices of Open Sets
+
+Every topological space X has a **lattice of open sets** O(X): the set of all open subsets of X, ordered by inclusion. This lattice is a **frame** (a complete lattice where meet distributes over arbitrary joins).
+
+This is one of the deepest embeddings. The lattice of open sets captures the topology completely — you can recover the topological space from its lattice of open sets (this is the content of **pointless topology** or **locale theory**). The points of X correspond to completely prime filters of O(X).
+
+For your system: if you think of your cell values as "observations" about a computational state, the lattice of possible observations IS a topology on the state space. The lattice ordering (more information = more refined observation) is the refinement ordering on open sets. Propagators are continuous maps between topological spaces — they preserve the open set structure.
+
+The practical application: **domain theory IS pointless topology.** Scott domains (the semantic foundation of programming language denotational semantics) are exactly the sober topological spaces whose lattices of open sets are continuous lattices. Your propagator networks, operating on lattice values, are computing with the topology of your computation space. This is not a metaphor — it's the mathematical content of what propagation means.
+
+This connects to your PPN vision: the parsing lattice is a topology on the space of possible programs. Each lattice element (partial parse) is an open set in this topology. Parsing is computing the intersection (meet) of all observations (syntactic constraints), producing the most refined description of the program.
+
+### Matroids via Lattice of Flats
+
+A matroid is an abstract structure capturing the notion of "independence" (generalizing linear independence in vector spaces, acyclicity in graphs, etc.). Every matroid M has a **lattice of flats** (closed sets under the matroid closure operator), which is a geometric lattice (atomistic, semimodular).
+
+For your system: if your constraint network has independence structure (some constraints are independent, some are dependent), the matroid captures this structure. The lattice of flats tells you which constraint sets are "minimal" (bases) and which are "redundant" (circuits).
+
+The practical application: **constraint selection.** In your ATMS, when multiple assumption sets support a conclusion, the matroid structure tells you which assumption sets are "independent" (form a basis for the conclusion). Independent assumption sets provide non-redundant justification. The matroid lattice identifies the non-redundant justifications.
+
+### Lattice-Ordered Groups (l-groups)
+
+A lattice-ordered group is a group that is also a lattice, where the group operation preserves the lattice ordering. Every l-group embeds into a lattice of functions (the Holland representation theorem: every l-group embeds into the l-group of order-preserving permutations of a chain).
+
+For your system: if your transformations form a group (every transformation has an inverse — which is the case for session type duality, which is an involution), the l-group structure gives you a lattice of transformations where you can compute "the best transformation between two states."
+
+The practical application: **session type compatibility.** Two session types are compatible if there exists a transformation (sequence of duality applications and subtyping steps) that maps one to the other. The l-group structure makes the set of all such transformations a lattice. The greatest element of this lattice is the "most general compatibility" — the weakest condition under which the two session types can interact.
+
+### Complete Heyting Algebras (Intuitionistic Logic)
+
+A complete Heyting algebra is a lattice where the meet distributes over arbitrary joins and every element has a pseudo-complement (the "best approximation of negation" that satisfies a ∧ ¬a = ⊥). Every frame (lattice of open sets) is a complete Heyting algebra.
+
+For your system: your type lattice, if it has pseudo-complements, supports intuitionistic reasoning natively. The pseudo-complement ¬a means "the best type that is incompatible with a." This is relevant to your negation-as-failure: NAF computes the pseudo-complement, not the classical complement. The Heyting algebra structure tells you exactly what NAF computes and what it doesn't (it computes intuitionistic negation, not classical negation).
+
+The practical application: **type difference.** Given types A and B, the pseudo-complement A → ¬B gives you "the part of A that is incompatible with B." This is useful for error reporting ("these two type constraints are incompatible because of THIS specific aspect") and for refinement types ("the type of values that are A but not B").
+
+### Quantales (Generalized Ring Theory on Lattices)
+
+You already work with quantales. A quantale is a complete lattice with an associative binary operation (tensor ⊗) that distributes over arbitrary joins. Quantales generalize rings to a lattice setting: the lattice replaces the abelian group, and the tensor replaces multiplication.
+
+The embedding: every ring R determines a quantale Id(R) of ideals (with ideal multiplication as tensor). Every quantale Q determines a "linear" theory where Q-valued sets replace ordinary sets. This is the foundation of quantale-valued logic and quantale-enriched categories.
+
+For your system: your effect ordering quantale, your session type quantale, and your multiplicity quantale are all instances. The quantale module theory (modules over a quantale) gives you the resource-tracking and effect-composition structures you need.
+
+---
+
+## The Meta-Pattern: Birkhoff's Representation Theorem and Its Generalizations
+
+The deepest reason that algebraic structures embed on lattices is **Birkhoff's representation theorem**: every finite distributive lattice is isomorphic to the lattice of downward-closed sets of some finite poset. More generally, every algebraic lattice (complete lattice where every element is a join of compact elements) is the lattice of subalgebras of some algebra (Birkhoff's HSP theorem).
+
+This means: **the lattice of "parts" of any algebraic structure is itself a lattice.** Groups have subgroup lattices. Rings have ideal lattices. Modules have submodule lattices. Topological spaces have open set lattices. The lattice of parts captures the structure of the original object.
+
+For your propagator networks, this means: **any algebraic structure you want to reason about can be represented as a lattice (the lattice of its parts), and propagation on this lattice computes structural properties of the original object.** You don't need to implement a separate solver for each algebraic theory. You implement one lattice propagation engine, and different lattices capture different algebraic theories.
+
+This is, I think, the strongest form of your Hyperlattice Postulate: the lattice of sub-structures of any algebraic object is a natural lattice representation of that object, and propagation on this lattice computes structural properties.
+
+---
+
+## Practical Implications for Prologos
+
+### A Lattice Library Organized by Algebraic Origin
+
+Your lattice library could be organized not by application domain (type lattice, session lattice, effect lattice) but by algebraic origin (subgroup lattice, ideal lattice, open set lattice, flat lattice). Each algebraic origin comes with:
+
+- A known lattice structure (modular, distributive, geometric, etc.)
+- Known algorithms (subgroup computation, ideal intersection, closure operators)
+- Known theoretical results (what properties are decidable, what are the complexity bounds)
+
+Users who need to reason about symmetry import the subgroup lattice module. Users who need to reason about divisibility import the ideal lattice module. Users who need to reason about independence import the matroid lattice module. The propagator infrastructure handles all of them uniformly.
+
+### Automatic Structure Detection
+
+Given a user-defined lattice, your system could automatically detect which algebraic structure it comes from:
+
+- Is it modular? (Then it might be a subgroup lattice or ideal lattice.)
+- Is it distributive? (Then it's a lattice of downward-closed sets, by Birkhoff.)
+- Is it geometric? (Then it's a matroid lattice.)
+- Is it complemented? (Then it's a Boolean algebra.)
+- Is it a frame? (Then it supports topological reasoning.)
+
+Each detected structure unlocks specific optimizations and reasoning capabilities. A distributive lattice gets more efficient join/meet algorithms. A Boolean lattice gets SAT-solving optimizations. A geometric lattice gets matroid-based constraint selection.
+
+### The Type System for Lattices
+
+Your type system can express the algebraic structure of a lattice as type-level constraints:
+
+```
+;; A lattice that happens to be distributive
+lattice MyLattice : DistributiveLattice
+  ;; compiler verifies distributivity: a ∧ (b ∨ c) = (a ∧ b) ∨ (a ∧ c)
+
+;; A lattice that happens to be a Boolean algebra
+lattice MyBits : BooleanAlgebra
+  ;; compiler verifies: complemented + distributive
+
+;; A lattice that's a quantale (lattice + tensor)
+lattice MyEffects : Quantale
+  ;; compiler verifies: tensor distributes over arbitrary joins
+
+;; A lattice that's a Heyting algebra
+lattice MyTypes : HeytingAlgebra
+  ;; compiler verifies: pseudo-complement exists for all elements
+```
+
+The algebraic structure of the lattice becomes a type-level property. Propagators that require specific lattice properties (e.g., "this propagator requires a distributive lattice") express this as a type constraint. The compiler checks that the constraint is satisfied.
+
+### Cross-Domain Reasoning via Universal Algebra
+
+The deepest application: your Galois bridges between subsystems can be derived from the universal algebra of the involved lattices, rather than being hand-coded.
+
+If lattice L has algebraic structure S₁ (e.g., distributive lattice) and lattice M has algebraic structure S₂ (e.g., Boolean algebra), and there exists a known embedding S₁ → S₂ (every distributive lattice embeds into a Boolean algebra via the Stone representation), then the Galois bridge L ↔ M can be derived from the embedding. The α and γ functions are determined by the algebraic relationship between S₁ and S₂.
+
+This means: when you add a new subsystem with a new lattice, the bridges to existing subsystems could be derived automatically from the algebraic properties of the lattice. The system knows that a distributive lattice connects to a Boolean algebra via the Stone embedding, and generates the bridge.
+
+This is aspirational, but the algebraic foundation for it exists. The Galois connections between algebraic structures are classified by universal algebra (the variety generated by the structures, the free constructions, the reflections and coreflections). Each classification gives you a specific bridge construction.
+
+---
+
+## What I'd Prioritize
+
+**First: Heyting algebra structure for your type lattice.** This gives you intuitionistic negation (pseudo-complements), which directly improves your error reporting ("the incompatibility is THIS") and connects your NAF semantics to a well-understood algebraic framework. This is likely the lowest-effort, highest-impact algebraic embedding.
+
+**Second: residuated lattice structure for your propagator algebra.** This gives you automatic backward reasoning (residuals), which transforms narrowing from search to computation. The implementation is: for each forward propagator, derive the backward propagator via the residuation formula. Your PUnify structural decomposition already computes residuals implicitly — making it explicit unifies forward and backward propagation under a single algebraic framework.
+
+**Third: Boolean algebra structure for your ATMS.** You likely already have this implicitly. Making it explicit connects your ATMS to the SAT/SMT solving literature and lets you import decades of optimization techniques (watched literals, conflict-driven clause learning, restarts) as algebraic operations on the Boolean lattice.
+
+**Fourth: quantale module structure for your resource tracking.** This unifies QTT multiplicities, session types, and effect ordering under a single algebraic framework. The quantale is the "ring" of effects/resources. The type lattice is the "module" acted on by effects/resources. The module theory gives you composition, decomposition, and residuation for resource tracking.
+
+**Fifth: matroid lattice for constraint selection.** This is more specialized, but if you find that your ATMS manages many redundant assumption sets, the matroid structure tells you which ones are non-redundant. This improves the efficiency of your parallel worldview management.
+
+The overarching principle: **each algebraic structure that embeds on a lattice brings its own toolkit of algorithms, theorems, and optimizations.** By detecting which algebraic structure your lattices have, you can import the appropriate toolkit and get domain-specific optimizations for free — all running on your universal propagator substrate.
+
+#+end_src
+

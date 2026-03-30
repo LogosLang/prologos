@@ -1,0 +1,1122 @@
+% Created 2026-03-16 Mon 17:28
+% Intended LaTeX compiler: lualatex
+\documentclass[11pt]{article}
+\usepackage{amsmath}
+\usepackage{fontspec}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{Prologos Project}
+\date{2026-03-16}
+\title{Quantum-Like Models for Social, Economic, and Cognitive Systems\\\medskip
+\large A Research Background for Tensor-Aware Propagator Networks in Prologos}
+\hypersetup{
+ pdfauthor={Prologos Project},
+ pdftitle={Quantum-Like Models for Social, Economic, and Cognitive Systems},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 30.2 (Org mode 9.7.39)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{1. Introduction}
+\label{sec:org1f81317}
+
+\subsection{1.1 The Quantum Probability Revolution in Social Science}
+\label{sec:org676a9dc}
+
+Over the past three decades, a growing community of researchers has discovered
+that the mathematical formalism of quantum mechanics --- Hilbert spaces,
+superposition, interference, entanglement, and projective measurement --- provides
+a more natural framework than classical (Kolmogorovian) probability for modeling
+human decision-making, cognition, social dynamics, and economic behavior. This is
+not a claim about quantum physics in the brain. It is a claim about mathematics:
+quantum probability theory is the \emph{next-simplest} probability theory after
+classical probability, and it naturally accommodates phenomena --- contextuality,
+order effects, interference --- that classical probability cannot represent.
+
+The field has reached institutional maturity. A dedicated journal, \emph{Quantum
+Economics and Finance} (SAGE, in collaboration with the Center for Quantum Social
+and Cognitive Science), publishes peer-reviewed research. Special issues in
+\emph{Quantum Reports} (MDPI), \emph{Frontiers in Physics}, and \emph{Topics in Cognitive
+Science} have collected major contributions. Comprehensive references include
+Busemeyer \& Bruza's \emph{Quantum Models of Cognition and Decision} (2012), Haven \&
+Khrennikov's \emph{Quantum Social Science} (2013), and the \emph{Palgrave Handbook of
+Quantum Models in Social Science}. A 2026 systematic review (Jammal et al.)
+documents steady publication growth, with over 60 articles in 2024 alone.
+\subsection{1.2 Why Hilbert Space?}
+\label{sec:org1768d98}
+
+Classical probability (Kolmogorov, 1933) assigns probabilities to events as
+elements of a Boolean algebra. The key properties: probabilities are real and
+non-negative; they add for disjoint events; the total is 1. This framework
+assumes:
+\begin{itemize}
+\item \textbf{Commutativity:} P(A and B) = P(B and A).
+\item \textbf{The law of total probability:} P(A) = P(A|B)P(B) + P(A|¬B)P(¬B).
+\item \textbf{Single sample space:} All events can be jointly represented.
+\end{itemize}
+
+Human cognition and social behavior routinely violate all three. The order in
+which questions are asked changes the answers (non-commutativity). The disjunction
+effect violates the law of total probability. Preferences cannot always be
+represented in a single consistent framework (contextuality).
+
+Quantum probability (von Neumann, 1932) replaces the Boolean algebra with a
+Hilbert space. Events are subspaces; probabilities are squared magnitudes of
+projections. This framework accommodates:
+\begin{itemize}
+\item \textbf{Non-commutativity:} Projecting onto subspace A then B differs from B then A.
+\item \textbf{Interference:} |a+b|² ≠ |a|² + |b|² when cross-terms are nonzero.
+\item \textbf{Contextuality:} Different measurement contexts yield incompatible probability
+spaces.
+\end{itemize}
+
+The crucial point: these are \emph{mathematical} properties of Hilbert spaces, not
+\emph{physical} properties of quantum mechanics. Any system exhibiting contextuality,
+order effects, or interference --- whether it is a photon, a human decision-maker,
+or a financial market --- is more naturally described by quantum probability than
+by classical probability.
+\subsection{1.3 Historical Overview}
+\label{sec:org9753fb5}
+
+The idea of applying quantum formalism to cognition emerged independently from
+several sources in the 1990s:
+
+\begin{itemize}
+\item \textbf{Aerts and collaborators} (Brussels) developed a quantum-like model of concept
+combination, showing that the "pet-fish" problem (a guppy is a good example of
+"pet fish" but a poor example of either "pet" or "fish") requires a state space
+richer than classical probability.
+\item \textbf{Khrennikov} (Linnaeus University) developed a contextual probability framework,
+pointing out that violations of the formula of total probability can serve as
+a quantitative measure of non-classicality.
+\item \textbf{Bordley} applied quantum probability to decision-making, showing that
+interference effects explain preference reversals.
+\end{itemize}
+
+The field accelerated in the 2000s with:
+\begin{itemize}
+\item \textbf{Busemeyer and collaborators} (Indiana University) developing formal quantum
+models of specific cognitive phenomena: the conjunction fallacy, the disjunction
+effect, order effects in judgments.
+\item \textbf{Haven and Khrennikov} connecting quantum formalism to financial markets and
+economics.
+\item \textbf{Yukalov and Sornette} (ETH Zurich) developing Quantum Decision Theory as a
+comprehensive mathematical framework.
+\end{itemize}
+
+The 2010s saw consolidation into textbooks and institutional infrastructure.
+The 2020s have brought empirical validation at scale (the QQ equality tested on
+70+ national surveys), practical applications (quantum computing for portfolio
+optimization), and new theoretical developments (quantum-like Bayesian networks,
+open quantum systems for cognitive dynamics).
+\subsection{1.4 Connection to Prologos}
+\label{sec:orgd574b2f}
+
+A companion document ("Tensor-Aware Propagator Networks with Unitary Evolution")
+describes how Prologos's propagator network can be extended with TensorCells
+(joint amplitude distributions over multiple variables) and unitary evolution
+(reversible transformations of quantum-like states). This background document
+provides the domain knowledge for what such a system could model.
+
+The connection is direct: every quantum-like model in the literature requires
+(1) a state space (Hilbert space), (2) evolution operators (unitaries), and
+(3) measurement (projection + Born rule). In Prologos, these map to
+(1) TensorCells, (2) unitary propagators, and (3) the measurement stratum with
+ATMS integration. The dependent type system provides compile-time dimensional
+correctness; the propagator network provides the computational engine; the
+Layered Recovery Principle ensures that unitary evolution and measurement are
+correctly stratified.
+\section{2. Foundations: Quantum Probability vs. Classical Probability}
+\label{sec:org49de79e}
+
+\subsection{2.1 Kolmogorov Probability and Its Limitations}
+\label{sec:org6f10e76}
+
+Classical probability theory (Kolmogorov, 1933) rests on a probability space
+(Ω, F, P) where Ω is a sample space, F is a σ-algebra of events, and P is a
+probability measure. For finite spaces, this reduces to:
+\begin{itemize}
+\item A set of outcomes \{ω₁, \ldots{}, ωₙ\}.
+\item Probabilities p(ωᵢ) ≥ 0 with Σᵢ p(ωᵢ) = 1.
+\item P(A) = Σ\textsubscript{ωᵢ∈A} p(ωᵢ) for any event A ⊆ Ω.
+\end{itemize}
+
+The law of total probability follows: P(A) = P(A|B)P(B) + P(A|B\textsuperscript{c})P(B\textsuperscript{c}),
+expressing P(A) as a weighted sum over a partition. This is the foundation of
+Bayesian reasoning.
+
+\textbf{Limitations in cognitive science:}
+
+The law of total probability is empirically violated in human judgment.
+Tversky and Shafir (1992) demonstrated the \textbf{disjunction effect}: in a
+two-stage gamble, participants who knew they won the first stage chose to play
+again (67\%); participants who knew they lost also chose to play again (59\%);
+but participants who did \emph{not} know the outcome of the first stage chose to play
+again at a lower rate (36\%). Under classical probability, not knowing the
+outcome should produce a probability between 59\% and 67\%, not below both.
+This is a direct violation of the law of total probability.
+\subsection{2.2 Hilbert Space Probability}
+\label{sec:org77c741b}
+
+Quantum probability replaces the classical framework with:
+\begin{itemize}
+\item A Hilbert space H (a complex vector space with inner product).
+\item A state |ψ⟩ ∈ H with ||ψ|| = 1 (a unit vector).
+\item Observables as projection operators P\textsubscript{A} (self-adjoint, P² = P).
+\item Probability of event A: p(A) = ||P\textsubscript{A}|ψ⟩||² = ⟨ψ|P\textsubscript{A}|ψ⟩.
+\item State update after observing A: |ψ'⟩ = P\textsubscript{A}|ψ⟩ / ||P\textsubscript{A}|ψ⟩|| (Lüders' rule).
+\end{itemize}
+
+\textbf{Key differences from classical probability:}
+
+\begin{enumerate}
+\item \textbf{Non-commutativity.} If P\textsubscript{A} P\textsubscript{B} ≠ P\textsubscript{B} P\textsubscript{A}, then the probability of "A then B"
+differs from "B then A":
+p(A then B) = ||P\textsubscript{B} P\textsubscript{A}|ψ⟩||² ≠ ||P\textsubscript{A} P\textsubscript{B}|ψ⟩||² = p(B then A).
+This models order effects in survey questions.
+
+\item \textbf{Interference.} If |ψ⟩ = α|a⟩ + β|b⟩, then:
+p(c) = |⟨c|ψ⟩|² = |α⟨c|a⟩ + β⟨c|b⟩|²
+     = |α|²|⟨c|a⟩|² + |β|²|⟨c|b⟩|² + 2Re(α*β⟨c|a⟩*⟨c|b⟩)
+The last term is the \emph{interference term}, absent in classical probability.
+
+\item \textbf{Incompatibility.} Two observables A, B are incompatible if their projection
+operators do not commute. Measuring A disturbs the state with respect to B.
+There is no joint probability distribution for incompatible observables.
+\end{enumerate}
+\subsection{2.3 Interference and Superposition}
+\label{sec:org8ebe4f4}
+
+The interference term is the key mechanism by which quantum-like models produce
+non-classical predictions. Consider a decision between options C (cooperate) and
+D (defect):
+
+\begin{itemize}
+\item Classical: p(C) = p(C|know\textsubscript{win})p(know\textsubscript{win}) + p(C|know\textsubscript{lose})p(know\textsubscript{lose})
+= 0.67 × 0.5 + 0.59 × 0.5 = 0.63.
+\item Quantum: |ψ⟩ = α|win⟩ + β|lose⟩. After interference:
+p(C) = |α|²p(C|win) + |β|²p(C|lose) + 2Re(α*β × interference)
+The interference term can be \emph{negative}, reducing p(C) below both conditional
+probabilities. This explains the disjunction effect.
+\end{itemize}
+
+The double-slit analogy is useful: when a particle passes through two slits
+simultaneously (superposition), the probability pattern at the detector shows
+interference fringes. When a decision-maker considers two possible states of
+the world simultaneously (uncertainty), the choice probability shows
+"interference fringes" --- deviations from the weighted average of the
+conditional probabilities.
+\subsection{2.4 Entanglement and Non-Separability}
+\label{sec:org35b767f}
+
+Two systems A and B are \textbf{entangled} when their joint state cannot be factored:
+\begin{center}
+\begin{tabular}{lllll}
+ψ\textsubscript{AB}⟩ ≠ & ψ\textsubscript{A}⟩ ⊗ & ψ\textsubscript{B}⟩ for any states & ψ\textsubscript{A}⟩, & ψ\textsubscript{B}⟩.\\
+\end{tabular}
+\end{center}
+
+The Bell state (|00⟩ + |11⟩)/√2 is the canonical example: if A is measured and
+found to be 0, then B is guaranteed to be 0 as well, even though neither had a
+definite value before measurement. The correlations are stronger than any
+classical probabilistic model can produce (Bell's theorem).
+
+In social science, entanglement models non-separable preferences and correlated
+beliefs:
+\begin{itemize}
+\item \textbf{Voter preferences:} A voter's preference for president and senator cannot always
+be factored into independent presidential and senatorial preferences. "Ticket
+splitting" (different parties for different races) may violate classical
+separability.
+\item \textbf{Agent interactions:} Two traders whose strategies are correlated through shared
+information or social influence may have entangled strategy states.
+\item \textbf{Concept combination:} The concept "pet fish" (well-modeled by a guppy) cannot
+be derived from independent concepts "pet" (well-modeled by a dog) and "fish"
+(well-modeled by a trout). Aerts showed this requires entangled concept states.
+\end{itemize}
+\subsection{2.5 Open Quantum Systems and Decoherence}
+\label{sec:orgf5dba0c}
+
+Real quantum systems interact with their environments, causing decoherence --- the
+loss of quantum coherence (interference capability). The GKSL (Gorini-Kossakowski-
+Sudarshan-Lindblad) master equation governs this evolution:
+
+\begin{verbatim}
+dρ/dt = -i[H, ρ] + Σ_k (L_k ρ L_k† - ½{L_k†L_k, ρ})
+\end{verbatim}
+
+where ρ is the density matrix (mixed state), H is the Hamiltonian (unitary
+dynamics), and L\textsubscript{k} are Lindblad operators (environmental interaction). The first
+term drives unitary evolution (rotation); the second term drives decoherence
+(decay of off-diagonal elements).
+
+In cognitive modeling (Asano, Khrennikov et al.), this models decision-making:
+\begin{itemize}
+\item The initial state ρ₀ is a superposition of choices (indecision).
+\item The Hamiltonian H encodes the decision-maker's preferences and information.
+\item The Lindblad operators L\textsubscript{k} model interaction with the "mental environment"
+(memory, emotions, social pressure).
+\item The stationary state ρ\_∞ is the final decision --- a classical mixture
+(diagonal density matrix) with no remaining quantum coherence.
+\end{itemize}
+
+The \textbf{diffidence} (classical entropy minus quantum entropy) tracks the decision
+process: it starts high (quantum uncertainty exceeds classical) and decays to zero
+as decoherence eliminates quantum effects, leaving a classical choice.
+\subsection{2.6 Contextuality}
+\label{sec:orgf099a5b}
+
+\textbf{Contextuality} is the property that the outcome of a measurement depends on what
+other measurements are performed alongside it. In classical probability, outcomes
+are context-independent: the probability of "heads" on a coin does not depend on
+whether a die is also rolled. In quantum mechanics, the probability of a spin
+measurement outcome depends on which axis is measured simultaneously.
+
+Dzhafarov and Kujala developed the \textbf{Contextuality-by-Default (CbD)} framework,
+which extends contextuality analysis to "inconsistently connected" systems --- those
+where marginal distributions change across contexts (a common feature of behavioral
+data). The CbD framework distinguishes between:
+\begin{itemize}
+\item \textbf{Direct influences:} Changes in marginal distributions due to context changes.
+\item \textbf{True contextuality:} Correlations that cannot be explained by any classical
+coupling, even after accounting for direct influences.
+\end{itemize}
+
+The "Snow Queen" experiment (Cervantes \& Dzhafarov) provided the first
+unequivocal empirical evidence of true contextuality in human behavior. A 2025
+study found true contextuality in global investment decisions, demonstrating that
+the phenomenon extends beyond laboratory settings to real-world economic behavior.
+\section{3. Quantum Decision Theory}
+\label{sec:org7b8b33c}
+
+\subsection{3.1 The Yukalov-Sornette Framework}
+\label{sec:org7de854a}
+
+Quantum Decision Theory (QDT), developed by Vyacheslav Yukalov and Didier Sornette
+(ETH Zurich), is a comprehensive mathematical framework that decomposes behavioral
+probability into classical and quantum components.
+
+\textbf{Mathematical formulation.} The probability of choosing a prospect πⱼ is:
+
+\begin{verbatim}
+p(πⱼ) = f(πⱼ) + q(πⱼ)
+\end{verbatim}
+
+where:
+\begin{itemize}
+\item f(πⱼ) is the \textbf{utility factor} --- the classical probability derived from
+expected utility or other rational choice models. It satisfies all classical
+probability axioms: f(πⱼ) ≥ 0, Σⱼ f(πⱼ) = 1.
+\item q(πⱼ) is the \textbf{attraction factor} --- the quantum interference term capturing
+emotional, irrational, and bias-driven components. It satisfies Σⱼ q(πⱼ) = 0
+(the interference terms sum to zero, preserving total probability).
+\end{itemize}
+
+The attraction factor arises from the entanglement between the decision-maker's
+strategic state and the prospects being evaluated. When prospects are composite
+(involving multiple attributes or stages), the probability operator decomposes
+into products of sub-operators, and cross-terms appear due to entanglement.
+
+\textbf{The Quarter Law.} QDT predicts that the average magnitude of the attraction factor
+is:
+
+\begin{verbatim}
+⟨|q|⟩ = 1/4
+\end{verbatim}
+
+This is not merely an empirical finding but is derivable as the non-informative
+prior over several families of distributions (uniform, beta, Gaussian). The
+Quarter Law provides a parameter-free quantitative prediction: the quantum
+deviation from classical expected utility averages 25\% of the choice probability.
+
+\textbf{Empirical validation.} The Quarter Law has been tested on simple risky choices
+(lottery pairs) and group-level data strongly support it (Yukalov \& Sornette, 2016).
+\subsection{3.2 Classical Decision Paradoxes Resolved}
+\label{sec:org0278a82}
+
+QDT resolves the major anomalies of classical decision theory as natural
+consequences of quantum interference:
+
+\textbf{Allais paradox.} People prefer a certain \$1M to an 89\% chance of \$1M + 10\%
+chance of \$5M + 1\% chance of \$0, yet simultaneously prefer a 10\% chance of \$5M
+to an 11\% chance of \$1M. This violates expected utility's independence axiom.
+In QDT, the interference term is positive for the certain option (reinforcing
+certainty preference) and negative for the mixed gamble (suppressing risk
+tolerance), producing the observed pattern.
+
+\textbf{Ellsberg paradox.} People prefer betting on a known 50-50 urn to an urn with
+unknown composition, even when the expected values are identical. Classical
+probability requires ambiguity-neutral behavior. In QDT, ambiguity generates
+a negative attraction factor (ambiguity aversion), reducing the probability
+of choosing the ambiguous option below its utility factor.
+
+\textbf{Disjunction effect.} As described in §2.1: knowing the outcome of a first stage
+leads to playing again regardless, but not knowing leads to refusing. The
+interference between the "won" and "lost" branches is destructive,
+reducing the play-again probability below both conditional probabilities.
+
+\textbf{Conjunction fallacy.} People judge P(feminist ∧ bank teller) > P(bank teller),
+violating the conjunction rule. In QDT, the conjunction is not a classical
+intersection but a sequential projection. The "feminist" projection rotates
+the state into a subspace where "bank teller" has higher probability than
+it does from the initial state.
+\subsection{3.3 Quantum Prospect Theory}
+\label{sec:org6e88037}
+
+Quantum Prospect Theory augments Kahneman and Tversky's Cumulative Prospect
+Theory (CPT) with quantum interference effects. The key formula adds an
+interference term to the CPT value function:
+
+\begin{verbatim}
+V_quantum(prospect) = V_CPT(prospect) + interference(prospect)
+\end{verbatim}
+
+The interference term captures conflicting interests, ambiguity, and emotions
+arising during deliberation. Two estimation methods exist:
+\begin{itemize}
+\item The \textbf{interference alternation method}: estimates the sign and magnitude of
+interference from the structure of the prospect.
+\item The \textbf{interference quarter law}: uses the QDT quarter law as a default
+magnitude.
+\end{itemize}
+
+Empirical comparisons show that at the aggregate level, CPT-based QDT outperforms
+pure CPT. At the individual level, RDU-based (Rank-Dependent Utility) QDT best
+captures heterogeneity across subjects.
+\subsection{3.4 Order Effects in Judgments}
+\label{sec:org3ebc165}
+
+Wang and Busemeyer (2013) derived a parameter-free prediction from quantum
+probability: the \textbf{QQ equality}.
+
+For two binary yes/no questions A and B:
+
+\begin{verbatim}
+p(Ay,By) + p(An,Bn) - p(By,Ay) - p(Bn,An) = 0
+\end{verbatim}
+
+where p(Ay,By) is the probability of answering "yes" to A and then "yes" to B.
+
+\textbf{Derivation.} The QQ equality follows from the law of reciprocity for Hilbert
+space inner products: |⟨ψ\textsubscript{B}|ψ\textsubscript{A}⟩|² = |⟨ψ\textsubscript{A}|ψ\textsubscript{B}⟩|². The real part of the inner
+product is independent of projection order, yielding the equality.
+
+\textbf{Empirical validation.} Wang et al. (2014) tested the QQ equality on \textbf{70 national
+representative surveys} (most with >1000 participants each, conducted by Gallup
+and Pew Research) plus two laboratory experiments. The QQ equality was strongly
+upheld --- a remarkable result given that it is a parameter-free, a priori
+prediction derived purely from the mathematical structure of Hilbert space.
+
+Neither Bayesian models nor Markov models generally satisfy the QQ equality.
+Its empirical success is one of the strongest pieces of evidence for the quantum
+probability framework in cognitive science.
+\section{4. Quantum Cognition}
+\label{sec:org7e47156}
+
+\subsection{4.1 Similarity Judgments}
+\label{sec:orgdca1fda}
+
+The \textbf{Quantum Similarity Model} (QSM), developed by Pothos and Busemeyer, models
+concepts as subspaces of a Hilbert space (not as points, as in classical geometric
+models). The key innovation: similarity between two concepts is computed as the
+probability of a sequential projection.
+
+\textbf{Formal structure:}
+\begin{itemize}
+\item A concept C is associated with a subspace H\textsubscript{C} of the Hilbert space.
+\item The mental state is a vector |ψ⟩.
+\item Similarity of A to B is: sim(A,B) = ||P\textsubscript{B} P\textsubscript{A}|ψ⟩||² (project onto A, then B).
+\end{itemize}
+
+\textbf{Key advantages:}
+\begin{itemize}
+\item \textbf{Asymmetry.} sim(A,B) ≠ sim(B,A) because P\textsubscript{B} P\textsubscript{A} ≠ P\textsubscript{A} P\textsubscript{B} in general. This
+captures Tversky's (1977) finding that similarity judgments are asymmetric:
+North Korea is more similar to China than China is to North Korea.
+\item \textbf{Diagnosticity.} Context (prior projections) changes similarity judgments. After
+seeing several fruits, an apple is similar to an orange; after seeing several
+round objects, an apple is similar to a ball.
+\item \textbf{Unification.} The QSM uses the same mathematical framework as the conjunction
+fallacy model, the order effects model, and the disjunction effect model. All
+are instances of projection in Hilbert space.
+\end{itemize}
+\subsection{4.2 Conceptual Combination}
+\label{sec:org4871c8f}
+
+The conjunction fallacy (§3.2) is a special case of conceptual combination. More
+broadly, quantum models address the general problem of how concepts combine:
+
+\textbf{The guppy problem.} A guppy is a good example of "pet fish" but a poor example
+of either "pet" or "fish." Classical fuzzy set theory (Osherson \& Smith, 1981)
+predicts that membership in A∧B should be at most min(membership in A, membership
+in B). The guppy violates this: membership in "pet fish" exceeds membership in
+both components.
+
+Aerts (2009) showed that this requires an \emph{entangled} state in the tensor product
+of the "pet" and "fish" Hilbert spaces. The concept "pet fish" is not the
+intersection of "pet" and "fish" but a projection onto a subspace of the composite
+space that has no product-state representation.
+
+\textbf{Overextension.} When combining concepts, people sometimes extend the category
+beyond what either component warrants. "Stone lion" is judged as a better
+predator than "stone" warrants and a better decorative object than "lion" warrants.
+This "emergence of new meaning" in conceptual conjunction maps to the quantum
+phenomenon of measurement outcomes that differ from what either subsystem alone
+would produce.
+\subsection{4.3 Memory and Perception}
+\label{sec:org48d7372}
+
+Quantum models have been applied to:
+\begin{itemize}
+\item \textbf{Memory retrieval:} The order in which memory items are recalled affects
+subsequent retrieval probabilities, modeled as sequential projections.
+\item \textbf{Perception:} Ambiguous stimuli (Necker cube, duck-rabbit) are modeled as
+superpositions that collapse upon "measurement" (conscious perception).
+The dynamics of perceptual switching are modeled by unitary evolution.
+\item \textbf{Categorization:} Categorization decisions under uncertainty exhibit
+interference effects analogous to the disjunction effect.
+\end{itemize}
+\subsection{4.4 Causal Reasoning}
+\label{sec:org4b56273}
+
+Trueblood and Busemeyer (2011, 2012) developed \textbf{quantum-like Bayesian networks}
+(QLBNs) by replacing classical probabilities with quantum probability amplitudes.
+
+\textbf{Framework:}
+\begin{itemize}
+\item Any classical Bayesian network can be generalized to a quantum Bayesian network
+by replacing conditional probability tables with conditional amplitude tables.
+\item A \textbf{similarity heuristic} automatically fits parameters through vector
+similarities, addressing the exponential growth of quantum parameters.
+\end{itemize}
+
+\textbf{Key results:}
+\begin{itemize}
+\item QLBNs account for \textbf{order effects in causal judgments}: judging whether A causes
+C and then whether B causes C gives different results than the reverse order.
+Classical Bayesian networks, which satisfy the local Markov condition, cannot
+produce order effects.
+\item \textbf{Anti-discounting:} In classical causal reasoning, learning about an alternative
+cause should reduce belief in the original cause (discounting). Humans sometimes
+do the opposite (anti-discounting). QLBNs model this via constructive
+interference between causal pathways.
+\item \textbf{Reciprocity:} Observing that A causes B increases belief that B causes A, even
+when there is no causal mechanism. This arises naturally from the symmetry of
+Hilbert space inner products.
+\end{itemize}
+\subsection{4.5 The Open Systems Approach}
+\label{sec:orga5b3af6}
+
+Asano, Ohya, Tanaka, Basieva, and Khrennikov developed a comprehensive model
+of cognitive dynamics using the GKSL master equation (§2.5).
+
+\textbf{Core model:}
+\begin{enumerate}
+\item The decision-maker's mental state is a density matrix ρ on a Hilbert space
+whose basis elements correspond to choices.
+\item The Hamiltonian H encodes preferences and information dynamics.
+\item Lindblad operators L\textsubscript{k} model interaction with the mental environment:
+memory retrieval, emotional processing, social pressure.
+\item The master equation dρ/dt = -i[H,ρ] + Σ\textsubscript{k}(L\textsubscript{k} ρ L\textsubscript{k}† - ½\{L\textsubscript{k}†L\textsubscript{k}, ρ\})
+drives the mental state toward a stationary state ρ\_∞.
+\item The stationary state is a classical mixture (diagonal) representing the
+final decision.
+\end{enumerate}
+
+\textbf{Applications:}
+\begin{itemize}
+\item \textbf{Disjunction effect in Prisoner's Dilemma:} The Shafir-Tversky experiments
+are explained by decoherence: knowing the opponent's move collapses the
+superposition, while not knowing preserves it, and interference between
+the "opponent cooperated" and "opponent defected" branches reduces the
+cooperation probability.
+\item \textbf{US political decision-making:} Voters' superposition of Republican/Democrat
+preferences decoheres through exposure to campaign information.
+\item \textbf{Biological applications:} The same formalism models E. coli glucose-lactose
+metabolism and epigenetic evolution.
+\end{itemize}
+
+\textbf{Non-Markovian extensions} are an active frontier. The GKSL equation assumes
+Markovian (memoryless) dynamics, but human cognition has strong memory effects.
+Non-Markovian quantum dynamics (Nakajima-Zwanzig equations, time-convolutionless
+approaches) are under development.
+\section{5. Quantum Game Theory}
+\label{sec:org8b8b78e}
+
+\subsection{5.1 The EWL Protocol}
+\label{sec:orgca6e979}
+
+Eisert, Wilkens, and Lewenstein (1999) proposed the first formal framework for
+quantum game theory, using entangled quantum strategies.
+
+\textbf{Mathematical formulation:}
+
+\begin{enumerate}
+\item Classical strategies are mapped to qubit states: Cooperate = |0⟩, Defect = |1⟩.
+
+\item An \textbf{entangling gate} creates initial correlations:
+J(γ) = exp(iγ σ\textsubscript{x} ⊗ σ\textsubscript{x} / 2)
+where γ ∈ [0, π/2] controls the entanglement degree and σ\textsubscript{x} is the Pauli-X
+matrix.
+
+\item The initial state is: |ψ\textsubscript{in}⟩ = J(γ)|00⟩.
+
+\item Each player applies a unitary strategy U ∈ SU(2), parameterized as:
+U(θ, φ) = [[e\textsuperscript{iφ}cos(θ/2), sin(θ/2)], [-sin(θ/2), e\textsuperscript{-iφ}cos(θ/2)]]
+With I = U(0,0) = Cooperate and σ\textsubscript{x} = U(π,0) = Defect as classical strategies.
+
+\item The final state is: |ψ\textsubscript{out}⟩ = J†(γ) · (U\textsubscript{A} ⊗ U\textsubscript{B}) · J(γ)|00⟩.
+
+\item Payoffs are computed from measurement probabilities:
+P\textsubscript{σ,τ} = |⟨σ,τ|ψ\textsubscript{out}⟩|² for σ,τ ∈ \{0,1\}
+Expected payoff = Σ\textsubscript{σ,τ} P\textsubscript{σ,τ} × payoff(σ,τ).
+\end{enumerate}
+
+\textbf{Key special strategy:} Q = U(0, π/2) --- a quantum strategy with no classical
+analogue. It commutes with J(γ) and has the property that Q against any classical
+strategy yields at least the cooperative payoff.
+\subsection{5.2 Quantum Prisoner's Dilemma}
+\label{sec:orga7c6757}
+
+In the classical Prisoner's Dilemma, the unique Nash equilibrium (Defect, Defect)
+is Pareto-dominated by (Cooperate, Cooperate). Rational self-interest leads to a
+collectively worse outcome.
+
+The quantum version resolves this:
+
+\textbf{Three entanglement regimes:}
+\begin{itemize}
+\item γ = 0 (no entanglement): Classical game recovered exactly. J(0) = I, so the
+entangling gate is trivial. The unique NE is (D, D).
+\item 0 < γ < π/2 (partial entanglement): Intermediate regime. The classical NE
+may still exist but with modified payoffs.
+\item γ = π/2 (maximum entanglement): The strategy pair (Q, Q) is a Nash equilibrium
+\emph{and} Pareto-optimal. Neither player can improve their payoff by unilateral
+deviation. The dilemma is resolved.
+\end{itemize}
+
+\textbf{The mechanism:} At maximum entanglement, the initial state J(π/2)|00⟩ creates
+quantum correlations between the players. The quantum strategy Q exploits these
+correlations: Q ⊗ Q against the entangled initial state produces the cooperative
+outcome with certainty. Any unilateral deviation from Q reduces the deviator's
+payoff (Nash equilibrium property) while no outcome Pareto-dominates Q ⊗ Q.
+
+\textbf{Critiques:} Benjamin and Hayden noted that the two-parameter restriction
+U(θ,φ) is not the most general SU(2) strategy. With the full three-parameter
+SU(2), Nash equilibria may not exist. The robustness of quantum game-theoretic
+advantages under noise and decoherence is an active research area.
+\subsection{5.3 Quantum Auctions and Mechanism Design}
+\label{sec:orgacd0062}
+
+Quantum information theory has implications for economic mechanism design:
+
+\textbf{Circumventing impossibility results.} Classical mechanism design is constrained
+by impossibility theorems (Arrow, Gibbard-Satterthwaite). Agents with access to
+quantum mechanisms can, under certain conditions, circumvent these constraints:
+quantum entanglement provides correlation resources unavailable classically.
+
+\textbf{Quantum economies.} Players producing and consuming "quantum goods" with
+entangled strategies yield economic equilibria with distinctive properties.
+These models "shed new light on theories of mechanism design, auction and
+contract in the quantum era."
+
+\textbf{Practical quantum auctions.} Economic applications relying on quantum
+information aspects (not computational speedup) are viable with just a few
+qubits. This suggests potential early applications of near-term quantum
+technology in auction design.
+
+\textbf{Quantum Condorcet Voting.} Quantum Condorcet Voting has been used to disprove
+Arrow's Impossibility Theorem in the quantum setting: for small readout
+amplitudes, quantum outcomes track the classical scheme, but beyond a modest
+noise level, they converge to non-classical distributions that satisfy the
+conditions Arrow showed to be classically impossible.
+\subsection{5.4 Evolutionary Quantum Game Theory}
+\label{sec:org084932c}
+
+Quantum game theory extends to evolutionary settings where strategies evolve
+over time under selection pressure:
+
+\begin{itemize}
+\item \textbf{Quantum replicator dynamics:} The classical replicator equation is generalized
+to track evolution of quantum strategy parameters. Quantum strategies can
+invade classical populations under certain conditions.
+\item \textbf{Biological applications:} Quantum game models have been applied to evolutionary
+biology, where the "entanglement" is reinterpreted as genetic correlation
+between related organisms.
+\item A 2025 review in \emph{Quantum Information Processing} maps the intersection of
+quantum and evolutionary game theory comprehensively.
+\end{itemize}
+\section{6. Quantum Finance and Economics}
+\label{sec:org1525abd}
+
+\subsection{6.1 The Schrödinger-Black-Scholes Connection}
+\label{sec:org164ac0d}
+
+Emmanuel Haven demonstrated that the Black-Scholes-Merton equation for option
+pricing is a special case of the Schrödinger equation when markets are perfectly
+efficient. The derivation introduces a parameter ℏ (by analogy with Planck's
+constant) that measures the degree of market inefficiency --- the amount of
+arbitrage arising from non-instantaneous price changes, information asymmetry,
+and unequal trader wealth.
+
+When ℏ → 0 (perfect efficiency), the equation reduces to classical Black-Scholes.
+When ℏ > 0, quantum-like effects emerge: interference between trading strategies,
+non-commutative observables for price and momentum, and wave-like propagation of
+market information. The Black-Scholes equation is equivalent to the imaginary-time
+Schrödinger equation of a free particle --- a connection that brings the full
+apparatus of quantum mechanics into financial modeling.
+
+The "financial Hamiltonian" (analogous to the energy operator in physics) is
+determined by the rate of return. Born's rule, interference of probabilities, and
+non-commutative operators all emerge from the organization of production and
+investment processes.
+\subsection{6.2 Open Quantum Systems in Markets}
+\label{sec:orge6ea420}
+
+Market dynamics are naturally modeled as \emph{open} quantum systems --- systems
+interacting with an environment. The GKSL master equation (§2.5) governs the
+evolution of market states:
+
+\begin{itemize}
+\item The density matrix ρ represents the distribution over market configurations.
+\item The Hamiltonian H encodes fundamental valuations and market microstructure.
+\item Lindblad operators L\textsubscript{k} model information arrival, regulatory intervention,
+and trader behavioral noise.
+\item Decoherence (decay of off-diagonal elements) corresponds to the market
+"resolving" uncertainty --- the transition from quantum-like superposition of
+prices to a definite traded price.
+\end{itemize}
+
+Khrennikov developed a contextual probability framework using agents to model
+this: each trader operates in a context (their information set, risk tolerance,
+time horizon), and the incompatibility of different agents' contexts produces
+non-classical aggregate behavior.
+\subsection{6.3 Portfolio Optimization}
+\label{sec:orgc743081}
+
+Quantum computing is finding practical application in portfolio optimization:
+
+\textbf{IBM + Vanguard (2024-2025):} Used 109 qubits on the IBM Quantum Heron r1
+processor (133 available) with circuits containing up to 4,200 gates. On
+simplified ETF portfolio construction, the hybrid quantum-classical workflow
+performed on par with and sometimes surpassed state-of-the-art classical solvers
+as problem size increased.
+
+\textbf{Citi + Classiq:} Applied the Quantum Approximate Optimization Algorithm (QAOA)
+to portfolio optimization problems.
+
+\textbf{Fidelity + IonQ:} Developed quantum models for synthetic financial data
+generation.
+
+Classical portfolio optimization becomes intractable when adding realistic
+constraints (lot sizes, maximum positions, sector limits). Quantum computers
+encode exponentially many portfolio configurations as superpositions, exploring
+the solution space more efficiently and potentially avoiding local minima.
+
+McKinsey estimates \$400-600 billion in potential value from quantum computing in
+financial services by 2035. The CFA Institute (2025) recommends starting with
+Monte Carlo methods for pricing/risk, then moving to discrete optimization as
+quantum hardware matures.
+\subsection{6.4 Quantum-Like Models of Market Behavior}
+\label{sec:org97a8c1b}
+
+Beyond formal quantum computing, quantum-like models explain market phenomena
+that classical models struggle with:
+
+\begin{itemize}
+\item \textbf{Interference in trading decisions:} A trader considering two information sources
+simultaneously may make different decisions than if they processed each source
+sequentially. The interference term captures "cognitive momentum" in trading.
+\item \textbf{Non-commutative observables:} Asking "what is the fair price?" and "what is the
+market sentiment?" in different orders yields different answers --- the act of
+assessing price changes one's sentiment assessment, and vice versa.
+\item \textbf{Contextuality in markets:} The same asset has different risk profiles depending
+on what else is in the portfolio --- a form of quantum contextuality.
+\end{itemize}
+\section{7. Quantum Social Dynamics}
+\label{sec:org2e4f451}
+
+\subsection{7.1 Opinion Dynamics and Polarization}
+\label{sec:orgbb460df}
+
+Recent models (2024-2025) apply quantum formalism to opinion dynamics:
+
+\textbf{Beliefs as quantized energy levels.} A 2024 model represents political beliefs
+as energy levels in a quantum system. Polarization corresponds to the formation
+of energy bands and interband gaps when like-minded individuals interact.
+Transitions between polarized groups require significant "energy" (effort,
+information, social pressure), explaining the persistence of political
+polarization.
+
+\textbf{Hamiltonian framework (2025).} A novel model provides: (1) complete probabilistic
+formulation with memory effects, (2) parameterized interaction potentials for
+social hierarchy and network topology, and (3) explicit consensus emergence
+mechanisms. Unlike classical opinion dynamics models (DeGroot, bounded confidence),
+the quantum model naturally produces oscillatory behavior, tunneling between
+opinion clusters, and interference between information pathways.
+
+\textbf{Quantum simulations on quantum hardware (2025).} Models of opinion dynamics have
+been implemented on IBM Quantum devices, using superposition for opinion
+uncertainty, measurement-induced collapse for opinion commitment, and entanglement
+for social correlations.
+\subsection{7.2 Information Diffusion via Quantum Walks}
+\label{sec:org83ad26e}
+
+Quantum walks --- the quantum analog of classical random walks --- model
+information propagation through social networks:
+
+\textbf{Continuous-Time Quantum Walk Information Propagation Model (CTQW-IPM).} Ranks
+crucial individuals in social networks for information spread. Overcomes
+limitations of classical simulation models (extensive iteration, multiple control
+parameters) by using the quantum walk's natural spreading behavior.
+
+\textbf{Asymmetry-resolving quantum walk.} A key innovation addresses the problem that
+quantum walk Hamiltonians are Hermitian (symmetric transitions), but social
+influence is inherently asymmetric. The model lifts the social network state
+into a higher-dimensional space and applies controlled operators to recover
+asymmetric influence.
+
+\textbf{Quantum Walk Neural Networks.} Learn a graph-dependent diffusion operation that
+can \emph{direct} information flow (unlike classical random walks in GCN/DCNN that
+diffuse uniformly). The "coin operators" controlling quantum walk behavior are
+learned from data.
+
+\textbf{Graph Quantum Walk Transformer (GQWformer, 2024).} Developed by Zhejiang Lab,
+this architecture embeds quantum walks into graph transformers, capturing both
+global and local structure. Validated on 5 benchmark datasets across biological,
+chemical, and social domains, outperforming 11 baseline models.
+\subsection{7.3 Voting Behavior}
+\label{sec:org8c0d38a}
+
+Quantum-like models have been applied extensively to voting:
+
+\textbf{Nonseparability of voter preferences.} "Ticket splitting" --- voting for
+different parties in executive vs. legislative races --- demonstrates non-separable
+preferences that violate classical Kolmogorovian probability through inconsistent
+Bayesian updating. The quantum formalism naturally accommodates this via entangled
+preference states in the tensor product of the presidential and senatorial
+Hilbert spaces.
+
+\textbf{Quantum interference in political preferences.} Election contexts modeled with
+quantum probability produce an interference term for contextuality. Some
+reconstructed decision eigenvectors produce "hyperbolic interference" (magnitude
+exceeding 1), indicating strong non-classicality.
+
+\textbf{Coalition formation (Bagarello, 2015).} Quantum field theory formalism derives
+dynamical equations for the evolution of parties' coalition preferences,
+incorporating voter behavior impact.
+
+\textbf{Quantum Condorcet Voting and Arrow's Theorem.} Quantum Condorcet Voting has
+been used to disprove Arrow's Impossibility Theorem in the quantum setting. For
+small readout amplitudes, quantum outcomes track the classical scheme; beyond a
+modest noise level, they converge to non-classical distributions that satisfy
+conditions Arrow showed to be classically impossible.
+
+\textbf{Density operator models (Dubois).} Density operators relative to candidate
+families model voting intention, with proportionality hypotheses between density
+matrix coefficients and vote probabilities. Applied to the French 2012
+presidential election with promising results.
+\subsection{7.4 Social Choice and Contextuality}
+\label{sec:org54006d5}
+
+The deepest connection between quantum theory and social science may be through
+contextuality:
+
+\textbf{Topological connection (Baryshnikov).} "The Topology of Quantum Theory and Social
+Choice" identifies topological singularities encoding the difference between
+classical and quantum probability, establishing that a resolution to the social
+choice problem is equivalent to a resolution to the violation of unicity in
+quantum measurement frameworks.
+
+\textbf{Contextuality-by-Default in economics (2025).} True contextuality has been found
+in global investment decisions, demonstrating that quantum-like contextuality
+extends beyond cognitive experiments to real-world economic behavior.
+
+\textbf{Intransitivity and contextuality.} The relationship between intransitive
+preferences (A ≻ B ≻ C ≻ A) and Type II contextuality (considered sine qua non
+of quantum mechanics) has been observed in human decision-making experiments.
+\section{8. Categorical and Compositional Approaches}
+\label{sec:orgb585e33}
+
+\subsection{8.1 Categorical Quantum Mechanics (CQM)}
+\label{sec:org1ac5c23}
+
+Categorical Quantum Mechanics, developed primarily by Bob Coecke, Samson Abramsky,
+Chris Heunen, and Jamie Vicary at Oxford, provides the mathematical foundation
+for the tensor-aware propagator network design described in the companion document.
+
+The framework axiomatizes quantum processes in terms of:
+\begin{itemize}
+\item \textbf{Monoidal categories:} Sequential (∘) and parallel (⊗) composition of processes.
+\item \textbf{Dagger categories:} Every process f has an adjoint f†, giving time-reversal.
+\item \textbf{Compact closed categories:} Duality between objects enables wire-bending in
+string diagrams, corresponding to bidirectional constraint propagation.
+\item \textbf{Frobenius algebras:} Merge and copy operations at nodes, with the spider theorem
+ensuring topology-independence.
+\end{itemize}
+
+The graphical calculus (string diagrams) provides a complete reasoning language:
+any equation between quantum processes that holds in finite-dimensional Hilbert
+spaces can be proved by diagram manipulation alone.
+\subsection{8.2 DisCoCat and Quantum NLP}
+\label{sec:org5ef3d65}
+
+The most developed social-science-adjacent application of CQM is \textbf{DisCoCat}
+(Categorical Compositional Distributional Semantics), introduced by Coecke,
+Sadrzadeh, and Clark:
+
+\begin{itemize}
+\item \textbf{Key insight:} Pregroup grammars and quantum processes both form rigid monoidal
+categories. A monoidal functor maps grammatical structure to vector space
+semantics, composing word meanings into sentence meanings via the same algebra
+that composes quantum states.
+\item \textbf{Verbs as unitary operations:} A transitive verb is a linear map
+S ⊗ O → S (where S = subject space, O = object space, S = sentence space).
+This is structurally identical to a unitary operator on a tensor product.
+\item \textbf{Extensions:} Density matrices for lexical ambiguity (Piedeleu et al.),
+convex relations for cognitive modeling (Bolt et al., 2016), and games for
+dialogue and Wittgenstein's language games (Hedges \& Lewis, 2018).
+\end{itemize}
+
+This connects to Prologos through the quantale-enriched categorical framework:
+the same string diagram calculus that describes quantum NLP describes
+propagation through TensorCells.
+\subsection{8.3 Sheaf-Theoretic Contextuality}
+\label{sec:org7f3c0ae}
+
+Abramsky and Brandenburger developed a sheaf-theoretic framework for
+contextuality that is \emph{theory-independent} --- it applies to any situation
+with locally consistent but globally inconsistent empirical data:
+
+\begin{itemize}
+\item Local sections over a measurement context describe the outcomes observable
+in that context.
+\item The sheaf condition checks whether local sections glue to a global section.
+\item Failure of the sheaf condition = contextuality = no single classical
+probability model accounts for all the data.
+\end{itemize}
+
+This connects directly to Prologos's sheaf-theoretic distributed reasoning
+(Beyond Prolog §8.3): the same mathematical structure that checks for
+quantum contextuality checks for consistency of distributed knowledge bases.
+\subsection{8.4 Connection to Prologos's Categorical Architecture}
+\label{sec:orgfec449b}
+
+The categorical structures described in this section align precisely with
+Prologos's existing and planned architecture:
+
+\begin{center}
+\begin{tabular}{ll}
+CQM Structure & Prologos Realization\\
+\hline
+Monoidal category & Propagator network (sequential + parallel)\\
+Dagger & Adjoint/reverse propagation\\
+Compact closure & Bidirectional constraints\\
+Frobenius algebra & Cell merge/broadcast operations\\
+Quantale enrichment & Information-graded morphisms\\
+Sheaf condition & Distributed consistency checking\\
+Tensor product & TensorCell (joint state spaces)\\
+Completely positive maps & DensityCell propagators (measurement)\\
+\end{tabular}
+\end{center}
+
+The vision: a single computational framework --- the quantale-enriched
+propagator network --- that simultaneously supports type inference, session
+type checking, relational logic, probabilistic reasoning, and quantum-like
+modeling. Each domain is an instantiation of the same enriched-categorical
+machinery.
+\section{9. Modeling with Tensor-Aware Propagators: Opportunities}
+\label{sec:org40f908e}
+
+\subsection{9.1 Decision Modeling}
+\label{sec:org2b484dc}
+
+The Yukalov-Sornette QDT framework maps to propagator constraints:
+
+\begin{itemize}
+\item Each prospect is a basis element in an \texttt{AmplitudeCell}.
+\item The decision-maker's state |ψ⟩ is a superposition of prospects.
+\item The attraction factor q(π) emerges from the interference term when
+amplitudes are squared: p(π) = |⟨π|ψ⟩|² = f(π) + q(π).
+\item The Quarter Law (⟨|q|⟩ = 1/4) becomes a testable propagator constraint.
+\item Deliberation (time evolution of preference) is a unitary rotation of |ψ⟩.
+\end{itemize}
+\subsection{9.2 Game-Theoretic Modeling}
+\label{sec:org97f05cd}
+
+The EWL protocol encodes directly:
+
+\begin{itemize}
+\item Two-player strategy space = \texttt{TensorCell [Strategy Strategy]}.
+\item Entangling gate J(γ) = unitary propagator on the joint TensorCell.
+\item Individual strategies = unitary propagators on subsystems.
+\item Payoff computation = measurement + classical propagation.
+\item Nash equilibrium = propagation to quiescence under payoff constraints.
+\end{itemize}
+
+The quantum Prisoner's Dilemma, where entangled strategies produce Pareto-optimal
+Nash equilibria, is expressible as a tensor-aware propagator network.
+\subsection{9.3 Financial Modeling}
+\label{sec:orge089767}
+
+Haven's Schrödinger-Black-Scholes connection:
+
+\begin{itemize}
+\item Market states as \texttt{AmplitudeCell} values in superposition.
+\item The arbitrage parameter ℏ controls the degree of quantum-like behavior.
+\item Unitary evolution encodes fundamental price dynamics.
+\item Measurement = trade execution (collapse to definite price).
+\item The GKSL equation via \texttt{DensityCell} models market decoherence.
+\end{itemize}
+\subsection{9.4 Social Network Modeling}
+\label{sec:org18816e4}
+
+Quantum walk propagators for opinion dynamics:
+
+\begin{itemize}
+\item Each agent's belief is an \texttt{AmplitudeCell} over opinion options.
+\item Social influence = unitary rotation toward neighbor's state.
+\item Network topology determines propagator wiring.
+\item Entanglement between agents = correlated belief updates via \texttt{TensorCell}.
+\item Consensus = decoherence to classical mixture via Lindblad operators.
+\end{itemize}
+\subsection{9.5 Survey and Polling Models}
+\label{sec:orgae29d8b}
+
+The QQ equality as a propagator constraint:
+
+\begin{itemize}
+\item The Wang-Busemeyer QQ equality is automatically satisfied by any quantum
+probability model implemented on AmplitudeCells.
+\item Violation detection becomes a constraint-propagation problem.
+\item Order effects in survey questions are modeled by non-commutative projections.
+\item The propagator network can optimize question ordering to minimize bias.
+\end{itemize}
+\section{10. Open Problems and Future Directions}
+\label{sec:org76bf475}
+
+\subsection{10.1 Empirical Validation Challenges}
+\label{sec:orga074828}
+
+While the QQ equality has strong empirical support (70+ national surveys), many
+quantum-like models have limited validation beyond explaining known anomalies post
+hoc. Prologos's modeling capabilities could help by making it easier to generate
+quantitative predictions from quantum-like models and test them against data.
+\subsection{10.2 The Parameter Explosion Problem}
+\label{sec:org86cc8fc}
+
+Quantum Bayesian networks suffer from exponential growth of parameters with the
+number of variables. The similarity heuristic (Moreira \& Wichert) helps, but
+principled dimensionality reduction for quantum-like social models remains open.
+Tensor network contraction methods may provide a path.
+\subsection{10.3 Non-Markovian Extensions}
+\label{sec:orgde5e3aa}
+
+The GKSL master equation assumes Markovian (memoryless) dynamics, but human
+cognition has strong memory effects. Non-Markovian quantum dynamics
+(Nakajima-Zwanzig equations, time-convolutionless approaches) are an active
+frontier. Prologos's persistent (immutable) propagator network naturally
+preserves historical states, which could be exploited for memory kernels.
+\subsection{10.4 Connecting Quantum-Like to Actual Quantum Computing}
+\label{sec:org8fbfdfd}
+
+As quantum hardware matures (IBM Heron, IonQ), practical applications in finance
+are demonstrating near-parity with classical methods. The question arises: can
+quantum-like cognitive/social models be run on actual quantum hardware for
+speedup? The answer is nuanced --- the models use quantum math but typically
+involve classical simulation of small quantum systems. Quantum advantage would
+emerge for large-scale social simulations (many agents, entangled beliefs).
+\subsection{10.5 Contextuality as the Key Resource}
+\label{sec:org03f4c3f}
+
+The CbD framework (Dzhafarov \& Kujala) provides a theory-independent way to
+detect and measure contextuality in behavioral data. Contextuality may be the
+key "resource" that quantum-like models provide --- analogous to how entanglement
+is a resource in quantum computing. Understanding when and why social/economic
+systems are contextual would guide where quantum-like models are most valuable.
+\subsection{10.6 Cross-Domain Compositional Models}
+\label{sec:org2f4401a}
+
+The categorical framework (CQM, DisCoCat) suggests the possibility of
+\emph{compositional} quantum-like models that span domains: a model of voter cognition
+(quantum decision theory) composed with a model of social influence (quantum
+walks) composed with a model of media dynamics (open quantum systems). Prologos's
+propagator network, with its natural compositional structure, is well-suited to
+this vision.
+\section{11. References}
+\label{sec:org07ec632}
+
+\subsection{Quantum Decision Theory}
+\label{sec:org2be310c}
+\begin{itemize}
+\item Yukalov, V.I. \& Sornette, D. (2010). Mathematical structure of quantum decision theory. \emph{Advances in Complex Systems} 13, 659-698.
+\item Yukalov, V.I. \& Sornette, D. (2011). Decision theory with prospect interference and entanglement. \emph{Theory and Decision} 70, 283-328.
+\item Yukalov, V.I. \& Sornette, D. (2014). Conditions for quantum interference in cognitive sciences. \emph{Topics in Cognitive Science} 6, 79-90.
+\item Yukalov, V.I. \& Sornette, D. (2016). Quantum probabilities as behavioral probabilities. \emph{Entropy} 19, 112.
+\end{itemize}
+\subsection{Quantum Cognition}
+\label{sec:org36473e1}
+\begin{itemize}
+\item Busemeyer, J.R. \& Bruza, P.D. (2012). \emph{Quantum Models of Cognition and Decision}. Cambridge UP.
+\item Pothos, E.M. \& Busemeyer, J.R. (2013). Can quantum probability provide a new direction for cognitive modeling? \emph{Behavioral and Brain Sciences} 36, 255-274.
+\item Wang, Z. \& Busemeyer, J.R. (2013). A quantum question order model supported by empirical tests of an a priori and target prediction. \emph{Topics in Cognitive Science} 5, 689-710.
+\item Wang, Z. et al. (2014). Context effects produced by question orders reveal quantum nature of human judgments. \emph{PNAS} 111, 9431-9436.
+\end{itemize}
+\subsection{Quantum Game Theory}
+\label{sec:org849fd9c}
+\begin{itemize}
+\item Eisert, J., Wilkens, M. \& Lewenstein, M. (1999). Quantum games and quantum strategies. \emph{Physical Review Letters} 83, 3077.
+\item Benjamin, S.C. \& Hayden, P.M. (2001). Multiplayer quantum games. \emph{Physical Review A} 64, 030301.
+\item Bagarello, F. (2015). Quantum dynamics for classical systems. \emph{Springer}.
+\end{itemize}
+\subsection{Quantum Finance}
+\label{sec:orgddb1e43}
+\begin{itemize}
+\item Haven, E. \& Khrennikov, A. (2013). \emph{Quantum Social Science}. Cambridge UP.
+\item Haven, E. (2002). A discussion on embedding the Black-Scholes option pricing model in a quantum physics setting. \emph{Physica A} 304, 507-524.
+\item Rao, A., Yang, S. \& Zakerinia, S. (2025). Using quantum game theory to model competition. \emph{SSRN}.
+\end{itemize}
+\subsection{Open Quantum Systems in Cognition}
+\label{sec:org0e8611a}
+\begin{itemize}
+\item Asano, M. et al. (2011). Quantum-like model of brain's functioning. \emph{Journal of Theoretical Biology} 281, 56-64.
+\item Asano, M. et al. (2011). Quantum-like dynamics of decision-making. \emph{Physica A} 391, 2083-2099.
+\item Khrennikov, A. (2023). Open systems, quantum probability, and logic for quantum-like modeling. \emph{Entropy} 25, 886.
+\end{itemize}
+\subsection{Contextuality}
+\label{sec:orge5a72cb}
+\begin{itemize}
+\item Dzhafarov, E.N. \& Kujala, J.V. (2016). Context-content systems of random variables. \emph{Philosophical Transactions A} 374, 20150235.
+\item Cervantes, V.H. \& Dzhafarov, E.N. (2018). Snow queen is evil and beautiful. \emph{Decision} 5, 193-214.
+\item Baryshnikov, Y. (2022). The topology of quantum theory and social choice. \emph{Quantum Reports} 4, 14.
+\end{itemize}
+\subsection{Quantum Walks and Social Networks}
+\label{sec:org14df466}
+\begin{itemize}
+\item Li, X. et al. (2022). CTQW information propagation model. \emph{Neural Computing and Applications}.
+\item Dernbach, S. et al. (2019). Quantum walk neural networks. \emph{Applied Network Science}.
+\end{itemize}
+\subsection{Categorical and Compositional}
+\label{sec:org14d4051}
+\begin{itemize}
+\item Coecke, B., Sadrzadeh, M. \& Clark, S. (2010). Mathematical foundations for a compositional distributional model of meaning. \emph{Linguistic Analysis} 36, 345-384.
+\item Abramsky, S. \& Brandenburger, A. (2011). The sheaf-theoretic structure of non-locality and contextuality. \emph{New Journal of Physics} 13, 113036.
+\end{itemize}
+\subsection{Prologos Internal Documents}
+\label{sec:org453a76e}
+\begin{itemize}
+\item Beyond Prolog: Frontiers for the Prologos Relational Language (2026-03-16).
+\item Tensor-Aware Propagator Networks with Unitary Evolution (companion, 2026-03-16).
+\item Logic Engine Design: Comprehensive Implementation Guide (2026-02-24).
+\item Towards a General Logic Engine on Propagators (2026-02-24).
+\end{itemize}
+\end{document}

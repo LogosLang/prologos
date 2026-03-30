@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pairs and Options — Prologos Standard Library</title>
+  <style>
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
+  --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
+  --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
+  color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
+}
+h1.chapter-title {
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
+  padding-bottom: .5rem; margin-bottom: .3rem;
+}
+h2.part-header {
+  font-size: 1.35rem; border-top: 1px solid var(--border);
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
+}
+h3.section-title {
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
+  padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
+}
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
+.module-badge {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: .78rem; background: var(--badge-bg); color: var(--accent);
+  border: 1px solid var(--badge-border); border-radius: 3px;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
+}
+pre {
+  background: var(--code-bg); border-left: 3px solid var(--border);
+  padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
+}
+code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
+pre code { background: none; color: var(--fg); }
+p code {
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
+  font-size: .88em;
+}
+.prose { margin: .5rem 0; }
+.prose p { margin: .6rem 0; }
+nav.chapter-nav {
+  font-size: .9rem; color: var(--muted);
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
+}
+nav.chapter-nav a { color: var(--accent); text-decoration: none; }
+nav.chapter-nav a:hover { text-decoration: underline; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
+nav.bottom-nav {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
+  font-size: .9rem; color: var(--muted);
+}
+nav.bottom-nav a { color: var(--accent); text-decoration: none; }
+nav.bottom-nav a:hover { text-decoration: underline; }
+.preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* TOC page */
+.toc-part-label {
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
+  margin-top: 1.8rem; margin-bottom: .3rem;
+}
+ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
+ol.toc-chapters li { margin: .3rem 0; }
+ol.toc-chapters a { color: var(--accent); text-decoration: none; }
+ol.toc-chapters a:hover { text-decoration: underline; }
+.toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+.book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
+  </style>
+
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\u2600':'\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\u2600':'\u263E';
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="chapter-nav"><a href="sets.html">← Sets</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="characters-and-strings.html">Characters And Strings →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<article>
+<h1 class="chapter-title">Pairs and Options</h1>
+<div class="prose"><p>Prologos provides several standard types for representing
+optional values, error handling, and binary choices. This
+chapter covers four related data types:</p>
+<p>  • <strong>Pair</strong> — non-dependent tuples <code>(A, B)</code> via <code>Sigma</code>
+  • <strong>Option</strong> — a value that may or may not be present
+  • <strong>Either</strong> — a tagged union of two types
+  • <strong>Result</strong> — success-or-error with domain-specific semantics
+  • <strong>Never</strong> — the uninhabited bottom type</p>
+<p>Pairs use the built-in <code>Sigma</code> type with a non-dependent first
+component: <code>Sigma (_ : A) B</code>. The <code>pair</code>, <code>first</code>, and <code>second</code>
+constructors/accessors are AST-level keywords. The Pair module
+adds derived operations like <code>swap</code>, <code>bimap</code>, and <code>uncurry</code>.</p>
+<p>Option and Result are the workhorses of error handling in
+Prologos — Option when there's nothing useful to say about
+failure, Result when the error carries information.</p></div>
+<h2 class="part-header">Part I — Pairs</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::pair</div>
+<h3 class="section-title">Pair Utilities</h3>
+<div class="prose"><p>The built-in <code>Sigma</code> type represents dependent pairs. When the
+second component doesn't depend on the first, you get an ordinary
+tuple. The <code>pair</code>, <code>first</code>, and <code>second</code> keywords are built-in
+AST nodes; this module provides derived combinators.</p>
+<p>Swap: (a, b) -&gt; (b, a)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> swap [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">B</span>&gt;] <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> swap [p]
+  pair [second p] [first p]</code></pre>
+<div class="prose"><p>Map over first component: (A -&gt; C) -&gt; (A, B) -&gt; (C, B)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> map-fst [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>] [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">C</span>&gt;] <span class="hl-ty">B</span>]
+<span class="hl-kw">defn</span> map-fst [f p]
+  pair [f [first p]] [second p]</code></pre>
+<div class="prose"><p>Map over second component: (B -&gt; C) -&gt; (A, B) -&gt; (A, C)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> map-snd [<span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>] [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">C</span>]
+<span class="hl-kw">defn</span> map-snd [f p]
+  pair [first p] [f [second p]]</code></pre>
+<div class="prose"><p>Bimap: (A -&gt; C) -&gt; (B -&gt; D) -&gt; (A, B) -&gt; (C, D)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> bimap [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>] [<span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">D</span>] [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">C</span>&gt;] <span class="hl-ty">D</span>]
+<span class="hl-kw">defn</span> bimap [f g p]
+  pair [f [first p]] [g [second p]]</code></pre>
+<div class="prose"><p>Duplicate: a -&gt; (a, a)</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> dup <span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">A</span>]
+<span class="hl-kw">defn</span> dup [x]
+  pair x x</code></pre>
+<div class="prose"><p>Uncurry: (A -&gt; B -&gt; C) -&gt; (A, B) -&gt; C</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> uncurry [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>] [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>
+<span class="hl-kw">defn</span> uncurry [f p]
+  f [first p] [second p]</code></pre>
+</section>
+<h2 class="part-header">Part II — Option</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::option</div>
+<h3 class="section-title">The Option Type</h3>
+<div class="prose"><p><code>Option A</code> represents a value that may or may not be present.
+It has two constructors:
+  <code>none</code> — absence of value
+  <code>some : A</code> — a present value</p>
+<p>Option is the standard way to handle partial functions in
+Prologos. Rather than throwing errors, functions that might
+not have a result return <code>Option</code>.</p></div>
+<pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">Option</span> {<span class="hl-ty">A</span>}
+  none
+  some : <span class="hl-ty">A</span></code></pre>
+<h3 class="section-title">Core Combinators</h3>
+<div class="prose"><p>Map a function over the contained value.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> map [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>] [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">B</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Apply a function to the value inside Some, pass through None"</span>
+<span class="hl-kw">defn</span> map [f opt]
+  <span class="hl-kw">match</span> opt
+    | none   <span class="hl-op">-&gt;</span> none
+    | some x <span class="hl-op">-&gt;</span> some [f x]</code></pre>
+<div class="prose"><p>Flat-map (bind): apply f that returns Option B.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> flat-map [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">B</span>] [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">B</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Monadic bind: chain computations that may fail"</span>
+<span class="hl-kw">defn</span> flat-map [f opt]
+  <span class="hl-kw">match</span> opt
+    | none   <span class="hl-op">-&gt;</span> none
+    | some x <span class="hl-op">-&gt;</span> f x</code></pre>
+<div class="prose"><p>Unwrap with a default value.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> unwrap-or <span class="hl-ty">A</span> [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Extract the value or return a default if None"</span>
+<span class="hl-kw">defn</span> unwrap-or [default opt]
+  <span class="hl-kw">match</span> opt
+    | none   <span class="hl-op">-&gt;</span> default
+    | some x <span class="hl-op">-&gt;</span> x</code></pre>
+<div class="prose"><p>Return opt if some, else fall back to alt.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> or-else [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Return the first Option if Some, otherwise the second"</span>
+<span class="hl-kw">defn</span> or-else [opt alt]
+  <span class="hl-kw">match</span> opt
+    | none   <span class="hl-op">-&gt;</span> alt
+    | some x <span class="hl-op">-&gt;</span> some x</code></pre>
+<h3 class="section-title">Filtering and Combining</h3>
+<div class="prose"><p>Keep the value only if the predicate holds, else none.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> filter [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>] [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Keep the value only if it satisfies the predicate"</span>
+<span class="hl-kw">defn</span> filter [pred opt]
+  <span class="hl-kw">match</span> opt
+    | none   <span class="hl-op">-&gt;</span> none
+    | some x <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> [pred x]
+                  | true  <span class="hl-op">-&gt;</span> some x
+                  | false <span class="hl-op">-&gt;</span> none</code></pre>
+<div class="prose"><p>Combine two Options with a function. None if either is none.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> zip-with [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>] [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] [<span class="hl-ty">Option</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">C</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Combine two Options with a function; None if either is None"</span>
+<span class="hl-kw">defn</span> zip-with [f oa ob]
+  <span class="hl-kw">match</span> oa
+    | none   <span class="hl-op">-&gt;</span> none
+    | some a <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> ob
+                  | none   <span class="hl-op">-&gt;</span> none
+                  | some b <span class="hl-op">-&gt;</span> some [f a b]</code></pre>
+<div class="prose"><p>Combine two Options into an Option of pairs. None if either is none.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> zip [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] [<span class="hl-ty">Option</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>]
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Pair two Options; None if either is None"</span>
+<span class="hl-kw">defn</span> zip [oa ob]
+  zip-with <span class="hl-ty">A</span> <span class="hl-ty">B</span> [<span class="hl-ty">Sigma</span> [_ &lt;<span class="hl-ty">A</span>&gt;] <span class="hl-ty">B</span>] [<span class="hl-kw">fn</span> a b [pair a b]] oa ob</code></pre>
+<h3 class="section-title">Predicates</h3>
+<div class="prose"><p>True if some.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> some? [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Returns true if the Option contains a value"</span>
+<span class="hl-kw">defn</span> some? [opt]
+  <span class="hl-kw">match</span> opt
+    | none   <span class="hl-op">-&gt;</span> false
+    | some _ <span class="hl-op">-&gt;</span> true</code></pre>
+<div class="prose"><p>True if none.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> none? [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Returns true if the Option is empty"</span>
+<span class="hl-kw">defn</span> none? [opt]
+  <span class="hl-kw">match</span> opt
+    | none   <span class="hl-op">-&gt;</span> true
+    | some _ <span class="hl-op">-&gt;</span> false</code></pre>
+<h3 class="section-title">Nesting</h3>
+<div class="prose"><p>Flatten nested Option.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> flatten [<span class="hl-ty">Option</span> [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>]] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Collapse a nested Option into a single Option"</span>
+<span class="hl-kw">defn</span> flatten [opt]
+  <span class="hl-kw">match</span> opt
+    | none   <span class="hl-op">-&gt;</span> none
+    | some x <span class="hl-op">-&gt;</span> x</code></pre>
+<div class="prose"><p>Apply a 2-argument function to two Options.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> map2 [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>] [<span class="hl-ty">Option</span> <span class="hl-ty">A</span>] [<span class="hl-ty">Option</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">C</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Apply a binary function to the values of two Options"</span>
+<span class="hl-kw">defn</span> map2 [f oa ob]
+  zip-with f oa ob</code></pre>
+</section>
+<h2 class="part-header">Part III — Either and Result</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::either</div>
+<h3 class="section-title">The Either Type</h3>
+<div class="prose"><p><code>Either A B</code> is a tagged union: <code>left A</code> or <code>right B</code>.
+By convention, <code>Left</code> carries the "error" or "alternative" value
+and <code>Right</code> carries the "success" or "primary" value. Functorial
+operations (<code>map</code>, <code>flat-map</code>) act on the Right branch.</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> none some]]
+
+<span class="hl-kw">data</span> <span class="hl-ty">Either</span> {<span class="hl-ty">A</span> <span class="hl-ty">B</span>}
+  left : <span class="hl-ty">A</span>
+  right : <span class="hl-ty">B</span></code></pre>
+<div class="prose"><p>Map a function over the Right value.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> map [<span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>] [<span class="hl-ty">Either</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Either</span> <span class="hl-ty">A</span> <span class="hl-ty">C</span>
+<span class="hl-kw">defn</span> map [f e]
+  <span class="hl-kw">match</span> e
+    | left a  <span class="hl-op">-&gt;</span> left a
+    | right b <span class="hl-op">-&gt;</span> right [f b]</code></pre>
+<div class="prose"><p>Map a function over the Left value.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> map-left [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>] [<span class="hl-ty">Either</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Either</span> <span class="hl-ty">C</span> <span class="hl-ty">B</span>
+<span class="hl-kw">defn</span> map-left [f e]
+  <span class="hl-kw">match</span> e
+    | left a  <span class="hl-op">-&gt;</span> left [f a]
+    | right b <span class="hl-op">-&gt;</span> right b</code></pre>
+<div class="prose"><p>Flat-map (bind) over the Right value.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> flat-map [<span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Either</span> <span class="hl-ty">A</span> <span class="hl-ty">C</span>] [<span class="hl-ty">Either</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Either</span> <span class="hl-ty">A</span> <span class="hl-ty">C</span>
+<span class="hl-kw">defn</span> flat-map [f e]
+  <span class="hl-kw">match</span> e
+    | left a  <span class="hl-op">-&gt;</span> left a
+    | right b <span class="hl-op">-&gt;</span> f b</code></pre>
+<div class="prose"><p>Convert Either to Option, keeping only Right values.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> to-option [<span class="hl-ty">Either</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">B</span>
+<span class="hl-kw">defn</span> to-option [e]
+  <span class="hl-kw">match</span> e
+    | left _  <span class="hl-op">-&gt;</span> none
+    | right b <span class="hl-op">-&gt;</span> some b</code></pre>
+<div class="prose"><p>True if Left.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> left? [<span class="hl-ty">Either</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> left? [e]
+  <span class="hl-kw">match</span> e
+    | left _  <span class="hl-op">-&gt;</span> true
+    | right _ <span class="hl-op">-&gt;</span> false</code></pre>
+<div class="prose"><p>True if Right.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> right? [<span class="hl-ty">Either</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+<span class="hl-kw">defn</span> right? [e]
+  <span class="hl-kw">match</span> e
+    | left _  <span class="hl-op">-&gt;</span> false
+    | right _ <span class="hl-op">-&gt;</span> true</code></pre>
+<div class="prose"><p>Unwrap Right with a default.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> unwrap-right <span class="hl-ty">B</span> [<span class="hl-ty">Either</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>
+<span class="hl-kw">defn</span> unwrap-right [default e]
+  <span class="hl-kw">match</span> e
+    | left _  <span class="hl-op">-&gt;</span> default
+    | right b <span class="hl-op">-&gt;</span> b</code></pre>
+<div class="prose"><p>Unwrap Left with a default.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> unwrap-left <span class="hl-ty">A</span> [<span class="hl-ty">Either</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+<span class="hl-kw">defn</span> unwrap-left [default e]
+  <span class="hl-kw">match</span> e
+    | left a  <span class="hl-op">-&gt;</span> a
+    | right _ <span class="hl-op">-&gt;</span> default</code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::data::result</div>
+<h3 class="section-title">The Result Type</h3>
+<div class="prose"><p><code>Result A E</code> is similar to Either but with domain-specific
+naming: <code>ok A</code> for success, <code>err E</code> for error. Result is
+the idiomatic error-handling type when the error carries
+information (use Option when there's nothing to say about failure).</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::data::option <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Option</span> none some]]
+
+<span class="hl-kw">data</span> <span class="hl-ty">Result</span> {<span class="hl-ty">A</span> <span class="hl-ty">E</span>}
+  ok : <span class="hl-ty">A</span>
+  err : <span class="hl-ty">E</span></code></pre>
+<div class="prose"><p>Map a function over the ok value.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> map [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span>] [<span class="hl-ty">Result</span> <span class="hl-ty">A</span> <span class="hl-ty">E</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Result</span> <span class="hl-ty">B</span> <span class="hl-ty">E</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Apply a function to the success value, pass through errors"</span>
+<span class="hl-kw">defn</span> map [f r]
+  <span class="hl-kw">match</span> r
+    | ok x  <span class="hl-op">-&gt;</span> ok [f x]
+    | err e <span class="hl-op">-&gt;</span> err e</code></pre>
+<div class="prose"><p>Map a function over the error value.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> map-err [<span class="hl-ty">E</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">F</span>] [<span class="hl-ty">Result</span> <span class="hl-ty">A</span> <span class="hl-ty">E</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Result</span> <span class="hl-ty">A</span> <span class="hl-ty">F</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Apply a function to the error value, pass through successes"</span>
+<span class="hl-kw">defn</span> map-err [f r]
+  <span class="hl-kw">match</span> r
+    | ok x  <span class="hl-op">-&gt;</span> ok x
+    | err e <span class="hl-op">-&gt;</span> err [f e]</code></pre>
+<div class="prose"><p>Unwrap with a default value.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> unwrap-or <span class="hl-ty">A</span> [<span class="hl-ty">Result</span> <span class="hl-ty">A</span> <span class="hl-ty">E</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Extract the success value or return a default on error"</span>
+<span class="hl-kw">defn</span> unwrap-or [default r]
+  <span class="hl-kw">match</span> r
+    | ok x  <span class="hl-op">-&gt;</span> x
+    | err _ <span class="hl-op">-&gt;</span> default</code></pre>
+<div class="prose"><p>Chain a computation on the ok value (monadic bind).</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> and-then [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Result</span> <span class="hl-ty">B</span> <span class="hl-ty">E</span>] [<span class="hl-ty">Result</span> <span class="hl-ty">A</span> <span class="hl-ty">E</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Result</span> <span class="hl-ty">B</span> <span class="hl-ty">E</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Monadic bind: chain computations that may fail with errors"</span>
+<span class="hl-kw">defn</span> and-then [f r]
+  <span class="hl-kw">match</span> r
+    | ok x  <span class="hl-op">-&gt;</span> f x
+    | err e <span class="hl-op">-&gt;</span> err e</code></pre>
+<div class="prose"><p>Chain a computation on the error value (recover from errors).</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> or-else [<span class="hl-ty">E</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">Result</span> <span class="hl-ty">A</span> <span class="hl-ty">F</span>] [<span class="hl-ty">Result</span> <span class="hl-ty">A</span> <span class="hl-ty">E</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Result</span> <span class="hl-ty">A</span> <span class="hl-ty">F</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Attempt error recovery by transforming the error"</span>
+<span class="hl-kw">defn</span> or-else [f r]
+  <span class="hl-kw">match</span> r
+    | ok x  <span class="hl-op">-&gt;</span> ok x
+    | err e <span class="hl-op">-&gt;</span> f e</code></pre>
+<div class="prose"><p>True if ok.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> ok? [<span class="hl-ty">Result</span> <span class="hl-ty">A</span> <span class="hl-ty">E</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Returns true if the Result is a success"</span>
+<span class="hl-kw">defn</span> ok? [r]
+  <span class="hl-kw">match</span> r
+    | ok _  <span class="hl-op">-&gt;</span> true
+    | err _ <span class="hl-op">-&gt;</span> false</code></pre>
+<div class="prose"><p>True if err.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> err? [<span class="hl-ty">Result</span> <span class="hl-ty">A</span> <span class="hl-ty">E</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Bool</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Returns true if the Result is an error"</span>
+<span class="hl-kw">defn</span> err? [r]
+  <span class="hl-kw">match</span> r
+    | ok _  <span class="hl-op">-&gt;</span> false
+    | err _ <span class="hl-op">-&gt;</span> true</code></pre>
+<div class="prose"><p>Convert Result to Option, discarding error info.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> to-option [<span class="hl-ty">Result</span> <span class="hl-ty">A</span> <span class="hl-ty">E</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Option</span> <span class="hl-ty">A</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Convert to Option, discarding error information"</span>
+<span class="hl-kw">defn</span> to-option [r]
+  <span class="hl-kw">match</span> r
+    | ok x  <span class="hl-op">-&gt;</span> some x
+    | err _ <span class="hl-op">-&gt;</span> none</code></pre>
+<div class="prose"><p>Apply a 2-argument function to two Results. Returns first error.</p></div>
+<pre><code class="prologos"><span class="hl-kw">spec</span> map2 [<span class="hl-ty">A</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-op">-&gt;</span> <span class="hl-ty">C</span>] [<span class="hl-ty">Result</span> <span class="hl-ty">A</span> <span class="hl-ty">E</span>] [<span class="hl-ty">Result</span> <span class="hl-ty">B</span> <span class="hl-ty">E</span>] <span class="hl-op">-&gt;</span> <span class="hl-ty">Result</span> <span class="hl-ty">C</span> <span class="hl-ty">E</span>
+  <span class="hl-kwlit">:doc</span> <span class="hl-str">"Apply a binary function to two Results; short-circuits on first error"</span>
+<span class="hl-kw">defn</span> map2 [f ra rb]
+  <span class="hl-kw">match</span> ra
+    | err e <span class="hl-op">-&gt;</span> err e
+    | ok a  <span class="hl-op">-&gt;</span> <span class="hl-kw">match</span> rb
+      | err e <span class="hl-op">-&gt;</span> err e
+      | ok b  <span class="hl-op">-&gt;</span> ok [f a b]</code></pre>
+</section>
+<h2 class="part-header">Part IV — Never</h2>
+<section class="module-container">
+<div class="module-badge">prologos::data::never</div>
+<h3 class="section-title">The Never Type</h3>
+<div class="prose"><p><code>Never</code> has no constructors — it cannot be instantiated.
+It serves as the return type of diverging computations
+and as the bottom of the subtyping lattice (with union types).
+A function returning <code>Never</code> promises to never return.</p></div>
+<pre><code class="prologos"><span class="hl-kw">data</span> <span class="hl-ty">Never</span></code></pre>
+</section>
+</article>
+<nav class="bottom-nav"><a href="sets.html">← Sets</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="characters-and-strings.html">Characters And Strings →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+
+</body>
+</html>

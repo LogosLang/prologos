@@ -144,7 +144,12 @@
       "Bash(\"/Applications/Racket v9.0/bin/raco\" make champ.rkt)",
       "Bash(\"/Applications/Racket v9.0/bin/raco\" make driver.rkt)",
       "Bash(\"/Applications/Racket v9.0/bin/racket\" tools/run-affected-tests.rkt --all)",
-      "Bash(\"/Applications/Racket v9.0/bin/racket\" racket/prologos/tests/test-sre-core.rkt)"
+      "Bash(\"/Applications/Racket v9.0/bin/racket\" racket/prologos/tests/test-sre-core.rkt)",
+      "Bash(\"/Applications/Racket v9.0/bin/raco\" make driver.rkt tools/pnet-compile.rkt tools/run-affected-tests.rkt tools/batch-worker.rkt)",
+      "Bash(\"/Applications/Racket v9.0/bin/raco\" make racket/prologos/tools/run-affected-tests.rkt)",
+      "Bash(git rm:*)",
+      "Bash(\"/Applications/Racket v9.0/bin/raco\" make racket/prologos/propagator.rkt racket/prologos/driver.rkt)",
+      "Bash(\"/Applications/Racket v9.0/bin/raco\" make racket/prologos/benchmarks/micro/bench-bsp-overhead.rkt)"
     ]
   }
 }

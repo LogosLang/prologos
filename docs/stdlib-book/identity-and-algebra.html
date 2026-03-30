@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Identity Elements and Algebraic Structure — Prologos Standard Library</title>
+  <style>
+/* ── Light theme (default) ── */
+:root, [data-theme='light'] {
+  --fg: #2c2c2c; --bg: #fefefe; --accent: #1a6fa8;
+  --badge-bg: #e8f4fd; --badge-border: #b8d9f3;
+  --code-bg: #f5f5f0; --code-inline-bg: #f0f0ea;
+  --border: #ccc; --muted: #666;
+  --heading: #333; --heading-muted: #444;
+  --nav-border: #eee; --nav-dim: #ccc;
+  --title-rule: #888; --section-border: #aaa;
+}
+/* ── Dark theme ── */
+[data-theme='dark'] {
+  --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+  --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+  --code-bg: #16162a; --code-inline-bg: #222240;
+  --border: #3a3a5c; --muted: #8888a8;
+  --heading: #ccc; --heading-muted: #aaa;
+  --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+  --title-rule: #5a5a7a; --section-border: #5a5a7a;
+}
+/* Respect OS preference when no explicit toggle */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --fg: #d4d4d4; --bg: #1a1a2e; --accent: #6db3f2;
+    --badge-bg: #1e2d3d; --badge-border: #2a4a6b;
+    --code-bg: #16162a; --code-inline-bg: #222240;
+    --border: #3a3a5c; --muted: #8888a8;
+    --heading: #ccc; --heading-muted: #aaa;
+    --nav-border: #2a2a48; --nav-dim: #4a4a6a;
+    --title-rule: #5a5a7a; --section-border: #5a5a7a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  max-width: 880px; margin: 0 auto; padding: 2rem 1.5rem;
+  color: var(--fg); line-height: 1.72; background: var(--bg);
+  transition: background .2s, color .2s;
+}
+h1.chapter-title {
+  font-size: 2rem; border-bottom: 3px double var(--title-rule);
+  padding-bottom: .5rem; margin-bottom: .3rem;
+}
+h2.part-header {
+  font-size: 1.35rem; border-top: 1px solid var(--border);
+  margin-top: 2.5rem; padding-top: 1rem; color: var(--heading-muted);
+}
+h3.section-title {
+  font-size: 1.08rem; color: var(--heading); border-left: 3px solid var(--section-border);
+  padding-left: .6rem; margin-top: 1.8rem; margin-bottom: .2rem;
+}
+.module-container {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: .8rem 1.2rem; margin: 1.5rem 0;
+}
+.module-badge {
+  display: inline-block; font-family: 'Menlo','Consolas',monospace;
+  font-size: .78rem; background: var(--badge-bg); color: var(--accent);
+  border: 1px solid var(--badge-border); border-radius: 3px;
+  padding: .1rem .45rem; margin: 0 0 .5rem;
+}
+pre {
+  background: var(--code-bg); border-left: 3px solid var(--border);
+  padding: .9rem 1rem; overflow-x: auto; border-radius: 0 4px 4px 0;
+  margin: .5rem -1.5rem 1.2rem;
+  font-size: .8rem;
+}
+code { font-family: 'Menlo','Consolas',monospace; font-size: .87rem; }
+pre code { background: none; color: var(--fg); }
+p code {
+  background: var(--code-inline-bg); padding: .1em .3em; border-radius: 2px;
+  font-size: .88em;
+}
+.prose { margin: .5rem 0; }
+.prose p { margin: .6rem 0; }
+nav.chapter-nav {
+  font-size: .9rem; color: var(--muted);
+  border-bottom: 1px solid var(--nav-border); padding-bottom: .5rem; margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: .1rem;
+}
+nav.chapter-nav a { color: var(--accent); text-decoration: none; }
+nav.chapter-nav a:hover { text-decoration: underline; }
+nav.chapter-nav .sep { margin: 0 .5rem; color: var(--nav-dim); }
+nav.chapter-nav .spacer { flex: 1; }
+nav.bottom-nav {
+  margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--nav-border);
+  font-size: .9rem; color: var(--muted);
+}
+nav.bottom-nav a { color: var(--accent); text-decoration: none; }
+nav.bottom-nav a:hover { text-decoration: underline; }
+.preamble { margin-bottom: 1.5rem; }
+/* Theme toggle */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); cursor: pointer; font-size: 1rem;
+  padding: .15rem .4rem; line-height: 1;
+  transition: border-color .2s, color .2s;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+/* TOC page */
+.toc-part-label {
+  font-size: 1.15rem; font-weight: bold; color: var(--heading-muted);
+  margin-top: 1.8rem; margin-bottom: .3rem;
+}
+ol.toc-chapters { margin-top: .2rem; padding-left: 1.5rem; }
+ol.toc-chapters li { margin: .3rem 0; }
+ol.toc-chapters a { color: var(--accent); text-decoration: none; }
+ol.toc-chapters a:hover { text-decoration: underline; }
+.toc-modules { font-size: .82rem; color: var(--muted); margin-left: .4rem; }
+.book-subtitle { color: var(--muted); font-size: 1rem; margin-top: -.5rem; margin-bottom: 2rem; }
+/* ── Syntax highlighting (light) ── */
+.hl-kw  { color: #7c4dff; font-weight: 600; }
+.hl-ty  { color: #0d7377; }
+.hl-str { color: #2e7d32; }
+.hl-num { color: #c75000; }
+.hl-cmt { color: var(--muted); font-style: italic; }
+.hl-kwlit { color: #6f42c1; }
+.hl-op  { color: #d63384; }
+.hl-br  { color: var(--muted); }
+/* ── Syntax highlighting (dark) ── */
+[data-theme='dark'] .hl-kw  { color: #c792ea; }
+[data-theme='dark'] .hl-ty  { color: #80cbc4; }
+[data-theme='dark'] .hl-str { color: #c3e88d; }
+[data-theme='dark'] .hl-num { color: #f78c6c; }
+[data-theme='dark'] .hl-kwlit { color: #b39ddb; }
+[data-theme='dark'] .hl-op  { color: #ff80ab; }
+[data-theme='dark'] .hl-br  { color: #888; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hl-kw  { color: #c792ea; }
+  :root:not([data-theme='light']) .hl-ty  { color: #80cbc4; }
+  :root:not([data-theme='light']) .hl-str { color: #c3e88d; }
+  :root:not([data-theme='light']) .hl-num { color: #f78c6c; }
+  :root:not([data-theme='light']) .hl-kwlit { color: #b39ddb; }
+  :root:not([data-theme='light']) .hl-op  { color: #ff80ab; }
+  :root:not([data-theme='light']) .hl-br  { color: #888; }
+}
+  </style>
+
+<script>
+(function(){
+  var h=document.documentElement, k='prologos-theme';
+  var s=localStorage.getItem(k);
+  if(s) h.setAttribute('data-theme',s);
+  window.toggleTheme=function(){
+    var c=h.getAttribute('data-theme');
+    var n;
+    if(c==='dark') n='light';
+    else if(c==='light') n='dark';
+    else n=(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark');
+    h.setAttribute('data-theme',n);
+    localStorage.setItem(k,n);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=n==='dark'?'\u2600':'\u263E';
+    });
+  };
+  // Set initial icon
+  document.addEventListener('DOMContentLoaded',function(){
+    var isDark=s==='dark'||(!s&&matchMedia('(prefers-color-scheme:dark)').matches);
+    document.querySelectorAll('.theme-toggle').forEach(function(b){
+      b.textContent=isDark?'\u2600':'\u263E';
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="chapter-nav"><a href="arithmetic-traits.html">← Arithmetic Traits</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="generic-operations.html">Generic Operations →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+<article>
+<h1 class="chapter-title">Identity Elements and Algebraic Structure</h1>
+<div class="prose"><p>This chapter covers the algebraic infrastructure that ties
+arithmetic traits together:</p>
+<p>  • <strong>AdditiveIdentity</strong> — the zero element for each type
+  • <strong>MultiplicativeIdentity</strong> — the one element for each type
+  • <strong>Num</strong> and <strong>Fractional</strong> bundles — grouped constraints
+  • <strong>Algebraic laws</strong> — property declarations for testing</p>
+<p>The identity traits are single-method traits where the method
+is a *value*, not a function — the dictionary IS the zero/one
+element itself. This enables <code>sum</code> and <code>product</code> to work
+generically over any numeric type.</p></div>
+<h2 class="part-header">Part I — Identity Traits</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::additive-identity-trait</div>
+<h3 class="section-title">AdditiveIdentity — The Zero Element</h3>
+<pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">AdditiveIdentity</span> {<span class="hl-ty">A</span>}
+  zero : <span class="hl-ty">A</span></code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::multiplicative-identity-trait</div>
+<h3 class="section-title">MultiplicativeIdentity — The One Element</h3>
+<pre><code class="prologos"><span class="hl-kw">trait</span> <span class="hl-ty">MultiplicativeIdentity</span> {<span class="hl-ty">A</span>}
+  one : <span class="hl-ty">A</span></code></pre>
+</section>
+<section class="module-container">
+<div class="module-badge">prologos::core::identity-instances</div>
+<h3 class="section-title">Identity Instances</h3>
+<div class="prose"><p>The dictionary IS the identity element (single-method trait
+where the method is a value, not a function).</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::additive-identity-trait       <span class="hl-kwlit">:refer</span> [<span class="hl-ty">AdditiveIdentity</span>]]
+<span class="hl-kw">require</span> [prologos::core::multiplicative-identity-trait  <span class="hl-kwlit">:refer</span> [<span class="hl-ty">MultiplicativeIdentity</span>]]</code></pre>
+<h3 class="section-title">Additive Identity (zero)</h3>
+<pre><code class="prologos">(<span class="hl-kw">def</span> <span class="hl-ty">Int--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Int</span>] <span class="hl-num">0</span>)
+(<span class="hl-kw">def</span> <span class="hl-ty">Rat--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Rat</span>] <span class="hl-num">0/1</span>)
+(<span class="hl-kw">def</span> <span class="hl-ty">Nat--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Nat</span>] <span class="hl-num">0<span class="hl-ty">N</span></span>)</code></pre>
+<h3 class="section-title">Multiplicative Identity (one)</h3>
+<pre><code class="prologos">(<span class="hl-kw">def</span> <span class="hl-ty">Int--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Int</span>] <span class="hl-num">1</span>)
+(<span class="hl-kw">def</span> <span class="hl-ty">Rat--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Rat</span>] <span class="hl-num">1/1</span>)
+(<span class="hl-kw">def</span> <span class="hl-ty">Nat--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Nat</span>] <span class="hl-num">1<span class="hl-ty">N</span></span>)</code></pre>
+<h3 class="section-title">Posit Identity Instances</h3>
+<pre><code class="prologos">(<span class="hl-kw">def</span> <span class="hl-ty">Posit8--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Posit8</span>] [posit8 <span class="hl-num">0</span>])
+(<span class="hl-kw">def</span> <span class="hl-ty">Posit8--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Posit8</span>] [posit8 <span class="hl-num">64</span>])
+
+(<span class="hl-kw">def</span> <span class="hl-ty">Posit16--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Posit16</span>] [posit16 <span class="hl-num">0</span>])
+(<span class="hl-kw">def</span> <span class="hl-ty">Posit16--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Posit16</span>] [posit16 <span class="hl-num">16384</span>])
+
+(<span class="hl-kw">def</span> <span class="hl-ty">Posit32--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Posit32</span>] [posit32 <span class="hl-num">0</span>])
+(<span class="hl-kw">def</span> <span class="hl-ty">Posit32--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Posit32</span>] [posit32 <span class="hl-num">1073741824</span>])
+
+(<span class="hl-kw">def</span> <span class="hl-ty">Posit64--AdditiveIdentity--dict</span> : [<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">Posit64</span>] [posit64 <span class="hl-num">0</span>])
+(<span class="hl-kw">def</span> <span class="hl-ty">Posit64--MultiplicativeIdentity--dict</span> : [<span class="hl-ty">MultiplicativeIdentity</span> <span class="hl-ty">Posit64</span>] [posit64 <span class="hl-num">4611686018427387904</span>])</code></pre>
+</section>
+<h2 class="part-header">Part II — Numeric Bundles</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::numeric-bundles</div>
+<h3 class="section-title">Num and Fractional Bundles</h3>
+<div class="prose"><p>Bundles are syntactic sugar for multiple trait constraints.
+<code>(Num A)</code> expands to 8 constraints; <code>(Fractional A)</code> adds 2 more.</p>
+<p><strong>Num A</strong> works for: Int, Rat, Posit8–64
+<strong>Fractional A</strong> works for: Rat, Posit8–64
+Nat fails Num (lacks Neg, Abs, FromInt).</p></div>
+<pre><code class="prologos"><span class="hl-kw">require</span> [prologos::core::add-trait     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Add</span>]]
+<span class="hl-kw">require</span> [prologos::core::sub-trait     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Sub</span>]]
+<span class="hl-kw">require</span> [prologos::core::mul-trait     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Mul</span>]]
+<span class="hl-kw">require</span> [prologos::core::div-trait     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Div</span>]]
+<span class="hl-kw">require</span> [prologos::core::neg-trait     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Neg</span>]]
+<span class="hl-kw">require</span> [prologos::core::abs-trait     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Abs</span>]]
+<span class="hl-kw">require</span> [prologos::core::eq-trait      <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Eq</span>]]
+<span class="hl-kw">require</span> [prologos::core::ord-trait     <span class="hl-kwlit">:refer</span> [<span class="hl-ty">Ord</span>]]
+<span class="hl-kw">require</span> [prologos::core::fromint-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">FromInt</span>]]
+<span class="hl-kw">require</span> [prologos::core::fromrat-trait <span class="hl-kwlit">:refer</span> [<span class="hl-ty">FromRat</span>]]</code></pre>
+<div class="prose"><p>(Num A) = (Add Sub Mul Neg Eq Ord Abs FromInt) A</p></div>
+<pre><code class="prologos"><span class="hl-kw">bundle</span> <span class="hl-ty">Num</span> <span class="hl-op">:=</span> (<span class="hl-ty">Add</span> <span class="hl-ty">Sub</span> <span class="hl-ty">Mul</span> <span class="hl-ty">Neg</span> <span class="hl-ty">Eq</span> <span class="hl-ty">Ord</span> <span class="hl-ty">Abs</span> <span class="hl-ty">FromInt</span>)</code></pre>
+<div class="prose"><p>(Fractional A) = Num A + (Div FromRat) A = 10 constraints</p></div>
+<pre><code class="prologos"><span class="hl-kw">bundle</span> <span class="hl-ty">Fractional</span> <span class="hl-op">:=</span> (<span class="hl-ty">Num</span> <span class="hl-ty">Div</span> <span class="hl-ty">FromRat</span>)</code></pre>
+</section>
+<h2 class="part-header">Part III — Algebraic Laws</h2>
+<section class="module-container">
+<div class="module-badge">prologos::core::algebraic-laws</div>
+<h3 class="section-title">Property Declarations</h3>
+<div class="prose"><p>These are metadata-only in Phase 1: they register in the property
+store but do not generate code. Phase 2 (QuickCheck) will execute
+<code>:holds</code> clauses as randomized tests.</p></div>
+<pre><code class="prologos">(<span class="hl-kw">ns</span> prologos::core::algebraic-laws <span class="hl-kwlit">:no-prelude</span>)</code></pre>
+<h3 class="section-title">Semigroup / Monoid / Group</h3>
+<pre><code class="prologos">(<span class="hl-kw">property</span> semigroup-laws ($brace-params <span class="hl-ty">A</span> : (<span class="hl-ty">Type</span> <span class="hl-num">0</span>))
+  (- <span class="hl-kwlit">:name</span> <span class="hl-str">"associativity"</span>
+     <span class="hl-kwlit">:forall</span> ($brace-params x : <span class="hl-ty">A</span>) ($brace-params y : <span class="hl-ty">A</span>) ($brace-params z : <span class="hl-ty">A</span>)
+     <span class="hl-kwlit">:holds</span> (eq? (add (add x y) z) (add x (add y z))))
+  ($brace-params <span class="hl-kwlit">:where</span> (<span class="hl-ty">Add</span> <span class="hl-ty">A</span>) (<span class="hl-ty">Eq</span> <span class="hl-ty">A</span>)))
+
+(<span class="hl-kw">property</span> monoid-laws ($brace-params <span class="hl-ty">A</span> : (<span class="hl-ty">Type</span> <span class="hl-num">0</span>))
+  (- <span class="hl-kwlit">:name</span> <span class="hl-str">"left-identity"</span>
+     <span class="hl-kwlit">:forall</span> ($brace-params x : <span class="hl-ty">A</span>)
+     <span class="hl-kwlit">:holds</span> (eq? (add additive-identity x) x))
+  (- <span class="hl-kwlit">:name</span> <span class="hl-str">"right-identity"</span>
+     <span class="hl-kwlit">:forall</span> ($brace-params x : <span class="hl-ty">A</span>)
+     <span class="hl-kwlit">:holds</span> (eq? (add x additive-identity) x))
+  ($brace-params <span class="hl-kwlit">:includes</span> (semigroup-laws <span class="hl-ty">A</span>) <span class="hl-kwlit">:where</span> (<span class="hl-ty">Add</span> <span class="hl-ty">A</span>) (<span class="hl-ty">AdditiveIdentity</span> <span class="hl-ty">A</span>) (<span class="hl-ty">Eq</span> <span class="hl-ty">A</span>)))</code></pre>
+<h3 class="section-title">Functor</h3>
+<pre><code class="prologos">(<span class="hl-kw">property</span> functor-laws ($brace-params <span class="hl-ty">F</span> : (<span class="hl-op">-&gt;</span> (<span class="hl-ty">Type</span> <span class="hl-num">0</span>) (<span class="hl-ty">Type</span> <span class="hl-num">0</span>)))
+  (- <span class="hl-kwlit">:name</span> <span class="hl-str">"identity"</span>
+     <span class="hl-kwlit">:forall</span> ($brace-params xs : (<span class="hl-ty">F</span> <span class="hl-ty">A</span>))
+     <span class="hl-kwlit">:holds</span> (eq? (fmap id xs) xs))
+  (- <span class="hl-kwlit">:name</span> <span class="hl-str">"composition"</span>
+     <span class="hl-kwlit">:forall</span> ($brace-params f : (<span class="hl-op">-&gt;</span> <span class="hl-ty">A</span> <span class="hl-ty">B</span>)) ($brace-params g : (<span class="hl-op">-&gt;</span> <span class="hl-ty">B</span> <span class="hl-ty">C</span>)) ($brace-params xs : (<span class="hl-ty">F</span> <span class="hl-ty">A</span>))
+     <span class="hl-kwlit">:holds</span> (eq? (fmap (<span class="hl-op">&gt;&gt;</span> f g) xs) (fmap g (fmap f xs))))
+  ($brace-params <span class="hl-kwlit">:where</span> (<span class="hl-ty">Functor</span> <span class="hl-ty">F</span>)))</code></pre>
+<h3 class="section-title">Commutativity</h3>
+<pre><code class="prologos">(<span class="hl-kw">property</span> commutative-add-laws ($brace-params <span class="hl-ty">A</span> : (<span class="hl-ty">Type</span> <span class="hl-num">0</span>))
+  (- <span class="hl-kwlit">:name</span> <span class="hl-str">"commutativity"</span>
+     <span class="hl-kwlit">:forall</span> ($brace-params x : <span class="hl-ty">A</span>) ($brace-params y : <span class="hl-ty">A</span>)
+     <span class="hl-kwlit">:holds</span> (eq? (add x y) (add y x)))
+  ($brace-params <span class="hl-kwlit">:where</span> (<span class="hl-ty">Add</span> <span class="hl-ty">A</span>) (<span class="hl-ty">Eq</span> <span class="hl-ty">A</span>)))</code></pre>
+</section>
+</article>
+<nav class="bottom-nav"><a href="arithmetic-traits.html">← Arithmetic Traits</a><span class="sep">|</span><a href="index.html">Table of Contents</a><span class="sep">|</span><a href="generic-operations.html">Generic Operations →</a><span class="spacer"></span><button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">&#x263E;</button></nav>
+
+</body>
+</html>
