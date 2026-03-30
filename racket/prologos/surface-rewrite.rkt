@@ -157,7 +157,7 @@
 ;; Returns a new node with refined tag, or the original if no rule matches.
 (define (refine-node-tag node)
   (cond
-    [(not (eq? (parse-tree-node-tag node) 'line)) node]  ;; only refine 'line nodes
+    [(not (memq (parse-tree-node-tag node) '(line group))) node]  ;; refine 'line and 'group nodes
     [else
      (define lexeme (first-token-lexeme node))
      (cond
@@ -578,14 +578,15 @@
 
   (case stage
     [(raw)
-     ;; T(0): tag refinement
-     (define refined (refine-node-tag node))
-     (form-pipeline-value 'tagged refined regs spos)]
+     ;; G(0): form grouping FIRST — creates bracket groups, nested groups
+     (define grouped (group-tree-node node))
+     (form-pipeline-value 'tagged grouped regs spos)]
 
     [(tagged)
-     ;; G(0): form grouping
-     (define grouped (group-tree-node node))
-     (form-pipeline-value 'grouped grouped regs spos)]
+     ;; T(0): tag refinement AFTER grouping — tags 'line AND 'group nodes
+     ;; Must run after G(0) because G(0) creates 'group nodes that need tagging
+     (define refined (refine-tag node))  ;; recursive into all children
+     (form-pipeline-value 'grouped refined regs spos)]
 
     [(grouped)
      ;; V(0,0): implicit-map
@@ -1433,10 +1434,19 @@
     (define merged (form-pipeline-merge old new))
     (check-eq? (form-pipeline-value-stage merged) 'grouped))
 
-  (test-case "pipeline: advance from raw → tagged"
+  (test-case "pipeline: advance raw → tagged (G(0) grouping)"
     (define pv (form-pipeline-value 'raw (make-line-node "def" "x" ":=" "42") '() #f))
     (define next (advance-pipeline pv))
     (check-eq? (form-pipeline-value-stage next) 'tagged)
+    ;; raw → tagged now does G(0) form grouping (tag refinement is tagged → grouped)
+    (check-true (parse-tree-node? (form-pipeline-value-tree-node next))))
+
+  (test-case "pipeline: advance tagged → grouped (T(0) tag refinement)"
+    (define node (make-line-node "def" "x" ":=" "42"))
+    (define grouped (group-tree-node node))
+    (define pv (form-pipeline-value 'tagged grouped '() #f))
+    (define next (advance-pipeline pv))
+    (check-eq? (form-pipeline-value-stage next) 'grouped)
     (check-eq? (parse-tree-node-tag (form-pipeline-value-tree-node next)) tag-def))
 
   (test-case "pipeline: run-form-pipeline reaches done"
