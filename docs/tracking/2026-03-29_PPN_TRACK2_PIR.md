@@ -246,10 +246,12 @@ Modeling the PPN Track 2 pipeline in NTT syntax revealed 3 missing NTT construct
 
 ## 8. What's Next
 
-### Immediate (PPN Track 2 follow-up)
+### Immediate (PPN Track 2 follow-up) — COMPLETED
 
-- **Phase 8a fix**: Resolve compat-token / token type mismatch. Two approaches: (a) migrate reader.rkt consumers to accept token structs, or (b) add compat-token wrapper to tree parser output. Estimated: 2-3 hours.
-- **Phase 8b**: Partial preparse retirement --- remove unused `expand-*` functions that the merge fallback handles. Estimated: 1-2 hours.
+- **Phase 8a** ✅ (`94e0f099`): All 53 test files migrated. 11 compound token types fixed.
+- **Phase 8b** ✅ (`bb09f4e9`): All production code migrated off reader.rkt.
+- **Phase 10** ✅ (`469e2276`): reader.rkt DELETED (1898 lines). Native implementations in parse-reader.rkt.
+- **Phase 11** DEFERRED to Track 3: macros.rkt sexp expanders (~1000 lines), blocked on tree parser handling all form types.
 
 ### Medium-term (PPN Tracks 3-4)
 
@@ -473,7 +475,39 @@ PM Track 10 (fork-prop-network, not replace-meta-store). PM Track 8 (worldview-a
 
 ## Open Questions
 
-- **What failure modes become more likely as the dual pipeline scales?** The merge strategy routes per-form, but if tree parser and preparse disagree on form boundaries, the merge could produce inconsistent output. This has not happened yet (383/383 files pass) but is a theoretical risk as edge cases accumulate.
+- ~~**What failure modes become more likely as the dual pipeline scales?**~~ RESOLVED by Phase 10: reader.rkt deleted, dual-path validation removed. Single reader path.
 - **Should the 5-level structure hierarchy be formalized in the codebase?** Currently it exists only in documentation. Making it explicit (e.g., type-level tags distinguishing levels) would prevent level-confusion errors structurally.
-- **Is the 16% dual-pipeline overhead acceptable long-term?** The overhead is from running both preparse and tree parser on every file. If preparse responsibilities cannot be migrated within 2-3 tracks, the overhead becomes permanent technical debt.
+- ~~**Is the 16% dual-pipeline overhead acceptable long-term?**~~ RESOLVED: The 16% was the `use-tree-parser? #t` hybrid path (development/validation only). Production default (`#f`) never had this overhead. The hybrid path remains available but is not the default. See §Addendum below.
 - **Are we actually learning from the "wrong assumptions at boundaries" pattern?** It has appeared in 9 of 11 PIRs. The Stage 2 audit methodology has improved but the pattern persists. The next response should be architectural: can we make boundary assumptions explicit and machine-checkable (e.g., interface contracts between modules)?
+
+---
+
+## PIR Addendum: Phase 8a/8b/10 (2026-03-30)
+
+### Additional Work Completed
+
+| Phase | Commit | Description | Delta |
+|-------|--------|-------------|-------|
+| 8a | `94e0f099` | All 53 test files migrated from reader.rkt to parse-reader.rkt. 11 compound token types fixed in compat wrapper. | +244 lines parse-reader.rkt |
+| 8b | `bb09f4e9` | All production code migrated off reader.rkt (driver, repl, tools, benchmarks). | -6 net lines |
+| 10 design | `cd6aa2d1` | §8 addendum to Track 2 design doc. Compat shim approach (Option B). | +109 lines docs |
+| 10 | `469e2276` | reader.rkt DELETED (1898 lines) + test-reader.rkt DELETED (449 lines). Native prologos-read-syntax in parse-reader.rkt. | **-2330 net lines** |
+
+### Updated Metrics
+
+- **Test count**: 7454 (was 7529; -75 from test-reader.rkt deletion)
+- **File count**: 382 (was 383; -1 from test-reader.rkt)
+- **Suite time**: 125.3s (was 132.1s; faster without reader.rkt .zo loading)
+- **Code deleted**: 2347 lines (reader.rkt 1898 + test-reader.rkt 449)
+- **Code added**: ~300 lines (compat token fixes + native reader implementations)
+- **Net**: approximately -2050 lines across all Phase 8-10 work
+
+### Clarification: 16% Dual-Pipeline Overhead
+
+The Phase 9 A/B measurement (16% overhead) was specific to the `use-tree-parser? #t` hybrid merge path, which runs BOTH preparse AND tree parser on every WS form. This path exists for development validation but is NOT the production default (`#f`). The production WS path is: `read-all-syntax-ws` (new parse-reader.rkt tokenizer + tree builder + datum extraction) → `preparse-expand-all` → `parse-datum` → elaboration. reader.rkt was never on the production `process-string` sexp path either — that uses `prologos-sexp-read-syntax` from sexp-readtable.rkt (Racket's native reader).
+
+Track 7 dual writes (hash parameter + propagator cell for each registry operation) remain present. These are architecturally necessary until cell-primary migration completes in Track 8E+.
+
+### What Remains (Phase 11, deferred to Track 3)
+
+macros.rkt sexp expanders (~1000 lines: `expand-if`, `expand-when`, `expand-cond`, `expand-let`, etc.) cannot be deleted yet because `preparse-expand-all` is shared by both sexp and WS processing paths. Retirement requires: (1) tree parser handling ALL form types including data/trait/impl/spec, (2) registration moved to tree level, (3) `preparse-expand-all` made obsolete. This is documented as a Track 3 prerequisite in the PPN Master.
