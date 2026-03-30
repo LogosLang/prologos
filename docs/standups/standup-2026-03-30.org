@@ -1,53 +1,77 @@
 #+TITLE: Standup — 2026-03-30
 #+DATE: 2026-03-30
 
-* Yesterday (since 2026-03-29 standup)
+* Yesterday (since 2026-03-29 standup at 13:12)
+
+** PPN Track 2: Design Completion (D.1b → D.3)
+- D.1b (=5acff03=): CALM-compliant rewrite architecture — replacement merge violates CALM; redesigned as pipeline of set-once cells across strata (Layered Recovery Principle)
+- D.1c (=a6c9349=): Parse tree as Pocket Universe — eliminated datum layer entirely, SRE operates directly on ~parse-tree-node~ via ~ctor-desc~. Module Theory lens: parse tree is a module over endomorphism ring of rewrite rules
+- D.2 (=99725f1=): Self-critique with two lenses (principles challenge + codebase reality check). 7 findings including tag-refinement stratum T(0), V(0) sub-strata, form identity tradeoff
+- NTT modeling (=db2ce39=): Full pipeline in NTT speculative syntax. 3 NTT gaps discovered → proposed extensions (rewrite, refine, foreach) in NTT Syntax Design §17
+- D.3 (=33b9a86=): External critique. 10 findings. Rule reclassification: 9 simple + 5 recursive + 4 specialized. V(0) priority → sub-strata. ~use-propagator-preparse?~ dual-path warning
+
+** PPN Track 2: Pre-0 Benchmarks
+- Micro-benchmarks (=a0fd523=): preparse takes <1% of wall time (elaboration at 99.99%). 22-35μs/rule. Complete performance freedom — design is architecturally motivated, not performance motivated
+
+** PPN Track 2: Full Implementation (Phases 1 → 6g)
+- Phase 1 (=27e8870=): ~surface-rewrite.rkt~ — tag refinement T(0), 38 rules, rewrite-rule struct
+- Phase 1b (=b990292=): Tag refinement wired into ~read-all-syntax-ws~ pipeline. 383/383 GREEN
+- Phases 2a-2b (=d1cc404=, =99cccaa=): 9 rewrite rules — 5 simple (let-assign, let-bracket, if, when, compose) + 4 recursive (cond, do, list-literal, lseq-literal)
+- Phase 3 (=2d3d1f7=): Quasiquote propagator. 4 complex rules deferred to Phase 6
+- Phase 6a (=8778dfe=): G(0) form-grouping stratum — line → form structure bridge. KEY FINDING: line structure ≠ form structure. 5-level hierarchy discovered
+- Phase 6b (=d67094d=): Pipeline-as-cell implementation — stratified pipeline embedded as monotone lattice value inside a cell. Pocket Universe Principle applied concretely.
+- Phase 6c (=6fa8b70= → =a3824c8=): ~tree-parser.rkt~ — 1250 lines, 26 tests. Tree → surf-* directly: def, defn, fn, Pi, Sigma, arrows, match, builtins, application, maps
+- Phase 6d (=3bca61e=): Integration + hybrid merge path. 383/383 GREEN. defn type inference fixed (Pi chain with holes + param-names as symbols). surf-app args-as-list fix
+- Pipeline reorder (=5d438f0=): G(0) before T(0). Nested forms correctly tagged and rewritten
+- Full validation (=902b8cb=): rewrite-tree enabled in hybrid. 383/383 GREEN
+- V(1)/V(2) stubs (=8372174=): documented requirements, pass-through for now
+- SWITCHOVER (=523f2f1= → =8d80c27=): Tree parser output used for REAL elaboration via spec-aware merge. Generated defs from preparse + user forms from tree parser. 383/383 GREEN
+
+** PPN Track 2: Phase 7 + PIR
+- Phase 7: ALREADY WORKING — expand-top-level processes tree parser's surf-* identically
+- PIR written (=7302345d=): Full 16-question methodology. 10-PIR longitudinal survey. 5 recurring patterns identified
 
 ** PPN Track 2: Phase 8a — Compat Token Migration (COMPLETE)
 - ALL 53 test files migrated from reader.rkt to parse-reader.rkt
-- 11 compound token types fixed: decimal-literal, typed-hole (??name), negative-decimal, tilde-neg-nat, $pipe→($list-tail), >>→$compose, |>→$pipe-gt, ||→$facts-sep, &>→$clause-sep, ...→$rest, dot-key/nil-dot-key
-- Compat wrapper: leading newline + trailing eof, type remapping, value mapping, disambiguation, validation
-- Commit =94e0f099=. 7529 tests, 383 files, ALL PASS (126.8s)
+- 11 compound token types fixed in compat wrapper (decimal-literal, typed-hole, negative-decimal, pipe/compose/facts-sep, rest-param, dot-key, nil-dot-key)
+- Multiple fix-and-revert cycles for quasiquote qq-depth propagation, approx-literal handling
+- =94e0f099=. 7529 tests, 383 files, ALL PASS
 
-** PPN Track 2: Phase 8b — Production Migration (COMPLETE)
-- All 7 production files migrated off reader.rkt: driver.rkt, repl.rkt, 2 tools, 3 benchmarks
-- reader.rkt now internal-only (parse-reader.rkt wrapper + test-reader.rkt)
-- Commit =bb09f4e9=. 7529 tests, 383 files, ALL PASS (132.1s)
+** PPN Track 2: Phase 8b + Phase 10 — reader.rkt DELETED
+- Phase 8b (=bb09f4e9=): All 7 production files migrated off reader.rkt
+- Phase 10 design (=cd6aa2d1=): §8 addendum — compat shim approach chosen. Key finding: ~process-string~ sexp path uses ~sexp-readtable.rkt~, NOT reader.rkt
+- Phase 10 (=469e2276=): *reader.rkt DELETED* (1898 lines) + test-reader.rkt DELETED (449 lines). Native ~prologos-read-syntax~ in parse-reader.rkt. driver.rkt old-reader fallback paths removed. Net: -2330 lines
+- 7454 tests, 382 files, ALL PASS (125.3s — faster without reader.rkt .zo loading)
 
-** PPN Track 2: Phase 10 Design Addendum
-- §8 added to Track 2 design doc: sexp pipeline retirement (Phases 10-11)
-- Design decision: compat shim at process-string boundary (Option B) chosen over mass migration of 350 test files
-- Key finding: process-string sexp path uses sexp-readtable.rkt (Racket's native reader), NOT reader.rkt
-- reader.rkt's WS tokenizer was only used by: WS REPL path, driver validation/fallback, parse-reader.rkt wrapper
-- Commit =cd6aa2d1=
+** A/B Overhead Clarification
+- 16% dual-pipeline overhead was ~use-tree-parser?=#t~ (development/validation only), NOT the production default
+- Production path has zero overhead. A/B stability test confirmed
 
-** PPN Track 2: Phase 10 — reader.rkt DELETED (COMPLETE)
-- reader.rkt (1898 lines) + test-reader.rkt (449 lines) DELETED
-- Native prologos-read-syntax/prologos-read implemented in parse-reader.rkt
-- driver.rkt old-reader fallback paths (use-new-reader?, validate-new-reader?) removed
-- Net: -2330 lines
-- Commit =469e2276=. 7454 tests, 382 files, ALL PASS (125.3s — faster)
+** PPN Track 2: Completion + Documentation
+- PPN Master updated (=f5934f35=): Track 2 marked ✅. Track 3 prerequisite documented (Phase 11 macros.rkt sexp expander retirement)
+- PIR addendum (=295c657a=): Phase 8-10 outcomes, 2 open questions resolved
 
-** PPN Track 2: Phase 9 A/B Overhead Clarification
-- 16% dual-pipeline overhead was =use-tree-parser?=#t= (development/validation) — NOT production default
-- Production path (=use-tree-parser?=#f=) has zero overhead: new reader → preparse → parse-datum
-- A/B stability test confirms: all benchmarks within ±0.5% noise
-- Track 7 dual writes (hash + cell) remain — architecturally necessary until Track 8E+
+** Process Adjustment: Validated ≠ Deployed
+- Two new meta-lessons codified in DEVELOPMENT_LESSONS.org (=c4224b88=):
+  1. "Validated Is Not Deployed" — parameter defaulting to old path is a gap, not a safety net
+  2. "'Pragmatic' Is a Rationalization for Incomplete" — ban in design docs; use "incomplete because [reason]" instead
+- workflow.md: extended red-flag phrases, added deployment gate and pragmatic-ban rules
 
-** PPN Master Updated
-- Track 2 marked ✅ with all delivered artifacts
-- Track 3 prerequisite documented: Phase 11 (macros.rkt sexp expander retirement)
-- 4-step plan in Track 3 detail: extend tree-parser for all forms → move registration → delete preparse-expand-all → retain expand-top-level
-- Commit =f5934f35=
+** PPN Track 2B: Design Document (D.1)
+- Stage 3 design written (=7f3390d6=): production deployment of tree parser
+- 6 phases: acceptance file → extract merge function → wire into ~process-file~ → wire into ~load-module~ → delete ~use-tree-parser?~ → verification
+- Scope: deploy existing validated merge, NOT new form types or sexp expander retirement
 
-** PIR Addendum
-- Phase 8-10 outcomes documented. 2 open questions resolved. §8 updated.
-- Commit =295c657a=
+** Track 2 Final Accounting
+- ~2700 lines new code (surface-rewrite.rkt 1200 + tree-parser.rkt 1250 + driver integration)
+- ~2350 lines deleted (reader.rkt 1898 + test-reader.rkt 449)
+- Net: ~+350 lines for fundamentally new architecture
+- 57 new module-level tests. 7454 tests total, 382 files
 
 * Today
 
-** Next work priorities
-1. (per priority ordering from Mar 28): SRE Track 2B, PPN Track 3, SRE Track 2G, PPN Track 4 / SRE Track 2C
+** PPN Track 2B
+- D.2 self-critique pending → implementation
 
 * Blockers
 
