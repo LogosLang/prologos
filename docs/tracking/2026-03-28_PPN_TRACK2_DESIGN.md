@@ -42,10 +42,11 @@
 | 6f | V(2) spec injection | ✅ | Spec-aware merge: preparse for spec-annotated, tree parser for inferred. |
 | 6g | **SWITCHOVER** | ✅ | `523f2f1`→`8d80c27`. **Tree parser output used for elaboration.** Merge: generated defs (preparse) + user forms (tree parser) + spec forms (preparse). 383/383 GREEN, 7529 tests. |
 | 7 | Layer 2 integration | ✅ | ALREADY WORKING. expand-top-level processes tree parser's surf-* identically to parse-datum's. Verified: auto-implicits, defn desugaring. |
-| 8a | Consumer migration (reader.rkt) | 🔄 | Attempted `50f60c3`. Compat-token type mismatch — 23 test failures. REVERTED. Needs compat-token → token matching or selective migration. |
-| 8b | Consumer migration (macros.rkt) | ⬜ | Preparse still runs for registration + generation + spec injection + specialized forms. Partial retirement only — remove unused expand-* functions. |
-| 8c | reader.rkt deletion | ⬜ | Blocked by 8a. 1898 lines. |
-| 9 | A/B benchmarks + suite verify + PIR | 🔄 | A/B: 16% overhead from dual pipeline (expected — both preparse + tree parser run). Suite: 383/383 GREEN, 7529 tests. PIR pending. |
+| 8a | Consumer migration (compat tokens) | ✅ | `94e0f099`. ALL 53 test files migrated. 11 compound token types fixed. Compat wrapper: newline/eof padding, type remapping, value mapping, disambiguation, validation. |
+| 8b | Consumer migration (reader.rkt imports) | ✅ | `bb09f4e9`. All production code uses parse-reader.rkt. reader.rkt internal-only (parse-reader.rkt wrapper + test-reader.rkt). |
+| 9 | A/B benchmarks + suite verify + PIR | ✅ | A/B: 16% overhead from dual pipeline (expected). Suite: 383/383 GREEN, 7529 tests. PIR: `2026-03-29_PPN_TRACK2_PIR.md`. |
+| 10 | Sexp pipeline retirement: compat shim | 🔄 | See §8 Addendum. `process-string` routes through WS pipeline internally. |
+| 11 | Sexp pipeline retirement: deletion | ⬜ | Blocked by 10. Delete sexp expanders (~1000 lines macros.rkt), WS tokenizer (~1800 lines reader.rkt), sexp parser path (~500 lines parser.rkt). |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
 
@@ -1073,3 +1074,107 @@ None directly — this track changes the INTERNAL expansion pipeline. User-facin
 | Phase 5b removal regression | Low | Dependency ordering is correct-by-construction. Any form that references an unregistered constructor will residuate, not silently fail. |
 | Layer 2 representation gap | Medium | Option A (separate surf-* rules) is safe. Option B (unified representation) deferred to PPN Track 3. |
 | Suite time regression | Low | Pre-0 establishes baseline. If rewrite overhead >5%, investigate. |
+
+---
+
+## §8 Addendum: Sexp Pipeline Retirement (Phases 10-11)
+
+**Date**: 2026-03-30
+**Context**: Phase 8a-8b achieved full consumer migration. All production code routes through parse-reader.rkt. reader.rkt is quarantined (only imported by parse-reader.rkt and test-reader.rkt). The dual pipeline remains: WS path (primary) and sexp path (legacy). This addendum designs the retirement of the sexp path.
+
+### 8.1 What Remains
+
+The sexp pipeline has three layers:
+
+| Layer | File | Lines | Consumers |
+|-------|------|-------|-----------|
+| **Sexp tokenizer/reader** | reader.rkt | ~1848 | parse-reader.rkt (wraps 2 functions), test-reader.rkt (70 tests) |
+| **Sexp expanders** | macros.rkt | ~1000 | `preparse-expand-form` registry dispatch (used by `process-string` sexp path) |
+| **Sexp→surf-* parser** | parser.rkt | ~500 | `parse-datum` called from sexp `process-string` path |
+
+Total: ~3300 lines of sexp-specific code.
+
+The consumers keeping this alive:
+
+1. **`process-string` API** — ~350 test files use sexp syntax via `run-ns`/`run-ns-last`/`run`/`run-last` from test-support.rkt
+2. **`prologos-read-syntax`** — the `#lang prologos` hook for `.rkt` files (sexp mode)
+3. **REPL sexp mode** — repl.rkt's default mode
+
+### 8.2 Design Decision: Compat Shim vs Mass Migration
+
+**Option A: Mass migration** — convert ~350 test files from sexp to WS syntax.
+- Pro: Clean, no compat layer.
+- Con: Massive churn. 350 files × ~5 changes each. Merge conflicts with any parallel work. Test readability changes (sexp tests are very compact). Weeks of mechanical work.
+
+**Option B: Compat shim at `process-string` boundary** ← CHOSEN
+- `process-string` internally converts sexp input to WS-equivalent, then routes through the WS pipeline.
+- Pro: Zero test file changes. Retirement is invisible to test authors. One shim, 3300 lines deleted.
+- Con: The shim itself needs to handle all sexp→WS translation.
+- Risk: The sexp→WS translation might miss edge cases.
+
+**Why Option B**: The Completeness principle says "do the hard thing at the right level of abstraction." The right level is the API boundary (`process-string`), not 350 individual files. The shim is ~50 lines; the mass migration is ~1750 edits. The shim also means any future sexp input (REPL, `#lang prologos` `.rkt` files) automatically benefits.
+
+### 8.3 The Compat Shim
+
+The sexp→WS translation is straightforward because sexp IS a subset of WS:
+
+```
+Sexp: (def x 42)        → WS: "def x 42"
+Sexp: (eval (int+ 3 4)) → WS: "eval [int+ 3 4]"
+Sexp: (ns foo)           → WS: "ns foo"
+```
+
+Rules:
+1. Strip outer `()` from each top-level form
+2. Convert inner `()` to `[]` (application brackets)
+3. Special forms (`def`, `defn`, `spec`, `type`, `trait`, `impl`, `data`, `ns`, `eval`, `check`, `infer`) keep their keywords bare
+4. Nested parens → nested brackets: `(f (g x))` → `[f [g x]]`
+5. `(match ...)`, `(the ...)`, `(solve ...)` — keyword parens stay as `(match ...)` in WS too
+
+Implementation site: `process-string` in driver.rkt. Before the current sexp parsing path, detect that input is sexp (starts with `(`), apply `sexp->ws-string` translation, then route through WS `process-string-ws` path.
+
+### 8.4 Phasing
+
+**Phase 10: Compat Shim** (enables deletion)
+
+| Sub-phase | Description | Risk |
+|-----------|-------------|------|
+| 10a | Implement `sexp->ws-string` translator | Medium — must handle all sexp forms |
+| 10b | Wire into `process-string`: detect sexp, translate, route to WS | Low |
+| 10c | Run full suite — all 7529 tests must pass through WS pipeline | HIGH — this is the validation gate |
+| 10d | Audit: grep for any remaining sexp-path calls | Low |
+
+**Phase 11: Deletion** (cleanup after shim validates)
+
+| Sub-phase | Description | Lines deleted |
+|-----------|-------------|--------------|
+| 11a | Delete `preparse-expand-form` + sexp-specific expanders from macros.rkt | ~1000 |
+| 11b | Delete `parse-datum` sexp→surf-* path from parser.rkt | ~500 |
+| 11c | Delete reader.rkt WS tokenizer (keep only sexp readtable `prologos-read-syntax`) | ~1600 |
+| 11d | Retire test-reader.rkt (fold remaining value into test-parse-reader.rkt) | ~200 |
+| 11e | Update dep-graph.rkt references | mechanical |
+
+**Total deletion target**: ~3300 lines.
+
+### 8.5 Risk Assessment
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| sexp→WS translation misses edge case | Medium | Test failure (caught immediately) | Phase 10c is full-suite gate. Translation is mechanical — sexp is strict subset. |
+| Special form sexp syntax has no WS equivalent | Low | Blocker | Audit: which sexp forms have no WS path? Known: none — all forms have WS equivalents. |
+| Performance: WS pipeline slower for sexp-originated tests | Low | Suite slowdown | Track 2 Phase 9 showed 16% overhead. After deletion of dual pipeline, overhead drops (only WS runs). Net effect may be neutral or faster. |
+| `prologos-read-syntax` for `#lang prologos` .rkt files | Medium | Breaking change for sexp .rkt modules | Keep sexp readtable path. `prologos-read-syntax` stays, reading through Racket's readtable. Only the WS tokenizer/expander path is deleted. |
+
+### 8.6 Dependency: What Stays After Retirement
+
+After Phase 11, the remaining pipeline is:
+
+```
+.prologos files:  parse-reader.rkt (WS tokenizer+tree) → surface-rewrite.rkt → tree-parser.rkt → macros.rkt (expand-top-level + registration ONLY) → elaborator
+.rkt files:       sexp-readtable.rkt → prologos-read-syntax → parser.rkt (sexp→surf-*) → macros.rkt (expand-top-level) → elaborator
+process-string:   sexp->ws-string → WS pipeline
+```
+
+The sexp `.rkt` path (using Racket's native reader + sexp-readtable.rkt) remains for backward compatibility but bypasses reader.rkt entirely. reader.rkt's WS tokenizer and preparse expanders are fully deleted.
+
+macros.rkt retains: `expand-top-level`, `expand-expression`, registration infrastructure, `preparse-expand-all` (for generated defs from data/trait/impl). The sexp-specific `expand-if`, `expand-when`, `expand-let`, etc. are deleted.
