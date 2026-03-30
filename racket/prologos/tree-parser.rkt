@@ -366,23 +366,19 @@
      (parse-error-result loc "def: need at least name + body")]))
 
 (define (parse-defn-tree args loc)
-  ;; args (after defn token): [name, params-bracket, maybe-return-type, body...]
-  ;; Variants:
-  ;;   [name, [params], body] — bare params, type inferred
-  ;;   [name, [params], <RetType>, body] — typed params + return type
-  ;;   [name, [params], :, type, body] — colon return type
-  ;; Multi-clause: handled by expand-top-level (defn-multi) at Layer 2
+  ;; Produce surf-defn (NOT surf-def). Let expand-top-level handle:
+  ;;   infer-auto-implicits → desugar-defn → nested lambdas.
+  ;; The tree parser's job is PARSING, not DESUGARING.
+  ;; surf-defn: (name type param-names body srcloc)
   (cond
     [(< (length args) 2)
      (parse-error-result loc "defn: need name + params + body")]
     [else
      (define name (token-symbol (car args)))
-     (when (not name)
-       (parse-error-result loc (format "defn: expected name, got ~a" (car args))))
      (cond
        [(not name)
         (parse-error-result loc "defn: expected name")]
-       ;; Check if second arg is a bracket-group (param list)
+       ;; Bracket-group param list
        [(and (>= (length args) 3)
              (parse-tree-node? (cadr args))
              (eq? (parse-tree-node-tag (cadr args)) 'bracket-group))
@@ -405,14 +401,9 @@
                 [(prologos-error? ret-type) ret-type]
                 [(prologos-error? body) body]
                 [else
-                 ;; Build: (def name (the (Pi binders RetType) (fn binders body)))
-                 (define full-type
-                   (foldr (lambda (bnd rest-ty) (surf-pi bnd rest-ty loc))
-                          ret-type binders))
-                 (define nested-lam
-                   (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
-                          body binders))
-                 (surf-def name full-type nested-lam loc)])]
+                 ;; param-names is list of SYMBOLS, not binder-infos
+                 (define param-names (map binder-info-name binders))
+                 (surf-defn name ret-type param-names body loc)])]
              ;; [name, [params], :, type, body]
              [(and (>= (length rest) 3)
                    (token-is? (car rest) ":"))
@@ -422,34 +413,25 @@
                 [(prologos-error? type-parsed) type-parsed]
                 [(prologos-error? body) body]
                 [else
-                 (define full-type
-                   (foldr (lambda (bnd rest-ty) (surf-pi bnd rest-ty loc))
-                          type-parsed binders))
-                 (define nested-lam
-                   (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
-                          body binders))
-                 (surf-def name full-type nested-lam loc)])]
-             ;; [name, [params], body] — type inferred
-             [(= (length rest) 1)
-              (define body (parse-form-tree (car rest)))
-              (if (prologos-error? body) body
-                  (let ([nested-lam
-                         (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
-                                body binders)])
-                    (surf-def name #f nested-lam loc)))]
-             ;; [name, [params], body1, body2, ...] — multi-expr body
+                 (define param-names (map binder-info-name binders))
+                 (surf-defn name type-parsed param-names body loc)])]
+             ;; [name, [params], body] — type inferred (build Pi chain with holes)
              [(>= (length rest) 1)
               (define body (parse-form-tree (car rest)))
               (if (prologos-error? body) body
-                  (let ([nested-lam
-                         (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
-                                body binders)])
-                    (surf-def name #f nested-lam loc)))]
+                  (let* ([param-names (map binder-info-name binders)]
+                         ;; Build full type: (Pi (x : _) (Pi (y : _) _))
+                         ;; This is what the old parser does — desugar-defn
+                         ;; needs Pi binders to create named lambdas.
+                         [full-type
+                          (foldr (lambda (bnd rest-ty) (surf-pi bnd rest-ty loc))
+                                 (surf-hole loc)
+                                 binders)])
+                    (surf-defn name full-type param-names body loc)))]
              [else
               (parse-error-result loc "defn: need body after params")])])]
        ;; Bare symbols as params (no bracket group)
        [else
-        ;; Try: all-but-last are symbols (bare params), last is body
         (define param-tokens (drop-right (cdr args) 1))
         (define body-item (last (cdr args)))
         (define param-names
@@ -457,14 +439,15 @@
             (token-symbol p)))
         (if (ormap not param-names)
             (parse-error-result loc "defn: expected param names")
-            (let* ([binders (map (lambda (n) (binder-info n #f (surf-hole loc)))
-                                 param-names)]
-                   [body (parse-form-tree body-item)]
-                   [nested-lam
-                    (foldr (lambda (bnd inner) (surf-lam bnd inner loc))
-                           body binders)])
+            (let ([body (parse-form-tree body-item)])
               (if (prologos-error? body) body
-                  (surf-def name #f nested-lam loc))))])]))
+                  (let* ([binders (map (lambda (n) (binder-info n #f (surf-hole loc)))
+                                      param-names)]
+                         [full-type
+                          (foldr (lambda (bnd rest-ty) (surf-pi bnd rest-ty loc))
+                                 (surf-hole loc)
+                                 binders)])
+                    (surf-defn name full-type param-names body loc)))))])]))
 
 (define (parse-spec-tree args loc)
   ;; spec is consumed by preparse-expand-all (registers type info).
@@ -475,7 +458,7 @@
   ;; The spec form is: (spec name type-tokens...)
   ;; After preparse injection, specs are consumed — they don't appear
   ;; in the parsed output. If they DO appear here, they weren't consumed.
-  (parse-error-result loc "spec: should have been consumed by preparse"))
+  (parse-error-result loc "spec: consumed by preparse"))
 
 (define (parse-eval-tree args loc)
   ;; Simple: (eval expr) → surf-eval
@@ -948,15 +931,13 @@
   (parse-error-result loc "solver: not yet implemented"))
 
 (define (parse-ns-tree args loc)
-  ;; (ns name) → just the name symbol for module system
-  ;; This is handled by preparse, not parser. Pass through.
-  (parse-error-result loc "ns: handled by preparse"))
+  (parse-error-result loc "ns: consumed by preparse"))
 
 (define (parse-imports-tree args loc)
-  (parse-error-result loc "imports: handled by preparse"))
+  (parse-error-result loc "imports: consumed by preparse"))
 
 (define (parse-exports-tree args loc)
-  (parse-error-result loc "exports: handled by preparse"))
+  (parse-error-result loc "exports: consumed by preparse"))
 
 ;; ========================================
 ;; Top-level: parse all forms from a tree
@@ -1060,8 +1041,8 @@
     (define body (tnode 'bracket-group (tok "int+") (tok "x") (tok "y")))
     (define node (tnode 'defn (tok "defn") (tok "add") params body))
     (define result (parse-form-tree node))
-    (check-true (surf-def? result))
-    (check-eq? (surf-def-name result) 'add))
+    (check-true (surf-defn? result) (format "expected surf-defn, got ~a" result))
+    (check-eq? (surf-defn-name result) 'add))
 
   (test-case "parse-defn: typed params + return type"
     (define params (tnode 'bracket-group (tok "x") (tok ":") (tok "Int")))
@@ -1069,9 +1050,9 @@
     (define body (tok "x"))
     (define node (tnode 'defn (tok "defn") (tok "id") params ret-type body))
     (define result (parse-form-tree node))
-    (check-true (surf-def? result) (format "expected surf-def, got ~a" result))
-    (check-eq? (surf-def-name result) 'id)
-    (check-not-false (surf-def-type result)))  ;; has type annotation
+    (check-true (surf-defn? result) (format "expected surf-defn, got ~a" result))
+    (check-eq? (surf-defn-name result) 'id)
+    (check-not-false (surf-defn-type result)))  ;; has type annotation
 
   (test-case "parse-fn: bracket-binder + body"
     (define binder (tnode 'bracket-group (tok "x") (tok ":") (tok "Int")))
