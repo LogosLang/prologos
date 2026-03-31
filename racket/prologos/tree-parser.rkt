@@ -423,6 +423,7 @@
            (define rest (cddr args))
            (cond
              ;; [name, [params], <RetType>, body]
+             ;; Build full Pi chain: Pi(x:T1, Pi(y:T2, RetType))
              [(and (>= (length rest) 2)
                    (parse-tree-node? (car rest))
                    (eq? (parse-tree-node-tag (car rest)) 'angle-group))
@@ -434,20 +435,31 @@
                 [(prologos-error? ret-type) ret-type]
                 [(prologos-error? body) body]
                 [else
-                 ;; param-names is list of SYMBOLS, not binder-infos
                  (define param-names (map binder-info-name binders))
-                 (surf-defn name ret-type param-names body loc)])]
+                 ;; Build Pi chain with binder types + return type
+                 (define full-type
+                   (foldr (lambda (bnd rest-ty) (surf-pi bnd rest-ty loc))
+                          ret-type
+                          binders))
+                 (surf-defn name full-type param-names body loc)])]
              ;; [name, [params], :, type, body]
+             ;; Build full Pi chain: Pi(x:T1, Pi(y:T2, RetType))
+             ;; Same as inferred case but with return type instead of hole
              [(and (>= (length rest) 3)
                    (token-is? (car rest) ":"))
-              (define type-parsed (parse-form-tree (cadr rest)))
+              (define ret-type-parsed (parse-form-tree (cadr rest)))
               (define body (parse-form-tree (caddr rest)))
               (cond
-                [(prologos-error? type-parsed) type-parsed]
+                [(prologos-error? ret-type-parsed) ret-type-parsed]
                 [(prologos-error? body) body]
                 [else
                  (define param-names (map binder-info-name binders))
-                 (surf-defn name type-parsed param-names body loc)])]
+                 ;; Build Pi chain: (Pi (x : T) (Pi (y : U) RetType))
+                 (define full-type
+                   (foldr (lambda (bnd rest-ty) (surf-pi bnd rest-ty loc))
+                          ret-type-parsed
+                          binders))
+                 (surf-defn name full-type param-names body loc)])]
              ;; [name, [params], body] — type inferred (build Pi chain with holes)
              [(>= (length rest) 1)
               (define body (parse-form-tree (car rest)))
@@ -896,7 +908,29 @@
               (if (prologos-error? a) a
                   ((hash-ref builtin-unary-ops head-lex) a loc)))
             (parse-application-tree children loc))]
-       ;; Default: application
+       ;; Default: check for pipe/compose operators in children (mid-expression)
+       ;; These are handled by preparse's expand-pipe-block/expand-compose-sexp,
+       ;; not by the tree parser. Return error so merge falls back to preparse.
+       ;; Also detect consecutive > > (rangle) which is >> compose inside brackets
+       ;; (disambiguator only merges >> at bracket-depth 0).
+       [(and (> (length children) 1)
+             (let check ([rest children])
+               (cond
+                 [(null? rest) #f]
+                 [(and (token-entry? (car rest))
+                       (let ([lex (token-entry-lexeme (car rest))])
+                         (or (equal? lex "|>") (equal? lex ">>")
+                             (equal? lex "$pipe-gt") (equal? lex "$compose"))))
+                  #t]
+                 ;; Consecutive > > = >> compose
+                 [(and (pair? (cdr rest))
+                       (token-entry? (car rest))
+                       (token-entry? (cadr rest))
+                       (equal? (token-entry-lexeme (car rest)) ">")
+                       (equal? (token-entry-lexeme (cadr rest)) ">"))
+                  #t]
+                 [else (check (cdr rest))])))
+        (parse-error-result loc "pipe/compose in expression: handled by preparse")]
        [else (parse-application-tree children loc)])]))
 
 (define (parse-bracket-group-tree children loc)
