@@ -103,7 +103,13 @@ Meet for type domain = type intersection. Meet for session domain = session inte
 3. **What is the identity?** (domain, property-name) pair. Both declaration and inference write to the SAME cell.
 4. **What emerges?** The set of satisfied properties determines capabilities. Implication propagators fire when input properties are filled, writing derived properties to their cells.
 
-**Implementation**: The `sre-domain` struct gains a `properties` field — a hash from property name (symbol) to Bool⊥ value. Initially all ⊥ (unknown). Declaration writes specific properties to #t. Inference tests and writes results.
+**Implementation** (D.2 revised — P1: properties as cells, not struct field):
+
+The `sre-domain` struct gains a `property-cell-ids` field — a hash from property name (symbol) to cell-id on the elaboration network. Each property IS a cell. Declaration writes to the cell at domain registration. Inference writes to the cell. Implication propagators are actual propagators connected to these cells.
+
+**Why cells, not struct fields**: (1) Pnet caching — property values persist across sessions, zero re-inference after first run. (2) Self-hosting — properties are visible to the Logos compiler as network state, not opaque Racket data. (3) Consistency — everything is on-network per propagator-only principle.
+
+`has-property?` reads the cell value from the network. Pure read, no side effects.
 
 Property names (atomic, independently testable):
 
@@ -139,20 +145,41 @@ Composite properties (derived by implication propagators, NOT declared directly)
 3. **What is the identity?** Meet shares the SAME structural decomposition as join. A compound type `Pi(A, B)` decomposes into per-component operations. The identity is the constructor and its component positions.
 4. **What emerges?** Meet on a compound type decomposes per-component via the variance-map (ring action). The result tree emerges from per-component meets/joins at fixpoint.
 
-**The ring action generalization**: The variance-map currently maps `(relation-name, variance) → sub-relation`. The generalization: `(operation, variance) → sub-operation`.
+**The ring action generalization** (D.2 revised — P2: ring-action function, not table columns):
 
-| Variance | Join (⊔) | Meet (⊓) | Subtype (≤) |
-|----------|----------|----------|-------------|
-| Covariant (+) | join | meet | subtype |
-| Contravariant (-) | join | **join** (flipped) | subtype-reverse |
-| Invariant (=) | equality | equality | equality |
-| Phantom (ø) | phantom | phantom | phantom |
+The variance-map currently maps `(relation-name, variance) → sub-relation`. The Module Theory view: variance IS a ring element. The ring element's action on ANY operation is uniform:
 
-The contravariant meet row is the key: meet at a contravariant position uses JOIN, because in the reversed ordering, the greatest lower bound is the least upper bound. This is the antitone ring element's action on the meet operation.
+| Ring Element | Variance | Action on any operation |
+|-------------|----------|------------------------|
+| **Identity** | Invariant (=) | Preserve: operation stays the same (equality for both join and meet) |
+| **Monotone** | Covariant (+) | Preserve: operation stays the same |
+| **Antitone** | Contravariant (-) | Flip: join ↔ meet, subtype ↔ subtype-reverse |
+| **Trivial** | Phantom (ø) | Erase: operation becomes phantom (ignore) |
 
-**Implementation**: `type-lattice-meet` in type-lattice.rkt. Mirrors `type-lattice-merge` but dispatches per-component via the meet column of the variance-map. For base types: `Int ⊓ Int = Int`, `Int ⊓ String = ⊥` (type-bot). For constructors: component-wise with variance-aware operation selection.
+Implementation: two-level dispatch:
+1. `(variance → ring-element)` — one lookup (same as current variance-map)
+2. `(apply-ring-action ring-element operation) → sub-operation` — case dispatch on 4 ring elements
 
-The variance-map table (sre-core.rkt:246-271) gains meet entries alongside the existing subtype/equality entries. Same lookup mechanism, different operation column. The `derive-sub-operation(operation, variance)` function replaces `derive-sub-relation(relation, variance)` — or extends it to handle both.
+Adding a new operation (meet, widen, narrow) requires ZERO new table entries — the ring action handles it uniformly. "Antitone flips everything" is verified once, not per-operation.
+
+```racket
+(define (apply-ring-action ring-element operation)
+  (case ring-element
+    [(identity)  'equality]        ;; invariant: must be equal regardless of operation
+    [(monotone)  operation]        ;; covariant: operation preserved
+    [(antitone)  (flip-operation operation)]  ;; contravariant: join↔meet, subtype↔reverse
+    [(trivial)   'phantom]))      ;; phantom: erased
+
+(define (flip-operation op)
+  (case op
+    [(join) 'meet]
+    [(meet) 'join]
+    [(subtype) 'subtype-reverse]
+    [(subtype-reverse) 'subtype]
+    [else op]))  ;; unknown operations pass through
+```
+
+**Implementation**: `type-lattice-meet` in type-lattice.rkt. For base types: `Int ⊓ Int = Int`, `Int ⊓ String = ⊥` (type-bot). For constructors: component-wise decomposition where each component's operation is determined by `apply-ring-action(component-variance, 'meet)`. Covariant → meet. Contravariant → join (flipped). Invariant → equality.
 
 ### 3.3 Property Inference (Detection Fallback)
 
@@ -163,15 +190,24 @@ The variance-map table (sre-core.rkt:246-271) gains meet entries alongside the e
 3. **What is the identity?** The property cell for the domain being tested. Both declaration and inference write to the same cell.
 4. **What emerges?** After sufficient testing, the property cell advances from ⊥ to a definitive value. Downstream implication propagators fire.
 
-**Mechanism**: For each undeclared property (cell at ⊥), the inference engine:
-1. Samples values from the domain (using bot, top, and values encountered during elaboration)
-2. Tests the axiom against the samples
-3. If any test fails: writes #f (property violated)
-4. If all tests pass (N samples, configurable): writes #t (property holds, with sampling confidence)
+**Mechanism** (D.2 revised — M3: Pocket Universe on-network, P4: eager at registration):
 
-The inference propagator fires lazily — only when a property is QUERIED and is at ⊥. Not eager. This avoids testing properties nobody cares about.
+The inference state for a domain IS a Pocket Universe cell on the network:
 
-**Connection to property-based testing**: This is a small-scale version of QuickCheck-style property testing. The same infrastructure will later support the `spec` system's `:property` declarations (Prologos language feature). Track 2G's implementation is a foundational piece.
+```racket
+(struct property-inference-state
+  (tested-axioms    ;; (hasheq axiom-name → 'passed | 'failed | 'untested)
+   sample-count     ;; how many samples tested so far (monotone)
+   ) #:transparent)
+```
+
+Merge: union of tested-axioms (monotone — axioms only get tested). Failed axiom dominates passed (one counterexample = permanent #f). Sample count takes max.
+
+The inference propagator fires eagerly at domain registration (D.2 P4 revision). It samples values (bot, top, representative constructor instances), tests axioms, and advances the inference state cell. A watcher propagator reads the inference state cell: when an axiom passes with sufficient evidence, it writes #t to the corresponding property cell. When an axiom fails, it writes #f immediately.
+
+**Everything on-network**: The inference state cell participates in pnet caching. First elaboration tests axioms and caches results. Subsequent runs read from cache — zero inference cost. The inference state is also extensible: if future elaboration encounters new representative values, the inference propagator can fire again and test additional samples.
+
+**Connection to property-based testing**: This is a small-scale version of QuickCheck-style property testing. The same Pocket Universe pattern (evidence accumulation as monotone cell value) will later support the `spec` system's `:property` declarations.
 
 ### 3.4 Implication Propagators
 
