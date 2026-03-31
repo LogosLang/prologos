@@ -17,7 +17,8 @@
 | 2 | Wire merge into `process-file-inner` | ⬜ | driver.rkt:1608 |
 | 3 | Wire merge into `load-module` | ⬜ | driver.rkt:1924-1934 |
 | 4 | Delete `use-tree-parser?`, collapse to merge-only | ⬜ | Delete parameter + old path |
-| 5 | Full suite verification + docs | ⬜ | 382/382 GREEN, acceptance file, grep confirms parameter gone |
+| 5 | Decouple registration from expansion in `preparse-expand-all` | ⬜ | Create `preparse-register-and-generate`, delete sexp expanders |
+| 6 | Full suite verification + docs | ⬜ | 382/382 GREEN, acceptance file, grep confirms parameter gone + expanders deleted |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
 
@@ -33,12 +34,13 @@
 3. `load-module` full-elaboration path uses the merge for `.prologos` files
 4. `process-string-ws-inner` simplified to merge-only (old path deleted)
 5. `use-tree-parser?` parameter deleted from codebase
+6. `preparse-expand-all` decoupled: registration+generation separated from sexp expansion
+7. Sexp-specific expanders deleted from macros.rkt (~1000 lines: `expand-let`, `expand-if`, `expand-cond`, `expand-do`, `expand-list-literal`, `expand-lseq-literal`, `expand-pipe-block`, `expand-compose-sexp`, `expand-mixfix-form`, `expand-quote`, `expand-quasiquote`, `expand-with-transient`)
 
 **What this track is NOT**:
-- It does NOT implement new tree parser form types (data, trait, impl) — incomplete because preparse handles registration side effects; deferred to Track 3
-- It does NOT delete sexp expanders from macros.rkt — incomplete because preparse-expand-all is shared by sexp and WS paths; deferred to Track 3 Phase 11
-- It does NOT fill V(1)/V(2) pipeline-as-cell stubs — incomplete because they need cross-form registry cells; deferred to Track 3/4
-- It does NOT eliminate the dual-pipeline overhead — incomplete because preparse is still needed for generated defs; deferred to Track 3
+- It does NOT implement new tree parser form types (data, trait, impl) — incomplete because preparse still handles registration side effects and generated def production; the merge routes these forms to preparse's output, which is correct
+- It does NOT fill V(1)/V(2) pipeline-as-cell stubs — incomplete because V(2) spec injection requires cross-form attribute flow (PPN Track 4 scope); V(1) user macros require tree-level macro system (PPN Track 3 grammar productions or Track 7 user-defined grammar extensions)
+- It does NOT eliminate the dual-pipeline overhead fully — incomplete because preparse registration+generation still runs alongside tree parser; full elimination requires moving registration to propagator cells (Track 3+)
 
 ---
 
@@ -203,6 +205,42 @@ After Phases 2-3, the merge runs on all WS paths. The `use-tree-parser?` paramet
 
 **Principle**: Validated ≠ Deployed applied in full — no parameter, no fallback, no "defaults to #f for safety."
 
+### 3.5 Decouple Registration from Expansion (Phase 11)
+
+`preparse-expand-all` (macros.rkt:2366-2593) is a monolithic 5-pass function that does THREE distinct things per form in Pass 2:
+
+1. **Consume** (ns, imports, exports, foreign) — side effects only, no output
+2. **Generate** (data, trait, impl) — produce generated defs (constructors, accessors, method defs) via `process-data`, `process-trait`, `process-impl`
+3. **Expand** (def, defn, eval + user forms) — spec injection via `maybe-inject-spec` + macro expansion via `preparse-expand-form`
+
+With the merge deployed (Phases 1-4), #3 fires on the preparse side but its output is **discarded for user forms** — the merge uses tree parser output instead. The sexp expanders (`expand-let`, `expand-if`, etc.) do wasted work: they expand datums that are thrown away.
+
+**The fix**: Create `preparse-register-and-generate` that does Passes -1, 0, 1 + Pass 2's consume+generate, WITHOUT calling `preparse-expand-form` on user forms. The merge calls this instead of `preparse-expand-all`.
+
+Structure of the new function:
+```racket
+(define (preparse-register-and-generate stxs)
+  ;; Pass -1: ns/imports (unchanged)
+  ;; Pass 0: register data/trait/deftype/defmacro/bundle (unchanged)
+  ;; Pass 1: register spec/impl (unchanged)
+  ;; Pass 2 (modified): consume + generate ONLY
+  ;;   - ns/imports/exports/foreign: consume (side effects)
+  ;;   - data/trait/impl: generate defs (constructors, accessors, method defs)
+  ;;   - spec: inject into spec-store (side effect), no output
+  ;;   - def/defn/eval/check/infer: NO EXPANSION — output raw datum + stx for parse-datum
+  ;;     (parse-datum still needed for generated defs; user forms handled by tree parser merge)
+  ;; Pass 5b: hoist generated defs before user forms (unchanged)
+  ...)
+```
+
+After this: `preparse-expand-form` is no longer called on the WS path. The registered sexp expanders (`expand-let`, `expand-if`, `expand-cond`, `expand-do`, `expand-list-literal`, `expand-lseq-literal`, `expand-pipe-block`, `expand-compose-sexp`, `expand-mixfix-form`, `expand-quote`, `expand-quasiquote`, `expand-with-transient`) become dead code on the WS path and can be deleted.
+
+**What stays**: `expand-top-level` and `expand-expression` (post-parse, shared by both pipelines — they operate on surf-* structs, not datums). `preparse-expand-form` stays for the sexp `process-string` path (out of scope). The registration infrastructure (`register-preparse-macro!`, `current-preparse-registry`) stays for user macro storage.
+
+**Estimated deletion**: ~1000 lines of sexp expansion functions from macros.rkt. Registration functions, `process-*` functions, and `expand-top-level`/`expand-expression` are retained.
+
+**Principle**: Completeness — Track 3 inherits a clean single-pipeline architecture where the WS path never calls sexp-specific expansion. No "we'll clean this up later."
+
 ---
 
 ## §4 Phasing
@@ -243,15 +281,44 @@ Delete `use-tree-parser?`, old path, export. Simplify `process-string-ws-inner`.
 
 **Verification**: Full suite `racket tools/run-affected-tests.rkt --all` — 382/382 GREEN. `grep -rn "use-tree-parser" --include="*.rkt"` returns 0 results. Acceptance file passes.
 
-### Phase 5: Suite Verification + Documentation
+### Phase 5: Decouple Registration from Expansion
+
+Create `preparse-register-and-generate` in macros.rkt. This is a copy of `preparse-expand-all` with Pass 2's expansion removed — user forms are output as raw datums (for `parse-datum` on the preparse side of the merge) without calling `preparse-expand-form`.
+
+5a. Create `preparse-register-and-generate` alongside `preparse-expand-all`.
+5b. Switch all WS merge paths to call `preparse-register-and-generate` instead of `preparse-expand-all`.
+5c. Verify: full suite GREEN — the merge uses tree parser output for user forms, so skipping sexp expansion should produce identical results.
+5d. Delete sexp expansion functions: `expand-let`, `expand-do`, `expand-if`, `expand-cond`, `expand-list-literal`, `expand-lseq-literal`, `expand-pipe-block`, `expand-compose-sexp`, `expand-mixfix-form`, `expand-quote`, `expand-quasiquote`, `expand-with-transient`, and their `register-preparse-macro!` / `register-built-in-expander!` registrations.
+5e. Verify: full suite GREEN — sexp path (`process-string`) still uses `preparse-expand-all` (unchanged), WS path uses `preparse-register-and-generate` (no expansion).
+
+**Verification**: `grep -rn "expand-let\|expand-if\|expand-cond\|expand-do" macros.rkt` returns only `preparse-expand-all` (sexp path) references, not WS path. Full suite GREEN.
+
+**Risk**: Generated defs from data/trait/impl pass through `preparse-expand-form` after `process-data`/`process-trait`/`process-impl` (macros.rkt lines 2527, 2533). These generated defs (constructors, method helpers) ARE sexp datums that need expansion before `parse-datum`. The new function must still expand generated defs — only user-written forms skip expansion. Specifically: Pass 2's data/trait/impl branches call `preparse-expand-form` on their generated output and this MUST be preserved.
+
+### Phase 6: Suite Verification + Documentation
 
 - Full suite with `--report`
-- Post-deployment A/B: `bench-ab.rkt --runs 10 benchmarks/comparative/` — confirm overhead matches Track 2 measurement
-- Update: Track 2B progress tracker, PPN Master, dailies
+- Post-deployment A/B: `bench-ab.rkt --runs 10 benchmarks/comparative/` — confirm overhead
+- Grep: `use-tree-parser?` returns 0 results, sexp expanders deleted from WS path
+- Update: Track 2B progress tracker, PPN Master, dailies, PIR addendum
 
 ---
 
-## §5 Risk Assessment
+## §5 Relationship to Track 2 Technical Debt
+
+Track 2's PIR identified 5 items of accepted technical debt (§11). This section maps each to Track 2B's handling:
+
+| Debt (from PIR §11) | Track 2B Status |
+|---------------------|-----------------|
+| Dual pipeline overhead (~16%) | REDUCED — Phase 5 removes sexp expansion from WS path. Preparse still runs for registration+generation. Full elimination requires registration on propagator cells (Track 3+). |
+| reader.rkt still imported | RESOLVED in Track 2 Phase 10 — reader.rkt deleted. |
+| Preparse still runs for 5 responsibilities | Phase 5 removes 1 of 5 (expansion). 4 remain: registration, spec storage, generated defs, consume. These are side-effect-producing and require preparse until registration moves to cells. |
+| V(1) user macros at tree level | NOT addressed — incomplete because V(1) requires tree-level macro system. Merge fallback handles correctly. Placement: Track 3 (grammar productions) or Track 7 (user-defined grammar extensions). |
+| V(2) spec injection at tree level | NOT addressed — incomplete because V(2) requires cross-form attribute flow on the network. Placement: PPN Track 4 (elaboration as attribute evaluation, IS SRE Track 2C). |
+
+---
+
+## §6 Risk Assessment
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
@@ -263,7 +330,7 @@ Delete `use-tree-parser?`, old path, export. Simplify `process-string-ws-inner`.
 
 ---
 
-## §6 Red-Flag Phrase Audit
+## §7 Red-Flag Phrase Audit
 
 | Phrase | Status |
 |--------|--------|
@@ -275,7 +342,7 @@ Delete `use-tree-parser?`, old path, export. Simplify `process-string-ws-inner`.
 
 ---
 
-## §7 Pre-0 Benchmarks
+## §8 Pre-0 Benchmarks
 
 Not required. Track 2 Phase 9 already measured the dual-pipeline overhead at ~16% (both preparse and tree parser run). Track 2B adds no new pipeline stages — it wires the existing merge into additional callsites. The same 16% applies.
 
@@ -283,12 +350,12 @@ Post-deployment A/B comparison (Phase 5) will confirm the overhead holds for fil
 
 ---
 
-## §8 WS Impact
+## §9 WS Impact
 
 None. No user-facing syntax is added or modified. Only internal pipeline routing changes.
 
 ---
 
-## §9 NTT Speculative Syntax
+## §10 NTT Speculative Syntax
 
 Not applicable. This track deploys existing infrastructure — no new propagators, lattices, or rewrite rules are introduced.

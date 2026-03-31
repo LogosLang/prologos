@@ -326,13 +326,13 @@ Deferral".
 - Infrastructure cells and elab-network structural fields are NOT TMS-managed
 - `restore-meta-state!` cannot be retired until this is addressed
 - **Fix path**: (1) infra cells → TMS-aware via `net-new-tms-cell`, (2) meta-info/id-map → TMS cells
-- **Placement**: Track 8 prerequisite phase
+- **Placement**: PPN Track 4 (Elaboration as Attribute Evaluation) — putting elaboration on the network with formal propagator edges requires TMS-aware cells. Relabeled from "Track 8 prerequisite" (2026-03-30): PPN Track 4 IS the elaboration-on-network track.
 - Source: Track 6 Phase 5b findings (commit `cb393bb`)
 
 ### Unify type inference and trait resolution under the propagator network — NOT STARTED
 - Current elaboration uses propagator network for cells but NOT formal propagator edges
 - Constraint solving driven by imperative retry loops, not propagator scheduler
-- **Scope**: Dedicated design/implement track — multi-session, architectural
+- **Placement**: PPN Track 4 (Elaboration as Attribute Evaluation, IS SRE Track 2C). Relabeled (2026-03-30): this IS Track 4's core scope.
 - Source: `docs/tracking/2026-03-11_1800_PROPAGATOR_FIRST_MIGRATION.md`
 
 ---

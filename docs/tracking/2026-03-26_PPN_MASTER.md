@@ -127,6 +127,8 @@ Track 3's early phases should include:
 3. Delete `preparse-expand-all` + sexp-specific expanders from macros.rkt
 4. Retain `expand-top-level` and `expand-expression` (post-parse, shared)
 
+**From Track 2B**: V(1) user macros — tree-level macro expansion as grammar productions. User-defined macros (`defmacro`) register rewrite rules that fire at tree level. Currently handled by merge fallback to preparse. V(1) belongs here if macros are grammar productions, or in Track 7 if macros are user-defined grammar extensions. Decision deferred to Track 3 design.
+
 **Key mechanism**: Chart parsing / Earley as fixpoint. Each chart entry
 is a cell. Completion/prediction/scanning are propagators. The grammar
 is the set of registered productions. Adding a production = adding a
@@ -152,6 +154,12 @@ via propagation.
 registered attribute rules. Adding a new type-level construct = registering
 a grammar production + an attribute rule. One action, not 14-file pipeline
 changes.
+
+**From Track 2B**: V(2) spec injection — cross-form attribute flow where one form's `spec` declaration annotates another form's `defn`. Currently handled by spec-aware merge (preparse injects, merge routes). V(2) at tree level requires the elaboration network to mediate cross-form data flow — exactly Track 4's scope.
+
+**From DEFERRED.md** (relabeled 2026-03-30):
+- TMS-aware infrastructure cells: `restore-meta-state!` cannot be retired until elab-network fields are TMS-managed. This is Track 4 scope (formal propagator edges require TMS-aware cells).
+- Unify type inference + trait resolution under propagator network: constraint solving currently driven by imperative retry loops, not propagator scheduler. This IS Track 4's core work.
 
 ### Track 5: Type-Directed Disambiguation
 
@@ -192,6 +200,8 @@ optimization, and tooling.
 - Macros are untyped; grammar extensions are NTT-typed
 - Macros don't participate in disambiguation; grammar extensions do
 - Macros are invisible to tooling; grammar extensions are first-class
+
+**From Track 2B**: If V(1) user macros are NOT handled by Track 3 as grammar productions, they belong here as user-defined grammar extensions. The distinction: Track 3 macros are production-level (the compiler's grammar is extended), Track 7 macros are user-level (user code extends the grammar). Decision deferred to Track 3 design — if Track 3 provides the mechanism, Track 7 exposes it to users.
 
 **Design work needed**: What does the `grammar` toplevel form look like?
 How does a user express a production + attribute rules + rewrite rules
