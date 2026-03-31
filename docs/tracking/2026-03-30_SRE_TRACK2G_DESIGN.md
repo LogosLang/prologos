@@ -23,7 +23,7 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Pre-0 benchmarks | ⬜ | Profile SRE decomposition, measure merge/meet candidate cost |
+| 0 | Pre-0 benchmarks | ✅ | Merge: ~159μs/op. Property test: 21ms/25 pairs. Error path: 0 contradictions typical. Design unchanged. |
 | 1 | Property cell infrastructure on sre-domain | ⬜ | Bool⊥ cells per property, has-property? API |
 | 2 | Meet for type domain (variance-aware ring action) | ⬜ | type-lattice-meet + variance-map generalization |
 | 3 | Meet for session domain | ⬜ | session-lattice-meet |
@@ -337,7 +337,60 @@ This is speculative — the actual NTT syntax depends on NTT implementation trac
 
 ---
 
-## §9 Propagator Design Mindspace Verification
+## §9 Pre-0 Benchmark Data
+
+| Metric | Value | Implication |
+|--------|-------|------------|
+| Single merge cost | ~159 μs/op | Meet mirrors this — negligible per-operation |
+| Commutativity test (5 types, 25 pairs) | 21ms | Property inference cheap (~0.8ms/pair) |
+| Associativity test (5 types, 125 triples) | 94ms | Full axiom suite ~200ms one-time |
+| unify_steps per file | 36 (simple) → 666 (complex) | Meet adds ≤100ms worst-case if called per unification |
+| type_check_ms per file | 90ms → 537ms | Bottleneck is type checking, not SRE |
+| Contradictions per file | 0 (typical) | Pseudo-complement fires zero times on success |
+
+**Conclusion**: All design assumptions confirmed. Meet is cheap. Property inference is one-time. Error reporting adds zero overhead on success path. Design proceeds unchanged.
+
+---
+
+## D.2 Self-Critique Findings
+
+### Lens 1 — Principles Challenge
+
+| # | Decision | Principle | Severity | Finding |
+|---|----------|-----------|----------|---------|
+| P1 | Properties as hash field on sre-domain | Propagator-First | MEDIUM | **Are property "cells" actually cells on the network, or struct fields?** A hash field is data-oriented but not propagator-first. If properties are determined at domain construction (before elaboration), struct fields are honest. If they change mid-elaboration (inference from encountered values), they must be actual network cells. **Resolution**: Properties are determined at domain registration time (startup). Struct fields with a clear initialization protocol are sufficient for Track 2G. The path to actual cells is: domain registration writes to cells on the elaboration network. This is the Track 3-4 refinement (same scaffolding→permanent pattern as Track 2B's merge). Note the scaffolding explicitly. |
+| P2 | Variance-map generalization as table with operation column | Data Orientation | LOW | **The ring action is a FUNCTION, not a per-operation table column.** The monotone ring element preserves any operation; the antitone element flips any operation. Adding an operation shouldn't require a new column — the ring element's action handles it. **Resolution**: Implement as ring-action function: `(apply-ring-action ring-element operation) → sub-operation`. The table becomes `(variance → ring-element)` + `(ring-element, operation → sub-operation)`. Cleaner generalization, extensible without new columns. |
+| P3 | Property set coverage for PPN Track 3 | Completeness | LOW | PPN Track 3 creates 3-4 new domains (parse lattices). Design addresses existing domains but doesn't detail new domain creation. **Resolution**: Note in design that Phase 4 (declaration syntax) must support new domain construction with properties, not just adding properties to existing domains. |
+| P4 | Lazy property inference (fires on query) | Decomplection | LOW | **Query-with-side-effect entangles reading with writing.** Eager inference at domain registration is cleaner. Pre-0 data: ~200ms one-time cost — negligible. **Resolution**: Change to eager inference at registration. The `has-property?` API is a pure read, never triggers inference. Simpler, more predictable. |
+
+### Lens 2 — Codebase Reality Check
+
+| # | Claim | Verification | Result |
+|---|-------|-------------|--------|
+| R1 | `sre-domain` can gain a `properties` field | 2 production + N test construction sites | ✓ Mechanical. All sites use positional args — must add 10th arg. Consider keyword args. |
+| R2 | `type-lattice-meet` mirrors `type-lattice-merge` | Read type-lattice.rkt:125-143 | ✓ Structure mirrorable: swap bot↔top in identity cases, intersection for else. |
+| R3 | Constructor meet uses SRE decomposition | Read try-unify-pure:169-204 | ✓ Component-wise, but currently hardcoded per-constructor, not variance-map-driven. Meet would follow same per-constructor pattern or use variance-map. |
+| R4 | Contradictions occur in error paths | Pre-0: 0 contradictions in well-typed programs | ✓ Correct — Heyting consumer fires only on type errors. Zero overhead on success. |
+
+### Lens 3 — Propagator Design Mindspace
+
+| # | Component | Four Questions Check | Finding |
+|---|-----------|---------------------|---------|
+| M1 | Property cells | Information ✓ Lattice ✓ Identity ✓ Emergence ✓ | **Red flag: "hash field" is not a cell.** Properties described as propagator cells but implemented as struct field hash. Scaffolding is acceptable IF noted. The information-flow model is correct even if the scheduling is eager-at-registration. |
+| M2 | Meet operations | Information ✓ Lattice ✓ Identity ✓ Emergence ✓ | **Sound.** Meet IS a lattice operation. The ring action generalization encodes ordering in data (table/function), not control flow. Per-component decomposition follows existing SRE pattern. |
+| M3 | Property inference | Information ✓ Lattice ✓ Identity ✓ | **Emergence concern**: Does inference EMERGE from the network, or is it an algorithm that RUNS and writes results? Axiom testing (sample values, check equality) is procedural. The RESULT is written to a cell, but the testing process itself isn't information-flow. This is acceptable — axiom testing IS computation that produces information. The information then enters the network via cell write. Not everything needs to be on-network; the RESULT does. |
+| M4 | Implication propagators | Information ✓ Lattice ✓ Identity ✓ Emergence ✓ | **Clean.** These ARE actual propagators (or their structural equivalent). Input property cells → derived property cell. Fires when inputs advance. No algorithmic thinking. |
+| M5 | Heyting error reporting | Information ✓ Lattice ✓ | **Identity concern**: The pseudo-complement computation — what is the information flow? It reads two conflicting values, computes their meet, and reports the result. This is a MAP propagator: input = contradiction cell, output = error message cell. The computation (meet) is a lattice operation. Sound. |
+
+### Design Changes from D.2
+
+1. **P1**: Note that properties-as-struct-field is scaffolding. The information-flow model is correct; scheduling is eager-at-registration. Track 3-4 path: domain registration writes to cells on the network.
+2. **P2**: Implement variance-map generalization as ring-action function, not per-operation columns.
+3. **P4**: Change inference from lazy (query-triggered) to eager (registration-triggered). `has-property?` becomes a pure read.
+
+---
+
+## §10 Propagator Design Mindspace Verification
 
 ### Property Cells
 - [x] Information identified: algebraic axioms as boolean facts
