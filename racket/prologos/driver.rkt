@@ -1487,13 +1487,80 @@
   (define refined-root (refine-tag grouped-root))
   (define rewritten-root (rewrite-tree refined-root))
   (define tree-surfs (parse-top-level-forms-from-tree rewritten-root))
-  ;; Track 2B: Validation-only mode.
-  ;; Tree parser runs for validation; preparse provides ALL elaboration output.
-  ;; The per-form merge introduces regressions (test-char-string-01, test-mixfix-02)
-  ;; due to remaining AST parity gaps. Validation-only is the safe deployment
-  ;; until ALL gaps are closed (Phases C, D, E complete).
-  (void tree-surfs)
-  (filter (lambda (s) (not (prologos-error? s))) preparse-surfs))
+  ;; Track 2B: Source-line-keyed merge.
+  ;; Each source form is identified by its source line. Both pipelines process
+  ;; the same source, so surfs for the same source line correspond.
+  ;;
+  ;; Tree parser output used when: (a) non-error, (b) same form type as preparse,
+  ;; (c) same source line. Preparse used for: generated defs (synthetic positions),
+  ;; forms where tree parser errored, and forms where tree parser is absent.
+  ;;
+  ;; This avoids the queue alignment problem: no positional counting,
+  ;; identity-based matching via source line.
+  ;;
+  ;; Generated defs from data/trait/impl have source lines that DON'T appear
+  ;; in tree parser output → always from preparse (correct).
+
+  ;; Helper: extract source line from a srcloc (handles both srcloc struct and raw tuple)
+  (define (loc->line loc)
+    (cond
+      [(srcloc? loc) (srcloc-line loc)]
+      [(and (list? loc) (>= (length loc) 2)) (cadr loc)]  ;; (file line col span) or (line col pos span)
+      [(and (pair? loc) (number? (car loc))) (car loc)]    ;; (line col pos span) as first element
+      [else #f]))
+
+  ;; Helper: extract source line from a surf
+  (define (surf-source-line s)
+    (cond
+      [(surf-def? s) (loc->line (surf-def-srcloc s))]
+      [(surf-defn? s) (loc->line (surf-defn-srcloc s))]
+      [(surf-defn-multi? s) (loc->line (surf-defn-multi-srcloc s))]
+      [(surf-eval? s) (loc->line (surf-eval-srcloc s))]
+      [(surf-check? s) (loc->line (surf-check-srcloc s))]
+      [(surf-infer? s) (loc->line (surf-infer-srcloc s))]
+      [else #f]))
+
+  ;; Helper: same form type?
+  (define (same-form-type? a b)
+    (or (and (surf-eval? a) (surf-eval? b))
+        (and (surf-check? a) (surf-check? b))
+        (and (surf-infer? a) (surf-infer? b))
+        (and (surf-def? a) (surf-def? b))
+        (and (surf-defn? a) (surf-defn? b))
+        (and (surf-defn-multi? a) (surf-defn-multi? b))))
+
+  ;; Build source-line → tree-surf map (non-errors only)
+  (define tree-by-line
+    (for/hasheq ([s (in-list tree-surfs)]
+                 #:when (not (prologos-error? s)))
+      (define line (surf-source-line s))
+      (if line (values line s) (values (gensym) s))))  ;; gensym for non-matchable
+
+  ;; Per-form merge function: given preparse's surf and tree parser's surf (or #f),
+  ;; resolve which to use. This IS the cell merge function — both pipelines write,
+  ;; the merge resolves. Executed here as a map operation, not a scan.
+  (define spec-store (current-spec-store))
+
+  (define (merge-form preparse-surf tree-surf)
+    (cond
+      ;; No tree parser output for this form → preparse
+      [(not tree-surf) preparse-surf]
+      ;; Form type mismatch → preparse (safety)
+      [(not (same-form-type? preparse-surf tree-surf)) preparse-surf]
+      ;; Spec-annotated → preparse (has spec type injected)
+      [(and (surf-def? preparse-surf) (hash-ref spec-store (surf-def-name preparse-surf) #f)) preparse-surf]
+      [(and (surf-defn? preparse-surf) (hash-ref spec-store (surf-defn-name preparse-surf) #f)) preparse-surf]
+      [(and (surf-defn-multi? preparse-surf) (hash-ref spec-store (surf-defn-multi-name preparse-surf) #f)) preparse-surf]
+      ;; Both pipelines produced valid output → tree parser wins for user forms
+      [else tree-surf]))
+
+  ;; Apply merge-form to each preparse surf, using tree-by-line for lookup.
+  ;; Preparse ordering preserved (Pass 5b hoisting for generated defs).
+  (for/list ([s (in-list preparse-surfs)]
+             #:when (not (prologos-error? s)))
+    (define line (surf-source-line s))
+    (define tree-match (and line (hash-ref tree-by-line line #f)))
+    (merge-form s tree-match)))
 
 ;; PPN Track 2B Phase 4: use-tree-parser? parameter — TO BE DELETED after Phases 2-3
 (define use-tree-parser? (make-parameter #f))
