@@ -464,141 +464,172 @@ This is **Track 3 early-phase scope** — extending tree-parser.rkt to full AST 
 
 ---
 
-## §12 AST Parity: Propagator-Only Design for Deferred Expression Forms
+## §12 AST Parity: Propagator-Only Design for Deferred Expression Forms (D.3b-revised)
 
 ### 12.1 Scope
 
-§11 identified three categories of AST parity gaps preventing tree parser output from being used for elaboration. This section designs the propagator-only approach for each.
+§11 identified three categories of AST parity gaps. This section designs the propagator-only approach for each, incorporating all findings from D.2c and D.3b critique rounds.
 
 | Category | Forms | Approach |
 |----------|-------|----------|
-| #1: Expression sentinels | mixfix (.{...}), pipe (\|>), compose (>>) | Propagator-native: lattice-embedded resolution in cell values |
-| #2: Expression keywords | solve, solve-one, defr, session ops, capability ops | Tree parser handlers in parse-expr-tree (mechanical) |
-| #3: Complex defn variants | inline type annotation + match body, multi-arity patterns | Tree parser parity in parse-defn-tree (mechanical) |
+| #1: Expression sentinels | mixfix (.{...}), pipe (\|>), compose (>>) | Pocket Universe cell value with position-aware claim lattice |
+| #2: Expression keywords | solve, solve-one, defr, session ops, capability ops | Tree parser handlers (non-trivial for scoped forms like defr-inside-solve) |
+| #3: Complex defn variants | inline type annotation + match body, multi-arity patterns, where-clauses | Tree parser extensions (non-trivial for pattern dispatch and constraint threading) |
 
 ### 12.2 Mixfix Resolution as Pocket Universe Cell Value
 
-**Principle**: The precedence DAG IS a partial order. A partial order IS a lattice structure. Mixfix resolution IS information flow on that lattice. No imperative Pratt parsing — the lattice computes the result.
+#### 12.2.1 Why Pocket Universe, Not Micro-Cells
 
-**The lattice**: A mixfix expression's resolution state is a single cell value progressing monotonically:
+The D.3b critique recommends "each operand position is an actual cell on the parse network." This fragments a single expression's resolution across many cells, requiring coordination infrastructure (which cells belong to which expression? how to collect the result?). It also creates dynamic topology during tree parsing — each mixfix expression encountered creates N cells and M propagators. This violates the CALM invariant within a stratum.
 
-```
-raw (flat token sequence)
-  → strata-resolved-N (highest precedence group resolved)
-  → strata-resolved-N-1
-  → ...
-  → strata-resolved-0 (lowest precedence group resolved)
-  → done (fully structured tree)
-```
+The Pocket Universe approach: ONE cell holds the ENTIRE expression's resolution as a lattice value. The cell's merge function IS the resolution logic. The value progresses monotonically through stages. Other propagators on the parse network see the cell value (intermediate states are visible). No dynamic topology — the cell exists from the moment the mixfix-group node is created.
 
-Each stage resolves one precedence level. Resolution within a level is monotone: each operator claims its adjacent operands. Claims cannot be retracted (monotonicity). Equal-precedence operators sharing an operand resolve by associativity (left-assoc: left operator wins). Operators with NO DAG relationship sharing an operand produce ⊤ (contradiction) — ambiguity error.
+This is the same pattern as PUnify's cell-tree: a cell holds a structured value that the merge function understands. The structure IS the lattice. The merge IS the computation. The network sees the cell value, not the internal structure's advancement steps.
 
-**The cell value structure** (Pocket Universe — embedded lattice):
+#### 12.2.2 The Claim Lattice (D.2c P2 resolved)
+
+**The problem**: Within one precedence level, left-associative operators must bind left-to-right. `1 + 2 + 3` → `((1 + 2) + 3)`. The D.2c found that resolving this by scan order is sequential, not a lattice join.
+
+**The solution**: Position IS information in the claim. The merge function uses positional comparison, making the join order-independent.
 
 ```racket
-(struct mixfix-resolution-value
-  (tokens       ;; the original flat token sequence (immutable)
-   bindings     ;; (hasheq position → (binding operator side)) — monotone accumulation
-   groups-done  ;; (seteq group-name) — which precedence groups have resolved
-   result       ;; #f (incomplete) | parse-tree-node (complete) | 'ambiguity-error
+(struct claim
+  (operator       ;; symbol — which operator claims this position
+   op-position    ;; integer — the operator's position in the token sequence
+   side           ;; 'left | 'right | 'unary-right
+   group          ;; symbol — precedence group name
+   op-info-ref    ;; op-info — full metadata (fn-name, swap?, assoc)
    ) #:transparent)
 ```
 
-The `bindings` hash maps each operand position to which operator claimed it. The `groups-done` set tracks which precedence levels have been resolved. Both are monotone: bindings only get added, groups-done only grows.
+The lattice on claims for a single operand position:
+- ⊥ = unclaimed
+- `claim(op, pos, side, group, info)` = claimed
+- ⊤ = ambiguity error (contradiction)
 
-**The merge function**: join of two `mixfix-resolution-value`s merges bindings (hash-union, conflict = ambiguity) and groups-done (set-union). If `result` is set on either side, it dominates. This is a proper lattice join.
+Merge of two claims:
+1. **Same group, same associativity**: left-assoc → lower `op-position` wins; right-assoc → higher `op-position` wins. **This is order-independent** — the positional comparison produces the same winner regardless of which claim is processed first.
+2. **Same group, non-associative** (`assoc: none`): → ⊤ (ambiguity error). Non-associative operators cannot share operands.
+3. **Different groups, comparable in DAG**: should not occur within one stratum (stratification prevents it). If it does: tighter group wins.
+4. **Different groups, incomparable in DAG**: → ⊤ (ambiguity error). `.{1 + 2 :: xs}` with additive/cons incomparable → structural error.
 
-**Resolution as stage advancement**: Within the rewrite engine, the `rhs-builder` for a `mixfix-group` node:
+This merge is commutative, associative, idempotent, and has ⊥ and ⊤. Proper lattice.
 
-1. Extracts the token sequence from the node's children
-2. Looks up each operator's precedence group from the registry (via `effective-precedence-groups`)
-3. Topologically sorts the groups by the `tighter-than` DAG (highest precedence first)
-4. For each group in order:
-   - For each operator in this group: claim left and right operand positions in `bindings`
-   - If an operand is already claimed by a same-level operator: resolve by associativity
-   - If an operand is claimed by an operator from an incomparable group: → ambiguity error (⊤)
-   - Mark group in `groups-done`
-5. When all groups are done: construct the nested tree from the binding map
+#### 12.2.3 The Resolution Value (Pocket Universe)
 
-Each step is a monotone advancement of the `mixfix-resolution-value`. The entire computation is a fold over the precedence DAG's topological order — which IS the stratum sequence.
+```racket
+(struct mixfix-resolution
+  (tokens          ;; immutable: original alternating operand/operator children
+   stage           ;; 'raw | 'chain-expanded | 'strata-N | ... | 'strata-0 | 'done | 'error
+   claims          ;; (hasheq operand-position → claim-or-bot) — monotone
+   resolved-groups ;; (seteq group-name) — monotone
+   result          ;; #f | parse-tree-node | prologos-error
+   ) #:transparent)
+```
 
-**Why this is propagator-native, not algorithmic**: The resolution state is a lattice value. Each group's resolution is a monotone operation on that value. The DAG order determines the stratum sequence. Incomparability produces contradiction (not silent wrong answers). The cell value progresses through a fixed lattice path determined entirely by the DAG structure and the input tokens.
+**Monotone progression**: `raw` < `chain-expanded` < `strata-N` < ... < `strata-0` < `done`. Each stage advance is irreversible. The `claims` hash only gains entries. The `resolved-groups` set only grows.
 
-The fact that we execute this eagerly within a rewrite-rule builder (rather than across BSP rounds on separate cells) is a scheduling choice, not an architectural one. The computation IS propagator-native — it's lattice-valued monotone information flow. The scheduler just happens to be "run all strata in sequence within one function call" rather than "schedule across BSP rounds." When Track 3-4 puts this on the full network, the computation separates into actual strata with actual cells — but the information flow is identical.
+**Merge of two `mixfix-resolution` values**: higher stage wins; claims merged via the claim lattice; resolved-groups unioned; result: non-#f dominates.
 
-**Scaffolding acknowledgment**: The eager execution within a rewrite rule is scaffolding. The permanent structure (Track 3-4) has actual cells per operand and actual propagators per operator on the parse network. The scaffolding and the permanent structure compute the same result because they implement the same lattice.
+#### 12.2.4 Stage Pipeline
 
-### 12.3 Pipe and Compose as Rewrite Rules
+**Stage 1: Chain Expansion** (D.2c P4, D.3b F3 resolved)
 
-Pipe (`|>`) and compose (`>>`) have fixed precedence in the DAG (pipe is the lowest, composition the highest in the standard chain). They don't involve precedence competition — they have unique semantics:
+Comparison chaining (`1 < x < 100`) is NOT binary precedence resolution — it's a syntactic sugar that transforms the token sequence. This stage runs BEFORE precedence resolution.
 
-**Pipe**: `x |> f |> g` → `(g (f x))`. Threading: fold-right, each step applies the next function to the accumulated result.
+Detection: scan for consecutive comparison operators sharing an operand (e.g., `a < b < c` has two `<` operators with `b` shared). Transformation: produce conjunction — `(and (< a b) (< b c))`. The shared operand `b` appears in both comparisons.
 
-**Compose**: `f >> g` → `(fn [x] (g (f x)))`. Lambda construction: compose functions left-to-right.
+After chain expansion, the token sequence contains only binary operator applications. No special-case needed in the precedence resolution stages.
 
-These are pattern→template rewrite rules in surface-rewrite.rkt. The `rhs-builder` walks the token sequence (which alternates operand, `$pipe-gt`/`$compose` sentinel, operand, ...) and produces the nested application or lambda tree.
+**Principle**: Comparison chaining is a separate concern (Decomplection). It's a pre-pass stratum, not an exception in the main resolution.
 
-No lattice needed — these are deterministic rewrites with no competing claims. The existing rewrite-rule infrastructure handles them directly.
+**Stage 2-N: DAG-Stratified Precedence Resolution** (D.3b F2 resolved)
 
-### 12.4 Expression Keywords (#2) and Defn Variants (#3)
+The precedence DAG's partial order determines which groups resolve together:
+- Groups at the same DAG depth with no order relationship → same stratum (concurrent resolution)
+- Groups with a `tighter-than` relationship → earlier stratum for the tighter group
 
-These are mechanical additions to tree-parser.rkt:
+For the builtin DAG: `multiplicative` and `cons` are both tighter than `comparison`. They may be at the same depth. If incomparable, they fire in the SAME stratum. Their claims to shared operands produce ⊤ (ambiguity) via the claim lattice — correct behavior.
 
-**Expression keywords** (solve, solve-one, session ops, etc.): Each keyword gets a handler in `parse-expr-tree`'s dispatch. The handler produces the same `surf-*` struct that `parse-datum` would produce. Reference: parser.rkt's `parse-list` function handles these keywords — the tree parser handlers mirror them but read from tree children instead of datum lists.
+Within each stratum:
+1. For each operator in the stratum's groups: submit claim for left and right operand positions
+2. Each operand position's claims are merged via the claim lattice (position-aware, order-independent)
+3. If any operand position reaches ⊤: record ambiguity error, halt
+4. Mark all groups in this stratum as resolved
 
-**Defn variants**: `parse-defn-tree` needs to handle:
-- Inline type annotation after params: `defn f [x : Int] : Int body`
-- Match body: `defn f | pattern -> body | ...`
-- Where-clause: `defn f [x] where (Eq x) body`
-- Multi-arity patterns compiled to match expression
+**Stage final: Tree Construction**
 
-These are extensions to the existing `parse-defn-tree` (tree-parser.rkt:368-450). Reference: macros.rkt's `preparse-expand-single` handles the datum-level equivalents.
+When all groups are resolved and no errors: walk the claims hash to build the nested parse-tree-node. Each operand is either bound to an operator (becomes a child of that operator's application node) or is the root (the outermost expression). Operator metadata (`op-info-ref`) provides the function name and swap? flag for `>` / `>=` rewriting.
+
+#### 12.2.5 Unary Operators (D.3b F1 resolved)
+
+Prefix unary operators (e.g., `-` in `.{-x + y}`) claim ONLY their right operand. In the claim struct: `side: 'unary-right`. No left claim is submitted. The operand position receives one claim (the unary operator) and resolves immediately.
+
+Detection: an operator token at position 0 (start of expression) or immediately after another operator token is unary prefix. This mirrors macros.rkt:5542-5549.
+
+Unary operators have their own precedence group (typically very high — tighter than multiplication). They resolve in an early stratum.
+
+#### 12.2.6 Pipe and Compose Inside Mixfix (D.3b F4 resolved)
+
+Pipe (`|>`) and compose (`>>`) are operators in the DAG with precedence groups `pipe` (lowest) and `composition` (highest). **Inside `.{...}`**, they participate in the same precedence resolution as `+`, `*`, etc. The claim lattice handles them: `|>` claims are at the `pipe` group, `>>` at `composition`. Stratification resolves them at the appropriate depth.
+
+**Outside `.{...}`**: Top-level pipe/compose expressions (e.g., `x |> f |> g` as a standalone line, not inside `.{...}`) appear as `pipe-gt` or `compose` tagged tree nodes. These are handled by separate rewrite rules in surface-rewrite.rkt (Phases A/B) because they are NOT mixfix-group nodes — they are top-level forms with the sentinel tag.
+
+**Scope boundary**: Phases A/B = top-level pipe/compose sentinels. Phase C = ALL operators inside mixfix-group, including pipe/compose.
+
+#### 12.2.7 Operand Types (D.2c P5)
+
+Children of a `mixfix-group` node alternate between operands and operators. Operands can be:
+- Token entries (numbers, symbols, variables) — atomic
+- Parse-tree-nodes (bracket groups `[f x]`, paren groups, nested mixfix) — already parsed, treated as atomic operands in the resolution
+
+The claim lattice does not look inside operand nodes. They are opaque values placed into the result tree.
+
+#### 12.2.8 User-Defined Operators (D.3b F6)
+
+The resolution reads operator metadata from `effective-operator-table` and `effective-precedence-groups`, which merge builtin and user-defined registries. Currently these are Racket parameters (imperative access). In the permanent propagator architecture (Track 3-4), these become cells that the mixfix resolution cell reads — when a new `precedence-group` or `:mixfix` spec is registered, the cell updates and dependent mixfix resolutions re-fire.
+
+For Track 2B: parameter access is scaffolding. The lattice computation is the same regardless of how the registry is accessed. Noted for Track 3-4 design continuity.
+
+### 12.3 Pipe and Compose Top-Level Rewrite Rules
+
+Top-level pipe and compose (outside `.{...}`) appear as `pipe-gt` and `compose` tagged tree nodes from T(0) tag refinement.
+
+**Pipe**: `x |> f |> g` → `(g (f x))`. The `pipe-gt` node's children alternate: `operand $pipe-gt operand $pipe-gt operand ...`. The rewrite rule folds right: `(g (f x))`. Produces a nested application parse-tree-node.
+
+**Compose**: `f >> g` → `(fn [x] (g (f x)))`. The `compose` node's children alternate similarly. The rewrite rule produces a lambda wrapping the composed application.
+
+These are straightforward `rhs-builder` functions in surface-rewrite.rkt using the existing rewrite-rule infrastructure. No lattice needed — deterministic transformation with no competing claims.
+
+### 12.4 Expression Keywords and Defn Variants
+
+**Expression keywords** (D.3b clarification: NOT all mechanical):
+- **Simple keyword forms** (solve, solve-one, session ops, capability ops): keyword-headed tree node → corresponding `surf-*` struct. Handlers mirror parser.rkt's `parse-list` dispatch. Mechanical.
+- **Scoped forms** (`defr` inside `solve`): introduces relational variable bindings visible in the solve body. Requires scope tracking in the tree parser — not a simple keyword→struct mapping. Non-trivial but bounded.
+
+**Defn variants** (D.3b clarification: NOT all mechanical):
+- **Inline type annotation**: `defn f [x : Int] : Int body` — requires recognizing the colon-type pattern after params. Extension of existing parse-defn-tree.
+- **Multi-arity pattern dispatch**: `defn f | pattern -> body | ...` — requires recognizing `|` as pattern alternative delimiter, compiling patterns into match expression. ~200 lines in macros.rkt. Non-trivial.
+- **Where-clauses**: `defn f [x] where (Eq x) body` — requires threading constraints into surf-defn. Interacts with trait constraint system.
+
+Estimated: expression keywords 100-150 lines. Defn variants 200-300 lines. Both reference existing implementations in parser.rkt and macros.rkt as templates.
 
 ### 12.5 Revised Phasing
 
-| Phase | Description | Approach |
-|-------|-------------|----------|
-| A | Pipe rewrite rule in surface-rewrite.rkt | Pattern→template rewrite |
-| B | Compose rewrite rule in surface-rewrite.rkt | Pattern→template rewrite |
-| C | Mixfix resolution as Pocket Universe cell value | Lattice-embedded DAG-stratified resolution |
-| D | Expression keywords in parse-expr-tree | Mechanical handlers (solve, session, etc.) |
-| E | Defn variant parity in parse-defn-tree | Mechanical extensions |
-| F | Re-attempt merge output deployment | Switch from validation-only to merge-active |
-| G | Delete use-tree-parser? + parameterize preparse-expand-all | Original Phases 4-5, now unblocked |
+| Phase | Description | Approach | Dependencies |
+|-------|-------------|----------|-------------|
+| A | Pipe top-level rewrite rule | surface-rewrite.rkt rhs-builder | None |
+| B | Compose top-level rewrite rule | surface-rewrite.rkt rhs-builder | None |
+| C | Mixfix Pocket Universe resolution | Lattice-embedded cell value with position-aware claims, DAG-stratified stages, chain expansion pre-pass, unary handling | Reads effective-precedence-groups registry |
+| D | Expression keywords in parse-expr-tree | Handlers for solve, solve-one, session, capability, defr (with scope) | None |
+| E | Defn variant parity | Inline type, multi-arity pattern, where-clause in parse-defn-tree | None |
+| E.5 | Integration validation | Full suite with merge active (not validation-only) | A-E complete |
+| F | Deploy merge output | Switch from validation-only to merge-active in process-file | E.5 green |
+| G | Delete use-tree-parser? + parameterize preparse-expand-all | Phases 4-5 from original design | F green |
 
-Cross-reference: [Mixfix Syntax Design](2026-02-23_MIXFIX_SYNTAX_DESIGN.md) §7 (Parsing Algorithm), §2 (Named Precedence Groups). [PUnify Structural Unification](2026-03-19_PUNIFY_STRUCTURAL_UNIFICATION_PROPAGATORS.md) (cell-tree pattern, information flow over shared structures). [PTF Master](2026-03-28_PTF_MASTER.md) (propagator kind taxonomy — mixfix resolution is Map+Reduce pattern).
+**Phase ordering**: A/B are independent of C (different node types). A/B handle top-level sentinels; C handles mixfix-group internals (including pipe/compose tokens). D/E are independent of A/B/C (different form types). E.5 is the integration gate before deployment.
 
-### D.2c Self-Critique on §12
-
-#### Lens 1 — Principles Challenge
-
-| # | Challenge | Severity | Finding |
-|---|-----------|----------|---------|
-| P1 | Is eager execution within a rewrite-rule builder actually propagator-native? The lattice struct is created, advanced, consumed — all in one synchronous function. No cell holds it. No propagator fires on it. No BSP round sees intermediate states. | HIGH | **The design calls itself "propagator-native" but describes imperative execution in lattice clothing.** The "scheduling choice" argument is rationalization. If we have propagator infrastructure, the principled approach is to USE it: the mixfix-group node's resolution IS a cell on the parse network. The rewrite engine advances it per stratum. Other propagators (error reporting, incremental reparse) see intermediate states. |
-| P2 | Same-level associativity resolution depends on positional scan order (left-to-right for left-assoc). Is this monotone? | MEDIUM | **Within a precedence level, resolution is sequential, not a lattice join.** Two operators at the same level sharing an operand: "left wins" for left-assoc is a positional decision. A true lattice-based resolution would encode position in the claim and let the merge be position-aware. The current design description elides this. |
-| P3 | Registry access (`effective-precedence-groups`) is imperative parameter read inside supposedly propagator-native computation. | LOW | **Scaffolding.** The permanent structure has the registry as a cell. Note in design but don't block on it. |
-| P4 | Chained comparisons (`1 < 2 < 3` → `(and (lt 1 2) (lt 2 3))`) not mentioned. | MEDIUM | **Gap.** The existing Pratt parser handles comparison chaining (macros.rkt:5567-5593). The §12 design's binary-claim model doesn't cover ternary+ chains. Must be addressed. |
-| P5 | Children of mixfix-group are tokens AND nodes (bracket subexpressions). Design only describes tokens. | LOW | **Needs handling.** Bracket-group children are already-parsed subexpressions. The resolution treats them as atomic operands. |
-
-#### Lens 2 — Codebase Reality Check
-
-| # | Claim | Verification | Result |
-|---|-------|-------------|--------|
-| R1 | "Use the DAG directly, not numeric binding powers" | Existing `compute-binding-powers` (macros.rkt:5410) flattens DAG to numbers | ✓ Correct — existing impl loses DAG structure. New design preserves it. But all existing operator infrastructure (op-info, builtin-operators) uses numeric BPs. New impl needs to work with DAG + `compare-groups`. |
-| R2 | Rewrite builder produces parse-tree-nodes | expand-mixfix-form returns datums, not nodes | ✓ Correct — new impl produces tree nodes. Different output type than existing. |
-| R3 | mixfix-group children are alternating operand/operator tokens | Verified from tree walk: `<nat-literal "1N"> <symbol "+"> <nat-literal "2N">` | ✓ But complex operands (bracket groups) are parse-tree-nodes, not tokens. |
-| R4 | 16 builtin operators across 7 groups | macros.rkt:5459-5486 | ✓ Confirmed. |
-| R5 | Chained comparisons need special handling | macros.rkt:5567-5593, extract-chain-shared | ✓ **Gap confirmed — §12 doesn't cover comparison chaining.** |
-
-#### Design Changes Required from D.2c
-
-1. **P1 (HIGH)**: Revise the "scheduling choice" framing. Either commit to actual propagator execution (cell on parse network, stratum advancement) or honestly state this is an algorithmic implementation of the lattice computation — scaffolding that Track 3-4 replaces. The user's directive is clear: "if we're not doing the propagator-only approach now, for what reason not?" If there IS no reason, do it on the network. If there IS a reason (e.g., the parse pipeline in Track 2 is sequential, not BSP-scheduled), state it explicitly.
-
-2. **P2 (MEDIUM)**: Address same-level associativity. Options: (a) within one level, process left-to-right — this is inherently sequential but bounded (operators at the same level in one expression). Acknowledge the sequentiality. (b) Encode position in claims and make merge position-aware — more complex but truly monotone.
-
-3. **P4 (MEDIUM)**: Add comparison chaining to the design. The resolution for comparison operators produces conjunctions, not binary trees. This is a special case in the existing implementation and needs to be in the new one.
-
-4. **P5 (LOW)**: Note that operands can be bracket-group parse-tree-nodes (treated as atomic in resolution).
+Cross-references: [Mixfix Syntax Design](2026-02-23_MIXFIX_SYNTAX_DESIGN.md) §7 (Parsing Algorithm), §2 (Named Precedence Groups), §6 (Chained Comparisons). [PUnify Structural Unification](2026-03-19_PUNIFY_STRUCTURAL_UNIFICATION_PROPAGATORS.md) (cell-value-as-lattice pattern). [PTF Master](2026-03-28_PTF_MASTER.md) (propagator kind taxonomy).
 
 ---
 
