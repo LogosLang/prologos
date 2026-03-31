@@ -201,39 +201,58 @@ PM Track 9 = SRE Track 5
 PM Track 10                      =   SRE Track 6 (module loading)
 #+END_SRC
 
-*Current priority ordering* (updated 2026-03-27):
+*Current priority ordering* (updated 2026-03-30):
 
-*Immediate (PAR — correct parallelism foundation before more topology-changing work):*
-1. PAR Track 0: CALM topology audit + stratified topology design (Stage 0/1 research + implementation)
-2. PAR Track 1: BSP-as-default (after topology stratification resolves CALM violations)
+*Completed:*
+1. ✅ PAR Track 0+1: CALM topology + BSP-as-default
+2. ✅ PPN Track 0: Lattice design (4 lattices, 6 bridges, 57 tests)
+3. ✅ PPN Track 1: Lexer + structure as propagators (5-cell reader)
+4. ✅ PPN Track 2: Surface normalization (tree parser, reader.rkt deleted)
+5. ✅ PPN Track 2B: Production deployment + mixfix Pocket Universe ([[file:2026-03-30_PPN_TRACK2B_DESIGN.md][Design]], [[file:2026-03-30_PPN_TRACK2B_PIR.md][PIR]])
+6. ✅ SRE Track 2G: Algebraic domain awareness ([[file:2026-03-30_SRE_TRACK2G_DESIGN.md][Design]], [[file:2026-03-30_SRE_TRACK2G_PIR.md][PIR]]). FINDING: type lattice not distributive → Track 2H.
 
-*Then PPN (pipeline collapse — prerequisite to future syntax work):*
-1. ✅ PPN Track 0: Lattice design — COMPLETE (4 lattices, 6 bridges, 57 tests)
-2. ✅ PPN Track 1: Lexer + structure as propagators — COMPLETE (5-cell reader, 380/380 green)
-3. ✅ PPN Track 2: Surface normalization — COMPLETE (tree parser, reader.rkt deleted, switchover validated)
-4. ✅ PPN Track 2B: Production deployment + mixfix Pocket Universe ([[file:2026-03-30_PPN_TRACK2B_DESIGN.md][Design]], [[file:2026-03-30_PPN_TRACK2B_PIR.md][PIR]])
-5. PPN Track 3: Parser as propagators (HR productions) — includes Phase 11 prerequisite from Track 2
-6. PPN Track 4 / SRE Track 2C: Elaboration as attribute evaluation (= elaborator-on-SRE). Includes: TMS-aware cells, V(2) spec injection, unified type inference+trait resolution.
+*Primary pipeline (highest leverage — unblocks language/syntax design):*
+7. *PPN Track 3*: Parser as propagators (HR productions). Includes Phase 11 prerequisite. SRE 2G provides algebraic domain awareness for parse lattices.
+8. *PPN Track 3.5 / Grammar Form*: Research + speculative design for ~grammar~ toplevel form. Multi-view spec, DPO structural preservation. Can interleave with PPN 4 — gives a clear design target for the PPN capstone while refining through remaining tracks. See [[file:../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md][Grammar Form research]].
+9. *SRE Track 2H*: Type lattice redesign — union types as subtype join, subtype-aware meet, per-relation properties (Pocket Universe). Makes type.subtype Heyting → pseudo-complement error reporting. *PREREQUISITE for PPN Track 4.*
+10. *PPN Track 4 / SRE Track 2C*: Elaboration as attribute evaluation. Type inference as propagator fixpoint. PUnify cell-tree unification. ATMS trait resolution. Requires Track 2H (well-structured type lattice). See PPN Master Track 4 notes for integration vision.
+
+*Cross-series dependency chain:*
+#+BEGIN_SRC
+  PPN 3 (parser on network)
+      ↓
+  Grammar Form research (speculative design, parallel)
+      ↓
+  SRE 2H (type lattice redesign — union join, subtype meet, Heyting)
+      ↓
+  PPN 4 (elaboration on network — needs 2H's well-structured lattice)
+      ↓
+  PPN 5-9 (disambiguation, error recovery, grammar extensions, incremental, serialization)
+      ↓
+  SH Series (self-hosting — compiler IS the network)
+#+END_SRC
+
+*Rationale*: PPN has highest leverage. Parsing collapsed to a single fixpoint opens language/syntax design with new capabilities (currently blocked). Grammar Form research fits after PPN 3 (when the parsing architecture is understood) and before/alongside PPN 4 (refines the design target). SRE 2H between PPN 3 and 4 ensures Track 4 builds on a correct type lattice.
 
 *Research (parallel with implementation):*
-- PAR Track 2: True parallelism mechanism (STM, WAL cells, FFI — Stage 0/1 research)
-- PAR Track 3: ~:auto~ heuristic (empirical calibration after Track 1)
-- PAR Q2: Multi-strata towers / parallel topology rewrites (connects to PRN/e-graphs)
+- PAR Track 2: True parallelism mechanism (STM, WAL cells, FFI)
+- PAR Track 3: ~:auto~ heuristic (empirical calibration)
+- PAR Q2: Multi-strata towers / parallel topology rewrites (PRN/e-graphs)
 
-*Then re-evaluate. Candidates for next priority:*
-- PM Track 10C: Per-test scheduling via Places (developer velocity — saves ~20s/run)
-- SRE Track 2B: Polarity inference (user-facing: auto subtyping for data types)
-- SRE Track 3: Trait resolution on SRE
-- CIU Tracks 3-5: Collection interface (unblocked by Track 8)
+*Independent (can be worked on between priority tracks):*
+- PM Track 10C: Per-test scheduling via Places (developer velocity)
+- SRE Track 2B: Polarity inference (user-facing: auto subtyping)
+- SRE Track 3: Trait resolution on SRE (benefits from Track 2H)
+- CIU Tracks 3-5: Collection interface
 
-*Lower priority (independent improvements):*
+*Lower priority:*
 - PM Track 8E: 17 registries as cells (architectural cleanup)
 - BSP-LE Tracks 1-2: UnionFind + ATMS Solver
 - SRE Track PUnify: Systemic parity investigation
-- OE research tracks
 
 *Future (blocked on PPN Track 4+):*
 - *SH (Self-Hosting) Series*: Racket prototype → propagator compiler → LLVM lowering → Logos self-hosting. Prerequisites: PPN Track 4 (compiler IS the network), LLVM lowering infrastructure, runtime design (GC per [[file:../research/RESEARCH_GC.md][RESEARCH_GC.md]], scheduling, I/O). Series not yet created — placeholder. See [[file:../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md][S-Expression IR to Propagator Compiler]] for trajectory analysis.
+- *PM Track 12+*: Module-load-time infrastructure on network (domain/ctor/property registrations as cell writes). See PM Master Track 8 audit section.
 
 *Theory (ongoing, fed by application tracks):*
 - PRN: Hyperlattice rewriting formalism (grows from PPN + SRE + PReductions)
