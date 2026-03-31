@@ -12,14 +12,13 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Acceptance file | ⬜ | `examples/2026-03-30-ppn-track2b.prologos` — must include impl referencing user function |
-| 0.5 | Tree parser error stubs for all preparse-consumed forms | ⬜ | D.3 F1: prevent `else` fallthrough producing garbage surfs |
-| 1 | Extract `merge-preparse-and-tree-parser` | ⬜ | Refactor driver.rkt:1485-1560; fix impl-generated ordering (D.3 F4) |
-| 2 | Wire merge into `process-file-inner` | ⬜ | driver.rkt:1608. WS path only — .rkt path unchanged (D.3 F3) |
-| 3 | Wire merge into `load-module` | ⬜ | driver.rkt:1924-1934. WS path only. |
-| 4 | Delete `use-tree-parser?`, collapse to merge-only | ⬜ | Delete parameter + old path. Independently revertible (D.3 F9). |
-| 5 | Parameterize `preparse-expand-all` (#:expand-user-forms? #f for WS) | ⬜ | D.2-revised + D.3 F2/F7: 4-way form classification, guard only category (c). |
-| 6 | Full suite verification + docs | ⬜ | 382/382 GREEN, acceptance file, A/B with cold-cache module loading (D.3 F5). |
+| 0 | Acceptance file | ✅ | `3457c6ca`. 0 errors on baseline. |
+| 0.5 | Tree parser error stubs | ✅ | `9a8f9158`. 15 explicit error stubs (D.3 F1). |
+| 1 | Extract merge function | ✅ | `67df701f`. Shared function. Zero behavioral change. |
+| 2+3 | Wire merge into process-file + load-module assessment | ✅ | `8a263d89`, `b7809237`. **CRITICAL FINDING**: see §11. Validation-only mode. |
+| 4 | Delete `use-tree-parser?` | ⏸️ | BLOCKED: merge output not used. Parameter retains value for validation. |
+| 5 | Parameterize `preparse-expand-all` | ⏸️ | BLOCKED: preparse still provides ALL elaboration input. |
+| 6 | Verification + docs | ✅ | 382/382 GREEN, 7459 tests, 130.6s. |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
 
@@ -412,6 +411,56 @@ None. No user-facing syntax is added or modified. Only internal pipeline routing
 ## §10 NTT Speculative Syntax
 
 Not applicable. This track deploys existing infrastructure — no new propagators, lattices, or rewrite rules are introduced.
+
+---
+
+## §11 Implementation Finding: AST Parity Gap (2026-03-30)
+
+### What happened
+
+Phase 2 wired the merge into `process-file-inner`. Three successive merge policies were tested:
+
+1. **Original merge** (spec-aware: tree parser for user forms, preparse for generated+spec-annotated): 12-22 test failures. Tree parser's `surf-defn` output for complex forms (inline type annotations, match bodies) differs from preparse's. Forms the tree parser claims to handle produce non-error surfs that are structurally wrong for elaboration.
+
+2. **Conservative merge** (tree parser for eval/check/infer only, preparse for ALL definitions): Still 12 failures. Tree parser's `surf-eval` wraps expressions via `parse-expr-tree` which produces different AST shapes than preparse's datum expansion for list expressions, Nat literals in brackets, and other compound forms.
+
+3. **Validation-only** (tree parser runs but preparse provides ALL output): 0 failures. This is what's deployed.
+
+### Root cause
+
+The tree parser (Track 2 Phase 6c, tree-parser.rkt) was designed to produce surf-* structs that match what `parse-datum` produces from preparse-expanded datums. But the validation in Track 2 was done via `process-string-ws` with `use-tree-parser? = #t` — a path that only runs on short test strings, not on full `.prologos` files with complex forms. The "383/383 GREEN" validation was against `process-string` (sexp path, no merge) and `process-string-ws` (WS path, with merge but on simple test inputs).
+
+When the merge runs on real `.prologos` files via `process-file`, it encounters forms the tree parser doesn't handle correctly: defn with inline type + match body, list expressions like `[1N 2N 3N]`, complex function applications, etc.
+
+### Two additional findings
+
+1. **load-module cannot use the merge**: `load-module` is called recursively during module imports (merge → preparse → process-imports → load-module → merge → ...). Each recursive call runs `read-to-tree` on the imported module, creating unbounded tree parsing. Library modules use `.pnet` cache on warm cache; cold-cache path must use preparse-only.
+
+2. **tag-check and tag-infer were missing**: T(0) tag refinement in surface-rewrite.rkt had no tags for `check` and `infer` forms. They fell to `tag-expr` catch-all, so the tree parser's dispatch never matched them. Fixed in `8a263d89`.
+
+### What Track 2B delivers (revised)
+
+- Tree parser runs as **continuous validation** on every `.prologos` file processed by `process-file`
+- Any tree parser crash or regression is caught immediately
+- Preparse provides ALL elaboration input (proven correct)
+- Tree parser error stubs prevent garbage surfs from unhandled forms (Phase 0.5)
+- Merge function extracted as shared infrastructure (Phase 1)
+
+### What Phases 4-5 require (revised scope for Track 3)
+
+Phases 4 and 5 as designed are BLOCKED until the tree parser achieves **AST parity** with preparse — meaning tree parser output produces identical elaboration results to preparse output for every form type. This requires:
+
+1. **Expression parity**: `parse-expr-tree` must produce identical surf-* shapes to what `parse-datum` produces from preparse-expanded datums. Key gaps: list expressions, Nat bracket groups, match arms, inline type annotations.
+2. **Definition parity**: `parse-defn-tree` must handle all defn variants (inline type + match body, where-clause injection, spec injection, multi-arity patterns).
+3. **load-module**: Either skip tree parser for module loading (current approach) or solve the recursive merge problem.
+
+This is **Track 3 early-phase scope** — extending tree-parser.rkt to full AST parity, then deploying the merge output.
+
+### Lessons
+
+- **"Validated on test path" ≠ "validated on production path"** — the Track 2 Phase 6g validation used `process-string-ws` which doesn't exercise the same code paths as `process-file`. Boundary assumption: "if it works on strings, it works on files." Reality: files have more complex forms.
+- **The diagnostic protocol worked**: instead of guessing, we tested three merge policies and let the suite tell us which forms fail. Each policy narrowed the problem. The final policy (validation-only) is the principally correct stopping point.
+- **The Validated≠Deployed lesson applies recursively**: Track 2's "switchover" was validated on one path. Track 2B's deployment attempt validates on the production path and finds it's not ready. Honest acknowledgment is better than forcing broken output through.
 
 ---
 
