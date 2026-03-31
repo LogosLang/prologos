@@ -554,6 +554,74 @@ at each phase, raising design issues as they surface.
   ~DEFERRED.md~ in the same commit. Deferred work not tracked is
   abandoned work.
 
+*** Implementation Protocol
+
+Distilled from SRE Track 2G implementation (2026-03-30), which executed
+significantly smoother than prior tracks. The difference: systematic
+mini-audits prevented wrong assumptions, the phase completion protocol
+created rhythm, and the principles challenge caught issues before they
+became bugs.
+
+**** Per-Phase Protocol
+
+For each implementation phase:
+
+1. *Mini-audit*: Before writing any code, audit the immediate phase
+   needs against the ACTUAL codebase. Produce a concrete list: which
+   structs, functions, and call sites does this phase touch? Which
+   files, which line numbers? Do not work from memory or assumptions
+   --- read the code. The audit prevents wrong assumptions that cause
+   mid-phase pivots.
+
+2. *Principles challenge mid-flight*: Every design decision made during
+   implementation --- "should I add a field?", "should I use a hash or
+   a cell?", "should I loop or fold?" --- is filtered through the
+   principles. Especially:
+
+   - Apply the *Propagator Design Mindspace four questions* (§3
+     Propagator Design Mindspace above) to any computation being added.
+     What is the information? What is the lattice? What is the identity?
+     What emerges?
+   - Check the *red flags table* (§3 above): am I reaching for a loop?
+     A queue? A left-to-right scan? If so, where is the lattice?
+
+3. *Diagnostic protocol on snag*: If stuck after 2-3 attempts, STOP
+   iterating and apply the diagnostic protocol (see ~workflow.md~):
+   audit the domain → hypothesize from data → test narrowly →
+   challenge by principles → reframe if still stuck. Do not iterate
+   fix-and-retry.
+
+4. *Phase completion* (4 steps IN ORDER):
+   a. /Commit/: ~git add~ + ~git commit~ with descriptive message
+   b. /Tracker/: Update design doc progress tracker (⬜ → ✅ + commit
+      hash + key result)
+   c. /Dailies/: Append to current dailies --- what was done, why,
+      design choices, lessons/surprises
+   d. /Proceed/: Next phase only after a-c are done
+
+**** Post-Implementation Protocol
+
+After all phases are complete:
+
+1. *A/B benchmark*: Run the comparative benchmark suite set up in the
+   Pre-0 phase. Compare against baseline. Any regression >5% requires
+   investigation before closing the track.
+
+2. *Instrumentation cleanup*: Grep for ~eprintf~, ~displayln~, debug
+   flags, temporary parameters. Remove or guard behind debug mode.
+
+3. *PIR*: Read the PIR methodology (~POST_IMPLEMENTATION_REVIEW.org~)
+   BEFORE writing. The methodology defines 16 questions, template
+   structure, format principles, and the mandatory longitudinal survey.
+   A PIR written without consulting the methodology systematically
+   omits the evaluative and meta-learning sections.
+
+Codified from SRE Track 2G (2026-03-30). The mini-audit prevented wrong
+assumptions at every phase. The principles challenge caught the key
+design issue (type lattice not distributive) through inference, not
+through test failure. The phase completion protocol created clean
+boundaries with no batched updates.
+
 - *Post-implementation A/B benchmark (final phase before PIR)*: The
   last implementation phase should include:
   1. Run the SAME micro-benchmarks from Pre-0 against the completed code
