@@ -370,6 +370,54 @@ See: [[file:../../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md][Algebrai
 [[file:../2026-03-28_PTF_MASTER.md][PTF Master]] (propagator kind taxonomy).
 Discovered and refined through PPN Track 2B implementation (2026-03-30).
 
+*** NTT Model Requirement
+
+Every design document for a track that builds with or on propagator
+networks MUST include a detailed NTT speculative syntax model. This is
+NOT optional --- it is a design gate, like the self-critique lenses.
+
+**** What the NTT model must cover
+
+For every component in the design:
+- *Cells*: ~:reads~ / ~:writes~ declarations with lattice types
+- *Propagators*: fire function signatures typed by cell reads/writes
+- *Lattice declarations*: ~impl Lattice~ with explicit join cases
+- *Network interfaces*: ~interface~ with ~:inputs~ / ~:outputs~
+- *Stratification*: which strata components belong to, what crosses strata
+
+The model should be detailed enough that someone could IMPLEMENT the
+design from the NTT syntax alone, without reading the prose.
+
+**** Why mandatory
+
+Two out of two tracks that used NTT modeling found architectural
+impurities that the prose design missed:
+
+- PPN Track 2: NTT model found 3 syntax gaps (rewrite, refine, foreach)
+  revealing missing NTT expressiveness for real use cases
+- SRE Track 2G: NTT model found that Phase 6's "install implication
+  propagators" was described as a static wiring step (enumerate domains,
+  loop, install) --- imperative, not reactive. Expressing it in NTT
+  (~propagator~ with ~:reads~ / ~:writes~ / ~:scatter~) revealed the
+  impurity. Revised to Pocket Universe internal stratification.
+
+The NTT model forces honest on-network modeling. If a component cannot
+be expressed as ~propagator~, ~cell~, ~interface~, or ~network~ in NTT
+syntax, it is NOT on the network --- regardless of what the prose claims.
+
+**** Observations section
+
+Every NTT model should end with an "Observations" subsection answering:
+1. Is everything on-network? (If not, what is off-network and why?)
+2. Did the model reveal any architectural impurities?
+3. Did the model reveal any NTT syntax gaps?
+4. Are there components the NTT cannot express? (These are NTT
+   refinement candidates for the NTT design document.)
+
+See: [[file:../2026-03-22_NTT_SYNTAX_DESIGN.md][NTT Syntax Design]] for the full NTT syntax reference.
+Codified from PPN Track 2 + SRE Track 2G (2026-03-30). Pattern 5 in
+SRE Track 2G PIR longitudinal survey (2/2 instances confirmed).
+
 - *Concrete over abstract*: Show elaboration examples, not just type
   signatures. Show how ~defr ancestor~ becomes propagator cells and
   fire functions, not just "relations elaborate to propagator networks."
