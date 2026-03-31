@@ -45,6 +45,11 @@
  register-domain!
  lookup-domain
  all-registered-domains
+ ;; Track 2G: property inference
+ axiom-confirmed axiom-confirmed? axiom-confirmed-count
+ axiom-refuted axiom-refuted? axiom-refuted-witness
+ axiom-untested
+ infer-domain-properties
 
  ;; Core SRE functions
  sre-identify-sub-cell
@@ -176,6 +181,112 @@
 
 (define (all-registered-domains)
   (hash-values domain-registry))
+
+;; ========================================================================
+;; SRE Track 2G Phase 5: Property Inference (Pocket Universe Evidence)
+;; ========================================================================
+;; Axiom testing: sample domain values, test algebraic axioms.
+;; Evidence accumulation: per-axiom status (untested/confirmed/refuted).
+;; Eager at domain registration. Validates declarations + discovers undeclared.
+
+;; Per-axiom evidence (D.3 F2)
+(struct axiom-confirmed (count) #:transparent)
+(struct axiom-refuted (witness) #:transparent)
+(define axiom-untested 'axiom-untested)
+
+;; Test commutativity of join: a ⊔ b = b ⊔ a
+(define (test-commutative-join domain samples)
+  (define merge-fn (sre-domain-merge-registry domain))
+  (define join (merge-fn 'equality))  ;; equality merge = lattice join
+  (for/fold ([status (axiom-confirmed 0)])
+            ([i (in-range (length samples))]
+             [a (in-list samples)]
+             #:break (axiom-refuted? status))
+    (for/fold ([st status])
+              ([b (in-list samples)]
+               #:break (axiom-refuted? st))
+      (if (equal? (join a b) (join b a))
+          (axiom-confirmed (+ (axiom-confirmed-count st) 1))
+          (axiom-refuted (list a b))))))
+
+;; Test associativity of join: (a ⊔ b) ⊔ c = a ⊔ (b ⊔ c)
+(define (test-associative-join domain samples)
+  (define join ((sre-domain-merge-registry domain) 'equality))
+  (for/fold ([status (axiom-confirmed 0)])
+            ([a (in-list samples)]
+             #:break (axiom-refuted? status))
+    (for/fold ([st status])
+              ([b (in-list samples)]
+               #:break (axiom-refuted? st))
+      (for/fold ([st2 st])
+                ([c (in-list samples)]
+                 #:break (axiom-refuted? st2))
+        (if (equal? (join (join a b) c) (join a (join b c)))
+            (axiom-confirmed (+ (axiom-confirmed-count st2) 1))
+            (axiom-refuted (list a b c)))))))
+
+;; Test idempotence of join: a ⊔ a = a
+(define (test-idempotent-join domain samples)
+  (define join ((sre-domain-merge-registry domain) 'equality))
+  (for/fold ([status (axiom-confirmed 0)])
+            ([a (in-list samples)]
+             #:break (axiom-refuted? status))
+    (if (equal? (join a a) a)
+        (axiom-confirmed (+ (axiom-confirmed-count status) 1))
+        (axiom-refuted (list a)))))
+
+;; Test distributivity: a ⊔ (b ⊓ c) = (a ⊔ b) ⊓ (a ⊔ c)
+;; Requires meet-fn. Returns axiom-untested if no meet available.
+(define (test-distributive domain samples meet-fn)
+  (if (not meet-fn)
+      axiom-untested
+      (let ([join ((sre-domain-merge-registry domain) 'equality)])
+        (for/fold ([status (axiom-confirmed 0)])
+                  ([a (in-list samples)]
+                   #:break (axiom-refuted? status))
+          (for/fold ([st status])
+                    ([b (in-list samples)]
+                     #:break (axiom-refuted? st))
+            (for/fold ([st2 st])
+                      ([c (in-list samples)]
+                       #:break (axiom-refuted? st2))
+              (define lhs (join a (meet-fn b c)))
+              (define rhs (meet-fn (join a b) (join a c)))
+              (if (equal? lhs rhs)
+                  (axiom-confirmed (+ (axiom-confirmed-count st2) 1))
+                  (axiom-refuted (list a b c)))))))))
+
+;; Infer properties for a domain from sample values.
+;; Returns updated declared-properties hash with inference results.
+;; Declarations take priority — inference validates but doesn't override #t declarations.
+;; If inference finds counterexample for a declared #t property → prop-contradicted.
+(define (infer-domain-properties domain samples #:meet-fn [meet-fn #f])
+  (define declared (sre-domain-declared-properties domain))
+  (define (update-property props name test-result)
+    (define current (hash-ref props name prop-unknown))
+    (define inferred
+      (cond
+        [(eq? test-result axiom-untested) prop-unknown]
+        [(axiom-confirmed? test-result) prop-confirmed]
+        [(axiom-refuted? test-result) prop-refuted]))
+    ;; Join declared value with inferred value
+    (hash-set props name (property-value-join current inferred)))
+
+  (define props-0
+    (update-property declared 'commutative-join
+                     (test-commutative-join domain samples)))
+  (define props-1
+    (update-property props-0 'associative-join
+                     (test-associative-join domain samples)))
+  (define props-2
+    (update-property props-1 'idempotent-join
+                     (test-idempotent-join domain samples)))
+  (define props-3
+    (if meet-fn
+        (update-property props-2 'distributive
+                         (test-distributive domain samples meet-fn))
+        props-2))
+  props-3)
 
 ;; Debug mode: enables idempotency assertions (D.2 critique)
 (define current-sre-debug? (make-parameter #f))

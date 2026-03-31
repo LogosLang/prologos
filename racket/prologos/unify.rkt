@@ -87,12 +87,18 @@
                 (and lookup (lookup expr)))
               #f                      ; dual-pairs
               (hasheq)                ; Track 2G: property-cell-ids
+              ;; Track 2G: declared-properties
+              ;; NOTE: type lattice under EQUALITY merge is a flat lattice
+              ;; with many incomparable atoms (Int, Nat, String, Bool, ...).
+              ;; Flat lattices with >2 atoms are NOT distributive.
+              ;; Inference validated: distributive = prop-contradicted.
+              ;; Consequently: NOT Heyting, NOT Boolean.
+              ;; Under SUBTYPE relation the lattice has more structure, but
+              ;; algebraic properties are per-relation, not per-domain (future work).
               (hasheq 'commutative-join prop-confirmed
                       'associative-join prop-confirmed
                       'idempotent-join prop-confirmed
-                      'has-meet prop-confirmed
-                      'distributive prop-confirmed
-                      'has-pseudo-complement prop-confirmed))) ; Track 2G: declared-properties
+                      'has-meet prop-confirmed))) ; Track 2G: declared-properties
 
 ;; Track 2G: register in domain registry
 (register-domain! type-sre-domain)

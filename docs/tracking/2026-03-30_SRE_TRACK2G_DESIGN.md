@@ -29,7 +29,7 @@
 | 2 | Meet for type domain (ring action) | ✅ | `9737625d`. type-lattice-meet: ⊤⊓x=x, x⊓⊥=⊥, Pi ring action (contra→join, co→meet, inv→eq-meet), meta→⊥. |
 | 3 | Meet for session domain | ✅ | session-lattice-meet in session-lattice.rkt. ⊤⊓x=x, x⊓⊥=⊥, meta→⊥. Ground sessions only. |
 | 4 | Property declaration on domain construction | ✅ | declared-properties field (11th). Type: 6 properties. Session: 4 properties. has-property? reads declarations. |
-| 5 | Property inference from operations | ⬜ | Pocket Universe evidence cell: confirmed(count) \| refuted(witness) (D.3 F2). Eager-synchronous + pnet cache. |
+| 5 | Property inference from operations | ✅ | axiom-confirmed/refuted structs. 4 test functions (commutative, associative, idempotent, distributive). infer-domain-properties. **FINDING**: type lattice NOT distributive under equality merge (flat lattice with >2 atoms). Declaration corrected. |
 | 6 | Implication propagators (reactive scatter) | ⬜ | Scatter propagator reads registry, creates implications per domain. Wiring-state cell. Stratified: S0 properties → S1 scatter → S2 implications. (NTT-revised) |
 | 7 | First capability consumer | ⬜ | Heyting pseudo-complement for ground type sublattice (D.3 F7) |
 | 8 | Verification + PIR | ⬜ | Full suite GREEN, benchmark comparison, documentation |
