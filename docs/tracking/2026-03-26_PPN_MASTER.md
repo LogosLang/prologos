@@ -130,10 +130,12 @@ Track 3's early phases should include:
 
 **From Track 2B**: V(1) user macros — tree-level macro expansion as grammar productions. User-defined macros (`defmacro`) register rewrite rules that fire at tree level. Currently handled by merge fallback to preparse. V(1) belongs here if macros are grammar productions, or in Track 7 if macros are user-defined grammar extensions. Decision deferred to Track 3 design.
 
-**From Track 2B §12 scaffolding (design considerations for Track 3)**:
+**From Track 2B scaffolding (design considerations for Track 3)**:
 - *Registry-as-cell*: Track 2B reads operator/precedence-group registries via Racket parameters (imperative). Track 3 should make these cells on the parse network — when a `precedence-group` or `:mixfix` spec is registered, dependent mixfix resolution cells re-fire.
 - *Pocket Universe scheduling*: Track 2B's mixfix resolution executes the lattice computation eagerly within a rewrite-rule builder. Track 3 can separate strata into actual BSP rounds if needed — the lattice is the same, only the scheduler changes.
 - *load-module exclusion*: Track 2B skips the merge for load-module (recursive merge causes unbounded read-to-tree). Track 3's propagator architecture eliminates this — cells replace function calls, no recursion.
+- *Merge identity matching → shared cells*: Track 2B's source-line-keyed merge matches pipeline outputs by source line (hash lookup). In Track 3, both pipelines write to the SAME cell per source form — identity is structural (shared cell), not computed (key lookup). The source-line key disappears. The `merge-form` lattice join function becomes the cell's merge function directly. See Track 2B §12.6.
+- *Merge scheduling → propagator firing*: Track 2B iterates preparse surfs sequentially. In Track 3, each cell's join fires when both inputs arrive (event-driven). Ordering emerges from cell readiness, not list position.
 
 **Key mechanism**: Chart parsing / Earley as fixpoint. Each chart entry
 is a cell. Completion/prediction/scanning are propagators. The grammar
@@ -167,8 +169,9 @@ changes.
 - TMS-aware infrastructure cells: `restore-meta-state!` cannot be retired until elab-network fields are TMS-managed. This is Track 4 scope (formal propagator edges require TMS-aware cells).
 - Unify type inference + trait resolution under propagator network: constraint solving currently driven by imperative retry loops, not propagator scheduler. This IS Track 4's core work.
 
-**From Track 2B §12 scaffolding (design considerations for Track 4)**:
+**From Track 2B scaffolding (design considerations for Track 4)**:
 - *Eager Pocket Universe → BSP strata*: The mixfix claim lattice (from Track 2B) executes eagerly. Track 4's elaboration network could host mixfix resolution cells alongside type cells — precedence resolution and type checking as concurrent information flow on the same network. The lattice design from Track 2B is the foundation; Track 4 distributes it across actual BSP strata.
+- *Per-form lattice join as cell merge*: Track 2B's `merge-form` function (§12.6) is the permanent per-form lattice join for merging pipeline outputs. Track 4 inherits this as the cell merge function when parse and elaboration cells coexist on the same network. The join logic (tree parser > preparse for user forms, preparse > tree parser for spec-annotated/generated) encodes pipeline preference as lattice ordering — both pipelines write, the lattice resolves. No "choice function" — the ordering IS the merge.
 
 ### Track 5: Type-Directed Disambiguation
 

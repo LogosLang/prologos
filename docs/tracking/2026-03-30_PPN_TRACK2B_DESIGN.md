@@ -631,6 +631,34 @@ Estimated: expression keywords 100-150 lines. Defn variants 200-300 lines. Both 
 
 Cross-references: [Mixfix Syntax Design](2026-02-23_MIXFIX_SYNTAX_DESIGN.md) §7 (Parsing Algorithm), §2 (Named Precedence Groups), §6 (Chained Comparisons). [PUnify Structural Unification](2026-03-19_PUNIFY_STRUCTURAL_UNIFICATION_PROPAGATORS.md) (cell-value-as-lattice pattern). [PTF Master](2026-03-28_PTF_MASTER.md) (propagator kind taxonomy).
 
+### 12.6 Merge Architecture: Three Components (Scaffolding Analysis)
+
+The deployed source-line-keyed merge has three distinct components. Understanding which are permanent and which are scaffolding informs Track 3-4 design:
+
+**Component 1: Lattice Join Function (`merge-form`)** — PERMANENT
+
+The `merge-form` function IS the per-form lattice join. Both pipelines contribute; the join resolves. The lattice ordering:
+- For user forms (def without spec, eval, check, infer): tree parser output is higher (more refined — preserves tree structure, avoids datum-layer lossy conversion)
+- For spec-annotated forms: preparse output is higher (has spec type injection)
+- For generated defs: preparse output is the only contributor (tree parser has no output for synthetic forms)
+- Incompatible types → preparse wins (safety)
+
+This join is commutative and associative — order of arrival doesn't matter. It's the correct permanent design. Track 3-4 retains this logic as the cell merge function.
+
+**Component 2: Identity Matching (source-line key)** — SCAFFOLDING
+
+The hash-map keyed by source line establishes correspondence between preparse surfs and tree parser surfs. This is necessary because the two pipelines produce SEPARATE lists — there's no shared structure.
+
+In the propagator model (Track 3-4): both pipelines write to the SAME cell for each source form. Identity is structural (shared cell), not computed (key lookup). The source-line key disappears — it's replaced by cell identity.
+
+**Component 3: Scheduling (sequential map over preparse surfs)** — SCAFFOLDING
+
+The `for/list` over preparse surfs determines when each join fires. This is sequential: preparse surfs are processed in Pass 5b hoisted order.
+
+In the propagator model (Track 3-4): each cell's join fires when both inputs arrive (propagator event-driven). No sequential iteration. The ordering emerges from cell readiness, not from list position.
+
+**Summary**: The lattice join logic (`merge-form`) is the permanent contribution. The identity matching and scheduling are scaffolding that Track 3-4 replaces with shared cells and propagator firing. The scaffolding is honest — it implements the same lattice computation with different infrastructure.
+
 ---
 
 ## D.3 External Critique Findings
