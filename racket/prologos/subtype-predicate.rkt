@@ -221,4 +221,5 @@
               type-bot
               type-top   ;; top-value
               #f #f      ;; no meta-recognizer/resolver (ground types only)
-              #f))       ;; no dual-pairs
+              #f         ;; no dual-pairs
+              (hasheq))) ;; Track 2G: property-cell-ids

@@ -272,7 +272,8 @@
               #f                               ;; meta-resolver
               '((sess-send . sess-recv)        ;; dual-pairs
                 (sess-dsend . sess-drecv)
-                (sess-async-send . sess-async-recv))))
+                (sess-async-send . sess-async-recv))
+              (hasheq)))                       ;; Track 2G: property-cell-ids
 
 ;; ========================================
 ;; Duality propagator (S4c → SRE Track 1 Phase 5)

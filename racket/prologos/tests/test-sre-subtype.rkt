@@ -136,7 +136,8 @@
               type-bot
               type-top  ;; top-value
               #f #f     ;; no meta-recognizer/resolver
-              #f))      ;; no dual-pairs
+              #f        ;; no dual-pairs
+              (hasheq)));; Track 2G: property-cell-ids
 
 (define (sre-subtype-check t1 t2)
   "Create mini-network, install subtype-relate, quiesce, return #t if no contradiction."

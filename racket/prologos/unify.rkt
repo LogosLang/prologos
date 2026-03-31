@@ -85,7 +85,8 @@
               (lambda (expr)
                 (define lookup (current-structural-meta-lookup))
                 (and lookup (lookup expr)))
-              #f))                    ; dual-pairs
+              #f                      ; dual-pairs
+              (hasheq)))              ; Track 2G: property-cell-ids
 
 ;; ========================================
 ;; SRE Track 2: Rollback toggle + SRE structural dispatch

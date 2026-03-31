@@ -36,7 +36,8 @@
               ;; Dual pairs: Send↔Recv, DSend↔DRecv, AsyncSend↔AsyncRecv
               '((sess-send . sess-recv)
                 (sess-dsend . sess-drecv)
-                (sess-async-send . sess-async-recv))))
+                (sess-async-send . sess-async-recv))
+              (hasheq)));; Track 2G: property-cell-ids
 
 ;; Helper: create mini-network, install duality-relate, quiesce
 (define (sre-duality-check sa sb)

@@ -37,6 +37,10 @@
  ;; Track 2F: algebraic foundation
  derive-sub-relation
  sre-relation-has-property?
+ ;; Track 2G: algebraic domain properties
+ prop-unknown prop-confirmed prop-refuted prop-contradicted
+ property-value-join
+ sre-domain-has-property?
 
  ;; Core SRE functions
  sre-identify-sub-cell
@@ -95,12 +99,48 @@
    meta-recognizer   ; (expr → bool) | #f — pure structural check: is this a meta/var ref?
    meta-resolver     ; (expr → cell-id | #f) | #f — context-dependent: what cell?
    dual-pairs        ; SRE Track 1: '((Send . Recv) ...) or #f
+   property-cell-ids ; SRE Track 2G: (hasheq property-name → cell-id) — algebraic properties on network
    )
   #:transparent)
 
 ;; Merge lookup: gets the merge function for a given relation from the domain registry.
 (define (sre-domain-merge domain relation)
   ((sre-domain-merge-registry domain) (sre-relation-name relation)))
+
+;; ========================================================================
+;; SRE Track 2G: Algebraic Domain Property Infrastructure
+;; ========================================================================
+;; 4-valued property lattice: ⊥ (unknown), #t (confirmed), #f (refuted), ⊤ (contradicted)
+;; Properties are cells on the network. has-property? is a pure cell read.
+
+;; Property value constants
+(define prop-unknown 'prop-unknown)   ;; ⊥
+(define prop-confirmed 'prop-confirmed)  ;; #t
+(define prop-refuted 'prop-refuted)    ;; #f
+(define prop-contradicted 'prop-contradicted)  ;; ⊤
+
+;; Property lattice join (4-valued)
+(define (property-value-join a b)
+  (cond
+    [(eq? a prop-unknown) b]
+    [(eq? b prop-unknown) a]
+    [(eq? a b) a]  ;; confirmed⊔confirmed, refuted⊔refuted
+    [(eq? a prop-contradicted) prop-contradicted]
+    [(eq? b prop-contradicted) prop-contradicted]
+    ;; confirmed ⊔ refuted = contradicted (declaration vs inference disagree)
+    [else prop-contradicted]))
+
+;; Query: does domain have this algebraic property?
+;; Returns #t, #f, or #f (⊤ treated as #f for capability gating).
+;; Returns #f if property cell doesn't exist or is ⊥ (unknown).
+(define (sre-domain-has-property? domain property-name net)
+  (define cell-ids (sre-domain-property-cell-ids domain))
+  (define cell-id (hash-ref cell-ids property-name #f))
+  (cond
+    [(not cell-id) #f]  ;; no cell for this property
+    [else
+     (define val (net-cell-read net cell-id))
+     (eq? val prop-confirmed)]))  ;; only #t = confirmed. ⊥, #f, ⊤ all → #f
 
 ;; Debug mode: enables idempotency assertions (D.2 critique)
 (define current-sre-debug? (make-parameter #f))
