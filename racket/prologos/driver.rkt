@@ -1597,16 +1597,28 @@
     (process-file-inner path #:verbose verbose?)))
 
 (define (process-file-inner path #:verbose [verbose? #f])
-  (define port (open-input-file path))
-  ;; Use WS reader for .prologos files, sexp reader otherwise
   (define path-str (if (string? path) path (path->string path)))
-  (define raw-stxs
-    (if (regexp-match? #rx"\\.prologos$" path-str)
-        (read-all-syntax-ws port path-str)
-        (read-all-syntax port path-str)))
-  (close-input-port port)
-  (define expanded-stxs (preparse-expand-all raw-stxs))
-  (define surfs (map parse-datum expanded-stxs))
+  (define ws? (regexp-match? #rx"\\.prologos$" path-str))
+  ;; PPN Track 2B Phase 2: WS files use tree parser merge.
+  ;; .rkt sexp files use original port-based reading (D.3 F3: minimum blast radius).
+  (define surfs
+    (cond
+      [ws?
+       ;; WS path: read file to string for both old pipeline + tree parser merge
+       (define file-port (open-input-file path))
+       (define str (port->string file-port))
+       (close-input-port file-port)
+       (define raw-stxs (read-all-syntax-ws (open-input-string str) path-str))
+       (define expanded-stxs (preparse-expand-all raw-stxs))
+       (define preparse-surfs (map parse-datum expanded-stxs))
+       (merge-preparse-and-tree-parser str preparse-surfs)]
+      [else
+       ;; .rkt sexp path: UNCHANGED
+       (define port (open-input-file path))
+       (define raw-stxs (read-all-syntax port path-str))
+       (close-input-port port)
+       (define expanded-stxs (preparse-expand-all raw-stxs))
+       (map parse-datum expanded-stxs)]))
   (define pt (phase-timings 0.0 0.0 0.0 0.0 0.0 0.0 0.0))
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define qs (make-quiescence-stats))
