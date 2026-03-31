@@ -31,7 +31,8 @@
 | 4 | Property declaration on domain construction | ✅ | declared-properties field (11th). Type: 6 properties. Session: 4 properties. has-property? reads declarations. |
 | 5 | Property inference from operations | ✅ | axiom-confirmed/refuted structs. 4 test functions (commutative, associative, idempotent, distributive). infer-domain-properties. **FINDING**: type lattice NOT distributive under equality merge (flat lattice with >2 atoms). Declaration corrected. |
 | 6 | Implication propagators (reactive scatter) | ⬜ | Scatter propagator reads registry, creates implications per domain. Wiring-state cell. Stratified: S0 properties → S1 scatter → S2 implications. (NTT-revised) |
-| 7 | First capability consumer | ⬜ | Heyting pseudo-complement for ground type sublattice (D.3 F7) |
+| 7a | Diagnostic property reporting at registration | ⬜ | Inference runs, profile reported with counterexample witnesses. PPN Track 3 consumer. |
+| 7b | Property-gated behavior infrastructure | ⬜ | when-property / select-by-property pattern. Fallback on absence. Future consumers plug in. |
 | 8 | Verification + PIR | ⬜ | Full suite GREEN, benchmark comparison, documentation |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
@@ -305,19 +306,37 @@ This is reactive: PPN Track 3 registers a new parse domain → registry cell adv
 
 **No multiple inheritance because there's no inheritance.** A domain that is both distributive and residuated simply has both property cells at #t. The heyting implication fires because distributive = #t. The residuated implications fire independently. No conflict resolution needed.
 
-### 3.5 Capability Consumer: Heyting Pseudo-Complement for Error Reporting
+### 3.5 Consumers (Phase 5 Finding: Type Lattice Not Distributive)
 
-When a type contradiction is detected (cell reaches ⊤), the error reporter:
-1. Reads `type-sre-domain.has-pseudo-complement`
-2. If #t: computes the pseudo-complement (maximal consistent refinement)
-3. Reports: "The constraint `x : Int ∧ String` is unsatisfiable. The maximal consistent refinement is `x : ⊥`. This arose from constraints C1 and C2."
-4. If #f or ⊥: falls back to current error format (no pseudo-complement information)
+Phase 5 inference discovered: the type lattice under equality merge is a flat lattice — NOT distributive, therefore NOT Heyting. The Heyting pseudo-complement consumer originally planned for Phase 7 is not applicable to the type domain under current implementation. A full type lattice redesign (union types as join, subtype-aware meet) is needed for Heyting compliance — that is its own track.
 
-The pseudo-complement of `a` relative to `b` is the largest `c` such that `a ⊓ c ≤ b`. For the type lattice: "given conflicting constraints A and B on a type variable, what is the largest type that satisfies A and is compatible with B?"
+**Revised Phase 7 delivers two consumers:**
 
-**Scope** (D.3 F7): Phase 7 implements pseudo-complement for the **ground type sublattice** — base types (Int, Nat, String, Bool), simple constructors (Pi, Sigma with ground components), and unions. Pseudo-complement for types containing unsolved metas or dependent types is a research question (may be undecidable for full dependent types). The `has-pseudo-complement` property declared on the type domain means: pseudo-complement is computable for ground types. Error reporting uses it when the conflicting types are ground (which is the common case for type errors like `Int ∧ String`).
+**7a: Diagnostic Property Reporting.** When a domain is registered, inference runs (Phase 5) and the algebraic profile is reported with counterexample witnesses:
 
-This requires meet (Phase 2) and the heyting property (Phase 6). The consumer wires into the existing error diagnostic system (driver.rkt `emit-error-diagnostic`).
+```
+Domain 'type registered:
+  commutative-join: confirmed (25 tests)
+  associative-join: confirmed (125 tests)
+  idempotent-join:  confirmed (5 tests)
+  has-meet:         confirmed
+  distributive:     refuted (counterexample: Int, Nat, String)
+```
+
+Immediately useful for PPN Track 3: parse lattice domains report which properties hold. The report IS a cell value on the network — diagnostic propagators can read it.
+
+**7b: Property-Gated Behavior Infrastructure.** The pattern where code reads property cells and selects behavior, with graceful fallback when a property isn't satisfied:
+
+```racket
+(define (with-domain-property domain property-name then-fn else-fn)
+  (if (sre-domain-has-property? domain property-name)
+      (then-fn)
+      (else-fn)))
+```
+
+This is the plumbing ALL future property consumers use. When the type lattice redesign makes the type domain Heyting, the property cell advances to `prop-confirmed` and the Heyting behavior activates — zero code changes.
+
+**Deferred: Heyting pseudo-complement.** Requires type lattice redesign (union types as join, subtype-aware meet). When the type domain becomes Heyting, the error reporter uses `with-domain-property` to gate pseudo-complement computation. The infrastructure from 7b enables this automatically.
 
 ---
 
