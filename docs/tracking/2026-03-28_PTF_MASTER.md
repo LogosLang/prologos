@@ -45,6 +45,60 @@
 
 ---
 
+## Topology Design Patterns (Observed)
+
+Patterns discovered through implementation (PPN Tracks 1-2B, PM Tracks, BSP-LE). Each is a reusable information-flow topology. Future PTF tracks should formalize these.
+
+### Set-Latch / Functorial Map (PPN Track 1, Track 2B discussion)
+
+One propagator lifts a scalar transformation to a container type. Input cell holds RRB(X), output cell holds RRB(Y), propagator applies `f : X → Y` per-position. ONE propagator, not N. The RRB IS a polynomial functor; the map IS `fmap f`. Structural sharing means unchanged elements are O(1). Incremental updates are O(log₃₂ N) per changed element.
+
+**Language design implication**: A scalar function applied to a collection could automatically compile to this topology. No explicit `map` — the network structure handles it. This is the basis for array programming in the language (PTF Track 4).
+
+**Efficiency note**: The propagator fires once per input change, producing an output that shares structure with the previous output. This is "incremental parallel map for free" — array languages don't get this without explicit diff tracking.
+
+### Pocket Universe / Lattice Embedding (PPN Track 2, Track 2B)
+
+One cell holds an ENTIRE embedded lattice. The merge function operates on the embedded structure. Examples: pipeline-as-cell (stage chain), mixfix-resolution-value (claim lattice), form-pipeline-value (normalization pipeline).
+
+**Design pattern**: When N sub-computations share a common lifecycle and resolution ordering, embed them in ONE cell value rather than allocating N cells. The Pocket Universe controls allocation cost while preserving information-flow properties. The SRE can decompose the embedded value via ctor-desc.
+
+**RRBs as trees**: An RRB of RRBs IS a tree. Structural sharing makes rewriting efficient (path-copy). The parse tree is this pattern. The mixfix resolution state is this pattern. Any computation over tree-shaped data can use RRB-embedding.
+
+### Threshold / Gather with Latch (type inference, constraint resolution)
+
+A cell accumulates information from N sources. A propagator fires when a threshold is reached (N of M inputs ready). The accumulated set is monotone (inputs only arrive). The output is latched (write-once). This is the Gather kind with a readiness condition.
+
+**Example**: Polymorphic type resolution — the type cell gathers argument type information. When all arguments are typed, the polymorphic type is instantiated. The threshold is "all positions filled."
+
+### Queue / Ordered Work Set (S(-1) retraction)
+
+A cell holds a set of pending work items plus a monotone high-water mark. New items accumulate (monotone). The propagator processes items above the mark. The mark advances (monotone). No consumption (monotone-safe). The "queue" ordering emerges from the mark's advancement, not from FIFO discipline.
+
+**Design consideration**: The current implementation uses an actual queue (non-monotone consumption). The lattice-compatible version uses mark advancement. Efficiency parity with true queues is an open question.
+
+### Structural Merge / PUnify (type unification, pattern matching)
+
+Two computations that agree on sub-structure share cells at corresponding positions. Information flows bidirectionally through shared structure. No explicit "merge step" — propagation through shared cells IS the merge.
+
+**Generalizes to**: Module imports (shared definition cells), pattern matching (shared scrutinee cells), bidirectional type checking (shared type cells between inference and checking modes).
+
+### Claim Lattice / Competitive Resolution (mixfix, disambiguation)
+
+Multiple agents submit claims on shared positions. The lattice merge resolves competing claims using domain-specific ordering (precedence DAG, position-aware associativity). Incomparable claims produce ⊤ (contradiction = ambiguity error).
+
+**Key property**: Resolution is order-independent. Claims can arrive in any order; the lattice merge produces the same result. No sequential scan. Position information is IN the claim data, not in processing order.
+
+### Kan Extension Patterns (forward/backward flow — not yet fully realized)
+
+Left Kan: forward propagation to fixpoint (greatest lower bound of output given input). This is what BSP does.
+
+Right Kan: backward propagation from constraints (tightest upper bound of input given output). Designed for PPN Track 5 (type-directed disambiguation).
+
+When both exist and coincide: the network computes the EXACT answer. The Hyperlattice Conjecture's optimality claim rests on this.
+
+---
+
 ## Open Research Questions
 
 1. **Can propagator kinds be inferred?** Given a fire function's input/output declaration, can we automatically classify it as Map/Reduce/Broadcast/Scatter? Or must the programmer annotate?
