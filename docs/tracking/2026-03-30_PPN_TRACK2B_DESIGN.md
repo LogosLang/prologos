@@ -568,6 +568,38 @@ These are extensions to the existing `parse-defn-tree` (tree-parser.rkt:368-450)
 
 Cross-reference: [Mixfix Syntax Design](2026-02-23_MIXFIX_SYNTAX_DESIGN.md) §7 (Parsing Algorithm), §2 (Named Precedence Groups). [PUnify Structural Unification](2026-03-19_PUNIFY_STRUCTURAL_UNIFICATION_PROPAGATORS.md) (cell-tree pattern, information flow over shared structures). [PTF Master](2026-03-28_PTF_MASTER.md) (propagator kind taxonomy — mixfix resolution is Map+Reduce pattern).
 
+### D.2c Self-Critique on §12
+
+#### Lens 1 — Principles Challenge
+
+| # | Challenge | Severity | Finding |
+|---|-----------|----------|---------|
+| P1 | Is eager execution within a rewrite-rule builder actually propagator-native? The lattice struct is created, advanced, consumed — all in one synchronous function. No cell holds it. No propagator fires on it. No BSP round sees intermediate states. | HIGH | **The design calls itself "propagator-native" but describes imperative execution in lattice clothing.** The "scheduling choice" argument is rationalization. If we have propagator infrastructure, the principled approach is to USE it: the mixfix-group node's resolution IS a cell on the parse network. The rewrite engine advances it per stratum. Other propagators (error reporting, incremental reparse) see intermediate states. |
+| P2 | Same-level associativity resolution depends on positional scan order (left-to-right for left-assoc). Is this monotone? | MEDIUM | **Within a precedence level, resolution is sequential, not a lattice join.** Two operators at the same level sharing an operand: "left wins" for left-assoc is a positional decision. A true lattice-based resolution would encode position in the claim and let the merge be position-aware. The current design description elides this. |
+| P3 | Registry access (`effective-precedence-groups`) is imperative parameter read inside supposedly propagator-native computation. | LOW | **Scaffolding.** The permanent structure has the registry as a cell. Note in design but don't block on it. |
+| P4 | Chained comparisons (`1 < 2 < 3` → `(and (lt 1 2) (lt 2 3))`) not mentioned. | MEDIUM | **Gap.** The existing Pratt parser handles comparison chaining (macros.rkt:5567-5593). The §12 design's binary-claim model doesn't cover ternary+ chains. Must be addressed. |
+| P5 | Children of mixfix-group are tokens AND nodes (bracket subexpressions). Design only describes tokens. | LOW | **Needs handling.** Bracket-group children are already-parsed subexpressions. The resolution treats them as atomic operands. |
+
+#### Lens 2 — Codebase Reality Check
+
+| # | Claim | Verification | Result |
+|---|-------|-------------|--------|
+| R1 | "Use the DAG directly, not numeric binding powers" | Existing `compute-binding-powers` (macros.rkt:5410) flattens DAG to numbers | ✓ Correct — existing impl loses DAG structure. New design preserves it. But all existing operator infrastructure (op-info, builtin-operators) uses numeric BPs. New impl needs to work with DAG + `compare-groups`. |
+| R2 | Rewrite builder produces parse-tree-nodes | expand-mixfix-form returns datums, not nodes | ✓ Correct — new impl produces tree nodes. Different output type than existing. |
+| R3 | mixfix-group children are alternating operand/operator tokens | Verified from tree walk: `<nat-literal "1N"> <symbol "+"> <nat-literal "2N">` | ✓ But complex operands (bracket groups) are parse-tree-nodes, not tokens. |
+| R4 | 16 builtin operators across 7 groups | macros.rkt:5459-5486 | ✓ Confirmed. |
+| R5 | Chained comparisons need special handling | macros.rkt:5567-5593, extract-chain-shared | ✓ **Gap confirmed — §12 doesn't cover comparison chaining.** |
+
+#### Design Changes Required from D.2c
+
+1. **P1 (HIGH)**: Revise the "scheduling choice" framing. Either commit to actual propagator execution (cell on parse network, stratum advancement) or honestly state this is an algorithmic implementation of the lattice computation — scaffolding that Track 3-4 replaces. The user's directive is clear: "if we're not doing the propagator-only approach now, for what reason not?" If there IS no reason, do it on the network. If there IS a reason (e.g., the parse pipeline in Track 2 is sequential, not BSP-scheduled), state it explicitly.
+
+2. **P2 (MEDIUM)**: Address same-level associativity. Options: (a) within one level, process left-to-right — this is inherently sequential but bounded (operators at the same level in one expression). Acknowledge the sequentiality. (b) Encode position in claims and make merge position-aware — more complex but truly monotone.
+
+3. **P4 (MEDIUM)**: Add comparison chaining to the design. The resolution for comparison operators produces conjunctions, not binary trees. This is a special case in the existing implementation and needs to be in the new one.
+
+4. **P5 (LOW)**: Note that operands can be bracket-group parse-tree-nodes (treated as atomic in resolution).
+
 ---
 
 ## D.3 External Critique Findings
