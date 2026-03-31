@@ -102,6 +102,7 @@ No new test files. Infrastructure validated via:
 | Pre-0 merge cost | ~159 μs/op |
 | Pre-0 property test cost | ~200ms one-time |
 | Suite health | 382/382, 7459 tests, ~130s |
+| A/B benchmark | 14 programs, 5 runs each. 13/14 no significant difference. Zero regression. |
 
 ---
 
