@@ -428,7 +428,7 @@ Not applicable. This track deploys existing infrastructure — no new propagator
 | F7 | MEDIUM | Phase 5 guard placement across 25+ branches | **ACCEPT** — subsumed by F2. | Covered by 4-way classification + 3 precise call sites. |
 | F8 | LOW | specialize-generated names could collide with tree-user-names | **PARTIALLY ACCEPT** — theoretically possible, practically impossible ($-suffixed names). | Documented as edge case. |
 | F9 | LOW | No rollback plan — Phase 4 deletes parameter | **ACCEPT** — phases are independently revertible via `git revert`. | Note added to Phase 4 in progress tracker. |
-| F10 | INFO | Merge braids classification, routing, and tree-parser execution. `[else #t]` catch-all is correctness by convention, not construction. | **ACCEPT for Track 3+** — when tree parser handles more forms, catch-all becomes less safe. | Flagged for Track 3 design: merge classification should become exhaustive. |
+| F10 | INFO | Merge braids classification, routing, and tree-parser execution. `[else #t]` catch-all is correctness by convention, not construction. | **ACKNOWLEDGED** — the merge is an imperative integration seam with known limitations. In the propagator-only target architecture (Track 3-4), the merge disappears entirely: each form gets a cell, both pipelines write, the lattice join resolves. Classification, catch-alls, and ordering concerns dissolve — correctness is structural (lattice properties + propagator residuation), not imperative (predicate classification). The merge is a throwaway bridge. Completeness is retiring it for propagator cells, not perfecting its classification logic. | No design change. Track 3 eliminates the merge rather than improving it. |
 
 ---
 
