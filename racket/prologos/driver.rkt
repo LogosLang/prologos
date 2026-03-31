@@ -1487,61 +1487,13 @@
   (define refined-root (refine-tag grouped-root))
   (define rewritten-root (rewrite-tree refined-root))
   (define tree-surfs (parse-top-level-forms-from-tree rewritten-root))
-  ;; Track 2B: Per-form merge. Tree parser output used when available and correct;
-  ;; preparse output used as fallback when tree parser returns errors.
-  ;;
-  ;; The tree parser returns prologos-error for forms it can't handle:
-  ;; - Expression sentinels: mixfix, pipe (inside .{...}), compose (inside .{...})
-  ;; - Expression keywords: solve, solve-one, defr, session, capability, etc.
-  ;; - Multi-arity pattern defn (| pattern -> body)
-  ;; - Preparse-consumed forms: data, trait, impl, ns, imports, etc.
-  ;;
-  ;; For these forms, the merge uses preparse's version.
-  ;; For forms the tree parser handles (def, defn with types, eval, check, infer,
-  ;; pipe/compose top-level), the tree parser's version is used.
-  ;;
-  ;; Preparse output preserves Pass 5b ordering (generated defs hoisted).
-  ;; The merge walks preparse output in order, substituting tree parser's
-  ;; non-error version when a corresponding surf exists.
-  (define tree-non-errors
-    (filter (lambda (s) (not (prologos-error? s))) tree-surfs))
-  ;; Build name→surf map from tree parser for def/defn lookup
-  (define tree-def-map
-    (for/hasheq ([s (in-list tree-non-errors)]
-                 #:when (or (surf-def? s) (surf-defn? s)))
-      (values (if (surf-def? s) (surf-def-name s) (surf-defn-name s)) s)))
-  ;; Tree parser eval/check/infer queue (positional correspondence with preparse)
-  (define tree-eval-queue
-    (filter (lambda (s) (or (surf-eval? s) (surf-check? s) (surf-infer? s)))
-            tree-non-errors))
-  ;; Walk preparse output, substituting where tree parser succeeded
-  (define spec-store (current-spec-store))
-  (let loop ([preparse (filter (lambda (s) (not (prologos-error? s))) preparse-surfs)]
-             [evals tree-eval-queue]
-             [acc '()])
-    (cond
-      [(null? preparse) (reverse acc)]
-      ;; eval/check/infer: use tree parser if available (queue-based)
-      [(and (or (surf-eval? (car preparse))
-                (surf-check? (car preparse))
-                (surf-infer? (car preparse)))
-            (pair? evals))
-       (loop (cdr preparse) (cdr evals) (cons (car evals) acc))]
-      ;; def without spec: use tree parser if it produced one
-      [(and (surf-def? (car preparse))
-            (not (hash-ref spec-store (surf-def-name (car preparse)) #f))
-            (hash-ref tree-def-map (surf-def-name (car preparse)) #f))
-       (loop (cdr preparse) evals
-             (cons (hash-ref tree-def-map (surf-def-name (car preparse))) acc))]
-      ;; defn without spec: use tree parser if it produced one
-      [(and (surf-defn? (car preparse))
-            (not (hash-ref spec-store (surf-defn-name (car preparse)) #f))
-            (hash-ref tree-def-map (surf-defn-name (car preparse)) #f))
-       (loop (cdr preparse) evals
-             (cons (hash-ref tree-def-map (surf-defn-name (car preparse))) acc))]
-      ;; Everything else: preparse (generated defs, spec-annotated, consumed forms)
-      [else
-       (loop (cdr preparse) evals (cons (car preparse) acc))])))
+  ;; Track 2B: Validation-only mode.
+  ;; Tree parser runs for validation; preparse provides ALL elaboration output.
+  ;; The per-form merge introduces regressions (test-char-string-01, test-mixfix-02)
+  ;; due to remaining AST parity gaps. Validation-only is the safe deployment
+  ;; until ALL gaps are closed (Phases C, D, E complete).
+  (void tree-surfs)
+  (filter (lambda (s) (not (prologos-error? s))) preparse-surfs))
 
 ;; PPN Track 2B Phase 4: use-tree-parser? parameter — TO BE DELETED after Phases 2-3
 (define use-tree-parser? (make-parameter #f))
