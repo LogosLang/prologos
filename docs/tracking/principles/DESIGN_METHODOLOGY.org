@@ -220,6 +220,156 @@ This is an iterative cycle:
   encodes fundamental architectural dependencies. Getting this right
   prevents wasted work.
 
+*** Propagator Design Mindspace
+
+Every design on the propagator network must be thought through as
+information flow on monotone lattice structures --- not as algorithmic
+steps. This section defines the mindspace and the red flags that
+signal a design has slipped into algorithmic thinking.
+
+**** The Core Shift
+
+Traditional software design asks: /what are the steps to produce the
+result?/ Propagator design asks: /what information determines the
+result, and what lattice structure does it live in?/
+
+The computation is often the same. The difference is where ordering
+lives. In algorithmic design, ordering is in control flow (loops,
+recursion, if/else dispatch). In propagator design, ordering is in
+data (lattice structure, position information, DAG edges, cell
+identity). The algorithmic representation is fragile --- it breaks
+when execution order changes. The propagator representation is robust
+--- it is order-independent by construction.
+
+This is not a stylistic preference. It is a correctness property. CALM
+tells us: monotone computations on fixed topologies converge regardless
+of evaluation order. If ordering is in the data (lattice monotonicity),
+CALM guarantees convergence. If ordering is in control flow, CALM says
+nothing --- correctness depends on getting the execution order right.
+
+**** The Four Questions
+
+Before designing any computation, answer these:
+
+1. *What is the information?* Not "what are the steps" --- what are
+   the FACTS that determine the answer? Enumerate the inputs. Each
+   input is a piece of partial information. The answer is determined
+   entirely by the combination of these inputs.
+
+2. *What is the lattice?* Every piece of information has a partial
+   order. Define ⊥ (no information), ⊤ (contradiction), and the join
+   (how two pieces of information combine). The join MUST be
+   commutative, associative, and idempotent. If it is not, ordering
+   is encoded in the join function --- that is algorithmic design in
+   lattice clothing.
+
+3. *What is the identity?* How do two pieces of information refer to
+   the same entity? Identity should be STRUCTURAL --- inherent in the
+   data, not computed from position. In the propagator architecture,
+   identity IS the cell: both sources write to the same cell. In
+   scaffolding, identity is the closest structural proxy (source line,
+   name, shared reference). NOT position in a list.
+
+4. *What emerges?* The answer is not constructed step by step. It
+   emerges from the lattice reaching fixpoint. Every cell has received
+   all its inputs. Every join has resolved. The result is reading the
+   final cell values. "Building" a result is algorithmic thinking.
+   "Reading" the fixpoint is propagator thinking.
+
+**** Red Flags: Algorithmic Thinking Detected
+
+These signal a design has slipped out of the propagator mindspace:
+
+| Red Flag | Propagator Alternative |
+|----------+------------------------|
+| ~for/fold~ or ~let loop~ to determine ordering | Encode ordering in lattice structure |
+| Queue or stack for correspondence | Identity-based matching via shared cells |
+| Left-to-right or right-to-left scanning | Position as data in the lattice value |
+| ~cond~/~if~ dispatch choosing between sources | Lattice ordering: one value is HIGHER |
+| "Process X before Y" | Data dependency: Y residuates until X resolves |
+| "Build the result" | Read the result: lattice values at fixpoint ARE the answer |
+| Mutable state tracking progress | Monotone cell values: progress IS lattice advancement |
+| "Sort by priority/precedence" | DAG structure determines dominance via join |
+
+**** The Pocket Universe: Controlling Cell Allocation
+
+A cell does not hold a simple value --- it holds an ENTIRE embedded
+lattice. This is the Pocket Universe principle: the cell value IS a
+computational domain. The cell's merge function understands the
+embedded structure.
+
+- *Cell allocation cost is controllable.* One cell holding an RRB
+  of N entries, with a merge function that understands the RRB
+  structure, gives the same information-flow properties as N cells.
+  The mixfix claim lattice is one cell holding the resolution state
+  of an entire expression --- not one cell per operand position.
+
+- *Partial information is natural.* A Pocket Universe value can be
+  between ⊥ and done. Not all claims resolved? The value represents
+  what is known so far. Other propagators can read partial state and
+  make progress. No exhaustiveness checks. No completeness barriers.
+
+- *Structural reasoning via SRE.* The SRE's ~ctor-desc~ can decompose
+  a Pocket Universe value --- recognizing internal structure, matching
+  patterns, extracting sub-components. PUnify can unify two Pocket
+  Universe values by structural correspondence.
+
+- *RRBs as natural trees.* An RRB whose values are themselves RRBs IS
+  a tree with structural sharing. The parse tree is exactly this:
+  ~parse-tree-node~ with RRB children containing other nodes. The
+  tree structure IS the lattice value. Rewriting IS lattice advancement.
+
+**** Why Propagator Thinking Is Superior
+
+The propagator mindspace is not a different style --- it is strictly
+more capable:
+
+- *Partial information.* Algorithms require complete inputs. Lattice
+  computations work with partial information and refine monotonically.
+
+- *No exhaustiveness checks.* Algorithms need to handle every case.
+  Lattice computations handle what they have and leave what they do
+  not at ⊥. A new form type that no propagator handles stays at ⊥ ---
+  it does not crash.
+
+- *No redundant recomputation.* Information on the network persists. A
+  solved meta-variable stays solved. A parsed sub-tree stays parsed.
+  The network IS the cache --- structurally, not as an optimization.
+
+- *Composition is structural.* Two propagator networks compose by
+  connecting cells. The Module Theory view says: composition of
+  lattice-embedded computations is a module homomorphism. The SRE
+  provides the decomposition.
+
+These properties support the Hyperlattice Conjecture: propagator
+networks on lattice-embedded algebraic structures are a universal
+substrate for computation. The theoretical grounding (algebraic
+embeddings + Tarski-Knaster + Module Theory) moves this from
+conjecture toward theorem. Every computation successfully put on the
+network is another data point.
+
+**** The Universal Substrate Perspective
+
+The propagator mindspace applies to ALL computation. Any algebraic
+structure can be embedded in a lattice (algebraic embeddings research).
+Lattice-valued computation on propagator networks converges to fixpoint
+(Tarski-Knaster). The Module Theory view provides composition and
+decomposition of embedded structures (SRE).
+
+The question is never "can this be done on the network?" --- it is
+"what is the lattice embedding for this computation?"
+
+I/O is data inflow/outflow on cells. Serialization is a lattice
+morphism. Test assertions are lattice comparisons. When writing code
+that is not yet on the network, ask: what lattice would this live in?
+The choice to defer the lattice embedding should be explicit and
+justified --- not a default assumption that it does not belong.
+
+See: [[file:../../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md][Algebraic Embeddings on Lattices]],
+[[file:../../research/2026-03-28_MODULE_THEORY_LATTICES.md][Module Theory on Lattices]],
+[[file:../2026-03-28_PTF_MASTER.md][PTF Master]] (propagator kind taxonomy).
+Discovered and refined through PPN Track 2B implementation (2026-03-30).
+
 - *Concrete over abstract*: Show elaboration examples, not just type
   signatures. Show how ~defr ancestor~ becomes propagator cells and
   fire functions, not just "relations elaborate to propagator networks."
