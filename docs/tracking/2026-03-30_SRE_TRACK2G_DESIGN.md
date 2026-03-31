@@ -24,13 +24,14 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Pre-0 benchmarks | ✅ | Merge: ~159μs/op. Property test: 21ms/25 pairs. Error path: 0 contradictions typical. Design unchanged. |
-| 1 | Property cell infrastructure on sre-domain | ⬜ | Bool⊥ cells per property, has-property? API |
-| 2 | Meet for type domain (variance-aware ring action) | ⬜ | type-lattice-meet + variance-map generalization |
+| 1 | Property cell infrastructure on sre-domain | ⬜ | 4-valued cells (⊥, #t, #f, ⊤) per property, has-property? API (D.3 F1) |
+| 1.5 | Domain registry | ⬜ | Cell on network: domain-name → sre-domain. register-domain!, lookup-domain. (D.3 F10) |
+| 2 | Meet for type domain (variance-aware ring action) | ⬜ | type-lattice-meet + ring-action function. Context-dependent equality (D.3 F6). Meta → ⊥ (D.3 F4). |
 | 3 | Meet for session domain | ⬜ | session-lattice-meet |
-| 4 | Property declaration on domain construction | ⬜ | Explicit declaration path (#:distributive #t, etc.) |
-| 5 | Property inference from operations | ⬜ | Axiom testing — structural detection fallback |
-| 6 | Implication propagators between properties | ⬜ | distributive ∧ has-pseudo-complement → heyting, etc. |
-| 7 | First capability consumer | ⬜ | Heyting pseudo-complement for type error reporting |
+| 4 | Property declaration on domain construction | ⬜ | Explicit declaration via register-domain! |
+| 5 | Property inference from operations | ⬜ | Pocket Universe evidence cell: confirmed(count) \| refuted(witness) (D.3 F2). Eager-synchronous + pnet cache. |
+| 6 | Implication propagators between properties | ⬜ | Auto-installed for all registered domains via registry (D.3 F10). Retroactive firing verified (D.3 F5). |
+| 7 | First capability consumer | ⬜ | Heyting pseudo-complement for ground type sublattice (D.3 F7) |
 | 8 | Verification + PIR | ⬜ | Full suite GREEN, benchmark comparison, documentation |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
@@ -42,14 +43,15 @@
 **End state**: Every SRE domain declares (or has inferred) a set of algebraic properties. These properties are cells on the domain — both pipelines (declaration, inference) write to the same cells. Implication propagators derive composite properties from atomic ones. Downstream consumers (error reporting, backward propagation, solving strategy) read property cells to select capabilities.
 
 **What is delivered**:
-1. Property cell infrastructure on `sre-domain` — per-property Bool⊥ cells
-2. `has-property?` API for querying domain algebraic properties
-3. Meet operations for type and session domains (variance-aware via ring action generalization)
-4. Variance-map generalized from relation-dispatch to operation-dispatch (meet/join as ring action)
-5. Property declaration syntax on domain construction
-6. Property inference from domain operations (axiom testing as fallback)
-7. Implication propagators between properties (flat composition, no hierarchy)
-8. At least one capability consumer wired up (Heyting pseudo-complement for error reporting)
+1. Property cell infrastructure on `sre-domain` — per-property 4-valued cells (⊥, #t, #f, ⊤) on the elaboration network
+2. Central domain registry — cell on network, `register-domain!` / `lookup-domain` API
+3. `has-property?` API for querying domain algebraic properties (pure read)
+4. Meet operations for type and session domains (variance-aware via ring action function)
+5. Ring action generalization — variance → ring element → uniform operation dispatch
+6. Property declaration syntax on domain construction
+7. Property inference from domain operations (Pocket Universe evidence cell with counterexample witnesses)
+8. Implication propagators between properties (flat composition, auto-installed via domain registry)
+9. At least one capability consumer wired up (Heyting pseudo-complement for ground type sublattice)
 
 **What this track is NOT**:
 - It does NOT implement CDCL integration for Boolean domains — incomplete because CDCL requires ATMS infrastructure changes; deferred to UCS Track 3
@@ -99,9 +101,9 @@ Meet for type domain = type intersection. Meet for session domain = session inte
 **Propagator Design Mindspace — Four Questions:**
 
 1. **What is the information?** Which algebraic axioms a domain's operations satisfy. Each axiom is a boolean fact about the domain.
-2. **What is the lattice?** Per-property: Bool⊥ = `{⊥, #t, #f}` where ⊥ = unknown, #t = property holds, #f = property violated. Join: `⊥ ⊔ #t = #t`, `⊥ ⊔ #f = #f`, `#t ⊔ #f = ⊤` (contradiction — declaration says #t but inference found #f).
-3. **What is the identity?** (domain, property-name) pair. Both declaration and inference write to the SAME cell.
-4. **What emerges?** The set of satisfied properties determines capabilities. Implication propagators fire when input properties are filled, writing derived properties to their cells.
+2. **What is the lattice?** Per-property: 4-valued = `{⊥, #t, #f, ⊤}` where ⊥ = unknown, #t = confirmed, #f = refuted, ⊤ = contradiction (declaration says #t but inference found #f). Join: `⊥ ⊔ #t = #t`, `⊥ ⊔ #f = #f`, `#t ⊔ #f = ⊤`. (D.3 F1: ⊤ semantics explicit — implication propagators treat ⊤ as #f for capability gating. ⊤ IS preserved in cell for diagnostics: "declared distributive but inference refuted.")
+3. **What is the identity?** (domain, property-name) pair. Both declaration and inference write to the SAME cell on the elaboration network.
+4. **What emerges?** The set of satisfied properties determines capabilities. Implication propagators fire when input properties are filled, writing derived properties to their cells. ⊤ propagates as #f for capability gating (conservative: contradicted = not available).
 
 **Implementation** (D.2 revised — P1: properties as cells, not struct field):
 
@@ -136,6 +138,24 @@ Composite properties (derived by implication propagators, NOT declared directly)
 
 **No hierarchy. No inheritance.** Properties are flat. Composites are conjunctions. This is the `bundle` approach applied to algebraic classes.
 
+### 3.1.5 Domain Registry (D.3 F10)
+
+**Propagator Design Mindspace — Four Questions:**
+
+1. **What is the information?** Which domains exist and what operations/properties they provide.
+2. **What is the lattice?** Set-accumulation: domains only get added (monotone). The registry value is a hash from domain-name to sre-domain. Join is hash-union.
+3. **What is the identity?** Domain name (symbol). Each domain has a unique name.
+4. **What emerges?** Propagators that need "all domains" (implication installation, property inference scheduling) fire when the registry cell advances. New domain registered → implication propagators auto-installed.
+
+**Implementation**: `current-domain-registry` — a cell on the elaboration network. Value: `(hasheq 'type type-sre-domain 'session session-sre-domain ...)`.
+
+- `register-domain!(name, domain)` — writes to registry cell (hash-set, monotone)
+- `lookup-domain(name)` — reads from registry cell (hash-ref)
+- Existing domain creation migrated from module-level variables to `register-domain!` calls
+- Phase 6: a "for-all-domains" propagator reads the registry and installs implication propagators for each domain. When a new domain is registered, the propagator fires and installs implications for the new domain.
+
+Parallels `ctor-registry.rkt` at the domain level. Pnet-cacheable (domain list persists across sessions). Self-hosting visible (Logos compiler can enumerate domains).
+
 ### 3.2 Meet Operations via Variance-Aware Ring Action
 
 **Propagator Design Mindspace — Four Questions:**
@@ -165,10 +185,18 @@ Adding a new operation (meet, widen, narrow) requires ZERO new table entries —
 ```racket
 (define (apply-ring-action ring-element operation)
   (case ring-element
-    [(identity)  'equality]        ;; invariant: must be equal regardless of operation
+    [(identity)  (equality-for-context operation)]  ;; D.3 F6: context-dependent equality
     [(monotone)  operation]        ;; covariant: operation preserved
     [(antitone)  (flip-operation operation)]  ;; contravariant: join↔meet, subtype↔reverse
     [(trivial)   'phantom]))      ;; phantom: erased
+
+;; D.3 F6: Equality in join context produces ⊤ on mismatch.
+;; Equality in meet context produces ⊥ on mismatch. Distinct sub-operations.
+(define (equality-for-context operation)
+  (case operation
+    [(join)  'equality-join]      ;; mismatch → ⊤
+    [(meet)  'equality-meet]      ;; mismatch → ⊥
+    [else    'equality]))         ;; subtype, other: standard equality
 
 (define (flip-operation op)
   (case op
@@ -176,10 +204,12 @@ Adding a new operation (meet, widen, narrow) requires ZERO new table entries —
     [(meet) 'join]
     [(subtype) 'subtype-reverse]
     [(subtype-reverse) 'subtype]
-    [else op]))  ;; unknown operations pass through
+    [else (error 'flip-operation "unknown operation: ~a" op)]))  ;; D.3 F9: fail-closed
 ```
 
-**Implementation**: `type-lattice-meet` in type-lattice.rkt. For base types: `Int ⊓ Int = Int`, `Int ⊓ String = ⊥` (type-bot). For constructors: component-wise decomposition where each component's operation is determined by `apply-ring-action(component-variance, 'meet)`. Covariant → meet. Contravariant → join (flipped). Invariant → equality.
+**Implementation**: `type-lattice-meet` in type-lattice.rkt. For base types: `Int ⊓ Int = Int`, `Int ⊓ String = ⊥` (type-bot). For constructors: component-wise decomposition where each component's operation is determined by `apply-ring-action(component-variance, 'meet)`. Covariant → meet. Contravariant → join (flipped). Invariant → equality-meet (mismatch → ⊥).
+
+**Metavariables** (D.3 F4): `?A ⊓ T = ⊥` (conservative). Meet cannot resolve an unsolved meta — the greatest lower bound is unknown. Returns ⊥ (type-bot). This is acceptable because: (1) property inference uses ground types as samples (no metas), (2) pseudo-complement fires on error paths where metas are typically resolved. If both sides have unsolved metas: `?A ⊓ ?B = ⊥`.
 
 ### 3.3 Property Inference (Detection Fallback)
 
@@ -196,12 +226,21 @@ The inference state for a domain IS a Pocket Universe cell on the network:
 
 ```racket
 (struct property-inference-state
-  (tested-axioms    ;; (hasheq axiom-name → 'passed | 'failed | 'untested)
+  (tested-axioms    ;; (hasheq axiom-name → axiom-status)
    sample-count     ;; how many samples tested so far (monotone)
    ) #:transparent)
+
+;; D.3 F2: Per-axiom status lattice with counterexample witness
+;; untested < confirmed(count) < refuted(witness)
+;; Refuted dominates confirmed. Witness preserved for error reporting.
+(struct axiom-untested () #:transparent)
+(struct axiom-confirmed (count) #:transparent)     ;; count = number of passing samples
+(struct axiom-refuted (witness) #:transparent)       ;; witness = (a, b, c) triple that failed
 ```
 
-Merge: union of tested-axioms (monotone — axioms only get tested). Failed axiom dominates passed (one counterexample = permanent #f). Sample count takes max.
+Merge per-axiom: `untested ⊔ confirmed(n) = confirmed(n)`, `untested ⊔ refuted(w) = refuted(w)`, `confirmed(n) ⊔ confirmed(m) = confirmed(max(n,m))`, `confirmed(n) ⊔ refuted(w) = refuted(w)` (counterexample dominates). Witness preserved for diagnostics: "distributivity fails because join(Int, Pi(Nat,Int)) ≠ Pi(Nat, join(Int,Int))".
+
+Merge of inference-state: union of tested-axioms (monotone per axiom). Sample count takes max.
 
 The inference propagator fires eagerly at domain registration (D.2 P4 revision). It samples values (bot, top, representative constructor instances), tests axioms, and advances the inference state cell. A watcher propagator reads the inference state cell: when an axiom passes with sufficient evidence, it writes #t to the corresponding property cell. When an axiom fails, it writes #f immediately.
 
@@ -240,6 +279,8 @@ When a type contradiction is detected (cell reaches ⊤), the error reporter:
 4. If #f or ⊥: falls back to current error format (no pseudo-complement information)
 
 The pseudo-complement of `a` relative to `b` is the largest `c` such that `a ⊓ c ≤ b`. For the type lattice: "given conflicting constraints A and B on a type variable, what is the largest type that satisfies A and is compatible with B?"
+
+**Scope** (D.3 F7): Phase 7 implements pseudo-complement for the **ground type sublattice** — base types (Int, Nat, String, Bool), simple constructors (Pi, Sigma with ground components), and unions. Pseudo-complement for types containing unsolved metas or dependent types is a research question (may be undecidable for full dependent types). The `has-pseudo-complement` property declared on the type domain means: pseudo-complement is computable for ground types. Error reporting uses it when the conflicting types are ground (which is the common case for type errors like `Int ∧ String`).
 
 This requires meet (Phase 2) and the heyting property (Phase 6). The consumer wires into the existing error diagnostic system (driver.rkt `emit-error-diagnostic`).
 
@@ -281,7 +322,7 @@ Declare properties for existing domains:
 
 ### Phase 5: Property Inference
 
-Implement axiom testing for undeclared properties. Lazy firing — test only when queried. Sample-based with configurable N. Counterexample immediately writes #f.
+Implement axiom testing for undeclared properties. Eager firing at domain registration (D.2 P4). Pocket Universe evidence cell with confirmed(count)/refuted(witness) per axiom (D.3 F2). Counterexample immediately writes refuted with witness.
 
 Properties testable with join only: commutative-join, associative-join, idempotent-join.
 Properties testable with join + meet: distributive, has-complement.
@@ -295,7 +336,7 @@ Register implication propagators for composite properties:
 - `heyting ∧ has-complement → boolean`
 - (Extensible — future tracks add more implications)
 
-**Verification**: Declare type-sre-domain with atomic properties. Verify `heyting` is derived by implication propagator. Verify `boolean` is NOT derived (type lattice has no complement — `Int | String` has no complement).
+**Verification**: Declare type-sre-domain with atomic properties. Verify `heyting` is derived by implication propagator. Verify `boolean` is NOT derived (type lattice has no complement — `Int | String` has no complement). (D.3 F5): Verify implication propagators fire retroactively when connected to property cells already filled in Phase 5. Standard BSP behavior — new propagators on filled cells fire on next round.
 
 ### Phase 7: Heyting Error Reporting
 
@@ -394,7 +435,7 @@ This is speculative — the actual NTT syntax depends on NTT implementation trac
 
 | # | Decision | Principle | Severity | Finding |
 |---|----------|-----------|----------|---------|
-| P1 | Properties as hash field on sre-domain | Propagator-First | MEDIUM | **Are property "cells" actually cells on the network, or struct fields?** A hash field is data-oriented but not propagator-first. If properties are determined at domain construction (before elaboration), struct fields are honest. If they change mid-elaboration (inference from encountered values), they must be actual network cells. **Resolution**: Properties are determined at domain registration time (startup). Struct fields with a clear initialization protocol are sufficient for Track 2G. The path to actual cells is: domain registration writes to cells on the elaboration network. This is the Track 3-4 refinement (same scaffolding→permanent pattern as Track 2B's merge). Note the scaffolding explicitly. |
+| P1 | Properties as cells on network | Propagator-First | MEDIUM | **Resolved in D.2 revision**: Properties ARE cells on the elaboration network (`property-cell-ids` field on sre-domain). Pnet-cacheable, self-hosting visible. Declaration and inference write to same cells. `has-property?` is a pure network cell read. |
 | P2 | Variance-map generalization as table with operation column | Data Orientation | LOW | **The ring action is a FUNCTION, not a per-operation table column.** The monotone ring element preserves any operation; the antitone element flips any operation. Adding an operation shouldn't require a new column — the ring element's action handles it. **Resolution**: Implement as ring-action function: `(apply-ring-action ring-element operation) → sub-operation`. The table becomes `(variance → ring-element)` + `(ring-element, operation → sub-operation)`. Cleaner generalization, extensible without new columns. |
 | P3 | Property set coverage for PPN Track 3 | Completeness | LOW | PPN Track 3 creates 3-4 new domains (parse lattices). Design addresses existing domains but doesn't detail new domain creation. **Resolution**: Note in design that Phase 4 (declaration syntax) must support new domain construction with properties, not just adding properties to existing domains. |
 | P4 | Lazy property inference (fires on query) | Decomplection | LOW | **Query-with-side-effect entangles reading with writing.** Eager inference at domain registration is cleaner. Pre-0 data: ~200ms one-time cost — negligible. **Resolution**: Change to eager inference at registration. The `has-property?` API is a pure read, never triggers inference. Simpler, more predictable. |
@@ -426,11 +467,29 @@ This is speculative — the actual NTT syntax depends on NTT implementation trac
 
 ---
 
+## D.3 External Critique Findings
+
+| # | Severity | Finding | Resolution |
+|---|----------|---------|------------|
+| F1 | HIGH | Bool-⊤ semantics undefined — downstream poisoning | 4-valued lattice: ⊤ propagates as #f for capability gating. ⊤ preserved for diagnostics. |
+| F2 | HIGH | Per-axiom inference lattice loses counterexample witness | `untested < confirmed(count) < refuted(witness)`. Witness preserved. |
+| F3 | HIGH | P1 resolution contradicts main design (3 implementations described) | Stale D.2 text fixed. Cells-on-network is THE answer. |
+| F4 | HIGH | Meet for metavariable-containing types unspecified | `?A ⊓ T = ⊥` (conservative). Property inference uses ground types. Pseudo-complement fires on resolved metas. |
+| F5 | MEDIUM | Phase 5→6 ordering assumes retroactive propagator firing | Standard BSP behavior — noted explicitly in Phase 6 verification. |
+| F6 | MEDIUM | Ring-action equality is context-dependent (⊤-producing vs ⊥-producing) | `equality-for-context`: `(identity, join) → equality-join`, `(identity, meet) → equality-meet`. |
+| F7 | MEDIUM | Pseudo-complement computation hand-waved for dependent types | Phase 7 scoped to ground type sublattice. Full dependent-type pseudo-complement is research. |
+| F8 | MEDIUM | Eager-synchronous inference blocks registration | 400ms one-time with pnet caching. Acceptable. Eager-async deferred as optimization. |
+| F9 | MEDIUM | `flip-operation` else clause fail-open | Changed to error (fail-closed per pipeline exhaustiveness). |
+| F10 | MEDIUM (scoped in) | No domain registry — manual wiring won't scale | Domain registry cell on network. `register-domain!` / `lookup-domain`. Phase 1.5. Auto-install implications. |
+| F11 | LOW | Stale "lazy firing" in verification checklist | Fixed to "eager at registration." |
+
+---
+
 ## §10 Propagator Design Mindspace Verification
 
 ### Property Cells
 - [x] Information identified: algebraic axioms as boolean facts
-- [x] Lattice defined: Bool⊥ per property, join = information accumulation
+- [x] Lattice defined: 4-valued (⊥, #t, #f, ⊤) per property, join = information accumulation (D.3 F1)
 - [x] Identity structural: (domain, property-name) pair → one cell
 - [x] Emergence: capabilities emerge from implication propagators at fixpoint
 - [x] No red flags: no loops, no queues, no scanning, no dispatch
@@ -447,7 +506,7 @@ This is speculative — the actual NTT syntax depends on NTT implementation trac
 - [x] Lattice defined: evidence accumulation (monotone: ⊥ → #t or ⊥ → #f)
 - [x] Identity structural: writes to same property cell as declaration
 - [x] Emergence: property determined when evidence sufficient
-- [x] Lazy firing: no eager scanning — fires on query
+- [x] Eager firing at domain registration — has-property? is a pure read (D.2 P4 revision)
 
 ### Implication Propagators
 - [x] Information identified: conjunction of source properties
