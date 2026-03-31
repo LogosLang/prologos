@@ -85,7 +85,6 @@
          ;; Track 10: .pnet cache feature flags
          current-use-pnet-cache?
          current-pnet-write-enabled?
-         use-tree-parser?
          ;; PTF Track 1 Phase 0: network capture hook for analysis
          current-network-capture-box)
 
@@ -1562,24 +1561,13 @@
     (define tree-match (and line (hash-ref tree-by-line line #f)))
     (merge-form s tree-match)))
 
-;; PPN Track 2B Phase 4: use-tree-parser? parameter — TO BE DELETED after Phases 2-3
-(define use-tree-parser? (make-parameter #f))
-
+;; PPN Track 2B Phase G: use-tree-parser? DELETED. Merge is the only path.
 (define (process-string-ws-inner s)
-  (cond
-    [(use-tree-parser?)
-     ;; Merge path: tree parser + preparse merge
-     (define raw-stxs (read-all-syntax-ws (open-input-string s) "<ws-string>"))
-     (define expanded-stxs (preparse-expand-all raw-stxs))
-     (define preparse-surfs (map parse-datum expanded-stxs))
-     (define surfs (merge-preparse-and-tree-parser s preparse-surfs))
-     (process-surfs surfs)]
-    [else
-     ;; OLD PATH: preparse only
-     (define raw-stxs (read-all-syntax-ws (open-input-string s) "<ws-string>"))
-     (define expanded-stxs (preparse-expand-all raw-stxs))
-     (define surfs (map parse-datum expanded-stxs))
-     (process-surfs surfs)]))
+  (define raw-stxs (read-all-syntax-ws (open-input-string s) "<ws-string>"))
+  (define expanded-stxs (preparse-expand-all raw-stxs))
+  (define preparse-surfs (map parse-datum expanded-stxs))
+  (define surfs (merge-preparse-and-tree-parser s preparse-surfs))
+  (process-surfs surfs))
 
 (define (process-surfs surfs)
   ;; Common tail for both old and new paths.
