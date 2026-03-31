@@ -1301,8 +1301,19 @@
                [bd-before (if (> i 0) (bracket-depth-at bracket-rrb (- i 1)) 0)]
                ;; Decision 1: > inside brackets with angle context → delimiter
                ;; (simplified: any > at bracket-depth > 0 could be a delimiter)
+               ;; PPN Track 2B: merge consecutive >> at bracket-depth 0 → $compose
+               [compose-merge?
+                (and (string=? lexeme ">")
+                     (set-member? types 'rangle)
+                     (= bd-before 0)
+                     (< (+ i 1) n)
+                     (let ([next (rrb-get token-rrb (+ i 1))])
+                       (and (string=? (token-entry-lexeme next) ">")
+                            (set-member? (token-entry-types next) 'rangle))))]
                [new-types
                 (cond
+                  ;; >> at bracket-depth 0 → compose operator (first > consumed, second skipped below)
+                  [compose-merge? (seteq 'symbol)]
                   ;; > that could be operator or rangle
                   [(and (string=? lexeme ">")
                         (set-member? types 'rangle)
@@ -1321,11 +1332,18 @@
                    ;; For now: keep as symbol (full disambiguation in Track 2)
                    types]
                   [else types])]
-               [entry-changed? (not (equal? new-types types))]
-               [new-entry (if entry-changed?
-                              (struct-copy token-entry entry [types new-types])
-                              entry)])
-          (loop (+ i 1)
+               [entry-changed? (or compose-merge? (not (equal? new-types types)))]
+               [new-entry
+                (cond
+                  [compose-merge?
+                   ;; Merge two > into >> compose token
+                   (token-entry (seteq 'symbol) ">>"
+                                (token-entry-start-pos entry)
+                                (token-entry-end-pos (rrb-get token-rrb (+ i 1))))]
+                  [entry-changed?
+                   (struct-copy token-entry entry [types new-types])]
+                  [else entry])])
+          (loop (if compose-merge? (+ i 2) (+ i 1))  ;; skip second > when merging
                 (rrb-push result new-entry)
                 (or changed? entry-changed?))))))
 
@@ -1566,6 +1584,7 @@
        (define sym (string->symbol lexeme))
        (cond
          [(equal? lexeme "|>") '$pipe-gt]
+         [(equal? lexeme ">>") '$compose]
          [(equal? lexeme "||") '$facts-sep]
          [(equal? lexeme "&>") '$clause-sep]
          [else sym])]

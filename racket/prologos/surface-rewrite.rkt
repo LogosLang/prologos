@@ -375,7 +375,11 @@
 (register-tag-rule!
  (tag-rule "$pipe-gt" #f tag-pipe-gt))
 (register-tag-rule!
+ (tag-rule "|>" #f tag-pipe-gt))           ;; raw token lexeme (tree-level)
+(register-tag-rule!
  (tag-rule "$compose" #f tag-compose))
+(register-tag-rule!
+ (tag-rule ">>" #f tag-compose))           ;; raw token lexeme (tree-level)
 (register-tag-rule!
  (tag-rule "$mixfix" #f tag-mixfix))
 
@@ -1149,10 +1153,65 @@
             [else child]))))
   #f 100 'V0-2))
 
+;; --- PPN Track 2B Phase A: expand-pipe-gt ---
+;; |> x f g → (g (f x))
+;; children: [|>-token, x, f, g, ...]
+;; Fold-left: accumulator starts as first operand, each subsequent operand
+;; wraps as application: [f acc], then [g [f acc]], etc.
+(register-rewrite-rule!
+ (rewrite-rule
+  'expand-pipe-gt
+  tag-pipe-gt
+  (lambda (children srcloc indent)
+    (cond
+      [(< (length children) 3)
+       ;; Need at least: |> x f
+       (build-node 'error (list (make-token "|>: need value and at least one function")) srcloc indent)]
+      [else
+       ;; Skip the |> sentinel (first child), accumulate left-to-right
+       (define operands (cdr children))
+       (define initial (car operands))
+       (define functions (cdr operands))
+       (foldl (lambda (fn acc)
+                ;; [fn acc] → bracket-group application node
+                (build-node 'bracket-group (list fn acc) srcloc indent))
+              initial
+              functions)]))
+  #f 100 'V0-2))
+
+;; --- PPN Track 2B Phase B: expand-compose ---
+;; >> f g → (fn [$_0] (g (f $_0)))
+;; children: [>>-token, f, g, ...]
+;; Build: (fn [$_comp] (last (... (second (first $_comp)) ...)))
+(register-rewrite-rule!
+ (rewrite-rule
+  'expand-compose
+  tag-compose
+  (lambda (children srcloc indent)
+    (cond
+      [(< (length children) 3)
+       (build-node 'error (list (make-token ">>: need at least two functions")) srcloc indent)]
+      [else
+       ;; Skip the >> sentinel, build composed application
+       (define functions (cdr children))
+       (define param (make-token "$_comp"))
+       ;; Inner: fold-left applying each function: (g (f $_comp))
+       (define body
+         (foldl (lambda (fn acc)
+                  (build-node 'bracket-group (list fn acc) srcloc indent))
+                param
+                functions))
+       ;; Wrap in lambda: (fn [$_comp] body)
+       (build-node tag-expr
+                   (list (make-token "fn")
+                         (build-node 'bracket-group (list param) srcloc indent)
+                         body)
+                   srcloc indent)]))
+  #f 100 'V0-2))
+
 ;; --- Placeholder notes for deferred rules ---
 ;; rewrite-dot-access: ($dot-access field) target → (map-get target :field)
 ;; rewrite-implicit-map: keyword-block restructuring
-;; rewrite-infix-pipe: |> canonicalization
 ;; These require tree-level integration with token sentinels (Phase 6).
 
 ;; --- rewrite-dot-access: ($dot-access field) target → (map-get target :field) ---
