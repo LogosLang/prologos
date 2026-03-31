@@ -124,6 +124,27 @@
        [(imports) (parse-imports-tree args loc)]
        [(exports) (parse-exports-tree args loc)]
 
+       ;; --- Preparse-consumed forms (D.3 F1) ---
+       ;; These are handled by preparse: registration, generation, or specialized
+       ;; desugaring. The tree parser returns explicit errors so the merge's
+       ;; error filter catches them. Without these stubs, the `else` fallthrough
+       ;; would call parse-expr-tree and produce garbage surf-app nodes.
+       [(bundle) (parse-error-result loc "bundle: consumed by preparse")]
+       [(capability) (parse-error-result loc "capability: consumed by preparse")]
+       [(defmacro) (parse-error-result loc "defmacro: consumed by preparse")]
+       [(deftype) (parse-error-result loc "deftype: consumed by preparse")]
+       [(foreign) (parse-error-result loc "foreign: consumed by preparse")]
+       [(functor) (parse-error-result loc "functor: consumed by preparse")]
+       [(precedence-group) (parse-error-result loc "precedence-group: consumed by preparse")]
+       [(proc) (parse-error-result loc "proc: consumed by preparse")]
+       [(property) (parse-error-result loc "property: consumed by preparse")]
+       [(schema) (parse-error-result loc "schema: consumed by preparse")]
+       [(selection) (parse-error-result loc "selection: consumed by preparse")]
+       [(spawn) (parse-error-result loc "spawn: consumed by preparse")]
+       [(spawn-with) (parse-error-result loc "spawn-with: consumed by preparse")]
+       [(specialize) (parse-error-result loc "specialize: consumed by preparse")]
+       [(strategy) (parse-error-result loc "strategy: consumed by preparse")]
+
        ;; --- Fall through ---
        [else
         ;; Unknown tag — try as expression
