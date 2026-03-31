@@ -22,9 +22,15 @@
 
 (require racket/list
          racket/set
+         racket/vector
          "parse-reader.rkt"
          "rrb.rkt"
-         "ctor-registry.rkt")
+         "ctor-registry.rkt"
+         ;; PPN Track 2B Phase C: operator/precedence data for mixfix resolution
+         (only-in "macros.rkt"
+                  effective-operator-table effective-precedence-groups
+                  prec-group prec-group-assoc prec-group-tighter-than
+                  op-info-fn-name op-info-group op-info-swap?))
 
 (provide
  ;; Rewrite rule struct
@@ -1209,6 +1215,283 @@
                          (build-node 'bracket-group (list param) srcloc indent)
                          body)
                    srcloc indent)]))
+  #f 100 'V0-2))
+
+;; --- PPN Track 2B Phase C: Mixfix Pocket Universe Resolution ---
+
+;; Compare two precedence groups in the DAG
+;; Returns: 'less | 'greater | 'equal | 'incomparable
+(define (compare-groups g1-name g2-name groups)
+  (cond
+    [(eq? g1-name g2-name) 'equal]
+    [else
+     (define (reachable? from to visited)
+       (cond
+         [(eq? from to) #t]
+         [(set-member? visited from) #f]
+         [else
+          (define g (hash-ref groups from #f))
+          (and g
+               (for/or ([parent (in-list (prec-group-tighter-than g))])
+                 (reachable? parent to (set-add visited from))))]))
+     (cond
+       [(reachable? g1-name g2-name (seteq)) 'greater]  ;; g1 tighter than g2
+       [(reachable? g2-name g1-name (seteq)) 'less]
+       [else 'incomparable])]))
+;; Resolves .{a + b * c} using DAG-stratified claim lattice.
+;; Each operand position receives claims from adjacent operators.
+;; The claim lattice merge is position-aware (left-assoc: lower position wins).
+;; Incomparable groups → ambiguity error (⊤).
+;;
+;; The resolution state is a Pocket Universe cell value: monotone progression
+;; from raw token sequence through per-stratum claim resolution to structured tree.
+
+;; Claim on an operand position
+(struct mixfix-claim (op-sym fn-name group op-pos side swap?) #:transparent)
+;; op-sym: operator symbol
+;; fn-name: the function to desugar to
+;; group: precedence group name
+;; op-pos: operator's position in token sequence (for associativity resolution)
+;; side: 'left | 'right | 'unary (which side of the operator this operand is on)
+;; swap?: whether to swap args (for > and >=)
+
+;; Merge two claims on the same operand position.
+;; Returns: winning claim | 'ambiguity-error
+(define (merge-claims c1 c2 groups)
+  (cond
+    ;; Same group: resolve by associativity using position
+    [(eq? (mixfix-claim-group c1) (mixfix-claim-group c2))
+     (define grp (hash-ref groups (mixfix-claim-group c1) #f))
+     (cond
+       [(not grp) c1]  ;; unknown group, keep first
+       [(eq? (prec-group-assoc grp) 'left)
+        ;; Left-assoc: lower op-position wins (leftmost operator)
+        (if (<= (mixfix-claim-op-pos c1) (mixfix-claim-op-pos c2)) c1 c2)]
+       [(eq? (prec-group-assoc grp) 'right)
+        ;; Right-assoc: higher op-position wins (rightmost operator)
+        (if (>= (mixfix-claim-op-pos c1) (mixfix-claim-op-pos c2)) c1 c2)]
+       [else 'ambiguity-error])]  ;; non-associative: can't share
+    ;; Different groups: check DAG comparability
+    [else
+     (define cmp (compare-groups (mixfix-claim-group c1) (mixfix-claim-group c2) groups))
+     (case cmp
+       [(greater) c1]   ;; c1's group is tighter → c1 wins
+       [(less) c2]      ;; c2's group is tighter → c2 wins
+       [(equal) c1]     ;; same depth → shouldn't happen (handled above)
+       [(incomparable) 'ambiguity-error])]))
+
+;; Parse mixfix-group children into operands and operators.
+;; Returns: (values operands operators) where:
+;;   operands: vector of tree items (tokens or nodes) at even positions
+;;   operators: list of (cons position op-info) at odd positions
+;; Multi-token operands (e.g., `f x` in `.{f x == g y}`) are grouped into application nodes.
+(define (parse-mixfix-tokens children)
+  (define ops (effective-operator-table))
+  (define items (if (list? children) children (rrb-to-list children)))
+  ;; Identify which positions are operators
+  (define item-vec (list->vector items))
+  (define n (vector-length item-vec))
+  ;; An item is an operator if it's a token whose lexeme is in the operator table
+  (define (operator-at? i)
+    (define item (vector-ref item-vec i))
+    (and (token-entry? item)
+         (hash-ref ops (string->symbol (token-entry-lexeme item)) #f)))
+  ;; Partition: operand groups separated by operators
+  ;; Each operand group is 1+ tokens/nodes that form an expression
+  (let loop ([i 0] [operands '()] [operators '()] [current-operand '()])
+    (cond
+      [(>= i n)
+       ;; Flush last operand group
+       (define final-operands
+         (reverse (cons (reverse current-operand) operands)))
+       (values (list->vector (filter pair? final-operands))
+               (reverse operators))]
+      [(operator-at? i)
+       ;; Flush current operand group, record operator
+       (define op-info-val (operator-at? i))
+       (loop (+ i 1)
+             (cons (reverse current-operand) operands)
+             (cons (cons i op-info-val) operators)
+             '())]
+      [else
+       ;; Part of operand group
+       (loop (+ i 1) operands operators
+             (cons (vector-ref item-vec i) current-operand))])))
+
+;; Build a tree node from an operand group (1+ items)
+(define (operand-group->node items srcloc indent)
+  (cond
+    [(null? items) (make-token "_")]  ;; shouldn't happen
+    [(= (length items) 1) (car items)]  ;; single item = atomic operand
+    [else
+     ;; Multiple items = application: [f x y]
+     (build-node 'bracket-group items srcloc indent)]))
+
+;; Resolve mixfix claims using the DAG.
+;; claims: (hasheq operand-index → claim) — monotone accumulation
+;; Returns: updated claims hash | 'ambiguity-error
+(define (resolve-stratum-claims operand-count operators groups claims)
+  (for/fold ([cl claims])
+            ([op-entry (in-list operators)]
+             #:break (eq? cl 'ambiguity-error))
+    (define op-pos (car op-entry))
+    (define op (cdr op-entry))
+    ;; Find this operator's operand indices
+    ;; Operators partition operands: operator at position P in the original sequence
+    ;; separates operand groups. The Nth operator claims operand N (left) and N+1 (right).
+    (define op-idx
+      (for/first ([i (in-naturals)]
+                  [o (in-list operators)]
+                  #:when (= (car o) op-pos))
+        i))
+    (define left-idx op-idx)
+    (define right-idx (+ op-idx 1))
+    ;; Submit claims
+    (define left-claim (mixfix-claim (op-info-fn-name op) (op-info-fn-name op)
+                                     (op-info-group op) op-pos 'left (op-info-swap? op)))
+    (define right-claim (mixfix-claim (op-info-fn-name op) (op-info-fn-name op)
+                                      (op-info-group op) op-pos 'right (op-info-swap? op)))
+    (define cl1
+      (if (eq? cl 'ambiguity-error) cl
+          (let ([existing (hash-ref cl left-idx #f)])
+            (if existing
+                (let ([merged (merge-claims existing left-claim groups)])
+                  (if (eq? merged 'ambiguity-error) 'ambiguity-error
+                      (hash-set cl left-idx merged)))
+                (hash-set cl left-idx left-claim)))))
+    (if (eq? cl1 'ambiguity-error) 'ambiguity-error
+        (let ([existing (hash-ref cl1 right-idx #f)])
+          (if existing
+              (let ([merged (merge-claims existing right-claim groups)])
+                (if (eq? merged 'ambiguity-error) 'ambiguity-error
+                    (hash-set cl1 right-idx merged)))
+              (hash-set cl1 right-idx right-claim))))))
+
+;; Build result tree from resolved claims.
+;;
+;; Information-flow approach: the claims ARE the tree structure (adjacency edges).
+;; Each operator's value depends on its operands' values. Process from tightest
+;; to loosest — tighter operators resolve first (their operands are atomic or
+;; already-resolved sub-expressions). Each resolved operator becomes a single
+;; node that looser operators see as an atomic operand.
+;;
+;; This is a dataflow fold: the evaluation order emerges from the DAG structure,
+;; not from explicit recursion. Tighter operators have no dependencies on other
+;; operators. Looser operators depend on tighter ones being resolved.
+(define (build-mixfix-tree operand-nodes operators claims srcloc indent)
+  ;; Resolved values: mutable vector, operand-index → current value
+  ;; Starts as atomic operand nodes. As operators resolve, their result
+  ;; replaces the LEFT operand position (the right position is consumed).
+  (define vals (vector-copy operand-nodes))
+  (define groups (effective-precedence-groups))
+
+  ;; Sort operators from TIGHTEST to LOOSEST (deepest DAG depth first).
+  ;; Within same group: left-assoc → left-to-right; right-assoc → right-to-left.
+  (define sorted-ops
+    (sort operators
+          (lambda (a b)
+            (define ga (op-info-group (cdr a)))
+            (define gb (op-info-group (cdr b)))
+            (define cmp (compare-groups ga gb groups))
+            (cond
+              [(eq? cmp 'greater) #t]   ;; a is tighter → a first
+              [(eq? cmp 'less) #f]      ;; b is tighter → b first
+              [(eq? cmp 'equal)
+               ;; Same group: left-assoc → process left first; right-assoc → right first
+               (define grp (hash-ref groups ga #f))
+               (if (and grp (eq? (prec-group-assoc grp) 'right))
+                   (> (car a) (car b))   ;; right-assoc: rightmost first
+                   (< (car a) (car b)))] ;; left-assoc: leftmost first
+              [else (< (car a) (car b))]))))  ;; incomparable: positional fallback
+
+  ;; Process each operator in tightest-first order.
+  ;; Each resolved operator produces a node and replaces its operand range.
+  ;; Track which operand indices have been consumed (merged into a tighter operator).
+  ;; An operand at index I is "live" if it hasn't been consumed.
+  ;; When operator at index K resolves: its result replaces the leftmost live
+  ;; operand in its span; the rightmost is consumed.
+  (for ([op-entry (in-list sorted-ops)])
+    (define op-pos (car op-entry))
+    (define op (cdr op-entry))
+    ;; Find this operator's index in the original operator list
+    (define op-idx
+      (for/first ([i (in-naturals)]
+                  [o (in-list operators)]
+                  #:when (= (car o) op-pos))
+        i))
+    (define left-idx op-idx)
+    (define right-idx (+ op-idx 1))
+    ;; Read current values (may be atomic or already-resolved sub-trees)
+    (define left-val (vector-ref vals left-idx))
+    (define right-val (vector-ref vals right-idx))
+    ;; Build application node: [fn-name left right] (or swap for > / >=)
+    (define fn-token (make-token (symbol->string (op-info-fn-name op))))
+    (define app-node
+      (if (op-info-swap? op)
+          (build-node 'bracket-group (list fn-token right-val left-val) srcloc indent)
+          (build-node 'bracket-group (list fn-token left-val right-val) srcloc indent)))
+    ;; Replace: the resolved operator's result goes in the LEFT position.
+    ;; The RIGHT position gets the same value (so any looser operator reading
+    ;; either position sees the resolved sub-tree).
+    (vector-set! vals left-idx app-node)
+    (vector-set! vals right-idx app-node))
+
+  ;; The root: the loosest operator (last processed) wrote the final tree.
+  ;; Its left-idx is the leftmost position of its span.
+  (if (null? sorted-ops)
+      (vector-ref vals 0)
+      (let ([last-op (last sorted-ops)])
+        (define last-op-idx
+          (for/first ([i (in-naturals)]
+                      [o (in-list operators)]
+                      #:when (= (car o) (car last-op)))
+            i))
+        (vector-ref vals last-op-idx))))
+
+;; The main mixfix rewrite rule
+(register-rewrite-rule!
+ (rewrite-rule
+  'expand-mixfix
+  'mixfix-group
+  (lambda (children srcloc indent)
+    (define items (if (list? children) children
+                      (for/list ([i (in-range (rrb-size children))])
+                        (rrb-get children i))))
+    (cond
+      [(null? items)
+       (build-node 'error (list (make-token "empty .{} expression")) srcloc indent)]
+      [(= (length items) 1)
+       ;; Single item — just pass through
+       (car items)]
+      [else
+       (define groups (effective-precedence-groups))
+       ;; Step 1: Parse into operands and operators
+       (define-values (operand-groups operators) (parse-mixfix-tokens items))
+       (cond
+         [(null? operators)
+          ;; No operators found — treat as application
+          (build-node 'bracket-group items srcloc indent)]
+         [else
+          ;; Step 2: Resolve claims (all operators submit claims simultaneously)
+          ;; The DAG comparison in merge-claims handles stratification:
+          ;; tighter operators' claims win over looser ones.
+          (define claims
+            (resolve-stratum-claims (vector-length operand-groups)
+                                    operators groups (hasheq)))
+          (cond
+            [(eq? claims 'ambiguity-error)
+             (build-node 'error
+                         (list (make-token "mixfix: ambiguous operators (no precedence relationship)"))
+                         srcloc indent)]
+            [else
+             ;; Step 3: Build result tree from claims
+             ;; Convert operand groups to nodes
+             (define operand-nodes
+               (for/vector ([i (in-range (vector-length operand-groups))])
+                 (operand-group->node (let ([v (vector-ref operand-groups i)])
+                                        (if (vector? v) (vector->list v) v))
+                                      srcloc indent)))
+             (build-mixfix-tree operand-nodes operators claims srcloc indent)])])]))
   #f 100 'V0-2))
 
 ;; --- Placeholder notes for deferred rules ---
