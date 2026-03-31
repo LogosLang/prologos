@@ -24,9 +24,9 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Pre-0 benchmarks | ✅ | Merge: ~159μs/op. Property test: 21ms/25 pairs. Error path: 0 contradictions typical. Design unchanged. |
-| 1 | Property cell infrastructure on sre-domain | ⬜ | 4-valued cells (⊥, #t, #f, ⊤) per property, has-property? API (D.3 F1) |
-| 1.5 | Domain registry | ⬜ | Cell on network: domain-name → sre-domain. register-domain!, lookup-domain. (D.3 F10) |
-| 2 | Meet for type domain (variance-aware ring action) | ⬜ | type-lattice-meet + ring-action function. Context-dependent equality (D.3 F6). Meta → ⊥ (D.3 F4). |
+| 1 | Property cell infrastructure on sre-domain | ✅ | `baa0fde6`. 4-valued lattice (⊥, #t, #f, ⊤). property-cell-ids field (10th). has-property? API. 9 construction sites updated. |
+| 1.5 | Domain registry | ✅ | `191d0933`. register-domain!, lookup-domain, all-registered-domains. type + session domains registered. |
+| 2 | Meet for type domain (ring action) | ✅ | `9737625d`. type-lattice-meet: ⊤⊓x=x, x⊓⊥=⊥, Pi ring action (contra→join, co→meet, inv→eq-meet), meta→⊥. |
 | 3 | Meet for session domain | ⬜ | session-lattice-meet |
 | 4 | Property declaration on domain construction | ⬜ | Explicit declaration via register-domain! |
 | 5 | Property inference from operations | ⬜ | Pocket Universe evidence cell: confirmed(count) \| refuted(witness) (D.3 F2). Eager-synchronous + pnet cache. |
