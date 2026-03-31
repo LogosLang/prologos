@@ -30,7 +30,7 @@
 | 3 | Meet for session domain | ✅ | session-lattice-meet in session-lattice.rkt. ⊤⊓x=x, x⊓⊥=⊥, meta→⊥. Ground sessions only. |
 | 4 | Property declaration on domain construction | ✅ | declared-properties field (11th). Type: 6 properties. Session: 4 properties. has-property? reads declarations. |
 | 5 | Property inference from operations | ✅ | axiom-confirmed/refuted structs. 4 test functions (commutative, associative, idempotent, distributive). infer-domain-properties. **FINDING**: type lattice NOT distributive under equality merge (flat lattice with >2 atoms). Declaration corrected. |
-| 6 | Implication propagators (reactive scatter) | ⬜ | Scatter propagator reads registry, creates implications per domain. Wiring-state cell. Stratified: S0 properties → S1 scatter → S2 implications. (NTT-revised) |
+| 6 | Implication rules + resolve-domain-properties | ✅ | implication-rule struct, standard rules (heyting, boolean). derive-composite-properties. resolve-domain-properties: declare→infer→derive. Verified: distributive=refuted → heyting=refuted → boolean=refuted. |
 | 7a | Diagnostic property reporting at registration | ⬜ | Inference runs, profile reported with counterexample witnesses. PPN Track 3 consumer. |
 | 7b | Property-gated behavior infrastructure | ⬜ | when-property / select-by-property pattern. Fallback on absence. Future consumers plug in. |
 | 8 | Verification + PIR | ⬜ | Full suite GREEN, benchmark comparison, documentation |

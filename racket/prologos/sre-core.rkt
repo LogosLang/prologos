@@ -50,6 +50,11 @@
  axiom-refuted axiom-refuted? axiom-refuted-witness
  axiom-untested
  infer-domain-properties
+ ;; Track 2G: implication rules + resolution
+ (struct-out implication-rule)
+ standard-implication-rules
+ derive-composite-properties
+ resolve-domain-properties
 
  ;; Core SRE functions
  sre-identify-sub-cell
@@ -287,6 +292,58 @@
                          (test-distributive domain samples meet-fn))
         props-2))
   props-3)
+
+;; ========================================================================
+;; SRE Track 2G Phase 6: Implication Rules (Derive Composite Properties)
+;; ========================================================================
+;; Composite properties are conjunctions of atomic properties.
+;; No hierarchy. Flat composition via implication rules.
+;;
+;; Scaffolding: eager function call after inference.
+;; Permanent: implication rules are data. Track 3-4 refinement:
+;; Pocket Universe internal stratification with actual propagators.
+
+;; Implication rule: if all source properties are confirmed → write target confirmed.
+(struct implication-rule (name sources target) #:transparent)
+
+;; Built-in implication rules
+(define standard-implication-rules
+  (list
+   (implication-rule 'heyting
+                     '(distributive has-pseudo-complement)
+                     'heyting)
+   (implication-rule 'boolean
+                     '(heyting has-complement)
+                     'boolean)))
+
+;; Derive composite properties from atomic ones.
+;; Reads source properties, writes derived property using property-value-join.
+;; Returns updated properties hash.
+(define (derive-composite-properties props [rules standard-implication-rules])
+  (for/fold ([p props])
+            ([rule (in-list rules)])
+    (define sources-satisfied?
+      (for/and ([src (in-list (implication-rule-sources rule))])
+        (eq? (hash-ref p src prop-unknown) prop-confirmed)))
+    (define any-source-refuted?
+      (for/or ([src (in-list (implication-rule-sources rule))])
+        (let ([v (hash-ref p src prop-unknown)])
+          (or (eq? v prop-refuted) (eq? v prop-contradicted)))))
+    (define derived-value
+      (cond
+        [sources-satisfied? prop-confirmed]
+        [any-source-refuted? prop-refuted]  ;; if any source is refuted, derived is refuted
+        [else prop-unknown]))  ;; sources still unknown → derived unknown
+    (hash-set p (implication-rule-target rule)
+              (property-value-join (hash-ref p (implication-rule-target rule) prop-unknown)
+                                  derived-value))))
+
+;; Full property resolution: declare → infer → derive implications.
+;; Called at domain registration time. Returns final properties hash.
+(define (resolve-domain-properties domain samples #:meet-fn [meet-fn #f])
+  (define after-inference
+    (infer-domain-properties domain samples #:meet-fn meet-fn))
+  (derive-composite-properties after-inference))
 
 ;; Debug mode: enables idempotency assertions (D.2 critique)
 (define current-sre-debug? (make-parameter #f))
