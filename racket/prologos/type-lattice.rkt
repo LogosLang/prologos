@@ -35,6 +35,7 @@
 
 (provide type-bot type-top type-bot? type-top?
          type-lattice-merge
+         type-lattice-meet           ;; Track 2G: lattice meet (greatest lower bound)
          type-lattice-contradicts?
          try-unify-pure
          ;; Phase E1: Meta-solution callback for propagator-aware merge
@@ -141,6 +142,89 @@
        [(or (has-unsolved-meta? v1) (has-unsolved-meta? v2))
         (if (has-unsolved-meta? v1) v2 v1)]
        [else type-top])]))
+
+;; ========================================
+;; SRE Track 2G: Type lattice meet (greatest lower bound)
+;; ========================================
+;;
+;; Dual of type-lattice-merge (join). Meet computes the greatest lower bound:
+;;   ⊤ ⊓ x = x  (top is identity for meet)
+;;   x ⊓ ⊥ = ⊥  (bot is annihilator for meet)
+;;   equal → identity
+;;   metavariable → ⊥ (conservative: can't compute GLB with unknown, D.3 F4)
+;;   structurally compatible constructors → component-wise meet with ring action
+;;   incompatible → ⊥
+;;
+;; Ring action for meet at constructor components:
+;;   Covariant (+):     meet (monotone preserves operation)
+;;   Contravariant (-): join (antitone flips operation)
+;;   Invariant (=):     equality-meet (mismatch → ⊥, D.3 F6)
+;;   Phantom (ø):       phantom (erased)
+
+(define (type-lattice-meet v1 v2)
+  (cond
+    ;; Identity: ⊤ ⊓ x = x (dual of ⊥ ⊔ x = x)
+    [(type-top? v1) v2]
+    [(type-top? v2) v1]
+    ;; Annihilator: x ⊓ ⊥ = ⊥ (dual of x ⊔ ⊤ = ⊤)
+    [(type-bot? v1) type-bot]
+    [(type-bot? v2) type-bot]
+    ;; Equal: a ⊓ a = a
+    [(eq? v1 v2) v1]
+    [(equal? v1 v2) v1]
+    ;; Metavariable: conservative → ⊥ (D.3 F4)
+    [(or (has-unsolved-meta? v1) (has-unsolved-meta? v2)) type-bot]
+    [else
+     ;; Structural intersection: same constructor tag → component-wise meet
+     ;; Different constructor tags → ⊥ (no common lower bound)
+     (define result (try-intersect-pure v1 v2))
+     (or result type-bot)]))
+
+;; Pure structural intersection: computes greatest lower bound.
+;; Returns #f if types are structurally incompatible (different constructor tags).
+;; Uses ring action: covariant → meet, contravariant → join, invariant → equality.
+;;
+;; Phase 2 scope: base types + Pi + Sigma. Ground types (no metas, no binder opening).
+;; Full constructor coverage follows the same pattern via SRE decomposition.
+(define (try-intersect-pure t1 t2)
+  (let ([a (whnf t1)]
+        [b (whnf t2)])
+    (cond
+      [(equal? a b) a]
+      ;; Metas → #f (conservative, D.3 F4: caller returns ⊥)
+      [(or (expr-meta? a) (expr-meta? b)) #f]
+      ;; Holes → #f
+      [(or (expr-hole? a) (expr-hole? b)) #f]
+      [(or (expr-typed-hole? a) (expr-typed-hole? b)) #f]
+      ;; Pi ⊓ Pi: component-wise with ring action
+      ;; mult = invariant (equality-meet: mismatch → #f)
+      ;; domain = contravariant (antitone flips: use JOIN)
+      ;; codomain = covariant (monotone preserves: use MEET)
+      [(and (expr-Pi? a) (expr-Pi? b))
+       (let ([m1 (expr-Pi-mult a)] [m2 (expr-Pi-mult b)])
+         (cond
+           [(not (equal? m1 m2)) #f]  ;; invariant: mismatch → ⊥
+           [else
+            (define dom-result (type-lattice-merge (expr-Pi-domain a) (expr-Pi-domain b)))
+            (define cod-result (type-lattice-meet (expr-Pi-codomain a) (expr-Pi-codomain b)))
+            (cond
+              [(type-top? dom-result) #f]
+              [(type-bot? cod-result) #f]
+              ;; Reconstruct Pi preserving original binder structure
+              [else (struct-copy expr-Pi a
+                                [domain dom-result]
+                                [codomain cod-result])])]))]
+      ;; Sigma ⊓ Sigma: both covariant positions → meet both
+      [(and (expr-Sigma? a) (expr-Sigma? b))
+       (let ([fst-result (type-lattice-meet (expr-Sigma-fst-type a) (expr-Sigma-fst-type b))]
+             [snd-result (type-lattice-meet (expr-Sigma-snd-type a) (expr-Sigma-snd-type b))])
+         (cond
+           [(or (type-bot? fst-result) (type-bot? snd-result)) #f]
+           [else (struct-copy expr-Sigma a
+                              [fst-type fst-result]
+                              [snd-type snd-result])]))]
+      ;; Different constructors / base types → no intersection
+      [else #f])))
 
 ;; ========================================
 ;; Contradiction predicate
