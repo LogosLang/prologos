@@ -29,6 +29,7 @@
 
 (provide sess-bot sess-top sess-bot? sess-top?
          session-lattice-merge
+         session-lattice-meet           ;; Track 2G: session lattice meet
          session-lattice-contradicts?
          try-unify-session-pure
          has-unsolved-session-meta?)
@@ -109,6 +110,30 @@
         (if (has-unsolved-session-meta? old) new old)]
        ;; Both ground and incompatible → contradiction
        [else sess-top])]))
+
+;; ========================================
+;; SRE Track 2G: Session lattice meet (greatest lower bound)
+;; ========================================
+;; Dual of session-lattice-merge. Meet computes the greatest lower bound:
+;;   ⊤ ⊓ x = x, x ⊓ ⊥ = ⊥, equal → identity.
+;;   Same session shape → component-wise meet.
+;;   Different shapes → ⊥. Meta → ⊥ (conservative).
+
+(define (session-lattice-meet v1 v2)
+  (cond
+    ;; Identity: ⊤ ⊓ x = x
+    [(sess-top? v1) v2]
+    [(sess-top? v2) v1]
+    ;; Annihilator: x ⊓ ⊥ = ⊥
+    [(sess-bot? v1) sess-bot]
+    [(sess-bot? v2) sess-bot]
+    ;; Equal: a ⊓ a = a
+    [(eq? v1 v2) v1]
+    [(equal? v1 v2) v1]
+    ;; Meta → ⊥ (conservative)
+    [(or (has-unsolved-session-meta? v1) (has-unsolved-session-meta? v2)) sess-bot]
+    ;; Different ground shapes → ⊥
+    [else sess-bot]))
 
 ;; ========================================
 ;; Pure structural session unification

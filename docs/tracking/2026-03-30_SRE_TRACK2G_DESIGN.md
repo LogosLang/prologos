@@ -27,7 +27,7 @@
 | 1 | Property cell infrastructure on sre-domain | ✅ | `baa0fde6`. 4-valued lattice (⊥, #t, #f, ⊤). property-cell-ids field (10th). has-property? API. 9 construction sites updated. |
 | 1.5 | Domain registry | ✅ | `191d0933`. register-domain!, lookup-domain, all-registered-domains. type + session domains registered. |
 | 2 | Meet for type domain (ring action) | ✅ | `9737625d`. type-lattice-meet: ⊤⊓x=x, x⊓⊥=⊥, Pi ring action (contra→join, co→meet, inv→eq-meet), meta→⊥. |
-| 3 | Meet for session domain | ⬜ | session-lattice-meet |
+| 3 | Meet for session domain | ✅ | session-lattice-meet in session-lattice.rkt. ⊤⊓x=x, x⊓⊥=⊥, meta→⊥. Ground sessions only. |
 | 4 | Property declaration on domain construction | ⬜ | Explicit declaration via register-domain! |
 | 5 | Property inference from operations | ⬜ | Pocket Universe evidence cell: confirmed(count) \| refuted(witness) (D.3 F2). Eager-synchronous + pnet cache. |
 | 6 | Implication propagators (reactive scatter) | ⬜ | Scatter propagator reads registry, creates implications per domain. Wiring-state cell. Stratified: S0 properties → S1 scatter → S2 implications. (NTT-revised) |
