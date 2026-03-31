@@ -1890,13 +1890,18 @@
        (define entry (vector-ref vec i))
        (define type (set-first (token-entry-types entry)))
        (cond
-         [(and close-type (eq? type close-type))
+         ;; Close on matching bracket type (mixfix-rbrace closes on rbrace)
+         [(and close-type
+               (or (eq? type close-type)
+                   (and (eq? close-type 'mixfix-rbrace) (eq? type 'rbrace))))
           (values (reverse result) (+ i 1))]
          [(memq type '(lbracket lparen))
           (define ct (if (eq? type 'lbracket) 'rbracket 'rparen))
           (define-values (inner next-i) (group-tokens vec (+ i 1) end ct source source-str))
           (loop next-i (cons (wrap-stx-list inner source) result))]
-         [(eq? type 'langle)
+         ;; Angle brackets: NOT treated as brackets inside mixfix (.{...})
+         ;; In mixfix context (close-type = mixfix-rbrace), < and > are operators
+         [(and (eq? type 'langle) (not (eq? close-type 'mixfix-rbrace)))
           (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rangle source source-str))
           (define-values (al ac) (pos->line-col source-str (token-entry-start-pos entry)))
           (loop next-i (cons (make-stx (cons (make-stx '$angle-type source al ac (+ (token-entry-start-pos entry) 1) 1) inner)
@@ -1908,7 +1913,8 @@
                                        source bl bc (+ (token-entry-start-pos entry) 1) 1) result))]
          [(eq? type 'dot-lbrace)
           ;; .{a b} → ($mixfix a b)
-          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'rbrace source source-str))
+          ;; Use 'mixfix-rbrace so group-tokens knows < > are operators, not brackets
+          (define-values (inner next-i) (group-tokens vec (+ i 1) end 'mixfix-rbrace source source-str))
           (define-values (ml mc) (pos->line-col source-str (token-entry-start-pos entry)))
           (loop next-i (cons (make-stx (cons (make-stx '$mixfix source ml mc (+ (token-entry-start-pos entry) 1) 2) inner)
                                        source ml mc (+ (token-entry-start-pos entry) 1) 2) result))]
@@ -1932,6 +1938,10 @@
           (define-values (hl hc) (pos->line-col source-str (token-entry-start-pos entry)))
           (loop next-i (cons (make-stx (cons (make-stx '$set-literal source hl hc (+ (token-entry-start-pos entry) 1) 2) inner)
                                        source hl hc (+ (token-entry-start-pos entry) 1) 2) result))]
+         ;; Stray closing brackets: skip. But in mixfix context, rangle is an operator.
+         [(and (memq type '(rangle langle)) (eq? close-type 'mixfix-rbrace))
+          ;; Inside .{...}: < and > are operators, emit as symbols
+          (loop (+ i 1) (cons (token-entry->stx entry source source-str) result))]
          [(memq type '(rbracket rparen rbrace rangle))
           (loop (+ i 1) result)]
          [else

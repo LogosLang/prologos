@@ -492,8 +492,8 @@
                   (or (eq? type close-type)
                       (and (eq? close-type 'mixfix-rbrace) (eq? type 'rbrace))))
              (values (reverse result) (+ i 1))]
-            ;; Langle → check for matching rangle (angle type group)
-            [(eq? type 'langle)
+            ;; Langle → angle group, UNLESS inside mixfix (.{...}) where < is an operator
+            [(and (eq? type 'langle) (not (eq? close-type 'mixfix-rbrace)))
              (define-values (inner next-i)
                (group-items-to-tree vec (+ i 1) end 'rangle srcloc indent))
              (define group-node (parse-tree-node 'angle-group (list->rrb inner) srcloc indent))
@@ -519,7 +519,9 @@
                                      [else 'bracket-group]))
              (define group-node (parse-tree-node group-tag (list->rrb inner) srcloc indent))
              (loop next-i (cons group-node result))]
-            ;; Stray closing brackets → skip
+            ;; Stray closing brackets → skip (but in mixfix, rangle/langle are operators)
+            [(and (memq type '(rangle langle)) (eq? close-type 'mixfix-rbrace))
+             (loop (+ i 1) (cons item result))]  ;; keep as operator token
             [(memq type '(rbracket rparen rbrace rangle))
              (loop (+ i 1) result)]
             ;; Comma → skip (cosmetic separator)
