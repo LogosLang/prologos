@@ -30,7 +30,7 @@
 | 3 | Meet for session domain | ⬜ | session-lattice-meet |
 | 4 | Property declaration on domain construction | ⬜ | Explicit declaration via register-domain! |
 | 5 | Property inference from operations | ⬜ | Pocket Universe evidence cell: confirmed(count) \| refuted(witness) (D.3 F2). Eager-synchronous + pnet cache. |
-| 6 | Implication propagators between properties | ⬜ | Auto-installed for all registered domains via registry (D.3 F10). Retroactive firing verified (D.3 F5). |
+| 6 | Implication propagators (reactive scatter) | ⬜ | Scatter propagator reads registry, creates implications per domain. Wiring-state cell. Stratified: S0 properties → S1 scatter → S2 implications. (NTT-revised) |
 | 7 | First capability consumer | ⬜ | Heyting pseudo-complement for ground type sublattice (D.3 F7) |
 | 8 | Verification + PIR | ⬜ | Full suite GREEN, benchmark comparison, documentation |
 
@@ -248,25 +248,50 @@ The inference propagator fires eagerly at domain registration (D.2 P4 revision).
 
 **Connection to property-based testing**: This is a small-scale version of QuickCheck-style property testing. The same Pocket Universe pattern (evidence accumulation as monotone cell value) will later support the `spec` system's `:property` declarations.
 
-### 3.4 Implication Propagators
+### 3.4 Implication Propagators (NTT-revised: reactive scatter, not static wiring)
 
-Properties compose via implications. Each implication is a propagator:
+Properties compose via implications. Each implication is a propagator. But the INSTALLATION of implication propagators is itself a reactive, on-network process — not a one-time setup step.
+
+**Architecture** (revised after NTT modeling revealed architectural impurity):
+
+The system has a persistent `install-implications` scatter propagator on the network. It reads the domain registry cell AND an `implication-wiring-state` cell (monotone set of domains already wired). When a new domain appears in the registry that isn't in the wired set:
+
+1. The scatter propagator fires (stratum boundary — topology creation)
+2. Creates implication propagators for the new domain's property cells
+3. Writes the updated wiring state (domain added — monotone)
+
+```
+;; Wiring state: monotone tracking of which domains have implications installed
+(struct implication-wiring-state
+  (wired-domains)   ;; (seteq symbol) — only grows
+  #:transparent)
+
+;; Scatter propagator: reacts to registry changes, creates topology
+;; Stratum: S1 (above S0 property cells, below S2 implication firing)
+install-implications:
+  reads  [registry : Cell DomainRegistry, wiring : Cell ImplicationWiringState]
+  writes [wiring : Cell ImplicationWiringState]
+  scatter: creates implication propagators for new domains
+```
+
+Individual implication propagators (one per derived property per domain):
 
 ```
 ;; When distributive AND has-pseudo-complement → write heyting
-(implication-propagator
-  #:reads (domain.distributive domain.has-pseudo-complement)
-  #:when (and (eq? distributive #t) (eq? has-pseudo-complement #t))
-  #:writes (domain.heyting := #t))
-
-;; When heyting AND has-complement → write boolean
-(implication-propagator
-  #:reads (domain.heyting domain.has-complement)
-  #:when (and (eq? heyting #t) (eq? has-complement #t))
-  #:writes (domain.boolean := #t))
+;; Stratum: S2 (fires after scatter creates them)
+imply-heyting:
+  reads  [domain.distributive, domain.has-pseudo-complement]
+  writes [domain.heyting]
+  when both = prop-confirmed → write prop-confirmed
+  when either = prop-contradicted → write prop-refuted  (⊤ → #f for capability)
 ```
 
-These are standard propagators — they fire when their input cells advance. No explicit "class hierarchy" evaluation. The composite property cells fill automatically when their source properties are determined.
+**Stratification** (Layered Recovery):
+- **S0**: Property cells filled (declaration + inference)
+- **S1**: Scatter propagator fires — creates implication propagators for new domains
+- **S2**: Implication propagators fire — derived properties filled
+
+This is reactive: PPN Track 3 registers a new parse domain → registry cell advances → scatter propagator fires → implication propagators auto-installed → derived properties computed. No manual wiring.
 
 **No multiple inheritance because there's no inheritance.** A domain that is both distributive and residuated simply has both property cells at #t. The heyting implication fires because distributive = #t. The residuated implications fire independently. No conflict resolution needed.
 
@@ -650,12 +675,30 @@ propagator imply-boolean
     | prop-confirmed prop-confirmed -> [write bool prop-confirmed]
     | _ _                           -> void)
 
-;; Auto-installer: reads domain registry, installs implications for new domains
+;; Wiring state: monotone tracking of implication installation progress
+type ImplicationWiringState := ImplicationWiringState {wired : Set Symbol}
+  :lattice :pure
+
+impl Lattice ImplicationWiringState
+  join [ImplicationWiringState a] [ImplicationWiringState b] ->
+    ImplicationWiringState [set-union a b]
+  bot -> ImplicationWiringState {}
+
+;; Reactive scatter: reads registry + wiring state, creates implication propagators
+;; Stratum S1 (above S0 property cells, creates topology for S2 implications)
 propagator install-implications
-  :reads  [registry : Cell DomainRegistry]
-  :writes []   ;; side effect: installs propagators on domain property cells
-  ;; foreach domain in registry that doesn't have implications wired:
-  ;;   install imply-heyting, imply-boolean, etc. on its property cells
+  :reads  [registry : Cell DomainRegistry
+           wiring   : Cell ImplicationWiringState]
+  :writes [wiring   : Cell ImplicationWiringState]
+  :scatter  ;; topology-creating — stratum boundary required (CALM)
+  (let [new-domains (set-diff (registry-domains [read registry])
+                               (wired-domains [read wiring]))]
+    ;; Create implication propagators for each new domain (set-diff, not loop)
+    ;; The diff is typically 1 domain per firing (incremental)
+    (foreach-new domain new-domains
+      (create-implication-propagators domain))
+    [write wiring (ImplicationWiringState
+                    [set-union (wired-domains [read wiring]) new-domains])])
 ```
 
 ### 10.7 Capability Consumer (Heyting Error Reporting)
@@ -685,7 +728,7 @@ propagator enhanced-error-reporter
 
 2. **The property inference propagator has a gap.** The `infer-properties` propagator "samples values and tests axioms" — but the NTT model shows it reads `Cell DomainOps` and writes `Cell InferenceState`. The sampling/testing is the fire function body. NTT types the inputs/outputs but the BODY is procedural. This is the M3 finding — the testing IS computation, the result IS information flow. The NTT model confirms this is acceptable: the propagator declaration types the boundary (what it reads, what it writes), not the internal computation.
 
-3. **The `install-implications` propagator has a `foreach` pattern.** It reads the registry and installs propagators for each domain. This is the `:foreach` NTT extension proposed in PPN Track 2 NTT modeling (§17.3). Without `:foreach`, we can't express "for each element in a collection cell, install a sub-network." This remains an open NTT gap.
+3. **The `install-implications` scatter propagator is reactive, not iterative.** It reads the registry + wiring state, computes the set DIFFERENCE (new unprocessed domains), and creates topology for the diff. The `:scatter` annotation marks the stratum boundary. The `foreach-new` in the NTT model operates on the diff set (typically size 1), not the full registry. This resolves the `:foreach` NTT concern from PPN Track 2 §17.3 — the pattern is set-diff-driven scatter, not collection iteration.
 
 4. **The ring action is pure function, not propagator.** `apply-ring-action` and `flip-operation` are `spec`/`defn` declarations, not `propagator` declarations. They're pure functions called within propagator fire bodies. This is correct — they don't read/write cells, they transform values. The NTT model naturally distinguishes: `propagator` = cell-mediated, `spec`/`defn` = pure function.
 
@@ -695,9 +738,9 @@ propagator enhanced-error-reporter
 
 **NTT gaps identified:**
 
-- **`:foreach` extension** — needed for `install-implications` (iterate over registry contents). Proposed in PPN Track 2 NTT §17.3 but not yet formalized.
-- **Lattice-parameterized interfaces** — `DomainInterface` is parameterized by `L` (the domain's value type) but NTT's `interface` form doesn't show how `L` flows through. The `functor` form (§5.3) may handle this, but the relationship between `interface` type parameters and `functor` instantiation needs clarification.
-- **Property cell auto-creation** — when a domain is registered, its property cells must be created on the network. The NTT model doesn't have syntax for "creating cells as part of registration." This is the `Scatter` propagator kind from PTF — topology-creating, requires stratum boundary.
+- **`:scatter` annotation and set-diff-driven topology creation** — the `install-implications` pattern (read collection cell, compute diff against wiring state, create topology for diff) is expressible but requires both `:scatter` (topology creation) and the set-diff idiom. The `:foreach` extension from PPN Track 2 §17.3 is NOT needed — the pattern is diff-driven, not iteration-driven. However, the `foreach-new` in the fire body is still a bounded iteration over the diff set. NTT could formalize this as a `:scatter :on-diff registry wiring` pattern.
+- **Lattice-parameterized interfaces** — `DomainInterface` is parameterized by `L` (the domain's value type) but NTT's `interface` form doesn't show how `L` flows through. The `functor` form (§5.3) may handle this.
+- **Property cell auto-creation** — creating cells during domain registration is scatter (topology creation). The wiring-state cell + scatter propagator pattern handles this at a stratum boundary, but NTT should have syntax for expressing "cell creation as scatter with monotone tracking."
 
 ---
 
