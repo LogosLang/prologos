@@ -170,6 +170,24 @@ changes.
 - TMS-aware infrastructure cells: `restore-meta-state!` cannot be retired until elab-network fields are TMS-managed. This is Track 4 scope (formal propagator edges require TMS-aware cells).
 - Unify type inference + trait resolution under propagator network: constraint solving currently driven by imperative retry loops, not propagator scheduler. This IS Track 4's core work.
 
+**From SRE Track 2G PIR + type lattice investigation (2026-03-30)**:
+
+*Prerequisite*: Type lattice redesign (SRE series) should precede PPN Track 4. Track 4 puts elaboration on the network — it needs the type lattice to be well-structured:
+- Union types as subtype join (`Int ⊔_sub String = Int | String`, not ⊤)
+- Subtype-aware meet (`Int ⊓_sub Nat = Nat`, not ⊥)
+- Heyting under subtype ordering → pseudo-complement error reporting
+- Per-relation algebraic properties (Track 2G extension): `type.subtype.heyting = #t`, `type.equality.heyting = #f`
+
+*Architectural pattern*: Type inference on the propagator network is structurally analogous to LE resolution — facts as cells, typing rules as propagators, resolution as fixpoint, trait selection as clause selection with ATMS. NOT using the LE directly — but the same propagator patterns apply. Draw from LE when designing type inference propagators.
+
+*Integration vision for Track 4*:
+1. AST nodes get type cells (PPN Track 4 = attribute evaluation)
+2. Type signatures are cell writes (facts)
+3. Application installs propagator: `f x` → SRE decomposes `f`'s Pi type, connects argument cell to domain, result cell to codomain
+4. Unification = PUnify cell-tree sharing (bidirectional info flow)
+5. Trait resolution = constraint cells that fire on meta resolution (LE pattern with ATMS)
+6. Type errors = contradiction (⊤) → ATMS dependency trace → Heyting pseudo-complement (after type lattice redesign)
+
 **From Track 2B scaffolding (design considerations for Track 4)**:
 - *Eager Pocket Universe → BSP strata*: The mixfix claim lattice (from Track 2B) executes eagerly. Track 4's elaboration network could host mixfix resolution cells alongside type cells — precedence resolution and type checking as concurrent information flow on the same network. The lattice design from Track 2B is the foundation; Track 4 distributes it across actual BSP strata.
 - *Per-form lattice join as cell merge*: Track 2B's `merge-form` function (§12.6) is the permanent per-form lattice join for merging pipeline outputs. Track 4 inherits this as the cell merge function when parse and elaboration cells coexist on the same network. The join logic (tree parser > preparse for user forms, preparse > tree parser for spec-annotated/generated) encodes pipeline preference as lattice ordering — both pipelines write, the lattice resolves. No "choice function" — the ordering IS the merge.
