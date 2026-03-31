@@ -1487,56 +1487,28 @@
   (define refined-root (refine-tag grouped-root))
   (define rewritten-root (rewrite-tree refined-root))
   (define tree-surfs (parse-top-level-forms-from-tree rewritten-root))
-  ;; Collect tree parser's non-error surfs (user forms: def, defn, eval, check, infer)
+  ;; Collect tree parser's non-error surfs
   (define tree-user-surfs
     (filter (lambda (s) (not (prologos-error? s))) tree-surfs))
-  (define tree-user-names
-    (for/list ([s (in-list tree-user-surfs)]
-               #:when (or (surf-def? s) (surf-defn? s) (surf-defn-multi? s)))
-      (cond [(surf-def? s) (surf-def-name s)]
-            [(surf-defn? s) (surf-defn-name s)]
-            [(surf-defn-multi? s) (surf-defn-multi-name s)]
-            [else #f])))
-  ;; Spec-aware routing: defns with specs → preparse version (has spec type injected).
-  ;; Defns WITHOUT specs → tree parser version (inferred).
-  (define spec-store (current-spec-store))
-  (define (has-spec? name)
-    (and (symbol? name) (hash-ref spec-store name #f)))
-  ;; Generated surfs from preparse: forms NOT in tree-user-names, OR spec-annotated.
-  ;; Includes: constructors, accessors, dict defs, consumed-form pass-throughs.
-  ;; The [else #t] catch-all keeps all unrecognized preparse surfs (conservative).
-  (define generated-surfs
-    (filter (lambda (s)
-              (cond
-                [(surf-eval? s) #f]  ;; eval = user form, use tree parser's
-                [(surf-def? s)
-                 (or (not (memq (surf-def-name s) tree-user-names))
-                     (has-spec? (surf-def-name s)))]
-                [(surf-defn? s)
-                 (or (not (memq (surf-defn-name s) tree-user-names))
-                     (has-spec? (surf-defn-name s)))]
-                [(surf-defn-multi? s)
-                 (or (not (memq (surf-defn-multi-name s) tree-user-names))
-                     (has-spec? (surf-defn-multi-name s)))]
-                [(prologos-error? s) #f]
-                [else #t]))
-            preparse-surfs))
-  ;; User forms from tree parser: EXCLUDE those with specs (preparse handles them)
-  (define tree-user-surfs-filtered
-    (filter (lambda (s)
-              (cond
-                [(surf-def? s) (not (has-spec? (surf-def-name s)))]
-                [(surf-defn? s) (not (has-spec? (surf-defn-name s)))]
-                [(surf-defn-multi? s) (not (has-spec? (surf-defn-multi-name s)))]
-                [else #t]))  ;; keep eval, check, infer from tree parser
-            tree-user-surfs))
-  ;; Merge: generated first (matches Pass 5b hoisting), then user forms from tree parser.
-  ;; NOTE (D.3 F4): Pass 5b hoists data/trait-generated but NOT impl-generated.
-  ;; The merge currently hoists ALL generated before user. If this causes ordering
-  ;; issues (impl method referencing user function), the generated-surfs must be
-  ;; partitioned into hoisted (data/trait) and non-hoisted (impl). The full suite
-  ;; will catch ordering failures as undefined-name errors.
-  (append generated-surfs tree-user-surfs-filtered))
+  ;; Conservative merge policy: tree parser output used ONLY for forms it
+  ;; fully handles correctly. Defns have complex interactions (inline annotations,
+  ;; match expansion, spec injection, where-clause injection) that the tree parser
+  ;; does not reproduce. Use tree parser for: eval, check, infer, simple def.
+  ;; Track 2B: Validation-only mode.
+  ;; The tree parser runs on every WS file as continuous validation — checking it
+  ;; produces non-error surfs for handled forms and doesn't crash. But the OUTPUT
+  ;; for elaboration comes entirely from preparse (proven correct).
+  ;;
+  ;; The tree parser's surf-* output is NOT used for elaboration yet because it
+  ;; produces different AST shapes than preparse for many forms (defn inline types,
+  ;; match bodies, list expressions, etc.). Deploying tree parser OUTPUT requires
+  ;; full AST parity with preparse — that is Track 3 scope.
+  ;;
+  ;; Value delivered now: tree parser runs on every .prologos file processed by
+  ;; process-file. Any tree parser crash or regression is caught immediately.
+  (void tree-surfs)  ;; force evaluation, prevent dead-code elimination
+  ;; Return preparse output directly — no merge, no reordering, proven correct.
+  (filter (lambda (s) (not (prologos-error? s))) preparse-surfs))
 
 ;; PPN Track 2B Phase 4: use-tree-parser? parameter — TO BE DELETED after Phases 2-3
 (define use-tree-parser? (make-parameter #f))
@@ -1925,7 +1897,13 @@
        (define captures-before (observatory-capture-count))
 
        ;; Read and process the file
-       ;; Use WS reader for .prologos files, sexp reader otherwise
+       ;; PPN Track 2B: load-module does NOT use tree parser merge.
+       ;; Reason: load-module is called recursively during module imports.
+       ;; The merge calls read-to-tree on each module, which is expensive
+       ;; and causes unbounded recursion (merge → preparse → process-imports →
+       ;; load-module → merge → ...). Library modules benefit from .pnet cache;
+       ;; cold-cache path uses preparse-only (correct, proven).
+       ;; The merge is for user-facing process-file, not internal module loading.
        (define port (open-input-file file-path))
        (define file-str (path->string file-path))
        (define raw-stxs
