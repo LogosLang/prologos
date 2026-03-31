@@ -1,0 +1,120 @@
+;; ========================================================================
+;;
+;;   PPN Track 2B Acceptance File — Production Deployment of Tree Parser
+;;
+;;   STATUS: Phase 0 (Pre-Implementation Baseline)
+;;   Run via: process-file "racket/prologos/examples/2026-03-30-ppn-track2b.prologos"
+;;
+;;   Routing paths tested:
+;;     A. def without spec — tree parser user forms
+;;     B. eval/infer — tree parser
+;;     C. data + constructors — preparse generated defs
+;;     D. trait + impl — preparse consumed forms + generated defs
+;;     E. spec + defn — spec-aware merge (preparse version used)
+;;     F. def referencing generated constructor — ordering test
+;;     G. Module loading — ns/import exercises load-module path
+;;     H. Generic arithmetic via prelude traits
+;;
+;; ========================================================================
+
+ns ppn-track2b
+
+;; ========================================================================
+;; A. def without spec — tree parser user forms
+;; ========================================================================
+
+def greeting := "hello"
+def doubled := [int* 21 2]
+
+eval greeting
+;; => "hello" : String
+
+eval doubled
+;; => 42 : Int
+
+;; ========================================================================
+;; B. eval/infer — tree parser
+;; ========================================================================
+
+eval [int+ 3 4]
+;; => 7 : Int
+
+infer "world"
+;; => String
+
+;; ========================================================================
+;; C. data + constructors — preparse generated defs
+;; ========================================================================
+
+data Color := Red | Green | Blue
+
+eval Red
+;; => Red : Color
+
+eval Blue
+;; => Blue : Color
+
+;; ========================================================================
+;; D. trait + impl — preparse consumed + generated
+;;    Tests that data/trait/impl registration + generated defs work
+;; ========================================================================
+
+trait Greet {A}
+  greet-msg : A -> String
+
+impl Greet Color
+  defn greet-msg
+    | Red   -> "red alert"
+    | Green -> "green light"
+    | Blue  -> "feeling blue"
+
+;; Verify the impl-generated dict function exists
+infer Color--Greet--dict
+;; Should produce a type (not an error)
+
+;; ========================================================================
+;; E. spec + defn — spec-aware merge routing
+;;    (preparse version used because spec exists)
+;; ========================================================================
+
+spec add-ten Int -> Int
+defn add-ten [x] [int+ x 10]
+
+eval [add-ten 32]
+;; => 42 : Int
+
+;; ========================================================================
+;; F. User function defined BEFORE use by later form — ordering test
+;;    Tests that the merge preserves source ordering for user defs.
+;;    If user defs are reordered, `use-helper` won't find `helper`.
+;; ========================================================================
+
+spec helper Int -> Int
+defn helper [x] [int+ x 1]
+
+spec use-helper Int -> Int
+defn use-helper [x] [helper [helper x]]
+
+eval [use-helper 40]
+;; => 42 : Int
+
+;; ========================================================================
+;; G. Module loading (ns/import already exercised by prelude)
+;;    The `ns ppn-track2b` at the top loads the full prelude via
+;;    load-module. If load-module's merge is broken, prelude loading
+;;    fails and nothing in this file works.
+;; ========================================================================
+
+;; Prelude-dependent: generic arithmetic
+eval [+ 3 4]
+;; => 7 : Int
+
+;; ========================================================================
+;; H. Generic arithmetic via prelude traits
+;; ========================================================================
+
+eval [* 6 7]
+;; => 42 : Int
+
+eval [- 50 8]
+;; => 42 : Int
