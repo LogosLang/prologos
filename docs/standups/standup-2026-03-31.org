@@ -1,0 +1,62 @@
+#+TITLE: Standup — 2026-03-31
+#+DATE: 2026-03-31
+
+* Yesterday (since 2026-03-30 standup)
+
+** PPN Track 2B: Production Deployment COMPLETE
+- Phases A+B: pipe/compose rewrite rules in surface-rewrite.rkt. ~>>~ disambiguator merge for tree pipeline. Tag rules for raw token lexemes.
+- Phase E partial: defn Pi chain fix (inline type → full Pi chain for parse-defn-tree)
+- Phase F: *MERGE DEPLOYED* — source-line-keyed identity matching. Per-form lattice join (~merge-form~). 3 failed queue-based policies before correct identity-based approach.
+- Phase G: ~use-tree-parser?~ DELETED. process-string-ws-inner collapsed to merge-only.
+- Phase C prereq: G(0) mixfix context fix — ~<~ ~>~ preserved as operators inside ~.{...}~
+- Phase C: *Mixfix Pocket Universe IMPLEMENTED* — DAG-stratified claim lattice. Position-aware merge (commutative/associative/idempotent). Dataflow fold from tightest to loosest.
+- Phase C.1+C.2: comparison chaining pre-pass + unary minus detection
+- §12.6: merge architecture analysis — lattice join (permanent), identity matching + scheduling (scaffolding)
+- PIR written (full 16-question methodology, 13-PIR longitudinal)
+- 382/382 GREEN, 7454 tests
+
+** Process Improvements Codified
+- *Validated ≠ Deployed* + *"Pragmatic" Ban* (~c4224b88~): DEVELOPMENT_LESSONS.org
+- *Propagator Design Mindspace* (~e8d10ccc~): DESIGN_METHODOLOGY.org Stage 3. Four questions (information, lattice, identity, emergence). Red flags table. Pocket Universe as design tool. Universal substrate perspective.
+- *Implementation Protocol* (~b46c24ff~): DESIGN_METHODOLOGY.org Stage 4. Per-phase: mini-audit + principles challenge + diagnostic on snag + phase completion. Post: A/B + cleanup + PIR.
+- *NTT Model REQUIRED* (~53cb5029~): Mandatory design gate for propagator tracks. 2/2 instances found impurities.
+- *7 Topology Design Patterns* (~4006244a~): PTF Master. Set-latch/functorial map, Pocket Universe, threshold/gather, queue/work-set, structural merge/PUnify, claim lattice, Kan extensions.
+
+** Research
+- *S-Expression IR to Propagator Compiler* (~4f019ddd~): 3 sexp roles, self-hosting trajectory. LANGUAGE_VISION.org updated. SH Series placeholder in Master Roadmap.
+- Discussion: array programming on propagators (fmap as single propagator, polynomial functors, PAR ~future~ pattern applicable "in the small")
+- Discussion: Propagator Design Mindspace as paradigm shift from algorithmic thinking. Kowalski's "Algorithm = Logic + Control" → "Algorithm = Logic + Structure" (control replaced by lattice structure)
+
+** SRE Track 2G: Algebraic Domain Awareness COMPLETE
+- Stage 2 audit (~6c32d723~): 2 domains, 5 relations, 28 ctors, no meet, no domain properties
+- Design cycle: D.1 → D.2 (3 revisions) → D.3 (11 findings) → NTT model (scatter impurity revealed) → Phase 5 finding (type lattice not distributive)
+- Implementation (10 phases, all using Implementation Protocol):
+  - Phase 1: property-cell-ids + declared-properties fields, 4-valued lattice, has-property? API
+  - Phase 1.5: domain registry (register-domain!, lookup-domain)
+  - Phase 2: type-lattice-meet (ring action: contra→join, co→meet, inv→eq-meet)
+  - Phase 3: session-lattice-meet
+  - Phase 4: property declarations (type: 6 properties, session: 4)
+  - Phase 5: property inference with counterexample witnesses. *FINDING: type lattice NOT distributive* (flat under equality merge). Declaration corrected.
+  - Phase 6: implication rules (heyting, boolean derivation chain)
+  - Phase 7a: diagnostic property reporting with evidence
+  - Phase 7b: property-gated behavior (with-domain-property, select-by-property)
+  - Phase 8: PIR (full 16-question, rewritten after initial omissions), A/B benchmark (zero regression), test-sre-algebraic.rkt (32 tests)
+- 383/383 GREEN, 7491 tests
+
+** Cross-Series Architecture Work
+- *SRE Track 2H* added to SRE Master: type lattice redesign (union join, subtype-aware meet, per-relation Pocket Universe properties). Prerequisite for PPN Track 4.
+- *PPN Track 4 preliminary notes*: type inference ≅ LE resolution (same propagator patterns). Integration vision: AST type cells, SRE decomposition, PUnify sharing, ATMS resolution, Heyting errors.
+- *PM Master*: module-load-time infrastructure on network concern captured for Track 8 audit.
+- *Master Roadmap* (~4a804faf~): PPN 3 → Grammar Form research → SRE 2H → PPN 4 → PPN 5-9 → SH. PPN has highest leverage — unblocks language/syntax design.
+
+* Today
+
+** PPN Track 3
+- Next priority track: parser as propagators (HR productions)
+- SRE 2G provides algebraic domain awareness for parse lattices
+
+* Blockers
+
+- test-structural-decomp: meta-solving via imperative state under BSP — deferred to SRE/PPN elaborator-on-network
+- WS-mode solver syntax gaps (~=~ as unification, ~is~ bridging) — deferred to post-PPN
+- Type lattice not distributive under current ops — SRE Track 2H (before PPN 4)
