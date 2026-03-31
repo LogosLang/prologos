@@ -485,7 +485,223 @@ This is speculative — the actual NTT syntax depends on NTT implementation trac
 
 ---
 
-## §10 Propagator Design Mindspace Verification
+## §10 NTT Model
+
+Expressing the Track 2G architecture in NTT speculative syntax. This exercises the NTT syntax and validates that every component is "on network."
+
+### 10.1 Property Lattice
+
+```prologos
+;; The 4-valued property lattice (D.3 F1)
+type PropertyValue := prop-unknown | prop-confirmed | prop-refuted | prop-contradicted
+  :lattice :pure
+  ;; ⊥ = prop-unknown, ⊤ = prop-contradicted
+  ;; prop-confirmed ⊔ prop-refuted = prop-contradicted
+
+impl Lattice PropertyValue
+  join prop-unknown x        -> x
+  join x prop-unknown        -> x
+  join prop-confirmed prop-confirmed -> prop-confirmed
+  join prop-refuted prop-refuted     -> prop-refuted
+  join prop-confirmed prop-refuted   -> prop-contradicted
+  join prop-refuted prop-confirmed   -> prop-contradicted
+  join prop-contradicted _           -> prop-contradicted
+  join _ prop-contradicted           -> prop-contradicted
+  bot -> prop-unknown
+```
+
+### 10.2 Domain Registry
+
+```prologos
+;; Domain registry as a cell on the network
+;; Value: set-accumulation lattice (domains only added, monotone)
+type DomainRegistry := DomainRegistry {domains : Map Symbol SreDomain}
+  :lattice :pure
+
+impl Lattice DomainRegistry
+  join [DomainRegistry a] [DomainRegistry b] -> DomainRegistry [map-union a b]
+  bot -> DomainRegistry {}
+
+;; The registry lives on the elaboration network
+network elab-net : ElaborationInterface
+  embed domain-registry : Cell DomainRegistry
+```
+
+### 10.3 Domain with Property Cells
+
+```prologos
+;; An SRE domain declares its operations + has property cells on-network
+;; Each property is a Cell PropertyValue
+interface DomainInterface {name : Symbol}
+  :inputs  [join-fn  : Cell (Fn L L -> L)
+            meet-fn  : Cell (Fn L L -> L)
+            bot-val  : Cell L
+            top-val  : Cell L]
+  :outputs [;; Property cells — one per algebraic property
+            commutative-join     : Cell PropertyValue
+            associative-join     : Cell PropertyValue
+            idempotent-join      : Cell PropertyValue
+            has-meet             : Cell PropertyValue
+            commutative-meet     : Cell PropertyValue
+            associative-meet     : Cell PropertyValue
+            distributive         : Cell PropertyValue
+            has-complement       : Cell PropertyValue
+            has-pseudo-complement : Cell PropertyValue
+            residuated           : Cell PropertyValue
+            ;; Derived (by implication propagators)
+            heyting              : Cell PropertyValue
+            boolean              : Cell PropertyValue]
+```
+
+### 10.4 Ring Action (Variance → Sub-Operation)
+
+```prologos
+;; The four ring elements (Krull-Schmidt irreducibles)
+type RingElement := ring-identity | ring-monotone | ring-antitone | ring-trivial
+
+;; Variance → ring element (one lookup)
+spec variance-to-ring Variance -> RingElement
+defn variance-to-ring
+  | invariant    -> ring-identity
+  | covariant    -> ring-monotone
+  | contravariant -> ring-antitone
+  | phantom      -> ring-trivial
+
+;; Ring action: uniform across all operations (D.2 P2)
+spec apply-ring-action RingElement Operation -> Operation
+defn apply-ring-action
+  | ring-identity  op -> equality-for-context op
+  | ring-monotone  op -> op
+  | ring-antitone  op -> flip-operation op
+  | ring-trivial   _  -> phantom-op
+
+;; Context-dependent equality (D.3 F6)
+spec equality-for-context Operation -> Operation
+defn equality-for-context
+  | join-op -> equality-join     ;; mismatch → ⊤
+  | meet-op -> equality-meet     ;; mismatch → ⊥
+  | other   -> equality-op       ;; standard
+
+;; Flip: antitone action (D.3 F9 — fail-closed)
+spec flip-operation Operation -> Operation
+defn flip-operation
+  | join-op           -> meet-op
+  | meet-op           -> join-op
+  | subtype-op        -> subtype-reverse-op
+  | subtype-reverse-op -> subtype-op
+  ;; no catch-all — fail-closed
+```
+
+### 10.5 Property Inference as Pocket Universe
+
+```prologos
+;; Per-axiom evidence (D.3 F2)
+type AxiomStatus := axiom-untested
+                  | axiom-confirmed {count : Nat}
+                  | axiom-refuted {witness : (L, L, L)}
+  :lattice :pure
+
+impl Lattice AxiomStatus
+  join axiom-untested x -> x
+  join x axiom-untested -> x
+  join [axiom-confirmed n] [axiom-confirmed m] -> axiom-confirmed [max n m]
+  join [axiom-confirmed _] [axiom-refuted w]   -> axiom-refuted w    ;; counterexample dominates
+  join [axiom-refuted w] _                     -> axiom-refuted w
+  bot -> axiom-untested
+
+;; Inference state: Pocket Universe cell (one per domain)
+type InferenceState := InferenceState
+  {tested-axioms : Map Symbol AxiomStatus
+   sample-count  : Nat}
+  :lattice :pure
+
+impl Lattice InferenceState
+  join [InferenceState a n] [InferenceState b m] ->
+    InferenceState [map-union-with axiom-join a b] [max n m]
+  bot -> InferenceState {} 0
+
+;; Inference propagator: reads domain operations, writes to inference state cell
+propagator infer-properties
+  :reads  [domain-ops : Cell DomainOps]
+  :writes [inference  : Cell InferenceState]
+  ;; Fire: sample values, test axioms, advance inference state
+  ;; Monotone: evidence only accumulates
+```
+
+### 10.6 Implication Propagators
+
+```prologos
+;; Implication: reads source property cells, writes derived property cell
+;; Auto-installed for each registered domain via domain registry watcher
+
+propagator imply-heyting
+  :reads  [dist : Cell PropertyValue, pseudo : Cell PropertyValue]
+  :writes [heyting : Cell PropertyValue]
+  (match [read dist] [read pseudo]
+    | prop-confirmed prop-confirmed -> [write heyting prop-confirmed]
+    | prop-contradicted _           -> [write heyting prop-refuted]    ;; ⊤ → #f for capability
+    | _ prop-contradicted           -> [write heyting prop-refuted]
+    | _ _                           -> void)    ;; wait for both inputs
+
+propagator imply-boolean
+  :reads  [hey : Cell PropertyValue, comp : Cell PropertyValue]
+  :writes [bool : Cell PropertyValue]
+  (match [read hey] [read comp]
+    | prop-confirmed prop-confirmed -> [write bool prop-confirmed]
+    | _ _                           -> void)
+
+;; Auto-installer: reads domain registry, installs implications for new domains
+propagator install-implications
+  :reads  [registry : Cell DomainRegistry]
+  :writes []   ;; side effect: installs propagators on domain property cells
+  ;; foreach domain in registry that doesn't have implications wired:
+  ;;   install imply-heyting, imply-boolean, etc. on its property cells
+```
+
+### 10.7 Capability Consumer (Heyting Error Reporting)
+
+```prologos
+;; Error reporter reads domain property, computes pseudo-complement if available
+propagator enhanced-error-reporter
+  :reads  [contradiction : Cell TypeLattice
+           has-pseudo    : Cell PropertyValue
+           meet-fn       : Cell (Fn TypeLattice TypeLattice -> TypeLattice)]
+  :writes [error-msg : Cell ErrorDiagnostic]
+  (match [read has-pseudo]
+    | prop-confirmed ->
+        ;; Compute pseudo-complement: maximal consistent refinement
+        (let [pc (pseudo-complement [read contradiction] [read meet-fn])]
+          [write error-msg (enhanced-diagnostic [read contradiction] pc)])
+    | _ ->
+        ;; Fallback: standard error message
+        [write error-msg (standard-diagnostic [read contradiction])])
+```
+
+### 10.8 NTT Observations
+
+**What the model reveals:**
+
+1. **Everything IS on-network.** Property values, inference state, domain registry, ring action results, error diagnostics — all expressed as cell reads/writes. No off-network computation.
+
+2. **The property inference propagator has a gap.** The `infer-properties` propagator "samples values and tests axioms" — but the NTT model shows it reads `Cell DomainOps` and writes `Cell InferenceState`. The sampling/testing is the fire function body. NTT types the inputs/outputs but the BODY is procedural. This is the M3 finding — the testing IS computation, the result IS information flow. The NTT model confirms this is acceptable: the propagator declaration types the boundary (what it reads, what it writes), not the internal computation.
+
+3. **The `install-implications` propagator has a `foreach` pattern.** It reads the registry and installs propagators for each domain. This is the `:foreach` NTT extension proposed in PPN Track 2 NTT modeling (§17.3). Without `:foreach`, we can't express "for each element in a collection cell, install a sub-network." This remains an open NTT gap.
+
+4. **The ring action is pure function, not propagator.** `apply-ring-action` and `flip-operation` are `spec`/`defn` declarations, not `propagator` declarations. They're pure functions called within propagator fire bodies. This is correct — they don't read/write cells, they transform values. The NTT model naturally distinguishes: `propagator` = cell-mediated, `spec`/`defn` = pure function.
+
+5. **PropertyValue lattice is well-formed.** The NTT `impl Lattice PropertyValue` declaration shows all join cases explicitly. Commutative: symmetric cases are listed. Idempotent: `confirmed ⊔ confirmed = confirmed`. ⊥ is `prop-unknown`. ⊤ is `prop-contradicted`. The lattice is 4-valued with clear semantics.
+
+6. **AxiomStatus lattice preserves witness.** The `axiom-refuted {witness}` carries the counterexample triple. The join `confirmed(n) ⊔ refuted(w) = refuted(w)` — counterexample dominates, witness preserved. This is well-formed as a lattice join (one-directional dominance, monotone).
+
+**NTT gaps identified:**
+
+- **`:foreach` extension** — needed for `install-implications` (iterate over registry contents). Proposed in PPN Track 2 NTT §17.3 but not yet formalized.
+- **Lattice-parameterized interfaces** — `DomainInterface` is parameterized by `L` (the domain's value type) but NTT's `interface` form doesn't show how `L` flows through. The `functor` form (§5.3) may handle this, but the relationship between `interface` type parameters and `functor` instantiation needs clarification.
+- **Property cell auto-creation** — when a domain is registered, its property cells must be created on the network. The NTT model doesn't have syntax for "creating cells as part of registration." This is the `Scatter` propagator kind from PTF — topology-creating, requires stratum boundary.
+
+---
+
+## §11 Propagator Design Mindspace Verification
 
 ### Property Cells
 - [x] Information identified: algebraic axioms as boolean facts
