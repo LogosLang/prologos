@@ -12,13 +12,14 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Acceptance file | ⬜ | `examples/2026-03-30-ppn-track2b.prologos` |
-| 1 | Extract `merge-preparse-and-tree-parser` | ⬜ | Refactor driver.rkt:1485-1560 into shared function |
-| 2 | Wire merge into `process-file-inner` | ⬜ | driver.rkt:1608 |
-| 3 | Wire merge into `load-module` | ⬜ | driver.rkt:1924-1934 |
-| 4 | Delete `use-tree-parser?`, collapse to merge-only | ⬜ | Delete parameter + old path |
-| 5 | Parameterize `preparse-expand-all` (#:expand-user-forms? #f for WS) | ⬜ | D.2-revised: parameterize, not duplicate. Sexp expanders unreachable from WS path but retained for sexp path. |
-| 6 | Full suite verification + docs | ⬜ | 382/382 GREEN, acceptance file, parameter gone, WS path skips user-form expansion |
+| 0 | Acceptance file | ⬜ | `examples/2026-03-30-ppn-track2b.prologos` — must include impl referencing user function |
+| 0.5 | Tree parser error stubs for all preparse-consumed forms | ⬜ | D.3 F1: prevent `else` fallthrough producing garbage surfs |
+| 1 | Extract `merge-preparse-and-tree-parser` | ⬜ | Refactor driver.rkt:1485-1560; fix impl-generated ordering (D.3 F4) |
+| 2 | Wire merge into `process-file-inner` | ⬜ | driver.rkt:1608. WS path only — .rkt path unchanged (D.3 F3) |
+| 3 | Wire merge into `load-module` | ⬜ | driver.rkt:1924-1934. WS path only. |
+| 4 | Delete `use-tree-parser?`, collapse to merge-only | ⬜ | Delete parameter + old path. Independently revertible (D.3 F9). |
+| 5 | Parameterize `preparse-expand-all` (#:expand-user-forms? #f for WS) | ⬜ | D.2-revised + D.3 F2/F7: 4-way form classification, guard only category (c). |
+| 6 | Full suite verification + docs | ⬜ | 382/382 GREEN, acceptance file, A/B with cold-cache module loading (D.3 F5). |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
 
@@ -118,6 +119,21 @@ The merge reads `current-spec-store` (line 1530 in existing code) to decide spec
 
 ## §3 Design
 
+### 3.0 Tree Parser Error Stubs (D.3 Finding 1)
+
+The tree parser's `else` fallthrough (tree-parser.rkt:128-132) calls `parse-expr-tree` on unrecognized forms. For preparse-consumed forms like `schema`, `selection`, `capability`, `strategy`, `spawn`, `spawn-with`, `precedence-group`, `specialize`, `bundle`, `property`, `functor`, `defmacro`, `deftype` — this produces garbage `surf-app` or `surf-eval` nodes (not `prologos-error?`). The merge's user-form filter would keep these as "user forms," duplicating or corrupting the output.
+
+**Fix**: Add explicit `prologos-error` stubs for ALL forms that preparse handles but the tree parser does not dispatch on. These join the existing stubs for `spec`, `data`, `trait`, `impl`, `ns`, `imports`, `exports`, `session`, `defproc`, `defr`, `solver`.
+
+Forms needing stubs (~15 lines added to tree-parser.rkt):
+- `schema`, `selection`, `capability`, `strategy`
+- `spawn`, `spawn-with`, `precedence-group`, `specialize`
+- `bundle`, `property`, `functor`
+- `defmacro`, `deftype`, `proc`
+- `foreign` (currently handled by preparse consume)
+
+After this: every form that falls to the tree parser either produces a valid `surf-*` (tree parser handles it) or a `prologos-error` (merge filters it). No garbage surfs from the `else` fallthrough for known form tags.
+
 ### 3.1 Extract `merge-preparse-and-tree-parser`
 
 Refactor lines 1485-1560 of `process-string-ws-inner` into a standalone function:
@@ -126,7 +142,7 @@ Refactor lines 1485-1560 of `process-string-ws-inner` into a standalone function
 ;; Merge preparse output with tree parser output for WS-mode processing.
 ;; preparse-surfs: (map parse-datum expanded-stxs) — all forms from old pipeline
 ;; source-str: the original source string — passed to read-to-tree for tree pipeline
-;; Returns: merged surf list (generated defs first, then user forms from tree parser)
+;; Returns: merged surf list preserving Pass 5b ordering semantics
 (define (merge-preparse-and-tree-parser source-str preparse-surfs)
   (register-default-token-patterns!)
   ;; Tree pipeline: read-to-tree → G(0) → T(0) → rewrite → parse
@@ -136,10 +152,26 @@ Refactor lines 1485-1560 of `process-string-ws-inner` into a standalone function
   (define rewritten-root (rewrite-tree refined-root))
   (define tree-surfs (parse-top-level-forms-from-tree rewritten-root))
   ;; ... existing merge logic (spec-aware partition + filter + combine) ...
+  ;; D.3 F4 FIX: preserve Pass 5b ordering — see below
   merged-surfs)
 ```
 
 **Principle**: Decomplection — merge logic separated from pipeline-specific post-processing.
+
+**D.3 Finding 4 — Impl-Generated Def Ordering**: The existing merge (driver.rkt:1560) does `(append generated-surfs tree-user-surfs-filtered)` — ALL generated surfs first, then ALL user surfs. But preparse's Pass 5b (macros.rkt:2462-2468) hoists only data/trait-generated defs before user forms. Impl-generated defs are intentionally NOT hoisted — they can reference user functions from the same module (macros.rkt:2466-2467 comment).
+
+The merge must match this ordering. Fix: partition `generated-surfs` into `hoisted-generated` (data/trait-generated: names in `generated-decl-names`) and `impl-generated` (everything else). Output: `hoisted-generated` first, then interleave `impl-generated` and `tree-user-surfs-filtered` in source order.
+
+Concretely: instead of `(append generated-surfs tree-user-surfs-filtered)`, use:
+```racket
+;; Separate hoisted (data/trait) from non-hoisted (impl) generated surfs
+(define hoisted (filter hoisted-generated? generated-surfs))
+(define non-hoisted (filter (negate hoisted-generated?) generated-surfs))
+;; Hoisted first, then non-hoisted + user forms interleaved in source order
+(append hoisted (merge-by-source-position non-hoisted tree-user-surfs-filtered))
+```
+
+The `hoisted-generated?` predicate checks if a surf's name was marked by `mark-generated-names!` in Pass 2 — data/trait branches call it, impl branches do not. The merge function receives this information from preparse (via the `generated-decl-names` hash or a separate output from `preparse-expand-all`).
 
 `register-default-token-patterns!` is called inside the function (idempotent). No caller dependency on external initialization.
 
@@ -154,22 +186,30 @@ Current (driver.rkt:1608-1618):
 (define surfs (map parse-datum expanded-stxs))
 ```
 
-Changed to:
+Changed to (D.3 F3 revision — only WS path changes, .rkt path unchanged):
 ```racket
-(define str (file->string path))
-(define raw-stxs (if ws? (read-all-syntax-ws (open-input-string str) ...)
-                         (read-all-syntax (open-input-string str) ...)))
-(define expanded-stxs (preparse-expand-all raw-stxs))
-(define preparse-surfs (map parse-datum expanded-stxs))
+(define ws? (regexp-match? #rx"\\.prologos$" path-str))
 (define surfs
-  (if ws?
-      (merge-preparse-and-tree-parser str preparse-surfs)
-      preparse-surfs))
+  (cond
+    [ws?
+     ;; WS path: read file to string for both old pipeline + tree parser merge
+     (define str (file->string path))
+     (define raw-stxs (read-all-syntax-ws (open-input-string str) path-str))
+     (define expanded-stxs (preparse-expand-all raw-stxs))
+     (define preparse-surfs (map parse-datum expanded-stxs))
+     (merge-preparse-and-tree-parser str preparse-surfs)]
+    [else
+     ;; .rkt sexp path: UNCHANGED — keep original port-based reading
+     (define port (open-input-file path))
+     (define raw-stxs (read-all-syntax port path-str))
+     (close-input-port port)
+     (define expanded-stxs (preparse-expand-all raw-stxs))
+     (map parse-datum expanded-stxs)]))
 ```
 
 The rest of `process-file-inner` (verbose mode loop, persistent registry init, heartbeat snapshots) is untouched — it operates on `surfs` regardless of source.
 
-**Principle**: Correct-by-Construction — same validated merge logic, different input source.
+**Principle**: Correct-by-Construction — same validated merge logic, different input source. Minimum blast radius — sexp path unchanged (D.3 F3).
 
 ### 3.3 Wire into `load-module` (Gap 2)
 
@@ -281,19 +321,32 @@ Delete `use-tree-parser?`, old path, export. Simplify `process-string-ws-inner`.
 
 **Verification**: Full suite `racket tools/run-affected-tests.rkt --all` — 382/382 GREEN. `grep -rn "use-tree-parser" --include="*.rkt"` returns 0 results. Acceptance file passes.
 
-### Phase 5: Parameterize `preparse-expand-all` (D.2-revised)
+### Phase 5: Parameterize `preparse-expand-all` (D.2-revised, D.3 F2/F7-revised)
 
 Add `#:expand-user-forms?` parameter to `preparse-expand-all` in macros.rkt. Default `#t` (preserves sexp path behavior). WS merge path passes `#f`.
 
+**D.3 Finding 2/7 — 4-Way Form Classification**: Every form in Pass 2 must be classified. The `#:expand-user-forms?` guard applies ONLY to category (c):
+
+| Category | Forms | Guard? | Rationale |
+|----------|-------|--------|-----------|
+| **(a) Consumed** — side effects only, no output | ns, imports, exports, foreign | NO | Already consumed; no expansion needed |
+| **(b) Generated** — output always from preparse, expansion required | data, trait, impl, bundle, specialize, property, functor, schema, selection | NO | Generated defs are sexp datums that MUST be expanded (preparse-expand-form fires on generated output). Tree parser returns errors for these. |
+| **(c) User forms** — handled by tree parser on WS path | def, defn, def-, defn-, eval, check, infer, bare expressions (else catch-all) | **YES** | When `expand? = #f`: skip `preparse-expand-form`. Output raw datum (merge uses tree parser output instead). |
+| **(d) Preparse-only pass-through** — forms the tree parser cannot handle, require specialized expansion/desugaring | defr, solver, session, defproc, proc, strategy, capability, spawn, spawn-with, precedence-group | NO | These call `preparse-expand-form` or specialized desugaring functions. Tree parser returns errors. Expansion MUST proceed on WS path. |
+
+**Implementation**: The guard wraps exactly these `preparse-expand-form` call sites in Pass 2:
+- Public `defn`/`def` branch (macros.rkt ~line 2832): `(when expand? (preparse-expand-form ...))`
+- Private `defn-`/`def-` branch (~line 2591): `(when expand? (preparse-expand-form ...))`
+- Catch-all `else` branch (~line 2845): `(when expand? (preparse-expand-form ...))`
+
+All other branches — category (a), (b), and (d) — are NOT guarded. Their `preparse-expand-form` calls fire regardless of `expand?`.
+
 5a. Add `#:expand-user-forms? [expand? #t]` parameter to `preparse-expand-all`.
-5b. In Pass 2: wrap user-form expansion (`preparse-expand-form` calls on def/defn/eval/check/infer) with `(when expand? ...)`. When `#f`, output raw datum without expansion.
-5c. Generated defs from data/trait/impl STILL pass through `preparse-expand-form` (unchanged — the `when expand?` guard only affects user forms, not generated def expansion at lines 2527/2533).
-5d. Switch WS merge callers (`merge-preparse-and-tree-parser`) to call `(preparse-expand-all stxs #:expand-user-forms? #f)`.
-5e. Verify: full suite GREEN. Sexp path (`process-string`) calls `(preparse-expand-all stxs)` with default `#t` — unchanged behavior. WS path skips user-form expansion — merge uses tree parser output for user forms anyway.
+5b. Add `when expand?` guard at the 3 call sites identified above.
+5c. Switch WS merge callers to pass `#:expand-user-forms? #f`.
+5d. Verify: full suite GREEN. Targeted test with data+trait+impl+defr+def+eval verifies categories (b) and (d) still expand while (c) skips.
 
-**Verification**: `grep -rn "expand-user-forms" macros.rkt driver.rkt` shows parameter definition + WS callers passing `#f`. Full suite GREEN.
-
-**Risk**: The `when expand?` guard must be placed precisely — only around user-form expansion, NOT around generated-def expansion, spec injection, or registration. Misplacing it would break the sexp path (if expansion is accidentally skipped for generated defs on the sexp path) or leave wasted work on the WS path (if expansion isn't actually skipped for user forms). A targeted test: run a WS file with `data` + `trait` + `impl` + `def` + `eval` and verify generated defs are expanded but user forms are raw datums on the preparse side of the merge.
+**Risk**: Reduced from D.2 assessment. The guard now has 3 precisely-identified call sites (not "somewhere in 373 lines"). Each is a `preparse-expand-form` call on a user-written form. Category (d) forms are explicitly excluded.
 
 ### Phase 6: Suite Verification + Documentation
 
@@ -359,6 +412,23 @@ None. No user-facing syntax is added or modified. Only internal pipeline routing
 ## §10 NTT Speculative Syntax
 
 Not applicable. This track deploys existing infrastructure — no new propagators, lattices, or rewrite rules are introduced.
+
+---
+
+## D.3 External Critique Findings
+
+| # | Severity | Finding | Response | Design Change |
+|---|----------|---------|----------|---------------|
+| F1 | HIGH | Tree parser `else` fallthrough produces garbage surfs for unhandled forms (schema, selection, capability, etc.) | **ACCEPT** — `parse-expr-tree` on keyword-headed children produces `surf-app`, not `prologos-error?`. Merge would keep these. | Phase 0.5 added: explicit error stubs for all preparse-consumed forms in tree-parser.rkt |
+| F2 | HIGH | Phase 5 scope incomplete: defr, solver, session, defproc, proc, strategy etc. must NOT be guarded | **ACCEPT** — these call `preparse-expand-form` or specialized desugaring. Guard must only wrap category (c) user forms. | 4-way form classification table added to Phase 5. Guard sites precisely enumerated (3 call sites). |
+| F3 | LOW | Pseudocode changes both WS and .rkt paths; design text says only WS | **PARTIALLY ACCEPT** — .rkt path should keep original port-based reading. | §3.2 pseudocode revised: `cond` dispatch, .rkt path unchanged. |
+| F4 | HIGH | Merge hoists impl-generated defs before user forms; Pass 5b intentionally does NOT (impl methods can reference user functions) | **ACCEPT, upgraded to HIGH** — could cause undefined-name errors in library files (arithmetic.prologos has 40 impls). | Merge ordering revised: partition generated into hoisted (data/trait) vs non-hoisted (impl). Hoisted first, then impl+user interleaved by source position. |
+| F5 | LOW | 16% overhead irrelevant for warm .pnet cache | **ACCEPT** — informational. | Phase 6 A/B should include cold-cache module loading scenario. |
+| F6 | LOW | `register-default-token-patterns!` ordering vs preparse | **REJECT** — separate registries (token-pattern-registry in parse-reader.rkt vs current-preparse-registry parameter in macros.rkt). No interaction. | No change. |
+| F7 | MEDIUM | Phase 5 guard placement across 25+ branches | **ACCEPT** — subsumed by F2. | Covered by 4-way classification + 3 precise call sites. |
+| F8 | LOW | specialize-generated names could collide with tree-user-names | **PARTIALLY ACCEPT** — theoretically possible, practically impossible ($-suffixed names). | Documented as edge case. |
+| F9 | LOW | No rollback plan — Phase 4 deletes parameter | **ACCEPT** — phases are independently revertible via `git revert`. | Note added to Phase 4 in progress tracker. |
+| F10 | INFO | Merge braids classification, routing, and tree-parser execution. `[else #t]` catch-all is correctness by convention, not construction. | **ACCEPT for Track 3+** — when tree parser handles more forms, catch-all becomes less safe. | Flagged for Track 3 design: merge classification should become exhaustive. |
 
 ---
 
