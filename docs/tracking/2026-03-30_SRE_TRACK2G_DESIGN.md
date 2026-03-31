@@ -286,12 +286,22 @@ imply-heyting:
   when either = prop-contradicted → write prop-refuted  (⊤ → #f for capability)
 ```
 
-**Stratification** (Layered Recovery):
-- **S0**: Property cells filled (declaration + inference)
-- **S1**: Scatter propagator fires — creates implication propagators for new domains
-- **S2**: Implication propagators fire — derived properties filled
+**Stratification as Pocket Universe** (Layered Recovery within embedded lattice):
 
-This is reactive: PPN Track 3 registers a new parse domain → registry cell advances → scatter propagator fires → implication propagators auto-installed → derived properties computed. No manual wiring.
+The S0→S1→S2 stratification is INTERNAL to the domain's property resolution — a Pocket Universe, not global network strata. Each domain's property resolution lifecycle is one cell value progressing monotonically:
+
+```
+raw (registered, property cells at ⊥)
+  → S0-complete (atomic properties filled by declaration + inference)
+  → S1-complete (implication propagators wired as part of cell structure)
+  → S2-complete (derived properties filled, capabilities available)
+```
+
+The Pocket Universe cell embeds the implication propagator topology as part of its VALUE — not as separate entities on the global network. The "scatter" is internal to the cell's stage advancement, not a global stratum boundary. This keeps domain property resolution self-contained: one cell per domain, monotone progression, no interaction with elaboration strata.
+
+Other propagators (capability consumers) read the domain's property resolution cell. If the cell hasn't reached S2-complete, the consumer sees ⊥ for derived properties and residuates (waits). When the cell advances to S2-complete, the consumer fires.
+
+This is reactive: PPN Track 3 registers a new parse domain → registry cell advances → domain's property resolution Pocket Universe initializes → stages advance → derived properties emerge → consumers fire.
 
 **No multiple inheritance because there's no inheritance.** A domain that is both distributive and residuated simply has both property cells at #t. The heyting implication fires because distributive = #t. The residuated implications fire independently. No conflict resolution needed.
 
