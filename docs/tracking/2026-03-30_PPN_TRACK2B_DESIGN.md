@@ -17,8 +17,8 @@
 | 2 | Wire merge into `process-file-inner` | ⬜ | driver.rkt:1608 |
 | 3 | Wire merge into `load-module` | ⬜ | driver.rkt:1924-1934 |
 | 4 | Delete `use-tree-parser?`, collapse to merge-only | ⬜ | Delete parameter + old path |
-| 5 | Decouple registration from expansion in `preparse-expand-all` | ⬜ | Create `preparse-register-and-generate`, delete sexp expanders |
-| 6 | Full suite verification + docs | ⬜ | 382/382 GREEN, acceptance file, grep confirms parameter gone + expanders deleted |
+| 5 | Parameterize `preparse-expand-all` (#:expand-user-forms? #f for WS) | ⬜ | D.2-revised: parameterize, not duplicate. Sexp expanders unreachable from WS path but retained for sexp path. |
+| 6 | Full suite verification + docs | ⬜ | 382/382 GREEN, acceptance file, parameter gone, WS path skips user-form expansion |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
 
@@ -34,8 +34,8 @@
 3. `load-module` full-elaboration path uses the merge for `.prologos` files
 4. `process-string-ws-inner` simplified to merge-only (old path deleted)
 5. `use-tree-parser?` parameter deleted from codebase
-6. `preparse-expand-all` decoupled: registration+generation separated from sexp expansion
-7. Sexp-specific expanders deleted from macros.rkt (~1000 lines: `expand-let`, `expand-if`, `expand-cond`, `expand-do`, `expand-list-literal`, `expand-lseq-literal`, `expand-pipe-block`, `expand-compose-sexp`, `expand-mixfix-form`, `expand-quote`, `expand-quasiquote`, `expand-with-transient`)
+6. `preparse-expand-all` parameterized: `#:expand-user-forms? #f` on WS path skips sexp expansion for user-written forms
+7. Sexp-specific expanders no longer called on WS path (~1545 lines of expand-* functions become WS-dead; retained for sexp `process-string` path until sexp path retirement)
 
 **What this track is NOT**:
 - It does NOT implement new tree parser form types (data, trait, impl) — incomplete because preparse still handles registration side effects and generated def production; the merge routes these forms to preparse's output, which is correct
@@ -215,31 +215,31 @@ After Phases 2-3, the merge runs on all WS paths. The `use-tree-parser?` paramet
 
 With the merge deployed (Phases 1-4), #3 fires on the preparse side but its output is **discarded for user forms** — the merge uses tree parser output instead. The sexp expanders (`expand-let`, `expand-if`, etc.) do wasted work: they expand datums that are thrown away.
 
-**The fix**: Create `preparse-register-and-generate` that does Passes -1, 0, 1 + Pass 2's consume+generate, WITHOUT calling `preparse-expand-form` on user forms. The merge calls this instead of `preparse-expand-all`.
+**The fix** (revised per D.2 finding P2): Parameterize `preparse-expand-all` with `#:expand-user-forms?` (default `#t`). The WS merge path passes `#f` — user-written forms (def, defn, eval, check, infer) skip `preparse-expand-form` and are output as raw datums. Generated defs from data/trait/impl STILL pass through `preparse-expand-form` (they need expansion — see D.2 R2).
 
-Structure of the new function:
 ```racket
-(define (preparse-register-and-generate stxs)
+(define (preparse-expand-all stxs #:expand-user-forms? [expand? #t])
   ;; Pass -1: ns/imports (unchanged)
   ;; Pass 0: register data/trait/deftype/defmacro/bundle (unchanged)
   ;; Pass 1: register spec/impl (unchanged)
-  ;; Pass 2 (modified): consume + generate ONLY
-  ;;   - ns/imports/exports/foreign: consume (side effects)
-  ;;   - data/trait/impl: generate defs (constructors, accessors, method defs)
-  ;;   - spec: inject into spec-store (side effect), no output
-  ;;   - def/defn/eval/check/infer: NO EXPANSION — output raw datum + stx for parse-datum
-  ;;     (parse-datum still needed for generated defs; user forms handled by tree parser merge)
+  ;; Pass 2: consume + generate + conditionally expand
+  ;;   - ns/imports/exports/foreign: consume (side effects) — unchanged
+  ;;   - data/trait/impl: generate defs → preparse-expand-form — unchanged (generated defs need expansion)
+  ;;   - def/defn/eval/check/infer: when expand? = #t → preparse-expand-form (sexp path)
+  ;;                                 when expand? = #f → output raw datum (WS path; tree parser handles these)
   ;; Pass 5b: hoist generated defs before user forms (unchanged)
   ...)
 ```
 
-After this: `preparse-expand-form` is no longer called on the WS path. The registered sexp expanders (`expand-let`, `expand-if`, `expand-cond`, `expand-do`, `expand-list-literal`, `expand-lseq-literal`, `expand-pipe-block`, `expand-compose-sexp`, `expand-mixfix-form`, `expand-quote`, `expand-quasiquote`, `expand-with-transient`) become dead code on the WS path and can be deleted.
+After this: on the WS path, `preparse-expand-form` is called ONLY on generated defs (data/trait/impl output), NOT on user forms. The sexp expanders (`expand-let`, `expand-if`, etc.) are unreachable from the WS path.
 
-**What stays**: `expand-top-level` and `expand-expression` (post-parse, shared by both pipelines — they operate on surf-* structs, not datums). `preparse-expand-form` stays for the sexp `process-string` path (out of scope). The registration infrastructure (`register-preparse-macro!`, `current-preparse-registry`) stays for user macro storage.
+**Why NOT duplication** (D.2 P2): Creating a separate `preparse-register-and-generate` function would duplicate ~80% of `preparse-expand-all` (Passes -1/0/1 and most of Pass 2). This violates Decomplection. A single parameter controlling phase elimination is cleaner — one function, one maintenance point.
 
-**Estimated deletion**: ~1000 lines of sexp expansion functions from macros.rkt. Registration functions, `process-*` functions, and `expand-top-level`/`expand-expression` are retained.
+**What stays**: Everything. No functions are deleted. The ~1545 lines of expand-* functions become WS-dead but sexp-live (the sexp `process-string` path still calls `preparse-expand-all` with default `#:expand-user-forms? #t`). Actual deletion of expanders is deferred: "incomplete because `process-string` sexp path still uses registered expanders; deferred until sexp path retirement."
 
-**Principle**: Completeness — Track 3 inherits a clean single-pipeline architecture where the WS path never calls sexp-specific expansion. No "we'll clean this up later."
+**What changes**: One parameter added to `preparse-expand-all`. One `when expand?` guard around the user-form expansion in Pass 2. WS callers pass `#:expand-user-forms? #f`.
+
+**Principle**: Completeness — Track 3 inherits a clean single-pipeline architecture where the WS path never calls sexp-specific expansion on user forms. Decomplection — one function, not two.
 
 ---
 
@@ -281,19 +281,19 @@ Delete `use-tree-parser?`, old path, export. Simplify `process-string-ws-inner`.
 
 **Verification**: Full suite `racket tools/run-affected-tests.rkt --all` — 382/382 GREEN. `grep -rn "use-tree-parser" --include="*.rkt"` returns 0 results. Acceptance file passes.
 
-### Phase 5: Decouple Registration from Expansion
+### Phase 5: Parameterize `preparse-expand-all` (D.2-revised)
 
-Create `preparse-register-and-generate` in macros.rkt. This is a copy of `preparse-expand-all` with Pass 2's expansion removed — user forms are output as raw datums (for `parse-datum` on the preparse side of the merge) without calling `preparse-expand-form`.
+Add `#:expand-user-forms?` parameter to `preparse-expand-all` in macros.rkt. Default `#t` (preserves sexp path behavior). WS merge path passes `#f`.
 
-5a. Create `preparse-register-and-generate` alongside `preparse-expand-all`.
-5b. Switch all WS merge paths to call `preparse-register-and-generate` instead of `preparse-expand-all`.
-5c. Verify: full suite GREEN — the merge uses tree parser output for user forms, so skipping sexp expansion should produce identical results.
-5d. Delete sexp expansion functions: `expand-let`, `expand-do`, `expand-if`, `expand-cond`, `expand-list-literal`, `expand-lseq-literal`, `expand-pipe-block`, `expand-compose-sexp`, `expand-mixfix-form`, `expand-quote`, `expand-quasiquote`, `expand-with-transient`, and their `register-preparse-macro!` / `register-built-in-expander!` registrations.
-5e. Verify: full suite GREEN — sexp path (`process-string`) still uses `preparse-expand-all` (unchanged), WS path uses `preparse-register-and-generate` (no expansion).
+5a. Add `#:expand-user-forms? [expand? #t]` parameter to `preparse-expand-all`.
+5b. In Pass 2: wrap user-form expansion (`preparse-expand-form` calls on def/defn/eval/check/infer) with `(when expand? ...)`. When `#f`, output raw datum without expansion.
+5c. Generated defs from data/trait/impl STILL pass through `preparse-expand-form` (unchanged — the `when expand?` guard only affects user forms, not generated def expansion at lines 2527/2533).
+5d. Switch WS merge callers (`merge-preparse-and-tree-parser`) to call `(preparse-expand-all stxs #:expand-user-forms? #f)`.
+5e. Verify: full suite GREEN. Sexp path (`process-string`) calls `(preparse-expand-all stxs)` with default `#t` — unchanged behavior. WS path skips user-form expansion — merge uses tree parser output for user forms anyway.
 
-**Verification**: `grep -rn "expand-let\|expand-if\|expand-cond\|expand-do" macros.rkt` returns only `preparse-expand-all` (sexp path) references, not WS path. Full suite GREEN.
+**Verification**: `grep -rn "expand-user-forms" macros.rkt driver.rkt` shows parameter definition + WS callers passing `#f`. Full suite GREEN.
 
-**Risk**: Generated defs from data/trait/impl pass through `preparse-expand-form` after `process-data`/`process-trait`/`process-impl` (macros.rkt lines 2527, 2533). These generated defs (constructors, method helpers) ARE sexp datums that need expansion before `parse-datum`. The new function must still expand generated defs — only user-written forms skip expansion. Specifically: Pass 2's data/trait/impl branches call `preparse-expand-form` on their generated output and this MUST be preserved.
+**Risk**: The `when expand?` guard must be placed precisely — only around user-form expansion, NOT around generated-def expansion, spec injection, or registration. Misplacing it would break the sexp path (if expansion is accidentally skipped for generated defs on the sexp path) or leave wasted work on the WS path (if expansion isn't actually skipped for user forms). A targeted test: run a WS file with `data` + `trait` + `impl` + `def` + `eval` and verify generated defs are expanded but user forms are raw datums on the preparse side of the merge.
 
 ### Phase 6: Suite Verification + Documentation
 
@@ -310,9 +310,9 @@ Track 2's PIR identified 5 items of accepted technical debt (§11). This section
 
 | Debt (from PIR §11) | Track 2B Status |
 |---------------------|-----------------|
-| Dual pipeline overhead (~16%) | REDUCED — Phase 5 removes sexp expansion from WS path. Preparse still runs for registration+generation. Full elimination requires registration on propagator cells (Track 3+). |
+| Dual pipeline overhead (~16%) | REDUCED — Phase 5 skips sexp expansion for user forms on WS path. Preparse still runs for registration+generation+generated-def-expansion. Full elimination requires registration on propagator cells (Track 3+). |
 | reader.rkt still imported | RESOLVED in Track 2 Phase 10 — reader.rkt deleted. |
-| Preparse still runs for 5 responsibilities | Phase 5 removes 1 of 5 (expansion). 4 remain: registration, spec storage, generated defs, consume. These are side-effect-producing and require preparse until registration moves to cells. |
+| Preparse still runs for 5 responsibilities | Phase 5 makes expansion conditional (skipped for user forms on WS path). 4.5 of 5 remain active: registration, spec storage, generated defs, consume, + generated-def expansion. User-form expansion eliminated. |
 | V(1) user macros at tree level | NOT addressed — incomplete because V(1) requires tree-level macro system. Merge fallback handles correctly. Placement: Track 3 (grammar productions) or Track 7 (user-defined grammar extensions). |
 | V(2) spec injection at tree level | NOT addressed — incomplete because V(2) requires cross-form attribute flow on the network. Placement: PPN Track 4 (elaboration as attribute evaluation, IS SRE Track 2C). |
 
@@ -359,3 +359,35 @@ None. No user-facing syntax is added or modified. Only internal pipeline routing
 ## §10 NTT Speculative Syntax
 
 Not applicable. This track deploys existing infrastructure — no new propagators, lattices, or rewrite rules are introduced.
+
+---
+
+## D.2 Self-Critique Findings
+
+### Lens 1 — Principles Challenge
+
+| # | Decision | Principle | Severity | Finding | Resolution |
+|---|----------|-----------|----------|---------|------------|
+| P1 | Merge reads `current-spec-store` (imperative parameter) | Data Orientation | LOW | Not data-oriented — reads imperative state for routing decision. Principled: spec-store as cell. | Acceptable for 2B — extracting existing validated logic, not introducing new patterns. Track 4 will put spec-store on the network. |
+| P2 | Phase 5 creates `preparse-register-and-generate` as copy of `preparse-expand-all` | Decomplection | MEDIUM | Code duplication (~80% shared). Two functions maintaining same Passes -1/0/1. | **FIX**: Parameterize `preparse-expand-all` with `#:expand-user-forms? #t` (default) instead of duplicating. WS path passes `#f`. One function, no duplication. This is not the "adding a parameter to inject X" anti-pattern — it's phase elimination, not behavior injection. |
+| P3 | Design pseudocode uses undefined `ws?` variable | — | LOW | Real code uses `(regexp-match? #rx"\\.prologos$" path-str)` inline. Design pseudocode should match. | Clarify in implementation — not architecturally significant. |
+| P4 | Delete `use-tree-parser?` entirely | Validated ≠ Deployed | NONE | Correct. No escape hatch reasoning. `git bisect` for debugging. | No change needed. |
+| P5 | Phase 5d says "delete sexp expanders" | Completeness | **HIGH** | **CONTRADICTS §3.5 "stays for sexp path"**. The sexp `process-string` path still calls `preparse-expand-all` → `preparse-expand-form` → registered expanders. Deleting the functions breaks the sexp path and ~350 test files. | **FIX**: Do NOT delete expander functions in Track 2B. Phase 5 parameterizes `preparse-expand-all` to skip expansion on WS path. Expanders become WS-dead but sexp-live. Actual deletion deferred to sexp path retirement: "incomplete because `process-string` sexp path still uses `preparse-expand-form`; deferred until sexp path retired." |
+
+### Lens 2 — Codebase Reality Check
+
+| # | Claim | Verification | Result |
+|---|-------|-------------|--------|
+| R1 | Merge reads `current-spec-store` at line 1530 | `grep -n "current-spec-store" driver.rkt` | ✓ Confirmed (line 1530) |
+| R2 | Generated defs pass through `preparse-expand-form` (lines 2527, 2533) | `grep -n "preparse-expand-form" macros.rkt` | ✓ Confirmed — trait/impl generated defs DO need expansion |
+| R3 | ~1000 lines of sexp expanders | `awk` line count on expand-* functions | ✗ Actually ~1545 lines (21 functions). But per P5, these cannot be deleted while sexp path exists. |
+| R4 | `use-tree-parser?` only in driver.rkt | `grep -rn "use-tree-parser"` | ✓ Confirmed — only 3 references, all in driver.rkt |
+| R5 | No tests parameterize `use-tree-parser?` | Same grep | ✓ Confirmed — no test files reference it |
+
+### Design Changes Required
+
+1. **Phase 5 revised**: Do NOT duplicate `preparse-expand-all`. Add `#:expand-user-forms?` parameter (default `#t`). WS merge path passes `#f`. Generated defs from data/trait/impl still expanded (they pass through `preparse-expand-form` regardless).
+
+2. **Phase 5d removed**: Sexp expanders NOT deleted — they stay for the sexp `process-string` path. The ~1545 lines are WS-dead but sexp-live. Scope boundary updated: "incomplete because `process-string` sexp path still uses registered expanders; deferred until sexp path retirement."
+
+3. **§1 deliverable 7 revised**: "Sexp expanders no longer called on WS path" replaces "sexp expanders deleted." The functions exist but are unreachable from WS processing.
