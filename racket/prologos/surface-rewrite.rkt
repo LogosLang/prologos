@@ -1448,6 +1448,76 @@
             i))
         (vector-ref vals last-op-idx))))
 
+;; Expand comparison chains: a < b < c → (and (< a b) (< b c))
+;; Takes the full item list, returns a single node (the conjunction) or #f if no chain.
+(define (expand-comparison-chain items ops srcloc indent)
+  (define comparison-ops-set (seteq '< '> '<= '>= '== '/=))
+  (define (is-cmp? item)
+    (and (token-entry? item)
+         (set-member? comparison-ops-set (string->symbol (token-entry-lexeme item)))))
+  (define (is-op? item)
+    (and (token-entry? item)
+         (hash-ref ops (string->symbol (token-entry-lexeme item)) #f)))
+  ;; Parse into alternating operand, operator, operand, operator, ...
+  ;; Only comparison operators participate in chaining
+  (let loop ([rest items] [operands '()] [cmp-ops '()] [collecting-operand '()])
+    (cond
+      [(null? rest)
+       ;; Flush last operand
+       (define all-operands (reverse (cons (reverse collecting-operand) operands)))
+       (define all-cmp-ops (reverse cmp-ops))
+       ;; Need at least 2 comparison operators for a chain
+       (if (< (length all-cmp-ops) 2)
+           #f
+           ;; Build conjunction: (and (op1 a b) (op2 b c) ...)
+           (let build ([ops-left all-cmp-ops]
+                       [opnds-left all-operands]
+                       [conjuncts '()])
+             (cond
+               [(null? ops-left)
+                ;; Build nested (and c1 (and c2 (and c3 ...)))
+                (define conj-list (reverse conjuncts))
+                (if (= (length conj-list) 1)
+                    (car conj-list)
+                    (foldr (lambda (c acc)
+                             (build-node 'bracket-group
+                                         (list (make-token "and") c acc)
+                                         srcloc indent))
+                           (last conj-list)
+                           (drop-right conj-list 1)))]
+               [else
+                (define left-operand
+                  (operand-group->node (car opnds-left) srcloc indent))
+                (define right-operand
+                  (operand-group->node (cadr opnds-left) srcloc indent))
+                (define op-token (car ops-left))
+                (define op-info-val (hash-ref ops (string->symbol (token-entry-lexeme op-token)) #f))
+                (define fn-name (if op-info-val (symbol->string (op-info-fn-name op-info-val))
+                                    (token-entry-lexeme op-token)))
+                (define swap? (and op-info-val (op-info-swap? op-info-val)))
+                (define cmp-node
+                  (if swap?
+                      (build-node 'bracket-group
+                                  (list (make-token fn-name) right-operand left-operand)
+                                  srcloc indent)
+                      (build-node 'bracket-group
+                                  (list (make-token fn-name) left-operand right-operand)
+                                  srcloc indent)))
+                (build (cdr ops-left) (cdr opnds-left) (cons cmp-node conjuncts))])))]
+      [(and (is-cmp? (car rest)) (pair? collecting-operand))
+       ;; Comparison operator: flush operand, record operator
+       (loop (cdr rest)
+             (cons (reverse collecting-operand) operands)
+             (cons (car rest) cmp-ops)
+             '())]
+      [(and (is-op? (car rest)) (not (is-cmp? (car rest))))
+       ;; Non-comparison operator in the chain — chain only applies to comparison region
+       ;; For now: bail (return #f, let normal resolution handle it)
+       #f]
+      [else
+       ;; Operand token
+       (loop (cdr rest) operands cmp-ops (cons (car rest) collecting-operand))])))
+
 ;; The main mixfix rewrite rule
 (register-rewrite-rule!
  (rewrite-rule
@@ -1465,12 +1535,89 @@
        (car items)]
       [else
        (define groups (effective-precedence-groups))
+       (define ops (effective-operator-table))
+
+       ;; Pre-pass 1: Unary prefix detection
+       ;; An operator at position 0, or immediately after another operator, is unary prefix.
+       ;; Transform: [- x + y] → [(negate x) + y]
+       ;; Also handle: [-x + y] where -x is a single symbol → split conceptually
+       (define (is-op? item)
+         (and (token-entry? item)
+              (hash-ref ops (string->symbol (token-entry-lexeme item)) #f)))
+       (define items-with-unary
+         (let loop ([rest items] [prev-was-op? #t] [acc '()])  ;; start as #t so position 0 is unary context
+           (cond
+             [(null? rest) (reverse acc)]
+             ;; Current item is `-` and in unary context → unary prefix
+             [(and prev-was-op?
+                   (token-entry? (car rest))
+                   (equal? (token-entry-lexeme (car rest)) "-")
+                   (pair? (cdr rest)))
+              ;; Consume the - and the next item, wrap as (negate operand)
+              (define operand (cadr rest))
+              (define negate-node
+                (build-node 'bracket-group
+                            (list (make-token "negate") operand)
+                            srcloc indent))
+              (loop (cddr rest) #f (cons negate-node acc))]
+             ;; Current item is a merged -name symbol (like -x) → split into (negate name)
+             [(and prev-was-op?
+                   (token-entry? (car rest))
+                   (let ([lex (token-entry-lexeme (car rest))])
+                     (and (> (string-length lex) 1)
+                          (char=? (string-ref lex 0) #\-)
+                          (not (is-op? (car rest))))))  ;; not a known operator
+              (define lex (token-entry-lexeme (car rest)))
+              (define name-token (token-entry (seteq 'symbol)
+                                              (substring lex 1)
+                                              (+ (token-entry-start-pos (car rest)) 1)
+                                              (token-entry-end-pos (car rest))))
+              (define negate-node
+                (build-node 'bracket-group
+                            (list (make-token "negate") name-token)
+                            srcloc indent))
+              (loop (cdr rest) #f (cons negate-node acc))]
+             [else
+              (loop (cdr rest) (is-op? (car rest)) (cons (car rest) acc))])))
+
+       ;; Pre-pass 2: Comparison chaining
+       ;; a < b < c → (and (< a b) (< b c)) with b shared
+       ;; Detect: two consecutive comparison operators in the sequence
+       (define comparison-ops (seteq '< '> '<= '>= '== '/=))
+       (define (is-comparison? item)
+         (and (token-entry? item)
+              (set-member? comparison-ops (string->symbol (token-entry-lexeme item)))))
+       ;; Check if chaining exists
+       (define has-chain?
+         (let check ([rest items-with-unary] [last-was-cmp? #f])
+           (cond
+             [(null? rest) #f]
+             [(is-comparison? (car rest))
+              (if last-was-cmp? #f  ;; consecutive ops shouldn't happen (operands between)
+                  (check (cdr rest) #t))]
+             [last-was-cmp?
+              ;; After a comparison operand, check if next is also comparison
+              (and (pair? (cdr rest))
+                   (is-comparison? (cadr rest)))]
+             [else (check (cdr rest) #f)])))
+       ;; If chaining detected, transform
+       ;; For now: detect pattern [a CMP b CMP c ...] and produce (and (CMP a b) (CMP b c) ...)
+       (define items-final
+         (if (not has-chain?)
+             items-with-unary
+             ;; Build chained conjunction: a < b < c → (and (< a b) (< b c))
+             (let ([result (expand-comparison-chain items-with-unary ops srcloc indent)])
+               (if result (list result) items-with-unary))))
+
        ;; Step 1: Parse into operands and operators
-       (define-values (operand-groups operators) (parse-mixfix-tokens items))
+       (define-values (operand-groups operators) (parse-mixfix-tokens items-final))
        (cond
          [(null? operators)
-          ;; No operators found — treat as application
-          (build-node 'bracket-group items srcloc indent)]
+          ;; No operators found — if single item (e.g., chain result), return it directly
+          ;; Otherwise treat as application
+          (if (= (length items-final) 1)
+              (car items-final)
+              (build-node 'bracket-group items-final srcloc indent))]
          [else
           ;; Step 2: Resolve claims (all operators submit claims simultaneously)
           ;; The DAG comparison in merge-claims handles stratification:
