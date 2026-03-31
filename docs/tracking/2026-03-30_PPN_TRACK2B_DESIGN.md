@@ -464,6 +464,112 @@ This is **Track 3 early-phase scope** — extending tree-parser.rkt to full AST 
 
 ---
 
+## §12 AST Parity: Propagator-Only Design for Deferred Expression Forms
+
+### 12.1 Scope
+
+§11 identified three categories of AST parity gaps preventing tree parser output from being used for elaboration. This section designs the propagator-only approach for each.
+
+| Category | Forms | Approach |
+|----------|-------|----------|
+| #1: Expression sentinels | mixfix (.{...}), pipe (\|>), compose (>>) | Propagator-native: lattice-embedded resolution in cell values |
+| #2: Expression keywords | solve, solve-one, defr, session ops, capability ops | Tree parser handlers in parse-expr-tree (mechanical) |
+| #3: Complex defn variants | inline type annotation + match body, multi-arity patterns | Tree parser parity in parse-defn-tree (mechanical) |
+
+### 12.2 Mixfix Resolution as Pocket Universe Cell Value
+
+**Principle**: The precedence DAG IS a partial order. A partial order IS a lattice structure. Mixfix resolution IS information flow on that lattice. No imperative Pratt parsing — the lattice computes the result.
+
+**The lattice**: A mixfix expression's resolution state is a single cell value progressing monotonically:
+
+```
+raw (flat token sequence)
+  → strata-resolved-N (highest precedence group resolved)
+  → strata-resolved-N-1
+  → ...
+  → strata-resolved-0 (lowest precedence group resolved)
+  → done (fully structured tree)
+```
+
+Each stage resolves one precedence level. Resolution within a level is monotone: each operator claims its adjacent operands. Claims cannot be retracted (monotonicity). Equal-precedence operators sharing an operand resolve by associativity (left-assoc: left operator wins). Operators with NO DAG relationship sharing an operand produce ⊤ (contradiction) — ambiguity error.
+
+**The cell value structure** (Pocket Universe — embedded lattice):
+
+```racket
+(struct mixfix-resolution-value
+  (tokens       ;; the original flat token sequence (immutable)
+   bindings     ;; (hasheq position → (binding operator side)) — monotone accumulation
+   groups-done  ;; (seteq group-name) — which precedence groups have resolved
+   result       ;; #f (incomplete) | parse-tree-node (complete) | 'ambiguity-error
+   ) #:transparent)
+```
+
+The `bindings` hash maps each operand position to which operator claimed it. The `groups-done` set tracks which precedence levels have been resolved. Both are monotone: bindings only get added, groups-done only grows.
+
+**The merge function**: join of two `mixfix-resolution-value`s merges bindings (hash-union, conflict = ambiguity) and groups-done (set-union). If `result` is set on either side, it dominates. This is a proper lattice join.
+
+**Resolution as stage advancement**: Within the rewrite engine, the `rhs-builder` for a `mixfix-group` node:
+
+1. Extracts the token sequence from the node's children
+2. Looks up each operator's precedence group from the registry (via `effective-precedence-groups`)
+3. Topologically sorts the groups by the `tighter-than` DAG (highest precedence first)
+4. For each group in order:
+   - For each operator in this group: claim left and right operand positions in `bindings`
+   - If an operand is already claimed by a same-level operator: resolve by associativity
+   - If an operand is claimed by an operator from an incomparable group: → ambiguity error (⊤)
+   - Mark group in `groups-done`
+5. When all groups are done: construct the nested tree from the binding map
+
+Each step is a monotone advancement of the `mixfix-resolution-value`. The entire computation is a fold over the precedence DAG's topological order — which IS the stratum sequence.
+
+**Why this is propagator-native, not algorithmic**: The resolution state is a lattice value. Each group's resolution is a monotone operation on that value. The DAG order determines the stratum sequence. Incomparability produces contradiction (not silent wrong answers). The cell value progresses through a fixed lattice path determined entirely by the DAG structure and the input tokens.
+
+The fact that we execute this eagerly within a rewrite-rule builder (rather than across BSP rounds on separate cells) is a scheduling choice, not an architectural one. The computation IS propagator-native — it's lattice-valued monotone information flow. The scheduler just happens to be "run all strata in sequence within one function call" rather than "schedule across BSP rounds." When Track 3-4 puts this on the full network, the computation separates into actual strata with actual cells — but the information flow is identical.
+
+**Scaffolding acknowledgment**: The eager execution within a rewrite rule is scaffolding. The permanent structure (Track 3-4) has actual cells per operand and actual propagators per operator on the parse network. The scaffolding and the permanent structure compute the same result because they implement the same lattice.
+
+### 12.3 Pipe and Compose as Rewrite Rules
+
+Pipe (`|>`) and compose (`>>`) have fixed precedence in the DAG (pipe is the lowest, composition the highest in the standard chain). They don't involve precedence competition — they have unique semantics:
+
+**Pipe**: `x |> f |> g` → `(g (f x))`. Threading: fold-right, each step applies the next function to the accumulated result.
+
+**Compose**: `f >> g` → `(fn [x] (g (f x)))`. Lambda construction: compose functions left-to-right.
+
+These are pattern→template rewrite rules in surface-rewrite.rkt. The `rhs-builder` walks the token sequence (which alternates operand, `$pipe-gt`/`$compose` sentinel, operand, ...) and produces the nested application or lambda tree.
+
+No lattice needed — these are deterministic rewrites with no competing claims. The existing rewrite-rule infrastructure handles them directly.
+
+### 12.4 Expression Keywords (#2) and Defn Variants (#3)
+
+These are mechanical additions to tree-parser.rkt:
+
+**Expression keywords** (solve, solve-one, session ops, etc.): Each keyword gets a handler in `parse-expr-tree`'s dispatch. The handler produces the same `surf-*` struct that `parse-datum` would produce. Reference: parser.rkt's `parse-list` function handles these keywords — the tree parser handlers mirror them but read from tree children instead of datum lists.
+
+**Defn variants**: `parse-defn-tree` needs to handle:
+- Inline type annotation after params: `defn f [x : Int] : Int body`
+- Match body: `defn f | pattern -> body | ...`
+- Where-clause: `defn f [x] where (Eq x) body`
+- Multi-arity patterns compiled to match expression
+
+These are extensions to the existing `parse-defn-tree` (tree-parser.rkt:368-450). Reference: macros.rkt's `preparse-expand-single` handles the datum-level equivalents.
+
+### 12.5 Revised Phasing
+
+| Phase | Description | Approach |
+|-------|-------------|----------|
+| A | Pipe rewrite rule in surface-rewrite.rkt | Pattern→template rewrite |
+| B | Compose rewrite rule in surface-rewrite.rkt | Pattern→template rewrite |
+| C | Mixfix resolution as Pocket Universe cell value | Lattice-embedded DAG-stratified resolution |
+| D | Expression keywords in parse-expr-tree | Mechanical handlers (solve, session, etc.) |
+| E | Defn variant parity in parse-defn-tree | Mechanical extensions |
+| F | Re-attempt merge output deployment | Switch from validation-only to merge-active |
+| G | Delete use-tree-parser? + parameterize preparse-expand-all | Original Phases 4-5, now unblocked |
+
+Cross-reference: [Mixfix Syntax Design](2026-02-23_MIXFIX_SYNTAX_DESIGN.md) §7 (Parsing Algorithm), §2 (Named Precedence Groups). [PUnify Structural Unification](2026-03-19_PUNIFY_STRUCTURAL_UNIFICATION_PROPAGATORS.md) (cell-tree pattern, information flow over shared structures). [PTF Master](2026-03-28_PTF_MASTER.md) (propagator kind taxonomy — mixfix resolution is Map+Reduce pattern).
+
+---
+
 ## D.3 External Critique Findings
 
 | # | Severity | Finding | Response | Design Change |
