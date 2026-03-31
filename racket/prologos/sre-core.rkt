@@ -103,7 +103,8 @@
    meta-recognizer   ; (expr → bool) | #f — pure structural check: is this a meta/var ref?
    meta-resolver     ; (expr → cell-id | #f) | #f — context-dependent: what cell?
    dual-pairs        ; SRE Track 1: '((Send . Recv) ...) or #f
-   property-cell-ids ; SRE Track 2G: (hasheq property-name → cell-id) — algebraic properties on network
+   property-cell-ids ; SRE Track 2G: (hasheq property-name → cell-id) — on-network cells (Phase 6)
+   declared-properties ; SRE Track 2G: (hasheq property-name → property-value) — declarations (Phase 4)
    )
   #:transparent)
 
@@ -135,16 +136,24 @@
     [else prop-contradicted]))
 
 ;; Query: does domain have this algebraic property?
-;; Returns #t, #f, or #f (⊤ treated as #f for capability gating).
-;; Returns #f if property cell doesn't exist or is ⊥ (unknown).
-(define (sre-domain-has-property? domain property-name net)
+;; Returns #t only for prop-confirmed. Everything else → #f (capability gating).
+;;
+;; Two sources (Phase 4: declaration hash, Phase 6: cells on network):
+;; 1. Check property-cell-ids for a cell → read from network
+;; 2. Fall back to declared-properties hash
+;; After Phase 6 wiring, all properties are on cells. Before: hash only.
+(define (sre-domain-has-property? domain property-name #:net [net #f])
+  ;; First: check cell (if exists and network provided)
   (define cell-ids (sre-domain-property-cell-ids domain))
-  (define cell-id (hash-ref cell-ids property-name #f))
+  (define cell-id (and net (hash-ref cell-ids property-name #f)))
   (cond
-    [(not cell-id) #f]  ;; no cell for this property
-    [else
+    [(and cell-id net)
      (define val (net-cell-read net cell-id))
-     (eq? val prop-confirmed)]))  ;; only #t = confirmed. ⊥, #f, ⊤ all → #f
+     (eq? val prop-confirmed)]
+    ;; Fallback: check declared-properties hash (Phase 4)
+    [else
+     (define declared (sre-domain-declared-properties domain))
+     (eq? (hash-ref declared property-name prop-unknown) prop-confirmed)]))
 
 ;; ========================================================================
 ;; SRE Track 2G Phase 1.5: Domain Registry

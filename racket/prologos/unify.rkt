@@ -86,7 +86,13 @@
                 (define lookup (current-structural-meta-lookup))
                 (and lookup (lookup expr)))
               #f                      ; dual-pairs
-              (hasheq)))              ; Track 2G: property-cell-ids
+              (hasheq)                ; Track 2G: property-cell-ids
+              (hasheq 'commutative-join prop-confirmed
+                      'associative-join prop-confirmed
+                      'idempotent-join prop-confirmed
+                      'has-meet prop-confirmed
+                      'distributive prop-confirmed
+                      'has-pseudo-complement prop-confirmed))) ; Track 2G: declared-properties
 
 ;; Track 2G: register in domain registry
 (register-domain! type-sre-domain)

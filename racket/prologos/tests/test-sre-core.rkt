@@ -70,7 +70,8 @@
               #f     ; no meta-recognizer
               #f     ; no meta-resolver
               #f     ; no dual-pairs
-              (hasheq))) ; Track 2G: property-cell-ids
+              (hasheq)  ; Track 2G: property-cell-ids
+              (hasheq))); Track 2G: declared-properties
 
 ;; ========================================
 ;; B. Register test constructors
@@ -263,7 +264,7 @@
             new))
       (define bad-domain
         (sre-domain 'bad (lambda (rn) bad-merge) (lambda (v) (eq? v 'top))
-                    (lambda (v) (eq? v 'bot)) 'bot 'top #f #f #f (hasheq)))  ; merge-registry, contradicts, bot, bot-val, top-val, meta-rec, meta-res, dual-pairs
+                    (lambda (v) (eq? v 'bot)) 'bot 'top #f #f #f (hasheq) (hasheq)))  ; +property-cell-ids, declared-properties
       ;; In debug mode, this should error
       (parameterize ([current-sre-debug? #t])
         (define net0 (fresh-net))

@@ -37,7 +37,8 @@
               '((sess-send . sess-recv)
                 (sess-dsend . sess-drecv)
                 (sess-async-send . sess-async-recv))
-              (hasheq)));; Track 2G: property-cell-ids
+              (hasheq)  ;; Track 2G: property-cell-ids
+              (hasheq)));; Track 2G: declared-properties
 
 ;; Helper: create mini-network, install duality-relate, quiesce
 (define (sre-duality-check sa sb)

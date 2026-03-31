@@ -137,7 +137,8 @@
               type-top  ;; top-value
               #f #f     ;; no meta-recognizer/resolver
               #f        ;; no dual-pairs
-              (hasheq)));; Track 2G: property-cell-ids
+              (hasheq)  ;; Track 2G: property-cell-ids
+              (hasheq)));; Track 2G: declared-properties
 
 (define (sre-subtype-check t1 t2)
   "Create mini-network, install subtype-relate, quiesce, return #t if no contradiction."
