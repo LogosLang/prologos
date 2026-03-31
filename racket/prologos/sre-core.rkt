@@ -19,6 +19,7 @@
 
 (require racket/list
          racket/set
+         racket/string
          "propagator.rkt"
          "ctor-registry.rkt")
 
@@ -55,6 +56,11 @@
  standard-implication-rules
  derive-composite-properties
  resolve-domain-properties
+ ;; Track 2G: diagnostic reporting + property-gated behavior
+ format-property-profile
+ resolve-and-report-properties
+ with-domain-property
+ select-by-property
 
  ;; Core SRE functions
  sre-identify-sub-cell
@@ -344,6 +350,79 @@
   (define after-inference
     (infer-domain-properties domain samples #:meet-fn meet-fn))
   (derive-composite-properties after-inference))
+
+;; ========================================================================
+;; SRE Track 2G Phase 7a: Diagnostic Property Reporting
+;; ========================================================================
+;; Formats the algebraic property profile of a domain with evidence details.
+;; Output: string (cell-compatible for network in Track 3-4).
+
+(define (format-property-profile domain-name properties inference-evidence)
+  (define lines
+    (for/list ([(prop val) (in-hash properties)])
+      (define evidence-detail
+        (let ([ev (hash-ref inference-evidence prop #f)])
+          (cond
+            [(not ev) ""]
+            [(axiom-confirmed? ev)
+             (format " (~a tests)" (axiom-confirmed-count ev))]
+            [(axiom-refuted? ev)
+             (format " (counterexample: ~a)"
+                     (string-join (map (lambda (v) (format "~a" v))
+                                       (axiom-refuted-witness ev))
+                                 ", "))]
+            [else ""])))
+      (format "  ~a: ~a~a" prop val evidence-detail)))
+  (string-append
+   (format "Domain '~a algebraic profile:\n" domain-name)
+   (string-join (sort lines string<?) "\n")))
+
+;; Run full property resolution and report diagnostic.
+;; Returns: (values final-properties report-string)
+(define (resolve-and-report-properties domain samples #:meet-fn [meet-fn #f])
+  ;; Step 1: Infer (produces inference evidence)
+  (define after-inference
+    (infer-domain-properties domain samples #:meet-fn meet-fn))
+  ;; Step 2: Build evidence map for reporting
+  (define evidence
+    (for/hasheq ([prop (in-list '(commutative-join associative-join idempotent-join distributive))])
+      (define test-fn
+        (case prop
+          [(commutative-join) test-commutative-join]
+          [(associative-join) test-associative-join]
+          [(idempotent-join) test-idempotent-join]
+          [(distributive) (lambda (d s) (test-distributive d s meet-fn))]
+          [else (lambda (d s) axiom-untested)]))
+      (values prop (test-fn domain samples))))
+  ;; Step 3: Derive composite properties
+  (define final-props (derive-composite-properties after-inference))
+  ;; Step 4: Format report
+  (define report (format-property-profile (sre-domain-name domain) final-props evidence))
+  (values final-props report))
+
+;; ========================================================================
+;; SRE Track 2G Phase 7b: Property-Gated Behavior
+;; ========================================================================
+;; Pattern for code that branches on domain algebraic properties.
+;; Future consumers (Heyting error reporting, CDCL, backward propagation)
+;; plug into this pattern. When properties change (e.g., type lattice
+;; redesign makes type domain Heyting), behavior activates automatically.
+
+;; Execute then-fn if domain has property, else-fn otherwise.
+(define (with-domain-property domain property-name then-fn else-fn)
+  (if (sre-domain-has-property? domain property-name)
+      (then-fn)
+      (else-fn)))
+
+;; Select from a list of (property-name . behavior-fn) pairs.
+;; Returns the first behavior whose property is confirmed, or default-fn.
+(define (select-by-property domain property-behaviors default-fn)
+  (let loop ([rest property-behaviors])
+    (cond
+      [(null? rest) (default-fn)]
+      [(sre-domain-has-property? domain (caar rest))
+       ((cdar rest))]
+      [else (loop (cdr rest))])))
 
 ;; Debug mode: enables idempotency assertions (D.2 critique)
 (define current-sre-debug? (make-parameter #f))

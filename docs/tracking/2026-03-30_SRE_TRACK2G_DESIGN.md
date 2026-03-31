@@ -31,8 +31,8 @@
 | 4 | Property declaration on domain construction | ✅ | declared-properties field (11th). Type: 6 properties. Session: 4 properties. has-property? reads declarations. |
 | 5 | Property inference from operations | ✅ | axiom-confirmed/refuted structs. 4 test functions (commutative, associative, idempotent, distributive). infer-domain-properties. **FINDING**: type lattice NOT distributive under equality merge (flat lattice with >2 atoms). Declaration corrected. |
 | 6 | Implication rules + resolve-domain-properties | ✅ | implication-rule struct, standard rules (heyting, boolean). derive-composite-properties. resolve-domain-properties: declare→infer→derive. Verified: distributive=refuted → heyting=refuted → boolean=refuted. |
-| 7a | Diagnostic property reporting at registration | ⬜ | Inference runs, profile reported with counterexample witnesses. PPN Track 3 consumer. |
-| 7b | Property-gated behavior infrastructure | ⬜ | when-property / select-by-property pattern. Fallback on absence. Future consumers plug in. |
+| 7a | Diagnostic property reporting | ✅ | format-property-profile + resolve-and-report-properties. Evidence details (test count, counterexample witness). |
+| 7b | Property-gated behavior | ✅ | with-domain-property + select-by-property. Graceful fallback. Verified: has-meet gates, heyting falls back. |
 | 8 | Verification + PIR | ⬜ | Full suite GREEN, benchmark comparison, documentation |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
