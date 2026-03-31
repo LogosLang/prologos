@@ -50,6 +50,7 @@
  axiom-confirmed axiom-confirmed? axiom-confirmed-count
  axiom-refuted axiom-refuted? axiom-refuted-witness
  axiom-untested
+ test-commutative-join test-associative-join test-idempotent-join test-distributive
  infer-domain-properties
  ;; Track 2G: implication rules + resolution
  (struct-out implication-rule)
