@@ -13,12 +13,17 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Acceptance file | ✅ | `3457c6ca`. 0 errors on baseline. |
-| 0.5 | Tree parser error stubs | ✅ | `9a8f9158`. 15 explicit error stubs (D.3 F1). |
+| 0.5 | Tree parser error stubs | ✅ | `9a8f9158`. 15 preparse-consumed + 7 expression sentinels + expression keywords. |
 | 1 | Extract merge function | ✅ | `67df701f`. Shared function. Zero behavioral change. |
-| 2+3 | Wire merge into process-file + load-module assessment | ✅ | `8a263d89`, `b7809237`. **CRITICAL FINDING**: see §11. Validation-only mode. |
-| 4 | Delete `use-tree-parser?` | ⏸️ | BLOCKED: merge output not used. Parameter retains value for validation. |
-| 5 | Parameterize `preparse-expand-all` | ⏸️ | BLOCKED: preparse still provides ALL elaboration input. |
-| 6 | Verification + docs | ✅ | 382/382 GREEN, 7459 tests, 130.6s. |
+| 2+3 | Wire merge into process-file + load-module assessment | ✅ | `8a263d89`, `b7809237`. §11: AST parity gap. load-module excluded (recursive). |
+| A+B | Pipe/compose rewrite rules | ✅ | `3c1bb200`. Top-level sentinels. `>>` disambiguator merge. |
+| C | Mixfix Pocket Universe | ✅ | `8574079a`. DAG-stratified claim lattice. Position-aware merge. |
+| C.1+C.2 | Comparison chaining + unary minus | ✅ | `eba3aad7`. Chain pre-pass + unary detection. |
+| E partial | Defn Pi chain fix | ✅ | `8ff16dca`. Inline type → full Pi chain for parse-defn-tree. |
+| F | **MERGE DEPLOYED** | ✅ | `ebb3b290`. Source-line-keyed identity matching. Per-form lattice join. |
+| G | **use-tree-parser? DELETED** | ✅ | `6f599054`. process-string-ws-inner collapsed to merge-only. |
+| 5 | Parameterize `preparse-expand-all` | SHELVED | Optimization of soon-to-be-replaced infrastructure. Not justified. |
+| — | Documentation + PIR | ✅ | Design doc, PPN Master, dailies, PIR updated. |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
 
