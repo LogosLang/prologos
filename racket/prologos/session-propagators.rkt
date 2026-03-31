@@ -275,6 +275,9 @@
                 (sess-async-send . sess-async-recv))
               (hasheq)))                       ;; Track 2G: property-cell-ids
 
+;; Track 2G: register in domain registry
+(register-domain! session-sre-domain)
+
 ;; ========================================
 ;; Duality propagator (S4c → SRE Track 1 Phase 5)
 ;; ========================================

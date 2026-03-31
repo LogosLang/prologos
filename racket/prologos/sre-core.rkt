@@ -41,6 +41,10 @@
  prop-unknown prop-confirmed prop-refuted prop-contradicted
  property-value-join
  sre-domain-has-property?
+ ;; Track 2G: domain registry
+ register-domain!
+ lookup-domain
+ all-registered-domains
 
  ;; Core SRE functions
  sre-identify-sub-cell
@@ -141,6 +145,28 @@
     [else
      (define val (net-cell-read net cell-id))
      (eq? val prop-confirmed)]))  ;; only #t = confirmed. ⊥, #f, ⊤ all → #f
+
+;; ========================================================================
+;; SRE Track 2G Phase 1.5: Domain Registry
+;; ========================================================================
+;; Central registry of all SRE domains. Monotone: domains only added.
+;; Scaffolding: module-level hash (same pattern as ctor-registry.rkt).
+;; Track 3-4 refinement: cell on persistent registry network (pnet-cacheable).
+;; The register-domain! / lookup-domain API is the permanent interface.
+
+(define domain-registry (make-hasheq))  ;; mutable: domain-name → sre-domain
+
+(define (register-domain! domain)
+  (define name (sre-domain-name domain))
+  (when (hash-has-key? domain-registry name)
+    (eprintf "WARNING: domain ~a already registered, overwriting\n" name))
+  (hash-set! domain-registry name domain))
+
+(define (lookup-domain name)
+  (hash-ref domain-registry name #f))
+
+(define (all-registered-domains)
+  (hash-values domain-registry))
 
 ;; Debug mode: enables idempotency assertions (D.2 critique)
 (define current-sre-debug? (make-parameter #f))

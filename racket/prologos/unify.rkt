@@ -88,6 +88,9 @@
               #f                      ; dual-pairs
               (hasheq)))              ; Track 2G: property-cell-ids
 
+;; Track 2G: register in domain registry
+(register-domain! type-sre-domain)
+
 ;; ========================================
 ;; SRE Track 2: Rollback toggle + SRE structural dispatch
 ;; ========================================
