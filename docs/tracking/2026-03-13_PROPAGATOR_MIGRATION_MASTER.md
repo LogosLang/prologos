@@ -347,6 +347,16 @@ Before Track 8 design begins, conduct a **full audit of imperative parameters an
 - Current storage mechanism (Racket parameter, elab-network field, box, mutable hash)
 - Lifecycle (per-command, per-file, per-speculation, permanent)
 - Whether it participates in speculation rollback
+
+**Module-load-time infrastructure on network** (from SRE Track 2G PIR, 2026-03-30):
+
+The compiler's own infrastructure — domain registrations (sre-domain objects), constructor registrations (ctor-descs), algebraic property declarations — runs at Racket module load time, BEFORE any network exists. This creates a lifecycle ordering problem: Step 1 (imperative Racket module load) must complete before Step 2 (network creation). Everything in Step 1 is off-network: not cached by .pnet, not introspectable by the self-hosted compiler, not restorable from persistent state.
+
+The .pnet cache (Track 7) serializes elaboration cell VALUES, but not the DEFINITIONS of the domains, constructors, and properties that those cells use. Every session re-runs the Racket-level registrations.
+
+For the self-hosting trajectory (SH series), there IS no Step 1 — the compiler IS the network. Domain registration, property declaration, constructor registration are all cell writes. The module "load" IS a sequence of cell writes.
+
+The resolution requires merging Steps 1 and 2: the persistent registry network must exist at the EARLIEST point of initialization, and all infrastructure registrations must be cell writes to it. Track 7 moved registry CONTENTS to cells; this next step moves registry DEFINITIONS to cells. Scope: Track 8 audit should classify all module-load-time registrations alongside the imperative parameter audit. Implementation could be Track 8E extension, a dedicated PM Track 12, or first SH series track.
 - Target: propagator cell (TMS-aware), persistent network cell, or retained as parameter
 
 Known candidates from Track 7:
