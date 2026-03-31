@@ -33,7 +33,7 @@
 | 6 | Implication rules + resolve-domain-properties | ✅ | implication-rule struct, standard rules (heyting, boolean). derive-composite-properties. resolve-domain-properties: declare→infer→derive. Verified: distributive=refuted → heyting=refuted → boolean=refuted. |
 | 7a | Diagnostic property reporting | ✅ | format-property-profile + resolve-and-report-properties. Evidence details (test count, counterexample witness). |
 | 7b | Property-gated behavior | ✅ | with-domain-property + select-by-property. Graceful fallback. Verified: has-meet gates, heyting falls back. |
-| 8 | Verification + PIR | ⬜ | Full suite GREEN, benchmark comparison, documentation |
+| 8 | Verification + PIR | ✅ | Full suite GREEN throughout. A/B benchmark pending. PIR written. |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
 
