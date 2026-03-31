@@ -124,6 +124,18 @@
        [(imports) (parse-imports-tree args loc)]
        [(exports) (parse-exports-tree args loc)]
 
+       ;; --- Expression-level sentinels (deferred to preparse) ---
+       ;; These are rewritten by preparse-expand-form (mixfix Pratt parser,
+       ;; pipe/compose expansion) but NOT by surface-rewrite.rkt. The tree
+       ;; parser returns errors so the merge uses preparse's version.
+       [(mixfix mixfix-group) (parse-error-result loc "mixfix: handled by preparse expansion")]
+       [(pipe-gt) (parse-error-result loc "pipe-gt: handled by preparse expansion")]
+       [(compose) (parse-error-result loc "compose: handled by preparse expansion")]
+       [(dot-access) (parse-error-result loc "dot-access: handled by preparse expansion")]
+       [(dot-key) (parse-error-result loc "dot-key: handled by preparse expansion")]
+       [(infix-pipe) (parse-error-result loc "infix-pipe: handled by preparse expansion")]
+       [(implicit-map) (parse-error-result loc "implicit-map: handled by preparse expansion")]
+
        ;; --- Preparse-consumed forms (D.3 F1) ---
        ;; These are handled by preparse: registration, generation, or specialized
        ;; desugaring. The tree parser returns explicit errors so the merge's
@@ -483,10 +495,15 @@
 
 (define (parse-eval-tree args loc)
   ;; Simple: (eval expr) → surf-eval
-  (if (= (length args) 1)
-      (surf-eval (parse-form-tree (car args)) loc)
-      ;; Multiple args → implicit application
-      (surf-eval (parse-application-tree args loc) loc)))
+  ;; Propagate inner errors — if the expression can't be parsed (mixfix, pipe, etc.),
+  ;; return the error so the merge falls back to preparse's version.
+  (define inner
+    (if (= (length args) 1)
+        (parse-form-tree (car args))
+        (parse-application-tree args loc)))
+  (if (prologos-error? inner)
+      inner  ;; propagate error — merge will use preparse's eval
+      (surf-eval inner loc)))
 
 (define (parse-data-tree args loc)
   (parse-error-result loc "parse-data-tree: not yet implemented"))
@@ -499,13 +516,17 @@
 
 (define (parse-check-tree args loc)
   (if (>= (length args) 2)
-      (surf-check (parse-form-tree (car args))
-                  (parse-form-tree (cadr args)) loc)
+      (let ([e (parse-form-tree (car args))]
+            [t (parse-form-tree (cadr args))])
+        (cond [(prologos-error? e) e]
+              [(prologos-error? t) t]
+              [else (surf-check e t loc)]))
       (parse-error-result loc "check: need expr type")))
 
 (define (parse-infer-tree args loc)
   (if (= (length args) 1)
-      (surf-infer (parse-form-tree (car args)) loc)
+      (let ([e (parse-form-tree (car args))])
+        (if (prologos-error? e) e (surf-infer e loc)))
       (parse-error-result loc "infer: need exactly 1 arg")))
 
 (define (parse-when-tree args loc)
@@ -852,6 +873,13 @@
        ;; Pre-parse macro forms that should have been expanded
        [(and head-lex (member head-lex '("let" "do" "if" "cond" "when" "defmacro" "deftype")))
         (parse-error-result loc (format "~a should have been expanded before parsing" head-lex))]
+       ;; Expression keywords handled by parser.rkt but not tree-parser
+       ;; (relational, session, capability). Return error so merge uses preparse.
+       [(and head-lex (member head-lex '("solve" "solve-one" "defr" "rel" "facts"
+                                         "session" "defproc" "proc" "spawn" "spawn-with"
+                                         "capability" "with-cap" "with-transient"
+                                         "assert" "retract" "explain")))
+        (parse-error-result loc (format "~a: expression keyword handled by preparse" head-lex))]
        ;; Built-in binary operations: int+, int-, etc.
        [(and head-lex (hash-has-key? builtin-binary-ops head-lex))
         (if (= (length args) 2)

@@ -1487,27 +1487,24 @@
   (define refined-root (refine-tag grouped-root))
   (define rewritten-root (rewrite-tree refined-root))
   (define tree-surfs (parse-top-level-forms-from-tree rewritten-root))
-  ;; Collect tree parser's non-error surfs
-  (define tree-user-surfs
-    (filter (lambda (s) (not (prologos-error? s))) tree-surfs))
-  ;; Conservative merge policy: tree parser output used ONLY for forms it
-  ;; fully handles correctly. Defns have complex interactions (inline annotations,
-  ;; match expansion, spec injection, where-clause injection) that the tree parser
-  ;; does not reproduce. Use tree parser for: eval, check, infer, simple def.
-  ;; Track 2B: Validation-only mode.
-  ;; The tree parser runs on every WS file as continuous validation — checking it
-  ;; produces non-error surfs for handled forms and doesn't crash. But the OUTPUT
-  ;; for elaboration comes entirely from preparse (proven correct).
+  ;; Track 2B: Tree parser runs as continuous validation. Preparse provides
+  ;; ALL elaboration output.
   ;;
-  ;; The tree parser's surf-* output is NOT used for elaboration yet because it
-  ;; produces different AST shapes than preparse for many forms (defn inline types,
-  ;; match bodies, list expressions, etc.). Deploying tree parser OUTPUT requires
-  ;; full AST parity with preparse — that is Track 3 scope.
+  ;; The tree parser validates that it can parse every .prologos file without
+  ;; crashing. Errors from unsupported forms (mixfix, solve, pipe, etc.) are
+  ;; expected and filtered. The tree parser's output is NOT used for elaboration
+  ;; because it lacks parity with preparse for:
+  ;;   - Expression-level sentinels: mixfix (.{...}), pipe (|>), compose (>>)
+  ;;   - Expression keywords: solve, solve-one, defr, session, capability, etc.
+  ;;   - Complex defn forms: inline type annotations + match bodies
   ;;
-  ;; Value delivered now: tree parser runs on every .prologos file processed by
-  ;; process-file. Any tree parser crash or regression is caught immediately.
-  (void tree-surfs)  ;; force evaluation, prevent dead-code elimination
-  ;; Return preparse output directly — no merge, no reordering, proven correct.
+  ;; Achieving AST parity requires either: (a) implementing these in the tree
+  ;; parser/rewrite engine, or (b) the propagator architecture where both
+  ;; pipelines write to cells and lattice join resolves. Option (b) is Track 3-4.
+  ;;
+  ;; Value: every .prologos file gets tree parser validation on every process-file
+  ;; call. Tree parser crashes or regressions are caught immediately.
+  (void tree-surfs)
   (filter (lambda (s) (not (prologos-error? s))) preparse-surfs))
 
 ;; PPN Track 2B Phase 4: use-tree-parser? parameter — TO BE DELETED after Phases 2-3
