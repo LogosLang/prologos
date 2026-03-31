@@ -18,6 +18,7 @@ problem. PPN collapses this to: register a rewrite rule (one file).
 Hypergraph rewriting research
 
 **Source Documents**:
+- [From S-Expression IR to Propagator Compiler](../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md) — sexp role analysis, self-hosting trajectory (Racket prototype → propagator compiler → LLVM lowering → Logos self-hosting)
 - [Hypergraph Rewriting + Propagator-Native Parsing](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md) — foundational research (Engelfriet-Heyker, DPO, semiring parsing)
 - [Tropical Optimization + Network Architecture](../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md) — ATMS search, stratification, cost-weighted rewriting
 - [Self-Describing Serialization (§4 below)](#4-research-lossy-bidirectional-typed-grammars) — grammar-as-type, invariant levels

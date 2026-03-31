@@ -405,10 +405,16 @@ vocabulary expressed through keywords and maps.
 
 * Long-Term Aspirations
 
-** Self-Hosting
-The Racket prototype (Phase 0) is a stepping stone. The goal is a
-self-hosted compiler where the type checker, optimizer, and code generator
-are themselves Prologos programs --- enabled by homoiconicity.
+** Self-Hosting → LLVM → Logos
+The Racket prototype (Phase 0) is a stepping stone. The trajectory:
+
+1. *Phase 0 (current)*: Compiler as Racket program, S-expressions as IR
+2. *Phase 1 (PPN Tracks 1-4)*: Compiler as propagator network on Racket host. Parsing, normalization, elaboration all as propagator fixpoint computation. S-expression IR eliminated from production path; Datum type preserved as user-facing semantic construct (homoiconicity).
+3. *Phase 2 (LLVM lowering)*: Typed AST cells → LLVM IR. The propagator network computes; a lowering pass reads output cells and emits native code.
+4. *Phase 3 (Logos self-hosting)*: Prologos program constructs a propagator network that compiles Logos source → LLVM IR → native binary. The native binary IS the Logos compiler. Bootstrap chain: Racket → Prologos → Logos → Logos.
+5. *Phase 4 (Racket dissolves)*: Logos runtime replaces Racket host (GC, scheduling, I/O). Racket needed only for initial bootstrap.
+
+See [[file:../../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md][From S-Expression IR to Propagator Compiler]] for the full architectural analysis of how the PPN series enables this trajectory.
 
 ** Relational Query Language for Data
 The relational paradigm (~defr~/~rel~/~solve~) is not just a logic programming
