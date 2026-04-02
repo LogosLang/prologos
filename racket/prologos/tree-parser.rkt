@@ -687,6 +687,72 @@
                            current loc)
                  (list rest) loc)]))))]))
 
+;; Helper: parse items as either a binder (x : T) or a type expression
+;; Returns binder-info if it's a binder, surf-* if it's a type
+(define (parse-binder-or-type items loc)
+  (cond
+    [(null? items) (surf-hole loc)]
+    [(= (length items) 1)
+     (define item (car items))
+     (cond
+       ;; Paren group: (x : T) → binder
+       [(and (parse-tree-node? item)
+             (eq? (parse-tree-node-tag item) 'paren-group))
+        (define pchildren (rrb-to-list (parse-tree-node-children item)))
+        ;; Check for (name : type) pattern
+        (if (and (>= (length pchildren) 3)
+                 (token-entry? (car pchildren))
+                 (token-entry? (cadr pchildren))
+                 (equal? (token-entry-lexeme (cadr pchildren)) ":"))
+            (let ([name (string->symbol (token-entry-lexeme (car pchildren)))]
+                  [type-items (cddr pchildren)])
+              (define type-surf (if (= (length type-items) 1)
+                                    (parse-form-tree (car type-items))
+                                    (parse-application-tree type-items loc)))
+              (if (prologos-error? type-surf) type-surf
+                  (binder-info name #f type-surf)))
+            ;; Not a binder pattern — parse as expression
+            (parse-form-tree item))]
+       [else (parse-form-tree item)])]
+    [else (parse-application-tree items loc)]))
+
+;; Helper: check if any item (recursively) has ?-prefixed variable names
+(define (has-narrow-vars? items)
+  (for/or ([item (in-list items)])
+    (cond
+      [(token-entry? item)
+       (let ([lex (token-entry-lexeme item)])
+         (and (> (string-length lex) 1)
+              (char=? (string-ref lex 0) #\?)))]
+      [(parse-tree-node? item)
+       (has-narrow-vars? (rrb-to-list (parse-tree-node-children item)))]
+      [else #f])))
+
+;; Helper: collect all ?-vars and constraint map recursively from items
+(define (collect-narrow-vars-from-items items)
+  (define qvars '())
+  (define cmap (hasheq))
+  (define (walk items)
+    (for ([item (in-list items)])
+      (cond
+        [(token-entry? item)
+         (define lex (token-entry-lexeme item))
+         (when (and (> (string-length lex) 1)
+                    (char=? (string-ref lex 0) #\?))
+           (define base (if (string-contains? lex ":")
+                            (car (string-split lex ":"))
+                            lex))
+           (set! qvars (cons (string->symbol base) qvars))
+           (when (string-contains? lex ":")
+             (define parts (string-split lex ":"))
+             (when (>= (length parts) 2)
+               (set! cmap (hash-set cmap (string->symbol (car parts))
+                                    (list (string->symbol (cadr parts))))))))]
+        [(parse-tree-node? item)
+         (walk (rrb-to-list (parse-tree-node-children item)))])))
+  (walk items)
+  (values (reverse qvars) cmap))
+
 ;; Helper: split a list of items by $pipe tokens
 (define (split-by-pipe items)
   (let loop ([remaining items] [current '()] [groups '()])
@@ -1225,12 +1291,8 @@
                         (and (token-entry? c) (equal? (token-entry-lexeme c) "=")
                              (> i 0) i))])
           (and eq-pos
-               ;; Check for ?-prefixed variables in children
-               (for/or ([c (in-list children)])
-                 (and (token-entry? c)
-                      (let ([lex (token-entry-lexeme c)])
-                        (and (> (string-length lex) 1)
-                             (char=? (string-ref lex 0) #\?)))))))
+               ;; Check for ?-prefixed variables in children (recursively into sub-nodes)
+               (has-narrow-vars? children)))
         ;; Narrowing: split at = into LHS and RHS
         (define eq-pos (for/or ([c (in-list children)] [i (in-naturals)])
                          (and (token-entry? c) (equal? (token-entry-lexeme c) "=")
@@ -1241,35 +1303,8 @@
                         (parse-application-tree lhs-items loc)))
         (define rhs (if (= (length rhs-items) 1) (parse-form-tree (car rhs-items))
                         (parse-application-tree rhs-items loc)))
-        ;; Collect ?-variables and constraint maps
-        (define qvars
-          (for/list ([c (in-list children)]
-                     #:when (and (token-entry? c)
-                                 (let ([lex (token-entry-lexeme c)])
-                                   (and (> (string-length lex) 1)
-                                        (char=? (string-ref lex 0) #\?)))))
-            ;; Extract variable name (strip ? prefix and :constraint suffix)
-            (let* ([lex (token-entry-lexeme c)]
-                   [base (if (string-contains? lex ":")
-                             (car (string-split lex ":"))
-                             lex)])
-              (string->symbol base))))
-        ;; Build constraint map from ?x:Type patterns
-        (define cmap
-          (for/fold ([m (hasheq)])
-                    ([c (in-list children)]
-                     #:when (and (token-entry? c)
-                                 (let ([lex (token-entry-lexeme c)])
-                                   (and (> (string-length lex) 1)
-                                        (char=? (string-ref lex 0) #\?)
-                                        (string-contains? lex ":")))))
-            (let* ([lex (token-entry-lexeme c)]
-                   [parts (string-split lex ":")]
-                   [var-name (string->symbol (car parts))]
-                   [type-name (and (>= (length parts) 2) (string->symbol (cadr parts)))])
-              (if type-name
-                  (hash-set m var-name (list type-name))
-                  m))))
+        ;; Collect ?-variables and constraint maps (recursively into sub-nodes)
+        (define-values (qvars cmap) (collect-narrow-vars-from-items children))
         (cond
           [(prologos-error? lhs) lhs]
           [(prologos-error? rhs) rhs]
@@ -1285,10 +1320,63 @@
 
 (define (parse-angle-group-tree children loc)
   ;; <Type> → type annotation
-  ;; For now, parse as expression
-  (if (= (length children) 1)
-      (parse-form-tree (car children))
-      (parse-application-tree children loc)))
+  ;; Detect: -> (Pi), * (Sigma), | (Union) operators
+  (cond
+    [(null? children) (surf-hole loc)]
+    [(= (length children) 1) (parse-form-tree (car children))]
+    ;; Check for -> (Pi type) or * (Sigma type) or | (Union)
+    [else
+     ;; Find arrow or star operator
+     (define arrow-pos (for/or ([c (in-list children)] [i (in-naturals)])
+                         (and (token-entry? c)
+                              (member (token-entry-lexeme c) '("->" "-0>" "->>" "-1>"))
+                              i)))
+     (define star-pos (for/or ([c (in-list children)] [i (in-naturals)])
+                        (and (token-entry? c) (equal? (token-entry-lexeme c) "*")
+                             (> i 0) i)))
+     (define union-pos (for/or ([c (in-list children)] [i (in-naturals)])
+                         (and (token-entry? c) (equal? (token-entry-lexeme c) "|")
+                              (> i 0) i)))
+     (cond
+       ;; Arrow type: <A -> B>
+       [arrow-pos
+        (define arrow-lex (token-entry-lexeme (list-ref children arrow-pos)))
+        (define mult (cond [(equal? arrow-lex "-0>") 'm0]
+                           [(equal? arrow-lex "-1>") 'm1]
+                           [else 'm0]))  ;; default mult
+        (define lhs-items (take children arrow-pos))
+        (define rhs-items (drop children (+ arrow-pos 1)))
+        (define lhs (parse-binder-or-type lhs-items loc))
+        (define rhs (if (= (length rhs-items) 1) (parse-form-tree (car rhs-items))
+                        (parse-angle-group-tree rhs-items loc)))
+        (cond [(prologos-error? lhs) lhs]
+              [(prologos-error? rhs) rhs]
+              [(binder-info? lhs) (surf-pi lhs rhs loc)]
+              [else (surf-arrow mult lhs rhs loc)])]
+       ;; Sigma type: <(x : A) * B>
+       [star-pos
+        (define lhs-items (take children star-pos))
+        (define rhs-items (drop children (+ star-pos 1)))
+        (define lhs (parse-binder-or-type lhs-items loc))
+        (define rhs (if (= (length rhs-items) 1) (parse-form-tree (car rhs-items))
+                        (parse-angle-group-tree rhs-items loc)))
+        (cond [(prologos-error? lhs) lhs]
+              [(prologos-error? rhs) rhs]
+              [(binder-info? lhs) (surf-sigma lhs rhs loc)]
+              [else (surf-pair lhs rhs loc)])]
+       ;; Union type: <A | B>
+       [union-pos
+        (define lhs-items (take children union-pos))
+        (define rhs-items (drop children (+ union-pos 1)))
+        (define lhs (if (= (length lhs-items) 1) (parse-form-tree (car lhs-items))
+                        (parse-application-tree lhs-items loc)))
+        (define rhs (if (= (length rhs-items) 1) (parse-form-tree (car rhs-items))
+                        (parse-angle-group-tree rhs-items loc)))
+        (cond [(prologos-error? lhs) lhs]
+              [(prologos-error? rhs) rhs]
+              [else (surf-union lhs rhs loc)])]
+       ;; No operator — application
+       [else (parse-application-tree children loc)])]))
 
 (define (parse-brace-group-tree children loc)
   ;; {k1 v1 k2 v2} → map literal
