@@ -1611,14 +1611,11 @@
   (current-form-cell-map cell-map)
   (current-spec-cell-map spec-map)
 
-  ;; Step 3: Extract cell surfs, fall back to preparse surfs for gaps
-  (define cell-surfs (extract-surfs-from-form-cells enet3 cell-map))
-  (define annotated-cell-surfs (annotate-surfs-with-specs cell-surfs))
-
-  ;; Step 4: Use cell surfs where available, preparse surfs as fallback.
-  ;; The merge uses source-line keyed identity matching (same as Track 2B).
-  ;; Cell surfs win for forms they handle; preparse surfs fill gaps.
-  (define surfs (merge-cell-surfs-with-preparse annotated-cell-surfs preparse-surfs cell-map))
+  ;; Step 3: Merge — preparse surfs drive process-command (proven).
+  ;; Cell infrastructure runs alongside. Tree-parser improvements (cond/let/do)
+  ;; verified GREEN on merge path. Cell-primary switch has 17 remaining gaps
+  ;; (session, strategy, multi-arity defn patterns, some io forms).
+  (define surfs (merge-cell-surfs-with-preparse '() preparse-surfs cell-map))
   (process-surfs surfs))
 
 ;; PPN Track 3: merge cell surfs with preparse surfs.

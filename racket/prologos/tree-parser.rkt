@@ -531,27 +531,35 @@
 ;; produce after preparse expansion.
 
 ;; cond | guard1 -> body1 | guard2 -> body2 | ...
-;; Desugars to: (boolrec _ body1 (boolrec _ body2 ... fail) guard2) guard1)
-;; In tree form: args after "cond" keyword are pipe-delimited clauses.
-;; Each clause: [guard -> body] or [guard -> body1 body2 ...] (multi-expr body)
+;; After G(0) grouping + T(0) tagging, cond node has children:
+;;   [cond-token, expr-node1, expr-node2, ...]
+;; Each expr-node contains: ["|" guard-tokens... "->" body-tokens...]
+;; Desugars to: nested boolrec (same as preparse's expand-cond)
 (define (parse-cond-expr args loc)
-  ;; Split args by $pipe tokens into clause groups
-  (define clauses (split-by-pipe args))
-  (if (null? clauses)
+  ;; args = children of cond node after keyword = [expr-node1, expr-node2, ...]
+  ;; Each arg is a parse-tree-node with clause children
+  (define clause-nodes
+    (filter (lambda (a) (parse-tree-node? a)) args))
+  (if (null? clause-nodes)
       (parse-error-result loc "cond: need at least one clause")
       ;; Build nested boolrec from last clause to first
-      (let loop ([remaining (reverse clauses)])
+      (let loop ([remaining (reverse clause-nodes)])
         (if (null? remaining)
-            ;; Fallthrough: typed hole for exhaustiveness
             (surf-typed-hole '__cond-fail loc)
-            (let* ([clause (car remaining)]
+            (let* ([clause-node (car remaining)]
                    [rest (cdr remaining)]
-                   ;; Find -> in clause to split guard from body
-                   [arrow-idx (for/or ([item (in-list clause)]
-                                       [i (in-naturals)])
+                   ;; Get clause children (flat tokens inside the expr node)
+                   [items (rrb-to-list (parse-tree-node-children clause-node))]
+                   ;; Strip leading | if present
+                   [items (if (and (pair? items) (token-entry? (car items))
+                                   (or (equal? (token-entry-lexeme (car items)) "|")
+                                       (equal? (token-entry-lexeme (car items)) "$pipe")))
+                              (cdr items) items)]
+                   ;; Find -> to split guard from body
+                   [arrow-idx (for/or ([item (in-list items)] [i (in-naturals)])
                                 (and (token-is? item "->") i))]
-                   [guard-items (if arrow-idx (take clause arrow-idx) clause)]
-                   [body-items (if arrow-idx (drop clause (+ arrow-idx 1)) '())])
+                   [guard-items (if arrow-idx (take items arrow-idx) items)]
+                   [body-items (if arrow-idx (drop items (+ arrow-idx 1)) '())])
               (if (or (null? guard-items) (null? body-items))
                   (parse-error-result loc "cond clause: need guard -> body")
                   (let ([guard (parse-expr-items guard-items loc)]
@@ -562,8 +570,6 @@
                       [(prologos-error? body) body]
                       [(prologos-error? else-branch) else-branch]
                       [else
-                       ;; (boolrec (fn [_] Type) true-branch false-branch scrutinee)
-                       ;; Simplified: (if guard body else-branch)
                        (surf-boolrec (surf-lam (binder-info '_ #f (surf-bool-type loc))
                                                (surf-hole loc) loc)
                                      body else-branch guard loc)]))))))))
