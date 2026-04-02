@@ -1,0 +1,30 @@
+#+TITLE: Standup — 2026-04-01
+#+DATE: 2026-04-01
+
+* Yesterday (since 2026-03-31 standup)
+
+** No new implementation work
+- March 31 interval was opened but no coding session occurred.
+- All prior work (PPN Track 2B, SRE Track 2G, process improvements) remains current.
+
+** Status Carried Forward
+- 383/383 GREEN, 7491 tests
+- PPN Track 2B COMPLETE: merge deployed, mixfix Pocket Universe, use-tree-parser? deleted
+- SRE Track 2G COMPLETE: algebraic domain awareness, property cells, domain registry, inference, implications, diagnostics, property-gated behavior
+- Process improvements codified: Propagator Design Mindspace, Implementation Protocol, NTT Model REQUIRED, Validated≠Deployed, Pragmatic ban
+
+* Today
+** PPN Track 3: HR Productions
+
+
+** SRE 2H
+
+
+
+
+* Blockers
+
+- test-structural-decomp: meta-solving via imperative state under BSP — deferred to SRE/PPN elaborator-on-network
+- WS-mode solver syntax gaps (~=~ as unification, ~is~ bridging) — deferred to post-PPN
+- Type lattice not distributive under current ops — SRE Track 2H (before PPN 4)
+
