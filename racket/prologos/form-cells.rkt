@@ -254,14 +254,19 @@
                   (let ([surfs (defs-to-surfs gen-defs)])
                     (if (null? surfs) acc
                         (cons (cons line surfs) acc)))]
-                 ;; No generated defs — try preparse-expand-form fallback.
-                 ;; Converts tree-node to datum, expands via preparse, parses.
-                 ;; This handles forms like cond, let, do inside defn bodies
-                 ;; that preparse-expand-form desugars.
+                 ;; No generated defs — check if it's a known side-effect-only form
+                 ;; These produce NO surfs (ns, imports, exports, deftype, bundle, etc.)
+                 [(memq tag '(ns imports exports spec deftype bundle defmacro property
+                              functor schema precedence-group specialize
+                              ;; spec is consumed by preparse (registration)
+                              ;; but tree-parser also has a stub for it
+                              ))
+                  acc]  ;; side-effect-only: no surfs
+                 ;; Unknown form with no handler — try preparse-expand-form fallback
                  [else
                   (define datum (tree-node-to-datum node source-str))
                   (if (not datum)
-                      acc  ;; conversion failed — skip
+                      acc
                       (with-handlers ([exn:fail? (lambda (e) acc)])
                         (define expanded (preparse-expand-form datum))
                         (define s (parse-datum (datum->syntax #f expanded)))

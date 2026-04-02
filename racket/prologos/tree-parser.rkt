@@ -320,16 +320,53 @@
          (let ([bd (parse-form-tree (caddr args))])
            (if (prologos-error? bd) bd
                (surf-def name #f bd loc))))]
-    ;; 4 args with := and type: (def name <type> := body) or (def name := <type> body)
+    ;; 5+ args: (def name : Type := body...) — colon type annotation with :=
+    [(and (>= (length args) 5)
+          (token-is? (cadr args) ":")
+          ;; Find := position
+          (for/or ([item (in-list args)] [i (in-naturals)])
+            (and (token-is? item ":=") i)))
+     (define name (token-symbol (car args)))
+     (define assign-idx (for/or ([item (in-list args)] [i (in-naturals)])
+                          (and (token-is? item ":=") i)))
+     (if (not name)
+         (parse-error-result loc "def: expected name")
+         (let* ([type-items (drop (take args assign-idx) 2)]  ;; between : and :=
+                [body-items (drop args (+ assign-idx 1))]     ;; after :=
+                [type-surf (if (= (length type-items) 1)
+                               (parse-form-tree (car type-items))
+                               (parse-expr-tree type-items loc))]
+                [bd (cond
+                      [(null? body-items) (parse-error-result loc "def: need body")]
+                      [(= (length body-items) 1) (parse-form-tree (car body-items))]
+                      [else (parse-expr-items body-items loc)])])
+           (cond
+             [(prologos-error? type-surf) type-surf]
+             [(prologos-error? bd) bd]
+             [else (surf-def name type-surf bd loc)])))]
+    ;; 4+ args with := at position 1: (def name := body-items...)
+    ;; body-items may be: single expression, type + body, or let-chain
     [(and (>= (length args) 4)
           (token-is? (cadr args) ":="))
-     ;; (def name := ... body) — skip :=, rest is body
      (define name (token-symbol (car args)))
      (if (not name)
          (parse-error-result loc "def: expected name")
-         (let ([bd (parse-form-tree (caddr args))])
-           (if (prologos-error? bd) bd
-               (surf-def name #f bd loc))))]
+         (let* ([body-items (cddr args)]  ;; everything after :=
+                ;; Check if first item after := is an angle-group (type annotation)
+                [has-type? (and (pair? body-items)
+                                (parse-tree-node? (car body-items))
+                                (eq? (parse-tree-node-tag (car body-items)) 'angle-group))]
+                [type-surf (if has-type? (parse-form-tree (car body-items)) #f)]
+                [rest-items (if has-type? (cdr body-items) body-items)]
+                ;; Parse body: single item → parse directly; multiple → expr sequence
+                [bd (cond
+                      [(null? rest-items) (parse-error-result loc "def: need body")]
+                      [(= (length rest-items) 1) (parse-form-tree (car rest-items))]
+                      [else (parse-expr-items rest-items loc)])])
+           (cond
+             [(prologos-error? bd) bd]
+             [(and has-type? (prologos-error? type-surf)) type-surf]
+             [else (surf-def name (and has-type? type-surf) bd loc)])))]
     ;; 3 args: (def name <type> body) or (def name body-expr)
     [(= (length args) 3)
      (define name (token-symbol (car args)))
@@ -673,11 +710,37 @@
        (loop (cdr remaining) (cons (car remaining) current) groups)])))
 
 ;; Helper: parse a list of items as an expression sequence
-;; If multiple items, wrap in application or sequence
+;; Handles: single item, let-chains, do-chains, application
 (define (parse-expr-items items loc)
   (cond
     [(null? items) (parse-error-result loc "empty expression")]
     [(= (length items) 1) (parse-form-tree (car items))]
+    ;; Check if first item is a let-assign node → let-chain
+    [(and (parse-tree-node? (car items))
+          (memq (parse-tree-node-tag (car items)) '(let-assign let-bracket)))
+     ;; Let-chain: parse first let, body is rest of items
+     (define let-node (car items))
+     (define rest (cdr items))
+     (define let-children (rrb-to-list (parse-tree-node-children let-node)))
+     ;; let-assign: [let, name, :=, value]
+     (define let-items (if (and (pair? let-children) (token-entry? (car let-children))
+                                (equal? (token-entry-lexeme (car let-children)) "let"))
+                           (cdr let-children) let-children))
+     (define assign-idx (for/or ([item (in-list let-items)] [i (in-naturals)])
+                           (and (token-is? item ":=") i)))
+     (if (not assign-idx)
+         (parse-expr-tree items loc)  ;; not a proper let — fallback
+         (let* ([name (token-symbol (car let-items))]
+                [val-items (drop let-items (+ assign-idx 1))]
+                [val (if (= (length val-items) 1) (parse-form-tree (car val-items))
+                         (parse-expr-items val-items loc))]
+                [body (parse-expr-items rest loc)])
+           (cond
+             [(not name) (parse-error-result loc "let: expected name")]
+             [(prologos-error? val) val]
+             [(prologos-error? body) body]
+             [else (surf-app (surf-lam (binder-info name #f (surf-hole loc)) body loc)
+                             (list val) loc)])))]
     [else
      ;; Multiple items — parse as expression tree
      (parse-expr-tree items loc)]))

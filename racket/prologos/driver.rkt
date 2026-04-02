@@ -1611,11 +1611,8 @@
   (current-form-cell-map cell-map)
   (current-spec-cell-map spec-map)
 
-  ;; Step 3: Merge — preparse surfs drive process-command (proven).
-  ;; Cell infrastructure runs alongside. Tree-parser improvements (cond/let/do)
-  ;; verified GREEN on merge path. Cell-primary switch has 17 remaining gaps
-  ;; (session, strategy, multi-arity defn patterns, some io forms).
-  (define surfs (merge-cell-surfs-with-preparse '() preparse-surfs cell-map))
+  ;; Step 3: MERGE path (proven) for surfs
+  (define surfs (merge-preparse-and-tree-parser s preparse-surfs))
   (process-surfs surfs))
 
 ;; PPN Track 3: merge cell surfs with preparse surfs.
