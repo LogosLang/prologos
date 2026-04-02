@@ -1601,7 +1601,9 @@
 
   ;; Step 2: Cell pipeline — form cells + dispatch + spec cells
   (register-default-token-patterns!)
-  (define pt (read-to-tree s))
+  ;; Pad source to avoid string-ref out-of-range in tree-node->stx-form
+  (define padded-src (string-append s "\n"))
+  (define pt (read-to-tree padded-src))
   (define net-box (current-prop-net-box))
   (define enet (unbox net-box))
   (define-values (enet1 cell-map raw-map) (create-form-cells-from-tree pt enet))
@@ -1614,7 +1616,7 @@
   ;; Step 3: Cell surfs are THE output. Single-parser path.
   ;; ONE parser (parse-datum), ONE representation. No fallback.
   (define surfs (extract-surfs-from-form-cells enet3 cell-map
-                  #:source-str s #:raw-map raw-map))
+                  #:source-str padded-src #:raw-map raw-map))
   (process-surfs surfs))
 
 ;; PPN Track 3: merge cell surfs with preparse surfs.

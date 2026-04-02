@@ -30,7 +30,9 @@
          "parser.rkt")
 
 (provide parse-form-tree
-         parse-top-level-forms-from-tree)
+         parse-top-level-forms-from-tree
+         parse-subtree-via-datum
+         current-source-str)
 
 ;; ========================================
 ;; Helpers: reading from tree nodes
@@ -90,15 +92,29 @@
 
      (case tag
        ;; --- Top-level forms ---
-       [(def) (parse-def-tree args loc)]
-       [(defn) (parse-defn-tree args loc)]
-       [(spec) (parse-spec-tree args loc)]
-       [(eval) (parse-eval-tree args loc)]
+       ;; §11: when source-str is set (cell pipeline), use datum conversion
+       ;; on the WHOLE node for correct keyword handling + postfix/dot-access.
+       ;; This makes parse-form-tree the ON-NETWORK dispatch point while
+       ;; parse-datum remains the canonical expression parser.
+       ;; §11: ALL top-level forms use datum conversion when source-str set
+       [(def defn defn-multi spec eval check infer
+         strategy session defproc defr solver subtype selection capability foreign)
+        (if (not (equal? (current-source-str) ""))
+            (parse-eval-tree-for-cell node loc)  ;; datum conversion on whole node
+            ;; Legacy path (merge/non-cell context)
+            (case tag
+              [(def) (parse-def-tree args loc)]
+              [(defn) (parse-defn-tree args loc)]
+              [(spec) (parse-spec-tree args loc)]
+              [(eval) (parse-eval-tree args loc)]
+              [(check) (parse-check-tree args loc)]
+              [(infer) (parse-infer-tree args loc)]
+              [(subtype) (parse-subtype-tree args loc)]
+              [(selection) (parse-selection-tree args loc)]
+              [else (parse-error-result loc (format "Unhandled form: ~a" tag))]))]
        [(data) (parse-data-tree args loc)]
        [(trait) (parse-trait-tree args loc)]
        [(impl) (parse-impl-tree args loc)]
-       [(check) (parse-check-tree args loc)]
-       [(infer) (parse-infer-tree args loc)]
 
        ;; --- Expression forms ---
        [(if) (parse-if-tree args loc)]
@@ -248,6 +264,21 @@
 
     ;; Default: variable reference
     [else (surf-var s loc)]))
+
+;; §11: Sub-expression parsing via datum conversion.
+;; Converts a tree-node to datum via tree-node->stx-form, then
+;; preparse-expand-single + parse-datum. Produces surfs IDENTICAL
+;; to the datum path (correct keyword handling, motive annotations, etc.)
+(define current-source-str (make-parameter ""))
+
+(define (parse-subtree-via-datum node)
+  (define stx (tree-node->stx-form node "<tree>" (current-source-str)))
+  (if (not stx)
+      (parse-form-tree node)
+      (let ([datum (syntax->datum stx)])
+        (with-handlers ([exn:fail? (lambda (e) (parse-form-tree node))])
+          (define expanded (preparse-expand-single datum))
+          (parse-datum (datum->syntax #f expanded))))))
 
 ;; ========================================
 ;; Built-in operation dispatch tables
@@ -548,16 +579,25 @@
   ;; in the parsed output. If they DO appear here, they weren't consumed.
   (parse-error-result loc "spec: consumed by preparse"))
 
+;; §11: parse eval via datum conversion on the WHOLE node (for postfix, dot-access)
+(define (parse-eval-tree-for-cell node loc)
+  (define stx (tree-node->stx-form node "<tree>" (current-source-str)))
+  (if (not stx)
+      (parse-error-result loc "eval: cannot convert to datum")
+      (let ([datum (syntax->datum stx)])
+        (with-handlers ([exn:fail? (lambda (e)
+                                     (parse-error-result loc (format "eval: ~a" (exn-message e))))])
+          (define expanded (preparse-expand-single datum))
+          (parse-datum (datum->syntax #f expanded))))))
+
 (define (parse-eval-tree args loc)
   ;; Simple: (eval expr) → surf-eval
-  ;; Propagate inner errors — if the expression can't be parsed (mixfix, pipe, etc.),
-  ;; return the error so the merge falls back to preparse's version.
   (define inner
     (if (= (length args) 1)
         (parse-form-tree (car args))
         (parse-application-tree args loc)))
   (if (prologos-error? inner)
-      inner  ;; propagate error — merge will use preparse's eval
+      inner
       (surf-eval inner loc)))
 
 ;; ========================================

@@ -300,8 +300,11 @@
 ;; Uses tree-node->stx-form which produces a single syntax object
 ;; representing the entire form (grouped, like the compat reader output).
 (define (tree-node-to-datum node source-str)
+  ;; Pad source-str with spaces to avoid string-ref out-of-range when
+  ;; tree-node srcloc end-position = string-length.
+  (define padded (string-append (or source-str "") "  "))
   (with-handlers ([exn:fail? (lambda (e) #f)])
-    (define stx (tree-node->stx-form node "<cell>" (or source-str "")))
+    (define stx (tree-node->stx-form node "<cell>" padded))
     (if stx (syntax->datum stx) #f)))
 
 ;; §11.5 Opt-in: form tags where parse-form-tree is VERIFIED to produce
@@ -315,13 +318,20 @@
 ;; But each form requires parse-form-tree to replicate parser.rkt's
 ;; keyword-specific logic (motive annotations, multiplicity, etc.)
 ;; §11.5: start empty (datum-always), opt-in verified forms
+;; TOP-LEVEL form tags where parse-form-tree uses datum conversion on
+;; the whole node (via parse-eval-tree-for-cell). ON-NETWORK dispatch.
+;; Expression-level tags (bracket-group, etc.) are NOT here — they're
+;; handled by form parsers' recursive descent via datum path.
+;; VERIFIED forms: these produce correct surfs via parse-form-tree
+;; with datum conversion on whole node. Each verified by targeted tests.
 (define tree-parser-verified-tags '())
 
 ;; §11 TREE-CANONICAL extraction rewrite
 (define (extract-surfs-from-form-cells enet cell-map
                                         #:source-str [source-str #f]
                                         #:raw-map [raw-map (hasheq)])
-  ;; §11: tree-parser opt-in forms, datum for rest.
+  ;; §11: set source-str for parse-subtree-via-datum in tree-parser
+  (current-source-str (or source-str ""))
   (define pairs
     (for/fold ([acc '()])
               ([(line cell-id) (in-hash cell-map)])
