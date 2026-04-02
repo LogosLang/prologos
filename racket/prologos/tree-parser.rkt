@@ -136,7 +136,10 @@
        [(infix-pipe) (parse-error-result loc "infix-pipe: handled by preparse expansion")]
        [(implicit-map) (parse-error-result loc "implicit-map: handled by preparse expansion")]
 
-       ;; --- Preparse-consumed forms (D.3 F1) ---
+       ;; --- Phase 1b: parseable preparse-consumed forms ---
+       [(subtype) (parse-subtype-tree args loc)]
+
+       ;; --- Preparse-consumed forms (remaining stubs) ---
        ;; These are handled by preparse: registration, generation, or specialized
        ;; desugaring. The tree parser returns explicit errors so the merge's
        ;; error filter catches them. Without these stubs, the `else` fallthrough
@@ -151,7 +154,7 @@
        [(proc) (parse-error-result loc "proc: consumed by preparse")]
        [(property) (parse-error-result loc "property: consumed by preparse")]
        [(schema) (parse-error-result loc "schema: consumed by preparse")]
-       [(selection) (parse-error-result loc "selection: consumed by preparse")]
+       [(selection) (parse-selection-tree args loc)]
        [(spawn) (parse-error-result loc "spawn: consumed by preparse")]
        [(spawn-with) (parse-error-result loc "spawn-with: consumed by preparse")]
        [(specialize) (parse-error-result loc "specialize: consumed by preparse")]
@@ -1021,6 +1024,92 @@
 
 (define (parse-exports-tree args loc)
   (parse-error-result loc "exports: consumed by preparse"))
+
+;; ========================================
+;; Phase 1b: Parseable preparse-consumed forms
+;; ========================================
+
+;; subtype Sub Super [via fn]
+;; Tree args: [Sub, Super] or [Sub, Super, via, fn]
+(define (parse-subtype-tree args loc)
+  (cond
+    [(< (length args) 2)
+     (parse-error-result loc "subtype requires at least 2 arguments: subtype Sub Super")]
+    [else
+     (define sub-sym (token-symbol (first args)))
+     (define super-sym (token-symbol (second args)))
+     (cond
+       [(not sub-sym)
+        (parse-error-result loc (format "subtype: expected type name, got ~a" (first args)))]
+       [(not super-sym)
+        (parse-error-result loc (format "subtype: expected type name, got ~a" (second args)))]
+       [else
+        (define rest (cddr args))
+        (define via-fn
+          (cond
+            [(null? rest) #f]
+            [(and (>= (length rest) 2)
+                  (token-is? (first rest) "via"))
+             (token-symbol (second rest))]
+            [else #f]))
+        (surf-subtype sub-sym super-sym via-fn loc)])]))
+
+;; selection Name from Schema :requires [...] :provides [...] :includes [...]
+;; Tree args: [Name, from, Schema, ...keyword-clauses...]
+(define (parse-selection-tree args loc)
+  (cond
+    [(< (length args) 3)
+     (parse-error-result loc "selection requires: selection Name from Schema")]
+    [else
+     (define name-sym (token-symbol (first args)))
+     (define from-kw (token-lexeme (second args)))
+     (define schema-sym (token-symbol (third args)))
+     (cond
+       [(not name-sym)
+        (parse-error-result loc (format "selection: expected name, got ~a" (first args)))]
+       [(not (equal? from-kw "from"))
+        (parse-error-result loc (format "selection: expected 'from' after name, got ~a" from-kw))]
+       [(not schema-sym)
+        (parse-error-result loc (format "selection: expected schema name, got ~a" (third args)))]
+       [else
+        ;; Parse keyword clauses from remaining args
+        (define rest (cdddr args))
+        (define-values (req prov incl)
+          (parse-selection-kw-clauses rest loc))
+        (surf-selection name-sym schema-sym req prov incl loc)])]))
+
+;; Helper: parse selection keyword clauses from tree args
+;; Recognizes :requires, :provides, :includes followed by bracket groups
+(define (parse-selection-kw-clauses args loc)
+  (let loop ([remaining args] [req '()] [prov '()] [incl '()])
+    (cond
+      [(null? remaining) (values req prov incl)]
+      [else
+       (define kw (token-lexeme (car remaining)))
+       (cond
+         [(and kw (string=? kw ":requires") (pair? (cdr remaining)))
+          (define val-node (cadr remaining))
+          (define items (extract-bracket-symbols val-node))
+          (loop (cddr remaining) items prov incl)]
+         [(and kw (string=? kw ":provides") (pair? (cdr remaining)))
+          (define val-node (cadr remaining))
+          (define items (extract-bracket-symbols val-node))
+          (loop (cddr remaining) req items incl)]
+         [(and kw (string=? kw ":includes") (pair? (cdr remaining)))
+          (define val-node (cadr remaining))
+          (define items (extract-bracket-symbols val-node))
+          (loop (cddr remaining) req prov items)]
+         [else
+          ;; Unknown keyword — skip
+          (loop (cdr remaining) req prov incl)])])))
+
+;; Helper: extract symbol names from a bracket-group node
+(define (extract-bracket-symbols node)
+  (if (parse-tree-node? node)
+      (for/list ([child (in-list (node-children node))]
+                 #:when (token-entry? child))
+        (string->symbol (token-entry-lexeme child)))
+      '()))
 
 ;; ========================================
 ;; Top-level: parse all forms from a tree

@@ -59,7 +59,7 @@
  tag-ns tag-imports tag-exports tag-foreign
  tag-defmacro tag-deftype tag-bundle
  tag-property tag-functor tag-schema tag-selection
- tag-specialize tag-capability tag-strategy
+ tag-subtype tag-specialize tag-capability tag-strategy
  tag-spawn tag-spawn-with
  tag-precedence-group)
 
@@ -116,6 +116,7 @@
 (define tag-functor 'functor)
 (define tag-schema 'schema)
 (define tag-selection 'selection)
+(define tag-subtype 'subtype)
 (define tag-specialize 'specialize)
 (define tag-capability 'capability)
 (define tag-strategy 'strategy)
@@ -350,6 +351,7 @@
 (register-simple-tag! "functor" tag-functor)
 (register-simple-tag! "schema" tag-schema)
 (register-simple-tag! "selection" tag-selection)
+(register-simple-tag! "subtype" tag-subtype)
 (register-simple-tag! "specialize" tag-specialize)
 (register-simple-tag! "session" tag-session)
 (register-simple-tag! "defproc" tag-defproc)
