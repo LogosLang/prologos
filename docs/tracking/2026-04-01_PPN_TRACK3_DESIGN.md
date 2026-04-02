@@ -1,4 +1,4 @@
-# PPN Track 3: Parser as Propagators — Stage 3 Design (D.1)
+# PPN Track 3: Parser as Propagators — Stage 3 Design (D.2)
 
 **Date**: 2026-04-01
 **Series**: [PPN (Propagator-Parsing-Network)](2026-03-26_PPN_MASTER.md)
@@ -119,13 +119,13 @@ These are all FACTS — partial (a form might be recognized but sub-expressions 
 
 **2. What is the lattice?**
 
-Three lattices:
+Three lattices, each with explicitly declared algebraic structure (see §3.8 for full analysis):
 
-- **Per-form parse lattice**: ⊥ (unparsed source) → partial (form type known, sub-structure in progress) → complete (fully parsed surf-* struct). The cell value IS a Pocket Universe containing the form's entire parse tree at whatever stage of refinement it's reached. The merge function is the per-form lattice join from Track 2B's `merge-form` — tree parser output ≥ preparse output for user forms.
+- **Per-form parse lattice (FormCell)**: A product lattice with deliberate ordering choices. The stage component is a finite chain (Heyting). The tree-node and surf components use **pipeline-preference ordering** (NOT flat equality) — tree-parser output > preparse output > ⊥. This makes the product distributive and Heyting, avoiding the flat-lattice trap that Track 2G found in the type domain. The registrations component is a powerset (Boolean). The FormCell domain MUST be registered via SRE Track 2G's `register-domain!` with explicit algebraic property declarations. See §3.8 for why these ordering choices matter.
 
-- **Grammar production registry**: ⊥ (empty) → set of registered productions. Monotone set — productions are only added. Join is set union. The registry cell holds a hash from keyword symbol to production (a Pocket Universe factory function). 236 productions bulk-registered at startup.
+- **Grammar production registry**: `Map Symbol (Set GrammarProduction)` — values are SETS of productions per keyword, not singletons. For Track 3, each set has exactly one element. Track 7 adds ambiguity (multiple productions per keyword, ATMS explores alternatives). The set-valued design avoids the type-lattice mistake of committing to a flat ordering that later needs redesign. Powerset per keyword → distributive, Heyting, Boolean.
 
-- **Registration lattice**: ⊥ (nothing registered) → set of known names with their properties. Monotone — registrations are only added. This is the information currently in `preparse-expand-all`'s side effects. For Track 3, this remains in Racket parameters (scaffolding). The lattice structure is what matters for the future PM migration.
+- **Registration lattice**: ⊥ (nothing registered) → set of known names with their properties. Monotone — registrations are only added. This is the information currently in `preparse-expand-all`'s side effects. For Track 3, this remains in Racket parameters (scaffolding). The lattice structure is what matters for the future PM migration. Per-key values (e.g., a spec's type annotation) use flat equality with collision = ⊤ (contradiction = error), which is correct semantics.
 
 **3. What is the identity?**
 
@@ -150,12 +150,20 @@ Each top-level source form gets ONE cell on the network. The cell value is a Poc
   stage         ;; symbol: 'raw | 'tagged | 'grouped | 'rewritten | 'parsed
   tree-node     ;; parse-tree-node at current stage (or #f if parsed)
   surf          ;; surf-* struct (or #f if not yet parsed)
+  provenance    ;; symbol: 'none | 'preparse | 'tree-parser — pipeline-preference ordering
   source-line   ;; integer — preserved for diagnostics
-  registrations ;; list of registration side-effects (scaffolding for PM migration)
+  registrations ;; set of registration side-effects (scaffolding for PM migration)
 )
 ```
 
-The stage ordering IS the lattice ordering: `raw < tagged < grouped < rewritten < parsed`. Each stage is a stratum. A propagator at stratum N reads the cell at stage ≥ N-1 and advances it to stage N.
+**Ordering (component-wise, all monotone)**:
+- `stage`: Finite chain — `raw < tagged < grouped < rewritten < parsed`. Heyting. Each stage is a stratum.
+- `tree-node`: Option with pipeline-preference — `#f < any-node`. At most one node (tree parser overwrites).
+- `surf`: Option with pipeline-preference — `#f < preparse-surf < tree-parser-surf`. The provenance field tracks source for the ordering.
+- `provenance`: Chain — `none < preparse < tree-parser`. This is the **pipeline-preference ordering** that makes the surf component a chain (Heyting) rather than flat (non-distributive). Track 2B's `merge-form` already encodes this ordering — D.2 makes it explicit and structural.
+- `registrations`: Set (powerset) — join is union. Boolean.
+
+The product of these components is distributive and Heyting (product of chains and powersets). See §3.8 for the algebraic property verification.
 
 **Stages** (from Track 2 pipeline, now formalized):
 
@@ -179,6 +187,7 @@ A grammar production maps a keyword to a parsing function:
 ;; A grammar production
 (struct grammar-production
   (keyword       ;; symbol — the keyword head (e.g., 'defn, 'data, 'fn)
+   provenance    ;; symbol: 'builtin | 'library | 'user — for priority ordering
    arity-check   ;; (or/c #f (-> list? boolean?)) — arity validation
    parse-fn       ;; (-> list? srcloc? surf?) — the parsing function
    registration-fn ;; (or/c #f (-> surf? void?)) — registration side-effect (scaffolding)
@@ -187,9 +196,15 @@ A grammar production maps a keyword to a parsing function:
   #:transparent)
 ```
 
-**The production registry** is a Pocket Universe cell holding a hash from keyword symbol to `grammar-production`. At system startup, 236 productions are bulk-registered. The merge function is hash-merge (union, later registration wins for same keyword — monotone because productions are only added or refined, never removed).
+**The production registry** is a Pocket Universe cell holding a hash from keyword symbol to **set of `grammar-production`**. Values are sets, not singletons — designed for Track 7's ambiguity where multiple productions may exist for the same keyword.
 
-**Relationship to Track 7**: The production registry is the extension point. Track 7 exposes it to users via the `grammar` toplevel form. Track 3 populates it from Racket-side definitions. The mechanism is the same — write to the production registry cell.
+For Track 3, each keyword maps to a singleton set (one builtin production). The dispatch function selects the highest-provenance production from the set (`user > library > builtin`). When the set has one element (Track 3), this is a no-op lookup.
+
+For Track 7, a user `grammar` declaration adds a production to the set. If the user production and a builtin production coexist, provenance ordering resolves (user wins). If two user productions coexist for the same keyword, ATMS explores alternatives (parse ambiguity). This is the same mechanism PPN Track 5 uses for type-directed disambiguation.
+
+The merge function is per-keyword set union: `join(a, b) = {k → a[k] ∪ b[k] | k ∈ keys(a) ∪ keys(b)}`. Powerset per keyword → distributive, Heyting, Boolean. Monotone — productions are only added.
+
+**Relationship to Track 7**: The production registry is the extension point. Track 7 exposes it to users via the `grammar` toplevel form. Track 3 populates it from Racket-side definitions. The mechanism is the same — write to the production registry cell. The set-valued design means Track 7 doesn't need a lattice redesign — it just adds elements to existing sets.
 
 ### 3.4 Registration as Information Flow (Scaffolding)
 
@@ -252,6 +267,109 @@ Phase 8 retires parser.rkt:
 Track 3 does NOT add new user-facing syntax. It restructures the internal pipeline. No changes to grammar.ebnf or grammar.org. No new keywords, delimiters, or parse forms.
 
 The user-visible effect is: nothing changes. `.prologos` files parse and elaborate identically. The pipeline is faster (no redundant preparse), more modular (productions vs. monolithic parser), and extensible (production registry for future `grammar` form).
+
+### 3.8 Algebraic Structure Analysis (D.2)
+
+**Motivation**: SRE Track 2G found the type lattice insufficient for Heyting classification — flat equality merge with >2 incomparable atoms is not distributive. That finding necessitates a full type lattice redesign (SRE Track 2H). Track 3's lattices are designed to AVOID this trap by making deliberate ordering choices that ensure the algebraic properties we need for SRE, error reporting, and future extensions.
+
+**Lesson applied**: The algebraic properties depend on which ORDERING we use, not just the carrier set. The same set of values can be Heyting under one ordering and non-distributive under another. We choose orderings that give us the properties we need.
+
+#### 3.8.1 FormCell Component Analysis
+
+| Component | Carrier | Ordering | Algebraic Class | Why This Ordering |
+|-----------|---------|----------|----------------|-------------------|
+| `stage` | 5 symbols | Total chain: raw < tagged < grouped < rewritten < parsed | Finite chain → **Heyting** | Stages are strictly ordered. No ambiguity. |
+| `tree-node` | {#f} ∪ ParseTreeNode | Option: #f < any-node (at most one) | 2-element chain → **Boolean** | Tree parser writes once. No merge between different trees needed. |
+| `surf` | {#f} ∪ SurfExpr | Pipeline-preference: #f < preparse-output < tree-parser-output | 3-element chain → **Heyting** | Track 2B's merge-form already encodes this. D.2 makes it explicit via `provenance` field. |
+| `provenance` | 3 symbols | Chain: none < preparse < tree-parser | Finite chain → **Heyting** | Tracks which pipeline produced the surf. IS the surf ordering. |
+| `source-line` | Nat | Max (information-preserving) | Trivial (single value per form) | Diagnostic only. Not merged. |
+| `registrations` | Set of Registration | Set union (powerset) | Powerset → **Boolean** | Accumulation. Monotone. |
+
+**Product lattice**: Chain × Boolean × Heyting × Heyting × Trivial × Boolean = **Heyting** (product of Heyting algebras is Heyting).
+
+**Why this avoids the type-lattice trap**: The type lattice used EQUALITY merge for types — `Int ⊔ Nat = ⊤` because Int and Nat are incomparable atoms in a flat lattice. Track 3's surf component uses PIPELINE-PREFERENCE ordering — `preparse-surf ⊔ tree-parser-surf = tree-parser-surf` because tree-parser is HIGHER in the chain. There are never two incomparable surf values. The provenance field encodes this ordering structurally.
+
+**Track 5 lattice evolution**: When Track 5 adds parse ambiguity, the surf component changes from a 3-element chain (one surf per form) to a **set of candidate surfs** (multiple parses). This is a powerset → Boolean. The product remains Heyting (powerset is stronger than Heyting). The design anticipates this: the `provenance` field becomes per-candidate, not per-form. No lattice REDESIGN needed — the component changes from chain to powerset, both of which are Heyting-or-better.
+
+#### 3.8.2 Production Registry Analysis
+
+| Component | Carrier | Ordering | Algebraic Class |
+|-----------|---------|----------|----------------|
+| Per-keyword value | Set of GrammarProduction | Set union (powerset) | **Boolean** |
+| Registry | Map Symbol (Set GrammarProduction) | Per-key set union | **Boolean** (product of Boolean per key) |
+
+**Track 7 provenance resolution**: Within a keyword's production set, provenance ordering (`user > library > builtin`) selects the active production. This is a CHOICE function on the set, not a lattice operation. The lattice (set union) accumulates all productions; the dispatch function selects from the accumulated set. Decomplected: accumulation is lattice, selection is pure function.
+
+**Ambiguity**: If two productions of the same provenance exist for the same keyword, the production set has >1 element at the same provenance level. This IS parse ambiguity — Track 5's ATMS-tagged speculation resolves it. The lattice doesn't need to resolve ambiguity; it accumulates it. Resolution is a separate concern (ATMS).
+
+#### 3.8.3 Registration Lattice Analysis (Scaffolding — PM Migration Target)
+
+| Registry | Per-key ordering | Collision semantics | Algebraic Class |
+|----------|-----------------|-------------------|----------------|
+| Constructors | Set of CtorDesc per type | Union (accumulate) | Powerset → **Boolean** |
+| Traits | Flat per trait name | Collision = ⊤ (error) | Flat → **NOT distributive** |
+| Impls | Set per (trait, type) | Union (multiple impls allowed) | Powerset → **Boolean** |
+| Specs | Flat per function name | Collision = ⊤ (error) | Flat → **NOT distributive** |
+| Macros | Flat per macro name | Collision = ⊤ (error) | Flat → **NOT distributive** |
+
+**NOTE**: Trait, spec, and macro registries are flat-per-key — same structure as the type lattice under equality. This means they are NOT distributive. For Track 3 (scaffolding via parameters), this doesn't matter — parameters aren't lattice-merged. For PM (cells on network), the per-key flat components will need the same attention as the type lattice. Options:
+1. **Accept flat**: collision = ⊤ is the correct semantics (redeclaring a trait is an error)
+2. **Version ordering**: trait-v2 > trait-v1 (incremental redefinition). Chain → Heyting.
+3. **Provenance ordering**: user-defined > library-defined. Chain → Heyting.
+
+PM's design should address this. Track 3 notes it but does not solve it.
+
+#### 3.8.4 SRE Domain Registration
+
+Track 3 MUST register its lattice domains via SRE Track 2G's `register-domain!` with explicit property declarations:
+
+```racket
+;; Register FormCell as an SRE domain
+(register-domain!
+  'form-cell
+  (make-sre-domain
+    ;; ... merge/meet/bot/top ...
+    #:declared-properties
+    (hasheq 'commutative-join  prop-confirmed
+            'associative-join  prop-confirmed
+            'idempotent-join   prop-confirmed
+            'has-meet          prop-confirmed
+            'commutative-meet  prop-confirmed
+            'associative-meet  prop-confirmed
+            'distributive      prop-confirmed     ;; pipeline-preference ordering
+            'has-pseudo-complement prop-confirmed  ;; finite Heyting
+            'has-complement    prop-refuted)))     ;; NOT Boolean (stages have >2 elements)
+
+;; Register ProductionRegistry as an SRE domain
+(register-domain!
+  'production-registry
+  (make-sre-domain
+    ;; ... merge/meet/bot/top ...
+    #:declared-properties
+    (hasheq 'commutative-join  prop-confirmed
+            'associative-join  prop-confirmed
+            'idempotent-join   prop-confirmed
+            'has-meet          prop-confirmed
+            'distributive      prop-confirmed
+            'has-pseudo-complement prop-confirmed
+            'has-complement    prop-confirmed)))   ;; Boolean (powerset)
+```
+
+**SRE Track 2G's inference validates declarations**: After registration, `infer-domain-properties` tests the declared properties against actual samples. If the pipeline-preference ordering is implemented incorrectly (e.g., a merge function that doesn't respect the chain), inference catches the counterexample. This is the safety net that was missing for the type lattice's distributivity assumption.
+
+#### 3.8.5 Summary: Why These Lattices Won't Need Redesign
+
+| Lattice | Algebraic Class | Design-for-Future Provision |
+|---------|----------------|---------------------------|
+| FormCell | Heyting | Surf component changes from chain → powerset in Track 5 (both Heyting-or-better). No redesign. |
+| ProductionRegistry | Boolean | Set-valued per keyword. Track 7 adds elements to sets. No redesign. |
+| Registration (scaffolding) | Mixed | Flat components noted. PM design must address. Track 3 doesn't commit to a lattice structure for registrations. |
+
+The type lattice required redesign because it committed to flat equality as the ordering, then discovered that downstream consumers (Heyting error reporting) needed a richer ordering. Track 3 avoids this by:
+1. **Choosing pipeline-preference ordering** for components that would otherwise be flat
+2. **Using set-valued collections** for components that could later have multiple values (production sets, not singletons)
+3. **Registering domains with SRE 2G** so property inference validates the algebraic structure
+4. **Noting flat components explicitly** in the registration lattice so PM doesn't inherit the assumption
 
 ---
 
@@ -434,64 +552,110 @@ Expressing the Track 3 architecture in NTT speculative syntax. This exercises th
 ### 5.1 Per-Form Parse Lattice (Pocket Universe)
 
 ```prologos
-;; The parse stage ordering
+;; The parse stage ordering — finite chain (Heyting)
 type ParseStage := raw | tagged | grouped | rewritten | parsed
   :lattice :pure
   ;; raw < tagged < grouped < rewritten < parsed
+  ;; Algebraic: finite chain → distributive, Heyting, NOT Boolean
 
 impl Lattice ParseStage
   join raw x      -> x
   join x raw      -> x
   join parsed _   -> parsed
   join _ parsed   -> parsed
-  ;; Same stage → identity
   join x x        -> x
   ;; Different non-extreme stages → take the higher
-  ;; (tagged < grouped < rewritten)
   bot -> raw
+  ;; Meet exists (min of chain)
+  meet parsed x   -> x
+  meet x parsed   -> x
+  meet raw _      -> raw
+  meet _ raw      -> raw
+  meet x x        -> x
+
+;; Pipeline provenance — chain ordering (Heyting)
+;; This is the KEY design choice that avoids the flat-lattice trap.
+;; Track 2B's merge-form encoded this implicitly; D.2 makes it structural.
+type Provenance := prov-none | prov-preparse | prov-tree-parser
+  :lattice :pure
+  ;; prov-none < prov-preparse < prov-tree-parser
+  ;; Algebraic: 3-element chain → distributive, Heyting
+
+impl Lattice Provenance
+  join prov-none x            -> x
+  join x prov-none            -> x
+  join prov-tree-parser _     -> prov-tree-parser
+  join _ prov-tree-parser     -> prov-tree-parser
+  join x x                    -> x
+  bot -> prov-none
 
 ;; The Pocket Universe value for a single source form
+;; Product of: chain × option × option × chain × nat × powerset
+;; = Heyting × Boolean × Heyting × Heyting × trivial × Boolean = HEYTING
 type FormCell := FormCell
-  {stage   : ParseStage
-   tree    : Option ParseTreeNode
-   surf    : Option SurfExpr
-   srcline : Int
-   regs    : List Registration}
+  {stage      : ParseStage         ;; chain → Heyting
+   tree       : Option ParseTreeNode  ;; 2-valued option → Boolean
+   surf       : Option SurfExpr    ;; option, ordered by provenance
+   provenance : Provenance         ;; chain → Heyting (IS the surf ordering)
+   srcline    : Int                ;; diagnostic, not merged
+   regs       : Set Registration}  ;; powerset → Boolean
   :lattice :pure
 
 impl Lattice FormCell
-  join [FormCell s1 t1 sf1 l1 r1] [FormCell s2 t2 sf2 l2 r2]
+  join [FormCell s1 t1 sf1 p1 l1 r1] [FormCell s2 t2 sf2 p2 l2 r2]
     -> FormCell
-         [stage-join s1 s2]
-         [option-join t1 t2]       ;; prefer non-#f
-         [option-join sf1 sf2]     ;; prefer non-#f
-         [max l1 l2]               ;; source line preserved
-         [list-union r1 r2]        ;; registrations accumulate
-  bot -> FormCell raw none none 0 '[]
+         [stage-join s1 s2]           ;; max of chain
+         [option-join t1 t2]          ;; prefer non-none
+         [prov-select sf1 p1 sf2 p2]  ;; take surf with higher provenance
+         [prov-join p1 p2]            ;; max of provenance chain
+         [max l1 l2]
+         [set-union r1 r2]
+  bot -> FormCell raw none none prov-none 0 #{}
+
+;; prov-select: choose the surf-* from the higher-provenance pipeline
+;; This IS Track 2B's merge-form logic, now structural
+spec prov-select (Option SurfExpr) Provenance (Option SurfExpr) Provenance -> Option SurfExpr
+defn prov-select
+  | none _ sf2 _  -> sf2
+  | sf1 _ none _  -> sf1
+  | sf1 p1 sf2 p2 -> (if [prov-ge p1 p2] sf1 sf2)
 ```
 
 ### 5.2 Grammar Production Registry
 
 ```prologos
 ;; A grammar production: keyword → parse function
+;; D.2: provenance field for priority ordering within ambiguity sets
+type ProductionProvenance := prov-builtin | prov-library | prov-user
+  :lattice :pure
+  ;; prov-builtin < prov-library < prov-user
+
 type GrammarProduction := GrammarProduction
-  {keyword   : Symbol
-   parse-fn  : Fn ParseTreeNode SrcLoc -> SurfExpr
+  {keyword    : Symbol
+   provenance : ProductionProvenance  ;; D.2: for priority resolution
+   parse-fn   : Fn ParseTreeNode SrcLoc -> SurfExpr
    register-fn : Option (Fn SurfExpr -> Unit)
    sublanguage : Bool}
 
-;; Production registry: monotone set of productions
-type ProductionRegistry := ProductionRegistry {prods : Map Symbol GrammarProduction}
+;; Production registry: Map from keyword to SET of productions (D.2)
+;; Values are sets, not singletons — designed for Track 7 ambiguity.
+;; For Track 3, each set has exactly 1 element.
+;; Algebraic: per-keyword powerset → Boolean. Product of Boolean → Boolean.
+type ProductionRegistry := ProductionRegistry {prods : Map Symbol (Set GrammarProduction)}
   :lattice :pure
 
 impl Lattice ProductionRegistry
+  ;; Per-keyword set union: accumulate all productions
   join [ProductionRegistry a] [ProductionRegistry b]
-    -> ProductionRegistry [map-union a b]
+    -> ProductionRegistry [map-merge-with set-union a b]
   bot -> ProductionRegistry {}
 
-;; The registry is a module-level cell (scaffolding)
-;; PM series migrates to: embed prod-registry : Cell ProductionRegistry
-def production-registry : ProductionRegistry := ProductionRegistry {}
+;; Dispatch selects highest-provenance production from the set (pure function, not lattice op)
+;; Track 3: singleton sets → trivial selection
+;; Track 7: multi-element sets with same provenance → ATMS ambiguity
+spec select-production (Set GrammarProduction) -> GrammarProduction
+defn select-production [prods]
+  |> prods [max-by GrammarProduction-provenance]
 ```
 
 ### 5.3 Registration as Information Flow
@@ -537,21 +701,32 @@ defn dispatch-production [registry node loc]
 |---------------|----------------------|
 | `FormCell` (Pocket Universe) | `form-cell-value` struct + cell on prop-network |
 | `ParseStage` lattice | Stage symbols with ordering in merge function |
-| `ProductionRegistry` | Module-level hash (scaffolding) |
-| `GrammarProduction` | `grammar-production` struct |
+| `Provenance` lattice (D.2) | Provenance symbols: `'none`, `'preparse`, `'tree-parser` |
+| `prov-select` (D.2) | `merge-form` logic from Track 2B, now structural |
+| `ProductionRegistry` | Module-level hash of sets (scaffolding) |
+| `GrammarProduction` | `grammar-production` struct with `provenance` field (D.2) |
+| `ProductionProvenance` (D.2) | Production provenance: `'builtin`, `'library`, `'user` |
+| `select-production` (D.2) | Pure function: max-by provenance from set |
 | `dispatch-production` | `dispatch-production` function called per form |
 | `register-from-surfs` | Racket function with parameter mutations |
 | Stage-advancing propagator | surface-rewrite.rkt rewrite rules |
-| Per-form cell merge | `merge-form` from Track 2B (promoted to cell merge fn) |
+| Per-form cell merge | `prov-select` + component-wise join (promoted from merge-form) |
 | SRE decomposition of surf-* | Existing `ctor-desc` pattern |
+| SRE domain registration (D.2) | `register-domain!` with declared properties for form-cell + production-registry |
 
 ### 5.6 NTT Model Observations
 
 1. **Registration is the scaffolding boundary.** The NTT model clearly shows where Track 3 is on-network (FormCell, ProductionRegistry, dispatch-production) vs. where it's scaffolding (register-from-surfs). PM series replaces the scaffolding with the commented-out `embed` declarations.
 
-2. **The production registry is a data structure, not a propagator.** Productions are registered, not computed. The registry is a lookup table. This is correct — it's the grammar, not the parse. The PARSING is propagator-mediated (production dispatch fires on cell writes). The GRAMMAR is data.
+2. **The production registry is a data structure, not a propagator.** Productions are registered, not computed. The registry is a lookup table. Dispatch (selection from set) is a pure function. The PARSING is propagator-mediated (production dispatch fires on cell writes). The GRAMMAR is data. This is Decomplection: accumulation (lattice) and selection (function) are separated.
 
-3. **No impurities detected.** Every component is either: (a) a pure lattice value (FormCell, ParseStage, ProductionRegistry), (b) a cell read/write (per-form cells, production dispatch), or (c) explicitly scaffolding (register-from-surfs). No disguised imperative patterns.
+3. **No impurities detected.** Every component is either: (a) a pure lattice value (FormCell, ParseStage, Provenance, ProductionRegistry), (b) a cell read/write (per-form cells, production dispatch), or (c) explicitly scaffolding (register-from-surfs). No disguised imperative patterns.
+
+4. **D.2: Pipeline-preference ordering is structural, not ad-hoc.** The `Provenance` type and `prov-select` function make the ordering explicit in the NTT model. Track 2B's `merge-form` encoded this implicitly via `cond` dispatch. D.2 promotes it to a first-class lattice component. The NTT model reveals this as correct: provenance IS the ordering on surfs, not a metadata annotation.
+
+5. **D.2: Set-valued productions prevent Track 7 lattice redesign.** The `Set GrammarProduction` per keyword means Track 7 adds elements to existing sets — the lattice structure doesn't change. The alternative (singleton per keyword) would require redesigning the registry lattice when ambiguity is introduced, exactly as the type lattice requires redesign for union types. The lesson from Track 2G is applied proactively.
+
+6. **D.2: SRE domain registration validates algebraic properties.** The NTT model includes `register-domain!` calls with explicit property declarations. Track 2G's inference mechanism validates these post-registration. If the FormCell merge function violates the declared properties (e.g., provenance ordering is wrong), inference catches it with a counterexample. This is the safety net the type lattice lacked.
 
 ---
 
