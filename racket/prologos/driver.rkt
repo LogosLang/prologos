@@ -1583,7 +1583,10 @@
     (define tree-match (and line (hash-ref tree-by-line line #f)))
     (merge-form s tree-match)))
 
-;; PPN Track 2B Phase G: use-tree-parser? DELETED. Merge is the only path.
+;; PPN Track 3: Merge + cells (coexist).
+;; Preparse + merge remain the PRIMARY path (spec injection depends on preparse).
+;; Form cells run alongside for infrastructure validation (Phase 6+3a).
+;; Full switch to cells requires spec cell consumption (Phase 3a+7 completion).
 (define (process-string-ws-inner s)
   (define raw-stxs (read-all-syntax-ws (open-input-string s) "<ws-string>"))
   (define expanded-stxs (preparse-expand-all raw-stxs))

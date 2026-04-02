@@ -21,7 +21,11 @@
          "tree-parser.rkt"
          "infra-cell.rkt"
          "source-location.rkt"
-         "rrb.rkt")
+         "rrb.rkt"
+         ;; Phase 4 (big-bang): consumed form processing
+         "macros.rkt"
+         "parser.rkt"
+         "errors.rkt")
 
 (provide
  ;; Phase 6: Cell creation
@@ -120,26 +124,104 @@
           (elab-cell-write current-enet cell-id result)))))
 
 ;; ========================================
-;; Phase 7: Extract surfs from form cells
+;; Phase 4 (big-bang): Extract surfs from form cells
 ;; ========================================
 
 ;; After dispatch-form-productions completes, each form cell holds a
 ;; completed form-pipeline-value with a rewritten tree-node.
-;; This function runs parse-form-tree on each completed tree-node
-;; to produce surf-* structs — the same output as the merge pipeline.
 ;;
-;; Returns: list of surf-* structs (in source-line order), suitable
-;; for passing to process-surfs.
+;; For non-consumed forms: parse-form-tree produces a surf-* directly.
+;; For consumed forms (data/trait/impl/etc.): parse-form-tree returns
+;; an error stub. We convert the tree-node to a datum, call the
+;; appropriate process-* function (which also performs registration),
+;; and parse each generated def through parse-datum.
+;;
+;; Returns: list of surf-* structs (in source-line order, with
+;; consumed forms expanded to their generated defs), suitable for
+;; passing to process-surfs.
+
+;; Helper: convert tree-node args (token-entries + parse-tree-nodes) to flat datum list
+(define (tree-args-to-datums args)
+  (for/list ([a (in-list args)])
+    (cond
+      [(token-entry? a)
+       (define lex (token-entry-lexeme a))
+       (or (string->number lex) (string->symbol lex))]
+      [(parse-tree-node? a)
+       (define children
+         (for/list ([c (in-list (rrb-to-list (parse-tree-node-children a)))]
+                    #:when (token-entry? c))
+           (define cl (token-entry-lexeme c))
+           (or (string->number cl) (string->symbol cl))))
+       (cond
+         [(null? children) '()]
+         [(= (length children) 1) (car children)]
+         [(eq? (car children) '$brace-params) children]
+         [else children])]
+      [else a])))
+
+;; Helper: get args from a tree-node (children after the keyword token)
+(define (node-args-for-datum node)
+  (define children (rrb-to-list (parse-tree-node-children node)))
+  (if (and (pair? children) (token-entry? (car children)))
+      (cdr children)  ;; skip keyword token
+      children))
+
+;; The consumed form handlers: tag → (datum → list-of-generated-defs)
+;; Each returns a list of sexp defs. Registration happens as a side effect.
+(define (process-consumed-form tag node)
+  (define args (node-args-for-datum node))
+  (define arg-datums (tree-args-to-datums args))
+  (define datum (cons tag arg-datums))
+  (with-handlers ([exn:fail? (lambda (e) '())])  ;; on error, produce no defs
+    (case tag
+      [(data)     (process-data datum)]
+      [(trait)    (process-trait datum)]
+      [(impl)     (let ([defs (process-impl datum)])
+                    ;; impl defs need preparse-expand-form for spec injection
+                    (for/list ([d (in-list defs)])
+                      (preparse-expand-form d)))]
+      [(deftype)  (process-deftype datum) '()]
+      [(bundle)   (process-bundle (rewrite-implicit-map datum)) '()]
+      [(defmacro) (process-defmacro datum) '()]
+      [(property) (process-property (rewrite-implicit-map datum)) '()]
+      [(functor)  (process-functor (rewrite-implicit-map datum)) '()]
+      [(schema)   '()]  ;; schema processing is inline in preparse, no separate function
+      [(selection) '()]  ;; selection has its own surf-* (handled by parse-form-tree)
+      [else '()])))
+
+;; Convert generated defs to surfs via parse-datum
+(define (defs-to-surfs defs)
+  (for/list ([d (in-list defs)]
+             #:when (pair? d))
+    (parse-datum (datum->syntax #f d))))
+
 (define (extract-surfs-from-form-cells enet cell-map)
   (define pairs
-    (for/list ([(line cell-id) (in-hash cell-map)])
+    (for/fold ([acc '()])
+              ([(line cell-id) (in-hash cell-map)])
       (define pv (elab-cell-read enet cell-id))
       (define node (form-pipeline-value-tree-node pv))
-      (define surf (if node (parse-form-tree node) #f))
-      (cons line surf)))
-  ;; Sort by source line to preserve form ordering
+      (if (not node)
+          acc
+          (let ([surf (parse-form-tree node)])
+            (cond
+              ;; Non-error: tree-parser handled this form → one surf
+              [(not (prologos-error? surf))
+               (cons (cons line (list surf)) acc)]
+              ;; Error stub: consumed form → expand via process-*
+              [else
+               (define tag (parse-tree-node-tag node))
+               (define gen-defs (process-consumed-form tag node))
+               (if (null? gen-defs)
+                   ;; No generated defs (e.g., bundle, property — side effect only)
+                   acc
+                   ;; Generated defs → multiple surfs
+                   (let ([surfs (defs-to-surfs gen-defs)])
+                     (cons (cons line surfs) acc)))])))))
+  ;; Sort by source line, flatten surf lists
   (define sorted (sort pairs < #:key car))
-  (map cdr sorted))
+  (apply append (map cdr sorted)))
 
 ;; ========================================
 ;; Phase 3a: Spec Cells

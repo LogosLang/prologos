@@ -24,7 +24,10 @@
          "surface-syntax.rkt"
          "surface-rewrite.rkt"
          "rrb.rkt"
-         "errors.rkt")
+         "errors.rkt"
+         ;; Phase 1a: process-data/trait/impl reuse
+         "macros.rkt"
+         "parser.rkt")
 
 (provide parse-form-tree
          parse-top-level-forms-from-tree)
@@ -520,14 +523,60 @@
       inner  ;; propagate error — merge will use preparse's eval
       (surf-eval inner loc)))
 
+;; ========================================
+;; Phase 1a: Consumed forms (data/trait/impl)
+;; ========================================
+;;
+;; Strategy: convert tree-node args to datum, call process-data/trait/impl
+;; (macros.rkt), then parse each generated def through parse-datum.
+;; Returns the first generated surf (the type def). Additional surfs
+;; (constructors, accessors, etc.) are handled by the merge fallback
+;; to preparse — preparse also calls process-data/trait/impl, and the
+;; registration is idempotent (hash-set). Once Phase 4 eliminates preparse,
+;; the form-cell path will handle ALL generated surfs.
+;;
+;; process-data/trait/impl also perform registration (register-ctor!,
+;; register-trait!, etc.). This is intentional — registration at
+;; tree-parser time replaces preparse registration for these forms.
+
+;; Helper: convert tree-node args (token-entries + parse-tree-nodes) to flat datum list
+(define (tree-args-to-datums args)
+  (for/list ([a (in-list args)])
+    (cond
+      [(token-entry? a)
+       (define lex (token-entry-lexeme a))
+       ;; Try as number first, then symbol
+       (or (string->number lex) (string->symbol lex))]
+      [(parse-tree-node? a)
+       ;; Bracket/indent group: convert children to a list datum
+       (define children
+         (for/list ([c (in-list (rrb-to-list (parse-tree-node-children a)))]
+                    #:when (token-entry? c))
+           (define cl (token-entry-lexeme c))
+           (or (string->number cl) (string->symbol cl))))
+       (cond
+         [(null? children) '()]
+         [(= (length children) 1) (car children)]
+         ;; Check if this is a $brace-params group
+         [(eq? (car children) '$brace-params) children]
+         [else children])]
+      [else a])))
+
 (define (parse-data-tree args loc)
-  (parse-error-result loc "parse-data-tree: not yet implemented"))
+  ;; Revert to error stub — the merge falls back to preparse.
+  ;; Direct process-data call from tree-parser causes double-registration
+  ;; and produces surfs without proper namespace scoping.
+  ;; Phase 1a+3b-3e needs a different approach: either (a) produce the
+  ;; generated defs as additional form cells (Phase 3e pattern), or
+  ;; (b) skip process-data and only produce the tree-node for cell storage.
+  ;; For now, the merge fallback is correct.
+  (parse-error-result loc "parse-data-tree: deferred to Phase 3e (generated defs)"))
 
 (define (parse-trait-tree args loc)
-  (parse-error-result loc "parse-trait-tree: not yet implemented"))
+  (parse-error-result loc "parse-trait-tree: deferred to Phase 3e (generated defs)"))
 
 (define (parse-impl-tree args loc)
-  (parse-error-result loc "parse-impl-tree: not yet implemented"))
+  (parse-error-result loc "parse-impl-tree: deferred to Phase 3e (generated defs)"))
 
 (define (parse-check-tree args loc)
   (if (>= (length args) 2)
