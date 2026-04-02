@@ -524,6 +524,159 @@
       (surf-eval inner loc)))
 
 ;; ========================================
+;; Phase 4: Expression-level desugaring (cond, let, do)
+;; ========================================
+;; These replace preparse's expand-cond, expand-let, expand-do.
+;; Each produces the same surf-* output that parse-datum would
+;; produce after preparse expansion.
+
+;; cond | guard1 -> body1 | guard2 -> body2 | ...
+;; Desugars to: (boolrec _ body1 (boolrec _ body2 ... fail) guard2) guard1)
+;; In tree form: args after "cond" keyword are pipe-delimited clauses.
+;; Each clause: [guard -> body] or [guard -> body1 body2 ...] (multi-expr body)
+(define (parse-cond-expr args loc)
+  ;; Split args by $pipe tokens into clause groups
+  (define clauses (split-by-pipe args))
+  (if (null? clauses)
+      (parse-error-result loc "cond: need at least one clause")
+      ;; Build nested boolrec from last clause to first
+      (let loop ([remaining (reverse clauses)])
+        (if (null? remaining)
+            ;; Fallthrough: typed hole for exhaustiveness
+            (surf-typed-hole '__cond-fail loc)
+            (let* ([clause (car remaining)]
+                   [rest (cdr remaining)]
+                   ;; Find -> in clause to split guard from body
+                   [arrow-idx (for/or ([item (in-list clause)]
+                                       [i (in-naturals)])
+                                (and (token-is? item "->") i))]
+                   [guard-items (if arrow-idx (take clause arrow-idx) clause)]
+                   [body-items (if arrow-idx (drop clause (+ arrow-idx 1)) '())])
+              (if (or (null? guard-items) (null? body-items))
+                  (parse-error-result loc "cond clause: need guard -> body")
+                  (let ([guard (parse-expr-items guard-items loc)]
+                        [body (parse-expr-items body-items loc)]
+                        [else-branch (loop rest)])
+                    (cond
+                      [(prologos-error? guard) guard]
+                      [(prologos-error? body) body]
+                      [(prologos-error? else-branch) else-branch]
+                      [else
+                       ;; (boolrec (fn [_] Type) true-branch false-branch scrutinee)
+                       ;; Simplified: (if guard body else-branch)
+                       (surf-boolrec (surf-lam (binder-info '_ #f (surf-bool-type loc))
+                                               (surf-hole loc) loc)
+                                     body else-branch guard loc)]))))))))
+
+;; let x := val body  OR  let x : T := val body
+;; Desugars to: ((fn [x] body) val) — application of lambda
+(define (parse-let-expr args loc)
+  (cond
+    [(< (length args) 3)
+     (parse-error-result loc "let: need name := value body")]
+    [else
+     ;; Find := in args
+     (define assign-idx
+       (for/or ([item (in-list args)] [i (in-naturals)])
+         (and (token-is? item ":=") i)))
+     (if (not assign-idx)
+         ;; No := — try as (let [bindings] body) bracket form
+         (parse-let-bracket-expr args loc)
+         ;; let name [:type] := value body...
+         (let* ([name-token (car args)]
+                [name (token-symbol name-token)]
+                [value-and-body (drop args (+ assign-idx 1))]
+                ;; First item after := is the value; rest is body
+                ;; But for multi-line let, body is on next indent level
+                ;; In tree form, body is the remaining children
+                [val-item (if (pair? value-and-body) (car value-and-body) #f)]
+                [body-items (if (pair? value-and-body) (cdr value-and-body) '())])
+           (if (or (not name) (not val-item))
+               (parse-error-result loc "let: need name := value body")
+               (let ([val-surf (parse-form-tree val-item)]
+                     [body-surf (if (null? body-items)
+                                    (parse-error-result loc "let: need body after value")
+                                    (parse-expr-items body-items loc))])
+                 (cond
+                   [(prologos-error? val-surf) val-surf]
+                   [(prologos-error? body-surf) body-surf]
+                   [else
+                    ;; ((fn [name] body) val)
+                    (surf-app
+                     (surf-lam (binder-info name #f (surf-hole loc))
+                               body-surf loc)
+                     (list val-surf) loc)])))))]))
+
+;; let [x1 := v1, x2 := v2, ...] body — bracket binding form
+(define (parse-let-bracket-expr args loc)
+  ;; First arg should be a bracket group with bindings, rest is body
+  (if (null? args)
+      (parse-error-result loc "let: need bindings + body")
+      (let ([bindings-node (car args)]
+            [body-items (cdr args)])
+        (if (null? body-items)
+            (parse-error-result loc "let: need body after bindings")
+            (let ([body (parse-expr-items body-items loc)])
+              (if (prologos-error? body) body
+                  ;; For now, pass through as-is — complex let desugaring
+                  ;; falls back to preparse via datum conversion
+                  (parse-error-result loc "let bracket form: complex desugaring needed")))))))
+
+;; do e1 e2 e3 ...
+;; Desugars to: ((fn [_] ((fn [_] e3) e2)) e1) — nested sequencing
+(define (parse-do-expr args loc)
+  (cond
+    [(null? args) (parse-error-result loc "do: need at least one expression")]
+    [(= (length args) 1) (parse-form-tree (car args))]
+    [else
+     ;; Build from last to first: ((fn [_] last) second-to-last)
+     (let loop ([remaining (reverse args)])
+       (if (= (length remaining) 1)
+           (parse-form-tree (car remaining))
+           (let ([current (parse-form-tree (car remaining))]
+                 [rest (loop (cdr remaining))])
+             (cond
+               [(prologos-error? current) current]
+               [(prologos-error? rest) rest]
+               [else
+                (surf-app
+                 (surf-lam (binder-info '_ #f (surf-unit-type loc))
+                           current loc)
+                 (list rest) loc)]))))]))
+
+;; Helper: split a list of items by $pipe tokens
+(define (split-by-pipe items)
+  (let loop ([remaining items] [current '()] [groups '()])
+    (cond
+      [(null? remaining)
+       (if (null? current)
+           (reverse groups)
+           (reverse (cons (reverse current) groups)))]
+      [(and (token-entry? (car remaining))
+            (equal? (token-entry-lexeme (car remaining)) "$pipe"))
+       (loop (cdr remaining)
+             '()
+             (if (null? current) groups (cons (reverse current) groups)))]
+      ;; Also split on bare | token
+      [(and (token-entry? (car remaining))
+            (equal? (token-entry-lexeme (car remaining)) "|"))
+       (loop (cdr remaining)
+             '()
+             (if (null? current) groups (cons (reverse current) groups)))]
+      [else
+       (loop (cdr remaining) (cons (car remaining) current) groups)])))
+
+;; Helper: parse a list of items as an expression sequence
+;; If multiple items, wrap in application or sequence
+(define (parse-expr-items items loc)
+  (cond
+    [(null? items) (parse-error-result loc "empty expression")]
+    [(= (length items) 1) (parse-form-tree (car items))]
+    [else
+     ;; Multiple items — parse as expression tree
+     (parse-expr-tree items loc)]))
+
+;; ========================================
 ;; Phase 1a: Consumed forms (data/trait/impl)
 ;; ========================================
 ;;
@@ -934,9 +1087,22 @@
         (if (= (length args) 5)
             (parse-application-tree children loc)  ;; J is complex — use generic app for now
             (parse-application-tree children loc))]
-       ;; Pre-parse macro forms that should have been expanded
-       [(and head-lex (member head-lex '("let" "do" "if" "cond" "when" "defmacro" "deftype")))
-        (parse-error-result loc (format "~a should have been expanded before parsing" head-lex))]
+       ;; Expression-level desugaring forms (Phase 4: inline handling replaces preparse)
+       [(and head-lex (equal? head-lex "cond"))
+        (parse-cond-expr args loc)]
+       [(and head-lex (equal? head-lex "let"))
+        (parse-let-expr args loc)]
+       [(and head-lex (equal? head-lex "do"))
+        (parse-do-expr args loc)]
+       ;; if/when already handled by tag dispatch (lines 101-102)
+       ;; but can appear as lexemes in expression context
+       [(and head-lex (equal? head-lex "if"))
+        (parse-if-tree args loc)]
+       [(and head-lex (equal? head-lex "when"))
+        (parse-when-tree args loc)]
+       ;; defmacro/deftype in expression context — error
+       [(and head-lex (member head-lex '("defmacro" "deftype")))
+        (parse-error-result loc (format "~a cannot appear in expression position" head-lex))]
        ;; Expression keywords handled by parser.rkt but not tree-parser
        ;; (relational, session, capability). Return error so merge uses preparse.
        [(and head-lex (member head-lex '("solve" "solve-one" "defr" "rel" "facts"
