@@ -300,11 +300,8 @@
 ;; Uses tree-node->stx-form which produces a single syntax object
 ;; representing the entire form (grouped, like the compat reader output).
 (define (tree-node-to-datum node source-str)
-  ;; Pad source-str with spaces to avoid string-ref out-of-range when
-  ;; tree-node srcloc end-position = string-length.
-  (define padded (string-append (or source-str "") "  "))
   (with-handlers ([exn:fail? (lambda (e) #f)])
-    (define stx (tree-node->stx-form node "<cell>" padded))
+    (define stx (tree-node->stx-form node "<cell>" (or source-str "")))
     (if stx (syntax->datum stx) #f)))
 
 ;; §11.5 Opt-in: form tags where parse-form-tree is VERIFIED to produce
@@ -330,6 +327,8 @@
 (define (extract-surfs-from-form-cells enet cell-map
                                         #:source-str [source-str #f]
                                         #:raw-map [raw-map (hasheq)])
+  ;; §11: scope current-source-str to this extraction call
+  (current-source-str (or source-str ""))
   ;; §11: set source-str for parse-subtree-via-datum in tree-parser
   (current-source-str (or source-str ""))
   (define pairs

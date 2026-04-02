@@ -1594,6 +1594,8 @@
 ;; Preparse surfs are FALLBACK for forms that fail parse-form-tree
 ;; (expression-level desugaring: cond, let, multi-arity defn patterns, etc.)
 (define (process-string-ws-inner s)
+  ;; §11: scope current-source-str to this call
+  (current-source-str s)
   ;; Step 1: Preparse — full expansion for registration + fallback surfs
   (define raw-stxs (read-all-syntax-ws (open-input-string s) "<ws-string>"))
   (define expanded-stxs (preparse-expand-all raw-stxs))
@@ -1601,9 +1603,7 @@
 
   ;; Step 2: Cell pipeline — form cells + dispatch + spec cells
   (register-default-token-patterns!)
-  ;; Pad source to avoid string-ref out-of-range in tree-node->stx-form
-  (define padded-src (string-append s "\n"))
-  (define pt (read-to-tree padded-src))
+  (define pt (read-to-tree s))
   (define net-box (current-prop-net-box))
   (define enet (unbox net-box))
   (define-values (enet1 cell-map raw-map) (create-form-cells-from-tree pt enet))
@@ -1616,7 +1616,9 @@
   ;; Step 3: Cell surfs are THE output. Single-parser path.
   ;; ONE parser (parse-datum), ONE representation. No fallback.
   (define surfs (extract-surfs-from-form-cells enet3 cell-map
-                  #:source-str padded-src #:raw-map raw-map))
+                  #:source-str s #:raw-map raw-map))
+  ;; §11: clear current-source-str to prevent leakage to process-file calls
+  (current-source-str "")
   (process-surfs surfs))
 
 ;; PPN Track 3: merge cell surfs with preparse surfs.
