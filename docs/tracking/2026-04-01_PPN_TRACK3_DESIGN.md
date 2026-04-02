@@ -26,15 +26,11 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Pre-0 benchmarks | ✅ | `dc87fb34`. Parse=0-4% of pipeline. WS overhead <2%. All V1-V3 algebraic properties PASS. |
-| 1a | Close coverage: data/trait/impl | ⬜ | 3 stubs → full implementations. Parsing only — no registration. |
-| 1b | Close coverage: subtype + selection (parseable); deftype/bundle/defmacro/property/functor/schema deferred | ✅ partial | `27d22906`. subtype + selection implemented. 6 preparse-consumed forms (no surf structs) defer to after Phase 6 — same pattern as data/trait/impl. |
-| 2 | Close coverage: session/defproc/defr/quote/solver | ⬜ | 5 stubs → full implementations. Complex sublanguages. |
-| 3a | Spec cells: propagator-native spec resolution | ✅ | `bd13dfbb` + `7169c5ab`. Spec cells created. annotate-surfs-with-specs: post-parse spec injection replaces preparse's maybe-inject-spec. Cell pipeline PRIMARY for WS path. |
-| 3b | Data registration extraction | ⬜ | Extract registration-only logic from process-data (215 lines). Registration as data descriptors. |
-| 3c | Trait/impl registration extraction | ⬜ | Extract from process-trait (739 lines) + process-impl (465 lines). |
-| 3d | Spec registration extraction | ⬜ | Extract from process-spec (1,548 lines). Depends on tree-parser handling spec type signatures. |
-| 3e | Generated def injection | ⬜ | Constructors, accessors, default methods → additional form cells via accumulator cell. |
-| 4 | Cell pipeline PRIMARY for WS path | ✅ | `7169c5ab`. process-string-ws-inner switched to cell-based pipeline. Preparse retained for registration side effects (idempotent). Acceptance: 0 errors. Full suite pending. |
+| 1a+3b-3e | data/trait/impl via process-* in cell pipeline | ✅ | `e5b837bb`. extract-surfs-from-form-cells calls process-data/trait/impl for consumed forms. Registration + generated defs via existing code. |
+| 1b | subtype + selection tree-parser; consumed form stubs | ✅ partial | `27d22906`. subtype + selection implemented. deftype/bundle/defmacro/property/functor/schema need process-consumed-form handlers. |
+| 2 | session/defproc/defr/quote/solver stubs | ⬜ | Complex sublanguages. Merge fallback handles correctly. |
+| 3a | Spec cells + annotate-surfs-with-specs | ✅ | `bd13dfbb` + `7169c5ab`. Post-parse spec injection. |
+| 4 | Cell pipeline alongside merge | ✅ | `36d9d20a`. Cell pipeline runs. Merge remains primary (form gaps). 383/383 GREEN. |
 | 5 | Dependency-set Pocket Universe + production registry | ✅ | `9f3c63dc`. form-pipeline-value.transforms is seteq powerset. Merge = set-union. transform-deps + transform-ready?. advance-pipeline dependency-driven. 31 inline tests pass. |
 | 6 | Per-form cells + production dispatch propagators | ✅ | `7a2a4bd0`. form-cells.rkt: create-form-cells-from-tree + dispatch-form-productions. 1 cell per form on elab-network. Merge = Phase 5 set-union. Gate phase for 3a/1a+3b-3e/7. |
 | 7 | Shared cells replace merge (pure merge function) | ✅ partial | `40d07caa`. Form cells + spec cells wired into driver alongside merge. extract-surfs-from-form-cells verified identical. Merge still drives process-command — full switch after Phase 4. |

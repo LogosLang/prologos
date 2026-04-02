@@ -172,25 +172,48 @@
 
 ;; The consumed form handlers: tag → (datum → list-of-generated-defs)
 ;; Each returns a list of sexp defs. Registration happens as a side effect.
+;;
+;; Two categories:
+;; 1. Forms that produce GENERATED DEFS (data, trait, impl): return sexp def lists
+;; 2. Forms that are SIDE-EFFECT-ONLY (deftype, bundle, etc.): return '()
+;; 3. Forms that have SURF-* structs but tree-parser stubs: convert to datum,
+;;    call parse-datum directly to produce the surf.
 (define (process-consumed-form tag node)
   (define args (node-args-for-datum node))
   (define arg-datums (tree-args-to-datums args))
   (define datum (cons tag arg-datums))
   (with-handlers ([exn:fail? (lambda (e) '())])  ;; on error, produce no defs
     (case tag
+      ;; Category 1: produce generated defs (registration + N defs)
       [(data)     (process-data datum)]
       [(trait)    (process-trait datum)]
       [(impl)     (let ([defs (process-impl datum)])
-                    ;; impl defs need preparse-expand-form for spec injection
                     (for/list ([d (in-list defs)])
                       (preparse-expand-form d)))]
+      ;; Category 2: side-effect-only (registration, no defs returned)
       [(deftype)  (process-deftype datum) '()]
       [(bundle)   (process-bundle (rewrite-implicit-map datum)) '()]
       [(defmacro) (process-defmacro datum) '()]
       [(property) (process-property (rewrite-implicit-map datum)) '()]
       [(functor)  (process-functor (rewrite-implicit-map datum)) '()]
-      [(schema)   '()]  ;; schema processing is inline in preparse, no separate function
-      [(selection) '()]  ;; selection has its own surf-* (handled by parse-form-tree)
+      [(precedence-group) '()]  ;; registration only
+      [(specialize) '()]  ;; registration only
+      ;; Category 3: have surf-* structs — parse via datum conversion
+      ;; Returns '(datum) so defs-to-surfs will call parse-datum on it
+      [(strategy)    (list datum)]
+      [(schema)      (list datum)]
+      [(capability)  (list datum)]
+      [(session)     (list datum)]
+      [(defproc)     (list datum)]
+      [(defr)        (list datum)]
+      [(solver)      (list datum)]
+      [(proc)        (list datum)]
+      [(spawn)       (list datum)]
+      [(spawn-with)  (list datum)]
+      [(foreign)     (list datum)]
+      ;; ns/imports/exports: consumed, no surfs produced
+      ;; Their side effects (namespace setup, module loading) happen in preparse
+      [(ns imports exports) '()]
       [else '()])))
 
 ;; Convert generated defs to surfs via parse-datum
