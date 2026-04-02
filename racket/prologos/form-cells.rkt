@@ -30,6 +30,8 @@
  form-cell-ref
  ;; Phase 6: Production dispatch
  dispatch-form-productions
+ ;; Phase 7: Extract surfs from completed form cells
+ extract-surfs-from-form-cells
  ;; Phase 6: Merge function (exposed for testing / validation)
  form-cell-merge-fn
  ;; Phase 3a: Spec cells
@@ -116,6 +118,28 @@
         (let ([result (run-form-pipeline node)])
           ;; Write the completed pipeline value to the cell
           (elab-cell-write current-enet cell-id result)))))
+
+;; ========================================
+;; Phase 7: Extract surfs from form cells
+;; ========================================
+
+;; After dispatch-form-productions completes, each form cell holds a
+;; completed form-pipeline-value with a rewritten tree-node.
+;; This function runs parse-form-tree on each completed tree-node
+;; to produce surf-* structs — the same output as the merge pipeline.
+;;
+;; Returns: list of surf-* structs (in source-line order), suitable
+;; for passing to process-surfs.
+(define (extract-surfs-from-form-cells enet cell-map)
+  (define pairs
+    (for/list ([(line cell-id) (in-hash cell-map)])
+      (define pv (elab-cell-read enet cell-id))
+      (define node (form-pipeline-value-tree-node pv))
+      (define surf (if node (parse-form-tree node) #f))
+      (cons line surf)))
+  ;; Sort by source line to preserve form ordering
+  (define sorted (sort pairs < #:key car))
+  (map cdr sorted))
 
 ;; ========================================
 ;; Phase 3a: Spec Cells

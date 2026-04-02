@@ -30,6 +30,7 @@
          "parse-reader.rkt"  ;; unified reader: WS-mode + sexp re-exports
          "surface-rewrite.rkt"  ;; PPN Track 2: tag refinement + rewrite rules
          "tree-parser.rkt"     ;; PPN Track 2 Phase 6c: tree → surf-* directly
+         "form-cells.rkt"     ;; PPN Track 3 Phase 6+3a: per-form cells + spec cells
          "namespace.rkt"
          "metavar-store.rkt"
          "zonk.rkt"
@@ -426,6 +427,10 @@
 ;; PTF Track 1 Phase 0: If set to a box, after each process-command the
 ;; elab-network is stored there for analysis. Default #f (no capture).
 (define current-network-capture-box (make-parameter #f))
+
+;; PPN Track 3 Phase 6+3a: form cell maps for downstream consumption
+(define current-form-cell-map (make-parameter (hasheq)))
+(define current-spec-cell-map (make-parameter (hasheq)))
 
 ;; Returns a result string, or a prologos-error.
 ;; Side effect: may update current-prelude-env for 'def'.
@@ -1486,6 +1491,23 @@
   (define refined-root (refine-tag grouped-root))
   (define rewritten-root (rewrite-tree refined-root))
   (define tree-surfs (parse-top-level-forms-from-tree rewritten-root))
+
+  ;; PPN Track 3 Phase 6+3a: create per-form cells on the elab-network.
+  ;; This runs alongside the merge — the form cells hold the tree-parser
+  ;; pipeline output in Pocket Universe cells with dependency-set transforms.
+  ;; Phase 7 will switch process-command to read from these cells.
+  (define net-box (current-prop-net-box))
+  (when net-box
+    (define enet (unbox net-box))
+    (define-values (enet1 cell-map) (create-form-cells-from-tree pt enet))
+    (define enet2 (dispatch-form-productions enet1 cell-map))
+    ;; Phase 3a: extract spec cells
+    (define-values (enet3 spec-map) (extract-specs-from-form-cells enet2 cell-map))
+    ;; Store updated network back
+    (set-box! net-box enet3)
+    ;; Store cell maps for downstream consumption
+    (current-form-cell-map cell-map)
+    (current-spec-cell-map spec-map))
   ;; Track 2B: Source-line-keyed merge.
   ;; Each source form is identified by its source line. Both pipelines process
   ;; the same source, so surfs for the same source line correspond.
