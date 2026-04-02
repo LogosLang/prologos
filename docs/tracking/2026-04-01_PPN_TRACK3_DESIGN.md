@@ -930,6 +930,131 @@ Benchmark file: `benchmarks/micro/bench-ppn-track3.rkt`
 
 9. **Tree pipeline is 2-3× slower per form than sexp pipeline (M3), but both are sub-0.2ms.** This ratio is irrelevant at pipeline scale (elaboration dominates at 96%). No optimization needed for individual production fire cost.
 
-### Design unchanged
+### Design unchanged by Pre-0 data
 
-No revisions to D.2. All assumptions validated. All algebraic properties confirmed. Performance overhead of the new architecture is within noise. Proceed to implementation.
+No revisions to D.2 from performance data. All assumptions validated. All algebraic properties confirmed. Performance overhead of the new architecture is within noise.
+
+---
+
+## §10 Self-Critique (D.3)
+
+### Lens 1 — Principles Challenge
+
+**D3-P1: `register-from-surfs` is an imperative loop — NOT propagator-first.**
+
+The design presents Phase 3's registration pass as a clean separation (parsing is pure, registration is a post-pass). But `register-from-surfs` is `(for ([surf surfs]) (cond ...))` — an imperative loop with side effects. This is explicitly not propagator-first.
+
+*Challenge*: Could registration write to CELLS instead of parameters within the per-command network? For `process-file` / `process-string-ws`, the network exists. Registration cells could be per-command cells that elaboration reads. For `load-module`, registration must persist across commands (parameters necessary, scaffolding).
+
+*Resolution*: Draw the scaffolding boundary at `load-module`-only, not ALL registration. For `process-file` / `process-string-ws`, Phase 3 COULD create registration cells alongside per-form cells — but this adds complexity (two registration paths: cells for process-file, parameters for load-module). **Accept as scaffolding for Track 3 with the explicit note: "incomplete because PM series unifies both paths on persistent cells."** Do not rationalize as "clean."
+
+**D3-P2: Two-pass spec ordering is an ALGORITHMIC WORKAROUND.**
+
+The design's `register-from-surfs` processes specs first, then data/trait/impl. This sequential ordering is encoded in control flow, not data dependency. In the propagator mindspace, a `defn` needing its spec should RESIDUATE until the spec cell is written.
+
+*Resolution*: Keep two-pass for Track 3 as algorithmic scaffolding. Track 4 replaces it with cell-mediated dependency (spec cell → defn propagator). **Flag as red flag in the design: "sequential ordering in control flow where data dependency should determine ordering."**
+
+**D3-P3: 5-stage chain over-constrains the pipeline ordering.**
+
+The stage chain `raw → tagged → grouped → rewritten → parsed` forces a total order. But tag refinement (T(0)) and form grouping (G(0)) are partially independent — the code currently runs G(0) before T(0), but the data dependency is only that T(0) must see grouped nodes. A partial order (DAG) would be more faithful.
+
+*Resolution*: Accept the chain as a simplification for Track 3. The algebraic properties (Heyting) are preserved by DAGs (product of chains). Note as a refinement opportunity: "stages could be a DAG; the chain is a conservative linearization." No redesign needed — only relaxation of ordering constraints if performance or extensibility demands it.
+
+**D3-P4: parser.rkt retained as 6,605-line sexp shim — INCOMPLETE, not "pragmatic."**
+
+The design says parser.rkt is "demoted." The honest label is: retaining 6,605 lines of dead-on-WS code is incomplete. The sexp path is used by 7,491 tests — migrating them is high-effort but is the Completeness principle applied.
+
+*Resolution*: Label explicitly as "incomplete (deferred because test migration is high-effort; tracked in DEFERRED.md)." NOT "demoted" (which implies deliberate design choice). The sexp path retirement is a future track.
+
+**D3-P5: merge-form has a spec-store parameter dependency — IMPURE merge function.**
+
+The current `merge-form` (driver.rkt line 1543) reads `(current-spec-store)` via a closure to decide whether a form is spec-annotated. Cell merge functions MUST be pure (no parameter reads). The D.2 design adds a `provenance` field to handle this, but does not explicitly address removing the spec-store dependency from merge-form.
+
+*Resolution*: The `provenance` field (D.2) IS the fix. When the preparse pipeline encounters a spec-annotated form, it sets `provenance = prov-preparse` (spec-annotated forms prefer preparse output). The merge function reads only the provenance field, not the spec-store parameter. **Phase 7 implementation must ensure provenance is set correctly for spec-annotated forms and that merge-form is rewritten as a pure function of its arguments.** Add this as an explicit implementation note in Phase 7.
+
+**D3-P6: Production dispatch should be named as a propagator.**
+
+The design describes `dispatch-production` as a "pure function." But in the propagator architecture, dispatch IS a propagator's fire body — it reads the production registry cell and the form cell, then writes to the form cell. Calling it a "function" obscures its propagator nature.
+
+*Resolution*: In the implementation, dispatch should be a registered propagator factory (for each form cell, a dispatch propagator is installed that reads the form cell's keyword and fires the appropriate production). The design should use propagator terminology.
+
+### Lens 2 — Codebase Reality Check
+
+**D3-R1: Registration functions are MUCH larger than the design assumes.**
+
+The design describes Phase 3 as "a new function `register-from-surfs` iterates over surf-* output and calls the same registration functions." But the actual registration functions are:
+
+| Function | Lines | Complexity |
+|----------|-------|-----------|
+| `process-spec` | 1,548 | Parsing + metadata + mixfix registration + spec injection + generated defs |
+| `process-trait` | 739 | Parsing + method signatures + default methods + registry |
+| `process-impl` | 465 | Parsing + method bodies + validation + registry |
+| `process-data` | 215 | Parsing + constructors + accessors + type definitions |
+| `process-defmacro` | ~50 | Parsing + rule registration |
+| **Total** | **~3,017** | |
+
+**`process-spec` alone is 1,548 lines** — it's NOT just "registration." It parses the spec's type signature, extracts metadata, handles keyword arguments, registers mixfix operators, and generates derived definitions. This is INTERLEAVED parsing+registration.
+
+*Implication for Phase 3*: `register-from-surfs` cannot simply "call the same registration functions." These functions expect RAW DATUMS (sexp), not surf-* structs. Phase 3 must either:
+- (a) Port 3,017 lines of registration logic to work on surf-* input, or
+- (b) Convert surf-* back to datum and call existing functions (wasteful), or
+- (c) Extract the registration-ONLY logic from the parsing logic (significant refactoring)
+
+Option (c) is the principled approach but is a major undertaking. The design underestimates Phase 3 scope.
+
+**D3-R2: `preparse-expand-all` is more than expansion + registration.**
+
+The design (§3.4) presents two responsibilities: expansion and registration. But `preparse-expand-all` (line 2366) also:
+- Pre-scans ALL forms for specs before expanding any form
+- Generates derived definitions (constructors, accessors, default methods)
+- Handles `provide`/`export` auto-export for public forms
+- Processes `subtype` and `deftype` declarations
+- Handles `bundle` constraint expansion
+- Does Pass 1 (spec + data + trait pre-scan) and Pass 2 (full expansion) as a TWO-PASS architecture
+
+The design's Phase 3 must replicate ALL of this, not just "iterate over surfs and register."
+
+**D3-R3: Generated definitions are a significant gap.**
+
+When `data Color := Red | Green | Blue` is processed, `process-data` generates:
+- Constructor functions: `Red`, `Green`, `Blue`
+- Type check: `Color?`
+- Pattern accessors
+- These are ADDITIONAL surf-* forms injected into the form list
+
+The design mentions this ("generated defs... must also be produced by the registration pass") but doesn't detail the mechanism. How does `register-from-surfs` inject generated defs into the form list? They need to go through the same elaboration pipeline as user-defined forms.
+
+**D3-R4: The sexp path and WS path share `process-command`.**
+
+Both paths produce surf-* structs that feed into `process-command` (driver.rkt). The shared tail means Track 3 only needs to change the front of the pipeline (how surfs are produced), not the back (how surfs are elaborated). This is correctly assumed in the design.
+
+### Propagator Mindspace Check
+
+**Red flags detected:**
+
+1. `register-from-surfs` — `for/fold` over a list, mutating parameters. **Red flag: "for/fold to determine ordering."**
+2. Two-pass spec ordering — "process specs before other forms." **Red flag: "Process X before Y."**
+3. `merge-form` reading `current-spec-store` — parameter read inside what should be a pure merge. **Red flag: "cond/if dispatch choosing between sources" based on external state.**
+
+**Not red flags (correctly propagator-native):**
+
+1. FormCell Pocket Universe — lattice value with stage ordering. Information flow.
+2. Production registry — monotone set, join is union. Information flow.
+3. Stage advancement — propagator fire advances stage monotonically. Information flow.
+4. Provenance-based merge — lattice ordering on surfs. Information flow.
+5. SRE decomposition of surf-* — structural pattern matching on cell values. Information flow.
+
+### Summary of D.3 Findings
+
+| Finding | Severity | Resolution |
+|---------|----------|------------|
+| D3-P1: Registration is imperative, not propagator-first | MEDIUM | Accept as scaffolding. Label honestly. PM unifies. |
+| D3-P2: Two-pass spec ordering is algorithmic workaround | MEDIUM | Accept for Track 3. Track 4 replaces with cell dependency. Flag as red flag. |
+| D3-P3: Stage chain over-constrains ordering | LOW | Accept as simplification. DAG refinement available if needed. |
+| D3-P4: parser.rkt retention is incomplete | LOW | Label as "incomplete (deferred)" not "demoted." Track in DEFERRED.md. |
+| D3-P5: merge-form has impure spec-store dependency | HIGH | D.2 provenance field IS the fix. Phase 7 must rewrite merge-form as pure. Add implementation note. |
+| D3-R1: Registration functions are 3,017 lines total | HIGH | Phase 3 scope is significantly larger than D.1/D.2 assumed. process-spec alone is 1,548 lines of interleaved parse+register. Option (c) extraction is correct but major. |
+| D3-R2: preparse-expand-all is a 2-pass architecture | HIGH | Phase 3 must replicate pre-scan + generation + auto-export, not just "iterate and register." |
+| D3-R3: Generated definitions injection mechanism unspecified | HIGH | Design must detail how register-from-surfs injects generated defs into the form pipeline. |
+
+**D3-R1 through D3-R3 are the critical findings.** The design underestimates Phase 3 scope. The registration migration is not "call the same functions" — it's extracting registration logic from 3,017 lines of interleaved parsing+registration code. This may warrant splitting Phase 3 into sub-phases (3a: extract registration-only logic, 3b: wire into post-tree-parse pass, 3c: handle generated defs).
