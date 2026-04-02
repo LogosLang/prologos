@@ -1272,7 +1272,17 @@ Tree-parser already handles most forms correctly:
 
 Estimated total: ~150-200 lines of tree-parser implementations for G1-G4, G7.
 
-### 11.5 Implementation Plan
+### 11.5 Migration Strategy: Datum-Always → Tree-Canonical
+
+**Current state**: datum-always path (383/383 GREEN). Cell pipeline is primary. Surfs produced by `parse-datum` via datum conversion. `parse-form-tree` exists with improvements (cond/let/do/narrowing/list-literal/dual/angle-group/token-atom keywords) but produces surfs with structural differences from `parse-datum` in ~50 test cases.
+
+**Root cause of differences**: Source location format (list vs struct — cosmetic, doesn't affect elaboration). Plus: missing keyword-to-surf mappings, postfix indexing, angle-group type parsing, expression nesting edge cases.
+
+**Migration strategy**: Opt-in per form tag. Each form type moves from datum-conversion to `parse-form-tree` when parity is verified. The opt-in list in `extract-surfs-from-form-cells` grows monotonically. When ALL forms are opted in, datum conversion is deleted.
+
+**Verification per form**: For each form tag, run ALL test files that exercise that form type. If 0 regressions, the form is verified and opted in.
+
+### 11.6 Implementation Plan (revised)
 
 | Step | What | Verification |
 |------|------|-------------|
