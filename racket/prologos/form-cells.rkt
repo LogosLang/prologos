@@ -222,7 +222,16 @@
              #:when (pair? d))
     (parse-datum (datum->syntax #f d))))
 
-(define (extract-surfs-from-form-cells enet cell-map)
+;; Helper: convert a tree-node to a datum for preparse-expand-form fallback.
+;; Uses tree-node->stx-form which produces a single syntax object
+;; representing the entire form (grouped, like the compat reader output).
+(define (tree-node-to-datum node source-str)
+  (with-handlers ([exn:fail? (lambda (e) #f)])
+    (define stx (tree-node->stx-form node "<cell>" (or source-str "")))
+    (if stx (syntax->datum stx) #f)))
+
+(define (extract-surfs-from-form-cells enet cell-map
+                                        #:source-str [source-str #f])
   (define pairs
     (for/fold ([acc '()])
               ([(line cell-id) (in-hash cell-map)])
@@ -235,16 +244,30 @@
               ;; Non-error: tree-parser handled this form → one surf
               [(not (prologos-error? surf))
                (cons (cons line (list surf)) acc)]
-              ;; Error stub: consumed form → expand via process-*
+              ;; Error: try consumed form handler first (data/trait/impl etc.)
               [else
                (define tag (parse-tree-node-tag node))
                (define gen-defs (process-consumed-form tag node))
-               (if (null? gen-defs)
-                   ;; No generated defs (e.g., bundle, property — side effect only)
-                   acc
-                   ;; Generated defs → multiple surfs
-                   (let ([surfs (defs-to-surfs gen-defs)])
-                     (cons (cons line surfs) acc)))])))))
+               (cond
+                 ;; Generated defs from consumed form
+                 [(not (null? gen-defs))
+                  (let ([surfs (defs-to-surfs gen-defs)])
+                    (if (null? surfs) acc
+                        (cons (cons line surfs) acc)))]
+                 ;; No generated defs — try preparse-expand-form fallback.
+                 ;; Converts tree-node to datum, expands via preparse, parses.
+                 ;; This handles forms like cond, let, do inside defn bodies
+                 ;; that preparse-expand-form desugars.
+                 [else
+                  (define datum (tree-node-to-datum node source-str))
+                  (if (not datum)
+                      acc  ;; conversion failed — skip
+                      (with-handlers ([exn:fail? (lambda (e) acc)])
+                        (define expanded (preparse-expand-form datum))
+                        (define s (parse-datum (datum->syntax #f expanded)))
+                        (if (prologos-error? s)
+                            acc
+                            (cons (cons line (list s)) acc))))])])))))
   ;; Sort by source line, flatten surf lists
   (define sorted (sort pairs < #:key car))
   (apply append (map cdr sorted)))
