@@ -35,8 +35,8 @@
 | 6 | Per-form cells + production dispatch | ✅ | `7a2a4bd0`. One cell per form on elab-network. |
 | 7 | Cell pipeline wired into driver | ✅ | `40d07caa` + `5d3b597c`. extract-surfs-from-form-cells produces ALL surfs. No merge. |
 | 8 | parser.rkt role | ✅ REDEFINED | parser.rkt IS the single parser — `parse-datum` used by both sexp path and cell pipeline's datum conversion. Not retired — CENTRAL. Original "demote to sexp shim" goal is N/A: the single-parser architecture uses parse-datum as the canonical parser. |
-| 9 | Acceptance + A/B benchmarks + verification | ⬜ | Full suite GREEN (383/383, 7491 tests, 133.0s). A/B benchmarks pending. |
-| 10 | PIR + documentation | ⬜ | |
+| 9 | Acceptance + A/B benchmarks + verification | ✅ | 383/383 GREEN, 7491 tests, 133.0s. A/B: zero meaningful regression (14 programs, 5 runs). 2 "significant" within noise (±3.5%). Acceptance: 0 errors. |
+| 10 | PIR + documentation | ✅ | [PIR](2026-04-02_PPN_TRACK3_PIR.md). 16 questions answered. 11-PIR longitudinal survey. |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
 
