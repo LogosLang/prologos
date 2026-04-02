@@ -304,6 +304,18 @@
     (define stx (tree-node->stx-form node "<cell>" (or source-str "")))
     (if stx (syntax->datum stx) #f)))
 
+;; §11.5 Opt-in: form tags where parse-form-tree is VERIFIED to produce
+;; correct surfs (semantically identical to parse-datum, modulo srcloc format).
+;; Each tag added here means that form type is ON-NETWORK via tree-parser.
+;; Start empty; add forms as parity is verified per-test.
+;; §11.5: Form tags where tree-parser surfs are verified correct.
+;; Empty for now — datum-always is the proven path.
+;; Each form migrates here individually after verification.
+;; The GOAL is to move ALL forms here, making datum path unnecessary.
+;; But each form requires parse-form-tree to replicate parser.rkt's
+;; keyword-specific logic (motive annotations, multiplicity, etc.)
+(define tree-parser-verified-tags '())
+
 ;; §11 TREE-CANONICAL extraction rewrite
 (define (extract-surfs-from-form-cells enet cell-map
                                         #:source-str [source-str #f]
@@ -330,11 +342,25 @@
                    (let ([surfs (defs-to-surfs gen-defs)])
                      (if (null? surfs) acc
                          (cons (cons line surfs) acc))))]
-              ;; ALL other forms: datum conversion (single-parser, proven)
-              ;; The datum path goes through parse-datum which IS the
-              ;; canonical parser. Tree-parser surfs are the TARGET for
-              ;; on-network parsing — each form type migrates individually
-              ;; from datum to tree-parser as parity is verified.
+              ;; §11.5 Opt-in migration: tree-parser for verified forms,
+              ;; datum conversion for everything else.
+              ;; Forms move from datum→tree-parser as parity is verified.
+              [(memq tag tree-parser-verified-tags)
+               ;; VERIFIED: tree-parser produces correct surfs for this form type
+               (define surf (parse-form-tree node))
+               (if (not (prologos-error? surf))
+                   (cons (cons line (list surf)) acc)
+                   ;; Unexpected error on verified form — fall to datum
+                   (let* ([raw-node (hash-ref raw-map line #f)]
+                          [use-node (or raw-node node)]
+                          [datum (tree-node-to-datum use-node source-str)])
+                     (if (not datum) acc
+                         (with-handlers ([exn:fail? (lambda (e) acc)])
+                           (define expanded (preparse-expand-single datum))
+                           (define s (parse-datum (datum->syntax #f expanded)))
+                           (if (prologos-error? s) acc
+                               (cons (cons line (list s)) acc))))))]
+              ;; UNVERIFIED: datum conversion (proven correct)
               [else
                (let* ([raw-node (hash-ref raw-map line #f)]
                       [use-node (or raw-node node)]

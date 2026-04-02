@@ -1069,15 +1069,24 @@
 (define (cddddr lst) (cdr (cdddr lst)))
 
 (define (parse-if-tree args loc)
-  ;; After rewriting: should be boolrec form. But if not rewritten:
-  ;; (if cond then else) → surf-boolrec
+  ;; (if cond then else) → (boolrec (fn [_] _) then else cond)
+  ;; Motive = (fn [_ : Bool] _) — same as preparse's expand-if
   (cond
     [(= (length args) 3)
-     (surf-boolrec (surf-hole loc)
-                   (parse-form-tree (list-ref args 1))
-                   (parse-form-tree (list-ref args 2))
-                   (parse-form-tree (car args))
-                   loc)]
+     (define cond-e (parse-form-tree (car args)))
+     (define then-e (parse-form-tree (list-ref args 1)))
+     (define else-e (parse-form-tree (list-ref args 2)))
+     (cond
+       [(prologos-error? cond-e) cond-e]
+       [(prologos-error? then-e) then-e]
+       [(prologos-error? else-e) else-e]
+       [else
+        (surf-boolrec
+         (surf-lam (binder-info '_ #f (surf-hole loc)) (surf-hole loc) loc)
+         then-e else-e cond-e loc)])]
+    [(>= (length args) 3)
+     ;; (if cond then else) where cond/then/else may be multi-token
+     (parse-if-tree (list (car args) (cadr args) (caddr args)) loc)]
     [else (parse-error-result loc "if: need cond then else")]))
 
 (define (parse-expr-tree children loc)
@@ -1410,12 +1419,13 @@
            (parse-application-tree children loc)]))))
 
 (define (parse-paren-group-tree children loc)
-  ;; (expr) → parse contents
+  ;; (keyword arg ...) → dispatch via parse-expr-tree (keyword recognition)
+  ;; (expr) → single expression
   (if (null? children)
       (parse-error-result loc "empty paren group")
       (if (= (length children) 1)
           (parse-form-tree (car children))
-          (parse-application-tree children loc))))
+          (parse-expr-tree children loc))))
 
 (define (parse-group-tree children loc)
   ;; Indent-nested group → parse as expression
