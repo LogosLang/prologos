@@ -216,85 +216,10 @@
 ;; Helper: restructure infix = in a top-level datum.
 ;; (add ?a 3N = 5N) → (= (add ?a 3N) 5N)
 ;; Same as macros.rkt's maybe-restructure-infix-eq (not exported).
-(define (restructure-infix-eq datum)
-  (if (not (and (pair? datum) (list? datum))) datum
-      (let ([eq-idx (let loop ([ts datum] [i 0])
-                      (cond
-                        [(null? ts) #f]
-                        [(and (symbol? (car ts)) (eq? (car ts) '=) (> i 0)) i]
-                        [else (loop (cdr ts) (+ i 1))]))])
-        (if eq-idx
-            (let* ([lhs-ts (take datum eq-idx)]
-                   [rhs-ts (drop datum (+ eq-idx 1))]
-                   [lhs (if (= (length lhs-ts) 1) (car lhs-ts) lhs-ts)]
-                   [rhs (if (= (length rhs-ts) 1) (car rhs-ts) rhs-ts)])
-              (list '= lhs rhs))
-            datum))))
+;; §11: restructure-infix-eq, flatten-ws-datum, normalize-ws-tokens
+;; are now in tree-parser.rkt (imported above) to avoid circular dependency.
 
-;; Helper: flatten WS indentation groups in a datum.
-;; tree-node->stx-form produces (keyword arg1 (:key :val) (:key2 :val2))
-;; where indent-block children become nested lists. Flatten these so
-;; preparse-expand-single/parse-datum sees flat keyword-value sequences.
-(define (flatten-ws-datum datum)
-  (if (not (pair? datum)) datum
-      (cons (car datum)  ;; keep the head (keyword)
-            (apply append
-              (for/list ([item (in-list (cdr datum))])
-                (cond
-                  ;; Nested list that starts with a keyword symbol (:name)
-                  ;; → splice its contents
-                  [(and (pair? item) (symbol? (car item))
-                        (let ([s (symbol->string (car item))])
-                          (and (> (string-length s) 1)
-                               (char=? (string-ref s 0) #\:))))
-                   item]  ;; splice the list contents
-                  ;; Nested list from indent grouping → splice
-                  [(and (pair? item) (not (eq? (car item) '$brace-params))
-                        (not (eq? (car item) '$angle-type))
-                        (not (eq? (car item) '$list-literal))
-                        (not (eq? (car item) '$nat-literal))
-                        (not (eq? (car item) '$approx-literal))
-                        (not (eq? (car item) '$decimal-literal))
-                        (not (eq? (car item) '$set-literal))
-                        (not (eq? (car item) '$vec-literal))
-                        (not (eq? (car item) '$foreign-block))
-                        (not (eq? (car item) '$typed-hole))
-                        (not (eq? (car item) '$solver-config))
-                        (not (eq? (car item) 'quote))
-                        (not (eq? (car item) '$quote)))
-                   ;; This might be an indent group — splice if all symbols
-                   ;; But be conservative: only splice if it looks like a KV group
-                   (if (and (>= (length item) 2)
-                            (symbol? (car item))
-                            (let ([s (symbol->string (car item))])
-                              (and (> (string-length s) 1)
-                                   (char=? (string-ref s 0) #\:))))
-                       item  ;; splice keyword group
-                       (list item))]  ;; keep as-is
-                  [else (list item)]))))))
-
-;; Helper: normalize WS-specific tokens in a datum.
-;; !! → AsyncSend, ?? → AsyncRecv, ! → Send, ? → Recv
-;; These are WS-mode tokens that preparse-expand-all normalizes in Pass 2.
-(define (normalize-ws-tokens datum)
-  (cond
-    [(not (pair? datum)) datum]
-    [(symbol? datum)
-     (case datum
-       [(!!)  'AsyncSend]
-       [(??)  'AsyncRecv]
-       [else datum])]
-    [else
-     (map (lambda (item)
-            (cond
-              [(symbol? item)
-               (case item
-                 [(!!)  'AsyncSend]
-                 [(??)  'AsyncRecv]
-                 [else item])]
-              [(pair? item) (normalize-ws-tokens item)]
-              [else item]))
-          datum)]))
+;; flatten-ws-datum, normalize-ws-tokens: imported from tree-parser.rkt
 
 ;; Helper: convert a tree-node to a datum for preparse-expand-form fallback.
 ;; Uses tree-node->stx-form which produces a single syntax object
@@ -321,7 +246,13 @@
 ;; handled by form parsers' recursive descent via datum path.
 ;; VERIFIED forms: these produce correct surfs via parse-form-tree
 ;; with datum conversion on whole node. Each verified by targeted tests.
-(define tree-parser-verified-tags '())
+;; §11: Verified forms use parse-form-tree dispatch (ON-NETWORK).
+;; eval/check/infer: single-expression forms that convert cleanly via
+;; parse-eval-tree-for-cell (whole node → datum → normalize → expand → parse).
+;; ALL OTHER forms use datum-always path in extract-surfs (raw node → datum).
+;; Both paths produce identical surfs via parse-datum — the difference is
+;; WHETHER form dispatch goes through parse-form-tree (on-network) or not.
+(define tree-parser-verified-tags '(eval check infer))
 
 ;; §11 TREE-CANONICAL extraction rewrite
 (define (extract-surfs-from-form-cells enet cell-map

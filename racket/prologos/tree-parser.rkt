@@ -32,7 +32,11 @@
 (provide parse-form-tree
          parse-top-level-forms-from-tree
          parse-subtree-via-datum
-         current-source-str)
+         current-source-str
+         ;; §11 WS normalizations (used by form-cells.rkt datum path too)
+         flatten-ws-datum
+         restructure-infix-eq
+         normalize-ws-tokens)
 
 ;; ========================================
 ;; Helpers: reading from tree nodes
@@ -579,7 +583,63 @@
   ;; in the parsed output. If they DO appear here, they weren't consumed.
   (parse-error-result loc "spec: consumed by preparse"))
 
-;; §11: parse eval via datum conversion on the WHOLE node (for postfix, dot-access)
+;; §11 WS normalizations for datum path
+(define (restructure-infix-eq datum)
+  (if (not (and (pair? datum) (list? datum))) datum
+      (let ([eq-idx (let loop ([ts datum] [i 0])
+                      (cond [(null? ts) #f]
+                            [(and (symbol? (car ts)) (eq? (car ts) '=) (> i 0)) i]
+                            [else (loop (cdr ts) (+ i 1))]))])
+        (if eq-idx
+            (let* ([lhs-ts (take datum eq-idx)]
+                   [rhs-ts (drop datum (+ eq-idx 1))]
+                   [lhs (if (= (length lhs-ts) 1) (car lhs-ts) lhs-ts)]
+                   [rhs (if (= (length rhs-ts) 1) (car rhs-ts) rhs-ts)])
+              (list '= lhs rhs))
+            datum))))
+
+(define (flatten-ws-datum datum)
+  (if (not (pair? datum)) datum
+      (cons (car datum)
+            (apply append
+              (for/list ([item (in-list (cdr datum))])
+                (cond
+                  [(and (pair? item) (symbol? (car item))
+                        (let ([s (symbol->string (car item))])
+                          (and (> (string-length s) 1)
+                               (char=? (string-ref s 0) #\:))))
+                   item]
+                  [(and (pair? item)
+                        (not (memq (car item) '($brace-params $angle-type $list-literal
+                                                $nat-literal $approx-literal $decimal-literal
+                                                $set-literal $vec-literal $foreign-block
+                                                $typed-hole $solver-config quote $quote)))
+                        (>= (length item) 2)
+                        (symbol? (car item))
+                        (let ([s (symbol->string (car item))])
+                          (and (> (string-length s) 1)
+                               (char=? (string-ref s 0) #\:))))
+                   item]
+                  [else (list item)]))))))
+
+(define (normalize-ws-tokens datum)
+  (cond
+    [(not (pair? datum)) datum]
+    [(symbol? datum)
+     (case datum [(!!) 'AsyncSend] [(??) 'AsyncRecv] [else datum])]
+    [else
+     (map (lambda (item)
+            (cond
+              [(symbol? item)
+               (case item [(!!) 'AsyncSend] [(??) 'AsyncRecv] [else item])]
+              [(pair? item) (normalize-ws-tokens item)]
+              [else item]))
+          datum)]))
+
+;; §11: parse ANY top-level form via datum conversion on the WHOLE node.
+;; Applies all WS normalizations: flatten, session desugar, infix =, tokens.
+;; This is the ON-NETWORK dispatch point — form-level dispatch via parse-form-tree,
+;; expression parsing via parse-datum (canonical, correct).
 (define (parse-eval-tree-for-cell node loc)
   (define stx (tree-node->stx-form node "<tree>" (current-source-str)))
   (if (not stx)
@@ -587,7 +647,18 @@
       (let ([datum (syntax->datum stx)])
         (with-handlers ([exn:fail? (lambda (e)
                                      (parse-error-result loc (format "eval: ~a" (exn-message e))))])
-          (define expanded (preparse-expand-single datum))
+          ;; Apply ALL WS normalizations (same as extract-surfs datum path)
+          (define flat (flatten-ws-datum datum))
+          (define session-desugared
+            (cond
+              [(and (pair? flat) (eq? (car flat) 'session))
+               (desugar-session-ws flat)]
+              [(and (pair? flat) (eq? (car flat) 'defproc))
+               (desugar-defproc-ws flat)]
+              [else flat]))
+          (define eq-fixed (restructure-infix-eq session-desugared))
+          (define norm (normalize-ws-tokens eq-fixed))
+          (define expanded (preparse-expand-single norm))
           (parse-datum (datum->syntax #f expanded))))))
 
 (define (parse-eval-tree args loc)
