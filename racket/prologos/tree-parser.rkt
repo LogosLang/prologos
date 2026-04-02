@@ -1290,27 +1290,6 @@
                   #t]
                  [else (check (cdr rest))])))
         (parse-error-result loc "pipe/compose in expression: handled by preparse")]
-       ;; Postfix bracket indexing: xs[0] → (nth xs 0)
-       ;; Pattern: [identifier, bracket-group] where identifier is not a keyword
-       [(and (= (length children) 2)
-             (token-entry? (car children))
-             (parse-tree-node? (cadr children))
-             (eq? (parse-tree-node-tag (cadr children)) 'bracket-group)
-             ;; Not a keyword — just a variable name followed by brackets
-             (not (member head-lex '("fn" "the" "suc" "fst" "snd" "pair" "match" "reduce"
-                                     "boolrec" "natrec" "Eq" "J" "eval" "check" "infer"
-                                     "cons" "nil" "let" "do" "cond" "dual"))))
-        ;; Postfix indexing: xs[0] → (postfix-bracket xs 0)
-        ;; The preparse path rewrites this to (nth xs 0) or (pvec-nth xs 0).
-        ;; The tree-parser produces a postfix-bracket application that the
-        ;; elaborator handles via postfix-bracket-dispatch.
-        (define obj (parse-form-tree (car children)))
-        (define idx-children (rrb-to-list (parse-tree-node-children (cadr children))))
-        (define idx-args (for/list ([c (in-list idx-children)]) (parse-form-tree c)))
-        (define first-err (findf prologos-error? (cons obj idx-args)))
-        (if first-err first-err
-            (surf-app (surf-var '$postfix-bracket loc)
-                      (cons obj idx-args) loc))]
        ;; §11 G1: Narrowing infix = detection
        ;; (expr1 expr2 ... = exprN) with ?-prefixed variables → surf-narrow
        ;; (expr1 = expr2) without ?-vars → eq-check via parse-datum

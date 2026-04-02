@@ -330,32 +330,31 @@
                    (let ([surfs (defs-to-surfs gen-defs)])
                      (if (null? surfs) acc
                          (cons (cons line surfs) acc))))]
-              ;; ALL other forms: tree-parser PRIMARY, datum fallback
+              ;; ALL other forms: datum conversion (single-parser, proven)
+              ;; The datum path goes through parse-datum which IS the
+              ;; canonical parser. Tree-parser surfs are the TARGET for
+              ;; on-network parsing — each form type migrates individually
+              ;; from datum to tree-parser as parity is verified.
               [else
-               (define surf (parse-form-tree node))
-               (if (not (prologos-error? surf))
-                   ;; Tree-parser succeeded → ON-NETWORK (canonical)
-                   (cons (cons line (list surf)) acc)
-                   ;; Tree-parser failed → datum conversion FALLBACK
-                   (let* ([raw-node (hash-ref raw-map line #f)]
-                          [use-node (or raw-node node)]
-                          [datum (tree-node-to-datum use-node source-str)])
-                     (if (not datum) acc
-                         (with-handlers ([exn:fail? (lambda (e) acc)])
-                           (define flat-datum (flatten-ws-datum datum))
-                           (define session-datum
-                             (cond
-                               [(and (pair? flat-datum) (eq? (car flat-datum) 'session))
-                                (desugar-session-ws flat-datum)]
-                               [(and (pair? flat-datum) (eq? (car flat-datum) 'defproc))
-                                (desugar-defproc-ws flat-datum)]
-                               [else flat-datum]))
-                           (define eq-datum (restructure-infix-eq session-datum))
-                           (define norm-datum (normalize-ws-tokens eq-datum))
-                           (define expanded (preparse-expand-single norm-datum))
-                           (define s (parse-datum (datum->syntax #f expanded)))
-                           (if (prologos-error? s) acc
-                               (cons (cons line (list s)) acc))))))])))))
+               (let* ([raw-node (hash-ref raw-map line #f)]
+                      [use-node (or raw-node node)]
+                      [datum (tree-node-to-datum use-node source-str)])
+                 (if (not datum) acc
+                     (with-handlers ([exn:fail? (lambda (e) acc)])
+                       (define flat-datum (flatten-ws-datum datum))
+                       (define session-datum
+                         (cond
+                           [(and (pair? flat-datum) (eq? (car flat-datum) 'session))
+                            (desugar-session-ws flat-datum)]
+                           [(and (pair? flat-datum) (eq? (car flat-datum) 'defproc))
+                            (desugar-defproc-ws flat-datum)]
+                           [else flat-datum]))
+                       (define eq-datum (restructure-infix-eq session-datum))
+                       (define norm-datum (normalize-ws-tokens eq-datum))
+                       (define expanded (preparse-expand-single norm-datum))
+                       (define s (parse-datum (datum->syntax #f expanded)))
+                       (if (prologos-error? s) acc
+                           (cons (cons line (list s)) acc)))))])))))
   ;; Sort by source line, flatten surf lists
   (define sorted (sort pairs < #:key car))
   (apply append (map cdr sorted)))
