@@ -1611,17 +1611,10 @@
   (current-form-cell-map cell-map)
   (current-spec-cell-map spec-map)
 
-  ;; Step 3: Cell surfs PRIMARY via single-parser path.
-  ;; ONE parser (parse-datum), ONE representation.
-  ;; Session sublanguage forms suppressed (need WS body chaining) → fewer surfs.
-  ;; When cell has fewer surfs, fall back to preparse for complete coverage.
-  (define cell-surfs (extract-surfs-from-form-cells enet3 cell-map
-                       #:source-str s #:raw-map raw-map))
-  (define clean-preparse (filter (lambda (s) (not (prologos-error? s))) preparse-surfs))
-  (define surfs
-    (if (< (length cell-surfs) (length clean-preparse))
-        clean-preparse  ;; session forms dropped → use preparse
-        cell-surfs))    ;; cell path covers all forms
+  ;; Step 3: Cell surfs are THE output. Single-parser path.
+  ;; ONE parser (parse-datum), ONE representation. No fallback.
+  (define surfs (extract-surfs-from-form-cells enet3 cell-map
+                  #:source-str s #:raw-map raw-map))
   (process-surfs surfs))
 
 ;; PPN Track 3: merge cell surfs with preparse surfs.

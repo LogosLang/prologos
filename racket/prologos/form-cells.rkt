@@ -322,13 +322,9 @@
       (if (not node) acc
           (let ([tag (parse-tree-node-tag node)])
             (cond
-              ;; Side-effect-only OR session sublanguage (needs special WS desugaring): no surfs
-              ;; Session forms require body chaining (!!→AsyncSend+continuation) that
-              ;; preparse-expand-all handles in Pass 2. Single-expand can't replicate this.
-              ;; Tracked for future session tree-parser implementation.
+              ;; Side-effect-only: no surfs
               [(memq tag '(ns imports exports spec deftype bundle defmacro property
-                           functor schema precedence-group specialize
-                           session defproc proc spawn spawn-with))
+                           functor schema precedence-group specialize))
                acc]
               ;; Generated-def forms: process-consumed-form returns sexp lists
               [(memq tag '(data trait impl))
@@ -344,9 +340,17 @@
                (define datum (tree-node-to-datum use-node source-str))
                (if (not datum) acc
                    (with-handlers ([exn:fail? (lambda (e) acc)])
-                     ;; Normalize WS datum: flatten groups + restructure infix = + session tokens
+                     ;; Normalize WS datum: flatten groups + session desugar + infix = + tokens
                      (define flat-datum (flatten-ws-datum datum))
-                     (define eq-datum (restructure-infix-eq flat-datum))
+                     ;; Session/defproc forms need special WS body desugaring
+                     (define session-datum
+                       (cond
+                         [(and (pair? flat-datum) (eq? (car flat-datum) 'session))
+                          (desugar-session-ws flat-datum)]
+                         [(and (pair? flat-datum) (eq? (car flat-datum) 'defproc))
+                          (desugar-defproc-ws flat-datum)]
+                         [else flat-datum]))
+                     (define eq-datum (restructure-infix-eq session-datum))
                      (define norm-datum (normalize-ws-tokens eq-datum))
                      (define expanded (preparse-expand-single norm-datum))
                      (define s (parse-datum (datum->syntax #f expanded)))
