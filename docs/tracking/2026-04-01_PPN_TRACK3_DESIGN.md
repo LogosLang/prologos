@@ -1,4 +1,4 @@
-# PPN Track 3: Parser as Propagators — Stage 3 Design (D.2)
+# PPN Track 3: Parser as Propagators — Stage 3 Design (D.4)
 
 **Date**: 2026-04-01
 **Series**: [PPN (Propagator-Parsing-Network)](2026-03-26_PPN_MASTER.md)
@@ -25,16 +25,20 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Pre-0 benchmarks | ✅ | `dc87fb34`. Parse=0-4% of pipeline. WS overhead <2%. All V1-V3 algebraic properties PASS. No design changes. |
-| 1 | Close tree-parser coverage gap: data/trait/impl | ⬜ | 3 stubs → full implementations. Registration remains in preparse (scaffolding). |
+| 0 | Pre-0 benchmarks | ✅ | `dc87fb34`. Parse=0-4% of pipeline. WS overhead <2%. All V1-V3 algebraic properties PASS. |
+| 1 | Close tree-parser coverage gap: data/trait/impl | ⬜ | 3 stubs → full implementations. Parsing only — no registration. |
 | 2 | Close tree-parser coverage gap: session/defproc/defr/quote/solver | ⬜ | 5 stubs → full implementations. Complex sublanguages. |
-| 3 | Registration migration: preparse → post-tree-parse pass | ⬜ | data/trait/impl/spec/defmacro registration moves to tree-parser level. preparse-expand-all becomes deletable for WS path. |
-| 4 | Delete sexp expanders on WS path | ⬜ | ~500-600 lines of macros.rkt expand-* functions become unreachable. preparse-expand-all eliminated from WS pipeline. |
-| 5 | Grammar production registry (cell) | ⬜ | Production table as Pocket Universe cell. Keyword → production mapping. Static bulk registration for 236 keyword heads. |
-| 6 | Per-form Pocket Universe architecture | ⬜ | One cell per top-level form. Value is Pocket Universe with embedded parse lattice. SRE decomposes for elaboration. |
-| 7 | Shared cells replace merge | ⬜ | merge-preparse-and-tree-parser deleted. Both pipelines write to same per-form cell. merge-form becomes cell merge function. |
-| 8 | Retire parser.rkt | ⬜ | 6,605 lines deleted. All callers rewired. parse-datum replaced by cell reads. |
-| 9 | Acceptance + A/B benchmarks + verification | ⬜ | Full suite GREEN. A/B vs Track 2B baseline. Acceptance file. |
+| 3a | Spec cells: propagator-native spec resolution | ⬜ | Per-function spec cells. Spec forms write, defn forms read. Eliminates two-pass ordering. |
+| 3b | Data registration extraction | ⬜ | Extract registration-only logic from process-data (215 lines). Registration as data descriptors. |
+| 3c | Trait/impl registration extraction | ⬜ | Extract from process-trait (739 lines) + process-impl (465 lines). |
+| 3d | Spec registration extraction | ⬜ | Extract from process-spec (1,548 lines). Depends on tree-parser handling spec type signatures. |
+| 3e | Generated def injection | ⬜ | Constructors, accessors, default methods → additional form cells via accumulator cell. |
+| 4 | Delete sexp expanders on WS path | ⬜ | ~500-600 lines of macros.rkt expand-* become unreachable. preparse-expand-all eliminated from WS pipeline. |
+| 5 | Dependency-set Pocket Universe + production registry | ⬜ | Replace stage chain with powerset of completed transforms (Boolean). Production registry as set-valued cell. |
+| 6 | Per-form cells + production dispatch propagators | ⬜ | One cell per top-level form. Dispatch IS a propagator. Dependency-set determines firing. |
+| 7 | Shared cells replace merge (pure merge function) | ⬜ | merge-form rewritten as pure (no spec-store). Provenance field handles spec-annotated forms. |
+| 8 | Retire parser.rkt (demote to sexp shim) | ⬜ | Incomplete — sexp path retained for tests/REPL. Full retirement when PM brings module loading on-network. Tracked in DEFERRED.md. |
+| 9 | Acceptance + A/B benchmarks + verification | ⬜ | Full suite GREEN. A/B vs Track 2B baseline. Acceptance file on all examples. |
 | 10 | PIR + documentation | ⬜ | |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
@@ -47,20 +51,23 @@
 
 **What is delivered**:
 1. Tree-parser handles ALL 8 currently-stubbed form types (data, trait, impl, session, defproc, defr, quote, solver)
-2. Registration (data constructors, traits, impls, specs, macros) migrated from preparse-expand-all to a post-tree-parse registration pass
-3. `preparse-expand-all` eliminated from the WS processing path
-4. ~500-600 lines of sexp-specific expanders deleted from macros.rkt
-5. Grammar production registry as a Pocket Universe cell — 236 keyword heads bulk-registered, monotonically extensible
-6. Per-form Pocket Universe architecture — one cell per top-level source form, value is the full parse tree for that form
-7. Shared cells replace the source-line-keyed merge — identity is structural (shared cell), not computed (key lookup)
-8. `parser.rkt` (6,605 lines) deleted — all `parse-datum` call sites rewired to cell reads
-9. `merge-preparse-and-tree-parser` (80 lines) deleted — no more dual-pipeline merge
+2. Spec resolution via propagator cells — per-function spec cells replace two-pass ordering. Defn propagators read spec cells; ordering emerges from data dependency, not control flow.
+3. Registration logic extracted from `process-data/trait/impl/spec/defmacro` (3,017 lines of interleaved parse+register) into registration-only functions that operate on surf-* input. Registration as data descriptors, not imperative side effects.
+4. Generated def injection via accumulator cell — constructors, accessors, default methods produced by registration propagators and injected as additional form cells.
+5. `preparse-expand-all` eliminated from the WS processing path
+6. ~500-600 lines of sexp-specific expanders deleted from macros.rkt
+7. Dependency-set Pocket Universe — pipeline stages as a powerset of completed transforms (Boolean lattice), not a chain. Independent transforms fire in parallel. Extensible: new transforms = new set elements.
+8. Grammar production registry as a set-valued cell — `Map Symbol (Set GrammarProduction)`, 236 keyword heads bulk-registered, monotonically extensible for Track 7.
+9. Per-form cells with production dispatch propagators — dispatch IS a propagator fire body, not a standalone function.
+10. Pure merge function — provenance field replaces spec-store parameter dependency. merge-form is a pure function of its arguments.
+11. Shared cells replace the source-line-keyed merge — identity is structural (shared cell), not computed (key lookup).
+12. `parser.rkt` demoted to sexp compatibility shim — incomplete, tracked in DEFERRED.md. Full retirement when PM brings module loading on-network.
 
 **What this track is NOT**:
-- It does NOT put registration on the propagator network as cells — incomplete because module-load-time network doesn't exist yet; PM series scope. Registration continues via Racket parameters (scaffolding) but is structured so PM can migrate to cells.
+- It does NOT put registration on the propagator network as persistent cells — incomplete because module-load-time network doesn't exist yet; PM series scope. Registration writes to per-command cells where possible (process-file path) and to Racket parameters where necessary (load-module path). PM unifies both on persistent cells.
 - It does NOT implement semiring-parameterized parsing — incomplete because the semiring abstraction requires the parse forest lattice from PPN Track 5. Boolean (recognition-only) semiring suffices for Track 3.
 - It does NOT implement user-defined grammar extensions — incomplete because user-facing `grammar` form requires Track 7 design. Track 3 provides the production registry mechanism that Track 7 exposes.
-- It does NOT retire the sexp processing path (`process-string`) — incomplete because sexp mode remains for REPL/test convenience. `parse-datum` remains callable on the sexp path. Retirement is a future cleanup track.
+- It does NOT retire the sexp processing path (`process-string`) — incomplete because sexp mode remains for tests/REPL. Full retirement blocked on PM module-loading-on-network. Tracked in DEFERRED.md.
 - It does NOT dissolve the parse/elaborate boundary — that is PPN Track 4. Track 3 produces surf-* structs, elaboration consumes them. The boundary is preserved.
 
 ---
@@ -119,13 +126,15 @@ These are all FACTS — partial (a form might be recognized but sub-expressions 
 
 **2. What is the lattice?**
 
-Three lattices, each with explicitly declared algebraic structure (see §3.8 for full analysis):
+Four lattices, each with explicitly declared algebraic structure (see §3.8 for full analysis):
 
-- **Per-form parse lattice (FormCell)**: A product lattice with deliberate ordering choices. The stage component is a finite chain (Heyting). The tree-node and surf components use **pipeline-preference ordering** (NOT flat equality) — tree-parser output > preparse output > ⊥. This makes the product distributive and Heyting, avoiding the flat-lattice trap that Track 2G found in the type domain. The registrations component is a powerset (Boolean). The FormCell domain MUST be registered via SRE Track 2G's `register-domain!` with explicit algebraic property declarations. See §3.8 for why these ordering choices matter.
+- **Per-form parse lattice (FormCell)**: A product lattice with deliberate ordering choices. The transforms component (D.4) is a **powerset of completed transforms** (Boolean — the strongest algebraic structure), replacing the D.2 stage chain. Independent transforms fire in parallel; ordering emerges from data dependency, not chain position. The tree-node and surf components use **pipeline-preference ordering** (NOT flat equality) — tree-parser output > preparse output > ⊥. The registrations component is a powerset (Boolean). The FormCell domain MUST be registered via SRE Track 2G's `register-domain!` with explicit algebraic property declarations. See §3.8 for why these ordering choices matter.
 
-- **Grammar production registry**: `Map Symbol (Set GrammarProduction)` — values are SETS of productions per keyword, not singletons. For Track 3, each set has exactly one element. Track 7 adds ambiguity (multiple productions per keyword, ATMS explores alternatives). The set-valued design avoids the type-lattice mistake of committing to a flat ordering that later needs redesign. Powerset per keyword → distributive, Heyting, Boolean.
+- **Grammar production registry**: `Map Symbol (Set GrammarProduction)` — values are SETS of productions per keyword, not singletons. For Track 3, each set has exactly one element. Track 7 adds ambiguity (multiple productions per keyword, ATMS explores alternatives). Powerset per keyword → Boolean.
 
-- **Registration lattice**: ⊥ (nothing registered) → set of known names with their properties. Monotone — registrations are only added. This is the information currently in `preparse-expand-all`'s side effects. For Track 3, this remains in Racket parameters (scaffolding). The lattice structure is what matters for the future PM migration. Per-key values (e.g., a spec's type annotation) use flat equality with collision = ⊤ (contradiction = error), which is correct semantics.
+- **Spec cell lattice** (D.4): Per-function cells holding spec annotations. ⊥ (no spec) → `spec-entry` (type signature + metadata). Set-once. Defn production propagators read spec cells — if ⊥, the defn residuates until the spec is written. This eliminates the two-pass ordering in `preparse-expand-all`. Ordering emerges from cell dependency, not control flow. Flat per-function → same structure as the type lattice under equality, but collision = ⊤ (error) is correct semantics (redefining a spec is an error).
+
+- **Registration lattice**: ⊥ (nothing registered) → set of known names with their properties. Monotone — registrations are only added. For Track 3: per-command cells where possible (process-file path), Racket parameters where necessary (load-module path). PM unifies both on persistent cells.
 
 **3. What is the identity?**
 
@@ -147,35 +156,53 @@ Each top-level source form gets ONE cell on the network. The cell value is a Poc
 
 ```
 (form-cell-value
-  stage         ;; symbol: 'raw | 'tagged | 'grouped | 'rewritten | 'parsed
-  tree-node     ;; parse-tree-node at current stage (or #f if parsed)
+  transforms    ;; set of symbols: completed transforms (powerset lattice)
+  tree-node     ;; parse-tree-node at current refinement (or #f if parsed)
   surf          ;; surf-* struct (or #f if not yet parsed)
   provenance    ;; symbol: 'none | 'preparse | 'tree-parser — pipeline-preference ordering
   source-line   ;; integer — preserved for diagnostics
-  registrations ;; set of registration side-effects (scaffolding for PM migration)
+  registrations ;; set of registration descriptors (data, not side effects)
 )
 ```
 
 **Ordering (component-wise, all monotone)**:
-- `stage`: Finite chain — `raw < tagged < grouped < rewritten < parsed`. Heyting. Each stage is a stratum.
+- `transforms` (D.4): **Powerset** — set of completed transform names. Join is set union. ⊥ = ∅, ⊤ = {all transforms}. **Boolean** (strongest algebraic structure). Replaces the D.2 stage chain. Each transform is an element: `'tagged`, `'grouped`, `'pipe-rewritten`, `'compose-rewritten`, `'mixfix-resolved`, `'let-expanded`, `'parsed`, etc. A propagator declares its dependencies as a required subset; it fires when that subset ⊆ `transforms`.
 - `tree-node`: Option with pipeline-preference — `#f < any-node`. At most one node (tree parser overwrites).
 - `surf`: Option with pipeline-preference — `#f < preparse-surf < tree-parser-surf`. The provenance field tracks source for the ordering.
 - `provenance`: Chain — `none < preparse < tree-parser`. This is the **pipeline-preference ordering** that makes the surf component a chain (Heyting) rather than flat (non-distributive). Track 2B's `merge-form` already encodes this ordering — D.2 makes it explicit and structural.
 - `registrations`: Set (powerset) — join is union. Boolean.
 
-The product of these components is distributive and Heyting (product of chains and powersets). See §3.8 for the algebraic property verification.
+The product of these components is **Boolean** (product of powersets and chains, all Boolean or Heyting). See §3.8 for the algebraic property verification.
 
-**Stages** (from Track 2 pipeline, now formalized):
+**Transforms as dependency-set** (D.4 — replaces D.2 stage chain):
 
-| Stage | Stratum | What Happens | Propagator |
-|-------|---------|-------------|-----------|
-| `raw` | S0 | Source text parsed into parse-tree-node by tree-builder | Tree-builder (Track 1) |
-| `tagged` | S1 | T(0) tag refinement — keyword identification | surface-rewrite.rkt tag rules |
-| `grouped` | S2 | G(0) form grouping — sub-expression boundary identification | surface-rewrite.rkt group rules |
-| `rewritten` | S3 | Rewrite rules — pipe, compose, mixfix, let, cond, etc. | surface-rewrite.rkt + new productions |
-| `parsed` | S4 | Final surf-* struct produced from rewritten tree | Grammar production for this form type |
+Each transform is a named operation with declared dependencies:
 
-**Why Pocket Universe, not 5 separate cells per form**: Cell allocation cost. A program with 100 forms would need 500 cells if each stage were a separate cell, plus propagators between them. One Pocket Universe per form = 100 cells, with internal stage advancement. The merge function understands stage ordering and always advances.
+| Transform | Dependencies | What it does | Propagator |
+|-----------|-------------|-------------|-----------|
+| `tagged` | ∅ | T(0) tag refinement — keyword identification | surface-rewrite.rkt tag rules |
+| `grouped` | ∅ | G(0) form grouping — sub-expression boundaries | surface-rewrite.rkt group rules |
+| `pipe-rewritten` | `{tagged, grouped}` | `\|>` expansion | surface-rewrite.rkt pipe rule |
+| `compose-rewritten` | `{tagged, grouped}` | `>>` expansion | surface-rewrite.rkt compose rule |
+| `mixfix-resolved` | `{tagged, grouped}` | `.{...}` Pocket Universe resolution | surface-rewrite.rkt mixfix |
+| `let-expanded` | `{tagged, grouped}` | `let` desugaring | production for `let` |
+| `cond-expanded` | `{tagged, grouped}` | `cond` desugaring | production for `cond` |
+| ... | ... | (one per rewrite rule) | ... |
+| `parsed` | `{tagged, grouped}` ∪ form-specific | Final surf-* struct produced | Grammar production |
+
+**Critical pairs analysis** (DPO theory, D.3 finding):
+- `tagged` and `grouped`: NO critical pair — they touch different node attributes (keyword vs children). **Can fire in parallel.**
+- Different rewrite rules (pipe, compose, mixfix, let, cond, etc.): NO critical pairs — they dispatch on different keywords/patterns. **Can fire in parallel.**
+- All rewrite rules depend on `{tagged, grouped}`: they need the tag to match and the group structure to navigate. **Stratification boundary: tag+group before rewrites.**
+- `parsed` depends on form-specific rewrites completing: a `defn` needs `let-expanded` if it contains let expressions. **Data dependency, not global ordering.**
+
+**Why dependency-set, not chain** (D.4):
+1. **Parallelism**: T(0) and G(0) fire concurrently. All rewrite rules for a form fire concurrently (no critical pairs between different keyword-dispatched rules). The chain serialized ALL of these.
+2. **Extensibility**: Adding a new rewrite rule = adding a new transform name + declaring its dependencies. No chain modification. Track 7 user-defined grammar extensions add transforms without changing the existing set.
+3. **Algebraic strength**: Powerset is Boolean (strongest). Chain was only Heyting. Boolean gives complement (useful for "what transforms have NOT fired" diagnostics).
+4. **Correctness**: Critical pair analysis guarantees that independent transforms commute. The dependency declarations capture EXACTLY the ordering constraints that exist. No over-constraining.
+
+**Why Pocket Universe, not N separate cells per form**: Cell allocation cost. A program with 100 forms would need 100 × M cells (M = number of transforms) if each transform were a separate cell. One Pocket Universe per form = 100 cells, with internal dependency-set advancement.
 
 **SRE decomposition**: When the elaborator needs to access sub-structure of a parsed form (e.g., a `surf-defn`'s parameter list), SRE's `ctor-desc` decomposes the surf-* struct, creating sub-cells for each component. This is the existing pattern from Track 2 — `parse-tree-node` is already decomposed by SRE via `ctor-desc`. surf-* structs get the same treatment.
 
@@ -206,27 +233,51 @@ The merge function is per-keyword set union: `join(a, b) = {k → a[k] ∪ b[k] 
 
 **Relationship to Track 7**: The production registry is the extension point. Track 7 exposes it to users via the `grammar` toplevel form. Track 3 populates it from Racket-side definitions. The mechanism is the same — write to the production registry cell. The set-valued design means Track 7 doesn't need a lattice redesign — it just adds elements to existing sets.
 
-### 3.4 Registration as Information Flow (Scaffolding)
+### 3.4 Registration as Information Flow (D.4 — Propagator-Native)
 
-Registration (data constructors, traits, impls, specs, macros) currently happens as side effects in `preparse-expand-all`. Track 3 restructures this:
+Registration (data constructors, traits, impls, specs, macros) currently happens as interleaved parse+register side effects in `preparse-expand-all`. The D.3 self-critique found this is 3,017 lines of code across 5 functions, not simple wrappers. D.4 restructures registration as propagator-native information flow.
 
-**Current flow**:
+**Current flow** (algorithmic, interleaved):
 ```
-preparse-expand-all: read sexp → REGISTER (mutate parameters) → output expanded sexp
+preparse-expand-all:
+  Pass 1: scan ALL specs → write spec-store (ordering dependency!)
+  Pass 2: for each form → PARSE + REGISTER (interleaved) → output expanded sexp
 parse-datum: read expanded sexp → output surf-*
 ```
 
-**Track 3 flow**:
+**Track 3 flow** (propagator-native, D.4):
 ```
-tree-parser: read tree → output surf-*
-registration-pass: read surf-* → REGISTER (mutate parameters, scaffolding)
+tree-parser: read tree → output surf-* (pure)
+spec cells: each spec form writes to per-function spec cell (propagator)
+registration propagators: each data/trait/impl form's propagator extracts
+  registration descriptors from its surf-* struct and writes to registration cells
+generated-def propagator: registration descriptors → additional form cells
+elaboration: reads form cells + registration cells (cell dependency, not ordering)
 ```
 
-Registration moves from PRE-parse to POST-parse. The surf-* struct IS the registration payload — a `surf-data` struct contains all the information needed to register constructors, accessors, and type definitions. The registration pass reads the surf-* and performs the same mutations as `preparse-expand-all`.
+**Key D.4 changes from D.2:**
 
-**Why this is progress**: Registration is now separated from parsing. The parsing step is pure (produces surf-*). The registration step is effectful but well-bounded (reads surf-*, writes parameters). This decomposition is the prerequisite for PM's migration — PM replaces the parameter writes with cell writes.
+1. **Spec cells replace two-pass ordering.** Each function name has a spec cell. When a `spec` form is processed, its production propagator writes the type annotation + metadata to the spec cell. When a `defn` form's production fires, it reads the spec cell for its name. If ⊥ (spec not yet processed), the defn residuates. When the spec cell is written, the defn propagator re-fires. No Pass 1/Pass 2. Ordering emerges from cell dependency.
 
-**Why this is still scaffolding**: Registration mutates Racket parameters, not cells. The information-flow model is correct (registration IS monotone information accumulation), but the mechanism is imperative. PM series replaces parameters with persistent cells.
+2. **Registration as data descriptors, not side effects.** The registration logic extracted from `process-data/trait/impl/spec` produces DESCRIPTORS — data values describing what to register (constructor names, method signatures, impl targets) — rather than directly mutating parameters. These descriptors are written to the form's `registrations` set in the Pocket Universe. A downstream registration propagator reads descriptors and performs the actual registration.
+
+3. **Generated defs via accumulator cell.** When `data Color := Red | Green | Blue` is processed, the registration propagator produces descriptors for constructors (`Red`, `Green`, `Blue`), type-check function (`Color?`), and accessors. A generated-def propagator reads these descriptors and creates ADDITIONAL per-form cells for the generated definitions. These cells go through the same production dispatch as user-written forms.
+
+4. **Two registration paths (scaffolding boundary).** For `process-file` / `process-string-ws`: registration descriptors → per-command registration cells → elaboration reads cells. For `load-module`: registration descriptors → Racket parameters (scaffolding, persists across commands). PM unifies both paths on persistent network cells.
+
+**Why this is progress over D.2**: D.2 proposed `register-from-surfs` as an imperative loop. D.4 replaces this with propagators: spec cells, registration descriptor extraction, generated-def injection. The only imperative remnant is the `load-module` parameter write (scaffolding for PM).
+
+**Registration function extraction scope** (D.3 finding R1):
+
+| Function | Lines | Extraction approach |
+|----------|-------|-------------------|
+| `process-data` | 215 | surf-data already contains all info. Extract: ctor names, accessor patterns, type def. |
+| `process-trait` | 739 | surf-trait contains method signatures. Extract: trait declaration, method types, defaults. |
+| `process-impl` | 465 | surf-impl contains method bodies. Extract: impl entry, method implementations. |
+| `process-spec` | 1,548 | Most is type-signature PARSING (tree-parser handles in Phases 1-2). Extract: spec-store write, mixfix metadata, generated defs. |
+| `process-defmacro` | ~50 | surf-defmacro contains pattern+template. Extract: macro rule registration. |
+
+The extraction does NOT port 3,017 lines. It extracts the REGISTRATION-ONLY portions from functions whose PARSING portions are replaced by the tree-parser. For `process-spec`, the 1,548 lines are mostly parsing — the registration portion is the spec-store write + mixfix metadata + a few generated defs.
 
 ### 3.5 Merge Retirement
 
@@ -278,14 +329,14 @@ The user-visible effect is: nothing changes. `.prologos` files parse and elabora
 
 | Component | Carrier | Ordering | Algebraic Class | Why This Ordering |
 |-----------|---------|----------|----------------|-------------------|
-| `stage` | 5 symbols | Total chain: raw < tagged < grouped < rewritten < parsed | Finite chain → **Heyting** | Stages are strictly ordered. No ambiguity. |
+| `transforms` (D.4) | Powerset of transform names | Set union | Powerset → **Boolean** | Independent transforms fire in parallel. Critical pair analysis: no ordering between independent rules. |
 | `tree-node` | {#f} ∪ ParseTreeNode | Option: #f < any-node (at most one) | 2-element chain → **Boolean** | Tree parser writes once. No merge between different trees needed. |
 | `surf` | {#f} ∪ SurfExpr | Pipeline-preference: #f < preparse-output < tree-parser-output | 3-element chain → **Heyting** | Track 2B's merge-form already encodes this. D.2 makes it explicit via `provenance` field. |
 | `provenance` | 3 symbols | Chain: none < preparse < tree-parser | Finite chain → **Heyting** | Tracks which pipeline produced the surf. IS the surf ordering. |
 | `source-line` | Nat | Max (information-preserving) | Trivial (single value per form) | Diagnostic only. Not merged. |
-| `registrations` | Set of Registration | Set union (powerset) | Powerset → **Boolean** | Accumulation. Monotone. |
+| `registrations` (D.4) | Set of registration descriptors | Set union (powerset) | Powerset → **Boolean** | Registration as data, not side effects. Accumulation. Monotone. |
 
-**Product lattice**: Chain × Boolean × Heyting × Heyting × Trivial × Boolean = **Heyting** (product of Heyting algebras is Heyting).
+**Product lattice**: Boolean × Boolean × Heyting × Heyting × Trivial × Boolean = **Boolean** (product of Boolean algebras is Boolean). D.4's dependency-set upgrade promotes the product from Heyting (D.2 chain) to Boolean (D.4 powerset).
 
 **Why this avoids the type-lattice trap**: The type lattice used EQUALITY merge for types — `Int ⊔ Nat = ⊤` because Int and Nat are incomparable atoms in a flat lattice. Track 3's surf component uses PIPELINE-PREFERENCE ordering — `preparse-surf ⊔ tree-parser-surf = tree-parser-surf` because tree-parser is HIGHER in the chain. There are never two incomparable surf values. The provenance field encodes this ordering structurally.
 
@@ -361,183 +412,190 @@ Track 3 MUST register its lattice domains via SRE Track 2G's `register-domain!` 
 
 | Lattice | Algebraic Class | Design-for-Future Provision |
 |---------|----------------|---------------------------|
-| FormCell | Heyting | Surf component changes from chain → powerset in Track 5 (both Heyting-or-better). No redesign. |
+| FormCell (D.4) | **Boolean** | Dependency-set (powerset) promotes from Heyting. Surf → powerset in Track 5. No redesign. |
+| SpecCell (D.4) | Flat (set-once) | Collision = ⊤ (error). Correct semantics. |
 | ProductionRegistry | Boolean | Set-valued per keyword. Track 7 adds elements to sets. No redesign. |
-| Registration (scaffolding) | Mixed | Flat components noted. PM design must address. Track 3 doesn't commit to a lattice structure for registrations. |
+| Registration descriptors (D.4) | Boolean (powerset) | Descriptors accumulate as sets. No flat-value issue. |
+| Registration effect (scaffolding) | Mixed | Parameter writes for load-module. PM replaces with persistent cells. |
 
 The type lattice required redesign because it committed to flat equality as the ordering, then discovered that downstream consumers (Heyting error reporting) needed a richer ordering. Track 3 avoids this by:
-1. **Choosing pipeline-preference ordering** for components that would otherwise be flat
-2. **Using set-valued collections** for components that could later have multiple values (production sets, not singletons)
-3. **Registering domains with SRE 2G** so property inference validates the algebraic structure
-4. **Noting flat components explicitly** in the registration lattice so PM doesn't inherit the assumption
+1. **Choosing dependency-set (powerset)** for transforms — Boolean, the strongest algebraic structure (D.4, upgraded from D.2 chain)
+2. **Choosing pipeline-preference ordering** for surf component — chain, not flat
+3. **Using set-valued collections** for components that could later have multiple values (production sets, registration descriptors)
+4. **Registering domains with SRE 2G** so property inference validates the algebraic structure
+5. **Separating registration data from registration effects** — descriptors (Boolean powerset) vs parameter writes (scaffolding). PM only needs to change the effect mechanism, not the data structure.
+6. **Spec cells with cell-mediated dependency** — eliminates algorithmic ordering that would have been another redesign target when Track 4 needs propagator-native spec resolution
 
 ---
 
-## §4 Phase Details
+## §4 Phase Details (D.4 — revised from D.3 self-critique)
 
-### Phase 0: Pre-0 Benchmarks
+### Phase 0: Pre-0 Benchmarks ✅
 
-**What**: Establish baselines and validate audit assumptions.
-
-1. **parse-datum micro-benchmark**: Time `parse-datum` on representative programs (6-def no-prelude, 20-def with prelude). Confirm the audit finding that parsing is <1ms.
-2. **preparse-expand-all micro-benchmark**: Time `preparse-expand-all` separately. Identify how much time is in expansion vs. registration.
-3. **Tree-parser coverage metrics**: For each form type, count how many instances in the test suite are tree-parser-handled vs. preparse-fallback. Quantify the coverage gap.
-4. **Merge overhead**: Time `merge-preparse-and-tree-parser` separately. Confirm it's negligible.
-
-**Design input**: If preparse-expand-all is expensive (e.g., >10ms for moderate programs), the registration migration (Phase 3) has performance value beyond architecture. If tree-parser coverage is >90%, the gap-closing work (Phases 1-2) is small.
+See §8 for full data. Key findings: parse = 0-4% of pipeline, WS overhead <2%, all algebraic properties PASS, set-valued registry zero overhead. No design changes.
 
 ### Phase 1: Close Coverage Gap — data/trait/impl
 
-**What**: Implement `parse-data-tree`, `parse-trait-tree`, `parse-impl-tree` in tree-parser.rkt. These are the 3 most important stubs — they are the most commonly used registration forms.
+**What**: Implement `parse-data-tree`, `parse-trait-tree`, `parse-impl-tree` in tree-parser.rkt. These are the 3 most important stubs — they are the most commonly used forms with registration side effects.
 
 **Scope per form**:
 
-- **data**: Tree → `surf-data` struct. Must handle: type parameters, constructor declarations, deriving clauses. Does NOT perform registration (that stays in preparse for now — Phase 3 moves it).
+- **data**: Tree → `surf-data` struct. Must handle: type parameters, constructor declarations, deriving clauses. **Parsing only** — no registration (Phase 3a-3e handles registration).
 - **trait**: Tree → `surf-trait` struct. Must handle: trait name, type parameters, method signatures, supertraits.
 - **impl**: Tree → `surf-impl` struct. Must handle: trait name, implementing type, method bodies.
 
-**Validation**: Each new tree-parser function is tested at Level 2 (WS string via `process-string-ws`) and Level 3 (`.prologos` acceptance file). The merge should route these forms through the tree parser instead of falling back to preparse.
+**Validation**: Three-level WS validation (L1 + L2 + L3). The merge routes these forms through tree parser instead of falling back to preparse.
 
-**Key risk**: data/trait/impl forms involve implicit generated definitions (constructors, accessors, method defaults). These are currently generated by `preparse-expand-all`. Phase 1 does NOT handle generation — the merge still routes generated defs through preparse. Phase 3 addresses generation.
+**Key risk**: data/trait/impl surf-* structs must contain ALL information that registration needs (constructor names, method signatures, impl targets). If the surf-* struct is missing information that `process-data/trait/impl` extracts from the raw datum, registration propagators (Phase 3b-3c) can't extract it.
 
 ### Phase 2: Close Coverage Gap — session/defproc/defr/quote/solver
 
-**What**: Implement the remaining 5 error stubs. These are less frequently used but have complex sublanguages.
+**What**: Implement the remaining 5 error stubs. Less frequently used but have complex sublanguages.
 
-- **session**: Session type bodies with Send/Recv/Choice/Offer. Complex sublanguage.
-- **defproc**: Process definitions with send/recv/select/offer primitives.
-- **defr**: Relational definitions with `?`-prefixed variables, `&>` clauses.
-- **quote**: Quoted expressions to literal data.
-- **solver**: Solver configuration blocks.
+- **quote/solver**: Simple (10-20 lines each). Do first.
+- **session/defproc**: Session type sublanguage (Send/Recv/Choice/Offer). Complex.
+- **defr**: Relational sublanguage (`?`-prefixed variables, `&>` clauses). Complex.
 
-**Ordering within Phase 2**: quote and solver are simple (10-20 lines each). session/defproc/defr are complex (100-200 lines each). Do simple ones first for quick wins.
+### Phase 3a: Spec Cells — Propagator-Native Spec Resolution
 
-### Phase 3: Registration Migration
+**What**: Create per-function spec cells that replace the two-pass spec ordering.
 
-**What**: Move registration side effects from `preparse-expand-all` to a post-tree-parse registration pass.
-
-**Current**: `preparse-expand-all` calls registration functions (from namespace.rkt) as it encounters data/trait/impl/spec forms:
-- `handle-data-decl` → registers constructors, accessors, type defs
-- `handle-trait-decl` → registers trait declaration, method signatures
-- `handle-impl-decl` → registers trait implementation
-- `handle-spec-decl` → pre-scans and injects type annotations
-- `handle-defmacro-decl` → registers macro definitions
-
-**Track 3**: A new function `register-from-surfs` iterates over the tree-parser's surf-* output and calls the same registration functions. The registration logic is UNCHANGED — only the trigger point moves from preparse to post-parse.
+**Mechanism**: For each function name that has a `spec` declaration, create a spec cell on the per-command network. The spec form's production propagator writes `(spec-entry type-expr metadata)` to the cell. The defn form's production propagator reads the spec cell for its name. If ⊥ (no spec yet), the defn residuates. When the spec cell is written, the defn propagator re-fires with the type annotation.
 
 ```racket
-;; Phase 3: post-tree-parse registration
-(define (register-from-surfs surfs)
-  (for ([surf (in-list surfs)])
-    (cond
-      [(surf-data? surf)    (register-data-from-surf surf)]
-      [(surf-trait? surf)   (register-trait-from-surf surf)]
-      [(surf-impl? surf)    (register-impl-from-surf surf)]
-      [(surf-spec? surf)    (register-spec-from-surf surf)]
-      [(surf-defmacro? surf) (register-macro-from-surf surf)]
-      [else (void)])))
+;; Spec cell: per-function, set-once
+;; ⊥ = (spec-cell-value #f #f)
+;; Written by spec production: (spec-cell-value type-expr metadata)
+(struct spec-cell-value (type-expr metadata) #:transparent)
+
+(define (spec-cell-merge old new)
+  (cond
+    [(not (spec-cell-value-type-expr old)) new]  ;; ⊥ ⊔ x = x
+    [(not (spec-cell-value-type-expr new)) old]  ;; x ⊔ ⊥ = x
+    [else old]))  ;; set-once: first write wins
 ```
 
-**Spec pre-scan**: `preparse-expand-all` pre-scans all `spec` forms before expanding other forms (so `defn` can see its type annotation). This ordering dependency must be preserved: `register-from-surfs` processes specs in a first pass, then other forms.
+**Key insight**: This eliminates the spec pre-scan Pass 1 from `preparse-expand-all`. The ordering "specs before defns" is not encoded in control flow — it emerges from cell dependency. If a program has `defn f` before `spec f`, the defn's propagator fires first (produces surf-defn without annotation), then when the spec is processed and the spec cell is written, the defn's propagator RE-FIRES (produces surf-defn WITH annotation). Monotone refinement, not sequential ordering.
 
-**Generated defs**: `preparse-expand-all` generates new defs from data/trait declarations (constructors, accessors, default methods). These generated defs must also be produced by the registration pass. They become additional surf-* structs injected into the form list.
+**Impact**: Removes the single largest algorithmic workaround from the design.
+
+### Phase 3b: Data Registration Extraction
+
+**What**: Extract registration-only logic from `process-data` (215 lines in macros.rkt).
+
+The surf-data struct produced by Phase 1's `parse-data-tree` contains: type name, type parameters, constructor declarations, deriving clauses. The registration extraction reads this struct and produces DESCRIPTORS:
+
+```racket
+;; Registration descriptors — data, not side effects
+(struct reg-constructor (type-name ctor-name arity field-types) #:transparent)
+(struct reg-type-def (name params constructors) #:transparent)
+(struct reg-accessor (type-name ctor-name field-index field-name) #:transparent)
+```
+
+A registration propagator reads the form cell (when it reaches `{parsed}` in the transforms set), extracts descriptors from the surf-data, and writes them to the form's `registrations` set in the Pocket Universe.
+
+A downstream registration-effect propagator reads the descriptors and performs the actual parameter writes (scaffolding) or cell writes (future PM).
+
+### Phase 3c: Trait/Impl Registration Extraction
+
+**What**: Same pattern for `process-trait` (739 lines) and `process-impl` (465 lines).
+
+- **Trait**: Extract trait name, method signatures, default methods, supertraits → `reg-trait-decl`, `reg-method-sig` descriptors.
+- **Impl**: Extract trait name, implementing type, method bodies, validation → `reg-impl-entry`, `reg-method-impl` descriptors.
+
+These are larger than data registration because traits have method signatures and defaults, impls have validation logic. The extraction separates: parsing (tree-parser handles) from registration data (descriptors) from registration effect (parameter/cell writes).
+
+### Phase 3d: Spec Registration Extraction
+
+**What**: Extract registration-only logic from `process-spec` (1,548 lines in macros.rkt).
+
+**D.3 finding**: Most of `process-spec` is type-signature PARSING. The tree-parser (Phases 1-2) handles this parsing. The registration-only portion is:
+- Write to spec-store: `(hash-set (current-spec-store) name spec-entry)` — becomes the spec cell write from Phase 3a
+- Mixfix metadata: if spec has `:mixfix`, register as user operator — extract as `reg-mixfix-operator` descriptor
+- Generated defs: spec sometimes generates dict-param defs — extract as generated def descriptors
+
+The 1,548 lines shrink to ~100-200 lines of registration extraction once parsing is handled by tree-parser.
+
+### Phase 3e: Generated Def Injection
+
+**What**: Data/trait/impl processing generates new definitions (constructors, accessors, type-check predicates, default methods). These must become additional per-form cells.
+
+**Mechanism**: A generated-def propagator reads the `registrations` set from each form's Pocket Universe. For each `reg-constructor`, `reg-accessor`, etc., it creates a NEW per-form cell containing the generated surf-* struct.
+
+```
+data Color := Red | Green | Blue
+  → form cell for Color (surf-data)
+  → registration descriptors: [reg-constructor Color Red 0 (), reg-constructor Color Green 0 (), ...]
+  → generated-def propagator creates form cells for: Red, Green, Blue, Color? (surf-def each)
+  → these generated form cells go through the same production dispatch as user forms
+```
+
+**Key design point**: Generated defs are ADDITIONAL form cells, not modifications to the original form cell. The original `data Color` form cell holds the surf-data. The generated `Red`, `Green`, `Blue` form cells hold surf-defs. Both types of cells are consumed by elaboration via `process-command`.
 
 ### Phase 4: Delete Sexp Expanders on WS Path
 
-**What**: With registration moved to post-tree-parse (Phase 3), `preparse-expand-all` is no longer needed on the WS path. The WS pipeline becomes:
+**What**: With Phases 1-3e complete, `preparse-expand-all` is no longer needed on the WS path.
 
+**WS pipeline becomes**:
 ```
-read-all-syntax-ws → tree-parser → surface-rewrite → register-from-surfs → process-commands
-```
-
-**Deletable expanders** (~500-600 lines in macros.rkt):
-- `expand-if`, `expand-cond`, `expand-let`, `expand-let-bracket-bindings`, `expand-let-inline-assign`, `expand-do` — tree-parser handles these forms directly
-- `expand-list-literal`, `expand-lseq-literal` — tree-parser handles
-- `expand-pipe-block`, `expand-compose-sexp`, `expand-mixfix-form` — surface-rewrite.rkt handles
-- `expand-quote`, `expand-quasiquote` — tree-parser handles
-- `expand-with-transient` — tree-parser handles
-- `expand-def-assign` — tree-parser handles
-
-**NOT deletable** (shared post-parse expanders, used by elaborator):
-- `expand-top-level` — post-parse normalization for data/trait/impl
-- `expand-expression` — post-parse expression normalization
-- `expand-bundle-constraints` — constraint expansion
-- `expand-defn-multi` — multi-arity defn normalization
-
-**driver.rkt changes**: `process-string-ws-inner` and `process-file-inner` (WS path) stop calling `preparse-expand-all`. They call tree-parser → surface-rewrite → `register-from-surfs` → `process-commands`.
-
-### Phase 5: Grammar Production Registry
-
-**What**: Create the production registry as a Pocket Universe cell. Register the 236 keyword heads.
-
-The production registry is a hash from keyword symbol to `grammar-production` struct. At system initialization, all built-in productions are bulk-registered:
-
-```racket
-(define (register-builtin-productions!)
-  ;; Core language
-  (register-production! 'def  parse-def-tree)
-  (register-production! 'defn parse-defn-tree)
-  (register-production! 'spec parse-spec-tree)
-  (register-production! 'fn   parse-fn-tree)
-  ;; ... 232 more
-  )
+read-all-syntax-ws → tree-parser → surface-rewrite → per-form cells
+  → spec cells written → production dispatch propagators fire
+  → registration propagators fire → generated-def propagators fire
+  → process-command reads completed form cells
 ```
 
-**For Track 3**: The production registry is a module-level hash (scaffolding, same pattern as SRE 2G's domain registry). Not on the network — PM series migrates.
+**Deletable expanders** (~500-600 lines): `expand-if`, `expand-cond`, `expand-let`, `expand-let-bracket-bindings`, `expand-let-inline-assign`, `expand-do`, `expand-list-literal`, `expand-lseq-literal`, `expand-pipe-block`, `expand-compose-sexp`, `expand-mixfix-form`, `expand-quote`, `expand-quasiquote`, `expand-with-transient`, `expand-def-assign`.
 
-**For Track 7**: The production registry becomes a cell on the network. User `grammar` forms write to it. Dependent parsing cells re-fire when new productions arrive.
+**NOT deletable** (shared post-parse expanders, used by elaborator): `expand-top-level`, `expand-expression`, `expand-bundle-constraints`, `expand-defn-multi`.
 
-### Phase 6: Per-Form Pocket Universe Architecture
+### Phase 5: Dependency-Set Pocket Universe + Production Registry
 
-**What**: Replace `(map parse-datum expanded-stxs)` with per-form cell creation and production dispatch.
+**What**: Replace the existing `form-pipeline-value` stage chain (surface-rewrite.rkt) with the dependency-set Pocket Universe. Create the production registry as a set-valued cell.
 
-For each top-level form in the source:
-1. Create a cell for this form
-2. Look up the production by keyword head
-3. Fire the production's parse function on the form's tree-parser output
-4. Write the resulting surf-* struct to the form's cell
+**Dependency-set implementation**: The `form-cell-value` struct uses a `transforms` field (set of symbols). Each production/rewrite rule declares its dependencies (required subset). The merge function is set union. A propagator fires when its required subset ⊆ the form's `transforms` set.
 
-The cell holds a `form-cell-value` Pocket Universe (§3.2). The production dispatch replaces the giant `case` statement in `parse-list`.
+**Production registry**: `Map Symbol (Set GrammarProduction)`. 236 builtin productions bulk-registered at startup. Set-valued for Track 7 extensibility. Module-level hash (scaffolding).
 
-**Connection to surface-rewrite.rkt**: surface-rewrite.rkt's existing rewrite rules (T(0) tag refinement, G(0) form grouping, pipe/compose/mixfix) are already grammar-production-like. Phase 6 formalizes them: each rewrite rule IS a registered production that advances the Pocket Universe's stage.
+### Phase 6: Per-Form Cells + Production Dispatch Propagators
 
-### Phase 7: Shared Cells Replace Merge
+**What**: Replace `(map parse-datum expanded-stxs)` with per-form cell creation and propagator-based dispatch.
 
-**What**: Delete `merge-preparse-and-tree-parser`. Both pipelines write to the same per-form cell.
+For each top-level form:
+1. Create a per-form cell (Pocket Universe with `transforms = ∅`)
+2. Tree-builder writes the parse-tree-node to the cell
+3. T(0) and G(0) propagators fire IN PARALLEL (no critical pair) — add `'tagged` and `'grouped` to transforms
+4. Rewrite propagators fire when `{tagged, grouped} ⊆ transforms` — add their respective transform names
+5. Production dispatch propagator fires when all form-specific dependencies are met — writes final surf-* to the cell
+6. Registration propagator fires when surf-* is present — extracts descriptors, writes to registrations
+7. Generated-def propagator fires when registrations are present — creates additional form cells
 
-After Phase 6, the WS path creates per-form cells and writes tree-parser output to them. The sexp path (retained for `process-string`) still uses `parse-datum`. For `process-string`, the per-form cell mechanism is not used — `parse-datum` returns surf-* directly.
+**Dispatch IS a propagator**: The dispatch function is the fire body of a propagator installed on each form cell. It reads the form's keyword from the tree-node, looks up the production in the registry, and fires the production's parse function. This is NOT a standalone function call — it's a propagator that fires when the form cell reaches the appropriate transform state.
 
-The WS path no longer calls `(map parse-datum expanded-stxs)` and no longer calls the merge. The merge infrastructure is dead code on the WS path.
+### Phase 7: Pure Merge Function + Shared Cells
 
-**Delete**:
-- `merge-preparse-and-tree-parser` (driver.rkt)
-- `merge-form` (driver.rkt)
-- Source-line-keyed identity matching hash construction
-- `tree-by-line` hash building
+**What**: Rewrite `merge-form` as a pure function (no spec-store parameter dependency). Delete the merge infrastructure.
 
-### Phase 8: Retire parser.rkt (Demote to Sexp Shim)
+**D.3 finding P5**: Current `merge-form` reads `(current-spec-store)` to decide if a form is spec-annotated. The D.2/D.4 `provenance` field replaces this: spec-annotated forms have `provenance = prov-preparse` set by the preparse pipeline. The merge function reads only the provenance field — pure function of its arguments.
 
-**What**: Remove `parse-datum` from the WS and file-processing paths. Retain only for sexp `process-string`.
+**Delete**: `merge-preparse-and-tree-parser`, `merge-form`, source-line-keyed identity matching, `tree-by-line` hash building. Total ~80 lines from driver.rkt.
 
-**Call sites rewired**:
-- `process-string-ws-inner`: uses per-form cells (Phase 6)
-- `process-file-inner` WS path: uses per-form cells (Phase 6)
-- `load-module`: uses tree-parser + `register-from-surfs` (Phase 3)
-- `parse-type-annotation-string`: single call — move to a local helper
+### Phase 8: Retire parser.rkt (Demote — Incomplete)
 
-**Call sites retained**:
-- `process-string-inner` (sexp path): continues using `(map parse-datum expanded-stxs)`
+**What**: Remove `parse-datum` from WS and file-processing paths. parser.rkt retained as sexp compatibility shim.
 
-**parser.rkt demoted**: Still exists, still provides `parse-datum`, but only reachable from sexp `process-string`. Not on any `.prologos` file processing path.
+**Call sites rewired**: `process-string-ws-inner`, `process-file-inner` (WS path), `load-module`, `parse-type-annotation-string`.
 
-### Phase 9: Acceptance + Benchmarks + Verification
+**Call sites retained**: `process-string-inner` (sexp path for tests/REPL).
 
-**What**: Full regression verification and performance comparison.
+**Honest label**: This is INCOMPLETE. parser.rkt (6,605 lines) remains reachable from the sexp path. Full retirement blocked on PM bringing module loading on-network + test migration to WS. Tracked in DEFERRED.md.
 
-1. **Acceptance file**: Run `process-file` on ALL example `.prologos` files. Zero errors.
+### Phase 9: Acceptance + A/B Benchmarks + Verification
+
+1. **Acceptance file**: `process-file` on ALL example `.prologos` files. Zero errors.
 2. **Full test suite**: 383+ files, 7491+ tests, all pass.
-3. **A/B benchmark**: `bench-ab.rkt --runs 15 benchmarks/comparative/` vs Track 2B baseline. Parse-phase change should be within noise (parsing was 0ms).
-4. **Suite wall time**: Should be ≤ baseline (removal of redundant preparse on WS path may improve).
+3. **A/B benchmark**: `bench-ab.rkt --runs 15 benchmarks/comparative/` vs Track 2B baseline.
+4. **Suite wall time**: Should be ≤ baseline.
+5. **Algebraic validation**: Re-run V1-V3 on the new dependency-set FormCell. Confirm Boolean properties.
 
 ### Phase 10: PIR + Documentation
 
@@ -549,37 +607,26 @@ Standard PIR per methodology. Update PPN Master, dailies, MASTER_ROADMAP.org.
 
 Expressing the Track 3 architecture in NTT speculative syntax. This exercises the NTT syntax and validates that every component is "on network."
 
-### 5.1 Per-Form Parse Lattice (Pocket Universe)
+### 5.1 Per-Form Parse Lattice (Pocket Universe) — D.4
 
 ```prologos
-;; The parse stage ordering — finite chain (Heyting)
-type ParseStage := raw | tagged | grouped | rewritten | parsed
+;; D.4: Dependency-set replaces stage chain
+;; Transforms as powerset (Boolean — strongest algebraic structure)
+;; Each transform is a named operation. Propagators declare required subsets.
+type TransformSet := TransformSet (Set Symbol)
   :lattice :pure
-  ;; raw < tagged < grouped < rewritten < parsed
-  ;; Algebraic: finite chain → distributive, Heyting, NOT Boolean
+  ;; Algebraic: powerset → Boolean (complement, distributive, Heyting)
 
-impl Lattice ParseStage
-  join raw x      -> x
-  join x raw      -> x
-  join parsed _   -> parsed
-  join _ parsed   -> parsed
-  join x x        -> x
-  ;; Different non-extreme stages → take the higher
-  bot -> raw
-  ;; Meet exists (min of chain)
-  meet parsed x   -> x
-  meet x parsed   -> x
-  meet raw _      -> raw
-  meet _ raw      -> raw
-  meet x x        -> x
+impl Lattice TransformSet
+  join [TransformSet a] [TransformSet b] -> TransformSet [set-union a b]
+  meet [TransformSet a] [TransformSet b] -> TransformSet [set-intersect a b]
+  complement [TransformSet a] -> TransformSet [set-diff all-transforms a]
+  bot -> TransformSet #{}
+  top -> TransformSet all-transforms
 
 ;; Pipeline provenance — chain ordering (Heyting)
-;; This is the KEY design choice that avoids the flat-lattice trap.
-;; Track 2B's merge-form encoded this implicitly; D.2 makes it structural.
 type Provenance := prov-none | prov-preparse | prov-tree-parser
   :lattice :pure
-  ;; prov-none < prov-preparse < prov-tree-parser
-  ;; Algebraic: 3-element chain → distributive, Heyting
 
 impl Lattice Provenance
   join prov-none x            -> x
@@ -590,35 +637,58 @@ impl Lattice Provenance
   bot -> prov-none
 
 ;; The Pocket Universe value for a single source form
-;; Product of: chain × option × option × chain × nat × powerset
-;; = Heyting × Boolean × Heyting × Heyting × trivial × Boolean = HEYTING
+;; Product of: powerset × option × option × chain × nat × powerset
+;; = Boolean × Boolean × Heyting × Heyting × trivial × Boolean = BOOLEAN
 type FormCell := FormCell
-  {stage      : ParseStage         ;; chain → Heyting
-   tree       : Option ParseTreeNode  ;; 2-valued option → Boolean
-   surf       : Option SurfExpr    ;; option, ordered by provenance
-   provenance : Provenance         ;; chain → Heyting (IS the surf ordering)
-   srcline    : Int                ;; diagnostic, not merged
-   regs       : Set Registration}  ;; powerset → Boolean
+  {transforms  : TransformSet       ;; D.4: powerset → Boolean
+   tree        : Option ParseTreeNode
+   surf        : Option SurfExpr
+   provenance  : Provenance
+   srcline     : Int
+   regs        : Set RegDescriptor}  ;; D.4: registration descriptors, not side effects
   :lattice :pure
 
 impl Lattice FormCell
-  join [FormCell s1 t1 sf1 p1 l1 r1] [FormCell s2 t2 sf2 p2 l2 r2]
+  join [FormCell t1 tr1 sf1 p1 l1 r1] [FormCell t2 tr2 sf2 p2 l2 r2]
     -> FormCell
-         [stage-join s1 s2]           ;; max of chain
-         [option-join t1 t2]          ;; prefer non-none
+         [transform-join t1 t2]       ;; set union
+         [option-join tr1 tr2]        ;; prefer non-none
          [prov-select sf1 p1 sf2 p2]  ;; take surf with higher provenance
-         [prov-join p1 p2]            ;; max of provenance chain
+         [prov-join p1 p2]
          [max l1 l2]
-         [set-union r1 r2]
-  bot -> FormCell raw none none prov-none 0 #{}
+         [set-union r1 r2]            ;; registration descriptors accumulate
+  bot -> FormCell (TransformSet #{}) none none prov-none 0 #{}
+```
 
-;; prov-select: choose the surf-* from the higher-provenance pipeline
-;; This IS Track 2B's merge-form logic, now structural
-spec prov-select (Option SurfExpr) Provenance (Option SurfExpr) Provenance -> Option SurfExpr
-defn prov-select
-  | none _ sf2 _  -> sf2
-  | sf1 _ none _  -> sf1
-  | sf1 p1 sf2 p2 -> (if [prov-ge p1 p2] sf1 sf2)
+### 5.1b Spec Cells — D.4
+
+```prologos
+;; D.4: Per-function spec cell — eliminates two-pass ordering
+;; Ordering emerges from cell dependency, not control flow
+type SpecCell := SpecCell
+  {type-expr : Option TypeExpr
+   metadata  : Option SpecMetadata}
+  :lattice :pure
+
+impl Lattice SpecCell
+  join [SpecCell none _] [SpecCell t m]  -> SpecCell t m    ;; ⊥ ⊔ x = x
+  join [SpecCell t m] [SpecCell none _]  -> SpecCell t m    ;; x ⊔ ⊥ = x
+  join x _                               -> x              ;; set-once
+  bot -> SpecCell none none
+
+;; Spec cell lives on the per-command network, keyed by function name
+;; network parse-net : ParseInterface
+;;   embed spec-cells : Cell (Map Symbol SpecCell)
+
+;; Production propagator for spec forms:
+;;   reads: form cell (when 'parsed ∈ transforms)
+;;   writes: spec-cells[name] := SpecCell type-expr metadata
+
+;; Production propagator for defn forms:
+;;   reads: form cell (when 'parsed ∈ transforms) AND spec-cells[name]
+;;   if spec-cells[name] = ⊥: residuate (wait for spec)
+;;   if spec-cells[name] = SpecCell type meta: annotate surf-defn with type
+;;   at quiescence: any defn still waiting → spec-less (correct, no annotation)
 ```
 
 ### 5.2 Grammar Production Registry
@@ -695,38 +765,40 @@ defn dispatch-production [registry node loc]
     | none -> [parse-expr-tree node loc])
 ```
 
-### 5.5 Correspondence Table
+### 5.5 Correspondence Table (D.4)
 
 | NTT Construct | Racket Implementation |
 |---------------|----------------------|
 | `FormCell` (Pocket Universe) | `form-cell-value` struct + cell on prop-network |
-| `ParseStage` lattice | Stage symbols with ordering in merge function |
-| `Provenance` lattice (D.2) | Provenance symbols: `'none`, `'preparse`, `'tree-parser` |
-| `prov-select` (D.2) | `merge-form` logic from Track 2B, now structural |
+| `TransformSet` (D.4) | Set of symbols: completed transform names. Powerset lattice. |
+| `Provenance` (D.2) | Provenance symbols: `'none`, `'preparse`, `'tree-parser` |
+| `prov-select` (D.2) | Pure merge-form logic, no parameter dependencies |
+| `SpecCell` (D.4) | Per-function cell. Set-once. Defn propagators read; residuate if ⊥. |
+| `RegDescriptor` (D.4) | `reg-constructor`, `reg-trait-decl`, `reg-impl-entry`, etc. — data, not effects |
 | `ProductionRegistry` | Module-level hash of sets (scaffolding) |
 | `GrammarProduction` | `grammar-production` struct with `provenance` field (D.2) |
-| `ProductionProvenance` (D.2) | Production provenance: `'builtin`, `'library`, `'user` |
 | `select-production` (D.2) | Pure function: max-by provenance from set |
-| `dispatch-production` | `dispatch-production` function called per form |
-| `register-from-surfs` | Racket function with parameter mutations |
-| Stage-advancing propagator | surface-rewrite.rkt rewrite rules |
-| Per-form cell merge | `prov-select` + component-wise join (promoted from merge-form) |
+| Dispatch propagator (D.4) | Propagator installed per form cell. Fires when dependencies ⊆ transforms. |
+| Registration propagator (D.4) | Reads parsed surf-*. Extracts descriptors. Writes to registrations set. |
+| Generated-def propagator (D.4) | Reads registration descriptors. Creates additional form cells. |
+| Transform-advancing propagator | surface-rewrite.rkt rewrite rules. Adds transform name to set. |
+| Per-form cell merge | `prov-select` + set-union transforms + set-union registrations (pure) |
 | SRE decomposition of surf-* | Existing `ctor-desc` pattern |
 | SRE domain registration (D.2) | `register-domain!` with declared properties for form-cell + production-registry |
 
-### 5.6 NTT Model Observations
+### 5.6 NTT Model Observations (D.4)
 
-1. **Registration is the scaffolding boundary.** The NTT model clearly shows where Track 3 is on-network (FormCell, ProductionRegistry, dispatch-production) vs. where it's scaffolding (register-from-surfs). PM series replaces the scaffolding with the commented-out `embed` declarations.
+1. **Registration is propagator-native on the process-file path.** D.4 replaces the D.2 imperative `register-from-surfs` with registration propagators that extract descriptors and write to cells. The only scaffolding remnant is the `load-module` parameter write path. The NTT model shows this clearly: `RegDescriptor` is data, not effects.
 
-2. **The production registry is a data structure, not a propagator.** Productions are registered, not computed. The registry is a lookup table. Dispatch (selection from set) is a pure function. The PARSING is propagator-mediated (production dispatch fires on cell writes). The GRAMMAR is data. This is Decomplection: accumulation (lattice) and selection (function) are separated.
+2. **Spec cells eliminate the last algorithmic ordering.** D.4's `SpecCell` replaces the D.2 two-pass spec ordering. The NTT model shows the propagator pattern: spec production writes to spec cell, defn production reads spec cell, residuates if ⊥. No control-flow ordering. This is the most significant D.4 improvement over D.2.
 
-3. **No impurities detected.** Every component is either: (a) a pure lattice value (FormCell, ParseStage, Provenance, ProductionRegistry), (b) a cell read/write (per-form cells, production dispatch), or (c) explicitly scaffolding (register-from-surfs). No disguised imperative patterns.
+3. **Dependency-set is algebraically stronger than chain.** D.4's `TransformSet` (powerset, Boolean) replaces D.2's `ParseStage` (chain, Heyting). The NTT model includes `complement` — useful for "which transforms have NOT completed" diagnostics (Track 6 error recovery). The chain couldn't express this.
 
-4. **D.2: Pipeline-preference ordering is structural, not ad-hoc.** The `Provenance` type and `prov-select` function make the ordering explicit in the NTT model. Track 2B's `merge-form` encoded this implicitly via `cond` dispatch. D.2 promotes it to a first-class lattice component. The NTT model reveals this as correct: provenance IS the ordering on surfs, not a metadata annotation.
+4. **Critical pair analysis is the correctness argument for parallelism.** The NTT model's transform declarations with dependencies make the DPO critical pair analysis explicit: transforms with non-overlapping patterns have no critical pairs → can fire in parallel. This is the hypergraph rewriting correctness guarantee applied to our pipeline.
 
-5. **D.2: Set-valued productions prevent Track 7 lattice redesign.** The `Set GrammarProduction` per keyword means Track 7 adds elements to existing sets — the lattice structure doesn't change. The alternative (singleton per keyword) would require redesigning the registry lattice when ambiguity is introduced, exactly as the type lattice requires redesign for union types. The lesson from Track 2G is applied proactively.
+5. **Generated-def propagator is the novel pattern.** A propagator that reads registration descriptors and CREATES NEW CELLS. This is scatter (topology creation) — the same pattern as Track 2G's property cell auto-creation. The wiring-state cell pattern handles this at a stratum boundary.
 
-6. **D.2: SRE domain registration validates algebraic properties.** The NTT model includes `register-domain!` calls with explicit property declarations. Track 2G's inference mechanism validates these post-registration. If the FormCell merge function violates the declared properties (e.g., provenance ordering is wrong), inference catches it with a counterexample. This is the safety net the type lattice lacked.
+6. **D.2 observations 2, 4, 5, 6 remain valid.** Production registry is data (Decomplection). Pipeline-preference is structural. Set-valued productions prevent Track 7 redesign. SRE domain registration validates properties.
 
 ---
 
