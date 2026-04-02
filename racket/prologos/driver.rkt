@@ -1622,19 +1622,10 @@
   (process-surfs surfs))
 
 ;; PPN Track 3: merge cell surfs with preparse surfs.
-;; Cell surfs are used for forms that parse-form-tree handles (non-error).
-;; Preparse surfs fill gaps: forms where the cell path produces no output
-;; (consumed forms without process-consumed-form handler, expression-level
-;; desugaring that tree-parser doesn't do).
-;; The result uses preparse surfs as the BASE and replaces with cell surfs
-;; where the cell path succeeded. This means preparse ordering is preserved
-;; (including generated defs from data/trait/impl in the correct position).
+;; Uses preparse surfs as base (proven, complete).
+;; Cell pipeline provides: form cell infrastructure, spec cells, registration.
+;; As cell-path form handlers improve, surfs will shift from preparse to cells.
 (define (merge-cell-surfs-with-preparse cell-surfs preparse-surfs cell-map)
-  ;; Build set of source lines that cell path produced surfs for
-  ;; (non-error, non-consumed forms)
-  ;; For now: just use preparse surfs (proven) — cell infrastructure runs alongside.
-  ;; Each phase that adds a tree-parser handler removes that form from preparse dependency.
-  ;; This IS the Option 2 intermediate state: preparse handles what cells can't.
   (filter (lambda (s) (not (prologos-error? s))) preparse-surfs))
 
 (define (process-surfs surfs)
