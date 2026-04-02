@@ -1583,15 +1583,38 @@
     (define tree-match (and line (hash-ref tree-by-line line #f)))
     (merge-form s tree-match)))
 
-;; PPN Track 3: Merge + cells (coexist).
-;; Preparse + merge remain the PRIMARY path (spec injection depends on preparse).
-;; Form cells run alongside for infrastructure validation (Phase 6+3a).
-;; Full switch to cells requires spec cell consumption (Phase 3a+7 completion).
+;; PPN Track 3 Phase 4: Cell-based pipeline.
+;; Preparse runs for registration side effects only (spec-store, ctor-meta,
+;; trait-registry, etc.). Surfs come from form cells, not from merge.
+;; Spec annotations injected post-parse via annotate-surfs-with-specs.
 (define (process-string-ws-inner s)
+  ;; Step 1: Preparse for registration side effects
+  ;; This populates spec-store, ctor-meta, trait-registry, etc.
+  ;; These registrations are idempotent (hash-set). The cell path's
+  ;; consumed form handlers also perform registration, so this is
+  ;; belt-and-suspenders until preparse is fully retired.
   (define raw-stxs (read-all-syntax-ws (open-input-string s) "<ws-string>"))
-  (define expanded-stxs (preparse-expand-all raw-stxs))
-  (define preparse-surfs (map parse-datum expanded-stxs))
-  (define surfs (merge-preparse-and-tree-parser s preparse-surfs))
+  (preparse-expand-all raw-stxs)  ;; side effects only
+
+  ;; Step 2: Cell-based pipeline — form cells → dispatch → extract surfs
+  (register-default-token-patterns!)
+  (define pt (read-to-tree s))
+  (define net-box (current-prop-net-box))
+  (define enet (unbox net-box))
+  (define-values (enet1 cell-map) (create-form-cells-from-tree pt enet))
+  (define enet2 (dispatch-form-productions enet1 cell-map))
+  (define-values (enet3 spec-map) (extract-specs-from-form-cells enet2 cell-map))
+  (set-box! net-box enet3)
+  (current-form-cell-map cell-map)
+  (current-spec-cell-map spec-map)
+
+  ;; Step 3: Extract surfs (including consumed form expansion)
+  (define raw-surfs (extract-surfs-from-form-cells enet3 cell-map))
+
+  ;; Step 4: Annotate defn surfs with spec types
+  (define surfs (annotate-surfs-with-specs raw-surfs))
+
+  ;; Step 5: Process
   (process-surfs surfs))
 
 (define (process-surfs surfs)

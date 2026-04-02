@@ -22,6 +22,7 @@
          "infra-cell.rkt"
          "source-location.rkt"
          "rrb.rkt"
+         "surface-syntax.rkt"
          ;; Phase 4 (big-bang): consumed form processing
          "macros.rkt"
          "parser.rkt"
@@ -36,6 +37,8 @@
  dispatch-form-productions
  ;; Phase 7: Extract surfs from completed form cells
  extract-surfs-from-form-cells
+ ;; Phase 3a completion: annotate defn surfs with spec types
+ annotate-surfs-with-specs
  ;; Phase 6: Merge function (exposed for testing / validation)
  form-cell-merge-fn
  ;; Phase 3a: Spec cells
@@ -222,6 +225,48 @@
   ;; Sort by source line, flatten surf lists
   (define sorted (sort pairs < #:key car))
   (apply append (map cdr sorted)))
+
+;; ========================================
+;; Phase 3a completion: Annotate defn surfs with spec types
+;; ========================================
+;;
+;; After extract-surfs-from-form-cells produces surfs, defn forms
+;; may lack type annotations (surf-defn-type = #f for bare-param defns).
+;; If a matching spec exists in current-spec-store, we inject the type.
+;;
+;; This replaces preparse's maybe-inject-spec which modifies datums.
+;; Here we modify surfs directly — post-parse annotation.
+;;
+;; Handles:
+;;   - surf-defn with type=#f and bare params → inject spec type
+;;   - surf-defn with existing type → leave unchanged (user annotation wins)
+;;   - surf-defn-multi → leave unchanged (pattern compilation handles types)
+;;   - Non-defn forms → pass through
+
+(define (annotate-surfs-with-specs surfs)
+  (for/list ([s (in-list surfs)])
+    (cond
+      ;; surf-defn — check if spec should replace/augment type
+      [(surf-defn? s)
+       (define name (surf-defn-name s))
+       (define spec (lookup-spec name))
+       (if (not spec)
+           s  ;; no spec → leave as-is
+           ;; Has spec → parse spec type and replace the defn's type
+           ;; The tree-parser produces Pi chains with holes for bare params.
+           ;; The spec type is the correct, fully-typed Pi chain.
+           (let ([type-datums (spec-entry-type-datums spec)])
+             (if (or (null? type-datums) (spec-entry-multi? spec))
+                 s  ;; multi-arity spec or empty → leave for expand-top-level
+                 ;; Parse the spec type tokens to a surf type expression
+                 (let* ([tokens (car type-datums)]
+                        [type-datum `($angle-type ,@tokens)]
+                        [type-surf (parse-datum (datum->syntax #f type-datum))])
+                   (if (prologos-error? type-surf)
+                       s  ;; parse error → leave as-is
+                       (struct-copy surf-defn s [type type-surf]))))))]
+      ;; Everything else passes through unchanged
+      [else s])))
 
 ;; ========================================
 ;; Phase 3a: Spec Cells
