@@ -314,15 +314,14 @@
 ;; The GOAL is to move ALL forms here, making datum path unnecessary.
 ;; But each form requires parse-form-tree to replicate parser.rkt's
 ;; keyword-specific logic (motive annotations, multiplicity, etc.)
+;; §11.5: start empty (datum-always), opt-in verified forms
 (define tree-parser-verified-tags '())
 
 ;; §11 TREE-CANONICAL extraction rewrite
 (define (extract-surfs-from-form-cells enet cell-map
                                         #:source-str [source-str #f]
                                         #:raw-map [raw-map (hasheq)])
-  ;; §11 TREE-CANONICAL: parse-form-tree is PRIMARY (on-network).
-  ;; Datum conversion is FALLBACK for forms parse-form-tree can't handle yet.
-  ;; Each gap closed (G1-G7) removes one fallback path.
+  ;; §11: tree-parser opt-in forms, datum for rest.
   (define pairs
     (for/fold ([acc '()])
               ([(line cell-id) (in-hash cell-map)])
