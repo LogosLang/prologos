@@ -1,4 +1,4 @@
-# PPN Track 3: Parser as Propagators — Stage 3 Design (D.4)
+# PPN Track 3: Parser as Propagators — Stage 3 Design (D.5)
 
 **Date**: 2026-04-01
 **Series**: [PPN (Propagator-Parsing-Network)](2026-03-26_PPN_MASTER.md)
@@ -26,9 +26,10 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Pre-0 benchmarks | ✅ | `dc87fb34`. Parse=0-4% of pipeline. WS overhead <2%. All V1-V3 algebraic properties PASS. |
-| 1 | Close tree-parser coverage gap: data/trait/impl | ⬜ | 3 stubs → full implementations. Parsing only — no registration. |
-| 2 | Close tree-parser coverage gap: session/defproc/defr/quote/solver | ⬜ | 5 stubs → full implementations. Complex sublanguages. |
-| 3a | Spec cells: propagator-native spec resolution | ⬜ | Per-function spec cells. Spec forms write, defn forms read. Eliminates two-pass ordering. |
+| 1a | Close coverage: data/trait/impl | ⬜ | 3 stubs → full implementations. Parsing only — no registration. |
+| 1b | Close coverage: deftype/subtype/bundle/defmacro/property/schema/selection/functor (D.5 F7) | ⬜ | 6 stubs + 1 missing (subtype). Must complete before Phase 4. |
+| 2 | Close coverage: session/defproc/defr/quote/solver | ⬜ | 5 stubs → full implementations. Complex sublanguages. |
+| 3a | Spec cells: propagator-native spec resolution | ⬜ | Per-function spec cells. Spec forms write, defn forms read. Eliminates two-pass ordering. Independent of Phases 1-2. |
 | 3b | Data registration extraction | ⬜ | Extract registration-only logic from process-data (215 lines). Registration as data descriptors. |
 | 3c | Trait/impl registration extraction | ⬜ | Extract from process-trait (739 lines) + process-impl (465 lines). |
 | 3d | Spec registration extraction | ⬜ | Extract from process-spec (1,548 lines). Depends on tree-parser handling spec type signatures. |
@@ -42,6 +43,32 @@
 | 10 | PIR + documentation | ⬜ | |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
+
+**Phase dependency DAG** (D.5, F10 — identifies parallelizable phases):
+
+```
+Phase 0 ✅
+  ↓
+Phase 1a ──→ Phase 3b (data reg extraction needs surf-data)
+Phase 1b ──→ Phase 3b (deftype/bundle reg extraction)
+Phase 2  ──→ (session/defr have no registrations — no Phase 3 dependency)
+Phase 3a ←── (independent: spec cells need only existing spec tree-parser, already complete)
+  ↓
+Phase 3b ──→ Phase 3e (generated defs need registration descriptors)
+Phase 3c ──→ Phase 3e
+Phase 3d ──→ Phase 3e
+  ↓
+Phase 4 ←── ALL of 1a, 1b, 2, 3a-3e (preparse deletion needs everything)
+Phase 5 ←── (independent: dependency-set infrastructure can start anytime)
+  ↓
+Phase 6 ←── 4, 5 (per-form cells need dependency-set + preparse-free pipeline)
+Phase 7 ←── 6 (shared cells need per-form cells)
+Phase 8 ←── 7 (parser.rkt demotion needs shared cells)
+Phase 9 ←── 8 (verification)
+Phase 10 ←── 9 (PIR)
+```
+
+**Parallelizable**: 1a ∥ 1b ∥ 2 ∥ 3a ∥ 5 (five independent workstreams at start). 3b ∥ 3c ∥ 3d (three independent registration extractions after Phase 1).
 
 ---
 
@@ -182,19 +209,35 @@ Each transform is a named operation with declared dependencies:
 |-----------|-------------|-------------|-----------|
 | `tagged` | ∅ | T(0) tag refinement — keyword identification | surface-rewrite.rkt tag rules |
 | `grouped` | ∅ | G(0) form grouping — sub-expression boundaries | surface-rewrite.rkt group rules |
-| `pipe-rewritten` | `{tagged, grouped}` | `\|>` expansion | surface-rewrite.rkt pipe rule |
-| `compose-rewritten` | `{tagged, grouped}` | `>>` expansion | surface-rewrite.rkt compose rule |
+| `pipe-rewritten` | `{tagged, grouped}` | `\|>` expansion at tree level | surface-rewrite.rkt pipe rule |
+| `compose-rewritten` | `{tagged, grouped}` | `>>` expansion at tree level | surface-rewrite.rkt compose rule |
 | `mixfix-resolved` | `{tagged, grouped}` | `.{...}` Pocket Universe resolution | surface-rewrite.rkt mixfix |
-| `let-expanded` | `{tagged, grouped}` | `let` desugaring | production for `let` |
-| `cond-expanded` | `{tagged, grouped}` | `cond` desugaring | production for `cond` |
-| ... | ... | (one per rewrite rule) | ... |
-| `parsed` | `{tagged, grouped}` ∪ form-specific | Final surf-* struct produced | Grammar production |
+| `parsed` | `{tagged, grouped}` | Final surf-* struct produced | Grammar production for this form type |
 
-**Critical pairs analysis** (DPO theory, D.3 finding):
-- `tagged` and `grouped`: NO critical pair — they touch different node attributes (keyword vs children). **Can fire in parallel.**
-- Different rewrite rules (pipe, compose, mixfix, let, cond, etc.): NO critical pairs — they dispatch on different keywords/patterns. **Can fire in parallel.**
-- All rewrite rules depend on `{tagged, grouped}`: they need the tag to match and the group structure to navigate. **Stratification boundary: tag+group before rewrites.**
-- `parsed` depends on form-specific rewrites completing: a `defn` needs `let-expanded` if it contains let expressions. **Data dependency, not global ordering.**
+**D.5 simplification (from external critique F5)**: Sub-expression transforms (`let-expanded`, `cond-expanded`, etc.) are NOT separate dependency-set entries. They are handled INTERNALLY by each production's parse function during recursive descent — `parse-defn-tree` calls `parse-expr-tree` which handles let/cond/if inline. Only tree-level transforms (those that rewrite top-level form nodes before production dispatch) are separate entries: `tagged`, `grouped`, `pipe-rewritten`, `compose-rewritten`, `mixfix-resolved`. Sub-expression transforms are part of the `parsed` transform.
+
+**Critical pairs analysis** (DPO theory, D.3 finding, extended D.5):
+
+| Transform A | Transform B | Critical Pair? | Rationale |
+|-------------|-------------|----------------|-----------|
+| `tagged` | `grouped` | NO | Touch different attributes (keyword vs children). **Parallel.** |
+| `pipe-rewritten` | `compose-rewritten` | NO | Different token patterns (`\|>` vs `>>`). **Parallel.** |
+| `pipe-rewritten` | `mixfix-resolved` | NO | Different contexts (bare `\|>` vs `.{...}` blocks). **Parallel.** |
+| Any rewrite | `tagged`/`grouped` | YES | Rewrites read tag and group structure. **Stratification: tag+group before rewrites.** |
+| `parsed` (spec) | trait registration | YES (D.5) | Spec production reads trait registry to recognize constraints. **Spec residuates until trait registered.** |
+| `parsed` (impl) | trait registration | YES (D.5) | Impl production reads trait registry for validation. **Impl residuates until trait registered.** |
+| `parsed` (defn) | spec cell | YES | Defn production reads spec cell for annotation. **Defn residuates until spec written (or quiescence).** |
+
+**D.5 addition — four-pass dependencies from `preparse-expand-all`**: The current `preparse-expand-all` (macros.rkt:2366) has FOUR passes, not two:
+
+| Pass | What | Propagator model |
+|------|------|-----------------|
+| Pass -1 | `ns`/`imports` → prelude loading | **Existing stratum boundary.** `process-file` processes ns first. No change needed. |
+| Pass 0 | `data`/`trait`/`deftype`/`defmacro`/`bundle`/etc. pre-registration | **Cell dependency.** Each registration writes to a registration cell. Dependents residuate. |
+| Pass 1 | `spec`/`impl` pre-registration (depends on trait registry) | **Cell dependency.** Spec/impl productions read trait registration cell; residuate if ⊥; re-fire when trait registered. |
+| Pass 2 | Full expansion with generated defs | **Production dispatch + generated-def propagator.** |
+
+All four passes are replaced by cell-mediated dependency. No explicit Pass ordering in control flow. ns is an existing stratum boundary. Data/trait→spec/impl is a critical pair resolved by residuation.
 
 **Why dependency-set, not chain** (D.4):
 1. **Parallelism**: T(0) and G(0) fire concurrently. All rewrite rules for a form fire concurrently (no critical pairs between different keyword-dispatched rules). The chain serialized ALL of these.
@@ -263,9 +306,16 @@ elaboration: reads form cells + registration cells (cell dependency, not orderin
 
 3. **Generated defs via accumulator cell.** When `data Color := Red | Green | Blue` is processed, the registration propagator produces descriptors for constructors (`Red`, `Green`, `Blue`), type-check function (`Color?`), and accessors. A generated-def propagator reads these descriptors and creates ADDITIONAL per-form cells for the generated definitions. These cells go through the same production dispatch as user-written forms.
 
-4. **Two registration paths (scaffolding boundary).** For `process-file` / `process-string-ws`: registration descriptors → per-command registration cells → elaboration reads cells. For `load-module`: registration descriptors → Racket parameters (scaffolding, persists across commands). PM unifies both paths on persistent network cells.
+4. **Trait→spec dependency via cell residuation (D.5).** Spec production propagators call `lookup-trait` to recognize constraint forms. In the current code, this is resolved by Pass 0 (data/trait) completing before Pass 1 (spec/impl). In the propagator model: spec propagators read from trait registration cells. If the trait isn't registered yet, the spec residuates. When the trait registration cell advances, the spec propagator re-fires. Same pattern as spec→defn. No barrier cell needed — just cell dependency.
 
-**Why this is progress over D.2**: D.2 proposed `register-from-surfs` as an imperative loop. D.4 replaces this with propagators: spec cells, registration descriptor extraction, generated-def injection. The only imperative remnant is the `load-module` parameter write (scaffolding for PM).
+5. **Two registration paths with dual-mode interface (D.5, scaffolding boundary).** Registration descriptor extraction functions must be callable in BOTH execution contexts (Two-Context Audit from pipeline.md):
+
+   - **process-file / process-string-ws** (network active): descriptors → write to per-command registration cells → elaboration reads cells.
+   - **load-module** (no network): descriptors → write to Racket parameters directly (scaffolding, persists across commands). Generated defs must also be handled (currently `process-data` returns generated def sexps that `preparse-expand-all` accumulates).
+
+   The interface: each `extract-*-registrations` function returns `(list-of reg-descriptor)`. A `commit-registrations!` function takes descriptors and writes them to either cells (process-file context) or parameters (load-module context) based on which context is active. PM unifies both on persistent cells.
+
+**Why this is progress over D.2**: D.2 proposed `register-from-surfs` as an imperative loop. D.4/D.5 replaces this with propagators for the process-file path, with an explicit dual-mode interface for load-module. The only imperative remnant is the `load-module` parameter write (scaffolding for PM).
 
 **Registration function extraction scope** (D.3 finding R1):
 
@@ -336,7 +386,7 @@ The user-visible effect is: nothing changes. `.prologos` files parse and elabora
 | `source-line` | Nat | Max (information-preserving) | Trivial (single value per form) | Diagnostic only. Not merged. |
 | `registrations` (D.4) | Set of registration descriptors | Set union (powerset) | Powerset → **Boolean** | Registration as data, not side effects. Accumulation. Monotone. |
 
-**Product lattice**: Boolean × Boolean × Heyting × Heyting × Trivial × Boolean = **Boolean** (product of Boolean algebras is Boolean). D.4's dependency-set upgrade promotes the product from Heyting (D.2 chain) to Boolean (D.4 powerset).
+**Product lattice**: Boolean × Boolean × Heyting × Heyting × Trivial × Boolean = **Heyting** (product of Heyting algebras is Heyting; D.5 correction from F9). The `transforms` component is individually Boolean (supports complement for "which transforms have NOT fired" diagnostics). The overall product is Heyting due to the 3-element provenance chain (Heyting, not Boolean — complement of `prov-preparse` doesn't exist in a 3-element chain). This is sufficient for SRE (pseudo-complement exists).
 
 **Why this avoids the type-lattice trap**: The type lattice used EQUALITY merge for types — `Int ⊔ Nat = ⊤` because Int and Nat are incomparable atoms in a flat lattice. Track 3's surf component uses PIPELINE-PREFERENCE ordering — `preparse-surf ⊔ tree-parser-surf = tree-parser-surf` because tree-parser is HIGHER in the chain. There are never two incomparable surf values. The provenance field encodes this ordering structurally.
 
@@ -412,8 +462,8 @@ Track 3 MUST register its lattice domains via SRE Track 2G's `register-domain!` 
 
 | Lattice | Algebraic Class | Design-for-Future Provision |
 |---------|----------------|---------------------------|
-| FormCell (D.4) | **Boolean** | Dependency-set (powerset) promotes from Heyting. Surf → powerset in Track 5. No redesign. |
-| SpecCell (D.4) | Flat (set-once) | Collision = ⊤ (error). Correct semantics. |
+| FormCell (D.5) | **Heyting** | `transforms` is Boolean individually (complement for diagnostics). Product is Heyting due to 3-element provenance chain. Sufficient for SRE. Surf → powerset in Track 5. No redesign. |
+| SpecCell (D.5) | Flat (set-once, collision = ⊤) | D.5 fix: collision produces top (error), restoring commutativity. |
 | ProductionRegistry | Boolean | Set-valued per keyword. Track 7 adds elements to sets. No redesign. |
 | Registration descriptors (D.4) | Boolean (powerset) | Descriptors accumulate as sets. No flat-value issue. |
 | Registration effect (scaffolding) | Mixed | Parameter writes for load-module. PM replaces with persistent cells. |
@@ -434,23 +484,33 @@ The type lattice required redesign because it committed to flat equality as the 
 
 See §8 for full data. Key findings: parse = 0-4% of pipeline, WS overhead <2%, all algebraic properties PASS, set-valued registry zero overhead. No design changes.
 
-### Phase 1: Close Coverage Gap — data/trait/impl
+### Phase 1: Close Coverage Gap — data/trait/impl + registration forms
 
-**What**: Implement `parse-data-tree`, `parse-trait-tree`, `parse-impl-tree` in tree-parser.rkt. These are the 3 most important stubs — they are the most commonly used forms with registration side effects.
+**What**: Implement tree-parser functions for the most important stubs. These are forms with registration side effects AND forms consumed by preparse Pass 0.
 
-**Scope per form**:
+**Phase 1a — Core registration forms**:
+- **data**: Tree → `surf-data` struct. Type parameters, constructor declarations, deriving clauses. **Parsing only** — no registration (Phase 3 handles).
+- **trait**: Tree → `surf-trait` struct. Trait name, type parameters, method signatures, supertraits.
+- **impl**: Tree → `surf-impl` struct. Trait name, implementing type, method bodies.
 
-- **data**: Tree → `surf-data` struct. Must handle: type parameters, constructor declarations, deriving clauses. **Parsing only** — no registration (Phase 3a-3e handles registration).
-- **trait**: Tree → `surf-trait` struct. Must handle: trait name, type parameters, method signatures, supertraits.
-- **impl**: Tree → `surf-impl` struct. Must handle: trait name, implementing type, method bodies.
+**Phase 1b — Additional preparse-consumed forms (D.5, F7)**:
+
+tree-parser.rkt has error stubs for 6 additional forms that `preparse-expand-all` consumes in Pass 0. These MUST be handled before Phase 4 can delete preparse on the WS path:
+
+- **deftype**: Type alias declaration. Tree → `surf-deftype`. Simple.
+- **subtype**: Subtype relation declaration. Tree → `surf-subtype`. Simple. (Currently NOT in tree-parser at all — must be added.)
+- **bundle**: Trait bundle constraint. Tree → `surf-bundle`. Moderate.
+- **defmacro**: Macro definition. Tree → `surf-defmacro`. Moderate.
+- **property**: Property declaration. Tree → `surf-property`. Simple.
+- **schema/selection/functor**: Configuration forms. Tree → respective surf-* structs. Simple-moderate.
 
 **Validation**: Three-level WS validation (L1 + L2 + L3). The merge routes these forms through tree parser instead of falling back to preparse.
 
-**Key risk**: data/trait/impl surf-* structs must contain ALL information that registration needs (constructor names, method signatures, impl targets). If the surf-* struct is missing information that `process-data/trait/impl` extracts from the raw datum, registration propagators (Phase 3b-3c) can't extract it.
+**Key risk**: surf-* structs must contain ALL information that registration needs. If the struct is missing information that `process-data/trait/impl` extracts from the raw datum, registration propagators (Phase 3b-3c) can't extract it.
 
 ### Phase 2: Close Coverage Gap — session/defproc/defr/quote/solver
 
-**What**: Implement the remaining 5 error stubs. Less frequently used but have complex sublanguages.
+**What**: Implement the remaining 5 stubs. Less frequently used but have complex sublanguages.
 
 - **quote/solver**: Simple (10-20 lines each). Do first.
 - **session/defproc**: Session type sublanguage (Send/Recv/Choice/Offer). Complex.
@@ -531,6 +591,17 @@ data Color := Red | Green | Blue
 ```
 
 **Key design point**: Generated defs are ADDITIONAL form cells, not modifications to the original form cell. The original `data Color` form cell holds the surf-data. The generated `Red`, `Green`, `Blue` form cells hold surf-defs. Both types of cells are consumed by elaboration via `process-command`.
+
+**Stratum boundary and termination argument (D.5, F6)**:
+
+Generated-def creation is SCATTER (topology creation — new cells). This requires an explicit stratum boundary:
+
+- **S0**: Parse all user-written forms to completion (tagged + grouped + rewritten + parsed). Extract registration descriptors. Write to registration cells.
+- **S1**: Generated-def propagator reads registration descriptors. Creates new per-form cells for constructors, accessors, type-check predicates, default methods. These cells go through production dispatch (tagged + grouped + parsed).
+- **S1 does NOT produce further S1 work**: Generated defs are `surf-def` (simple value definitions) and `surf-defn` (simple function definitions). They do not declare new data types, traits, or impls. **Depth is bounded at 1.** No cascading generation.
+- The wiring-state cell pattern (from Track 2G property cell auto-creation) controls propagator installation on newly created cells: the generated-def propagator writes new cell IDs to a wiring-state cell, and a downstream propagator installs dispatch propagators on those cells.
+
+**Quiescence accounting**: The network cannot declare quiescence while the generated-def propagator is creating new cells. The wiring-state cell serves as the quiescence barrier — quiescence requires the wiring-state cell to be stable (no new cell IDs being added).
 
 ### Phase 4: Delete Sexp Expanders on WS Path
 
@@ -673,8 +744,13 @@ type SpecCell := SpecCell
 impl Lattice SpecCell
   join [SpecCell none _] [SpecCell t m]  -> SpecCell t m    ;; ⊥ ⊔ x = x
   join [SpecCell t m] [SpecCell none _]  -> SpecCell t m    ;; x ⊔ ⊥ = x
-  join x _                               -> x              ;; set-once
+  join [SpecCell t1 m1] [SpecCell t2 m2]
+    | [eq? t1 t2] -> SpecCell t1 m1                        ;; same spec = idempotent
+    | else        -> spec-cell-top                          ;; D.5 fix: collision = ⊤ (error)
   bot -> SpecCell none none
+  ;; D.5 (F4): "first write wins" violated commutativity.
+  ;; collision = ⊤ restores: join(a,b) = join(b,a) = ⊤ when a ≠ b.
+  ;; Elaborator detects ⊤ and reports "duplicate spec for function X."
 
 ;; Spec cell lives on the per-command network, keyed by function name
 ;; network parse-net : ParseInterface
@@ -728,27 +804,51 @@ defn select-production [prods]
   |> prods [max-by GrammarProduction-provenance]
 ```
 
-### 5.3 Registration as Information Flow
+### 5.3 Registration as Propagators (D.5 — replaces D.2 imperative model)
 
 ```prologos
-;; Registration pass: surf-* → parameter mutations (scaffolding)
-;; In NTT, this WOULD be a propagator writing to registration cells.
-;; For Track 3, it's a Racket function with side effects.
+;; D.5: Registration is propagator-native on the process-file path.
+;; Each registration form's propagator extracts descriptors and writes to cells.
+;; No imperative loop. No ordering in control flow. Cell dependency determines order.
 
-;; FUTURE (PM series): registration cells on network
-;; network elab-net : ElaborationInterface
-;;   embed ctor-registry   : Cell (Map Symbol CtorDesc)
-;;   embed trait-registry   : Cell (Map Symbol TraitDecl)
-;;   embed impl-registry    : Cell (Map (Symbol Symbol) ImplDecl)
-;;   embed spec-registry    : Cell (Map Symbol TypeExpr)
+;; Registration descriptor types — data, not side effects
+type RegDescriptor
+  := RegConstructor {type-name : Symbol, ctor-name : Symbol, arity : Int, fields : List TypeExpr}
+   | RegTypeDef {name : Symbol, params : List Symbol, ctors : List Symbol}
+   | RegAccessor {type-name : Symbol, ctor-name : Symbol, field-idx : Int}
+   | RegTraitDecl {name : Symbol, params : List Symbol, methods : List MethodSig}
+   | RegImplEntry {trait : Symbol, type : Symbol, methods : List MethodImpl}
+   | RegSpecEntry {name : Symbol, type-expr : TypeExpr, metadata : Option SpecMetadata}
+   | RegMacroRule {name : Symbol, pattern : SurfExpr, template : SurfExpr}
 
-;; Track 3 scaffolding: register-from-surfs is an imperative pass
-spec register-from-surfs [List SurfExpr] -> Unit
-defn register-from-surfs [surfs]
-  ;; Phase 1: specs (pre-scan, order-dependent)
-  |> surfs [filter surf-spec?] [for-each register-spec-from-surf]
-  ;; Phase 2: data/trait/impl/macro (order-independent)
-  |> surfs [filter registration-form?] [for-each register-form-from-surf]
+;; Per-form registration propagator:
+;; reads: form cell (when 'parsed ∈ transforms)
+;; writes: form cell registrations set (set-union with extracted descriptors)
+propagator extract-registrations
+  :reads  [form-cell :when (set-member? (FormCell-transforms form-cell) 'parsed)]
+  :writes [form-cell.registrations]
+  :fire
+    (match (FormCell-surf form-cell)
+      | some (surf-data name params ctors _) ->
+          [extract-data-registrations name params ctors]
+      | some (surf-trait name params methods _) ->
+          [extract-trait-registrations name params methods]
+      | some (surf-impl trait-name type-name methods _) ->
+          [extract-impl-registrations trait-name type-name methods]
+      | _ -> #{})  ;; no registrations for non-registration forms
+
+;; Dual-mode commit (D.5 F8 — Two-Context Audit):
+;; process-file path: write descriptors to registration cells
+;; load-module path: write descriptors to parameters (scaffolding)
+spec commit-registrations (List RegDescriptor) -> Unit
+defn commit-registrations [descs]
+  (if [network-active?]
+    [for-each write-to-registration-cell descs]    ;; process-file path
+    [for-each write-to-parameter descs])            ;; load-module path (scaffolding)
+
+;; Trait → spec dependency (D.5 F2):
+;; Spec production reads trait registration cell. Residuates if trait not yet registered.
+;; When trait cell advances, spec propagator re-fires and resolves constraint forms.
 ```
 
 ### 5.4 Production Dispatch
@@ -802,16 +902,19 @@ defn dispatch-production [registry node loc]
 
 ---
 
-## §6 Risks and Mitigations
+## §6 Risks and Mitigations (D.5 — updated from external critique F1)
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
 | data/trait/impl tree parsing exposes new bugs | MEDIUM | Three-level WS validation (L1 + L2 + L3). Merge provides fallback during development. |
-| Registration ordering dependency (specs before other forms) | HIGH | Two-pass registration: specs first, then data/trait/impl. Explicit ordering in `register-from-surfs`. |
-| Generated defs (constructors, accessors) not produced by registration pass | HIGH | Port generation logic from `preparse-expand-all` to `register-from-surfs`. Test with `data` declarations that exercise all generated def patterns. |
-| `load-module` path differs from `process-file` path | MEDIUM | Module loading gets same tree-parser + registration-pass treatment. Test with cross-module imports. |
-| Per-form cell overhead on large files | LOW | Pocket Universe pattern controls allocation. One cell per form, not per sub-expression. Profile on large library files (72 files in lib/prologos/). |
-| sexp path diverges from WS path | LOW | Accepted — sexp path retains `parse-datum`, WS path uses per-form cells. Tests run both paths. |
+| Spec cell residuation at quiescence (D.5) | MEDIUM | Defns whose spec cell is still ⊥ at quiescence proceed without annotation. Correct semantics — spec-less function. |
+| Trait→spec dependency: spec production needs trait registry (D.5) | HIGH | Spec production reads trait registration cell, residuates if trait not yet registered. Re-fires when trait cell advances. Same pattern as spec→defn. |
+| Generated defs: scatter + termination (D.5) | HIGH | Stratum boundary S0/S1. Depth bounded at 1 (generated defs don't produce further data/trait). Wiring-state cell for quiescence accounting. |
+| Registration extraction scope (3,017 lines interleaved parse+register) | HIGH | Phases 3b-3e extract registration-only logic. Most of process-spec (1,548 lines) is parsing handled by tree-parser. Extraction is ~200-400 lines per form type. |
+| Missing form types (bundle, deftype, subtype, etc.) (D.5 F7) | HIGH | Added to Phase 1b scope. 6 additional error stubs + 1 missing form (subtype). Must complete before Phase 4 deletes preparse. |
+| `load-module` path: no network, needs parameter writes (D.5 F8) | HIGH | Dual-mode registration interface: `commit-registrations!` writes to cells or parameters based on context. Two-Context Audit applied. |
+| Per-form cell overhead on large files | LOW | Pocket Universe controls allocation. Pre-0: 2ns creation, 12ns merge. 200 forms × 5 merges = 12μs. |
+| sexp path diverges from WS path | LOW | Accepted — incomplete, tracked in DEFERRED.md. Full retirement at PM module-loading-on-network. |
 
 ---
 
