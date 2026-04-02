@@ -44,31 +44,24 @@
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
 
-**Phase dependency DAG** (D.5, F10 — identifies parallelizable phases):
+**Phase dependency DAG** (D.5b — revised from implementation finding: Phase 3a requires cell infrastructure from Phase 6):
 
 ```
-Phase 0 ✅
-  ↓
-Phase 1a ──→ Phase 3b (data reg extraction needs surf-data)
-Phase 1b ──→ Phase 3b (deftype/bundle reg extraction)
-Phase 2  ──→ (session/defr have no registrations — no Phase 3 dependency)
-Phase 3a ←── (independent: spec cells need only existing spec tree-parser, already complete)
-  ↓
-Phase 3b ──→ Phase 3e (generated defs need registration descriptors)
-Phase 3c ──→ Phase 3e
-Phase 3d ──→ Phase 3e
-  ↓
-Phase 4 ←── ALL of 1a, 1b, 2, 3a-3e (preparse deletion needs everything)
-Phase 5 ←── (independent: dependency-set infrastructure can start anytime)
-  ↓
-Phase 6 ←── 4, 5 (per-form cells need dependency-set + preparse-free pipeline)
-Phase 7 ←── 6 (shared cells need per-form cells)
-Phase 8 ←── 7 (parser.rkt demotion needs shared cells)
-Phase 9 ←── 8 (verification)
-Phase 10 ←── 9 (PIR)
+Group 1 (parallel front):  1a ∥ 1b ∥ 2 ∥ 5
+  ↓                           ↓
+Group 2:                      6 (needs 5)
+                              ↓
+Group 3 (parallel middle): 3a ∥ 3b ∥ 3c ∥ 3d ∥ 3e ∥ 7
+                           (3a needs 6; 3b-3e need 1-2 + 6; 7 needs 6)
+                              ↓
+Group 4:                      4 (needs all of 3 — preparse deletion)
+                              ↓
+Group 5:                      8 → 9 → 10
 ```
 
-**Parallelizable**: 1a ∥ 1b ∥ 2 ∥ 3a ∥ 5 (five independent workstreams at start). 3b ∥ 3c ∥ 3d (three independent registration extractions after Phase 1).
+**Implementation order**: 1a → 1b → 2 → 5 → 6 → 3a/3b-3e/7 → 4 → 8 → 9 → 10
+
+**Rationale for reorder** (discovered during Phase 3a mini-audit): Spec cells (Phase 3a) require per-form cell infrastructure (Phase 6) for propagator-native cell residuation. Without cells, Phase 3a would require a two-pass algorithmic approach — the exact pattern the D.4 design eliminated. Build infrastructure first (Phases 5-6), deploy features on it (Phases 3, 7), then clean up (Phase 4, 8).
 
 ---
 
