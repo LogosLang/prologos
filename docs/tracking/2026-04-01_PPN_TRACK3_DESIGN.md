@@ -30,11 +30,11 @@
 | 1b | subtype + selection tree-parser; consumed form stubs | ✅ partial | `27d22906`. subtype + selection implemented. deftype/bundle/defmacro/property/functor/schema need process-consumed-form handlers. |
 | 2 | session/defproc/defr/quote/solver stubs | ⬜ | Complex sublanguages. Merge fallback handles correctly. |
 | 3a | Spec cells + annotate-surfs-with-specs | ✅ | `bd13dfbb` + `7169c5ab`. Post-parse spec injection. |
-| 4 | Cell pipeline alongside merge | ✅ | `36d9d20a`. Cell pipeline runs. Merge remains primary (form gaps). 383/383 GREEN. |
+| 4 | Cell pipeline alongside merge | ✅ partial | `352893bc` stubs filled, `40175f61` reverted to merge. Cell pipeline has form gaps (multi-arity defn, strategy desugaring, expression-level forms). Merge remains primary. |
 | 5 | Dependency-set Pocket Universe + production registry | ✅ | `9f3c63dc`. form-pipeline-value.transforms is seteq powerset. Merge = set-union. transform-deps + transform-ready?. advance-pipeline dependency-driven. 31 inline tests pass. |
 | 6 | Per-form cells + production dispatch propagators | ✅ | `7a2a4bd0`. form-cells.rkt: create-form-cells-from-tree + dispatch-form-productions. 1 cell per form on elab-network. Merge = Phase 5 set-union. Gate phase for 3a/1a+3b-3e/7. |
-| 7 | Shared cells replace merge (pure merge function) | ✅ partial | `40d07caa`. Form cells + spec cells wired into driver alongside merge. extract-surfs-from-form-cells verified identical. Merge still drives process-command — full switch after Phase 4. |
-| 8 | Retire parser.rkt (demote to sexp shim) | ⬜ | Incomplete — sexp path retained for tests/REPL. Full retirement when PM brings module loading on-network. Tracked in DEFERRED.md. |
+| 7 | Form cells wired into driver + annotate-surfs-with-specs | ✅ | `40d07caa` + `e5b837bb`. Cell pipeline runs alongside merge. extract-surfs-from-form-cells handles all form types. annotate-surfs-with-specs ready. |
+| 8 | Retire parser.rkt (demote to sexp shim) | ⬜ | Blocked on cell pipeline becoming primary (Phase 4 gaps). |
 | 9 | Acceptance + A/B benchmarks + verification | ⬜ | Full suite GREEN. A/B vs Track 2B baseline. Acceptance file on all examples. |
 | 10 | PIR + documentation | ⬜ | |
 
