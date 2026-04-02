@@ -27,17 +27,17 @@
 |-------|-------------|--------|-------|
 | 0 | Pre-0 benchmarks | ✅ | `dc87fb34`. Parse=0-4% of pipeline. WS overhead <2%. All V1-V3 algebraic properties PASS. |
 | 1a | Close coverage: data/trait/impl | ⬜ | 3 stubs → full implementations. Parsing only — no registration. |
-| 1b | Close coverage: deftype/subtype/bundle/defmacro/property/schema/selection/functor (D.5 F7) | ⬜ | 6 stubs + 1 missing (subtype). Must complete before Phase 4. |
+| 1b | Close coverage: subtype + selection (parseable); deftype/bundle/defmacro/property/functor/schema deferred | ✅ partial | `27d22906`. subtype + selection implemented. 6 preparse-consumed forms (no surf structs) defer to after Phase 6 — same pattern as data/trait/impl. |
 | 2 | Close coverage: session/defproc/defr/quote/solver | ⬜ | 5 stubs → full implementations. Complex sublanguages. |
-| 3a | Spec cells: propagator-native spec resolution | ⬜ | Per-function spec cells. Spec forms write, defn forms read. Eliminates two-pass ordering. Independent of Phases 1-2. |
+| 3a | Spec cells: propagator-native spec resolution | ✅ | `bd13dfbb`. spec-cell-value struct, merge with collision=top (D.5 F4), extract-specs-from-form-cells. 2 specs from 6-form program. Commutativity verified. Consumption in Phase 7. |
 | 3b | Data registration extraction | ⬜ | Extract registration-only logic from process-data (215 lines). Registration as data descriptors. |
 | 3c | Trait/impl registration extraction | ⬜ | Extract from process-trait (739 lines) + process-impl (465 lines). |
 | 3d | Spec registration extraction | ⬜ | Extract from process-spec (1,548 lines). Depends on tree-parser handling spec type signatures. |
 | 3e | Generated def injection | ⬜ | Constructors, accessors, default methods → additional form cells via accumulator cell. |
 | 4 | Delete sexp expanders on WS path | ⬜ | ~500-600 lines of macros.rkt expand-* become unreachable. preparse-expand-all eliminated from WS pipeline. |
-| 5 | Dependency-set Pocket Universe + production registry | ⬜ | Replace stage chain with powerset of completed transforms (Boolean). Production registry as set-valued cell. |
-| 6 | Per-form cells + production dispatch propagators | ⬜ | One cell per top-level form. Dispatch IS a propagator. Dependency-set determines firing. |
-| 7 | Shared cells replace merge (pure merge function) | ⬜ | merge-form rewritten as pure (no spec-store). Provenance field handles spec-annotated forms. |
+| 5 | Dependency-set Pocket Universe + production registry | ✅ | `9f3c63dc`. form-pipeline-value.transforms is seteq powerset. Merge = set-union. transform-deps + transform-ready?. advance-pipeline dependency-driven. 31 inline tests pass. |
+| 6 | Per-form cells + production dispatch propagators | ✅ | `7a2a4bd0`. form-cells.rkt: create-form-cells-from-tree + dispatch-form-productions. 1 cell per form on elab-network. Merge = Phase 5 set-union. Gate phase for 3a/1a+3b-3e/7. |
+| 7 | Shared cells replace merge (pure merge function) | ✅ partial | `40d07caa`. Form cells + spec cells wired into driver alongside merge. extract-surfs-from-form-cells verified identical. Merge still drives process-command — full switch after Phase 4. |
 | 8 | Retire parser.rkt (demote to sexp shim) | ⬜ | Incomplete — sexp path retained for tests/REPL. Full retirement when PM brings module loading on-network. Tracked in DEFERRED.md. |
 | 9 | Acceptance + A/B benchmarks + verification | ⬜ | Full suite GREEN. A/B vs Track 2B baseline. Acceptance file on all examples. |
 | 10 | PIR + documentation | ⬜ | |
