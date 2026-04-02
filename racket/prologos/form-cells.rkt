@@ -304,16 +304,13 @@
     (define stx (tree-node->stx-form node "<cell>" (or source-str "")))
     (if stx (syntax->datum stx) #f)))
 
+;; §11 TREE-CANONICAL extraction rewrite
 (define (extract-surfs-from-form-cells enet cell-map
                                         #:source-str [source-str #f]
                                         #:raw-map [raw-map (hasheq)])
-  ;; ONE PARSER strategy: convert RAW tree-node to datum via tree-node->stx-form,
-  ;; then preparse-expand-form + parse-datum. This produces IDENTICAL surfs to the
-  ;; merge pipeline because it uses the SAME parse-datum. No dual representation.
-  ;;
-  ;; Special cases:
-  ;; - Side-effect-only forms (ns, spec, bundle, etc.): suppressed
-  ;; - Generated-def forms (data, trait, impl): process-consumed-form returns def lists
+  ;; §11 TREE-CANONICAL: parse-form-tree is PRIMARY (on-network).
+  ;; Datum conversion is FALLBACK for forms parse-form-tree can't handle yet.
+  ;; Each gap closed (G1-G7) removes one fallback path.
   (define pairs
     (for/fold ([acc '()])
               ([(line cell-id) (in-hash cell-map)])
@@ -333,29 +330,32 @@
                    (let ([surfs (defs-to-surfs gen-defs)])
                      (if (null? surfs) acc
                          (cons (cons line surfs) acc))))]
-              ;; ALL other forms: RAW node → datum → normalize → expand → parse-datum
+              ;; ALL other forms: tree-parser PRIMARY, datum fallback
               [else
-               (define raw-node (hash-ref raw-map line #f))
-               (define use-node (or raw-node node))
-               (define datum (tree-node-to-datum use-node source-str))
-               (if (not datum) acc
-                   (with-handlers ([exn:fail? (lambda (e) acc)])
-                     ;; Normalize WS datum: flatten groups + session desugar + infix = + tokens
-                     (define flat-datum (flatten-ws-datum datum))
-                     ;; Session/defproc forms need special WS body desugaring
-                     (define session-datum
-                       (cond
-                         [(and (pair? flat-datum) (eq? (car flat-datum) 'session))
-                          (desugar-session-ws flat-datum)]
-                         [(and (pair? flat-datum) (eq? (car flat-datum) 'defproc))
-                          (desugar-defproc-ws flat-datum)]
-                         [else flat-datum]))
-                     (define eq-datum (restructure-infix-eq session-datum))
-                     (define norm-datum (normalize-ws-tokens eq-datum))
-                     (define expanded (preparse-expand-single norm-datum))
-                     (define s (parse-datum (datum->syntax #f expanded)))
-                     (if (prologos-error? s) acc
-                         (cons (cons line (list s)) acc))))])))))
+               (define surf (parse-form-tree node))
+               (if (not (prologos-error? surf))
+                   ;; Tree-parser succeeded → ON-NETWORK (canonical)
+                   (cons (cons line (list surf)) acc)
+                   ;; Tree-parser failed → datum conversion FALLBACK
+                   (let* ([raw-node (hash-ref raw-map line #f)]
+                          [use-node (or raw-node node)]
+                          [datum (tree-node-to-datum use-node source-str)])
+                     (if (not datum) acc
+                         (with-handlers ([exn:fail? (lambda (e) acc)])
+                           (define flat-datum (flatten-ws-datum datum))
+                           (define session-datum
+                             (cond
+                               [(and (pair? flat-datum) (eq? (car flat-datum) 'session))
+                                (desugar-session-ws flat-datum)]
+                               [(and (pair? flat-datum) (eq? (car flat-datum) 'defproc))
+                                (desugar-defproc-ws flat-datum)]
+                               [else flat-datum]))
+                           (define eq-datum (restructure-infix-eq session-datum))
+                           (define norm-datum (normalize-ws-tokens eq-datum))
+                           (define expanded (preparse-expand-single norm-datum))
+                           (define s (parse-datum (datum->syntax #f expanded)))
+                           (if (prologos-error? s) acc
+                               (cons (cons line (list s)) acc))))))])))))
   ;; Sort by source line, flatten surf lists
   (define sorted (sort pairs < #:key car))
   (apply append (map cdr sorted)))
