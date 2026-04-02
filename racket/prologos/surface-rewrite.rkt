@@ -555,110 +555,138 @@
  run-form-pipeline
  rewrite-tree)
 
-;; --- Pipeline-as-cell value ---
+;; --- Pipeline-as-cell value (D.5b: dependency-set replaces stage chain) ---
 
 (struct form-pipeline-value
-  (stage        ;; symbol: position in stage chain
-   tree-node    ;; parse-tree-node at this stage
+  (transforms    ;; (seteq of symbol): completed transform names — powerset lattice (Boolean)
+   tree-node     ;; parse-tree-node at current refinement
    registrations ;; (listof pair) extracted registry entries
-   source-pos)  ;; source position for provenance
+   source-pos)   ;; source position for provenance
   #:transparent)
 
-;; Stage ordering (finite total order)
+;; D.5b: Dependency-set merge = set union (monotone, commutative, associative, idempotent)
+;; This IS the powerset lattice join. Replaces D.2's stage>? ordering.
+(define (form-pipeline-merge old new)
+  (form-pipeline-value
+   (set-union (form-pipeline-value-transforms old)
+              (form-pipeline-value-transforms new))
+   ;; tree-node: prefer the one from the value with MORE transforms
+   (if (> (set-count (form-pipeline-value-transforms new))
+          (set-count (form-pipeline-value-transforms old)))
+       (form-pipeline-value-tree-node new)
+       (form-pipeline-value-tree-node old))
+   ;; registrations: set union
+   (append (form-pipeline-value-registrations old)
+           (form-pipeline-value-registrations new))
+   ;; source-pos: preserve
+   (or (form-pipeline-value-source-pos old)
+       (form-pipeline-value-source-pos new))))
+
+;; --- Legacy compatibility: stage-order and stage>? for V1 algebraic validation ---
 (define stage-order
   '(raw tagged grouped v0-0 v0-1 v0-2 v1 v2 done))
 
 (define (stage-index stage)
   (let loop ([stages stage-order] [i 0])
     (cond
-      [(null? stages) -1]  ;; unknown stage
+      [(null? stages) -1]
       [(eq? (car stages) stage) i]
       [else (loop (cdr stages) (+ i 1))])))
 
 (define (stage>? a b)
   (> (stage-index a) (stage-index b)))
 
-;; Merge: take the later stage (monotone)
-(define (form-pipeline-merge old new)
-  (if (stage>? (form-pipeline-value-stage new)
-               (form-pipeline-value-stage old))
-      new
-      old))
+;; --- Transform dependency declarations (D.5b critical pair analysis) ---
+;; Each transform declares what transforms must be in the set before it can fire.
+;; Transforms with non-overlapping deps can fire in parallel.
 
-;; Advance a pipeline value by one stage.
-;; Returns a new form-pipeline-value at the next stage, or #f if already 'done.
+(define transform-deps
+  (hasheq
+   'grouped   (seteq)             ;; G(0): no deps
+   'tagged    (seteq 'grouped)    ;; T(0): needs grouped nodes to tag
+   'v0-0      (seteq 'tagged 'grouped)  ;; V(0,0): needs tag + group
+   'v0-1      (seteq 'tagged 'grouped)  ;; V(0,1): needs tag + group
+   'v0-2      (seteq 'tagged 'grouped)  ;; V(0,2): needs tag + group
+   'v1        (seteq 'tagged 'grouped)  ;; V(1): needs tag + group
+   'v2        (seteq 'tagged 'grouped)  ;; V(2): needs tag + group
+   'done      (seteq 'tagged 'grouped 'v0-0 'v0-1 'v0-2 'v1 'v2)))
+
+;; Check if a transform's dependencies are satisfied
+(define (transform-ready? transform-name current-transforms)
+  (define deps (hash-ref transform-deps transform-name (seteq)))
+  (subset? deps current-transforms))
+
+;; Check if pipeline is complete
+(define (pipeline-done? pv)
+  (set-member? (form-pipeline-value-transforms pv) 'done))
+
+;; Advance a pipeline value by firing all ready transforms.
+;; D.5b: replaces sequential stage advancement with dependency-set-based firing.
+;; Returns a new form-pipeline-value with additional transforms, or #f if done.
 ;; Optional registries parameter for V(1) and V(2) stages.
 (define (advance-pipeline pv #:registries [registries #f])
-  (define stage (form-pipeline-value-stage pv))
+  (define transforms (form-pipeline-value-transforms pv))
   (define node (form-pipeline-value-tree-node pv))
   (define regs (form-pipeline-value-registrations pv))
   (define spos (form-pipeline-value-source-pos pv))
 
-  (case stage
-    [(raw)
-     ;; G(0): form grouping FIRST — creates bracket groups, nested groups
+  (cond
+    [(pipeline-done? pv) #f]  ;; already done
+
+    ;; G(0): form grouping — no deps
+    [(and (not (set-member? transforms 'grouped))
+          (transform-ready? 'grouped transforms))
      (define grouped (group-tree-node node))
-     (form-pipeline-value 'tagged grouped regs spos)]
+     (form-pipeline-value (set-add transforms 'grouped) grouped regs spos)]
 
-    [(tagged)
-     ;; T(0): tag refinement AFTER grouping — tags 'line AND 'group nodes
-     ;; Must run after G(0) because G(0) creates 'group nodes that need tagging
-     (define refined (refine-tag node))  ;; recursive into all children
-     (form-pipeline-value 'grouped refined regs spos)]
+    ;; T(0): tag refinement — needs grouped
+    [(and (not (set-member? transforms 'tagged))
+          (transform-ready? 'tagged transforms))
+     (define refined (refine-tag node))
+     (form-pipeline-value (set-add transforms 'tagged) refined regs spos)]
 
-    [(grouped)
-     ;; V(0,0): implicit-map
+    ;; V(0,0): implicit-map — needs tagged + grouped
+    [(and (not (set-member? transforms 'v0-0))
+          (transform-ready? 'v0-0 transforms))
      (define-values (result _) (apply-rules node 'V0-0))
-     (form-pipeline-value 'v0-0 result regs spos)]
+     (form-pipeline-value (set-add transforms 'v0-0) result regs spos)]
 
-    [(v0-0)
-     ;; V(0,1): dot-access
+    ;; V(0,1): dot-access — needs tagged + grouped
+    [(and (not (set-member? transforms 'v0-1))
+          (transform-ready? 'v0-1 transforms))
      (define-values (result _) (apply-rules node 'V0-1))
-     (form-pipeline-value 'v0-1 result regs spos)]
+     (form-pipeline-value (set-add transforms 'v0-1) result regs spos)]
 
-    [(v0-1)
-     ;; V(0,2): infix + simple + recursive rewrites
+    ;; V(0,2): infix + simple + recursive rewrites — needs tagged + grouped
+    [(and (not (set-member? transforms 'v0-2))
+          (transform-ready? 'v0-2 transforms))
      (define-values (result _) (apply-rules node 'V0-2))
-     (form-pipeline-value 'v0-2 result regs spos)]
+     (form-pipeline-value (set-add transforms 'v0-2) result regs spos)]
 
-    [(v0-2)
-     ;; V(1): macro expansion
-     ;; Apply any rewrite rules registered in stratum 'V1 (user macros).
-     ;; Built-in macros (let, if, cond, etc.) are already handled in V(0,2).
-     ;; User macros from defmacro need to be registered as V1 rewrite rules
-     ;; by the driver after preparse runs.
+    ;; V(1): macro expansion — needs tagged + grouped
+    [(and (not (set-member? transforms 'v1))
+          (transform-ready? 'v1 transforms))
      (define-values (result matched?) (apply-rules node 'V1))
-     (form-pipeline-value 'v1 result regs spos)]
+     (form-pipeline-value (set-add transforms 'v1) result regs spos)]
 
-    [(v1)
-     ;; V(2): spec/where injection
-     ;; If registries provided with a spec-store lookup function,
-     ;; check if this node is a defn whose name has a matching spec.
-     ;; If so, the spec type replaces the defn's hole types.
-     ;;
-     ;; For tree-level: this would modify the defn node's type annotation.
-     ;; For pipeline-as-cell: this would be a propagator watching
-     ;; form-cell + spec-store-cell, firing when both have values.
-     ;;
-     ;; For now: pass through. Spec injection is handled by datum-level
-     ;; preparse (maybe-inject-spec). The defn's type in the tree parser
-     ;; has Pi chain with holes; the preparse injects the spec type into
-     ;; the DATUM which parse-datum sees. The hybrid path uses preparse's
-     ;; output so spec types are correct in elaboration.
-     (form-pipeline-value 'v2 node regs spos)]
+    ;; V(2): spec/where injection (pass-through for now — Phase 3a deploys spec cells)
+    [(and (not (set-member? transforms 'v2))
+          (transform-ready? 'v2 transforms))
+     (form-pipeline-value (set-add transforms 'v2) node regs spos)]
 
-    [(v2)
-     ;; Extract registrations, mark done
-     (form-pipeline-value 'done node regs spos)]
+    ;; All transforms complete → done
+    [(and (not (set-member? transforms 'done))
+          (transform-ready? 'done transforms))
+     (form-pipeline-value (set-add transforms 'done) node regs spos)]
 
-    [(done) #f]  ;; already done
     [else #f]))
 
 ;; Run a form through the entire pipeline to 'done.
+;; D.5b: iterates advancing transforms until no more are ready.
 ;; Returns the final form-pipeline-value.
 ;; Optional registries for V(1)/V(2) stages.
 (define (run-form-pipeline node #:registries [registries #f])
-  (let loop ([pv (form-pipeline-value 'raw node '()
+  (let loop ([pv (form-pipeline-value (seteq) node '()
                                        (and (parse-tree-node? node)
                                             (parse-tree-node-srcloc node)))])
     (define next (advance-pipeline pv #:registries registries))
@@ -1950,44 +1978,46 @@
     (check-false (stage>? 'raw 'tagged))
     (check-false (stage>? 'raw 'raw)))
 
-  (test-case "pipeline: merge takes later stage"
-    (define old (form-pipeline-value 'raw (make-line-node "def" "x") '() #f))
-    (define new (form-pipeline-value 'tagged (make-line-node "def" "x") '() #f))
+  (test-case "pipeline: merge combines transform sets (D.5b)"
+    (define old (form-pipeline-value (seteq) (make-line-node "def" "x") '() #f))
+    (define new (form-pipeline-value (seteq 'grouped 'tagged) (make-line-node "def" "x") '() #f))
     (define merged (form-pipeline-merge old new))
-    (check-eq? (form-pipeline-value-stage merged) 'tagged))
+    (check-true (set-member? (form-pipeline-value-transforms merged) 'tagged))
+    (check-true (set-member? (form-pipeline-value-transforms merged) 'grouped)))
 
-  (test-case "pipeline: merge rejects earlier stage"
-    (define old (form-pipeline-value 'grouped (make-line-node "def" "x") '() #f))
-    (define new (form-pipeline-value 'tagged (make-line-node "def" "x") '() #f))
-    (define merged (form-pipeline-merge old new))
-    (check-eq? (form-pipeline-value-stage merged) 'grouped))
+  (test-case "pipeline: merge is commutative (D.5b)"
+    (define a (form-pipeline-value (seteq 'grouped) (make-line-node "def" "x") '() #f))
+    (define b (form-pipeline-value (seteq 'tagged) (make-line-node "def" "x") '() #f))
+    (define ab (form-pipeline-merge a b))
+    (define ba (form-pipeline-merge b a))
+    (check-equal? (form-pipeline-value-transforms ab)
+                  (form-pipeline-value-transforms ba)))
 
-  (test-case "pipeline: advance raw → tagged (G(0) grouping)"
-    (define pv (form-pipeline-value 'raw (make-line-node "def" "x" ":=" "42") '() #f))
+  (test-case "pipeline: advance empty → grouped (G(0) grouping)"
+    (define pv (form-pipeline-value (seteq) (make-line-node "def" "x" ":=" "42") '() #f))
     (define next (advance-pipeline pv))
-    (check-eq? (form-pipeline-value-stage next) 'tagged)
-    ;; raw → tagged now does G(0) form grouping (tag refinement is tagged → grouped)
+    (check-true (set-member? (form-pipeline-value-transforms next) 'grouped))
     (check-true (parse-tree-node? (form-pipeline-value-tree-node next))))
 
-  (test-case "pipeline: advance tagged → grouped (T(0) tag refinement)"
+  (test-case "pipeline: advance grouped → tagged (T(0) tag refinement)"
     (define node (make-line-node "def" "x" ":=" "42"))
     (define grouped (group-tree-node node))
-    (define pv (form-pipeline-value 'tagged grouped '() #f))
+    (define pv (form-pipeline-value (seteq 'grouped) grouped '() #f))
     (define next (advance-pipeline pv))
-    (check-eq? (form-pipeline-value-stage next) 'grouped)
+    (check-true (set-member? (form-pipeline-value-transforms next) 'tagged))
     (check-eq? (parse-tree-node-tag (form-pipeline-value-tree-node next)) tag-def))
 
-  (test-case "pipeline: run-form-pipeline reaches done"
+  (test-case "pipeline: run-form-pipeline reaches done (D.5b)"
     (define node (make-line-node "eval" "x"))
     (define result (run-form-pipeline node))
-    (check-eq? (form-pipeline-value-stage result) 'done)
+    (check-true (set-member? (form-pipeline-value-transforms result) 'done))
     ;; Tag should have been refined
     (check-eq? (parse-tree-node-tag (form-pipeline-value-tree-node result)) tag-eval))
 
   (test-case "pipeline: if form reaches done with correct rewrite"
     (define node (make-line-node "if" "true" "1" "0"))
     (define result (run-form-pipeline node))
-    (check-eq? (form-pipeline-value-stage result) 'done)
+    (check-true (set-member? (form-pipeline-value-transforms result) 'done))
     ;; After G(0) grouping + V(0,2) rewrite, the if should be rewritten to boolrec
     (define final-node (form-pipeline-value-tree-node result))
     (check-true (parse-tree-node? final-node))
