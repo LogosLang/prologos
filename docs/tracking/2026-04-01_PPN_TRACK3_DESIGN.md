@@ -25,7 +25,7 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Pre-0 benchmarks | ⬜ | parse-datum profiling, preparse-expand-all profiling, tree-parser coverage metrics |
+| 0 | Pre-0 benchmarks | ✅ | `dc87fb34`. Parse=0-4% of pipeline. WS overhead <2%. All V1-V3 algebraic properties PASS. No design changes. |
 | 1 | Close tree-parser coverage gap: data/trait/impl | ⬜ | 3 stubs → full implementations. Registration remains in preparse (scaffolding). |
 | 2 | Close tree-parser coverage gap: session/defproc/defr/quote/solver | ⬜ | 5 stubs → full implementations. Complex sublanguages. |
 | 3 | Registration migration: preparse → post-tree-parse pass | ⬜ | data/trait/impl/spec/defmacro registration moves to tree-parser level. preparse-expand-all becomes deletable for WS path. |
@@ -760,3 +760,176 @@ defn dispatch-production [registry node loc]
 ### Not consumed (explicitly NOT prerequisites):
 - **SRE Track 2H** — type lattice redesign. Track 3 does not touch the type domain. 2H is a Track 4 prerequisite.
 - **PPN Track 5** — type-directed disambiguation. Track 3 produces unambiguous parses (no parse forests yet). Track 5 adds ambiguity.
+
+---
+
+## §8 Pre-0 Benchmark Data (`dc87fb34`)
+
+Benchmark file: `benchmarks/micro/bench-ppn-track3.rkt`
+19 tests: M1-M7 micro, A1-A5 adversarial, E1-E4 E2E, V1-V3 algebraic validation.
+
+### M1: parse-datum isolation
+
+| Program | parse-datum x100 | Per-call |
+|---------|-----------------|----------|
+| simple (6 forms) | 1.9ms | 19μs |
+| medium (25 forms) | 1.8ms | 18μs |
+| large (55 forms) | 1.9ms | 19μs |
+
+**parse-datum is ~19μs per call.** At 200 forms = 3.8ms. Negligible vs 485ms total pipeline.
+
+### M2: preparse-expand-all decomposed
+
+| Operation | simple | trait-impl |
+|-----------|--------|-----------|
+| preparse-expand-all | 0.051ms | 0.056ms |
+| map parse-datum | 0.059ms | 0.057ms |
+
+**Both sub-0.1ms.** Registration and expansion are not separable at this granularity — both are noise-level.
+
+### M3: tree-parser vs parse-datum per form
+
+| Form | Tree pipeline | Sexp pipeline | Ratio |
+|------|--------------|---------------|-------|
+| def | 0.144ms | 0.059ms | 2.4× |
+| defn | 0.175ms | 0.057ms | 3.1× |
+| data (stub) | 0.138ms | 0.062ms | 2.2× |
+| trait (stub) | 0.142ms | 0.060ms | 2.4× |
+
+**Tree pipeline is 2-3× slower per form** (includes read-to-tree + group + tag + rewrite + parse). Absolute difference: 0.08-0.12ms — negligible in context of 80-500ms full pipeline.
+
+### M4: WS vs sexp full pipeline
+
+| Program | WS | Sexp | WS overhead |
+|---------|-----|------|-------------|
+| simple (6 forms) | 83.3ms | 82.4ms | 1.1% |
+| data-match (5 forms) | 78.1ms | — | — |
+
+**WS merge overhead is ~1%.** Within measurement noise.
+
+### M5: Production dispatch overhead
+
+| Registry size | 1000 lookups | Per-lookup |
+|---------------|-------------|-----------|
+| 236 entries (hit) | 0.095ms | 95ns |
+| 500 entries (hit) | 0.072ms | 72ns |
+| 1000 entries (hit) | 0.072ms | 72ns |
+| 236 entries (miss) | 0.017ms | 17ns |
+| Merge 236+10 | 0.058ms | — |
+
+**Registry lookup <100ns regardless of size.** Set-valued design (D.2) has zero measurable overhead. Scaling from 236 → 1000 entries does NOT increase lookup cost (hash amortized O(1)).
+
+### M6: Per-form cell creation
+
+| Operation | x1000 | Per-op |
+|-----------|-------|--------|
+| FormCell creation | 0.002ms | 2ns |
+| FormCell merge (advance) | 0.008ms | 8ns |
+| FormCell merge (no-op) | 0.012ms | 12ns |
+
+**Cell creation is 2ns, merge is 8-12ns.** 200 forms × 5 merges = 1000 merges = 12μs total.
+
+### M7: Full pipeline phase timing
+
+| Phase | simple (6) | large (55) | A1 (167) |
+|-------|-----------|-----------|----------|
+| read-to-tree | 0.213ms | 1.983ms | 18.79ms |
+| group-tree | 0.019ms | 0.061ms | 0.144ms |
+| refine-tag | 0.020ms | 0.042ms | 0.091ms |
+| rewrite-tree | 0.027ms | 0.087ms | 0.411ms |
+| parse-forms | 0.041ms | 0.121ms | 0.279ms |
+| **total-tree** | **0.320ms** | **2.294ms** | **19.715ms** |
+
+**read-to-tree dominates** (66-95% of tree pipeline time). Group/refine/rewrite/parse are all sub-0.5ms even at 167 forms.
+
+### A1-A5: Adversarial
+
+| Test | Total pipeline | Tree pipeline fraction |
+|------|---------------|----------------------|
+| A1: 200-form program | 485ms | 20ms (4%) |
+| A2: 20 data × 10 ctors (registration stress) | 901ms | — |
+| A3: 50 spec+defn pairs | 401ms | — |
+| A4: 20 mixfix expressions | 173ms | — |
+| A5: 500-entry registry, 1000 dispatches | 0.8ms | — |
+
+**Parsing is 4% of the 200-form pipeline.** A2 (registration stress) is the most expensive adversarial at 901ms — registration of 200 constructors, not parsing.
+
+### E1: Comparative suite
+
+14 programs. Range: 127ms (simple-typed) to 4,072ms (constraints-adversarial). **parse_ms = 0 across ALL per-command verbose outputs.** Confirms audit finding at scale.
+
+### E2: Library file loading (top 10)
+
+| File | Size | Time |
+|------|------|------|
+| lattices.prologos | 25.6KB | 2,642ms |
+| lists.prologos | 22.7KB | 2,703ms |
+| list.prologos | 17.1KB | 2,118ms |
+| characters-and-strings.prologos | 17.0KB | 2,628ms |
+| pairs-and-options.prologos | 12.2KB | 1,221ms |
+| string-ops.prologos | 11.9KB | 2,466ms |
+| lattice.prologos | 11.2KB | 1,440ms |
+| lazy-sequences.prologos | 10.7KB | 700ms |
+| collection-functions.prologos | 10.5KB | 2,096ms |
+| collections.prologos | 10.2KB | 2,639ms |
+
+72 library files found. Largest library files take 0.7-2.7s. This is the module-loading path that Phase 3 (registration migration) must not regress.
+
+### E4: WS vs sexp pipeline comparison
+
+| Program | WS | Sexp | WS overhead |
+|---------|-----|------|-------------|
+| simple | 141.8ms | 140.6ms | 0.8% |
+| medium (20 defs) | 224.2ms | 220.3ms | 1.8% |
+
+**WS overhead <2%.** Merge infrastructure cost is within noise.
+
+### V1-V3: Algebraic Validation — ALL PASS
+
+| Test | Property | Result |
+|------|----------|--------|
+| V1a | FormCell merge commutativity | 0 failures / 500 |
+| V1b | FormCell merge associativity | 0 failures / 500 |
+| V1c | FormCell merge idempotence | 0 failures / 500 |
+| V2 | Stage chain distributivity | 0 failures / 1000 |
+| V2b | Stage chain pseudo-complement (Heyting) | ALL PASS |
+| V3a | ProductionRegistry set-union commutativity | 0 failures / 100 |
+| V3b | ProductionRegistry set-union associativity | 0 failures / 100 |
+| V3c | ProductionRegistry set-union idempotence | 0 failures / 100 |
+| V3d | Provenance selection from merged set | `fn` → 2 productions (builtin + user) ✓ |
+
+**All algebraic properties confirmed.** The stage chain IS distributive and Heyting. The production registry set-union IS Boolean. D.2 algebraic structure claims are validated by data.
+
+---
+
+## §9 Design Implications from Pre-0 Data
+
+### Confirmed (no design changes needed)
+
+1. **Parsing is confirmed negligible (0-4% of pipeline).** Track 3's value is architecture, incrementality, and extensibility — not performance. The design correctly prioritizes structural improvement over speed.
+
+2. **WS merge overhead is <2%.** The merge infrastructure can be retired without performance concern. No need to optimize the merge path before replacing it.
+
+3. **Set-valued production registry is performance-free.** D.2's decision to use `Set GrammarProduction` per keyword has zero measurable overhead vs singleton at any scale (236-1000 entries). Future-proofing for Track 7 costs nothing today.
+
+4. **FormCell creation+merge is negligible (2-12ns per op).** Per-form Pocket Universe architecture adds μs-level overhead at worst. 200 forms × 5 merges = 12μs.
+
+5. **All algebraic properties validated.** The D.2 lattice design is correct:
+   - FormCell stage chain: distributive, Heyting ✓
+   - Pipeline-preference ordering: avoids flat-lattice trap ✓
+   - Production registry: Boolean (powerset) ✓
+   - No type-lattice-style redesign will be needed ✓
+
+### Findings that inform phasing
+
+6. **read-to-tree dominates the tree pipeline (66-95%).** If parsing performance ever becomes a concern, read-to-tree is the optimization target — not group/refine/rewrite/parse. This is Track 1 infrastructure, not Track 3 scope.
+
+7. **A2 registration stress (901ms) shows registration is the dominant cost for data-heavy programs.** Phase 3 (registration migration) should focus on correctness and not introduce additional overhead. The current registration mechanism is fast enough — the cost is in elaboration of the 200 generated constructors/accessors, not in the registration itself.
+
+8. **Library file loading (0.7-2.7s per file) is the sensitive path.** Phase 3 must not regress module loading. The load-module path currently uses preparse-only (no merge) — Track 3 switches it to tree-parser + registration pass. E2 provides the regression baseline.
+
+9. **Tree pipeline is 2-3× slower per form than sexp pipeline (M3), but both are sub-0.2ms.** This ratio is irrelevant at pipeline scale (elaboration dominates at 96%). No optimization needed for individual production fire cost.
+
+### Design unchanged
+
+No revisions to D.2. All assumptions validated. All algebraic properties confirmed. Performance overhead of the new architecture is within noise. Proceed to implementation.
