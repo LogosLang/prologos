@@ -111,7 +111,7 @@
        [(group) (parse-group-tree children loc)]
 
        ;; --- Sentinel forms ---
-       [(list-literal) (parse-list-literal-tree args loc)]
+       [(list-literal list-literal-group) (parse-list-literal-tree children loc)]
        [(quote) (parse-quote-tree args loc)]
 
        ;; --- Session forms ---
@@ -1218,6 +1218,63 @@
                   #t]
                  [else (check (cdr rest))])))
         (parse-error-result loc "pipe/compose in expression: handled by preparse")]
+       ;; §11 G1: Narrowing infix = detection
+       ;; (expr1 expr2 ... = exprN) with ?-prefixed variables → surf-narrow
+       ;; (expr1 = expr2) without ?-vars → eq-check via parse-datum
+       [(let ([eq-pos (for/or ([c (in-list children)] [i (in-naturals)])
+                        (and (token-entry? c) (equal? (token-entry-lexeme c) "=")
+                             (> i 0) i))])
+          (and eq-pos
+               ;; Check for ?-prefixed variables in children
+               (for/or ([c (in-list children)])
+                 (and (token-entry? c)
+                      (let ([lex (token-entry-lexeme c)])
+                        (and (> (string-length lex) 1)
+                             (char=? (string-ref lex 0) #\?)))))))
+        ;; Narrowing: split at = into LHS and RHS
+        (define eq-pos (for/or ([c (in-list children)] [i (in-naturals)])
+                         (and (token-entry? c) (equal? (token-entry-lexeme c) "=")
+                              (> i 0) i)))
+        (define lhs-items (take children eq-pos))
+        (define rhs-items (drop children (+ eq-pos 1)))
+        (define lhs (if (= (length lhs-items) 1) (parse-form-tree (car lhs-items))
+                        (parse-application-tree lhs-items loc)))
+        (define rhs (if (= (length rhs-items) 1) (parse-form-tree (car rhs-items))
+                        (parse-application-tree rhs-items loc)))
+        ;; Collect ?-variables and constraint maps
+        (define qvars
+          (for/list ([c (in-list children)]
+                     #:when (and (token-entry? c)
+                                 (let ([lex (token-entry-lexeme c)])
+                                   (and (> (string-length lex) 1)
+                                        (char=? (string-ref lex 0) #\?)))))
+            ;; Extract variable name (strip ? prefix and :constraint suffix)
+            (let* ([lex (token-entry-lexeme c)]
+                   [base (if (string-contains? lex ":")
+                             (car (string-split lex ":"))
+                             lex)])
+              (string->symbol base))))
+        ;; Build constraint map from ?x:Type patterns
+        (define cmap
+          (for/fold ([m (hasheq)])
+                    ([c (in-list children)]
+                     #:when (and (token-entry? c)
+                                 (let ([lex (token-entry-lexeme c)])
+                                   (and (> (string-length lex) 1)
+                                        (char=? (string-ref lex 0) #\?)
+                                        (string-contains? lex ":")))))
+            (let* ([lex (token-entry-lexeme c)]
+                   [parts (string-split lex ":")]
+                   [var-name (string->symbol (car parts))]
+                   [type-name (and (>= (length parts) 2) (string->symbol (cadr parts)))])
+              (if type-name
+                  (hash-set m var-name (list type-name))
+                  m))))
+        (cond
+          [(prologos-error? lhs) lhs]
+          [(prologos-error? rhs) rhs]
+          [else (surf-narrow lhs rhs qvars loc cmap)])]
+       ;; No = with ?-vars → application
        [else (parse-application-tree children loc)])]))
 
 (define (parse-bracket-group-tree children loc)
@@ -1281,9 +1338,16 @@
     [else (surf-app (car parsed) (cdr parsed) loc)]))
 
 (define (parse-list-literal-tree args loc)
-  ;; Already rewritten by expand-list-literal to cons chain
-  ;; If not rewritten, handle here
-  (parse-error-result loc "list-literal: should have been rewritten"))
+  ;; '[1 2 3] → (cons 1 (cons 2 (cons 3 nil)))
+  (let loop ([remaining args])
+    (if (null? remaining)
+        (surf-nil loc)
+        (let ([elem (parse-form-tree (car remaining))])
+          (if (prologos-error? elem) elem
+              (let ([rest-list (loop (cdr remaining))])
+                (if (prologos-error? rest-list) rest-list
+                    (surf-app (surf-var 'cons loc)
+                              (list elem rest-list) loc))))))))
 
 (define (parse-quote-tree args loc)
   (parse-error-result loc "quote: not yet implemented"))
