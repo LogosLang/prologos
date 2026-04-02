@@ -14,6 +14,7 @@
 ;;;
 
 (require racket/set
+         racket/list
          "elaborator-network.rkt"
          "elab-network-types.rkt"
          "parse-reader.rkt"
@@ -67,15 +68,16 @@
 ;; creates one cell per top-level form node.
 ;; Each cell starts with (seteq) transforms and the raw tree-node.
 ;;
-;; Returns: (values updated-enet (hasheq source-line -> cell-id))
+;; Returns: (values updated-enet (hasheq source-line -> cell-id) (hasheq source-line -> raw-node))
 (define (create-form-cells-from-tree pt enet)
   (define top-forms (tree-top-level-forms pt))
 
   (let loop ([remaining top-forms]
              [current-enet enet]
-             [cell-map (hasheq)])
+             [cell-map (hasheq)]
+             [raw-map (hasheq)])
     (if (null? remaining)
-        (values current-enet cell-map)
+        (values current-enet cell-map raw-map)
         (let* ([node (car remaining)]
                [loc (and (parse-tree-node? node)
                          (parse-tree-node-srcloc node))]
@@ -90,9 +92,8 @@
             (elab-new-infra-cell current-enet pv form-cell-merge-fn))
           (loop (cdr remaining)
                 new-enet
-                (if line
-                    (hash-set cell-map line cell-id)
-                    cell-map))))))
+                (if line (hash-set cell-map line cell-id) cell-map)
+                (if line (hash-set raw-map line node) raw-map))))))
 
 ;; ========================================
 ;; Cell access
@@ -198,19 +199,9 @@
       [(functor)  (process-functor (rewrite-implicit-map datum)) '()]
       [(precedence-group) '()]  ;; registration only
       [(specialize) '()]  ;; registration only
-      ;; Category 3: have surf-* structs — parse via datum conversion
-      ;; Returns '(datum) so defs-to-surfs will call parse-datum on it
-      [(strategy)    (list datum)]
-      [(schema)      (list datum)]
-      [(capability)  (list datum)]
-      [(session)     (list datum)]
-      [(defproc)     (list datum)]
-      [(defr)        (list datum)]
-      [(solver)      (list datum)]
-      [(proc)        (list datum)]
-      [(spawn)       (list datum)]
-      [(spawn-with)  (list datum)]
-      [(foreign)     (list datum)]
+      ;; Category 3: forms that USED to be in consumed-form but now go through
+      ;; the general single-parser path (raw node → datum → expand → parse).
+      ;; Returning '() makes them fall through to the general handler.
       ;; ns/imports/exports: consumed, no surfs produced
       ;; Their side effects (namespace setup, module loading) happen in preparse
       [(ns imports exports) '()]
@@ -222,6 +213,89 @@
              #:when (pair? d))
     (parse-datum (datum->syntax #f d))))
 
+;; Helper: restructure infix = in a top-level datum.
+;; (add ?a 3N = 5N) → (= (add ?a 3N) 5N)
+;; Same as macros.rkt's maybe-restructure-infix-eq (not exported).
+(define (restructure-infix-eq datum)
+  (if (not (and (pair? datum) (list? datum))) datum
+      (let ([eq-idx (let loop ([ts datum] [i 0])
+                      (cond
+                        [(null? ts) #f]
+                        [(and (symbol? (car ts)) (eq? (car ts) '=) (> i 0)) i]
+                        [else (loop (cdr ts) (+ i 1))]))])
+        (if eq-idx
+            (let* ([lhs-ts (take datum eq-idx)]
+                   [rhs-ts (drop datum (+ eq-idx 1))]
+                   [lhs (if (= (length lhs-ts) 1) (car lhs-ts) lhs-ts)]
+                   [rhs (if (= (length rhs-ts) 1) (car rhs-ts) rhs-ts)])
+              (list '= lhs rhs))
+            datum))))
+
+;; Helper: flatten WS indentation groups in a datum.
+;; tree-node->stx-form produces (keyword arg1 (:key :val) (:key2 :val2))
+;; where indent-block children become nested lists. Flatten these so
+;; preparse-expand-single/parse-datum sees flat keyword-value sequences.
+(define (flatten-ws-datum datum)
+  (if (not (pair? datum)) datum
+      (cons (car datum)  ;; keep the head (keyword)
+            (apply append
+              (for/list ([item (in-list (cdr datum))])
+                (cond
+                  ;; Nested list that starts with a keyword symbol (:name)
+                  ;; → splice its contents
+                  [(and (pair? item) (symbol? (car item))
+                        (let ([s (symbol->string (car item))])
+                          (and (> (string-length s) 1)
+                               (char=? (string-ref s 0) #\:))))
+                   item]  ;; splice the list contents
+                  ;; Nested list from indent grouping → splice
+                  [(and (pair? item) (not (eq? (car item) '$brace-params))
+                        (not (eq? (car item) '$angle-type))
+                        (not (eq? (car item) '$list-literal))
+                        (not (eq? (car item) '$nat-literal))
+                        (not (eq? (car item) '$approx-literal))
+                        (not (eq? (car item) '$decimal-literal))
+                        (not (eq? (car item) '$set-literal))
+                        (not (eq? (car item) '$vec-literal))
+                        (not (eq? (car item) '$foreign-block))
+                        (not (eq? (car item) '$typed-hole))
+                        (not (eq? (car item) '$solver-config))
+                        (not (eq? (car item) 'quote))
+                        (not (eq? (car item) '$quote)))
+                   ;; This might be an indent group — splice if all symbols
+                   ;; But be conservative: only splice if it looks like a KV group
+                   (if (and (>= (length item) 2)
+                            (symbol? (car item))
+                            (let ([s (symbol->string (car item))])
+                              (and (> (string-length s) 1)
+                                   (char=? (string-ref s 0) #\:))))
+                       item  ;; splice keyword group
+                       (list item))]  ;; keep as-is
+                  [else (list item)]))))))
+
+;; Helper: normalize WS-specific tokens in a datum.
+;; !! → AsyncSend, ?? → AsyncRecv, ! → Send, ? → Recv
+;; These are WS-mode tokens that preparse-expand-all normalizes in Pass 2.
+(define (normalize-ws-tokens datum)
+  (cond
+    [(not (pair? datum)) datum]
+    [(symbol? datum)
+     (case datum
+       [(!!)  'AsyncSend]
+       [(??)  'AsyncRecv]
+       [else datum])]
+    [else
+     (map (lambda (item)
+            (cond
+              [(symbol? item)
+               (case item
+                 [(!!)  'AsyncSend]
+                 [(??)  'AsyncRecv]
+                 [else item])]
+              [(pair? item) (normalize-ws-tokens item)]
+              [else item]))
+          datum)]))
+
 ;; Helper: convert a tree-node to a datum for preparse-expand-form fallback.
 ;; Uses tree-node->stx-form which produces a single syntax object
 ;; representing the entire form (grouped, like the compat reader output).
@@ -231,48 +305,53 @@
     (if stx (syntax->datum stx) #f)))
 
 (define (extract-surfs-from-form-cells enet cell-map
-                                        #:source-str [source-str #f])
+                                        #:source-str [source-str #f]
+                                        #:raw-map [raw-map (hasheq)])
+  ;; ONE PARSER strategy: convert RAW tree-node to datum via tree-node->stx-form,
+  ;; then preparse-expand-form + parse-datum. This produces IDENTICAL surfs to the
+  ;; merge pipeline because it uses the SAME parse-datum. No dual representation.
+  ;;
+  ;; Special cases:
+  ;; - Side-effect-only forms (ns, spec, bundle, etc.): suppressed
+  ;; - Generated-def forms (data, trait, impl): process-consumed-form returns def lists
   (define pairs
     (for/fold ([acc '()])
               ([(line cell-id) (in-hash cell-map)])
       (define pv (elab-cell-read enet cell-id))
       (define node (form-pipeline-value-tree-node pv))
-      (if (not node)
-          acc
-          (let ([surf (parse-form-tree node)])
+      (if (not node) acc
+          (let ([tag (parse-tree-node-tag node)])
             (cond
-              ;; Non-error: tree-parser handled this form → one surf
-              [(not (prologos-error? surf))
-               (cons (cons line (list surf)) acc)]
-              ;; Error: try consumed form handler first (data/trait/impl etc.)
-              [else
-               (define tag (parse-tree-node-tag node))
+              ;; Side-effect-only OR session sublanguage (needs special WS desugaring): no surfs
+              ;; Session forms require body chaining (!!→AsyncSend+continuation) that
+              ;; preparse-expand-all handles in Pass 2. Single-expand can't replicate this.
+              ;; Tracked for future session tree-parser implementation.
+              [(memq tag '(ns imports exports spec deftype bundle defmacro property
+                           functor schema precedence-group specialize
+                           session defproc proc spawn spawn-with))
+               acc]
+              ;; Generated-def forms: process-consumed-form returns sexp lists
+              [(memq tag '(data trait impl))
                (define gen-defs (process-consumed-form tag node))
-               (cond
-                 ;; Generated defs from consumed form
-                 [(not (null? gen-defs))
-                  (let ([surfs (defs-to-surfs gen-defs)])
-                    (if (null? surfs) acc
-                        (cons (cons line surfs) acc)))]
-                 ;; No generated defs — check if it's a known side-effect-only form
-                 ;; These produce NO surfs (ns, imports, exports, deftype, bundle, etc.)
-                 [(memq tag '(ns imports exports spec deftype bundle defmacro property
-                              functor schema precedence-group specialize
-                              ;; spec is consumed by preparse (registration)
-                              ;; but tree-parser also has a stub for it
-                              ))
-                  acc]  ;; side-effect-only: no surfs
-                 ;; Unknown form with no handler — try preparse-expand-form fallback
-                 [else
-                  (define datum (tree-node-to-datum node source-str))
-                  (if (not datum)
-                      acc
-                      (with-handlers ([exn:fail? (lambda (e) acc)])
-                        (define expanded (preparse-expand-form datum))
-                        (define s (parse-datum (datum->syntax #f expanded)))
-                        (if (prologos-error? s)
-                            acc
-                            (cons (cons line (list s)) acc))))])])))))
+               (if (null? gen-defs) acc
+                   (let ([surfs (defs-to-surfs gen-defs)])
+                     (if (null? surfs) acc
+                         (cons (cons line surfs) acc))))]
+              ;; ALL other forms: RAW node → datum → normalize → expand → parse-datum
+              [else
+               (define raw-node (hash-ref raw-map line #f))
+               (define use-node (or raw-node node))
+               (define datum (tree-node-to-datum use-node source-str))
+               (if (not datum) acc
+                   (with-handlers ([exn:fail? (lambda (e) acc)])
+                     ;; Normalize WS datum: flatten groups + restructure infix = + session tokens
+                     (define flat-datum (flatten-ws-datum datum))
+                     (define eq-datum (restructure-infix-eq flat-datum))
+                     (define norm-datum (normalize-ws-tokens eq-datum))
+                     (define expanded (preparse-expand-single norm-datum))
+                     (define s (parse-datum (datum->syntax #f expanded)))
+                     (if (prologos-error? s) acc
+                         (cons (cons line (list s)) acc))))])))))
   ;; Sort by source line, flatten surf lists
   (define sorted (sort pairs < #:key car))
   (apply append (map cdr sorted)))

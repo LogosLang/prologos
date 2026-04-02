@@ -1499,7 +1499,7 @@
   (define net-box (current-prop-net-box))
   (when net-box
     (define enet (unbox net-box))
-    (define-values (enet1 cell-map) (create-form-cells-from-tree pt enet))
+    (define-values (enet1 cell-map _raw-map) (create-form-cells-from-tree pt enet))
     (define enet2 (dispatch-form-productions enet1 cell-map))
     ;; Phase 3a: extract spec cells
     (define-values (enet3 spec-map) (extract-specs-from-form-cells enet2 cell-map))
@@ -1604,15 +1604,24 @@
   (define pt (read-to-tree s))
   (define net-box (current-prop-net-box))
   (define enet (unbox net-box))
-  (define-values (enet1 cell-map) (create-form-cells-from-tree pt enet))
+  (define-values (enet1 cell-map raw-map) (create-form-cells-from-tree pt enet))
   (define enet2 (dispatch-form-productions enet1 cell-map))
   (define-values (enet3 spec-map) (extract-specs-from-form-cells enet2 cell-map))
   (set-box! net-box enet3)
   (current-form-cell-map cell-map)
   (current-spec-cell-map spec-map)
 
-  ;; Step 3: MERGE path (proven) for surfs
-  (define surfs (merge-preparse-and-tree-parser s preparse-surfs))
+  ;; Step 3: Cell surfs PRIMARY via single-parser path.
+  ;; ONE parser (parse-datum), ONE representation.
+  ;; Session sublanguage forms suppressed (need WS body chaining) → fewer surfs.
+  ;; When cell has fewer surfs, fall back to preparse for complete coverage.
+  (define cell-surfs (extract-surfs-from-form-cells enet3 cell-map
+                       #:source-str s #:raw-map raw-map))
+  (define clean-preparse (filter (lambda (s) (not (prologos-error? s))) preparse-surfs))
+  (define surfs
+    (if (< (length cell-surfs) (length clean-preparse))
+        clean-preparse  ;; session forms dropped → use preparse
+        cell-surfs))    ;; cell path covers all forms
   (process-surfs surfs))
 
 ;; PPN Track 3: merge cell surfs with preparse surfs.
