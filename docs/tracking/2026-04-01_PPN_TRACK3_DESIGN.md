@@ -34,7 +34,7 @@
 | 5 | Dependency-set Pocket Universe | ✅ | `9f3c63dc`. Powerset transforms. |
 | 6 | Per-form cells + production dispatch | ✅ | `7a2a4bd0`. One cell per form on elab-network. |
 | 7 | Cell pipeline wired into driver | ✅ | `40d07caa` + `5d3b597c`. extract-surfs-from-form-cells produces ALL surfs. No merge. |
-| 8 | parser.rkt role | ✅ REDEFINED | parser.rkt IS the single parser — `parse-datum` used by both sexp path and cell pipeline's datum conversion. Not retired — CENTRAL. Original "demote to sexp shim" goal is N/A: the single-parser architecture uses parse-datum as the canonical parser. |
+| 8 | parser.rkt retirement | ⬜ RESTORED | §11 pivot: tree-parser is canonical. parse-datum retired from WS path. Requires G1-G7 gap closure (§11.4). |
 | 9 | Acceptance + A/B benchmarks + verification | ✅ | 383/383 GREEN, 7491 tests, 133.0s. A/B: zero meaningful regression (14 programs, 5 runs). 2 "significant" within noise (±3.5%). Acceptance: 0 errors. |
 | 10 | PIR + documentation | ✅ | [PIR](2026-04-02_PPN_TRACK3_PIR.md). 16 questions answered. 11-PIR longitudinal survey. |
 
@@ -1222,3 +1222,77 @@ Both paths produce surf-* structs that feed into `process-command` (driver.rkt).
 | D3-R3: Generated definitions injection mechanism unspecified | HIGH | Design must detail how register-from-surfs injects generated defs into the form pipeline. |
 
 **D3-R1 through D3-R3 are the critical findings.** The design underestimates Phase 3 scope. The registration migration is not "call the same functions" — it's extracting registration logic from 3,017 lines of interleaved parsing+registration code. This may warrant splitting Phase 3 into sub-phases (3a: extract registration-only logic, 3b: wire into post-tree-parse pass, 3c: handle generated defs).
+
+---
+
+## §11 Pivot: Tree-Canonical Parsing (Post-PIR)
+
+### 11.1 The Problem with Datum-Canonical
+
+The PIR (§14-15) identified that the single-parser datum conversion path (`raw node → datum → preparse-expand-single → parse-datum`) keeps parsing OFF-network. `parse-datum` is a pure function — no cells, no propagators, no lattice computation. This contradicts the Track 3 vision (parsing IS propagator fixpoint) and blocks:
+
+- **Track 4**: Parse/elaborate boundary dissolution requires surfs IN cells, not returned from a function.
+- **Track 7**: User-defined grammar extensions need productions as propagators, not additions to parse-datum's hardcoded dispatch.
+- **Track 8**: Incremental re-parsing needs cell-level change tracking, not full re-parse via `parse-datum`.
+- **Self-hosting**: parse-datum is a Racket function, not expressible in Prologos or observable on-network.
+
+### 11.2 The Pivot: Tree-Parser Canonical
+
+**Tree-parsing is canonical. Datums are derived therefrom.**
+
+`parse-form-tree` IS the parser for the WS path. It produces surf-* structs directly from tree-nodes — ON the network (surfs written to per-form cells). `parse-datum` becomes a sexp compatibility shim: used only by `process-string` (REPL/test sexp path). The WS path never calls `parse-datum`.
+
+**parser.rkt is genuinely retired from the WS pipeline.** Not "central" (as the datum-canonical path made it), not "redefined" — RETIRED. The sexp path retains it; the WS path does not.
+
+### 11.3 What Exists (from Track 3 implementation)
+
+Tree-parser already handles most forms correctly:
+
+| Category | Forms | Status |
+|----------|-------|--------|
+| Core | def, defn, spec, fn, if, when, check, infer, eval | ✅ parse-form-tree |
+| Expression desugar | cond, let, do | ✅ parse-cond-expr, parse-let-expr, parse-do-expr |
+| Data types | data, trait, impl | ✅ process-consumed-form → process-data/trait/impl |
+| Simple forms | subtype, selection | ✅ parse-subtype-tree, parse-selection-tree |
+| Rewrites | pipe, compose, mixfix | ✅ surface-rewrite.rkt |
+| Groups | bracket, angle, brace, paren | ✅ parse-*-group-tree |
+| Application, match, arrows | General expressions | ✅ parse-expr-tree |
+
+### 11.4 What Remains (Gaps for Tree-Canonical)
+
+| Gap | Form | Root cause | Estimated effort |
+|-----|------|-----------|-----------------|
+| G1 | Narrowing infix `=` | `add ?a 3N = 5N` — need `=` restructured at expression level | 20 lines: detect `=` with `?`-vars in parse-expr-tree, split LHS/RHS, produce surf-narrow |
+| G2 | Strategy WS keywords | `:fairness :priority` nested in indent groups | 15 lines: parse-strategy-tree flattens keyword groups |
+| G3 | Session body chaining | `!! Nat end` → `(AsyncSend Nat End)` with continuation | 40 lines: parse-session-tree chains body items into nested session types |
+| G4 | defproc body chaining | Same as session but for process definitions | 30 lines: parse-defproc-tree, shares session body chaining |
+| G5 | def `: Type :=` pattern | 5+ arg pattern with colon type annotation + `:=` | ✅ ALREADY FIXED in parse-def-tree this session |
+| G6 | Side-effect-only forms | deftype, bundle, defmacro, property, functor, schema, ns, imports, exports | ✅ Suppressed (no surfs) — registration via preparse side effects |
+| G7 | Session expression forms | proc, spawn, spawn-with, dual, strategy (at expression level) | 20 lines each: parse-*-tree functions converting tree args to surf-* |
+
+Estimated total: ~150-200 lines of tree-parser implementations for G1-G4, G7.
+
+### 11.5 Implementation Plan
+
+| Step | What | Verification |
+|------|------|-------------|
+| 1 | Switch `extract-surfs-from-form-cells` to tree-parser-primary with datum fallback | Acceptance file 0 errors |
+| 2 | Implement G1: narrowing `=` in parse-expr-tree | test-bound-args-01, test-constraint-chain-01, test-first-rest-01 pass |
+| 3 | Implement G2: parse-strategy-tree | test-strategy-ws-01 passes |
+| 4 | Implement G3+G4: session/defproc body chaining | test-session-ws-01, test-session-async-ws-01, test-io-* pass |
+| 5 | Implement G7: proc/spawn/spawn-with/dual tree-parser | test-process-ws-02 passes |
+| 6 | Remove datum fallback entirely | Full suite GREEN with tree-parser-only |
+| 7 | Remove `parse-datum` from WS pipeline | parser.rkt retired from WS path |
+| 8 | Put surfs IN form cells (not extracted as list) | Per-form cells hold surf-* as final value |
+
+**Verification per step, not big-bang.** Each step verified with targeted tests before proceeding.
+
+### 11.6 Phase 8 Restored: parser.rkt Retirement
+
+With tree-canonical parsing, Phase 8 is restored to its original meaning:
+
+- parser.rkt's `parse-datum` is NOT called from the WS pipeline
+- parser.rkt remains for the sexp path (`process-string`)
+- The WS path uses `parse-form-tree` exclusively
+- parser.rkt is a sexp compatibility shim — 6,605 lines, reachable only from test/REPL sexp path
+- Full deletion when sexp path is retired (PM module-loading-on-network)
