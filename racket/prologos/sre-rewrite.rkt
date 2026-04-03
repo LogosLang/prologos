@@ -87,7 +87,10 @@
   (name              ;; symbol — debugging/tracing
    lhs-pattern       ;; pattern-desc — LHS pattern for matching
    interface-keys    ;; (listof symbol) — named K bindings (= sub-cell names)
-   rhs-template      ;; parse-tree-node with $punify-hole markers — the reconstruction template
+   rhs-template      ;; parse-tree-node with $punify-hole markers, or #f for non-template rules
+   apply-fn          ;; (node → node | #f) or #f — custom handler for fold/tree/PU rules.
+                     ;; When present, overrides the default match+instantiate path.
+                     ;; When #f, uses pattern-desc match + template instantiation.
    directionality    ;; 'one-way (Track 2D) or 'equivalence (Track 6 e-graph)
    cost              ;; number (tropical semiring, default 0)
    confluence-class  ;; 'unknown | 'strongly-confluent | 'priority-resolved
@@ -450,18 +453,22 @@
 
 ;; Apply a single SRE rewrite rule to a node.
 ;; Returns the rewritten node on match, or #f on no match.
+;; Dispatches via apply-fn (custom handler) or default match+instantiate.
 (define (apply-sre-rewrite-rule rule node)
-  (define bindings (match-pattern-desc node (sre-rewrite-rule-lhs-pattern rule)))
   (cond
-    [(not bindings) #f]  ;; no match — propagator doesn't fire
-    [(not (sre-rewrite-rule-rhs-template rule))
-     ;; No template (fold/tree rules) — fold rules use apply-fold-rewrite
-     ;; or tree-structural-rewrite directly. This path is for simple span rules.
-     #f]
+    ;; Custom handler: fold/tree/PU rules provide their own apply-fn
+    [(sre-rewrite-rule-apply-fn rule)
+     ((sre-rewrite-rule-apply-fn rule) node)]
+    ;; Default: match pattern-desc + instantiate template
     [else
-     (instantiate-template (sre-rewrite-rule-rhs-template rule) bindings
-       #:srcloc (and (parse-tree-node? node) (parse-tree-node-srcloc node))
-       #:indent (and (parse-tree-node? node) (parse-tree-node-indent node)))]))
+     (define bindings (match-pattern-desc node (sre-rewrite-rule-lhs-pattern rule)))
+     (cond
+       [(not bindings) #f]
+       [(not (sre-rewrite-rule-rhs-template rule)) #f]
+       [else
+        (instantiate-template (sre-rewrite-rule-rhs-template rule) bindings
+          #:srcloc (and (parse-tree-node? node) (parse-tree-node-srcloc node))
+          #:indent (and (parse-tree-node? node) (parse-tree-node-indent node)))])]))
 
 ;; Create a propagator fire function for a rewrite rule.
 ;; The fire function signature matches the propagator protocol:
@@ -561,7 +568,7 @@
     '(cond then else)
     (tpl tag-expr (tpl-const "boolrec") (tpl-const "_")
          (make-hole 'then) (make-hole 'else) (make-hole 'cond))
-    'one-way 0 'strongly-confluent 'V0-2))
+    #f 'one-way 0 'strongly-confluent 'V0-2))
 (verify-rewrite-rule expand-if-3-span)
 (register-sre-rewrite-rule! expand-if-3-span)
 
@@ -580,7 +587,7 @@
     '(result-type cond then else)
     (tpl tag-expr (tpl-const "boolrec") (make-hole 'result-type)
          (make-hole 'then) (make-hole 'else) (make-hole 'cond))
-    'one-way 0 'strongly-confluent 'V0-2))
+    #f 'one-way 0 'strongly-confluent 'V0-2))
 (verify-rewrite-rule expand-if-4-span)
 (register-sre-rewrite-rule! expand-if-4-span)
 
@@ -596,7 +603,7 @@
       #f)
     '(cond body)
     (tpl tag-if (tpl-const "if") (make-hole 'cond) (make-hole 'body) (tpl-const "unit"))
-    'one-way 0 'strongly-confluent 'V0-2))
+    #f 'one-way 0 'strongly-confluent 'V0-2))
 (verify-rewrite-rule expand-when-span)
 (register-sre-rewrite-rule! expand-when-span)
 
@@ -618,7 +625,7 @@
            (tpl tag-expr (make-hole 'name))
            (make-splice 'body))
       (make-hole 'value))
-    'one-way 0 'strongly-confluent 'V0-2))
+    #f 'one-way 0 'strongly-confluent 'V0-2))
 (verify-rewrite-rule expand-let-assign-span)
 (register-sre-rewrite-rule! expand-let-assign-span)
 
@@ -636,7 +643,7 @@
     (tpl tag-expr (tpl-const "fn")
          (make-hole 'bindings)
          (make-splice 'body))
-    'one-way 0 'strongly-confluent 'V0-2))
+    #f 'one-way 0 'strongly-confluent 'V0-2))
 (verify-rewrite-rule expand-let-bracket-span)
 (register-sre-rewrite-rule! expand-let-bracket-span)
 
@@ -691,13 +698,22 @@
 (define (list-literal-step elem acc)
   (tpl tag-expr (tpl-const "cons") elem acc))
 
+(define (apply-expand-list-literal-fold node)
+  (and (parse-tree-node? node)
+       (eq? (parse-tree-node-tag node) 'list-literal)
+       (let ([children (rrb-to-list (parse-tree-node-children node))])
+         (let ([elements (cdr children)])  ;; skip sentinel token
+           (if (null? elements)
+               (tpl-const "nil")
+               (run-fold elements (tpl-const "nil") list-literal-step))))))
+
 (define expand-list-literal-fold
   (sre-rewrite-rule
     'expand-list-literal-fold
     (pattern-desc 'list-literal (list) #f)  ;; tag match only
     '()  ;; K is implicit in fold — elements extracted from node
     #f   ;; no template — fold produces result directly
-    'one-way 0 'strongly-confluent 'V0-2))
+    apply-expand-list-literal-fold 'one-way 0 'strongly-confluent 'V0-2))
 (register-sre-rewrite-rule! expand-list-literal-fold)
 
 ;; --- Fold rule: expand-lseq-literal ---
@@ -708,11 +724,20 @@
             (tpl tag-expr (tpl-const "_") (tpl-const ":") (tpl-const "_"))
             acc)))
 
+(define (apply-expand-lseq-literal-fold node)
+  (and (parse-tree-node? node)
+       (eq? (parse-tree-node-tag node) 'lseq-literal)
+       (let ([children (rrb-to-list (parse-tree-node-children node))])
+         (let ([elements (cdr children)])
+           (if (null? elements)
+               (tpl-const "lseq-nil")
+               (run-fold elements (tpl-const "lseq-nil") lseq-literal-step))))))
+
 (define expand-lseq-literal-fold
   (sre-rewrite-rule
     'expand-lseq-literal-fold
     (pattern-desc 'lseq-literal (list) #f)
-    '() #f 'one-way 0 'strongly-confluent 'V0-2))
+    '() #f apply-expand-lseq-literal-fold 'one-way 0 'strongly-confluent 'V0-2))
 (register-sre-rewrite-rule! expand-lseq-literal-fold)
 
 ;; --- Fold rule: expand-do ---
@@ -720,11 +745,24 @@
 (define (do-step elem acc)
   (tpl tag-expr (tpl-const "let") (tpl-const "_") (tpl-const ":=") elem acc))
 
+(define (apply-expand-do-fold node)
+  (and (parse-tree-node? node)
+       (eq? (parse-tree-node-tag node) 'do)
+       (let ([children (rrb-to-list (parse-tree-node-children node))])
+         (let ([body (cdr children)])  ;; skip do token
+           (cond
+             [(null? body) #f]
+             [(null? (cdr body)) (car body)]  ;; single expr → return it
+             [else
+              (let ([body-except-last (drop-right body 1)]
+                    [last-expr (last body)])
+                (run-fold body-except-last last-expr do-step))])))))
+
 (define expand-do-fold
   (sre-rewrite-rule
     'expand-do-fold
     (pattern-desc 'do (list) #f)
-    '() #f 'one-way 0 'strongly-confluent 'V0-2))
+    '() #f apply-expand-do-fold 'one-way 0 'strongly-confluent 'V0-2))
 (register-sre-rewrite-rule! expand-do-fold)
 
 ;; --- Fold rule: expand-pipe-gt ---
@@ -733,11 +771,19 @@
 (define (pipe-gt-step fn-node acc)
   (tpl 'bracket-group fn-node acc))
 
+(define (apply-expand-pipe-gt-fold node)
+  (and (parse-tree-node? node)
+       (eq? (parse-tree-node-tag node) 'pipe-gt)
+       (let ([children (rrb-to-list (parse-tree-node-children node))])
+         (let ([operands (cdr children)])  ;; skip |> token
+           (and (not (null? operands))
+                (foldl pipe-gt-step (car operands) (cdr operands)))))))
+
 (define expand-pipe-gt-fold
   (sre-rewrite-rule
     'expand-pipe-gt-fold
     (pattern-desc 'pipe-gt (list) #f)
-    '() #f 'one-way 0 'strongly-confluent 'V0-2))
+    '() #f apply-expand-pipe-gt-fold 'one-way 0 'strongly-confluent 'V0-2))
 (register-sre-rewrite-rule! expand-pipe-gt-fold)
 
 ;; --- Fold rule: expand-compose ---
@@ -746,11 +792,22 @@
 (define (compose-step fn-node acc)
   (tpl 'bracket-group fn-node acc))
 
+(define (apply-expand-compose-fold node)
+  (and (parse-tree-node? node)
+       (eq? (parse-tree-node-tag node) 'compose)
+       (let ([children (rrb-to-list (parse-tree-node-children node))])
+         (let ([functions (cdr children)])  ;; skip >> token
+           (and (not (null? functions))
+                (let ([body (foldl compose-step (tpl-const "$_comp") functions)])
+                  (tpl tag-expr (tpl-const "fn")
+                       (tpl tag-expr (tpl-const "$_comp"))
+                       body)))))))
+
 (define expand-compose-fold
   (sre-rewrite-rule
     'expand-compose-fold
     (pattern-desc 'compose (list) #f)
-    '() #f 'one-way 0 'strongly-confluent 'V0-2))
+    '() #f apply-expand-compose-fold 'one-way 0 'strongly-confluent 'V0-2))
 (register-sre-rewrite-rule! expand-compose-fold)
 
 ;; --- Fold rule: expand-cond ---
@@ -780,11 +837,18 @@
            body))
      (tpl tag-if (tpl-const "if") guard-node body-node acc)]))
 
+(define (apply-expand-cond-fold node)
+  (and (parse-tree-node? node)
+       (eq? (parse-tree-node-tag node) 'cond)
+       (let ([children (rrb-to-list (parse-tree-node-children node))])
+         (let ([arms (cdr children)])  ;; skip cond token
+           (run-fold arms (tpl-const "unit") cond-step)))))
+
 (define expand-cond-fold
   (sre-rewrite-rule
     'expand-cond-fold
     (pattern-desc 'cond (list) #f)
-    '() #f 'one-way 0 'strongly-confluent 'V0-2))
+    '() #f apply-expand-cond-fold 'one-way 0 'strongly-confluent 'V0-2))
 (register-sre-rewrite-rule! expand-cond-fold)
 
 ;; --- Pocket Universe: expand-mixfix ---
@@ -797,13 +861,17 @@
 ;; lambda IS the PU's fire function. The PU framing makes it visible
 ;; to the SRE as a rewrite rule with metadata (strongly-confluent,
 ;; cost 0, stratum V0-2).
+;; NOTE: expand-mixfix-pu intentionally keeps apply-fn = #f.
+;; The existing lambda-based rule in surface-rewrite.rkt handles mixfix
+;; resolution. This span exists for SRE metadata visibility only.
+;; When Phase 7 wires propagators, the lambda-based rule IS the fire function.
 (define expand-mixfix-pu
   (sre-rewrite-rule
     'expand-mixfix-pu
     (pattern-desc 'mixfix-group (list) #f)
     '()  ;; K is internal to the PU (operator/operand cells)
     #f   ;; no template — PU produces result directly
-    'one-way 0 'strongly-confluent 'V0-2))
+    #f 'one-way 0 'strongly-confluent 'V0-2))
 (register-sre-rewrite-rule! expand-mixfix-pu)
 
 ;; ========================================
@@ -876,11 +944,27 @@
     [else child]))
 
 ;; Register quasiquote as a tree-structural rule
+(define (apply-expand-quasiquote-tree node)
+  (and (parse-tree-node? node)
+       (eq? (parse-tree-node-tag node) 'quasiquote)
+       (let ([children (rrb-to-list (parse-tree-node-children node))])
+         (let ([datum-parts (cdr children)])  ;; skip quasiquote token
+           (cond
+             [(null? datum-parts) #f]
+             [(null? (cdr datum-parts))
+              ;; Single child — process directly
+              (quasiquote-position-fn (car datum-parts))]
+             [else
+              ;; Multiple children — wrap in node, process via tree-structural
+              (let ([wrapped (parse-tree-node 'quasiquote-inner
+                              (list->rrb datum-parts) #f 0)])
+                (tree-structural-rewrite wrapped quasiquote-position-fn))])))))
+
 (define expand-quasiquote-tree
   (sre-rewrite-rule
     'expand-quasiquote-tree
     (pattern-desc 'quasiquote (list) #f)
-    '() #f 'one-way 0 'strongly-confluent 'V0-2))
+    '() #f apply-expand-quasiquote-tree 'one-way 0 'strongly-confluent 'V0-2))
 (register-sre-rewrite-rule! expand-quasiquote-tree)
 
 ;; ========================================

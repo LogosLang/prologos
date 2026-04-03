@@ -660,17 +660,17 @@
      (form-pipeline-value (set-add transforms 'v0-1) result regs spos)]
 
     ;; V(0,2): infix + simple + recursive rewrites — needs tagged + grouped
-    ;; SRE Track 2D Phase 7: try SRE rewrite rules first, fall back to lambda rules.
-    ;; SRE rules cover: expand-if-3, expand-if-4, expand-when, expand-let-assign,
-    ;; expand-let-bracket. Lambda rules cover: expand-cond, expand-compose,
-    ;; expand-pipe-gt, expand-mixfix, expand-list-literal, expand-lseq-literal,
-    ;; expand-do, expand-quasiquote. Dual path during migration.
+    ;; SRE Track 2D: 12/13 rules fire via SRE (apply-all-sre-rewrites).
+    ;; Lambda fallback only for expand-mixfix (PU — precedence resolution,
+    ;; apply-fn returns #f, delegates to lambda path).
     [(and (not (set-member? transforms 'v0-2))
           (transform-ready? 'v0-2 transforms))
      (define sre-result (apply-all-sre-rewrites node 'V0-2))
      (define-values (result _)
        (if sre-result
            (values sre-result #t)
+           ;; Lambda fallback: only expand-mixfix reaches here.
+           ;; All other rules fire via SRE.
            (apply-rules node 'V0-2)))
      (form-pipeline-value (set-add transforms 'v0-2) result regs spos)]
 

@@ -232,6 +232,7 @@
         (pattern-desc 'test (list) #f)
         '(x y)
         (make-node 'expr (list (make-hole 'x) (make-hole 'y)))
+        #f  ;; apply-fn
         'one-way 0 'unknown 'V0-2))
       (check-true (verify-rewrite-rule rule)))
 
@@ -241,6 +242,7 @@
         (pattern-desc 'test (list) #f)
         '(x)  ;; K only has x
         (make-node 'expr (list (make-hole 'x) (make-hole 'z)))  ;; z not in K
+        #f  ;; apply-fn
         'one-way 0 'unknown 'V0-2))
       (check-exn exn:fail? (lambda () (verify-rewrite-rule rule))))))
 
@@ -260,22 +262,22 @@
       (define r1 (sre-rewrite-rule 'r1
         (pattern-desc 'tag (list (child-pattern 0 'any #f 'a)
                                  (child-pattern 1 'any #f 'b)) #f)
-        '(a b) #f 'one-way 0 'unknown 'test))
+        '(a b) #f #f 'one-way 0 'unknown 'test))
       (define r2 (sre-rewrite-rule 'r2
         (pattern-desc 'tag (list (child-pattern 0 'any #f 'a)
                                  (child-pattern 1 'any #f 'b)
                                  (child-pattern 2 'any #f 'c)) #f)
-        '(a b c) #f 'one-way 0 'unknown 'test))
+        '(a b c) #f #f 'one-way 0 'unknown 'test))
       (define pairs (find-critical-pairs (list r1 r2)))
       (check-equal? (length pairs) 0))
 
     (test-case "same-arity same-tag rules overlap"
       (define r1 (sre-rewrite-rule 'r1
         (pattern-desc 'tag (list (child-pattern 0 'any #f 'a)) #f)
-        '(a) #f 'one-way 0 'unknown 'test))
+        '(a) #f #f 'one-way 0 'unknown 'test))
       (define r2 (sre-rewrite-rule 'r2
         (pattern-desc 'tag (list (child-pattern 0 'any #f 'b)) #f)
-        '(b) #f 'one-way 0 'unknown 'test))
+        '(b) #f #f 'one-way 0 'unknown 'test))
       (define pairs (find-critical-pairs (list r1 r2)))
       (check-equal? (length pairs) 1))))
 
