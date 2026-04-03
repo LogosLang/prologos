@@ -43,9 +43,9 @@ PPN consumes.
 | 1 | Lexer + structure as propagators (char → structured token tree) | ✅ | [Design D.9](2026-03-26_PPN_TRACK1_DESIGN.md), [Audit](2026-03-26_PPN_TRACK1_STAGE2_AUDIT.md), [PIR](2026-03-26_PPN_TRACK1_PIR.md). **5-cell architecture**: 4 RRB embedded cells + 1 tree M-type cell. 380/380 GREEN. 108 tests. reader.rkt switchover complete. |
 | 2 | Surface normalization as rewriting | ✅ | [Design D.1c+§8](2026-03-28_PPN_TRACK2_DESIGN.md), [PIR](2026-03-29_PPN_TRACK2_PIR.md). reader.rkt DELETED. Tree parser switchover + merge deployed. |
 | 2B | Production deployment + mixfix Pocket Universe | ✅ | [Design §12](2026-03-30_PPN_TRACK2B_DESIGN.md), [PIR](2026-03-30_PPN_TRACK2B_PIR.md). Merge deployed (source-line-keyed). Mixfix claim lattice. Pipe/compose rewrites. `use-tree-parser?` deleted. |
-| 3 | Parser as propagators (chart/Earley, HR productions) | ⬜ | Replaces parser.rkt (~1500 lines). **From Track 1**: needs span-based SRE decomposition. **From Track 2 Phase 11**: retire macros.rkt sexp expanders (~1000 lines) — requires tree parser handling ALL form types (data/trait/impl/spec), making `preparse-expand-all` obsolete. |
+| 3 | Parser as propagators — ON-NETWORK | ✅ | [Design D.5b+§11+§12](2026-04-01_PPN_TRACK3_DESIGN.md), [PIR](2026-04-02_PPN_TRACK3_PIR.md). All forms ON-NETWORK. Per-form cells. SRE domains + ctor-descs. Dependency-set Pocket Universe. Spec cells. parser.rkt retired from WS dispatch. 383/383 GREEN. |
 | 3.5 | **Grammar Form: Research + Design** | ⬜ | [`grammar` vision](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md). Multi-view spec. DPO structural preservation. Full theory + syntax after Tracks 1-3. **From Track 1**: typed productions (NTT-typed rewrite rules). |
-| 4 | Elaboration as attribute evaluation | ⬜ | IS SRE Track 2C. Dissolves parse/elab boundary. |
+| 4 | Elaboration as attribute evaluation | ⬜ | IS SRE Track 2C. Dissolves parse/elab boundary. **From Track 3**: per-form cells, SRE ctor-descs, spec cells. First step: surfs as cell values. See Track 4 detail section. |
 | 5 | Type-directed disambiguation | ⬜ | Backward type→parse flow via Galois bridges. Bilattice (gfp/elimination) added here via WF-LE newtype pattern. |
 | 6 | Error recovery as lattice repair | ⬜ | Tropical semiring optimization. Track 1 writes error cells; Track 6 adds ATMS repair. |
 | 7 | User-defined grammar extensions (`grammar` form) | ⬜ | CAPSTONE. **Notes from Track 1**: token pattern registry migration from hash to cell needed here (dynamic grammar patterns). DPO framework for structural preservation. |
@@ -106,9 +106,19 @@ indentation level is a cell that the lexer rules read.
 - **CALM-compliant stratified pipeline**: Set-once cells between strata
 - **Spec-aware merge**: Generated defs from preparse + user forms from tree parser
 
-### Track 3: Parser as Propagators
+### Track 3: Parser as Propagators ✅ COMPLETE
 
-**What**: Replace `parser.rkt` with grammar-production-based parsing on
+**Status**: COMPLETE (2026-04-02). [Design](2026-04-01_PPN_TRACK3_DESIGN.md), [PIR](2026-04-02_PPN_TRACK3_PIR.md).
+
+**What was delivered**: Per-form cells on elab-network. Tree-parser canonical (§11 pivot): ALL top-level form dispatch ON-NETWORK via `parse-form-tree`. Expression parsing via datum conversion (`parse-datum` as canonical expression parser). SRE integration (§12): FormCell + SpecCell domains registered with property inference, 5 ctor-descs for surf-* decomposition. Dependency-set Pocket Universe (Boolean powerset). Spec cells with collision detection.
+
+**parser.rkt**: Effectively retired from WS form dispatch. Called from on-network dispatch for expression parsing (datum conversion) and from sexp path (`process-string`).
+
+**Preparse**: Retained for registration side effects only (idempotent). PM series migrates to persistent cells.
+
+**Original description** (preserved for reference):
+
+Replace `parser.rkt` with grammar-production-based parsing on
 the network. Each grammar production installs propagators. Parse forests
 (ambiguity) as lattice values.
 
@@ -164,7 +174,25 @@ registered attribute rules. Adding a new type-level construct = registering
 a grammar production + an attribute rule. One action, not 14-file pipeline
 changes.
 
-**From Track 2B**: V(2) spec injection — cross-form attribute flow where one form's `spec` declaration annotates another form's `defn`. Currently handled by spec-aware merge (preparse injects, merge routes). V(2) at tree level requires the elaboration network to mediate cross-form data flow — exactly Track 4's scope.
+**From Track 3 (2026-04-02)**:
+
+Track 3 delivers the foundation that Track 4 builds on:
+
+1. **Per-form cells on elab-network**: Each top-level form has a cell. Track 4 adds TYPE cells and CONSTRAINT cells alongside form cells. The parse/elaborate boundary dissolves because both use the same network.
+
+2. **SRE ctor-descs for surf-* structs** (§12 S4): surf-def, surf-defn, surf-eval, surf-check, surf-narrow have registered decomposition patterns. Track 4's elaboration reads form sub-structure via SRE decomposition (`ctor-desc-extract-fn`), creating typed sub-cells. This is the attribute evaluation pattern: each component gets a cell, propagators connect them.
+
+3. **FormCell SRE domain** (§12 S1): Registered with algebraic properties confirmed by inference (Heyting). Track 4 adds per-expression type domains.
+
+4. **Spec cells** (§12 S3+S5): Spec cells exist on-network with collision detection. Track 4 wires a propagator: when spec cell has value, write spec type to defn's type cell. This replaces the scaffolding `annotate-surfs-with-specs`.
+
+5. **Surfs as cell values**: Track 3 extracts surfs as a list (not in cells). Track 4's FIRST step: put surfs INTO form cells as the final value. This enables propagators to read/write surfs on-network. The spec→defn propagator (S5 completion) becomes possible.
+
+6. **Dependency-set Pocket Universe**: Track 4 can extend the transform set with elaboration-phase transforms (type-inferred, constraints-resolved, etc.).
+
+**Prerequisite ordering**: SRE Track 2H (type lattice redesign) → Grammar Form research → PPN Track 4.
+
+**From Track 2B**: V(2) spec injection — cross-form attribute flow where one form's `spec` declaration annotates another form's `defn`. Track 3 scaffolding (`annotate-surfs-with-specs`). Track 4 replaces with on-network propagator.
 
 **From DEFERRED.md** (relabeled 2026-03-30):
 - TMS-aware infrastructure cells: `restore-meta-state!` cannot be retired until elab-network fields are TMS-managed. This is Track 4 scope (formal propagator edges require TMS-aware cells).
