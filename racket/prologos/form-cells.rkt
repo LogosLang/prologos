@@ -540,3 +540,86 @@
                       'idempotent-join   prop-confirmed)))
 
 (register-domain! spec-cell-sre-domain)
+
+;; ========================================
+;; §12 S4: ctor-desc for surf-* structs
+;; ========================================
+;;
+;; Register recognizer/extractor/reconstructor for key surf-* types
+;; in the 'form-cell domain. This enables Track 4's elaboration to
+;; access form sub-structure via SRE decomposition rather than
+;; direct struct field access.
+
+;; register-ctor! from macros.rkt is for constructor METADATA.
+;; register-ctor! from ctor-registry.rkt is for SRE ctor-desc.
+;; Import ctor-registry's version with a prefix to avoid conflict.
+(require (prefix-in sre: "ctor-registry.rkt"))
+
+;; surf-def: (name type body srcloc) — srcloc included for roundtrip
+(sre:register-ctor! 'surf-def
+ #:arity 4
+ #:recognizer surf-def?
+ #:extract (lambda (v) (list (surf-def-name v) (surf-def-type v)
+                             (surf-def-body v) (surf-def-srcloc v)))
+ #:reconstruct (lambda (vals) (surf-def (first vals) (second vals)
+                                         (third vals) (fourth vals)))
+ #:component-lattices (list 'atom 'type 'type 'atom)
+ #:domain 'form-cell
+ #:sample (surf-def 'x (surf-int-type (srcloc "<s>" 0 0 0))
+                    (surf-int-lit 42 (srcloc "<s>" 0 0 0))
+                    (srcloc "<s>" 0 0 0)))
+
+;; surf-defn: (name type param-names body srcloc)
+(sre:register-ctor! 'surf-defn
+ #:arity 5
+ #:recognizer surf-defn?
+ #:extract (lambda (v) (list (surf-defn-name v) (surf-defn-type v)
+                             (surf-defn-param-names v) (surf-defn-body v)
+                             (surf-defn-srcloc v)))
+ #:reconstruct (lambda (vals) (surf-defn (first vals) (second vals)
+                                          (third vals) (fourth vals)
+                                          (fifth vals)))
+ #:component-lattices (list 'atom 'type 'atom 'type 'atom)
+ #:domain 'form-cell
+ #:sample (surf-defn 'f (surf-int-type (srcloc "<s>" 0 0 0))
+                     '(x) (surf-int-lit 1 (srcloc "<s>" 0 0 0))
+                     (srcloc "<s>" 0 0 0)))
+
+;; surf-eval: (expr srcloc)
+(sre:register-ctor! 'surf-eval
+ #:arity 2
+ #:recognizer surf-eval?
+ #:extract (lambda (v) (list (surf-eval-expr v) (surf-eval-srcloc v)))
+ #:reconstruct (lambda (vals) (surf-eval (first vals) (second vals)))
+ #:component-lattices (list 'type 'atom)
+ #:domain 'form-cell
+ #:sample (surf-eval (surf-int-lit 42 (srcloc "<s>" 0 0 0))
+                     (srcloc "<s>" 0 0 0)))
+
+;; surf-check: (expr type srcloc)
+(sre:register-ctor! 'surf-check
+ #:arity 3
+ #:recognizer surf-check?
+ #:extract (lambda (v) (list (surf-check-expr v) (surf-check-type v) (surf-check-srcloc v)))
+ #:reconstruct (lambda (vals) (surf-check (first vals) (second vals) (third vals)))
+ #:component-lattices (list 'type 'type 'atom)
+ #:domain 'form-cell
+ #:sample (surf-check (surf-int-lit 42 (srcloc "<s>" 0 0 0))
+                      (surf-int-type (srcloc "<s>" 0 0 0))
+                      (srcloc "<s>" 0 0 0)))
+
+;; surf-narrow: (lhs rhs vars srcloc constraint-map)
+(sre:register-ctor! 'surf-narrow
+ #:arity 5
+ #:recognizer surf-narrow?
+ #:extract (lambda (v) (list (surf-narrow-lhs v) (surf-narrow-rhs v)
+                             (surf-narrow-vars v) (surf-narrow-srcloc v)
+                             (surf-narrow-constraint-map v)))
+ #:reconstruct (lambda (vals) (surf-narrow (first vals) (second vals)
+                                            (third vals) (fourth vals)
+                                            (fifth vals)))
+ #:component-lattices (list 'type 'type 'atom 'atom 'atom)
+ #:domain 'form-cell
+ #:sample (surf-narrow (surf-int-lit 1 (srcloc "<s>" 0 0 0))
+                       (surf-int-lit 2 (srcloc "<s>" 0 0 0))
+                       '(?x) (srcloc "<s>" 0 0 0) (hasheq)))
