@@ -19,7 +19,8 @@
          racket/list
          "syntax.rkt"
          "macros.rkt"          ;; subtype-pair?
-         "type-lattice.rkt"    ;; type-top, type-bot, type-lattice-merge, etc.
+         "type-lattice.rkt"    ;; type-top, type-bot, type-lattice-merge, has-unsolved-meta?, etc.
+         "union-types.rkt"     ;; SRE Track 2H: flatten-union, build-union-type
          "propagator.rkt"      ;; SRE Track 1 Phase 4: mini-network for compound checks
          "sre-core.rkt"        ;; SRE Track 1 Phase 4: structural subtype check
          (only-in "ctor-registry.rkt"
@@ -32,6 +33,7 @@
 (provide subtype?
          type-key
          subtype-lattice-merge
+         build-union-type-with-absorption  ;; SRE Track 2H Phase 2
          ;; SRE Track 1 Phase 4: frequency counter for monitoring
          current-subtype-check-count
          ;; Track 1B Phase 1: global counters + reporter
@@ -186,21 +188,73 @@
         (and (not ((sre-domain-contradicts? domain) merged))
              (equal? merged t2))])]))
 
-;; SRE Track 1: Subtype-ordering lattice merge.
+;; ========================================
+;; SRE Track 2H Phase 2: Subtype absorption (SCAFFOLDING)
+;; ========================================
+;; In the permanent network architecture, absorption is emergent from
+;; pairwise cell merges as writes arrive. This explicit algorithm is
+;; scaffolding — the imperative simulation of what the network does.
+
+;; Remove any component that is a subtype of another.
+;; O(n^2) in the number of components — acceptable for typical 2-5 component unions.
+;; Returns a filtered list (may be shorter than input).
+(define (absorb-subtype-components components)
+  (filter
+    (lambda (c)
+      ;; Keep c unless some OTHER component is a strict supertype
+      (not (for/or ([other (in-list components)])
+             (and (not (equal? c other))
+                  (subtype? c other)))))
+    components))
+
+;; Build a canonical union type with subtype absorption.
+;; flatten → sort → dedup → absorb → fold.
+;; Single type → identity. Empty → expr-error.
+(define (build-union-type-with-absorption types)
+  (define flat (append-map flatten-union types))
+  (define sorted (sort flat string<? #:key union-sort-key))
+  (define deduped (dedup-union-components sorted))
+  (define absorbed (absorb-subtype-components deduped))
+  (cond
+    [(null? absorbed) (expr-error)]
+    [(= (length absorbed) 1) (car absorbed)]
+    [else (foldr expr-union (last absorbed) (drop-right absorbed 1))]))
+
+;; ========================================
+;; SRE Track 2H Phase 2: Redesigned subtype-lattice-merge
+;; ========================================
 ;; Returns the join in the subtype ordering:
-;;   subtype-merge(a, b) = b if a <: b
-;;   subtype-merge(a, b) = a if b <: a
-;;   subtype-merge(a, b) = a if a = b
-;;   subtype-merge(a, b) = type-top if incomparable
-;; This is a proper lattice merge (monotone, commutative, associative,
-;; idempotent). Used by the SRE subtype propagator to keep subtyping
-;; fully on-network — no off-network flat-subtype? escape hatch.
+;;   merge(⊥, x) = x             (identity — fixes V1d)
+;;   merge(x, ⊥) = x
+;;   merge(⊤, x) = ⊤             (absorbing)
+;;   merge(a, b) = a if a = b     (idempotent)
+;;   merge(a, b) = b if a <: b    (absorption for comparable)
+;;   merge(a, b) = a if b <: a
+;;   merge(a, b) = union(a, b)    (incomparable → union type, NOT type-top)
+;;
+;; Meta handling: keep concrete side. KNOWN UNSOUNDNESS (F2):
+;; not monotone in the merge function itself — compensated by
+;; solve-meta! + constraint-retry pipeline. Pre-existing pattern
+;; inherited from type-lattice-merge. Retirement: PPN Track 4
+;; ATMS-conditional cell values.
+;;
+;; Monotone, commutative, associative, idempotent. Used by the SRE
+;; subtype propagator to keep subtyping fully on-network.
 (define (subtype-lattice-merge a b)
   (cond
-    [(equal? a b) a]
-    [(subtype? a b) b]
-    [(subtype? b a) a]
-    [else type-top]))
+    [(type-bot? a) b]             ;; identity (fixes V1d)
+    [(type-bot? b) a]
+    [(type-top? a) type-top]      ;; absorbing
+    [(type-top? b) type-top]
+    [(equal? a b) a]              ;; idempotent
+    [(subtype? a b) b]            ;; a ≤ b → join = b
+    [(subtype? b a) a]            ;; b ≤ a → join = a
+    ;; Meta handling (F2): keep concrete side — compensated by solve-meta! pipeline
+    [(or (has-unsolved-meta? a) (has-unsolved-meta? b))
+     (if (has-unsolved-meta? a) b a)]
+    [else
+     ;; Incomparable under subtyping → canonical union with absorption
+     (build-union-type-with-absorption (list a b))]))
 
 ;; Domain spec for structural subtype queries (used by sre-structural-subtype-check above).
 ;; Defined after subtype-lattice-merge since it references it.
