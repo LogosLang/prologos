@@ -1,11 +1,11 @@
 # SRE Track 2H: Type Lattice Redesign — Post-Implementation Review
 
 **Date**: 2026-04-03
-**Duration**: ~8 hours design, ~4 hours implementation. 2 sessions (Apr 2-3).
-**Commits**: 26 (from `b30a7b83` Stage 2 audit through `6e65ba19` A/B data)
-**Test delta**: 7491 → 7491 (+0 new test files; Pre-0 benchmarks extended in-place)
-**Code delta**: ~350 lines added/modified across 14 files. 1 new module (union-types.rkt, 120 lines).
-**Suite health**: 383/383 files, 7491 tests, 131.4s, all pass
+**Duration**: ~8 hours design, ~4 hours implementation, ~2 hours PIR + follow-up. 2 sessions (Apr 2-3).
+**Commits**: 30 (from `b30a7b83` Stage 2 audit through `7050e49b` keyword constructor)
+**Test delta**: 7491 → 7526 (+35 in test-sre-track2h.rkt)
+**Code delta**: ~500 lines added/modified across 16 files. 1 new module (union-types.rkt, 120 lines). 1 new test file.
+**Suite health**: 384/384 files, 7526 tests, 129.9s, all pass
 **Design iterations**: D.1 → D.2 (Pre-0 data) → D.3 (self-critique, 3 lenses) → D.4 (incorporating findings) → D.5 (external critique, 12 findings)
 **Design docs**: [Design](2026-04-02_SRE_TRACK2H_DESIGN.md), [Stage 2 Audit](2026-04-02_SRE_TRACK2H_STAGE2_AUDIT.md)
 **Prior PIRs**: [PPN Track 3](2026-04-02_PPN_TRACK3_PIR.md), [SRE Track 2G](2026-03-30_SRE_TRACK2G_PIR.md), [PPN Track 2B](2026-03-30_PPN_TRACK2B_PIR.md)
@@ -13,7 +13,19 @@
 
 ---
 
-## 1. What Was Built
+## 1. Stated Objectives and Evolution
+
+**Original (D.1)**: Fix the type lattice's subtype ordering to produce union types instead of type-top for incomparable types. Make the subtype lattice Heyting (distributive + pseudo-complement). Per-relation property declarations. Pseudo-complement error reporting.
+
+**Scope expansion (D.3, user challenge)**: The tensor (function application as quantale multiplication) was pulled into scope. Rationale: introducing union types without handling them in function application creates a half-built algebraic structure. The quantale (join + tensor) is the minimal complete structure.
+
+**Final (D.5)**: Full quantale delivery — union-join with absorption, complete meet, tensor (core + scaffolding distribute), tensor-aware elaboration, per-relation properties, pseudo-complement scaffolding. Plus whnf fast-path (independent optimization from Pre-0 data).
+
+**Scope adherence**: 9/9 phases complete. The tensor expansion added 2 phases (4-5 in final numbering) that were not in D.1. The scope GREW in ambition but the implementation was clean — no phases required reverts.
+
+---
+
+## 2. What Was Built
 
 The type lattice under the subtype ordering is now a **quantale** — a distributive lattice (Heyting algebra for the ground sublattice) equipped with a tensor (function application) that distributes over the join. This is the algebraic foundation that PPN Track 4 needs to put elaboration on-network.
 
@@ -30,40 +42,71 @@ Additionally, an independent optimization emerged from Pre-0 data: **whnf fast-p
 
 ---
 
-## 2. Timeline and Phases
+## 3. Timeline and Phases
 
-| Phase | Commit | Key Result |
-|-------|--------|------------|
-| Audit | `b30a7b83` | 11-section Stage 2 audit |
-| Design D.1 | `7b9b8570` | 8-phase design (later 9 after tensor scope expansion) |
-| Tensor scope | `a9dc9112` | Pulled tensor into Track 2H scope (full quantale) |
-| Pre-0 | `a8023d58` | 30 benchmarks, 5 tiers. Design unchanged by data. |
-| whnf fast-path | `92006da8` | Independent optimization: 150μs → 0.24μs for atoms |
-| D.3 self-critique | `3f22d1ad` | 10 findings (R1 blocker: circular dep, M3 win: core/scaffolding tensor split) |
-| D.5 external critique | `f8369678` | 12 findings (F1: bot-on-failure, F7: Heyting scoped to ground, F11: merge phases 2+3) |
-| ATMS doc | `51f5d9d4` | Documented speculation retirement for Track 4 |
-| Vision Alignment Gate | `621e4e89` | New process rule codified from Track 3 deviations |
-| Phase 1 | `7a91db47` | union-types.rkt extracted (eliminates 3-function duplication) |
-| Phase 2 | `8bb7af3d` | Subtype-aware join with absorption (atomic change, F11) |
-| Phase 3 | `0ba64c3b` | Generic descriptor-driven meet (2 → 11 constructors) |
-| Phase 4 | `0edee767` | type-tensor-core + type-tensor-distribute |
-| Phase 5 | `493cfc68` | Tensor-aware expr-app elaboration |
-| Phase 6 | `bba6f7ab` | Per-relation properties + operations field (13 sites migrated) |
-| Phase 7 | `5735b9e8` | Distributivity achieved: V4 0/512. Subtype callback. Meet distributes over unions. |
-| Phase 8 | `19e165e2` | Pseudo-complement scaffolding |
+### Time Breakdown
 
-D:I ratio: ~8h design : ~4h implementation ≈ 2:1
+| Activity | Duration | Notes |
+|----------|----------|-------|
+| Stage 2 audit | ~1h | 11 sections, grep-backed measurements |
+| Design D.1 draft | ~1.5h | 8 phases, NTT model, mathematical grounding |
+| Tensor scope discussion + integration | ~1h | User challenge → full quantale, semiring research connection |
+| Pre-0 benchmarks (design + run + analyze) | ~1h | 30 tests, 5 tiers, whnf finding |
+| whnf fast-path optimization | ~0.5h | Independent concern, 63 lines, 625× speedup |
+| Self-critique (D.3) + incorporation (D.4) | ~1.5h | 3 lenses, 10 findings, R1 blocker found |
+| External critique (D.5) + incorporation | ~1h | 12 findings, F1+M3+F11 accepted |
+| Process codification (Vision Alignment Gate) | ~0.5h | Two rules in workflow.md + DESIGN_METHODOLOGY.org |
+| Implementation Phases 1-8 | ~3.5h | 8 phases, each with mini-audit + implement + test + commit |
+| PIR + follow-up (tests, keyword migration) | ~2h | PIR, 35 regression tests, make-sre-domain, scaffolding docs |
+| **Total** | **~14h** | **D:I ratio ≈ 2.5:1** (design+critique : implementation) |
+
+### Phase Timeline
+
+| Phase | Commit | Duration | Key Result |
+|-------|--------|----------|------------|
+| Audit | `b30a7b83` | 1h | 11-section Stage 2 audit |
+| Design D.1 | `7b9b8570` | 1.5h | 8-phase design (later 9 after tensor scope expansion) |
+| Tensor scope | `a9dc9112` | 0.5h | Pulled tensor into Track 2H scope (full quantale) |
+| Pre-0 | `a8023d58` | 1h | 30 benchmarks, 5 tiers. Design unchanged by data. |
+| whnf fast-path | `92006da8` | 0.5h | Independent optimization: 150μs → 0.24μs for atoms |
+| D.3 self-critique | `3f22d1ad` | 1h | 10 findings (R1 blocker: circular dep, M3 win: core/scaffolding tensor split) |
+| D.5 external critique | `f8369678` | 0.5h | 12 findings (F1: bot-on-failure, F7: Heyting scoped to ground, F11: merge phases 2+3) |
+| ATMS doc | `51f5d9d4` | 0.25h | Documented speculation retirement for Track 4 |
+| Vision Gate | `621e4e89` | 0.25h | New process rule codified from Track 3 deviations |
+| Phase 1 | `7a91db47` | 0.25h | union-types.rkt extracted |
+| Phase 2 | `8bb7af3d` | 0.5h | Subtype-aware join with absorption (atomic, F11) |
+| Phase 3 | `0ba64c3b` | 0.5h | Generic descriptor-driven meet (2 → 11 constructors) |
+| Phase 4 | `0edee767` | 0.5h | type-tensor-core + type-tensor-distribute |
+| Phase 5 | `493cfc68` | 0.25h | Tensor-aware expr-app elaboration |
+| Phase 6 | `bba6f7ab` | 0.75h | Per-relation properties + operations (13 sites migrated) |
+| Phase 7 | `5735b9e8` | 0.5h | Distributivity achieved: V4 0/512. 3 fixes. |
+| Phase 8 | `19e165e2` | 0.25h | Pseudo-complement scaffolding |
+| PIR + follow-up | `47e8d401`→`7050e49b` | 2h | PIR, 35 tests, keyword migration |
 
 ---
 
-## 3. Test Coverage
+## 3a. Test Coverage
 
 No new dedicated test file. Validation via:
 - **Pre-0 benchmarks** (bench-sre-track2h.rkt): 30 tests across 5 tiers (M, A, E, V, T). All V tests pass post-implementation.
 - **Acceptance file** (2026-04-02-sre-track2h.prologos): 6 sections, all pass at Level 3 throughout.
 - **Full test suite**: 383/383 GREEN at every phase commit.
 
-**Gap**: No dedicated test-sre-track2h.rkt with persistent regression tests for the new lattice operations. The Pre-0 benchmarks validate but are not in the test suite. Recommend adding targeted tests in Phase 9 follow-up.
+**Gap closed during PIR follow-up**: `test-sre-track2h.rkt` added (`47e8d401`) with 35 tests across 6 suites. Includes F7 binder-type distributivity tests (Suite 6) — conjecture CONFIRMED for Pi/Sigma samples.
+
+---
+
+## 3b. What Was Deferred and Why?
+
+| Deferred Item | Reason | Where Tracked |
+|---------------|--------|---------------|
+| ATMS-based union checking (replace `with-speculative-rollback`) | Requires Track 4 ATMS-managed type cells. Can't retrofit ATMS without putting elaboration on-network. | PPN Master Track 4 §scaffolding |
+| Tensor as on-network propagator (vs pure function) | Track 4 wires `type-tensor-core` as propagator. Track 2H delivers the algebra; Track 4 delivers the network. | PPN Master Track 4 §integration vision |
+| Union handling in eliminators beyond expr-app (fst, natrec, etc.) | P2 finding: exposure is limited. Monitor during implementation. Not triggered by any existing test. | Design §3.5 (P2 note) |
+| Maps as `Any` type (open-world semantics) | CIU series scope, not Track 2H. User flagged during design discussion. | Not yet tracked — needs CIU entry |
+| sre-domain keyword args → DONE in PIR follow-up | Was L4 debt from Track 2G. | Retired (`7050e49b`) |
+
+All deferrals are intentional (genuine dependency on unbuilt infrastructure). No scope creep or exhaustion deferrals.
 
 ---
 
@@ -77,7 +120,61 @@ No new dedicated test file. Validation via:
 
 ---
 
-## 5. Design Decisions and Rationale
+## 5. What Went Well?
+
+1. **The design cycle (5 iterations) front-loaded ALL difficult decisions.** Every implementation phase was clean — no reverts, no diagnostic protocol, no mid-flight pivots. The 10 self-critique findings and 12 external critique findings resolved issues that would have been implementation snags: R1 (circular dep for tensor), F1 (bot-on-failure), M3 (core/scaffolding split), F11 (atomic phases 2+3). Compare to PPN Track 3 which had two major deviations DURING implementation (§11, §12).
+
+2. **The user's tensor scope expansion was the most important design decision.** The D.1 design delivered "half a semiring." The challenge to include the tensor expanded Track 2H from a lattice fix to a full quantale delivery. This reduced PPN Track 4's scope — Track 4 inherits a validated quantale and only needs to wire it as propagators.
+
+3. **The Pre-0 algebraic validation tier drove implementation.** V4 (distributivity 0/512) was the SPECIFICATION. Three Phase 7 fixes (sort key, subtype callback, meet distribution) were all discovered by running V4 and investigating failures. Without the algebraic validation tier in the benchmarks, these would have been found much later.
+
+4. **The whnf fast-path optimization was a high-value independent discovery.** 63 lines of code, 625× speedup for atoms, 3.5% suite improvement. Emerged from Pre-0 data — nobody had measured whnf on atoms in isolation before.
+
+---
+
+## 6. What Went Wrong?
+
+1. **The D.1 design missed the tensor entirely.** Five design iterations were needed to reach the full quantale. The tensor scope expansion came from the user, not from the design process. The root cause: the design cycle asked "what files change?" (system boundaries) instead of "what's the minimal complete algebraic structure?" (mathematical completeness).
+
+2. **Phase completion protocol was not followed for Phases 5-7.** Tracker updates were skipped during implementation momentum. Caught by the user. Codified as a blocking checklist rule — but the rule should not have been needed if the existing protocol had been followed.
+
+3. **No persistent test file until PIR follow-up.** The Pre-0 benchmarks validated algebraic properties comprehensively, but they're not regression tests. A dedicated test file should have been part of the implementation phases, not a follow-up.
+
+---
+
+## 7. Where We Got Lucky
+
+1. **The binder-type distributivity conjecture (F7) holds.** We scoped Heyting to the ground sublattice and conjectured it holds for Pi/Sigma. The follow-up test (35 tests, Suite 6) confirmed it. If it had FAILED, the Heyting claim would need to be weakened and PPN Track 4's design would be more constrained. We got lucky that the algebra is cleaner than we had evidence for during design.
+
+2. **No existing tests depended on subtype-lattice-merge producing type-top.** The redesign changed the merge from type-top to union types for incomparable inputs. If any test had asserted `(check-equal? (subtype-lattice-merge ...) type-top)`, it would have broken. None did — because subtype-lattice-merge is only used in SRE query cells, not in the main elaboration path. This is structural luck: the SRE's cell isolation protected us from regression.
+
+3. **The circular dependency (R1) was caught during critique, not during implementation.** If type-tensor-core had been placed in type-lattice.rkt (as D.1 specified), compilation would have failed. The self-critique's reality check caught it — but it could easily have been missed if the codebase reality check lens hadn't been applied.
+
+---
+
+## 8. What Surprised Us?
+
+1. **whnf costs 150μs per atom.** A single call to `whnf(Nat)` — where Nat is trivially in WHNF — costs 150μs because Racket's `match` traverses ~100 patterns in a 1,700-line function. This was the dominant cost in ALL lattice operations. The fast-path guard reduced it to 0.24μs. The surprise: a systems-level performance issue was hiding behind algorithmic-level measurements. E2E benchmarks hid it in aggregate noise; only micro-benchmarks on individual operations revealed it.
+
+2. **Distributivity requires the meet to distribute over unions.** The initial implementation achieved union-join + complete meet but still had 106 distributivity failures. The insight: `meet(a, b|c) = meet(a,b) | meet(a,c)` IS the distributive law — it needs to be IMPLEMENTED in the meet function, not just verified as a property. Distributivity is something you construct, not something you discover.
+
+3. **The subtype merge change was invisible to the test suite.** 383/383 GREEN at every phase — including the core Phase 2 change that replaced type-top with union types. This is because subtype-lattice-merge only flows through SRE query cells, not main elaboration cells. The change is algebraically significant but operationally invisible in the current architecture.
+
+---
+
+## 9. How Did the Architecture Hold Up?
+
+**SRE infrastructure held up well.** The `sre-domain` struct was extensible (added 1 field — operations). The merge-registry pattern cleanly separated equality and subtype orderings. The property declaration infrastructure from Track 2G needed only a nesting change (flat → nested hash) to support per-relation properties. The ctor-registry's generic-merge pattern was directly mirrored for generic-meet.
+
+**Callback pattern for breaking circular deps works.** `current-lattice-subtype-fn` follows the same pattern as `current-lattice-meta-solution-fn`. Both are installed by driver.rkt at startup. This is becoming an architectural pattern — but it's scaffolding. The permanent mechanism is the propagator network, where cell reads replace callbacks.
+
+**Friction point: positional struct args.** Growing from 11 to 12 fields on `sre-domain` was the immediate pain. RESOLVED during PIR follow-up: `make-sre-domain` keyword constructor eliminates positional counting. All 13 construction sites migrated.
+
+**Friction point: union sort key non-determinism.** The original `union-sort-key` gave all Pi types the same key `"3:Pi"`. This was adequate for pairwise union unification (where components are compared, not sorted) but broke commutativity when unions are built from arbitrary component orderings. Fixed with recursive sort keys — but this revealed that the sort key was designed for a narrower use case than Track 2H requires.
+
+---
+
+## 10. Key Design Decisions and Rationale
 
 | Decision | Rationale | Principle |
 |----------|-----------|-----------|
@@ -91,7 +188,7 @@ No new dedicated test file. Validation via:
 
 ---
 
-## 6. Lessons Learned
+## 11. Lessons Learned
 
 **L1: The external critique's propagator lens caught architectural issues the self-critique missed.** F1 (bot-on-failure) and M3 (distribution as network behavior) were both external critique findings. The self-critique caught the circular dependency (R1) and the migration sizing (R2) — real but mechanical issues. The propagator mindset lens produced the deeper architectural insights. Implication: always include an explicit propagator mindset lens in external critique.
 
@@ -105,7 +202,7 @@ No new dedicated test file. Validation via:
 
 ---
 
-## 7. Metrics
+## 12. Metrics
 
 | Metric | Value |
 |--------|-------|
@@ -113,7 +210,7 @@ No new dedicated test file. Validation via:
 | Self-critique findings | 10 (3 lenses: R, P, M) |
 | External critique findings | 12 |
 | Implementation phases | 8 (+ Phase 0 Pre-0) |
-| Commits (total) | 26 |
+| Commits (total) | 30 |
 | New modules | 1 (union-types.rkt) |
 | Files modified | 14 |
 | Lines added/modified | ~350 |
@@ -124,14 +221,16 @@ No new dedicated test file. Validation via:
 | V5 absorption: before → after | 56/64 → 0/64 |
 | whnf speedup for atoms | 150μs → 0.24μs (625×) |
 | Suite wall time: before → after | 136.2s → 131.4s (-3.5%) |
-| D:I ratio | 2:1 |
+| D:I ratio | 2.5:1 (design+critique : implementation) |
+| Test delta | +35 (test-sre-track2h.rkt) |
 
 ---
 
-## 8. What's Next
+## 13. What's Next
 
 **Immediate**:
-- Add persistent test file (test-sre-track2h.rkt) for lattice operation regression tests
+- ~~Add persistent test file~~ — DONE (`47e8d401`, 35 tests)
+- ~~make-sre-domain keyword constructor~~ — DONE (`7050e49b`, L4 retired)
 - Dedicated codification session for 9+ lessons flagged READY across multiple sessions
 
 **Medium-term**:
@@ -144,7 +243,7 @@ No new dedicated test file. Validation via:
 
 ---
 
-## 9. Key Files
+## 14. Key Files
 
 | File | Role |
 |------|------|
@@ -159,7 +258,7 @@ No new dedicated test file. Validation via:
 
 ---
 
-## 10. Lessons Distilled
+## 15. Lessons Distilled
 
 | Lesson | Distilled To | Status |
 |--------|-------------|--------|
@@ -173,7 +272,7 @@ No new dedicated test file. Validation via:
 
 ---
 
-## 11. Technical Debt Accepted
+## 16. Technical Debt Accepted
 
 | Debt | Rationale | Tracking |
 |------|-----------|----------|
@@ -182,12 +281,12 @@ No new dedicated test file. Validation via:
 | absorb-subtype-components O(n²) (scaffolding) | Network does pairwise merge. Imperative simulation. | Design §3.2, F3 |
 | Property keyword API (scaffolding) | Property cells are permanent (Track 4). Keyword dispatch is imperative query. | Design §3.6, F5 |
 | Meta handling in subtype-lattice-merge breaks monotonicity | Pre-existing pattern. Compensated by solve-meta! pipeline. | Design §3.2, F2 |
-| sre-domain 12 positional args | Same debt as Track 2G L4. Keyword args needed. | SRE Master |
-| No persistent test file | Pre-0 benchmarks validate but not in suite. Add test-sre-track2h.rkt. | Follow-up |
+| ~~sre-domain 12 positional args~~ | ~~RESOLVED: `make-sre-domain` keyword constructor (`7050e49b`)~~ | ~~Retired~~ |
+| ~~No persistent test file~~ | ~~RESOLVED: test-sre-track2h.rkt 35 tests (`47e8d401`)~~ | ~~Retired~~ |
 
 ---
 
-## 12. What Would We Do Differently?
+## 17. What Would We Do Differently?
 
 1. **Include the tensor from D.1, not D.3.** The user's challenge to expand scope was a design improvement that should have been in the initial draft. The original design delivered "half a semiring" — the user saw the gap before the critique rounds did.
 
@@ -197,7 +296,7 @@ No new dedicated test file. Validation via:
 
 ---
 
-## 13. Wrong Assumptions
+## 18. Wrong Assumptions
 
 | # | Assumption | Reality | Impact |
 |---|-----------|---------|--------|
@@ -207,7 +306,7 @@ No new dedicated test file. Validation via:
 
 ---
 
-## 14. What Did We Learn About the Problem?
+## 19. What Did We Learn About the Problem?
 
 The type lattice redesign is fundamentally about making the subtype ordering a PROPER lattice — with join (union types), meet (GLB with distribution), and algebraic laws (distributive, Heyting). The key insight: **distributivity is not a property to verify — it is a property to CONSTRUCT.** Meet distributing over union-join is not something we test for; it is something we implement in the meet function. The meet function's union case IS the distributive law.
 
@@ -217,7 +316,7 @@ The distinction between scaffolding and permanent is the core architectural patt
 
 ---
 
-## 15. Are We Solving the Right Problem?
+## 20. Are We Solving the Right Problem?
 
 Yes. The type lattice redesign is the prerequisite for PPN Track 4 (elaboration on network). Track 4 needs:
 - Union types as the join (to merge type information from multiple sources)
@@ -229,7 +328,7 @@ Track 2H delivers all four. The scaffolding (imperative distribution, function-o
 
 ---
 
-## 16. Longitudinal Survey — 10 Most Recent PIRs
+## 21. Longitudinal Survey — 10 Most Recent PIRs
 
 | # | Track | Date | Duration | Commits | Test Delta | D:I Ratio | Bugs | Wrong Assumptions |
 |---|-------|------|----------|---------|------------|-----------|------|-------------------|
