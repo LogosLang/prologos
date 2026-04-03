@@ -208,10 +208,27 @@ Track 3 delivers the foundation that Track 4 builds on:
 
 *Architectural pattern*: Type inference on the propagator network is structurally analogous to LE resolution — facts as cells, typing rules as propagators, resolution as fixpoint, trait selection as clause selection with ATMS. NOT using the LE directly — but the same propagator patterns apply. Draw from LE when designing type inference propagators.
 
+*Semiring structure — the type lattice as quantale* ([Lattice Foundations](../research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) §2.4, [SRE Track 2H Design](2026-04-02_SRE_TRACK2H_DESIGN.md) §10):
+
+The type lattice is a **quantale** — simultaneously a lattice (for fixpoint computation) and a semiring (for type-level "parsing" = elaboration):
+- **Addition (⊕)**: union-join (`Int ⊕ String = Int | String`). Delivered by SRE Track 2H.
+- **Multiplication (⊗)**: function type application (`(A → B) ⊗ A = B`). This IS Track 4's core propagator.
+
+The research says: "The resulting 'parse' doesn't produce trees — it produces types. This is type inference as parsing: the grammar's semantic actions compute types, and the semiring combines types according to the grammar's composition rules."
+
+Track 4's design MUST:
+1. Name the function-application propagator as the **tensor (⊗)** of the type-lattice quantale
+2. Verify the **semiring distributive law**: `⊗ distributes over ⊕` — `f(A | B) = f(A) | f(B)`. SRE Track 2H validates this on samples; Track 4 must ensure the on-network propagator preserves it.
+3. Verify **associativity** of ⊗ (nested application), **identity** (identity function type), and **annihilation** (⊗ with ⊥ = ⊥)
+4. Connect to the **6-domain reduced product** architecture: the type lattice is one of six domains (token, surface, core, type, mult, session) connected by Galois bridges. Track 4 builds the Surface→Type and Type→Surface bridges.
+5. Design the type-level semantic actions that make grammar productions compute types — these are the propagators that turn parsing into type inference.
+
+SRE Track 2H's Pre-0 validates the distributive law on samples. If it fails, Track 4 needs to know immediately.
+
 *Integration vision for Track 4*:
 1. AST nodes get type cells (PPN Track 4 = attribute evaluation)
 2. Type signatures are cell writes (facts)
-3. Application installs propagator: `f x` → SRE decomposes `f`'s Pi type, connects argument cell to domain, result cell to codomain
+3. Application installs propagator: `f x` → SRE decomposes `f`'s Pi type, connects argument cell to domain, result cell to codomain — **this IS the tensor (⊗)**
 4. Unification = PUnify cell-tree sharing (bidirectional info flow)
 5. Trait resolution = constraint cells that fire on meta resolution (LE pattern with ATMS)
 6. Type errors = contradiction (⊤) → ATMS dependency trace → Heyting pseudo-complement (after type lattice redesign)

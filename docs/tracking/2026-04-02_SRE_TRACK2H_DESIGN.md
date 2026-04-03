@@ -22,7 +22,7 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Pre-0 benchmarks + property checks | ⬜ | Benchmark subtype-lattice-merge, verify distributivity of union-join under subtype ordering on samples |
+| 0 | Pre-0 benchmarks + property checks | ⬜ | Benchmark subtype-lattice-merge, verify distributivity of union-join under subtype ordering on samples, validate tensor (⊗) distributes over join (⊕) — semiring law from §10 |
 | 1 | Extract union type helpers to standalone module | ⬜ | Eliminates duplication between type-lattice.rkt and unify.rkt |
 | 2 | Subtype-aware join: union types for incomparable types | ⬜ | Core change: subtype-lattice-merge → union types instead of type-top |
 | 3 | Subtype absorption in union normalization | ⬜ | `Nat | Int` simplifies to `Int` (Nat <: Int → absorbed) |
@@ -408,6 +408,7 @@ def pseudo-complement [a : Type, ctx : (List Type)] -> Type
 - Benchmark `subtype-lattice-merge` on incomparable types (current: produces type-top, fast)
 - Benchmark `build-union-type` ACI normalization (existing, measure baseline)
 - Property check: manually verify distributivity on sample triples BEFORE implementation
+- **Semiring validation**: verify tensor (function application) distributes over union-join on sample types — `f(A | B) = f(A) | f(B)` for concrete f, A, B. This validates the quantale structure that PPN Track 4 depends on (§10).
 
 **Per-phase**: Targeted tests for each phase's deliverable. Shared fixture pattern for new test file.
 
@@ -432,7 +433,49 @@ No preparse changes. No reader changes. No parser changes.
 
 ---
 
-## §9 Cross-References
+## §10 Semiring Structure: Scope Boundary and Forward Reference
+
+### The Type Lattice as Quantale
+
+The [Lattice Foundations research](../research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) §2.4 establishes that the type lattice is a **quantale** — a complete lattice that is simultaneously a semiring:
+
+- **Addition (⊕)**: union-join — `Int ⊕ String = Int | String`. Track 2H delivers this.
+- **Multiplication (⊗)**: function type application — `(A → B) ⊗ A = B`. This is PPN Track 4 scope.
+
+The key semiring axiom is **distributivity of tensor over join**:
+
+```
+a ⊗ (b ⊕ c) = (a ⊗ b) ⊕ (a ⊗ c)
+```
+
+In type terms: applying a function to a union distributes across components:
+
+```
+(A → B) applied to (C | D) = ((A → B) applied to C) | ((A → B) applied to D)
+```
+
+This is the theoretical basis for "type inference as parsing" — elaboration IS parsing in the type-lattice semiring (§2.4: "The resulting 'parse' doesn't produce trees — it produces types"). When elaboration goes on-network (PPN Track 4), the tensor becomes a propagator: given cells for f's type and arg's type, write result's type. The propagator IS the tensor.
+
+### What Track 2H validates (but does NOT implement)
+
+Track 2H delivers ⊕ (union-join). It does NOT implement ⊗ as a lattice operation — that requires elaboration on-network (Track 4). But Track 2H MUST validate:
+
+1. **Distributive law**: `⊗ distributes over ⊕` — verify on sample types in Pre-0 property checks. If function application doesn't distribute over union-join, the semiring vision fails and we need to know NOW, not during Track 4.
+2. **API compatibility**: `build-union-type-with-absorption` must handle outputs of per-component application (the union of application results).
+3. **Normalization stability**: applying a function to a normalized union, then normalizing the result, must be idempotent.
+
+### What PPN Track 4 picks up
+
+The tensor (⊗) as on-network propagator. See PPN Master Track 4 detail section — line 214 already describes this: "Application installs propagator: `f x` → SRE decomposes `f`'s Pi type, connects argument cell to domain, result cell to codomain." This IS the tensor. Track 4's design should:
+
+1. Name the tensor explicitly as a quantale operation
+2. Verify the full semiring axioms (associativity of ⊗, identity element, distribution)
+3. Connect to the 6-domain reduced product architecture from the Lattice Foundations research
+4. Design the parse-to-type and type-to-parse Galois bridges that make "type inference as parsing" concrete
+
+---
+
+## §11 Cross-References
 
 - **Track 2G PIR §14** (L3): "Algebraic properties are per-ordering, not per-carrier." — This is the core motivation for per-relation property declarations.
 - **Track 2G PIR §12**: "Pre-0 property check for algebraic tracks." — Phase 0 includes property checks.
