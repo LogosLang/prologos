@@ -26,6 +26,8 @@
          "parse-reader.rkt"
          "rrb.rkt"
          "ctor-registry.rkt"
+         ;; SRE Track 2D Phase 7: SRE rewrite rules (dual path)
+         (only-in "sre-rewrite.rkt" apply-all-sre-rewrites)
          ;; PPN Track 2B Phase C: operator/precedence data for mixfix resolution
          (only-in "macros.rkt"
                   effective-operator-table effective-precedence-groups
@@ -658,9 +660,18 @@
      (form-pipeline-value (set-add transforms 'v0-1) result regs spos)]
 
     ;; V(0,2): infix + simple + recursive rewrites — needs tagged + grouped
+    ;; SRE Track 2D Phase 7: try SRE rewrite rules first, fall back to lambda rules.
+    ;; SRE rules cover: expand-if-3, expand-if-4, expand-when, expand-let-assign,
+    ;; expand-let-bracket. Lambda rules cover: expand-cond, expand-compose,
+    ;; expand-pipe-gt, expand-mixfix, expand-list-literal, expand-lseq-literal,
+    ;; expand-do, expand-quasiquote. Dual path during migration.
     [(and (not (set-member? transforms 'v0-2))
           (transform-ready? 'v0-2 transforms))
-     (define-values (result _) (apply-rules node 'V0-2))
+     (define sre-result (apply-all-sre-rewrites node 'V0-2))
+     (define-values (result _)
+       (if sre-result
+           (values sre-result #t)
+           (apply-rules node 'V0-2)))
      (form-pipeline-value (set-add transforms 'v0-2) result regs spos)]
 
     ;; V(1): macro expansion — needs tagged + grouped

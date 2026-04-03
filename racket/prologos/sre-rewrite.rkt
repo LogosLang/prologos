@@ -474,7 +474,18 @@
 ;; rules in surface-rewrite.rkt. Phase 7 wires these as propagators and
 ;; retires the lambda-based rules.
 
-(require "surface-rewrite.rkt")  ;; for tag constants
+;; Tag constants — defined locally to avoid circular dep with surface-rewrite.rkt.
+;; These must match the definitions in surface-rewrite.rkt.
+(define tag-expr 'expr)
+(define tag-if 'if)
+(define tag-when 'when)
+(define tag-cond 'cond)
+(define tag-do 'do)
+(define tag-list-literal 'list-literal)
+(define tag-lseq-literal 'lseq-literal)
+(define tag-let-assign 'let-assign)
+(define tag-let-bracket 'let-bracket)
+(define tag-quasiquote 'quasiquote)
 
 ;; Helper: build a template node (parse-tree-node with potential holes)
 (define (tpl tag . children)
