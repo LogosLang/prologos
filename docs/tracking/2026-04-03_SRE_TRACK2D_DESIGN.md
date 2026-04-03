@@ -23,14 +23,15 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Pre-0 benchmarks + critical pair analysis on existing 12 rules | ✅ | `299ead31`. 28 tests. Pipeline ~7μs. SRE tag 0.03μs. 1 critical pair found (expand-compose duplicate). See §Pre-0. |
-| 1 | DPO span representation: `sre-rewrite-rule` struct | ⬜ | L (ctor-desc pattern), K (binding map), R (template), metadata (directionality, cost, confluence class) |
-| 2 | Lift 6 simple rewrites to SRE pattern→template spans | ⬜ | expand-if, expand-let-assign, expand-let-bracket, expand-when, expand-dot-access, rewrite-implicit-map |
-| 3 | Fold combinator as Pocket Universe | ⬜ | Right-fold over variable-length children. Monotone on descending element count. Lift expand-cond, expand-do, expand-list-literal, expand-lseq-literal. |
-| 4 | SRE decomposition for rule matching (replace tag+guard) | ⬜ | `sre-decompose-generic` against LHS ctor-desc. Sub-structure matching, not just tag. |
-| 5 | Explicit interface K: sub-cell binding map | ⬜ | Named bindings shared between L and R. Verifiable: R only references K's bindings. |
-| 6 | Critical pair analysis infrastructure | ⬜ | Given two spans, determine LHS overlap. Classify: confluent (same result), conflicting (different results, needs priority). |
-| 7 | Integration: replace apply-rules with SRE rewrite dispatch | ⬜ | Wire into existing form pipeline. Pipeline IS the monotone shell — no new stratification. |
-| 8 | Verification + acceptance file + PIR | ⬜ | Full suite green, A/B benchmark, all 12 rules pass acceptance tests. |
+| 1 | DPO span + pattern-desc representation | ⬜ | `sre-rewrite-rule` with `pattern-desc` LHS, named K, template R, metadata. |
+| 2 | Lift 6 simple rewrites to SRE spans | ⬜ | expand-if, let-assign, let-bracket, when, dot-access, implicit-map. Fix expand-compose duplicate. |
+| 3a | Fold combinator as micro-stratified Pocket Universe | ⬜ | Sequential accumulation via micro-strata. Lift expand-cond, expand-do, expand-list-literal, expand-lseq-literal. |
+| 3b | Tree-structural combinator | ⬜ | Parallel per-position recognition + reconstruction. Lift expand-quasiquote. |
+| 4 | pattern-desc matching (replace tag+guard dispatch) | ⬜ | Tag + positional child + literal match + variadic tail. Retires guard field. Feeds Grammar Form. |
+| 5 | Explicit interface K with verification | ⬜ | Named bindings. R only references K. DPO interface preservation guarantee. |
+| 6 | Critical pair analysis infrastructure | ⬜ | LHS overlap detection. Confluent vs conflicting classification. Consumed by PPN Track 4 + Grammar Form. |
+| 7 | Integration: replace apply-rules with SRE dispatch | ⬜ | Wire into existing form pipeline. Pipeline IS the monotone shell. |
+| 8 | Verification + acceptance file + PIR | ⬜ | Full suite green, A/B, all rules pass. |
 
 ---
 
@@ -39,13 +40,14 @@
 **End state**: The SRE has a REWRITE RELATION — the 4th relation type (after equality, subtyping, duality). Rewrite rules are first-class DPO spans (`L ← K → R`) with explicit interfaces, structural matching via SRE decomposition, and computable critical pair analysis. PPN 2-3's 12 surface rewrite rules are lifted from tag+guard+lambda to SRE spans. Recursive rewrites use a fold combinator in its own Pocket Universe. PPN Track 4 consumes the critical pair analysis and sub-cell interfaces directly.
 
 **What is delivered**:
-1. `sre-rewrite-rule` — DPO span struct with L (pattern), K (interface), R (template), metadata
-2. 6 simple rules lifted to SRE pattern→template (expand-if, expand-let-assign, expand-let-bracket, expand-when, dot-access, implicit-map)
-3. Fold combinator — a Pocket Universe that right-folds a step rule over variable-length children, monotone on descending element count. Lifts expand-cond, expand-do, expand-list-literal, expand-lseq-literal.
-4. SRE decomposition replacing tag+guard dispatch in rule matching
-5. Explicit interface K as named binding map — verifiable, not positional
-6. Critical pair analysis — computable from rule catalog, classifies rule pairs as confluent/conflicting
-7. Integration with existing form pipeline — rules fire within the monotone shell, no new stratification
+1. `sre-rewrite-rule` — DPO span struct with `pattern-desc` LHS, named K, template R, metadata
+2. `pattern-desc` — extends ctor-desc with sub-component patterns (tag + positional child + literal + variadic tail). Retires guard field. Grammar Form compilation target.
+3. 6 simple rules lifted to SRE pattern→template. Fix expand-compose duplicate.
+4. Fold combinator — micro-stratified Pocket Universe for sequential accumulation. Progress ascending (monotone), accumulator gated (non-monotone, stratified). Lifts 4 fold rules.
+5. Tree-structural combinator — parallel per-position recognition + reconstruction. Lifts expand-quasiquote. Positions independent → parallel.
+6. Explicit interface K — named binding map, verifiable (R only refs K), DPO interface preservation
+7. Critical pair analysis — computable from rule catalog, consumed by PPN Track 4 + Grammar Form
+8. Integration with form pipeline — rules fire within existing monotone shell
 
 **What this track is NOT**:
 - It does NOT implement e-graph equality saturation — that's Track 6 scope. But the span representation carries directionality metadata (one-way vs. equivalence-preserving) so Track 6 can reuse it.
@@ -188,33 +190,36 @@ Each simple rule has fixed arity and clear interface. Example — `expand-if`:
 
 6 rules to lift: expand-if, expand-let-assign, expand-let-bracket, expand-when, expand-dot-access, rewrite-implicit-map.
 
-### §3.3 Phase 3: Fold combinator as Pocket Universe
+### §3.3 Phase 3: Fold combinator as micro-stratified Pocket Universe
 
 The 4 recursive rewrites (expand-cond, expand-do, expand-list-literal, expand-lseq-literal) all follow the same pattern: `foldr step-rule base-case elements`.
 
-**The fold as a Pocket Universe**:
+**Accumulation is non-monotone.** The accumulator value at each step is NOT "more information" than the previous — `cons e1 (cons e2 nil)` is a DIFFERENT value from `cons e2 nil`, not a refinement. This is the same pattern as NAF-LE accumulation: the result is built by sequential aggregation, which is fundamentally non-monotone.
+
+**The fold as a micro-stratified Pocket Universe**:
+
+The form pipeline already handles this: the transforms-set is monotone (ascending powerset), and the tree-node changes between transforms (non-monotone but stratified — each transform is a micro-stratum gated on the previous). The fold combinator follows the same pattern:
 
 ```
 Cell value: fold-state
-  elements:  (listof node) — remaining elements to fold
-  accumulator: node — the built-up result so far
+  progress:    Nat — how many elements processed (ASCENDING — monotone)
+  accumulator: node — the built-up result (changes between micro-strata)
+  elements:    (listof node) — original input (immutable reference)
 
-Lattice: descending chain on element count
-  ⊤ = all elements remaining
-  ⊥ = no elements remaining (fold complete)
-  Merge: take the state with FEWER remaining elements (monotone toward completion)
+Micro-stratification:
+  Stratum 0: accumulator = base-case, progress = 0
+  Stratum 1: accumulator = step(elem₀, base-case), progress = 1
+  Stratum N: accumulator = step(elemₙ₋₁, accumulatorₙ₋₁), progress = N
 
-Propagator: fires when elements is non-empty
-  - Pops first element
-  - Applies step-rule: (step element accumulator) → new accumulator
-  - Writes new fold-state with (cdr elements), new accumulator
-
-Quiescence: elements empty → accumulator IS the result
+Gate: stratum N fires only when stratum N-1 is complete.
+Monotone dimension: progress (ascending Nat).
+Non-monotone dimension: accumulator (gated by progress — safe).
+Quiescence: progress = length(elements) → accumulator IS the result.
 ```
 
-This IS a Pocket Universe — the fold state is an embedded lattice within the cell. The merge function understands the fold structure. Each step advances monotonically (element count decreases). Quiescence produces the result.
+This mirrors the form pipeline exactly: `transforms-set` ↔ `progress`, `tree-node` ↔ `accumulator`. The fold's Pocket Universe IS a micro-stratification engine — the same pattern as the existing pipeline, specialized for sequential accumulation.
 
-**The step-rule IS a DPO span**: L = `(element . rest)`, K = `{element, rest-accumulator}`, R = `(build tag element rest-accumulator)`. The fold combinator applies this span repeatedly.
+**The step-rule IS a DPO span**: L = `(element . rest)`, K = `{element, rest-accumulator}`, R = `(build tag element rest-accumulator)`. The fold combinator applies this span once per micro-stratum.
 
 **Concrete fold rules**:
 
@@ -225,15 +230,94 @@ This IS a Pocket Universe — the fold state is an embedded lattice within the c
 | expand-list-literal | `(elem . rest) → (cons elem rest)` | `nil` |
 | expand-lseq-literal | `(elem . rest) → (lseq-cell elem (fn [_:_] rest))` | `lseq-nil` |
 
-### §3.4 Phase 4: SRE decomposition for rule matching
+### §3.3b Phase 3b: Tree-structural combinator
+
+**expand-quasiquote** doesn't fit simple spans or fold — it's a recursive tree transformation with splicing. But imperative tree-walking is the wrong abstraction (PPN Track 1-2 lesson).
+
+The SRE can reason about tree structure ALL AT ONCE. A quasiquote tree has two cases at each position: regular token → datum constructor, `$unquote` sentinel → splice expression. The SRE distinguishes these by structural recognition (ctor-desc tag), not by recursive descent.
+
+**The tree-structural combinator as Pocket Universe**:
+
+```
+Cell value: tree-rewrite-state
+  tree:       parse-tree-node — the input tree
+  rewrites:   (hasheq position → result) — per-position results (ASCENDING — monotone)
+
+Lattice: ascending on rewrites-count (how many positions processed)
+  Bot: empty rewrites hash
+  Top: all positions have results
+
+Propagator per position:
+  - SRE recognizes the node at this position (tag match)
+  - If $unquote: bind the spliced expression → write to rewrites
+  - If regular token: apply datum-conversion → write to rewrites
+  - Positions are INDEPENDENT → can fire in parallel
+
+Reconstruction: when all positions have results, compose final tree
+  from per-position results.
+```
+
+This is PARALLEL — unlike the fold (which is sequential), the tree combinator's positions are independent. Each position's propagator fires when its node is available. No ordering between positions. Reconstruction fires when all positions are complete.
+
+**The tree combinator generalizes the fold**: a fold IS a tree-structural operation on a list-shaped tree where positions are ordered. The tree combinator relaxes the ordering constraint. Track 2D implements the fold (sequential, for the 4 existing fold rules) and the tree combinator (parallel, for expand-quasiquote). Future grammar forms use whichever fits their production shape.
+
+### §3.4 Phase 4: SRE decomposition + pattern-desc for rule matching
 
 **Current**: `apply-rules` iterates rules, checks `eq?` on tag, calls guard predicate. O(N) in rules per stratum.
 
-**Redesigned**: SRE decomposition matches the cell value against the LHS ctor-desc. The existing `prop:ctor-desc-tag` property on structs provides O(1) tag lookup. Decomposition binds the named interface K.
+**Redesigned**: SRE decomposition matches the cell value against a `pattern-desc` — an extension of ctor-desc with sub-component patterns.
 
-For simple rules (tag-only LHS), this is equivalent to the current dispatch but structured. For rules that need sub-structure matching (future: grammar form productions), decomposition is MORE EXPRESSIVE — it can match on child patterns, not just the outermost tag.
+**pattern-desc** (minimum viable, retiring guards):
 
-**Guard transitional path**: The `guard` field on `sre-rewrite-rule` is TRANSITIONAL. It allows existing guard predicates (e.g., expand-let-assign's check for `:=` token at position 2) to work during migration. The permanent mechanism: rich LHS patterns that express the guard structurally. The guard field is scaffolding, retired when the LHS pattern language is expressive enough.
+```racket
+(struct pattern-desc
+  (tag              ;; symbol — outermost tag (existing ctor-desc tag)
+   child-patterns   ;; (listof child-pattern) — per-position patterns
+   variadic-tail    ;; symbol or #f — K binding for remaining children
+   )
+  #:transparent)
+
+(struct child-pattern
+  (position         ;; natural — which child
+   kind             ;; 'token | 'node | 'any — what type of child
+   literal          ;; string or #f — for token literal matching (e.g., ":=")
+   bind-name        ;; symbol or #f — K binding name (e.g., 'value)
+   )
+  #:transparent)
+```
+
+**Example** — expand-let-assign (currently uses guard for `:=` check):
+
+```racket
+(pattern-desc
+  tag-let-assign
+  (list (child-pattern 0 'token "let" #f)       ;; literal "let" at pos 0
+        (child-pattern 1 'any #f 'name)          ;; bind child 1 as 'name
+        (child-pattern 2 'token ":=" #f)         ;; literal ":=" at pos 2 (replaces guard!)
+        (child-pattern 3 'any #f 'value))        ;; bind child 3 as 'value
+  'body)                                          ;; variadic tail as 'body
+```
+
+This retires the guard field for expand-let-assign and expand-let-bracket. The guard was an arbitrary predicate; the pattern-desc is STRUCTURAL — verifiable, composable, and the same representation Grammar Form compiles to.
+
+**Connection to Grammar Form R&D**: The `pattern-desc` IS what a grammar production's LHS compiles to. The user writes:
+
+```
+production let-assign
+  | "let" name:ident ":=" value:expr body:expr+ -> ...
+```
+
+This compiles to a `pattern-desc` with literal matches, typed bindings, and variadic tail. Track 2D designs the internal representation; Grammar Form R&D designs the surface syntax. Same thing at different levels.
+
+**Richer patterns (future, Grammar Form scope)**:
+- Nested patterns: child matches another pattern-desc
+- Alternatives: child matches one of several patterns
+- Optional children: 0 or 1 occurrence
+- Repetition with separator: `expr ("," expr)*`
+
+Track 2D implements minimum viable (tag + positional + literal + variadic). Grammar Form extends as needed.
+
+**Dispatch**: `prop:ctor-desc-tag` provides O(1) tag lookup (existing). Pattern-desc matching adds per-child checks — O(K) where K is the number of child-patterns. For the 12 existing rules, K ≤ 5. Negligible vs. the 7μs pipeline overhead.
 
 ### §3.5 Phase 5: Explicit interface K
 
@@ -318,14 +402,35 @@ relation rewrite
     | instantiate(R, bindings) -> new-value
     | advance pipeline transform set]
 
--- Fold combinator as embedded Pocket Universe
+-- Fold combinator as micro-stratified Pocket Universe
+-- Accumulation is non-monotone (NAF-LE pattern) — gated by progress.
 cell fold-state
-  :carrier (List Element) × Accumulator
-  :lattice descending-chain on element count
-  :propagator [state ->
-    | empty?(elements) -> quiescent (accumulator IS result)
-    | otherwise        -> apply step-rule to (head, accumulator)
-                          write (tail, new-accumulator)]
+  :carrier Nat × Accumulator × (List Element)
+  :monotone-dim progress (ascending Nat: 0 → N)
+  :non-monotone-dim accumulator (changes between micro-strata, gated by progress)
+  :micro-strata [
+    stratum 0: accumulator = base-case
+    stratum N: accumulator = step(elem[N-1], accumulator[N-1])
+    gate: stratum N fires only when stratum N-1 complete]
+  :quiescence progress = length(elements) → accumulator IS result
+
+-- Tree-structural combinator (parallel)
+cell tree-rewrite-state
+  :carrier TreeNode × (HasheqOf Position Result)
+  :monotone-dim rewrites-count (ascending: positions processed)
+  :propagator-per-position [node-at-pos ->
+    | $unquote? -> bind spliced expr, write to rewrites
+    | regular?  -> apply datum-conversion, write to rewrites]
+  :positions INDEPENDENT → parallel firing
+  :reconstruction when all positions have results → compose final tree
+
+-- Pattern-desc: extends ctor-desc with sub-structure matching
+struct pattern-desc
+  :tag          symbol                     -- outermost tag
+  :children     (List child-pattern)       -- per-position patterns
+  :variadic     symbol | #f               -- K binding for rest-of-children
+  -- child-pattern: (position, kind, literal, bind-name)
+  -- Compiles from grammar production LHS
 
 -- DPO span with metadata
 struct sre-rewrite-rule
@@ -341,11 +446,14 @@ struct sre-rewrite-rule
 
 | NTT Construct | Racket Implementation | File |
 |---------------|----------------------|------|
-| `sre-rewrite-rule` | `sre-rewrite-rule` struct | sre-core.rkt or sre-rewrite.rkt (NEW) |
+| `sre-rewrite-rule` | `sre-rewrite-rule` struct | sre-rewrite.rkt (NEW) |
+| `pattern-desc` | `pattern-desc` struct (extends ctor-desc) | sre-rewrite.rkt (NEW) |
 | `relation rewrite` | 5th `sre-relation` in sre-core.rkt | sre-core.rkt |
-| `fold-state` | fold Pocket Universe in surface-rewrite.rkt | surface-rewrite.rkt |
+| `fold-state` | micro-stratified fold Pocket Universe | surface-rewrite.rkt |
+| `tree-rewrite-state` | tree-structural combinator Pocket Universe | surface-rewrite.rkt |
 | `apply-sre-rewrite` | replaces `apply-rules` | surface-rewrite.rkt |
-| `verify-rewrite-rule` | interface verification | sre-rewrite.rkt (NEW) |
+| `match-pattern-desc` | pattern-desc matching (retires guards) | sre-rewrite.rkt (NEW) |
+| `verify-rewrite-rule` | interface K verification | sre-rewrite.rkt (NEW) |
 | `find-critical-pairs` | critical pair analysis | sre-rewrite.rkt (NEW) |
 | `instantiate-rhs-template` | template instantiation from K bindings | sre-rewrite.rkt (NEW) |
 
