@@ -200,11 +200,13 @@ Track 3 delivers the foundation that Track 4 builds on:
 
 **From SRE Track 2G PIR + type lattice investigation (2026-03-30)**:
 
-*Prerequisite*: Type lattice redesign (SRE series) should precede PPN Track 4. Track 4 puts elaboration on the network — it needs the type lattice to be well-structured:
-- Union types as subtype join (`Int ⊔_sub String = Int | String`, not ⊤)
-- Subtype-aware meet (`Int ⊓_sub Nat = Nat`, not ⊥)
-- Heyting under subtype ordering → pseudo-complement error reporting
-- Per-relation algebraic properties (Track 2G extension): `type.subtype.heyting = #t`, `type.equality.heyting = #f`
+*Prerequisite*: SRE Track 2H (type lattice redesign) delivers the algebraic foundation Track 4 needs:
+- Union types as subtype join (`Int ⊔_sub String = Int | String`, not ⊤) — Track 2H Phase 2-3
+- Subtype-aware meet (`Int ⊓_sub Nat = Nat`, not ⊥) — Track 2H Phase 4
+- Full quantale: tensor (`type-tensor`) distributes over union-join — Track 2H Phase 5-6
+- Tensor-aware elaboration (pure, no speculation) — Track 2H Phase 6
+- Heyting under subtype ordering → pseudo-complement error reporting — Track 2H Phase 9
+- Per-relation algebraic properties: `type.subtype.heyting = #t`, `type.equality.heyting = #f` — Track 2H Phase 7-8
 
 *Architectural pattern*: Type inference on the propagator network is structurally analogous to LE resolution — facts as cells, typing rules as propagators, resolution as fixpoint, trait selection as clause selection with ATMS. NOT using the LE directly — but the same propagator patterns apply. Draw from LE when designing type inference propagators.
 
@@ -212,19 +214,22 @@ Track 3 delivers the foundation that Track 4 builds on:
 
 The type lattice is a **quantale** — simultaneously a lattice (for fixpoint computation) and a semiring (for type-level "parsing" = elaboration):
 - **Addition (⊕)**: union-join (`Int ⊕ String = Int | String`). Delivered by SRE Track 2H.
-- **Multiplication (⊗)**: function type application (`(A → B) ⊗ A = B`). This IS Track 4's core propagator.
+- **Multiplication (⊗)**: function type application (`(A → B) ⊗ A = B`). Delivered by SRE Track 2H as pure `type-tensor`. Track 4 wires it as a propagator.
 
 The research says: "The resulting 'parse' doesn't produce trees — it produces types. This is type inference as parsing: the grammar's semantic actions compute types, and the semiring combines types according to the grammar's composition rules."
 
 SRE Track 2H delivers both halves of the quantale:
 - **⊕ (union-join)**: subtype-aware join producing union types with absorption
-- **⊗ (tensor)**: `type-tensor` — reified function application distributing over unions, wired into the elaborator
+- **⊗ (tensor)**: `type-tensor` — reified function application distributing over unions, wired into the imperative elaborator as a pure function
+
+Track 2H also wires tensor-aware elaboration into `infer` for `expr-app` (Phase 6), handling union-typed functions and arguments via pure `type-tensor` — no speculation, no rollback. The existing `check(G, e, A | B)` speculation path (`with-speculative-rollback` at `typing-core.rkt:2424`) is NOT extended by Track 2H. It is documented as debt for Track 4.
 
 Track 4's design MUST:
 1. Wire `type-tensor` as a **propagator fire function**: given cells for f-type and arg-type, write result-type. The propagator IS the tensor on-network.
-2. Connect to the **6-domain reduced product** architecture: the type lattice is one of six domains (token, surface, core, type, mult, session) connected by Galois bridges. Track 4 builds the Surface→Type and Type→Surface bridges.
-3. Design the type-level semantic actions that make grammar productions compute types — these are the propagators that turn parsing into type inference.
-4. Semiring axioms (distribution, associativity, identity, annihilation) are validated by Track 2H — Track 4 inherits them.
+2. **Retire imperative union speculation via ATMS**: The `with-speculative-rollback` path for `check(G, e, A | B)` (`typing-core.rkt:2424`) uses `save-meta-state`/`restore-meta-state!` — sequential, imperative, not on-network. Track 4 replaces this with ATMS-managed assumption branches: each union component becomes an assumption, elaboration proceeds under each assumption in parallel, the ATMS manages consistency and retracts contradictory branches. Union types ARE type-level ambiguity — the same pattern as parse ambiguity in the Lattice Foundations research (§7.4, §8.4). After Track 2H, more union types flow through the elaborator, making this retirement more pressing.
+3. Connect to the **6-domain reduced product** architecture: the type lattice is one of six domains (token, surface, core, type, mult, session) connected by Galois bridges. Track 4 builds the Surface→Type and Type→Surface bridges.
+4. Design the type-level semantic actions that make grammar productions compute types — these are the propagators that turn parsing into type inference.
+5. Semiring axioms (distribution, associativity, identity, annihilation) are validated by Track 2H — Track 4 inherits them.
 
 *Integration vision for Track 4*:
 1. AST nodes get type cells (PPN Track 4 = attribute evaluation)

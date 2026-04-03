@@ -55,6 +55,7 @@
 **What this track is NOT**:
 - It does NOT change the equality merge (`type-lattice-merge` remains flat — `Nat ⊔_eq String = ⊤` is correct for equality). Equality and subtype are different orderings on the same carrier. This is the L3 lesson from Track 2G.
 - It does NOT put elaboration on-network as propagators — the tensor is a reified FUNCTION, not yet a propagator. PPN Track 4 makes it a propagator. Track 2H delivers the algebraic operation that Track 4 will wire into the network.
+- It does NOT replace the imperative speculation for union checking (`with-speculative-rollback` at `typing-core.rkt:2424`). This is debt that PPN Track 4 retires via ATMS: union components become assumptions, elaboration proceeds under each in parallel, the ATMS manages consistency. Track 2H adds no new speculation paths — Phase 6 uses pure `type-tensor` (no rollback).
 - It does NOT implement backward type propagation via residuation — deferred to the residuated lattice track (requires full bidirectional propagator infrastructure).
 - It does NOT make `sre-domain` use keyword arguments — that debt (Track 2G L4) is out of scope here unless we touch the struct definition.
 
@@ -386,9 +387,9 @@ type-tensor((F₁ | F₂), C) =            ;; distribute over function union
      [_ (expr-error)]))]
 ```
 
-**Also needed**: The `check` path for unions (`typing-core.rkt:2424`). Currently `check(G, e, A | B)` speculatively checks `e : A` or `e : B`. This is correct and doesn't need changes — it already handles union types in the CHECK direction. The tensor phase handles unions in the INFER direction (function/argument types).
+**Check path for unions** (`typing-core.rkt:2424`): Currently `check(G, e, A | B)` uses `with-speculative-rollback` — `save-meta-state`/`restore-meta-state!` to try `e : A`, roll back on failure, try `e : B`. This is imperative speculation, not propagator-based. After Track 2H, more union types flow through, so this path fires more often. Track 2H does NOT modify or extend this speculation path — no new `with-speculative-rollback` calls. The permanent solution is ATMS-based: each union component becomes an assumption, elaboration proceeds under each assumption in parallel, the ATMS manages consistency and retracts contradictory branches. This is PPN Track 4 scope. The existing speculation is documented as debt to be retired.
 
-**Scope boundary**: This phase wires `type-tensor` into the existing imperative elaborator. It does NOT put the tensor on-network as a propagator — that's PPN Track 4. Track 2H makes the elaborator WORK with union types; Track 4 makes it work ON-NETWORK.
+**Scope boundary**: This phase wires `type-tensor` into the existing imperative elaborator as a PURE function call (no speculation, no rollback). It does NOT put the tensor on-network as a propagator — that's PPN Track 4. Track 2H makes the elaborator WORK with union types; Track 4 makes it work ON-NETWORK with ATMS-managed assumption branches replacing imperative speculation.
 
 ### §3.7 Phase 7: Per-relation property declarations
 
