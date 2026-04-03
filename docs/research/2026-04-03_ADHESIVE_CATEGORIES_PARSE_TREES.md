@@ -175,7 +175,82 @@ The evidence from Track 2D: 13 rules, 0 critical pairs, all fire as independent 
 
 ---
 
-## 6. Conditions and Restrictions
+## 6. Catalog of Adhesive Transformations in Prologos
+
+Every pipeline stage that transforms tree-structured data is a DPO rewriting instance on presheaf objects. Parse trees are just the first. The adhesive structure applies across the entire compiler:
+
+| Pipeline Stage | LHS pattern | K (interface) | RHS template | Track | Adhesive Guarantee |
+|---------------|-------------|---------------|--------------|-------|-------------------|
+| **Surface normalization** | form tag + children | extracted components | desugared form | SRE 2D ✅ | 13 rules, 0 CPs, strongly confluent |
+| **Type inference** | expr-meta(?A) + constraint | type position | solved type | PPN 4 | Meta-solving rules parallelize for independent metas |
+| **Elaboration** | surface form (surf-*) | type + scope info | core AST (expr-*) | PPN 4 | Non-dependent definitions elaborate simultaneously |
+| **β-reduction** | (λx.body) arg | {body, arg} | body[arg/x] | SRE 6 | Church-Rosser (inherited from λ-calculus + adhesivity) |
+| **δ-reduction** | fvar(name) | {position} | global definition | SRE 6 | Independent unfoldings parallelize |
+| **ι-reduction** | natrec(mot,base,step,zero) | {base} | base | SRE 6 | Iota rules for different eliminators are independent |
+| **Pattern compilation** | match node + arms | constructor cases | decision tree | SRE 5 | Compilation order doesn't affect decision tree |
+| **Trait resolution** | trait constraint pattern | {trait, type} | impl instance | SRE 3 | Coherence = no critical pairs between impl instances |
+| **Session duality** | Send A . Rest | {A, Rest} | Recv A . dual(Rest) | SRE 4 | Involutive — applied twice = identity. Order-independent. |
+| **Narrowing** | tensor(f, a) → b | {a, f} | a refined by constraint | PPN 4 | Narrowing = reverse tensor. Bidirectional type checking. |
+| **E-graph saturation** | equivalence class | {class members} | expanded class | SRE 6 | Arsac et al. 2025: e-graphs ARE adhesive |
+| **Error recovery** | malformed token stream | repair point | repaired stream | PPN 5 | Optimal repair = minimum tropical cost among valid repairs |
+| **Module resolution** | ns::name | {module, binding} | resolved definition | SRE 7 | Independent resolutions parallelize |
+
+### What Each Track Inherits
+
+**SRE Track 3 (Trait Resolution)**: Coherence checking IS critical pair analysis on impl instance patterns. If two impl instances have overlapping type patterns (e.g., `impl Eq Int` and `impl Eq a`), the critical pair analysis detects the overlap at registration time. The concurrency theorem tells us how to compose overlapping instances (specialization ordering).
+
+**PPN Track 4 (Elaboration on Network)**: Elaboration rules for independent definitions have no critical pairs — they can fire as parallel propagators. The adhesive parallelism theorem formally justifies this. For dependent definitions (where one definition's type references another), critical pairs exist — these require ordering, matching the dependency analysis that the form pipeline already provides.
+
+**SRE Track 5 (Pattern Compilation)**: Pattern match compilation transforms a flat list of arms into a decision tree. Each compilation step splits on a constructor. Adhesivity means: the compilation is confluent — different splitting strategies produce equivalent decision trees. The optimal split (minimizing tree depth) can be selected by tropical cost annotation.
+
+**SRE Track 6 (Reduction as Rewriting)**: β/δ/ι-reduction rules on the e-graph. Equality saturation applies ALL applicable rules simultaneously. Adhesivity of e-graphs (Arsac et al. 2025) guarantees this is well-defined. The critical pair analysis extends to reduction rules: rules that commute can be parallelized; rules with critical pairs need the ATMS to explore both orderings.
+
+**PPN Track 5 (Error Recovery)**: Error repair rules (insert missing token, remove extra token, substitute token) are DPO rewrite rules on the token stream. Multiple valid repairs may exist — the tropical semiring selects the optimal one. Critical pair analysis on repair rules identifies where multiple repairs interact (e.g., inserting a token AND removing a token at the same position).
+
+### The Rewrite Relation as Universal Mechanism
+
+The SRE's rewrite relation (Track 2D) is the FOUNDATION — not just for surface normalization but for every structural transformation in the pipeline. Each track registers its rules using the same DPO span mechanism. The adhesive category structure guarantees that ALL these rules compose correctly, parallelize safely, and have complete conflict analysis.
+
+This is the concrete realization of the SRE Master's vision: "build a typed graph rewriting engine on the SRE, where GADTs, e-graphs, interaction nets, and GoI are all applications of the same substrate."
+
+---
+
+## 7. CALM-Adhesive Unification (expanded)
+
+### The Boundary Agreement
+
+The adhesive category structure and CALM theorem agree on the boundary between parallel-safe and ordering-required operations:
+
+| Property | Adhesive DPO | CALM/Propagator | Agreement |
+|----------|-------------|-----------------|-----------|
+| **Parallel-safe** | Rules without critical pairs | Monotone propagators | Same operations: independent rewrites on independent cells |
+| **Order-dependent** | Rules WITH critical pairs | Non-monotone operations | Same operations: overlapping rewrites, accumulation, retraction |
+| **Stratification** | Needed for non-confluent rules | Needed for non-monotone ops (S(-1)) | Same boundary: S0 = CALM+adhesive, S(-1) = coordination |
+| **Conflict detection** | Critical pair analysis (compile-time) | Non-monotonicity analysis | Both detect at registration/analysis time, not at runtime |
+| **Convergence** | Termination of rule saturation | Fixpoint of lattice computation | Same guarantee: finite lattice height → termination |
+
+### The Unified Guarantee
+
+For the S0 stratum of the Prologos propagator network — monotone rewriting on adhesive presheaf structures — the combined CALM+adhesive guarantee is:
+
+**Monotone propagators implementing DPO rewrite rules without critical pairs are provably: coordination-free (CALM), order-independent (Church-Rosser), parallelizable (parallelism theorem), and composable (concurrency theorem).**
+
+This is a STRONGER result than either theory gives alone:
+- CALM alone says: monotone operations converge. It doesn't say the INTERMEDIATE states are well-defined or composable.
+- Adhesive DPO alone says: rewriting without critical pairs is order-independent. It doesn't say the computation is coordination-free in a distributed setting.
+- TOGETHER: the intermediate states (cell values during propagation) are adhesive presheaf objects. The propagators are monotone DPO rules. Convergence is guaranteed by BOTH the lattice fixpoint (CALM/Knaster-Tarski) AND the adhesive Church-Rosser property. Parallelism is justified by BOTH CALM (no coordination needed) AND adhesive parallelism theorem (independent rules commute). Composition is justified by the adhesive concurrency theorem — going beyond CALM's guarantees.
+
+### Potential Contribution
+
+The CALM body of research has focused on set-based lattice operations (union, intersection) in distributed systems (Bloom, BloomL). The adhesive DPO body of research has focused on graph rewriting in formal language theory. The Prologos propagator network sits at the intersection: lattice-based information flow (CALM) on graph-structured data (adhesive DPO).
+
+The conjecture from §5, strengthened: **In a CALM-compliant propagator network where cell values are objects in an adhesive category and propagators implement DPO rewrite rules, the CALM coordination-free fragment coincides exactly with the adhesive Church-Rosser fragment. A propagator is coordination-free if and only if its corresponding DPO rule has no critical pairs with any other rule in the same stratum.**
+
+This would be a genuine extension of CALM theory from set operations to graph rewriting operations, with adhesive category theory providing the formal bridge. The Prologos system is a concrete implementation that could serve as the proof-of-concept for this theoretical connection.
+
+---
+
+## 8. Conditions and Restrictions
 
 ### What Could Break Adhesivity
 
@@ -195,7 +270,7 @@ The evidence from Track 2D: 13 rules, 0 critical pairs, all fire as independent 
 
 ---
 
-## 7. Open Questions
+## 9. Open Questions
 
 1. **Can we exploit the concurrency theorem for Grammar Form?** The concurrency theorem composes rules that share structure. For Grammar Form productions that share sub-patterns (e.g., two productions that both match `expr`), the theorem tells us how to combine them. This could optimize Grammar Form compilation — instead of registering N rules, register one concurrent rule.
 
@@ -205,9 +280,15 @@ The evidence from Track 2D: 13 rules, 0 critical pairs, all fire as independent 
 
 4. **Does Track 6's e-graph extension preserve adhesivity?** The Arsac result says e-graphs are adhesive. But our e-graph extension (Track 2H's union-join on the type lattice) adds equivalence classes to types, not to parse trees. The question: when type-level e-graphs interact with parse-tree-level rewriting (via elaboration), does the combined structure remain adhesive?
 
+5. **Can coherence checking (SRE Track 3) be expressed entirely as critical pair analysis?** Trait coherence says: for any type, at most one impl instance applies. This IS the zero-critical-pairs condition on impl instance patterns. If so, the existing `find-critical-pairs` from Track 2D IS the coherence checker — no separate mechanism needed.
+
+6. **Does the CALM-adhesive boundary coincide with the S0/S(-1) stratification boundary?** The conjecture says coordination-free = no critical pairs. The stratification says S0 = monotone, S(-1) = non-monotone. Do these boundaries align exactly? If a monotone S0 propagator implements a DPO rule WITH critical pairs, is it still coordination-free? (We think not — critical pairs require ordering even within monotone computation.)
+
+7. **Is there a categorical semantics for the propagator network itself?** The cells are objects, propagators are morphisms, the network is a diagram. Is this diagram in an adhesive category? If so, the network's OWN transformations (adding cells, adding propagators) inherit DPO guarantees — network construction itself is a rewriting system.
+
 ---
 
-## 8. References
+## 10. References
 
 ### Foundational
 

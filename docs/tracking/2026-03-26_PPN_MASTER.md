@@ -45,7 +45,7 @@ PPN consumes.
 | 2B | Production deployment + mixfix Pocket Universe | ✅ | [Design §12](2026-03-30_PPN_TRACK2B_DESIGN.md), [PIR](2026-03-30_PPN_TRACK2B_PIR.md). Merge deployed (source-line-keyed). Mixfix claim lattice. Pipe/compose rewrites. `use-tree-parser?` deleted. |
 | 3 | Parser as propagators — ON-NETWORK | ✅ | [Design D.5b+§11+§12](2026-04-01_PPN_TRACK3_DESIGN.md), [PIR](2026-04-02_PPN_TRACK3_PIR.md). All forms ON-NETWORK. Per-form cells. SRE domains + ctor-descs. Dependency-set Pocket Universe. Spec cells. parser.rkt retired from WS dispatch. 383/383 GREEN. |
 | 3.5 | **Grammar Form: Research + Design** | ⬜ | [`grammar` vision](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md). Multi-view spec. DPO structural preservation. Full theory + syntax after Tracks 1-3. **From Track 1**: typed productions (NTT-typed rewrite rules). |
-| 4 | Elaboration as attribute evaluation | ⬜ | IS SRE Track 2C. Dissolves parse/elab boundary. **From Track 3**: per-form cells, SRE ctor-descs, spec cells. First step: surfs as cell values. See Track 4 detail section. |
+| 4 | Elaboration as attribute evaluation | ⬜ | IS SRE Track 2C. Dissolves parse/elab boundary. **From Track 3**: per-form cells, SRE ctor-descs, spec cells. **From Track 2D**: rewrite relation, DPO spans, critical pair analysis. **Adhesive DPO**: elaboration rules are DPO spans on adhesive presheaf objects. See [research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md) §6. See Track 4 detail section. |
 | 5 | Type-directed disambiguation | ⬜ | Backward type→parse flow via Galois bridges. Bilattice (gfp/elimination) added here via WF-LE newtype pattern. |
 | 6 | Error recovery as lattice repair | ⬜ | Tropical semiring optimization. Track 1 writes error cells; Track 6 adds ATMS repair. |
 | 7 | User-defined grammar extensions (`grammar` form) | ⬜ | CAPSTONE. **Notes from Track 1**: token pattern registry migration from hash to cell needed here (dynamic grammar patterns). DPO framework for structural preservation. |
@@ -160,6 +160,8 @@ lattice design determines which semiring we use.
 
 ### Track 4: Elaboration as Attribute Evaluation
 
+**Adhesive DPO foundation**: Elaboration rules are DPO rewriting on adhesive presheaf objects. Type inference (meta-solving), elaboration (surface→core), and narrowing (bidirectional type checking) are all DPO spans. Non-dependent definitions have no critical pairs → parallelize. Dependent definitions have critical pairs → ordering required (matching the dependency analysis the pipeline already provides). See [Adhesive Categories research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md) §6. CALM-adhesive unified guarantee: monotone elaboration propagators implementing DPO rules without critical pairs are provably coordination-free, order-independent, parallelizable, and composable (§7).
+
 **What**: Recognize that elaboration (type inference, constraint generation)
 IS attribute evaluation on the parse tree. Register elaboration rules
 alongside grammar rules. The parse→elaborate boundary dissolves.
@@ -257,6 +259,8 @@ Track 4's design should include a "scaffolding retirement" phase that replaces e
 - *Per-form lattice join as cell merge*: Track 2B's `merge-form` function (§12.6) is the permanent per-form lattice join for merging pipeline outputs. Track 4 inherits this as the cell merge function when parse and elaboration cells coexist on the same network. The join logic (tree parser > preparse for user forms, preparse > tree parser for spec-annotated/generated) encodes pipeline preference as lattice ordering — both pipelines write, the lattice resolves. No "choice function" — the ordering IS the merge.
 
 ### Track 5: Type-Directed Disambiguation
+
+**Adhesive DPO foundation**: Error repair rules (insert, remove, substitute tokens) are DPO rewriting on the token stream. Multiple valid repairs → tropical semiring selects optimal. Critical pair analysis on repair rules identifies where repairs interact. See [Adhesive Categories research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md) §6.
 
 **What**: Use type information flowing BACKWARD through the network to
 resolve parse ambiguities. The parser produces multiple parses (ambiguity
