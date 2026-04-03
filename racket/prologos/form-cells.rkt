@@ -27,6 +27,8 @@
          ;; Phase 4 (big-bang): consumed form processing
          "macros.rkt"
          "parser.rkt"
+         ;; §12: SRE integration
+         "sre-core.rkt"
          "errors.rkt")
 
 (provide
@@ -42,6 +44,10 @@
  annotate-surfs-with-specs
  ;; Phase 6: Merge function (exposed for testing / validation)
  form-cell-merge-fn
+ ;; §12: SRE domain registrations
+ form-cell-sre-domain
+ spec-cell-sre-domain
+ spec-cell-bot
  ;; Phase 3a: Spec cells
  (struct-out spec-cell-value)
  spec-cell-merge-fn
@@ -394,19 +400,18 @@
 ;; - x ⊔ y = top when x ≠ y (collision = error, D.5 F4)
 (define (spec-cell-merge-fn old new)
   (cond
+    ;; Top cases FIRST (top absorbs everything)
+    [(spec-cell-value-top? old) old]
+    [(spec-cell-value-top? new) new]
     ;; bot cases
     [(not (spec-cell-value-type-surf old)) new]
     [(not (spec-cell-value-type-surf new)) old]
-    ;; Already top → stays top
-    [(spec-cell-value-top? old) old]
-    [(spec-cell-value-top? new) new]
     ;; Same name + same type → idempotent
     [(and (eq? (spec-cell-value-name old) (spec-cell-value-name new))
           (equal? (spec-cell-value-type-surf old) (spec-cell-value-type-surf new)))
      old]
-    ;; Collision: two different specs for the same function → top (error)
-    [else (spec-cell-value (spec-cell-value-name old)
-                           (spec-cell-value-type-surf old)
+    ;; Collision: two different specs → canonical top (commutative)
+    [else (spec-cell-value 'collision-top #f
                            (spec-cell-value-metadata old)
                            #t)]))
 
@@ -454,3 +459,84 @@
                 (values enet** (hash-set spec-map name scid)))
               (values current-enet spec-map)))
         (values current-enet spec-map))))
+
+;; ========================================
+;; §12 S1-S3: SRE Domain Registrations
+;; ========================================
+;;
+;; Register FormCell, ProductionRegistry, SpecCell as SRE domains
+;; with declared algebraic properties. Track 2G infrastructure consumed.
+
+;; --- S1: FormCell domain ---
+;; Merge: set-union on transforms (powerset → Boolean)
+(define form-cell-merge-table
+  (hasheq 'equality form-cell-merge-fn))
+
+(define (form-cell-merge-registry rel-name)
+  (hash-ref form-cell-merge-table rel-name
+            (lambda () (error 'form-cell-merge-registry
+                              "no merge for relation: ~a" rel-name))))
+
+(define form-cell-bot
+  (form-pipeline-value (seteq) #f '() #f))
+
+(define (form-cell-bot? v)
+  (and (form-pipeline-value? v)
+       (set-empty? (form-pipeline-value-transforms v))))
+
+(define (form-cell-contradicts? v) #f)  ;; form cells don't have top/contradiction
+
+(define form-cell-sre-domain
+  (sre-domain 'form-cell
+              form-cell-merge-registry
+              form-cell-contradicts?
+              form-cell-bot?
+              form-cell-bot
+              #f                    ;; top-value (not applicable)
+              #f                    ;; meta-recognizer
+              #f                    ;; meta-resolver
+              #f                    ;; dual-pairs
+              (hasheq)              ;; property-cell-ids (scaffolding)
+              ;; Declared properties: transforms is powerset → Boolean
+              (hasheq 'commutative-join  prop-confirmed
+                      'associative-join  prop-confirmed
+                      'idempotent-join   prop-confirmed
+                      'has-meet          prop-confirmed
+                      'distributive      prop-confirmed
+                      'has-pseudo-complement prop-confirmed
+                      'has-complement    prop-refuted)))  ;; product is Heyting (provenance chain)
+
+(register-domain! form-cell-sre-domain)
+
+;; --- S2: SpecCell domain ---
+;; Merge: set-once with collision = top (D.5 F4)
+(define spec-cell-merge-table
+  (hasheq 'equality spec-cell-merge-fn))
+
+(define (spec-cell-merge-registry rel-name)
+  (hash-ref spec-cell-merge-table rel-name
+            (lambda () (error 'spec-cell-merge-registry
+                              "no merge for relation: ~a" rel-name))))
+
+(define (spec-cell-bot? v)
+  (and (spec-cell-value? v)
+       (not (spec-cell-value-type-surf v))))
+
+(define (spec-cell-contradicts? v)
+  (and (spec-cell-value? v)
+       (spec-cell-value-top? v)))
+
+(define spec-cell-sre-domain
+  (sre-domain 'spec-cell
+              spec-cell-merge-registry
+              spec-cell-contradicts?
+              spec-cell-bot?
+              spec-cell-bot          ;; bot value
+              (spec-cell-value #f #f #f #t)  ;; top value (collision)
+              #f #f #f
+              (hasheq)
+              (hasheq 'commutative-join  prop-confirmed
+                      'associative-join  prop-confirmed
+                      'idempotent-join   prop-confirmed)))
+
+(register-domain! spec-cell-sre-domain)
