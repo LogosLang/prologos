@@ -129,17 +129,13 @@
     [else (error 'test-type-merge-registry "no merge for: ~a" rel-name)]))
 
 (define type-domain
-  (sre-domain 'type
-              test-type-merge-registry  ;; merge-registry
-              type-lattice-contradicts?
-              type-bot?
-              type-bot
-              type-top  ;; top-value
-              #f #f     ;; no meta-recognizer/resolver
-              #f        ;; no dual-pairs
-              (hasheq)  ;; Track 2G: property-cell-ids
-              (hasheq)  ;; Track 2G: declared-properties
-              (hasheq)));; Track 2G: operations
+  (make-sre-domain
+    #:name 'type
+    #:merge-registry test-type-merge-registry
+    #:contradicts? type-lattice-contradicts?
+    #:bot? type-bot?
+    #:bot-value type-bot
+    #:top-value type-top))
 
 (define (sre-subtype-check t1 t2)
   "Create mini-network, install subtype-relate, quiesce, return #t if no contradiction."

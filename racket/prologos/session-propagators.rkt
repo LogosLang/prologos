@@ -262,25 +262,24 @@
             (λ () (error 'session-merge-registry "no merge for: ~a" rel-name))))
 
 (define session-sre-domain
-  (sre-domain 'session
-              session-merge-registry           ;; merge-registry
-              session-lattice-contradicts?
-              sess-bot?
-              sess-bot
-              sess-top                         ;; top-value
-              sess-meta?                       ;; meta-recognizer
-              #f                               ;; meta-resolver
-              '((sess-send . sess-recv)        ;; dual-pairs
-                (sess-dsend . sess-drecv)
-                (sess-async-send . sess-async-recv))
-              (hasheq)                         ;; Track 2G: property-cell-ids
-              ;; Track 2H: declared-properties nested by relation
-              (hasheq
-                'equality (hasheq 'commutative-join prop-confirmed
-                                  'associative-join prop-confirmed
-                                  'idempotent-join  prop-confirmed
-                                  'has-meet         prop-confirmed))
-              (hasheq)))                        ;; Track 2H: operations (none for session)
+  (make-sre-domain
+    #:name 'session
+    #:merge-registry session-merge-registry
+    #:contradicts? session-lattice-contradicts?
+    #:bot? sess-bot?
+    #:bot-value sess-bot
+    #:top-value sess-top
+    #:meta-recognizer sess-meta?
+    #:dual-pairs '((sess-send . sess-recv)
+                   (sess-dsend . sess-drecv)
+                   (sess-async-send . sess-async-recv))
+    ;; Track 2H: declared-properties nested by relation
+    #:declared-properties
+    (hasheq
+      'equality (hasheq 'commutative-join prop-confirmed
+                        'associative-join prop-confirmed
+                        'idempotent-join  prop-confirmed
+                        'has-meet         prop-confirmed))))
 
 ;; Track 2G: register in domain registry
 (register-domain! session-sre-domain)

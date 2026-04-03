@@ -87,9 +87,14 @@
 
 ;; Benchmark: SRE full sre-constructor-tag (domain check)
 (define type-domain-for-bench
-  (sre-domain 'type
-              type-lattice-merge type-top? type-bot? type-bot type-top
-              expr-meta? #f #f (hasheq) (hasheq) (hasheq))) ;; Track 2G: property-cell-ids, declared-properties, operations
+  (make-sre-domain
+    #:name 'type
+    #:merge-registry type-lattice-merge
+    #:contradicts? type-top?
+    #:bot? type-bot?
+    #:bot-value type-bot
+    #:top-value type-top
+    #:meta-recognizer expr-meta?))
 
 (define (bench-sre-full-tag label expr n)
   (collect-garbage)

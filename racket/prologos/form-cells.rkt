@@ -493,26 +493,22 @@
 (define (form-cell-contradicts? v) #f)  ;; form cells don't have top/contradiction
 
 (define form-cell-sre-domain
-  (sre-domain 'form-cell
-              form-cell-merge-registry
-              form-cell-contradicts?
-              form-cell-bot?
-              form-cell-bot
-              #f                    ;; top-value (not applicable)
-              #f                    ;; meta-recognizer
-              #f                    ;; meta-resolver
-              #f                    ;; dual-pairs
-              (hasheq)              ;; property-cell-ids (scaffolding)
-              ;; Track 2H: declared-properties nested by relation
-              (hasheq
-                'equality (hasheq 'commutative-join  prop-confirmed
-                                  'associative-join  prop-confirmed
-                                  'idempotent-join   prop-confirmed
-                                  'has-meet          prop-confirmed
-                                  'distributive      prop-confirmed
-                                  'has-pseudo-complement prop-confirmed
-                                  'has-complement    prop-refuted))  ;; Heyting
-              (hasheq)))           ;; Track 2H: operations
+  (make-sre-domain
+    #:name 'form-cell
+    #:merge-registry form-cell-merge-registry
+    #:contradicts? form-cell-contradicts?
+    #:bot? form-cell-bot?
+    #:bot-value form-cell-bot
+    ;; Track 2H: declared-properties nested by relation
+    #:declared-properties
+    (hasheq
+      'equality (hasheq 'commutative-join  prop-confirmed
+                        'associative-join  prop-confirmed
+                        'idempotent-join   prop-confirmed
+                        'has-meet          prop-confirmed
+                        'distributive      prop-confirmed
+                        'has-pseudo-complement prop-confirmed
+                        'has-complement    prop-refuted))))
 
 (register-domain! form-cell-sre-domain)
 
@@ -535,20 +531,19 @@
        (spec-cell-value-top? v)))
 
 (define spec-cell-sre-domain
-  (sre-domain 'spec-cell
-              spec-cell-merge-registry
-              spec-cell-contradicts?
-              spec-cell-bot?
-              spec-cell-bot          ;; bot value
-              (spec-cell-value #f #f #f #t)  ;; top value (collision)
-              #f #f #f
-              (hasheq)
-              ;; Track 2H: declared-properties nested by relation
-              (hasheq
-                'equality (hasheq 'commutative-join  prop-confirmed
-                                  'associative-join  prop-confirmed
-                                  'idempotent-join   prop-confirmed))
-              (hasheq)))           ;; Track 2H: operations
+  (make-sre-domain
+    #:name 'spec-cell
+    #:merge-registry spec-cell-merge-registry
+    #:contradicts? spec-cell-contradicts?
+    #:bot? spec-cell-bot?
+    #:bot-value spec-cell-bot
+    #:top-value (spec-cell-value #f #f #f #t)  ;; top value (collision)
+    ;; Track 2H: declared-properties nested by relation
+    #:declared-properties
+    (hasheq
+      'equality (hasheq 'commutative-join  prop-confirmed
+                        'associative-join  prop-confirmed
+                        'idempotent-join   prop-confirmed))))
 
 (register-domain! spec-cell-sre-domain)
 

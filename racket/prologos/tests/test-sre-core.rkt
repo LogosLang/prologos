@@ -61,18 +61,13 @@
     [else (error 'test-merge-registry "no merge for: ~a" rel-name)]))
 
 (define test-domain
-  (sre-domain 'test-term
-              test-merge-registry  ; merge-registry
-              test-contradicts?
-              test-bot?
-              test-bot
-              'top   ; top-value
-              #f     ; no meta-recognizer
-              #f     ; no meta-resolver
-              #f     ; no dual-pairs
-              (hasheq)  ; Track 2G: property-cell-ids
-              (hasheq)  ; Track 2G: declared-properties
-              (hasheq))); Track 2G: operations
+  (make-sre-domain
+    #:name 'test-term
+    #:merge-registry test-merge-registry
+    #:contradicts? test-contradicts?
+    #:bot? test-bot?
+    #:bot-value test-bot
+    #:top-value 'top))
 
 ;; ========================================
 ;; B. Register test constructors
@@ -264,8 +259,13 @@
             'different-each-time
             new))
       (define bad-domain
-        (sre-domain 'bad (lambda (rn) bad-merge) (lambda (v) (eq? v 'top))
-                    (lambda (v) (eq? v 'bot)) 'bot 'top #f #f #f (hasheq) (hasheq) (hasheq)))  ; +property-cell-ids, declared-properties, operations
+        (make-sre-domain
+          #:name 'bad
+          #:merge-registry (lambda (rn) bad-merge)
+          #:contradicts? (lambda (v) (eq? v 'top))
+          #:bot? (lambda (v) (eq? v 'bot))
+          #:bot-value 'bot
+          #:top-value 'top))
       ;; In debug mode, this should error
       (parameterize ([current-sre-debug? #t])
         (define net0 (fresh-net))

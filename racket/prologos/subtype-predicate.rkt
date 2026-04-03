@@ -364,14 +364,10 @@
             (λ () (error 'subtype-query-merge "no merge for: ~a" rel-name))))
 
 (define type-sre-domain-for-subtype
-  (sre-domain 'type
-              subtype-query-merge-registry  ;; merge-registry
-              type-lattice-contradicts?
-              type-bot?
-              type-bot
-              type-top   ;; top-value
-              #f #f      ;; no meta-recognizer/resolver (ground types only)
-              #f         ;; no dual-pairs
-              (hasheq)   ;; Track 2G: property-cell-ids
-              (hasheq)   ;; Track 2H: declared-properties (nested, empty for query domain)
-              (hasheq))) ;; Track 2H: operations (empty for query domain)
+  (make-sre-domain
+    #:name 'type
+    #:merge-registry subtype-query-merge-registry
+    #:contradicts? type-lattice-contradicts?
+    #:bot? type-bot?
+    #:bot-value type-bot
+    #:top-value type-top))

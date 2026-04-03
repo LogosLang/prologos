@@ -26,20 +26,17 @@
     [else (error 'test-session-merge-registry "no merge for: ~a" rel-name)]))
 
 (define session-domain
-  (sre-domain 'session
-              test-session-merge-registry  ;; merge-registry
-              session-lattice-contradicts?
-              sess-bot?
-              sess-bot
-              sess-top  ;; top-value
-              #f #f     ;; no meta-recognizer/resolver
-              ;; Dual pairs: Send↔Recv, DSend↔DRecv, AsyncSend↔AsyncRecv
-              '((sess-send . sess-recv)
-                (sess-dsend . sess-drecv)
-                (sess-async-send . sess-async-recv))
-              (hasheq)  ;; Track 2G: property-cell-ids
-              (hasheq)  ;; Track 2G: declared-properties
-              (hasheq)));; Track 2G: operations
+  (make-sre-domain
+    #:name 'session
+    #:merge-registry test-session-merge-registry
+    #:contradicts? session-lattice-contradicts?
+    #:bot? sess-bot?
+    #:bot-value sess-bot
+    #:top-value sess-top
+    ;; Dual pairs: Send↔Recv, DSend↔DRecv, AsyncSend↔AsyncRecv
+    #:dual-pairs '((sess-send . sess-recv)
+                   (sess-dsend . sess-drecv)
+                   (sess-async-send . sess-async-recv))))
 
 ;; Helper: create mini-network, install duality-relate, quiesce
 (define (sre-duality-check sa sb)
