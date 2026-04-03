@@ -252,16 +252,15 @@
 ;; ALL OTHER forms use datum-always path in extract-surfs (raw node → datum).
 ;; Both paths produce identical surfs via parse-datum — the difference is
 ;; WHETHER form dispatch goes through parse-form-tree (on-network) or not.
+;; §11: eval/check/infer ON-NETWORK. Rest datum-always.
+;; Full on-network pending fix for Hole diagnostic in cond (batch runner false positive).
 (define tree-parser-verified-tags '(eval check infer))
 
 ;; §11 TREE-CANONICAL extraction rewrite
 (define (extract-surfs-from-form-cells enet cell-map
                                         #:source-str [source-str #f]
                                         #:raw-map [raw-map (hasheq)])
-  ;; §11: scope current-source-str to this extraction call
-  (current-source-str (or source-str ""))
-  ;; §11: set source-str for parse-subtree-via-datum in tree-parser
-  (current-source-str (or source-str ""))
+  ;; §11: current-source-str is set via parameterize in process-string-ws-inner
   (define pairs
     (for/fold ([acc '()])
               ([(line cell-id) (in-hash cell-map)])
@@ -269,6 +268,8 @@
       (define node (form-pipeline-value-tree-node pv))
       (if (not node) acc
           (let ([tag (parse-tree-node-tag node)])
+            ;; §11: set raw-node for datum conversion in parse-eval-tree-for-cell
+            (current-raw-node (hash-ref raw-map line #f))
             (cond
               ;; Side-effect-only: no surfs
               [(memq tag '(ns imports exports spec deftype bundle defmacro property
@@ -281,25 +282,13 @@
                    (let ([surfs (defs-to-surfs gen-defs)])
                      (if (null? surfs) acc
                          (cons (cons line surfs) acc))))]
-              ;; §11.5 Opt-in migration: tree-parser for verified forms,
-              ;; datum conversion for everything else.
-              ;; Forms move from datum→tree-parser as parity is verified.
+              ;; §11 opt-in: verified forms use tree-parser, rest datum
               [(memq tag tree-parser-verified-tags)
-               ;; VERIFIED: tree-parser produces correct surfs for this form type
                (define surf (parse-form-tree node))
                (if (not (prologos-error? surf))
                    (cons (cons line (list surf)) acc)
-                   ;; Unexpected error on verified form — fall to datum
-                   (let* ([raw-node (hash-ref raw-map line #f)]
-                          [use-node (or raw-node node)]
-                          [datum (tree-node-to-datum use-node source-str)])
-                     (if (not datum) acc
-                         (with-handlers ([exn:fail? (lambda (e) acc)])
-                           (define expanded (preparse-expand-single datum))
-                           (define s (parse-datum (datum->syntax #f expanded)))
-                           (if (prologos-error? s) acc
-                               (cons (cons line (list s)) acc))))))]
-              ;; UNVERIFIED: datum conversion (proven correct)
+                   acc)]
+              ;; Datum conversion for unverified forms
               [else
                (let* ([raw-node (hash-ref raw-map line #f)]
                       [use-node (or raw-node node)]
@@ -319,7 +308,7 @@
                        (define expanded (preparse-expand-single norm-datum))
                        (define s (parse-datum (datum->syntax #f expanded)))
                        (if (prologos-error? s) acc
-                           (cons (cons line (list s)) acc)))))])))))
+                           (cons (cons line (list s)) acc)))))])))))  ;; close
   ;; Sort by source line, flatten surf lists
   (define sorted (sort pairs < #:key car))
   (apply append (map cdr sorted)))

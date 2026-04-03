@@ -33,6 +33,7 @@
          parse-top-level-forms-from-tree
          parse-subtree-via-datum
          current-source-str
+         current-raw-node
          ;; §11 WS normalizations (used by form-cells.rkt datum path too)
          flatten-ws-datum
          restructure-infix-eq
@@ -274,6 +275,7 @@
 ;; preparse-expand-single + parse-datum. Produces surfs IDENTICAL
 ;; to the datum path (correct keyword handling, motive annotations, etc.)
 (define current-source-str (make-parameter ""))
+(define current-raw-node (make-parameter #f))  ;; §11: raw node for datum conversion
 
 (define (parse-subtree-via-datum node)
   (define stx (tree-node->stx-form node "<tree>" (current-source-str)))
@@ -641,7 +643,9 @@
 ;; This is the ON-NETWORK dispatch point — form-level dispatch via parse-form-tree,
 ;; expression parsing via parse-datum (canonical, correct).
 (define (parse-eval-tree-for-cell node loc)
-  (define stx (tree-node->stx-form node "<tree>" (current-source-str)))
+  ;; Use raw node if available (preserves pre-pipeline structure for multi-line forms)
+  (define use-node (or (current-raw-node) node))
+  (define stx (tree-node->stx-form use-node "<tree>" (current-source-str)))
   (if (not stx)
       (parse-error-result loc "eval: cannot convert to datum")
       (let ([datum (syntax->datum stx)])

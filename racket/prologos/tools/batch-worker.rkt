@@ -56,7 +56,8 @@
          "../global-env.rkt"
          "../metavar-store.rkt"
          "../errors.rkt"
-         "../driver.rkt")
+         "../driver.rkt"
+         "../tree-parser.rkt")  ;; §11: current-source-str, current-raw-node
 
 ;; Track 10 Phase 3a: Read .pnet cache setting from environment
 ;; The test runner sets PROLOGOS_PNET_CACHE=1 when cache is enabled.
@@ -235,6 +236,9 @@
          [current-module-registry-cell-id  #f]          ;; Phase 3c: fresh per-file
          [current-ns-context-cell-id       #f]          ;; Phase 3c: fresh per-file
          [current-defn-param-names-cell-id #f]          ;; Phase 3c: fresh per-file
+         ;; tree-parser.rkt — §11 PPN Track 3: fresh per file
+         [current-source-str              ""]
+         [current-raw-node                #f]
          ;; metavar-store.rkt — fresh mutable hash per file
          [current-mult-meta-store         (make-hasheq)]
          ;; errors.rkt — emit formatted errors to stderr for failure logs
