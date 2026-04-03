@@ -31,7 +31,7 @@
 | 6 | Per-relation property declarations on sre-domain | ✅ | `bba6f7ab`. sre-domain +operations field (12th). declared-properties nested by relation. 13 sites migrated. |
 | 7 | Validate algebraic properties: Heyting (ground sublattice) + quantale | ✅ | `5735b9e8`. V4 distributivity: 0/512 (was 412). Meet distributes over unions. Subtype callback. Sort key fix. |
 | 8 | Pseudo-complement computation for error reporting | ✅ | `19e165e2`. SCAFFOLDING. type-pseudo-complement verified: ¬Int={Bool\|String}, ¬(Int\|String)={Bool}. |
-| 9 | Verification + acceptance file + PIR | ⬜ | Full suite green, A/B benchmark, acceptance file, PIR |
+| 9 | Verification + acceptance file + PIR | 🔄 | Suite 383/383 GREEN throughout. A/B data recorded. PIR in progress. |
 
 ---
 
@@ -192,6 +192,29 @@ These are dominated by prelude loading + elaboration. Track 2H lattice changes a
 **Total non-expected failures: 74** (V1d: 18 + V5: 56). Both are consequences of two known gaps: (1) missing bot handling in subtype-lattice-merge, (2) incomplete try-intersect-pure. Both are in Track 2H scope (Phases 2 and 4 respectively).
 
 ### Design Impact
+
+### Post-Implementation A/B Comparison
+
+| Metric | Pre-Track-2H | Post-Track-2H | Change |
+|--------|-------------|---------------|--------|
+| `subtype-lattice-merge` incomparable (M2c) | 0.3μs | 1.3μs | +1.0μs (builds union) |
+| `build-union-type` 2-component (M5a) | 0.2μs | 0.2μs | unchanged |
+| `type-lattice-meet` incompatible (M3c) | 309μs | 2.3μs | **-307μs** (whnf fast-path + subtype callback) |
+| `subtype?` flat positive (M4a) | 0.1μs | 0.1μs | unchanged |
+| Absorption 10 components (A3b) | 16μs | 15μs | unchanged |
+| Hot-path 1000x incomparable (A5c) | 0.3ms | 1.3ms | +1.0ms (union construction) |
+| E1 numeric (ms) | 86.5 | 83.3 | -3.2ms |
+| E2 mixed-map (ms) | 85.4 | 81.2 | -4.2ms |
+| E3 pattern (ms) | 98.8 | 96.6 | -2.2ms |
+| E4 subtype (ms) | 79.8 | 78.7 | -1.1ms |
+| V4 distributivity (subtype) | 412/512 fail | **0/512** | ✅ TARGET MET |
+| V1d identity | 18/18 fail | **0/18** | ✅ FIXED |
+| V5 absorption | 56/64 fail | **0/64** | ✅ FIXED |
+| Suite wall time | 136.2s | 131.4s | **-3.5%** |
+
+Subtype merge +1μs for incomparable (union construction vs returning sentinel) — expected, acceptable. Meet 130× faster from whnf fast-path. E2E improved across the board. All algebraic targets met.
+
+### Design Impact (Pre-0)
 
 **No design changes.** The data confirms:
 1. All phases are correctly scoped — the two existing bugs (V1d, V5) are exactly what Phases 2 and 4 fix.
