@@ -76,35 +76,34 @@
             (λ () (error 'type-merge-registry "no merge for relation: ~a" rel-name))))
 
 (define type-sre-domain
-  (sre-domain 'type
-              type-merge-registry     ; merge-registry (replaces lattice-merge + subtype-merge)
-              type-lattice-contradicts?
-              type-bot?
-              type-bot
-              type-top                ; top-value
-              expr-meta?
-              (lambda (expr)
-                (define lookup (current-structural-meta-lookup))
-                (and lookup (lookup expr)))
-              #f                      ; dual-pairs
-              (hasheq)                ; Track 2G: property-cell-ids
-              ;; Track 2H: declared-properties — nested by relation (L3, P4)
-              (hasheq
-                'equality (hasheq 'commutative-join prop-confirmed
-                                  'associative-join prop-confirmed
-                                  'idempotent-join  prop-confirmed
-                                  'has-meet         prop-confirmed)
-                'subtype  (hasheq 'commutative-join prop-confirmed
-                                  'associative-join prop-confirmed
-                                  'idempotent-join  prop-confirmed
-                                  'has-meet         prop-confirmed
-                                  'distributive     prop-confirmed
-                                  'has-pseudo-complement prop-confirmed))
-              ;; Track 2H: operations
-              (hasheq 'tensor (hasheq 'name 'tensor
-                                      'fn type-tensor-core
-                                      'arity 2
-                                      'properties '(distributes-over-join associative has-identity)))))
+  (make-sre-domain
+    #:name 'type
+    #:merge-registry type-merge-registry
+    #:contradicts? type-lattice-contradicts?
+    #:bot? type-bot?
+    #:bot-value type-bot
+    #:top-value type-top
+    #:meta-recognizer expr-meta?
+    #:meta-resolver (lambda (expr)
+                      (define lookup (current-structural-meta-lookup))
+                      (and lookup (lookup expr)))
+    #:declared-properties
+      (hasheq
+        'equality (hasheq 'commutative-join prop-confirmed
+                          'associative-join prop-confirmed
+                          'idempotent-join  prop-confirmed
+                          'has-meet         prop-confirmed)
+        'subtype  (hasheq 'commutative-join prop-confirmed
+                          'associative-join prop-confirmed
+                          'idempotent-join  prop-confirmed
+                          'has-meet         prop-confirmed
+                          'distributive     prop-confirmed
+                          'has-pseudo-complement prop-confirmed))
+    #:operations
+      (hasheq 'tensor (hasheq 'name 'tensor
+                               'fn type-tensor-core
+                               'arity 2
+                               'properties '(distributes-over-join associative has-identity)))))
 
 ;; Track 2G: register in domain registry
 (register-domain! type-sre-domain)

@@ -26,6 +26,7 @@
 (provide
  ;; Domain spec
  (struct-out sre-domain)
+ make-sre-domain                ;; SRE Track 2H: keyword constructor (retires positional debt L4)
  sre-domain-merge
 
  ;; Relation spec (SRE Track 1 + Track 2F)
@@ -130,6 +131,26 @@
                        ; Track 4 looks up operations generically via this field.
    )
   #:transparent)
+
+;; SRE Track 2H: Keyword constructor for sre-domain (retires L4 positional debt).
+;; Required fields: name, merge-registry, contradicts?, bot?, bot-value.
+;; Optional fields default to #f / (hasheq) as appropriate.
+;; All 13 construction sites can migrate incrementally.
+(define (make-sre-domain #:name name
+                          #:merge-registry merge-registry
+                          #:contradicts? contradicts?
+                          #:bot? bot?
+                          #:bot-value bot-value
+                          #:top-value [top-value #f]
+                          #:meta-recognizer [meta-recognizer #f]
+                          #:meta-resolver [meta-resolver #f]
+                          #:dual-pairs [dual-pairs #f]
+                          #:property-cell-ids [property-cell-ids (hasheq)]
+                          #:declared-properties [declared-properties (hasheq)]
+                          #:operations [operations (hasheq)])
+  (sre-domain name merge-registry contradicts? bot? bot-value top-value
+              meta-recognizer meta-resolver dual-pairs
+              property-cell-ids declared-properties operations))
 
 ;; Merge lookup: gets the merge function for a given relation from the domain registry.
 (define (sre-domain-merge domain relation)
