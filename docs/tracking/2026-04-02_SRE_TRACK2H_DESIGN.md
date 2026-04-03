@@ -30,7 +30,7 @@
 | 5 | Tensor-aware elaboration: infer for union-typed expr-app | ✅ | `493cfc68`. expr-app handles union function types via type-tensor-distribute. |
 | 6 | Per-relation property declarations on sre-domain | ✅ | `bba6f7ab`. sre-domain +operations field (12th). declared-properties nested by relation. 13 sites migrated. |
 | 7 | Validate algebraic properties: Heyting (ground sublattice) + quantale | ✅ | `5735b9e8`. V4 distributivity: 0/512 (was 412). Meet distributes over unions. Subtype callback. Sort key fix. |
-| 8 | Pseudo-complement computation for error reporting | ⬜ | SCAFFOLDING (M2). First consumer of Heyting structure. Context from cell registry where available (F6). |
+| 8 | Pseudo-complement computation for error reporting | ✅ | `19e165e2`. SCAFFOLDING. type-pseudo-complement verified: ¬Int={Bool\|String}, ¬(Int\|String)={Bool}. |
 | 9 | Verification + acceptance file + PIR | ⬜ | Full suite green, A/B benchmark, acceptance file, PIR |
 
 ---
