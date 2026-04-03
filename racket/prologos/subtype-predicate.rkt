@@ -38,6 +38,8 @@
          ;; SRE Track 2H Phase 4: Tensor (quantale multiplication)
          type-tensor-core                  ;; propagator fire function: single Pi × single arg
          type-tensor-distribute            ;; scaffolding: imperative union distribution
+         ;; SRE Track 2H Phase 8: Pseudo-complement (SCAFFOLDING)
+         type-pseudo-complement            ;; Heyting pseudo-complement for error reporting
          ;; SRE Track 1 Phase 4: frequency counter for monitoring
          current-subtype-check-count
          ;; Track 1B Phase 1: global counters + reporter
@@ -286,6 +288,33 @@
      (if (null? valid) type-bot
          (build-union-type-with-absorption valid))]
     [else (type-tensor-core func-type arg-type)]))
+
+;; ========================================
+;; SRE Track 2H Phase 8: Pseudo-complement (SCAFFOLDING)
+;; ========================================
+;; Heyting pseudo-complement: ¬a = max{x | x ⊓ a ≤ ⊥}
+;; For ground types: the union of all context types incompatible with `type`.
+;;
+;; SCAFFOLDING (M2, F6): This is a function over a list of context types.
+;; The permanent solution is ATMS-derived: when a cell reaches type-top,
+;; the ATMS nogood records the conflicting assumption set. Retracting the
+;; conflicting assumption gives the maximal consistent subset — the
+;; pseudo-complement falls out of the dependency structure.
+;; RETIRE WHEN: PPN Track 4 delivers ATMS-managed type cells.
+;;
+;; Context source (F6): Takes a list of types. Callers should derive this
+;; from the cell registry where available (structural identity), not ad-hoc
+;; collection (positional identity).
+
+(define (type-pseudo-complement type context-types)
+  (define incompatible
+    (filter (lambda (t)
+              (let ([m (type-lattice-meet t type)])
+                (type-bot? m)))
+            context-types))
+  (cond
+    [(null? incompatible) type-top]  ;; nothing incompatible → ⊤ (everything is compatible)
+    [else (build-union-type-with-absorption incompatible)]))
 
 ;; ========================================
 ;; SRE Track 2H Phase 2: Redesigned subtype-lattice-merge
