@@ -71,6 +71,11 @@
  do-step
  pipe-gt-step
  compose-step
+ cond-step
+ cond-arm-split
+ ;; Separator-based split pattern
+ (struct-out child-pattern-split)
+ match-split-pattern
  ;; Form-tag ctor-desc registration
  register-form-tag-ctor-desc!)
 
@@ -108,6 +113,51 @@
    bind-name        ;; symbol or #f — K binding name (e.g., 'value)
    )
   #:transparent)
+
+;; ========================================
+;; Separator-based split pattern (for cond arm decomposition)
+;; ========================================
+;; Splits a node's children at a literal separator token.
+;; Returns a hash with before-bind → children before separator,
+;; after-bind → children after separator, or #f if separator not found.
+
+(struct child-pattern-split
+  (separator       ;; string — the literal separator token (e.g., "->")
+   strip-prefix    ;; string or #f — optional prefix to strip (e.g., "$pipe")
+   before-bind     ;; symbol — K binding for children before separator
+   after-bind)     ;; symbol — K binding for children after separator
+  #:transparent)
+
+(define (match-split-pattern node split-pat)
+  (cond
+    [(not (parse-tree-node? node)) #f]
+    [else
+     (define children (rrb-to-list (parse-tree-node-children node)))
+     ;; Strip prefix if specified
+     (define stripped
+       (if (and (child-pattern-split-strip-prefix split-pat)
+                (not (null? children))
+                (token-entry? (car children))
+                (equal? (token-entry-lexeme (car children))
+                        (child-pattern-split-strip-prefix split-pat)))
+           (cdr children)
+           children))
+     ;; Find separator
+     (define sep (child-pattern-split-separator split-pat))
+     (define sep-idx
+       (for/first ([c (in-list stripped)] [i (in-naturals)]
+                   #:when (and (token-entry? c)
+                               (equal? (token-entry-lexeme c) sep)))
+         i))
+     (cond
+       [(not sep-idx) #f]
+       [else
+        (define before (take stripped sep-idx))
+        (define after (drop stripped (add1 sep-idx)))
+        (hasheq (child-pattern-split-before-bind split-pat)
+                (if (= (length before) 1) (car before) before)
+                (child-pattern-split-after-bind split-pat)
+                (if (= (length after) 1) (car after) after))])]))
 
 ;; ========================================
 ;; PUnify Holes — template markers
@@ -703,14 +753,58 @@
     '() #f 'one-way 0 'strongly-confluent 'V0-2))
 (register-sre-rewrite-rule! expand-compose-fold)
 
-;; Note: expand-cond needs arm-splitting (guard/body extraction from each arm).
-;; The fold step function would need to parse arm structure. The existing
-;; lambda-based rule handles this. Lifting requires a richer step function
-;; that pattern-matches each arm — deferred to Grammar Form scope where
-;; arm syntax is formalized as a pattern-desc.
+;; --- Fold rule: expand-cond ---
+;; (cond | guard -> body | guard -> body ...) → nested (if guard body ...)
+;; Each arm is split at "->" separator. $pipe prefix stripped.
+(define cond-arm-split
+  (child-pattern-split "->" "$pipe" 'guard 'body))
+
+(define (cond-step arm acc)
+  ;; Decompose arm into guard/body via separator split
+  (define bindings (match-split-pattern arm cond-arm-split))
+  (cond
+    [(not bindings)
+     ;; Malformed arm — pass through (last arm without guard = default body)
+     arm]
+    [else
+     (define guard (hash-ref bindings 'guard))
+     (define body (hash-ref bindings 'body))
+     ;; Build: (if guard body accumulator)
+     (define guard-node
+       (if (list? guard)
+           (apply tpl tag-expr guard)  ;; multi-token guard → wrap in expr
+           guard))
+     (define body-node
+       (if (list? body)
+           (apply tpl tag-expr body)   ;; multi-token body → wrap in expr
+           body))
+     (tpl tag-if (tpl-const "if") guard-node body-node acc)]))
+
+(define expand-cond-fold
+  (sre-rewrite-rule
+    'expand-cond-fold
+    (pattern-desc 'cond (list) #f)
+    '() #f 'one-way 0 'strongly-confluent 'V0-2))
+(register-sre-rewrite-rule! expand-cond-fold)
+
+;; --- Pocket Universe: expand-mixfix ---
+;; Precedence resolution wrapped as a PU. The existing Track 2B logic
+;; (operator table, precedence DAG, associativity) runs inside the PU.
+;; The PU value tracks resolution progress (operators resolved).
+;; This is Option B from the design: existing logic, PU framing.
 ;;
-;; expand-mixfix uses precedence resolution (Track 2B Pocket Universe).
-;; Not a pattern→template rewrite — stays as lambda.
+;; The mixfix PU delegates to the existing lambda-based rule — the
+;; lambda IS the PU's fire function. The PU framing makes it visible
+;; to the SRE as a rewrite rule with metadata (strongly-confluent,
+;; cost 0, stratum V0-2).
+(define expand-mixfix-pu
+  (sre-rewrite-rule
+    'expand-mixfix-pu
+    (pattern-desc 'mixfix-group (list) #f)
+    '()  ;; K is internal to the PU (operator/operand cells)
+    #f   ;; no template — PU produces result directly
+    'one-way 0 'strongly-confluent 'V0-2))
+(register-sre-rewrite-rule! expand-mixfix-pu)
 
 ;; ========================================
 ;; Phase 3b: Tree-Structural Combinator
