@@ -31,7 +31,7 @@
 | 6 | Per-relation property declarations on sre-domain | ✅ | `bba6f7ab`. sre-domain +operations field (12th). declared-properties nested by relation. 13 sites migrated. |
 | 7 | Validate algebraic properties: Heyting (ground sublattice) + quantale | ✅ | `5735b9e8`. V4 distributivity: 0/512 (was 412). Meet distributes over unions. Subtype callback. Sort key fix. |
 | 8 | Pseudo-complement computation for error reporting | ✅ | `19e165e2`. SCAFFOLDING. type-pseudo-complement verified: ¬Int={Bool\|String}, ¬(Int\|String)={Bool}. |
-| 9 | Verification + acceptance file + PIR | 🔄 | Suite 383/383 GREEN throughout. A/B data recorded. PIR in progress. |
+| 9 | Verification + acceptance file + PIR | ✅ | Suite 383/383 GREEN. A/B data recorded. [PIR](2026-04-03_SRE_TRACK2H_PIR.md) written. |
 
 ---
 
