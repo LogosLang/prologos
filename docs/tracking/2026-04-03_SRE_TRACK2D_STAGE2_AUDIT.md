@@ -115,6 +115,8 @@ These lambdas receive `children` (extracted from matched node) and construct new
 
 ### Rule Classification for SRE Lifting
 
+**BUG FOUND (Pre-0 critical pair analysis)**: `expand-compose` is registered TWICE — Track 2 (right-to-left) and Track 2B (left-to-right `>>` semantics). Track 2B version is dead code. Track 2 version fires with wrong composition order for `>>`. Fix in Track 2D Phase 2.
+
 | Category | Rules | SRE Expressibility |
 |----------|-------|-------------------|
 | **Simple rewrite** (fixed arity, no recursion) | expand-if, expand-let-assign, expand-let-bracket, expand-when, expand-dot-access, rewrite-implicit-map | ✅ Directly expressible as SRE pattern → template with named sub-cells |

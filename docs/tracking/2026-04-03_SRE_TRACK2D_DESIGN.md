@@ -22,7 +22,7 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Pre-0 benchmarks + critical pair analysis on existing 12 rules | ⬜ | Measure apply-rules dispatch, verify confluence per stratum |
+| 0 | Pre-0 benchmarks + critical pair analysis on existing 12 rules | ✅ | `299ead31`. 28 tests. Pipeline ~7μs. SRE tag 0.03μs. 1 critical pair found (expand-compose duplicate). See §Pre-0. |
 | 1 | DPO span representation: `sre-rewrite-rule` struct | ⬜ | L (ctor-desc pattern), K (binding map), R (template), metadata (directionality, cost, confluence class) |
 | 2 | Lift 6 simple rewrites to SRE pattern→template spans | ⬜ | expand-if, expand-let-assign, expand-let-bracket, expand-when, expand-dot-access, rewrite-implicit-map |
 | 3 | Fold combinator as Pocket Universe | ⬜ | Right-fold over variable-length children. Monotone on descending element count. Lift expand-cond, expand-do, expand-list-literal, expand-lseq-literal. |
@@ -82,6 +82,52 @@ R: the RIGHT template — what's produced (reconstruction from K's bindings)
 - `cost`: tropical semiring value for optimization. Default 0. Grammar Form's optimization extensions use this for cost-weighted rewriting.
 - `confluence-class`: `'strongly-confluent` (no critical pairs with any other rule in the stratum) or `'priority-resolved` (has critical pairs, resolved by priority ordering). Computed by critical pair analysis (Phase 6).
 - `stratum`: which pipeline stratum this rule fires in. Inherited from PPN 2-3's existing stratification.
+
+---
+
+## §Pre-0: Benchmark Data and Findings
+
+**Benchmark file**: `benchmarks/micro/bench-sre-track2d.rkt` (commit `299ead31`)
+**28 tests across 5 tiers**: M1-M7 micro, A1-A5 adversarial, E1-E4 E2E, V1-V5 validation, C1-C3 confluence.
+
+### Performance Baselines
+
+| Operation | Cost | Design Implication |
+|-----------|------|-------------------|
+| Full pipeline per form (M1a) | 7μs | Dominated by pipeline iteration, not rule matching. SRE lift won't change this. |
+| Pipeline overhead, no match (M1d) | 5.9μs | Framework floor — advance-pipeline loop cost. |
+| SRE tag lookup (M2a) | 0.03μs | O(1) via prop:ctor-desc-tag. Replacement path is fast. |
+| SRE tag + extract (M3a) | 0.03μs | Decomposition adds ~0μs. Extract-fn is struct accessor. |
+| hash-ref named K (M5a) | 0.012μs | 3× list-ref (0.004μs). Both sub-0.02μs — negligible in 7μs pipeline. |
+| build-node 4 children (M4a) | 0.3μs | Dominant per-step cost. Shared between old and new. |
+| foldr 5 elements (M7a) | 0.04μs | Fold combinator overhead is construction, not iteration. |
+| cond 20 arms (A1c) | 31μs | Linear scaling. No concern for fold Pocket Universe. |
+| list 50 elements (A2c) | 35μs | Linear scaling. |
+
+**Key insight**: Pipeline framework (~6μs) dominates. Rule matching is negligible. Track 2D's benefit is STRUCTURAL (explicit interfaces, critical pair analysis, DPO formalism) not performance.
+
+### Critical Finding: expand-compose Duplicate Registration
+
+The critical pair analysis found 1 overlap: `expand-compose` is registered TWICE in V0-2 with the same `tag-compose` LHS:
+- **Line 908 (PPN Track 2)**: `for/fold` right-to-left composition. Registered first → always fires.
+- **Line 1224 (PPN Track 2B)**: `foldl` left-to-right composition (`>>` semantics). Registered second → DEAD CODE.
+
+These have DIFFERENT semantics (opposite composition order). The Track 2B version is correct for `>>` (pipe-forward = left-to-right). The Track 2 version does standard `compose` (right-to-left) which is wrong for `>>`. The duplicate registration made the Track 2B fix silently ineffective.
+
+This validates the critical pair analysis design — it caught a real semantic bug in the existing rule set.
+
+### Strata Distribution
+
+All 13 rules are in V0-2. Strata V0-0, V0-1, V1, V2 are EMPTY. The stratification infrastructure is dormant — all rewrites fire in one stratum. Simplifies Track 2D integration.
+
+### Design Impact
+
+**No design changes.** The data confirms:
+1. SRE lift is performance-neutral (pipeline dominates)
+2. Named K (hash-ref) is negligible overhead vs positional (list-ref)
+3. Fold scaling is linear — no concern for Pocket Universe
+4. Critical pair analysis catches real bugs — validates Phase 6
+5. Duplicate expand-compose fix is Track 2D Phase 2 scope
 
 ---
 
