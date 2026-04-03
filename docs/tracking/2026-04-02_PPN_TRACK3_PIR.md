@@ -316,3 +316,63 @@ WS source → read-to-tree → per-form cells on elab-network
 3. **Batch-worker parameter isolation is the #1 deployment hazard.** Every new Racket parameter that persists across `process-string-ws` calls MUST be added to (a) the `parameterize` wrapper in `process-string-ws-inner`, and (b) the batch-worker's `parameterize` block. This is the Two-Context Audit pattern from pipeline.md, applied to a THIRD context (batch worker).
 
 4. **Diagnostic output (stderr) is a test contract.** The batch runner treats stderr output as failure. Any surf struct change that produces new stderr diagnostics (Hole, deprecation warning, etc.) will break batch tests even if the result is correct. This is a test infrastructure concern, not a parsing concern.
+
+---
+
+## §12 Addendum: SRE Integration Completion — Critical Process Failures
+
+### What Happened
+
+The PIR (§1 deliverables, §5 NTT model, §3.8.4 design) specified SRE integration: domain registration, property inference, ctor-desc decomposition, SRE relations. SRE Track 2G was built SPECIFICALLY for Track 3 to consume.
+
+**None of it was implemented during the main Track 3 implementation.** The design was used as a pattern guide but the actual SRE mechanisms were never called. This was identified during a post-PIR review conversation — NOT during the PIR process itself.
+
+### Two Critical Process Failures
+
+**Failure 1: Implementation deviated from design.** The design (§3.8.4) had EXACT `register-domain!` calls. The NTT model (§5) showed ctor-desc registrations. These were specified deliverables, not aspirational goals. The implementation skipped them without acknowledgment. This is the Completeness principle violated at the implementation level — the design said "do X", the implementation said "skip X, it's not blocking."
+
+**Why it happened**: Implementation pressure. The datum-canonical vs tree-canonical pivot consumed all attention. SRE registration felt like "nice to have" rather than load-bearing. The Implementation Protocol (mini-audit → implement → principles challenge) should have caught this — the principles challenge should have asked "are we consuming the SRE infrastructure we designed for?" It didn't.
+
+**Failure 2: PIR didn't catch the gap.** The PIR's §2 (What Was Delivered) listed deliverables that matched the implementation but NOT the design. The PIR's §9 (Architecture Assessment) didn't ask "did we consume Track 2G's deliverables?" The PIR methodology's §2 says "Quantify scope adherence (e.g., 36/38 sub-phases, 95%)." We didn't quantify — we narrativized.
+
+**Why it happened**: The PIR was written with a focus on what was built (cell pipeline, tree-parser, dependency-set) rather than what was DESIGNED (SRE integration, domain registration, property inference). The PIR methodology says to compare against STATED OBJECTIVES from the design doc. The design doc's §1 (Objectives) lists SRE domain registration as deliverable #8 (via the NTT model). The PIR's §1 doesn't mention it.
+
+### What §12 Delivered
+
+| Deliverable | Finding |
+|-------------|---------|
+| S1: FormCell domain | Registered. Property inference VALIDATES: Heyting ✓. All 7 declared properties confirmed. |
+| S3: SpecCell domain | Registered. **Inference caught a REAL bug**: top absorption ordering in merge function. Commutativity and associativity violated before fix. |
+| S4: 5 ctor-descs | Registered for surf-def/defn/eval/check/narrow. Roundtrip validated. |
+| S5: Spec→defn SRE relation | In progress — parse-level propagator wiring, NOT Track 4 scope. |
+| S6: Property inference | All domains pass. Heyting/Boolean classifications match design. |
+
+### The S3 Bug: Why This Matters
+
+The spec cell merge had top absorption AFTER bot checks:
+```racket
+[(not (spec-cell-value-type-surf old)) new]  ;; bot check FIRST
+[(spec-cell-value-top? old) old]              ;; top check SECOND
+```
+
+Top values had `type-surf = #f` → matched the bot check → top was treated as bot. Result: `top ⊔ x = x` instead of `top ⊔ x = top`. This violated associativity: `(a ⊔ b) ⊔ c ≠ a ⊔ (b ⊔ c)`.
+
+This bug would have caused INCORRECT behavior if two specs for the same function were registered: the collision (top) would have been silently absorbed instead of propagating as an error. Testing alone would not catch this — it requires the spec cell to receive a top value, which only happens on duplicate spec declarations. Property inference tested all combinations automatically.
+
+**This is WHY SRE domain registration must be MANDATORY for every lattice cell.** It's not ceremony — it's correctness validation that catches bugs testing misses.
+
+### Lessons from §12
+
+5. **SRE domain registration is MANDATORY, not optional.** Every lattice cell must register its domain with `register-domain!` and run property inference. This is the same lesson as "tests are mandatory" — but for algebraic properties. Track 2G's inference caught the type lattice's distributivity failure. §12's inference caught the spec cell's associativity failure. The pattern: algebraic properties MUST be machine-verified, not human-declared.
+
+6. **PIR scope adherence must be quantified against the DESIGN, not the implementation.** "We delivered X" is meaningless if the design said "deliver X + Y" and Y was silently dropped. The PIR methodology's §2 says to quantify — we must LIST each design deliverable and mark delivered/deferred/missed. No narrativizing.
+
+7. **"Deferred to Track N" must survive the Completeness challenge.** The initial S5 deferral ("Track 4 scope") was incorrect — it was Track 3 scope using existing infrastructure. The deferral rationalized avoiding work, not genuine dependency. The Completeness principle says: defer only for genuine dependency or uncertain design. S5 had neither.
+
+### Updated Lessons Distilled
+
+| Lesson | Distilled To | Status |
+|--------|-------------|--------|
+| SRE domain registration is MANDATORY for all lattice cells | DESIGN_METHODOLOGY.org Stage 4 | MUST codify — 2 bugs caught by inference |
+| PIR scope adherence: quantify against design, not implementation | POST_IMPLEMENTATION_REVIEW.org | MUST codify — critical process gap |
+| "Deferred to Track N" requires Completeness challenge | workflow.md | MUST codify — prevents rationalized deferral |

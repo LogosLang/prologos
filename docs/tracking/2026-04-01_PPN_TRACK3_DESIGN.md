@@ -41,7 +41,7 @@
 | S2 | Register ProductionRegistry domain | ⬜ | §12. Boolean powerset. |
 | S3 | Register SpecCell domain | ⬜ | §12. Collision = top. |
 | S4 | ctor-desc for surf-* structs | ⬜ | §12. Structural decomposition of form cell values. |
-| S5 | SRE relation for spec→defn | ⬜ DEFERRED to Track 4 | §12. Requires propagator wiring between spec cells and defn cells — Track 4 scope (elaboration on network). annotate-surfs-with-specs retained as scaffolding. |
+| S5 | SRE relation for spec→defn | ⬜ | §12. Propagator between spec cell and defn cell on elab-network. Replaces annotate-surfs-with-specs. PARSE-LEVEL wiring, not Track 4 scope. |
 | S6 | Property inference validation | ⬜ | §12. All domains pass inference. |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
