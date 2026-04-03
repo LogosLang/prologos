@@ -22,7 +22,7 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Pre-0 benchmarks + property checks | ⬜ | Benchmark subtype-lattice-merge, verify distributivity, validate tensor distributes over join |
+| 0 | Pre-0 benchmarks + property checks | ✅ | 30 tests across 5 tiers. Design unchanged — data confirms all phases correctly scoped. See §Pre-0. |
 | 1 | Extract union type helpers to standalone module | ⬜ | Eliminates duplication between type-lattice.rkt and unify.rkt |
 | 2 | Subtype-aware join: union types for incomparable types | ⬜ | Core change: subtype-lattice-merge → union types instead of type-top |
 | 3 | Subtype absorption in union normalization | ⬜ | `Nat | Int` simplifies to `Int` (Nat <: Int → absorbed) |
@@ -113,6 +113,73 @@ When building a union type, any component that is a subtype of another component
 - `Int | String → Int | String` (incomparable, both retained)
 
 This is ACI normalization PLUS subtype absorption. The existing `build-union-type` does ACI (associative, commutative, idempotent via sort+dedup). Track 2H adds the absorption step.
+
+---
+
+## §Pre-0: Benchmark Data and Findings
+
+**Benchmark file**: `benchmarks/micro/bench-sre-track2h.rkt` (commit `a8023d58`)
+**30 tests across 5 tiers**: M1-M8 micro, A1-A6 adversarial, E1-E4 E2E, V1-V6 algebraic, T1-T4 tensor.
+
+### Performance Baselines
+
+| Operation | Cost | Track 2H Implication |
+|-----------|------|---------------------|
+| `subtype-lattice-merge` incomparable (M2c) | 0.3μs | Currently returns type-top. After 2H: +0.2μs for union build + absorption |
+| `subtype-lattice-merge` chain Nat→Int (M2b) | 0.1μs | Unchanged — subtype path already returns b |
+| `build-union-type` 2-component (M5a) | 0.2μs | Cheap ACI normalization. No concern. |
+| `build-union-type` 5-component (M5c) | 0.9μs | Linear growth. Acceptable. |
+| `subtype?` flat positive (M4a) | 0.1μs | Per-pair cost in absorption. 10 components ≈ 9μs total |
+| Absorption N^2: 10 components (A3b) | 16μs | Measured directly. Acceptable for typical 2-5 component unions |
+| Absorption N^2: 20 components (A3c) | 72μs | Quadratic visible. Pathological but survivable. |
+| `type-lattice-meet` incompatible (M3c) | 309μs | **whnf-dominated**. Structural operations are noise. |
+| `type-lattice-meet` Pi ring action (M3d) | 609μs | Two whnf calls. Phase 4 extends to all constructors — same cost pattern. |
+| `try-unify-pure` equal atoms (M7a) | 305μs | Also whnf-dominated. Baseline for equality merge. |
+| Tensor simulation 3-union (A6a) | 223μs | subtype? + subst per component. Dominated by whnf in subtype?. |
+| Hot-path 1000x incomparable (A5c) | 0.3ms | 1000 subtype-lattice-merge calls. After 2H: ~0.5ms (union build adds ~0.2μs each). |
+
+**Key insight**: `whnf` (~300μs) dominates every structural lattice operation. Track 2H's additions (union construction 0.2μs, absorption 16μs for 10 components) are negligible. **No performance risk from the redesign.**
+
+### E2E Baselines
+
+| Program | Median | Description |
+|---------|--------|-------------|
+| E1 | 86.5ms | Numeric subtyping (simple Nat/Int) |
+| E2 | 85.4ms | Mixed-type map (union values — existing consumer) |
+| E3 | 98.8ms | Pattern matching with data constructors |
+| E4 | 79.8ms | Subtype in arithmetic context |
+
+These are dominated by prelude loading + elaboration. Track 2H lattice changes are invisible at E2E scale.
+
+### Algebraic Findings
+
+| Test | Failures | Analysis |
+|------|----------|----------|
+| V1a commutativity | 0/324 | ✅ subtype-lattice-merge is commutative |
+| V1b associativity | 0/512 | ✅ associative |
+| V1c idempotence | 0/18 | ✅ idempotent |
+| V1d identity (bot) | **18/18** | **BUG**: `subtype-lattice-merge` missing bot handling. merge(bot, x) goes to subtype? path which returns #f, then → type-top. Phase 2 adds explicit bot/top cases. |
+| V1e absorption (top) | 0/18 | ✅ top is absorbing |
+| V2a meet commutativity | 0/324 | ✅ |
+| V2b meet identity (top) | 0/18 | ✅ |
+| V2c meet annihilator (bot) | 0/18 | ✅ |
+| V3 distributivity (equality) | 336/512 | ✅ Expected — confirms Track 2G finding (flat lattice) |
+| V4 distributivity (subtype) | 412/512 | Expected pre-2H — target 0 after Track 2H |
+| V5 absorption law | **56/64** | Compound bug: meet(Nat,Int)=bot (uncovered by try-intersect-pure) + merge(Nat,bot)=top (missing bot handling). Fixed by Phases 2+4. |
+| V6 subtype consistency | 0/3 | ✅ a<:b → join(a,b)=b holds |
+| T1 right-distribution | 0/2 | ✅ (trivially — both sides → top currently) |
+| T3 annihilation | 0/0 | ✅ bot is not Pi, tensor returns bot |
+| T4 identity | 0/8 | ✅ id(a)=a holds for all base types |
+
+**Total non-expected failures: 74** (V1d: 18 + V5: 56). Both are consequences of two known gaps: (1) missing bot handling in subtype-lattice-merge, (2) incomplete try-intersect-pure. Both are in Track 2H scope (Phases 2 and 4 respectively).
+
+### Design Impact
+
+**No design changes.** The data confirms:
+1. All phases are correctly scoped — the two existing bugs (V1d, V5) are exactly what Phases 2 and 4 fix.
+2. Performance overhead of union types is negligible (dominated by whnf at ~300μs per structural op).
+3. Tensor axioms hold where testable; left-distribution (T2) deferred to post-implementation (requires union-of-Pi types).
+4. The 412 V4 distributivity failures are the gap Track 2H closes — the target is 0 failures post-implementation.
 
 ---
 
