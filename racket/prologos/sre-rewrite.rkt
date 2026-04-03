@@ -43,6 +43,10 @@
  all-sre-rewrite-rules
  ;; Template instantiation
  instantiate-template
+ ;; Propagator factory (Phase 4)
+ make-rewrite-propagator-fn
+ apply-sre-rewrite-rule
+ apply-all-sre-rewrites
  ;; Verification
  verify-rewrite-rule
  ;; Critical pair analysis
@@ -293,6 +297,50 @@
                       (list->rrb new-children)
                       (or srcloc (parse-tree-node-srcloc template))
                       (or indent (parse-tree-node-indent template)))]))
+
+;; ========================================
+;; Phase 4: Per-Rule Propagator Factory
+;; ========================================
+;; Each rule becomes a propagator: watches a form cell, fires when LHS
+;; matches, writes RHS. No iteration. No priority. All matching propagators
+;; fire. With zero critical pairs, exactly one fires.
+;;
+;; make-rewrite-propagator-fn: given a rule, returns a fire function.
+;; apply-sre-rewrite-rule: standalone rule application (match + instantiate).
+
+;; Apply a single SRE rewrite rule to a node.
+;; Returns the rewritten node on match, or #f on no match.
+(define (apply-sre-rewrite-rule rule node)
+  (define bindings (match-pattern-desc node (sre-rewrite-rule-lhs-pattern rule)))
+  (cond
+    [(not bindings) #f]  ;; no match — propagator doesn't fire
+    [(not (sre-rewrite-rule-rhs-template rule))
+     ;; No template (fold/tree rules) — fold rules use apply-fold-rewrite
+     ;; or tree-structural-rewrite directly. This path is for simple span rules.
+     #f]
+    [else
+     (instantiate-template (sre-rewrite-rule-rhs-template rule) bindings
+       #:srcloc (and (parse-tree-node? node) (parse-tree-node-srcloc node))
+       #:indent (and (parse-tree-node? node) (parse-tree-node-indent node)))]))
+
+;; Create a propagator fire function for a rewrite rule.
+;; The fire function signature matches the propagator protocol:
+;;   (fire-fn net cell-id cell-value) → new-value | #f
+;; Returns: the rewritten value, or #f (don't write — propagator silent).
+;;
+;; Phase 7 installs this on the network via net-add-propagator.
+(define (make-rewrite-propagator-fn rule)
+  (lambda (net cell-id cell-value)
+    (apply-sre-rewrite-rule rule cell-value)))
+
+;; Apply ALL matching SRE rewrite rules to a node.
+;; Returns the first match's result (since rules have zero critical pairs,
+;; at most one matches). For future Grammar Form rules with critical pairs,
+;; the cell merge function resolves conflicts (F7: conflicting → top).
+(define (apply-all-sre-rewrites node stratum)
+  (define rules (lookup-sre-rewrite-rules stratum))
+  (for/or ([rule (in-list rules)])
+    (apply-sre-rewrite-rule rule node)))
 
 ;; ========================================
 ;; Form-tag ctor-desc registration
