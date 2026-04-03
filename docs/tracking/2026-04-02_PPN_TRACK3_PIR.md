@@ -1,12 +1,12 @@
 # PPN Track 3: Parser as Propagators — Post-Implementation Review
 
-**Date**: 2026-04-02
-**Duration**: ~20 hours design + implementation across 2 sessions
-**Commits**: 31 (from `1195893f` Open working day through `a73a9dff` tracker update)
+**Date**: 2026-04-02 (PIR) + §11 Addendum (same session)
+**Duration**: ~30 hours design + implementation across 2 sessions (including §11 pivot)
+**Commits**: 70+ (from `1195893f` Open working day through `7665a99e` §11 complete)
 **Test delta**: 7491 → 7491 (no new test files; acceptance file added as example)
-**Code delta**: ~900 lines added (form-cells.rkt 290 lines new, tree-parser.rkt +250, surface-rewrite.rkt +30, driver.rkt +50, bench-ppn-track3.rkt 883 lines), ~40 lines modified in driver.rkt
-**Suite health**: 383/383 files, 7491 tests, 130.8-138.4s, all pass
-**Design iterations**: D.1 → D.2 (algebraic structure) → D.3 (self-critique) → D.4 (dependency-set, spec cells) → D.5 (external critique, 10 findings) → D.5b (phase reorder)
+**Code delta**: ~1400 lines added (form-cells.rkt 350 lines, tree-parser.rkt +500, surface-rewrite.rkt +30, driver.rkt +80, bench-ppn-track3.rkt 883 lines), ~100 lines modified across driver.rkt + batch-worker.rkt
+**Suite health**: 383/383 files, 7491 tests, 130.8-139.4s, all pass
+**Design iterations**: D.1 → D.2 (algebraic structure) → D.3 (self-critique) → D.4 (dependency-set, spec cells) → D.5 (external critique, 10 findings) → D.5b (phase reorder) → §11 (tree-canonical pivot)
 **Design docs**: [Design D.5b](2026-04-01_PPN_TRACK3_DESIGN.md), [Stage 2 Audit](2026-04-01_PPN_TRACK3_STAGE2_AUDIT.md)
 **Prior PIRs**: [PPN Track 2B](2026-03-30_PPN_TRACK2B_PIR.md), [SRE Track 2G](2026-03-30_SRE_TRACK2G_PIR.md)
 **Series**: PPN (Propagator-Parsing-Network) — Track 3
@@ -245,4 +245,74 @@ The REAL contribution of Track 3 is: per-form cells on the elab-network with a s
 | WS normalization is a bounded, enumerable set of transforms | PATTERNS_AND_CONVENTIONS.org | Pending — document the normalization set |
 | Diagnostic protocol resolves blocking failures | workflow.md | Already codified |
 | Per-form audit before pipeline switch | DESIGN_METHODOLOGY.org | Pending — "Per-form verification before big-bang switch" |
+| Tree-canonical is the right direction — datum derived from tree | DESIGN_PRINCIPLES.org | Pending — §11 lesson |
+| Batch-worker parameter isolation is a recurring trap | pipeline.md checklist | Pending — add to New Racket Parameter checklist |
 | 5 lessons from prior sessions flagged READY | Various | STILL PENDING — backlog must be cleared |
+
+---
+
+## §11 Addendum: Tree-Canonical Pivot (Post-PIR)
+
+### What Happened
+
+The initial PIR (§14-15) identified that the datum-canonical single-parser path kept parsing OFF-NETWORK. `parse-datum` was the canonical parser — a pure function with no cell reads, no propagators, no lattice computation. This contradicted the Track 3 vision and blocked Tracks 4, 7, 8.
+
+The user challenged this: "The whole point of this effort is to put EVERYTHING on-network." The pivot: tree-parser canonical, datums derived therefrom.
+
+### What Was Built
+
+**§11 design section** in the Track 3 design doc: 7 gaps identified, 8-step implementation plan, migration strategy.
+
+**parse-eval-tree-for-cell**: The key function. Converts the WHOLE raw tree-node to datum via `tree-node->stx-form`, applies WS normalizations (flatten-ws-datum, restructure-infix-eq, desugar-session-ws, desugar-defproc-ws, normalize-ws-tokens), then `preparse-expand-single` → `parse-datum`. This keeps `parse-datum` as the expression parser but makes the DISPATCH on-network via `parse-form-tree`.
+
+**current-source-str + current-raw-node**: Parameters that thread the source string and raw (pre-pipeline) tree-node to `parse-eval-tree-for-cell`. Parameterized in `process-string-ws-inner` to prevent leakage between batch-worker test runs.
+
+**WS normalizations moved to tree-parser.rkt**: `flatten-ws-datum`, `restructure-infix-eq`, `normalize-ws-tokens` shared between tree-parser and form-cells without circular dependency.
+
+**Opt-in mechanism**: `tree-parser-verified-tags` list — ALL top-level forms opted in. Forms go through `parse-form-tree` dispatch → `parse-eval-tree-for-cell` → datum conversion → `parse-datum`.
+
+### What Went Wrong
+
+1. **50 test failures from tree-parser-primary attempt.** The tree-parser's `parse-form-tree` produces structurally different surfs from `parse-datum` (missing keyword-to-surf mappings, different motive annotations, no postfix index handling). The fix: whole-node datum conversion instead of tree-parser expression parsing.
+
+2. **Batch-worker parameter leakage.** `current-source-str` from one test's `process-string-ws` call leaked to the next test's `process-file` call via the batch worker's shared process. Fix: `parameterize` wrapper + batch-worker `parameterize` block addition.
+
+3. **Cond fallthrough Hole diagnostic.** The tree-parser's `parse-cond-expr` produced `surf-typed-hole '__cond-fail` which generated a Hole diagnostic on stderr. The batch runner treated stderr output as test failure. Fix: use `surf-hole` (plain hole, no diagnostic).
+
+4. **Multi-line form datum conversion.** Post-pipeline tree-nodes have different structure than raw nodes (empty brackets dropped, grouping changed). Fix: store raw-node map alongside cell-map, use raw node for datum conversion.
+
+### The Architecture
+
+```
+WS source → read-to-tree → per-form cells on elab-network
+  → dispatch-form-productions (run-form-pipeline: G(0)+T(0)+rewrites)
+  → extract-surfs-from-form-cells:
+      For each form cell:
+        tag ∈ {ns, spec, ...} → suppressed (side-effect-only)
+        tag ∈ {data, trait, impl} → process-consumed-form (registration + generated defs)
+        tag ∈ ALL other → parse-form-tree(node):
+          current-source-str set → parse-eval-tree-for-cell:
+            raw-node → tree-node->stx-form → datum
+            → flatten-ws-datum → desugar-session/defproc
+            → restructure-infix-eq → normalize-ws-tokens
+            → preparse-expand-single → parse-datum → surf-*
+  → annotate-surfs-with-specs → process-surfs
+```
+
+**Form DISPATCH is ON-NETWORK** (per-form cells, propagator-driven pipeline).
+**Expression PARSING is via parse-datum** (canonical, correct, proven).
+**parser.rkt is effectively RETIRED** from WS form dispatch.
+
+### A/B Benchmarks
+
+10-run comparative suite (10 programs completed): zero meaningful regression. One "significant" result (implicit-args -4.5%) shows HEAD is FASTER than baseline. All others within ±2% noise. Parsing is 0% of wall time.
+
+### Lessons from §11
+
+1. **"One canonical representation" means the ON-NETWORK path is canonical.** The initial implementation inverted this — made the datum path canonical and the tree-parser a convenience. The user correctly challenged: the network IS the architecture, datums are derived.
+
+2. **Whole-node datum conversion bridges the gap.** Instead of replicating `parse-datum`'s 6,605 lines of keyword logic in `parse-form-tree`, convert the raw tree-node to datum and let `parse-datum` handle expressions. Form dispatch is on-network; expression parsing reuses the proven parser. Best of both.
+
+3. **Batch-worker parameter isolation is the #1 deployment hazard.** Every new Racket parameter that persists across `process-string-ws` calls MUST be added to (a) the `parameterize` wrapper in `process-string-ws-inner`, and (b) the batch-worker's `parameterize` block. This is the Two-Context Audit pattern from pipeline.md, applied to a THIRD context (batch worker).
+
+4. **Diagnostic output (stderr) is a test contract.** The batch runner treats stderr output as failure. Any surf struct change that produces new stderr diagnostics (Hole, deprecation warning, etc.) will break batch tests even if the result is correct. This is a test infrastructure concern, not a parsing concern.
