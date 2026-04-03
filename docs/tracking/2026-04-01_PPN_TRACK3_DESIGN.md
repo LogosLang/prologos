@@ -36,7 +36,13 @@
 | 7 | Cell pipeline wired into driver | ✅ | `40d07caa` + `5d3b597c`. extract-surfs-from-form-cells produces ALL surfs. No merge. |
 | 8 | parser.rkt retirement | ⬜ RESTORED | §11 pivot: tree-parser is canonical. parse-datum retired from WS path. Requires G1-G7 gap closure (§11.4). |
 | 9 | Acceptance + A/B benchmarks + verification | ✅ | 383/383 GREEN, 7491 tests, 133.0s. A/B: zero meaningful regression (14 programs, 5 runs). 2 "significant" within noise (±3.5%). Acceptance: 0 errors. |
-| 10 | PIR + documentation | ✅ | [PIR](2026-04-02_PPN_TRACK3_PIR.md). 16 questions answered. 11-PIR longitudinal survey. |
+| 10 | PIR + documentation | ✅ | [PIR](2026-04-02_PPN_TRACK3_PIR.md). 16 questions answered. 11-PIR longitudinal survey. §11 addendum. |
+| S1 | Register FormCell domain with SRE | ⬜ | §12. register-domain! + property inference validation. |
+| S2 | Register ProductionRegistry domain | ⬜ | §12. Boolean powerset. |
+| S3 | Register SpecCell domain | ⬜ | §12. Collision = top. |
+| S4 | ctor-desc for surf-* structs | ⬜ | §12. Structural decomposition of form cell values. |
+| S5 | SRE relation for spec→defn | ⬜ | §12. Replace hash-lookup with structural relation. |
+| S6 | Property inference validation | ⬜ | §12. All domains pass inference. |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
 
@@ -1306,3 +1312,93 @@ With tree-canonical parsing, Phase 8 is restored to its original meaning:
 - The WS path uses `parse-form-tree` exclusively
 - parser.rkt is a sexp compatibility shim — 6,605 lines, reachable only from test/REPL sexp path
 - Full deletion when sexp path is retired (PM module-loading-on-network)
+
+---
+
+## §12 SRE Integration Completion (Post-§11)
+
+### 12.1 The Gap
+
+Track 3's design (§3.8.4, §5 NTT model) specified SRE integration: domain registration with `register-domain!`, property inference, `ctor-desc` decomposition of surf-* structs, SRE relations for spec→defn resolution. Track 2G built this infrastructure FOR Track 3 to consume.
+
+**None of it was implemented.** The design was used as a pattern guide (domain registration API, algebraic property analysis) but the actual SRE mechanisms were never called. This is a Completeness failure: Track 2G's deliverables exist to be consumed by Track 3, and Track 3 skipped the consumption.
+
+**Consequence if not addressed**: Track 4 (elaboration on network) builds on Track 3's cell infrastructure. If Track 3 doesn't use SRE for form cell decomposition, Track 4 won't either — it'll build ad-hoc mechanisms. The pattern compounds. SRE becomes unused infrastructure rather than the structural reasoning backbone it's designed to be.
+
+### 12.2 Deliverables
+
+**S1: Register FormCell domain with SRE**
+
+Call `register-domain!` with:
+- Domain name: `'form-cell`
+- Merge function: `form-pipeline-merge` (set-union on transforms)
+- Meet function: set-intersection on transforms
+- Bot: `(seteq)`, Top: all-transforms set
+- Declared properties: commutative-join ✓, associative-join ✓, idempotent-join ✓, has-meet ✓, distributive ✓ (powerset), has-pseudo-complement ✓, has-complement ✓ (Boolean — transforms component)
+- Run `infer-domain-properties` to validate declarations
+
+Reference: §3.8.4 has the exact `register-domain!` call.
+
+**S2: Register ProductionRegistry domain with SRE**
+
+- Domain name: `'production-registry`
+- Merge: per-keyword set-union
+- Properties: all Boolean (powerset per keyword)
+- Validate via inference
+
+**S3: Register SpecCell domain with SRE**
+
+- Domain name: `'spec-cell`
+- Merge: `spec-cell-merge-fn` (collision = top)
+- Properties: commutative ✓ (D.5 F4 fix), idempotent ✓
+- Validate: collision detection produces top
+
+**S4: Register `ctor-desc` for surf-* structs**
+
+SRE's `ctor-desc` enables structural decomposition of cell values. Register recognizer/extractor/reconstructor for key surf-* types:
+
+- `surf-def`: fields (name, type, body, srcloc)
+- `surf-defn`: fields (name, type, param-names, body, srcloc)
+- `surf-defn-multi`: fields (name, docstring, clauses, srcloc)
+- `surf-eval`: fields (expr, srcloc)
+- `surf-check`: fields (expr, type, srcloc)
+- `surf-narrow`: fields (lhs, rhs, vars, srcloc, constraint-map)
+
+This enables Track 4's elaboration to access form sub-structure via SRE decomposition rather than direct struct field access. The elaborator creates sub-cells for each field; propagators connect them.
+
+**S5: SRE relation for spec→defn resolution**
+
+Replace the hash-lookup-based spec annotation (`annotate-surfs-with-specs`) with an SRE relation:
+
+```
+(sre-relate spec-cell defn-cell 'annotates
+  :when (eq? (spec-cell-name spec) (defn-cell-name defn)))
+```
+
+The spec→defn annotation becomes a structural relation on the network, not an imperative post-processing step. When a spec cell is written, the relation propagator fires and annotates the defn cell.
+
+**S6: Verify algebraic properties via SRE Track 2G inference**
+
+After registering all domains (S1-S3), run `resolve-and-report-properties` to:
+- Validate declared properties match actual behavior
+- Detect any distributivity/Heyting issues (the type lattice lesson)
+- Produce property profiles that downstream consumers (Track 4) can read
+
+### 12.3 Implementation Plan
+
+| Step | What | Verification | Est. lines |
+|------|------|-------------|-----------|
+| S1 | Register FormCell domain | `resolve-and-report-properties` confirms Boolean | ~30 |
+| S2 | Register ProductionRegistry domain | Property inference confirms Boolean | ~20 |
+| S3 | Register SpecCell domain | Collision = top confirmed by inference | ~20 |
+| S4 | Register `ctor-desc` for surf-def, surf-defn, surf-eval, surf-check, surf-narrow | SRE decomposition produces sub-cells matching struct fields | ~60 |
+| S5 | SRE relation for spec→defn | Spec annotation works via SRE relation, `annotate-surfs-with-specs` deleted | ~40 |
+| S6 | Property inference validation | All domains pass inference; property profiles match design claims | ~20 |
+
+**Total estimated: ~190 lines.** Verification per step. Implementation Protocol applies.
+
+### 12.4 Why This Must Precede Track 4
+
+Track 4 dissolves the parse/elaborate boundary by making elaboration read form cells via SRE decomposition. If Track 3 doesn't establish the SRE domain registrations and ctor-desc patterns, Track 4 has to build them from scratch — duplicating Track 2G's infrastructure pattern instead of consuming it. Track 3's §12 creates the foundation that Track 4 extends to type cells and constraint cells.
+
+The dependency: Track 3 §12 → Track 4 designs against SRE-decomposed form cells → elaboration rules register as propagators alongside grammar productions.
