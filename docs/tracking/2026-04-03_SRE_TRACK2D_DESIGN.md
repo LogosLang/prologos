@@ -23,7 +23,7 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Pre-0 benchmarks + critical pair analysis on existing 12 rules | ✅ | `299ead31`. 28 tests. Pipeline ~7μs. SRE tag 0.03μs. 1 critical pair found (expand-compose duplicate). See §Pre-0. |
-| 1 | Form tags as first-class ctor-descs in `'form` domain + DPO span struct | ⬜ | Register ctor-descs for form tags. `sre-rewrite-rule` with pattern-desc LHS, K as sub-cells, template-tree R. Rule registry as cell (Grammar Form writes dynamically). |
+| 1 | Form tags as first-class ctor-descs in `'form` domain + DPO span struct | ✅ | `1b059003`. sre-rewrite.rkt: DPO span, pattern-desc, PUnify holes, monotone registry, verification, critical pairs, form-tag ctor-descs. |
 | 2 | Lift simple rewrites to SRE spans | ⬜ | expand-if (2 arity patterns), let-assign, let-bracket, when, dot-access, implicit-map, compose (fix duplicate). Templates as parse-tree-nodes with PUnify holes. |
 | 3a | Fold combinator as PU micro-stratified | ⬜ | Option C: PU value with internal progress, accumulator gated by micro-strata. One cell, no per-step allocation. Track 6 can upgrade to Option B (per-step cells) if interleaving needed. |
 | 3b | Tree-structural combinator as Pocket Universe | ⬜ | Embedded per-position lattice. PUnify fills holes in parallel. Lift expand-quasiquote. |
