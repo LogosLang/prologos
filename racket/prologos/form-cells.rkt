@@ -254,7 +254,10 @@
 ;; WHETHER form dispatch goes through parse-form-tree (on-network) or not.
 ;; §11: eval/check/infer ON-NETWORK. Rest datum-always.
 ;; Full on-network pending fix for Hole diagnostic in cond (batch runner false positive).
-(define tree-parser-verified-tags '(eval check infer))
+;; ALL top-level forms ON-NETWORK
+(define tree-parser-verified-tags
+  '(eval check infer def defn defn-multi spec
+    strategy session defproc defr solver subtype selection capability foreign))
 
 ;; §11 TREE-CANONICAL extraction rewrite
 (define (extract-surfs-from-form-cells enet cell-map

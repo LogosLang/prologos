@@ -697,7 +697,7 @@
       ;; Build nested boolrec from last clause to first
       (let loop ([remaining (reverse clause-nodes)])
         (if (null? remaining)
-            (surf-typed-hole '__cond-fail loc)
+            (surf-hole loc)  ;; cond fallthrough: use plain hole (no typed-hole diagnostic)
             (let* ([clause-node (car remaining)]
                    [rest (cdr remaining)]
                    ;; Get clause children (flat tokens inside the expr node)
