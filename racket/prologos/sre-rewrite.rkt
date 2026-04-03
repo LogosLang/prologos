@@ -49,6 +49,14 @@
  find-critical-pairs
  ;; Pattern matching
  match-pattern-desc
+ ;; Fold combinator
+ (struct-out fold-pu-state)
+ run-fold
+ apply-fold-rewrite
+ ;; Fold step functions (for lifted fold rules)
+ list-literal-step
+ lseq-literal-step
+ do-step
  ;; Form-tag ctor-desc registration
  register-form-tag-ctor-desc!)
 
@@ -442,6 +450,91 @@
 ;; (compose f g ...) → (fn [$_comp] (g (f $_comp)))
 ;; Track 2 version (right-to-left) is REMOVED — it was the duplicate bug.
 
+;; ========================================
+;; Phase 3a: Fold Combinator (PU Micro-Stratified)
+;; ========================================
+;; Sequential accumulation via micro-strata within a single Pocket Universe.
+;; Progress is monotone (ascending Nat). Accumulator changes between
+;; micro-strata (non-monotone, gated by progress — NAF-LE pattern).
+;;
+;; The fold combinator takes:
+;;   - elements: list of nodes to fold over
+;;   - base-case: the initial accumulator value
+;;   - step-fn: (element accumulator → new-accumulator)
+;; Returns: the final accumulator.
+;;
+;; Option C: one cell, no per-step allocation. Micro-strata execute
+;; within a single pipeline cycle. Track 6 can upgrade to Option B
+;; (per-step cells) if reduction interleaving is needed.
+
+(struct fold-pu-state
+  (progress      ;; Nat — micro-stratum index (ascending, monotone)
+   accumulator   ;; node — built-up result (changes between micro-strata)
+   elements      ;; (listof node) — original input (immutable)
+   step-fn)      ;; (element accumulator → node) — the step rule
+  #:transparent)
+
+;; Run a right-fold to completion: apply step-fn from right to left.
+;; foldr step base [e1, e2, e3] = step(e1, step(e2, step(e3, base)))
+;; Returns the final accumulator.
+(define (run-fold elements base-case step-fn)
+  (foldr step-fn base-case elements))
+
+;; Build a fold-based rewrite: decompose the node into elements,
+;; fold them with a step template, return the result.
+(define (apply-fold-rewrite node element-extractor base-case-fn step-fn)
+  (define elements (element-extractor node))
+  (define base (base-case-fn node))
+  (run-fold elements base step-fn))
+
+;; --- Fold rule: expand-list-literal ---
+;; (list-literal e1 e2 ...) → (cons e1 (cons e2 ... nil))
+(define (list-literal-step elem acc)
+  (tpl tag-expr (tpl-const "cons") elem acc))
+
+(define expand-list-literal-fold
+  (sre-rewrite-rule
+    'expand-list-literal-fold
+    (pattern-desc 'list-literal (list) #f)  ;; tag match only
+    '()  ;; K is implicit in fold — elements extracted from node
+    #f   ;; no template — fold produces result directly
+    'one-way 0 'strongly-confluent 'V0-2))
+(register-sre-rewrite-rule! expand-list-literal-fold)
+
+;; --- Fold rule: expand-lseq-literal ---
+;; (lseq-literal e1 e2 ...) → (lseq-cell e1 (fn [_ : _] (lseq-cell e2 ... lseq-nil)))
+(define (lseq-literal-step elem acc)
+  (tpl tag-expr (tpl-const "lseq-cell") elem
+       (tpl tag-expr (tpl-const "fn")
+            (tpl tag-expr (tpl-const "_") (tpl-const ":") (tpl-const "_"))
+            acc)))
+
+(define expand-lseq-literal-fold
+  (sre-rewrite-rule
+    'expand-lseq-literal-fold
+    (pattern-desc 'lseq-literal (list) #f)
+    '() #f 'one-way 0 'strongly-confluent 'V0-2))
+(register-sre-rewrite-rule! expand-lseq-literal-fold)
+
+;; --- Fold rule: expand-do ---
+;; (do e1 e2 ... en) → (let [_ := e1] (let [_ := e2] ... en))
+(define (do-step elem acc)
+  (tpl tag-expr (tpl-const "let") (tpl-const "_") (tpl-const ":=") elem acc))
+
+(define expand-do-fold
+  (sre-rewrite-rule
+    'expand-do-fold
+    (pattern-desc 'do (list) #f)
+    '() #f 'one-way 0 'strongly-confluent 'V0-2))
+(register-sre-rewrite-rule! expand-do-fold)
+
+;; Note: expand-cond is more complex (arms need guard/body splitting).
+;; It stays as the existing lambda-based rule for now. The fold combinator
+;; infrastructure is in place for cond — the step function would need
+;; arm-splitting logic that doesn't reduce cleanly to a single template.
+;; This is documented as a known limitation for Phase 3a.
+
+;; ========================================
 ;; Phase 2 summary: 5 simple rules lifted to SRE spans.
 ;; expand-dot-access and expand-implicit-map have tag-specific handling
 ;; in tree-parser.rkt — they don't go through surface-rewrite's pipeline.
