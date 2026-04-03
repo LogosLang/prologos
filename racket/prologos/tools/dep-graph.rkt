@@ -345,8 +345,6 @@
    (test-dep '(driver.rkt macros.rkt sessions.rkt) #t)
    'test-free-ordering.rkt
    (test-dep '(driver.rkt global-env.rkt macros.rkt) #t)
-   'test-functor-ws.rkt
-   (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt namespace.rkt parser.rkt pretty-print.rkt reader.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #f)
    'test-galois-connection.rkt
    (test-dep '() #t)
    'test-gde-errors.rkt
@@ -536,8 +534,6 @@
    (test-dep '(driver.rkt global-env.rkt performance-counters.rkt) #f)
    'test-pipe-compose-e2e-01.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
-   'test-pipe-compose-e2e-02.rkt
-   (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-pipe-compose-e2e-03.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt reader.rkt reduction.rkt source-location.rkt surface-syntax.rkt syntax.rkt trait-resolution.rkt typing-core.rkt) #t)
    'test-pipe-compose.rkt
@@ -624,8 +620,6 @@
    (test-dep '(reader.rkt) #f)
    'test-reader.rkt
    (test-dep '(reader.rkt) #f)
-   'test-reducible.rkt
-   (test-dep '(driver.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt syntax.rkt) #t)
    'test-reduction-perf-01-01.rkt
    (test-dep '(driver.rkt global-env.rkt macros.rkt namespace.rkt parser.rkt posit-impl.rkt prelude.rkt reader.rkt reduction.rkt surface-syntax.rkt syntax.rkt) #t)
    'test-reduction-perf-01-02.rkt
@@ -1040,7 +1034,6 @@
    'test-numeric-traits-01.rkt    '(prologos::core::arithmetic)
    'test-numeric-traits-02.rkt    '(prologos::core::algebra prologos::core::arithmetic prologos::core::conversions prologos::core::eq prologos::core::ord prologos::data::nat)
    'test-pipe-compose-e2e-01.rkt  '(prologos::data::list prologos::data::nat prologos::data::transducer)
-   'test-pipe-compose-e2e-02.rkt  '(prologos::data::list prologos::data::nat prologos::data::transducer)
    'test-pipe-compose-e2e-03.rkt  '(prologos::data::list prologos::data::nat prologos::data::transducer)
    'test-posit-identity.rkt       '(prologos::core::algebra prologos::core::arithmetic prologos::data::list)
    'test-prelude-system-01.rkt    '(prologos::core)
@@ -1048,7 +1041,6 @@
    'test-pvec-traits.rkt          '(prologos::core::pvec prologos::data::list prologos::data::lseq prologos::data::lseq-ops prologos::data::nat prologos::data::option)
    'test-qtt-pipeline.rkt         '(prologos::data::bool prologos::data::nat)
    'test-quote.rkt                '(prologos::data::datum)
-   'test-reducible.rkt            '(prologos::core::collection-traits prologos::core::collections prologos::core::list prologos::core::lseq prologos::core::pvec prologos::core::set prologos::data::list prologos::data::lseq prologos::data::lseq-ops prologos::data::nat prologos::data::option)
    'test-refined-int.rkt          '(prologos::core::abstract-domains prologos::core::eq prologos::core::ord prologos::data::option prologos::data::ordering prologos::data::refined-int)
    'test-refined-rat.rkt          '(prologos::core::abstract-domains prologos::core::eq prologos::core::ord prologos::data::option prologos::data::ordering prologos::data::refined-rat)
    'test-refined-subtyping.rkt    '(prologos::core::abstract-domains prologos::core::eq prologos::data::option prologos::data::refined-int prologos::data::refined-rat)
