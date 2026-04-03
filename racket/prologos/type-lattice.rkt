@@ -31,7 +31,8 @@
          "reduction.rkt"       ;; whnf (read-only)
          "zonk.rkt"            ;; zonk-at-depth (read-only)
          "substitution.rkt"    ;; open-expr (read-only)
-         "ctor-registry.rkt")  ;; PUnify Phase 1: descriptor-driven structural merge
+         "ctor-registry.rkt"   ;; PUnify Phase 1: descriptor-driven structural merge
+         "union-types.rkt")    ;; SRE Track 2H: canonical union construction (extracted)
 
 (provide type-bot type-top type-bot? type-top?
          type-lattice-merge
@@ -380,59 +381,14 @@
 ;; Union type pure unification
 ;; ========================================
 ;;
-;; Duplicated from unify.rkt to avoid importing metavar-store.rkt
-;; (unify.rkt requires metavar-store.rkt, which we must avoid).
-;; These are pure functions on AST structs.
-
-(define (flatten-union-pure e)
-  (match e
-    [(expr-union l r)
-     (append (flatten-union-pure l) (flatten-union-pure r))]
-    [_ (list e)]))
-
-;; Canonical sort key (copied from unify.rkt union-sort-key)
-(define (union-sort-key-pure e)
-  (match e
-    [(expr-Nat) "0:Nat"]
-    [(expr-nat-val _) "0:NatVal"]
-    [(expr-Bool) "0:Bool"]
-    [(expr-Unit) "0:Unit"]
-    [(expr-Int) "0:Int"]
-    [(expr-Rat) "0:Rat"]
-    [(expr-String) "0:String"]
-    [(expr-Keyword) "0:Keyword"]
-    [(expr-Char) "0:Char"]
-    [(expr-Type l) (format "0:Type~a" l)]
-    [(expr-fvar name) (format "1:~a" name)]
-    [(expr-tycon name) (format "1:tycon:~a" name)]
-    [(expr-bvar idx) (format "2:~a" idx)]
-    [(expr-Pi _ _ _) "3:Pi"]
-    [(expr-Sigma _ _) "3:Sigma"]
-    [(expr-Eq _ _ _) "3:Eq"]
-    [(expr-Vec _ _) "3:Vec"]
-    [(expr-Fin _) "3:Fin"]
-    [(expr-Map _ _) "3:Map"]
-    [(expr-PVec _) "3:PVec"]
-    [(expr-Set _) "3:Set"]
-    [(expr-app _ _) "4:app"]
-    [(expr-meta id _) (format "5:?~a" id)]
-    [_ "9:other"]))
-
-(define (dedup-union-components-pure cs)
-  (if (null? cs) '()
-      (let loop ([prev (car cs)] [rest (cdr cs)] [acc (list (car cs))])
-        (cond
-          [(null? rest) (reverse acc)]
-          [(equal? prev (car rest))
-           (loop prev (cdr rest) acc)]
-          [else
-           (loop (car rest) (cdr rest) (cons (car rest) acc))]))))
+;; SRE Track 2H Phase 1: flatten-union, union-sort-key, dedup-union-components
+;; are now imported from union-types.rkt (eliminates duplication with unify.rkt).
 
 (define (try-unify-pure-unions a b)
-  (define cs-a (dedup-union-components-pure
-                 (sort (flatten-union-pure a) string<? #:key union-sort-key-pure)))
-  (define cs-b (dedup-union-components-pure
-                 (sort (flatten-union-pure b) string<? #:key union-sort-key-pure)))
+  (define cs-a (dedup-union-components
+                 (sort (flatten-union a) string<? #:key union-sort-key)))
+  (define cs-b (dedup-union-components
+                 (sort (flatten-union b) string<? #:key union-sort-key)))
   (cond
     [(not (= (length cs-a) (length cs-b))) #f]
     [else
