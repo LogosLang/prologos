@@ -19,8 +19,9 @@
          racket/list
          "syntax.rkt"
          "macros.rkt"          ;; subtype-pair?
-         "type-lattice.rkt"    ;; type-top, type-bot, type-lattice-merge, has-unsolved-meta?, etc.
+         "type-lattice.rkt"    ;; type-top, type-bot, type-lattice-merge, has-unsolved-meta?, try-unify-pure
          "union-types.rkt"     ;; SRE Track 2H: flatten-union, build-union-type
+         "substitution.rkt"    ;; SRE Track 2H Phase 4: subst for tensor binder instantiation
          "propagator.rkt"      ;; SRE Track 1 Phase 4: mini-network for compound checks
          "sre-core.rkt"        ;; SRE Track 1 Phase 4: structural subtype check
          (only-in "ctor-registry.rkt"
@@ -34,6 +35,9 @@
          type-key
          subtype-lattice-merge
          build-union-type-with-absorption  ;; SRE Track 2H Phase 2
+         ;; SRE Track 2H Phase 4: Tensor (quantale multiplication)
+         type-tensor-core                  ;; propagator fire function: single Pi × single arg
+         type-tensor-distribute            ;; scaffolding: imperative union distribution
          ;; SRE Track 1 Phase 4: frequency counter for monitoring
          current-subtype-check-count
          ;; Track 1B Phase 1: global counters + reporter
@@ -219,6 +223,69 @@
     [(null? absorbed) (expr-error)]
     [(= (length absorbed) 1) (car absorbed)]
     [else (foldr expr-union (last absorbed) (drop-right absorbed 1))]))
+
+;; ========================================
+;; SRE Track 2H Phase 4: Tensor (⊗) — quantale multiplication
+;; ========================================
+;; The tensor takes a SINGLE function type and a SINGLE argument type
+;; and produces the result type. This is Pi elimination at the type level.
+;;
+;; Returns type-bot for inapplicable types (F1: not type-top).
+;; In a propagator network, "can't apply" = propagator doesn't write
+;; = output cell stays at bot (no information). type-top means
+;; CONTRADICTION (two conflicting pieces of information).
+;;
+;; type-tensor-core is the operation PPN Track 4 wires as a propagator.
+;; type-tensor-distribute is scaffolding: the imperative simulation of
+;; what the network does when multiple components write to the same cell.
+;; Distribution is EMERGENT network behavior (M3), not explicit computation.
+
+(define (type-tensor-core func-type arg-type)
+  (cond
+    [(type-bot? func-type) type-bot]    ;; no info → no output
+    [(type-bot? arg-type) type-bot]
+    [(type-top? func-type) type-top]    ;; genuine contradiction propagates
+    [(type-top? arg-type) type-top]
+    [(expr-Pi? func-type)
+     (let ([domain (expr-Pi-domain func-type)]
+           [codomain (expr-Pi-codomain func-type)])
+       (cond
+         [(subtype? arg-type domain) (subst 0 arg-type codomain)]
+         [(try-unify-pure arg-type domain) (subst 0 arg-type codomain)]
+         [else type-bot]))]             ;; inapplicable → no info
+    [else type-bot]))                   ;; non-Pi → no info
+
+;; Scaffolding: imperative distribution for pre-network elaborator.
+;; In PPN Track 4's propagator network, this is unnecessary — the network
+;; fires type-tensor-core per component, the output cell's merge produces
+;; the union. Distribution is emergent from multiple writes.
+(define (type-tensor-distribute func-type arg-type)
+  (cond
+    [(and (expr-union? func-type) (expr-union? arg-type))
+     ;; Both unions: distribute both sides (cross product)
+     (define results
+       (for*/list ([f (in-list (flatten-union func-type))]
+                   [a (in-list (flatten-union arg-type))])
+         (type-tensor-core f a)))
+     ;; Filter out bot (inapplicable components)
+     (define valid (filter (lambda (r) (not (type-bot? r))) results))
+     (if (null? valid) type-bot
+         (build-union-type-with-absorption valid))]
+    [(expr-union? func-type)
+     (define results
+       (for/list ([f (in-list (flatten-union func-type))])
+         (type-tensor-core f arg-type)))
+     (define valid (filter (lambda (r) (not (type-bot? r))) results))
+     (if (null? valid) type-bot
+         (build-union-type-with-absorption valid))]
+    [(expr-union? arg-type)
+     (define results
+       (for/list ([a (in-list (flatten-union arg-type))])
+         (type-tensor-core func-type a)))
+     (define valid (filter (lambda (r) (not (type-bot? r))) results))
+     (if (null? valid) type-bot
+         (build-union-type-with-absorption valid))]
+    [else (type-tensor-core func-type arg-type)]))
 
 ;; ========================================
 ;; SRE Track 2H Phase 2: Redesigned subtype-lattice-merge
