@@ -69,6 +69,8 @@
  list-literal-step
  lseq-literal-step
  do-step
+ pipe-gt-step
+ compose-step
  ;; Form-tag ctor-desc registration
  register-form-tag-ctor-desc!)
 
@@ -675,11 +677,40 @@
     '() #f 'one-way 0 'strongly-confluent 'V0-2))
 (register-sre-rewrite-rule! expand-do-fold)
 
-;; Note: expand-cond is more complex (arms need guard/body splitting).
-;; It stays as the existing lambda-based rule for now. The fold combinator
-;; infrastructure is in place for cond — the step function would need
-;; arm-splitting logic that doesn't reduce cleanly to a single template.
-;; This is documented as a known limitation for Phase 3a.
+;; --- Fold rule: expand-pipe-gt ---
+;; |> x f g → (g (f x))
+;; Fold-left: accumulator = x, each function wraps in application
+(define (pipe-gt-step fn-node acc)
+  (tpl 'bracket-group fn-node acc))
+
+(define expand-pipe-gt-fold
+  (sre-rewrite-rule
+    'expand-pipe-gt-fold
+    (pattern-desc 'pipe-gt (list) #f)
+    '() #f 'one-way 0 'strongly-confluent 'V0-2))
+(register-sre-rewrite-rule! expand-pipe-gt-fold)
+
+;; --- Fold rule: expand-compose ---
+;; >> f g → (fn [$_comp] (g (f $_comp)))
+;; Fold-left: accumulator = param, each function wraps in application
+(define (compose-step fn-node acc)
+  (tpl 'bracket-group fn-node acc))
+
+(define expand-compose-fold
+  (sre-rewrite-rule
+    'expand-compose-fold
+    (pattern-desc 'compose (list) #f)
+    '() #f 'one-way 0 'strongly-confluent 'V0-2))
+(register-sre-rewrite-rule! expand-compose-fold)
+
+;; Note: expand-cond needs arm-splitting (guard/body extraction from each arm).
+;; The fold step function would need to parse arm structure. The existing
+;; lambda-based rule handles this. Lifting requires a richer step function
+;; that pattern-matches each arm — deferred to Grammar Form scope where
+;; arm syntax is formalized as a pattern-desc.
+;;
+;; expand-mixfix uses precedence resolution (Track 2B Pocket Universe).
+;; Not a pattern→template rewrite — stays as lambda.
 
 ;; ========================================
 ;; Phase 3b: Tree-Structural Combinator
