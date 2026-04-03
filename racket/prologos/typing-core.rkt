@@ -547,12 +547,26 @@
        ;; General case: infer function type, check argument
        [_
         (let ([t1 (whnf (infer ctx e1))])
-          (match t1
-            [(expr-Pi m a b)
-             (if (check ctx e2 a)
-                 (subst 0 e2 b)
+          (cond
+            ;; Direct Pi: existing fast path
+            [(expr-Pi? t1)
+             (if (check ctx e2 (expr-Pi-domain t1))
+                 (subst 0 e2 (expr-Pi-codomain t1))
                  (expr-error))]
-            [_ (expr-error)]))])]
+            ;; SRE Track 2H Phase 5: Union type → distribute via tensor (scaffolding)
+            ;; type-tensor-core returns bot for inapplicable (F1), so
+            ;; type-tensor-distribute may return bot (all inapplicable)
+            ;; or top (contradiction). Both → expr-error.
+            [(expr-union? t1)
+             (let ([arg-ty (infer ctx e2)])
+               (if (expr-error? arg-ty)
+                   (expr-error)
+                   (let ([result (type-tensor-distribute t1 arg-ty)])
+                     ;; type-bot = 'type-bot, type-top = 'type-top (sentinel symbols)
+                     (if (or (eq? result 'type-bot) (eq? result 'type-top))
+                         (expr-error)
+                         result))))]
+            [else (expr-error)]))])]
 
     ;; ---- Sigma elimination: fst ----
     [(expr-fst e1)
