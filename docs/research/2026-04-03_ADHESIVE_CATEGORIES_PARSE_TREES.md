@@ -270,7 +270,29 @@ This would be a genuine extension of CALM theory from set operations to graph re
 
 ---
 
-## 9. Open Questions
+## 9. Conceptual Connection: Wolfram Multiway Systems and the Ruliad
+
+The Prologos propagator network exhibits structural parallels with Wolfram's [multiway systems](https://mathworld.wolfram.com/MultiwayGraph.html) and the [Ruliad](https://writings.stephenwolfram.com/2021/11/the-concept-of-the-ruliad/). The key correspondences:
+
+| Wolfram Multiway | Prologos Propagator Network |
+|-----------------|---------------------------|
+| Rewrite rule application → multiple successor states | Propagator firing → cell writes |
+| Branching (multiple successors from one state) | ATMS assumption creation (worldview split) |
+| Merging (different paths → same state) | Cell merge (lattice join) |
+| Causal invariance | Church-Rosser / CALM compliance |
+| Branchial space (space of quantum branches) | ATMS worldview space (consistent assumption sets) |
+| Observer "adding lemmas" to merge branches | Elaborator selecting consistent worldview (disambiguation, meta-solving) |
+| Knuth-Bendix completion (resolving critical pairs) | Grammar Form completion (adding rules to make user productions confluent) |
+
+The deepest parallel: [causal invariance](https://www.wolframphysics.org/glossary/) in the multiway graph IS the Church-Rosser property. In both systems, it means all execution paths converge to the same result. For Prologos, CALM compliance (§7) provides this guarantee for the monotone S0 stratum.
+
+Wolfram's [observer theory](https://writings.stephenwolfram.com/2023/12/observer-theory/) — where an observer embedded in the multiway system perceives a single consistent thread by collapsing branches — maps to the elaborator's role: selecting a consistent parse/type/reduction from the ATMS's branching space. The elaborator IS the observer.
+
+**Assessment**: These parallels validate that our architecture sits on well-studied mathematical structures. However, they do not change our design decisions. The tropical semiring (cost-weighted rewriting), ATMS (worldview management), and adhesive DPO (confluence) are already the right tools — they are more specific and actionable than the Ruliad framing. The Wolfram connection is useful as: (a) a conceptual map showing where Prologos sits in the space of computational formalisms, (b) potential experimental comparison (our propagator network IS a finite fragment of the ruliad for Prologos programs), and (c) a bridge to the physics-of-computation community for future research dissemination.
+
+---
+
+## 10. Open Questions
 
 1. **Can we exploit the concurrency theorem for Grammar Form?** The concurrency theorem composes rules that share structure. For Grammar Form productions that share sub-patterns (e.g., two productions that both match `expr`), the theorem tells us how to combine them. This could optimize Grammar Form compilation — instead of registering N rules, register one concurrent rule.
 
@@ -288,7 +310,7 @@ This would be a genuine extension of CALM theory from set operations to graph re
 
 ---
 
-## 10. References
+## 11. References
 
 ### Foundational
 
