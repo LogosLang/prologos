@@ -344,4 +344,5 @@
               #f #f      ;; no meta-recognizer/resolver (ground types only)
               #f         ;; no dual-pairs
               (hasheq)   ;; Track 2G: property-cell-ids
-              (hasheq))) ;; Track 2G: declared-properties
+              (hasheq)   ;; Track 2H: declared-properties (nested, empty for query domain)
+              (hasheq))) ;; Track 2H: operations (empty for query domain)

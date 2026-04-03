@@ -121,7 +121,13 @@
    meta-resolver     ; (expr → cell-id | #f) | #f — context-dependent: what cell?
    dual-pairs        ; SRE Track 1: '((Send . Recv) ...) or #f
    property-cell-ids ; SRE Track 2G: (hasheq property-name → cell-id) — on-network cells (Phase 6)
-   declared-properties ; SRE Track 2G: (hasheq property-name → property-value) — declarations (Phase 4)
+   declared-properties ; SRE Track 2H: (hasheq relation-name → (hasheq property-name → property-value))
+                       ; Was flat hash in Track 2G; now nested by relation (F7, P4, L3).
+                       ; Relation-level: endomorphism properties on sre-relation.properties.
+                       ; Domain×relation: lattice structure properties here.
+   operations          ; SRE Track 2H: (hasheq op-name → (hasheq 'name sym 'fn proc 'arity nat 'properties list))
+                       ; Discoverable operations: tensor, pseudo-complement, residual (future).
+                       ; Track 4 looks up operations generically via this field.
    )
   #:transparent)
 
@@ -155,11 +161,16 @@
 ;; Query: does domain have this algebraic property?
 ;; Returns #t only for prop-confirmed. Everything else → #f (capability gating).
 ;;
+;; SRE Track 2H: #:relation keyword selects which ordering's properties to check.
+;; Default: 'equality (backward compat — all pre-2H callers query equality ordering).
+;; The keyword API is SCAFFOLDING (F5) — permanent is cell reads from property-cell-ids.
+;;
 ;; Two sources (Phase 4: declaration hash, Phase 6: cells on network):
 ;; 1. Check property-cell-ids for a cell → read from network
-;; 2. Fall back to declared-properties hash
-;; After Phase 6 wiring, all properties are on cells. Before: hash only.
-(define (sre-domain-has-property? domain property-name #:net [net #f])
+;; 2. Fall back to declared-properties nested hash
+(define (sre-domain-has-property? domain property-name
+                                  #:net [net #f]
+                                  #:relation [relation-name 'equality])
   ;; First: check cell (if exists and network provided)
   (define cell-ids (sre-domain-property-cell-ids domain))
   (define cell-id (and net (hash-ref cell-ids property-name #f)))
@@ -167,10 +178,11 @@
     [(and cell-id net)
      (define val (net-cell-read net cell-id))
      (eq? val prop-confirmed)]
-    ;; Fallback: check declared-properties hash (Phase 4)
+    ;; Fallback: check declared-properties nested hash
     [else
      (define declared (sre-domain-declared-properties domain))
-     (eq? (hash-ref declared property-name prop-unknown) prop-confirmed)]))
+     (define rel-props (hash-ref declared relation-name (hasheq)))
+     (eq? (hash-ref rel-props property-name prop-unknown) prop-confirmed)]))
 
 ;; ========================================================================
 ;; SRE Track 2G Phase 1.5: Domain Registry
@@ -269,11 +281,15 @@
                   (axiom-refuted (list a b c)))))))))
 
 ;; Infer properties for a domain from sample values.
-;; Returns updated declared-properties hash with inference results.
+;; SRE Track 2H: #:relation selects which sub-hash to work with.
+;; Returns updated properties sub-hash for that relation.
 ;; Declarations take priority — inference validates but doesn't override #t declarations.
 ;; If inference finds counterexample for a declared #t property → prop-contradicted.
-(define (infer-domain-properties domain samples #:meet-fn [meet-fn #f])
-  (define declared (sre-domain-declared-properties domain))
+(define (infer-domain-properties domain samples
+                                 #:meet-fn [meet-fn #f]
+                                 #:relation [relation-name 'equality])
+  (define all-declared (sre-domain-declared-properties domain))
+  (define declared (hash-ref all-declared relation-name (hasheq)))
   (define (update-property props name test-result)
     (define current (hash-ref props name prop-unknown))
     (define inferred
@@ -410,18 +426,22 @@
 ;; redesign makes type domain Heyting), behavior activates automatically.
 
 ;; Execute then-fn if domain has property, else-fn otherwise.
-(define (with-domain-property domain property-name then-fn else-fn)
-  (if (sre-domain-has-property? domain property-name)
+;; #:relation defaults to 'equality (backward compat).
+(define (with-domain-property domain property-name then-fn else-fn
+                              #:relation [relation-name 'equality])
+  (if (sre-domain-has-property? domain property-name #:relation relation-name)
       (then-fn)
       (else-fn)))
 
 ;; Select from a list of (property-name . behavior-fn) pairs.
 ;; Returns the first behavior whose property is confirmed, or default-fn.
-(define (select-by-property domain property-behaviors default-fn)
+;; #:relation defaults to 'equality (backward compat).
+(define (select-by-property domain property-behaviors default-fn
+                            #:relation [relation-name 'equality])
   (let loop ([rest property-behaviors])
     (cond
       [(null? rest) (default-fn)]
-      [(sre-domain-has-property? domain (caar rest))
+      [(sre-domain-has-property? domain (caar rest) #:relation relation-name)
        ((cdar rest))]
       [else (loop (cdr rest))])))
 

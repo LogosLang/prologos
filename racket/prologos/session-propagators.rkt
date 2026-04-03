@@ -274,10 +274,13 @@
                 (sess-dsend . sess-drecv)
                 (sess-async-send . sess-async-recv))
               (hasheq)                         ;; Track 2G: property-cell-ids
-              (hasheq 'commutative-join prop-confirmed
-                      'associative-join prop-confirmed
-                      'idempotent-join prop-confirmed
-                      'has-meet prop-confirmed))) ;; Track 2G: declared-properties
+              ;; Track 2H: declared-properties nested by relation
+              (hasheq
+                'equality (hasheq 'commutative-join prop-confirmed
+                                  'associative-join prop-confirmed
+                                  'idempotent-join  prop-confirmed
+                                  'has-meet         prop-confirmed))
+              (hasheq)))                        ;; Track 2H: operations (none for session)
 
 ;; Track 2G: register in domain registry
 (register-domain! session-sre-domain)

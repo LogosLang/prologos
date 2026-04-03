@@ -74,7 +74,7 @@
 (define type-domain
   (sre-domain 'type
               type-lattice-merge type-top? type-bot? type-bot type-top
-              expr-meta? #f #f (hasheq) (hasheq))) ;; Track 2G: property-cell-ids, declared-properties
+              expr-meta? #f #f (hasheq) (hasheq) (hasheq))) ;; Track 2G: property-cell-ids, declared-properties, operations
 
 ;; Check if expr-app is headed by an unsolved meta (flex-app pattern)
 (define (flex-app-check? v)

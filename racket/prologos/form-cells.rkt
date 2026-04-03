@@ -503,14 +503,16 @@
               #f                    ;; meta-resolver
               #f                    ;; dual-pairs
               (hasheq)              ;; property-cell-ids (scaffolding)
-              ;; Declared properties: transforms is powerset → Boolean
-              (hasheq 'commutative-join  prop-confirmed
-                      'associative-join  prop-confirmed
-                      'idempotent-join   prop-confirmed
-                      'has-meet          prop-confirmed
-                      'distributive      prop-confirmed
-                      'has-pseudo-complement prop-confirmed
-                      'has-complement    prop-refuted)))  ;; product is Heyting (provenance chain)
+              ;; Track 2H: declared-properties nested by relation
+              (hasheq
+                'equality (hasheq 'commutative-join  prop-confirmed
+                                  'associative-join  prop-confirmed
+                                  'idempotent-join   prop-confirmed
+                                  'has-meet          prop-confirmed
+                                  'distributive      prop-confirmed
+                                  'has-pseudo-complement prop-confirmed
+                                  'has-complement    prop-refuted))  ;; Heyting
+              (hasheq)))           ;; Track 2H: operations
 
 (register-domain! form-cell-sre-domain)
 
@@ -541,9 +543,12 @@
               (spec-cell-value #f #f #f #t)  ;; top value (collision)
               #f #f #f
               (hasheq)
-              (hasheq 'commutative-join  prop-confirmed
-                      'associative-join  prop-confirmed
-                      'idempotent-join   prop-confirmed)))
+              ;; Track 2H: declared-properties nested by relation
+              (hasheq
+                'equality (hasheq 'commutative-join  prop-confirmed
+                                  'associative-join  prop-confirmed
+                                  'idempotent-join   prop-confirmed))
+              (hasheq)))           ;; Track 2H: operations
 
 (register-domain! spec-cell-sre-domain)
 
