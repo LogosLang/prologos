@@ -26,7 +26,7 @@
 | 1 | Form tags as first-class ctor-descs in `'form` domain + DPO span struct | ✅ | `1b059003`. sre-rewrite.rkt: DPO span, pattern-desc, PUnify holes, monotone registry, verification, critical pairs, form-tag ctor-descs. |
 | 2 | Lift simple rewrites to SRE spans | ✅ | `25a697aa`. 5 rules (if-3, if-4, when, let-assign, let-bracket). match-pattern-desc + instantiate-template. Compose dup noted. |
 | 3a | Fold combinator as PU micro-stratified | ✅ | `e67f0820`. run-fold (right-fold, Option C). 3 fold rules: list-literal, lseq-literal, do. Cond stays as lambda (arm-splitting limitation). |
-| 3b | Tree-structural combinator as Pocket Universe | ⬜ | Embedded per-position lattice. PUnify fills holes in parallel. Lift expand-quasiquote. |
+| 3b | Tree-structural combinator as Pocket Universe | ✅ | `dbf793d5`. tree-structural-rewrite + quasiquote-position-fn. Per-position classification + nested recursion + fold composition. |
 | 4 | pattern-desc + per-rule propagators (replace iteration dispatch) | ⬜ | Each rule is a propagator watching form cell. Fires when LHS pattern matches. Zero critical pairs → parallel safe. Cell merge resolves conflicts for future Grammar Form rules. |
 | 5 | K as sub-cells (PUnify pattern) with verification | ⬜ | Decomposition writes sub-cells, reconstruction reads. DPO interface preservation. Verification: template holes ⊆ K bindings. |
 | 6 | Critical pair analysis infrastructure | ⬜ | Computable from pattern-desc LHS overlap. Consumed by PPN Track 4 + Grammar Form. |
