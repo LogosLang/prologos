@@ -30,7 +30,7 @@
 | 4 | pattern-desc + per-rule propagators (replace iteration dispatch) | ✅ | `c86594be`. make-rewrite-propagator-fn (fire fn factory), apply-sre-rewrite-rule, apply-all-sre-rewrites. |
 | 5 | K as sub-cells (PUnify pattern) with verification | ✅ | `59609525`. rewrite-binding-context abstracts hash vs cells. Fresh per fold step (NAF-LE). Verification from Phase 1 intact. |
 | 6 | Critical pair analysis infrastructure | ✅ | `43773669`. analyze-confluence + report. Arity-aware overlap. 9 rules → 0 critical pairs (strongly confluent). |
-| 7 | Integration: wire per-rule propagators into form pipeline | ⬜ | Rules fire as propagators within pipeline's monotone shell. |
+| 7 | Integration: wire SRE rules into form pipeline | ✅ | `b061d832`. V0-2 tries SRE first, lambda fallback. Circular dep resolved. Dual path during migration. |
 | 8 | Verification + acceptance file + PIR | ⬜ | Full suite green, A/B, all 13 rules pass. |
 
 ---
