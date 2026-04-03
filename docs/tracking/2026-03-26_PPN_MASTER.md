@@ -216,14 +216,15 @@ The type lattice is a **quantale** — simultaneously a lattice (for fixpoint co
 
 The research says: "The resulting 'parse' doesn't produce trees — it produces types. This is type inference as parsing: the grammar's semantic actions compute types, and the semiring combines types according to the grammar's composition rules."
 
-Track 4's design MUST:
-1. Name the function-application propagator as the **tensor (⊗)** of the type-lattice quantale
-2. Verify the **semiring distributive law**: `⊗ distributes over ⊕` — `f(A | B) = f(A) | f(B)`. SRE Track 2H validates this on samples; Track 4 must ensure the on-network propagator preserves it.
-3. Verify **associativity** of ⊗ (nested application), **identity** (identity function type), and **annihilation** (⊗ with ⊥ = ⊥)
-4. Connect to the **6-domain reduced product** architecture: the type lattice is one of six domains (token, surface, core, type, mult, session) connected by Galois bridges. Track 4 builds the Surface→Type and Type→Surface bridges.
-5. Design the type-level semantic actions that make grammar productions compute types — these are the propagators that turn parsing into type inference.
+SRE Track 2H delivers both halves of the quantale:
+- **⊕ (union-join)**: subtype-aware join producing union types with absorption
+- **⊗ (tensor)**: `type-tensor` — reified function application distributing over unions, wired into the elaborator
 
-SRE Track 2H's Pre-0 validates the distributive law on samples. If it fails, Track 4 needs to know immediately.
+Track 4's design MUST:
+1. Wire `type-tensor` as a **propagator fire function**: given cells for f-type and arg-type, write result-type. The propagator IS the tensor on-network.
+2. Connect to the **6-domain reduced product** architecture: the type lattice is one of six domains (token, surface, core, type, mult, session) connected by Galois bridges. Track 4 builds the Surface→Type and Type→Surface bridges.
+3. Design the type-level semantic actions that make grammar productions compute types — these are the propagators that turn parsing into type inference.
+4. Semiring axioms (distribution, associativity, identity, annihilation) are validated by Track 2H — Track 4 inherits them.
 
 *Integration vision for Track 4*:
 1. AST nodes get type cells (PPN Track 4 = attribute evaluation)

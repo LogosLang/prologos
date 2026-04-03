@@ -22,34 +22,39 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Pre-0 benchmarks + property checks | ⬜ | Benchmark subtype-lattice-merge, verify distributivity of union-join under subtype ordering on samples, validate tensor (⊗) distributes over join (⊕) — semiring law from §10 |
+| 0 | Pre-0 benchmarks + property checks | ⬜ | Benchmark subtype-lattice-merge, verify distributivity, validate tensor distributes over join |
 | 1 | Extract union type helpers to standalone module | ⬜ | Eliminates duplication between type-lattice.rkt and unify.rkt |
 | 2 | Subtype-aware join: union types for incomparable types | ⬜ | Core change: subtype-lattice-merge → union types instead of type-top |
 | 3 | Subtype absorption in union normalization | ⬜ | `Nat | Int` simplifies to `Int` (Nat <: Int → absorbed) |
 | 4 | Extend try-intersect-pure to all registered constructors | ⬜ | Generic descriptor-driven meet via ctor-registry (mirrors try-unify-pure pattern) |
-| 5 | Per-relation property declarations on sre-domain | ⬜ | Pocket Universe: one property set per domain×relation pair |
-| 6 | Validate algebraic properties under subtype ordering | ⬜ | Property inference: distributive, has-pseudo-complement, Heyting under subtype |
-| 7 | Pseudo-complement computation for error reporting | ⬜ | First consumer of Heyting structure: informative type errors |
-| 8 | Verification + acceptance file + PIR | ⬜ | Full suite green, A/B benchmark, acceptance file, PIR |
+| 5 | Tensor (⊗): type-level function application as lattice operation | ⬜ | `type-tensor : Type × Type → Type` — applies Pi, distributes over unions |
+| 6 | Tensor-aware elaboration: infer/check for union types | ⬜ | `expr-app` distributes across union function types and union argument types |
+| 7 | Per-relation property declarations on sre-domain | ⬜ | Pocket Universe: one property set per domain×relation pair |
+| 8 | Validate algebraic properties: Heyting + quantale | ⬜ | Property inference: distributive, pseudo-complement, Heyting; tensor axioms (associative, distributes over ⊕) |
+| 9 | Pseudo-complement computation for error reporting | ⬜ | First consumer of Heyting structure: informative type errors |
+| 10 | Verification + acceptance file + PIR | ⬜ | Full suite green, A/B benchmark, acceptance file, PIR |
 
 ---
 
 ## §1 Objectives
 
-**End state**: The type lattice under the subtype ordering is a Heyting algebra. The join of incomparable types is a union type (`Int | String`), not type-top. The meet is a subtype-aware GLB using the ring action from Track 2G. Per-relation property declarations let the subtype ordering declare `distributive = prop-confirmed` independently of the equality ordering (which remains flat and non-distributive). Pseudo-complement error reporting is the first Heyting consumer — type errors carry structured incompatibility information.
+**End state**: The type lattice under the subtype ordering is a **quantale** — a Heyting algebra equipped with a tensor (function application) that distributes over the join. The join of incomparable types is a union type (`Int | String`), not type-top. The meet is a subtype-aware GLB using the ring action from Track 2G. The tensor applies Pi types to argument types, distributing over unions on both sides. Per-relation property declarations let the subtype ordering declare its full algebraic structure independently of the equality ordering. The elaborator handles union types in function application via the tensor's distributive law. Pseudo-complement error reporting is the first Heyting consumer.
 
 **What is delivered**:
 1. `union-types.rkt` — extracted union type helpers (eliminates duplication + drift risk)
 2. Redesigned `subtype-lattice-merge` that produces union types for incomparable types
 3. Subtype absorption in ACI union normalization (`Nat | Int → Int`)
 4. Complete `try-intersect-pure` coverage via ctor-registry descriptors (not just Pi/Sigma)
-5. Per-relation property declaration infrastructure on `sre-domain`
-6. Property inference validation: subtype ordering is Heyting
-7. Pseudo-complement computation: `pseudo-complement(A, B)` = largest X such that `X ⊓ A ≤ B`
-8. At least one consumer: informative type error messages using pseudo-complement
+5. `type-tensor` — reified function application as a lattice operation, distributing over unions
+6. Tensor-aware elaboration: `infer`/`check` for `expr-app` handle union function types and union argument types via distribution
+7. Per-relation property declaration infrastructure on `sre-domain`
+8. Property inference validation: subtype ordering is Heyting AND quantale
+9. Pseudo-complement computation: `pseudo-complement(A, B)` = largest X such that `X ⊓ A ≤ B`
+10. Informative type error messages using pseudo-complement
 
 **What this track is NOT**:
 - It does NOT change the equality merge (`type-lattice-merge` remains flat — `Nat ⊔_eq String = ⊤` is correct for equality). Equality and subtype are different orderings on the same carrier. This is the L3 lesson from Track 2G.
+- It does NOT put elaboration on-network as propagators — the tensor is a reified FUNCTION, not yet a propagator. PPN Track 4 makes it a propagator. Track 2H delivers the algebraic operation that Track 4 will wire into the network.
 - It does NOT implement backward type propagation via residuation — deferred to the residuated lattice track (requires full bidirectional propagator infrastructure).
 - It does NOT make `sre-domain` use keyword arguments — that debt (Track 2G L4) is out of scope here unless we touch the struct definition.
 
@@ -217,7 +222,108 @@ Where `generic-meet` mirrors `generic-merge` but applies the ring action:
 
 **Principle served**: Completeness (6). The meet was incomplete (only Pi/Sigma). Generic descriptor-driven meet makes it complete for all registered types.
 
-### §3.5 Phase 5: Per-relation property declarations
+### §3.5 Phase 5: Tensor (⊗) — type-level function application
+
+**The operation**: The tensor takes a function type and an argument type and produces the result type. This is Pi elimination at the type level:
+
+```
+type-tensor : Type × Type → Type
+
+type-tensor((A → B), C) =
+  | C <: A     → B[C/binder]           ;; argument fits domain
+  | C = ⊥      → ⊥                     ;; annihilation
+  | C = union  → ⊔{type-tensor(f, ci)} ;; distribute over argument union
+  | otherwise  → type-top               ;; type error (argument incompatible)
+
+type-tensor((F₁ | F₂), C) =            ;; distribute over function union
+  ⊔{type-tensor(fi, C)}                ;; each fi must be Pi; non-Pi → type-top component
+```
+
+**Key algebraic properties**:
+1. **Distributes over join (⊕)**: `f ⊗ (a ⊕ b) = (f ⊗ a) ⊕ (f ⊗ b)` — this IS the semiring axiom
+2. **Left-distributes over join**: `(f ⊕ g) ⊗ a = (f ⊗ a) ⊕ (g ⊗ a)` — union of function types
+3. **Annihilation**: `f ⊗ ⊥ = ⊥`, `⊥ ⊗ a = ⊥`
+4. **Absorbing element**: `f ⊗ ⊤ = ⊤` (applying to contradiction preserves contradiction)
+5. **Identity**: `(A → A) ⊗ A = A` (identity function)
+6. **Associativity**: `(A → B → C) ⊗ A ⊗ B = C` (curried application)
+
+**Implementation site**: New function in `type-lattice.rkt` (pure, no side effects). Uses `subtype?` for domain checking, `build-union-type-with-absorption` for result normalization, `subst` for binder instantiation.
+
+```racket
+(define (type-tensor func-type arg-type)
+  (cond
+    [(type-bot? func-type) type-bot]
+    [(type-bot? arg-type) type-bot]
+    [(type-top? func-type) type-top]
+    [(type-top? arg-type) type-top]
+    ;; Union function type: distribute
+    [(expr-union? func-type)
+     (let ([components (flatten-union func-type)])
+       (build-union-type-with-absorption
+         (map (lambda (f) (type-tensor f arg-type)) components)))]
+    ;; Union argument type: distribute
+    [(expr-union? arg-type)
+     (let ([components (flatten-union arg-type)])
+       (build-union-type-with-absorption
+         (map (lambda (a) (type-tensor func-type a)) components)))]
+    ;; Pi type: apply
+    [(expr-Pi? func-type)
+     (let ([domain (expr-Pi-domain func-type)]
+           [codomain (expr-Pi-codomain func-type)])
+       (cond
+         [(subtype? arg-type domain) (subst 0 arg-type codomain)]
+         ;; Try equality merge (handles metas)
+         [(try-unify-pure arg-type domain) (subst 0 arg-type codomain)]
+         [else type-top]))]
+    ;; Non-Pi, non-union: can't apply
+    [else type-top]))
+```
+
+**Dependency**: Phases 2-3 (union-join + absorption) must be complete. `type-tensor` uses `build-union-type-with-absorption` and `flatten-union`.
+
+**Principle served**: Completeness (6) — delivering the full quantale, not half a semiring. First-Class by Default (4) — the tensor is a reified value-level operation, composable with join/meet. Data Orientation (2) — the tensor is a pure function on type data, not embedded in elaborator control flow.
+
+### §3.6 Phase 6: Tensor-aware elaboration
+
+**Current state** (`typing-core.rkt:548-555`):
+```racket
+;; General case: infer function type, check argument
+[_
+ (let ([t1 (whnf (infer ctx e1))])
+   (match t1
+     [(expr-Pi m a b)
+      (if (check ctx e2 a)
+          (subst 0 e2 b)
+          (expr-error))]
+     [_ (expr-error)]))]  ;; ← union types hit this branch
+```
+
+**Problem**: If `t1` is an `expr-union` of Pi types (e.g., from overloading or subtype merge), it falls to `[_ (expr-error)]`. The elaborator cannot handle union-typed functions or union-typed arguments.
+
+**Redesigned**:
+```racket
+[_
+ (let ([t1 (whnf (infer ctx e1))])
+   (cond
+     ;; Direct Pi: existing fast path
+     [(expr-Pi? t1)
+      (if (check ctx e2 (expr-Pi-domain t1))
+          (subst 0 e2 (expr-Pi-codomain t1))
+          (expr-error))]
+     ;; Union type: distribute via tensor
+     [(expr-union? t1)
+      (let ([result (type-tensor t1 (infer ctx e2))])
+        (if (type-top? result)
+            (expr-error)
+            result))]
+     [_ (expr-error)]))]
+```
+
+**Also needed**: The `check` path for unions (`typing-core.rkt:2424`). Currently `check(G, e, A | B)` speculatively checks `e : A` or `e : B`. This is correct and doesn't need changes — it already handles union types in the CHECK direction. The tensor phase handles unions in the INFER direction (function/argument types).
+
+**Scope boundary**: This phase wires `type-tensor` into the existing imperative elaborator. It does NOT put the tensor on-network as a propagator — that's PPN Track 4. Track 2H makes the elaborator WORK with union types; Track 4 makes it work ON-NETWORK.
+
+### §3.7 Phase 7: Per-relation property declarations
 
 **Current state**: `sre-domain.declared-properties` is a single `(hasheq property-name → property-value)`. Properties apply to the domain's equality merge.
 
@@ -354,6 +460,15 @@ def generic-meet [a b : Type] -> Type
                     phantom      -> erased
      | diff-tag -> type-bot
 
+-- Tensor (⊗): function application as quantale multiplication
+def type-tensor [f : Type, a : Type] -> Type
+  := match f a
+     | (Pi dom cod) a  -> if a <: dom then cod[a] else type-top
+     | (union fs)   a  -> union-join (map [fi -> type-tensor fi a] fs)  -- left-distribute
+     | f  (union as)   -> union-join (map [ai -> type-tensor f ai] as)  -- right-distribute
+     | bot _           -> bot                                            -- annihilation
+     | _ bot           -> bot
+
 -- Pseudo-complement (Heyting implication to ⊥)
 def pseudo-complement [a : Type, ctx : (List Type)] -> Type
   := union-join (filter [t -> meet(t, a) = bot] ctx)
@@ -369,6 +484,8 @@ def pseudo-complement [a : Type, ctx : (List Type)] -> Type
 | `flatten-union` | `flatten-union` | union-types.rkt (extracted) |
 | `absorb-subtypes` | `absorb-subtype-components` | union-types.rkt (NEW) |
 | `generic-meet` | `generic-meet` (NEW, mirrors generic-merge) | type-lattice.rkt |
+| `type-tensor` | `type-tensor` (NEW) | type-lattice.rkt |
+| `infer expr-app union` | `expr-app` case with union dispatch | typing-core.rkt |
 | `pseudo-complement` | `type-pseudo-complement` | type-lattice.rkt or typing-errors.rkt |
 | `relation.properties` | `declared-properties` nested hash | sre-core.rkt |
 | `has-property? :relation` | `sre-domain-has-property?` with #:relation | sre-core.rkt |
@@ -456,22 +573,23 @@ In type terms: applying a function to a union distributes across components:
 
 This is the theoretical basis for "type inference as parsing" — elaboration IS parsing in the type-lattice semiring (§2.4: "The resulting 'parse' doesn't produce trees — it produces types"). When elaboration goes on-network (PPN Track 4), the tensor becomes a propagator: given cells for f's type and arg's type, write result's type. The propagator IS the tensor.
 
-### What Track 2H validates (but does NOT implement)
+### What Track 2H delivers
 
-Track 2H delivers ⊕ (union-join). It does NOT implement ⊗ as a lattice operation — that requires elaboration on-network (Track 4). But Track 2H MUST validate:
+Track 2H delivers BOTH halves of the quantale:
+- **⊕ (union-join)**: Phases 2-3. Subtype-aware join producing union types with absorption.
+- **⊗ (tensor)**: Phases 5-6. Reified function application as a pure lattice operation (`type-tensor`), wired into the elaborator for union-typed functions and arguments.
 
-1. **Distributive law**: `⊗ distributes over ⊕` — verify on sample types in Pre-0 property checks. If function application doesn't distribute over union-join, the semiring vision fails and we need to know NOW, not during Track 4.
-2. **API compatibility**: `build-union-type-with-absorption` must handle outputs of per-component application (the union of application results).
-3. **Normalization stability**: applying a function to a normalized union, then normalizing the result, must be idempotent.
+Track 2H's tensor is a **pure function** — it takes types as data, returns types as data. It is not yet a propagator on the network. This is the correct intermediate step: the algebraic operation must exist and be validated before it can be wired as a propagator.
 
 ### What PPN Track 4 picks up
 
-The tensor (⊗) as on-network propagator. See PPN Master Track 4 detail section — line 214 already describes this: "Application installs propagator: `f x` → SRE decomposes `f`'s Pi type, connects argument cell to domain, result cell to codomain." This IS the tensor. Track 4's design should:
+Track 4 takes the reified `type-tensor` and makes it a **propagator**: given cells for f's type and arg's type, a function-application propagator writes result's type. The propagator IS the tensor wired into the network.
 
-1. Name the tensor explicitly as a quantale operation
-2. Verify the full semiring axioms (associativity of ⊗, identity element, distribution)
-3. Connect to the 6-domain reduced product architecture from the Lattice Foundations research
-4. Design the parse-to-type and type-to-parse Galois bridges that make "type inference as parsing" concrete
+Track 4's design should:
+1. Wire `type-tensor` as a propagator fire function (cell reads → type-tensor → cell write)
+2. Connect to the 6-domain reduced product architecture from the Lattice Foundations research
+3. Design the parse-to-type and type-to-parse Galois bridges that make "type inference as parsing" concrete
+4. The semiring axioms are already validated by Track 2H — Track 4 inherits them
 
 ---
 
