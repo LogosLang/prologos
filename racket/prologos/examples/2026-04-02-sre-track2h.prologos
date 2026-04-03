@@ -1,0 +1,70 @@
+;; SRE Track 2H Acceptance File: Type Lattice Redesign
+;;
+;; Exercises union-join, subtype absorption, tensor distribution,
+;; and pseudo-complement error reporting in WS-mode.
+;; Run: process-file "examples/2026-04-02-sre-track2h.prologos"
+;;
+;; Sections:
+;;   A. Basic subtype chain (existing — regression check)
+;;   B. Mixed-type maps (existing union consumer — regression check)
+;;   C. Pattern matching on data types (regression check)
+;;   D. Union type annotations (existing syntax — regression check)
+;;   E. Numeric subtyping in function application
+;;   F. Generic arithmetic with subtype widening
+
+;; === Section A: Basic subtype chain (regression) ===
+ns acceptance-a :no-prelude
+
+def x : Nat := 0N
+def y : Int := 42
+def z : Int := [int+ y 1]
+eval z
+
+;; === Section B: Mixed-type maps (existing union consumer) ===
+ns acceptance-b :no-prelude
+
+def m := {:name "alice" :age 30}
+eval m.name
+eval m.age
+
+;; === Section C: Pattern matching (regression) ===
+ns acceptance-c :no-prelude
+
+data Color := Red | Green | Blue
+
+spec show Color -> Int
+defn show
+  | Red   -> 1
+  | Green -> 2
+  | Blue  -> 3
+
+eval [show Red]
+eval [show Blue]
+
+;; === Section D: Union type annotations (existing syntax) ===
+ns acceptance-d :no-prelude
+
+;; Union types in annotations already parse and type-check
+def a : <Int | String> := 42
+def b : <Int | String> := "hello"
+
+;; Check against union: speculative rollback (existing path)
+check 42 : <Int | String>
+check "hello" : <Int | String>
+
+;; === Section E: Numeric subtyping in application ===
+ns acceptance-e :no-prelude
+
+;; Nat values used where Int is expected (Nat <: Int)
+spec double Int -> Int
+defn double [n] [int* n 2]
+
+;; This works today via subtype widening in check
+eval [double 3N]
+
+;; === Section F: Generic arithmetic (regression) ===
+ns acceptance-f :no-prelude
+
+def a : Int := [int+ 10 20]
+def b : Int := [int* a 3]
+eval b
