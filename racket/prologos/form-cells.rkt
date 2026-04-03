@@ -339,11 +339,12 @@
 ;;   - surf-defn-multi → leave unchanged (pattern compilation handles types)
 ;;   - Non-defn forms → pass through
 
-;; §12 S5: spec annotation reads from spec-store parameter (scaffolding).
-;; Spec cells hold spec names on-network. Full spec→defn propagator
-;; wiring requires spec cells to store full spec entries AND the defn
-;; cell to hold the surf — both are prerequisites for on-network annotation.
-;; Track 4 wires the propagator; Track 3 establishes the cell infrastructure.
+;; §12 S5: spec→defn annotation.
+;; The spec CELL (on-network) indicates a spec EXISTS for a function.
+;; The spec DATA comes from current-spec-store parameter (scaffolding).
+;; The annotation itself is the same regardless of data source.
+;; When PM migrates spec-store to persistent cells, the data source changes
+;; but the annotation mechanism stays.
 (define (annotate-surfs-with-specs surfs)
   (for/list ([s (in-list surfs)])
     (cond

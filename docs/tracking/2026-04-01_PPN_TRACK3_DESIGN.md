@@ -41,7 +41,7 @@
 | S2 | Register ProductionRegistry domain | ⬜ | §12. Boolean powerset. |
 | S3 | Register SpecCell domain | ⬜ | §12. Collision = top. |
 | S4 | ctor-desc for surf-* structs | ⬜ | §12. Structural decomposition of form cell values. |
-| S5 | SRE relation for spec→defn | ⬜ | §12. Requires: (a) spec cells with full entries, (b) surfs as cell values. These are cell pipeline structural changes. annotate-surfs-with-specs retained as correct scaffolding. Prerequisites for Track 4 propagator wiring. |
+| S5 | SRE relation for spec→defn | ✅ partial | §12. Spec cells validate spec EXISTS on-network. Annotation reads spec DATA from parameter (scaffolding). Full propagator (spec writes to defn type cell) requires surfs as cell values → Track 4 scope. |
 | S6 | Property inference validation | ⬜ | §12. All domains pass inference. |
 
 **Phase completion protocol**: After each phase: commit → update tracker → update dailies → run targeted tests → proceed.
