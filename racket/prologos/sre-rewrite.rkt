@@ -851,28 +851,12 @@
     '() #f apply-expand-cond-fold 'one-way 0 'strongly-confluent 'V0-2))
 (register-sre-rewrite-rule! expand-cond-fold)
 
-;; --- Pocket Universe: expand-mixfix ---
-;; Precedence resolution wrapped as a PU. The existing Track 2B logic
-;; (operator table, precedence DAG, associativity) runs inside the PU.
-;; The PU value tracks resolution progress (operators resolved).
-;; This is Option B from the design: existing logic, PU framing.
-;;
-;; The mixfix PU delegates to the existing lambda-based rule — the
-;; lambda IS the PU's fire function. The PU framing makes it visible
-;; to the SRE as a rewrite rule with metadata (strongly-confluent,
-;; cost 0, stratum V0-2).
-;; NOTE: expand-mixfix-pu intentionally keeps apply-fn = #f.
-;; The existing lambda-based rule in surface-rewrite.rkt handles mixfix
-;; resolution. This span exists for SRE metadata visibility only.
-;; When Phase 7 wires propagators, the lambda-based rule IS the fire function.
-(define expand-mixfix-pu
-  (sre-rewrite-rule
-    'expand-mixfix-pu
-    (pattern-desc 'mixfix-group (list) #f)
-    '()  ;; K is internal to the PU (operator/operand cells)
-    #f   ;; no template — PU produces result directly
-    #f 'one-way 0 'strongly-confluent 'V0-2))
-(register-sre-rewrite-rule! expand-mixfix-pu)
+;; --- expand-mixfix: registered from surface-rewrite.rkt ---
+;; Mixfix resolution requires macros.rkt imports (operator table, precedence
+;; groups). Registered in surface-rewrite.rkt where those imports exist.
+;; Removed from sre-rewrite.rkt to avoid circular dep.
+;; (This comment preserved for traceability — the rule IS registered,
+;; just not in this file.)
 
 ;; ========================================
 ;; Phase 3b: Tree-Structural Combinator

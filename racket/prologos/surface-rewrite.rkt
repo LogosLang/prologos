@@ -26,8 +26,12 @@
          "parse-reader.rkt"
          "rrb.rkt"
          "ctor-registry.rkt"
-         ;; SRE Track 2D Phase 7: SRE rewrite rules (dual path)
-         (only-in "sre-rewrite.rkt" apply-all-sre-rewrites)
+         ;; SRE Track 2D: SRE rewrite rules
+         (only-in "sre-rewrite.rkt"
+                  apply-all-sre-rewrites
+                  register-sre-rewrite-rule!
+                  sre-rewrite-rule
+                  pattern-desc)
          ;; PPN Track 2B Phase C: operator/precedence data for mixfix resolution
          (only-in "macros.rkt"
                   effective-operator-table effective-precedence-groups
@@ -660,17 +664,18 @@
      (form-pipeline-value (set-add transforms 'v0-1) result regs spos)]
 
     ;; V(0,2): infix + simple + recursive rewrites — needs tagged + grouped
-    ;; SRE Track 2D: 12/13 rules fire via SRE (apply-all-sre-rewrites).
-    ;; Lambda fallback only for expand-mixfix (PU — precedence resolution,
-    ;; apply-fn returns #f, delegates to lambda path).
+    ;; SRE Track 2D: ALL 13/13 rules fire via SRE (apply-all-sre-rewrites).
+    ;; Mixfix registered from surface-rewrite.rkt with apply-fn wrapping
+    ;; the existing resolution logic. Lambda fallback kept as safety net
+    ;; but should not fire for any known tag.
     [(and (not (set-member? transforms 'v0-2))
           (transform-ready? 'v0-2 transforms))
      (define sre-result (apply-all-sre-rewrites node 'V0-2))
      (define-values (result _)
        (if sre-result
            (values sre-result #t)
-           ;; Lambda fallback: only expand-mixfix reaches here.
-           ;; All other rules fire via SRE.
+           ;; Safety net: should not fire for any known tag.
+           ;; All 13 rules fire via SRE.
            (apply-rules node 'V0-2)))
      (form-pipeline-value (set-add transforms 'v0-2) result regs spos)]
 
@@ -1681,6 +1686,28 @@
                                       srcloc indent)))
              (build-mixfix-tree operand-nodes operators claims srcloc indent)])])]))
   #f 100 'V0-2))
+
+;; --- SRE Track 2D: Register mixfix as SRE rule with apply-fn ---
+;; The apply-fn delegates to the existing lambda-based rule above.
+;; Registered HERE (not in sre-rewrite.rkt) because it needs macros.rkt imports.
+(define (apply-expand-mixfix node)
+  (and (parse-tree-node? node)
+       (eq? (parse-tree-node-tag node) 'mixfix-group)
+       (let ([children (rrb-to-list (parse-tree-node-children node))]
+             [srcloc (parse-tree-node-srcloc node)]
+             [indent (parse-tree-node-indent node)])
+         ;; Delegate to the lambda-based rule's logic via apply-rules
+         (let-values ([(result matched?) (apply-rules node 'V0-2)])
+           (and matched? result)))))
+
+(register-sre-rewrite-rule!
+  (sre-rewrite-rule
+    'expand-mixfix-pu
+    (pattern-desc 'mixfix-group (list) #f)
+    '()  ;; K internal to PU
+    #f   ;; no template
+    apply-expand-mixfix  ;; apply-fn: wraps existing resolution logic
+    'one-way 0 'strongly-confluent 'V0-2))
 
 ;; --- Placeholder notes for deferred rules ---
 ;; rewrite-dot-access: ($dot-access field) target → (map-get target :field)
