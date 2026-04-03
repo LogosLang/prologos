@@ -239,6 +239,19 @@ Track 4's design MUST:
 5. Trait resolution = constraint cells that fire on meta resolution (LE pattern with ATMS)
 6. Type errors = contradiction (⊤) → ATMS dependency trace → Heyting pseudo-complement (after type lattice redesign)
 
+**From SRE Track 2H: scaffolding to retire in Track 4** ([PIR §11](2026-04-03_SRE_TRACK2H_PIR.md)):
+
+Track 2H delivered 4 scaffolding components that Track 4 MUST retire. If not scoped explicitly in Track 4's design, scaffolding becomes permanent (validated ≠ deployed pattern).
+
+| Scaffolding | What it does | Permanent replacement |
+|-------------|-------------|----------------------|
+| `type-tensor-distribute` | Imperative union distribution (iterates components, builds result union) | Network fires `type-tensor-core` per component; cell merge produces union (M3) |
+| `absorb-subtype-components` | O(n²) pairwise subtype filter on union component list | Network does pairwise merge natively as writes arrive (F3) |
+| `type-pseudo-complement` | Function-over-list: filters context types by meet incompatibility | ATMS nogood → retract conflicting assumption → pseudo-complement from dependency structure (M2) |
+| Property keyword API (`#:relation` on `has-property?`) | Keyword dispatch selects which ordering's properties to query | Property cells (`property-cell-ids`) on network; query = cell read (F5) |
+
+Track 4's design should include a "scaffolding retirement" phase that replaces each with the on-network mechanism. The retirement order: property cells first (simplest — populate existing `property-cell-ids` field), then tensor distribution (requires tensor propagator wiring), then pseudo-complement (requires ATMS), then absorption (requires union cells with pairwise merge).
+
 **From Track 2B scaffolding (design considerations for Track 4)**:
 - *Eager Pocket Universe → BSP strata*: The mixfix claim lattice (from Track 2B) executes eagerly. Track 4's elaboration network could host mixfix resolution cells alongside type cells — precedence resolution and type checking as concurrent information flow on the same network. The lattice design from Track 2B is the foundation; Track 4 distributes it across actual BSP strata.
 - *Per-form lattice join as cell merge*: Track 2B's `merge-form` function (§12.6) is the permanent per-form lattice join for merging pipeline outputs. Track 4 inherits this as the cell merge function when parse and elaboration cells coexist on the same network. The join logic (tree parser > preparse for user forms, preparse > tree parser for spec-annotated/generated) encodes pipeline preference as lattice ordering — both pipelines write, the lattice resolves. No "choice function" — the ordering IS the merge.
