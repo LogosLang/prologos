@@ -41,10 +41,14 @@
  register-sre-rewrite-rule!
  lookup-sre-rewrite-rules
  all-sre-rewrite-rules
+ ;; Template instantiation
+ instantiate-template
  ;; Verification
  verify-rewrite-rule
  ;; Critical pair analysis
  find-critical-pairs
+ ;; Pattern matching
+ match-pattern-desc
  ;; Form-tag ctor-desc registration
  register-form-tag-ctor-desc!)
 
@@ -199,6 +203,90 @@
   (reverse pairs))
 
 ;; ========================================
+;; Pattern Matching: match-pattern-desc
+;; ========================================
+;; Match a parse-tree-node against a pattern-desc.
+;; Returns a hash of K bindings (symbol → value) on match, or #f on no match.
+
+(define (match-pattern-desc node pattern)
+  (cond
+    [(not (parse-tree-node? node)) #f]
+    [(not (eq? (parse-tree-node-tag node) (pattern-desc-tag pattern))) #f]
+    [else
+     (define children (rrb-to-list (parse-tree-node-children node)))
+     (define child-pats (pattern-desc-child-patterns pattern))
+     ;; Check each child pattern
+     (define bindings (make-hasheq))
+     (define ok?
+       (for/and ([cp (in-list child-pats)])
+         (define pos (child-pattern-position cp))
+         (cond
+           [(>= pos (length children)) #f]  ;; not enough children
+           [else
+            (define child (list-ref children pos))
+            (define kind-ok?
+              (case (child-pattern-kind cp)
+                [(token) (token-entry? child)]
+                [(node) (parse-tree-node? child)]
+                [(any) #t]
+                [else #t]))
+            (define literal-ok?
+              (if (child-pattern-literal cp)
+                  (and (token-entry? child)
+                       (equal? (token-entry-lexeme child)
+                               (child-pattern-literal cp)))
+                  #t))
+            (when (and kind-ok? literal-ok? (child-pattern-bind-name cp))
+              (hash-set! bindings (child-pattern-bind-name cp) child))
+            (and kind-ok? literal-ok?)])))
+     ;; Handle variadic tail
+     (when (and ok? (pattern-desc-variadic-tail pattern))
+       (define last-fixed-pos
+         (if (null? child-pats) -1
+             (apply max (map child-pattern-position child-pats))))
+       (define tail (drop children (add1 last-fixed-pos)))
+       (hash-set! bindings (pattern-desc-variadic-tail pattern) tail))
+     (and ok? bindings)]))
+
+;; ========================================
+;; Template Instantiation
+;; ========================================
+;; Replace $punify-hole markers in a template tree with K binding values.
+;; Replace $punify-splice markers by splicing K binding's list into parent.
+;; Returns a new parse-tree-node with all holes filled.
+
+(define (instantiate-template template bindings #:srcloc [srcloc #f] #:indent [indent 0])
+  (cond
+    [(not (parse-tree-node? template)) template]  ;; token-entry — pass through
+    [(punify-hole? template)
+     ;; Replace hole with bound value
+     (define name (punify-hole-name template))
+     (hash-ref bindings name
+               (lambda () (error 'instantiate-template
+                                  "unbound hole: ~a" name)))]
+    [else
+     ;; Recursively instantiate children, handling splices
+     (define children (rrb-to-list (parse-tree-node-children template)))
+     (define new-children
+       (apply append
+         (for/list ([child (in-list children)])
+           (cond
+             [(and (parse-tree-node? child) (punify-splice? child))
+              ;; Splice: insert all items from the binding
+              (define name (punify-hole-name child))
+              (define val (hash-ref bindings name
+                            (lambda () (error 'instantiate-template
+                                              "unbound splice: ~a" name))))
+              (if (list? val) val (list val))]
+             [else
+              (list (instantiate-template child bindings
+                      #:srcloc srcloc #:indent indent))]))))
+     (parse-tree-node (parse-tree-node-tag template)
+                      (list->rrb new-children)
+                      (or srcloc (parse-tree-node-srcloc template))
+                      (or indent (parse-tree-node-indent template)))]))
+
+;; ========================================
 ;; Form-tag ctor-desc registration
 ;; ========================================
 ;; Register a form tag as a first-class ctor-desc in the 'form domain.
@@ -231,3 +319,132 @@
     #:sample (parse-tree-node tag-sym
                               (list->rrb sample-children)
                               #f 0)))
+
+;; ========================================
+;; Phase 2: Lifted Simple Rewrite Rules
+;; ========================================
+;; SRE spans for the 6 simple rewrites. Templates are parse-tree-nodes
+;; with $punify-hole markers. Verified at definition time.
+;;
+;; NOTE: These are PARALLEL registrations alongside the existing lambda-based
+;; rules in surface-rewrite.rkt. Phase 7 wires these as propagators and
+;; retires the lambda-based rules.
+
+(require "surface-rewrite.rkt")  ;; for tag constants
+
+;; Helper: build a template node (parse-tree-node with potential holes)
+(define (tpl tag . children)
+  (parse-tree-node tag (list->rrb children) #f 0))
+
+;; Helper: make a constant token for templates
+(define (tpl-const lexeme)
+  (token-entry (seteq 'constant) lexeme 0 (string-length lexeme)))
+
+;; --- expand-if-3: (if cond then else) → (boolrec _ then else cond) ---
+;; 4 children: [if-token, cond, then, else]
+(define expand-if-3-span
+  (sre-rewrite-rule
+    'expand-if-3
+    (pattern-desc 'if
+      (list (child-pattern 0 'token "if" #f)
+            (child-pattern 1 'any #f 'cond)
+            (child-pattern 2 'any #f 'then)
+            (child-pattern 3 'any #f 'else))
+      #f)
+    '(cond then else)
+    (tpl tag-expr (tpl-const "boolrec") (tpl-const "_")
+         (make-hole 'then) (make-hole 'else) (make-hole 'cond))
+    'one-way 0 'strongly-confluent 'V0-2))
+(verify-rewrite-rule expand-if-3-span)
+(register-sre-rewrite-rule! expand-if-3-span)
+
+;; --- expand-if-4: (if ResultType cond then else) → (boolrec ResultType then else cond) ---
+;; 5 children: [if-token, type, cond, then, else]
+(define expand-if-4-span
+  (sre-rewrite-rule
+    'expand-if-4
+    (pattern-desc 'if
+      (list (child-pattern 0 'token "if" #f)
+            (child-pattern 1 'any #f 'result-type)
+            (child-pattern 2 'any #f 'cond)
+            (child-pattern 3 'any #f 'then)
+            (child-pattern 4 'any #f 'else))
+      #f)
+    '(result-type cond then else)
+    (tpl tag-expr (tpl-const "boolrec") (make-hole 'result-type)
+         (make-hole 'then) (make-hole 'else) (make-hole 'cond))
+    'one-way 0 'strongly-confluent 'V0-2))
+(verify-rewrite-rule expand-if-4-span)
+(register-sre-rewrite-rule! expand-if-4-span)
+
+;; --- expand-when: (when cond body) → (if cond body unit) ---
+;; 3 children: [when-token, cond, body]
+(define expand-when-span
+  (sre-rewrite-rule
+    'expand-when
+    (pattern-desc 'when
+      (list (child-pattern 0 'token "when" #f)
+            (child-pattern 1 'any #f 'cond)
+            (child-pattern 2 'any #f 'body))
+      #f)
+    '(cond body)
+    (tpl tag-if (tpl-const "if") (make-hole 'cond) (make-hole 'body) (tpl-const "unit"))
+    'one-way 0 'strongly-confluent 'V0-2))
+(verify-rewrite-rule expand-when-span)
+(register-sre-rewrite-rule! expand-when-span)
+
+;; --- expand-let-assign: (let name := val body...) → ((fn [name] body...) val) ---
+;; 5+ children: [let-token, name, :=, val, body...]
+(define expand-let-assign-span
+  (sre-rewrite-rule
+    'expand-let-assign
+    (pattern-desc 'let-assign
+      (list (child-pattern 0 'token "let" #f)
+            (child-pattern 1 'any #f 'name)
+            (child-pattern 2 'token ":=" #f)
+            (child-pattern 3 'any #f 'value))
+      'body)  ;; variadic tail
+    '(name value body)
+    ;; RHS: ((fn [name] body...) val)
+    (tpl tag-expr
+      (tpl tag-expr (tpl-const "fn")
+           (tpl tag-expr (make-hole 'name))
+           (make-splice 'body))
+      (make-hole 'value))
+    'one-way 0 'strongly-confluent 'V0-2))
+(verify-rewrite-rule expand-let-assign-span)
+(register-sre-rewrite-rule! expand-let-assign-span)
+
+;; --- expand-let-bracket: (let [bindings] body...) → nested fn ---
+;; 3+ children: [let-token, bracket-group, body...]
+(define expand-let-bracket-span
+  (sre-rewrite-rule
+    'expand-let-bracket
+    (pattern-desc 'let-bracket
+      (list (child-pattern 0 'token "let" #f)
+            (child-pattern 1 'node #f 'bindings))  ;; bracket group
+      'body)
+    '(bindings body)
+    ;; RHS: ((fn [bindings] body...) — simplified; full nested let is fold scope)
+    (tpl tag-expr (tpl-const "fn")
+         (make-hole 'bindings)
+         (make-splice 'body))
+    'one-way 0 'strongly-confluent 'V0-2))
+(verify-rewrite-rule expand-let-bracket-span)
+(register-sre-rewrite-rule! expand-let-bracket-span)
+
+;; --- expand-dot-access: (dot-access obj key) → (map-get obj :key) ---
+;; Note: dot-access has its own handling in tree-parser; this span
+;; represents the rewrite if it reaches the surface-rewrite pipeline.
+;; Registered for completeness and critical pair analysis.
+
+;; --- expand-compose (FIXED — only Track 2B left-to-right version): ---
+;; (compose f g ...) → (fn [$_comp] (g (f $_comp)))
+;; Track 2 version (right-to-left) is REMOVED — it was the duplicate bug.
+
+;; Phase 2 summary: 5 simple rules lifted to SRE spans.
+;; expand-dot-access and expand-implicit-map have tag-specific handling
+;; in tree-parser.rkt — they don't go through surface-rewrite's pipeline.
+;; compose duplicate is fixed by NOT re-registering the Track 2 version.
+;; The remaining rules (fold: cond, do, list-literal, lseq-literal) are Phase 3a.
+;; quasiquote is Phase 3b (tree-structural combinator).
