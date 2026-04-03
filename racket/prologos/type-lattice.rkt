@@ -224,8 +224,46 @@
            [else (struct-copy expr-Sigma a
                               [fst-type fst-result]
                               [snd-type snd-result])]))]
-      ;; Different constructors / base types → no intersection
-      [else #f])))
+      ;; --- Generic descriptor-driven structural meet (SRE Track 2H Phase 3) ---
+      ;; Handles all registered type constructors with binder-depth 0:
+      ;; app, Eq, Vec, Fin, pair, suc, PVec, Set, Map.
+      ;; Mirrors the generic-merge pattern from try-unify-pure but applies
+      ;; the ring action: covariant → meet, contravariant → join, invariant → equality.
+      ;; Pi and Sigma are handled above (binder + mult complications).
+      [else
+       (define desc-a (ctor-tag-for-value a))
+       (cond
+         [(and desc-a
+               (eq? (ctor-desc-domain desc-a) 'type)
+               (= (ctor-desc-binder-depth desc-a) 0)
+               ((ctor-desc-recognizer-fn desc-a) b))
+          ;; Same constructor, no binders — component-wise meet with ring action
+          (define arity (ctor-desc-arity desc-a))
+          (cond
+            [(= arity 0) a]  ;; same atom → identity
+            [else
+             (define cs1 ((ctor-desc-extract-fn desc-a) a))
+             (define cs2 ((ctor-desc-extract-fn desc-a) b))
+             (define variances (or (ctor-desc-component-variances desc-a)
+                                   (make-list arity '=)))  ;; default invariant
+             (define met
+               (for/list ([c1 (in-list cs1)]
+                          [c2 (in-list cs2)]
+                          [v (in-list variances)])
+                 (case v
+                   [(+) (type-lattice-meet c1 c2)]                  ;; covariant → meet
+                   [(-) (type-lattice-merge c1 c2)]                 ;; contravariant → join (antitone)
+                   [(=) (if (equal? c1 c2) c1 #f)]                  ;; invariant → equality or fail
+                   [(ø) c1]                                          ;; phantom → erased
+                   [else (if (equal? c1 c2) c1 #f)])))              ;; unknown → equality
+             ;; Any #f or bot component → intersection fails
+             (if (or (memq #f met)
+                     (ormap type-bot? met))
+                 #f
+                 ((ctor-desc-reconstruct-fn desc-a) met))])]
+         ;; Different constructor tags → no intersection
+         [else #f])])))
+
 
 ;; ========================================
 ;; Contradiction predicate
