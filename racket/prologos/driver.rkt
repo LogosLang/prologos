@@ -62,6 +62,8 @@
          (only-in "pnet-serialize.rkt"   ;; Track 10: .pnet serialization
                   serialize-module-state deserialize-module-state
                   pnet-stale? relink-foreign-marshallers!)
+         (only-in "subtype-predicate.rkt" ;; SRE Track 2H: subtype? for meet callback
+                  subtype?)
          (only-in "sre-core.rkt"         ;; PAR Track 1: topology stratum handler
                   sre-decompose-generic sre-constructor-tag
                   sre-domain-bot? sre-domain-name sre-relation-name)
@@ -2600,6 +2602,11 @@
 ;; the propagator network merges cell values. Breaks no circular deps because
 ;; meta-solution is a pure read from propagator cell or CHAMP store.
 (install-lattice-meta-solution-fn! meta-solution)
+
+;; SRE Track 2H: Install subtype callback for type-lattice-meet.
+;; Enables meet(Nat, Int) = Nat (GLB of comparable types) instead of type-bot.
+;; Required for distributivity of the subtype lattice.
+(install-lattice-subtype-fn! subtype?)
 
 ;; Phase 4c: Install structural decomposition meta-lookup callback.
 ;; When a compound type is decomposed into sub-cells, bare metas (expr-meta id)

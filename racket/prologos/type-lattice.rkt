@@ -42,7 +42,10 @@
          ;; Phase E1: Meta-solution callback for propagator-aware merge
          current-lattice-meta-solution-fn
          install-lattice-meta-solution-fn!
-         has-unsolved-meta?)
+         has-unsolved-meta?
+         ;; SRE Track 2H: subtype callback for meet
+         current-lattice-subtype-fn
+         install-lattice-subtype-fn!)
 
 ;; ========================================
 ;; Sentinel values
@@ -65,6 +68,16 @@
 
 (define (install-lattice-meta-solution-fn! fn)
   (current-lattice-meta-solution-fn fn))
+
+;; SRE Track 2H: Subtype callback for meet.
+;; Signature: (type1 type2 → bool) — returns #t if type1 <: type2.
+;; Installed by driver.rkt; default #f (structural meet only).
+;; When installed, type-lattice-meet can compute GLB for subtype-related atoms:
+;; meet(Nat, Int) = Nat when Nat <: Int, instead of type-bot.
+(define current-lattice-subtype-fn (make-parameter #f))
+
+(define (install-lattice-subtype-fn! fn)
+  (current-lattice-subtype-fn fn))
 
 ;; Phase E1: Check if an expression contains unsolved metavariables.
 ;; Uses the meta-solution callback to distinguish solved from unsolved.
@@ -175,11 +188,34 @@
     [(equal? v1 v2) v1]
     ;; Metavariable: conservative → ⊥ (D.3 F4)
     [(or (has-unsolved-meta? v1) (has-unsolved-meta? v2)) type-bot]
+    ;; SRE Track 2H: meet distributes over union-join.
+    ;; meet(a, b | c) = meet(a, b) | meet(a, c)
+    ;; This IS the distributivity law — implementing it here makes the
+    ;; lattice distributive by construction.
+    [(expr-union? v1)
+     (define components (flatten-union v1))
+     (define met (filter (lambda (r) (not (type-bot? r)))
+                         (map (lambda (c) (type-lattice-meet c v2)) components)))
+     (if (null? met) type-bot (build-union-type met))]
+    [(expr-union? v2)
+     (define components (flatten-union v2))
+     (define met (filter (lambda (r) (not (type-bot? r)))
+                         (map (lambda (c) (type-lattice-meet v1 c)) components)))
+     (if (null? met) type-bot (build-union-type met))]
     [else
      ;; Structural intersection: same constructor tag → component-wise meet
-     ;; Different constructor tags → ⊥ (no common lower bound)
      (define result (try-intersect-pure v1 v2))
-     (or result type-bot)]))
+     (cond
+       [result result]
+       ;; SRE Track 2H: subtype-aware meet for atoms.
+       ;; When subtype callback is installed: meet(a, b) = a if a <: b,
+       ;; meet(a, b) = b if b <: a. The GLB of comparable types is the lesser.
+       [else
+        (define sub-fn (current-lattice-subtype-fn))
+        (cond
+          [(and sub-fn (sub-fn v1 v2)) v1]   ;; v1 <: v2 → GLB = v1
+          [(and sub-fn (sub-fn v2 v1)) v2]   ;; v2 <: v1 → GLB = v2
+          [else type-bot])])]))
 
 ;; Pure structural intersection: computes greatest lower bound.
 ;; Returns #f if types are structurally incompatible (different constructor tags).
