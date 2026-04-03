@@ -1,0 +1,46 @@
+#+TITLE: Standup — 2026-04-02
+#+DATE: 2026-04-02
+
+* Yesterday (since 2026-04-01 standup)
+
+** PPN Track 3: Parser as Propagators — COMPLETE
+- Stage 2 audit of parser.rkt (6,605 lines, PURE, 0 registry reads, parse = 0ms)
+- Stage 3 design: 6 iterations (D.1→D.2→D.3→D.4→D.5→D.5b)
+  - D.2: algebraic structure (pipeline-preference ordering, set-valued registry)
+  - D.3: self-critique (3,017 lines registration scope, merge-form impure)
+  - D.4: dependency-set Pocket Universe, spec cells, Phase 3 split
+  - D.5: external critique (10 findings incorporated)
+- Pre-0 benchmarks: 19 tests, all algebraic properties PASS
+- Implementation (70+ commits):
+  - Phase 5: dependency-set Pocket Universe (Boolean powerset replaces stage chain)
+  - Phase 6: per-form cells on elab-network + production dispatch
+  - Phase 3a: spec cells with collision detection
+  - Phase 7: cell pipeline wired into driver
+  - Phase 1a+4: consumed form expansion (data/trait/impl)
+  - Expression desugaring: cond/let/do in tree-parser
+  - §11 pivot: tree-canonical parsing — ALL forms ON-NETWORK
+    - parse-eval-tree-for-cell: whole-node datum conversion with WS normalizations
+    - current-source-str + current-raw-node: parameterized, batch-worker isolated
+    - Narrowing infix =, list-literal, angle-group sigma/pi, dual keyword
+- A/B benchmarks: zero regression (10-run + 5-run comparative suite)
+- 383/383 GREEN, 7491 tests, ~133s
+- PIR written per 16-question methodology with §11 addendum
+
+** Key Architectural Outcome
+- Tree-parser is canonical: form DISPATCH on-network via parse-form-tree
+- parse-datum is expression parser: called from on-network dispatch via datum conversion
+- parser.rkt effectively retired from WS form dispatch
+- Preparse retained for registration side effects only (PM migrates to cells)
+- Cell infrastructure ready for Track 4 (elaboration), Track 7 (grammar extensions), Track 8 (incremental editing)
+
+* Today
+**
+
+
+* Blockers
+
+- test-structural-decomp: meta-solving via imperative state under BSP — deferred to SRE/PPN elaborator-on-network
+- WS-mode solver syntax gaps (~=~ as unification, ~is~ bridging) — deferred to post-PPN
+- Type lattice not distributive under current ops — SRE Track 2H (before PPN 4)
+- 5 lessons flagged READY for codification — backlog from multiple sessions
+
