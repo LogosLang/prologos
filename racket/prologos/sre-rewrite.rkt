@@ -535,6 +535,83 @@
 ;; This is documented as a known limitation for Phase 3a.
 
 ;; ========================================
+;; Phase 3b: Tree-Structural Combinator
+;; ========================================
+;; Pocket Universe with per-position processing. Positions are independent
+;; and can be processed in parallel within the PU. Results compose when
+;; all positions are complete.
+;;
+;; The tree-structural combinator takes:
+;;   - node: a parse-tree-node to transform
+;;   - position-fn: (child → result) — processes each position independently
+;; Returns: a new node with all positions processed.
+
+(struct tree-pu-state
+  (processed    ;; (seteq position-index) — which positions done (monotone)
+   results      ;; (hasheq position-index → result) — per-position results
+   original)    ;; parse-tree-node — the input tree
+  #:transparent)
+
+;; Process all positions of a tree node, producing per-position results.
+;; Positions are independent — order doesn't matter.
+(define (tree-structural-rewrite node position-fn)
+  (cond
+    [(not (parse-tree-node? node)) node]  ;; non-node → pass through
+    [else
+     (define children (rrb-to-list (parse-tree-node-children node)))
+     (define results
+       (for/list ([child (in-list children)])
+         (position-fn child)))
+     (parse-tree-node (parse-tree-node-tag node)
+                      (list->rrb results)
+                      (parse-tree-node-srcloc node)
+                      (parse-tree-node-indent node))]))
+
+;; Quasiquote position function: classify each child and produce datum constructor.
+;; This is the per-position recognition for the quasiquote tree PU.
+(define (quasiquote-position-fn child)
+  (cond
+    [(token-entry? child)
+     (define lex (token-entry-lexeme child))
+     (cond
+       ;; Keyword → datum-kw
+       [(and (> (string-length lex) 1) (char=? (string-ref lex 0) #\:))
+        (tpl tag-expr (tpl-const "datum-kw") child)]
+       ;; Boolean
+       [(equal? lex "true")
+        (tpl tag-expr (tpl-const "datum-bool") child)]
+       [(equal? lex "false")
+        (tpl tag-expr (tpl-const "datum-bool") child)]
+       ;; Number (simple heuristic)
+       [(and (> (string-length lex) 0)
+             (or (char-numeric? (string-ref lex 0))
+                 (and (char=? (string-ref lex 0) #\-)
+                      (> (string-length lex) 1)
+                      (char-numeric? (string-ref lex 1)))))
+        (tpl tag-expr (tpl-const "datum-int") child)]
+       ;; Default → datum-sym
+       [else
+        (tpl tag-expr (tpl-const "datum-sym")
+             (tpl tag-expr (tpl-const "symbol-lit") child))])]
+    ;; Node → recurse (nested PU), wrap in datum-list + cons chain
+    [(parse-tree-node? child)
+     (define child-results
+       (for/list ([i (in-range (rrb-size (parse-tree-node-children child)))])
+         (quasiquote-position-fn (rrb-get (parse-tree-node-children child) i))))
+     ;; Fold into cons chain
+     (define cons-chain (run-fold child-results (tpl-const "nil") list-literal-step))
+     (tpl tag-expr (tpl-const "datum-list") cons-chain)]
+    [else child]))
+
+;; Register quasiquote as a tree-structural rule
+(define expand-quasiquote-tree
+  (sre-rewrite-rule
+    'expand-quasiquote-tree
+    (pattern-desc 'quasiquote (list) #f)
+    '() #f 'one-way 0 'strongly-confluent 'V0-2))
+(register-sre-rewrite-rule! expand-quasiquote-tree)
+
+;; ========================================
 ;; Phase 2 summary: 5 simple rules lifted to SRE spans.
 ;; expand-dot-access and expand-implicit-map have tag-specific handling
 ;; in tree-parser.rkt — they don't go through surface-rewrite's pipeline.
