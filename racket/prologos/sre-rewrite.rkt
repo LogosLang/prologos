@@ -57,6 +57,8 @@
  verify-rewrite-rule
  ;; Critical pair analysis
  find-critical-pairs
+ analyze-confluence
+ report-critical-pairs
  ;; Pattern matching
  match-pattern-desc
  ;; Fold combinator
@@ -204,9 +206,20 @@
 ;; For pattern-desc: overlap = same tag + compatible child patterns.
 
 (define (patterns-overlap? p1 p2)
-  ;; Two pattern-descs overlap if they have the same tag.
-  ;; (Richer overlap analysis for child-patterns is future scope.)
-  (eq? (pattern-desc-tag p1) (pattern-desc-tag p2)))
+  ;; Two pattern-descs overlap if they have the same tag AND compatible arities.
+  ;; Arity-disjoint rules (e.g., expand-if-3 with 4 children vs expand-if-4 with 5)
+  ;; are NOT overlapping — they can never match the same input.
+  (and (eq? (pattern-desc-tag p1) (pattern-desc-tag p2))
+       ;; Check arity: if both have fixed child patterns (no variadic),
+       ;; different max positions → no overlap
+       (let ([max1 (if (null? (pattern-desc-child-patterns p1)) -1
+                       (apply max (map child-pattern-position (pattern-desc-child-patterns p1))))]
+             [max2 (if (null? (pattern-desc-child-patterns p2)) -1
+                       (apply max (map child-pattern-position (pattern-desc-child-patterns p2))))])
+         ;; If neither has variadic tail and max positions differ → disjoint
+         (or (pattern-desc-variadic-tail p1)
+             (pattern-desc-variadic-tail p2)
+             (= max1 max2)))))
 
 (define (find-critical-pairs rules)
   (define pairs '())
@@ -303,6 +316,37 @@
                       (list->rrb new-children)
                       (or srcloc (parse-tree-node-srcloc template))
                       (or indent (parse-tree-node-indent template)))]))
+
+;; ========================================
+;; Phase 6: Confluence Analysis + Reporting
+;; ========================================
+;; Analyze the SRE rule catalog for critical pairs.
+;; Classify each rule as strongly-confluent or priority-resolved.
+;; Report results. Consumed by PPN Track 4 and Grammar Form.
+
+(define (analyze-confluence)
+  ;; Analyze all registered SRE rewrite rules
+  (define all-rules (all-sre-rewrite-rules))
+  (define pairs (find-critical-pairs all-rules))
+  ;; Update confluence-class on each rule based on analysis
+  ;; (structural update not possible on transparent structs — report instead)
+  (values (length all-rules) (length pairs) pairs))
+
+(define (report-critical-pairs)
+  (define-values (rule-count pair-count pairs) (analyze-confluence))
+  (printf "SRE Rewrite Confluence Analysis:\n")
+  (printf "  Rules: ~a\n" rule-count)
+  (printf "  Critical pairs: ~a\n" pair-count)
+  (cond
+    [(= pair-count 0)
+     (printf "  Result: STRONGLY CONFLUENT — firing order doesn't matter.\n")]
+    [else
+     (printf "  Result: ~a critical pair(s) found — priority ordering needed.\n" pair-count)
+     (for ([pair (in-list pairs)])
+       (printf "    OVERLAP: ~a <-> ~a (tag: ~a)\n"
+               (sre-rewrite-rule-name (first pair))
+               (sre-rewrite-rule-name (second pair))
+               (pattern-desc-tag (sre-rewrite-rule-lhs-pattern (first pair)))))]))
 
 ;; ========================================
 ;; Phase 5: K as Sub-Cell Abstraction
