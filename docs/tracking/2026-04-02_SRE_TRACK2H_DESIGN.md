@@ -23,13 +23,13 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Pre-0 benchmarks + property checks | ✅ | 30 tests across 5 tiers. Design unchanged — data confirms all phases correctly scoped. See §Pre-0. |
-| 1 | Extract union type helpers to standalone module | ⬜ | Eliminates duplication between type-lattice.rkt and unify.rkt |
-| 2 | Subtype-aware join WITH absorption (atomic) | ⬜ | Merged Phases 2+3 (F11): union-join + absorption is one atomic lattice change. Never produce non-canonical unions. |
-| 3 | Extend try-intersect-pure to all registered constructors | ⬜ | Generic descriptor-driven meet via ctor-registry (mirrors try-unify-pure pattern) |
-| 4 | Tensor (⊗): core + distribute + SRE registration | ⬜ | `type-tensor-core` (bot-on-failure, F1) + `type-tensor-distribute` (scaffolding) in subtype-predicate.rkt. `operations` field with contract (F8). |
-| 5 | Tensor-aware elaboration: infer for union-typed expr-app | ⬜ | `expr-app` calls `type-tensor-distribute`. Limited eliminator exposure (P2). |
-| 6 | Per-relation property declarations on sre-domain | ⬜ | Nested hash: domain×relation. 13 migration sites. `operations` field also added here. Keyword API is scaffolding (F5). |
-| 7 | Validate algebraic properties: Heyting (ground sublattice) + quantale | ⬜ | Property inference for ground types. Dependent-type distributivity conjectured, tested with binder samples (F7). |
+| 1 | Extract union type helpers to standalone module | ✅ | `7a91db47`. union-types.rkt created. Duplicates removed from type-lattice.rkt + unify.rkt. |
+| 2 | Subtype-aware join WITH absorption (atomic) | ✅ | `8bb7af3d`. subtype-lattice-merge redesigned. Bot/top handling fixes V1d. absorb-subtype-components (scaffolding). |
+| 3 | Extend try-intersect-pure to all registered constructors | ✅ | `0ba64c3b`. Generic descriptor-driven meet. 9 constructors gained (2→11). Ring action per variance. |
+| 4 | Tensor (⊗): core + distribute + SRE registration | ✅ | `0edee767`. type-tensor-core (bot-on-failure, F1) + type-tensor-distribute (scaffolding) in subtype-predicate.rkt. SRE registration in Phase 6. |
+| 5 | Tensor-aware elaboration: infer for union-typed expr-app | ✅ | `493cfc68`. expr-app handles union function types via type-tensor-distribute. |
+| 6 | Per-relation property declarations on sre-domain | ✅ | `bba6f7ab`. sre-domain +operations field (12th). declared-properties nested by relation. 13 sites migrated. |
+| 7 | Validate algebraic properties: Heyting (ground sublattice) + quantale | ✅ | `5735b9e8`. V4 distributivity: 0/512 (was 412). Meet distributes over unions. Subtype callback. Sort key fix. |
 | 8 | Pseudo-complement computation for error reporting | ⬜ | SCAFFOLDING (M2). First consumer of Heyting structure. Context from cell registry where available (F6). |
 | 9 | Verification + acceptance file + PIR | ⬜ | Full suite green, A/B benchmark, acceptance file, PIR |
 
