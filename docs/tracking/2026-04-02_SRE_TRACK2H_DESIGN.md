@@ -1,4 +1,4 @@
-# SRE Track 2H: Type Lattice Redesign — Stage 3 Design (D.4)
+# SRE Track 2H: Type Lattice Redesign — Stage 3 Design (D.5)
 
 **Date**: 2026-04-02
 **Series**: [SRE (Structural Reasoning Engine)](2026-03-22_SRE_MASTER.md)
@@ -24,15 +24,14 @@
 |-------|-------------|--------|-------|
 | 0 | Pre-0 benchmarks + property checks | ✅ | 30 tests across 5 tiers. Design unchanged — data confirms all phases correctly scoped. See §Pre-0. |
 | 1 | Extract union type helpers to standalone module | ⬜ | Eliminates duplication between type-lattice.rkt and unify.rkt |
-| 2 | Subtype-aware join: union types for incomparable types | ⬜ | Core change: subtype-lattice-merge → union types instead of type-top |
-| 3 | Subtype absorption in union normalization | ⬜ | `Nat | Int` simplifies to `Int` (Nat <: Int → absorbed) |
-| 4 | Extend try-intersect-pure to all registered constructors | ⬜ | Generic descriptor-driven meet via ctor-registry (mirrors try-unify-pure pattern) |
-| 5 | Tensor (⊗): core + distribute + SRE registration | ⬜ | `type-tensor-core` (propagator fire fn) + `type-tensor-distribute` (scaffolding) in subtype-predicate.rkt. `operations` field on sre-domain. |
-| 6 | Tensor-aware elaboration: infer for union-typed expr-app | ⬜ | `expr-app` calls `type-tensor-distribute`. Limited eliminator exposure (P2). |
-| 7 | Per-relation property declarations on sre-domain | ⬜ | Nested hash: domain×relation. 13 migration sites. `operations` field also added here. |
-| 8 | Validate algebraic properties: Heyting + quantale | ⬜ | Property inference: distributive, pseudo-complement, Heyting; tensor axioms (associative, distributes over ⊕) |
-| 9 | Pseudo-complement computation for error reporting | ⬜ | First consumer of Heyting structure: informative type errors |
-| 10 | Verification + acceptance file + PIR | ⬜ | Full suite green, A/B benchmark, acceptance file, PIR |
+| 2 | Subtype-aware join WITH absorption (atomic) | ⬜ | Merged Phases 2+3 (F11): union-join + absorption is one atomic lattice change. Never produce non-canonical unions. |
+| 3 | Extend try-intersect-pure to all registered constructors | ⬜ | Generic descriptor-driven meet via ctor-registry (mirrors try-unify-pure pattern) |
+| 4 | Tensor (⊗): core + distribute + SRE registration | ⬜ | `type-tensor-core` (bot-on-failure, F1) + `type-tensor-distribute` (scaffolding) in subtype-predicate.rkt. `operations` field with contract (F8). |
+| 5 | Tensor-aware elaboration: infer for union-typed expr-app | ⬜ | `expr-app` calls `type-tensor-distribute`. Limited eliminator exposure (P2). |
+| 6 | Per-relation property declarations on sre-domain | ⬜ | Nested hash: domain×relation. 13 migration sites. `operations` field also added here. Keyword API is scaffolding (F5). |
+| 7 | Validate algebraic properties: Heyting (ground sublattice) + quantale | ⬜ | Property inference for ground types. Dependent-type distributivity conjectured, tested with binder samples (F7). |
+| 8 | Pseudo-complement computation for error reporting | ⬜ | SCAFFOLDING (M2). First consumer of Heyting structure. Context from cell registry where available (F6). |
+| 9 | Verification + acceptance file + PIR | ⬜ | Full suite green, A/B benchmark, acceptance file, PIR |
 
 ---
 
@@ -105,6 +104,22 @@ Every finite distributive lattice is automatically Heyting (Birkhoff). Our type 
 - `Nat ⊓ (Int | String) = (Nat ⊓ Int) | (Nat ⊓ String) = Nat | ⊥ = Nat` ✅
 - `(Int | Bool) ⊓ (Int | String) = Int | (Bool ⊓ String) = Int | ⊥ = Int` ✅ (by distributing both sides)
 
+**Distributivity scope** (F7): The Heyting claim is validated for the **ground sublattice** (no metas, no binders). For dependent types with binder substitution (e.g., `meet(Pi(x:Nat, x), union(Pi(x:Nat, Nat), Pi(x:Int, Int)))`), distributivity is conjectured but not yet verified — substitution under binders does not obviously distribute over union-join. Phase 7 tests with binder types to validate or bound the claim.
+
+### Equality Merge with Union Types (F9)
+
+After Track 2H, union types exist as first-class type expressions. The equality merge (`type-lattice-merge`) is UNCHANGED — it remains flat. Worked examples:
+
+- `(Int | String) ⊔_eq (Int | String) = Int | String` ✅ (equal? → identity)
+- `(Int | String) ⊔_eq Int = type-top` ✅ (not equal — `try-unify-pure` fails, shapes differ)
+- `(Int | String) ⊔_eq (String | Int) = Int | String` ✅ (canonical form → equal? succeeds)
+
+This is correct: equality merge and subtype merge are DIFFERENT operations on DIFFERENT cells. A cell under equality merge that receives both `Int | String` and `Int` gets contradiction — because the values are not equal. A cell under subtype merge would give `Int | String` — because `Int <: Int | String`.
+
+### Asymmetric Relationship Between Orderings (F12)
+
+The equality ordering REFINES the subtype ordering: `a = b ⟹ a <: b`, but NOT the reverse. Information flows ONE WAY: equality resolution constrains subtype (if `a = b` is known, then `a <: b` is also known). But subtype resolution does NOT constrain equality (knowing `Nat <: Int` does not mean `Nat = Int`). Currently, equality and subtype use DIFFERENT cells — the equality merge cells are main elaboration type cells; subtype merge cells are short-lived SRE query cells. No bridge is needed today. PPN Track 4's design should address whether this asymmetric flow needs an explicit Galois bridge when both orderings coexist on the same network.
+
 ### Subtype Absorption
 
 When building a union type, any component that is a subtype of another component is absorbed:
@@ -113,7 +128,9 @@ When building a union type, any component that is a subtype of another component
 - `Posit8 | Posit32 | Posit64 → Posit64` (Posit8 <: Posit32 <: Posit64)
 - `Int | String → Int | String` (incomparable, both retained)
 
-This is ACI normalization PLUS subtype absorption. The existing `build-union-type` does ACI (associative, commutative, idempotent via sort+dedup). Track 2H adds the absorption step.
+Absorption is the canonical form computation WITHIN the join — like reducing fractions (M4). `Nat | Int` and `Int` denote the SAME lattice element (because `Nat <: Int` means `Nat ⊔ Int = Int`). No information is lost; both representations denote the same set of values. Monotonicity is preserved: `merge(Nat, Int) = Int ≥ Nat` in the subtype ordering.
+
+This is ACI normalization PLUS subtype absorption, delivered as a single atomic operation (F11) — the merge function never produces non-canonical unions. The explicit `absorb-subtype-components` algorithm (flatten → pairwise filter) is **scaffolding** (F3): in the permanent network architecture, absorption is emergent from pairwise cell merges as writes arrive.
 
 ---
 
@@ -200,7 +217,9 @@ Both type-lattice.rkt and unify.rkt import from union-types.rkt. The new module 
 
 **Principle served**: Decomplection (5). Separable concerns separated. One canonical union normalization.
 
-### §3.2 Phase 2: Subtype-aware join (the core change)
+### §3.2 Phase 2: Subtype-aware join WITH absorption (atomic, F11)
+
+**Rationale for merging old Phases 2+3**: The subtype-lattice-merge must never produce non-canonical unions. Either it produces `type-top` (pre-Track-2H) or it produces absorbed unions (post-Track-2H). A non-absorbed union like `Nat | Int` violates the absorption law (`a ⊔ (a ⊓ b) = a`) — it is not a valid lattice element. The algebraic change is atomic: join + absorption together, or neither.
 
 **Current** (`subtype-predicate.rkt:198`):
 ```racket
@@ -209,54 +228,39 @@ Both type-lattice.rkt and unify.rkt import from union-types.rkt. The new module 
     [(equal? a b) a]
     [(subtype? a b) b]
     [(subtype? b a) a]
-    [else type-top]))  ;; ← THIS becomes union type
+    [else type-top]))  ;; ← THIS becomes union type with absorption
 ```
 
 **Redesigned**:
 ```racket
 (define (subtype-lattice-merge a b)
   (cond
-    [(type-bot? a) b]           ;; identity
+    [(type-bot? a) b]           ;; identity (fixes V1d)
     [(type-bot? b) a]
     [(type-top? a) type-top]    ;; absorbing
     [(type-top? b) type-top]
     [(equal? a b) a]            ;; idempotent
-    [(subtype? a b) b]          ;; a ≤ b → join = b
-    [(subtype? b a) a]          ;; b ≤ a → join = a
-    ;; Meta handling: if either has unsolved metas, keep concrete side
-    ;; (same conservative treatment as type-lattice-merge)
+    [(subtype? a b) b]          ;; a ≤ b → join = b (absorption for comparable)
+    [(subtype? b a) a]
+    ;; Meta handling: keep concrete side. KNOWN UNSOUNDNESS (F2):
+    ;; not monotone in the merge function itself — compensated by
+    ;; solve-meta! + constraint-retry pipeline. Pre-existing pattern
+    ;; inherited from type-lattice-merge. Retirement: PPN Track 4
+    ;; ATMS-conditional cell values make this unnecessary.
     [(or (has-unsolved-meta? a) (has-unsolved-meta? b))
      (if (has-unsolved-meta? a) b a)]
     [else
-     ;; Incomparable under subtyping → build union type with absorption
+     ;; Incomparable under subtyping → canonical union with absorption
      (build-union-type-with-absorption (list a b))]))
 ```
 
-**`build-union-type-with-absorption`**: Like `build-union-type` but after flatten+sort+dedup, applies subtype absorption: if any component is a subtype of another, remove the subtype.
+**`build-union-type-with-absorption`**: flatten + sort + dedup + absorb + fold. Absorption removes any component that is a subtype of another: `Nat | Int → Int`. The O(n^2) pairwise `subtype?` check in `absorb-subtype-components` is **scaffolding** (F3): in the permanent network architecture, absorption is emergent from pairwise cell merges as writes arrive. No list, no n^2 — the cell's merge function handles it pair-by-pair.
 
-**Monotonicity argument**: Union-join is monotone because adding information (refining a component from `?A` to `Nat`) can only shrink the union (via absorption) or leave it the same. It cannot grow the union. ⊥ ⊔ x = x (identity). ⊤ ⊔ x = ⊤ (absorbing). Commutativity: `build-union-type` sorts canonically. Associativity: flatten + sort + dedup + absorb. Idempotent: dedup.
+**Monotonicity argument**: `merge(a, b) ≥ a` and `merge(a, b) ≥ b` in the subtype ordering. `merge(Int, String) = Int | String`. Is `Int | String ≥ Int`? Yes — `Int <: Int | String`. `merge(Nat, Int) = Int`. Is `Int ≥ Nat`? Yes — `Nat <: Int`. Commutativity: canonical sort. Associativity: flatten + re-absorb. Idempotent: dedup.
 
-**Where subtype-lattice-merge is called**: Via the merge-registry in type-sre-domain and type-sre-domain-for-subtype. Called when cells with subtype relation are merged. Also called directly from structural subtype checking.
+**Where called**: Via merge-registry in type-sre-domain and type-sre-domain-for-subtype. Also from structural subtype checking.
 
-### §3.3 Phase 3: Subtype absorption
-
-**Algorithm**: Given a list of union components (already flattened, sorted, deduped):
-
-```
-absorb(components):
-  for each pair (a, b) in components:
-    if subtype?(a, b): remove a
-    if subtype?(b, a): remove b
-  return remaining
-```
-
-This is O(n^2) in the number of components. For typical union types (2-5 components), this is negligible. For pathological cases (100+ components), the n^2 may matter — but such unions indicate a design problem, not a performance problem.
-
-**Integration**: This runs inside `build-union-type-with-absorption`, AFTER flatten+sort+dedup and BEFORE the final fold to expr-union.
-
-**Correctness**: Absorption is the lattice-theoretic consequence of `a ≤ b → a ⊔ b = b`. In a union `a | b` where `a <: b`, the union is equivalent to `b` alone. This is semantically correct: the set of values inhabiting `Nat | Int` is the same as the set inhabiting `Int` (since every Nat is an Int).
-
-### §3.4 Phase 4: Complete try-intersect-pure
+### §3.3 Phase 3: Complete try-intersect-pure
 
 **Current coverage**: Pi (with ring action), Sigma (both covariant). Everything else → `#f` → `type-bot`.
 
@@ -290,7 +294,7 @@ Where `generic-meet` mirrors `generic-merge` but applies the ring action:
 
 **Principle served**: Completeness (6). The meet was incomplete (only Pi/Sigma). Generic descriptor-driven meet makes it complete for all registered types.
 
-### §3.5 Phase 5: Tensor (⊗) — type-level function application
+### §3.4 Phase 4: Tensor (⊗) — type-level function application
 
 **The operation**: The tensor takes a SINGLE function type and a SINGLE argument type and produces the result type. This is Pi elimination at the type level — the CORE lattice operation.
 
@@ -300,11 +304,16 @@ Distribution over unions is NOT part of the core tensor. In a propagator network
 ```racket
 ;; The core quantale tensor: single Pi × single arg → result
 ;; This is the operation Track 4 wires as a propagator.
+;; Returns type-bot for inapplicable types (F1: NOT type-top).
+;; In a propagator network, "can't apply" = propagator doesn't write
+;; = output cell stays at bot (no information). type-top means
+;; CONTRADICTION (two conflicting pieces of information), which is
+;; semantically different from "no applicable function."
 (define (type-tensor-core func-type arg-type)
   (cond
-    [(type-bot? func-type) type-bot]
+    [(type-bot? func-type) type-bot]  ;; no info → no output
     [(type-bot? arg-type) type-bot]
-    [(type-top? func-type) type-top]
+    [(type-top? func-type) type-top]  ;; genuine contradiction propagates
     [(type-top? arg-type) type-top]
     [(expr-Pi? func-type)
      (let ([domain (expr-Pi-domain func-type)]
@@ -312,8 +321,8 @@ Distribution over unions is NOT part of the core tensor. In a propagator network
        (cond
          [(subtype? arg-type domain) (subst 0 arg-type codomain)]
          [(try-unify-pure arg-type domain) (subst 0 arg-type codomain)]
-         [else type-top]))]
-    [else type-top]))
+         [else type-bot]))]           ;; inapplicable → no info (not contradiction)
+    [else type-bot]))                 ;; non-Pi → no info
 ```
 
 **Distribution wrapper** (`type-tensor-distribute` — scaffolding):
@@ -351,13 +360,22 @@ Distribution (properties 5-6 below) is network-level, verified by writing multip
 
 **Module location**: `subtype-predicate.rkt` (NOT type-lattice.rkt — D.3 finding R1). `type-tensor-core` requires `subtype?` (in subtype-predicate.rkt) and `try-unify-pure` (in type-lattice.rkt). subtype-predicate.rkt already imports type-lattice.rkt, so it can access both. No circular dependency.
 
-**SRE registration**: Register the tensor as a discoverable operation on `sre-domain` via a new `operations` field — `(hasheq 'tensor type-tensor-core ...)`. This makes Track 4 lookup generic: `(hash-ref (sre-domain-operations domain) 'tensor)` works for any domain that declares a tensor. The `operations` hash is extensible (future: residual, pseudo-complement).
+**SRE registration**: Register the tensor as a discoverable operation on `sre-domain` via a new `operations` field. Track 4 looks up any domain's tensor generically: `(hash-ref (sre-domain-operations domain) 'tensor)`.
+
+**Operations contract** (F8): Each operation entry is a hash with metadata:
+```racket
+(hasheq 'tensor (hasheq 'name 'tensor
+                        'fn type-tensor-core
+                        'arity 2
+                        'properties '(distributes-over-join associative has-identity)))
+```
+The `properties` list declares which lattice laws the operation satisfies. Track 4 uses these to wire propagators correctly: a tensor that distributes over join can be decomposed into per-component firings; one that does not cannot. Extensible — future operations (residual, pseudo-complement) follow the same contract.
 
 **Dependency**: Phases 2-3 (union-join + absorption) must be complete. `type-tensor-distribute` uses `build-union-type-with-absorption`.
 
 **Principle served**: Propagator-First (1) — core tensor is the propagator fire function; distribution is network behavior. Completeness (6) — full quantale. Data Orientation (2) — tensor registered as discoverable data on domain, not standalone function.
 
-### §3.6 Phase 6: Tensor-aware elaboration
+### §3.5 Phase 5: Tensor-aware elaboration
 
 **Current state** (`typing-core.rkt:548-555`):
 ```racket
@@ -385,9 +403,12 @@ Distribution (properties 5-6 below) is network-level, verified by writing multip
           (subst 0 e2 (expr-Pi-codomain t1))
           (expr-error))]
      ;; Union type: distribute via tensor (scaffolding wrapper)
+     ;; type-tensor-core returns bot for inapplicable (F1), so
+     ;; type-tensor-distribute may return bot (all components inapplicable)
+     ;; or top (genuine contradiction). Both → expr-error.
      [(expr-union? t1)
       (let ([result (type-tensor-distribute t1 (infer ctx e2))])
-        (if (type-top? result)
+        (if (or (type-bot? result) (type-top? result))
             (expr-error)
             result))]
      [_ (expr-error)]))]
@@ -399,7 +420,7 @@ Distribution (properties 5-6 below) is network-level, verified by writing multip
 
 **Scope boundary**: This phase wires `type-tensor` into the existing imperative elaborator as a PURE function call (no speculation, no rollback). It does NOT put the tensor on-network as a propagator — that's PPN Track 4. Track 2H makes the elaborator WORK with union types; Track 4 makes it work ON-NETWORK with ATMS-managed assumption branches replacing imperative speculation.
 
-### §3.7 Phase 7: Per-relation property declarations
+### §3.6 Phase 6: Per-relation property declarations
 
 **Current state**: `sre-domain.declared-properties` is a single `(hasheq property-name → property-value)`. Properties apply to the domain's equality merge.
 
@@ -441,19 +462,25 @@ Example for type domain:
 
 **Why domain×relation, not relation alone** (D.3 finding P4, Track 2G L3): The same relation (e.g., `sre-subtype`) is shared across domains — it's the same endomorphism struct for types and sessions. But the algebraic properties of subtype ordering DIFFER by domain: `type.subtype` may be Heyting while `session.subtype` is not. `sre-relation.properties` holds endomorphism-level properties (antitone, involutive). `sre-domain.declared-properties` indexed by relation holds lattice-structure properties (distributive, Heyting). This factoring ensures future domains reuse relation structs with independent property declarations.
 
+**The `#:relation` keyword API is scaffolding** (F5): callers choose which ordering to query via control flow, not information flow. In a propagator network, properties are CELL VALUES — a property cell for (type, subtype, distributive) holds `prop-confirmed`. The query is a cell read, not a function call with a keyword. Track 2G's `property-cell-ids` field on `sre-domain` (currently `(hasheq)` — empty) is the permanent home. Populating it requires domain registration AFTER network creation — the lifecycle ordering issue from Track 2G PIR §9. This is Track 4 scope.
+
 **Principle served**: Data Orientation (2). Properties are data indexed by (domain, relation) — not embedded in control flow. Decomplection (5) — relation-level properties (endomorphism kind) separated from domain×relation properties (lattice structure).
 
-### §3.6 Phase 6: Algebraic validation
+### §3.7 Phase 7: Algebraic validation — Heyting (ground sublattice) + quantale
 
 Run property inference on the redesigned subtype-lattice-merge:
-- **Samples**: `(expr-Nat) (expr-Int) (expr-Rat) (expr-String) (expr-Bool) (expr-Unit) (expr-Char) (expr-Keyword)` — same base types used in Track 2G, plus a few compound types for structural coverage
-- **Tests**: commutativity, associativity, idempotence, distributivity (using meet = GLB)
-- **Expected results**: ALL four confirmed under subtype ordering (the union-join + GLB-meet combination is distributive for ground types)
-- **Implication derivation**: distributive + has-pseudo-complement → Heyting = prop-confirmed
+- **Ground type samples**: `(expr-Nat) (expr-Int) (expr-Rat) (expr-String) (expr-Bool) (expr-Unit) (expr-Char) (expr-Keyword)` — same base types used in Track 2G
+- **Compound type samples**: `(expr-PVec (expr-Nat))`, `(expr-Pi 'mw (expr-Int) (expr-Bool))` — structural coverage for meet
+- **Binder type samples** (F7): `(expr-Pi 'mw (expr-Nat) (expr-bvar 0))`, dependent Pi with binder — test distributivity for non-ground cases
+- **Lattice tests**: commutativity, associativity, idempotence, distributivity (using meet = GLB)
+- **Expected ground results**: ALL four confirmed under subtype ordering
+- **Expected binder results**: distributivity may fail for dependent types — document as conjectured, scope Heyting claim to ground sublattice
+- **Tensor tests**: associativity, identity, annihilation, distribution over join
+- **Implication derivation**: distributive + has-pseudo-complement → Heyting = prop-confirmed (ground sublattice)
 
 This is the "Pre-0 property check" lesson from Track 2G — validate mathematical properties DURING design, not after implementation.
 
-### §3.7 Phase 7: Pseudo-complement error reporting
+### §3.8 Phase 8: Pseudo-complement error reporting
 
 **Pseudo-complement**: `¬a = a → ⊥ = max{x | x ⊓ a ≤ ⊥}`
 
@@ -481,7 +508,11 @@ For ground types under the subtype ordering with union-join + GLB-meet:
 - WHAT alternatives remain (the pseudo-complement)
 - WHY they conflict (the meet that produced ⊥)
 
-**This is SCAFFOLDING** (D.3 finding M2). The function-over-list approach requires collecting "context types" into a list — information that isn't aggregated on-network today. It filters via meet — recomputing relationships the network already established. The permanent solution is ATMS-derived: when a cell reaches type-top, the ATMS nogood records the minimal assumption set that produced the contradiction. Retracting the conflicting assumption gives the maximal consistent subset — which IS the pseudo-complement, falling out of the dependency structure without list filtering. **Retire when**: PPN Track 4 delivers ATMS-managed type cells. At that point, contradiction → nogood → pseudo-complement is on-network.
+**This is SCAFFOLDING** (D.3 M2, D.5 F6). The function-over-list approach requires collecting "context types" into a list — information that isn't aggregated on-network today. It filters via meet — recomputing relationships the network already established.
+
+**Context source** (F6): Even as scaffolding, the pseudo-complement should derive its context from the network's existing cell state where possible, not from an ad-hoc list parameter. If the elaboration scope's cell registry provides the needed type cells (investigate during implementation), use it. This keeps identity structural (cell references) rather than positional (list membership). If the registry doesn't track per-expression type cells (likely — that's Track 4), the list parameter is acceptable scaffolding.
+
+**Permanent solution**: ATMS-derived. When a cell reaches type-top, the ATMS nogood records the minimal assumption set that produced the contradiction. Retracting the conflicting assumption gives the maximal consistent subset — which IS the pseudo-complement, falling out of the dependency structure without list filtering. **Retire when**: PPN Track 4 delivers ATMS-managed type cells. At that point, contradiction → nogood → pseudo-complement is on-network.
 
 **Why build the scaffolding**: It's the first CONSUMER of the Heyting structure. It validates that the pseudo-complement is computable and produces useful error information. The scaffolding proves the concept; the ATMS replaces the mechanism.
 
@@ -494,34 +525,26 @@ For ground types under the subtype ordering with union-join + GLB-meet:
 The NTT (speculative syntax) model for key constructs:
 
 ```
--- Union type as subtype join
+-- Type lattice with first-class join/meet operations (F10)
 lattice TypeLattice
   :carrier Type
   :bot     type-bot
   :top     type-top
+  :join    union-join        -- FIRST-CLASS: the lattice's join operation
+  :meet    glb-meet          -- FIRST-CLASS: the lattice's meet operation
 
-  -- Equality relation (unchanged)
+  -- Equality relation (unchanged) — uses its own merge, not the lattice join
   relation equality
     :merge [a b -> (try-unify-pure a b) | type-top]
     :properties {commutative associative idempotent has-meet}
 
-  -- Subtype relation (REDESIGNED)
+  -- Subtype relation (REDESIGNED) — uses the lattice's join/meet
   relation subtype
-    :merge [a b ->
-      | a = b        -> a
-      | a <: b       -> b
-      | b <: a       -> a
-      | has-meta? a  -> b
-      | has-meta? b  -> a
-      | otherwise    -> (union-join a b)]  -- NOT type-top
-    :meet [a b ->
-      | a = b        -> a
-      | a <: b       -> a     -- GLB of comparable = lesser
-      | b <: a       -> b
-      | same-ctor?   -> (component-wise-meet a b)  -- ring action
-      | otherwise    -> type-bot]
+    :merge union-join        -- delegates to lattice join
+    :meet  glb-meet          -- delegates to lattice meet
     :properties {commutative associative idempotent distributive
                  has-meet has-pseudo-complement heyting}
+    :properties-scope ground-sublattice  -- F7: dependent types conjectured
 
 -- Union join with subtype absorption
 def union-join [a b : Type] -> Type
@@ -544,12 +567,15 @@ def generic-meet [a b : Type] -> Type
 
 -- Tensor (⊗): function application as quantale multiplication
 -- CORE: single Pi × single arg — the propagator fire function
+-- Returns bot for inapplicable (F1: not top — absence ≠ contradiction)
 def type-tensor-core [f : Type, a : Type] -> Type
   := match f a
-     | (Pi dom cod) a  -> if a <: dom then cod[a] else type-top
-     | bot _           -> bot
+     | (Pi dom cod) a  -> if a <: dom then cod[a] else bot  -- inapplicable = no info
+     | top _           -> top   -- genuine contradiction propagates
+     | _ top           -> top
+     | bot _           -> bot   -- no info in → no info out
      | _ bot           -> bot
-     | _               -> type-top
+     | _               -> bot   -- non-Pi = no applicable function
 
 -- SCAFFOLDING: imperative distribution for pre-network elaborator
 -- In Track 4's network, distribution is emergent from multiple cell writes.
@@ -651,16 +677,35 @@ Three lenses: Reality Check (R), Principles (P), Propagator Mindset (M).
 
 | Finding | Lens | Impact | Resolution |
 |---------|------|--------|------------|
-| R1: `type-tensor` can't live in type-lattice.rkt (circular dep with subtype?) | R | **Blocker** — design specified wrong module | Moved to subtype-predicate.rkt (§3.5) |
-| R2: 13 sre-domain construction sites, not 9 | R | Phase 7 underestimated migration | Sized explicitly in §3.7 |
+| R1: `type-tensor` can't live in type-lattice.rkt (circular dep with subtype?) | R | **Blocker** — design specified wrong module | Moved to subtype-predicate.rkt (§3.4) |
+| R2: 13 sre-domain construction sites, not 9 | R | Phase 6 underestimated migration | Sized explicitly in §3.6 |
 | R3: Pre-0 numbers stale after whnf fast-path (300μs → 0.3μs) | R | Performance analysis too pessimistic | Noted — union cost even MORE negligible now |
 | P1: Union normalization maintained by discipline, not structure | P | Risk of non-canonical expr-union | Monitor — smart constructor pattern if issues arise |
-| P2: Union types from subtype merge don't reach main elab cells | P | Eliminator concern (critique #2) is bounded | Documented in §3.6. Monitor during implementation. |
-| P3: Tensor should be discoverable via SRE, not standalone | P | Track 4 can't generically look up tensor | `operations` hash on sre-domain (§3.5) |
-| P4: Domain×relation IS the right property key | P | Confirms design's nested hash approach | Justified in §3.7 from Track 2G L3 |
-| M2: Pseudo-complement is scaffolding (ATMS replaces) | M | Document scaffolding boundary | Explicit in §3.9 with retirement criterion |
+| P2: Union types from subtype merge don't reach main elab cells | P | Eliminator concern bounded | Documented in §3.5. Monitor during implementation. |
+| P3: Tensor should be discoverable via SRE, not standalone | P | Track 4 can't generically look up tensor | `operations` hash on sre-domain (§3.4) |
+| P4: Domain×relation IS the right property key | P | Confirms design's nested hash approach | Justified in §3.6 from Track 2G L3 |
+| M2: Pseudo-complement is scaffolding (ATMS replaces) | M | Document scaffolding boundary | Explicit in §3.8 with retirement criterion |
 | M3: Distribution is network behavior, not tensor behavior | M | **Design win** — split core from distribute | `type-tensor-core` (propagator fn) + `type-tensor-distribute` (scaffolding) |
-| M4: Absorption is canonical form within join, not stratification | M | Confirms design — no separate cell needed | Documented in design rationale |
+| M4: Absorption is canonical form within join, not stratification | M | Confirms design — no separate cell needed | Documented in §2 and §3.2 |
+
+## §D.5 External Critique Findings
+
+Propagator information flow lens. 12 findings, responses inline.
+
+| Finding | Issue | Resolution |
+|---------|-------|------------|
+| F1: Tensor top-on-failure conflates absence with contradiction | **Accept** | `type-tensor-core` returns `type-bot` for inapplicable (§3.4). In network: propagator doesn't write. |
+| F2: Meta handling in subtype-lattice-merge breaks monotonicity | **Document** | Pre-existing pattern inherited from `type-lattice-merge`, compensated by solve-meta! + constraint-retry. Retirement: Track 4 ATMS-conditional values. Documented in §3.2. |
+| F3: Absorption algorithm is scaffolding (not flagged as such) | **Accept** | `absorb-subtype-components` flagged as scaffolding in §2, §3.2. Network does pairwise merge. |
+| F4: Core/scaffolding tensor split is right | Positive | No action. |
+| F5: Property keyword API adds algorithmic dispatch | **Document** | Keyword API is scaffolding; property cells (Track 2G `property-cell-ids`) are permanent. Documented in §3.6. |
+| F6: Pseudo-complement context from list, not cells | **Investigate** | Use cell registry if available; list parameter otherwise. Documented in §3.8. |
+| F7: Distributivity claim needs scoping to ground types | **Accept** | Heyting scoped to ground sublattice. Phase 7 tests binder types. Documented in §2, §3.7. |
+| F8: Operations hash needs a contract | **Accept** | Minimal contract: `(hasheq 'name sym 'fn proc 'arity nat 'properties list)`. Documented in §3.4. |
+| F9: Equality merge + union types interaction | **Accept** | Worked examples added to §2. Cells never switch merge strategies. |
+| F10: NTT model should declare join/meet as first-class | **Accept** | NTT lattice now declares `:join union-join :meet glb-meet`. Relations reference these. |
+| F11: Phase ordering creates algebraic inconsistency window | **Compromise** | Phases 2+3 merged into atomic Phase 2 (§3.2). Phase 3 (meet) separate — incomplete meet doesn't break join laws. |
+| F12: No explicit bridge between equality and subtype orderings | **Document for Track 4** | Asymmetric relationship documented in §2. Equality refines subtype, not reverse. Different cells today — no bridge needed. |
 
 ---
 
