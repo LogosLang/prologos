@@ -43,6 +43,12 @@
  all-sre-rewrite-rules
  ;; Template instantiation
  instantiate-template
+ ;; K binding context (Phase 5)
+ (struct-out rewrite-binding-context)
+ make-hash-binding-context
+ binding-ref
+ binding-set!
+ binding-context->hash
  ;; Propagator factory (Phase 4)
  make-rewrite-propagator-fn
  apply-sre-rewrite-rule
@@ -297,6 +303,44 @@
                       (list->rrb new-children)
                       (or srcloc (parse-tree-node-srcloc template))
                       (or indent (parse-tree-node-indent template)))]))
+
+;; ========================================
+;; Phase 5: K as Sub-Cell Abstraction
+;; ========================================
+;; K bindings abstract over hash (standalone) vs network cells (Phase 7).
+;; The binding context provides read/write operations that work with both.
+;; For standalone use: hash-based context (current behavior).
+;; For network use: cell-based context (Phase 7 wires).
+;;
+;; Sub-cell reset within PU micro-strata boundary (F3, NAF-LE pattern):
+;; The fold combinator resets K bindings between micro-strata by creating
+;; a fresh binding context per step. No cell mutation — fresh context each time.
+
+(struct rewrite-binding-context
+  (bindings     ;; hasheq of (symbol → value) — the K binding values
+   write-fn     ;; (symbol value → void) or #f — for cell-based contexts
+   read-fn)     ;; (symbol → value) or #f — for cell-based contexts
+  #:transparent)
+
+;; Create a hash-based binding context (standalone mode)
+(define (make-hash-binding-context)
+  (define h (make-hasheq))
+  (rewrite-binding-context
+    h
+    (lambda (name val) (hash-set! h name val))
+    (lambda (name) (hash-ref h name #f))))
+
+;; Read a K binding from the context
+(define (binding-ref ctx name)
+  (hash-ref (rewrite-binding-context-bindings ctx) name #f))
+
+;; Write a K binding to the context
+(define (binding-set! ctx name value)
+  (hash-set! (rewrite-binding-context-bindings ctx) name value))
+
+;; Get all bindings as a hash (for template instantiation)
+(define (binding-context->hash ctx)
+  (rewrite-binding-context-bindings ctx))
 
 ;; ========================================
 ;; Phase 4: Per-Rule Propagator Factory
