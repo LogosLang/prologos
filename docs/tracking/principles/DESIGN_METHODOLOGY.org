@@ -639,7 +639,34 @@ For each implementation phase:
    challenge by principles → reframe if still stuck. Do not iterate
    fix-and-retry.
 
-4. *Phase completion* (4 steps IN ORDER):
+4. *Vision Alignment Gate*: Before committing, verify the phase
+   against the design's stated vision. Three questions, all must pass:
+
+   a. /On-network?/ Is information flowing through cells on the
+      network, or am I computing off-network? If off-network, is it
+      explicitly labeled as scaffolding with a documented retirement
+      plan (which track retires it, what replaces it)? Unlabeled
+      off-network computation is a vision deviation.
+
+   b. /Complete?/ Does this phase's implementation match ALL
+      deliverables the design specified? Not just the code --- but
+      registrations, property declarations, SRE integration, test
+      coverage. Designed-but-not-implemented is invisible deferral.
+
+   c. /Vision-advancing?/ Would the design author recognize this as
+      advancing the stated vision? If you need to explain why a
+      pragmatic shortcut does not violate the vision, it probably
+      does. The shortcut may be correct --- but it must be named as
+      scaffolding, not rationalized as permanent.
+
+   Origin: PPN Track 3 had two major deviations (§11 datum-canonical
+   instead of tree-canonical on-network, §12 SRE integration
+   designed-but-not-implemented). Both passed code correctness checks
+   but failed vision alignment. Question (a) catches §11-type
+   deviations. Question (b) catches §12-type deviations. Question (c)
+   is the general guard against incremental pragmatic drift.
+
+5. *Phase completion* (4 steps IN ORDER):
    a. /Commit/: ~git add~ + ~git commit~ with descriptive message
    b. /Tracker/: Update design doc progress tracker (⬜ → ✅ + commit
       hash + key result)
