@@ -31,7 +31,7 @@
 | 5 | K as sub-cells (PUnify pattern) with verification | ✅ | `59609525`. rewrite-binding-context abstracts hash vs cells. Fresh per fold step (NAF-LE). Verification from Phase 1 intact. |
 | 6 | Critical pair analysis infrastructure | ✅ | `43773669`. analyze-confluence + report. Arity-aware overlap. 9 rules → 0 critical pairs (strongly confluent). |
 | 7 | Integration: wire SRE rules into form pipeline | ✅ | `b061d832`. V0-2 tries SRE first, lambda fallback. Circular dep resolved. Dual path during migration. |
-| 8 | Verification + acceptance file + PIR | 🔄 | Suite 384/384 GREEN. A/B: no regression. SRE 0 critical pairs. PIR in progress. |
+| 8 | Verification + acceptance file + PIR | ✅ | Suite 384/384 GREEN. A/B: no regression. 11/13 rules lifted. [PIR](2026-04-03_SRE_TRACK2D_PIR.md). |
 
 ---
 
