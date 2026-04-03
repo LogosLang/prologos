@@ -641,7 +641,7 @@ Propagator information flow lens. 12 findings, responses inline.
 
 ---
 
-**DPO formalism — adhesive category assumption** (F8): The design uses DPO span notation throughout. The hypergraph research (§3.3) establishes that e-graphs are adhesive, granting local Church-Rosser, parallelism, and concurrency guarantees. Parse trees with RRB children are a strict sub-structure of e-graphs (no equivalence classes). We ASSUME parse trees are adhesive (reasonable — they're term trees, which are adhesive by the presheaf result). Formal verification is research scope, not Track 2D implementation scope. If the assumption fails, the DPO guarantees weaken — but the implementation is still correct (we verify confluence empirically via Phase 6 critical pair analysis, not by categorical proof).
+**DPO formalism — adhesive category CONFIRMED** (F8, resolved): Parse-tree-nodes are objects in a presheaf topos (ordered trees as functors). Every presheaf topos is adhesive (Lack & Sobocinski 2005). Therefore DPO rewriting on parse trees inherits the full adhesive toolkit: Church-Rosser, parallelism, concurrency, critical pair completeness. See [Adhesive Categories and Parse Trees](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md) for the full argument. The research note also identifies a novel CALM-adhesive connection: monotone propagators implementing DPO rewrite rules without critical pairs are both CALM-compliant AND adhesive-certified.
 
 ---
 
