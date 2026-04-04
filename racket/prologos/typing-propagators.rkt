@@ -17,7 +17,8 @@
          "substitution.rkt"
          "global-env.rkt"
          (only-in "subtype-predicate.rkt" type-tensor-core)
-         (only-in "type-lattice.rkt" type-bot type-bot? type-top type-top?))
+         (only-in "type-lattice.rkt" type-bot type-bot? type-top type-top?)
+         (only-in "metavar-store.rkt" meta-solution/cell-id))
 
 (provide
  ;; Phase 1c: Context lattice
@@ -47,7 +48,9 @@
  register-application-typing-rules!
  ;; Phase 3: Integration — typing-rule-aware infer
  make-typing-rule-infer
- make-default-typing-registry)
+ make-default-typing-registry
+ ;; Phase 4a: Meta-solving — typing rule for expr-meta
+ register-meta-typing-rules!)
 
 ;; ============================================================
 ;; Phase 1c: Context Lattice
@@ -622,6 +625,7 @@
   (register-variable-typing-rules! reg)
   (register-binder-typing-rules! reg)
   (register-application-typing-rules! reg)
+  (register-meta-typing-rules! reg)
   reg)
 
 ;; Create a typing-rule-aware infer function.
@@ -661,3 +665,34 @@
           (infer-fallback ctx e)])]))
 
   rule-infer)
+
+
+;; ============================================================
+;; Phase 4a: Meta-Variable Typing Rule
+;; ============================================================
+;;
+;; Meta-variables ARE cells. When a meta appears in an expression,
+;; its type is read directly from its cell (via cell-id fast path).
+;; If the meta is solved, return the solution type. If unsolved,
+;; return 'not-ready (propagator re-fires when the cell is written).
+;;
+;; This makes cells the SOLE AUTHORITY for meta solutions.
+;; The CHAMP meta-info is kept for debugging/constraint tracking
+;; but is NOT consulted for solution lookup.
+
+(define (register-meta-typing-rules! registry)
+  (typing-rule-registry-add! registry
+    (typing-rule
+     'expr-meta 'meta-follow 0
+     (lambda (_ctx-val e _reader)
+       ;; Read solution directly from cell (fast path)
+       (define cell-id (expr-meta-cell-id e))
+       (define id (expr-meta-id e))
+       (define sol (meta-solution/cell-id cell-id id))
+       (cond
+         [sol sol]          ;; solved → return solution type
+         [else 'not-ready])) ;; unsolved → wait for cell write
+     ;; check: meta in check position — optimistically succeed
+     ;; (matches current imperative behavior: [(expr-meta _ _) _) #t])
+     (lambda (_ctx-val _e _expected _reader) #t)
+     0)))

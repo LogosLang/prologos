@@ -664,6 +664,36 @@
        (check-equal? (rule-infer ctx e) (infer ctx e)))
      )))
 
+;; ============================================================
+;; Phase 4a: Meta-variable typing rule
+;; ============================================================
+
+(define phase-4a-tests
+  (let ()
+    (define reg (make-typing-rule-registry))
+    (register-meta-typing-rules! reg)
+
+    (test-suite
+     "Phase 4a: meta-variable typing rule"
+
+     (test-case "meta rule registered"
+       (check-true (typing-rule? (typing-rule-registry-lookup reg 'expr-meta))))
+
+     (test-case "meta check: optimistically succeeds"
+       ;; Meta in check position → #t (matches imperative behavior)
+       (define result
+         (dispatch-typing-rule reg expr-typing-tag context-empty-value
+                               (expr-meta 'test-meta #f)
+                               (lambda (pos) #f)
+                               #:expected-type (expr-Int)))
+       (check-equal? result (cons 'check #t)))
+
+     ;; Note: testing infer for solved/unsolved metas requires a live
+     ;; elaboration network (meta-solution/cell-id reads from current-prop-net-box).
+     ;; That's an integration test — covered by the acceptance file and full suite.
+     ;; Unit test validates the rule structure and check behavior.
+     )))
+
 (run-tests phase-1a-tests)
 (run-tests phase-1c-tests)
 (run-tests phase-2a-tests)
@@ -672,3 +702,4 @@
 (run-tests phase-2d-tests)
 (run-tests phase-2e-tests)
 (run-tests phase-3-tests)
+(run-tests phase-4a-tests)
