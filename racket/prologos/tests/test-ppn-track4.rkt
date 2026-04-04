@@ -379,7 +379,49 @@
 ;; Run
 ;; ============================================================
 
+;; ============================================================
+;; Phase 2c: Variable lookup typing rules
+;; ============================================================
+
+(define phase-2c-tests
+  (let ()
+    (define reg (make-typing-rule-registry))
+    (register-variable-typing-rules! reg)
+
+    (define (infer-with-ctx ctx-val e)
+      (dispatch-typing-rule reg expr-typing-tag ctx-val e
+                            (lambda (pos) #f)))
+
+    (test-suite
+     "Phase 2c: variable lookup typing rules"
+
+     (test-case "bvar 0: most recent binding"
+       (define ctx (context-extend-value context-empty-value (expr-Int) 'mw))
+       ;; bvar(0) in ctx with [Int] → Int (shifted by 1, but Int has no bvars → stays Int)
+       (define result (infer-with-ctx ctx (expr-bvar 0)))
+       (check-equal? result (cons 'ok (expr-Int))))
+
+     (test-case "bvar 1: earlier binding"
+       (define ctx (context-extend-value
+                    (context-extend-value context-empty-value (expr-Nat) 'mw)
+                    (expr-Int) 'm1))
+       ;; bvar(1) → Nat (shifted by 2, but Nat has no bvars → stays Nat)
+       (define result (infer-with-ctx ctx (expr-bvar 1)))
+       (check-equal? result (cons 'ok (expr-Nat))))
+
+     (test-case "bvar out of bounds: returns #f"
+       (define result (infer-with-ctx context-empty-value (expr-bvar 0)))
+       (check-false result))
+
+     ;; fvar tests require global-env state — skip for unit tests.
+     ;; fvar is tested via the acceptance file (process-file) at Level 3.
+     (test-case "fvar rule registered"
+       (check-true (typing-rule? (typing-rule-registry-lookup reg 'expr-fvar))))
+     )))
+
+
 (run-tests phase-1a-tests)
 (run-tests phase-1c-tests)
 (run-tests phase-2a-tests)
 (run-tests phase-2b-tests)
+(run-tests phase-2c-tests)

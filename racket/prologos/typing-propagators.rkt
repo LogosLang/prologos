@@ -13,7 +13,9 @@
 
 (require racket/match
          "syntax.rkt"
-         "prelude.rkt")
+         "prelude.rkt"
+         "substitution.rkt"
+         "global-env.rkt")
 
 (provide
  ;; Phase 1c: Context lattice
@@ -34,7 +36,9 @@
  expr-typing-tag
  ;; Phase 2b: Concrete typing rules
  register-literal-typing-rules!
- register-universe-typing-rules!)
+ register-universe-typing-rules!
+ ;; Phase 2c: Variable lookup rules
+ register-variable-typing-rules!)
 
 ;; ============================================================
 ;; Phase 1c: Context Lattice
@@ -326,4 +330,50 @@
        (and (expr-Type? expected)
             (equal? (lsuc (expr-Type-level e))
                     (expr-Type-level expected))))
+     0)))
+
+
+;; ============================================================
+;; Phase 2c: Variable Lookup Typing Rules
+;; ============================================================
+;;
+;; bvar: reads from context cell at de Bruijn position k, shifts by (k+1).
+;; fvar: reads from global environment (off-network bridge, deferred to Track 7).
+
+(define (register-variable-typing-rules! registry)
+  ;; Bound variable: (expr-bvar k) → lookup-type(k, ctx), shifted by (k+1)
+  (typing-rule-registry-add! registry
+    (typing-rule
+     'expr-bvar 'bound-variable-lookup 0
+     (lambda (ctx-val e _reader)
+       (define k (expr-bvar-index e))
+       (define raw-type (context-lookup-type ctx-val k))
+       (if (expr-error? raw-type)
+           #f  ;; out of bounds — can't fire (or error in imperative path)
+           (shift (+ k 1) 0 raw-type)))
+     ;; check: bvar checks if its inferred type is consistent with expected
+     (lambda (ctx-val e expected _reader)
+       (define k (expr-bvar-index e))
+       (define raw-type (context-lookup-type ctx-val k))
+       (if (expr-error? raw-type)
+           #f
+           (equal? (shift (+ k 1) 0 raw-type) expected)))
+     0))
+
+  ;; Free variable: (expr-fvar name) → global-env-lookup-type(name)
+  ;; Uses the off-network global environment bridge (§1c, deferred to Track 7).
+  ;; Deprecation warnings are side effects — preserved here for parity with
+  ;; the imperative arm, but will migrate to separate concern in Track 7.
+  (typing-rule-registry-add! registry
+    (typing-rule
+     'expr-fvar 'free-variable-lookup 0
+     (lambda (_ctx-val e _reader)
+       (define name (expr-fvar-name e))
+       (define ty (global-env-lookup-type name))
+       (or ty #f))  ;; #f if not found (imperative path returns expr-error)
+     ;; check: fvar checks if its type matches expected
+     (lambda (_ctx-val e expected _reader)
+       (define name (expr-fvar-name e))
+       (define ty (global-env-lookup-type name))
+       (and ty (equal? ty expected)))
      0)))
