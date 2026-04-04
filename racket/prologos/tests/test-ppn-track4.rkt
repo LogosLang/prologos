@@ -12,7 +12,8 @@
          prologos/typing-propagators
          prologos/syntax
          prologos/prelude
-         prologos/type-lattice)
+         prologos/type-lattice
+         (only-in prologos/typing-core infer))
 
 ;; ============================================================
 ;; Phase 1a: Component-indexed propagator firing
@@ -602,6 +603,67 @@
        (check-false result))
      )))
 
+;; ============================================================
+;; Phase 3: Integration — typing-rule-aware infer parity
+;; ============================================================
+
+(define phase-3-tests
+  (let ()
+    ;; Create rule-infer that falls back to imperative infer
+    (define rule-infer (make-typing-rule-infer infer))
+    (define ctx ctx-empty)
+
+    (test-suite
+     "Phase 3: typing-rule-aware infer parity with imperative"
+
+     ;; Literals: rule-infer should match imperative infer
+     (test-case "parity: int literal"
+       (define e (expr-int 42))
+       (check-equal? (rule-infer ctx e) (infer ctx e)))
+
+     (test-case "parity: nat literal"
+       (define e (expr-nat-val 3))
+       (check-equal? (rule-infer ctx e) (infer ctx e)))
+
+     (test-case "parity: true"
+       (check-equal? (rule-infer ctx (expr-true)) (infer ctx (expr-true))))
+
+     (test-case "parity: false"
+       (check-equal? (rule-infer ctx (expr-false)) (infer ctx (expr-false))))
+
+     ;; Type constructors
+     (test-case "parity: Int type"
+       (check-equal? (rule-infer ctx (expr-Int)) (infer ctx (expr-Int))))
+
+     (test-case "parity: Nat type"
+       (check-equal? (rule-infer ctx (expr-Nat)) (infer ctx (expr-Nat))))
+
+     (test-case "parity: Bool type"
+       (check-equal? (rule-infer ctx (expr-Bool)) (infer ctx (expr-Bool))))
+
+     ;; Universe
+     (test-case "parity: Type 0"
+       (define e (expr-Type (lzero)))
+       (check-equal? (rule-infer ctx e) (infer ctx e)))
+
+     ;; Application (tensor): [int+ applied to args]
+     ;; This requires global env for int+ — test with a simple Pi
+     (test-case "parity: application of lambda to arg"
+       ;; (\x:Int. x) 42  — should infer Int
+       (define lam (expr-lam 'mw (expr-Int) (expr-bvar 0)))
+       (define app (expr-app lam (expr-int 42)))
+       (define imperative-result (infer ctx app))
+       (define rule-result (rule-infer ctx app))
+       ;; Both should produce Int (or at least be equal)
+       (check-equal? rule-result imperative-result))
+
+     ;; Fallback: expressions without rules still work
+     (test-case "fallback: error expression"
+       (define e (expr-error))
+       ;; expr-error has no typing rule → falls back to imperative
+       (check-equal? (rule-infer ctx e) (infer ctx e)))
+     )))
+
 (run-tests phase-1a-tests)
 (run-tests phase-1c-tests)
 (run-tests phase-2a-tests)
@@ -609,3 +671,4 @@
 (run-tests phase-2c-tests)
 (run-tests phase-2d-tests)
 (run-tests phase-2e-tests)
+(run-tests phase-3-tests)

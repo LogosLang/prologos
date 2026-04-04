@@ -44,7 +44,10 @@
  ;; Phase 2d: Lambda + Pi formation rules
  register-binder-typing-rules!
  ;; Phase 2e: Application (tensor) rule
- register-application-typing-rules!)
+ register-application-typing-rules!
+ ;; Phase 3: Integration — typing-rule-aware infer
+ make-typing-rule-infer
+ make-default-typing-registry)
 
 ;; ============================================================
 ;; Phase 1c: Context Lattice
@@ -589,3 +592,72 @@
          [(expr-Sigma? inner-type) (expr-Sigma-snd-type inner-type)]
          [else #f]))
      #f 0)))
+
+
+;; ============================================================
+;; Phase 3: Integration — Typing-Rule-Aware Infer
+;; ============================================================
+;;
+;; DPO-first + imperative-fallback (design §4b).
+;;
+;; `make-typing-rule-infer` creates a function that wraps an existing
+;; `infer` function with typing-rule dispatch. For each expression:
+;;   1. Check the registry for a typing rule matching this expr tag.
+;;   2. If found, build a type-map-reader that recursively calls
+;;      the WRAPPED infer on sub-expressions (mixed state: rules for
+;;      this node, imperative/rule mix for children).
+;;   3. If the rule fires, use its result.
+;;   4. If no rule or not-ready, fall back to the original infer.
+;;
+;; This is the incremental migration path: as more rules are added
+;; to the registry, more expressions are typed via rules, fewer via
+;; imperative match arms. When all expressions have rules, the
+;; fallback is never reached.
+
+;; Create a registry with all currently-implemented typing rules.
+(define (make-default-typing-registry)
+  (define reg (make-typing-rule-registry))
+  (register-literal-typing-rules! reg)
+  (register-universe-typing-rules! reg)
+  (register-variable-typing-rules! reg)
+  (register-binder-typing-rules! reg)
+  (register-application-typing-rules! reg)
+  reg)
+
+;; Create a typing-rule-aware infer function.
+;; infer-fallback: (ctx expr → type-or-error) — the imperative infer
+;; registry: typing-rule registry (or #f to use default)
+;; Returns: (ctx expr → type-or-error) — same signature as infer
+(define (make-typing-rule-infer infer-fallback
+                                #:registry [registry #f])
+  (define reg (or registry (make-default-typing-registry)))
+
+  (define (rule-infer ctx e)
+    ;; Build context-cell-value from the imperative ctx (list of (type . mult))
+    (define ctx-val
+      (context-cell-value ctx (length ctx)))
+
+    ;; Build type-map-reader: reads sub-expression types by recursively
+    ;; calling rule-infer on the sub-expression. This is the mixed-state
+    ;; bridge: the reader itself may use rules or fall back for each sub.
+    (define (type-map-reader sub-expr)
+      (define result (rule-infer ctx sub-expr))
+      (if (expr-error? result) #f result))
+
+    ;; Try dispatch
+    (define tag (expr-typing-tag e))
+    (cond
+      [(not tag)
+       ;; Unknown tag → straight to fallback
+       (infer-fallback ctx e)]
+      [else
+       (define dispatch-result
+         (dispatch-typing-rule reg expr-typing-tag ctx-val e type-map-reader))
+       (cond
+         [(and dispatch-result (eq? (car dispatch-result) 'ok))
+          (cdr dispatch-result)]
+         [else
+          ;; No rule, not-ready, or rule returned #f → fallback
+          (infer-fallback ctx e)])]))
+
+  rule-infer)
