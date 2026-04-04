@@ -12,7 +12,8 @@
 ;;;
 
 (require racket/match
-         "syntax.rkt")
+         "syntax.rkt"
+         "prelude.rkt")
 
 (provide
  ;; Phase 1c: Context lattice
@@ -29,7 +30,11 @@
  typing-rule-registry-add!
  typing-rule-registry-lookup
  typing-rule-registry-rules
- dispatch-typing-rule)
+ dispatch-typing-rule
+ expr-typing-tag
+ ;; Phase 2b: Concrete typing rules
+ register-literal-typing-rules!
+ register-universe-typing-rules!)
 
 ;; ============================================================
 ;; Phase 1c: Context Lattice
@@ -213,3 +218,112 @@
      (if (or (not result) (eq? result 'not-ready))
          #f
          (cons 'ok result))]))
+
+
+;; ============================================================
+;; expr-typing-tag: extract AST tag symbol from an expression
+;; ============================================================
+;;
+;; Maps expression structs to tag symbols used for registry lookup.
+;; This is the bridge between Racket struct predicates and the
+;; typing-rule registry's symbol-based indexing.
+
+(define (expr-typing-tag e)
+  (cond
+    ;; Literals (value-carrying)
+    [(expr-int? e)      'expr-int]
+    [(expr-nat-val? e)  'expr-nat-val]
+    [(expr-true? e)     'expr-true]
+    [(expr-false? e)    'expr-false]
+    ;; Type constructors (nullary)
+    [(expr-Int? e)      'expr-Int]
+    [(expr-Nat? e)      'expr-Nat]
+    [(expr-Bool? e)     'expr-Bool]
+    [(expr-String? e)   'expr-String]
+    [(expr-Char? e)     'expr-Char]
+    [(expr-Keyword? e)  'expr-Keyword]
+    [(expr-Symbol? e)   'expr-Symbol]
+    ;; Universe
+    [(expr-Type? e)     'expr-Type]
+    ;; Variables
+    [(expr-bvar? e)     'expr-bvar]
+    [(expr-fvar? e)     'expr-fvar]
+    ;; Structural
+    [(expr-app? e)      'expr-app]
+    [(expr-lam? e)      'expr-lam]
+    [(expr-Pi? e)       'expr-Pi]
+    [(expr-Sigma? e)    'expr-Sigma]
+    [(expr-fst? e)      'expr-fst]
+    [(expr-snd? e)      'expr-snd]
+    [(expr-meta? e)     'expr-meta]
+    ;; Eliminators
+    [(expr-natrec? e)   'expr-natrec]
+    [(expr-boolrec? e)  'expr-boolrec]
+    ;; Fallback
+    [else               #f]))
+
+
+;; ============================================================
+;; Phase 2b: Literal + Universe Typing Rules
+;; ============================================================
+;;
+;; The simplest rules: no context, no recursion, fixed types.
+;; These validate the typing-rule framework with real expr types.
+
+;; Helper: make a constant infer rule (returns a fixed type regardless of inputs).
+(define (make-constant-infer-rule tag name result-type)
+  (typing-rule
+   tag name 0
+   (lambda (_ctx _e _reader) result-type)
+   ;; check-fn: type equality check against the constant type
+   (lambda (_ctx _e expected _reader) (equal? expected result-type))
+   0))
+
+;; Register all literal typing rules into a registry.
+;; Literals: expr-int → Int, expr-nat-val → Nat, expr-true/false → Bool
+(define (register-literal-typing-rules! registry)
+  ;; Integer literal: (expr-int v) → Int when v is exact-integer?
+  (typing-rule-registry-add! registry
+    (typing-rule
+     'expr-int 'int-literal 0
+     (lambda (_ctx e _reader)
+       (if (exact-integer? (expr-int-val e)) (expr-Int) #f))
+     (lambda (_ctx e expected _reader)
+       (and (exact-integer? (expr-int-val e))
+            (equal? expected (expr-Int))))
+     0))
+  ;; Nat value literal: (expr-nat-val _) → Nat
+  (typing-rule-registry-add! registry
+    (make-constant-infer-rule 'expr-nat-val 'nat-literal (expr-Nat)))
+  ;; Boolean literals
+  (typing-rule-registry-add! registry
+    (make-constant-infer-rule 'expr-true 'true-literal (expr-Bool)))
+  (typing-rule-registry-add! registry
+    (make-constant-infer-rule 'expr-false 'false-literal (expr-Bool)))
+  ;; Type constructors: each type IS a Type at universe level 0
+  ;; Int : Type 0, Nat : Type 0, Bool : Type 0, etc.
+  (for ([tag+name (list (cons 'expr-Int 'Int-type)
+                        (cons 'expr-Nat 'Nat-type)
+                        (cons 'expr-Bool 'Bool-type)
+                        (cons 'expr-String 'String-type)
+                        (cons 'expr-Char 'Char-type)
+                        (cons 'expr-Keyword 'Keyword-type)
+                        (cons 'expr-Symbol 'Symbol-type))])
+    (typing-rule-registry-add! registry
+      (make-constant-infer-rule (car tag+name) (cdr tag+name)
+                                (expr-Type (lzero))))))
+
+;; Universe rule: Type(l) : Type(l+1)
+(define (register-universe-typing-rules! registry)
+  (typing-rule-registry-add! registry
+    (typing-rule
+     'expr-Type 'universe 0
+     (lambda (_ctx e _reader)
+       (expr-Type (lsuc (expr-Type-level e))))
+     ;; check: Type(l) checks against Type(l') when l < l' (cumulativity)
+     ;; For now: exact level match (Phase 5 may refine with level solving)
+     (lambda (_ctx e expected _reader)
+       (and (expr-Type? expected)
+            (equal? (lsuc (expr-Type-level e))
+                    (expr-Type-level expected))))
+     0)))

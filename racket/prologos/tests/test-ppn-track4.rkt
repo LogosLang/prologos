@@ -10,7 +10,8 @@
          prologos/propagator
          prologos/champ
          prologos/typing-propagators
-         prologos/syntax)
+         prologos/syntax
+         prologos/prelude)
 
 ;; ============================================================
 ;; Phase 1a: Component-indexed propagator firing
@@ -297,9 +298,88 @@
 
 
 ;; ============================================================
+;; Phase 2b: Literal + universe typing rules
+;; ============================================================
+
+(define phase-2b-tests
+  (let ()
+    (define reg (make-typing-rule-registry))
+    (register-literal-typing-rules! reg)
+    (register-universe-typing-rules! reg)
+
+    (define (infer-via-rule e)
+      (dispatch-typing-rule reg expr-typing-tag context-empty-value e
+                            (lambda (pos) #f)))
+
+    (define (check-via-rule e expected)
+      (dispatch-typing-rule reg expr-typing-tag context-empty-value e
+                            (lambda (pos) #f)
+                            #:expected-type expected))
+
+    (test-suite
+     "Phase 2b: literal + universe typing rules"
+
+     (test-case "int literal: 42 → Int"
+       (check-equal? (infer-via-rule (expr-int 42)) (cons 'ok (expr-Int))))
+
+     (test-case "nat literal: (nat-val 3) → Nat"
+       (check-equal? (infer-via-rule (expr-nat-val 3)) (cons 'ok (expr-Nat))))
+
+     (test-case "true → Bool"
+       (check-equal? (infer-via-rule (expr-true)) (cons 'ok (expr-Bool))))
+
+     (test-case "false → Bool"
+       (check-equal? (infer-via-rule (expr-false)) (cons 'ok (expr-Bool))))
+
+     (test-case "Int : Type 0"
+       (check-equal? (infer-via-rule (expr-Int)) (cons 'ok (expr-Type (lzero)))))
+
+     (test-case "Nat : Type 0"
+       (check-equal? (infer-via-rule (expr-Nat)) (cons 'ok (expr-Type (lzero)))))
+
+     (test-case "Bool : Type 0"
+       (check-equal? (infer-via-rule (expr-Bool)) (cons 'ok (expr-Type (lzero)))))
+
+     (test-case "String : Type 0"
+       (check-equal? (infer-via-rule (expr-String)) (cons 'ok (expr-Type (lzero)))))
+
+     (test-case "Type 0 : Type 1"
+       (define result (infer-via-rule (expr-Type (lzero))))
+       (check-equal? result (cons 'ok (expr-Type (lsuc (lzero))))))
+
+     (test-case "Type 1 : Type 2"
+       (define result (infer-via-rule (expr-Type (lsuc (lzero)))))
+       (check-equal? result (cons 'ok (expr-Type (lsuc (lsuc (lzero)))))))
+
+     (test-case "check: 42 : Int → #t"
+       (check-equal? (check-via-rule (expr-int 42) (expr-Int))
+                     (cons 'check #t)))
+
+     (test-case "check: 42 : Nat → #f"
+       (check-equal? (check-via-rule (expr-int 42) (expr-Nat))
+                     (cons 'check #f)))
+
+     (test-case "check: true : Bool → #t"
+       (check-equal? (check-via-rule (expr-true) (expr-Bool))
+                     (cons 'check #t)))
+
+     (test-case "unknown expr tag → #f (imperative fallback)"
+       (check-false (infer-via-rule (expr-app (expr-int 1) (expr-int 2)))))
+
+     (test-case "tag extraction works for all registered types"
+       (check-eq? (expr-typing-tag (expr-int 42)) 'expr-int)
+       (check-eq? (expr-typing-tag (expr-true)) 'expr-true)
+       (check-eq? (expr-typing-tag (expr-Int)) 'expr-Int)
+       (check-eq? (expr-typing-tag (expr-Type (lzero))) 'expr-Type)
+       (check-eq? (expr-typing-tag (expr-app (expr-int 1) (expr-int 2))) 'expr-app))
+     )))
+
+
+;; ============================================================
 ;; Run
 ;; ============================================================
 
 (run-tests phase-1a-tests)
 (run-tests phase-1c-tests)
 (run-tests phase-2a-tests)
+(run-tests phase-2b-tests)
