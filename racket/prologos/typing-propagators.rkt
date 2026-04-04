@@ -22,7 +22,14 @@
  context-lookup-type
  context-lookup-mult
  context-cell-merge
- context-cell-contradicts?)
+ context-cell-contradicts?
+ ;; Phase 2a: Typing rule infrastructure
+ (struct-out typing-rule)
+ make-typing-rule-registry
+ typing-rule-registry-add!
+ typing-rule-registry-lookup
+ typing-rule-registry-rules
+ dispatch-typing-rule)
 
 ;; ============================================================
 ;; Phase 1c: Context Lattice
@@ -111,3 +118,98 @@
 ;; A contradicted binding will show up as type-top IN the type lattice,
 ;; not in the context lattice.
 (define (context-cell-contradicts? v) #f)
+
+
+;; ============================================================
+;; Phase 2a: Typing Rule Infrastructure
+;; ============================================================
+;;
+;; A typing-rule is first-class data: inspectable, registry-indexed,
+;; and analyzable (critical pairs for confluence). Parallels sre-rewrite-rule
+;; from Track 2D but specific to the typing domain.
+;;
+;; Each rule matches an AST node tag and computes a type from sub-expression
+;; types (read from the type-map) and context (read from a context cell).
+;; Rules operate bidirectionally: infer (join, upward) when computing a
+;; type from sub-expressions, check (meet, downward) when validating
+;; against an expected type.
+
+;; typing-rule: a declarative typing rule for one AST node kind.
+;;
+;; tag: symbol — the expr struct tag this rule matches (e.g., 'expr-app, 'expr-lam)
+;; name: symbol — human-readable name for the rule
+;; arity: Nat — number of sub-expression children (for structural matching)
+;; infer-fn: (context-cell-value, expr, (position → type-or-#f)) → type-or-#f
+;;   Computes the type from the expression and sub-expression types.
+;;   The third argument reads the type-map at sub-expression positions.
+;;   Returns the computed type, or #f if the rule cannot fire (inputs not ready).
+;; check-fn: (context-cell-value, expr, type, (position → type-or-#f)) → boolean
+;;   Validates the expression against an expected type.
+;;   Returns #t if valid, #f if not. #f when inputs not ready.
+;;   Can be #f if this rule only infers (no check mode).
+;; stratum: Nat — scheduling stratum (0 = S0 monotone, default)
+(struct typing-rule
+  (tag        ;; symbol: expr tag this rule matches
+   name       ;; symbol: human-readable rule name
+   arity      ;; Nat: number of sub-expression children
+   infer-fn   ;; (ctx-val, expr, type-map-reader) → type-or-#f
+   check-fn   ;; (ctx-val, expr, expected-type, type-map-reader) → boolean | #f for infer-only
+   stratum)   ;; Nat: scheduling stratum
+  #:transparent)
+
+;; Registry: mutable hash mapping expr tag → typing-rule.
+;; The registry is the typing rule index — lookup by AST tag is O(1).
+(define (make-typing-rule-registry)
+  (make-hasheq))
+
+;; Register a typing rule. If a rule already exists for this tag,
+;; it is replaced (later registration wins — for migration batches).
+(define (typing-rule-registry-add! registry rule)
+  (hash-set! registry (typing-rule-tag rule) rule))
+
+;; Look up a typing rule by AST tag. Returns the rule or #f.
+(define (typing-rule-registry-lookup registry tag)
+  (hash-ref registry tag #f))
+
+;; List all registered rules (for inspection, critical pair analysis).
+(define (typing-rule-registry-rules registry)
+  (hash-values registry))
+
+;; Dispatch: given an expression and a registry, find and fire the
+;; appropriate typing rule. Returns the computed type, or #f if no rule
+;; exists for this expression's tag (fall back to imperative infer/check).
+;;
+;; This is the DPO-first + imperative-fallback entry point from §4b.
+;; When a rule exists, it fires. When no rule exists, the caller falls
+;; back to the imperative infer/check arm.
+;;
+;; expr-tag-fn: (expr → symbol) — extracts the AST tag from an expression
+;;   (provided by the caller to avoid dependency on syntax.rkt's tag dispatch)
+;; ctx-val: context-cell-value — the current typing context
+;; e: Expr — the expression to type
+;; type-map-reader: (position → type-or-#f) — reads sub-expression types
+;;
+;; Returns: (cons 'ok type) if a rule fired successfully,
+;;          (cons 'check ok?) if a check rule fired,
+;;          #f if no rule exists for this tag (fall back to imperative).
+(define (dispatch-typing-rule registry expr-tag-fn ctx-val e type-map-reader
+                              #:expected-type [expected-type #f])
+  (define tag (expr-tag-fn e))
+  (define rule (typing-rule-registry-lookup registry tag))
+  (cond
+    [(not rule) #f]  ;; no rule for this tag → imperative fallback
+    ;; Check mode: expected type provided, rule has check-fn
+    [(and expected-type (typing-rule-check-fn rule))
+     (define result ((typing-rule-check-fn rule) ctx-val e expected-type type-map-reader))
+     ;; check-fn returns #t/#f for pass/fail, or 'not-ready if inputs missing.
+     ;; #t/#f are valid results; 'not-ready means the rule can't fire yet.
+     (if (eq? result 'not-ready)
+         #f
+         (cons 'check result))]
+    ;; Infer mode
+    [else
+     (define result ((typing-rule-infer-fn rule) ctx-val e type-map-reader))
+     ;; infer-fn returns a type, or 'not-ready if inputs missing.
+     (if (or (not result) (eq? result 'not-ready))
+         #f
+         (cons 'ok result))]))

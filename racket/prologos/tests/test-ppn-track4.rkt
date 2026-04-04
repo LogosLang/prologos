@@ -218,8 +218,88 @@
 
 
 ;; ============================================================
+;; Phase 2a: Typing rule infrastructure
+;; ============================================================
+
+(define phase-2a-tests
+  (test-suite
+   "Phase 2a: typing rule infrastructure"
+
+   (test-case "registry: create empty"
+     (define reg (make-typing-rule-registry))
+     (check-equal? (length (typing-rule-registry-rules reg)) 0))
+
+   (test-case "registry: add and lookup"
+     (define reg (make-typing-rule-registry))
+     (define rule (typing-rule
+                   'expr-int 'int-literal 0
+                   (lambda (ctx e reader) (expr-Int))
+                   #f  ;; no check-fn
+                   0))
+     (typing-rule-registry-add! reg rule)
+     (check-equal? (length (typing-rule-registry-rules reg)) 1)
+     (check-eq? (typing-rule-registry-lookup reg 'expr-int) rule)
+     (check-false (typing-rule-registry-lookup reg 'expr-nat)))
+
+   (test-case "dispatch: infer with matching rule"
+     (define reg (make-typing-rule-registry))
+     (typing-rule-registry-add! reg
+       (typing-rule
+        'test-lit 'test-literal 0
+        (lambda (ctx e reader) (expr-Int))
+        #f 0))
+     (define result
+       (dispatch-typing-rule reg (lambda (e) 'test-lit)
+                             context-empty-value 'dummy-expr
+                             (lambda (pos) #f)))
+     (check-equal? result (cons 'ok (expr-Int))))
+
+   (test-case "dispatch: no matching rule → #f (imperative fallback)"
+     (define reg (make-typing-rule-registry))
+     (define result
+       (dispatch-typing-rule reg (lambda (e) 'unknown-tag)
+                             context-empty-value 'dummy-expr
+                             (lambda (pos) #f)))
+     (check-false result))
+
+   (test-case "dispatch: check mode with matching rule"
+     (define reg (make-typing-rule-registry))
+     (typing-rule-registry-add! reg
+       (typing-rule
+        'test-lit 'test-literal 0
+        (lambda (ctx e reader) (expr-Int))
+        (lambda (ctx e expected reader) (equal? expected (expr-Int)))
+        0))
+     ;; Check against Int → #t
+     (define result-ok
+       (dispatch-typing-rule reg (lambda (e) 'test-lit)
+                             context-empty-value 'dummy-expr
+                             (lambda (pos) #f)
+                             #:expected-type (expr-Int)))
+     (check-equal? result-ok (cons 'check #t))
+     ;; Check against Nat → #f
+     (define result-fail
+       (dispatch-typing-rule reg (lambda (e) 'test-lit)
+                             context-empty-value 'dummy-expr
+                             (lambda (pos) #f)
+                             #:expected-type (expr-Nat)))
+     (check-equal? result-fail (cons 'check #f)))
+
+   (test-case "typing-rule struct is inspectable"
+     (define rule (typing-rule 'expr-app 'app-tensor 2
+                               (lambda (ctx e reader) #f)
+                               #f 0))
+     (check-eq? (typing-rule-tag rule) 'expr-app)
+     (check-eq? (typing-rule-name rule) 'app-tensor)
+     (check-equal? (typing-rule-arity rule) 2)
+     (check-equal? (typing-rule-stratum rule) 0))
+   ))
+
+
+;; ============================================================
 ;; Run
 ;; ============================================================
 
 (run-tests phase-1a-tests)
 (run-tests phase-1c-tests)
+(run-tests phase-2a-tests)
