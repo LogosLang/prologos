@@ -57,7 +57,7 @@
 | 1a | Component-indexed propagator firing infrastructure | ✅ | `pu-value-diff` + `filter-dependents-by-paths` in `net-cell-write`. `net-add-propagator` gains `#:component-paths` keyword. Fast path preserved for all-#f dependents. 13 tests. (commit `6d5f1adb`) |
 | 1b | Per-expression type cells as PU cell-trees | ✅ | `type-map` field added to `form-pipeline-value` (5th field, hasheq). `type-map-merge` pointwise. 30+ construction sites updated. Phase 2 wires in lattice merge. (commit `bffe3c90`) |
 | 1c | Context lattice: typing context as cells | ✅ | `context-cell-value` struct in typing-propagators.rkt. Extension = tensor (depth+1). Lookup = de Bruijn position read. Merge: pointwise same-depth, deeper wins. 8 tests. (commit `2f50c6c4`) |
-| 2 | Typing rules as DPO rewrite rules | 🔄 | **2a** ✅ struct+registry+dispatch (`bca522f5`). **2b** ✅ 12 literal+universe rules (`08402ded`). 2c-2e: pending. |
+| 2 | Typing rules as DPO rewrite rules | 🔄 | **2a** ✅ struct+registry+dispatch (`bca522f5`). **2b** ✅ 12 literal+universe rules (`08402ded`). **2c** ✅ bvar+fvar lookup (`fae47058`). 2d-2e: pending. |
 | 3 | Tensor as on-network propagator | ⬜ | Wire `type-tensor-core` from Track 2H. Union distribution is emergent from cell merge, not imperative iteration. |
 | 4a | Meta-solving as cell writes (cell-refs replace expr-meta) | ⬜ | Metas are cells. `solve-meta!` = cell write. Cascade is automatic. Cell-refs in expressions replace `expr-meta` nodes. |
 | 4b | Zonk retirement: fan-in default propagator | ⬜ | Meta-readiness cell (bitmask) per form. Each solve flips one bit. S2 commit: single threshold propagator reads complement, writes defaults. ~1,300 lines of zonk.rkt deleted. Absorbs SRE Track 2C. |
