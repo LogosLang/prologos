@@ -15,8 +15,7 @@
          prologos/syntax
          prologos/prelude
          prologos/type-lattice
-         prologos/surface-rewrite
-         prologos/form-cells)
+         prologos/surface-rewrite)
 
 ;; ============================================================
 ;; Phase 1a: Component-indexed propagator firing
@@ -101,98 +100,99 @@
    "Phase 2 D.4: propagator-native typing on the network"
 
    (test-case "literal propagator: writes type to type-map via net-cell-write"
-     ;; Create a network with a form cell
+     ;; Create a network with a typing cell (plain hasheq)
      (define net0 (make-prop-network))
-     (define pv (form-pipeline-value (seteq 'done) #f '() #f (hasheq)))
-     (define-values (net1 form-cid)
-       (net-new-cell net0 pv form-cell-merge-fn))
+     (define-values (net1 tm-cid)
+       (net-new-cell net0 (hasheq) type-map-merge-fn))
      ;; Install a literal propagator for an int expression
      (define int-expr (expr-int 42))
      (define-values (net2 _pid)
-       (net-add-propagator net1 (list form-cid) (list form-cid)
-                           (make-literal-fire-fn form-cid int-expr (expr-Int))))
+       (net-add-propagator net1 (list tm-cid) (list tm-cid)
+                           (make-literal-fire-fn tm-cid int-expr (expr-Int))))
      ;; Run to quiescence — propagator fires and writes Int to type-map
      (define net3 (run-to-quiescence net2))
-     ;; Read result from the type-map
-     (define result-pv (net-cell-read net3 form-cid))
-     (define result-type (hash-ref (form-pipeline-value-type-map result-pv) int-expr type-bot))
+     ;; Read result from the type-map cell
+     (define tm (net-cell-read net3 tm-cid))
+     (define result-type (hash-ref tm int-expr type-bot))
      ;; Network Reality Check: result comes from cell read after propagator firing
      (check-equal? result-type (expr-Int)))
 
    (test-case "universe propagator: Type(0) → Type(1)"
      (define net0 (make-prop-network))
-     (define pv (form-pipeline-value (seteq 'done) #f '() #f (hasheq)))
-     (define-values (net1 form-cid)
-       (net-new-cell net0 pv form-cell-merge-fn))
+     (define-values (net1 tm-cid)
+       (net-new-cell net0 (hasheq) type-map-merge-fn))
      (define type-expr (expr-Type (lzero)))
      (define-values (net2 _pid)
-       (net-add-propagator net1 (list form-cid) (list form-cid)
-                           (make-universe-fire-fn form-cid type-expr (lzero))))
+       (net-add-propagator net1 (list tm-cid) (list tm-cid)
+                           (make-universe-fire-fn tm-cid type-expr (lzero))))
      (define net3 (run-to-quiescence net2))
-     (define result-pv (net-cell-read net3 form-cid))
-     (define result-type (hash-ref (form-pipeline-value-type-map result-pv) type-expr type-bot))
-     (check-equal? result-type (expr-Type (lsuc (lzero)))))
+     (define tm (net-cell-read net3 tm-cid))
+     (check-equal? (hash-ref tm type-expr type-bot) (expr-Type (lsuc (lzero)))))
 
    (test-case "app propagator: tensor fires when func + arg types available"
      (define net0 (make-prop-network))
-     ;; Pre-populate type-map with func:Pi(mw,Int,Bool) and arg:Int
      (define func-e (expr-fvar 'f))
      (define arg-e (expr-int 42))
      (define app-e (expr-app func-e arg-e))
-     (define pv (form-pipeline-value
-                 (seteq 'done) #f '() #f
-                 (hasheq func-e (expr-Pi 'mw (expr-Int) (expr-Bool))
-                         arg-e (expr-Int))))
-     (define-values (net1 form-cid)
-       (net-new-cell net0 pv form-cell-merge-fn))
+     ;; Create typing cell pre-populated with func and arg types
+     (define-values (net1 tm-cid)
+       (net-new-cell net0
+                     (hasheq func-e (expr-Pi 'mw (expr-Int) (expr-Bool))
+                             arg-e (expr-Int))
+                     type-map-merge-fn))
      ;; Install app propagator
      (define-values (net2 _pid)
-       (net-add-propagator net1 (list form-cid) (list form-cid)
-                           (make-app-fire-fn form-cid app-e func-e arg-e)
+       (net-add-propagator net1 (list tm-cid) (list tm-cid)
+                           (make-app-fire-fn tm-cid app-e func-e arg-e)
                            #:component-paths
-                           (list (cons form-cid func-e)
-                                 (cons form-cid arg-e))))
+                           (list (cons tm-cid func-e)
+                                 (cons tm-cid arg-e))))
      (define net3 (run-to-quiescence net2))
-     (define result-pv (net-cell-read net3 form-cid))
-     (define result-type (hash-ref (form-pipeline-value-type-map result-pv) app-e type-bot))
+     (define tm (net-cell-read net3 tm-cid))
      ;; tensor(Pi(mw, Int, Bool), Int) = Bool (via subst)
-     (check-equal? result-type (expr-Bool)))
+     (check-equal? (hash-ref tm app-e type-bot) (expr-Bool)))
 
-   (test-case "install-typing-network: literal expression"
+   (test-case "infer-on-network: literal expression"
      (define net0 (make-prop-network))
-     (define pv (form-pipeline-value (seteq 'done) #f '() #f (hasheq)))
-     (define-values (net1 form-cid)
-       (net-new-cell net0 pv form-cell-merge-fn))
      (define e (expr-int 42))
-     (define net2 (install-typing-network net1 form-cid e context-empty-value))
-     (define net3 (run-to-quiescence net2))
-     (define result-pv (net-cell-read net3 form-cid))
-     (define result-type (hash-ref (form-pipeline-value-type-map result-pv) e type-bot))
+     (define-values (net1 result-type)
+       (infer-on-network net0 e context-empty-value))
+     ;; Network Reality Check: result comes from cell read after quiescence
      (check-equal? result-type (expr-Int)))
 
-   (test-case "install-typing-network: application of Pi to arg"
+   (test-case "infer-on-network: Type(0) → Type(1)"
      (define net0 (make-prop-network))
-     (define func-e (expr-fvar 'add))
+     (define-values (net1 result-type)
+       (infer-on-network net0 (expr-Type (lzero)) context-empty-value))
+     (check-equal? result-type (expr-Type (lsuc (lzero)))))
+
+   (test-case "app propagator: fires after both inputs written"
+     ;; Test the app propagator in isolation with manual writes
+     (define net0 (make-prop-network))
+     (define func-e (expr-fvar 'f))
      (define arg-e (expr-int 1))
      (define app-e (expr-app func-e arg-e))
-     (define pv (form-pipeline-value (seteq 'done) #f '() #f (hasheq)))
-     (define-values (net1 form-cid)
-       (net-new-cell net0 pv form-cell-merge-fn))
-     ;; Install typing network for the app expression.
-     ;; The fvar propagator needs global-env — we can pre-populate the type-map instead.
-     ;; Directly write func type to test the tensor propagator in isolation.
-     (define pv-with-func
-       (struct-copy form-pipeline-value (net-cell-read net1 form-cid)
-         [type-map (hasheq func-e (expr-Pi 'mw (expr-Int) (expr-Int)))]))
-     (define net1b (net-cell-write net1 form-cid pv-with-func))
-     ;; Install: literal for arg, app tensor for app-e
-     (define net2 (install-typing-network net1b form-cid app-e context-empty-value))
-     (define net3 (run-to-quiescence net2))
-     (define result-pv (net-cell-read net3 form-cid))
-     ;; arg should be Int (literal propagator)
-     (check-equal? (hash-ref (form-pipeline-value-type-map result-pv) arg-e type-bot) (expr-Int))
-     ;; app should be Int (tensor: Pi(mw,Int,Int) applied to Int)
-     (check-equal? (hash-ref (form-pipeline-value-type-map result-pv) app-e type-bot) (expr-Int)))
+     ;; Create typing cell
+     (define-values (net1 tm-cid)
+       (net-new-cell net0 (hasheq) type-map-merge-fn))
+     ;; Install ONLY the app propagator (not sub-expression propagators)
+     (define-values (net2 _pid)
+       (net-add-propagator net1 (list tm-cid) (list tm-cid)
+                           (make-app-fire-fn tm-cid app-e func-e arg-e)
+                           #:component-paths
+                           (list (cons tm-cid func-e)
+                                 (cons tm-cid arg-e))))
+     ;; Drain initial fire (inputs are ⊥, propagator is a no-op)
+     (define net2q (run-to-quiescence net2))
+     ;; Write func type
+     (define net3 (net-cell-write net2q tm-cid
+                    (hasheq func-e (expr-Pi 'mw (expr-Int) (expr-Int)))))
+     ;; Write arg type — this should trigger the app propagator
+     (define net4 (net-cell-write net3 tm-cid (hasheq arg-e (expr-Int))))
+     (define net5 (run-to-quiescence net4))
+     (define tm (net-cell-read net5 tm-cid))
+     ;; tensor(Pi(mw,Int,Int), Int) = Int
+     (check-equal? (hash-ref tm app-e type-bot) (expr-Int)))
    ))
 
 ;; ============================================================

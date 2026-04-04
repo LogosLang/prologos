@@ -44,6 +44,9 @@
  make-fvar-fire-fn
  make-lam-fire-fn
  make-pi-fire-fn
+ ;; Phase 3 (D.4): Production integration
+ infer-on-network
+ type-map-merge-fn
  ;; Phase 4b-i: Fan-in meta-readiness infrastructure
  (struct-out meta-readiness-value)
  meta-readiness-empty
@@ -156,65 +159,74 @@
 ;; (form-pipeline-value-type-map). Positions are expr object identities.
 ;; Component-indexed firing (Phase 1a) selectively schedules propagators.
 
-;; --- Helpers: read/write type-map positions on a form cell ---
+;; --- Typing cell: a plain hasheq mapping positions to types ---
+;;
+;; The typing cell's value IS the type-map: (hasheq expr → type-value).
+;; Each position starts at type-bot (absent from map = ⊥).
+;; The merge function is pointwise: for shared keys, keep the non-⊥ value.
+;; This is monotone: positions only gain information.
 
-;; Read a type-map position from the form cell's PU value.
-;; Returns type-bot if the position doesn't exist (= ⊥).
-(define (type-map-read net form-cid position)
-  (define pv (net-cell-read net form-cid))
-  (if (form-pipeline-value? pv)
-      (hash-ref (form-pipeline-value-type-map pv) position type-bot)
+(define (type-map-merge-fn old new)
+  (cond
+    [(not (hash? old)) new]
+    [(not (hash? new)) old]
+    [else
+     (for/fold ([result old]) ([(k v) (in-hash new)])
+       (define old-v (hash-ref result k type-bot))
+       (cond
+         [(type-bot? old-v) (hash-set result k v)]  ;; ⊥ + X = X
+         [(type-bot? v) result]                       ;; X + ⊥ = X
+         [(equal? old-v v) result]                    ;; idempotent
+         [else (hash-set result k type-top)]))]))     ;; conflict = ⊤
+
+;; Read a type-map position. Returns type-bot if not present (= ⊥).
+(define (type-map-read net tm-cid position)
+  (define tm (net-cell-read net tm-cid))
+  (if (hash? tm)
+      (hash-ref tm position type-bot)
       type-bot))
 
-;; Write a type to a type-map position on the form cell.
-;; Constructs an updated form-pipeline-value and writes via net-cell-write.
-;; The form cell's merge function (form-pipeline-merge) handles the
-;; pointwise type-map merge. Component-indexed firing ensures only
-;; propagators watching this position are scheduled.
-(define (type-map-write net form-cid position type-val)
-  (define pv (net-cell-read net form-cid))
-  (if (form-pipeline-value? pv)
-      (let* ([tm (form-pipeline-value-type-map pv)]
-             [new-tm (hash-set tm position type-val)]
-             [new-pv (struct-copy form-pipeline-value pv [type-map new-tm])])
-        (net-cell-write net form-cid new-pv))
-      net))
+;; Write a type to a type-map position via net-cell-write.
+;; The cell merge (type-map-merge-fn) handles pointwise combination.
+;; Component-indexed firing selectively schedules propagators.
+(define (type-map-write net tm-cid position type-val)
+  (net-cell-write net tm-cid (hasheq position type-val)))
 
 ;; --- Fire functions: one per AST node kind ---
 ;; Each returns a (lambda (net) ...) that reads inputs, computes, writes output.
-;; The form-cid and position keys are captured in the closure.
+;; The tm-cid and position keys are captured in the closure.
 
 ;; Literal: write a fixed type immediately.
-(define (make-literal-fire-fn form-cid position result-type)
+(define (make-literal-fire-fn tm-cid position result-type)
   (lambda (net)
-    (type-map-write net form-cid position result-type)))
+    (type-map-write net tm-cid position result-type)))
 
 ;; Universe: Type(l) → Type(lsuc(l))
-(define (make-universe-fire-fn form-cid position level)
+(define (make-universe-fire-fn tm-cid position level)
   (lambda (net)
-    (type-map-write net form-cid position (expr-Type (lsuc level)))))
+    (type-map-write net tm-cid position (expr-Type (lsuc level)))))
 
 ;; Bound variable: read from context cell at de Bruijn position k.
-(define (make-bvar-fire-fn form-cid position k ctx-val)
+(define (make-bvar-fire-fn tm-cid position k ctx-val)
   (lambda (net)
     (define raw-type (context-lookup-type ctx-val k))
     (if (expr-error? raw-type)
         net  ;; out of bounds — leave at ⊥
-        (type-map-write net form-cid position (shift (+ k 1) 0 raw-type)))))
+        (type-map-write net tm-cid position (shift (+ k 1) 0 raw-type)))))
 
 ;; Free variable: read from global environment.
-(define (make-fvar-fire-fn form-cid position name)
+(define (make-fvar-fire-fn tm-cid position name)
   (lambda (net)
     (define ty (global-env-lookup-type name))
     (if ty
-        (type-map-write net form-cid position ty)
+        (type-map-write net tm-cid position ty)
         net)))  ;; not found — leave at ⊥
 
 ;; Application (tensor): read func-type and arg-type, write tensor result.
-(define (make-app-fire-fn form-cid position func-pos arg-pos)
+(define (make-app-fire-fn tm-cid position func-pos arg-pos)
   (lambda (net)
-    (define func-type (type-map-read net form-cid func-pos))
-    (define arg-type (type-map-read net form-cid arg-pos))
+    (define func-type (type-map-read net tm-cid func-pos))
+    (define arg-type (type-map-read net tm-cid arg-pos))
     (cond
       [(or (type-bot? func-type) (type-bot? arg-type)) net]  ;; wait for inputs
       [else
@@ -222,15 +234,15 @@
        (cond
          [(type-bot? result) net]   ;; inapplicable — no info to write
          [(type-top? result)        ;; contradiction
-          (type-map-write net form-cid position type-top)]
+          (type-map-write net tm-cid position type-top)]
          [else
-          (type-map-write net form-cid position result)])])))
+          (type-map-write net tm-cid position result)])])))
 
 ;; Lambda: read domain type (must be Type(l)) and body type, write Pi.
-(define (make-lam-fire-fn form-cid position dom-pos body-pos mult)
+(define (make-lam-fire-fn tm-cid position dom-pos body-pos mult)
   (lambda (net)
-    (define dom-type (type-map-read net form-cid dom-pos))
-    (define body-type (type-map-read net form-cid body-pos))
+    (define dom-type (type-map-read net tm-cid dom-pos))
+    (define body-type (type-map-read net tm-cid body-pos))
     (cond
       [(or (type-bot? dom-type) (type-bot? body-type)) net]  ;; wait
       [else
@@ -238,20 +250,20 @@
        ;; not the type-of-domain. The lambda propagator assembles Pi
        ;; from the domain and body types.
        (define dom-expr dom-pos)  ;; the domain expression
-       (type-map-write net form-cid position
+       (type-map-write net tm-cid position
                        (expr-Pi mult dom-expr body-type))])))
 
 ;; Pi formation: read domain and codomain types (both must be Type(l)).
-(define (make-pi-fire-fn form-cid position dom-pos cod-pos)
+(define (make-pi-fire-fn tm-cid position dom-pos cod-pos)
   (lambda (net)
-    (define dom-type (type-map-read net form-cid dom-pos))
-    (define cod-type (type-map-read net form-cid cod-pos))
+    (define dom-type (type-map-read net tm-cid dom-pos))
+    (define cod-type (type-map-read net tm-cid cod-pos))
     (cond
       [(or (type-bot? dom-type) (type-bot? cod-type)) net]
       [(not (expr-Type? dom-type)) net]  ;; domain not a type
       [(not (expr-Type? cod-type)) net]  ;; codomain not a type
       [else
-       (type-map-write net form-cid position
+       (type-map-write net tm-cid position
                        (expr-Type (lmax (expr-Type-level dom-type)
                                         (expr-Type-level cod-type))))])))
 
@@ -273,7 +285,7 @@
 ;;   - net-cell-write: each fire-fn writes to type-map
 ;;   - Trace: type-map[pos] = ⊥ → propagator fires → writes type → cascade → read
 
-(define (install-typing-network net form-cid expr ctx-val)
+(define (install-typing-network net tm-cid expr ctx-val)
   ;; Recursive structural decomposition.
   ;; For each sub-expression, assign it as its own position key (eq? identity),
   ;; install the appropriate propagator, return updated network.
@@ -282,74 +294,74 @@
       ;; --- Literals: immediate type, no inputs ---
       [(expr-int v)
        (define-values (net1 _pid)
-         (net-add-propagator net (list form-cid) (list form-cid)
-                             (make-literal-fire-fn form-cid e (expr-Int))
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-literal-fire-fn tm-cid e (expr-Int))
                              #:component-paths (list)))
        net1]
 
       [(expr-nat-val _)
        (define-values (net1 _pid)
-         (net-add-propagator net (list form-cid) (list form-cid)
-                             (make-literal-fire-fn form-cid e (expr-Nat))))
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-literal-fire-fn tm-cid e (expr-Nat))))
        net1]
 
       [(expr-true)
        (define-values (net1 _pid)
-         (net-add-propagator net (list form-cid) (list form-cid)
-                             (make-literal-fire-fn form-cid e (expr-Bool))))
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-literal-fire-fn tm-cid e (expr-Bool))))
        net1]
 
       [(expr-false)
        (define-values (net1 _pid)
-         (net-add-propagator net (list form-cid) (list form-cid)
-                             (make-literal-fire-fn form-cid e (expr-Bool))))
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-literal-fire-fn tm-cid e (expr-Bool))))
        net1]
 
       ;; --- Type constructors: Type(lzero) ---
       [(expr-Int)
        (define-values (net1 _pid)
-         (net-add-propagator net (list form-cid) (list form-cid)
-                             (make-literal-fire-fn form-cid e (expr-Type (lzero)))))
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-literal-fire-fn tm-cid e (expr-Type (lzero)))))
        net1]
 
       [(expr-Nat)
        (define-values (net1 _pid)
-         (net-add-propagator net (list form-cid) (list form-cid)
-                             (make-literal-fire-fn form-cid e (expr-Type (lzero)))))
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-literal-fire-fn tm-cid e (expr-Type (lzero)))))
        net1]
 
       [(expr-Bool)
        (define-values (net1 _pid)
-         (net-add-propagator net (list form-cid) (list form-cid)
-                             (make-literal-fire-fn form-cid e (expr-Type (lzero)))))
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-literal-fire-fn tm-cid e (expr-Type (lzero)))))
        net1]
 
       [(expr-String)
        (define-values (net1 _pid)
-         (net-add-propagator net (list form-cid) (list form-cid)
-                             (make-literal-fire-fn form-cid e (expr-Type (lzero)))))
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-literal-fire-fn tm-cid e (expr-Type (lzero)))))
        net1]
 
       ;; --- Universe ---
       [(expr-Type l)
        (define-values (net1 _pid)
-         (net-add-propagator net (list form-cid) (list form-cid)
-                             (make-universe-fire-fn form-cid e l)))
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-universe-fire-fn tm-cid e l)))
        net1]
 
       ;; --- Bound variable ---
       [(expr-bvar k)
        (define-values (net1 _pid)
-         (net-add-propagator net (list form-cid) (list form-cid)
-                             (make-bvar-fire-fn form-cid e k ctx)
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-bvar-fire-fn tm-cid e k ctx)
                              #:component-paths (list)))
        net1]
 
       ;; --- Free variable ---
       [(expr-fvar name)
        (define-values (net1 _pid)
-         (net-add-propagator net (list form-cid) (list form-cid)
-                             (make-fvar-fire-fn form-cid e name)))
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-fvar-fire-fn tm-cid e name)))
        net1]
 
       ;; --- Application (tensor) ---
@@ -359,11 +371,11 @@
        (define net2 (install net1 arg ctx))
        ;; Install app propagator watching func and arg positions
        (define-values (net3 _pid)
-         (net-add-propagator net2 (list form-cid) (list form-cid)
-                             (make-app-fire-fn form-cid e func arg)
+         (net-add-propagator net2 (list tm-cid) (list tm-cid)
+                             (make-app-fire-fn tm-cid e func arg)
                              #:component-paths
-                             (list (cons form-cid func)
-                                   (cons form-cid arg))))
+                             (list (cons tm-cid func)
+                                   (cons tm-cid arg))))
        net3]
 
       ;; --- Lambda ---
@@ -375,11 +387,11 @@
        (define net2 (install net1 body child-ctx))
        ;; Install lambda propagator watching dom and body positions
        (define-values (net3 _pid)
-         (net-add-propagator net2 (list form-cid) (list form-cid)
-                             (make-lam-fire-fn form-cid e dom body m)
+         (net-add-propagator net2 (list tm-cid) (list tm-cid)
+                             (make-lam-fire-fn tm-cid e dom body m)
                              #:component-paths
-                             (list (cons form-cid dom)
-                                   (cons form-cid body))))
+                             (list (cons tm-cid dom)
+                                   (cons tm-cid body))))
        net3]
 
       ;; --- Pi formation ---
@@ -387,15 +399,48 @@
        (define net1 (install net dom ctx))
        (define net2 (install net1 cod ctx))
        (define-values (net3 _pid)
-         (net-add-propagator net2 (list form-cid) (list form-cid)
-                             (make-pi-fire-fn form-cid e dom cod)
+         (net-add-propagator net2 (list tm-cid) (list tm-cid)
+                             (make-pi-fire-fn tm-cid e dom cod)
                              #:component-paths
-                             (list (cons form-cid dom)
-                                   (cons form-cid cod))))
+                             (list (cons tm-cid dom)
+                                   (cons tm-cid cod))))
        net3]
 
       ;; --- Fallthrough: unknown expr kind, leave at ⊥ ---
       [_ net])))
+
+
+;; ============================================================
+;; Phase 3 (D.4): Production Integration — infer-on-network
+;; ============================================================
+;;
+;; Creates a typing cell on the prop-network, installs typing propagators
+;; for the given core expr, runs to quiescence, and reads the root type
+;; from the cell. This is the propagator-native replacement for infer/err.
+;;
+;; Network Reality Check:
+;;   1. net-new-cell: creates the typing cell with type-map-merge-fn
+;;   2. net-add-propagator: via install-typing-network (per sub-expression)
+;;   3. run-to-quiescence: propagators fire, types flow through cell
+;;   4. net-cell-read: reads the root type from the type-map
+;;   Result comes from cell read after quiescence. Not a function return.
+
+;; infer-on-network: the production entry point for propagator-native typing.
+;; Takes a prop-network, a core expr, and a context cell value.
+;; Returns: (values updated-network inferred-type)
+;;   inferred-type is the type at the root position (the expr itself),
+;;   or type-bot if the propagators couldn't compute it.
+(define (infer-on-network net expr ctx-val)
+  ;; 1. Create a fresh typing cell (hasheq value, type-map-merge-fn)
+  (define-values (net1 tm-cid)
+    (net-new-cell net (hasheq) type-map-merge-fn))
+  ;; 2. Install typing propagators for the expr tree
+  (define net2 (install-typing-network net1 tm-cid expr ctx-val))
+  ;; 3. Run to quiescence — propagators fire, types flow
+  (define net3 (run-to-quiescence net2))
+  ;; 4. Read the root type from the type-map
+  (define root-type (type-map-read net3 tm-cid expr))
+  (values net3 root-type))
 
 
 ;; ============================================================
