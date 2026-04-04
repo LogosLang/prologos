@@ -26,9 +26,9 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Stage 2 audit of elaboration infrastructure + Pre-0 benchmarks | ⬜ | Audit typing-core.rkt (2,796 lines, ~595 arms), elaborator.rkt, metavar-store.rkt. Benchmark per-command elaboration cost. |
+| 0 | Stage 2 audit + Pre-0 benchmarks | ✅ (audit) ⬜ (Pre-0) | [Audit](2026-04-04_PPN_TRACK4_STAGE2_AUDIT.md): 19K lines, 589 arms, 0 typing propagators, 17-22 cells, 2-11ms. Pre-0 benchmarks pending. |
 | 1 | Per-expression type cells on the elab-network | ⬜ | Each AST node gets a type cell. Surfs → cells (Track 3 foundation). Type cells written by elaboration propagators. |
-| 2 | Typing rules as propagators (infer/check → attribute rules) | ⬜ | The 595 match arms in typing-core.rkt become registered propagator rules. Each arm = one propagator. |
+| 2 | Typing rules as propagators (infer/check → attribute rules) | ⬜ | The 589 match arms in typing-core.rkt become registered propagator rules. Each arm = one propagator. |
 | 3 | Tensor as on-network propagator | ⬜ | Wire `type-tensor-core` from Track 2H. `f x` → SRE decomposes Pi, connects arg cell to domain, result cell to codomain. |
 | 4 | Meta-solving as cell writes (retire imperative metavar-store) | ⬜ | Metas are cells. `solve-meta!` = cell write. Resolution triggered by cell merge, not imperative retry. |
 | 5 | ATMS replaces speculation (retire save/restore-meta-state!) | ⬜ | Union checking, Church fold, trait ambiguity → ATMS assumption branches. 37 occurrences across 7 files. |
@@ -96,21 +96,40 @@ The "elaboration result" is: READ the type cells. If any cell is `type-top` (con
 
 ---
 
+## §1a. Audit Findings (Stage 2 Audit — [2026-04-04_PPN_TRACK4_STAGE2_AUDIT.md](2026-04-04_PPN_TRACK4_STAGE2_AUDIT.md))
+
+Key findings that shaped this design:
+
+1. **The network today has ZERO typing propagators.** Cells exist for metas and infrastructure (17-22 per program). ALL typing computation is in `infer`/`check` match arms (589 arms, 249 unique expr types). The propagator network is passive storage. Track 4 makes it active computation.
+
+2. **Speculation is frequent, not rare.** 0-9 speculations for SIMPLE programs (e.g., `m.name` triggers union-type speculation). Phase 5 (ATMS) improves the HOT PATH, not just cleaning code.
+
+3. **Elaboration + type-check are two sequential walks.** Elaborate (2-6ms) then type-check (2-11ms) — two passes over the same structure. Track 4 merges them into ONE fixpoint computation.
+
+4. **The elab-network struct has 5 fields.** `prop-net`, `cell-info`, `next-meta-id`, `id-map`, `meta-info` (CHAMP maps). Track 4's integration point.
+
+5. **19,058 lines across 11 files.** The migration surface. Incremental approach essential — start with the 10 most common typing arms.
+
+---
+
 ## §2 Architecture: Elaboration as Network Construction
 
-### Current (imperative)
+### Current (imperative — from audit §2)
 
 ```
 process-command(surf):
-  reset-meta-store!()
-  expanded = expand-top-level(surf)
-  elab-result = elaborate-top-level(expanded)    ;; walks AST, calls infer/check
-  type-result = type-check(elab-result)          ;; walks AST again for QTT
-  zonked = zonk(elab-result)                     ;; walks AST for meta cleanup
-  register-definition(zonked)
+  1. reset-meta-store!()
+  2. register-global-env-cells!()
+  3. expand-top-level(surf)               → expanded surface form
+  4. elaborate-top-level(expanded)         → core AST [walk 1: surface→core]
+  5. infer/check(ctx-empty, expr)          → type     [walk 2: core→types]
+  6. check-unresolved-trait-constraints()              [resolution loop]
+  7. freeze(expr) → zonk()                             [walk 3: meta cleanup]
+  8. nf(zonked)                                        [walk 4: reduction]
+  9. register-definition()                             [global env update]
 ```
 
-Each step WALKS the AST. The elaborator accumulates constraints imperatively. Resolution retries in loops. Speculation uses save/restore.
+Four walks of the same structure. The elaborator accumulates constraints imperatively. Resolution retries in loops. Speculation uses save/restore (37 sites, 7 files).
 
 ### Target (propagator)
 
@@ -120,7 +139,7 @@ process-command(surf):
   cells = create-expression-cells(surf)
 
   ;; Step 2: Install typing propagators for each sub-expression
-  ;; (These are the 595 match arms, now as propagator rules)
+  ;; (These are the 589 match arms, now as propagator rules)
   install-typing-propagators(cells)
 
   ;; Step 3: Run to fixpoint
@@ -168,11 +187,13 @@ surf-def "x" : Int := [add 1 2]
 
 This mirrors PPN Track 3's form pipeline: one cell per form, with a PU value that tracks progress. Track 4's PU tracks type assignments instead of pipeline transforms.
 
+**Baseline**: Current elab-network has 17-22 infrastructure cells per program (audit §4). Track 4 adds type information per expression — but the PU approach keeps the CELL count from exploding. The type-map lives INSIDE the form cell's PU value, not as separate cells.
+
 **Existing infrastructure**: Track 3's `form-pipeline-value` holds `(transforms-set × tree-node × registrations)`. Track 4 adds a `type-map` component: `(transforms-set × tree-node × registrations × type-map)`. The type-map is a hash from AST position → type value. The merge for type-maps is pointwise type-lattice-merge.
 
 ### §3.2 Phase 2: Typing Rules as Propagators
 
-**The 595 match arms → propagator rules.**
+**The 589 match arms → propagator rules.**
 
 Currently, `infer` is a giant `match` expression. Each arm computes a type for one AST node kind. In the propagator design, each arm becomes a propagator that:
 1. Watches the input cells (sub-expression types)
@@ -205,7 +226,7 @@ propagator app-typing [func-type-cell arg-type-cell → result-type-cell]
 
 This IS `type-tensor-core` from Track 2H — the tensor as a propagator fire function. Track 2H delivered it as a pure function; Track 4 wires it on the network.
 
-**Not all 595 arms become separate propagators.** Many arms share patterns (literal typing, variable lookup, annotation checking). The propagator rules group by AST node kind:
+**Not all 589 arms become separate propagators.** Many arms share patterns (literal typing, variable lookup, annotation checking). The propagator rules group by AST node kind:
 
 | AST Kind | Propagator | What it computes |
 |----------|-----------|-----------------|
