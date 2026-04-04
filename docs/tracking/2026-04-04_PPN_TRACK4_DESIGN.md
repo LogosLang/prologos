@@ -26,7 +26,7 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Stage 2 audit + Pre-0 benchmarks | ✅ (audit) ⬜ (Pre-0) | [Audit](2026-04-04_PPN_TRACK4_STAGE2_AUDIT.md): 19K lines, 589 arms, 0 typing propagators, 17-22 cells, 2-11ms. Pre-0 benchmarks pending. |
+| 0 | Stage 2 audit + Pre-0 benchmarks | ✅ | [Audit](2026-04-04_PPN_TRACK4_STAGE2_AUDIT.md): 19K lines, 589 arms, 0 typing propagators. [Pre-0](§Pre-0): cell ops 300-1000× cheaper than typing. No design changes. |
 | 1 | Per-expression type cells on the elab-network | ⬜ | Each AST node gets a type cell. Surfs → cells (Track 3 foundation). Type cells written by elaboration propagators. |
 | 2 | Typing rules as propagators (infer/check → attribute rules) | ⬜ | The 589 match arms in typing-core.rkt become registered propagator rules. Each arm = one propagator. |
 | 3 | Tensor as on-network propagator | ⬜ | Wire `type-tensor-core` from Track 2H. `f x` → SRE decomposes Pi, connects arg cell to domain, result cell to codomain. |
@@ -109,6 +109,68 @@ Key findings that shaped this design:
 4. **The elab-network struct has 5 fields.** `prop-net`, `cell-info`, `next-meta-id`, `id-map`, `meta-info` (CHAMP maps). Track 4's integration point.
 
 5. **19,058 lines across 11 files.** The migration surface. Incremental approach essential — start with the 10 most common typing arms.
+
+---
+
+## §Pre-0: Benchmark Data and Findings
+
+**Benchmark file**: `benchmarks/micro/bench-ppn-track4.rkt` (commit `b3e42297`)
+**28 tests across 4 tiers**: M1-M8 micro, A1-A4 adversarial, E1-E6 E2E, V1-V4 validation.
+
+### Two Cost Regimes
+
+| Regime | Operations | Cost | Implication |
+|--------|-----------|------|------------|
+| **Typing computation** | infer, check, unify, tensor | 50-200μs per op | Dominates elaboration time. This is what each propagator fire costs. |
+| **Cell operations** | create, write, read | 0.1-0.4μs per op | **300-1000× cheaper** than typing. Network overhead is negligible. |
+
+### Key Baselines
+
+| Operation | Cost | Design Implication |
+|-----------|------|-------------------|
+| `infer(literal)` (M1b) | 126μs | Per-arm cost. With ~10 arms per command, ~1ms typing per command. |
+| `check(lit:type)` (M2a) | 50μs | Cheaper than infer (no type synthesis). |
+| `unify(equal)` (M3a) | 199μs | Structural comparison dominates. |
+| `unify(meta solve)` (M3c) | 432μs | Meta-bearing unification includes solve cascade. |
+| `save-meta-state` (M5a) | 46μs | Speculation save is cheap. |
+| `restore-meta-state!` (M5b) | 48μs | Speculation restore is cheap. ATMS motivation is correctness, not performance. |
+| `type-tensor-core` applicable (M6a) | 103μs | Includes whnf + subtype check. This is the propagator fire cost for application. |
+| `type-tensor-core` inapplicable (M6b) | 1.3μs | Fast bot return. Network avoids firing downstream propagators. |
+| `elab-fresh-meta` (M7a) | 0.3μs | Cell creation is trivially cheap. |
+| `elab-cell-write` (M7b) | 0.4μs | Cell write is trivially cheap. |
+| `elab-cell-read` (M7c) | 0.08μs | Cell read is nearly free. |
+| `make-elaboration-network` (M8a) | 0.1μs | Network creation is trivially cheap. |
+
+### Adversarial Scaling
+
+| Input | Cost | Scaling |
+|-------|------|---------|
+| depth-5 app chain (A1a) | 1.7ms | Linear |
+| depth-10 (A1b) | 3.9ms | Linear |
+| depth-20 (A1c) | 7.9ms | Linear (~400μs/level) |
+| 20 meta+solve cycles (A2b) | 0.16ms | Linear |
+| 20 speculation cycles (A3b) | 0.13ms | Linear |
+| 100 cell allocations (A4b) | 0.12ms | Linear |
+
+### E2E Baselines
+
+| Program | Median | Character |
+|---------|--------|-----------|
+| E1 simple (no metas) | 70ms | Baseline: prelude load + simple typing |
+| E2 pattern matching | 78ms | Data + defn with arms |
+| E3 mixed-type maps | 78ms | Union speculation |
+| E4 polymorphic (prelude + map) | 494ms | **Prelude loading dominates** |
+| E5 generic arithmetic | 111ms | Trait dispatch |
+| E6 recursive fib(10) | 2,391ms | **Reduction-dominated**, not elaboration |
+
+### Design Impact
+
+**No design changes from Pre-0 data.** The data confirms:
+1. Cell creation is cheap (0.1-0.4μs) → per-expression type cells are feasible, PU approach is architectural choice not performance necessity
+2. Typing computation dominates (50-200μs) → propagator overhead is negligible compared to what each propagator DOES
+3. Speculation is cheap (46-48μs) → ATMS replacement motivated by correctness (parallel branches), not performance
+4. Deep nesting scales linearly → propagator chains will scale the same
+5. E4/E6 are NOT elaboration bottlenecks (prelude loading / reduction dominate)
 
 ---
 
