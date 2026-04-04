@@ -567,7 +567,12 @@
   (transforms    ;; (seteq of symbol): completed transform names — powerset lattice (Boolean)
    tree-node     ;; parse-tree-node at current refinement
    registrations ;; (listof pair) extracted registry entries
-   source-pos)   ;; source position for provenance
+   source-pos    ;; source position for provenance
+   type-map)     ;; PPN Track 4 Phase 1b: (hasheq position → type-value)
+                 ;; Maps sub-expression positions to their types. Initially (hasheq) = all ⊥.
+                 ;; Typing propagators write to this map. At quiescence, the typed AST
+                 ;; IS this map. Component-indexed firing (Phase 1a) ensures only
+                 ;; propagators watching changed positions fire.
   #:transparent)
 
 ;; D.5b: Dependency-set merge = set union (monotone, commutative, associative, idempotent)
@@ -586,7 +591,25 @@
            (form-pipeline-value-registrations new))
    ;; source-pos: preserve
    (or (form-pipeline-value-source-pos old)
-       (form-pipeline-value-source-pos new))))
+       (form-pipeline-value-source-pos new))
+   ;; PPN Track 4 Phase 1b: type-map — pointwise merge via type-lattice-merge.
+   ;; Each position merges independently. New positions are added. Missing positions
+   ;; are preserved from the other side (union of keys, merge of shared values).
+   (type-map-merge (form-pipeline-value-type-map old)
+                   (form-pipeline-value-type-map new))))
+
+;; PPN Track 4 Phase 1b: type-map merge — pointwise union of hasheq maps.
+;; For shared keys, uses equal?-based identity (Phase 2 will wire in type-lattice-merge
+;; via the SRE per-relation merge registry). For now: newer value wins for shared keys
+;; (monotone if callers only write more-informative values).
+(define (type-map-merge old-tm new-tm)
+  (cond
+    [(and (hash? old-tm) (hash? new-tm))
+     (for/fold ([result old-tm]) ([(k v) (in-hash new-tm)])
+       (hash-set result k v))]
+    [(hash? new-tm) new-tm]
+    [(hash? old-tm) old-tm]
+    [else (hasheq)]))
 
 ;; --- Legacy compatibility: stage-order and stage>? for V1 algebraic validation ---
 (define stage-order
@@ -635,6 +658,7 @@
   (define node (form-pipeline-value-tree-node pv))
   (define regs (form-pipeline-value-registrations pv))
   (define spos (form-pipeline-value-source-pos pv))
+  (define tm (form-pipeline-value-type-map pv))  ;; PPN Track 4 Phase 1b: thread type-map
 
   (cond
     [(pipeline-done? pv) #f]  ;; already done
@@ -643,25 +667,25 @@
     [(and (not (set-member? transforms 'grouped))
           (transform-ready? 'grouped transforms))
      (define grouped (group-tree-node node))
-     (form-pipeline-value (set-add transforms 'grouped) grouped regs spos)]
+     (form-pipeline-value (set-add transforms 'grouped) grouped regs spos tm)]
 
     ;; T(0): tag refinement — needs grouped
     [(and (not (set-member? transforms 'tagged))
           (transform-ready? 'tagged transforms))
      (define refined (refine-tag node))
-     (form-pipeline-value (set-add transforms 'tagged) refined regs spos)]
+     (form-pipeline-value (set-add transforms 'tagged) refined regs spos tm)]
 
     ;; V(0,0): implicit-map — needs tagged + grouped
     [(and (not (set-member? transforms 'v0-0))
           (transform-ready? 'v0-0 transforms))
      (define-values (result _) (apply-rules node 'V0-0))
-     (form-pipeline-value (set-add transforms 'v0-0) result regs spos)]
+     (form-pipeline-value (set-add transforms 'v0-0) result regs spos tm)]
 
     ;; V(0,1): dot-access — needs tagged + grouped
     [(and (not (set-member? transforms 'v0-1))
           (transform-ready? 'v0-1 transforms))
      (define-values (result _) (apply-rules node 'V0-1))
-     (form-pipeline-value (set-add transforms 'v0-1) result regs spos)]
+     (form-pipeline-value (set-add transforms 'v0-1) result regs spos tm)]
 
     ;; V(0,2): infix + simple + recursive rewrites — needs tagged + grouped
     ;; SRE Track 2D: ALL 13/13 rules fire via SRE (apply-all-sre-rewrites).
@@ -677,23 +701,23 @@
            ;; Safety net: should not fire for any known tag.
            ;; All 13 rules fire via SRE.
            (apply-rules node 'V0-2)))
-     (form-pipeline-value (set-add transforms 'v0-2) result regs spos)]
+     (form-pipeline-value (set-add transforms 'v0-2) result regs spos tm)]
 
     ;; V(1): macro expansion — needs tagged + grouped
     [(and (not (set-member? transforms 'v1))
           (transform-ready? 'v1 transforms))
      (define-values (result matched?) (apply-rules node 'V1))
-     (form-pipeline-value (set-add transforms 'v1) result regs spos)]
+     (form-pipeline-value (set-add transforms 'v1) result regs spos tm)]
 
     ;; V(2): spec/where injection (pass-through for now — Phase 3a deploys spec cells)
     [(and (not (set-member? transforms 'v2))
           (transform-ready? 'v2 transforms))
-     (form-pipeline-value (set-add transforms 'v2) node regs spos)]
+     (form-pipeline-value (set-add transforms 'v2) node regs spos tm)]
 
     ;; All transforms complete → done
     [(and (not (set-member? transforms 'done))
           (transform-ready? 'done transforms))
-     (form-pipeline-value (set-add transforms 'done) node regs spos)]
+     (form-pipeline-value (set-add transforms 'done) node regs spos tm)]
 
     [else #f]))
 
@@ -704,7 +728,8 @@
 (define (run-form-pipeline node #:registries [registries #f])
   (let loop ([pv (form-pipeline-value (seteq) node '()
                                        (and (parse-tree-node? node)
-                                            (parse-tree-node-srcloc node)))])
+                                            (parse-tree-node-srcloc node))
+                                       (hasheq))])
     (define next (advance-pipeline pv #:registries registries))
     (if next
         (loop next)
@@ -2017,22 +2042,22 @@
     (check-false (stage>? 'raw 'raw)))
 
   (test-case "pipeline: merge combines transform sets (D.5b)"
-    (define old (form-pipeline-value (seteq) (make-line-node "def" "x") '() #f))
-    (define new (form-pipeline-value (seteq 'grouped 'tagged) (make-line-node "def" "x") '() #f))
+    (define old (form-pipeline-value (seteq) (make-line-node "def" "x") '() #f (hasheq)))
+    (define new (form-pipeline-value (seteq 'grouped 'tagged) (make-line-node "def" "x") '() #f (hasheq)))
     (define merged (form-pipeline-merge old new))
     (check-true (set-member? (form-pipeline-value-transforms merged) 'tagged))
     (check-true (set-member? (form-pipeline-value-transforms merged) 'grouped)))
 
   (test-case "pipeline: merge is commutative (D.5b)"
-    (define a (form-pipeline-value (seteq 'grouped) (make-line-node "def" "x") '() #f))
-    (define b (form-pipeline-value (seteq 'tagged) (make-line-node "def" "x") '() #f))
+    (define a (form-pipeline-value (seteq 'grouped) (make-line-node "def" "x") '() #f (hasheq)))
+    (define b (form-pipeline-value (seteq 'tagged) (make-line-node "def" "x") '() #f (hasheq)))
     (define ab (form-pipeline-merge a b))
     (define ba (form-pipeline-merge b a))
     (check-equal? (form-pipeline-value-transforms ab)
                   (form-pipeline-value-transforms ba)))
 
   (test-case "pipeline: advance empty → grouped (G(0) grouping)"
-    (define pv (form-pipeline-value (seteq) (make-line-node "def" "x" ":=" "42") '() #f))
+    (define pv (form-pipeline-value (seteq) (make-line-node "def" "x" ":=" "42") '() #f (hasheq)))
     (define next (advance-pipeline pv))
     (check-true (set-member? (form-pipeline-value-transforms next) 'grouped))
     (check-true (parse-tree-node? (form-pipeline-value-tree-node next))))
@@ -2040,7 +2065,7 @@
   (test-case "pipeline: advance grouped → tagged (T(0) tag refinement)"
     (define node (make-line-node "def" "x" ":=" "42"))
     (define grouped (group-tree-node node))
-    (define pv (form-pipeline-value (seteq 'grouped) grouped '() #f))
+    (define pv (form-pipeline-value (seteq 'grouped) grouped '() #f (hasheq)))
     (define next (advance-pipeline pv))
     (check-true (set-member? (form-pipeline-value-transforms next) 'tagged))
     (check-eq? (parse-tree-node-tag (form-pipeline-value-tree-node next)) tag-def))

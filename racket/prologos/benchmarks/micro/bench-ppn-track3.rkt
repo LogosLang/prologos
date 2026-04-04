@@ -370,12 +370,12 @@
 ;; Simulate FormCell creation and merge using form-pipeline-value
 ;; (Already exists in surface-rewrite.rkt)
 (define (make-test-form-pv stage)
-  (form-pipeline-value stage #f '() 1))
+  (form-pipeline-value stage #f '() 1 (hasheq)))
 
 (bench "form-pipeline-value creation x1000"
        (lambda ()
          (for ([_ (in-range 1000)])
-           (form-pipeline-value 'raw #f '() 1)))
+           (form-pipeline-value 'raw #f '() 1 (hasheq))))
        #:runs 20 #:warmup 5)
 
 (bench "form-pipeline-merge x1000 (raw→tagged)"
@@ -712,7 +712,7 @@
 
 (define (random-pv)
   (define stage (list-ref test-stages (random (length test-stages))))
-  (form-pipeline-value stage #f '() (random 100)))
+  (form-pipeline-value stage #f '() (random 100) (hasheq)))
 
 ;; V1a: Commutativity
 (define v1a-failures 0)

@@ -93,7 +93,7 @@
                        [(and (list? loc) (pair? loc) (number? (car loc))) (car loc)]
                        [else #f])]
                [pv (form-pipeline-value
-                    (seteq) node '() loc)])
+                    (seteq) node '() loc (hasheq))])
           (define-values (new-enet cell-id)
             (elab-new-infra-cell current-enet pv form-cell-merge-fn))
           (loop (cdr remaining)
@@ -484,7 +484,7 @@
                               "no merge for relation: ~a" rel-name))))
 
 (define form-cell-bot
-  (form-pipeline-value (seteq) #f '() #f))
+  (form-pipeline-value (seteq) #f '() #f (hasheq)))
 
 (define (form-cell-bot? v)
   (and (form-pipeline-value? v)
