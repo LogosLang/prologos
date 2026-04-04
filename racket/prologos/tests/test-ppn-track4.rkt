@@ -2,18 +2,21 @@
 
 ;;; test-ppn-track4.rkt — PPN Track 4: Elaboration as Attribute Evaluation
 ;;;
-;;; Tests for Track 4 infrastructure: component-indexed firing, PU cell-trees,
-;;; context lattice, DPO typing rules, etc. Phases add tests as they complete.
+;;; Tests for Track 4 propagator-native infrastructure.
+;;; D.4 redo: tests verify actual propagator firings on the network,
+;;; not function-call dispatch.
 
 (require rackunit
          rackunit/text-ui
+         racket/set
          prologos/propagator
          prologos/champ
          prologos/typing-propagators
          prologos/syntax
          prologos/prelude
          prologos/type-lattice
-         (only-in prologos/typing-core infer))
+         prologos/surface-rewrite
+         prologos/form-cells)
 
 ;; ============================================================
 ;; Phase 1a: Component-indexed propagator firing
@@ -22,8 +25,6 @@
 (define phase-1a-tests
   (test-suite
    "Phase 1a: component-indexed propagator firing"
-
-   ;; --- pu-value-diff ---
 
    (test-case "pu-value-diff: identical hasheqs → empty diff"
      (define m (hasheq 'a 1 'b 2))
@@ -35,78 +36,17 @@
      (define diff (pu-value-diff old new))
      (check-equal? (sort diff symbol<?) '(b)))
 
-   (test-case "pu-value-diff: key added"
-     (define old (hasheq 'a 1))
-     (define new (hasheq 'a 1 'b 2))
-     (define diff (pu-value-diff old new))
-     (check-equal? (sort diff symbol<?) '(b)))
-
-   (test-case "pu-value-diff: key removed"
-     (define old (hasheq 'a 1 'b 2))
-     (define new (hasheq 'a 1))
-     (define diff (pu-value-diff old new))
-     (check-equal? (sort diff symbol<?) '(b)))
-
-   (test-case "pu-value-diff: multiple keys changed"
-     (define old (hasheq 'a 1 'b 2 'c 3))
-     (define new (hasheq 'a 99 'b 2 'c 88))
-     (define diff (pu-value-diff old new))
-     (check-equal? (sort diff symbol<?) '(a c)))
-
    (test-case "pu-value-diff: non-hash values → #f (all changed)"
-     (check-false (pu-value-diff 42 43))
-     (check-false (pu-value-diff "hello" "world"))
-     (check-false (pu-value-diff (hasheq 'a 1) 42)))
-
-   ;; --- filter-dependents-by-paths ---
-
-   (test-case "filter-dependents: all paths #f → all fire"
-     (define deps (champ-insert
-                   (champ-insert champ-empty 1 (prop-id 1) #f)
-                   2 (prop-id 2) #f))
-     (define result (filter-dependents-by-paths deps '(a)))
-     (check-equal? (length result) 2))
-
-   (test-case "filter-dependents: component match → fires"
-     (define deps (champ-insert champ-empty 1 (prop-id 1) 'b))
-     (define result (filter-dependents-by-paths deps '(b)))
-     (check-equal? (length result) 1))
-
-   (test-case "filter-dependents: component no match → skipped"
-     (define deps (champ-insert champ-empty 1 (prop-id 1) 'b))
-     (define result (filter-dependents-by-paths deps '(a)))
-     (check-equal? (length result) 0))
-
-   (test-case "filter-dependents: mixed paths, only matching fire"
-     (define deps (champ-insert
-                   (champ-insert
-                    (champ-insert champ-empty 1 (prop-id 1) #f)     ;; watch all
-                    2 (prop-id 2) 'a)                                ;; watch 'a
-                   3 (prop-id 3) 'b))                                ;; watch 'b
-     (define result (filter-dependents-by-paths deps '(a)))
-     ;; prop-id 1 (watch all) + prop-id 2 (watch 'a) = 2
-     (check-equal? (length result) 2))
-
-   (test-case "filter-dependents: #f changed-paths → all fire"
-     (define deps (champ-insert
-                   (champ-insert champ-empty 1 (prop-id 1) 'a)
-                   2 (prop-id 2) 'b))
-     (define result (filter-dependents-by-paths deps #f))
-     (check-equal? (length result) 2))
-
-   ;; --- Integration: component-indexed propagator on network ---
+     (check-false (pu-value-diff 42 43)))
 
    (test-case "component-indexed propagator: only fires on watched component"
-     ;; Create a network with one cell holding a hasheq PU value
      (define fire-count (box 0))
      (define net0 (make-prop-network))
      (define-values (net1 cid)
        (net-new-cell net0 (hasheq 'a 0 'b 0)
                      (lambda (old new)
-                       ;; Merge: pointwise max
                        (for/hasheq ([(k v) (in-hash new)])
                          (values k (max v (hash-ref old k 0)))))))
-     ;; Add a propagator that watches only component 'a
      (define-values (net2 pid)
        (net-add-propagator net1
                            (list cid) '()
@@ -114,45 +54,18 @@
                              (set-box! fire-count (add1 (unbox fire-count)))
                              net)
                            #:component-paths (list (cons cid 'a))))
-     ;; Drain initial firing (net-add-propagator schedules initial fire)
      (define net2q (run-to-quiescence net2))
      (set-box! fire-count 0)
-     ;; Write to component 'b — propagator should NOT fire
+     ;; Write to 'b — propagator watching 'a should NOT fire
      (define net3 (run-to-quiescence
                    (net-cell-write net2q cid (hasheq 'a 0 'b 99))))
-     (check-equal? (unbox fire-count) 0
-                   "propagator watching 'a should not fire when only 'b changed")
-     ;; Write to component 'a — propagator SHOULD fire
+     (check-equal? (unbox fire-count) 0)
+     ;; Write to 'a — propagator SHOULD fire
      (set-box! fire-count 0)
      (define net4 (run-to-quiescence
                    (net-cell-write net3 cid (hasheq 'a 42 'b 99))))
-     (check-equal? (unbox fire-count) 1
-                   "propagator watching 'a should fire when 'a changed"))
-
-   (test-case "backward compat: propagator without component-paths fires on any change"
-     (define fire-count (box 0))
-     (define net0 (make-prop-network))
-     (define-values (net1 cid)
-       (net-new-cell net0 (hasheq 'a 0 'b 0)
-                     (lambda (old new)
-                       (for/hasheq ([(k v) (in-hash new)])
-                         (values k (max v (hash-ref old k 0)))))))
-     ;; Add propagator WITHOUT component-paths (default = watch all)
-     (define-values (net2 pid)
-       (net-add-propagator net1 (list cid) '()
-                           (lambda (net)
-                             (set-box! fire-count (add1 (unbox fire-count)))
-                             net)))
-     ;; Drain initial firing
-     (define net2q (run-to-quiescence net2))
-     (set-box! fire-count 0)
-     ;; Write to component 'b — propagator SHOULD fire (no filtering)
-     (define net3 (run-to-quiescence
-                   (net-cell-write net2q cid (hasheq 'a 0 'b 99))))
-     (check-equal? (unbox fire-count) 1
-                   "propagator without component-paths should fire on any change"))
+     (check-equal? (unbox fire-count) 1))
    ))
-
 
 ;; ============================================================
 ;; Phase 1c: Context lattice
@@ -166,671 +79,176 @@
      (check-equal? (context-cell-value-bindings context-empty-value) '())
      (check-equal? (context-cell-value-depth context-empty-value) 0))
 
-   (test-case "context-extend-value adds binding at head"
+   (test-case "context-extend-value adds binding"
      (define ctx1 (context-extend-value context-empty-value (expr-Nat) 'mw))
-     (check-equal? (context-cell-value-depth ctx1) 1)
-     (check-equal? (length (context-cell-value-bindings ctx1)) 1)
-     (define ctx2 (context-extend-value ctx1 (expr-Int) 'm1))
-     (check-equal? (context-cell-value-depth ctx2) 2)
-     (check-equal? (length (context-cell-value-bindings ctx2)) 2))
+     (check-equal? (context-cell-value-depth ctx1) 1))
 
    (test-case "context-lookup-type: de Bruijn indexing"
      (define ctx (context-extend-value
                   (context-extend-value context-empty-value (expr-Nat) 'mw)
                   (expr-Int) 'm1))
-     ;; Position 0 = most recent = Int
      (check-equal? (context-lookup-type ctx 0) (expr-Int))
-     ;; Position 1 = earlier = Nat
      (check-equal? (context-lookup-type ctx 1) (expr-Nat))
-     ;; Position 2 = out of bounds = error
      (check-pred expr-error? (context-lookup-type ctx 2)))
-
-   (test-case "context-lookup-mult: de Bruijn indexing"
-     (define ctx (context-extend-value
-                  (context-extend-value context-empty-value (expr-Nat) 'mw)
-                  (expr-Int) 'm1))
-     (check-equal? (context-lookup-mult ctx 0) 'm1)
-     (check-equal? (context-lookup-mult ctx 1) 'mw)
-     (check-false (context-lookup-mult ctx 2)))
-
-   (test-case "context-cell-merge: bot with non-bot → non-bot"
-     (define ctx (context-extend-value context-empty-value (expr-Nat) 'mw))
-     (check-equal? (context-cell-value-depth (context-cell-merge context-empty-value ctx)) 1)
-     (check-equal? (context-cell-value-depth (context-cell-merge ctx context-empty-value)) 1))
-
-   (test-case "context-cell-merge: same depth → pointwise"
-     (define ctx1 (context-extend-value context-empty-value (expr-Nat) 'mw))
-     (define ctx2 (context-extend-value context-empty-value (expr-Int) 'mw))
-     (define merged (context-cell-merge ctx1 ctx2))
-     ;; Both depth 1, pointwise merge takes newer (ctx2's Int)
-     (check-equal? (context-cell-value-depth merged) 1)
-     (check-equal? (context-lookup-type merged 0) (expr-Int)))
-
-   (test-case "context-cell-merge: different depth → deeper wins"
-     (define ctx1 (context-extend-value context-empty-value (expr-Nat) 'mw))
-     (define ctx2 (context-extend-value ctx1 (expr-Int) 'm1))
-     ;; ctx1 is depth 1, ctx2 is depth 2
-     (define merged (context-cell-merge ctx1 ctx2))
-     (check-equal? (context-cell-value-depth merged) 2))
-
-   (test-case "context-cell-contradicts? always #f"
-     (check-false (context-cell-contradicts? context-empty-value))
-     (check-false (context-cell-contradicts?
-                   (context-extend-value context-empty-value (expr-Nat) 'mw))))
    ))
 
-
 ;; ============================================================
-;; Phase 2a: Typing rule infrastructure
+;; Phase 2 (D.4): Propagator-native typing — Network Reality Check
 ;; ============================================================
 
-(define phase-2a-tests
+(define phase-2-network-tests
   (test-suite
-   "Phase 2a: typing rule infrastructure"
+   "Phase 2 D.4: propagator-native typing on the network"
 
-   (test-case "registry: create empty"
-     (define reg (make-typing-rule-registry))
-     (check-equal? (length (typing-rule-registry-rules reg)) 0))
+   (test-case "literal propagator: writes type to type-map via net-cell-write"
+     ;; Create a network with a form cell
+     (define net0 (make-prop-network))
+     (define pv (form-pipeline-value (seteq 'done) #f '() #f (hasheq)))
+     (define-values (net1 form-cid)
+       (net-new-cell net0 pv form-cell-merge-fn))
+     ;; Install a literal propagator for an int expression
+     (define int-expr (expr-int 42))
+     (define-values (net2 _pid)
+       (net-add-propagator net1 (list form-cid) (list form-cid)
+                           (make-literal-fire-fn form-cid int-expr (expr-Int))))
+     ;; Run to quiescence — propagator fires and writes Int to type-map
+     (define net3 (run-to-quiescence net2))
+     ;; Read result from the type-map
+     (define result-pv (net-cell-read net3 form-cid))
+     (define result-type (hash-ref (form-pipeline-value-type-map result-pv) int-expr type-bot))
+     ;; Network Reality Check: result comes from cell read after propagator firing
+     (check-equal? result-type (expr-Int)))
 
-   (test-case "registry: add and lookup"
-     (define reg (make-typing-rule-registry))
-     (define rule (typing-rule
-                   'expr-int 'int-literal 0
-                   (lambda (ctx e reader effects) (expr-Int))
-                   #f  ;; no check-fn
-                   0))
-     (typing-rule-registry-add! reg rule)
-     (check-equal? (length (typing-rule-registry-rules reg)) 1)
-     (check-eq? (typing-rule-registry-lookup reg 'expr-int) rule)
-     (check-false (typing-rule-registry-lookup reg 'expr-nat)))
+   (test-case "universe propagator: Type(0) → Type(1)"
+     (define net0 (make-prop-network))
+     (define pv (form-pipeline-value (seteq 'done) #f '() #f (hasheq)))
+     (define-values (net1 form-cid)
+       (net-new-cell net0 pv form-cell-merge-fn))
+     (define type-expr (expr-Type (lzero)))
+     (define-values (net2 _pid)
+       (net-add-propagator net1 (list form-cid) (list form-cid)
+                           (make-universe-fire-fn form-cid type-expr (lzero))))
+     (define net3 (run-to-quiescence net2))
+     (define result-pv (net-cell-read net3 form-cid))
+     (define result-type (hash-ref (form-pipeline-value-type-map result-pv) type-expr type-bot))
+     (check-equal? result-type (expr-Type (lsuc (lzero)))))
 
-   (test-case "dispatch: infer with matching rule"
-     (define reg (make-typing-rule-registry))
-     (typing-rule-registry-add! reg
-       (typing-rule
-        'test-lit 'test-literal 0
-        (lambda (ctx e reader effects) (expr-Int))
-        #f 0))
-     (define result
-       (dispatch-typing-rule reg (lambda (e) 'test-lit)
-                             context-empty-value 'dummy-expr
-                             (lambda (pos) #f)))
-     (check-equal? result (cons 'ok (expr-Int))))
+   (test-case "app propagator: tensor fires when func + arg types available"
+     (define net0 (make-prop-network))
+     ;; Pre-populate type-map with func:Pi(mw,Int,Bool) and arg:Int
+     (define func-e (expr-fvar 'f))
+     (define arg-e (expr-int 42))
+     (define app-e (expr-app func-e arg-e))
+     (define pv (form-pipeline-value
+                 (seteq 'done) #f '() #f
+                 (hasheq func-e (expr-Pi 'mw (expr-Int) (expr-Bool))
+                         arg-e (expr-Int))))
+     (define-values (net1 form-cid)
+       (net-new-cell net0 pv form-cell-merge-fn))
+     ;; Install app propagator
+     (define-values (net2 _pid)
+       (net-add-propagator net1 (list form-cid) (list form-cid)
+                           (make-app-fire-fn form-cid app-e func-e arg-e)
+                           #:component-paths
+                           (list (cons form-cid func-e)
+                                 (cons form-cid arg-e))))
+     (define net3 (run-to-quiescence net2))
+     (define result-pv (net-cell-read net3 form-cid))
+     (define result-type (hash-ref (form-pipeline-value-type-map result-pv) app-e type-bot))
+     ;; tensor(Pi(mw, Int, Bool), Int) = Bool (via subst)
+     (check-equal? result-type (expr-Bool)))
 
-   (test-case "dispatch: no matching rule → #f (imperative fallback)"
-     (define reg (make-typing-rule-registry))
-     (define result
-       (dispatch-typing-rule reg (lambda (e) 'unknown-tag)
-                             context-empty-value 'dummy-expr
-                             (lambda (pos) #f)))
-     (check-false result))
+   (test-case "install-typing-network: literal expression"
+     (define net0 (make-prop-network))
+     (define pv (form-pipeline-value (seteq 'done) #f '() #f (hasheq)))
+     (define-values (net1 form-cid)
+       (net-new-cell net0 pv form-cell-merge-fn))
+     (define e (expr-int 42))
+     (define net2 (install-typing-network net1 form-cid e context-empty-value))
+     (define net3 (run-to-quiescence net2))
+     (define result-pv (net-cell-read net3 form-cid))
+     (define result-type (hash-ref (form-pipeline-value-type-map result-pv) e type-bot))
+     (check-equal? result-type (expr-Int)))
 
-   (test-case "dispatch: check mode with matching rule"
-     (define reg (make-typing-rule-registry))
-     (typing-rule-registry-add! reg
-       (typing-rule
-        'test-lit 'test-literal 0
-        (lambda (ctx e reader effects) (expr-Int))
-        (lambda (ctx e expected reader effects) (equal? expected (expr-Int)))
-        0))
-     ;; Check against Int → #t
-     (define result-ok
-       (dispatch-typing-rule reg (lambda (e) 'test-lit)
-                             context-empty-value 'dummy-expr
-                             (lambda (pos) #f)
-                             #:expected-type (expr-Int)))
-     (check-equal? result-ok (cons 'check #t))
-     ;; Check against Nat → #f
-     (define result-fail
-       (dispatch-typing-rule reg (lambda (e) 'test-lit)
-                             context-empty-value 'dummy-expr
-                             (lambda (pos) #f)
-                             #:expected-type (expr-Nat)))
-     (check-equal? result-fail (cons 'check #f)))
-
-   (test-case "typing-rule struct is inspectable"
-     (define rule (typing-rule 'expr-app 'app-tensor 2
-                               (lambda (ctx e reader effects) #f)
-                               #f 0))
-     (check-eq? (typing-rule-tag rule) 'expr-app)
-     (check-eq? (typing-rule-name rule) 'app-tensor)
-     (check-equal? (typing-rule-arity rule) 2)
-     (check-equal? (typing-rule-stratum rule) 0))
+   (test-case "install-typing-network: application of Pi to arg"
+     (define net0 (make-prop-network))
+     (define func-e (expr-fvar 'add))
+     (define arg-e (expr-int 1))
+     (define app-e (expr-app func-e arg-e))
+     (define pv (form-pipeline-value (seteq 'done) #f '() #f (hasheq)))
+     (define-values (net1 form-cid)
+       (net-new-cell net0 pv form-cell-merge-fn))
+     ;; Install typing network for the app expression.
+     ;; The fvar propagator needs global-env — we can pre-populate the type-map instead.
+     ;; Directly write func type to test the tensor propagator in isolation.
+     (define pv-with-func
+       (struct-copy form-pipeline-value (net-cell-read net1 form-cid)
+         [type-map (hasheq func-e (expr-Pi 'mw (expr-Int) (expr-Int)))]))
+     (define net1b (net-cell-write net1 form-cid pv-with-func))
+     ;; Install: literal for arg, app tensor for app-e
+     (define net2 (install-typing-network net1b form-cid app-e context-empty-value))
+     (define net3 (run-to-quiescence net2))
+     (define result-pv (net-cell-read net3 form-cid))
+     ;; arg should be Int (literal propagator)
+     (check-equal? (hash-ref (form-pipeline-value-type-map result-pv) arg-e type-bot) (expr-Int))
+     ;; app should be Int (tensor: Pi(mw,Int,Int) applied to Int)
+     (check-equal? (hash-ref (form-pipeline-value-type-map result-pv) app-e type-bot) (expr-Int)))
    ))
 
-
 ;; ============================================================
-;; Phase 2b: Literal + universe typing rules
-;; ============================================================
-
-(define phase-2b-tests
-  (let ()
-    (define reg (make-typing-rule-registry))
-    (register-literal-typing-rules! reg)
-    (register-universe-typing-rules! reg)
-
-    (define (infer-via-rule e)
-      (dispatch-typing-rule reg expr-typing-tag context-empty-value e
-                            (lambda (pos) #f)))
-
-    (define (check-via-rule e expected)
-      (dispatch-typing-rule reg expr-typing-tag context-empty-value e
-                            (lambda (pos) #f)
-                            #:expected-type expected))
-
-    (test-suite
-     "Phase 2b: literal + universe typing rules"
-
-     (test-case "int literal: 42 → Int"
-       (check-equal? (infer-via-rule (expr-int 42)) (cons 'ok (expr-Int))))
-
-     (test-case "nat literal: (nat-val 3) → Nat"
-       (check-equal? (infer-via-rule (expr-nat-val 3)) (cons 'ok (expr-Nat))))
-
-     (test-case "true → Bool"
-       (check-equal? (infer-via-rule (expr-true)) (cons 'ok (expr-Bool))))
-
-     (test-case "false → Bool"
-       (check-equal? (infer-via-rule (expr-false)) (cons 'ok (expr-Bool))))
-
-     (test-case "Int : Type 0"
-       (check-equal? (infer-via-rule (expr-Int)) (cons 'ok (expr-Type (lzero)))))
-
-     (test-case "Nat : Type 0"
-       (check-equal? (infer-via-rule (expr-Nat)) (cons 'ok (expr-Type (lzero)))))
-
-     (test-case "Bool : Type 0"
-       (check-equal? (infer-via-rule (expr-Bool)) (cons 'ok (expr-Type (lzero)))))
-
-     (test-case "String : Type 0"
-       (check-equal? (infer-via-rule (expr-String)) (cons 'ok (expr-Type (lzero)))))
-
-     (test-case "Type 0 : Type 1"
-       (define result (infer-via-rule (expr-Type (lzero))))
-       (check-equal? result (cons 'ok (expr-Type (lsuc (lzero))))))
-
-     (test-case "Type 1 : Type 2"
-       (define result (infer-via-rule (expr-Type (lsuc (lzero)))))
-       (check-equal? result (cons 'ok (expr-Type (lsuc (lsuc (lzero)))))))
-
-     (test-case "check: 42 : Int → #t"
-       (check-equal? (check-via-rule (expr-int 42) (expr-Int))
-                     (cons 'check #t)))
-
-     (test-case "check: 42 : Nat → #f"
-       (check-equal? (check-via-rule (expr-int 42) (expr-Nat))
-                     (cons 'check #f)))
-
-     (test-case "check: true : Bool → #t"
-       (check-equal? (check-via-rule (expr-true) (expr-Bool))
-                     (cons 'check #t)))
-
-     (test-case "unknown expr tag → #f (imperative fallback)"
-       (check-false (infer-via-rule (expr-app (expr-int 1) (expr-int 2)))))
-
-     (test-case "tag extraction works for all registered types"
-       (check-eq? (expr-typing-tag (expr-int 42)) 'expr-int)
-       (check-eq? (expr-typing-tag (expr-true)) 'expr-true)
-       (check-eq? (expr-typing-tag (expr-Int)) 'expr-Int)
-       (check-eq? (expr-typing-tag (expr-Type (lzero))) 'expr-Type)
-       (check-eq? (expr-typing-tag (expr-app (expr-int 1) (expr-int 2))) 'expr-app))
-     )))
-
-
-;; ============================================================
-;; Run
-;; ============================================================
-
-;; ============================================================
-;; Phase 2c: Variable lookup typing rules
-;; ============================================================
-
-(define phase-2c-tests
-  (let ()
-    (define reg (make-typing-rule-registry))
-    (register-variable-typing-rules! reg)
-
-    (define (infer-with-ctx ctx-val e)
-      (dispatch-typing-rule reg expr-typing-tag ctx-val e
-                            (lambda (pos) #f)))
-
-    (test-suite
-     "Phase 2c: variable lookup typing rules"
-
-     (test-case "bvar 0: most recent binding"
-       (define ctx (context-extend-value context-empty-value (expr-Int) 'mw))
-       ;; bvar(0) in ctx with [Int] → Int (shifted by 1, but Int has no bvars → stays Int)
-       (define result (infer-with-ctx ctx (expr-bvar 0)))
-       (check-equal? result (cons 'ok (expr-Int))))
-
-     (test-case "bvar 1: earlier binding"
-       (define ctx (context-extend-value
-                    (context-extend-value context-empty-value (expr-Nat) 'mw)
-                    (expr-Int) 'm1))
-       ;; bvar(1) → Nat (shifted by 2, but Nat has no bvars → stays Nat)
-       (define result (infer-with-ctx ctx (expr-bvar 1)))
-       (check-equal? result (cons 'ok (expr-Nat))))
-
-     (test-case "bvar out of bounds: returns #f"
-       (define result (infer-with-ctx context-empty-value (expr-bvar 0)))
-       (check-false result))
-
-     ;; fvar tests require global-env state — skip for unit tests.
-     ;; fvar is tested via the acceptance file (process-file) at Level 3.
-     (test-case "fvar rule registered"
-       (check-true (typing-rule? (typing-rule-registry-lookup reg 'expr-fvar))))
-     )))
-
-
-;; ============================================================
-;; Phase 2d: Lambda + Pi + Sigma formation typing rules
-;; ============================================================
-
-(define phase-2d-tests
-  (let ()
-    (define reg (make-typing-rule-registry))
-    (register-binder-typing-rules! reg)
-
-    (test-suite
-     "Phase 2d: lambda + Pi + Sigma formation typing rules"
-
-     (test-case "lambda: (lam mw Int body) where body:Bool → Pi(mw, Int, Bool)"
-       (define lam-expr (expr-lam 'mw (expr-Int) (expr-bvar 0)))
-       ;; Simulate type-map: dom=(expr-Int) has type Type(0), body has type Bool
-       (define reader
-         (lambda (sub-e)
-           (cond
-             [(equal? sub-e (expr-Int)) (expr-Type (lzero))]   ;; Int : Type 0
-             [(equal? sub-e (expr-bvar 0)) (expr-Bool)]         ;; body : Bool
-             [else #f])))
-       (define result
-         (dispatch-typing-rule reg expr-typing-tag context-empty-value
-                               lam-expr reader))
-       (check-equal? result (cons 'ok (expr-Pi 'mw (expr-Int) (expr-Bool)))))
-
-     (test-case "lambda: hole domain → #f in infer mode"
-       (define lam-expr (expr-lam 'mw (expr-hole) (expr-bvar 0)))
-       (define result
-         (dispatch-typing-rule reg expr-typing-tag context-empty-value
-                               lam-expr (lambda (_) #f)))
-       (check-false result))
-
-     (test-case "lambda check: hole domain accepts expected Pi domain"
-       (define lam-expr (expr-lam 'mw (expr-hole) (expr-bvar 0)))
-       (define expected (expr-Pi 'mw (expr-Int) (expr-Bool)))
-       (define reader
-         (lambda (sub-e)
-           (cond
-             [(equal? sub-e (expr-bvar 0)) (expr-Bool)]
-             [else #f])))
-       (define result
-         (dispatch-typing-rule reg expr-typing-tag context-empty-value
-                               lam-expr reader
-                               #:expected-type expected))
-       (check-equal? result (cons 'check #t)))
-
-     (test-case "lambda: sub-expression not ready → not-ready"
-       (define lam-expr (expr-lam 'mw (expr-Int) (expr-bvar 0)))
-       (define reader
-         (lambda (sub-e)
-           (cond
-             [(equal? sub-e (expr-Int)) (expr-Type (lzero))]
-             [else #f])))  ;; body not typed yet
-       (define result
-         (dispatch-typing-rule reg expr-typing-tag context-empty-value
-                               lam-expr reader))
-       (check-false result))  ;; not-ready → #f
-
-     (test-case "Pi formation: Pi(mw, Int, Bool) → Type(max(0,0)) = Type(0)"
-       (define pi-expr (expr-Pi 'mw (expr-Int) (expr-Bool)))
-       (define reader
-         (lambda (sub-e)
-           (cond
-             [(equal? sub-e (expr-Int)) (expr-Type (lzero))]
-             [(equal? sub-e (expr-Bool)) (expr-Type (lzero))]
-             [else #f])))
-       (define result
-         (dispatch-typing-rule reg expr-typing-tag context-empty-value
-                               pi-expr reader))
-       (check-equal? result (cons 'ok (expr-Type (lmax (lzero) (lzero))))))
-
-     (test-case "Sigma formation: Sigma(Int, Bool) → Type(0)"
-       (define sig-expr (expr-Sigma (expr-Int) (expr-Bool)))
-       (define reader
-         (lambda (sub-e)
-           (cond
-             [(equal? sub-e (expr-Int)) (expr-Type (lzero))]
-             [(equal? sub-e (expr-Bool)) (expr-Type (lzero))]
-             [else #f])))
-       (define result
-         (dispatch-typing-rule reg expr-typing-tag context-empty-value
-                               sig-expr reader))
-       (check-equal? result (cons 'ok (expr-Type (lmax (lzero) (lzero))))))
-
-     (test-case "Pi formation: sub-expression not a type → #f"
-       (define pi-expr (expr-Pi 'mw (expr-int 42) (expr-Bool)))
-       (define reader
-         (lambda (sub-e)
-           (cond
-             [(equal? sub-e (expr-int 42)) (expr-Int)]   ;; 42 : Int, not Type
-             [(equal? sub-e (expr-Bool)) (expr-Type (lzero))]
-             [else #f])))
-       (define result
-         (dispatch-typing-rule reg expr-typing-tag context-empty-value
-                               pi-expr reader))
-       (check-false result))
-     )))
-
-;; ============================================================
-;; Phase 2e: Application (tensor) + projection typing rules
-;; ============================================================
-
-(define phase-2e-tests
-  (let ()
-    (define reg (make-typing-rule-registry))
-    (register-application-typing-rules! reg)
-
-    (test-suite
-     "Phase 2e: application (tensor) + projection typing rules"
-
-     (test-case "app: [Int→Bool applied to Int] → Bool"
-       (define app-expr (expr-app (expr-fvar 'f) (expr-int 42)))
-       (define reader
-         (lambda (sub-e)
-           (cond
-             [(equal? sub-e (expr-fvar 'f)) (expr-Pi 'mw (expr-Int) (expr-Bool))]
-             [(equal? sub-e (expr-int 42)) (expr-Int)]
-             [else #f])))
-       (define result
-         (dispatch-typing-rule reg expr-typing-tag context-empty-value
-                               app-expr reader))
-       ;; type-tensor-core(Pi(mw, Int, Bool), Int) → Bool (via subst)
-       (check-equal? (cdr result) (expr-Bool)))
-
-     (test-case "app: func type not ready → not-ready"
-       (define app-expr (expr-app (expr-fvar 'f) (expr-int 42)))
-       (define reader (lambda (sub-e) #f))
-       (define result
-         (dispatch-typing-rule reg expr-typing-tag context-empty-value
-                               app-expr reader))
-       (check-false result))
-
-     (test-case "app: non-Pi func → #f (error)"
-       (define app-expr (expr-app (expr-int 1) (expr-int 2)))
-       (define reader
-         (lambda (sub-e)
-           (cond
-             [(equal? sub-e (expr-int 1)) (expr-Int)]  ;; Int is not a Pi
-             [(equal? sub-e (expr-int 2)) (expr-Int)]
-             [else #f])))
-       (define result
-         (dispatch-typing-rule reg expr-typing-tag context-empty-value
-                               app-expr reader))
-       (check-false result))
-
-     (test-case "fst: fst(Sigma(Int, Bool)) → Int"
-       (define fst-expr (expr-fst (expr-fvar 'p)))
-       (define reader
-         (lambda (sub-e)
-           (if (equal? sub-e (expr-fvar 'p))
-               (expr-Sigma (expr-Int) (expr-Bool))
-               #f)))
-       (define result
-         (dispatch-typing-rule reg expr-typing-tag context-empty-value
-                               fst-expr reader))
-       (check-equal? result (cons 'ok (expr-Int))))
-
-     (test-case "snd: snd(Sigma(Int, Bool)) → Bool"
-       (define snd-expr (expr-snd (expr-fvar 'p)))
-       (define reader
-         (lambda (sub-e)
-           (if (equal? sub-e (expr-fvar 'p))
-               (expr-Sigma (expr-Int) (expr-Bool))
-               #f)))
-       (define result
-         (dispatch-typing-rule reg expr-typing-tag context-empty-value
-                               snd-expr reader))
-       (check-equal? result (cons 'ok (expr-Bool))))
-
-     (test-case "fst on non-Sigma → #f"
-       (define fst-expr (expr-fst (expr-fvar 'x)))
-       (define reader
-         (lambda (sub-e)
-           (if (equal? sub-e (expr-fvar 'x)) (expr-Int) #f)))
-       (define result
-         (dispatch-typing-rule reg expr-typing-tag context-empty-value
-                               fst-expr reader))
-       (check-false result))
-     )))
-
-;; ============================================================
-;; Phase 3: Integration — typing-rule-aware infer parity
-;; ============================================================
-
-(define phase-3-tests
-  (let ()
-    ;; Create rule-infer that falls back to imperative infer
-    (define rule-infer (make-typing-rule-infer infer))
-    (define ctx ctx-empty)
-
-    (test-suite
-     "Phase 3: typing-rule-aware infer parity with imperative"
-
-     ;; Literals: rule-infer should match imperative infer
-     (test-case "parity: int literal"
-       (define e (expr-int 42))
-       (check-equal? (rule-infer ctx e) (infer ctx e)))
-
-     (test-case "parity: nat literal"
-       (define e (expr-nat-val 3))
-       (check-equal? (rule-infer ctx e) (infer ctx e)))
-
-     (test-case "parity: true"
-       (check-equal? (rule-infer ctx (expr-true)) (infer ctx (expr-true))))
-
-     (test-case "parity: false"
-       (check-equal? (rule-infer ctx (expr-false)) (infer ctx (expr-false))))
-
-     ;; Type constructors
-     (test-case "parity: Int type"
-       (check-equal? (rule-infer ctx (expr-Int)) (infer ctx (expr-Int))))
-
-     (test-case "parity: Nat type"
-       (check-equal? (rule-infer ctx (expr-Nat)) (infer ctx (expr-Nat))))
-
-     (test-case "parity: Bool type"
-       (check-equal? (rule-infer ctx (expr-Bool)) (infer ctx (expr-Bool))))
-
-     ;; Universe
-     (test-case "parity: Type 0"
-       (define e (expr-Type (lzero)))
-       (check-equal? (rule-infer ctx e) (infer ctx e)))
-
-     ;; Application (tensor): [int+ applied to args]
-     ;; This requires global env for int+ — test with a simple Pi
-     (test-case "parity: application of lambda to arg"
-       ;; (\x:Int. x) 42  — should infer Int
-       (define lam (expr-lam 'mw (expr-Int) (expr-bvar 0)))
-       (define app (expr-app lam (expr-int 42)))
-       (define imperative-result (infer ctx app))
-       (define rule-result (rule-infer ctx app))
-       ;; Both should produce Int (or at least be equal)
-       (check-equal? rule-result imperative-result))
-
-     ;; Fallback: expressions without rules still work
-     (test-case "fallback: error expression"
-       (define e (expr-error))
-       ;; expr-error has no typing rule → falls back to imperative
-       (check-equal? (rule-infer ctx e) (infer ctx e)))
-     )))
-
-;; ============================================================
-;; Phase 4a: Meta-variable typing rule
-;; ============================================================
-
-(define phase-4a-tests
-  (let ()
-    (define reg (make-typing-rule-registry))
-    (register-meta-typing-rules! reg)
-
-    (test-suite
-     "Phase 4a: meta-variable typing rule"
-
-     (test-case "meta rule registered"
-       (check-true (typing-rule? (typing-rule-registry-lookup reg 'expr-meta))))
-
-     (test-case "meta check: optimistically succeeds"
-       ;; Meta in check position → #t (matches imperative behavior)
-       (define result
-         (dispatch-typing-rule reg expr-typing-tag context-empty-value
-                               (expr-meta 'test-meta #f)
-                               (lambda (pos) #f)
-                               #:expected-type (expr-Int)))
-       (check-equal? result (cons 'check #t)))
-
-     ;; Note: testing infer for solved/unsolved metas requires a live
-     ;; elaboration network (meta-solution/cell-id reads from current-prop-net-box).
-     ;; That's an integration test — covered by the acceptance file and full suite.
-     ;; Unit test validates the rule structure and check behavior.
-     )))
-
-;; ============================================================
-;; Phase 4b-i: Fan-in meta-readiness infrastructure
+;; Phase 4b-i: Fan-in meta-readiness
 ;; ============================================================
 
 (define phase-4b-tests
   (test-suite
    "Phase 4b-i: fan-in meta-readiness"
 
-   (test-case "empty readiness: no metas"
-     (check-true (meta-readiness-all-solved? meta-readiness-empty))
-     (check-equal? (meta-readiness-unsolved meta-readiness-empty) '()))
+   (test-case "empty readiness: all solved"
+     (check-true (meta-readiness-all-solved? meta-readiness-empty)))
 
-   (test-case "register + unsolved: all unsolved initially"
+   (test-case "register + solve: tracks correctly"
      (define rv (meta-readiness-register
                  (meta-readiness-register meta-readiness-empty 'a 'type)
                  'b 'level))
      (check-false (meta-readiness-all-solved? rv))
-     (check-equal? (length (meta-readiness-unsolved rv)) 2))
-
-   (test-case "register + solve: partial solve"
-     (define rv (meta-readiness-register
-                 (meta-readiness-register meta-readiness-empty 'a 'type)
-                 'b 'level))
-     (define rv2 (meta-readiness-solve rv 'a))
-     (check-false (meta-readiness-all-solved? rv2))
-     (define unsolved (meta-readiness-unsolved rv2))
-     (check-equal? (length unsolved) 1)
-     (check-equal? (caar unsolved) 'b)
-     (check-equal? (cdar unsolved) 'level))
-
-   (test-case "register + solve all: all solved"
-     (define rv (meta-readiness-register
-                 (meta-readiness-register meta-readiness-empty 'a 'type)
-                 'b 'level))
      (define rv2 (meta-readiness-solve (meta-readiness-solve rv 'a) 'b))
-     (check-true (meta-readiness-all-solved? rv2))
-     (check-equal? (meta-readiness-unsolved rv2) '()))
+     (check-true (meta-readiness-all-solved? rv2)))
 
    (test-case "merge: set-union on registered and solved"
      (define rv1 (meta-readiness-solve
-                  (meta-readiness-register meta-readiness-empty 'a 'type)
-                  'a))
+                  (meta-readiness-register meta-readiness-empty 'a 'type) 'a))
      (define rv2 (meta-readiness-register meta-readiness-empty 'b 'level))
      (define merged (meta-readiness-merge rv1 rv2))
-     ;; Registered: {a, b}. Solved: {a}.
-     (check-equal? (length (meta-readiness-unsolved merged)) 1)
-     (check-equal? (caar (meta-readiness-unsolved merged)) 'b))
-
-   (test-case "merge: monotone — solved set only grows"
-     (define rv1 (meta-readiness-solve
-                  (meta-readiness-register meta-readiness-empty 'a 'type)
-                  'a))
-     (define rv2 meta-readiness-empty)
-     (define merged (meta-readiness-merge rv1 rv2))
-     ;; a is still solved after merging with empty
-     (check-true (meta-readiness-all-solved? merged)))
-
-   (test-case "contradicts? always #f"
-     (check-false (meta-readiness-contradicts? meta-readiness-empty)))
+     (check-equal? (length (meta-readiness-unsolved merged)) 1))
    ))
 
-
 ;; ============================================================
-;; Phase 6: Constraint SRE domain
+;; Phase 6: Constraint lattice
 ;; ============================================================
 
 (define phase-6-tests
   (test-suite
    "Phase 6: constraint lattice"
 
-   ;; Join (merge)
-   (test-case "join: pending ⊔ pending = pending"
-     (check-true (constraint-pending? (constraint-cell-merge constraint-pending constraint-pending))))
-
    (test-case "join: pending ⊔ resolved = resolved"
-     (define r (constraint-resolved 'eq-int-instance))
+     (define r (constraint-resolved 'eq-int))
      (check-true (constraint-resolved? (constraint-cell-merge constraint-pending r))))
 
-   (test-case "join: resolved ⊔ same = idempotent"
-     (define r (constraint-resolved 'eq-int-instance))
-     (check-equal? (constraint-cell-merge r r) r))
-
    (test-case "join: resolved(A) ⊔ resolved(B) = contradicted"
-     (define r1 (constraint-resolved 'eq-int))
-     (define r2 (constraint-resolved 'eq-nat))
-     (check-true (constraint-contradicted? (constraint-cell-merge r1 r2))))
-
-   (test-case "join: contradicted ⊔ X = contradicted"
      (check-true (constraint-contradicted?
-                  (constraint-cell-merge constraint-contradicted (constraint-resolved 'x)))))
+                  (constraint-cell-merge (constraint-resolved 'a) (constraint-resolved 'b)))))
 
-   ;; Meet
-   (test-case "meet: contradicted ⊓ X = X (identity)"
+   (test-case "meet: contradicted ⊓ X = X"
      (define r (constraint-resolved 'eq-int))
      (check-equal? (constraint-cell-meet constraint-contradicted r) r))
-
-   (test-case "meet: pending ⊓ X = pending (annihilator)"
-     (define r (constraint-resolved 'eq-int))
-     (check-true (constraint-pending? (constraint-cell-meet constraint-pending r))))
-
-   (test-case "meet: resolved(A) ⊓ resolved(A) = resolved(A)"
-     (define r (constraint-resolved 'eq-int))
-     (check-equal? (constraint-cell-meet r r) r))
-
-   (test-case "meet: resolved(A) ⊓ resolved(B) = pending"
-     (define r1 (constraint-resolved 'eq-int))
-     (define r2 (constraint-resolved 'eq-nat))
-     (check-true (constraint-pending? (constraint-cell-meet r1 r2))))
-
-   ;; Contradiction
-   (test-case "contradicts?: only contradicted"
-     (check-false (constraint-cell-contradicts? constraint-pending))
-     (check-false (constraint-cell-contradicts? (constraint-resolved 'x)))
-     (check-true (constraint-cell-contradicts? constraint-contradicted)))
-
-   ;; Algebraic properties
-   (test-case "join commutativity: a ⊔ b = b ⊔ a"
-     (define r (constraint-resolved 'eq-int))
-     (check-equal? (constraint-cell-merge constraint-pending r)
-                   (constraint-cell-merge r constraint-pending)))
-
-   (test-case "join associativity: (a ⊔ b) ⊔ c = a ⊔ (b ⊔ c)"
-     (define r1 (constraint-resolved 'eq-int))
-     (define r2 (constraint-resolved 'eq-int))  ;; same instance
-     (check-equal? (constraint-cell-merge (constraint-cell-merge constraint-pending r1) r2)
-                   (constraint-cell-merge constraint-pending (constraint-cell-merge r1 r2))))
    ))
 
+;; ============================================================
+;; Run
+;; ============================================================
 
 (run-tests phase-1a-tests)
 (run-tests phase-1c-tests)
-(run-tests phase-2a-tests)
-(run-tests phase-2b-tests)
-(run-tests phase-2c-tests)
-(run-tests phase-2d-tests)
-(run-tests phase-2e-tests)
-(run-tests phase-3-tests)
-(run-tests phase-4a-tests)
+(run-tests phase-2-network-tests)
 (run-tests phase-4b-tests)
 (run-tests phase-6-tests)

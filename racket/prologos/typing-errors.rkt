@@ -23,8 +23,7 @@
          "pretty-print.rkt"
          "global-env.rkt"
          "elab-speculation-bridge.rkt"
-         "atms.rkt"
-         (only-in "typing-propagators.rkt" current-typing-rule-infer))
+         "atms.rkt")
 
 (provide infer/err
          check/err
@@ -36,13 +35,8 @@
 ;; ========================================
 ;; Returns (or/c Expr? prologos-error?)
 ;; Sprint 9: optional `names` for de Bruijn recovery in error messages
-;; PPN Track 4 Phase 4b: when current-typing-rule-infer is installed,
-;; use it (DPO-first + imperative-fallback). Otherwise, use raw infer.
 (define (infer/err ctx e [loc srcloc-unknown] [names '()])
-  (let ([result (let ([rule-infer (current-typing-rule-infer)])
-                  (if rule-infer
-                      (rule-infer ctx e)
-                      (infer ctx e)))])
+  (let ([result (infer ctx e)])
     (if (expr-error? result)
         (inference-failed-error loc
                                 "Could not infer type"
