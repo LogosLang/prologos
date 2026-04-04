@@ -8,7 +8,9 @@
 (require rackunit
          rackunit/text-ui
          prologos/propagator
-         prologos/champ)
+         prologos/champ
+         prologos/typing-propagators
+         prologos/syntax)
 
 ;; ============================================================
 ;; Phase 1a: Component-indexed propagator firing
@@ -150,7 +152,74 @@
 
 
 ;; ============================================================
+;; Phase 1c: Context lattice
+;; ============================================================
+
+(define phase-1c-tests
+  (test-suite
+   "Phase 1c: context lattice"
+
+   (test-case "context-empty-value is empty"
+     (check-equal? (context-cell-value-bindings context-empty-value) '())
+     (check-equal? (context-cell-value-depth context-empty-value) 0))
+
+   (test-case "context-extend-value adds binding at head"
+     (define ctx1 (context-extend-value context-empty-value (expr-Nat) 'mw))
+     (check-equal? (context-cell-value-depth ctx1) 1)
+     (check-equal? (length (context-cell-value-bindings ctx1)) 1)
+     (define ctx2 (context-extend-value ctx1 (expr-Int) 'm1))
+     (check-equal? (context-cell-value-depth ctx2) 2)
+     (check-equal? (length (context-cell-value-bindings ctx2)) 2))
+
+   (test-case "context-lookup-type: de Bruijn indexing"
+     (define ctx (context-extend-value
+                  (context-extend-value context-empty-value (expr-Nat) 'mw)
+                  (expr-Int) 'm1))
+     ;; Position 0 = most recent = Int
+     (check-equal? (context-lookup-type ctx 0) (expr-Int))
+     ;; Position 1 = earlier = Nat
+     (check-equal? (context-lookup-type ctx 1) (expr-Nat))
+     ;; Position 2 = out of bounds = error
+     (check-pred expr-error? (context-lookup-type ctx 2)))
+
+   (test-case "context-lookup-mult: de Bruijn indexing"
+     (define ctx (context-extend-value
+                  (context-extend-value context-empty-value (expr-Nat) 'mw)
+                  (expr-Int) 'm1))
+     (check-equal? (context-lookup-mult ctx 0) 'm1)
+     (check-equal? (context-lookup-mult ctx 1) 'mw)
+     (check-false (context-lookup-mult ctx 2)))
+
+   (test-case "context-cell-merge: bot with non-bot → non-bot"
+     (define ctx (context-extend-value context-empty-value (expr-Nat) 'mw))
+     (check-equal? (context-cell-value-depth (context-cell-merge context-empty-value ctx)) 1)
+     (check-equal? (context-cell-value-depth (context-cell-merge ctx context-empty-value)) 1))
+
+   (test-case "context-cell-merge: same depth → pointwise"
+     (define ctx1 (context-extend-value context-empty-value (expr-Nat) 'mw))
+     (define ctx2 (context-extend-value context-empty-value (expr-Int) 'mw))
+     (define merged (context-cell-merge ctx1 ctx2))
+     ;; Both depth 1, pointwise merge takes newer (ctx2's Int)
+     (check-equal? (context-cell-value-depth merged) 1)
+     (check-equal? (context-lookup-type merged 0) (expr-Int)))
+
+   (test-case "context-cell-merge: different depth → deeper wins"
+     (define ctx1 (context-extend-value context-empty-value (expr-Nat) 'mw))
+     (define ctx2 (context-extend-value ctx1 (expr-Int) 'm1))
+     ;; ctx1 is depth 1, ctx2 is depth 2
+     (define merged (context-cell-merge ctx1 ctx2))
+     (check-equal? (context-cell-value-depth merged) 2))
+
+   (test-case "context-cell-contradicts? always #f"
+     (check-false (context-cell-contradicts? context-empty-value))
+     (check-false (context-cell-contradicts?
+                   (context-extend-value context-empty-value (expr-Nat) 'mw))))
+   ))
+
+
+;; ============================================================
 ;; Run
 ;; ============================================================
 
 (run-tests phase-1a-tests)
+(run-tests phase-1c-tests)
