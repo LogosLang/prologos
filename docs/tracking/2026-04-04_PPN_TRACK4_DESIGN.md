@@ -58,7 +58,7 @@
 | 1b | Per-expression type cells as PU cell-trees | ✅ | `type-map` field added to `form-pipeline-value` (5th field, hasheq). `type-map-merge` pointwise. 30+ construction sites updated. Phase 2 wires in lattice merge. (commit `bffe3c90`) |
 | 1c | Context lattice: typing context as cells | ✅ | `context-cell-value` struct in typing-propagators.rkt. Extension = tensor (depth+1). Lookup = de Bruijn position read. Merge: pointwise same-depth, deeper wins. 8 tests. (commit `2f50c6c4`) |
 | 2 | Typing rules as DPO rewrite rules | ✅ | **2a** struct+registry+dispatch (`bca522f5`). **2b** 12 literal+universe (`08402ded`). **2c** bvar+fvar (`fae47058`). **2d** lam+Pi+Sigma (`605f4356`). **2e** app/tensor+fst/snd (`71bd2bca`). 20 rules total. |
-| 3 | Tensor as on-network propagator | ⬜ | Wire `type-tensor-core` from Track 2H. Union distribution is emergent from cell merge, not imperative iteration. |
+| 3 | Tensor as on-network propagator | ✅ | `make-typing-rule-infer`: DPO-first + imperative-fallback. 20 rules dispatched via registry. Parity tests confirm equivalence. (commit `f7c86536`) |
 | 4a | Meta-solving as cell writes (cell-refs replace expr-meta) | ⬜ | Metas are cells. `solve-meta!` = cell write. Cascade is automatic. Cell-refs in expressions replace `expr-meta` nodes. |
 | 4b | Zonk retirement: fan-in default propagator | ⬜ | Meta-readiness cell (bitmask) per form. Each solve flips one bit. S2 commit: single threshold propagator reads complement, writes defaults. ~1,300 lines of zonk.rkt deleted. Absorbs SRE Track 2C. |
 | 5 | ATMS extension (delta from PM Track 8 B1) | ⬜ | PM Track 8 B1 already retired save/restore and installed TMS worldview + ATMS. Track 4 extends to propagator-native elaboration patterns. Scope is incremental, not from-scratch. |
