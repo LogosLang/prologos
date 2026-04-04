@@ -43,7 +43,7 @@
 - It does NOT implement type-directed parse disambiguation — that's PPN Track 5. Track 4 builds the Surface→Type bridge that Track 5 consumes.
 - It does NOT implement β/δ/ι-reduction as propagators — that's SRE Track 6. Track 4 builds per-expression type cells that Track 6 uses as reduction targets.
 - It does NOT implement the `grammar :type` compilation target directly — that's Grammar Form R&D. Track 4 delivers the MACHINERY (typing propagator infrastructure) that grammar `:type` will compile to.
-- It does NOT implement full PUnify integration for all typing operations — PUnify is used for structural decomposition (existing from PM Track 8). True PUnify-based type inference (cell-tree sharing for all types) is a future refinement.
+- It does NOT implement full PUnify parity (the PUnify toggle, Track 10B's systemic regression). PUnify's structural decomposition IS used for type cell-trees. The PUnify parity track remains separate.
 
 ---
 
@@ -52,7 +52,8 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Stage 2 audit + Pre-0 benchmarks | ✅ | [Audit](2026-04-04_PPN_TRACK4_STAGE2_AUDIT.md): 19K lines, 589 arms, 0 typing propagators. [Pre-0](§Pre-0): cell ops 300-1000× cheaper than typing. No design changes. |
-| 1 | Per-expression type cells on the elab-network | ⬜ | Each AST node gets a type cell. Surfs → cells (Track 3 foundation). Type cells written by elaboration propagators. |
+| 1a | Component-indexed propagator firing infrastructure | ⬜ | `watched-input` with optional path. `pu-diff` on writes. Selective scheduling. Backward compatible (existing propagators unchanged). |
+| 1b | Per-expression type cells as PU cell-trees | ⬜ | Each AST node gets a type cell. PU value = type-cell-tree (tag + components + meta-refs). PUnify operates on PU values. |
 | 2 | Typing rules as propagators (infer/check → attribute rules) | ⬜ | The 589 match arms in typing-core.rkt become registered propagator rules. Each arm = one propagator. |
 | 3 | Tensor as on-network propagator | ⬜ | Wire `type-tensor-core` from Track 2H. `f x` → SRE decomposes Pi, connects arg cell to domain, result cell to codomain. |
 | 4 | Meta-solving as cell writes (retire imperative metavar-store) | ⬜ | Metas are cells. `solve-meta!` = cell write. Resolution triggered by cell merge, not imperative retry. |
@@ -309,6 +310,72 @@ This makes Track 4's `fvar` propagator READY for Track 7's full env-on-network �
 
 ---
 
+## §1d. PU-Based Cell-Trees with PUnify Integration (Path A)
+
+### Architecture: Types as Pocket Universe Cell-Trees
+
+Every type expression is a cell-tree — a Pocket Universe value within an expression cell. The PU value holds the type's structure (tag + components). Components may REFERENCE other cells (meta variables, shared sub-expressions). The merge function understands the tree structure — component-wise type-lattice-merge.
+
+```
+Expression cell (top-level on prop-net):
+  PU value: type-cell-tree
+    tag: 'Pi | 'Sigma | 'app | 'meta-ref | 'atom | ...
+    components: [value-or-cell-ref, ...]
+      value: concrete type (expr-Nat, expr-Int, etc.)
+      cell-ref: reference to a meta cell or shared expression cell
+
+Meta cell (top-level on prop-net):
+  value: type-bot (unsolved) | concrete type (solved)
+```
+
+**Cell count**: One top-level cell per expression + one per meta + one per constraint. Type structure is WITHIN the PU, not separate cells. For 50 expressions, 10 metas, 5 constraints: **65 cells** (vs 165 without PU).
+
+**PUnify integration**: When unifying two type cell-trees, PUnify reads both PU values, matches tags, and for each component pair: if both are concrete and equal → identity. If one is a meta-ref → install propagator to sync. If both are concrete and different → contradiction. This uses the EXISTING `elab-add-unify-constraint` mechanism — but operating on PU values instead of standalone type values.
+
+**Sharing**: When two expressions reference the same meta `?A`, their PU values contain the same meta-ref (cell-id to ?A's cell). When `?A` is solved, any propagator watching a cell whose PU contains a ref to `?A` fires and reads the updated value. Sharing IS cell identity.
+
+### Component-Indexed Propagator Firing
+
+Standard propagators fire on ANY write to their input cells. For PU-based type cells, this means a propagator watching a Pi type cell fires even if only the multiplicity changed — wasteful when the propagator only cares about the domain.
+
+**Component-indexed firing**: Propagators declare WHICH component of a PU they watch. Only propagators watching changed components are scheduled.
+
+**Infrastructure changes** (targeted, backward-compatible):
+
+1. **Extended watch declaration**: propagators specify an optional component path alongside each input cell-id.
+
+```
+;; Current:
+(net-add-propagator net (list cell-a cell-b) (list cell-out) fire-fn)
+
+;; Extended:
+(net-add-propagator net
+  (list (watched-input cell-a #:path '(domain))    ;; watch domain component only
+        (watched-input cell-b #:path #f))           ;; watch entire cell (default)
+  (list cell-out)
+  fire-fn)
+```
+
+2. **PU diff on write**: When a PU value is written, the merge determines which components changed. `pu-diff(old-value, new-value) → (listof component-path)`. For a Pi where only codomain changed: `'((codomain))`.
+
+3. **Selective scheduling**: Only propagators whose watched paths intersect the dirty set go on the worklist. Propagators with `#:path #f` fire on any change (current behavior — full backward compat).
+
+**Cost**: `pu-diff` is one `equal?` per component (~0.05μs each). Selective scheduling is set membership (~0.05μs). Total overhead per write: ~0.2μs. Savings: avoids N-1 unnecessary firings where N is component count. For deeply nested types (10+ components), significant.
+
+**Backward compatibility**: All existing propagators have `#:path #f` — they behave exactly as today. Only Track 4's new typing propagators use component paths.
+
+### What This Enables
+
+**Bidirectional type inference as information flow**: Knowing the result type of `f x` constrains `f`'s codomain AND `x`'s type simultaneously. The propagator watching the codomain component fires when the result type is known (from `check` context), writing the constraint backward to `f`'s type cell.
+
+**Incremental re-elaboration**: Changing one definition's type triggers only the propagators that depend on that specific type component. No full re-walk.
+
+**Unification is cell sharing**: To unify two types, install propagators connecting corresponding components. No separate unification pass — it's just "these two PU components must agree."
+
+**Meta-solving cascades naturally**: When meta `?A` is solved, every cell with a meta-ref to `?A` sees the change. Each such cell's propagators fire. The cascade is automatic, targeted (only affected components), and complete (fixpoint).
+
+---
+
 ## §2 Architecture: Elaboration as Network Construction
 
 ### Current (imperative — from audit §2)
@@ -380,13 +447,11 @@ surf-def "x" : Int := [add 1 2]
   → cell for add's type (initially: lookup spec → Int Int → Int)
 ```
 
-**Pocket Universe approach**: Not one cell per sub-expression (cell explosion). ONE cell per top-level form, holding a Pocket Universe of sub-expression types. The PU value is a tree of type assignments — one entry per AST position. The merge function understands the tree structure.
+**PU-based cell-trees (Path A — §1d)**: Each expression gets a top-level cell whose PU value IS a type-cell-tree — structured tag + components, where components may reference meta cells. The merge is component-wise type-lattice-merge. PUnify operates on PU values directly. Component-indexed firing ensures propagators only trigger on their specific component changes.
 
-This mirrors PPN Track 3's form pipeline: one cell per form, with a PU value that tracks progress. Track 4's PU tracks type assignments instead of pipeline transforms.
+**Cell count**: One top-level cell per expression + one per meta + one per constraint. Type structure is WITHIN the PU. Baseline: 17-22 infrastructure cells (audit §4). Track 4 adds: ~N expression cells + ~M meta cells + ~K constraint cells per command. For a typical command: N≈20, M≈5, K≈2 → ~27 new cells + 17-22 existing ≈ ~45-50 total. Cell creation cost: ~15μs (negligible vs 70ms elaboration).
 
-**Baseline**: Current elab-network has 17-22 infrastructure cells per program (audit §4). Track 4 adds type information per expression — but the PU approach keeps the CELL count from exploding. The type-map lives INSIDE the form cell's PU value, not as separate cells.
-
-**Existing infrastructure**: Track 3's `form-pipeline-value` holds `(transforms-set × tree-node × registrations)`. Track 4 adds a `type-map` component: `(transforms-set × tree-node × registrations × type-map)`. The type-map is a hash from AST position → type value. The merge for type-maps is pointwise type-lattice-merge.
+**Existing infrastructure**: Track 3's per-form cells provide the form-level anchor. Track 4 creates per-EXPRESSION cells within each form's elaboration scope. The form cell tracks pipeline progress; the expression cells track types. These are separate cells connected by propagators (the form's elaboration propagator creates expression cells when it fires).
 
 ### §3.2 Phase 2: Typing Rules as Propagators
 
