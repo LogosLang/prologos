@@ -60,7 +60,18 @@
  meta-readiness-unsolved
  meta-readiness-all-solved?
  meta-readiness-merge
- meta-readiness-contradicts?)
+ meta-readiness-contradicts?
+ ;; Phase 6: Constraint SRE domain
+ (struct-out constraint-cell-value)
+ constraint-pending
+ constraint-resolved
+ constraint-contradicted
+ constraint-pending?
+ constraint-resolved?
+ constraint-contradicted?
+ constraint-cell-merge
+ constraint-cell-meet
+ constraint-cell-contradicts?)
 
 ;; ============================================================
 ;; Phase 1c: Context Lattice
@@ -777,3 +788,85 @@
 
 ;; Meta-readiness cells don't contradict.
 (define (meta-readiness-contradicts? v) #f)
+
+
+;; ============================================================
+;; Phase 6: Constraint SRE Domain
+;; ============================================================
+;;
+;; Trait constraints as a lattice: pending (⊥) → resolved(instance) → contradicted (⊤).
+;; Each constraint cell tracks one trait constraint (e.g., "Eq ?A").
+;; The constraint fires as a propagator when its argument type is refined.
+;;
+;; Lattice (from design §1b):
+;;   pending ⊔ pending = pending
+;;   pending ⊔ resolved(A) = resolved(A)
+;;   resolved(A) ⊔ resolved(A) = resolved(A)  (idempotent)
+;;   resolved(A) ⊔ resolved(B) = contradicted  (A ≠ B, coherence violation)
+;;   contradicted ⊔ X = contradicted
+;;
+;; Meet (GLB, dual of join):
+;;   meet(contradicted, X) = X              (⊤ is identity for meet)
+;;   meet(pending, X) = pending             (⊥ is annihilator)
+;;   meet(resolved(A), resolved(A)) = resolved(A)
+;;   meet(resolved(A), resolved(B)) = pending  (different → ⊥)
+
+;; constraint-cell-value: the state of one trait constraint.
+;;   status: 'pending | 'resolved | 'contradicted
+;;   instance: the resolved instance (when status = 'resolved), #f otherwise
+(struct constraint-cell-value
+  (status    ;; 'pending | 'resolved | 'contradicted
+   instance) ;; resolved instance value, or #f
+  #:transparent)
+
+;; Constructors
+(define constraint-pending (constraint-cell-value 'pending #f))
+(define (constraint-resolved instance) (constraint-cell-value 'resolved instance))
+(define constraint-contradicted (constraint-cell-value 'contradicted #f))
+
+;; Predicates
+(define (constraint-pending? v)
+  (and (constraint-cell-value? v) (eq? (constraint-cell-value-status v) 'pending)))
+(define (constraint-resolved? v)
+  (and (constraint-cell-value? v) (eq? (constraint-cell-value-status v) 'resolved)))
+(define (constraint-contradicted? v)
+  (and (constraint-cell-value? v) (eq? (constraint-cell-value-status v) 'contradicted)))
+
+;; Join (⊔): accumulate constraint information monotonically.
+(define (constraint-cell-merge old new)
+  (cond
+    ;; contradicted absorbs everything
+    [(constraint-contradicted? old) old]
+    [(constraint-contradicted? new) new]
+    ;; pending + X = X (pending is ⊥)
+    [(constraint-pending? old) new]
+    [(constraint-pending? new) old]
+    ;; resolved + resolved: same instance → idempotent, different → contradicted
+    [(and (constraint-resolved? old) (constraint-resolved? new))
+     (if (equal? (constraint-cell-value-instance old)
+                 (constraint-cell-value-instance new))
+         old  ;; idempotent
+         constraint-contradicted)]  ;; coherence violation
+    ;; fallback (shouldn't happen)
+    [else constraint-contradicted]))
+
+;; Meet (⊓): dual of join.
+(define (constraint-cell-meet a b)
+  (cond
+    ;; contradicted is identity for meet
+    [(constraint-contradicted? a) b]
+    [(constraint-contradicted? b) a]
+    ;; pending is annihilator for meet
+    [(constraint-pending? a) a]
+    [(constraint-pending? b) b]
+    ;; resolved + resolved: same → keep, different → pending (no common lower bound)
+    [(and (constraint-resolved? a) (constraint-resolved? b))
+     (if (equal? (constraint-cell-value-instance a)
+                 (constraint-cell-value-instance b))
+         a
+         constraint-pending)]
+    [else constraint-pending]))
+
+;; Contradiction check: is this cell value at ⊤?
+(define (constraint-cell-contradicts? v)
+  (constraint-contradicted? v))

@@ -756,6 +756,73 @@
    ))
 
 
+;; ============================================================
+;; Phase 6: Constraint SRE domain
+;; ============================================================
+
+(define phase-6-tests
+  (test-suite
+   "Phase 6: constraint lattice"
+
+   ;; Join (merge)
+   (test-case "join: pending ⊔ pending = pending"
+     (check-true (constraint-pending? (constraint-cell-merge constraint-pending constraint-pending))))
+
+   (test-case "join: pending ⊔ resolved = resolved"
+     (define r (constraint-resolved 'eq-int-instance))
+     (check-true (constraint-resolved? (constraint-cell-merge constraint-pending r))))
+
+   (test-case "join: resolved ⊔ same = idempotent"
+     (define r (constraint-resolved 'eq-int-instance))
+     (check-equal? (constraint-cell-merge r r) r))
+
+   (test-case "join: resolved(A) ⊔ resolved(B) = contradicted"
+     (define r1 (constraint-resolved 'eq-int))
+     (define r2 (constraint-resolved 'eq-nat))
+     (check-true (constraint-contradicted? (constraint-cell-merge r1 r2))))
+
+   (test-case "join: contradicted ⊔ X = contradicted"
+     (check-true (constraint-contradicted?
+                  (constraint-cell-merge constraint-contradicted (constraint-resolved 'x)))))
+
+   ;; Meet
+   (test-case "meet: contradicted ⊓ X = X (identity)"
+     (define r (constraint-resolved 'eq-int))
+     (check-equal? (constraint-cell-meet constraint-contradicted r) r))
+
+   (test-case "meet: pending ⊓ X = pending (annihilator)"
+     (define r (constraint-resolved 'eq-int))
+     (check-true (constraint-pending? (constraint-cell-meet constraint-pending r))))
+
+   (test-case "meet: resolved(A) ⊓ resolved(A) = resolved(A)"
+     (define r (constraint-resolved 'eq-int))
+     (check-equal? (constraint-cell-meet r r) r))
+
+   (test-case "meet: resolved(A) ⊓ resolved(B) = pending"
+     (define r1 (constraint-resolved 'eq-int))
+     (define r2 (constraint-resolved 'eq-nat))
+     (check-true (constraint-pending? (constraint-cell-meet r1 r2))))
+
+   ;; Contradiction
+   (test-case "contradicts?: only contradicted"
+     (check-false (constraint-cell-contradicts? constraint-pending))
+     (check-false (constraint-cell-contradicts? (constraint-resolved 'x)))
+     (check-true (constraint-cell-contradicts? constraint-contradicted)))
+
+   ;; Algebraic properties
+   (test-case "join commutativity: a ⊔ b = b ⊔ a"
+     (define r (constraint-resolved 'eq-int))
+     (check-equal? (constraint-cell-merge constraint-pending r)
+                   (constraint-cell-merge r constraint-pending)))
+
+   (test-case "join associativity: (a ⊔ b) ⊔ c = a ⊔ (b ⊔ c)"
+     (define r1 (constraint-resolved 'eq-int))
+     (define r2 (constraint-resolved 'eq-int))  ;; same instance
+     (check-equal? (constraint-cell-merge (constraint-cell-merge constraint-pending r1) r2)
+                   (constraint-cell-merge constraint-pending (constraint-cell-merge r1 r2))))
+   ))
+
+
 (run-tests phase-1a-tests)
 (run-tests phase-1c-tests)
 (run-tests phase-2a-tests)
@@ -766,3 +833,4 @@
 (run-tests phase-3-tests)
 (run-tests phase-4a-tests)
 (run-tests phase-4b-tests)
+(run-tests phase-6-tests)
