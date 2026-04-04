@@ -38,7 +38,9 @@
  register-literal-typing-rules!
  register-universe-typing-rules!
  ;; Phase 2c: Variable lookup rules
- register-variable-typing-rules!)
+ register-variable-typing-rules!
+ ;; Phase 2d: Lambda + Pi formation rules
+ register-binder-typing-rules!)
 
 ;; ============================================================
 ;; Phase 1c: Context Lattice
@@ -376,4 +378,128 @@
        (define name (expr-fvar-name e))
        (define ty (global-env-lookup-type name))
        (and ty (equal? ty expected)))
+     0)))
+
+
+;; ============================================================
+;; Phase 2d: Lambda + Pi + Sigma Formation Rules
+;; ============================================================
+;;
+;; These rules use context extension (tensor) and read sub-expression
+;; types from the type-map reader.
+;;
+;; In the propagator model:
+;; - "is this a type?" = read the sub-expression's type from type-map;
+;;   if it's Type(l), the sub-expression is a type at level l.
+;; - "infer body under extended context" = extend context cell, read
+;;   body's type from type-map (body's typing rule fires with extended ctx).
+;;
+;; The type-map reader receives AST sub-expression objects as position keys.
+;; Phase 3 formalizes the position scheme when wiring to actual type-maps.
+
+(define (register-binder-typing-rules! registry)
+  ;; Lambda: (expr-lam m dom body) → Pi(m, dom, body-type)
+  ;; Reads dom's type (must be Type(l)) and body's type from type-map.
+  ;; Extends context with dom:m for body's typing.
+  (typing-rule-registry-add! registry
+    (typing-rule
+     'expr-lam 'lambda-formation 2  ;; 2 sub-expressions: dom, body
+     (lambda (ctx-val e reader)
+       (define dom (expr-lam-type e))
+       (define body (expr-lam-body e))
+       (define m (expr-lam-mult e))
+       (cond
+         ;; Hole domain: can't infer without expected type (need check mode)
+         [(expr-hole? dom) #f]
+         [else
+          ;; Read domain's type from type-map (must be Type(l) for dom to be a type)
+          (define dom-type (reader dom))
+          (cond
+            [(not dom-type) 'not-ready]  ;; dom not typed yet
+            [(not (expr-Type? dom-type)) #f]  ;; dom is not a type → error
+            [else
+             ;; Read body's type from type-map
+             ;; The body's type was computed in an extended context (ctx + dom:m).
+             ;; This is handled by the propagator wiring: body's typing rule
+             ;; reads from a child context cell. Here we just read the result.
+             (define body-type (reader body))
+             (cond
+               [(not body-type) 'not-ready]  ;; body not typed yet
+               [(expr-error? body-type) #f]   ;; body typing failed
+               [else (expr-Pi m dom body-type)])])]))
+     ;; check: lambda against Pi — the bidirectional (meet, downward) case.
+     ;; Uses expected Pi domain to fill hole domains.
+     (lambda (ctx-val e expected reader)
+       (cond
+         [(not (expr-Pi? expected)) #f]  ;; can only check lambda against Pi
+         [else
+          (define m (expr-lam-mult e))
+          (define dom (expr-lam-type e))
+          (define body (expr-lam-body e))
+          (define expected-dom (expr-Pi-domain expected))
+          (define expected-cod (expr-Pi-codomain expected))
+          (cond
+            ;; Hole domain: accept expected domain (the key bidirectional case)
+            [(expr-hole? dom)
+             (define body-type (reader body))
+             (cond
+               [(not body-type) 'not-ready]
+               [else (equal? body-type expected-cod)])]
+            ;; Concrete domain: must match expected
+            [else
+             (and (equal? dom expected-dom)
+                  (let ([body-type (reader body)])
+                    (cond
+                      [(not body-type) 'not-ready]
+                      [else (equal? body-type expected-cod)])))])]))
+     0))
+
+  ;; Pi formation: (expr-Pi m dom cod) → Type(max(level(dom), level(cod)))
+  ;; Both dom and cod must be types (their types must be Type(l)).
+  (typing-rule-registry-add! registry
+    (typing-rule
+     'expr-Pi 'pi-formation 2
+     (lambda (ctx-val e reader)
+       (define dom (expr-Pi-domain e))
+       (define cod (expr-Pi-codomain e))
+       ;; Read types of domain and codomain
+       (define dom-type (reader dom))
+       (define cod-type (reader cod))
+       (cond
+         [(or (not dom-type) (not cod-type)) 'not-ready]
+         [(not (expr-Type? dom-type)) #f]  ;; domain not a type
+         [(not (expr-Type? cod-type)) #f]  ;; codomain not a type
+         [else
+          ;; Level = max(dom-level, cod-level)
+          ;; For simplicity: use lmax (defined in prelude)
+          (expr-Type (lmax (expr-Type-level dom-type)
+                           (expr-Type-level cod-type)))]))
+     ;; check: Pi checks against Type(l)
+     (lambda (ctx-val e expected reader)
+       (and (expr-Type? expected)
+            (let ([result ((typing-rule-infer-fn
+                            (typing-rule-registry-lookup registry 'expr-Pi))
+                           ctx-val e reader)])
+              (cond
+                [(eq? result 'not-ready) 'not-ready]
+                [(not result) #f]
+                [else (equal? result expected)]))))
+     0))
+
+  ;; Sigma formation: (expr-Sigma A B) → Type(max(level(A), level(B)))
+  (typing-rule-registry-add! registry
+    (typing-rule
+     'expr-Sigma 'sigma-formation 2
+     (lambda (ctx-val e reader)
+       (define a (expr-Sigma-fst-type e))
+       (define b (expr-Sigma-snd-type e))
+       (define a-type (reader a))
+       (define b-type (reader b))
+       (cond
+         [(or (not a-type) (not b-type)) 'not-ready]
+         [(not (expr-Type? a-type)) #f]
+         [(not (expr-Type? b-type)) #f]
+         [else (expr-Type (lmax (expr-Type-level a-type)
+                                (expr-Type-level b-type)))]))
+     #f  ;; no check-fn (Sigma checks via infer+compare)
      0)))

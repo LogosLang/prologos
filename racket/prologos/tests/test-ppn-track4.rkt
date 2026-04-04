@@ -420,8 +420,108 @@
      )))
 
 
+;; ============================================================
+;; Phase 2d: Lambda + Pi + Sigma formation typing rules
+;; ============================================================
+
+(define phase-2d-tests
+  (let ()
+    (define reg (make-typing-rule-registry))
+    (register-binder-typing-rules! reg)
+
+    (test-suite
+     "Phase 2d: lambda + Pi + Sigma formation typing rules"
+
+     (test-case "lambda: (lam mw Int body) where body:Bool → Pi(mw, Int, Bool)"
+       (define lam-expr (expr-lam 'mw (expr-Int) (expr-bvar 0)))
+       ;; Simulate type-map: dom=(expr-Int) has type Type(0), body has type Bool
+       (define reader
+         (lambda (sub-e)
+           (cond
+             [(equal? sub-e (expr-Int)) (expr-Type (lzero))]   ;; Int : Type 0
+             [(equal? sub-e (expr-bvar 0)) (expr-Bool)]         ;; body : Bool
+             [else #f])))
+       (define result
+         (dispatch-typing-rule reg expr-typing-tag context-empty-value
+                               lam-expr reader))
+       (check-equal? result (cons 'ok (expr-Pi 'mw (expr-Int) (expr-Bool)))))
+
+     (test-case "lambda: hole domain → #f in infer mode"
+       (define lam-expr (expr-lam 'mw (expr-hole) (expr-bvar 0)))
+       (define result
+         (dispatch-typing-rule reg expr-typing-tag context-empty-value
+                               lam-expr (lambda (_) #f)))
+       (check-false result))
+
+     (test-case "lambda check: hole domain accepts expected Pi domain"
+       (define lam-expr (expr-lam 'mw (expr-hole) (expr-bvar 0)))
+       (define expected (expr-Pi 'mw (expr-Int) (expr-Bool)))
+       (define reader
+         (lambda (sub-e)
+           (cond
+             [(equal? sub-e (expr-bvar 0)) (expr-Bool)]
+             [else #f])))
+       (define result
+         (dispatch-typing-rule reg expr-typing-tag context-empty-value
+                               lam-expr reader
+                               #:expected-type expected))
+       (check-equal? result (cons 'check #t)))
+
+     (test-case "lambda: sub-expression not ready → not-ready"
+       (define lam-expr (expr-lam 'mw (expr-Int) (expr-bvar 0)))
+       (define reader
+         (lambda (sub-e)
+           (cond
+             [(equal? sub-e (expr-Int)) (expr-Type (lzero))]
+             [else #f])))  ;; body not typed yet
+       (define result
+         (dispatch-typing-rule reg expr-typing-tag context-empty-value
+                               lam-expr reader))
+       (check-false result))  ;; not-ready → #f
+
+     (test-case "Pi formation: Pi(mw, Int, Bool) → Type(max(0,0)) = Type(0)"
+       (define pi-expr (expr-Pi 'mw (expr-Int) (expr-Bool)))
+       (define reader
+         (lambda (sub-e)
+           (cond
+             [(equal? sub-e (expr-Int)) (expr-Type (lzero))]
+             [(equal? sub-e (expr-Bool)) (expr-Type (lzero))]
+             [else #f])))
+       (define result
+         (dispatch-typing-rule reg expr-typing-tag context-empty-value
+                               pi-expr reader))
+       (check-equal? result (cons 'ok (expr-Type (lmax (lzero) (lzero))))))
+
+     (test-case "Sigma formation: Sigma(Int, Bool) → Type(0)"
+       (define sig-expr (expr-Sigma (expr-Int) (expr-Bool)))
+       (define reader
+         (lambda (sub-e)
+           (cond
+             [(equal? sub-e (expr-Int)) (expr-Type (lzero))]
+             [(equal? sub-e (expr-Bool)) (expr-Type (lzero))]
+             [else #f])))
+       (define result
+         (dispatch-typing-rule reg expr-typing-tag context-empty-value
+                               sig-expr reader))
+       (check-equal? result (cons 'ok (expr-Type (lmax (lzero) (lzero))))))
+
+     (test-case "Pi formation: sub-expression not a type → #f"
+       (define pi-expr (expr-Pi 'mw (expr-int 42) (expr-Bool)))
+       (define reader
+         (lambda (sub-e)
+           (cond
+             [(equal? sub-e (expr-int 42)) (expr-Int)]   ;; 42 : Int, not Type
+             [(equal? sub-e (expr-Bool)) (expr-Type (lzero))]
+             [else #f])))
+       (define result
+         (dispatch-typing-rule reg expr-typing-tag context-empty-value
+                               pi-expr reader))
+       (check-false result))
+     )))
+
 (run-tests phase-1a-tests)
 (run-tests phase-1c-tests)
 (run-tests phase-2a-tests)
 (run-tests phase-2b-tests)
 (run-tests phase-2c-tests)
+(run-tests phase-2d-tests)
