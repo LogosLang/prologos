@@ -22,6 +22,31 @@
 
 ---
 
+## §0 Objectives
+
+**End state**: Elaboration IS a propagator fixpoint computation on the network. The parse→elaborate boundary is dissolved. Type inference, trait resolution, and constraint solving are propagator firings in the same S0 pass. The typed AST EMERGES from cells reaching quiescence — not BUILT by an imperative walker. After Track 4, the production compiler IS a propagator network.
+
+**What is delivered**:
+1. Per-expression type cells — each AST node has a type cell in a Pocket Universe per form
+2. Typing rules as propagators — the 589 match arms in typing-core.rkt become registered propagator rules
+3. Tensor as on-network propagator — `type-tensor-core` (Track 2H) wired into the network
+4. Meta-solving as cell writes — metas ARE cells, `solve-meta!` = cell write, cascade is automatic
+5. ATMS replaces speculation — `save-meta-state!` / `restore-meta-state!` retired (37 sites, 7 files)
+6. Trait resolution as constraint propagators — constraints ARE cells, resolution fires as propagators
+7. Constraint SRE domain — registered with algebraic properties, meet operation, property inference validation
+8. Surface→Type Galois bridge — bidirectional: elaboration forward, disambiguation backward (Track 5 prep)
+9. Scaffolding retirement — 8 items from Tracks 2H + 2D replaced by on-network mechanisms
+10. Dedicated test file — mandatory per codified rule
+
+**What this track is NOT**:
+- It does NOT migrate the global environment onto the network — that's SRE Track 7 (Module Loading). Track 4 uses the existing bridge cells and ensures `fvar` propagators are ready for Track 7. See §1c.
+- It does NOT implement type-directed parse disambiguation — that's PPN Track 5. Track 4 builds the Surface→Type bridge that Track 5 consumes.
+- It does NOT implement β/δ/ι-reduction as propagators — that's SRE Track 6. Track 4 builds per-expression type cells that Track 6 uses as reduction targets.
+- It does NOT implement the `grammar :type` compilation target directly — that's Grammar Form R&D. Track 4 delivers the MACHINERY (typing propagator infrastructure) that grammar `:type` will compile to.
+- It does NOT implement full PUnify integration for all typing operations — PUnify is used for structural decomposition (existing from PM Track 8). True PUnify-based type inference (cell-tree sharing for all types) is a future refinement.
+
+---
+
 ## Progress Tracker
 
 | Phase | Description | Status | Notes |
@@ -32,7 +57,7 @@
 | 3 | Tensor as on-network propagator | ⬜ | Wire `type-tensor-core` from Track 2H. `f x` → SRE decomposes Pi, connects arg cell to domain, result cell to codomain. |
 | 4 | Meta-solving as cell writes (retire imperative metavar-store) | ⬜ | Metas are cells. `solve-meta!` = cell write. Resolution triggered by cell merge, not imperative retry. |
 | 5 | ATMS replaces speculation (retire save/restore-meta-state!) | ⬜ | Union checking, Church fold, trait ambiguity → ATMS assumption branches. 37 occurrences across 7 files. |
-| 6 | Trait resolution as constraint propagators | ⬜ | Trait constraints are cells. Resolution fires as propagators. ATMS manages overlapping instances. |
+| 6 | Trait resolution as constraint propagators + SRE domain | ⬜ | Constraint SRE domain registered (join + meet + properties). Trait constraints are cells. Resolution fires as propagators. Property inference validates. ATMS manages overlapping instances. |
 | 7 | Surface→Type Galois bridge | ⬜ | Bidirectional: surface form → type constraints (elaboration), type info → surface disambiguation (Track 5 prep). |
 | 8 | Scaffolding retirement (8 items from Tracks 2H + 2D) | ⬜ | type-tensor-distribute, absorb-subtype-components, type-pseudo-complement, property keyword API, apply-all-sre-rewrites, K-as-hash, instantiate-template, local tag constants. |
 | T | Dedicated test file: test-ppn-track4.rkt | ⬜ | Mandatory test phase (codified rule). |
@@ -197,6 +222,36 @@ resolved(A) ⊔ resolved(A) = resolved(A)  (idempotent)
 resolved(A) ⊔ resolved(B) = contradicted  (A ≠ B)
 contradicted ⊔ X = contradicted
 ```
+
+### Constraint Domain Meet
+
+The constraint lattice needs a meet (GLB) for the SRE domain registration:
+
+```
+meet(contradicted, X) = X                 (⊤ is identity for meet)
+meet(X, contradicted) = X
+meet(pending, X) = pending                (⊥ is annihilator)
+meet(X, pending) = pending
+meet(resolved(A), resolved(A)) = resolved(A)  (idempotent)
+meet(resolved(A), resolved(B)) = pending       (different instances → ⊥, no common lower bound)
+```
+
+This is the DUAL of the join. `pending` is annihilator for meet (dual of ⊤ absorbing for join). `contradicted` is identity for meet (dual of ⊥ identity for join).
+
+### Property Verification Plan
+
+Following the Pre-0 property check pattern (Track 2G L6, Track 2H):
+
+**Before implementation** (Phase 0 → design validation):
+- Manually verify constraint lattice properties on sample values (commutativity, associativity, idempotence, identity, absorption)
+- Verify meet duality (meet(a, join(a,b)) = a for constraint domain)
+
+**During implementation** (Phase 6 → constraint propagators):
+- Register constraint SRE domain with `make-sre-domain`
+- Declare properties in `declared-properties` (per-relation, nested hash from Track 2H)
+- Run `infer-domain-properties` with constraint samples
+- Verify: commutative ✅, associative ✅, idempotent ✅, has-meet ✅, distributive ❌ (expected — flat)
+- Any contradictions between declared and inferred → design error, fix before proceeding
 
 **Distributivity analysis**: 2 of 4 domains are distributive (subtype, mult). The non-distributive ones (type-equality, constraint) are flat — conflicts go directly to ⊤, which is correct because conflicts ARE errors. For the reduced product iteration, flat lattices converge in one step (any non-⊥ write is final) — no iteration needed for the non-distributive domains.
 
