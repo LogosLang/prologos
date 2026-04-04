@@ -571,33 +571,24 @@
   (typing-rule-registry-add! registry
     (typing-rule
      'expr-app 'application-tensor 2
-     (lambda (ctx-val e reader effects)
-       (define func (expr-app-func e))
-       (define arg (expr-app-arg e))
-       (define func-type (reader func))
-       (cond
-         [(not func-type) 'not-ready]
-         [else
-          ;; Phase 6: for production dispatch, delegate to the imperative
-          ;; infer-fallback for the full application. The typing rule's
-          ;; value is: tag-indexed dispatch (avoids 589-arm match) + the
-          ;; func-type is already computed by the reader. But application
-          ;; typing involves check(ctx, arg, domain) which has complex
-          ;; side effects (unify → solve-meta! → add-constraint! → trait
-          ;; resolution). Rather than reproducing all side effects, delegate
-          ;; to the imperative path which handles them correctly.
-          (define infer-fallback (hash-ref effects 'infer-fallback #f))
-          (if infer-fallback
-              ;; Production: delegate full application to imperative infer
-              (infer-fallback (hash-ref effects 'ctx ctx-empty) e)
-              ;; Pure mode (testing): use tensor directly
-              (let ([arg-type (reader arg)])
-                (if (not arg-type) 'not-ready
-                    (let ([result (type-tensor-core func-type arg-type)])
-                      (cond
-                        [(type-bot? result) #f]
-                        [(type-top? result) #f]
-                        [else result])))))]))
+     ;; Phase 6: app rule must NOT call reader before checking delegation,
+     ;; because reader invokes infer on sub-expressions, and delegation
+     ;; calls infer on the FULL expression (which re-infers subs internally).
+     ;; Double-processing causes solve-mult-meta!-already-solved errors.
+     (delegating-infer
+      (lambda (ctx-val e reader effects)
+        (define func (expr-app-func e))
+        (define arg (expr-app-arg e))
+        (define func-type (reader func))
+        (define arg-type (reader arg))
+        (cond
+          [(or (not func-type) (not arg-type)) 'not-ready]
+          [else
+           (define result (type-tensor-core func-type arg-type))
+           (cond
+             [(type-bot? result) #f]
+             [(type-top? result) #f]
+             [else result])])))
      ;; check: delegate to imperative check in production
      (delegating-check
       (lambda (ctx-val e expected reader effects)
@@ -675,11 +666,11 @@
   (define reg (make-typing-rule-registry))
   (register-literal-typing-rules! reg)
   (register-universe-typing-rules! reg)
-  ;; Non-leaf: effects + delegation infrastructure built, 22 failures remain
-  ;; (register-variable-typing-rules! reg)
-  ;; (register-binder-typing-rules! reg)
-  ;; (register-application-typing-rules! reg)
-  ;; (register-meta-typing-rules! reg)
+  ;; Phase 6: ALL non-leaf rules enabled with delegation
+  (register-variable-typing-rules! reg)
+  (register-binder-typing-rules! reg)
+  (register-application-typing-rules! reg)
+  (register-meta-typing-rules! reg)
   reg)
 
 ;; Create a typing-rule-aware infer function.
