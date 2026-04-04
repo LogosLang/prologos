@@ -11,7 +11,8 @@
          prologos/champ
          prologos/typing-propagators
          prologos/syntax
-         prologos/prelude)
+         prologos/prelude
+         prologos/type-lattice)
 
 ;; ============================================================
 ;; Phase 1a: Component-indexed propagator firing
@@ -519,9 +520,92 @@
        (check-false result))
      )))
 
+;; ============================================================
+;; Phase 2e: Application (tensor) + projection typing rules
+;; ============================================================
+
+(define phase-2e-tests
+  (let ()
+    (define reg (make-typing-rule-registry))
+    (register-application-typing-rules! reg)
+
+    (test-suite
+     "Phase 2e: application (tensor) + projection typing rules"
+
+     (test-case "app: [Int→Bool applied to Int] → Bool"
+       (define app-expr (expr-app (expr-fvar 'f) (expr-int 42)))
+       (define reader
+         (lambda (sub-e)
+           (cond
+             [(equal? sub-e (expr-fvar 'f)) (expr-Pi 'mw (expr-Int) (expr-Bool))]
+             [(equal? sub-e (expr-int 42)) (expr-Int)]
+             [else #f])))
+       (define result
+         (dispatch-typing-rule reg expr-typing-tag context-empty-value
+                               app-expr reader))
+       ;; type-tensor-core(Pi(mw, Int, Bool), Int) → Bool (via subst)
+       (check-equal? (cdr result) (expr-Bool)))
+
+     (test-case "app: func type not ready → not-ready"
+       (define app-expr (expr-app (expr-fvar 'f) (expr-int 42)))
+       (define reader (lambda (sub-e) #f))
+       (define result
+         (dispatch-typing-rule reg expr-typing-tag context-empty-value
+                               app-expr reader))
+       (check-false result))
+
+     (test-case "app: non-Pi func → #f (error)"
+       (define app-expr (expr-app (expr-int 1) (expr-int 2)))
+       (define reader
+         (lambda (sub-e)
+           (cond
+             [(equal? sub-e (expr-int 1)) (expr-Int)]  ;; Int is not a Pi
+             [(equal? sub-e (expr-int 2)) (expr-Int)]
+             [else #f])))
+       (define result
+         (dispatch-typing-rule reg expr-typing-tag context-empty-value
+                               app-expr reader))
+       (check-false result))
+
+     (test-case "fst: fst(Sigma(Int, Bool)) → Int"
+       (define fst-expr (expr-fst (expr-fvar 'p)))
+       (define reader
+         (lambda (sub-e)
+           (if (equal? sub-e (expr-fvar 'p))
+               (expr-Sigma (expr-Int) (expr-Bool))
+               #f)))
+       (define result
+         (dispatch-typing-rule reg expr-typing-tag context-empty-value
+                               fst-expr reader))
+       (check-equal? result (cons 'ok (expr-Int))))
+
+     (test-case "snd: snd(Sigma(Int, Bool)) → Bool"
+       (define snd-expr (expr-snd (expr-fvar 'p)))
+       (define reader
+         (lambda (sub-e)
+           (if (equal? sub-e (expr-fvar 'p))
+               (expr-Sigma (expr-Int) (expr-Bool))
+               #f)))
+       (define result
+         (dispatch-typing-rule reg expr-typing-tag context-empty-value
+                               snd-expr reader))
+       (check-equal? result (cons 'ok (expr-Bool))))
+
+     (test-case "fst on non-Sigma → #f"
+       (define fst-expr (expr-fst (expr-fvar 'x)))
+       (define reader
+         (lambda (sub-e)
+           (if (equal? sub-e (expr-fvar 'x)) (expr-Int) #f)))
+       (define result
+         (dispatch-typing-rule reg expr-typing-tag context-empty-value
+                               fst-expr reader))
+       (check-false result))
+     )))
+
 (run-tests phase-1a-tests)
 (run-tests phase-1c-tests)
 (run-tests phase-2a-tests)
 (run-tests phase-2b-tests)
 (run-tests phase-2c-tests)
 (run-tests phase-2d-tests)
+(run-tests phase-2e-tests)

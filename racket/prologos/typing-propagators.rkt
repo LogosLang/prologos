@@ -15,7 +15,9 @@
          "syntax.rkt"
          "prelude.rkt"
          "substitution.rkt"
-         "global-env.rkt")
+         "global-env.rkt"
+         (only-in "subtype-predicate.rkt" type-tensor-core)
+         (only-in "type-lattice.rkt" type-bot type-bot? type-top type-top?))
 
 (provide
  ;; Phase 1c: Context lattice
@@ -40,7 +42,9 @@
  ;; Phase 2c: Variable lookup rules
  register-variable-typing-rules!
  ;; Phase 2d: Lambda + Pi formation rules
- register-binder-typing-rules!)
+ register-binder-typing-rules!
+ ;; Phase 2e: Application (tensor) rule
+ register-application-typing-rules!)
 
 ;; ============================================================
 ;; Phase 1c: Context Lattice
@@ -503,3 +507,85 @@
                                 (expr-Type-level b-type)))]))
      #f  ;; no check-fn (Sigma checks via infer+compare)
      0)))
+
+
+;; ============================================================
+;; Phase 2e: Application (Tensor) Typing Rule
+;; ============================================================
+;;
+;; The core application rule: (expr-app func arg) → result-type
+;; Uses type-tensor-core from Track 2H (the quantale tensor).
+;;
+;; In the propagator model:
+;; - func-type is read from the type-map at the func position
+;; - arg-type is read from the type-map at the arg position
+;; - type-tensor-core(func-type, arg-type) computes the result type
+;; - Union distribution is EMERGENT: tensor returns type-bot for
+;;   inapplicable components; the cell merge produces the union of
+;;   valid results.
+;;
+;; The beta case (func is a lambda) is handled by the lambda rule's
+;; check mode: when we know the expected arg type, the lambda rule
+;; fires in check direction. The general application rule handles
+;; the remaining case: infer func type, tensor with arg type.
+
+(define (register-application-typing-rules! registry)
+  ;; Application: (expr-app func arg) → type-tensor-core(func-type, arg-type)
+  (typing-rule-registry-add! registry
+    (typing-rule
+     'expr-app 'application-tensor 2
+     (lambda (ctx-val e reader)
+       (define func (expr-app-func e))
+       (define arg (expr-app-arg e))
+       (define func-type (reader func))
+       (define arg-type (reader arg))
+       (cond
+         [(or (not func-type) (not arg-type)) 'not-ready]
+         [else
+          (define result (type-tensor-core func-type arg-type))
+          (cond
+            [(type-bot? result) #f]  ;; inapplicable → error
+            [(type-top? result) #f]  ;; contradiction → error
+            [else result])]))
+     ;; check: application against expected type.
+     ;; Validates that tensor result is consistent with expected.
+     (lambda (ctx-val e expected reader)
+       (define func (expr-app-func e))
+       (define arg (expr-app-arg e))
+       (define func-type (reader func))
+       (define arg-type (reader arg))
+       (cond
+         [(or (not func-type) (not arg-type)) 'not-ready]
+         [else
+          (define result (type-tensor-core func-type arg-type))
+          (cond
+            [(type-bot? result) #f]
+            [(type-top? result) #f]
+            [else (equal? result expected)])]))
+     0))
+
+  ;; Projection: (expr-fst e) → first component of Sigma type
+  (typing-rule-registry-add! registry
+    (typing-rule
+     'expr-fst 'fst-projection 1
+     (lambda (ctx-val e reader)
+       (define inner (expr-fst-expr e))
+       (define inner-type (reader inner))
+       (cond
+         [(not inner-type) 'not-ready]
+         [(expr-Sigma? inner-type) (expr-Sigma-fst-type inner-type)]
+         [else #f]))  ;; not a Sigma → error
+     #f 0))
+
+  ;; Projection: (expr-snd e) → second component of Sigma type
+  (typing-rule-registry-add! registry
+    (typing-rule
+     'expr-snd 'snd-projection 1
+     (lambda (ctx-val e reader)
+       (define inner (expr-snd-expr e))
+       (define inner-type (reader inner))
+       (cond
+         [(not inner-type) 'not-ready]
+         [(expr-Sigma? inner-type) (expr-Sigma-snd-type inner-type)]
+         [else #f]))
+     #f 0)))
