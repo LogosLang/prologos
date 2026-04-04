@@ -24,7 +24,11 @@
          "surface-rewrite.rkt"
          (only-in "subtype-predicate.rkt" type-tensor-core)
          (only-in "type-lattice.rkt" type-bot type-bot? type-top type-top?)
-         (only-in "metavar-store.rkt" meta-solution/cell-id))
+         (only-in "metavar-store.rkt" meta-solution/cell-id current-prop-net-box)
+         "elab-network-types.rkt"
+         "errors.rkt"
+         "pretty-print.rkt"
+         "source-location.rkt")
 
 (provide
  ;; Phase 1c: Context lattice
@@ -47,6 +51,8 @@
  ;; Phase 3 (D.4): Production integration
  infer-on-network
  type-map-merge-fn
+ ;; Phase 7 (D.4): Surface→Type bridge — production entry point
+ infer-on-network/err
  ;; Phase 4b-i: Fan-in meta-readiness infrastructure
  (struct-out meta-readiness-value)
  meta-readiness-empty
@@ -349,64 +355,18 @@
                              (make-universe-fire-fn tm-cid e l)))
        net1]
 
-      ;; --- Bound variable ---
-      [(expr-bvar k)
-       (define-values (net1 _pid)
-         (net-add-propagator net (list tm-cid) (list tm-cid)
-                             (make-bvar-fire-fn tm-cid e k ctx)
-                             #:component-paths (list)))
-       net1]
+      ;; --- Non-leaf expressions: LEAVE AT ⊥ for Phase 7 deployment ---
+      ;; These propagators are correct in isolation (see Phase 2 tests) but
+      ;; don't handle unification side effects needed for production.
+      ;; They produce wrong types for implicit arguments, dependent application,
+      ;; and trait-dispatched functions. Fallback to imperative catches the ⊥.
+      ;; Phase 5+ (ATMS) and Phase 6+ (constraints on-network) will enable these.
+      ;;
+      ;; The fire functions (make-bvar-fire-fn, make-fvar-fire-fn, make-app-fire-fn,
+      ;; make-lam-fire-fn, make-pi-fire-fn) remain defined and tested. They are
+      ;; ready to install when unification is on-network.
 
-      ;; --- Free variable ---
-      [(expr-fvar name)
-       (define-values (net1 _pid)
-         (net-add-propagator net (list tm-cid) (list tm-cid)
-                             (make-fvar-fire-fn tm-cid e name)))
-       net1]
-
-      ;; --- Application (tensor) ---
-      [(expr-app func arg)
-       ;; Install sub-expression propagators first
-       (define net1 (install net func ctx))
-       (define net2 (install net1 arg ctx))
-       ;; Install app propagator watching func and arg positions
-       (define-values (net3 _pid)
-         (net-add-propagator net2 (list tm-cid) (list tm-cid)
-                             (make-app-fire-fn tm-cid e func arg)
-                             #:component-paths
-                             (list (cons tm-cid func)
-                                   (cons tm-cid arg))))
-       net3]
-
-      ;; --- Lambda ---
-      [(expr-lam m dom body)
-       ;; Install domain propagator
-       (define net1 (install net dom ctx))
-       ;; Install body propagator with extended context
-       (define child-ctx (context-extend-value ctx dom m))
-       (define net2 (install net1 body child-ctx))
-       ;; Install lambda propagator watching dom and body positions
-       (define-values (net3 _pid)
-         (net-add-propagator net2 (list tm-cid) (list tm-cid)
-                             (make-lam-fire-fn tm-cid e dom body m)
-                             #:component-paths
-                             (list (cons tm-cid dom)
-                                   (cons tm-cid body))))
-       net3]
-
-      ;; --- Pi formation ---
-      [(expr-Pi m dom cod)
-       (define net1 (install net dom ctx))
-       (define net2 (install net1 cod ctx))
-       (define-values (net3 _pid)
-         (net-add-propagator net2 (list tm-cid) (list tm-cid)
-                             (make-pi-fire-fn tm-cid e dom cod)
-                             #:component-paths
-                             (list (cons tm-cid dom)
-                                   (cons tm-cid cod))))
-       net3]
-
-      ;; --- Fallthrough: unknown expr kind, leave at ⊥ ---
+      ;; --- Fallthrough: non-leaf and unknown expr kinds, leave at ⊥ ---
       [_ net])))
 
 
@@ -441,6 +401,51 @@
   ;; 4. Read the root type from the type-map
   (define root-type (type-map-read net3 tm-cid expr))
   (values net3 root-type))
+
+
+;; ============================================================
+;; Phase 7 (D.4): Surface→Type Bridge — Production Entry Point
+;; ============================================================
+;;
+;; infer-on-network/err: drop-in replacement for infer/err in process-command.
+;; Same contract: takes ctx and expr, returns type or prologos-error.
+;; Internally: extracts prop-network from elab-network box, runs
+;; infer-on-network, writes updated network back, returns type.
+
+(define (infer-on-network/err ctx expr [loc srcloc-unknown] [names '()])
+  (define net-box (current-prop-net-box))
+  (cond
+    [(not net-box)
+     ;; No network available (test context or #lang expander) — can't use propagators.
+     ;; Return type-bot to signal "not computed" — caller should fall back.
+     type-bot]
+    [else
+     (define enet (unbox net-box))
+     (define pnet (elab-network-prop-net enet))
+     ;; Build context cell value from imperative ctx
+     (define ctx-val (context-cell-value ctx (length ctx)))
+     ;; Run typing on network
+     (define-values (pnet* root-type) (infer-on-network pnet expr ctx-val))
+     ;; Write updated network back
+     (set-box! net-box
+       (elab-network pnet*
+                     (elab-network-cell-info enet)
+                     (elab-network-next-meta-id enet)
+                     (elab-network-id-map enet)
+                     (elab-network-meta-info enet)))
+     ;; Convert result
+     (cond
+       [(type-bot? root-type)
+        ;; Propagators couldn't compute a type — error
+        (inference-failed-error loc
+                                "Could not infer type (on-network)"
+                                (pp-expr expr names))]
+       [(type-top? root-type)
+        ;; Contradiction — type error
+        (inference-failed-error loc
+                                "Type contradiction (on-network)"
+                                (pp-expr expr names))]
+       [else root-type])]))
 
 
 ;; ============================================================

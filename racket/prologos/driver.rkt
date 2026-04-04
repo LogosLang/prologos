@@ -47,6 +47,7 @@
          "elaborator-network.rkt"
          "type-lattice.rkt"
          "propagator.rkt"
+         "typing-propagators.rkt"  ;; PPN Track 4 D.4: propagator-native typing
          "champ.rkt"
          "unify.rkt"
          "atms.rkt"
@@ -503,8 +504,15 @@
                          "OK"))]
 
                   ;; (eval expr)
+                  ;; PPN Track 4 D.4 Phase 7: try propagator-native typing first.
+                  ;; Falls back to imperative infer/err for expressions the network
+                  ;; can't yet handle (side effects not on-network).
                   [(list 'eval expr)
-                   (let ([ty (time-phase! type-check (infer/err ctx-empty expr))])
+                   (let ([ty (time-phase! type-check
+                              (let ([net-ty (infer-on-network/err ctx-empty expr)])
+                                (if (prologos-error? net-ty)
+                                    (infer/err ctx-empty expr)
+                                    net-ty)))])
                      (if (prologos-error? ty) ty
                          (begin
                            ;; Track 2: trait + hasmethod resolution handled reactively by propagator callbacks
@@ -527,7 +535,11 @@
 
                   ;; (infer expr)
                   [(list 'infer expr)
-                   (let ([ty (time-phase! type-check (infer/err ctx-empty expr))])
+                   (let ([ty (time-phase! type-check
+                              (let ([net-ty (infer-on-network/err ctx-empty expr)])
+                                (if (prologos-error? net-ty)
+                                    (infer/err ctx-empty expr)
+                                    net-ty)))])
                      (if (prologos-error? ty) ty
                          (begin
                            ;; Track 2: trait + hasmethod resolution handled reactively by propagator callbacks
@@ -2608,10 +2620,10 @@
 ;; Required for distributivity of the subtype lattice.
 (install-lattice-subtype-fn! subtype?)
 
-;; PPN Track 4 D.4: imperative typing-rule-infer removed.
-;; Typing computation will be on-network via install-typing-network
-;; (propagator fire functions on the form cell's type-map).
-;; For now, infer/err calls raw infer directly.
+;; PPN Track 4 D.4 Phase 7: infer-on-network/err available as propagator-native
+;; typing entry point. Used in process-command for eval/infer/def forms.
+;; Falls back to imperative infer/err when the network returns type-bot
+;; (expressions with side effects not yet on-network).
 
 ;; Phase 4c: Install structural decomposition meta-lookup callback.
 ;; When a compound type is decomposed into sub-cells, bare metas (expr-meta id)
