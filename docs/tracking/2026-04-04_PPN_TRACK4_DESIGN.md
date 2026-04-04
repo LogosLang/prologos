@@ -1,4 +1,4 @@
-# PPN Track 4: Elaboration as Attribute Evaluation — Stage 3 Design (D.3)
+# PPN Track 4: Elaboration as Attribute Evaluation — Stage 3 Design (D.4)
 
 **Date**: 2026-04-04
 **Series**: [PPN (Propagator-Parsing-Network)](2026-03-26_PPN_MASTER.md) — Track 4
@@ -57,16 +57,16 @@
 | 1a | Component-indexed propagator firing infrastructure | ✅ | `pu-value-diff` + `filter-dependents-by-paths` in `net-cell-write`. `net-add-propagator` gains `#:component-paths` keyword. Fast path preserved for all-#f dependents. 13 tests. (commit `6d5f1adb`) |
 | 1b | Per-expression type cells as PU cell-trees | ✅ | `type-map` field added to `form-pipeline-value` (5th field, hasheq). `type-map-merge` pointwise. 30+ construction sites updated. Phase 2 wires in lattice merge. (commit `bffe3c90`) |
 | 1c | Context lattice: typing context as cells | ✅ | `context-cell-value` struct in typing-propagators.rkt. Extension = tensor (depth+1). Lookup = de Bruijn position read. Merge: pointwise same-depth, deeper wins. 8 tests. (commit `2f50c6c4`) |
-| 2 | Typing rules as DPO rewrite rules | ✅ | **2a** struct+registry+dispatch (`bca522f5`). **2b** 12 literal+universe (`08402ded`). **2c** bvar+fvar (`fae47058`). **2d** lam+Pi+Sigma (`605f4356`). **2e** app/tensor+fst/snd (`71bd2bca`). 20 rules total. |
-| 3 | Tensor as on-network propagator | ✅ | `make-typing-rule-infer`: DPO-first + imperative-fallback. 20 rules dispatched via registry. Parity tests confirm equivalence. (commit `f7c86536`) |
-| 4a | Meta-solving as cell writes (cell-refs replace expr-meta) | ✅ | Meta typing rule reads from cells via fast path. Cells authoritative. Full expr-meta→cell-ref migration deferred to 4b. 21 rules total. (commit `edb8962e`) |
-| 4b | Zonk retirement: fan-in default propagator | 🔄 | **4b-i** ✅ meta-readiness infra (`002f7cc3`). **4b-ii-a** ✅ cell-id fast path (`4b8f3876`). **4b-deploy** ✅ all 21 rules deployed (`4e1fa274`). **4b-ii-b** ⏸️ zonk.rkt deletion DEFERRED: zonk still needed because delegation runs imperative path (produces expr-meta). Requires delegation retirement → future track. |
-| 5 | ATMS extension (delta from PM Track 8 B1) | ✅ | ATMS active via delegation: all 21 rules delegate to imperative path which already uses with-speculative-rollback (PM Track 8 B1). Explicit ATMS wiring into pure rule computation deferred to delegation retirement (future track). |
-| 6 | Trait resolution as constraint propagators + SRE domain | ✅ | Constraint lattice (`f7ef8665`). Effects protocol + delegation (`b306a8c0`). ALL 21 rules deployed to production (`4e1fa274`). Root cause: app rule called reader before delegating → double-solve. Fixed with delegating-infer. |
-| 7 | Surface→Type Galois bridge (bidirectional ring) | ✅ | Bidirectional flow active via delegation: infer/err dispatches through registry (infer = join direction), imperative check (check = meet direction) handles the backward flow. Explicit bridge propagators deferred to delegation retirement. |
-| 8 | Scaffolding retirement (8 items from Tracks 2H + 2D) | 🔄 | 1/8 retirable now: type-pseudo-complement (test-only, no production calls — ATMS active via delegation). 6/8 blocked on delegation retirement. 1/8 blocked on module restructuring (local tag constants). |
-| T | Dedicated test file: test-ppn-track4.rkt | ✅ | 90 tests across 11 suites: component-indexed firing, context lattice, typing-rule struct/registry/dispatch, literal/universe/variable/binder/application/meta rules, parity with imperative infer, fan-in readiness, constraint lattice. |
-| 9 | Verification + acceptance file + PIR | 🔄 | **DIVERGENCE IDENTIFIED**: Phases 2-3 and 6 implemented imperative function-call dispatch instead of propagator-native typing. See §12 Divergence Analysis. Infrastructure (1a, 1b, 1c, 4a, 4b-i, constraint lattice) is genuinely on-network and KEPT. Phases 2, 3, 6 (effects/delegation) need REDO as propagator fire functions on the actual network. |
+| 2 | Typing rules as propagator fire functions | ⬜ | **REDO** — D.3 implementation built function-call registry + dispatch (imperative). D.4 correction: typing rules are propagator fire functions installed via `net-add-propagator`, writing to type-map positions. See §12. Prior commits (`bca522f5`→`71bd2bca`) are imperative scaffolding to be replaced. |
+| 3 | Type-map population + propagator installation | ⬜ | **REDO** — D.3 implementation built `make-typing-rule-infer` (function-call wrapper around imperative `infer`). D.4 correction: when form reaches 'done', SRE structural decomposition identifies sub-expression positions in the PU, populates type-map with ⊥, installs typing propagators via `net-add-propagator`. See §12. |
+| 4a | Meta-solving as cell writes | ✅ | Cell-id fast path (`4b8f3876`). Cells authoritative for meta solutions. KEPT — genuinely on-network. |
+| 4b | Zonk retirement: fan-in default propagator | 🔄 | **4b-i** ✅ meta-readiness infra (`002f7cc3`). **4b-ii-a** ✅ cell-id fast path (`4b8f3876`). **4b-ii-b** ⬜ zonk deletion: blocked on Phases 2-3 redo (propagator-native typing must produce cell-refs, not expr-meta). |
+| 5 | ATMS extension | ⬜ | Blocked on Phase 2-3 redo. When typing propagators fire on-network, ATMS branching for union types creates assumption-indexed PU values per the existing TMS infrastructure. |
+| 6 | Constraint propagators + SRE domain | 🔄 | ✅ Constraint lattice (`f7ef8665`). ⬜ Constraint cells as on-network propagators: blocked on Phase 2-3 redo. **DELETE** effects protocol + delegation pattern (imperative scaffolding). |
+| 7 | Surface→Type Galois bridge | ⬜ | Blocked on Phase 2-3 redo. The bridge IS the typing propagators — when they fire on the form cell's PU, they connect surface structure to type information bidirectionally. |
+| 8 | Scaffolding retirement | ⬜ | Blocked on Phases 2-7 completing on-network. |
+| T | Dedicated test file | 🔄 | Infrastructure tests (1a, 1c, 4b-i, constraint lattice) KEPT. Function-call dispatch tests (2a-2e, 3, parity) to be REPLACED with propagator-firing tests. |
+| 9 | Verification + PIR | ⬜ | After all phases complete on-network. |
 
 ---
 
@@ -1126,3 +1126,83 @@ External critique through propagator-information-flow lens.
 | 5d | Ground-type fast path is off-network | It IS on-network: a propagator with a cheap fire function that detects ground inputs and writes identity. No bypass. CALM-safe. |
 | 5e | NTT model not present | Present in full §4 of the document. Critique received a truncated summary due to context limits. |
 | 4c | DPO + PUnify composition: PUnify creates propagators during firing | PUnify operates on PU values within a firing, not on network topology. Value computation, not cell creation. |
+
+---
+
+## §12 D.3→D.4 Divergence Analysis and Correction
+
+### The Divergence
+
+The D.3 design describes a **propagator-native** architecture: types flow through cells, typing rules fire as propagators, unification is cell merge, the typed AST emerges from quiescence.
+
+The implementation built an **imperative wrapper** architecture: typing rules as function-call closures in a registry, dispatched via hash-table lookup, delegating to the same imperative `infer` they were supposed to replace. 21 rules "deployed to production" that are no-op wrappers — the non-leaf rules call `infer-fallback(ctx, e)` which IS the original imperative `infer`.
+
+### Root Causes
+
+1. **Phase 3 scope compromise**: the design says "install typing propagators via `net-add-propagator`." The implementation built `make-typing-rule-infer` — a function-call wrapper. This was the point of divergence. Every subsequent phase built on the wrapper.
+
+2. **"Parity with imperative" as validation criterion**: tests proved the rules produce the same types as imperative `infer`. But parity means you're still doing the imperative thing. The correct criterion: **does the result come from reading a cell value after propagator quiescence?**
+
+3. **Side-effect coupling solved imperatively**: the 53-failure diagnostic revealed that non-leaf rules can't replace imperative because of side effects (unify → solve-meta! → add-constraint!). Instead of making unification a cell merge (on-network), the "effects protocol" injected imperative functions as callbacks. This made the rules CALL the imperative path instead of REPLACING it.
+
+4. **Network Reality Check not yet codified**: the Vision Alignment Gate asked "On-network?" too subjectively. The Network Reality Check (now codified in workflow.md) asks concretely: "Which `net-add-propagator` calls were added? Which `net-cell-write` calls produce the result?" — the answer for the imperative implementation was "none" for both.
+
+### What Is Kept (Genuinely On-Network)
+
+| Phase | Deliverable | Why Kept |
+|-------|-------------|----------|
+| 0 | Acceptance file + DEFERRED triage | Validates at Level 3 |
+| 1a | Component-indexed propagator firing | `pu-value-diff` + selective scheduling in `net-cell-write`. Real propagator infrastructure. Passes Network Reality Check. |
+| 1b | Type-map in form-pipeline-value | PU carries type information. Correct placement. |
+| 1c | Context cell value struct | Correct lattice: tensor extension, de Bruijn lookup, merge. |
+| 4a | Meta cell-id fast path | Cell reads as sole authority for meta solutions. |
+| 4b-i | Meta-readiness fan-in | Set-based tracking, monotone merge. |
+| 6 (partial) | Constraint lattice | Join/meet/contradicts. Correct flat-lattice design. |
+
+### What Is Replaced (Imperative Scaffolding)
+
+| Component | File | Why Replaced |
+|-----------|------|-------------|
+| `typing-rule` struct with `infer-fn`/`check-fn` closures | typing-propagators.rkt | Function-call dispatch, not propagator fire functions |
+| `make-typing-rule-registry`, `dispatch-typing-rule` | typing-propagators.rkt | Hash-table lookup, not network scheduling |
+| `delegating-infer`, `delegating-check` | typing-propagators.rkt | No-op wrappers that call back to imperative `infer` |
+| `effects` hash (`'unify`, `'check`, `'infer-fallback`) | typing-propagators.rkt | Imperative callback injection, not cell operations |
+| `make-typing-rule-infer`, `make-default-typing-registry` | typing-propagators.rkt | Function-call wrapper around imperative `infer` |
+| `current-typing-rule-infer` parameter | typing-propagators.rkt | Injects wrapper into `infer/err` — remove |
+| `infer/err` integration | typing-errors.rkt | Remove `current-typing-rule-infer` check |
+| `(current-typing-rule-infer (make-typing-rule-infer ...))` | driver.rkt | Remove installation of wrapper |
+
+### Corrected Implementation: Propagator-Native Typing
+
+The corrected implementation follows the D.3 §2 architecture. No function-call dispatch. No delegation. No effects callbacks. Information flows through cells.
+
+**How the AST enters the network**: The AST IS the form cell's PU value (PPN Track 1-2). It does not get "walked" — it IS a cell value, structurally accessible. When the form reaches 'done', the PU value holds the complete parse tree. SRE structural decomposition (Track 2D's `pattern-desc` matching) identifies sub-expression positions within the PU.
+
+**How type-map positions are populated**: The form cell's `type-map` (Phase 1b) maps sub-expression positions to type values. Each position starts at ⊥ (`type-bot`). This is a cell value write — `net-cell-write` to the form cell with an updated PU value that has `type-bot` for each position.
+
+**How typing propagators are installed**: For each sub-expression position, a typing propagator is installed via `net-add-propagator`:
+- Inputs: the form cell (with `#:component-paths` specifying which type-map positions this propagator watches — Phase 1a infrastructure)
+- Outputs: the form cell (writes to this propagator's output position in the type-map)
+- Fire function: reads the watched positions from the type-map PU value; if all non-⊥, computes the output type and writes it
+
+**How context flows**: Each binder scope (lambda, Pi, let, Sigma) creates a child `context-cell-value` via `context-extend-value` (Phase 1c). The child context is written as part of the PU value at the binder's position. Variable lookup propagators read from the enclosing context at the appropriate de Bruijn position. Context is NOT a function argument — it's a cell value, part of the PU.
+
+**How unification works**: Unification IS cell merge. When two propagators write to the same type-map position, `type-lattice-merge` resolves: equal types → identity, one is ⊥ → take the other, conflict → type-top (contradiction). For structural unification (Pi domain ≡ argument type), a constraint cell is created whose merge checks compatibility. This uses the constraint lattice from Phase 6 (kept).
+
+**How metas work**: A meta's type-map position starts at ⊥. When the meta is solved (via `solve-meta!` → cell write → cascade), the position transitions to the solution type. Every propagator watching that position fires. This is the EXISTING mechanism — `solve-meta!` already writes to cells (Phase 4a kept).
+
+**How the result is read**: After `run-to-quiescence`, read the form cell's PU value. The type-map holds the type of every sub-expression. The top-level expression's type is at the root position. If any position is `type-top`, there's a type error — ATMS dependency traces identify which assumptions caused the contradiction.
+
+**Concrete corrected phases**:
+
+| Phase | Deliverable | How It Passes Network Reality Check |
+|-------|-------------|--------------------------------------|
+| 2 (redo) | Typing propagator fire functions | Each rule is a `(lambda (net) ...)` that reads type-map positions via `net-cell-read` and writes results via `net-cell-write`. NOT a closure in a hash table. |
+| 3 (redo) | Type-map population + propagator installation | `net-add-propagator` called for each sub-expression position. Component paths specify watched positions. Form cell write triggers initial propagation. `run-to-quiescence` produces the typed result. Trace: cell creation (type-map ⊥) → propagator installation → cell write (type) → cell read (result). |
+| 5 (redo) | ATMS branching for union types | When a typing propagator encounters a union, ATMS assumptions are created via the existing `atms-assume` API. Per-assumption PU values diverge. `net-commit-assumption` merges the surviving branch. |
+| 6 (redo) | Constraint cells for trait resolution | Each trait constraint is a cell on the network (using constraint lattice from Phase 6 kept). Constraint propagators watch argument type positions. When arguments refine, constraint fires and resolves. |
+| 7 (redo) | Bidirectional bridge | The typing propagators ARE the bridge. Infer-direction propagators write upward (sub-expression types → parent type). Check-direction propagators write downward (expected type → sub-expression constraints). Same cells, per-relation SRE merge dispatch. |
+
+### Process Codification
+
+**Network Reality Check** added to `workflow.md` (commit `0175c986`): for any phase claiming on-network computation, verify (1) `net-add-propagator` calls added, (2) `net-cell-write` produces the result, (3) full trace from cell creation through propagator firing to cell read. Zero on any = imperative, regardless of data structures.
