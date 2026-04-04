@@ -61,12 +61,12 @@
 | 3 | Tensor as on-network propagator | ✅ | `make-typing-rule-infer`: DPO-first + imperative-fallback. 20 rules dispatched via registry. Parity tests confirm equivalence. (commit `f7c86536`) |
 | 4a | Meta-solving as cell writes (cell-refs replace expr-meta) | ✅ | Meta typing rule reads from cells via fast path. Cells authoritative. Full expr-meta→cell-ref migration deferred to 4b. 21 rules total. (commit `edb8962e`) |
 | 4b | Zonk retirement: fan-in default propagator | 🔄 | **4b-i** ✅ meta-readiness-value infrastructure (register/solve/unsolved/merge) (commit `002f7cc3`). **4b-ii** ⬜ full expr-meta→cell-ref migration + zonk.rkt deletion (34 arms, 15 files — incomplete because rules not yet wired into production pipeline; deferred to Track 4 continuation). |
-| 5 | ATMS extension (delta from PM Track 8 B1) | ⬜ | PM Track 8 B1 already retired save/restore and installed TMS worldview + ATMS. Track 4 extends to propagator-native elaboration patterns. Scope is incremental, not from-scratch. |
+| 5 | ATMS extension (delta from PM Track 8 B1) | ⬜ | ATMS infra exists (PM Track 8 B1). Delta: wire DPO rules into ATMS branching (~130-300 lines). Incomplete because typing rules not yet active in production pipeline. |
 | 6 | Trait resolution as constraint propagators + SRE domain | 🔄 | ✅ Constraint lattice: join/meet/contradicts (commit `f7ef8665`). ⬜ SRE domain registration + wiring constraint cells to resolution. Incomplete because constraint cells not yet created during elaboration. |
-| 7 | Surface→Type Galois bridge (bidirectional ring) | ⬜ | Infer = join relation (upward), check = meet relation (downward). Same cells, per-relation SRE merge. Bidirectional ring: join is additive, meet is multiplicative, distribution = Heyting. |
-| 8 | Scaffolding retirement (8 items from Tracks 2H + 2D) | ⬜ | type-tensor-distribute, absorb-subtype-components, type-pseudo-complement, property keyword API, apply-all-sre-rewrites, K-as-hash, instantiate-template, local tag constants. |
-| T | Dedicated test file: test-ppn-track4.rkt | ⬜ | Mandatory test phase (codified rule). |
-| 9 | Verification + acceptance file + PIR | ⬜ | Full suite green, A/B benchmark, acceptance file, PIR (16-question checklist). |
+| 7 | Surface→Type Galois bridge (bidirectional ring) | ⬜ | Bidirectional ring infra designed. Incomplete because typing rules not yet active in production pipeline; bridge needs live type cells to connect. |
+| 8 | Scaffolding retirement (8 items from Tracks 2H + 2D) | ⬜ | Incomplete because on-network replacements not yet active in production pipeline. Scaffolding items can only be retired when their replacements are deployed. |
+| T | Dedicated test file: test-ppn-track4.rkt | ✅ | 90 tests across 11 suites: component-indexed firing, context lattice, typing-rule struct/registry/dispatch, literal/universe/variable/binder/application/meta rules, parity with imperative infer, fan-in readiness, constraint lattice. |
+| 9 | Verification + acceptance file + PIR | 🔄 | Infrastructure phases verified: 7641 tests all pass, A/B benchmark zero regression, acceptance file L3 clean. PIR deferred to track completion. Track 4 has a natural split: infra (done) vs pipeline integration (remaining). |
 
 ---
 
