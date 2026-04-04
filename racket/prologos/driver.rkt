@@ -47,6 +47,7 @@
          "elaborator-network.rkt"
          "type-lattice.rkt"
          "propagator.rkt"
+         "typing-propagators.rkt"  ;; PPN Track 4: typing rules as data, rule-aware infer
          "champ.rkt"
          "unify.rkt"
          "atms.rkt"
@@ -2607,6 +2608,13 @@
 ;; Enables meet(Nat, Int) = Nat (GLB of comparable types) instead of type-bot.
 ;; Required for distributivity of the subtype lattice.
 (install-lattice-subtype-fn! subtype?)
+
+;; PPN Track 4 Phase 4b: Install typing-rule-aware infer.
+;; DPO-first + imperative-fallback: dispatch through typing-rule registry,
+;; fall back to imperative infer for expressions without rules.
+;; 21 typing rules cover: literals, type constructors, universe, variables,
+;; lambda/Pi/Sigma formation, application (tensor), projections, metas.
+(current-typing-rule-infer (make-typing-rule-infer infer))
 
 ;; Phase 4c: Install structural decomposition meta-lookup callback.
 ;; When a compound type is decomposed into sub-cells, bare metas (expr-meta id)

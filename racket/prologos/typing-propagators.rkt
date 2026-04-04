@@ -50,6 +50,8 @@
  ;; Phase 3: Integration — typing-rule-aware infer
  make-typing-rule-infer
  make-default-typing-registry
+ ;; Phase 4b deployment: parameter for production pipeline wiring
+ current-typing-rule-infer
  ;; Phase 4a: Meta-solving — typing rule for expr-meta
  register-meta-typing-rules!
  ;; Phase 4b-i: Fan-in meta-readiness infrastructure
@@ -639,14 +641,21 @@
 ;; fallback is never reached.
 
 ;; Create a registry with all currently-implemented typing rules.
+;; Phase 4b deployment: only LEAF rules are safe for production dispatch.
+;; Non-leaf rules (binder, application, variable, meta) have side effects
+;; in the imperative path (constraint creation, meta solving, trait resolution)
+;; that the pure typing rules don't reproduce. Enabling them causes constraint
+;; resolution failures. Non-leaf rules remain for testing/parity validation.
+;; They will be safe when constraint creation is also on-network (Phase 6+).
 (define (make-default-typing-registry)
   (define reg (make-typing-rule-registry))
   (register-literal-typing-rules! reg)
   (register-universe-typing-rules! reg)
-  (register-variable-typing-rules! reg)
-  (register-binder-typing-rules! reg)
-  (register-application-typing-rules! reg)
-  (register-meta-typing-rules! reg)
+  ;; Phase 6+ will enable these as constraint creation moves on-network:
+  ;; (register-variable-typing-rules! reg)
+  ;; (register-binder-typing-rules! reg)
+  ;; (register-application-typing-rules! reg)
+  ;; (register-meta-typing-rules! reg)
   reg)
 
 ;; Create a typing-rule-aware infer function.
@@ -686,6 +695,12 @@
           (infer-fallback ctx e)])]))
 
   rule-infer)
+
+;; Phase 4b deployment: parameter for production pipeline wiring.
+;; When set, infer/err uses this instead of raw (infer ctx e).
+;; Installed by driver.rkt at startup via make-typing-rule-infer.
+;; Default #f = not installed (use imperative infer directly).
+(define current-typing-rule-infer (make-parameter #f))
 
 
 ;; ============================================================
