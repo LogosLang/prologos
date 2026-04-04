@@ -63,7 +63,7 @@
 | 4b | Zonk retirement: fan-in default propagator | 🔄 | **4b-i** ✅ meta-readiness infra (`002f7cc3`). **4b-ii-a** ✅ cell-id fast path (`4b8f3876`). **4b-ii-b** ⬜ zonk deletion: blocked on Phases 2-3 redo (propagator-native typing must produce cell-refs, not expr-meta). |
 | 5 | ATMS extension | ⬜ | Blocked on Phase 2-3 redo. When typing propagators fire on-network, ATMS branching for union types creates assumption-indexed PU values per the existing TMS infrastructure. |
 | 6 | Constraint propagators + SRE domain | 🔄 | ✅ Constraint lattice (`f7ef8665`). ⬜ Constraint cells as on-network propagators: blocked on Phase 2-3 redo. **DELETE** effects protocol + delegation pattern (imperative scaffolding). |
-| 7 | Surface→Type Galois bridge | ⬜ | Blocked on Phase 2-3 redo. The bridge IS the typing propagators — when they fire on the form cell's PU, they connect surface structure to type information bidirectionally. |
+| 7 | Surface→Type Galois bridge | ✅ | **D.4 REDO** (commit `f1354276`): `infer-on-network/err` wired into process-command for eval/infer. Leaf expressions typed on-network. Non-leaf falls back to imperative (unification not yet on-network). NRC passes. |
 | 8 | Scaffolding retirement | ⬜ | Blocked on Phases 2-7 completing on-network. |
 | T | Dedicated test file | 🔄 | Infrastructure tests (1a, 1c, 4b-i, constraint lattice) KEPT. Function-call dispatch tests (2a-2e, 3, parity) to be REPLACED with propagator-firing tests. |
 | 9 | Verification + PIR | ⬜ | After all phases complete on-network. |
