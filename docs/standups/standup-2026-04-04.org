@@ -1,0 +1,45 @@
+#+TITLE: Standup — 2026-04-04
+#+DATE: 2026-04-04
+
+* Yesterday (since 2026-04-03 standup)
+
+** SRE Track 2D: Rewrite Relation — COMPLETE
+- 4th SRE relation. 13/13 rules on SRE (100%).
+- DPO spans, pattern-desc, child-pattern-split, PUnify holes.
+- Fold/tree/PU combinators. Propagator factory. Critical pair analysis (0 pairs).
+- Pipeline integrated. expand-compose bug found + fixed.
+- 25 persistent tests. PIR written (16-question methodology).
+- 385/385 GREEN, 7551 tests.
+
+** SRE Track 2H: Follow-up
+- 35 regression tests. make-sre-domain keyword constructor (L4 retired).
+- 4 scaffolding items documented for PPN Track 4.
+
+** Adhesive Categories Research
+- Parse trees = presheaf objects = adhesive. Full DPO toolkit.
+- CALM-adhesive unified guarantee. 13 applications catalogued.
+- Wolfram Ruliad connection documented. Linked across Master Series.
+
+** Grammar Form Design Thinking (Stage 2)
+- 15-section design document. Progressive specification (Level 0-4).
+- :target-first insight: 90%+ of cases work via spec/defn -> grammar :target.
+- Compositional grammar layering. Operator declarations via DAG precedence.
+- Attribute grammar thread: three tiers (target-inferred / type params / relational).
+- Duality/modality for serialization. Context-sensitive as experimental.
+
+** Process Codifications
+- Vision Alignment Gate (3 questions per phase)
+- Phase completion blocking checklist
+- PIR methodology as checklist
+- Mandatory test phase for implementation tracks
+
+* Today
+
+* Blockers
+None.
+
+* Notes
+- 9+ codification patterns backlog — dedicated session needed.
+- SRE Track 2F PIR outstanding.
+- Grammar Form at Stage 2 — needs more iteration before Stage 3.
+- Attribute grammar expression needs worked examples through hard cases.
