@@ -53,8 +53,8 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Stage 2 audit + Pre-0 benchmarks | ✅ | [Audit](2026-04-04_PPN_TRACK4_STAGE2_AUDIT.md): 19K lines, 589 arms, 0 typing propagators. [Pre-0](§Pre-0): cell ops 300-1000× cheaper than typing. No design changes. |
-| 1a | Component-indexed propagator firing infrastructure | ⬜ | PU-diff on writes → selective scheduling via component paths. Backward compatible (existing propagators use #:path #f). |
+| 0 | Stage 2 audit + Pre-0 benchmarks + acceptance file | ✅ | [Audit](2026-04-04_PPN_TRACK4_STAGE2_AUDIT.md): 19K lines, 589 arms, 0 typing propagators. [Pre-0](§Pre-0): cell ops 300-1000× cheaper than typing. Acceptance file: 8 sections, L3 clean (commit `81cf3a72`). DEFERRED triage: 2 items in scope, 1 out. |
+| 1a | Component-indexed propagator firing infrastructure | ✅ | `pu-value-diff` + `filter-dependents-by-paths` in `net-cell-write`. `net-add-propagator` gains `#:component-paths` keyword. Fast path preserved for all-#f dependents. 13 tests. (commit `6d5f1adb`) |
 | 1b | Per-expression type cells as PU cell-trees | ⬜ | Each AST node gets a type cell. PU value = type-cell-tree (tag + components + meta-refs). PUnify operates on PU values. Relation-parameterized merge (equality vs subtype via SRE merge-registry). |
 | 1c | Context lattice: typing context as cells | ⬜ | Context = cell with PU value (binding stack). Scope extension = tensor. Variable lookup = structural read. Module Theory parallel. |
 | 2 | Typing rules as DPO rewrite rules | ⬜ | 589 arms → ~50-80 `sre-rewrite-rule` instances on type domain. `pattern-desc` matches AST structure. PUnify fills type holes. Critical pair analysis validates confluence. Engelfriet-Heyker. |
