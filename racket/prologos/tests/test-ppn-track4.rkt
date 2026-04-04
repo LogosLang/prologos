@@ -694,6 +694,68 @@
      ;; Unit test validates the rule structure and check behavior.
      )))
 
+;; ============================================================
+;; Phase 4b-i: Fan-in meta-readiness infrastructure
+;; ============================================================
+
+(define phase-4b-tests
+  (test-suite
+   "Phase 4b-i: fan-in meta-readiness"
+
+   (test-case "empty readiness: no metas"
+     (check-true (meta-readiness-all-solved? meta-readiness-empty))
+     (check-equal? (meta-readiness-unsolved meta-readiness-empty) '()))
+
+   (test-case "register + unsolved: all unsolved initially"
+     (define rv (meta-readiness-register
+                 (meta-readiness-register meta-readiness-empty 'a 'type)
+                 'b 'level))
+     (check-false (meta-readiness-all-solved? rv))
+     (check-equal? (length (meta-readiness-unsolved rv)) 2))
+
+   (test-case "register + solve: partial solve"
+     (define rv (meta-readiness-register
+                 (meta-readiness-register meta-readiness-empty 'a 'type)
+                 'b 'level))
+     (define rv2 (meta-readiness-solve rv 'a))
+     (check-false (meta-readiness-all-solved? rv2))
+     (define unsolved (meta-readiness-unsolved rv2))
+     (check-equal? (length unsolved) 1)
+     (check-equal? (caar unsolved) 'b)
+     (check-equal? (cdar unsolved) 'level))
+
+   (test-case "register + solve all: all solved"
+     (define rv (meta-readiness-register
+                 (meta-readiness-register meta-readiness-empty 'a 'type)
+                 'b 'level))
+     (define rv2 (meta-readiness-solve (meta-readiness-solve rv 'a) 'b))
+     (check-true (meta-readiness-all-solved? rv2))
+     (check-equal? (meta-readiness-unsolved rv2) '()))
+
+   (test-case "merge: set-union on registered and solved"
+     (define rv1 (meta-readiness-solve
+                  (meta-readiness-register meta-readiness-empty 'a 'type)
+                  'a))
+     (define rv2 (meta-readiness-register meta-readiness-empty 'b 'level))
+     (define merged (meta-readiness-merge rv1 rv2))
+     ;; Registered: {a, b}. Solved: {a}.
+     (check-equal? (length (meta-readiness-unsolved merged)) 1)
+     (check-equal? (caar (meta-readiness-unsolved merged)) 'b))
+
+   (test-case "merge: monotone — solved set only grows"
+     (define rv1 (meta-readiness-solve
+                  (meta-readiness-register meta-readiness-empty 'a 'type)
+                  'a))
+     (define rv2 meta-readiness-empty)
+     (define merged (meta-readiness-merge rv1 rv2))
+     ;; a is still solved after merging with empty
+     (check-true (meta-readiness-all-solved? merged)))
+
+   (test-case "contradicts? always #f"
+     (check-false (meta-readiness-contradicts? meta-readiness-empty)))
+   ))
+
+
 (run-tests phase-1a-tests)
 (run-tests phase-1c-tests)
 (run-tests phase-2a-tests)
@@ -703,3 +765,4 @@
 (run-tests phase-2e-tests)
 (run-tests phase-3-tests)
 (run-tests phase-4a-tests)
+(run-tests phase-4b-tests)

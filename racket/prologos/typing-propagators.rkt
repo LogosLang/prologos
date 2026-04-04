@@ -12,6 +12,7 @@
 ;;;
 
 (require racket/match
+         racket/set
          "syntax.rkt"
          "prelude.rkt"
          "substitution.rkt"
@@ -50,7 +51,16 @@
  make-typing-rule-infer
  make-default-typing-registry
  ;; Phase 4a: Meta-solving — typing rule for expr-meta
- register-meta-typing-rules!)
+ register-meta-typing-rules!
+ ;; Phase 4b-i: Fan-in meta-readiness infrastructure
+ (struct-out meta-readiness-value)
+ meta-readiness-empty
+ meta-readiness-register
+ meta-readiness-solve
+ meta-readiness-unsolved
+ meta-readiness-all-solved?
+ meta-readiness-merge
+ meta-readiness-contradicts?)
 
 ;; ============================================================
 ;; Phase 1c: Context Lattice
@@ -696,3 +706,74 @@
      ;; (matches current imperative behavior: [(expr-meta _ _) _) #t])
      (lambda (_ctx-val _e _expected _reader) #t)
      0)))
+
+
+;; ============================================================
+;; Phase 4b-i: Fan-In Meta-Readiness Infrastructure
+;; ============================================================
+;;
+;; A meta-readiness cell per form tracks which metas are solved
+;; via a set-based monotone value. At S2 commit time, a single
+;; threshold propagator reads the unsolved set and writes defaults
+;; (lzero for levels, mw for multiplicities, sess-end for sessions).
+;;
+;; This replaces the tree-walking `default-metas` function in
+;; freeze (zonk.rkt:939-1352). Instead of walking a tree, the
+;; S2 handler reads a cell.
+;;
+;; The merge is set-union (monotone: solved set only grows).
+;; When all registered metas are in the solved set, all-solved? = #t.
+
+;; meta-readiness-value: tracks meta solve states for one form.
+;;   registered: (hasheq meta-id → meta-class) — all metas in this form
+;;     meta-class: 'type | 'level | 'mult | 'session
+;;   solved: (seteq meta-id) — which metas have been solved
+(struct meta-readiness-value
+  (registered  ;; hasheq: meta-id → meta-class
+   solved)     ;; seteq: solved meta-ids
+  #:transparent)
+
+;; Empty readiness (no metas registered, none solved)
+(define meta-readiness-empty
+  (meta-readiness-value (hasheq) (seteq)))
+
+;; Register a new meta in this form's readiness tracking.
+;; Returns updated readiness value.
+(define (meta-readiness-register rv meta-id meta-class)
+  (meta-readiness-value
+   (hash-set (meta-readiness-value-registered rv) meta-id meta-class)
+   (meta-readiness-value-solved rv)))
+
+;; Mark a meta as solved. Returns updated readiness value.
+(define (meta-readiness-solve rv meta-id)
+  (meta-readiness-value
+   (meta-readiness-value-registered rv)
+   (set-add (meta-readiness-value-solved rv) meta-id)))
+
+;; Get the set of unsolved metas (registered but not solved).
+;; Returns: (listof (cons meta-id meta-class))
+(define (meta-readiness-unsolved rv)
+  (define registered (meta-readiness-value-registered rv))
+  (define solved (meta-readiness-value-solved rv))
+  (for/list ([(id cls) (in-hash registered)]
+             #:unless (set-member? solved id))
+    (cons id cls)))
+
+;; Are all registered metas solved?
+(define (meta-readiness-all-solved? rv)
+  (= (hash-count (meta-readiness-value-registered rv))
+     (set-count (meta-readiness-value-solved rv))))
+
+;; Merge: set-union on both registered and solved (monotone).
+(define (meta-readiness-merge old new)
+  (meta-readiness-value
+   ;; Registered: union of all registered metas
+   (for/fold ([result (meta-readiness-value-registered old)])
+             ([(id cls) (in-hash (meta-readiness-value-registered new))])
+     (hash-set result id cls))
+   ;; Solved: union of solved sets
+   (set-union (meta-readiness-value-solved old)
+              (meta-readiness-value-solved new))))
+
+;; Meta-readiness cells don't contradict.
+(define (meta-readiness-contradicts? v) #f)
