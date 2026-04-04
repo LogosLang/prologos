@@ -174,6 +174,86 @@ Key findings that shaped this design:
 
 ---
 
+## §1b. Lattice Algebraic Properties and SRE Domain Registration
+
+### Property Map for Track 4's Lattices
+
+| Domain | Relation | Comm | Assoc | Idemp | Has-meet | Distributive | Heyting | SRE Registered? |
+|--------|----------|------|-------|-------|----------|-------------|---------|----------------|
+| Type | equality | ✅ | ✅ | ✅ | ✅ | ❌ (flat) | ❌ | ✅ `type-sre-domain` |
+| Type | subtype | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (ground) | ✅ per-relation properties |
+| Meta-solution | equality | ✅ | ✅ | ✅ | ✅ | ❌ (flat) | ❌ | Uses type domain directly |
+| Constraint | equality | ✅ | ✅ | ✅ | ? | ❌ (flat) | ❌ | ⬜ **REGISTER IN TRACK 4** |
+| Multiplicity | max | ✅ | ✅ | ✅ | ✅ | ✅ (chain) | ✅ | ✅ existing mult cells |
+
+**Meta cells use the type domain directly**: A meta IS a type cell with the equality merge. `⊥ (unsolved) ⊔ Nat = Nat`. `Nat ⊔ Int = ⊤ (contradiction)`. No separate domain needed — metas ARE type cells.
+
+**Constraint domain should be registered in Track 4**: Constraints have the same flat-lattice structure as types under equality: `pending (⊥) → resolved(instance) → contradicted (⊤)`. Registering as an SRE domain gives: property inference validation, critical pair analysis on constraint propagators, domain-parameterized operations. The merge:
+
+```
+pending ⊔ pending = pending
+pending ⊔ resolved(A) = resolved(A)
+resolved(A) ⊔ resolved(A) = resolved(A)  (idempotent)
+resolved(A) ⊔ resolved(B) = contradicted  (A ≠ B)
+contradicted ⊔ X = contradicted
+```
+
+**Distributivity analysis**: 2 of 4 domains are distributive (subtype, mult). The non-distributive ones (type-equality, constraint) are flat — conflicts go directly to ⊤, which is correct because conflicts ARE errors. For the reduced product iteration, flat lattices converge in one step (any non-⊥ write is final) — no iteration needed for the non-distributive domains.
+
+### Bridges Between Domains
+
+| Bridge | From → To | Mechanism | Status |
+|--------|-----------|-----------|--------|
+| Surface → Type | form cell → typing propagators | **Track 4 core deliverable** | Phase 1-2 |
+| Type ↔ Meta | unification → meta cell write/read | Exists (elab-add-unify-constraint) | Reuse, upgrade to permanent cells |
+| Meta → Constraint | meta solved → constraint re-evaluates | **Track 4 Phase 6** — replaces retry loop | New |
+| Constraint → Meta | instance resolved → dict meta solved | Transitive (constraint writes meta) | Emergent |
+| Type ↔ Mult | type structure → mult annotation | Exists (PM Track 8: elab-add-type-mult-bridge) | Reuse unchanged |
+| ATMS branch → PU merge | assumption survival → type-map merge | **Track 4 Phase 5** | New |
+
+The cascade: `constraint resolved → meta solved → type cell refined → typing propagators fire → more constraints generated → ...` continues automatically via propagator scheduling until fixpoint. No imperative iteration needed.
+
+### Pocket Universe Composition with SRE and ATMS
+
+**ATMS branching → per-branch PU → merge at commitment:**
+
+1. ATMS creates assumption branches for union type checking
+2. Each branch works with the form cell's type-map PU
+3. Typing propagators fire within each branch's worldview
+4. Contradicted branches are retracted
+5. Surviving branch's PU merges into the main cell (pointwise type-lattice-merge on type-map)
+
+**SRE decomposition → per-component type cells → cascade:**
+
+1. SRE decomposes `[f x]` into sub-cells for `f`, `x`, result
+2. Typing propagator watches `f`-type and `x`-type cells
+3. Tensor fires: `type-tensor-core(f-type, x-type)` → writes result-type
+4. If `f`-type later refines (meta solved): propagator re-fires with new input
+5. Result cell merges old and new values (type-lattice-merge)
+
+---
+
+## §1c. Global Environment Scoping Decision
+
+### Current State
+
+The global environment (`current-global-env`) is a Racket parameter holding a hash table. It is NOT on the network. After elaboration computes a type via propagator fixpoint, the result is extracted from cells and written to the OFF-NETWORK hash (`global-env-add`). The cells are used during elaboration; the hash is the persisted state.
+
+`register-global-env-cells!` creates BRIDGE cells that sync with the hash — so `fvar` lookup can read from cells during elaboration. But the authoritative store is the hash.
+
+### Decision: NOT in Track 4 scope
+
+Full global-env-on-network is **SRE Track 7** (Module Loading-on-SRE) scope. Track 7 envisions per-name cells, module export/import as structural matching, adhesive DPO for name resolution. This is a large scope that Track 4 should not absorb.
+
+Track 4's approach: use the existing `register-global-env-cells!` bridge. The `fvar` typing propagator:
+1. Reads type from global env hash (current behavior, fast)
+2. ALSO checks if a global env cell exists for this name
+3. If cell exists, watches it — when the definition's type changes (incremental recompilation), the `fvar` propagator re-fires
+
+This makes Track 4's `fvar` propagator READY for Track 7's full env-on-network — the propagator already watches cells, Track 7 just makes the cells authoritative.
+
+---
+
 ## §2 Architecture: Elaboration as Network Construction
 
 ### Current (imperative — from audit §2)
