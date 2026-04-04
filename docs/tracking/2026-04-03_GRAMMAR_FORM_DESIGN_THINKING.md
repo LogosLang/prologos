@@ -360,7 +360,85 @@ These apply to USER-DEFINED extensions. When a user writes `grammar my-form`, th
 
 ---
 
-## 14. Open Questions (Remaining)
+## 14. Attribute Grammars and Dependent Type Expression (Active Design Thread)
+
+### The Problem
+
+A grammar production needs to express not just STRUCTURE (what to parse) but ATTRIBUTES (what types flow, what constraints hold, what relationships exist between components). In Prolog DCGs, this is natural — `expr(Type)` carries the type as an argument, `{ Goal }` constrains it. The grammar and the type rule are the same language.
+
+In Prologos, we have richer types (dependent types, universes, QTT) but a separate grammar and type language. The challenge: express attribute flow in the grammar without bolting on a second language.
+
+### The Engelfriet-Heyker Equivalence
+
+HR grammars and attribute grammars have exactly the same generative power (Engelfriet & Heyker 1992). Our propagator network already implements attribute grammar evaluation. The elaborator IS an attribute grammar evaluator — synthesized attributes flow up (inferred types), inherited attributes flow down (checking context). PPN Track 4 merges this with parsing: elaboration IS parsing in the type-lattice semiring.
+
+### Design Direction: Common Case + Advanced Case
+
+**Common case (Expression B)**: Pure structure, types inferred from `:target`.
+
+```prologos
+grammar when
+  | "when" cond:expr body:expr -> (if cond body unit)
+  ;; Types fully inferred from if's spec. No annotations needed.
+```
+
+**Advanced case (type parameters, Expression A)**: When no `:target`, or when the type flow is non-trivial, type parameters on the grammar nonterminal:
+
+```prologos
+grammar expr<T>
+  | int-literal _                         : Int
+  | a:expr<Int> "+" b:expr<Int>           : Int
+  | "if" c:expr<Bool> t:expr<T> e:expr<T> : T
+```
+
+**Attribute-rich case (relational constraints, emerging direction)**: For dependent types and complex attribute relationships, `&>` relational constraints embedded in the grammar — the same mechanism as our logic language:
+
+```prologos
+grammar match-expr
+  | "match" scrut:expr arms:match-arm+
+    :target (reduce scrut arms)
+    &> all-arms-same-type arms result-type
+    &> scrut-type-determines-arms scrut.type arms
+```
+
+The `&>` constraints are relational goals fired during elaboration — they constrain attribute flow. The elaborator (Track 4) wires them as propagators.
+
+### The Prolog Connection
+
+In Prolog, attributes are just predicate arguments. Relations constrain them via `{ Goal }`. There's no syntactic distinction between "this is structure" and "this is a type attribute." The elegance: one language for everything.
+
+For Prologos, the `&>` relational constraint offers a similar unification: the grammar says "here's the structure," the `&>` says "here's what must hold." The user writes relationships, not plumbing. This uses our EXISTING relational language infrastructure (`defr`-style constraints).
+
+### Hard Cases (Tests for Any Candidate Syntax)
+
+These are the cases where elegance breaks or shines:
+
+1. **GADT pattern match**: branch type depends on which constructor matched — the scrutinee's constructor REFINES the type in each arm
+2. **Session type step**: `send Int . recv Bool . end` — each step constrains the next step's available operations
+3. **Dependent pair**: `(x : Nat, Vec x Bool)` — second component's type depends on first component's VALUE
+4. **Parameterized grammar**: `list-literal {A}` where element parsing depends on A
+5. **Overloaded operator**: `a + b` where the operator dispatches based on a's type (trait resolution during parsing)
+
+### What PPN Track 4 Must Deliver
+
+PPN Track 4's job: make the propagator network serve as the attribute graph for grammar productions.
+
+- Each production creates attribute cells (type, value, constraints)
+- The network connects them (synthesized flow up, inherited flow down, cross-domain via bridges)
+- Elaboration IS the fixpoint of the attribute graph
+- The grammar form DECLARES attributes; Track 4 handles HOW they flow
+
+The hard thing for Track 4 that makes the grammar form easy: the machinery for creating attribute cells, wiring propagators for attribute flow, and computing the fixpoint. The grammar form just declares WHAT — Track 4 handles HOW.
+
+### Status
+
+This thread is ACTIVE and UNRESOLVED. The relational constraint direction (`&>`) is promising but needs iteration. The common case (Expression B — types from target) and fallback (Expression A — type parameters) are settled. The attribute-rich case needs more worked examples through the hard cases above.
+
+Attribute graph grammars (the formal framework where attributes flow along graph edges, not just tree edges) may provide additional theoretical grounding — to be explored.
+
+---
+
+## 15. Open Questions (Remaining)
 
 ### A. Code-as-data introspection for grammar forms
 
