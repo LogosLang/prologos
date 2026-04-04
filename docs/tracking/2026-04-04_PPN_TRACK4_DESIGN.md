@@ -1,4 +1,4 @@
-# PPN Track 4: Elaboration as Attribute Evaluation — Stage 3 Design (D.1)
+# PPN Track 4: Elaboration as Attribute Evaluation — Stage 3 Design (D.2)
 
 **Date**: 2026-04-04
 **Series**: [PPN (Propagator-Parsing-Network)](2026-03-26_PPN_MASTER.md) — Track 4
@@ -28,15 +28,17 @@
 
 **What is delivered**:
 1. Per-expression type cells — each AST node has a type cell in a Pocket Universe per form
-2. Typing rules as propagators — the 589 match arms in typing-core.rkt become registered propagator rules
-3. Tensor as on-network propagator — `type-tensor-core` (Track 2H) wired into the network
-4. Meta-solving as cell writes — metas ARE cells, `solve-meta!` = cell write, cascade is automatic
-5. ATMS replaces speculation — `save-meta-state!` / `restore-meta-state!` retired (37 sites, 7 files)
-6. Trait resolution as constraint propagators — constraints ARE cells, resolution fires as propagators
-7. Constraint SRE domain — registered with algebraic properties, meet operation, property inference validation
-8. Surface→Type Galois bridge — bidirectional: elaboration forward, disambiguation backward (Track 5 prep)
-9. Scaffolding retirement — 8 items from Tracks 2H + 2D replaced by on-network mechanisms
-10. Dedicated test file — mandatory per codified rule
+2. Typing rules as DPO rewrite rules — the 589 match arms become `sre-rewrite-rule` data on the type domain (Engelfriet-Heyker: HR grammars = attribute grammars). Critical pair analysis validates confluence.
+3. Context lattice — typing context IS a cell. Binding stack = PU value. Variable lookup = structural read. Scope extension = tensor on context lattice. Module Theory parallel (SRE Track 7 prep).
+4. Tensor as on-network propagator — `type-tensor-core` (Track 2H) wired into the network
+5. Meta-solving as cell writes — metas ARE cells, `solve-meta!` = cell write, cascade is automatic
+6. Zonk retirement — cell-refs replace `expr-meta`. Downstream code reads cells, not walks trees. ~1,300 lines deleted. Fan-in default propagator at S2 for unsolvable metas. (Absorbs SRE Track 2C scope.)
+7. ATMS extension — PM Track 8 B1 already retired `save-meta-state!`/`restore-meta-state!` and installed TMS worldview + ATMS hypothesis creation. Track 4 extends to new elaboration patterns (union type checking, Church fold, trait ambiguity under propagator-native elaboration).
+8. Trait resolution as constraint propagators — constraints ARE cells, resolution fires as propagators
+9. Constraint SRE domain — registered with algebraic properties, meet operation, property inference validation
+10. Surface→Type Galois bridge — bidirectional: infer = join relation (upward), check = meet relation (downward). Same cells, per-relation SRE merge. Track 5 prep.
+11. Scaffolding retirement — 8 items from Tracks 2H + 2D replaced by on-network mechanisms
+12. Dedicated test file — mandatory per codified rule
 
 **What this track is NOT**:
 - It does NOT migrate the global environment onto the network — that's SRE Track 7 (Module Loading). Track 4 uses the existing bridge cells and ensures `fvar` propagators are ready for Track 7. See §1c.
@@ -52,14 +54,16 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Stage 2 audit + Pre-0 benchmarks | ✅ | [Audit](2026-04-04_PPN_TRACK4_STAGE2_AUDIT.md): 19K lines, 589 arms, 0 typing propagators. [Pre-0](§Pre-0): cell ops 300-1000× cheaper than typing. No design changes. |
-| 1a | Component-indexed propagator firing infrastructure | ⬜ | `watched-input` with optional path. `pu-diff` on writes. Selective scheduling. Backward compatible (existing propagators unchanged). |
-| 1b | Per-expression type cells as PU cell-trees | ⬜ | Each AST node gets a type cell. PU value = type-cell-tree (tag + components + meta-refs). PUnify operates on PU values. |
-| 2 | Typing rules as propagators (infer/check → attribute rules) | ⬜ | The 589 match arms in typing-core.rkt become registered propagator rules. Each arm = one propagator. |
-| 3 | Tensor as on-network propagator | ⬜ | Wire `type-tensor-core` from Track 2H. `f x` → SRE decomposes Pi, connects arg cell to domain, result cell to codomain. |
-| 4 | Meta-solving as cell writes (retire imperative metavar-store) | ⬜ | Metas are cells. `solve-meta!` = cell write. Resolution triggered by cell merge, not imperative retry. |
-| 5 | ATMS replaces speculation (retire save/restore-meta-state!) | ⬜ | Union checking, Church fold, trait ambiguity → ATMS assumption branches. 37 occurrences across 7 files. |
-| 6 | Trait resolution as constraint propagators + SRE domain | ⬜ | Constraint SRE domain registered (join + meet + properties). Trait constraints are cells. Resolution fires as propagators. Property inference validates. ATMS manages overlapping instances. |
-| 7 | Surface→Type Galois bridge | ⬜ | Bidirectional: surface form → type constraints (elaboration), type info → surface disambiguation (Track 5 prep). |
+| 1a | Component-indexed propagator firing infrastructure | ⬜ | PU-diff on writes → selective scheduling via component paths. Backward compatible (existing propagators use #:path #f). |
+| 1b | Per-expression type cells as PU cell-trees | ⬜ | Each AST node gets a type cell. PU value = type-cell-tree (tag + components + meta-refs). PUnify operates on PU values. Relation-parameterized merge (equality vs subtype via SRE merge-registry). |
+| 1c | Context lattice: typing context as cells | ⬜ | Context = cell with PU value (binding stack). Scope extension = tensor. Variable lookup = structural read. Module Theory parallel. |
+| 2 | Typing rules as DPO rewrite rules | ⬜ | 589 arms → ~50-80 `sre-rewrite-rule` instances on type domain. `pattern-desc` matches AST structure. PUnify fills type holes. Critical pair analysis validates confluence. Engelfriet-Heyker. |
+| 3 | Tensor as on-network propagator | ⬜ | Wire `type-tensor-core` from Track 2H. Union distribution is emergent from cell merge, not imperative iteration. |
+| 4a | Meta-solving as cell writes (cell-refs replace expr-meta) | ⬜ | Metas are cells. `solve-meta!` = cell write. Cascade is automatic. Cell-refs in expressions replace `expr-meta` nodes. |
+| 4b | Zonk retirement: fan-in default propagator | ⬜ | Meta-readiness cell (bitmask) per form. Each solve flips one bit. S2 commit: single threshold propagator reads complement, writes defaults. ~1,300 lines of zonk.rkt deleted. Absorbs SRE Track 2C. |
+| 5 | ATMS extension (delta from PM Track 8 B1) | ⬜ | PM Track 8 B1 already retired save/restore and installed TMS worldview + ATMS. Track 4 extends to propagator-native elaboration patterns. Scope is incremental, not from-scratch. |
+| 6 | Trait resolution as constraint propagators + SRE domain | ⬜ | Constraint SRE domain registered (join + meet + properties). Trait constraints are cells. Resolution fires as propagators. Property inference validates. Trait resolution is monotone (bundles are conjunctions, no inheritance). |
+| 7 | Surface→Type Galois bridge (bidirectional ring) | ⬜ | Infer = join relation (upward), check = meet relation (downward). Same cells, per-relation SRE merge. Bidirectional ring: join is additive, meet is multiplicative, distribution = Heyting. |
 | 8 | Scaffolding retirement (8 items from Tracks 2H + 2D) | ⬜ | type-tensor-distribute, absorb-subtype-components, type-pseudo-complement, property keyword API, apply-all-sre-rewrites, K-as-hash, instantiate-template, local tag constants. |
 | T | Dedicated test file: test-ppn-track4.rkt | ⬜ | Mandatory test phase (codified rule). |
 | 9 | Verification + acceptance file + PIR | ⬜ | Full suite green, A/B benchmark, acceptance file, PIR (16-question checklist). |
@@ -103,9 +107,11 @@ In the current elaborator, identity is POSITIONAL: the AST node at position P in
 
 In the propagator design, identity is STRUCTURAL: each AST node IS a cell. The type IS the cell's value. Two references to the same expression share the same cell. Identity is the cell, not the position.
 
-**Per-expression cells**: Each sub-expression gets a type cell when it's encountered during elaboration. Two occurrences of the same expression (e.g., `x` used twice) reference the SAME type cell (the cell for `x`'s type). PUnify's structural sharing handles this — shared sub-cells for shared sub-expressions.
+**Per-expression cells**: Each sub-expression gets a type cell within the form's Pocket Universe. Two occurrences of the same expression (e.g., `x` used twice) reference the SAME type cell (the cell for `x`'s type). PUnify's structural sharing handles this — shared sub-cells for shared sub-expressions. The form cell's PU value holds the ENTIRE parse tree — there is no traversal, only structural decomposition via SRE pattern matching (PPN Track 1-2 established this: the tree IS a cell value).
 
-**Meta-variables as cells**: Each `?A` IS a cell. `solve-meta!` = write to the cell. Any propagator watching the cell fires when it's solved. No imperative "retry unsolved constraints" — the network handles it.
+**Meta-variables as cells**: Each `?A` IS a cell. Expressions contain cell-refs (not `expr-meta` nodes). Reading the cell gives the current value — solved or unsolved. No zonk walk needed. `solve-meta!` = write to the cell. Any propagator watching the cell fires when it's solved. No imperative "retry unsolved constraints" — the network handles it.
+
+**Typing context as a cell**: The context (binding stack for de Bruijn indices) IS a cell whose PU value is a list of (type, multiplicity) bindings. Scope extension (entering a lambda/Pi/let) = tensor on the context lattice, creating a child context cell. Variable lookup = structural read at position k. This parallels Module Theory (SRE Track 7): a typing context is a "local module" with positional exports. See §1e.
 
 ### Question 4: What EMERGES?
 
@@ -115,10 +121,13 @@ The typed AST EMERGES from the lattice reaching fixpoint. Not "the elaborator bu
 - Every meta's cell has been solved (or marked unsolvable)
 - Every trait constraint has been resolved (or marked unresolvable)
 - Every QTT annotation has been computed
+- Every context cell has been extended with all bindings in its scope
 
-The "elaboration result" is: READ the type cells. If any cell is `type-top` (contradiction), there's a type error — report it via Heyting pseudo-complement (ATMS nogood → dependency trace). If all cells are concrete types, elaboration succeeded.
+The "elaboration result" is: READ the type cells. If any cell is `type-top` (contradiction), there's a type error — report it via Heyting pseudo-complement (ATMS nogood → dependency trace). If all cells are concrete types, elaboration succeeded. There is no zonk walk — expressions contain cell-refs, downstream code reads cells directly.
 
-**What this means**: there is no `elaborate-top-level` function that WALKS the tree. Instead, constructing the per-expression cells and installing the typing propagators IS elaboration. The walk is replaced by cell creation + propagator installation. Fixpoint IS the result.
+**Quiescence detection**: A meta-readiness cell per form tracks solved/unsolved metas as a bitmask (monotone: bits flip 0→1 on solve). At S2 commit, a single threshold propagator reads the bitmask complement and writes defaults for genuinely unsolvable metas. One propagator, not N.
+
+**What this means**: there is no `elaborate-top-level` function that WALKS the tree. The form cell holds the parsed surface form as a PU value. A DPO structural decomposition propagator (Track 2D) fires on the form cell, decomposes it into sub-expression cells, and installs typing rules (as `sre-rewrite-rule` data) for each. Sub-cells trigger further decomposition recursively. Typing propagators fire as their inputs arrive. The typed tree IS the form cell's PU value at quiescence — enriched with type information via monotone writes. No traversal. No imperative setup. The cell IS the tree, and elaboration IS the tree gaining type annotations through propagator firings.
 
 ---
 
@@ -256,6 +265,25 @@ Following the Pre-0 property check pattern (Track 2G L6, Track 2H):
 
 **Distributivity analysis**: 2 of 4 domains are distributive (subtype, mult). The non-distributive ones (type-equality, constraint) are flat — conflicts go directly to ⊤, which is correct because conflicts ARE errors. For the reduced product iteration, flat lattices converge in one step (any non-⊥ write is final) — no iteration needed for the non-distributive domains.
 
+### Bidirectional Ring Structure
+
+Bidirectional type inference (infer + check) is TWO RELATIONS on the same carrier — the SRE per-relation merge registry handles this natively:
+
+| Direction | Mode | SRE Relation | Ring Role | Flow |
+|-----------|------|-------------|-----------|------|
+| Upward | Synthesis (infer) | Join relation | Additive operation | Sub-expression types → parent type |
+| Downward | Checking (check) | Meet relation | Multiplicative operation | Expected type → sub-expression constraints |
+
+**The ring**: infer-join is additive (accumulate type information upward), check-meet is multiplicative (constrain type information downward). Distribution of meet over join = distribution of checking over synthesis. This IS the Heyting quantale from Track 2H applied bidirectionally. Same cells, same network, different relations. The SRE dispatches the correct merge based on which relation is active.
+
+**What this means for propagators**: A typing propagator for `expr-app` operates bidirectionally:
+- **Infer direction** (join): `func-type ⊔ arg-type → result-type` via tensor
+- **Check direction** (meet): `result-type ⊓ func-codomain → arg-constraint` via meet-projection
+
+Both directions are monotone. Both use the SAME cells. The propagator fires in whichever direction has new information. The SRE per-relation property system guarantees the algebraic properties hold for each direction independently.
+
+**Trait resolution is monotone**: Bundles are conjunctions (`bundle Comparable := (Eq Ord)`) — no inheritance, no superclass hierarchy, no ordering dependencies. Resolving `Eq ?A` never affects how `Ord ?A` resolves. Each constraint cell is independent. All trait resolution is S0 (monotone stratum).
+
 ### Bridges Between Domains
 
 | Bridge | From → To | Mechanism | Status |
@@ -374,9 +402,62 @@ Standard propagators fire on ANY write to their input cells. For PU-based type c
 
 **Meta-solving cascades naturally**: When meta `?A` is solved, every cell with a meta-ref to `?A` sees the change. Each such cell's propagators fire. The cascade is automatic, targeted (only affected components), and complete (fixpoint).
 
+### Relation-Parameterized Merge
+
+Cell-tree merges are RELATION-PARAMETERIZED via SRE's `sre-domain-merge domain relation` dispatch. The type domain is registered with both equality and subtype relations — same carrier, different merge functions:
+
+- **Equality merge** (unification context): `merge(Nat, Int) = type-top` (contradiction)
+- **Subtype merge** (checking context): `merge(Nat, Int) = Nat` (Nat ≤ Int, more information)
+
+For compound types, the relation determines component-wise behavior:
+- `Pi(A→B)` under subtype: domain is CONTRAVARIANT (meet), codomain is COVARIANT (join)
+- `Pi(A→B)` under equality: both components use equality-merge
+
+Track 2H's per-relation properties already declared this: subtype on the type domain has `distributive: ✅`, `heyting: ✅ (ground)`. The SRE's property inference validates.
+
 ---
 
-## §2 Architecture: Elaboration as Network Construction
+## §1e. Context Lattice: Typing Context as Cells
+
+### The Problem
+
+In the current elaborator, `infer(ctx, e)` and `check(ctx, e, T)` thread a context `ctx` as a function argument. `ctx` is a linked list of `(type . multiplicity)` pairs using de Bruijn indices — `ctx-extend` conses a new pair onto the front, `lookup-type k ctx` reads position k. Simple and correct, but entirely OFF-NETWORK. Every typing rule takes `ctx` as input; no cell holds the context; no propagator watches context changes.
+
+### Context as a Cell
+
+The typing context IS a cell. Its PU value is a binding stack (list of (type, mult) pairs). The context lattice:
+
+| Element | Meaning |
+|---------|---------|
+| ⊥ | No bindings known yet |
+| `[(Int, ω), (Bool, 1)]` | Two bindings: position 0 is `Int` unrestricted, position 1 is `Bool` linear |
+| ⊤ | Contradicted context (impossible binding combination) |
+
+**Merge**: Pointwise on bindings at each position — `merge([(A₁, m₁)], [(A₂, m₂)]) = [(merge(A₁,A₂), merge(m₁,m₂))]`. Types merge via the active relation (equality or subtype). Multiplicities merge via mult-lattice (max). Monotone: bindings only GAIN information.
+
+**Extension (tensor)**: Entering a binder (lambda, Pi, let, Sigma) creates a CHILD context cell whose value = parent extended with the new binding. The child cell watches the parent — when the parent is refined, the child updates. This IS the tensor on the context lattice: `ctx ⊗ (A, m) = child-ctx`.
+
+**Variable lookup**: A `bvar(k)` propagator reads position k from its enclosing context cell. When the context cell is refined (e.g., a binding's type goes from `type-bot` to `Int`), the lookup propagator fires and writes to the variable's type cell.
+
+### Module Theory Parallel
+
+| Module concept | Context concept | SRE mechanism |
+|---------------|----------------|---------------|
+| Module export set | Typing context | Cell with PU binding-stack value |
+| Import resolution | `bvar(k)` lookup | Structural read propagator at position k |
+| Module dependency | Scope nesting (lambda inside lambda) | Cell parent→child extension (tensor) |
+| Export refinement | Type refinement of a binding | Cell merge (monotone, relation-parameterized) |
+| Module composition | Context extension | Tensor on context lattice |
+
+SRE Track 7 (Module Loading) and PPN Track 4 share the SAME cell-based scoping mechanism. A typing context IS a "local module" — a structured value holding positional name-type bindings. Track 4 establishes this pattern; Track 7 extends it to inter-module scope.
+
+### Why This Matters
+
+Without context-as-cells, typing propagators cannot function: the `fvar` propagator needs to know what's in scope, the lambda propagator needs to extend scope, the let propagator needs to introduce bindings. Context threading is what makes typing bidirectional (context flows DOWN from parent to child scope, types flow UP from sub-expressions to parent). On-network context cells make this flow explicit as information flow between cells, not as an argument passed through a function call chain.
+
+---
+
+## §2 Architecture: Elaboration IS the Network
 
 ### Current (imperative — from audit §2)
 
@@ -393,33 +474,40 @@ process-command(surf):
   9. register-definition()                             [global env update]
 ```
 
-Four walks of the same structure. The elaborator accumulates constraints imperatively. Resolution retries in loops. Speculation uses save/restore (37 sites, 7 files).
+Four walks of the same structure. The elaborator accumulates constraints imperatively. Resolution retries in loops. Zonking walks the tree a third time to substitute solved metas.
 
-### Target (propagator)
+### Target (propagator — no walks)
 
 ```
 process-command(surf):
-  ;; Step 1: Create cells for the surface form's sub-expressions
-  cells = create-expression-cells(surf)
+  ;; The form cell already holds the parsed surface form (from PPN Track 1-3).
+  ;; Writing to the form cell is the ONLY imperative action.
+  ;; Everything else is propagator firing.
 
-  ;; Step 2: Install typing propagators for each sub-expression
-  ;; (These are the 589 match arms, now as propagator rules)
-  install-typing-propagators(cells)
+  write(form-cell, surf)
+    → DPO decomposition propagator fires (Track 2D infrastructure)
+      → structural matching on form tag creates sub-expression cells
+      → each sub-cell installs typing rewrite rules (sre-rewrite-rule data)
+      → sub-cells trigger further decomposition recursively
+    → context cells created at each binder scope (tensor on context lattice)
+    → typing propagators fire as their inputs arrive
+      → bidirectional: infer (join, upward) and check (meet, downward)
+      → tensor propagator for application (type-tensor-core from Track 2H)
+      → constraint cells created for trait requirements
+    → meta cells solved → cascade to dependent propagators
+    → constraint cells resolved → cascade to type cells
+    → quiescence: all cells stable
 
-  ;; Step 3: Run to fixpoint
-  ;; (The network scheduler fires propagators, resolves constraints,
-  ;;  manages ATMS branches, until quiescence)
-  run-to-quiescence()
-
-  ;; Step 4: Read the result
-  ;; (Type cells hold the computed types. Meta cells hold solutions.
-  ;;  Errors are contradictions with ATMS dependency traces.)
-  read-elaboration-result(cells)
+  read(form-cell.type-map)
+    → the typed AST IS the cell values at quiescence
+    → no zonk walk: expressions contain cell-refs, read directly
+    → contradictions (type-top) reported via ATMS dependency traces
+    → unsolvable metas defaulted by S2 fan-in threshold propagator
 ```
 
-Steps 1-2 are CONSTRUCTION (creating the network for this command). Step 3 is EXECUTION (the network computes). Step 4 is READING (the result IS the cell values).
+**No walks. No imperative setup.** Writing to the form cell triggers the entire elaboration cascade via propagator firings. The form cell IS the tree (PPN Track 1-2 established: the tree IS a cell value, a Pocket Universe). DPO decomposition IS the "traversal" — but it's a propagator pattern, not an imperative walk. Sub-expressions decompose in parallel (CALM-adhesive guarantee: independent sub-trees elaborate without coordination). The typed tree EMERGES from quiescence.
 
-The key shift: the elaborator no longer COMPUTES types. It DECLARES constraints (as propagators). The network COMPUTES the fixpoint.
+**The key shift**: there is no elaboration FUNCTION. There is a form cell. Writing to it triggers the network. Reading from it yields the result. The network IS the elaborator.
 
 ---
 
@@ -451,59 +539,61 @@ surf-def "x" : Int := [add 1 2]
 
 **Cell count**: One top-level cell per expression + one per meta + one per constraint. Type structure is WITHIN the PU. Baseline: 17-22 infrastructure cells (audit §4). Track 4 adds: ~N expression cells + ~M meta cells + ~K constraint cells per command. For a typical command: N≈20, M≈5, K≈2 → ~27 new cells + 17-22 existing ≈ ~45-50 total. Cell creation cost: ~15μs (negligible vs 70ms elaboration).
 
-**Existing infrastructure**: Track 3's per-form cells provide the form-level anchor. Track 4 creates per-EXPRESSION cells within each form's elaboration scope. The form cell tracks pipeline progress; the expression cells track types. These are separate cells connected by propagators (the form's elaboration propagator creates expression cells when it fires).
+**Existing infrastructure**: Track 3's per-form cells provide the form-level anchor. The form cell holds the parsed surface form as a PU value (PPN Track 1-2: tree IS cell value). DPO decomposition propagators (Track 2D) structurally match the form cell and create per-expression sub-cells. No imperative walk — the form cell write triggers decomposition, decomposition creates sub-cells, sub-cells trigger further decomposition recursively.
 
-### §3.2 Phase 2: Typing Rules as Propagators
+**Context cells**: Each binder scope (lambda, Pi, let, Sigma) creates a context cell via tensor on the parent context. The root context cell starts as `ctx-empty`. Variable lookup propagators read their enclosing context cell at the appropriate de Bruijn position. See §1e.
 
-**The 589 match arms → propagator rules.**
+### §3.2 Phase 2: Typing Rules as DPO Rewrite Rules
 
-Currently, `infer` is a giant `match` expression. Each arm computes a type for one AST node kind. In the propagator design, each arm becomes a propagator that:
-1. Watches the input cells (sub-expression types)
-2. Fires when its inputs have values
-3. Writes the computed type to the output cell
+**The 589 match arms → ~50-80 `sre-rewrite-rule` instances on the type domain.**
 
-**Example: Pi elimination (application)**
+This is the Engelfriet-Heyker equivalence: HR grammars = attribute grammars. Typing rules ARE attribute grammar rules. Expressing them as DPO rewrite rules makes them first-class DATA — inspectable, composable, analyzable via critical pairs.
 
-Current (typing-core.rkt line 548):
-```racket
-[(expr-app e1 e2)
- (let ([t1 (whnf (infer ctx e1))])
-   (match t1
-     [(expr-Pi m a b) (if (check ctx e2 a) (subst 0 e2 b) (expr-error))]
-     [_ (expr-error)]))]
+**A typing rule as a DPO span:**
+
+```
+;; The app typing rule as a DPO rewrite rule
+(sre-rewrite-rule
+  'app-typing                                    ;; name
+  (pattern-desc 'app                             ;; L: match app node
+    (list (child-pattern 0 'bind "func")         ;; bind func sub-cell
+          (child-pattern 1 'bind "arg")))         ;; bind arg sub-cell
+  '("func" "arg")                                ;; K: preserved sub-cells
+  (lambda (K)                                    ;; R: type computation
+    (let ([func-type (cell-read (K "func" 'type))]
+          [arg-type  (cell-read (K "arg" 'type))])
+      (type-tensor-core func-type arg-type)))     ;; Track 2H tensor
+  'app-typing-fire                               ;; apply-fn
+  'forward                                        ;; directionality
+  1                                               ;; cost
+  'infer                                          ;; confluence-class
+  0)                                              ;; stratum (S0 monotone)
 ```
 
-Propagator:
-```
-;; When function-type and arg-type cells both have values:
-propagator app-typing [func-type-cell arg-type-cell → result-type-cell]
-  :reads func-type-cell, arg-type-cell
-  :writes result-type-cell
-  :fire
-    func-type = read(func-type-cell)
-    arg-type = read(arg-type-cell)
-    result = type-tensor-core(func-type, arg-type)    ;; Track 2H's tensor
-    write(result-type-cell, result)
-```
+**What this gives us over closure-based propagators:**
+- **Critical pair analysis** (Track 2D): two rules that could fire on the same cell must produce compatible results. Validates confluence automatically.
+- **Inspectable structure**: the `pattern-desc` is data, not opaque code. Rules can be listed, filtered, composed.
+- **PUnify integration**: K bindings are sub-cells. PUnify's structural matching fills type holes. The `instantiate-template` scaffolding is retired — PUnify IS the template mechanism.
+- **Bidirectional rules**: each rule can operate in both infer (join) and check (meet) direction. The SRE per-relation dispatch selects the right merge.
 
-This IS `type-tensor-core` from Track 2H — the tensor as a propagator fire function. Track 2H delivered it as a pure function; Track 4 wires it on the network.
+**Rule grouping by AST node kind** (many arms share the same pattern, differing only by tag):
 
-**Not all 589 arms become separate propagators.** Many arms share patterns (literal typing, variable lookup, annotation checking). The propagator rules group by AST node kind:
+| AST Kind | DPO Rule | Fire function | Direction |
+|----------|----------|--------------|-----------|
+| `expr-app` | App tensor rule | `type-tensor-core(func-type, arg-type)` | Bidirectional |
+| `expr-lam` | Lambda rule | Creates Pi from domain + codomain cells via ctx tensor | Infer up, check destructures down |
+| `expr-Pi` | Pi formation rule | Checks domain/codomain are types under context | Infer |
+| `expr-fvar` | Lookup rule | Reads type from context cell at position k | Infer |
+| `expr-bvar` | Bound var rule | Reads type from enclosing context cell at de Bruijn k | Infer |
+| `expr-Sigma` | Sigma formation rule | Component-wise type cells | Infer |
+| `expr-fst/snd` | Projection rule | Reads Sigma type, extracts component | Bidirectional |
+| `expr-natrec` | Nat eliminator rule | Dependent typing with motive | Infer |
+| `expr-boolrec` | Bool eliminator rule | Motive-dependent branch typing | Infer |
+| `expr-J` | Equality eliminator rule | Equality proof typing | Infer |
+| `expr-reduce` | Match rule | Per-arm type checking, result type unification | Infer |
+| literals | Constant rule | Fixed type write (Int, Nat, Bool, String, etc.) | Infer |
 
-| AST Kind | Propagator | What it computes |
-|----------|-----------|-----------------|
-| `expr-app` | Tensor propagator | `type-tensor-core(func-type, arg-type)` → result-type |
-| `expr-lam` | Lambda propagator | Creates Pi type from domain + codomain cells |
-| `expr-Pi` | Pi formation | Checks domain is a type, codomain is a type under binder |
-| `expr-fvar` | Lookup propagator | Reads type from global env cell |
-| `expr-meta` | Meta propagator | Follows solution via meta cell |
-| `expr-Sigma` | Sigma formation | Component-wise type cells |
-| `expr-fst/snd` | Projection | Reads Sigma type, extracts component |
-| `expr-natrec` | Eliminator | Dependent typing with motive |
-| `expr-boolrec` | Eliminator | Motive-dependent branch typing |
-| `expr-J` | Eliminator | Equality proof typing |
-| `expr-reduce` | Match propagator | Per-arm type checking, result type unification |
-| literals | Constant propagator | Fixed type (Int, Nat, Bool, String, etc.) |
+**Note**: meta cells have no typing rule. They ARE cells. `expr-meta` becomes a cell-ref — reading the cell gives the current value. No `expr-meta` match arm needed. This is the zonk-retirement connection (Phase 4b).
 
 ### §3.3 Phase 3: Tensor as On-Network Propagator
 
@@ -524,60 +614,79 @@ For each (expr-app func arg) in the AST:
 
 In the scaffolding (Track 2H), `type-tensor-distribute` iterates components. On-network (Track 4), the propagator fires ONCE with the union value. If the union has N components and only K are applicable, the propagator writes K results to the output cell. The cell's merge produces the union of valid results.
 
-### §3.4 Phase 4: Meta-Solving as Cell Writes
+### §3.4a Phase 4a: Meta-Solving as Cell Writes (Cell-Refs Replace expr-meta)
 
-**Current**: `solve-meta!` in metavar-store.rkt writes to a CHAMP hash. Downstream consumers check `meta-solution(id)` to follow solved metas. Resolution retries poll unsolved metas.
+**Current state (partially migrated)**: `solve-meta!` already writes to cells AND triggers `run-stratified-resolution-pure` (propagator network to quiescence). The meta→cell→propagator cascade is already implemented. What remains: making cells the ONLY authoritative store (retiring the CHAMP `meta-info` as redundant), and replacing `expr-meta` nodes in expressions with cell-refs.
 
-**Propagator**: Each meta IS a cell. `solve-meta!` = write to the cell. Propagators watching the cell fire automatically when it's solved. No polling. No retry loops.
+**Cell-refs**: Currently, expressions contain `expr-meta id cell-id` nodes. Zonking walks the tree to substitute solved metas. With cell-refs, expressions reference cells directly — reading a cell-ref gives the current value (solved or unsolved). No substitution walk needed.
 
 ```
-meta ?A:
-  cell: type-cell (initially type-bot)
-  solve-meta!(?A, Int):
-    write(type-cell, Int)          ;; cell merge: ⊥ ⊔ Int = Int
-    → all propagators watching ?A's cell fire
-    → constraint cells that depended on ?A re-evaluate
-    → resolution cascade: no imperative loop needed
+;; Current: expr-meta nodes require zonk to substitute
+(expr-meta ?A cell-42)  → zonk walks tree → (expr-Nat)
+
+;; Track 4: cell-refs read directly
+(cell-ref cell-42)      → read(cell-42) → (expr-Nat)
 ```
+
+**Fast path preservation**: `elab-add-unify-constraint` currently skips propagator creation for fully-ground types (no unsolved metas). This optimization MUST be preserved — if both types are concrete and equal, cell-merge is identity, no propagator needed.
 
 **The meta-solution callback** (`current-lattice-meta-solution-fn` from Track 2H) becomes a cell read. The callback is scaffolding; the cell IS the permanent mechanism.
 
-### §3.5 Phase 5: ATMS Replaces Speculation
+### §3.4b Phase 4b: Zonk Retirement — Fan-In Default Propagator
 
-**The most architecturally significant change.**
+**Retire zonking entirely.** With cell-refs replacing `expr-meta`, there is nothing to "zonk." Downstream code reads cells directly. ~1,300 lines of zonk.rkt deleted. This absorbs SRE Track 2C scope ("Cell References in Expressions — ENABLES zonk elimination").
 
-Current: `with-speculative-rollback` (37 occurrences) uses `save-meta-state!` / `restore-meta-state!` to try a path, roll back on failure, try another. Sequential. Imperative. Blocks on each attempt.
+**What about defaulting unsolvable metas?**
 
-Propagator: Each speculative branch is an ATMS assumption. The network explores ALL branches simultaneously. The ATMS manages consistency — contradictory branches are retracted. No rollback. No sequential try/fail.
+Currently, final zonk defaults unsolved metas to `lzero` (universe level) and `mw` (unrestricted multiplicity). In the propagator design, this becomes a SINGLE fan-in threshold propagator per form:
 
-**Union type checking** (typing-core.rkt line 2424):
 ```
-;; Current: speculative rollback
-check(G, e, A | B) =
-  (or (with-speculative-rollback (check G e A))
-      (check G e B))
+meta-readiness cell (per form):
+  value: bitmask of meta solve states (monotone: bits flip 0→1 on solve)
+  merge: bitwise-OR
 
-;; Propagator: ATMS branches
+Each meta-solve: flips one bit in the readiness cell
+  → merge: OR(old-bitmask, new-bit) → updated bitmask
+
+S2 commit handler (ONE propagator):
+  fires when S0 reaches quiescence
+  reads: meta-readiness cell → bitmask
+  computes: complement (unsolved positions)
+  for each unsolved meta:
+    write(meta-cell, default-value)  ;; lzero for level metas, mw for mult metas
+  → cascading propagator firings settle naturally
+```
+
+**Why fan-in, not per-meta**: One propagator per meta is N propagators doing trivial work at S2. A single fan-in propagator reads the bitmask complement and writes all defaults in one batch. The readiness cell's merge (bitwise-OR) is monotone and trivially cheap. The S2 propagator fires exactly once.
+
+**What's deleted**: `zonk-intermediate`, `zonk-final`, `zonk-level` — all three zonk functions (~1,300 lines). The two-phase zonking distinction (intermediate preserves unsolved, final defaults) becomes: S0 propagators do the work that intermediate zonk did (substituting solved metas is just cell reads), S2 fan-in does the work that final zonk did (defaulting unsolvable metas).
+
+### §3.5 Phase 5: ATMS Extension (Delta from PM Track 8 B1)
+
+**PM Track 8 B1 already retired `save-meta-state!`/`restore-meta-state!`.** The current `with-speculative-rollback` uses TMS worldview + ATMS hypothesis creation + `net-commit-assumption`/`net-retract-assumption`. The ATMS API is pure functional (`atms-assume`, `atms-retract` — no `!`, returns new values). The infrastructure is BUILT.
+
+**What Track 4 adds**: extending the existing ATMS mechanism to propagator-native elaboration patterns. The delta:
+
+1. **Union type checking under DPO rules**: When a typing rule encounters a union type, it creates ATMS assumptions for each component. In D.1 this was framed as replacing save/restore — but save/restore is already gone. The actual work: make the DPO typing rules (§3.2) ATMS-aware. Each rule that may branch (app on union func-type, check against union expected-type) creates assumptions via the existing `atms-assume` API.
+
+2. **ATMS-aware cell-tree merge**: When two ATMS branches compute different types for the same cell, the surviving branch's PU value merges into the main cell at commitment. This uses the existing `net-commit-assumption` mechanism.
+
+3. **Learned clause propagation to DPO rules**: The existing nogood infrastructure (`atms-add-nogood`) already prunes known-bad assumption combinations. Track 4 connects this to the DPO rule registry: if a rule's pattern matches a known-bad combination, skip firing.
+
+**Union type checking example** (already works via existing ATMS, Track 4 wires it to DPO rules):
+```
 check(G, e, A | B):
-  assumption α₁ = "e : A"
-  assumption α₂ = "e : B"
+  assumption α₁ = atms-assume("e : A")    ;; pure functional, returns new ATMS
+  assumption α₂ = atms-assume("e : B")
   → both branches elaborate simultaneously under their assumptions
-  → if α₁ leads to contradiction: ATMS retracts α₁
-  → if α₂ succeeds: α₂ survives
+  → if α₁ leads to contradiction: atms-retract(α₁)
+  → if α₂ succeeds: α₂ survives, net-commit-assumption promotes values
   → if both succeed: union type preserved (both are valid)
 ```
 
-**Church fold attempts** (elaborator.rkt):
-```
-;; Current: try fold-style typing, roll back if it fails, try regular
-;; Propagator: ATMS explores both simultaneously
-assumption α_fold = "this is a Church fold"
-assumption α_regular = "this is a regular expression"
-→ both type-check simultaneously
-→ contradictions retract the failing assumption
-```
+**Church fold attempts** (elaborator.rkt): Same pattern — ATMS assumptions for "this is a Church fold" vs "this is a regular expression." Both type-check simultaneously via the existing `with-speculative-rollback` (which ALREADY uses ATMS under the hood since PM Track 8 B1). Track 4's work: ensure the DPO typing rules integrate cleanly with the ATMS branching.
 
-**This is the same pattern as parse disambiguation** (PPN Track 5, future): ambiguous parses create ATMS assumptions, type information retracts inconsistent ones. Track 4 establishes the ATMS infrastructure for type-level ambiguity. Track 5 extends it to parse-level ambiguity.
+**This is the same pattern as parse disambiguation** (PPN Track 5, future): ambiguous parses create ATMS assumptions, type information retracts inconsistent ones. The infrastructure is shared — Track 4 validates it for type-level ambiguity, Track 5 extends to parse-level ambiguity.
 
 ### §3.6 Phase 6: Trait Resolution as Constraint Propagators
 
@@ -602,18 +711,21 @@ constraint (Eq ?A):
 
 **Overlapping instances**: When multiple impl instances could match (trait coherence issue), the ATMS creates assumptions for each. The one that's consistent with all other constraints survives. Critical pair analysis from Track 2D detects incoherent instances at registration time.
 
-### §3.7 Phase 7: Surface→Type Galois Bridge
+### §3.7 Phase 7: Surface→Type Galois Bridge (Bidirectional Ring)
 
-The bridge between the surface lattice (parsed tree) and the type lattice (computed types). This is the bidirectional connection that the reduced product provides:
+The bridge between the surface lattice (parsed tree) and the type lattice (computed types). This IS the bidirectional ring structure from §1b realized as infrastructure:
 
-**Forward (surface → type)**: When a surface form is parsed, its type constraints are generated. This IS elaboration — the typing propagators fire.
+**Forward / Infer (join, upward)**: Surface form → DPO decomposition → sub-expression cells → typing rules fire → type information accumulates upward. This is the additive operation of the ring.
 
-**Backward (type → surface)**: When type information constrains which parse is valid, the type lattice writes BACK to the surface lattice. This is Track 5 scope (type-directed disambiguation), but the BRIDGE INFRASTRUCTURE is Track 4.
+**Backward / Check (meet, downward)**: Expected type → destructure into component constraints → write to sub-expression type cells. This is the multiplicative operation of the ring. The SRE per-relation merge dispatch selects the meet-merge (subtype relation, contravariant for Pi domains).
 
-The bridge is a set of propagators that connect surface cells to type cells:
-- A surface cell holding a surf-def writes the definition's declared type to a type cell
-- A type cell holding a contradiction writes a parse-invalid signal to the surface cell
-- The ATMS manages the assumption space for ambiguous parses
+**Distribution (Heyting)**: Meet distributes over join — checking distributes over synthesis. When a sub-expression has been inferred (join) AND there's an expected type constraint (meet), the merge combines them. For ground types, this is the Heyting algebra from Track 2H.
+
+The bridge is a set of propagators connecting surface cells to type cells:
+- DPO decomposition creates type cells from surface form structure (forward)
+- Expected type propagators write constraints to sub-expression cells (backward)
+- The ATMS manages the assumption space for ambiguous parses (Track 5 prep)
+- Same cells participate in both directions — the relation determines the merge
 
 ### §3.8 Phase 8: Scaffolding Retirement
 
@@ -643,23 +755,49 @@ The bridge is a set of propagators that connect surface cells to type cells:
 -- Elaboration as attribute evaluation on the propagator network.
 -- The type lattice IS a semiring. Elaboration IS parsing in the type semiring.
 -- "The parse doesn't produce trees — it produces types."
+-- Typing rules are DPO rewrite rules (Engelfriet-Heyker: HR = AG).
 
 -- Per-expression type cells (Pocket Universe per form)
 cell form-elab-pu
   :carrier FormPipelineValue × TypeMap
   :type-map (HasheqOf ASTPosition TypeValue)
   :merge   pointwise type-lattice-merge on type-map
+  :merge-relation per-relation via SRE merge-registry (equality | subtype)
   :bot     empty type-map (all positions ⊥)
   :top     any position = type-top (contradiction)
 
--- Typing rule as propagator
-propagator typing-rule
-  :reads   sub-expression type cells
-  :writes  parent expression type cell
-  :fire    compute type from sub-types (one infer/check arm)
+-- Typing context as cell (§1e)
+cell context-cell
+  :carrier (Listof (Pair TypeValue Multiplicity))
+  :merge   pointwise (type-merge × mult-merge) at each position
+  :bot     () (empty context)
+  :tensor  ctx-extend: parent-ctx ⊗ (type, mult) = child-ctx
+  :lookup  bvar(k) = structural read at position k
+
+-- Typing rule as DPO rewrite rule (§3.2)
+rewrite-rule typing-rule
+  :lhs     pattern-desc matching AST tag + sub-expressions
+  :K       preserved sub-cells (PUnify structural matching)
+  :rhs     type computation (fire function)
+  :direction bidirectional (infer = join, check = meet)
   :example
-    app-typing [func-type arg-type → result-type]
+    app-typing: pattern-desc 'app [func, arg]
+      K: {func, arg} sub-cells preserved
       fire: type-tensor-core(func-type, arg-type)
+    lam-typing: pattern-desc 'lam [domain, body]
+      K: {domain, body} sub-cells
+      fire: ctx-tensor(parent-ctx, domain-type) → child-ctx
+            infer(body) under child-ctx → codomain
+            write Pi(domain, codomain)
+
+-- DPO decomposition propagator (no imperative walk)
+propagator form-decompose
+  :reads   form-cell (holds parsed surface form as PU value)
+  :writes  sub-expression cells (created by structural matching)
+  :fire    SRE pattern-desc matches form tag
+           → creates sub-cells for each child position
+           → installs typing rewrite rules for each sub-cell
+           → sub-cells trigger further decomposition recursively
 
 -- Tensor as propagator (from Track 2H)
 propagator tensor
@@ -668,13 +806,21 @@ propagator tensor
   :fire    type-tensor-core(func, arg)
   :union-distribution emergent from cell merge (not explicit iteration)
 
--- Meta as cell
+-- Meta as cell (cell-refs replace expr-meta)
 cell meta-cell
   :carrier TypeValue
   :merge   type-lattice-merge
   :bot     type-bot (unsolved)
   :solve   write(meta-cell, solution-type)
   :cascade all watchers fire on solve
+  :ref     expressions contain cell-ref (not expr-meta) — no zonk needed
+
+-- Meta-readiness fan-in (zonk retirement)
+cell meta-readiness
+  :carrier Bitmask (one bit per meta in this form)
+  :merge   bitwise-OR (monotone: bits flip 0→1)
+  :s2-handler single threshold propagator
+    reads complement → writes defaults to unsolvable metas
 
 -- Trait constraint as cell
 cell constraint-cell
@@ -684,18 +830,22 @@ cell constraint-cell
   :resolved instance found
   :top     contradicted (no instance)
   :watches argument type cells → re-evaluates on refinement
+  :monotone bundles are conjunctions, no inheritance, no ordering deps
 
--- ATMS assumption for speculation
+-- ATMS assumption (extends existing PM Track 8 B1 infrastructure)
 assumption branch
+  :api     atms-assume / atms-retract (pure functional, no !)
   :creates worldview where branch holds
-  :contradiction retracts branch + all dependent cells
-  :replaces save-meta-state! / restore-meta-state!
+  :contradiction retracts branch via net-retract-assumption
+  :commit  surviving branch promotes via net-commit-assumption
+  :track4-delta wire DPO typing rules into existing ATMS branching
 
--- Surface→Type Galois bridge
+-- Surface→Type Galois bridge (bidirectional ring)
 bridge surface-type
-  :forward  surface form → install typing propagators (elaboration)
-  :backward type contradiction → retract parse assumption (Track 5)
-  :mechanism propagators connecting surface cells to type cells
+  :forward  surface form → DPO decomposition → type cells (infer = join, upward)
+  :backward expected type → destructure → sub-cell constraints (check = meet, downward)
+  :ring     join is additive, meet is multiplicative, distribution = Heyting
+  :mechanism per-relation SRE merge dispatch on same cells
 ```
 
 ### NTT Correspondence Table
@@ -703,12 +853,15 @@ bridge surface-type
 | NTT Construct | Racket Implementation | File |
 |---------------|----------------------|------|
 | `form-elab-pu` | Extended `form-pipeline-value` with type-map | form-cells.rkt |
-| `typing-rule` propagator | Registered propagator per AST node kind | typing-propagators.rkt (NEW) |
-| `tensor` propagator | `type-tensor-core` wired via `net-add-propagator` | subtype-predicate.rkt + elaborator-network.rkt |
-| `meta-cell` | Meta as network cell (replacing CHAMP hash) | metavar-store.rkt (REWRITTEN) |
+| `context-cell` | Context as cell with binding-stack PU value | typing-propagators.rkt (NEW) |
+| `typing-rule` (DPO) | `sre-rewrite-rule` instances on type domain | typing-propagators.rkt (NEW) |
+| `form-decompose` | DPO structural decomposition propagator | typing-propagators.rkt (NEW) |
+| `tensor` propagator | `type-tensor-core` wired as DPO rule fire fn | subtype-predicate.rkt + typing-propagators.rkt |
+| `meta-cell` | Meta as network cell (cell-refs in expressions) | metavar-store.rkt (MODIFIED) |
+| `meta-readiness` | Bitmask cell + S2 fan-in threshold propagator | metavar-store.rkt (MODIFIED) |
 | `constraint-cell` | Trait constraint as network cell | trait-resolution.rkt (REWRITTEN) |
-| `assumption` (ATMS) | `atms-assume!` replacing `save-meta-state!` | elab-speculation-bridge.rkt (REWRITTEN) |
-| `bridge surface-type` | Propagators connecting form cells to type cells | elaborator-network.rkt (EXPANDED) |
+| `assumption` (ATMS) | Existing `atms-assume`/`atms-retract` (PM Track 8 B1) | elab-speculation-bridge.rkt (EXTENDED) |
+| `bridge surface-type` | Bidirectional per-relation propagators | elaborator-network.rkt (EXPANDED) |
 
 ---
 
@@ -717,11 +870,12 @@ bridge surface-type
 | Risk | Severity | Mitigation |
 |------|----------|------------|
 | Cell explosion (per-expression cells) | High | Pocket Universe: one cell per form, PU tracks sub-expression types. Not one cell per AST node. |
-| Performance regression from network overhead | High | Pre-0 benchmarks establish baseline. Per-command elaboration is ~15ms today. Target: no worse than 2×. |
-| ATMS memory pressure from many assumptions | Medium | ATMS assumptions are lightweight (bitvectors). Track 4's usage: ~2-5 assumptions per union check. |
-| 595-arm typing-core.rkt migration scope | High | Incremental: start with the 10 most common arms (app, lam, Pi, fvar, literal, meta, Sigma, fst/snd, boolrec). Coverage grows per phase. |
-| Interaction between typing propagators and constraint propagators | Medium | The existing stratification (S0 monotone, S1 readiness, S2 commit, S(-1) retraction) handles this. Constraint resolution is S0 (monotone — constraints can only gain information). |
-| `restore-meta-state!` retirement breaks existing tests | High | Incremental: ATMS coexists with save/restore during migration. Tests migrate incrementally. |
+| Performance regression from network overhead | High | Pre-0 benchmarks establish baseline. Per-command elaboration is ~15ms today. Target: no worse than 2×. Ground-type fast path preserved (no propagator for `Nat ≡ Nat`). |
+| DPO typing rules: 589 arms → ~80 rules migration scope | High | Incremental: start with the 10 most common AST kinds (app, lam, Pi, fvar, bvar, literal, meta, Sigma, fst/snd, boolrec). Coverage grows per phase. Critical pair analysis validates each batch. |
+| Zonk retirement scope (~1,300 lines) | Medium | Cell-refs are a local change (expr-meta → cell-ref). Zonk callers switch to cell reads. Incremental: intermediate zonk first (just reads), then final zonk (S2 fan-in). |
+| Context-as-cells: de Bruijn indexing under substitution | Medium | Context cells use positional merge. Substitution doesn't move cells — it writes new values. PUnify handles structural sharing. |
+| Interaction between typing and constraint propagators | Medium | Both are S0 (monotone). Trait resolution is monotone (bundles are conjunctions, no inheritance). Existing stratification handles S0→S2 transition. |
+| ATMS integration with DPO rules | Low | ATMS infrastructure already built (PM Track 8 B1). Track 4 delta is wiring, not construction. |
 
 ---
 
@@ -765,7 +919,10 @@ bridge surface-type
 
 Track 4 does NOT change user-facing syntax. It changes the INTERNAL mechanism for type-checking existing syntax. All `.prologos` programs should produce the same types before and after Track 4. The change is: HOW types are computed (propagator fixpoint vs imperative walk), not WHAT types are computed.
 
-One observable change: error messages may improve (ATMS dependency traces → Heyting pseudo-complement → more informative "why did this fail?" messages).
+Observable changes:
+- Error messages may improve (ATMS dependency traces → more informative "why did this fail?" messages)
+- ~1,300 lines of zonk.rkt deleted (zonk retirement — cell-refs replace expr-meta, no tree walk needed)
+- SRE Track 2C scope absorbed (cell references in expressions)
 
 ---
 
@@ -778,3 +935,38 @@ One observable change: error messages may improve (ATMS dependency traces → He
 - **Lattice Foundations §2.4** — "type inference as parsing" quote, semiring structure
 - **Adhesive Categories §6** — elaboration as adhesive DPO, parallelism guarantee
 - **Grammar Form §14** — attribute grammar thread, PPN 4 requirements
+- **SRE Track 2C** — cell references in expressions, zonk elimination — scope absorbed into Track 4 Phase 4b
+
+---
+
+## §10 D.1→D.2 Critique Findings and Changes
+
+Self-critique with three lenses: Principles (P), Reality Check (R), Propagator Mindspace (M).
+
+### Critical Findings (incorporated into D.2)
+
+| # | Lens | Finding | Resolution |
+|---|------|---------|-----------|
+| R1 | R | `save-meta-state!`/`restore-meta-state!` already retired by PM Track 8 B1. D.1 Phase 5 scope was wrong. | Phase 5 rescoped as "ATMS extension (delta)" — wiring DPO rules into existing ATMS, not building from scratch. |
+| M1 | M | Context (`ctx`) had no cell representation. Typing propagators cannot work without it. | Added §1e Context Lattice. Context = cell with binding-stack PU value. Extension = tensor. Lookup = structural read. Module Theory parallel. |
+| M2 | M | `check` mode (top-down flow) not modeled. Bidirectional typing requires backward propagation. | Added bidirectional ring structure to §1b. Infer = join relation (upward), check = meet relation (downward). Same cells, per-relation SRE merge. |
+| M3 | M | D.1 had imperative walks for cell creation. Trees are already cells (PPN Track 1-2). | Rewrote §2: form cell write → DPO decomposition propagator → sub-cells → typing rules. No walks. |
+| P5 | P | Typing rules as closures, not data. Missed connection to Track 2D rewrite rules. | Rewrote §3.2: typing rules as `sre-rewrite-rule` DPO data. Engelfriet-Heyker. Critical pair analysis validates confluence. |
+| M6 | M | Zonking not addressed. Should be retired entirely, not adapted. | Added §3.4b: zonk retirement. Cell-refs replace `expr-meta`. Fan-in bitmask threshold propagator at S2. ~1,300 lines deleted. Absorbs SRE Track 2C. |
+| R3 | R | `watched-input` doesn't exist in current API. | Retained as new infrastructure in Phase 1a with acknowledgment that it's new, not extending existing. |
+| R4 | R | `solve-meta!` already triggers network resolution. | Phase 4a rescoped: cell-refs replacing `expr-meta` and retiring CHAMP as authoritative store. |
+
+### Retracted Findings
+
+| # | Lens | Finding | Why Retracted |
+|---|------|---------|--------------|
+| P2 | P | Trait resolution ordering dependencies. | Bundles are conjunctions (no inheritance). Each constraint cell is independent. Trait resolution IS monotone, IS S0. |
+
+### Confirmed (no change needed)
+
+| # | Finding |
+|---|---------|
+| M4 | Quiescence detection via meta-readiness cell + S2 threshold propagator (fan-in bitmask). |
+| M5 | Cell-tree merge is relation-parameterized via SRE merge-registry. Contravariant/covariant per Pi component. |
+| P1 | Constraint SRE domain kept for consistency (flat lattice, trivial properties, but uniform with all other domains). |
+| R5 | Ground-type fast path in `elab-add-unify-constraint` must be preserved. Noted in §5 Risks. |
