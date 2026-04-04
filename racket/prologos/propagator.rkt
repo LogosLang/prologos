@@ -79,6 +79,9 @@
  net-cell-replace  ;; Track 7 post-fix: bypass merge for S(-1) retraction
  ;; Propagator operations
  net-add-propagator
+ ;; PPN Track 4 Phase 1a: component-indexed firing
+ pu-value-diff
+ filter-dependents-by-paths
  ;; Threshold propagators (Phase 2.5b)
  make-threshold-fire-fn
  make-barrier-fire-fn
@@ -180,7 +183,10 @@
 
 ;; Propagator cell — immutable.
 ;; value: any Racket value (lattice element; starts at bot)
-;; dependents: champ-root (set of prop-id → #t) — propagators to fire on change
+;; dependents: champ-root (prop-id → component-path-or-#f)
+;;   component-path = #f means "fire on ANY change to this cell" (default, backward compat)
+;;   component-path = symbol or list means "fire only when this PU component changes"
+;;   PPN Track 4 Phase 1a: component-indexed propagator firing
 (struct prop-cell (value dependents) #:transparent)
 
 ;; Propagator — monotone function, immutable.
@@ -579,6 +585,57 @@
       (error 'net-cell-read-raw "unknown cell: ~a" cid)
       (prop-cell-value cell)))
 
+;; PPN Track 4 Phase 1a: compute which PU component paths changed between
+;; old and new values. Returns a set of changed paths, or #f meaning
+;; "everything changed" (non-structured values, or structural mismatch).
+;; For hasheq-based PU values (type-maps), diffs per-key.
+;; For all other values, returns #f (all dependents fire).
+(define (pu-value-diff old-val new-val)
+  (cond
+    ;; Both are hasheq → diff per key
+    [(and (hash? old-val) (immutable? old-val)
+          (hash? new-val) (immutable? new-val))
+     (define changed '())
+     ;; Keys in new that differ from old (changed or added)
+     (for ([(k v) (in-hash new-val)])
+       (define old-v (hash-ref old-val k 'pu-diff-absent))
+       (unless (or (eq? v old-v) (equal? v old-v))
+         (set! changed (cons k changed))))
+     ;; Keys in old missing from new (removed)
+     (for ([(k _v) (in-hash old-val)])
+       (unless (hash-has-key? new-val k)
+         (set! changed (cons k changed))))
+     (if (null? changed) '() changed)]
+    ;; Non-structured or type mismatch → everything changed
+    [else #f]))
+
+;; PPN Track 4 Phase 1a: filter dependent prop-ids by component paths.
+;; deps-champ: prop-id → component-path-or-#f
+;; changed-paths: list of changed path keys, or #f meaning "all changed"
+;; Returns: list of prop-id to enqueue.
+(define (filter-dependents-by-paths deps-champ changed-paths)
+  (cond
+    ;; All changed (non-structured value) → enqueue all dependents
+    [(not changed-paths)
+     (champ-keys deps-champ)]
+    ;; Nothing changed → enqueue nothing (shouldn't happen, caller checks)
+    [(null? changed-paths)
+     '()]
+    ;; Specific paths changed → filter
+    [else
+     (define changed-set changed-paths)
+     (champ-fold
+      deps-champ
+      (lambda (pid path acc)
+        (cond
+          ;; path = #f → watch all, always fire
+          [(not path) (cons pid acc)]
+          ;; path is in the changed set → fire
+          [(member path changed-set) (cons pid acc)]
+          ;; path not changed → skip
+          [else acc]))
+      '())]))
+
 ;; Write a value to a cell: computes merge-fn(old, new).
 ;; Track 4 Phase 2: TMS-transparent. If the cell holds a tms-cell-value and
 ;; the new value is NOT a tms-cell-value (i.e., a plain domain value from a
@@ -628,8 +685,21 @@
              [_ (when cc (set-box! cc (add1 (unbox cc))))]
              [new-cell (struct-copy prop-cell cell [value merged])]
              [new-cells (champ-insert cells h cid new-cell)]
-             ;; Enqueue dependents
-             [deps (champ-keys (prop-cell-dependents cell))]
+             ;; Enqueue dependents — PPN Track 4 Phase 1a: component-indexed filtering.
+             ;; If any dependent has a component-path (not #f), compute PU-diff
+             ;; and only enqueue dependents whose path intersects the diff.
+             ;; If ALL dependents have path=#f, fast path: enqueue all (no diff needed).
+             [deps-champ (prop-cell-dependents cell)]
+             [deps (let ([has-component-paths?
+                          (champ-fold deps-champ
+                                      (lambda (_k v found?) (or found? v))
+                                      #f)])
+                     (if has-component-paths?
+                         ;; Slow path: compute diff, filter dependents
+                         (let ([changed (pu-value-diff old-val merged)])
+                           (filter-dependents-by-paths deps-champ changed))
+                         ;; Fast path: no component paths registered, enqueue all
+                         (champ-keys deps-champ)))]
              [new-wl (append deps (prop-network-worklist net))]
              ;; Check contradiction
              [cfn (champ-lookup (prop-network-contradiction-fns net) h cid)]
@@ -985,7 +1055,15 @@
 ;;
 ;; The propagator is registered as a dependent of each input cell,
 ;; and scheduled for initial firing on the worklist.
-(define (net-add-propagator net input-ids output-ids fire-fn)
+;; PPN Track 4 Phase 1a: #:component-paths is an optional assoc list
+;; of (cell-id . path) pairs declaring which PU component a propagator
+;; watches for each input cell. If omitted (or a cell-id is not in the
+;; assoc), the propagator watches the entire cell (path = #f, backward compat).
+;; Path values are arbitrary keys (symbols, integers, etc.) that correspond
+;; to keys in a hasheq PU value. The component path is stored in the cell's
+;; dependent set: prop-id → path-or-#f.
+(define (net-add-propagator net input-ids output-ids fire-fn
+                            #:component-paths [component-paths '()])
   ;; PAR Track 1: During BSP fire rounds, propagator creation is allowed
   ;; but the new propagator is NOT scheduled on the worklist. It exists
   ;; in the result-net's propagator CHAMP. fire-and-collect-writes captures
@@ -1006,8 +1084,12 @@
       (define cell (champ-lookup (prop-network-cells net) ch cid))
       (if (eq? cell 'none)
           cn  ;; unknown cell — skip (defensive)
-          (let ([new-deps (champ-insert (prop-cell-dependents cell)
-                                         ph pid #t)])
+          ;; PPN Track 4 Phase 1a: look up component path for this cell-id.
+          ;; If found in component-paths, store the path. Otherwise #f (watch all).
+          (let* ([path (let ([pair (assoc cid component-paths equal?)])
+                         (if pair (cdr pair) #f))]
+                 [new-deps (champ-insert (prop-cell-dependents cell)
+                                          ph pid path)])
             (define-values (cn* _)
               (tchamp-insert-owned! cn sb ch cid
                                     (struct-copy prop-cell cell
