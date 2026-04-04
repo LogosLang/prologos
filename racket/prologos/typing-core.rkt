@@ -2772,8 +2772,9 @@
     ;; Metavariable: if solved, follow solution; if unsolved, assume Type(lzero).
     ;; Unsolved metas in type position (e.g. map-empty key/value types) will be
     ;; resolved later via unification. This mirrors check's [(expr-meta _) _) #t].
-    [(expr-meta id _)
-     (let ([sol (meta-solution id)])
+    ;; PPN Track 4 Phase 4b: cell-id fast path (cells authoritative)
+    [(expr-meta id cell-id)
+     (let ([sol (meta-solution/cell-id cell-id id)])
        (if sol
            (infer-level ctx sol)
            (just-level (lzero))))]

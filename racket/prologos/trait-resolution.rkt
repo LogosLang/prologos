@@ -114,11 +114,12 @@
      (if (< k (vector-length var-names))
          (vector-ref var-names k)
          (format "T~a" k))]
-    [(expr-meta id _)
-     ;; If solved, chase the solution
-     (if (meta-solved? id)
-         (expr->impl-key-str (meta-solution id))
-         (format "?~a" id))]
+    ;; PPN Track 4 Phase 4b: cell-id fast path (cells authoritative)
+    [(expr-meta id cell-id)
+     (let ([sol (meta-solution/cell-id cell-id id)])
+       (if sol
+           (expr->impl-key-str sol)
+           (format "?~a" id)))]
     [_ (pp-expr e)]))
 
 ;; ========================================

@@ -251,10 +251,12 @@
 ;; solve-meta! to trigger resolution.
 
 (define (punify-bridge-cell-solves! exprs)
+  ;; PPN Track 4 Phase 4b: cell-id fast path (cells authoritative)
   (for ([e (in-list exprs)])
     (when (expr-meta? e)
       (define id (expr-meta-id e))
-      (define sol (meta-solution id))
+      (define cell-id (expr-meta-cell-id e))
+      (define sol (meta-solution/cell-id cell-id id))
       (when (and sol (not (meta-info-solved? id)))
         (solve-meta! id sol)))))
 
@@ -420,11 +422,12 @@
 ;; This catches transitive inconsistencies from cell writes + quiescence
 ;; that the imperative path wouldn't detect until the top-level `unify` wrapper.
 
-(define (solve-flex-rigid id rhs ctx)
+;; PPN Track 4 Phase 4b: added cell-id parameter for fast path
+(define (solve-flex-rigid id rhs ctx #:cell-id [cell-id #f])
   (cond
     ;; Already solved? Check consistency by unifying solution with rhs
     [(meta-solved? id)
-     (unify-core ctx (meta-solution id) rhs)]
+     (unify-core ctx (or (meta-solution/cell-id cell-id id) (meta-solution id)) rhs)]
     ;; Occur check: prevent infinite types
     [(occurs? id rhs) #f]
     ;; Solve!

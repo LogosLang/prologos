@@ -76,8 +76,9 @@
     [(expr-nil) "nil"]
     [(expr-hole) "_"]
     [(expr-typed-hole name) (if name (format "??~a" name) "??")]
-    [(expr-meta id _)
-     (let ([sol (meta-solution id)])
+    ;; PPN Track 4 Phase 4b: cell-id fast path (cells authoritative)
+    [(expr-meta id cell-id)
+     (let ([sol (meta-solution/cell-id cell-id id)])
        (if sol
            (pp-expr sol names)
            (format "?~a" id)))]

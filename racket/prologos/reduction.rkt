@@ -3165,8 +3165,9 @@
            (if val (whnf val) e)))]
 
     ;; Metavariable: if solved, reduce solution; if unsolved, stuck
-    [(expr-meta id _)
-     (let ([sol (meta-solution id)])
+    ;; PPN Track 4 Phase 4b: use cell-id fast path (cells authoritative)
+    [(expr-meta id cell-id)
+     (let ([sol (meta-solution/cell-id cell-id id)])
        (if sol (whnf sol) e))]
 
     ;; Everything else is already in WHNF

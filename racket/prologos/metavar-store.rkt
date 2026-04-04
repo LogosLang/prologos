@@ -688,12 +688,14 @@
   (let walk ([e expr] [acc '()])
     (cond
       [(expr-meta? e)
-       (let ([id (expr-meta-id e)])
-         (if (meta-solved? id)
-             ;; Follow solved meta's solution to find transitive metas
-             (let ([sol (meta-solution id)])
-               (if sol (walk sol acc) acc))
-             (if (memq id acc) acc (cons id acc))))]
+       (let ([id (expr-meta-id e)]
+             [cid (expr-meta-cell-id e)])
+         ;; PPN Track 4 Phase 4b: cell-id fast path (cells authoritative)
+         (let ([sol (meta-solution/cell-id cid id)])
+           (if sol
+               ;; Follow solved meta's solution to find transitive metas
+               (walk sol acc)
+               (if (memq id acc) acc (cons id acc)))))]
       [(struct? e)
        (let ([v (struct->vector e)])
          (for/fold ([a acc])
@@ -1999,13 +2001,19 @@
 ;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
 ;; PM 8F Phase 1: Fast path that uses cell-id directly (skips 82ns id-map lookup).
 ;; Called by callers that have the expr-meta struct (zonk, unify, etc.)
+;; PPN Track 4 Phase 4b: guarded cell read — if cell-id references a cell from a
+;; previous command's network (stale reference), fall back to id-map or CHAMP path
+;; instead of crashing. This happens when expr-meta structs persist in the global
+;; environment across command boundaries.
 (define (meta-solution/cell-id cell-id id)
   (define net-box (current-prop-net-box))
   (cond
     [(and cell-id net-box)
      ;; Direct cell read — no id-map lookup (82ns savings per call)
-     (let ([v (elab-cell-read (unbox net-box) cell-id)])
-       (and (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]
+     ;; Guard: cell may be stale (from prior command's network). Fall back gracefully.
+     (with-handlers ([exn:fail? (lambda (_) (meta-solution id))])
+       (let ([v (elab-cell-read (unbox net-box) cell-id)])
+         (and (not (prop-type-bot? v)) (not (prop-type-top? v)) v)))]
     [net-box
      ;; cell-id=#f (module-loading meta) — fall back to id-map
      (define cid (prop-meta-id->cell-id id))
