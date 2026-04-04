@@ -350,7 +350,8 @@ These apply to USER-DEFINED extensions. When a user writes `grammar my-form`, th
 |----------|-----------|-----------|
 | `defmacro` relationship | `grammar` subsumes; `defmacro` eventually deprecated | Level 0 grammar IS defmacro. No rush — deprecate when grammar is proven. |
 | Numeric vs DAG precedence | DAG with `tighter-than` (existing design) | Extensible, intuitive, no "what number?" problem. |
-| Type information source | `:target` carries types; `:type` optional/required when no target | Progressive disclosure. Most grammars have targets. |
+| Type information source | `:target` carries types via spec/defn. Even dependent types. `:type` only for primitives without target. | 90%+ of cases, including dependent types, work via :target. |
+| Attribute flow priority | Tier 1 (:target) → Tier 2 (type params) → Tier 3 (&> relational, future) | Tier 1 handles 90%+. Tier 3 not a priority — can wait. |
 | `:reduce` mechanism | Compiles to Track 6 DPO reduction rules | One mechanism. Completeness principle. |
 | `:dual` explicit vs inferred | Explicit assertion, compiler verifies. Can be inferred. | Same pattern as `check` — assert + verify. |
 | Syntactic domain distinction | Inferred from syntax: strings=tokens, names=nonterminals, regex=chars | No modal prefix needed. Clean progressive disclosure. |
@@ -360,29 +361,51 @@ These apply to USER-DEFINED extensions. When a user writes `grammar my-form`, th
 
 ---
 
-## 14. Attribute Grammars and Dependent Type Expression (Active Design Thread)
+## 14. Attribute Grammars and Dependent Type Expression
 
-### The Problem
+### The Core Insight: `:target` Carries Everything
 
-A grammar production needs to express not just STRUCTURE (what to parse) but ATTRIBUTES (what types flow, what constraints hold, what relationships exist between components). In Prolog DCGs, this is natural — `expr(Type)` carries the type as an argument, `{ Goal }` constrains it. The grammar and the type rule are the same language.
+The 90%+ right answer for attribute-rich grammars — even those involving dependent types — is: **put the typing logic in `spec`/`defn`, and let the grammar desugar to it via `:target`.**
 
-In Prologos, we have richer types (dependent types, universes, QTT) but a separate grammar and type language. The challenge: express attribute flow in the grammar without bolting on a second language.
+```prologos
+;; Even natrec — deeply dependent — is just a :target
+grammar natrec-form
+  | "natrec" mot:expr base:expr step:expr target:expr
+    -> (natrec mot base step target)
+;; ALL typing complexity lives in natrec's spec, not in the grammar.
+```
+
+The grammar is PURE STRUCTURE. The types flow from the target's spec. This works because:
+- `natrec` has a spec that declares its dependent typing (motive, base checks against motive(zero), step checks against Π(n:Nat).motive(n)→motive(suc(n)))
+- The elaborator applies the spec when it encounters the desugared form
+- The grammar doesn't need to know anything about the typing — it just rewrites
+
+This principle scales to ALL dependent forms: `J` elimination, GADT pattern matching, session type steps, dependent pairs. As long as the form has a `spec`/`defn` with the right typing, the grammar is one line.
 
 ### The Engelfriet-Heyker Equivalence
 
 HR grammars and attribute grammars have exactly the same generative power (Engelfriet & Heyker 1992). Our propagator network already implements attribute grammar evaluation. The elaborator IS an attribute grammar evaluator — synthesized attributes flow up (inferred types), inherited attributes flow down (checking context). PPN Track 4 merges this with parsing: elaboration IS parsing in the type-lattice semiring.
 
-### Design Direction: Common Case + Advanced Case
+The key consequence: the attribute flow doesn't need to be in the GRAMMAR — it's in the NETWORK. The grammar declares structure; the network computes attributes. The `:target` connects them.
 
-**Common case (Expression B)**: Pure structure, types inferred from `:target`.
+### Three Tiers (Priority-Ordered)
+
+**Tier 1 (the 90%+ case): `:target` with existing spec/defn**
 
 ```prologos
 grammar when
   | "when" cond:expr body:expr -> (if cond body unit)
-  ;; Types fully inferred from if's spec. No annotations needed.
+
+grammar natrec-form
+  | "natrec" mot:expr base:expr step:expr target:expr
+    -> (natrec mot base step target)
 ```
 
-**Advanced case (type parameters, Expression A)**: When no `:target`, or when the type flow is non-trivial, type parameters on the grammar nonterminal:
+Types fully inferred. No annotations. The grammar is pure syntax-to-syntax rewriting. Even deeply dependent forms work because the typing lives in the target's spec.
+
+If the language only had `spec`/`defn` and `grammar :target`, most users would never notice the lack or want.
+
+**Tier 2 (when needed): type parameters on nonterminals**
 
 ```prologos
 grammar expr<T>
@@ -391,50 +414,53 @@ grammar expr<T>
   | "if" c:expr<Bool> t:expr<T> e:expr<T> : T
 ```
 
-**Attribute-rich case (relational constraints, emerging direction)**: For dependent types and complex attribute relationships, `&>` relational constraints embedded in the grammar — the same mechanism as our logic language:
+For grammar nonterminals that need to carry type attributes (e.g., the type of an expression flows through parse composition). Used when there is no single `:target` — the grammar IS the primitive.
+
+**Tier 3 (future, power-user): relational constraints via `&>`**
 
 ```prologos
-grammar match-expr
-  | "match" scrut:expr arms:match-arm+
-    :target (reduce scrut arms)
-    &> all-arms-same-type arms result-type
-    &> scrut-type-determines-arms scrut.type arms
+grammar my-eliminator
+  | "my-elim" mot:expr base:expr target:expr
+    &> (check mot <Nat -> Type>)
+       (check base [mot zero])
+       (check target Nat)
+       (synthesize [mot target])
 ```
 
-The `&>` constraints are relational goals fired during elaboration — they constrain attribute flow. The elaborator (Track 4) wires them as propagators.
+Single `&>` with conjunction block (multiple `&>` would mean disjunction). Relational goals expressed in the existing logic language. For defining genuinely NEW primitives with dependent types where no existing `spec`/`defn` target exists.
 
-### The Prolog Connection
+**Not a priority** — this tier can wait. The relational power is important for completeness but the vast majority of grammar extensions will use Tier 1. When the language matures and users push the boundaries, Tier 3 provides the escape hatch.
 
-In Prolog, attributes are just predicate arguments. Relations constrain them via `{ Goal }`. There's no syntactic distinction between "this is structure" and "this is a type attribute." The elegance: one language for everything.
+### The Prolog/DCG Connection
 
-For Prologos, the `&>` relational constraint offers a similar unification: the grammar says "here's the structure," the `&>` says "here's what must hold." The user writes relationships, not plumbing. This uses our EXISTING relational language infrastructure (`defr`-style constraints).
+In Prolog DCGs, `expr(Type)` carries attributes as predicate arguments. The elegance: one language for grammar and typing.
 
-### Hard Cases (Tests for Any Candidate Syntax)
+In Prologos, the `:target` path achieves the same elegance differently: the grammar is one language (structure), the typing is another language (`spec`/`defn`), and `:target` connects them. The user doesn't mix languages in one form — they write the grammar AND the spec, and the compiler handles the connection.
 
-These are the cases where elegance breaks or shines:
-
-1. **GADT pattern match**: branch type depends on which constructor matched — the scrutinee's constructor REFINES the type in each arm
-2. **Session type step**: `send Int . recv Bool . end` — each step constrains the next step's available operations
-3. **Dependent pair**: `(x : Nat, Vec x Bool)` — second component's type depends on first component's VALUE
-4. **Parameterized grammar**: `list-literal {A}` where element parsing depends on A
-5. **Overloaded operator**: `a + b` where the operator dispatches based on a's type (trait resolution during parsing)
+The Tier 3 `&>` relational constraints bring us closer to Prolog's unified expression — but only when the user genuinely needs it.
 
 ### What PPN Track 4 Must Deliver
 
-PPN Track 4's job: make the propagator network serve as the attribute graph for grammar productions.
+PPN Track 4's job: make the propagator network serve as the attribute graph for grammar productions. The hard thing for Track 4 that makes the grammar form easy:
 
-- Each production creates attribute cells (type, value, constraints)
-- The network connects them (synthesized flow up, inherited flow down, cross-domain via bridges)
-- Elaboration IS the fixpoint of the attribute graph
-- The grammar form DECLARES attributes; Track 4 handles HOW they flow
+- When a grammar rewrites to a `:target`, Track 4 wires the target's typing rules as propagators
+- Each spec's type constraints become attribute cells connected by propagators
+- The elaboration fixpoint computes all types
+- The grammar form declares WHAT (structure + target); Track 4 handles HOW (attribute flow)
 
-The hard thing for Track 4 that makes the grammar form easy: the machinery for creating attribute cells, wiring propagators for attribute flow, and computing the fixpoint. The grammar form just declares WHAT — Track 4 handles HOW.
+Track 4 should design with this in mind: `grammar :type` compilation as a consideration, making the typing infrastructure efficient enough that grammar extensions "just work" when they desugar to typed targets.
 
-### Status
+### Hard Cases (Tests for Any Future Syntax Work)
 
-This thread is ACTIVE and UNRESOLVED. The relational constraint direction (`&>`) is promising but needs iteration. The common case (Expression B — types from target) and fallback (Expression A — type parameters) are settled. The attribute-rich case needs more worked examples through the hard cases above.
+For eventual Tier 2/3 development, these are the stress tests:
 
-Attribute graph grammars (the formal framework where attributes flow along graph edges, not just tree edges) may provide additional theoretical grounding — to be explored.
+1. **GADT pattern match**: branch type depends on which constructor matched
+2. **Session type step**: each step constrains the next step's available operations
+3. **Dependent pair**: second component's type depends on first component's VALUE
+4. **Parameterized grammar**: element parsing depends on type parameter
+5. **Overloaded operator**: dispatch based on operand type (trait resolution)
+
+All five work at Tier 1 (`:target` with existing spec). Tiers 2-3 are needed only for users defining genuinely new type formers.
 
 ---
 
