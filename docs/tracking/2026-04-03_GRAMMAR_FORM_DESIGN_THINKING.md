@@ -1,9 +1,9 @@
-# Grammar Form — Design Thinking (Early Draft)
+# Grammar Form — Design Thinking (Revised Draft)
 
-**Date**: 2026-04-03
-**Stage**: 1→2 (Research synthesis → early design thinking)
+**Date**: 2026-04-03 (revised 2026-04-04)
+**Stage**: 2 (Design thinking — converging on direction)
 **Series**: PPN Track 3.5 / Grammar Form R&D
-**Status**: Living document. Captures current design thinking, open questions, and connected research. Not yet a Stage 3 design document.
+**Status**: Living document. Captures design direction from discussion. Not yet a Stage 3 formal design.
 
 **Research grounding**:
 - [Grammar Toplevel Form — Vision](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md) — 7-view multi-spec, progressive specification
@@ -26,294 +26,373 @@
 
 A `grammar` toplevel form that is:
 - **The universal extension mechanism** — powerful enough that language implementors would use it for most of their own needs
-- **Progressive** — a one-liner for sugar, a full spec for real language extensions (Progressive Disclosure principle)
-- **Subsumes `defmacro`** — the simplest `grammar` form IS a defmacro. No separate mechanism needed for the common case.
-- **Multi-modal** — a grammar production simultaneously specifies parsing, serialization, types, reduction, display. Each view is a DPO span on a different lattice domain.
-- **Bidirectional where possible** — parsing and serialization are duals when lossless. The grammar declares which invariant level (identity, structural, behavioral, value) the round-trip preserves.
-- **First-class** — grammar rules are values. They compose. They can be exported from modules. They participate in the SRE as registered DPO spans.
-- **Checked** — grammar extensions are verified at registration time: critical pair analysis detects conflicts, type rules are validated, invariant levels are checked.
+- **Progressive** — a one-liner for sugar, a full spec for real language extensions (Progressive Disclosure)
+- **Subsumes `defmacro`** — the simplest `grammar` form IS a defmacro. Eventually deprecates `defmacro`.
+- **Multi-view** — a grammar production simultaneously specifies parsing, serialization, types, reduction, display. Each view is a DPO span on a different lattice domain.
+- **Bidirectional where possible** — parsing and serialization are duals. The grammar declares invariant level. `:dual` can be inferred but is worth asserting for compiler verification.
+- **Compositional** — grammar productions reference other productions by name. Repetition, optionality, and alternation as production-level combinators.
+- **First-class** — grammar rules are values. They compose. They export from modules. They participate in the SRE as registered DPO spans.
+- **Checked** — critical pair analysis at registration. Type rules validated. Invariant levels checked.
+- **Context-sensitive capable** — productions can read from context cells (indentation, scope). Mechanically safe via propagator architecture. An experimental extension.
 
 ---
 
-## 2. Progressive Specification (from simplest to fullest)
+## 2. The Multi-Domain View
 
-### Level 0: Sugar (equivalent to `defmacro`)
+Each view of a `grammar` production is a DPO span on a different lattice domain in the 6-domain reduced product:
+
+| View | Domain | DPO direction | What it specifies |
+|------|--------|--------------|-------------------|
+| `:lex` | Token lattice (L_token) | Characters → tokens | How to TOKENIZE this form |
+| `:parse` | Surface lattice (L_surface) | Tokens/trees → tree | How to PARSE this form |
+| `:type` | Type lattice (L_type) | Surface form → constraints | What TYPE this form has (optional — inferred from `:target` when present) |
+| `:reduce` | Core lattice (L_core) | Redex → contractum | How this form EVALUATES |
+| `:display` | Text lattice | Tree → text | How to DISPLAY this form (derived from `:parse` when lossless) |
+| `:serialize` | Byte lattice | Tree → bytes | How to ENCODE this form for wire/storage |
+| `:target` | Cross-domain | Parse result → structural target | The DESUGARING or COMPILATION of this form |
+
+Not all views are required. Progressive specification: provide what you have, derive what you don't.
+
+---
+
+## 3. Progressive Specification
+
+### Level 0: Sugar (replaces `defmacro`)
 
 ```prologos
 grammar when
   | "when" cond:expr body:expr -> (if cond body unit)
 ```
 
-One line. Pattern on the left, desugared form on the right. This IS `defmacro` — same power, same simplicity. All other views derived from the desugaring target. `defmacro` can be retired or retained as syntactic sugar for this form.
+One line. Pattern left, desugared form right. All other views derived from the target (`if`). This IS `defmacro` — same power, same conciseness.
 
 ### Level 1: Typed sugar
 
 ```prologos
 grammar when
-  | "when" cond:Bool body:A -> (if cond body unit) : A
+  | "when" cond:expr body:expr -> (if cond body unit) : A
 ```
 
-Adds type constraints. The compiler verifies: does the desugared form (`if cond body unit`) actually have type `A` when `cond : Bool` and `body : A`? Type checking at grammar definition time, not at use time.
+Type annotation optional — if `if` has a spec, the compiler infers `cond : Bool` and `body : A → result : A` from the target's spec. Explicit types are self-documenting; compiler verifies consistency.
 
-### Level 2: Reduction rules
+### Level 2: With reduction rules
 
 ```prologos
 grammar when
   :parse  "when" cond:expr body:expr
-  :type   cond : Bool, body : A -> A
+  :target (if cond body unit)
   :reduce
     | when true  body -> body
     | when false _    -> unit
 ```
 
-Specifies how the form evaluates. Each reduction clause is a DPO span registered with SRE Track 6. This is more than `defmacro` can do — defmacro specifies rewriting (surface → core), not reduction (core → value).
+`:reduce` clauses compile to Track 6 DPO reduction rules. Same mechanism as β/δ/ι — one infrastructure, not two. Completeness principle.
 
 ### Level 3: Full multi-view
 
 ```prologos
 grammar when
   :parse      "when" cond:expr body:expr
-  :type       cond : Bool, body : A -> A
+  :target     (if cond body unit)
+  :type       cond : Bool, body : A -> A     ;; optional: inferred from target spec
   :reduce
     | when true  body -> body
     | when false _    -> unit
-  :components [cond : Bool, body : A]
+  :components [cond : Bool, body : A]         ;; SRE structural form
   :display    "when" cond body
-  :invariant  value    ;; lossy: can't reconstruct "when" from "if"
+  :invariant  value                           ;; lossy: can't reconstruct "when" from "if"
 ```
-
-All views explicit. The compiler checks consistency: does `:type` agree with `:reduce`? Does `:display` agree with `:parse`? Does `:invariant` match the actual round-trip?
 
 ### Level 4: Serialization / wire protocol
 
 ```prologos
 grammar json-number
-  :parse      digit+ ("." digit+)?
-  :target     Rat
-  :serialize  (rat-to-decimal-string value)
+  :lex        "0" | nonzero-digit digit* ("." digit+)?
+  :target     [string-to-rat value]
+  :serialize  [rat-to-decimal-string value]
   :invariant  structural
-  :dual                                ;; parse and serialize are inverses
+  :dual                                       ;; assertion: parse and serialize are inverses
 ```
 
-A grammar that is both a parser AND a serializer. The `:dual` declaration asserts the round-trip property. Not all grammars can be dual — lossy transformations (like `when → if` desugaring) are one-directional.
+`:dual` can be inferred (if `deserialize(serialize(x)) = x` at the declared invariant level). Explicit `:dual` is a DECLARATION the compiler CHECKS — same pattern as `check` in the type system. When `:serialize` is absent, `:dual` tells the compiler to derive it from `:lex`/`:parse`.
 
 ---
 
-## 3. Operator Declarations via Grammar
+## 4. Type Information: `:target` Carries the Types
 
-The existing mixfix system uses a DAG of precedence groups:
-
-```racket
-;; From macros.rkt:
-(struct prec-group (name assoc tighter-than) #:transparent)
-;; DAG: pipe < logical-or < logical-and < comparison < additive < multiplicative < ...
-```
-
-Users can define new groups with `tighter-than` relations — no numeric precedence. This is the RIGHT design: extensible, intuitive, no "what number do I pick?" problem.
-
-Grammar subsumes this:
+The `:target` expression carries all typing information via the target function's spec:
 
 ```prologos
-;; Define a precedence group
+grammar set-union
+  :parse    a "∪" b
+  :group    set-ops
+  :target   [set-union a b]
+  ;; Type inferred: set-union has spec Set<A> Set<A> -> Set<A>
+  ;; Therefore a : Set<A>, b : Set<A>, result : Set<A>
+```
+
+Type annotations on `:parse` are **optional documentation** — verified by the compiler but carrying no new information beyond what `:target`'s spec already declares.
+
+The `:type` view is only REQUIRED when there is no `:target` — i.e., for primitive forms that don't desugar to existing infrastructure:
+
+```prologos
+;; Primitive form: no desugaring target, must declare types
+grammar my-primitive
+  :parse  "prim" x:expr y:expr
+  :type   x : Int, y : Int -> Bool    ;; required — no target to infer from
+  :reduce
+    | prim x y -> [int-lt x y]
+```
+
+Progressive disclosure: `:target` present → types inferred. `:target` absent → `:type` required.
+
+---
+
+## 5. Compositional Grammar Layering
+
+Grammar productions COMPOSE by name reference. The grammar IS a set of mutually-referencing productions. Repetition (`+`, `*`, `?`) as production-level combinators.
+
+### The Hierarchy
+
+| Level | Syntax | What it matches | Example |
+|-------|--------|----------------|---------|
+| Character class | `/.../` | Raw characters (regex) | `/[0-9]/`, `/[a-zA-Z_]/` |
+| Lexer production | name (in `:lex`) | Token by production | `digit`, `hex-digit` |
+| Repetition | `name+`, `name*`, `name?` | Repeated production | `digit+`, `ident?` |
+| Alternation | `a \| b` | Either production | `digit \| letter` |
+| Literal token | `"..."` | Exact token string | `"when"`, `"+"`, `"("` |
+| Tree nonterminal | `name` or `name:Type` | Parsed subtree | `cond:expr`, `a:Set<A>` |
+| Separator pattern | `elem "sep" ...` | Separated sequence | `a:expr "," b:expr` |
+
+### Syntactic Domain Inference
+
+The domain is inferred from the syntactic form of each element — no modal prefix needed:
+
+- **Quoted strings** (`"when"`, `"+"`) → token literal match
+- **Bare names** (`cond`, `body`, `expr`) → tree nonterminal reference
+- **Typed names** (`a:Set<A>`) → tree nonterminal with type constraint
+- **Regex** (`/[0-9]/`) → character-level match (only in `:lex`)
+- **Repetition** (`digit+`, `expr*`) → production combinator (works in both domains)
+
+The compiler verifies: nonterminals must resolve to defined productions (or built-ins). Regex only appears in `:lex`. Type constraints verified against target spec.
+
+### Composition Examples
+
+```prologos
+;; Lexer productions compose
+grammar digit
+  :lex /[0-9]/
+
+grammar hex-digit
+  :lex digit | /[a-fA-F]/
+
+grammar hex-literal
+  :lex "0x" hex-digit+
+  :target [string-to-int value 16]
+
+;; Parser productions compose
+grammar expr
+  | atom
+  | "(" expr ")"
+  | expr "+" expr   :group additive
+
+grammar stmt
+  | expr
+  | "let" name:ident ":=" value:expr body:stmt
+```
+
+---
+
+## 6. Operator Declarations via DAG-Based Precedence Groups
+
+Operators use the existing DAG-based precedence system — NOT numeric precedence. Precedence groups declare `tighter-than` relations:
+
+```prologos
+;; Define a precedence group in the DAG
 precedence-group set-ops
   :associativity left
   :tighter-than comparison
 
-;; Define operators in the group
+;; Operators reference their group
 grammar set-union
-  :parse    a:expr "∪" b:expr
+  :parse    a "∪" b
   :group    set-ops
   :target   [set-union a b]
-  :type     a : Set A, b : Set A -> Set A
 
 grammar set-intersect
-  :parse    a:expr "∩" b:expr
+  :parse    a "∩" b
   :group    set-ops
   :target   [set-intersect a b]
-  :type     a : Set A, b : Set A -> Set A
 ```
 
-The `precedence-group` declaration defines a group in the DAG. The `:group` attribute on a grammar production places it in the group. The DAG determines resolution order in the mixfix PU (Track 2B).
+The DAG determines resolution order in the mixfix Pocket Universe (Track 2B). New groups extend the DAG. Groups that are UNRELATED in the DAG (neither tighter-than the other) require explicit disambiguation — the compiler warns at definition time.
 
-This naturally coexists with the existing `prec-group` + `op-info` infrastructure. The grammar form COMPILES TO the same registration calls. New groups extend the DAG; new operators register in groups.
+The `grammar` form with `:group` compiles to the same `prec-group` + `op-info` registration that the existing mixfix system uses. No new mechanism — same infrastructure, surface syntax.
 
-Critical pair analysis applies: two operators in the SAME group with the same associativity have no critical pair. Two operators in UNRELATED groups (neither tighter-than the other) require explicit disambiguation — the compiler warns at definition time.
+Critical pair analysis applies: operators in the same group with the same associativity → no critical pair. Operators in unrelated groups → require parenthesization.
 
 ---
 
-## 4. The Prolog/DCG Connection: Grammars as Relations
+## 7. Duality and Modality
 
-A Prolog DCG:
-```prolog
-sentence --> noun_phrase, verb_phrase.
-noun_phrase --> determiner, noun.
-```
+### Invariant Levels
 
-Is a relation: `sentence(S0, S)` means "the string from position S0 to S is a sentence." Running with S0 bound and S unbound → parsing. Running with S bound and S0 unbound → generation.
-
-The Prologos `grammar` form has the same duality. A production like:
-
-```prologos
-grammar pair-literal
-  :parse    "(" a:expr "," b:expr ")"
-  :target   [pair a b]
-```
-
-IS a relation between surface syntax `"(" a "," b ")"` and structural target `[pair a b]`. Running forward (surface → target) is parsing. Running backward (target → surface) is serialization/display.
-
-The propagator network makes this bidirectionality concrete: the parse production is a propagator with input cells (surface tokens) and output cells (structural target). Information flows in BOTH directions via the reduced product. The lattice merge handles partial information — you can have the surface form without the target, or the target without the surface form, and the network fills in what it can.
-
-This is MORE powerful than Prolog's DCG because:
-1. **Typed**: each production carries type constraints (`:type`)
-2. **Lattice-based**: partial information is handled naturally (not just bound/unbound)
-3. **Parallel**: independent productions fire simultaneously (adhesive guarantee)
-4. **Multi-domain**: the production touches multiple domains (surface, type, core) via the reduced product
-5. **Cost-weighted**: the tropical semiring selects optimal parsings/serializations
-
----
-
-## 5. Duality and Modality
-
-Not all grammars can be `:dual`. The invariant level declares what's preserved:
-
-| Invariant | Round-trip | Example | Dual? |
-|-----------|-----------|---------|-------|
-| `:identity` | `eq?` identity preserved | In-process snapshot | ✅ Full |
+| Invariant | Round-trip guarantee | Example | Can be `:dual`? |
+|-----------|---------------------|---------|-----------------|
+| `:identity` | `eq?` preserved | In-process snapshot | ✅ Full |
 | `:structural` | `equal?` preserved | .pnet cache, JSON | ✅ Full |
-| `:behavioral` | Function behavior preserved | FFI re-link | ⚠️ Partial (behavioral equivalence, not structural) |
+| `:behavioral` | Function behavior preserved | FFI re-link | ⚠️ Partial |
 | `:value` | Computed value preserved | `when → if` desugar | ❌ One-directional |
 
-The `:dual` declaration asserts: `:parse` and `:serialize` are inverses at the declared invariant level. The type system ENFORCES this — a consumer requiring `:structural` round-trip can't use a `:value`-only grammar.
+### `:dual` as Assertion
 
-For serialization / wire protocols:
+`:dual` declares that `:parse` and `:serialize` (or `:display`) are inverses at the declared invariant level. The compiler verifies this structurally. When `:serialize` is absent, `:dual` tells the compiler to DERIVE it from the parse direction.
 
-```prologos
-;; Full dual: JSON ↔ Prologos values
-grammar json-object
-  :parse      "{" (key:string ":" value:json-value ",")* "}"
-  :target     Map String JsonValue
-  :serialize  ... ;; derived from :parse when :dual
-  :invariant  structural
-  :dual
+`:dual` CAN be inferred — but explicit assertion is worth keeping for the same reason `check` exists in the type system: the user says "I believe this property holds" and the compiler verifies.
 
-;; Lossy: compact binary → Prologos (no reverse)
-grammar compact-binary
-  :parse      byte-header content:bytes
-  :target     ModuleState
-  :invariant  value     ;; can't reconstruct exact bytes from ModuleState
-  ;; NO :serialize, NO :dual — one-directional parse only
-```
+### Serialization Connection
+
+A `grammar` production with `:serialize` IS a serialization spec. The self-describing format (research §5) is a collection of `grammar` forms shipped with the data. The `.pnet` Part 1 grammar rules = `grammar` forms.
 
 ---
 
-## 6. What Track 2D Provides as Compilation Target
+## 8. Context-Sensitive Grammar (Experimental)
+
+Context-sensitivity via `:context` declaration — the production reads from a context cell on the network:
+
+```prologos
+grammar indented-block
+  :parse    indent-open body:stmt* indent-close
+  :context  indent-level : Nat
+  :target   [block body]
+```
+
+The `:context` declaration says: this production's propagator reads from the `indent-level` cell. It only fires when the context cell has a value.
+
+Mechanically SAFE: context is a lattice domain, the propagator reads it monotonically, the ATMS manages branching when context creates ambiguity. Adhesive DPO guarantees hold — context-sensitive productions compose with the same guarantees as context-free ones.
+
+Conceptually EXPERIMENTAL: user-defined context-sensitivity is powerful but could create confusing syntax. Worth exploring — if it proves too complex for practical use, we can restrict it. The propagator architecture contains the power.
+
+---
+
+## 9. Module Export and Composition
+
+Grammar extensions travel with modules:
+
+```prologos
+ns my-dsl
+
+grammar my-form
+  :parse  "my" x:expr
+  :target [process x]
+  :export                     ;; visible to importers
+```
+
+Importing a module that exports grammar extensions automatically registers those productions in the importer's grammar. Fully-qualified namespaces prevent collisions. Critical pair analysis runs at import time to verify composition safety.
+
+Grammar rules are part of the module's exported interface — same as type definitions (`data`), trait implementations (`impl`), and function specs (`spec`).
+
+---
+
+## 10. Parameterized Grammars
+
+Grammar productions parameterized by types:
+
+```prologos
+grammar list-literal {A : Type}
+  :parse    "[" a:A ("," a:A)* "]"
+  :target   List A
+```
+
+The type parameter determines how to parse elements. This uses existing HKT infrastructure — the grammar is a type-level function. The parse production is a generic function on the type lattice.
+
+Connects to Track 2H's quantale: the type-lattice tensor distributes over union-typed parameters. A `list-literal {Int | String}` parses elements that are either Int or String expressions.
+
+---
+
+## 11. Compilation Target: Track 2D DPO Spans
 
 The `grammar` form COMPILES TO Track 2D's DPO span infrastructure:
 
 | Grammar feature | Track 2D mechanism |
 |----------------|-------------------|
 | `:parse` pattern | `pattern-desc` with child-patterns, literals, variadic |
-| `:parse` separator patterns | `child-pattern-split` (e.g., `guard "->" body`) |
+| `:parse` separator patterns | `child-pattern-split` |
+| `:parse` repetition (`+`, `*`) | Fold combinator (right-fold over repeated elements) |
 | `:parse` → `:target` rewrite | `sre-rewrite-rule` with template RHS |
-| `:group` (operator precedence) | Registration in `prec-group` DAG + mixfix PU |
-| `:reduce` clauses | Fold combinator + step rules (DPO spans on core domain) |
-| Critical pair detection | `find-critical-pairs` at grammar registration time |
+| `:group` operator | Registration in `prec-group` DAG + mixfix PU |
+| `:reduce` clauses | DPO spans on core domain (Track 6 when available) |
+| `:lex` patterns | Token-level DPO spans (PPN Track 1 domain) |
+| Critical pair detection | `find-critical-pairs` at registration time |
 | Confluence verification | `analyze-confluence` on the full rule set |
 | Template instantiation | `instantiate-template` with `$punify-hole` markers |
 
-The compilation is: parse the `grammar` form → generate `sre-rewrite-rule` registrations + `pattern-desc` + template trees → register with `register-sre-rewrite-rule!` → verify via `verify-rewrite-rule` + `find-critical-pairs`.
+The compilation is: parse the `grammar` form → generate `sre-rewrite-rule` registrations → verify via `verify-rewrite-rule` + `find-critical-pairs`.
 
 ---
 
-## 7. Adhesive Category Guarantees
+## 12. Adhesive Category Guarantees
 
 From the [adhesive categories research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md):
 
-- **Grammar extensions compose correctly** — the concurrency theorem guarantees that non-conflicting grammar rules can coexist
-- **Conflicts are detectable** — critical pair analysis finds ALL conflicts at registration time
-- **Parallel parsing is safe** — independent productions fire simultaneously (parallelism theorem)
+- **Grammar extensions compose correctly** — concurrency theorem
+- **Conflicts are detectable** — critical pair lemma completeness
+- **Parallel parsing is safe** — parallelism theorem
 - **CALM-compliant** — monotone grammar propagators are coordination-free
 
-These guarantees apply to USER-DEFINED grammar extensions, not just built-in rules. When a user writes `grammar my-form ...`, the compiler verifies the extension is adhesive-safe before accepting it.
+These apply to USER-DEFINED extensions. When a user writes `grammar my-form`, the compiler verifies adhesive safety before accepting it.
 
 ---
 
-## 8. Open Design Questions
+## 13. Resolved Design Decisions
 
-### A. Does `grammar` fully subsume `defmacro`?
-
-The Level 0 syntax (`grammar when | "when" cond body -> (if cond body unit)`) is as concise as `defmacro when [cond body] [if cond body unit]`. If `grammar` has a one-liner form, `defmacro` adds no value. Should `defmacro` be:
-- (a) Retained as syntax sugar for `grammar` Level 0
-- (b) Deprecated in favor of `grammar`
-- (c) Retained for backward compatibility but documented as "prefer `grammar`"
-
-### B. Scope of `:type` view
-
-Does `:type` specify:
-- (a) Type CONSTRAINTS only (the elaborator infers the rest) — easier to write, less precise
-- (b) Full typing JUDGMENT (infer/check rules) — more powerful, more complex
-- (c) Progressive: constraints by default, full judgment with `:type-rule` escape
-
-### C. `:reduce` view interaction with Track 6
-
-`:reduce` clauses are DPO spans on the core domain. Should they:
-- (a) Compile to Track 6 reduction rules (when Track 6 exists)
-- (b) Be a separate mechanism that coexists with Track 6
-- (c) BE Track 6 — grammar `:reduce` IS how reduction rules are defined
-
-### D. Context-sensitive syntax
-
-The existing WS syntax has context-sensitivity: indentation, operator precedence, `.{...}` blocks. Can `grammar` express context-sensitivity? Options:
-- (a) Context-free only — context-sensitivity handled by separate mechanisms
-- (b) `:context` parameter declaring what context the production needs
-- (c) Context as a lattice domain in the reduced product — the production's type includes its context requirements
-
-### E. Grammar modularity and export
-
-Can a module export grammar extensions? Can two modules' extensions compose?
-- Module A defines `grammar my-if` with its own semantics
-- Module B imports Module A and uses `my-if`
-- The grammar rules travel with the module (like type definitions travel with `data`)
-- Critical pair analysis runs at import time to verify composition safety
-
-### F. Parameterized grammars
-
-```prologos
-grammar list-literal {A : Type}
-  :parse    "[" (a:A ",")* "]"
-  :target   List A
-```
-
-Requires HKT integration — the grammar is parameterized by a type. The type parameter determines how to parse elements. This is powerful (generic syntax) but complex (type-level computation in the parser).
-
-### G. Self-describing serialization integration
-
-The [Self-Describing Serialization research](../research/2026-03-25_SELF_DESCRIBING_SERIALIZATION_GRAMMAR.md) envisions grammar rules embedded in `.pnet` files. The `:serialize` view of `grammar` IS the serialization spec. The `.pnet` format's Part 1 (grammar rules) is a collection of `grammar` forms.
-
-### H. Interaction with ATMS for ambiguity
-
-When two grammar productions match the same input (ambiguity), the ATMS explores both branches. Does the `grammar` form specify ATMS interaction?
-- (a) Implicit — the compiler manages ATMS branching automatically
-- (b) `:ambiguity` parameter controlling how to resolve
-- (c) `:priority` + `:group` for operator-style resolution; ATMS for type-directed resolution
+| Decision | Resolution | Rationale |
+|----------|-----------|-----------|
+| `defmacro` relationship | `grammar` subsumes; `defmacro` eventually deprecated | Level 0 grammar IS defmacro. No rush — deprecate when grammar is proven. |
+| Numeric vs DAG precedence | DAG with `tighter-than` (existing design) | Extensible, intuitive, no "what number?" problem. |
+| Type information source | `:target` carries types; `:type` optional/required when no target | Progressive disclosure. Most grammars have targets. |
+| `:reduce` mechanism | Compiles to Track 6 DPO reduction rules | One mechanism. Completeness principle. |
+| `:dual` explicit vs inferred | Explicit assertion, compiler verifies. Can be inferred. | Same pattern as `check` — assert + verify. |
+| Syntactic domain distinction | Inferred from syntax: strings=tokens, names=nonterminals, regex=chars | No modal prefix needed. Clean progressive disclosure. |
+| Context-sensitivity | Experimental `:context` declaration. Mechanically safe. | Propagator architecture contains the power. Worth exploring. |
+| Module export | Grammar rules export with modules. CPA at import time. | Grammar IS part of the module interface. |
+| Parameterized grammars | Supported via existing HKT | Grammar is a type-level function. |
 
 ---
 
-## 9. Cross-References
+## 14. Open Questions (Remaining)
 
-- **SRE Track 2D** (completed): provides the DPO compilation target
-- **SRE Track 2H** (completed): provides the type-lattice foundation
-- **PPN Track 4** (next): elaboration on network — consumes grammar extensions for type inference
-- **SRE Track 6** (future): reduction as rewriting — consumes `:reduce` view
-- **PPN Track 5** (future): disambiguation — consumes `:ambiguity` view
-- **Adhesive Categories**: formal guarantees for grammar composition
+### A. Code-as-data introspection for grammar forms
+
+Grammar rules AS data means richer introspection than `defmacro` — you can inspect the full multi-view spec, not just pattern→template. What does the introspection API look like? Can a program query "what grammar productions exist for this form?"
+
+### B. Type view scope (deferred to PPN Track 4)
+
+The `:type` view's representation depends on what PPN Track 4 delivers for elaboration-on-network. Track 4 should design with `grammar :type` compilation in mind. Ambition: Track 4 improves and makes more efficient the typing infrastructure overall.
+
+### C. Token-level vs tree-level interaction
+
+When a `:lex` production and a `:parse` production compose (`:lex` produces tokens that `:parse` consumes), how is the interface specified? Is it implicit (`:lex` produces tokens, `:parse` consumes them) or explicit (some bridge declaration)?
+
+### D. Separator patterns and repetition
+
+The `("," a:expr)*` pattern in parameterized grammars — is this a built-in combinator or composed from simpler productions? How does it relate to Track 2D's `child-pattern-split`?
+
+### E. Error messages for grammar violations
+
+When a user's input doesn't match any grammar production, what error does the compiler produce? Can the grammar form specify custom error messages (`:error "expected condition after 'when'"`)? How does this interact with error recovery (PPN Track 5)?
+
+### F. Self-describing serialization as grammar export
+
+The `.pnet` format's Part 1 (grammar rules) = exported `grammar` forms. How does the grammar form's module export interact with the serialization format? Is Part 1 literally the serialized `grammar` declarations?
 
 ---
 
-## 10. Next Steps
+## 15. Next Steps
 
-1. **Deepen into each open question** (A-H) through focused design discussion
-2. **Speculative syntax for NTT-typed grammar forms** — what does the NTT type of a grammar production look like?
+1. **Deepen remaining open questions** (A-F) through focused discussion
+2. **Speculative NTT syntax** for grammar productions — what is the NTT type of a grammar?
 3. **Prototype**: compile a small grammar extension to Track 2D DPO spans, end-to-end
-4. **DCG/Prolog connection**: formalize the relational interpretation of grammar productions
-5. **Serialization integration**: design the `:serialize` / `:dual` / `:invariant` subsystem
+4. **Formalize the DCG/Prolog relational interpretation** — grammar as bidirectional relation
+5. **Design the `:context` mechanism** for context-sensitive grammars
+6. **Connect to PPN Track 4 design** — grammar `:type` compilation target
