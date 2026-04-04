@@ -2614,7 +2614,10 @@
 ;; fall back to imperative infer for expressions without rules.
 ;; 21 typing rules cover: literals, type constructors, universe, variables,
 ;; lambda/Pi/Sigma formation, application (tensor), projections, metas.
-(current-typing-rule-infer (make-typing-rule-infer infer))
+;; Phase 6: provide check and unify as effects for non-leaf rules.
+(current-typing-rule-infer (make-typing-rule-infer infer
+                             #:check-fn check
+                             #:unify-fn unify))
 
 ;; Phase 4c: Install structural decomposition meta-lookup callback.
 ;; When a compound type is decomposed into sub-cells, bare metas (expr-meta id)

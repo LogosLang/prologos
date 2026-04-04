@@ -52,6 +52,9 @@
  make-default-typing-registry
  ;; Phase 4b deployment: parameter for production pipeline wiring
  current-typing-rule-infer
+ ;; Phase 6: delegation helpers for non-leaf rules
+ delegating-infer
+ delegating-check
  ;; Phase 4a: Meta-solving — typing rule for expr-meta
  register-meta-typing-rules!
  ;; Phase 4b-i: Fan-in meta-readiness infrastructure
@@ -183,21 +186,26 @@
 ;; tag: symbol — the expr struct tag this rule matches (e.g., 'expr-app, 'expr-lam)
 ;; name: symbol — human-readable name for the rule
 ;; arity: Nat — number of sub-expression children (for structural matching)
-;; infer-fn: (context-cell-value, expr, (position → type-or-#f)) → type-or-#f
+;; infer-fn: (context-cell-value, expr, reader, effects) → type-or-#f
 ;;   Computes the type from the expression and sub-expression types.
-;;   The third argument reads the type-map at sub-expression positions.
-;;   Returns the computed type, or #f if the rule cannot fire (inputs not ready).
-;; check-fn: (context-cell-value, expr, type, (position → type-or-#f)) → boolean
+;;   reader: (position → type-or-#f) — reads the type-map at sub-expression positions.
+;;   effects: hash providing imperative side-effect functions (Phase 6):
+;;     'unify → (ctx t1 t2 → #t | 'postponed | #f)
+;;     'check → (ctx e t → bool)
+;;     'infer → (ctx e → type)
+;;     'solve-mult-meta! → (id sol → void) | #f
+;;   Returns the computed type, or #f if the rule cannot fire.
+;; check-fn: (context-cell-value, expr, type, reader, effects) → boolean
 ;;   Validates the expression against an expected type.
-;;   Returns #t if valid, #f if not. #f when inputs not ready.
+;;   Returns #t if valid, #f if not. 'not-ready when inputs missing.
 ;;   Can be #f if this rule only infers (no check mode).
 ;; stratum: Nat — scheduling stratum (0 = S0 monotone, default)
 (struct typing-rule
   (tag        ;; symbol: expr tag this rule matches
    name       ;; symbol: human-readable rule name
    arity      ;; Nat: number of sub-expression children
-   infer-fn   ;; (ctx-val, expr, type-map-reader) → type-or-#f
-   check-fn   ;; (ctx-val, expr, expected-type, type-map-reader) → boolean | #f for infer-only
+   infer-fn   ;; (ctx-val, expr, reader, effects) → type-or-#f
+   check-fn   ;; (ctx-val, expr, expected-type, reader, effects) → boolean | #f for infer-only
    stratum)   ;; Nat: scheduling stratum
   #:transparent)
 
@@ -236,15 +244,21 @@
 ;; Returns: (cons 'ok type) if a rule fired successfully,
 ;;          (cons 'check ok?) if a check rule fired,
 ;;          #f if no rule exists for this tag (fall back to imperative).
+;; Phase 6: effects hash provides imperative side-effect functions.
+;; When effects = #f (pure mode), rules operate without side effects.
+;; When effects is a hash (production mode), rules call unify, check, etc.
+(define no-effects (hasheq))
+
 (define (dispatch-typing-rule registry expr-tag-fn ctx-val e type-map-reader
-                              #:expected-type [expected-type #f])
+                              #:expected-type [expected-type #f]
+                              #:effects [effects no-effects])
   (define tag (expr-tag-fn e))
   (define rule (typing-rule-registry-lookup registry tag))
   (cond
     [(not rule) #f]  ;; no rule for this tag → imperative fallback
     ;; Check mode: expected type provided, rule has check-fn
     [(and expected-type (typing-rule-check-fn rule))
-     (define result ((typing-rule-check-fn rule) ctx-val e expected-type type-map-reader))
+     (define result ((typing-rule-check-fn rule) ctx-val e expected-type type-map-reader effects))
      ;; check-fn returns #t/#f for pass/fail, or 'not-ready if inputs missing.
      ;; #t/#f are valid results; 'not-ready means the rule can't fire yet.
      (if (eq? result 'not-ready)
@@ -252,7 +266,7 @@
          (cons 'check result))]
     ;; Infer mode
     [else
-     (define result ((typing-rule-infer-fn rule) ctx-val e type-map-reader))
+     (define result ((typing-rule-infer-fn rule) ctx-val e type-map-reader effects))
      ;; infer-fn returns a type, or 'not-ready if inputs missing.
      (if (or (not result) (eq? result 'not-ready))
          #f
@@ -313,9 +327,9 @@
 (define (make-constant-infer-rule tag name result-type)
   (typing-rule
    tag name 0
-   (lambda (_ctx _e _reader) result-type)
+   (lambda (_ctx _e _reader _effects) result-type)
    ;; check-fn: type equality check against the constant type
-   (lambda (_ctx _e expected _reader) (equal? expected result-type))
+   (lambda (_ctx _e expected _reader _effects) (equal? expected result-type))
    0))
 
 ;; Register all literal typing rules into a registry.
@@ -325,9 +339,9 @@
   (typing-rule-registry-add! registry
     (typing-rule
      'expr-int 'int-literal 0
-     (lambda (_ctx e _reader)
+     (lambda (_ctx e _reader _effects)
        (if (exact-integer? (expr-int-val e)) (expr-Int) #f))
-     (lambda (_ctx e expected _reader)
+     (lambda (_ctx e expected _reader _effects)
        (and (exact-integer? (expr-int-val e))
             (equal? expected (expr-Int))))
      0))
@@ -357,11 +371,11 @@
   (typing-rule-registry-add! registry
     (typing-rule
      'expr-Type 'universe 0
-     (lambda (_ctx e _reader)
+     (lambda (_ctx e _reader _effects)
        (expr-Type (lsuc (expr-Type-level e))))
      ;; check: Type(l) checks against Type(l') when l < l' (cumulativity)
      ;; For now: exact level match (Phase 5 may refine with level solving)
-     (lambda (_ctx e expected _reader)
+     (lambda (_ctx e expected _reader _effects)
        (and (expr-Type? expected)
             (equal? (lsuc (expr-Type-level e))
                     (expr-Type-level expected))))
@@ -377,46 +391,74 @@
 
 (define (register-variable-typing-rules! registry)
   ;; Bound variable: (expr-bvar k) → lookup-type(k, ctx), shifted by (k+1)
+  ;; Phase 6: delegate to imperative in production (bvar may be under binders
+  ;; where context extension side effects matter)
   (typing-rule-registry-add! registry
     (typing-rule
      'expr-bvar 'bound-variable-lookup 0
-     (lambda (ctx-val e _reader)
-       (define k (expr-bvar-index e))
-       (define raw-type (context-lookup-type ctx-val k))
-       (if (expr-error? raw-type)
-           #f  ;; out of bounds — can't fire (or error in imperative path)
-           (shift (+ k 1) 0 raw-type)))
-     ;; check: bvar checks if its inferred type is consistent with expected
-     (lambda (ctx-val e expected _reader)
-       (define k (expr-bvar-index e))
-       (define raw-type (context-lookup-type ctx-val k))
-       (if (expr-error? raw-type)
-           #f
-           (equal? (shift (+ k 1) 0 raw-type) expected)))
+     (delegating-infer
+      (lambda (ctx-val e _reader _effects)
+        (define k (expr-bvar-index e))
+        (define raw-type (context-lookup-type ctx-val k))
+        (if (expr-error? raw-type)
+            #f
+            (shift (+ k 1) 0 raw-type))))
+     (delegating-check
+      (lambda (ctx-val e expected _reader _effects)
+        (define k (expr-bvar-index e))
+        (define raw-type (context-lookup-type ctx-val k))
+        (if (expr-error? raw-type)
+            #f
+            (equal? (shift (+ k 1) 0 raw-type) expected))))
      0))
 
   ;; Free variable: (expr-fvar name) → global-env-lookup-type(name)
   ;; Uses the off-network global environment bridge (§1c, deferred to Track 7).
   ;; Deprecation warnings are side effects — preserved here for parity with
   ;; the imperative arm, but will migrate to separate concern in Track 7.
+  ;; Phase 6: fvar delegates in production (deprecation warnings are side effects)
   (typing-rule-registry-add! registry
     (typing-rule
      'expr-fvar 'free-variable-lookup 0
-     (lambda (_ctx-val e _reader)
-       (define name (expr-fvar-name e))
-       (define ty (global-env-lookup-type name))
-       (or ty #f))  ;; #f if not found (imperative path returns expr-error)
-     ;; check: fvar checks if its type matches expected
-     (lambda (_ctx-val e expected _reader)
-       (define name (expr-fvar-name e))
-       (define ty (global-env-lookup-type name))
-       (and ty (equal? ty expected)))
+     (delegating-infer
+      (lambda (_ctx-val e _reader _effects)
+        (define name (expr-fvar-name e))
+        (define ty (global-env-lookup-type name))
+        (or ty #f)))
+     (delegating-check
+      (lambda (_ctx-val e expected _reader _effects)
+        (define name (expr-fvar-name e))
+        (define ty (global-env-lookup-type name))
+        (and ty (equal? ty expected))))
      0)))
 
 
 ;; ============================================================
 ;; Phase 2d: Lambda + Pi + Sigma Formation Rules
 ;; ============================================================
+;;
+;; Phase 6 pattern: non-leaf rules delegate to imperative infer-fallback
+;; when effects are available (production mode). In pure mode (testing),
+;; they use the reader and compute types directly.
+
+;; Helper: wrap a pure infer-fn with production delegation.
+;; In production (effects has 'infer-fallback), delegates to imperative.
+;; In testing (no effects), calls the pure fn.
+(define (delegating-infer pure-fn)
+  (lambda (ctx-val e reader effects)
+    (define infer-fallback (hash-ref effects 'infer-fallback #f))
+    (if infer-fallback
+        (infer-fallback (hash-ref effects 'ctx ctx-empty) e)
+        (pure-fn ctx-val e reader effects))))
+
+;; Helper: wrap a pure check-fn with production delegation.
+(define (delegating-check pure-fn)
+  (if (not pure-fn) #f
+      (lambda (ctx-val e expected reader effects)
+        (define check-fn (hash-ref effects 'check #f))
+        (if check-fn
+            (check-fn (hash-ref effects 'ctx ctx-empty) e expected)
+            (pure-fn ctx-val e expected reader effects)))))
 ;;
 ;; These rules use context extension (tensor) and read sub-expression
 ;; types from the type-map reader.
@@ -431,111 +473,77 @@
 ;; Phase 3 formalizes the position scheme when wiring to actual type-maps.
 
 (define (register-binder-typing-rules! registry)
-  ;; Lambda: (expr-lam m dom body) → Pi(m, dom, body-type)
-  ;; Reads dom's type (must be Type(l)) and body's type from type-map.
-  ;; Extends context with dom:m for body's typing.
-  (typing-rule-registry-add! registry
-    (typing-rule
-     'expr-lam 'lambda-formation 2  ;; 2 sub-expressions: dom, body
-     (lambda (ctx-val e reader)
-       (define dom (expr-lam-type e))
-       (define body (expr-lam-body e))
-       (define m (expr-lam-mult e))
-       (cond
-         ;; Hole domain: can't infer without expected type (need check mode)
-         [(expr-hole? dom) #f]
-         [else
-          ;; Read domain's type from type-map (must be Type(l) for dom to be a type)
-          (define dom-type (reader dom))
-          (cond
-            [(not dom-type) 'not-ready]  ;; dom not typed yet
-            [(not (expr-Type? dom-type)) #f]  ;; dom is not a type → error
-            [else
-             ;; Read body's type from type-map
-             ;; The body's type was computed in an extended context (ctx + dom:m).
-             ;; This is handled by the propagator wiring: body's typing rule
-             ;; reads from a child context cell. Here we just read the result.
-             (define body-type (reader body))
-             (cond
-               [(not body-type) 'not-ready]  ;; body not typed yet
-               [(expr-error? body-type) #f]   ;; body typing failed
-               [else (expr-Pi m dom body-type)])])]))
-     ;; check: lambda against Pi — the bidirectional (meet, downward) case.
-     ;; Uses expected Pi domain to fill hole domains.
-     (lambda (ctx-val e expected reader)
-       (cond
-         [(not (expr-Pi? expected)) #f]  ;; can only check lambda against Pi
-         [else
-          (define m (expr-lam-mult e))
-          (define dom (expr-lam-type e))
-          (define body (expr-lam-body e))
-          (define expected-dom (expr-Pi-domain expected))
-          (define expected-cod (expr-Pi-codomain expected))
-          (cond
-            ;; Hole domain: accept expected domain (the key bidirectional case)
-            [(expr-hole? dom)
-             (define body-type (reader body))
-             (cond
-               [(not body-type) 'not-ready]
-               [else (equal? body-type expected-cod)])]
-            ;; Concrete domain: must match expected
-            [else
-             (and (equal? dom expected-dom)
-                  (let ([body-type (reader body)])
-                    (cond
-                      [(not body-type) 'not-ready]
-                      [else (equal? body-type expected-cod)])))])]))
-     0))
-
-  ;; Pi formation: (expr-Pi m dom cod) → Type(max(level(dom), level(cod)))
-  ;; Both dom and cod must be types (their types must be Type(l)).
-  (typing-rule-registry-add! registry
-    (typing-rule
-     'expr-Pi 'pi-formation 2
-     (lambda (ctx-val e reader)
-       (define dom (expr-Pi-domain e))
-       (define cod (expr-Pi-codomain e))
-       ;; Read types of domain and codomain
+  ;; Lambda: Phase 6 — delegate to imperative in production
+  (define (lam-infer-pure ctx-val e reader effects)
+    (define dom (expr-lam-type e))
+    (define body (expr-lam-body e))
+    (define m (expr-lam-mult e))
+    (cond
+      [(expr-hole? dom) #f]
+      [else
        (define dom-type (reader dom))
-       (define cod-type (reader cod))
        (cond
-         [(or (not dom-type) (not cod-type)) 'not-ready]
-         [(not (expr-Type? dom-type)) #f]  ;; domain not a type
-         [(not (expr-Type? cod-type)) #f]  ;; codomain not a type
+         [(not dom-type) 'not-ready]
+         [(not (expr-Type? dom-type)) #f]
          [else
-          ;; Level = max(dom-level, cod-level)
-          ;; For simplicity: use lmax (defined in prelude)
-          (expr-Type (lmax (expr-Type-level dom-type)
-                           (expr-Type-level cod-type)))]))
-     ;; check: Pi checks against Type(l)
-     (lambda (ctx-val e expected reader)
-       (and (expr-Type? expected)
-            (let ([result ((typing-rule-infer-fn
-                            (typing-rule-registry-lookup registry 'expr-Pi))
-                           ctx-val e reader)])
-              (cond
-                [(eq? result 'not-ready) 'not-ready]
-                [(not result) #f]
-                [else (equal? result expected)]))))
-     0))
+          (define body-type (reader body))
+          (cond
+            [(not body-type) 'not-ready]
+            [(expr-error? body-type) #f]
+            [else (expr-Pi m dom body-type)])])]))
+  (define (lam-check-pure ctx-val e expected reader effects)
+    (cond
+      [(not (expr-Pi? expected)) #f]
+      [else
+       (define body (expr-lam-body e))
+       (define expected-cod (expr-Pi-codomain expected))
+       (define body-type (reader body))
+       (cond
+         [(not body-type) 'not-ready]
+         [else (equal? body-type expected-cod)])]))
+  (typing-rule-registry-add! registry
+    (typing-rule 'expr-lam 'lambda-formation 2
+                 (delegating-infer lam-infer-pure)
+                 (delegating-check lam-check-pure)
+                 0))
+
+  ;; Pi formation: Phase 6 — delegate in production
+  (define (pi-infer-pure ctx-val e reader effects)
+    (define dom-type (reader (expr-Pi-domain e)))
+    (define cod-type (reader (expr-Pi-codomain e)))
+    (cond
+      [(or (not dom-type) (not cod-type)) 'not-ready]
+      [(not (expr-Type? dom-type)) #f]
+      [(not (expr-Type? cod-type)) #f]
+      [else (expr-Type (lmax (expr-Type-level dom-type)
+                              (expr-Type-level cod-type)))]))
+  (typing-rule-registry-add! registry
+    (typing-rule 'expr-Pi 'pi-formation 2
+                 (delegating-infer pi-infer-pure)
+                 (delegating-check
+                  (lambda (ctx-val e expected reader effects)
+                    (and (expr-Type? expected)
+                         (equal? (pi-infer-pure ctx-val e reader effects) expected))))
+                 0))
 
   ;; Sigma formation: (expr-Sigma A B) → Type(max(level(A), level(B)))
   (typing-rule-registry-add! registry
     (typing-rule
      'expr-Sigma 'sigma-formation 2
-     (lambda (ctx-val e reader)
-       (define a (expr-Sigma-fst-type e))
-       (define b (expr-Sigma-snd-type e))
-       (define a-type (reader a))
-       (define b-type (reader b))
-       (cond
-         [(or (not a-type) (not b-type)) 'not-ready]
-         [(not (expr-Type? a-type)) #f]
-         [(not (expr-Type? b-type)) #f]
-         [else (expr-Type (lmax (expr-Type-level a-type)
-                                (expr-Type-level b-type)))]))
-     #f  ;; no check-fn (Sigma checks via infer+compare)
-     0)))
+     (delegating-infer
+      (lambda (ctx-val e reader effects)
+        (define a (expr-Sigma-fst-type e))
+        (define b (expr-Sigma-snd-type e))
+        (define a-type (reader a))
+        (define b-type (reader b))
+        (cond
+          [(or (not a-type) (not b-type)) 'not-ready]
+          [(not (expr-Type? a-type)) #f]
+          [(not (expr-Type? b-type)) #f]
+          [else (expr-Type (lmax (expr-Type-level a-type)
+                                 (expr-Type-level b-type)))])))
+     #f  ;; no check-fn
+     0)))  ;; end register-binder-typing-rules!
 
 
 ;; ============================================================
@@ -563,60 +571,74 @@
   (typing-rule-registry-add! registry
     (typing-rule
      'expr-app 'application-tensor 2
-     (lambda (ctx-val e reader)
+     (lambda (ctx-val e reader effects)
        (define func (expr-app-func e))
        (define arg (expr-app-arg e))
        (define func-type (reader func))
-       (define arg-type (reader arg))
        (cond
-         [(or (not func-type) (not arg-type)) 'not-ready]
+         [(not func-type) 'not-ready]
          [else
-          (define result (type-tensor-core func-type arg-type))
-          (cond
-            [(type-bot? result) #f]  ;; inapplicable → error
-            [(type-top? result) #f]  ;; contradiction → error
-            [else result])]))
-     ;; check: application against expected type.
-     ;; Validates that tensor result is consistent with expected.
-     (lambda (ctx-val e expected reader)
-       (define func (expr-app-func e))
-       (define arg (expr-app-arg e))
-       (define func-type (reader func))
-       (define arg-type (reader arg))
-       (cond
-         [(or (not func-type) (not arg-type)) 'not-ready]
-         [else
-          (define result (type-tensor-core func-type arg-type))
-          (cond
-            [(type-bot? result) #f]
-            [(type-top? result) #f]
-            [else (equal? result expected)])]))
+          ;; Phase 6: for production dispatch, delegate to the imperative
+          ;; infer-fallback for the full application. The typing rule's
+          ;; value is: tag-indexed dispatch (avoids 589-arm match) + the
+          ;; func-type is already computed by the reader. But application
+          ;; typing involves check(ctx, arg, domain) which has complex
+          ;; side effects (unify → solve-meta! → add-constraint! → trait
+          ;; resolution). Rather than reproducing all side effects, delegate
+          ;; to the imperative path which handles them correctly.
+          (define infer-fallback (hash-ref effects 'infer-fallback #f))
+          (if infer-fallback
+              ;; Production: delegate full application to imperative infer
+              (infer-fallback (hash-ref effects 'ctx ctx-empty) e)
+              ;; Pure mode (testing): use tensor directly
+              (let ([arg-type (reader arg)])
+                (if (not arg-type) 'not-ready
+                    (let ([result (type-tensor-core func-type arg-type)])
+                      (cond
+                        [(type-bot? result) #f]
+                        [(type-top? result) #f]
+                        [else result])))))]))
+     ;; check: delegate to imperative check in production
+     (delegating-check
+      (lambda (ctx-val e expected reader effects)
+        (define func-type (reader (expr-app-func e)))
+        (define arg-type (reader (expr-app-arg e)))
+        (cond
+          [(or (not func-type) (not arg-type)) 'not-ready]
+          [else
+           (define result (type-tensor-core func-type arg-type))
+           (cond
+             [(type-bot? result) #f]
+             [(type-top? result) #f]
+             [else (equal? result expected)])])))
      0))
 
   ;; Projection: (expr-fst e) → first component of Sigma type
   (typing-rule-registry-add! registry
     (typing-rule
      'expr-fst 'fst-projection 1
-     (lambda (ctx-val e reader)
-       (define inner (expr-fst-expr e))
-       (define inner-type (reader inner))
-       (cond
-         [(not inner-type) 'not-ready]
-         [(expr-Sigma? inner-type) (expr-Sigma-fst-type inner-type)]
-         [else #f]))  ;; not a Sigma → error
+     (delegating-infer
+      (lambda (ctx-val e reader effects)
+        (define inner (expr-fst-expr e))
+        (define inner-type (reader inner))
+        (cond
+          [(not inner-type) 'not-ready]
+          [(expr-Sigma? inner-type) (expr-Sigma-fst-type inner-type)]
+          [else #f])))
      #f 0))
 
   ;; Projection: (expr-snd e) → second component of Sigma type
   (typing-rule-registry-add! registry
     (typing-rule
      'expr-snd 'snd-projection 1
-     (lambda (ctx-val e reader)
-       (define inner (expr-snd-expr e))
-       (define inner-type (reader inner))
+     (delegating-infer
+      (lambda (ctx-val e reader effects)
+        (define inner (expr-snd-expr e))
+        (define inner-type (reader inner))
        (cond
          [(not inner-type) 'not-ready]
          [(expr-Sigma? inner-type) (expr-Sigma-snd-type inner-type)]
-         [else #f]))
+         [else #f])))
      #f 0)))
 
 
@@ -641,17 +663,19 @@
 ;; fallback is never reached.
 
 ;; Create a registry with all currently-implemented typing rules.
-;; Phase 4b deployment: only LEAF rules are safe for production dispatch.
-;; Non-leaf rules (binder, application, variable, meta) have side effects
-;; in the imperative path (constraint creation, meta solving, trait resolution)
-;; that the pure typing rules don't reproduce. Enabling them causes constraint
-;; resolution failures. Non-leaf rules remain for testing/parity validation.
-;; They will be safe when constraint creation is also on-network (Phase 6+).
+;; Phase 6: effects interface added. Non-leaf rules delegate to imperative
+;; in production via delegating-infer/delegating-check. However, 22 tests
+;; still fail with full deployment — the delegation pattern doesn't handle
+;; all edge cases (arity checking, spec ordering, higher-rank types, etc.).
+;; For now: leaf-only remains the production default. Non-leaf rules are
+;; registered for testing but not production dispatch.
+;; Incomplete because: non-leaf delegation still has 22 edge-case failures
+;; that need per-test investigation. This is tracked as Phase 6 continuation.
 (define (make-default-typing-registry)
   (define reg (make-typing-rule-registry))
   (register-literal-typing-rules! reg)
   (register-universe-typing-rules! reg)
-  ;; Phase 6+ will enable these as constraint creation moves on-network:
+  ;; Non-leaf: effects + delegation infrastructure built, 22 failures remain
   ;; (register-variable-typing-rules! reg)
   ;; (register-binder-typing-rules! reg)
   ;; (register-application-typing-rules! reg)
@@ -660,9 +684,13 @@
 
 ;; Create a typing-rule-aware infer function.
 ;; infer-fallback: (ctx expr → type-or-error) — the imperative infer
+;; check-fn: (ctx expr type → bool) — the imperative check (for effects)
+;; unify-fn: (ctx t1 t2 → #t | 'postponed | #f) — the imperative unify (for effects)
 ;; registry: typing-rule registry (or #f to use default)
 ;; Returns: (ctx expr → type-or-error) — same signature as infer
 (define (make-typing-rule-infer infer-fallback
+                                #:check-fn [check-fn #f]
+                                #:unify-fn [unify-fn #f]
                                 #:registry [registry #f])
   (define reg (or registry (make-default-typing-registry)))
 
@@ -678,6 +706,16 @@
       (define result (rule-infer ctx sub-expr))
       (if (expr-error? result) #f result))
 
+    ;; Phase 6: effects hash provides imperative side-effect functions.
+    ;; Non-leaf rules (app, lam, etc.) call these to trigger unification,
+    ;; constraint creation, and meta solving alongside type computation.
+    (define effects
+      (hasheq 'infer rule-infer
+              'infer-fallback infer-fallback
+              'check (or check-fn (lambda (ctx e t) #f))
+              'unify (or unify-fn (lambda (ctx t1 t2) #t))
+              'ctx ctx))
+
     ;; Try dispatch
     (define tag (expr-typing-tag e))
     (cond
@@ -686,7 +724,8 @@
        (infer-fallback ctx e)]
       [else
        (define dispatch-result
-         (dispatch-typing-rule reg expr-typing-tag ctx-val e type-map-reader))
+         (dispatch-typing-rule reg expr-typing-tag ctx-val e type-map-reader
+                               #:effects effects))
        (cond
          [(and dispatch-result (eq? (car dispatch-result) 'ok))
           (cdr dispatch-result)]
@@ -720,17 +759,18 @@
   (typing-rule-registry-add! registry
     (typing-rule
      'expr-meta 'meta-follow 0
-     (lambda (_ctx-val e _reader)
-       ;; Read solution directly from cell (fast path)
-       (define cell-id (expr-meta-cell-id e))
-       (define id (expr-meta-id e))
-       (define sol (meta-solution/cell-id cell-id id))
-       (cond
-         [sol sol]          ;; solved → return solution type
-         [else 'not-ready])) ;; unsolved → wait for cell write
+     (delegating-infer
+      (lambda (_ctx-val e _reader _effects)
+        ;; Read solution directly from cell (fast path)
+        (define cell-id (expr-meta-cell-id e))
+        (define id (expr-meta-id e))
+        (define sol (meta-solution/cell-id cell-id id))
+        (cond
+          [sol sol]
+          [else 'not-ready])))
      ;; check: meta in check position — optimistically succeed
-     ;; (matches current imperative behavior: [(expr-meta _ _) _) #t])
-     (lambda (_ctx-val _e _expected _reader) #t)
+     (delegating-check
+      (lambda (_ctx-val _e _expected _reader _effects) #t))
      0)))
 
 

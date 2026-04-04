@@ -236,7 +236,7 @@
      (define reg (make-typing-rule-registry))
      (define rule (typing-rule
                    'expr-int 'int-literal 0
-                   (lambda (ctx e reader) (expr-Int))
+                   (lambda (ctx e reader effects) (expr-Int))
                    #f  ;; no check-fn
                    0))
      (typing-rule-registry-add! reg rule)
@@ -249,7 +249,7 @@
      (typing-rule-registry-add! reg
        (typing-rule
         'test-lit 'test-literal 0
-        (lambda (ctx e reader) (expr-Int))
+        (lambda (ctx e reader effects) (expr-Int))
         #f 0))
      (define result
        (dispatch-typing-rule reg (lambda (e) 'test-lit)
@@ -270,8 +270,8 @@
      (typing-rule-registry-add! reg
        (typing-rule
         'test-lit 'test-literal 0
-        (lambda (ctx e reader) (expr-Int))
-        (lambda (ctx e expected reader) (equal? expected (expr-Int)))
+        (lambda (ctx e reader effects) (expr-Int))
+        (lambda (ctx e expected reader effects) (equal? expected (expr-Int)))
         0))
      ;; Check against Int → #t
      (define result-ok
@@ -290,7 +290,7 @@
 
    (test-case "typing-rule struct is inspectable"
      (define rule (typing-rule 'expr-app 'app-tensor 2
-                               (lambda (ctx e reader) #f)
+                               (lambda (ctx e reader effects) #f)
                                #f 0))
      (check-eq? (typing-rule-tag rule) 'expr-app)
      (check-eq? (typing-rule-name rule) 'app-tensor)
