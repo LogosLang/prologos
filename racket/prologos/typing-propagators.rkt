@@ -406,12 +406,32 @@
   (define ret-type (typing-domain-rule-return-type rule))
   (cond
     [(not ret-type) net]  ;; special handling needed — not in domain
-    [else
-     ;; Recurse on children
+    [(procedure? ret-type)
+     ;; COMPUTED return type: function from first child's type → result type.
+     ;; Install children first, then a propagator that watches the first child's
+     ;; type-map position and applies the function.
+     (define child-exprs (map (lambda (fn) (fn e)) children))
      (define net-with-children
        (for/fold ([n net]) ([child-fn (in-list children)])
          (install-typing-network n tm-cid (child-fn e) ctx-pos)))
-     ;; Install literal propagator for the return type
+     (define first-child (car child-exprs))
+     (define-values (net* _pid)
+       (net-add-propagator net-with-children (list tm-cid) (list tm-cid)
+         (lambda (net)
+           (define child-type (type-map-read net tm-cid first-child))
+           (cond
+             [(type-bot? child-type) net]  ;; wait for child type
+             [else
+              (define result (ret-type child-type))
+              (if result
+                  (type-map-write net tm-cid e result)
+                  net)]))))  ;; function returned #f — can't compute
+     net*]
+    [else
+     ;; Constant return type
+     (define net-with-children
+       (for/fold ([n net]) ([child-fn (in-list children)])
+         (install-typing-network n tm-cid (child-fn e) ctx-pos)))
      (define-values (net* _pid)
        (net-add-propagator net-with-children (list tm-cid) (list tm-cid)
                            (make-literal-fire-fn tm-cid e ret-type)))
@@ -612,20 +632,21 @@
   (register-typing-rule! expr-nil-check? 1 (list expr-nil-check-arg) (expr-Bool) 'nil-check)
 
   ;; ===== MAP OPERATIONS =====
-  ;; Structural (return type depends on map type) — registered as #f
+  ;; map-get, map-assoc, etc. have structural return types (depend on collection type).
+  ;; Registered with return-type=#f — falls back to imperative which handles union maps,
+  ;; nested maps, and type-directed dispatch. Only constant-type ops (has-key, size) computed.
   (register-typing-rule! expr-map-get? 2 (list expr-map-get-m expr-map-get-k) #f 'map-get)
   (register-typing-rule! expr-map-has-key? 2 (list expr-map-has-key-m expr-map-has-key-k) (expr-Bool) 'map-has-key)
   (register-typing-rule! expr-map-size? 1 (list expr-map-size-m) (expr-Nat) 'map-size)
-  ;; map-assoc, map-dissoc, map-keys, map-vals: structural (#f)
   (register-typing-rule! expr-map-assoc? 3 (list expr-map-assoc-m expr-map-assoc-k expr-map-assoc-v) #f 'map-assoc)
   (register-typing-rule! expr-map-dissoc? 2 (list expr-map-dissoc-m expr-map-dissoc-k) #f 'map-dissoc)
   (register-typing-rule! expr-map-keys? 1 (list expr-map-keys-m) #f 'map-keys)
   (register-typing-rule! expr-map-vals? 1 (list expr-map-vals-m) #f 'map-vals)
 
   ;; ===== SET OPERATIONS =====
+  ;; Same pattern: structural ops as #f, constant ops computed.
   (register-typing-rule! expr-set-member? 2 (list expr-set-member-s expr-set-member-a) (expr-Bool) 'set-member)
   (register-typing-rule! expr-set-size? 1 (list expr-set-size-s) (expr-Nat) 'set-size)
-  ;; set-insert, set-delete, set-union, set-intersect, set-diff, set-to-list: structural (#f)
   (register-typing-rule! expr-set-insert? 2 (list expr-set-insert-s expr-set-insert-a) #f 'set-insert)
   (register-typing-rule! expr-set-delete? 2 (list expr-set-delete-s expr-set-delete-a) #f 'set-delete)
   (register-typing-rule! expr-set-union? 2 (list expr-set-union-s1 expr-set-union-s2) #f 'set-union)
