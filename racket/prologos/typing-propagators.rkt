@@ -654,7 +654,12 @@
   (register-typing-rule! expr-set-diff? 2 (list expr-set-diff-s1 expr-set-diff-s2) #f 'set-diff)
   (register-typing-rule! expr-set-to-list? 1 (list expr-set-to-list-s) #f 'set-to-list)
 
-  ;; ===== GENERIC ARITHMETIC: return-type #f (Pattern 4: trait dispatch) =====
+  ;; ===== GENERIC ARITHMETIC: return-type #f (Pattern 4: full trait dispatch) =====
+  ;; F2 Option C attempted but REVERTED: computed return types (same-as-arg-type)
+  ;; produce correct types for same-type ops but bypass coercion warnings for
+  ;; cross-family ops (Int + Posit32). The imperative path handles coercion
+  ;; detection and warning emission. Until coercion logic moves on-network,
+  ;; generic ops must fall back to imperative for correct warning behavior.
   (for ([info (list (list expr-generic-add? expr-generic-add-a expr-generic-add-b 'generic-add)
                     (list expr-generic-sub? expr-generic-sub-a expr-generic-sub-b 'generic-sub)
                     (list expr-generic-mul? expr-generic-mul-a expr-generic-mul-b 'generic-mul)
@@ -668,6 +673,22 @@
     (register-typing-rule! (car info) 2 (list (cadr info) (caddr info)) #f (cadddr info)))
   (register-typing-rule! expr-generic-negate? 1 (list expr-generic-negate-a) #f 'generic-negate)
   (register-typing-rule! expr-generic-abs? 1 (list expr-generic-abs-a) #f 'generic-abs)
+
+  ;; Conversion: return type = target-type field (first field, not arg)
+  ;; generic-from-int(target-type, arg) → target-type
+  ;; generic-from-rat(target-type, arg) → target-type
+  ;; The target-type is an EXPRESSION (like (expr-Int)), and its type-map value is Type(0).
+  ;; But we want the expression itself as the return type. Use a computed function that
+  ;; reads the target-type expression from the type-map and returns it if it's a type constructor.
+  ;; Conversion: target-type field is an EXPRESSION (e.g., (expr-Rat)), not a type.
+  ;; The return type IS the expression, not its type-map value (Type(0)).
+  ;; Registered as #f for now — needs expression-value access in computed types.
+  (register-typing-rule! expr-generic-from-int? 2
+                         (list expr-generic-from-int-target-type expr-generic-from-int-arg)
+                         #f 'generic-from-int)
+  (register-typing-rule! expr-generic-from-rat? 2
+                         (list expr-generic-from-rat-target-type expr-generic-from-rat-arg)
+                         #f 'generic-from-rat)
 
   ;; ===== STRUCTURAL/COMPLEX: return-type #f =====
   ;; These need special handling: dependent types, eliminators, pattern matching, etc.
