@@ -307,9 +307,9 @@
      ;; Non-existent fvar stays at ⊥
      (check-equal? (hash-ref tm fvar-e type-bot) type-bot))
 
-   (test-case "app: sub-expressions typed, result at ⊥ (app propagator disabled for Pattern 1)"
-     ;; App propagator disabled in production — result stays at ⊥
-     ;; But sub-expressions (func, arg) still get their own propagators
+   (test-case "app: bidirectional — writes domain to arg, result via tensor"
+     ;; App propagator writes domain DOWNWARD to arg position (check direction)
+     ;; and result UPWARD to app position (infer direction)
      (define func-e (expr-fvar 'f))
      (define arg-e (expr-int 42))
      (define app-e (expr-app func-e arg-e))
@@ -321,12 +321,13 @@
      (define net2 (install-typing-network net1 tm-cid app-e context-empty-value))
      (define net3 (run-to-quiescence net2))
      (define tm (net-cell-read net3 tm-cid))
-     ;; Arg is typed on-network (literal propagator fires)
+     ;; Arg gets Int from BOTH: literal propagator (infer) AND app's domain write (check)
+     ;; The merge: Int ⊔ Int = Int (idempotent)
      (check-equal? (hash-ref tm arg-e type-bot) (expr-Int)
-                   "arg 42 : Int (sub-expression typed on-network)")
-     ;; App result stays at ⊥ (app propagator disabled)
-     (check-equal? (hash-ref tm app-e type-bot) type-bot
-                   "app result at ⊥ (awaiting Pattern 1 for implicit args)"))
+                   "arg 42 : Int (bidirectional merge)")
+     ;; App result: tensor(Pi(mw,Int,Bool), Int) = Bool
+     (check-equal? (hash-ref tm app-e type-bot) (expr-Bool)
+                   "app result: Bool via tensor"))
    ))
 
 (run-tests phase-1a-tests)

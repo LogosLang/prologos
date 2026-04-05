@@ -167,6 +167,19 @@
 ;; (form-pipeline-value-type-map). Positions are expr object identities.
 ;; Component-indexed firing (Phase 1a) selectively schedules propagators.
 
+;; Helper: check if an expression references bvar(0) — indicates dependent type.
+;; Simplified check: looks for (expr-bvar 0) in the immediate structure.
+(define (codomain-is-dependent? e)
+  (match e
+    [(expr-bvar _) #t]  ;; ANY bvar reference means dependent
+    [(expr-app f a) (or (codomain-is-dependent? f) (codomain-is-dependent? a))]
+    [(expr-Pi _ d c) (or (codomain-is-dependent? d) (codomain-is-dependent? c))]
+    [(expr-lam _ d b) (or (codomain-is-dependent? d) (codomain-is-dependent? b))]
+    [(expr-Sigma a b) (or (codomain-is-dependent? a) (codomain-is-dependent? b))]
+    [(expr-meta _ _) #t]  ;; metas may resolve to dependent types
+    [_ #f]))
+
+
 ;; --- Typing cell: a plain hasheq mapping positions to types ---
 ;;
 ;; The typing cell's value IS the type-map: (hasheq expr → type-value).
@@ -237,21 +250,50 @@
         (type-map-write net tm-cid position ty)
         net)))  ;; not found — leave at ⊥
 
-;; Application (tensor): read func-type and arg-type, write tensor result.
+;; Application (tensor) with BIDIRECTIONAL writes.
+;; DOWNWARD (check direction): writes domain to arg position.
+;; UPWARD (infer direction): writes subst(0, arg-expr, codomain) to result position.
+;; The merge at arg-pos IS unification: the arg's inferred type and the expected
+;; domain meet via type-lattice-merge. This solves metas (bot → concrete).
 (define (make-app-fire-fn tm-cid position func-pos arg-pos)
   (lambda (net)
     (define func-type (type-map-read net tm-cid func-pos))
-    (define arg-type (type-map-read net tm-cid arg-pos))
     (cond
-      [(or (type-bot? func-type) (type-bot? arg-type)) net]  ;; wait for inputs
-      [else
-       (define result (type-tensor-core func-type arg-type))
+      [(type-bot? func-type) net]  ;; wait for func type
+      [(expr-Pi? func-type)
+       (define dom (expr-Pi-domain func-type))
+       (define cod (expr-Pi-codomain func-type))
+       ;; Check if codomain is dependent (contains bvar(0)).
+       ;; Dependent codomains require value-level tracking which the type-map
+       ;; doesn't support yet (Pattern 2). Leave at ⊥ for imperative fallback.
+       (define dependent? (codomain-is-dependent? cod))
        (cond
-         [(type-bot? result) net]   ;; inapplicable — no info to write
-         [(type-top? result)        ;; contradiction
-          (type-map-write net tm-cid position type-top)]
+         [dependent? net]  ;; leave at ⊥ — imperative fallback handles dependent types
          [else
-          (type-map-write net tm-cid position result)])])))
+          ;; Non-dependent: safe for bidirectional writes.
+          ;; DOWNWARD: write expected domain to arg position.
+          (define net1 (type-map-write net tm-cid arg-pos dom))
+          ;; UPWARD: read arg type, compute result via tensor.
+          (define arg-type (type-map-read net1 tm-cid arg-pos))
+          (cond
+            [(type-bot? arg-type) net1]  ;; arg still unknown — wrote domain, wait
+            [else
+             (define result (type-tensor-core func-type arg-type))
+             (cond
+               [(type-bot? result) net1]
+               [(type-top? result) (type-map-write net1 tm-cid position type-top)]
+               [else (type-map-write net1 tm-cid position result)])])])]
+      ;; Non-Pi func type — try tensor directly (union types etc.)
+      [else
+       (define arg-type (type-map-read net tm-cid arg-pos))
+       (cond
+         [(type-bot? arg-type) net]
+         [else
+          (define result (type-tensor-core func-type arg-type))
+          (cond
+            [(type-bot? result) net]
+            [(type-top? result) (type-map-write net tm-cid position type-top)]
+            [else (type-map-write net tm-cid position result)])])])))
 
 ;; Lambda: read domain type (must be Type(l)) and body type, write Pi.
 (define (make-lam-fire-fn tm-cid position dom-pos body-pos mult)
@@ -422,17 +464,18 @@
                              (make-fvar-fire-fn tm-cid e name)))
        net1]
 
-      ;; --- Application (tensor) ---
-      ;; DISABLED for production: the tensor propagator doesn't handle implicit
-      ;; arguments. [lseq-nil Nat] produces LSeq Type(0) instead of LSeq Nat
-      ;; because it types Nat as Type(0) (type-of-Nat) instead of treating Nat
-      ;; as a value argument. Requires Pattern 1 (implicit argument positions).
-      ;; Sub-expressions still get propagators (func, arg typed correctly).
+      ;; --- Application (tensor) with bidirectional writes ---
+      ;; Pattern 1: the app propagator writes domain DOWNWARD to arg position.
+      ;; The merge at arg-pos is unification (type-lattice-merge). This solves
+      ;; metas: if arg is a meta at ⊥, the domain write fills it.
       [(expr-app func arg)
        (define net1 (install net func ctx-pos))
        (define net2 (install net1 arg ctx-pos))
-       ;; App propagator NOT installed — result stays at ⊥, imperative fallback handles it
-       net2]
+       ;; Watch entire cell (multiple positions on same cell-id)
+       (define-values (net3 _pid)
+         (net-add-propagator net2 (list tm-cid) (list tm-cid)
+                             (make-app-fire-fn tm-cid e func arg)))
+       net3]
 
       ;; --- Lambda: creates child scope via context-extension propagator ---
       [(expr-lam m dom body)
