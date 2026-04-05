@@ -1326,3 +1326,69 @@ The five patterns decompose into three implementation tiers:
 - Pattern 3 (constraint postponement): Requires stratified merge (S0 defers to S1/S2) and ATMS integration. This is the hardest pattern — it touches the merge function semantics and the stratification boundary.
 
 Tier 1 is where the next implementation work should focus. Patterns 1, 2, and 5 together enable the core non-leaf propagators (app, lambda, Pi, variables) to type correctly on-network for the common cases that don't involve traits or deferred constraints.
+
+---
+
+## §15 Typing PU Architecture (from Pattern 2 Investigation)
+
+### Discovery
+
+Pattern 2 investigation (dependent substitution) revealed three issues:
+1. **Network accumulation**: typing propagators on the main elab-network persist across commands, causing timeouts from unbounded growth
+2. **Ephemeral typing networks solve this**: fresh prop-network per call, discarded after
+3. **Expression keys for subst are correct**: `subst(0, arg-pos, cod)` produces the right types
+
+### Architecture: Typing as a Pocket Universe
+
+The ephemeral typing network IS a Pocket Universe — a self-contained lattice computation within a single cell on the main elab-network.
+
+```
+Main elab-network:
+  form cell ← parse tree + pipeline (existing, PPN Track 3)
+  typing PU cell ← NEW: one per eval/infer command
+    value: type-map (hasheq position → type)
+    merge: type-map-merge-fn (pointwise type-lattice-merge)
+    Internal prop-network (ephemeral, GC'd after quiescence):
+      K-indexed positions (expression keys in the type-map)
+      Typing propagators attached to K-indices
+      Context-extension propagators for scope tree
+      Quiesces internally → final type-map value
+    Result written to typing PU cell on main network
+  constraint cells ← trait constraints (Phase 6 lattice, existing)
+  meta cells ← metavariable solutions (existing)
+```
+
+### How It Works
+
+1. **Typing PU cell created** on the main elab-network (`net-new-cell` with `type-map-merge-fn`). This is the ONE cell that the main network sees.
+
+2. **Ephemeral internal prop-network created** (`make-prop-network`). This is the PU's computational engine — a real propagator network with cells, propagators, and a scheduler, but ISOLATED from the main network.
+
+3. **K-indexed positions populated**: `install-typing-network` walks the core expr and installs propagators on the internal network. Each sub-expression is a K-index (expression key). The internal network's ONE cell holds the type-map hasheq.
+
+4. **Internal quiescence**: `run-to-quiescence` on the internal network fires typing propagators until the type-map stabilizes. The app propagator writes domain DOWNWARD (bidirectional merge = unification) and `subst(0, arg-expr, cod)` UPWARD (expression keys for dependent substitution).
+
+5. **Result written to main network**: the final type-map value is written to the typing PU cell on the main elab-network. Downstream main-network propagators (constraint resolution, ATMS) see this ONE write and fire accordingly.
+
+6. **Ephemeral network discarded**: the internal prop-network is unreferenced after step 5. Racket GC collects it. No manual cleanup. Efficient because CHAMP is persistent (structural sharing, no mutation to undo).
+
+### Why This Works
+
+- **No accumulation**: each typing PU creates a fresh internal network. No propagators persist across commands.
+- **One cell on main network**: the typing PU cell is the bridge. Main-network consumers see a single monotone write (⊥ → typed type-map).
+- **Real propagators inside**: the internal network has proper scheduling, fixpoint iteration, and component-indexed firing. Circular dependencies (recursive types) are handled by the scheduler.
+- **Expression keys for substitution**: `subst(0, arg-pos, cod)` uses the expression key (the value), while the type-map validates type agreement via merge. Clean separation: type-map for validation, expression keys for computation.
+- **GC-efficient**: the internal network is a transient Racket value. The typing PU cell's value (the final hasheq) is lightweight.
+
+### Relation to PPN Track 1-2
+
+This is the same PU pattern as PPN Track 1-2: the tree cell holds a PU value (the parse tree as a lattice). The tree cell's internal structure is computed by propagators. The main network sees the tree cell as a single cell with a structured value.
+
+For typing: the typing PU cell holds the type-map. The internal structure is computed by typing propagators. The main network sees the typing PU cell as a single cell with a structured value (the typed type-map).
+
+### Implementation Status
+
+- Ephemeral prop-network: VALIDATED (zero timeouts, correct results for narrow tests)
+- Expression-key substitution: VALIDATED (identity, compose, polymorphic functions)
+- Typing PU cell on main network: NOT YET IMPLEMENTED (current code creates ephemeral network but doesn't write result to main network cell)
+- 13 remaining failures: all trait-dispatch (Pattern 4 scope), not Pattern 2 issues
