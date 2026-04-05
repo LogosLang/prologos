@@ -50,6 +50,12 @@
  make-pi-fire-fn
  ;; Pattern 5: Context-extension propagator
  make-context-extension-fire-fn
+ ;; §16 SRE Typing Domain
+ (struct-out typing-domain-rule)
+ make-typing-domain
+ register-typing-rule!
+ lookup-typing-rule
+ install-default-typing-domain!
  ;; Phase 3 (D.4): Production integration
  infer-on-network
  type-map-merge-fn
@@ -355,6 +361,112 @@
            (type-map-write net tm-cid position (shift (+ k 1) 0 raw-type)))])))
 
 
+;; ============================================================
+;; §16 SRE Typing Domain: Expression-Kind → Type as Domain Data
+;; ============================================================
+;;
+;; Each expression kind is registered with its arity, child accessors,
+;; and return type. The catch-all in install-typing-network looks up
+;; the domain and installs the appropriate propagator.
+;;
+;; Self-hosting path: this domain IS the data a self-hosted compiler
+;; consumes. Library authors register rules for new constructs.
+
+;; A typing domain rule: one entry per expression kind.
+(struct typing-domain-rule
+  (predicate   ;; (expr → bool): matches this expression kind
+   arity       ;; Nat: number of sub-expression children
+   children    ;; (listof (expr → expr)): accessor functions for children
+   return-type ;; Expr | #f: constant return type, or #f for special handling
+   name)       ;; symbol: human-readable name
+  #:transparent)
+
+;; The typing domain: a list of rules (checked in order).
+;; Using a list (not hash) because predicates can overlap and order matters.
+(define current-typing-domain (make-parameter '()))
+
+(define (make-typing-domain) '())
+
+(define (register-typing-rule! pred arity children return-type name)
+  (current-typing-domain
+   (cons (typing-domain-rule pred arity children return-type name)
+         (current-typing-domain))))
+
+;; Look up a rule for an expression. Returns the rule or #f.
+(define (lookup-typing-rule e)
+  (for/first ([rule (in-list (current-typing-domain))]
+              #:when ((typing-domain-rule-predicate rule) e))
+    rule))
+
+;; Install a propagator from a domain rule.
+;; Arity 0: literal propagator (constant return type).
+;; Arity 1: recurse on child, install literal propagator.
+;; Arity 2: recurse on both children, install literal propagator.
+;; return-type = #f: unhandled by domain, leave at ⊥.
+(define (install-from-rule net tm-cid e ctx-pos rule)
+  (define children (typing-domain-rule-children rule))
+  (define ret-type (typing-domain-rule-return-type rule))
+  (cond
+    [(not ret-type) net]  ;; special handling needed — not in domain
+    [else
+     ;; Recurse on children
+     (define net-with-children
+       (for/fold ([n net]) ([child-fn (in-list children)])
+         (install-typing-network n tm-cid (child-fn e) ctx-pos)))
+     ;; Install literal propagator for the return type
+     (define-values (net* _pid)
+       (net-add-propagator net-with-children (list tm-cid) (list tm-cid)
+                           (make-literal-fire-fn tm-cid e ret-type)))
+     net*]))
+
+;; Register ALL known expression kinds.
+;; Called once at module load time.
+(define (install-default-typing-domain!)
+  ;; --- Int arithmetic: binary → Int ---
+  (for ([info (list (list expr-int-add? expr-int-add-a expr-int-add-b 'int-add)
+                    (list expr-int-sub? expr-int-sub-a expr-int-sub-b 'int-sub)
+                    (list expr-int-mul? expr-int-mul-a expr-int-mul-b 'int-mul)
+                    (list expr-int-div? expr-int-div-a expr-int-div-b 'int-div)
+                    (list expr-int-mod? expr-int-mod-a expr-int-mod-b 'int-mod))])
+    (register-typing-rule! (car info) 2
+                           (list (cadr info) (caddr info))
+                           (expr-Int) (cadddr info)))
+
+  ;; --- Int arithmetic: unary → Int ---
+  (register-typing-rule! expr-int-neg? 1 (list expr-int-neg-a) (expr-Int) 'int-neg)
+  (register-typing-rule! expr-int-abs? 1 (list expr-int-abs-a) (expr-Int) 'int-abs)
+
+  ;; --- Int comparison: binary → Bool ---
+  (for ([info (list (list expr-int-lt? expr-int-lt-a expr-int-lt-b 'int-lt)
+                    (list expr-int-le? expr-int-le-a expr-int-le-b 'int-le)
+                    (list expr-int-eq? expr-int-eq-a expr-int-eq-b 'int-eq))])
+    (register-typing-rule! (car info) 2
+                           (list (cadr info) (caddr info))
+                           (expr-Bool) (cadddr info)))
+
+  ;; --- Literals ---
+  (register-typing-rule! expr-string? 0 '() (expr-String) 'string-literal)
+
+  ;; --- Type constructors not yet in explicit match ---
+  (register-typing-rule! expr-Char? 0 '() (expr-Type (lzero)) 'Char-type)
+  (register-typing-rule! expr-Symbol? 0 '() (expr-Type (lzero)) 'Symbol-type)
+  (register-typing-rule! expr-Keyword? 0 '() (expr-Type (lzero)) 'Keyword-type)
+
+  ;; --- Generic arithmetic: return-type #f (Pattern 4 scope) ---
+  (register-typing-rule! expr-generic-add? 2
+                         (list expr-generic-add-a expr-generic-add-b)
+                         #f 'generic-add)
+  (register-typing-rule! expr-generic-sub? 2
+                         (list expr-generic-sub-a expr-generic-sub-b)
+                         #f 'generic-sub)
+  (register-typing-rule! expr-generic-mul? 2
+                         (list expr-generic-mul-a expr-generic-mul-b)
+                         #f 'generic-mul))
+
+;; Install default domain at module load time
+(install-default-typing-domain!)
+
+
 ;; --- install-typing-network: the core Phase 2 deliverable ---
 ;;
 ;; Takes a prop-network, a form cell id, and a core expr (from elaborate-top-level).
@@ -440,70 +552,6 @@
                              (make-universe-fire-fn tm-cid e l)))
        net1]
 
-      ;; --- String/Char/Keyword literals ---
-      [(expr-string _)
-       (define-values (net1 _pid)
-         (net-add-propagator net (list tm-cid) (list tm-cid)
-                             (make-literal-fire-fn tm-cid e (expr-String))))
-       net1]
-
-      [(expr-char _)
-       (define-values (net1 _pid)
-         (net-add-propagator net (list tm-cid) (list tm-cid)
-                             (make-literal-fire-fn tm-cid e (expr-Char))))
-       net1]
-
-      [(expr-keyword _)
-       (define-values (net1 _pid)
-         (net-add-propagator net (list tm-cid) (list tm-cid)
-                             (make-literal-fire-fn tm-cid e (expr-Keyword))))
-       net1]
-
-      ;; --- Specialized int arithmetic: known types ---
-      ;; Binary Int → Int → Int
-      [(? (lambda (x) (or (expr-int-add? x) (expr-int-sub? x) (expr-int-mul? x)
-                          (expr-int-div? x) (expr-int-mod? x))))
-       (define a (if (expr-int-add? e) (expr-int-add-a e)
-                     (if (expr-int-sub? e) (expr-int-sub-a e)
-                         (if (expr-int-mul? e) (expr-int-mul-a e)
-                             (if (expr-int-div? e) (expr-int-div-a e)
-                                 (expr-int-mod-a e))))))
-       (define b (if (expr-int-add? e) (expr-int-add-b e)
-                     (if (expr-int-sub? e) (expr-int-sub-b e)
-                         (if (expr-int-mul? e) (expr-int-mul-b e)
-                             (if (expr-int-div? e) (expr-int-div-b e)
-                                 (expr-int-mod-b e))))))
-       (define net1 (install net a ctx-pos))
-       (define net2 (install net1 b ctx-pos))
-       (define-values (net3 _pid)
-         (net-add-propagator net2 (list tm-cid) (list tm-cid)
-                             (make-literal-fire-fn tm-cid e (expr-Int))))
-       net3]
-
-      ;; Unary Int → Int
-      [(? (lambda (x) (or (expr-int-neg? x) (expr-int-abs? x))))
-       (define a (if (expr-int-neg? e) (expr-int-neg-a e) (expr-int-abs-a e)))
-       (define net1 (install net a ctx-pos))
-       (define-values (net2 _pid)
-         (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                             (make-literal-fire-fn tm-cid e (expr-Int))))
-       net2]
-
-      ;; Binary Int → Int → Bool
-      [(? (lambda (x) (or (expr-int-lt? x) (expr-int-le? x) (expr-int-eq? x))))
-       (define a (if (expr-int-lt? e) (expr-int-lt-a e)
-                     (if (expr-int-le? e) (expr-int-le-a e)
-                         (expr-int-eq-a e))))
-       (define b (if (expr-int-lt? e) (expr-int-lt-b e)
-                     (if (expr-int-le? e) (expr-int-le-b e)
-                         (expr-int-eq-b e))))
-       (define net1 (install net a ctx-pos))
-       (define net2 (install net1 b ctx-pos))
-       (define-values (net3 _pid)
-         (net-add-propagator net2 (list tm-cid) (list tm-cid)
-                             (make-literal-fire-fn tm-cid e (expr-Bool))))
-       net3]
-
       ;; --- Meta expression: leave at ⊥ (metas resolve through imperative path) ---
       [(expr-meta _ _) net]
 
@@ -573,12 +621,12 @@
                              (make-pi-fire-fn tm-cid e dom cod)))
        net3]
 
-      ;; --- Fallthrough: unhandled expr kind, leave at ⊥ ---
+      ;; --- Domain lookup: SRE typing domain handles remaining expr kinds ---
       [_
-       (when (struct? e)
-         (eprintf "UNHANDLED-EXPR: ~a\n"
-           (let ([v (struct->vector e)]) (vector-ref v 0))))
-       net])))
+       (define rule (lookup-typing-rule e))
+       (if rule
+           (install-from-rule net tm-cid e ctx-pos rule)
+           net)])))
 
 
 ;; ============================================================
