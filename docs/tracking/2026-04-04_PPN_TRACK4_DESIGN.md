@@ -1206,3 +1206,121 @@ The corrected implementation follows the D.3 §2 architecture. No function-call 
 ### Process Codification
 
 **Network Reality Check** added to `workflow.md` (commit `0175c986`): for any phase claiming on-network computation, verify (1) `net-add-propagator` calls added, (2) `net-cell-write` produces the result, (3) full trace from cell creation through propagator firing to cell read. Zero on any = imperative, regardless of data structures.
+
+---
+
+## §13 Continuation: Five On-Network Patterns for Full Non-Leaf Typing
+
+Non-leaf typing propagators (app, lambda, bvar, fvar, Pi) are defined, tested, and pass the NRC in isolation. They can't be deployed because five problems remain imperative. Each maps to prior art in SRE, PPN, and the lattice/module theory.
+
+### Pattern 1: Implicit Arguments — Structural Decomposition, Not Meta Creation
+
+**The problem**: `[id 42]` where `id : {A : Type} → A → A`. The imperative path calls `fresh-meta` to create `?A`, unifies `?A` with `Int`, substitutes. The propagator model has no "create a meta" operation.
+
+**Prior art**: PPN Track 1-2 — when the parser encounters ambiguity, the alternatives ARE the PU value. ATMS branches represent possibilities. The tree cell holds ALL possible parses simultaneously. Alternatives aren't "created" — they're structural components that start at ⊥.
+
+SRE Track 2D — `pattern-desc` matches form structure and creates sub-cell bindings for ALL children, including optional ones. Structural decomposition discovers positions, it doesn't create them.
+
+**The pattern**: Implicit parameters ARE sub-expression positions in the Pi's structural decomposition. When `install-typing-network` encounters a Pi with an implicit domain, it creates a position for the implicit argument at ⊥. The app propagator writes the inferred type (from the explicit argument) to that position. The position starts at ⊥ and gains information through writes — exactly like any other position.
+
+The implicit argument is not "created on demand" — it's a structural component of the Pi that's always there, starting at ⊥, gaining information through bidirectional writes. SRE structural decomposition of the Pi creates all positions, including implicit ones.
+
+**Cell model**: When the app propagator reads `Pi({A:Type}, A → A)` applied to `42`:
+- Position for `{A}` starts at ⊥
+- The literal propagator writes `Int` to the arg position
+- The app propagator reads `Pi({A}, A→A)` and the arg type `Int`
+- The app writes `Int` to the `{A}` position (domain = A, arg = Int, so A = Int)
+- The `{A}` position goes from ⊥ to `Int` via merge
+- The codomain `A → A` becomes `Int → Int` after substitution
+- Result position gets `Int`
+
+No `fresh-meta`, no `solve-meta!`. Information flows through positions.
+
+### Pattern 2: Dependent Substitution — Template Instantiation as Propagator
+
+**The problem**: `Pi(m, A, B)` where `B` mentions bvar(0). After the argument type is known, `subst(0, arg, B)` computes the result type. If the argument contains metas, the substituted result does too.
+
+**Prior art**: Track 2D's `instantiate-template` — fill holes from K bindings. The codomain template has a hole (bvar 0), the argument fills it. PUnify's structural matching is this exact operation.
+
+Track 2H's tensor — `type-tensor-core(Pi(m,A,B), arg-type) = subst(0, arg, B)`. The tensor IS substitution. It's already a pure function that computes the result type from the function type and argument.
+
+**The pattern**: A substitution propagator watches the argument position and the codomain. When the argument gains a value, the propagator computes `subst(0, arg, cod)` and writes the result to the output position. This is the same as Track 2D's template hole-filling: the codomain is the template, the argument is the binding, the result is the instantiation.
+
+**Cell model**: The app propagator already does this — `(subst 0 arg-expr cod)` in the upward (infer) direction. If `arg-expr` contains metas (positions at ⊥), the substituted result references those positions. When the metas solve (positions gain values), the substituted result updates. This is AUTOMATIC if the result type itself is written to a position — when its constituent positions change, the merge at the result position fires dependent propagators.
+
+This may require the result type to be a STRUCTURED PU value (like the type-cell-tree from the D.3 design) rather than a flat type value. The type-cell-tree decomposes the result type into sub-positions, so changes to constituent metas cascade through. This connects to the PU model from §1d.
+
+### Pattern 3: Constraint Postponement — Stratified Merge, Not Immediate Contradiction
+
+**The problem**: `?A join Int` where `?A` is a simple meta → `Int` (merge gains info). But `(?A x y) join (f x y)` where `?A` is an applied meta → the merge can't decide. `type-lattice-merge` calls `try-unify-pure` which returns `#f` → `type-top`. But this should be DEFERRED, not contradicted.
+
+**Prior art**: BSP-LE stratification — S0 handles monotone computation, S1 handles readiness checks, S2 handles commitment. Constraints that can't resolve at S0 are held for later strata. The ATMS manages open assumptions that are retracted if contradicted.
+
+SRE Track 2G — property inference validates lattice properties, but some properties can only be confirmed after accumulating enough information. The "infer then validate" pattern: accumulate at S0, validate at S2.
+
+**The pattern**: The merge function needs a THIRD outcome: "defer." For cases where `type-lattice-merge` can't determine agreement or contradiction (applied metas, higher-order patterns), the merge returns the MORE INFORMATIVE value (not type-top) and registers a DEFERRED CONSTRAINT. The deferred constraint is a cell on the network (using the constraint lattice from Phase 6). A readiness propagator at S1 watches the constituent positions; when they gain enough info, the constraint re-evaluates.
+
+**Cell model**: `type-lattice-merge` already has the meta-handling case: "if either has unsolved metas, keep the more concrete value." This IS deferral for simple metas. The gap: for applied metas, `try-unify-pure` returns `#f` too eagerly. The fix is in `type-lattice-merge` or `try-unify-pure`: instead of returning `#f` (which triggers type-top), return a "postponed" marker that `type-lattice-merge` treats as "keep both, wait for more info."
+
+This connects to the ATMS: a postponed constraint IS an ATMS assumption ("these types agree, we just can't verify yet"). If later information contradicts the assumption, ATMS retracts it.
+
+### Pattern 4: Trait Dispatch — Instance Registry as Cell, Resolution as Propagator
+
+**The problem**: `[+ 3 4]` dispatches through the `Add` trait. The imperative path: create dict-meta → look up instance registry → find `impl Add Int` → fill dict-meta with `int-add`. None of this exists on-network.
+
+**Prior art**: Module theory on SRE — module exports ARE cells. SRE Track 7 envisions per-name cells, module export/import as structural matching. Trait instances ARE module-level exports.
+
+SRE Track 2G — domain registration with `make-sre-domain` + declared properties. The trait instance registry IS an SRE domain: the carrier is "set of instances for a trait," the merge is set-union (monotone — instances only increase), properties include coherence (no overlapping instances).
+
+Constraint propagators (elaborator-network.rkt) — `install-type->constraint-propagator` watches a type cell and writes to a constraint cell when the type refines. This is the EXACT pattern for trait resolution.
+
+**The pattern**: Each trait constraint (`Add ?A`) is a constraint cell (using the constraint lattice from Phase 6). A constraint propagator watches the argument type position (`?A`). When `?A`'s position gains a value (e.g., `Int`), the constraint propagator:
+1. Reads the instance registry (off-network bridge for now, SRE Track 7 makes it a cell)
+2. Matches: `impl Add Int` → `int-add`
+3. Writes `resolved(int-add)` to the constraint cell
+4. Writes the resolved type to the function position (dict-meta → concrete implementation)
+
+The dict-meta IS a position in the type-map. It starts at ⊥. When the constraint resolves, the constraint propagator writes the implementation type to the dict-meta position. Dependent propagators fire.
+
+**Cell model**: The constraint cell watches the argument type position. When `Int` is written there, the constraint cell resolves. The resolved implementation type flows into the typing network. No imperative `resolve-trait-constraint!` — the constraint propagator IS the resolution.
+
+### Pattern 5: Context Threading — Scope Tree as Cell Tree, Module Theory Parallel
+
+**The problem**: Lambda extends context for its body. Nested lambdas need nested extensions. Currently `install-typing-network` captures context at installation time — a static snapshot. Nested scopes don't get dynamically extended contexts.
+
+**Prior art**: Module theory — modules nest. A submodule's scope includes parent's exports plus its own. SRE Track 7's module loading: per-module cells, import/export as structural matching.
+
+PPN Track 3 — per-form cells with dependency-set pipeline. Each form has a cell, dependencies flow through the pipeline. The form cell's PU value enriches as the pipeline progresses.
+
+Phase 1c context lattice — `context-extend-value` creates a child from parent via tensor. The lattice IS the scope tree structure.
+
+**The pattern**: Each binder scope creates a CONTEXT POSITION in the type-map. A context propagator watches the enclosing context position and the binder's domain type position. When both have values, it computes the extended context and writes it to the scope's context position.
+
+**Cell model**: For `(lambda [x : Int] (lambda [y : Bool] body))`:
+- Outer context position: `ctx-empty` (written immediately)
+- Outer lambda's context propagator reads `ctx-empty` + domain position `Int` → writes `[(Int, mw)]` to inner-scope context position
+- Inner lambda's context propagator reads `[(Int, mw)]` + domain position `Bool` → writes `[(Bool, mw), (Int, mw)]` to body-scope context position
+- Body's bvar propagators read from body-scope context position
+
+The context flows DOWNWARD through the scope tree via cell writes. When a domain type refines (meta solved), the context position updates, and all body propagators fire. The scope tree IS a cell tree — each scope has a context position, connected by context-extension propagators.
+
+This is the Module Theory parallel: each scope is a "local module" with exports (bindings). Import resolution (bvar lookup) reads from the enclosing module's export cell. Module composition (scope nesting) is tensor on the context lattice.
+
+---
+
+## §14 Continuation Priority and Scope Assessment
+
+The five patterns decompose into three implementation tiers:
+
+**Tier 1 — Near-term (enables non-leaf deployment)**:
+- Pattern 1 (implicit args): Structural decomposition of Pi creates implicit positions. Primarily a change to `install-typing-network`'s Pi/app handling.
+- Pattern 2 (dependent substitution): Already handled by the app propagator's `subst` call. The gap is structured PU values for result types containing metas.
+- Pattern 5 (context threading): Context positions in type-map, context-extension propagators. Uses existing Phase 1c lattice.
+
+**Tier 2 — Medium-term (enables constraint-dependent typing)**:
+- Pattern 4 (trait dispatch): Constraint cells + constraint propagators watching type positions. Uses existing Phase 6 constraint lattice. Instance registry as off-network bridge (Track 7 scope for on-network).
+
+**Tier 3 — Longer-term (completes edge cases)**:
+- Pattern 3 (constraint postponement): Requires stratified merge (S0 defers to S1/S2) and ATMS integration. This is the hardest pattern — it touches the merge function semantics and the stratification boundary.
+
+Tier 1 is where the next implementation work should focus. Patterns 1, 2, and 5 together enable the core non-leaf propagators (app, lambda, Pi, variables) to type correctly on-network for the common cases that don't involve traits or deferred constraints.
