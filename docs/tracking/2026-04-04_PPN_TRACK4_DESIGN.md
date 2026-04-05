@@ -62,7 +62,8 @@
 | 4a | Meta-solving as cell writes | ✅ | Cell-id fast path (`4b8f3876`). Cells authoritative for meta solutions. KEPT — genuinely on-network. |
 | 4b | Zonk retirement: fan-in default propagator | 🔄 | **4b-i** ✅ meta-readiness infra (`002f7cc3`). **4b-ii-a** ✅ cell-id fast path (`4b8f3876`). **4b-ii-b** ⬜ zonk deletion: blocked on Phases 2-3 redo (propagator-native typing must produce cell-refs, not expr-meta). |
 | P5 | Pattern 5: Context threading as cell positions | ✅ | Context positions in type-map, ctx-extension propagators, bvar reads from ctx position. Lambda/Pi/bvar/fvar enabled. App disabled (Pattern 1). (commit `fb1a69b0`) |
-| P1 | Pattern 1: Bidirectional app propagator | ✅ | App writes domain DOWNWARD to arg, result UPWARD. Dependent codomain → ⊥ (fallback). Unification IS the merge at arg-pos. (commit `297faf33`) |
+| P1 | Pattern 1: Bidirectional app propagator | ✅ | App writes domain DOWNWARD to arg, result UPWARD. Unification IS the merge at arg-pos. (commit `297faf33`) |
+| P2 | Pattern 2: Ephemeral PU typing + expression-key subst | ✅ | Ephemeral prop-network per call (GC'd). subst(0, arg-expr, cod) uses expression keys. Fuel limit + unsolved-meta fallback. Dependent guard REMOVED. (commit `21bcbd58`) |
 | 5 | ATMS extension | ⬜ | Blocked on Pattern 2 (dependent subst value-level tracking) and Pattern 3 (constraint postponement). |
 | 6 | Constraint propagators + SRE domain | 🔄 | ✅ Constraint lattice (`f7ef8665`). ⬜ Constraint cells as on-network propagators: blocked on Phase 2-3 redo. **DELETE** effects protocol + delegation pattern (imperative scaffolding). |
 | 7 | Surface→Type Galois bridge | ✅ | **D.4 REDO** (commit `f1354276`): `infer-on-network/err` wired into process-command for eval/infer. Leaf expressions typed on-network. Non-leaf falls back to imperative (unification not yet on-network). NRC passes. |
