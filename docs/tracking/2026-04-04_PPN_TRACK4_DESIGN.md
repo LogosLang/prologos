@@ -1393,7 +1393,54 @@ For typing: the typing PU cell holds the type-map. The internal structure is com
 - Expression-key substitution: VALIDATED (identity, compose, polymorphic functions)
 - Typing PU cell on main network: NOT YET IMPLEMENTED (current code creates ephemeral network but doesn't write result to main network cell)
 - 15 failures: all PRE-EXISTING (not from Track 4 changes)
-- On-network rate: ~46% (acceptance file). Remaining fallbacks from unhandled expr kinds + metas.
+- On-network rate: ~46% (acceptance file). Remaining fallbacks from 3 frontiers.
+
+---
+
+## §17 Three Frontiers to 100% On-Network
+
+Current on-network rate: ~46-54%. Three categories of fallback remain.
+
+### Frontier 2: Trait Dispatch (generic-add, generic-eq, etc.)
+
+**Problem**: `(+ 3 4)` → `(expr-generic-add 3 4)`. Return type depends on the `Add` trait instance for the argument type. Currently registered with `return-type=#f`.
+
+**Options**:
+- **A. Full constraint propagator**: constraint cell watches arg type, resolves instance from registry. Architecturally complete but requires new propagator kind + instance registry bridge.
+- **B. Direct type derivation**: for most numeric traits, return type = argument type (`Add: a→a→a`, `Sub: a→a→a`). Comparison traits return Bool. The return type IS derivable from the argument type without trait resolution.
+- **C. Computed return type via SRE domain** (CHOSEN): register generic ops with `return-type = (lambda (arg-type) arg-type)` for arithmetic, `return-type = (lambda (_) (expr-Bool))` for comparison. Uses existing §16 infrastructure. No new architecture.
+
+**Decision**: Option C — uses existing computed-return-type infrastructure. Handles common cases. Complex trait methods with non-derivable return types remain at #f for now.
+
+### Frontier 1: Meta Resolution (dependent apps with implicit args)
+
+**Problem**: `(id zero)` → `(expr-app (expr-app id ?A) zero)`. The on-network typing computes `subst(0, ?A, cod)` which preserves the meta in the result. `has-unsolved-meta?` catches it and defers.
+
+**The root issue**: The ephemeral network solves `?A` conceptually (the downward write puts `Type` at `?A`'s position). But `subst` uses the EXPRESSION `?A`, not the position's value. The result contains the meta even though the type-map has it solved.
+
+**Options**:
+- **A. Local zonk of result**: After quiescence, walk the result type and replace `(expr-meta ?A cid)` with the value at its type-map position (if non-⊥). Local to the ephemeral result, not a global tree walk. Pragmatic.
+- **B. Type-map holds type×value pairs**: Each position carries both type (for validation/merge) and value (for substitution). Richer lattice. Architecturally clean but doubles information per position.
+- **C. Bridge meta solutions to main network**: After quiescence, write solved meta values back to the main elab-network via `solve-meta!`. The typing PU's output channel. Crosses the ephemeral boundary.
+
+**Prior art**: PPN Track 1-2 tree cell holds both structure and metadata (two facets). SRE Track 2D K bindings hold both value and tag. Option B follows this PU pattern.
+
+### Frontier 3: Structural Collection Types (map-get, set-*, etc.)
+
+**Problem**: `map-get(m, k)` → return type is `V` where `m : Map K V`. Computed return types handle simple Map types but fail on unions (`Map K (Int | String)`).
+
+**Options**:
+- **A. Union distribution**: Extract V from each union component, join results. Follows Track 2H tensor distribution pattern. The test-mixed-map regression showed where edge cases are.
+- **B. Conservative #f for unions**: Handle `Map K V → V` for concrete maps only. Union maps fall back. Safe intermediate.
+- **C. Leave at #f**: Structural ops fall back to imperative. Low impact (few map expressions in typical code).
+
+**Prior art**: Track 2H's tensor distributes over unions — `type-tensor-core` returns `type-bot` for inapplicable, union-join collects valid results. Same pattern for `map-value-type`.
+
+### Implementation Order
+
+1. **F2 first** (trait dispatch): uses existing infrastructure, immediate improvement
+2. **F1 next** (meta resolution): architectural decision, Option A as pragmatic start
+3. **F3 last** (structural types): union distribution following Track 2H pattern
 
 ---
 
