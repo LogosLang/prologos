@@ -23,7 +23,7 @@
          "propagator.rkt"
          "surface-rewrite.rkt"
          (only-in "subtype-predicate.rkt" type-tensor-core)
-         (only-in "type-lattice.rkt" type-bot type-bot? type-top type-top? type-lattice-merge)
+         (only-in "type-lattice.rkt" type-bot type-bot? type-top type-top? type-lattice-merge has-unsolved-meta?)
          (only-in "metavar-store.rkt" meta-solution/cell-id current-prop-net-box)
          "elab-network-types.rkt"
          "errors.rkt"
@@ -250,11 +250,11 @@
         (type-map-write net tm-cid position ty)
         net)))  ;; not found — leave at ⊥
 
-;; Application (tensor) with BIDIRECTIONAL writes.
-;; DOWNWARD (check direction): writes domain to arg position.
-;; UPWARD (infer direction): writes subst(0, arg-expr, codomain) to result position.
-;; The merge at arg-pos IS unification: the arg's inferred type and the expected
-;; domain meet via type-lattice-merge. This solves metas (bot → concrete).
+;; Application with BIDIRECTIONAL writes (§15 Typing PU Architecture).
+;; DOWNWARD (check): writes domain to arg position. Merge = unification.
+;; UPWARD (infer): writes subst(0, arg-EXPR, codomain) to result position.
+;;   Pattern 2: substitution uses expression keys (values), not type-map values.
+;;   Dependent codomains handled correctly: subst(0, arg-pos, bvar(0)) = arg-pos.
 (define (make-app-fire-fn tm-cid position func-pos arg-pos)
   (lambda (net)
     (define func-type (type-map-read net tm-cid func-pos))
@@ -263,26 +263,11 @@
       [(expr-Pi? func-type)
        (define dom (expr-Pi-domain func-type))
        (define cod (expr-Pi-codomain func-type))
-       ;; Check if codomain is dependent (contains bvar(0)).
-       ;; Dependent codomains require value-level tracking which the type-map
-       ;; doesn't support yet (Pattern 2). Leave at ⊥ for imperative fallback.
-       (define dependent? (codomain-is-dependent? cod))
-       (cond
-         [dependent? net]  ;; leave at ⊥ — imperative fallback handles dependent types
-         [else
-          ;; Non-dependent: safe for bidirectional writes.
-          ;; DOWNWARD: write expected domain to arg position.
-          (define net1 (type-map-write net tm-cid arg-pos dom))
-          ;; UPWARD: read arg type, compute result via tensor.
-          (define arg-type (type-map-read net1 tm-cid arg-pos))
-          (cond
-            [(type-bot? arg-type) net1]  ;; arg still unknown — wrote domain, wait
-            [else
-             (define result (type-tensor-core func-type arg-type))
-             (cond
-               [(type-bot? result) net1]
-               [(type-top? result) (type-map-write net1 tm-cid position type-top)]
-               [else (type-map-write net1 tm-cid position result)])])])]
+       ;; DOWNWARD: write expected domain to arg position.
+       (define net1 (type-map-write net tm-cid arg-pos dom))
+       ;; UPWARD: subst uses arg-pos (expression key) — handles ALL codomains.
+       (define result-type (subst 0 arg-pos cod))
+       (type-map-write net1 tm-cid position result-type)]
       ;; Non-Pi func type — try tensor directly (union types etc.)
       [else
        (define arg-type (type-map-read net tm-cid arg-pos))
@@ -539,17 +524,30 @@
 ;; Returns: (values updated-network inferred-type)
 ;;   inferred-type is the type at the root position (the expr itself),
 ;;   or type-bot if the propagators couldn't compute it.
+;; §15 Typing PU: fuel limit for the internal prop-network.
+;; Simple expressions: 2-10 firings. Complex: up to ~100.
+;; If exceeded, the network is cycling — bail out (type-bot → fallback).
+(define TYPING-FUEL-LIMIT 200)
+
 (define (infer-on-network net expr ctx-val)
   ;; 1. Create a fresh typing cell (hasheq value, type-map-merge-fn)
   (define-values (net1 tm-cid)
     (net-new-cell net (hasheq) type-map-merge-fn))
   ;; 2. Install typing propagators for the expr tree
   (define net2 (install-typing-network net1 tm-cid expr ctx-val))
-  ;; 3. Run to quiescence — propagators fire, types flow
-  (define net3 (run-to-quiescence net2))
+  ;; 3. Run to quiescence with fuel limit
+  (define original-fuel (prop-network-fuel net2))
+  (define net2-limited
+    (struct-copy prop-network net2
+      [hot (struct-copy prop-net-hot (prop-network-hot net2)
+             [fuel TYPING-FUEL-LIMIT])]))
+  (define net3 (run-to-quiescence net2-limited))
   ;; 4. Read the root type from the type-map
   (define root-type (type-map-read net3 tm-cid expr))
-  (values net3 root-type))
+  ;; If fuel exhausted (cycling), return type-bot → fallback
+  (if (<= (prop-network-fuel net3) 0)
+      (values net3 type-bot)
+      (values net3 root-type)))
 
 
 ;; ============================================================
@@ -561,39 +559,31 @@
 ;; Internally: extracts prop-network from elab-network box, runs
 ;; infer-on-network, writes updated network back, returns type.
 
+;; §15 Typing PU Architecture: ephemeral network as Pocket Universe.
+;; Creates a FRESH prop-network for typing (not the main elab-network).
+;; The typing network is created, run, read, and discarded (GC'd).
+;; This prevents accumulation of typing propagators across commands.
 (define (infer-on-network/err ctx expr [loc srcloc-unknown] [names '()])
   (define net-box (current-prop-net-box))
   (cond
-    [(not net-box)
-     ;; No network available (test context or #lang expander) — can't use propagators.
-     ;; Return type-bot to signal "not computed" — caller should fall back.
-     type-bot]
+    [(not net-box) type-bot]  ;; no network → signal fallback
     [else
-     (define enet (unbox net-box))
-     (define pnet (elab-network-prop-net enet))
-     ;; Build context cell value from imperative ctx
+     ;; Ephemeral typing network — isolated from main elab-network
+     (define pnet (make-prop-network))
      (define ctx-val (context-cell-value ctx (length ctx)))
-     ;; Run typing on network
-     (define-values (pnet* root-type) (infer-on-network pnet expr ctx-val))
-     ;; Write updated network back
-     (set-box! net-box
-       (elab-network pnet*
-                     (elab-network-cell-info enet)
-                     (elab-network-next-meta-id enet)
-                     (elab-network-id-map enet)
-                     (elab-network-meta-info enet)))
-     ;; Convert result
+     (define-values (_pnet* root-type) (infer-on-network pnet expr ctx-val))
+     ;; Main elab-network UNCHANGED — typing PU is ephemeral
+     ;; Convert result: fall back for incomplete/partial results
      (cond
        [(type-bot? root-type)
-        ;; Propagators couldn't compute a type — error
-        (inference-failed-error loc
-                                "Could not infer type (on-network)"
-                                (pp-expr expr names))]
+        ;; Couldn't compute (or fuel exhausted) → signal fallback
+        (inference-failed-error loc "on-network: bot" (pp-expr expr names))]
        [(type-top? root-type)
-        ;; Contradiction — type error
-        (inference-failed-error loc
-                                "Type contradiction (on-network)"
-                                (pp-expr expr names))]
+        ;; Contradiction → signal fallback (imperative may give better error)
+        (inference-failed-error loc "on-network: top" (pp-expr expr names))]
+       [(has-unsolved-meta? root-type)
+        ;; Partial result with unsolved metas → signal fallback
+        (inference-failed-error loc "on-network: unsolved meta" (pp-expr expr names))]
        [else root-type])]))
 
 
