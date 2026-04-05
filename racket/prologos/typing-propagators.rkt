@@ -248,6 +248,8 @@
 (define (make-fvar-fire-fn tm-cid position name)
   (lambda (net)
     (define ty (global-env-lookup-type name))
+    (when (not ty)
+      (eprintf "FVAR-MISS: ~a\n" name))
     (if ty
         (type-map-write net tm-cid position ty)
         net)))  ;; not found — leave at ⊥
@@ -260,6 +262,8 @@
 (define (make-app-fire-fn tm-cid position func-pos arg-pos)
   (lambda (net)
     (define func-type (type-map-read net tm-cid func-pos))
+    (when (type-bot? func-type)
+      (eprintf "APP-WAIT: func ~a still bot\n" func-pos))
     (cond
       [(type-bot? func-type) net]  ;; wait for func type
       [(expr-Pi? func-type)
@@ -436,6 +440,73 @@
                              (make-universe-fire-fn tm-cid e l)))
        net1]
 
+      ;; --- String/Char/Keyword literals ---
+      [(expr-string _)
+       (define-values (net1 _pid)
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-literal-fire-fn tm-cid e (expr-String))))
+       net1]
+
+      [(expr-char _)
+       (define-values (net1 _pid)
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-literal-fire-fn tm-cid e (expr-Char))))
+       net1]
+
+      [(expr-keyword _)
+       (define-values (net1 _pid)
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-literal-fire-fn tm-cid e (expr-Keyword))))
+       net1]
+
+      ;; --- Specialized int arithmetic: known types ---
+      ;; Binary Int → Int → Int
+      [(? (lambda (x) (or (expr-int-add? x) (expr-int-sub? x) (expr-int-mul? x)
+                          (expr-int-div? x) (expr-int-mod? x))))
+       (define a (if (expr-int-add? e) (expr-int-add-a e)
+                     (if (expr-int-sub? e) (expr-int-sub-a e)
+                         (if (expr-int-mul? e) (expr-int-mul-a e)
+                             (if (expr-int-div? e) (expr-int-div-a e)
+                                 (expr-int-mod-a e))))))
+       (define b (if (expr-int-add? e) (expr-int-add-b e)
+                     (if (expr-int-sub? e) (expr-int-sub-b e)
+                         (if (expr-int-mul? e) (expr-int-mul-b e)
+                             (if (expr-int-div? e) (expr-int-div-b e)
+                                 (expr-int-mod-b e))))))
+       (define net1 (install net a ctx-pos))
+       (define net2 (install net1 b ctx-pos))
+       (define-values (net3 _pid)
+         (net-add-propagator net2 (list tm-cid) (list tm-cid)
+                             (make-literal-fire-fn tm-cid e (expr-Int))))
+       net3]
+
+      ;; Unary Int → Int
+      [(? (lambda (x) (or (expr-int-neg? x) (expr-int-abs? x))))
+       (define a (if (expr-int-neg? e) (expr-int-neg-a e) (expr-int-abs-a e)))
+       (define net1 (install net a ctx-pos))
+       (define-values (net2 _pid)
+         (net-add-propagator net1 (list tm-cid) (list tm-cid)
+                             (make-literal-fire-fn tm-cid e (expr-Int))))
+       net2]
+
+      ;; Binary Int → Int → Bool
+      [(? (lambda (x) (or (expr-int-lt? x) (expr-int-le? x) (expr-int-eq? x))))
+       (define a (if (expr-int-lt? e) (expr-int-lt-a e)
+                     (if (expr-int-le? e) (expr-int-le-a e)
+                         (expr-int-eq-a e))))
+       (define b (if (expr-int-lt? e) (expr-int-lt-b e)
+                     (if (expr-int-le? e) (expr-int-le-b e)
+                         (expr-int-eq-b e))))
+       (define net1 (install net a ctx-pos))
+       (define net2 (install net1 b ctx-pos))
+       (define-values (net3 _pid)
+         (net-add-propagator net2 (list tm-cid) (list tm-cid)
+                             (make-literal-fire-fn tm-cid e (expr-Bool))))
+       net3]
+
+      ;; --- Meta expression: leave at ⊥ (metas resolve through imperative path) ---
+      [(expr-meta _ _) net]
+
       ;; --- Bound variable: reads from context POSITION ---
       [(expr-bvar k)
        (define-values (net1 _pid)
@@ -502,8 +573,12 @@
                              (make-pi-fire-fn tm-cid e dom cod)))
        net3]
 
-      ;; --- Fallthrough: unknown expr kind, leave at ⊥ ---
-      [_ net])))
+      ;; --- Fallthrough: unhandled expr kind, leave at ⊥ ---
+      [_
+       (when (struct? e)
+         (eprintf "UNHANDLED-EXPR: ~a\n"
+           (let ([v (struct->vector e)]) (vector-ref v 0))))
+       net])))
 
 
 ;; ============================================================
@@ -532,6 +607,7 @@
 (define TYPING-FUEL-LIMIT 200)
 
 (define (infer-on-network net expr ctx-val)
+  (eprintf "INFER-ON-NET: ~a\n" expr)
   ;; 1. Create a fresh typing cell (hasheq value, type-map-merge-fn)
   (define-values (net1 tm-cid)
     (net-new-cell net (hasheq) type-map-merge-fn))
