@@ -56,6 +56,7 @@
  register-typing-rule!
  lookup-typing-rule
  install-default-typing-domain!
+ unhandled-expr-counts
  ;; Phase 3 (D.4): Production integration
  infer-on-network
  type-map-merge-fn
@@ -254,8 +255,6 @@
 (define (make-fvar-fire-fn tm-cid position name)
   (lambda (net)
     (define ty (global-env-lookup-type name))
-    (when (not ty)
-      (eprintf "FVAR-MISS: ~a\n" name))
     (if ty
         (type-map-write net tm-cid position ty)
         net)))  ;; not found — leave at ⊥
@@ -268,8 +267,6 @@
 (define (make-app-fire-fn tm-cid position func-pos arg-pos)
   (lambda (net)
     (define func-type (type-map-read net tm-cid func-pos))
-    (when (type-bot? func-type)
-      (eprintf "APP-WAIT: func ~a still bot\n" func-pos))
     (cond
       [(type-bot? func-type) net]  ;; wait for func type
       [(expr-Pi? func-type)
@@ -384,6 +381,7 @@
 ;; The typing domain: a list of rules (checked in order).
 ;; Using a list (not hash) because predicates can overlap and order matters.
 (define current-typing-domain (make-parameter '()))
+(define unhandled-expr-counts (make-hash))
 
 (define (make-typing-domain) '())
 
@@ -451,6 +449,11 @@
   (register-typing-rule! expr-Char? 0 '() (expr-Type (lzero)) 'Char-type)
   (register-typing-rule! expr-Symbol? 0 '() (expr-Type (lzero)) 'Symbol-type)
   (register-typing-rule! expr-Keyword? 0 '() (expr-Type (lzero)) 'Keyword-type)
+
+  ;; --- Map operations: structural (return type depends on map type) ---
+  (register-typing-rule! expr-map-get? 2
+                         (list expr-map-get-m expr-map-get-k)
+                         #f 'map-get)
 
   ;; --- Generic arithmetic: return-type #f (Pattern 4 scope) ---
   (register-typing-rule! expr-generic-add? 2
@@ -626,7 +629,13 @@
        (define rule (lookup-typing-rule e))
        (if rule
            (install-from-rule net tm-cid e ctx-pos rule)
-           net)])))
+           ;; Truly unhandled — leave at ⊥, log for coverage tracking
+           (begin
+             (when (struct? e)
+               (define v (struct->vector e))
+               (define tag (vector-ref v 0))
+               (hash-update! unhandled-expr-counts tag add1 0))
+             net))])))
 
 
 ;; ============================================================
@@ -655,7 +664,6 @@
 (define TYPING-FUEL-LIMIT 200)
 
 (define (infer-on-network net expr ctx-val)
-  (eprintf "INFER-ON-NET: ~a\n" expr)
   ;; 1. Create a fresh typing cell (hasheq value, type-map-merge-fn)
   (define-values (net1 tm-cid)
     (net-new-cell net (hasheq) type-map-merge-fn))
