@@ -61,7 +61,8 @@
 | 3 | Type-map population + propagator installation | ✅ | **D.4 REDO** (commit `c3f9db39`): `infer-on-network` creates typing cell + installs propagators + runs to quiescence + reads result from cell. `type-map-merge-fn` for standalone typing cells. NRC passes. |
 | 4a | Meta-solving as cell writes | ✅ | Cell-id fast path (`4b8f3876`). Cells authoritative for meta solutions. KEPT — genuinely on-network. |
 | 4b | Zonk retirement: fan-in default propagator | 🔄 | **4b-i** ✅ meta-readiness infra (`002f7cc3`). **4b-ii-a** ✅ cell-id fast path (`4b8f3876`). **4b-ii-b** ⬜ zonk deletion: blocked on Phases 2-3 redo (propagator-native typing must produce cell-refs, not expr-meta). |
-| 5 | ATMS extension | ⬜ | Blocked on Phase 2-3 redo. When typing propagators fire on-network, ATMS branching for union types creates assumption-indexed PU values per the existing TMS infrastructure. |
+| P5 | Pattern 5: Context threading as cell positions | ✅ | Context positions in type-map, ctx-extension propagators, bvar reads from ctx position. Lambda/Pi/bvar/fvar enabled. App disabled (Pattern 1). (commit `fb1a69b0`) |
+| 5 | ATMS extension | ⬜ | Blocked on Pattern 1 (implicit args) and Pattern 3 (constraint postponement). |
 | 6 | Constraint propagators + SRE domain | 🔄 | ✅ Constraint lattice (`f7ef8665`). ⬜ Constraint cells as on-network propagators: blocked on Phase 2-3 redo. **DELETE** effects protocol + delegation pattern (imperative scaffolding). |
 | 7 | Surface→Type Galois bridge | ✅ | **D.4 REDO** (commit `f1354276`): `infer-on-network/err` wired into process-command for eval/infer. Leaf expressions typed on-network. Non-leaf falls back to imperative (unification not yet on-network). NRC passes. |
 | 8 | Scaffolding retirement | ⬜ | Blocked on Phases 2-7 completing on-network. |
