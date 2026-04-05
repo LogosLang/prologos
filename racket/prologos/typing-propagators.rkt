@@ -55,6 +55,8 @@
  type-map-merge-fn
  ;; Phase 7 (D.4): Surface→Type bridge — production entry point
  infer-on-network/err
+ on-network-success-count
+ on-network-fallback-count
  ;; Phase 4b-i: Fan-in meta-readiness infrastructure
  (struct-out meta-readiness-value)
  meta-readiness-empty
@@ -563,6 +565,9 @@
 ;; Creates a FRESH prop-network for typing (not the main elab-network).
 ;; The typing network is created, run, read, and discarded (GC'd).
 ;; This prevents accumulation of typing propagators across commands.
+(define on-network-success-count (box 0))
+(define on-network-fallback-count (box 0))
+
 (define (infer-on-network/err ctx expr [loc srcloc-unknown] [names '()])
   (define net-box (current-prop-net-box))
   (cond
@@ -576,15 +581,17 @@
      ;; Convert result: fall back for incomplete/partial results
      (cond
        [(type-bot? root-type)
-        ;; Couldn't compute (or fuel exhausted) → signal fallback
+        (set-box! on-network-fallback-count (add1 (unbox on-network-fallback-count)))
         (inference-failed-error loc "on-network: bot" (pp-expr expr names))]
        [(type-top? root-type)
-        ;; Contradiction → signal fallback (imperative may give better error)
+        (set-box! on-network-fallback-count (add1 (unbox on-network-fallback-count)))
         (inference-failed-error loc "on-network: top" (pp-expr expr names))]
        [(has-unsolved-meta? root-type)
-        ;; Partial result with unsolved metas → signal fallback
+        (set-box! on-network-fallback-count (add1 (unbox on-network-fallback-count)))
         (inference-failed-error loc "on-network: unsolved meta" (pp-expr expr names))]
-       [else root-type])]))
+       [else
+        (set-box! on-network-success-count (add1 (unbox on-network-success-count)))
+        root-type])]))
 
 
 ;; ============================================================
