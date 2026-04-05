@@ -419,52 +419,244 @@
 
 ;; Register ALL known expression kinds.
 ;; Called once at module load time.
+;; Helper: register a family of binary ops with the same return type.
+(define (register-binary-ops! pred+acc-list return-type)
+  (for ([info (in-list pred+acc-list)])
+    (register-typing-rule! (car info) 2 (list (cadr info) (caddr info))
+                           return-type (cadddr info))))
+
+;; Helper: register a family of unary ops with the same return type.
+(define (register-unary-ops! pred+acc-list return-type)
+  (for ([info (in-list pred+acc-list)])
+    (register-typing-rule! (car info) 1 (list (cadr info))
+                           return-type (caddr info))))
+
 (define (install-default-typing-domain!)
-  ;; --- Int arithmetic: binary → Int ---
-  (for ([info (list (list expr-int-add? expr-int-add-a expr-int-add-b 'int-add)
-                    (list expr-int-sub? expr-int-sub-a expr-int-sub-b 'int-sub)
-                    (list expr-int-mul? expr-int-mul-a expr-int-mul-b 'int-mul)
-                    (list expr-int-div? expr-int-div-a expr-int-div-b 'int-div)
-                    (list expr-int-mod? expr-int-mod-a expr-int-mod-b 'int-mod))])
-    (register-typing-rule! (car info) 2
-                           (list (cadr info) (caddr info))
-                           (expr-Int) (cadddr info)))
 
-  ;; --- Int arithmetic: unary → Int ---
-  (register-typing-rule! expr-int-neg? 1 (list expr-int-neg-a) (expr-Int) 'int-neg)
-  (register-typing-rule! expr-int-abs? 1 (list expr-int-abs-a) (expr-Int) 'int-abs)
-
-  ;; --- Int comparison: binary → Bool ---
-  (for ([info (list (list expr-int-lt? expr-int-lt-a expr-int-lt-b 'int-lt)
-                    (list expr-int-le? expr-int-le-a expr-int-le-b 'int-le)
-                    (list expr-int-eq? expr-int-eq-a expr-int-eq-b 'int-eq))])
-    (register-typing-rule! (car info) 2
-                           (list (cadr info) (caddr info))
-                           (expr-Bool) (cadddr info)))
-
-  ;; --- Literals ---
+  ;; ===== LITERALS =====
   (register-typing-rule! expr-string? 0 '() (expr-String) 'string-literal)
+  (register-typing-rule! expr-symbol? 0 '() (expr-Symbol) 'symbol-literal)
+  (register-typing-rule! expr-zero? 0 '() (expr-Nat) 'zero-literal)
+  (register-typing-rule! expr-unit? 0 '() (expr-Unit) 'unit-literal)
+  (register-typing-rule! expr-nil? 0 '() (expr-Nil) 'nil-literal)
+  (register-typing-rule! expr-refl? 0 '() #f 'refl)  ;; dependent: Eq a a
+  (register-typing-rule! expr-hole? 0 '() #f 'hole)
+  (register-typing-rule! expr-error? 0 '() #f 'error)
+  (register-typing-rule! expr-cut? 0 '() #f 'cut)
 
-  ;; --- Type constructors not yet in explicit match ---
-  (register-typing-rule! expr-Char? 0 '() (expr-Type (lzero)) 'Char-type)
-  (register-typing-rule! expr-Symbol? 0 '() (expr-Type (lzero)) 'Symbol-type)
-  (register-typing-rule! expr-Keyword? 0 '() (expr-Type (lzero)) 'Keyword-type)
+  ;; Posit literals
+  (register-typing-rule! expr-posit8? 0 '() (expr-Posit8) 'posit8-literal)
+  (register-typing-rule! expr-posit16? 0 '() (expr-Posit16) 'posit16-literal)
+  (register-typing-rule! expr-posit32? 0 '() (expr-Posit32) 'posit32-literal)
+  (register-typing-rule! expr-posit64? 0 '() (expr-Posit64) 'posit64-literal)
 
-  ;; --- Map operations: structural (return type depends on map type) ---
-  (register-typing-rule! expr-map-get? 2
-                         (list expr-map-get-m expr-map-get-k)
-                         #f 'map-get)
+  ;; Quire literals
+  (register-typing-rule! expr-quire8-val? 0 '() (expr-Quire8) 'quire8-literal)
+  (register-typing-rule! expr-quire16-val? 0 '() (expr-Quire16) 'quire16-literal)
+  (register-typing-rule! expr-quire32-val? 0 '() (expr-Quire32) 'quire32-literal)
+  (register-typing-rule! expr-quire64-val? 0 '() (expr-Quire64) 'quire64-literal)
 
-  ;; --- Generic arithmetic: return-type #f (Pattern 4 scope) ---
-  (register-typing-rule! expr-generic-add? 2
-                         (list expr-generic-add-a expr-generic-add-b)
-                         #f 'generic-add)
-  (register-typing-rule! expr-generic-sub? 2
-                         (list expr-generic-sub-a expr-generic-sub-b)
-                         #f 'generic-sub)
-  (register-typing-rule! expr-generic-mul? 2
-                         (list expr-generic-mul-a expr-generic-mul-b)
-                         #f 'generic-mul))
+  ;; Rat literal
+  (register-typing-rule! expr-rat? 0 '() (expr-Rat) 'rat-literal)
+
+  ;; ===== TYPE CONSTRUCTORS → Type(lzero) =====
+  (for ([pred (list expr-Char? expr-Symbol? expr-Keyword? expr-Unit? expr-Nil?
+                   expr-Posit8? expr-Posit16? expr-Posit32? expr-Posit64?
+                   expr-Quire8? expr-Quire16? expr-Quire32? expr-Quire64?
+                   expr-Rat? expr-Path? expr-goal-type? expr-solver-type?
+                   expr-derivation-type?)]
+        [name (list 'Char 'Symbol 'Keyword 'Unit 'Nil
+                    'Posit8 'Posit16 'Posit32 'Posit64
+                    'Quire8 'Quire16 'Quire32 'Quire64
+                    'Rat 'Path 'GoalType 'SolverType
+                    'DerivationType)])
+    (register-typing-rule! pred 0 '() (expr-Type (lzero)) name))
+
+  ;; ===== INT ARITHMETIC =====
+  (register-binary-ops!
+   (list (list expr-int-add? expr-int-add-a expr-int-add-b 'int-add)
+         (list expr-int-sub? expr-int-sub-a expr-int-sub-b 'int-sub)
+         (list expr-int-mul? expr-int-mul-a expr-int-mul-b 'int-mul)
+         (list expr-int-div? expr-int-div-a expr-int-div-b 'int-div)
+         (list expr-int-mod? expr-int-mod-a expr-int-mod-b 'int-mod))
+   (expr-Int))
+  (register-unary-ops!
+   (list (list expr-int-neg? expr-int-neg-a 'int-neg)
+         (list expr-int-abs? expr-int-abs-a 'int-abs))
+   (expr-Int))
+  (register-binary-ops!
+   (list (list expr-int-lt? expr-int-lt-a expr-int-lt-b 'int-lt)
+         (list expr-int-le? expr-int-le-a expr-int-le-b 'int-le)
+         (list expr-int-eq? expr-int-eq-a expr-int-eq-b 'int-eq))
+   (expr-Bool))
+  (register-typing-rule! expr-from-nat? 1 (list expr-from-nat-n) (expr-Int) 'from-nat)
+
+  ;; ===== RAT ARITHMETIC =====
+  (register-binary-ops!
+   (list (list expr-rat-add? expr-rat-add-a expr-rat-add-b 'rat-add)
+         (list expr-rat-sub? expr-rat-sub-a expr-rat-sub-b 'rat-sub)
+         (list expr-rat-mul? expr-rat-mul-a expr-rat-mul-b 'rat-mul)
+         (list expr-rat-div? expr-rat-div-a expr-rat-div-b 'rat-div))
+   (expr-Rat))
+  (register-unary-ops!
+   (list (list expr-rat-neg? expr-rat-neg-a 'rat-neg)
+         (list expr-rat-abs? expr-rat-abs-a 'rat-abs))
+   (expr-Rat))
+  (register-binary-ops!
+   (list (list expr-rat-lt? expr-rat-lt-a expr-rat-lt-b 'rat-lt)
+         (list expr-rat-le? expr-rat-le-a expr-rat-le-b 'rat-le)
+         (list expr-rat-eq? expr-rat-eq-a expr-rat-eq-b 'rat-eq))
+   (expr-Bool))
+  (register-typing-rule! expr-from-int? 1 (list expr-from-int-n) (expr-Rat) 'from-int)
+  (register-typing-rule! expr-rat-numer? 1 (list expr-rat-numer-a) (expr-Int) 'rat-numer)
+  (register-typing-rule! expr-rat-denom? 1 (list expr-rat-denom-a) (expr-Int) 'rat-denom)
+
+  ;; ===== POSIT8 ARITHMETIC =====
+  (register-binary-ops!
+   (list (list expr-p8-add? expr-p8-add-a expr-p8-add-b 'p8-add)
+         (list expr-p8-sub? expr-p8-sub-a expr-p8-sub-b 'p8-sub)
+         (list expr-p8-mul? expr-p8-mul-a expr-p8-mul-b 'p8-mul)
+         (list expr-p8-div? expr-p8-div-a expr-p8-div-b 'p8-div))
+   (expr-Posit8))
+  (register-unary-ops!
+   (list (list expr-p8-neg? expr-p8-neg-a 'p8-neg)
+         (list expr-p8-abs? expr-p8-abs-a 'p8-abs)
+         (list expr-p8-sqrt? expr-p8-sqrt-a 'p8-sqrt))
+   (expr-Posit8))
+  (register-binary-ops!
+   (list (list expr-p8-lt? expr-p8-lt-a expr-p8-lt-b 'p8-lt)
+         (list expr-p8-le? expr-p8-le-a expr-p8-le-b 'p8-le)
+         (list expr-p8-eq? expr-p8-eq-a expr-p8-eq-b 'p8-eq))
+   (expr-Bool))
+  (register-typing-rule! expr-p8-from-nat? 1 (list expr-p8-from-nat-n) (expr-Posit8) 'p8-from-nat)
+  (register-typing-rule! expr-p8-to-rat? 1 (list expr-p8-to-rat-a) (expr-Rat) 'p8-to-rat)
+  (register-typing-rule! expr-p8-from-rat? 1 (list expr-p8-from-rat-a) (expr-Posit8) 'p8-from-rat)
+  (register-typing-rule! expr-p8-from-int? 1 (list expr-p8-from-int-a) (expr-Posit8) 'p8-from-int)
+
+  ;; ===== POSIT16 ARITHMETIC =====
+  (register-binary-ops!
+   (list (list expr-p16-add? expr-p16-add-a expr-p16-add-b 'p16-add)
+         (list expr-p16-sub? expr-p16-sub-a expr-p16-sub-b 'p16-sub)
+         (list expr-p16-mul? expr-p16-mul-a expr-p16-mul-b 'p16-mul)
+         (list expr-p16-div? expr-p16-div-a expr-p16-div-b 'p16-div))
+   (expr-Posit16))
+  (register-unary-ops!
+   (list (list expr-p16-neg? expr-p16-neg-a 'p16-neg)
+         (list expr-p16-abs? expr-p16-abs-a 'p16-abs)
+         (list expr-p16-sqrt? expr-p16-sqrt-a 'p16-sqrt))
+   (expr-Posit16))
+  (register-binary-ops!
+   (list (list expr-p16-lt? expr-p16-lt-a expr-p16-lt-b 'p16-lt)
+         (list expr-p16-le? expr-p16-le-a expr-p16-le-b 'p16-le)
+         (list expr-p16-eq? expr-p16-eq-a expr-p16-eq-b 'p16-eq))
+   (expr-Bool))
+  (register-typing-rule! expr-p16-from-nat? 1 (list expr-p16-from-nat-n) (expr-Posit16) 'p16-from-nat)
+  (register-typing-rule! expr-p16-to-rat? 1 (list expr-p16-to-rat-a) (expr-Rat) 'p16-to-rat)
+  (register-typing-rule! expr-p16-from-rat? 1 (list expr-p16-from-rat-a) (expr-Posit16) 'p16-from-rat)
+  (register-typing-rule! expr-p16-from-int? 1 (list expr-p16-from-int-a) (expr-Posit16) 'p16-from-int)
+
+  ;; ===== POSIT32 ARITHMETIC =====
+  (register-binary-ops!
+   (list (list expr-p32-add? expr-p32-add-a expr-p32-add-b 'p32-add)
+         (list expr-p32-sub? expr-p32-sub-a expr-p32-sub-b 'p32-sub)
+         (list expr-p32-mul? expr-p32-mul-a expr-p32-mul-b 'p32-mul)
+         (list expr-p32-div? expr-p32-div-a expr-p32-div-b 'p32-div))
+   (expr-Posit32))
+  (register-unary-ops!
+   (list (list expr-p32-neg? expr-p32-neg-a 'p32-neg)
+         (list expr-p32-abs? expr-p32-abs-a 'p32-abs)
+         (list expr-p32-sqrt? expr-p32-sqrt-a 'p32-sqrt))
+   (expr-Posit32))
+  (register-binary-ops!
+   (list (list expr-p32-lt? expr-p32-lt-a expr-p32-lt-b 'p32-lt)
+         (list expr-p32-le? expr-p32-le-a expr-p32-le-b 'p32-le)
+         (list expr-p32-eq? expr-p32-eq-a expr-p32-eq-b 'p32-eq))
+   (expr-Bool))
+  (register-typing-rule! expr-p32-from-nat? 1 (list expr-p32-from-nat-n) (expr-Posit32) 'p32-from-nat)
+  (register-typing-rule! expr-p32-to-rat? 1 (list expr-p32-to-rat-a) (expr-Rat) 'p32-to-rat)
+  (register-typing-rule! expr-p32-from-rat? 1 (list expr-p32-from-rat-a) (expr-Posit32) 'p32-from-rat)
+  (register-typing-rule! expr-p32-from-int? 1 (list expr-p32-from-int-a) (expr-Posit32) 'p32-from-int)
+
+  ;; ===== POSIT64 ARITHMETIC =====
+  (register-binary-ops!
+   (list (list expr-p64-add? expr-p64-add-a expr-p64-add-b 'p64-add)
+         (list expr-p64-sub? expr-p64-sub-a expr-p64-sub-b 'p64-sub)
+         (list expr-p64-mul? expr-p64-mul-a expr-p64-mul-b 'p64-mul)
+         (list expr-p64-div? expr-p64-div-a expr-p64-div-b 'p64-div))
+   (expr-Posit64))
+  (register-unary-ops!
+   (list (list expr-p64-neg? expr-p64-neg-a 'p64-neg)
+         (list expr-p64-abs? expr-p64-abs-a 'p64-abs)
+         (list expr-p64-sqrt? expr-p64-sqrt-a 'p64-sqrt))
+   (expr-Posit64))
+  (register-binary-ops!
+   (list (list expr-p64-lt? expr-p64-lt-a expr-p64-lt-b 'p64-lt)
+         (list expr-p64-le? expr-p64-le-a expr-p64-le-b 'p64-le)
+         (list expr-p64-eq? expr-p64-eq-a expr-p64-eq-b 'p64-eq))
+   (expr-Bool))
+  (register-typing-rule! expr-p64-from-nat? 1 (list expr-p64-from-nat-n) (expr-Posit64) 'p64-from-nat)
+  (register-typing-rule! expr-p64-to-rat? 1 (list expr-p64-to-rat-a) (expr-Rat) 'p64-to-rat)
+  (register-typing-rule! expr-p64-from-rat? 1 (list expr-p64-from-rat-a) (expr-Posit64) 'p64-from-rat)
+  (register-typing-rule! expr-p64-from-int? 1 (list expr-p64-from-int-a) (expr-Posit64) 'p64-from-int)
+
+  ;; ===== QUIRE OPERATIONS =====
+  ;; quire-fma: ternary → Quire (q, a, b → q)
+  ;; quire-to: unary → Posit
+  (register-typing-rule! expr-quire8-to? 1 (list expr-quire8-to-q) (expr-Posit8) 'q8-to)
+  (register-typing-rule! expr-quire16-to? 1 (list expr-quire16-to-q) (expr-Posit16) 'q16-to)
+  (register-typing-rule! expr-quire32-to? 1 (list expr-quire32-to-q) (expr-Posit32) 'q32-to)
+  (register-typing-rule! expr-quire64-to? 1 (list expr-quire64-to-q) (expr-Posit64) 'q64-to)
+
+  ;; ===== NAT OPERATIONS =====
+  (register-typing-rule! expr-suc? 1 (list expr-suc-pred) (expr-Nat) 'suc)
+  (register-typing-rule! expr-nil-check? 1 (list expr-nil-check-arg) (expr-Bool) 'nil-check)
+
+  ;; ===== MAP OPERATIONS =====
+  ;; Structural (return type depends on map type) — registered as #f
+  (register-typing-rule! expr-map-get? 2 (list expr-map-get-m expr-map-get-k) #f 'map-get)
+  (register-typing-rule! expr-map-has-key? 2 (list expr-map-has-key-m expr-map-has-key-k) (expr-Bool) 'map-has-key)
+  (register-typing-rule! expr-map-size? 1 (list expr-map-size-m) (expr-Nat) 'map-size)
+  ;; map-assoc, map-dissoc, map-keys, map-vals: structural (#f)
+  (register-typing-rule! expr-map-assoc? 3 (list expr-map-assoc-m expr-map-assoc-k expr-map-assoc-v) #f 'map-assoc)
+  (register-typing-rule! expr-map-dissoc? 2 (list expr-map-dissoc-m expr-map-dissoc-k) #f 'map-dissoc)
+  (register-typing-rule! expr-map-keys? 1 (list expr-map-keys-m) #f 'map-keys)
+  (register-typing-rule! expr-map-vals? 1 (list expr-map-vals-m) #f 'map-vals)
+
+  ;; ===== SET OPERATIONS =====
+  (register-typing-rule! expr-set-member? 2 (list expr-set-member-s expr-set-member-a) (expr-Bool) 'set-member)
+  (register-typing-rule! expr-set-size? 1 (list expr-set-size-s) (expr-Nat) 'set-size)
+  ;; set-insert, set-delete, set-union, set-intersect, set-diff, set-to-list: structural (#f)
+  (register-typing-rule! expr-set-insert? 2 (list expr-set-insert-s expr-set-insert-a) #f 'set-insert)
+  (register-typing-rule! expr-set-delete? 2 (list expr-set-delete-s expr-set-delete-a) #f 'set-delete)
+  (register-typing-rule! expr-set-union? 2 (list expr-set-union-s1 expr-set-union-s2) #f 'set-union)
+  (register-typing-rule! expr-set-intersect? 2 (list expr-set-intersect-s1 expr-set-intersect-s2) #f 'set-intersect)
+  (register-typing-rule! expr-set-diff? 2 (list expr-set-diff-s1 expr-set-diff-s2) #f 'set-diff)
+  (register-typing-rule! expr-set-to-list? 1 (list expr-set-to-list-s) #f 'set-to-list)
+
+  ;; ===== GENERIC ARITHMETIC: return-type #f (Pattern 4: trait dispatch) =====
+  (for ([info (list (list expr-generic-add? expr-generic-add-a expr-generic-add-b 'generic-add)
+                    (list expr-generic-sub? expr-generic-sub-a expr-generic-sub-b 'generic-sub)
+                    (list expr-generic-mul? expr-generic-mul-a expr-generic-mul-b 'generic-mul)
+                    (list expr-generic-div? expr-generic-div-a expr-generic-div-b 'generic-div)
+                    (list expr-generic-mod? expr-generic-mod-a expr-generic-mod-b 'generic-mod)
+                    (list expr-generic-lt? expr-generic-lt-a expr-generic-lt-b 'generic-lt)
+                    (list expr-generic-le? expr-generic-le-a expr-generic-le-b 'generic-le)
+                    (list expr-generic-gt? expr-generic-gt-a expr-generic-gt-b 'generic-gt)
+                    (list expr-generic-ge? expr-generic-ge-a expr-generic-ge-b 'generic-ge)
+                    (list expr-generic-eq? expr-generic-eq-a expr-generic-eq-b 'generic-eq))])
+    (register-typing-rule! (car info) 2 (list (cadr info) (caddr info)) #f (cadddr info)))
+  (register-typing-rule! expr-generic-negate? 1 (list expr-generic-negate-a) #f 'generic-negate)
+  (register-typing-rule! expr-generic-abs? 1 (list expr-generic-abs-a) #f 'generic-abs)
+
+  ;; ===== STRUCTURAL/COMPLEX: return-type #f =====
+  ;; These need special handling: dependent types, eliminators, pattern matching, etc.
+  (register-typing-rule! expr-panic? 1 (list expr-panic-msg) #f 'panic)
+  (register-typing-rule! expr-ann? 2 (list expr-ann-term expr-ann-type) #f 'ann)
+  (register-typing-rule! expr-reduce? 2 (list expr-reduce-scrutinee expr-reduce-arms) #f 'reduce)
+  (register-typing-rule! expr-union? 2 (list expr-union-left expr-union-right) #f 'union)
+  (register-typing-rule! expr-pair? 2 (list expr-pair-fst expr-pair-snd) #f 'pair)
+  (register-typing-rule! expr-tycon? 0 '() #f 'tycon)
+  )
 
 ;; Install default domain at module load time
 (install-default-typing-domain!)
