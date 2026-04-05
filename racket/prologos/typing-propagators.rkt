@@ -23,7 +23,7 @@
          "propagator.rkt"
          "surface-rewrite.rkt"
          (only-in "subtype-predicate.rkt" type-tensor-core)
-         (only-in "type-lattice.rkt" type-bot type-bot? type-top type-top?)
+         (only-in "type-lattice.rkt" type-bot type-bot? type-top type-top? type-lattice-merge)
          (only-in "metavar-store.rkt" meta-solution/cell-id current-prop-net-box)
          "elab-network-types.rkt"
          "errors.rkt"
@@ -48,6 +48,8 @@
  make-fvar-fire-fn
  make-lam-fire-fn
  make-pi-fire-fn
+ ;; Pattern 5: Context-extension propagator
+ make-context-extension-fire-fn
  ;; Phase 3 (D.4): Production integration
  infer-on-network
  type-map-merge-fn
@@ -183,7 +185,14 @@
          [(type-bot? old-v) (hash-set result k v)]  ;; ⊥ + X = X
          [(type-bot? v) result]                       ;; X + ⊥ = X
          [(equal? old-v v) result]                    ;; idempotent
-         [else (hash-set result k type-top)]))]))     ;; conflict = ⊤
+         ;; Both non-⊥ and different: use type-lattice-merge for shared keys.
+         ;; This makes the type-map merge INTO unification — two writes to the
+         ;; same position (infer upward + check downward) merge via the type
+         ;; lattice, handling metas, structural equality, and subtype comparison.
+         ;; Context-cell-values are not types — pass through unchanged.
+         [(context-cell-value? old-v) (hash-set result k v)]
+         [(context-cell-value? v) result]
+         [else (hash-set result k (type-lattice-merge old-v v))]))]))  ;; lattice merge
 
 ;; Read a type-map position. Returns type-bot if not present (= ⊥).
 (define (type-map-read net tm-cid position)
@@ -273,6 +282,46 @@
                        (expr-Type (lmax (expr-Type-level dom-type)
                                         (expr-Type-level cod-type))))])))
 
+;; --- Pattern 5: Context as cell positions ---
+;;
+;; Each scope has a context POSITION in the type-map. A context-extension
+;; propagator watches the parent scope's context position and the binder's
+;; domain type position. When both have values, it writes the extended
+;; context (via tensor) to the child scope's context position.
+;;
+;; This makes context flow DOWNWARD through the scope tree via cell writes.
+;; When a domain type refines (meta solved), the context position updates,
+;; and all body propagators fire. The scope tree IS a cell tree.
+
+;; Context-extension propagator: watches parent-ctx-pos + domain-pos,
+;; writes extended context to child-ctx-pos.
+;; domain-expr is the EXPRESSION that is the domain type (e.g., (expr-Int)),
+;; NOT the type-of-domain (which would be Type(0)). The context stores the
+;; domain expression — `bvar(0)` in `[x : Int]` scope has type `Int`, not `Type(0)`.
+(define (make-context-extension-fire-fn tm-cid parent-ctx-pos domain-expr child-ctx-pos mult)
+  (lambda (net)
+    (define parent-ctx (type-map-read net tm-cid parent-ctx-pos))
+    (cond
+      [(not (context-cell-value? parent-ctx)) net]
+      [else
+       ;; Extend context with the domain EXPRESSION (the type annotation)
+       (define child-ctx (context-extend-value parent-ctx domain-expr mult))
+       (type-map-write net tm-cid child-ctx-pos child-ctx)])))
+
+;; Updated bvar fire-fn: reads from a context POSITION in the type-map
+;; (not a captured context value)
+(define (make-bvar-fire-fn/ctx-pos tm-cid position k ctx-pos)
+  (lambda (net)
+    (define ctx-val (type-map-read net tm-cid ctx-pos))
+    (cond
+      [(not (context-cell-value? ctx-val)) net]  ;; wait for context
+      [else
+       (define raw-type (context-lookup-type ctx-val k))
+       (if (expr-error? raw-type)
+           net  ;; out of bounds
+           (type-map-write net tm-cid position (shift (+ k 1) 0 raw-type)))])))
+
+
 ;; --- install-typing-network: the core Phase 2 deliverable ---
 ;;
 ;; Takes a prop-network, a form cell id, and a core expr (from elaborate-top-level).
@@ -292,10 +341,13 @@
 ;;   - Trace: type-map[pos] = ⊥ → propagator fires → writes type → cascade → read
 
 (define (install-typing-network net tm-cid expr ctx-val)
+  ;; Write initial context to a root context position
+  (define root-ctx-pos (gensym 'ctx-root))
+  (define net-with-ctx (type-map-write net tm-cid root-ctx-pos ctx-val))
   ;; Recursive structural decomposition.
-  ;; For each sub-expression, assign it as its own position key (eq? identity),
-  ;; install the appropriate propagator, return updated network.
-  (let install ([net net] [e expr] [ctx ctx-val])
+  ;; For each sub-expression, assign it as its own position key (eq? identity).
+  ;; ctx-pos is the POSITION of the current scope's context in the type-map.
+  (let install ([net net-with-ctx] [e expr] [ctx-pos root-ctx-pos])
     (match e
       ;; --- Literals: immediate type, no inputs ---
       [(expr-int v)
@@ -355,18 +407,72 @@
                              (make-universe-fire-fn tm-cid e l)))
        net1]
 
-      ;; --- Non-leaf expressions: LEAVE AT ⊥ for Phase 7 deployment ---
-      ;; These propagators are correct in isolation (see Phase 2 tests) but
-      ;; don't handle unification side effects needed for production.
-      ;; They produce wrong types for implicit arguments, dependent application,
-      ;; and trait-dispatched functions. Fallback to imperative catches the ⊥.
-      ;; Phase 5+ (ATMS) and Phase 6+ (constraints on-network) will enable these.
-      ;;
-      ;; The fire functions (make-bvar-fire-fn, make-fvar-fire-fn, make-app-fire-fn,
-      ;; make-lam-fire-fn, make-pi-fire-fn) remain defined and tested. They are
-      ;; ready to install when unification is on-network.
+      ;; --- Bound variable: reads from context POSITION ---
+      [(expr-bvar k)
+       (define-values (net1 _pid)
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-bvar-fire-fn/ctx-pos tm-cid e k ctx-pos)
+                             #:component-paths (list (cons tm-cid ctx-pos))))
+       net1]
 
-      ;; --- Fallthrough: non-leaf and unknown expr kinds, leave at ⊥ ---
+      ;; --- Free variable: reads from global env ---
+      [(expr-fvar name)
+       (define-values (net1 _pid)
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-fvar-fire-fn tm-cid e name)))
+       net1]
+
+      ;; --- Application (tensor) ---
+      ;; DISABLED for production: the tensor propagator doesn't handle implicit
+      ;; arguments. [lseq-nil Nat] produces LSeq Type(0) instead of LSeq Nat
+      ;; because it types Nat as Type(0) (type-of-Nat) instead of treating Nat
+      ;; as a value argument. Requires Pattern 1 (implicit argument positions).
+      ;; Sub-expressions still get propagators (func, arg typed correctly).
+      [(expr-app func arg)
+       (define net1 (install net func ctx-pos))
+       (define net2 (install net1 arg ctx-pos))
+       ;; App propagator NOT installed — result stays at ⊥, imperative fallback handles it
+       net2]
+
+      ;; --- Lambda: creates child scope via context-extension propagator ---
+      [(expr-lam m dom body)
+       ;; Install domain propagator
+       (define net1 (install net dom ctx-pos))
+       ;; Create child context position for body scope
+       (define child-ctx-pos (gensym 'ctx-lam))
+       ;; Install context-extension propagator: watches parent ctx position
+       (define-values (net2 _ctx-pid)
+         (net-add-propagator net1 (list tm-cid) (list tm-cid)
+                             (make-context-extension-fire-fn tm-cid ctx-pos dom child-ctx-pos m)
+                             #:component-paths
+                             (list (cons tm-cid ctx-pos))))
+       ;; Install body propagator in child scope
+       (define net3 (install net2 body child-ctx-pos))
+       ;; Install lambda propagator — watches entire cell (multiple positions
+       ;; on same cell-id can't use component-paths due to assoc first-match)
+       (define-values (net4 _pid)
+         (net-add-propagator net3 (list tm-cid) (list tm-cid)
+                             (make-lam-fire-fn tm-cid e dom body m)))
+       net4]
+
+      ;; --- Pi formation ---
+      [(expr-Pi m dom cod)
+       ;; Create child context for codomain (Pi binds a variable)
+       (define child-ctx-pos (gensym 'ctx-pi))
+       (define-values (net0 _ctx-pid)
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-context-extension-fire-fn tm-cid ctx-pos dom child-ctx-pos m)
+                             #:component-paths
+                             (list (cons tm-cid ctx-pos))))
+       (define net1 (install net0 dom ctx-pos))
+       (define net2 (install net1 cod child-ctx-pos))
+       ;; Watch entire cell (multiple positions on same cell-id)
+       (define-values (net3 _pid)
+         (net-add-propagator net2 (list tm-cid) (list tm-cid)
+                             (make-pi-fire-fn tm-cid e dom cod)))
+       net3]
+
+      ;; --- Fallthrough: unknown expr kind, leave at ⊥ ---
       [_ net])))
 
 

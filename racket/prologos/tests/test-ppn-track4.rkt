@@ -247,8 +247,91 @@
 ;; Run
 ;; ============================================================
 
+;; ============================================================
+;; Pattern 5: Context threading via cell positions
+;; ============================================================
+
+(define pattern-5-tests
+  (test-suite
+   "Pattern 5: context as cell positions in type-map"
+
+   (test-case "bvar in lambda body: reads from context position"
+     ;; (lambda [x : Int] x) — body is bvar(0), should get type Int
+     (define net0 (make-prop-network))
+     (define dom-e (expr-Int))
+     (define body-e (expr-bvar 0))
+     (define lam-e (expr-lam 'mw dom-e body-e))
+     (define-values (net1 tm-cid)
+       (net-new-cell net0 (hasheq) type-map-merge-fn))
+     (define net2 (install-typing-network net1 tm-cid lam-e context-empty-value))
+     (define net3 (run-to-quiescence net2))
+     (define tm (net-cell-read net3 tm-cid))
+     ;; domain = Int, so bvar(0) should read Int from context
+     ;; Int : Type(0), body : Int, so lam : Pi(mw, Int, Int)
+     (check-equal? (hash-ref tm dom-e type-bot) (expr-Type (lzero))
+                   "Int : Type(0)")
+     (check-equal? (hash-ref tm body-e type-bot) (expr-Int)
+                   "bvar(0) in [x:Int] scope should be Int")
+     (check-equal? (hash-ref tm lam-e type-bot)
+                   (expr-Pi 'mw dom-e (expr-Int))
+                   "lambda should produce Pi(mw, Int, Int)"))
+
+   (test-case "nested lambda: inner bvar reads from extended context"
+     ;; (lambda [x : Int] (lambda [y : Bool] x))
+     ;; Inner body is bvar(1) — should be Int (from outer scope)
+     (define dom1 (expr-Int))
+     (define dom2 (expr-Bool))
+     (define inner-body (expr-bvar 1))  ;; x in outer scope
+     (define inner-lam (expr-lam 'mw dom2 inner-body))
+     (define outer-lam (expr-lam 'mw dom1 inner-lam))
+     (define net0 (make-prop-network))
+     (define-values (net1 tm-cid)
+       (net-new-cell net0 (hasheq) type-map-merge-fn))
+     (define net2 (install-typing-network net1 tm-cid outer-lam context-empty-value))
+     (define net3 (run-to-quiescence net2))
+     (define tm (net-cell-read net3 tm-cid))
+     ;; bvar(1) in [y:Bool] scope = Int (from [x:Int] scope)
+     (check-equal? (hash-ref tm inner-body type-bot) (expr-Int)
+                   "bvar(1) should be Int from outer scope"))
+
+   (test-case "fvar: reads from global env"
+     ;; This test requires global env state — limited to verifying
+     ;; that the fvar propagator is installed and fires
+     (define net0 (make-prop-network))
+     (define fvar-e (expr-fvar 'nonexistent))
+     (define-values (net1 tm-cid)
+       (net-new-cell net0 (hasheq) type-map-merge-fn))
+     (define net2 (install-typing-network net1 tm-cid fvar-e context-empty-value))
+     (define net3 (run-to-quiescence net2))
+     (define tm (net-cell-read net3 tm-cid))
+     ;; Non-existent fvar stays at ⊥
+     (check-equal? (hash-ref tm fvar-e type-bot) type-bot))
+
+   (test-case "app: sub-expressions typed, result at ⊥ (app propagator disabled for Pattern 1)"
+     ;; App propagator disabled in production — result stays at ⊥
+     ;; But sub-expressions (func, arg) still get their own propagators
+     (define func-e (expr-fvar 'f))
+     (define arg-e (expr-int 42))
+     (define app-e (expr-app func-e arg-e))
+     (define net0 (make-prop-network))
+     (define-values (net1 tm-cid)
+       (net-new-cell net0
+                     (hasheq func-e (expr-Pi 'mw (expr-Int) (expr-Bool)))
+                     type-map-merge-fn))
+     (define net2 (install-typing-network net1 tm-cid app-e context-empty-value))
+     (define net3 (run-to-quiescence net2))
+     (define tm (net-cell-read net3 tm-cid))
+     ;; Arg is typed on-network (literal propagator fires)
+     (check-equal? (hash-ref tm arg-e type-bot) (expr-Int)
+                   "arg 42 : Int (sub-expression typed on-network)")
+     ;; App result stays at ⊥ (app propagator disabled)
+     (check-equal? (hash-ref tm app-e type-bot) type-bot
+                   "app result at ⊥ (awaiting Pattern 1 for implicit args)"))
+   ))
+
 (run-tests phase-1a-tests)
 (run-tests phase-1c-tests)
 (run-tests phase-2-network-tests)
 (run-tests phase-4b-tests)
 (run-tests phase-6-tests)
+(run-tests pattern-5-tests)
