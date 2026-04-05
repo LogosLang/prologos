@@ -1410,7 +1410,7 @@ Current on-network rate: ~46-54%. Three categories of fallback remain.
 - **B. Direct type derivation**: for most numeric traits, return type = argument type (`Add: a→a→a`, `Sub: a→a→a`). Comparison traits return Bool. The return type IS derivable from the argument type without trait resolution.
 - **C. Computed return type via SRE domain** (CHOSEN): register generic ops with `return-type = (lambda (arg-type) arg-type)` for arithmetic, `return-type = (lambda (_) (expr-Bool))` for comparison. Uses existing §16 infrastructure. No new architecture.
 
-**Decision**: Option C — uses existing computed-return-type infrastructure. Handles common cases. Complex trait methods with non-derivable return types remain at #f for now.
+**Decision**: Option C attempted and REVERTED. same-as-arg-type heuristic produces correct types for same-type ops but bypasses coercion warnings for cross-family ops (Int + Posit32) and produces wrong types for mixed-type operations. Generic arithmetic requires FULL Pattern 4 (Option A): constraint propagators + instance registry bridge + coercion detection. This is a larger scope than simple return-type functions.
 
 ### Frontier 1: Meta Resolution (dependent apps with implicit args)
 
