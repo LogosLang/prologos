@@ -1392,4 +1392,68 @@ For typing: the typing PU cell holds the type-map. The internal structure is com
 - Ephemeral prop-network: VALIDATED (zero timeouts, correct results for narrow tests)
 - Expression-key substitution: VALIDATED (identity, compose, polymorphic functions)
 - Typing PU cell on main network: NOT YET IMPLEMENTED (current code creates ephemeral network but doesn't write result to main network cell)
-- 13 remaining failures: all trait-dispatch (Pattern 4 scope), not Pattern 2 issues
+- 15 failures: all PRE-EXISTING (not from Track 4 changes)
+- On-network rate: ~46% (acceptance file). Remaining fallbacks from unhandled expr kinds + metas.
+
+---
+
+## §16 SRE Typing Domain: Expression-Kind → Type as Domain Data
+
+### The Problem
+
+294 expr-* struct kinds exist. 26 are handled by explicit match arms in `install-typing-network`. The remaining 268 fall through to ⊥, triggering imperative fallback. Adding 268 match arms replicates the imperative 589-arm match — not data-oriented.
+
+### The Self-Hosting Constraint
+
+The §0 end state: "the production compiler IS a propagator network." For self-hosting, ALL typing knowledge must be ON the network as data. Imperative results written to cells is a dead end — the self-hosted compiler needs the typing rules themselves to be network-native data that it can read, execute, and extend.
+
+### The Design: Typing Rules as SRE Domain Entries
+
+Each expression kind is registered in an SRE typing domain — a structured registry where each entry describes:
+- **tag**: the expr struct predicate (e.g., `expr-int-add?`)
+- **arity**: number of sub-expression children (0, 1, 2, ...)
+- **children**: accessor functions for sub-expressions (e.g., `expr-int-add-a`, `expr-int-add-b`)
+- **return-type**: either a constant type (e.g., `(expr-Int)`) or a computation tag (`'tensor`, `'pi-formation`, `'bvar-lookup`, etc.)
+
+This parallels Track 2D's `sre-rewrite-rule`:
+- `sre-rewrite-rule.tag` → typing-rule tag (expr predicate)
+- `sre-rewrite-rule.lhs-pattern` → typing-rule children (structural decomposition)
+- `sre-rewrite-rule.rhs-template` → typing-rule return-type (result computation)
+
+### How It Works
+
+**Registration** (one line per expression kind):
+```
+(register-typing-rule! 'expr-int-add  #:arity 2  #:children (list expr-int-add-a expr-int-add-b)  #:return-type (expr-Int))
+(register-typing-rule! 'expr-rat-mul  #:arity 2  #:children (list expr-rat-mul-a expr-rat-mul-b)  #:return-type (expr-Rational))
+(register-typing-rule! 'expr-string   #:arity 0  #:children '()  #:return-type (expr-String))
+```
+
+**Installation** (the catch-all in `install-typing-network`):
+```racket
+[_
+ (define rule (lookup-typing-rule e))
+ (if rule
+     (install-from-rule net tm-cid e ctx-pos rule)
+     net)]
+```
+
+**install-from-rule** dispatches on arity pattern:
+- Arity 0: install literal propagator (return-type is a constant)
+- Arity 1: recurse on child, install unary propagator
+- Arity 2: recurse on both children, install binary propagator
+- Special tags ('tensor, 'pi-formation, 'bvar-lookup): use existing special-case propagators
+
+### What This Enables
+
+1. **Self-hosting**: the SRE typing domain IS the compilation target. The self-hosted compiler reads domain entries and installs propagators. No imperative match arms to translate.
+
+2. **Critical pair analysis**: Track 2D infrastructure validates that no two typing rules conflict for the same expression kind. Confluence verified automatically.
+
+3. **Property inference**: SRE Track 2G validates algebraic properties (type(A+B) = type(B+A) for commutative ops).
+
+4. **Completeness check**: data query — "which expr structs have no typing rule?" Auditable, not a code review.
+
+5. **Extensibility**: library authors register typing rules for new constructs. No editing core files.
+
+6. **Coverage**: 268 entries (one line each) + ~10 special-case match arms = complete coverage. The catch-all handles the bulk; explicit arms handle the complex cases (tensor, Pi, context, etc.).
