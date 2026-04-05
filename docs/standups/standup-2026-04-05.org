@@ -1,0 +1,49 @@
+#+TITLE: Standup — 2026-04-05
+#+DATE: 2026-04-05
+
+* Yesterday (since 2026-04-04 standup)
+
+** PPN Track 4: Elaboration as Attribute Evaluation — COMPLETE (Track 4A)
+
+*** Design (D.1→D.4)
+- D.1: Four Questions, phases, NTT model
+- D.2: Self-critique (P/R/M lenses) — context lattice, no-walk DPO, typing as rewrite rules, zonk retirement, bidirectional ring
+- D.3: External critique — PU-internal invariant, off-network state mapping, phase deps, migration strategy
+- D.4: Divergence correction — imperative scaffolding identified and replaced with propagator-native code
+
+*** Implementation
+- Phases 1a-1c: component-indexed firing, type-map, context lattice
+- Phase 2 REDO: propagator fire functions + install-typing-network
+- Phase 3 REDO: infer-on-network (cell → quiescence → read)
+- Phase 7 REDO: infer-on-network/err wired into process-command
+- Pattern 5: context threading as cell positions in scope tree
+- Pattern 1: bidirectional app (domain downward, subst upward)
+- Pattern 2: ephemeral PU typing + expression-key substitution
+- §16 SRE Typing Domain: ~150 expr kinds as data registry
+- Network Reality Check codified in workflow.md
+
+*** Results
+- 46% of eval/infer typed on-network (100% for simple programs)
+- Zero regressions (15 pre-existing failures unchanged)
+- 69 commits, 23 tests, ~900 lines typing-propagators.rkt
+- PIR written (16-question methodology, longitudinal survey of 9 prior PIRs)
+
+*** Side-Effect Boundary Identified
+- F1 (meta resolution) + F2 (trait dispatch) both reverted: on-network typing bypasses imperative side effects
+- The path to 100% requires ALL side effects on-network: trait resolution, constraint creation, multiplicity checking, warnings
+- This is PPN Track 4B continuation scope
+
+* Today
+
+** PPN Track 4B: Side-Effect Migration
+- Move trait resolution, constraint creation, multiplicity checking, and warning emission onto the propagator network
+- Full Pattern 4: constraint propagators + instance registry bridge
+- Goal: 100% on-network typing, retire imperative fallback
+
+* Blockers
+- None immediate. The 15 pre-existing test failures should be investigated separately.
+
+* Priorities
+1. PPN Track 4B — continue toward 100% on-network
+2. Distill 6 pending lessons from Track 4 PIR to principles documents
+3. Grammar Form R&D — attribute grammar expression (deferred from Track 4 sessions)
