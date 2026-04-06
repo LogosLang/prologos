@@ -12,6 +12,7 @@
 - [Adhesive Categories](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md) — CALM-adhesive guarantee
 - [Hypergraph Rewriting](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md) — Engelfriet-Heyker
 - [Grammar Form Design Thinking](2026-04-03_GRAMMAR_FORM_DESIGN_THINKING.md) — attribute grammar thread
+- [Attribute Grammar Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md) — catamorphisms, aspects, CLP, DCGs, higher-order AGs
 
 ---
 
@@ -19,41 +20,52 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Stage 2 audit + attribute grammar specification | ✅ | [Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md): 5 domains, 12 node kinds, stratification map |
-| 1 | Attribute Record PU: extend type-map to full attribute record | ⬜ | Type + Context + Constraint + Multiplicity + Warning facets |
-| 2 | Constraint attribute propagators (S0: creation during typing) | ⬜ | Trait constraints, unification constraints, capability constraints |
-| 3 | Trait resolution propagators (S1: readiness-triggered) | ⬜ | P1 pattern: type→constraint narrowing. Monomorphic + parametric. |
-| 4 | Multiplicity attribute propagators (S0: usage tracking) | ⬜ | QTT: single-usage, zero-usage, add-usage, scale-usage as cell ops |
-| 5 | Structural unification propagators (S0: Pi/Sigma decomposition) | ⬜ | Reuse make-structural-unify-propagator inside ephemeral PU |
-| 6 | Meta solution bridging (ephemeral → main network) | ⬜ | PU output channels for solved metas, resolved constraints |
-| 7 | Warning attribute propagators (S2: accumulation + reporting) | ⬜ | Coercion, deprecation, capability warnings as cell values |
-| 8 | ATMS integration for union type checking (S(-1): retraction) | ⬜ | ATMS branching for union speculation within the attribute PU |
-| 9 | Elaboration attributes: implicit args + name resolution on-network | ⬜ | Move insert-implicits-with-tagging into attribute propagators |
-| 10 | Retire imperative fallback entirely | ⬜ | infer-on-network/err becomes the ONLY path |
-| 11 | Zonk retirement (from Track 4A Phase 4b) | ⬜ | Cell-refs replace expr-meta; fan-in default propagator |
-| 12 | Scaffolding retirement (from Track 4A Phase 8) | ⬜ | 8 items from Tracks 2H + 2D |
-| T | Dedicated test file | ⬜ | Attribute-level tests: per-domain, per-node-kind, per-stratum |
-| 13 | Verification + PIR | ⬜ | Full suite GREEN, A/B benchmark, acceptance file, PIR |
+| 0a | Fix multi-path component-indexed firing (foundational) | ⬜ | Fix `assoc` first-match bug in propagator.rkt. Multi-map for paths per cell-id. NTT K-indexed read/write specification. Audit Track 4A for thrashing from incorrect firing. |
+| 0b | Constraint domain lattice design (explicit design phase) | ⬜ | CLP-inspired domain narrowing, not flat pending→resolved→contradicted. SRE algebraic structure. Design BEFORE implementation. |
+| 0c | .pnet attribute cache design | ⬜ | What's cached, invalidation strategy, structural sharing format, warm-start preloading. |
+| 0 | Stage 2 audit + attribute grammar specification | ✅ | [Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md): 5 domains, 12 node kinds, stratification. [AG Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md): catamorphisms, CLP, aspects. |
+| 1 | Attribute Record PU: extend type-map to full attribute record | ⬜ | Type + Context + Constraint + Multiplicity + Warning facets. CHAMP-backed with shared singletons. Proper K-indexed component firing. |
+| 2 | Constraint attribute propagators (S0: creation during typing) | ⬜ | Uses the new domain lattice from Phase 0b. Trait constraints, unification constraints, capability constraints as domain-narrowing cells. |
+| 3 | Trait resolution propagators (S1: readiness-triggered) | ⬜ | P1 pattern: type→constraint narrowing. Monomorphic + parametric. Fires when arg types reach ground in the domain lattice. |
+| 4 | Multiplicity attribute propagators (S0: usage tracking + S2: validation) | ⬜ | QTT: single-usage, zero-usage, add-usage, scale-usage as cell ops. S2 validation: compatible(declared, actual). |
+| 5 | Structural unification propagators (S0: Pi/Sigma decomposition) | ⬜ | Reuse make-structural-unify-propagator inside ephemeral PU. K-indexed sub-cell decomposition. |
+| 6 | Meta solution bridging (ephemeral → main network) | ⬜ | PU output channels for solved metas, resolved constraints. Resolved type-map resolution (F1 from Track 4A, now with correct component firing). |
+| 7 | Warning attribute propagators (S2: accumulation + reporting) | ⬜ | Coercion, deprecation, capability warnings as cell values. |
+| 8 | ATMS integration for union type checking (S(-1): retraction) | ⬜ | ATMS branching within the attribute PU. Per-branch attribute records. |
+| 9 | Retire imperative fallback: infer/check + resolve-trait-constraints! + checkQ + freeze | ⬜ | infer-on-network/err becomes the ONLY path. 100% on-network for typing + constraints + multiplicities + warnings. |
+| 10 | Zonk retirement (from Track 4A Phase 4b) | ⬜ | Cell-refs replace expr-meta; fan-in default propagator at S2. |
+| 11 | Scaffolding retirement (from Track 4A Phase 8) | ⬜ | 8 items from Tracks 2H + 2D. |
+| T | Dedicated test file | ⬜ | Attribute-level tests: per-domain, per-node-kind, per-stratum. |
+| 12 | Verification + PIR | ⬜ | Full suite GREEN, A/B benchmark, acceptance file, PIR. |
 
 ---
 
 ## §0 Objectives
 
-**End state**: Elaboration IS attribute evaluation on the propagator network. The parse tree gains attributes (type, context, multiplicity, constraints, warnings) through propagator fixpoint — not through imperative tree walks. The typed, resolved, checked expression EMERGES from quiescence. The imperative `infer/check`, `resolve-trait-constraints!`, `checkQ`, and `freeze` are retired.
+**End state**: Type inference, constraint resolution, multiplicity checking, and zonking are FULLY on-network as attribute evaluation within encapsulated Pocket Universe shells. The imperative `infer/check`, `resolve-trait-constraints!`, `checkQ`, and `freeze` are retired. The core expression (from `elaborate-top-level`) gains attributes through propagator fixpoint — the typed, resolved, checked result EMERGES from quiescence.
 
-**Reframing from Track 4A**: Track 4A framed this as "move side effects on-network." The attribute grammar analysis (§0 foundation) revealed this framing was too narrow. The side effects ARE attributes — they're not separate things to migrate, they're facets of the same evaluation. The right framing: elaboration is attribute evaluation on a structured PU value.
+**Reframing from Track 4A**: Track 4A framed the goal as "move side effects on-network." The attribute grammar analysis revealed this was too narrow. The side effects ARE attributes — facets of the same evaluation. The right framing: typing + resolution + checking = attribute evaluation on a structured PU value.
 
 **What Track 4B delivers**:
-1. The Attribute Record PU — each AST node has a record with 5 facets (type, context, multiplicity, constraints, warnings)
-2. Attribute propagators for ALL 5 domains at the appropriate strata (S0/S1/S2)
-3. Elaboration-specific attributes (implicit arg insertion, name resolution) as on-network propagators
-4. Retirement of the imperative `infer/check`, `resolve-trait-constraints!`, `checkQ`, and `freeze`
-5. The SRE typing domain extended to full attribute rules (not just type rules)
+1. **Foundational fix**: Multi-path component-indexed firing (the Phase 1a bug that caused thrashing)
+2. **Constraint domain lattice**: CLP-inspired domain narrowing for constraints, designed with SRE algebraic structure
+3. **The Attribute Record PU**: each AST node has a record with 5 facets (type, context, multiplicity, constraints, warnings) in encapsulated PU shells with own stratification (S0→S1→S2)
+4. **Attribute propagators for ALL 5 domains** at appropriate strata
+5. **Global attribute store** with CHAMP structural sharing and .pnet caching
+6. **`that` operation** (internal API): first-class attribute read/write on the PU, designed for future user-facing exposure
+7. **Retirement of imperative fallback**: `infer/check`, `resolve-trait-constraints!`, `checkQ`, `freeze`
+8. **The SRE typing domain extended to full attribute rules** (not just type rules)
 
 **What this track is NOT**:
-- It does NOT move reduction on-network — that's SRE Track 6
-- It does NOT move the surface→core structural transformation on-network — that's already on-network via PPN Track 3's form pipeline
-- It does NOT implement the self-hosted compiler — but it provides the attribute grammar data that the self-hosted compiler will consume
+- It does NOT move the surface→core structural transformation on-network — `elaborate-top-level` stays imperative. Elaboration-as-attributes (implicit arg insertion, name resolution, macro expansion as propagators) is **PPN Track 4C** scope, which depends on **SRE Track 6** (DPO rewriting infrastructure with e-graphs).
+- It does NOT move β/δ/ι-reduction on-network — that's **SRE Track 6** scope. Track 4B uses `subst`, `whnf`, `nf` as pure function calls within propagator fire functions. SRE Track 6 replaces these with DPO rewriting later.
+- It does NOT implement the self-hosted compiler — but it provides the attribute grammar data that the self-hosted compiler will consume.
+- It does NOT design user-facing `that` syntax — that's **Grammar Form R&D** scope. Track 4B builds the internal mechanism.
+
+**Track relationships**:
+- **PPN Track 4B** (this track): attribute evaluation for typing + constraints + mult + warnings. Receives core expr from imperative elaborator.
+- **SRE Track 6** (dependency): DPO rewriting with e-graphs over tropical semirings. Provides optimal reduction infrastructure.
+- **PPN Track 4C** (future, depends on SRE 6): elaboration structural transformations as attribute propagators. Replaces `elaborate-top-level` with DPO rewriting. Also absorbs `whnf`/`nf` replacement via SRE 6.
 
 ---
 
@@ -214,31 +226,42 @@ All Track 4A code is reusable — it's the TYPE facet implementation. Track 4B a
 
 ---
 
-## §4 Elaboration-Specific Attributes
+## §4 Elaboration Boundary and Scope
 
-The attribute grammar (§1 foundation, §5 of the AG document) identifies elaboration-specific attributes beyond typing:
+### §4.1 What Track 4B Receives (from imperative elaborator)
 
-### §4.1 Implicit Argument Insertion
+Track 4B receives the CORE EXPR from `elaborate-top-level`. By the time the attribute PU sees the expression:
+- Surface syntax has been transformed to core AST (expr-* structs)
+- Implicit arguments have been inserted as `expr-meta` nodes
+- Names have been resolved to qualified `expr-fvar` / de Bruijn `expr-bvar`
+- Trait constraints have been registered via `register-trait-constraint!`
+- HasMethod constraints have been registered via `register-hasmethod-constraint!`
 
-Currently imperative in `insert-implicits-with-tagging` (elaborator.rkt:362-528). This creates metas for implicit params, registers trait constraints, and detects capabilities.
+### §4.2 What Track 4B Evaluates (attribute propagators)
 
-**On-network**: the form pipeline (Track 3) produces the surface syntax with arity information. An implicit-insertion propagator watches the function type and argument count. When the function type is a Pi chain with m0 binders and the arg count is less than the total parameter count, the propagator inserts meta POSITIONS in the attribute map for each implicit argument.
+Given the core expr, the attribute PU computes:
+- **Type attributes** (S0): the type of every sub-expression (Track 4A's scope, extended)
+- **Constraint attributes** (S0): constraint DOMAIN narrowing alongside type computation
+- **Trait resolution** (S1): resolving trait constraints when argument types are ground
+- **Multiplicity attributes** (S0+S2): usage tracking + validation
+- **Warning attributes** (S2): coercion, deprecation detection
+- **Meta defaulting** (S2): fan-in for unsolvable metas
 
-This is structurally similar to Track 4A Pattern 1 (implicit argument positions ARE structural components of the Pi decomposition). The difference: Track 4A relied on the elaborator to insert the metas BEFORE typing. Track 4B makes the insertion itself an attribute propagator.
+### §4.3 What Track 4C Will Add (future, depends on SRE 6)
 
-### §4.2 Name Resolution
+Track 4C moves the elaboration structural transformation ON-network:
+- Implicit argument insertion as attribute propagators (DPO rewriting on the form cell)
+- Name resolution as attribute propagators
+- Macro expansion as attribute propagators
+- `whnf`/`nf` as DPO rewriting (replaces function calls in propagator fire functions)
 
-Currently imperative in `elaborate` (elaborator.rkt:755+). Translates surface names to qualified fvars and de Bruijn bvars.
+Track 4C depends on SRE Track 6 for the DPO rewriting + e-graph infrastructure.
 
-**On-network**: this is ALREADY on-network via the form pipeline (Track 3). The surface→core structural transformation happens in the form cell's pipeline propagators. Track 4B doesn't change this.
+### §4.4 Constraint Registration in Track 4B
 
-### §4.3 Constraint Registration
+The imperative elaborator ALREADY registers trait constraints before the attribute PU runs. Track 4B's constraint propagators READ these registrations and create corresponding constraint domain cells in the attribute PU.
 
-Currently imperative: `register-trait-constraint!`, `register-hasmethod-constraint!`, `register-capability-constraint!`.
-
-**On-network**: constraint CREATION is an S0 attribute propagator. When an app's function type reveals an implicit trait domain, the constraint-creation propagator writes a constraint entry to the CONSTRAINT facet of that node's attribute record. The constraint entry includes: trait name, type-arg positions (metas that need solving), dict-meta position.
-
-At S1, the trait-resolution propagator watches the type-arg positions. When they gain ground values, it resolves the instance and writes the dict-meta position's type facet.
+The constraint-creation propagator (S0) reads the registered `trait-constraint-info` from the main elab-network (via bridge read) and creates a constraint domain entry in the attribute record for the corresponding node. The domain lattice (Phase 0b) represents the set of possible trait instances, narrowed as type information refines.
 
 ---
 
@@ -276,11 +299,15 @@ At S1, the trait-resolution propagator watches the type-arg positions. When they
 ## §7 Phase Dependencies
 
 ```
-Phase 0 (audit + AG spec) ✅
+Phase 0a (Fix multi-path component-indexed firing) ← FOUNDATIONAL, blocks everything
   ↓
-Phase 1 (Attribute Record PU)
+Phase 0b (Constraint domain lattice DESIGN) ← design phase, before implementation
   ↓
-Phase 2 (Constraint creation S0) ←─── Phase 1
+Phase 0c (.pnet attribute cache design) ← design phase
+  ↓
+Phase 1 (Attribute Record PU) ← depends on 0a (correct K-indexed firing)
+  ↓
+Phase 2 (Constraint creation S0) ←─── Phase 1 + 0b (domain lattice designed)
   ↓
 Phase 3 (Trait resolution S1) ←─── Phase 2 (constraints exist to resolve)
   |
@@ -294,18 +321,18 @@ Phase 6 (Meta bridging) ←─── Phase 3 (resolved traits produce meta solut
   ↓
 Phase 8 (ATMS) ←─── Phase 2+3 (constraints + resolution under assumptions)
   ↓
-Phase 9 (Elaboration attributes: implicit args) ←─── Phases 2+3+8 (needs constraints + ATMS)
+Phase 9 (Retire imperative fallback) ←─── ALL above (2-8)
   ↓
-Phase 10 (Retire imperative fallback) ←─── ALL above
+Phase 10 (Zonk retirement) ←─── Phase 9
   ↓
-Phase 11 (Zonk retirement) ←─── Phase 10
+Phase 11 (Scaffolding retirement) ←─── Phase 9
   ↓
-Phase 12 (Scaffolding retirement) ←─── Phase 10
-  ↓
-Phase T + 13 (Tests + PIR) ←─── ALL
+Phase T + 12 (Tests + PIR) ←─── ALL
 ```
 
-Phases 4, 5, 7 are PARALLEL with Phase 3. Phase 9 (implicit args) is the HARDEST and depends on most other phases.
+**Critical path**: 0a → 0b → 1 → 2 → 3 → 6 → 9 (retire imperative)
+**Parallel**: Phases 4, 5, 7 independent after Phase 1. Phase 8 (ATMS) after Phase 3.
+**Design phases**: 0a, 0b, 0c are design+implementation before main attribute work.
 
 ---
 
@@ -496,7 +523,88 @@ This makes prelude loading nearly free for attribute evaluation: ~500 names × c
 
 ---
 
-## §10 Open Questions Resolved
+## §10 Phase 0a Design: Multi-Path Component-Indexed Firing
+
+### The Bug
+
+Track 4A Phase 1a introduced component-indexed firing: propagators declare which PU component paths they watch. Only propagators whose watched paths intersect the changed components are scheduled.
+
+The bug: `net-add-propagator` uses `(assoc cid component-paths equal?)` to find the path for a cell-id. When a propagator has MULTIPLE paths on the SAME cell-id (e.g., app propagator watches both `func-pos` and `arg-pos` on the same type-map cell), `assoc` finds only the FIRST path. The second path is lost.
+
+### The Impact
+
+When position `arg-pos` changes, the app propagator (which registered only `func-pos` as its path) is NOT scheduled. This caused:
+- Incorrect behavior: propagators miss updates they should see
+- Workaround: multi-position propagators omit component-paths (watch entire cell → fire on ANY change)
+- Thrashing: propagators watching entire cell fire unnecessarily, causing cascading re-firings
+
+The Pattern 2 timeout regression was likely caused by this: bidirectional app writes trigger ALL propagators (because component-paths was omitted), each of which writes to other positions, triggering more firings.
+
+### The Fix
+
+Change `prop-cell.dependents` from `(champ prop-id → path-or-#f)` to `(champ prop-id → (listof path) | #f)`. A propagator can watch MULTIPLE paths on the same cell.
+
+In `net-add-propagator`: for each input cell, collect ALL matching paths from component-paths (not just the first). Store as a list.
+
+In `net-cell-write`'s `filter-dependents-by-paths`: check if ANY of the propagator's watched paths intersect the changed set. Fire if any match.
+
+### NTT Specification
+
+```
+propagator app-typing
+  :reads   attribute-map @ [func-pos, arg-pos]   ;; K-indexed multi-path reads
+  :writes  attribute-map @ [result-pos, arg-pos]  ;; K-indexed writes (bidirectional)
+  :fire    ...
+```
+
+The `:reads` and `:writes` declarations specify WHICH positions the propagator accesses. The scheduler uses these for:
+- **Selective scheduling**: only fire when a read-position changes
+- **Cycle detection**: if a propagator writes to its own read-position, flag for review (potential loop)
+- **Audit**: NTT declarations can be validated against actual fire-fn behavior
+
+### Audit of Track 4A for Thrashing
+
+With the fix in place, audit ALL propagators in `install-typing-network`:
+- Each propagator should declare its EXACT read/write positions
+- No propagator should watch the entire cell (path=#f) unless it genuinely reads ALL positions
+- The bidirectional app propagator's read={func-pos} and write={arg-pos, result-pos} should NOT cause self-triggering
+
+---
+
+## §11 Phase 0b Design: Constraint Domain Lattice (NEEDS DESIGN)
+
+### The Problem
+
+Track 4A Phase 6 built a flat constraint lattice: `pending → resolved(instance) → contradicted`. This is too simple for CLP-inspired domain narrowing.
+
+### The Vision (from CLP(Z) analogy)
+
+A type variable `?A` with constraint `(Add ?A)` should have a DOMAIN: the set of types that implement `Add`. As type information refines, the domain narrows:
+
+```
+(Add ?A)  where ?A : Type
+  domain = {Int, Nat, Rat, String, Posit8, Posit16, Posit32, Posit64}  ;; all Add impls
+
+?A gains info: ?A appears in (int+ ?A 3)  →  ?A narrows toward Int
+  domain = {Int}  ;; only Int compatible
+
+Resolve: impl Add Int → dict = Int--Add--dict
+```
+
+### What Needs Designing (explicit design phase)
+
+1. **The domain lattice structure**: `(Setof Candidate)` ordered by subset (⊇ = more info). The bot is the full candidate set. The top is empty (contradiction — no valid instance).
+2. **SRE algebraic properties**: commutativity, associativity, idempotence of domain intersection. Is this a Heyting algebra? Does it form a quantale with the type lattice?
+3. **Integration with type lattice**: when a type-map position narrows (meta → Int), the constraint domain for that position's trait constraints narrows correspondingly.
+4. **Parametric instance handling**: CLP narrowing for parametric impls (e.g., `impl Eq (List A) where (Eq A)`) — the domain includes parametric entries that generate sub-constraints.
+5. **Relation to SRE Track 2H properties**: the constraint domain should be registered as an SRE domain with declared properties that property inference validates.
+6. **This IS the bridge between functional types and relational constraints**: types as CLP domains, trait constraints as domain constraints, elaboration as constraint propagation. The design must account for future use as domain constraints in the Relational Language.
+
+### Status: NEEDS DEDICATED DESIGN before Phase 2 implementation
+
+---
+
+## §12 Open Questions Resolved
 
 ### Q1: The `that` Operation — User-Facing Syntax
 
