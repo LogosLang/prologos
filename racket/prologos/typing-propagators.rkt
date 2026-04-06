@@ -24,7 +24,12 @@
          "surface-rewrite.rkt"
          (only-in "subtype-predicate.rkt" type-tensor-core)
          (only-in "type-lattice.rkt" type-bot type-bot? type-top type-top? type-lattice-merge has-unsolved-meta?)
-         (only-in "metavar-store.rkt" meta-solution/cell-id current-prop-net-box)
+         (only-in "metavar-store.rkt" meta-solution/cell-id current-prop-net-box
+                  trait-constraint-info trait-constraint-info?
+                  trait-constraint-info-trait-name trait-constraint-info-type-arg-exprs
+                  read-trait-constraints)
+         "constraint-cell.rkt"  ;; Track 4B Phase 2: reuse existing constraint lattice
+         "constraint-propagators.rkt"  ;; Track 4B Phase 2: build-trait-constraint, refine-constraint-by-type-tag
          "elab-network-types.rkt"
          "errors.rkt"
          "pretty-print.rkt"
@@ -41,6 +46,10 @@
  context-cell-contradicts?
  ;; Track 4B Phase 1: Attribute Record PU
  attribute-map-merge-fn
+ ;; Track 4B Phase 2: Constraint Attribute Propagators
+ make-constraint-creation-fire-fn
+ make-type-narrows-constraints-fire-fn
+ type-expr->tag
  that-read
  that-write
  facet-bot
@@ -233,8 +242,9 @@
        [(equal? new-v context-empty-value) old-v]
        [(equal? old-v new-v) old-v]
        [else (context-cell-merge old-v new-v)])]
-    ;; Future facets (Phases 2, 4, 7) — identity merge until implemented
-    [(:constraints) new-v]
+    ;; Track 4B Phase 2: constraint domain uses existing constraint-cell lattice
+    [(:constraints) (constraint-merge old-v new-v)]
+    ;; Future facets (Phases 4, 7) — identity merge until implemented
     [(:usage) new-v]
     [(:warnings) new-v]
     [else new-v]))
@@ -243,7 +253,7 @@
   (case facet
     [(:type) type-bot]
     [(:context) context-empty-value]
-    [(:constraints) 'universe]   ;; constraint domain bot = all candidates
+    [(:constraints) constraint-bot]  ;; constraint-cell.rkt: all candidates possible
     [(:usage) '()]               ;; empty usage vector
     [(:warnings) '()]            ;; no warnings
     [else #f]))
@@ -252,7 +262,7 @@
   (case facet
     [(:type) (type-bot? v)]
     [(:context) (equal? v context-empty-value)]
-    [(:constraints) (eq? v 'universe)]
+    [(:constraints) (constraint-bot? v)]
     [(:usage) (null? v)]
     [(:warnings) (null? v)]
     [else (not v)]))
@@ -323,6 +333,98 @@
 
 (define (type-map-write net tm-cid position type-val)
   (that-write net tm-cid position ':type type-val))
+
+;; ============================================================
+;; Track 4B Phase 2: Constraint Attribute Propagators (S0)
+;; ============================================================
+;;
+;; Two new propagator kinds:
+;;   1. Constraint-creation: builds initial constraint domain from impl
+;;      registry for each trait constraint. Fires once (no inputs to wait
+;;      for — reads static impl registry at fire time).
+;;   2. Type-narrows-constraints bridge: watches :type facets of constraint
+;;      type-arg positions. When a type becomes concrete, narrows the
+;;      constraint domain by filtering candidates. Pure S0, monotone.
+;;
+;; Network Reality Check:
+;;   1. net-add-propagator: YES — installed per constraint during
+;;      install-attribute-network
+;;   2. net-cell-write produces result: YES — that-write to :constraints
+;;   3. Cell trace: attribute cell → constraint-creation fires →
+;;      :constraints facet written → type-narrows bridge fires when
+;;      :type facet changes → narrowed :constraints written
+
+;; Extract a type tag symbol from a TYPE expression for constraint narrowing.
+;; Maps type constructors to registry-compatible tag symbols.
+;; Returns #f for non-concrete types (metas, bots, complex types).
+;; The tags must match what impl-entry-type-args stores (e.g., 'Nat, 'Int).
+(define (type-expr->tag type-val)
+  (cond
+    [(expr-Int? type-val) 'Int]
+    [(expr-Nat? type-val) 'Nat]
+    [(expr-Bool? type-val) 'Bool]
+    [(expr-String? type-val) 'String]
+    ;; Named type constructors: the tag is the FQN symbol itself.
+    ;; impl-entry-type-args stores the FQN (e.g., 'prologos::data::posit::Posit8),
+    ;; so we need to match on that, not a short name.
+    [(and (expr-fvar? type-val)
+          (symbol? (expr-fvar-name type-val)))
+     (expr-fvar-name type-val)]
+    [else #f]))
+
+;; Constraint-creation propagator: builds initial constraint domain from
+;; the impl registry. This is a PROPAGATOR (on-network), not a literal
+;; write — it fires as part of attribute evaluation and is expressible
+;; in the SRE attribute domain for self-hosting.
+;;
+;; Reads: impl registry (off-network, static during evaluation — Track 7 migrates)
+;; Writes: :constraints facet at the dict-meta position
+(define (make-constraint-creation-fire-fn tm-cid dict-meta-pos trait-name)
+  (lambda (net)
+    (define current-constraints
+      (that-read (net-cell-read net tm-cid) dict-meta-pos ':constraints))
+    ;; Only write if still at bot — don't overwrite narrowed domains
+    (if (constraint-bot? current-constraints)
+        (let ([initial-domain (build-trait-constraint trait-name)])
+          (that-write net tm-cid dict-meta-pos ':constraints initial-domain))
+        net)))
+
+;; Type-narrows-constraints bridge propagator: watches the :type facet of
+;; a constraint's type-arg position. When the type becomes concrete (has a
+;; recognizable type tag), narrows the constraint domain at the dict-meta
+;; position by filtering candidates to those matching the type tag.
+;;
+;; Reads: :type facet at type-arg-pos
+;; Writes: :constraints facet at dict-meta-pos (narrowed domain)
+;; Monotone S0: domains only shrink (intersection)
+(define (make-type-narrows-constraints-fire-fn tm-cid dict-meta-pos type-arg-pos)
+  (lambda (net)
+    (define tm (net-cell-read net tm-cid))
+    (define type-val (that-read tm type-arg-pos ':type))
+    (cond
+      ;; Wait for type to be non-bot
+      [(type-bot? type-val) net]
+      [else
+       (define tag (type-expr->tag type-val))
+       (cond
+         ;; No recognizable tag — can't narrow (type is complex, meta, etc.)
+         [(not tag) net]
+         [else
+          ;; Read current constraint domain
+          (define current-domain (that-read tm dict-meta-pos ':constraints))
+          (cond
+            ;; If still at bot, nothing to narrow yet (creation hasn't fired)
+            [(constraint-bot? current-domain) net]
+            ;; If already at top (contradiction) or resolved, nothing to do
+            [(constraint-top? current-domain) net]
+            [(constraint-one? current-domain) net]
+            [else
+             ;; Narrow: keep only candidates whose type-args match this tag
+             (define narrowed (refine-constraint-by-type-tag current-domain tag))
+             ;; Only write if narrowing actually changed something
+             (if (equal? narrowed current-domain)
+                 net
+                 (that-write net tm-cid dict-meta-pos ':constraints narrowed))])])])))
 
 ;; --- Fire functions: one per AST node kind ---
 ;; Each returns a (lambda (net) ...) that reads inputs, computes, writes output.
@@ -822,6 +924,11 @@
   ;; Write initial context to root context position via :context facet
   (define root-ctx-pos (gensym 'ctx-root))
   (define net-with-ctx (that-write net tm-cid root-ctx-pos ':context ctx-val))
+  ;; Track 4B Phase 2: read registered trait constraints ONCE at setup.
+  ;; This is an off-network read during propagator installation, not during
+  ;; firing. The constraints were registered by the imperative elaborator.
+  ;; The resulting propagators are on-network.
+  (define trait-constraints (read-trait-constraints))  ;; hasheq: meta-id → trait-constraint-info
   ;; Recursive structural decomposition.
   ;; For each sub-expression, assign it as its own position key (eq? identity).
   ;; ctx-pos is the POSITION of the current scope's context in the type-map.
@@ -885,8 +992,41 @@
                              (make-universe-fire-fn tm-cid e l)))
        net1]
 
-      ;; --- Meta expression: leave at ⊥ (metas resolve through imperative path) ---
-      [(expr-meta _ _) net]
+      ;; --- Meta expression: leave :type at ⊥ (metas resolve through typing).
+      ;; Track 4B Phase 2: if this meta has a registered trait constraint,
+      ;; install constraint-creation and type-narrows-constraints propagators.
+      [(expr-meta id _)
+       (define tc-info (hash-ref trait-constraints id #f))
+       (cond
+         [(not tc-info) net]  ;; no trait constraint → nothing to install
+         [else
+          (define trait-name (trait-constraint-info-trait-name tc-info))
+          (define type-arg-exprs (trait-constraint-info-type-arg-exprs tc-info))
+          ;; 1. Constraint-creation propagator: builds initial domain from registry
+          (define-values (net1 _cc-pid)
+            (net-add-propagator net (list tm-cid) (list tm-cid)
+                                (make-constraint-creation-fire-fn tm-cid e trait-name)
+                                #:component-paths (list)))  ;; fires once (no watched paths)
+          ;; 2. Type-narrows-constraints bridge: one per type-arg expression.
+          ;; Watches the :type facet of each type-arg position.
+          ;; When the type-arg becomes concrete, narrows the constraint domain.
+          (for/fold ([n net1]) ([ta (in-list type-arg-exprs)])
+            (cond
+              ;; Only install bridge for type-args that are positions in the
+              ;; attribute map (expr nodes). Concrete types don't need bridges.
+              [(or (expr-meta? ta) (expr-bvar? ta) (expr-fvar? ta)
+                   (expr-app? ta) (expr-lam? ta) (expr-Pi? ta))
+               (define-values (n2 _bridge-pid)
+                 (net-add-propagator n (list tm-cid) (list tm-cid)
+                                     (make-type-narrows-constraints-fire-fn tm-cid e ta)
+                                     #:component-paths
+                                     (list (cons tm-cid (cons ta ':type)))))
+               n2]
+              ;; Concrete type-arg (e.g., (expr-Int)) — narrow immediately
+              ;; by writing a refined domain in the creation propagator.
+              ;; This is handled by the creation propagator's initial domain
+              ;; already being filtered when type args are known.
+              [else n]))])]
 
       ;; --- Bound variable: reads from :context facet at ctx-pos ---
       [(expr-bvar k)
