@@ -339,6 +339,7 @@ Track 4C moves the elaboration structural transformation ON-network:
 - Name resolution as attribute propagators
 - Macro expansion as attribute propagators
 - `whnf`/`nf` as DPO rewriting (replaces function calls in propagator fire functions)
+- **Propagator installation as topology-stratum decomposition**: Track 4B's `install-typing-network` walks the core AST imperatively and installs all attribute propagators (typing, constraint, usage) in a single pass. This is the §4.1a handoff — imperative elaboration produces data, one walk installs all propagators. Track 4C replaces this walk with on-network decomposition: the expression IS a cell value, a decomposition propagator reads it and installs sub-propagators via the topology stratum (same pattern as PPN Track 3 form-cell pipeline). This is the "all-at-once read-in-parallel" pattern — the tree isn't traversed sequentially; positions are read as parallel cell values and propagators are installed concurrently. The sequential walk is Track 4B scaffolding.
 
 Track 4C depends on SRE Track 6 for the DPO rewriting + e-graph infrastructure.
 
