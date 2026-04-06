@@ -208,7 +208,21 @@ Attribute PU (ephemeral prop-network):
 
 6. **Discard PU** — GC the ephemeral network.
 
-### §3.3 Why Attribute Records, Not Separate Maps
+### §3.3 Reactive Output: Scoped Propagators on Main Network (Preferred)
+
+The D.1 self-critique (R/M3) identified that an ephemeral PU with function-call output bridging puts results OFF-NETWORK. Every off-network operation is something that later needs fixing for self-hosting, provenance, error-reporting, and observability.
+
+**Preferred architecture**: the attribute-map cell lives ON the main elab-network. Typing/constraint/usage propagators are installed on the main network for the duration of one command, then become INERT (not deleted — inert, because their inputs stabilize after quiescence).
+
+This is how the FORM PIPELINE already works: form cells persist, pipeline propagators fire during `dispatch-form-productions`, and after 'done' the propagators are inert. No ephemeral network needed.
+
+**Accumulation concern**: Track 4A showed propagators on the main network cause accumulation. The fix: propagator INERTNESS. After quiescence, a propagator whose inputs are all stable NEVER fires again. The `net-cell-write` no-change guard ensures this — writing the same value is a no-op. Over many commands, inert propagators exist in the CHAMP but never fire. Memory grows slowly (CHAMP structural sharing), performance is unaffected (inert propagators are never scheduled).
+
+**BSP CALM guarantee**: with BSP scheduler, monotone propagators on the main network are safe to parallelize (CALM). Non-monotone operations (S2 defaulting, S(-1) retraction) are stratified. The main network's BSP scheduler handles the strata.
+
+**Fallback**: if accumulation proves problematic in practice (profiling shows memory/time growth), fall back to ephemeral PU with explicit output writes. The attribute-map cell structure is the same either way — only the network hosting changes.
+
+### §3.4 Why Attribute Records, Not Separate Maps
 
 Track 4A used separate maps: type-map for types, separate context positions for contexts. This created complexity — different merge functions, different position key spaces, special cases for context-cell-values in the type-map merge.
 
@@ -828,7 +842,9 @@ propagator type-narrows-constraint-domain
 
 ### §11.7 Parametric Instance Handling
 
-Parametric impls (e.g., `impl Eq (List A) where (Eq A)`) are candidates whose match GENERATES sub-constraints:
+Parametric impls (e.g., `impl Eq (List A) where (Eq A)`) are candidates whose match GENERATES sub-constraints. This is NOT simple set intersection — it's constraint PROPAGATION.
+
+**The merge function handles MONOMORPHIC narrowing only** (pure set filtering by type tag). Parametric narrowing requires pattern matching + sub-constraint generation, which is COMPUTATION that belongs in a PROPAGATOR, not in a merge function.
 
 ```racket
 (struct parametric-candidate
@@ -838,13 +854,30 @@ Parametric impls (e.g., `impl Eq (List A) where (Eq A)`) are candidates whose ma
   #:transparent)
 ```
 
-When a parametric candidate matches during narrowing:
-1. The candidate stays in the domain (it's a valid possibility)
-2. Sub-constraints are GENERATED for the pattern variables
-3. The sub-constraints are NEW constraint domain entries in the attribute map
-4. These sub-constraints narrow independently via the same lattice
+**Two-level narrowing**:
 
-This is the CLP analogy: `X ∈ {1..9}, X = Y + Z` generates sub-constraints on Y and Z. In Prologos: `(Eq (List A))` matches `impl Eq (List A) where (Eq A)`, generating `(Eq A)` as a sub-constraint.
+1. **Merge level (pure, in constraint-domain-merge)**: filter candidates by type tag. `?A → List ?B` eliminates monomorphic candidates (Eq Int, Eq Nat, etc.) that don't match `List`. Parametric candidates with compatible patterns STAY in the set.
+
+2. **Propagator level (S0, parametric-narrowing propagator)**: watches the constraint domain. When it sees parametric candidates AND the type is sufficiently ground to attempt pattern matching:
+   - Match candidate pattern against current type: `List A` matches `List ?B` → binding `A = ?B`
+   - Generate sub-constraints: `where (Eq A)` with `A = ?B` → `(Eq ?B)` as a NEW constraint entry
+   - Write sub-constraints to the attribute map: `that-write(net, cell, ?B-position, :constraints, (constraint-domain 'Eq ...))`
+   - The sub-constraints narrow independently via the same lattice
+
+```
+propagator parametric-narrowing
+  :reads   attribute-map @ [(constraint-pos . :constraints), (type-arg-pos . :type)]
+  :writes  attribute-map @ [(sub-constraint-positions . :constraints)]
+  :fire    for each parametric candidate in domain:
+             bindings = match-type-pattern(type-val, candidate.pattern)
+             if bindings:
+               for each where-clause in candidate.where-clauses:
+                 sub-constraint = instantiate(where-clause, bindings)
+                 that-write(sub-constraint-position, :constraints, sub-constraint-domain)
+  :stratum S0 (monotone: sub-constraints are new info, narrowing only)
+```
+
+**This IS CLP constraint propagation**: `X ∈ {1..9}, X = Y + Z` generates constraints on Y and Z. In Prologos: `(Eq ?A)` where `?A = List ?B` matches `impl Eq (List A) where (Eq A)`, generating `(Eq ?B)`. The constraint domain lattice handles the domain; the parametric propagator handles the generation. Both are monotone S0 operations.
 
 ### §11.8 Generalization: Universal Constraint Domain Solving
 
@@ -1000,9 +1033,9 @@ The internal API is designed for future external exposure:
 
 ### Critical (must address before implementation)
 
-**R1+M1: Facet-aware diffing required.** The `pu-value-diff` currently diffs at the POSITION level (which hasheq keys changed). For the attribute map, a change to `(position-P . :constraints)` registers as "position-P changed" — ALL propagators watching P fire, not just constraint propagators. The Phase 0a multi-path fix allows propagators to declare `(cell . (position . facet))` compound paths, but the DIFF itself must also detect at the (position, facet) granularity. Without this, the attribute PU thrashes like Track 4A did. **Resolution**: Phase 0a scope must include facet-aware diffing, not just multi-path registration.
+**R1+M1: Facet-aware diffing required.** The `pu-value-diff` currently diffs at the POSITION level (which hasheq keys changed). For the attribute map, a change to `(position-P . :constraints)` registers as "position-P changed" — ALL propagators watching P fire, not just constraint propagators. The Phase 0a multi-path fix allows propagators to declare `(cell . (position . facet))` compound paths, but the DIFF itself must also detect at the (position, facet) granularity. Without this, the attribute PU thrashes like Track 4A did. **Resolution**: Phase 0a scope INCLUDES facet-aware diffing — the diff recurses one level deeper, comparing old/new records per position to identify which facets changed. Compound keys `(position . facet)` in component-paths. Implementation detail, not architectural.
 
-**P1: Parametric instance narrowing is not set intersection.** `impl Eq (List A) where (Eq A)` requires PATTERN MATCHING during narrowing (the type narrows to `List Int`, the parametric candidate matches, and `(Eq Int)` is GENERATED as a sub-constraint). The merge function in §11.5 does simple set intersection which doesn't handle this. **Resolution**: The narrowing operation for parametric candidates needs a richer model: match → generate sub-constraints → add to attribute map. This is CONSTRAINT PROPAGATION within the domain lattice, not simple set operations. Needs design refinement in §11.7.
+**P1: Parametric instance narrowing is not set intersection.** `impl Eq (List A) where (Eq A)` requires PATTERN MATCHING during narrowing. The merge function handles MONOMORPHIC narrowing only (pure set filtering). A SEPARATE S0 propagator handles parametric narrowing: pattern match → extract bindings → generate sub-constraints → write to attribute map. This is CLP constraint propagation within the domain lattice. **Resolution**: §11.7 updated with two-level narrowing design (merge for monomorphic, propagator for parametric). The merge stays pure; the computation lives in propagators. Principled per propagator-first.
 
 ### Medium
 
@@ -1014,7 +1047,9 @@ The internal API is designed for future external exposure:
 
 ### Low (acceptable as-is)
 
-**R3**: Output bridge is a function call at the PU boundary, not a propagator. Acceptable — every reactive system has a stimulus boundary.
+**R3**: Output bridge revised — PREFERRED architecture is scoped propagators on main network (§3.3). Attribute-map cell lives on main network, propagators become inert after quiescence. Results are reactive, visible to downstream propagators. Ephemeral PU is fallback only. Provenance, error-reporting, observability benefit from on-network results.
+
+**R4**: BSP topology stratum needs `decomp-request-cell-id` for structural decomposition requests. If attribute PU uses BSP (per Phase 0d), ensure decomp-request cell is initialized. Track 4A's ephemeral PU creation (`make-prop-network`) does NOT set up decomp-request. **Resolution**: either initialize it in the PU setup, or verify that the attribute propagators don't generate decomp requests (they shouldn't — structural decomposition is Phase 5 scope, not every propagator).
 
 **P3**: Constraint creation reads impl registry at fire time (bridge). SRE domain registration is static. Acceptable.
 
