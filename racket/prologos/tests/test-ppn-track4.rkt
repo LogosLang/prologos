@@ -11,7 +11,7 @@
          racket/set
          prologos/propagator
          prologos/champ
-         prologos/typing-propagators
+         prologos/typing-propagators  ;; provides that-read, attribute-map-merge-fn
          prologos/syntax
          prologos/prelude
          prologos/type-lattice
@@ -113,7 +113,7 @@
      (define net3 (run-to-quiescence net2))
      ;; Read result from the type-map cell
      (define tm (net-cell-read net3 tm-cid))
-     (define result-type (hash-ref tm int-expr type-bot))
+     (define result-type (that-read tm int-expr ':type))
      ;; Network Reality Check: result comes from cell read after propagator firing
      (check-equal? result-type (expr-Int)))
 
@@ -127,30 +127,30 @@
                            (make-universe-fire-fn tm-cid type-expr (lzero))))
      (define net3 (run-to-quiescence net2))
      (define tm (net-cell-read net3 tm-cid))
-     (check-equal? (hash-ref tm type-expr type-bot) (expr-Type (lsuc (lzero)))))
+     (check-equal? (that-read tm type-expr ':type) (expr-Type (lsuc (lzero)))))
 
    (test-case "app propagator: tensor fires when func + arg types available"
      (define net0 (make-prop-network))
      (define func-e (expr-fvar 'f))
      (define arg-e (expr-int 42))
      (define app-e (expr-app func-e arg-e))
-     ;; Create typing cell pre-populated with func and arg types
+     ;; Create attribute cell pre-populated with func and arg types (nested records)
      (define-values (net1 tm-cid)
        (net-new-cell net0
-                     (hasheq func-e (expr-Pi 'mw (expr-Int) (expr-Bool))
-                             arg-e (expr-Int))
+                     (hasheq func-e (hasheq ':type (expr-Pi 'mw (expr-Int) (expr-Bool)))
+                             arg-e (hasheq ':type (expr-Int)))
                      type-map-merge-fn))
-     ;; Install app propagator
+     ;; Install app propagator — compound component-paths
      (define-values (net2 _pid)
        (net-add-propagator net1 (list tm-cid) (list tm-cid)
                            (make-app-fire-fn tm-cid app-e func-e arg-e)
                            #:component-paths
-                           (list (cons tm-cid func-e)
-                                 (cons tm-cid arg-e))))
+                           (list (cons tm-cid (cons func-e ':type))
+                                 (cons tm-cid (cons arg-e ':type)))))
      (define net3 (run-to-quiescence net2))
      (define tm (net-cell-read net3 tm-cid))
      ;; tensor(Pi(mw, Int, Bool), Int) = Bool (via subst)
-     (check-equal? (hash-ref tm app-e type-bot) (expr-Bool)))
+     (check-equal? (that-read tm app-e ':type) (expr-Bool)))
 
    (test-case "infer-on-network: literal expression"
      (define net0 (make-prop-network))
@@ -180,19 +180,19 @@
        (net-add-propagator net1 (list tm-cid) (list tm-cid)
                            (make-app-fire-fn tm-cid app-e func-e arg-e)
                            #:component-paths
-                           (list (cons tm-cid func-e)
-                                 (cons tm-cid arg-e))))
+                           (list (cons tm-cid (cons func-e ':type))
+                                 (cons tm-cid (cons arg-e ':type)))))
      ;; Drain initial fire (inputs are ⊥, propagator is a no-op)
      (define net2q (run-to-quiescence net2))
-     ;; Write func type
+     ;; Write func type (nested record)
      (define net3 (net-cell-write net2q tm-cid
-                    (hasheq func-e (expr-Pi 'mw (expr-Int) (expr-Int)))))
+                    (hasheq func-e (hasheq ':type (expr-Pi 'mw (expr-Int) (expr-Int))))))
      ;; Write arg type — this should trigger the app propagator
-     (define net4 (net-cell-write net3 tm-cid (hasheq arg-e (expr-Int))))
+     (define net4 (net-cell-write net3 tm-cid (hasheq arg-e (hasheq ':type (expr-Int)))))
      (define net5 (run-to-quiescence net4))
      (define tm (net-cell-read net5 tm-cid))
      ;; tensor(Pi(mw,Int,Int), Int) = Int
-     (check-equal? (hash-ref tm app-e type-bot) (expr-Int)))
+     (check-equal? (that-read tm app-e ':type) (expr-Int)))
    ))
 
 ;; ============================================================
@@ -268,11 +268,11 @@
      (define tm (net-cell-read net3 tm-cid))
      ;; domain = Int, so bvar(0) should read Int from context
      ;; Int : Type(0), body : Int, so lam : Pi(mw, Int, Int)
-     (check-equal? (hash-ref tm dom-e type-bot) (expr-Type (lzero))
+     (check-equal? (that-read tm dom-e ':type) (expr-Type (lzero))
                    "Int : Type(0)")
-     (check-equal? (hash-ref tm body-e type-bot) (expr-Int)
+     (check-equal? (that-read tm body-e ':type) (expr-Int)
                    "bvar(0) in [x:Int] scope should be Int")
-     (check-equal? (hash-ref tm lam-e type-bot)
+     (check-equal? (that-read tm lam-e ':type)
                    (expr-Pi 'mw dom-e (expr-Int))
                    "lambda should produce Pi(mw, Int, Int)"))
 
@@ -291,7 +291,7 @@
      (define net3 (run-to-quiescence net2))
      (define tm (net-cell-read net3 tm-cid))
      ;; bvar(1) in [y:Bool] scope = Int (from [x:Int] scope)
-     (check-equal? (hash-ref tm inner-body type-bot) (expr-Int)
+     (check-equal? (that-read tm inner-body ':type) (expr-Int)
                    "bvar(1) should be Int from outer scope"))
 
    (test-case "fvar: reads from global env"
@@ -305,7 +305,7 @@
      (define net3 (run-to-quiescence net2))
      (define tm (net-cell-read net3 tm-cid))
      ;; Non-existent fvar stays at ⊥
-     (check-equal? (hash-ref tm fvar-e type-bot) type-bot))
+     (check-equal? (that-read tm fvar-e ':type) type-bot))
 
    (test-case "app: bidirectional — writes domain to arg, result via tensor"
      ;; App propagator writes domain DOWNWARD to arg position (check direction)
@@ -316,17 +316,17 @@
      (define net0 (make-prop-network))
      (define-values (net1 tm-cid)
        (net-new-cell net0
-                     (hasheq func-e (expr-Pi 'mw (expr-Int) (expr-Bool)))
+                     (hasheq func-e (hasheq ':type (expr-Pi 'mw (expr-Int) (expr-Bool))))
                      type-map-merge-fn))
      (define net2 (install-typing-network net1 tm-cid app-e context-empty-value))
      (define net3 (run-to-quiescence net2))
      (define tm (net-cell-read net3 tm-cid))
      ;; Arg gets Int from BOTH: literal propagator (infer) AND app's domain write (check)
      ;; The merge: Int ⊔ Int = Int (idempotent)
-     (check-equal? (hash-ref tm arg-e type-bot) (expr-Int)
+     (check-equal? (that-read tm arg-e ':type) (expr-Int)
                    "arg 42 : Int (bidirectional merge)")
      ;; App result: tensor(Pi(mw,Int,Bool), Int) = Bool
-     (check-equal? (hash-ref tm app-e type-bot) (expr-Bool)
+     (check-equal? (that-read tm app-e ':type) (expr-Bool)
                    "app result: Bool via tensor"))
    ))
 

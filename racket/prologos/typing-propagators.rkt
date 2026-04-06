@@ -39,6 +39,13 @@
  context-lookup-mult
  context-cell-merge
  context-cell-contradicts?
+ ;; Track 4B Phase 1: Attribute Record PU
+ attribute-map-merge-fn
+ that-read
+ that-write
+ facet-bot
+ facet-bot?
+ facet-merge
  ;; Phase 2 (D.4): Propagator-native typing
  install-typing-network
  make-literal-fire-fn
@@ -189,45 +196,133 @@
     [_ #f]))
 
 
-;; --- Typing cell: a plain hasheq mapping positions to types ---
+;; ============================================================
+;; Track 4B Phase 1: Attribute Record PU
+;; ============================================================
 ;;
-;; The typing cell's value IS the type-map: (hasheq expr → type-value).
-;; Each position starts at type-bot (absent from map = ⊥).
-;; The merge function is pointwise: for shared keys, keep the non-⊥ value.
-;; This is monotone: positions only gain information.
+;; The attribute cell holds a NESTED hasheq:
+;;   (hasheq position → (hasheq facet → value))
+;;
+;; Each position (AST node, eq?-identity) has a RECORD with one
+;; field per attribute domain (§1.2 of Track 4B design).
+;; Phase 1 implements :type and :context facets. Phases 2/4/7
+;; add :constraints, :usage, :warnings.
+;;
+;; Merge is two-level pointwise: per position, then per facet.
+;; Each facet has its own merge function and bot value.
+;; Component-indexed firing uses compound paths (position . facet).
+;;
+;; Network Reality Check:
+;;   Same propagators, same information flow. The cell values are
+;;   richer (multi-facet records) but the computation topology is
+;;   unchanged. Phase 1 is a correct-by-construction refactoring.
 
-(define (type-map-merge-fn old new)
+;; --- Facet definitions: merge function + bot per facet ---
+
+(define (facet-merge facet old-v new-v)
+  (case facet
+    [(:type)
+     (cond
+       [(type-bot? old-v) new-v]
+       [(type-bot? new-v) old-v]
+       [(equal? old-v new-v) old-v]
+       [else (type-lattice-merge old-v new-v)])]
+    [(:context)
+     (cond
+       [(equal? old-v context-empty-value) new-v]
+       [(equal? new-v context-empty-value) old-v]
+       [(equal? old-v new-v) old-v]
+       [else (context-cell-merge old-v new-v)])]
+    ;; Future facets (Phases 2, 4, 7) — identity merge until implemented
+    [(:constraints) new-v]
+    [(:usage) new-v]
+    [(:warnings) new-v]
+    [else new-v]))
+
+(define (facet-bot facet)
+  (case facet
+    [(:type) type-bot]
+    [(:context) context-empty-value]
+    [(:constraints) 'universe]   ;; constraint domain bot = all candidates
+    [(:usage) '()]               ;; empty usage vector
+    [(:warnings) '()]            ;; no warnings
+    [else #f]))
+
+(define (facet-bot? facet v)
+  (case facet
+    [(:type) (type-bot? v)]
+    [(:context) (equal? v context-empty-value)]
+    [(:constraints) (eq? v 'universe)]
+    [(:usage) (null? v)]
+    [(:warnings) (null? v)]
+    [else (not v)]))
+
+;; --- Attribute map merge: two-level pointwise ---
+;;
+;; Outer: per position (hasheq key).
+;; Inner: per facet within each position's record.
+;; Each facet merges independently via facet-merge.
+
+(define (attribute-map-merge-fn old new)
   (cond
     [(not (hash? old)) new]
     [(not (hash? new)) old]
     [else
-     (for/fold ([result old]) ([(k v) (in-hash new)])
-       (define old-v (hash-ref result k type-bot))
+     (for/fold ([result old]) ([(pos record) (in-hash new)])
+       (define old-record (hash-ref result pos (hasheq)))
        (cond
-         [(type-bot? old-v) (hash-set result k v)]  ;; ⊥ + X = X
-         [(type-bot? v) result]                       ;; X + ⊥ = X
-         [(equal? old-v v) result]                    ;; idempotent
-         ;; Both non-⊥ and different: use type-lattice-merge for shared keys.
-         ;; This makes the type-map merge INTO unification — two writes to the
-         ;; same position (infer upward + check downward) merge via the type
-         ;; lattice, handling metas, structural equality, and subtype comparison.
-         ;; Context-cell-values are not types — pass through unchanged.
-         [(context-cell-value? old-v) (hash-set result k v)]
-         [(context-cell-value? v) result]
-         [else (hash-set result k (type-lattice-merge old-v v))]))]))  ;; lattice merge
+         ;; No existing record at this position → insert new record
+         [(and (hash? old-record) (zero? (hash-count old-record)))
+          (hash-set result pos record)]
+         ;; Both have records → merge per facet
+         [else
+          (define merged-record
+            (for/fold ([rec old-record]) ([(facet val) (in-hash record)])
+              (define old-val (hash-ref rec facet (facet-bot facet)))
+              (cond
+                [(facet-bot? facet old-val) (hash-set rec facet val)]
+                [(facet-bot? facet val) rec]
+                [(equal? old-val val) rec]  ;; idempotent
+                [else (hash-set rec facet (facet-merge facet old-val val))])))
+          (if (equal? merged-record old-record)
+              result  ;; no change at this position
+              (hash-set result pos merged-record))]))]))
 
-;; Read a type-map position. Returns type-bot if not present (= ⊥).
+;; --- that-read / that-write: the attribute record API ---
+;;
+;; that-read: (attribute-map, position, facet) → value
+;; that-write: (net, cell-id, position, facet, value) → updated-net
+;;
+;; These are the INTERNAL API for all attribute access.
+;; §14 of Track 4B design: designed for future user-facing exposure.
+
+(define (that-read attribute-map position facet)
+  (if (hash? attribute-map)
+      (let ([record (hash-ref attribute-map position (hasheq))])
+        (if (hash? record)
+            (hash-ref record facet (facet-bot facet))
+            (facet-bot facet)))
+      (facet-bot facet)))
+
+(define (that-write net cell-id position facet value)
+  (net-cell-write net cell-id
+    (hasheq position (hasheq facet value))))
+
+;; --- Backward-compatible type-map API ---
+;;
+;; type-map-read/write are thin wrappers over that-read/that-write
+;; for the :type facet. Existing fire functions call these unchanged.
+;; ~150 SRE domain rules, all fire function bodies: zero changes needed.
+;; type-map-merge-fn is an alias for attribute-map-merge-fn (test compat).
+
+(define type-map-merge-fn attribute-map-merge-fn)
+
 (define (type-map-read net tm-cid position)
   (define tm (net-cell-read net tm-cid))
-  (if (hash? tm)
-      (hash-ref tm position type-bot)
-      type-bot))
+  (that-read tm position ':type))
 
-;; Write a type to a type-map position via net-cell-write.
-;; The cell merge (type-map-merge-fn) handles pointwise combination.
-;; Component-indexed firing selectively schedules propagators.
 (define (type-map-write net tm-cid position type-val)
-  (net-cell-write net tm-cid (hasheq position type-val)))
+  (that-write net tm-cid position ':type type-val))
 
 ;; --- Fire functions: one per AST node kind ---
 ;; Each returns a (lambda (net) ...) that reads inputs, computes, writes output.
@@ -334,21 +429,22 @@
 ;; domain-expr is the EXPRESSION that is the domain type (e.g., (expr-Int)),
 ;; NOT the type-of-domain (which would be Type(0)). The context stores the
 ;; domain expression — `bvar(0)` in `[x : Int]` scope has type `Int`, not `Type(0)`.
+;; Track 4B Phase 1: context-extension writes to :context facet.
+;; No more mixing context-cell-values into the :type facet.
 (define (make-context-extension-fire-fn tm-cid parent-ctx-pos domain-expr child-ctx-pos mult)
   (lambda (net)
-    (define parent-ctx (type-map-read net tm-cid parent-ctx-pos))
+    (define parent-ctx (that-read (net-cell-read net tm-cid) parent-ctx-pos ':context))
     (cond
       [(not (context-cell-value? parent-ctx)) net]
       [else
        ;; Extend context with the domain EXPRESSION (the type annotation)
        (define child-ctx (context-extend-value parent-ctx domain-expr mult))
-       (type-map-write net tm-cid child-ctx-pos child-ctx)])))
+       (that-write net tm-cid child-ctx-pos ':context child-ctx)])))
 
-;; Updated bvar fire-fn: reads from a context POSITION in the type-map
-;; (not a captured context value)
+;; Track 4B Phase 1: bvar reads from :context facet.
 (define (make-bvar-fire-fn/ctx-pos tm-cid position k ctx-pos)
   (lambda (net)
-    (define ctx-val (type-map-read net tm-cid ctx-pos))
+    (define ctx-val (that-read (net-cell-read net tm-cid) ctx-pos ':context))
     (cond
       [(not (context-cell-value? ctx-val)) net]  ;; wait for context
       [else
@@ -723,9 +819,9 @@
 ;;   - Trace: type-map[pos] = ⊥ → propagator fires → writes type → cascade → read
 
 (define (install-typing-network net tm-cid expr ctx-val)
-  ;; Write initial context to a root context position
+  ;; Write initial context to root context position via :context facet
   (define root-ctx-pos (gensym 'ctx-root))
-  (define net-with-ctx (type-map-write net tm-cid root-ctx-pos ctx-val))
+  (define net-with-ctx (that-write net tm-cid root-ctx-pos ':context ctx-val))
   ;; Recursive structural decomposition.
   ;; For each sub-expression, assign it as its own position key (eq? identity).
   ;; ctx-pos is the POSITION of the current scope's context in the type-map.
@@ -792,12 +888,12 @@
       ;; --- Meta expression: leave at ⊥ (metas resolve through imperative path) ---
       [(expr-meta _ _) net]
 
-      ;; --- Bound variable: reads from context POSITION ---
+      ;; --- Bound variable: reads from :context facet at ctx-pos ---
       [(expr-bvar k)
        (define-values (net1 _pid)
          (net-add-propagator net (list tm-cid) (list tm-cid)
                              (make-bvar-fire-fn/ctx-pos tm-cid e k ctx-pos)
-                             #:component-paths (list (cons tm-cid ctx-pos))))
+                             #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
        net1]
 
       ;; --- Free variable: reads from global env ---
@@ -814,13 +910,13 @@
       [(expr-app func arg)
        (define net1 (install net func ctx-pos))
        (define net2 (install net1 arg ctx-pos))
-       ;; Track 4B Phase 0a: multi-path — watches func AND arg positions
+       ;; Track 4B Phase 1: multi-path on :type facet — watches func AND arg types
        (define-values (net3 _pid)
          (net-add-propagator net2 (list tm-cid) (list tm-cid)
                              (make-app-fire-fn tm-cid e func arg)
                              #:component-paths
-                             (list (cons tm-cid func)
-                                   (cons tm-cid arg))))
+                             (list (cons tm-cid (cons func ':type))
+                                   (cons tm-cid (cons arg ':type)))))
        net3]
 
       ;; --- Lambda: creates child scope via context-extension propagator ---
@@ -829,21 +925,21 @@
        (define net1 (install net dom ctx-pos))
        ;; Create child context position for body scope
        (define child-ctx-pos (gensym 'ctx-lam))
-       ;; Install context-extension propagator: watches parent ctx position
+       ;; Install context-extension propagator: watches parent :context facet
        (define-values (net2 _ctx-pid)
          (net-add-propagator net1 (list tm-cid) (list tm-cid)
                              (make-context-extension-fire-fn tm-cid ctx-pos dom child-ctx-pos m)
                              #:component-paths
-                             (list (cons tm-cid ctx-pos))))
+                             (list (cons tm-cid (cons ctx-pos ':context)))))
        ;; Install body propagator in child scope
        (define net3 (install net2 body child-ctx-pos))
-       ;; Track 4B Phase 0a: multi-path — watches dom AND body positions
+       ;; Track 4B Phase 1: multi-path on :type facet — watches dom AND body types
        (define-values (net4 _pid)
          (net-add-propagator net3 (list tm-cid) (list tm-cid)
                              (make-lam-fire-fn tm-cid e dom body m)
                              #:component-paths
-                             (list (cons tm-cid dom)
-                                   (cons tm-cid body))))
+                             (list (cons tm-cid (cons dom ':type))
+                                   (cons tm-cid (cons body ':type)))))
        net4]
 
       ;; --- Pi formation ---
@@ -854,16 +950,16 @@
          (net-add-propagator net (list tm-cid) (list tm-cid)
                              (make-context-extension-fire-fn tm-cid ctx-pos dom child-ctx-pos m)
                              #:component-paths
-                             (list (cons tm-cid ctx-pos))))
+                             (list (cons tm-cid (cons ctx-pos ':context)))))
        (define net1 (install net0 dom ctx-pos))
        (define net2 (install net1 cod child-ctx-pos))
-       ;; Track 4B Phase 0a: multi-path — watches dom AND cod positions
+       ;; Track 4B Phase 1: multi-path on :type facet — watches dom AND cod types
        (define-values (net3 _pid)
          (net-add-propagator net2 (list tm-cid) (list tm-cid)
                              (make-pi-fire-fn tm-cid e dom cod)
                              #:component-paths
-                             (list (cons tm-cid dom)
-                                   (cons tm-cid cod))))
+                             (list (cons tm-cid (cons dom ':type))
+                                   (cons tm-cid (cons cod ':type)))))
        net3]
 
       ;; --- Domain lookup: SRE typing domain handles remaining expr kinds ---
@@ -906,9 +1002,9 @@
 (define TYPING-FUEL-LIMIT 200)
 
 (define (infer-on-network net expr ctx-val)
-  ;; 1. Create a fresh typing cell (hasheq value, type-map-merge-fn)
+  ;; 1. Create a fresh attribute cell (nested hasheq, attribute-map-merge-fn)
   (define-values (net1 tm-cid)
-    (net-new-cell net (hasheq) type-map-merge-fn))
+    (net-new-cell net (hasheq) attribute-map-merge-fn))
   ;; 2. Install typing propagators for the expr tree
   (define net2 (install-typing-network net1 tm-cid expr ctx-val))
   ;; 3. Run to quiescence with fuel limit

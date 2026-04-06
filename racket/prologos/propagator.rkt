@@ -585,14 +585,20 @@
       (error 'net-cell-read-raw "unknown cell: ~a" cid)
       (prop-cell-value cell)))
 
-;; PPN Track 4 Phase 1a: compute which PU component paths changed between
-;; old and new values. Returns a set of changed paths, or #f meaning
+;; PPN Track 4B Phase 1: compute which component paths changed between
+;; old and new values. Returns a list of changed paths, or #f meaning
 ;; "everything changed" (non-structured values, or structural mismatch).
-;; For hasheq-based PU values (type-maps), diffs per-key.
+;;
+;; For NESTED hasheq values (attribute maps: position → (hasheq facet → value)),
+;; produces COMPOUND paths: (cons position facet) for each changed facet.
+;; This enables precise component-indexed firing: a typing propagator watching
+;; (pos . :type) doesn't fire when (pos . :context) changes.
+;;
+;; For FLAT hasheq values (legacy type-maps), produces position keys as before.
 ;; For all other values, returns #f (all dependents fire).
 (define (pu-value-diff old-val new-val)
   (cond
-    ;; Both are hasheq → diff per key
+    ;; Both are hasheq → diff per key, with nested record support
     [(and (hash? old-val) (immutable? old-val)
           (hash? new-val) (immutable? new-val))
      (define changed '())
@@ -600,7 +606,27 @@
      (for ([(k v) (in-hash new-val)])
        (define old-v (hash-ref old-val k 'pu-diff-absent))
        (unless (or (eq? v old-v) (equal? v old-v))
-         (set! changed (cons k changed))))
+         ;; Track 4B Phase 1: if BOTH values are hasheq (nested record),
+         ;; diff the inner record and emit compound (position . facet) paths.
+         (if (and (hash? v) (immutable? v)
+                  (hash? old-v) (immutable? old-v))
+             ;; Nested: emit (position . facet) for each changed facet
+             (begin
+               (for ([(fk fv) (in-hash v)])
+                 (define old-fv (hash-ref old-v fk 'pu-diff-absent))
+                 (unless (or (eq? fv old-fv) (equal? fv old-fv))
+                   (set! changed (cons (cons k fk) changed))))
+               ;; Facets in old missing from new (removed)
+               (for ([(fk _fv) (in-hash old-v)])
+                 (unless (hash-has-key? v fk)
+                   (set! changed (cons (cons k fk) changed)))))
+             ;; Flat (or new record, old absent): emit position key
+             ;; For new nested records, emit all facets as changed
+             (if (and (hash? v) (immutable? v)
+                      (eq? old-v 'pu-diff-absent))
+                 (for ([(fk _fv) (in-hash v)])
+                   (set! changed (cons (cons k fk) changed)))
+                 (set! changed (cons k changed))))))
      ;; Keys in old missing from new (removed)
      (for ([(k _v) (in-hash old-val)])
        (unless (hash-has-key? new-val k)
