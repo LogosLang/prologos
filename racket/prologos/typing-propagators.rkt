@@ -282,8 +282,8 @@
     [(:constraints) (constraint-merge old-v new-v)]
     ;; Track 4B Phase 4: usage vectors merge via pointwise mult-add
     [(:usage) (add-usage old-v new-v)]
-    ;; Future facet (Phase 7) — identity merge until implemented
-    [(:warnings) new-v]
+    ;; Track 4B Phase 7: warnings merge via monotone accumulation (append)
+    [(:warnings) (append old-v new-v)]
     [else new-v]))
 
 (define (facet-bot facet)
@@ -538,6 +538,57 @@
       [else
        ;; Concrete type at this meta position — write to output cell
        (net-cell-write net output-cid (list (cons meta-id type-val)))])))
+
+;; ============================================================
+;; Track 4B Phase 7: Warning Propagators (S2)
+;; ============================================================
+;;
+;; S2 propagators that fire after S0+S1 quiesce. They read computed
+;; attributes and write diagnostics to the :warnings facet.
+;;
+;; Per §6a design guidance: S2 propagators are fire-once (P2).
+
+;; Usage-validation propagator: checks compatible(declared, actual)
+;; for each binding position. Writes multiplicity-violation warnings.
+;; Reads: :usage and :context at each expression position.
+;; Writes: :warnings at each position where usage violates declaration.
+(define (make-usage-validation-fire-fn tm-cid expr-pos ctx-pos)
+  (lambda (net)
+    (define tm (net-cell-read net tm-cid))
+    (define usage (that-read tm expr-pos ':usage))
+    (define ctx-val (that-read tm ctx-pos ':context))
+    (cond
+      [(or (null? usage) (not ctx-val) (not (context-cell-value? ctx-val))) net]
+      [else
+       ;; Walk the usage vector against the context bindings
+       (define bindings (context-cell-value-bindings ctx-val))
+       (define violations
+         (for/list ([binding (in-list bindings)]
+                    [actual-mult (in-list usage)]
+                    #:unless (compatible (cdr binding) actual-mult))
+           (list 'multiplicity-violation (car binding) (cdr binding) actual-mult)))
+       (if (null? violations)
+           net  ;; all usages compatible — no warnings
+           (that-write net tm-cid expr-pos ':warnings violations))])))
+
+;; Warning-collection propagator: reads all :warnings facets from
+;; the attribute map and writes the collected set to an output cell.
+;; Fires at S2 after all warning producers have written.
+(define (make-warning-collection-fire-fn tm-cid output-cid)
+  (lambda (net)
+    (define tm (net-cell-read net tm-cid))
+    (if (not (hash? tm))
+        net
+        (let ([all-warnings
+               (for/fold ([acc '()])
+                         ([(pos record) (in-hash tm)])
+                 (if (hash? record)
+                     (let ([warnings (hash-ref record ':warnings '())])
+                       (if (null? warnings) acc (append acc warnings)))
+                     acc))])
+          (if (null? all-warnings)
+              net
+              (net-cell-write net output-cid all-warnings))))))
 
 ;; ============================================================
 ;; Track 4B Phase 4: Usage Tracking Propagators (S0)
@@ -1476,17 +1527,24 @@
       [else
        (define-values (n c) (net-new-cell pnet (hasheq) attribute-map-merge-fn))
        (values n c #f)]))
-  ;; 2. Create per-command output cell (on the same network as the attribute map)
+  ;; 2. Create per-command output cells (meta solutions + warnings)
   (define-values (net1 output-cid)
     (net-new-cell net0 '() meta-solution-merge))
+  (define-values (net1b warning-output-cid)
+    (net-new-cell net1 '() (lambda (old new) (append old new))))
   ;; 3. Install ALL attribute propagators (typing + constraints + usage + meta-bridge)
   (parameterize ([current-meta-solution-output-cell-id output-cid])
-    (define net2 (install-typing-network net1 tm-cid expr ctx-val))
+    (define net2 (install-typing-network net1b tm-cid expr ctx-val))
+    ;; Phase 7: Install warning-collection propagator (S2, P2 fire-once).
+    ;; Reads all :warnings facets, writes to warning output cell.
+    (define-values (net2w _w-pid)
+      (net-add-fire-once-propagator net2 (list tm-cid) (list warning-output-cid)
+        (make-warning-collection-fire-fn tm-cid warning-output-cid) tm-cid))
     ;; 4. Run to quiescence with fuel limit (save/restore for main network)
-    (define saved-fuel (prop-network-fuel net2))
+    (define saved-fuel (prop-network-fuel net2w))
     (define net2-limited
-      (struct-copy prop-network net2
-        [hot (struct-copy prop-net-hot (prop-network-hot net2)
+      (struct-copy prop-network net2w
+        [hot (struct-copy prop-net-hot (prop-network-hot net2w)
                [fuel TYPING-FUEL-LIMIT])]))
     (define net3 (run-to-quiescence-bsp net2-limited))
     ;; Restore fuel
@@ -1497,19 +1555,16 @@
     ;; 5. Read results
     (define root-type (type-map-read net3-restored tm-cid expr))
     (define meta-solutions (net-cell-read net3-restored output-cid))
-    ;; 6. P3 cleanup: clear dependents from both cells.
-    ;; Values persist (CHAMP positions stay). Propagators removed
-    ;; (zero scheduling overhead for next command).
+    (define warnings (net-cell-read net3-restored warning-output-cid))
+    ;; 6. P3 cleanup: clear dependents from all cells.
     (define net4 (net-clear-dependents net3-restored tm-cid))
     (define net5 (net-clear-dependents net4 output-cid))
+    (define net6 (net-clear-dependents net5 warning-output-cid))
     ;; 7. Rebox the persistent network if we used it.
-    ;; The global cell retains its values (§9 structural sharing).
     (when use-persistent?
-      (set-box! prn-box net5))
-    ;; Return: cleaned network, root type, meta solutions
-    ;; When persistent: return the ELAB network's prop-net unchanged (typing was on persistent)
-    ;; When per-command: return the updated prop-net
-    (values (if use-persistent? pnet net5) root-type meta-solutions)))
+      (set-box! prn-box net6))
+    ;; Return: cleaned network, root type, meta solutions, warnings
+    (values (if use-persistent? pnet net6) root-type meta-solutions warnings)))
 
 ;; ============================================================
 ;; Production Entry Point: infer-on-network/err
@@ -1534,8 +1589,8 @@
      (define enet (unbox net-box))
      (define pnet (elab-network-prop-net enet))
      (define ctx-val (context-cell-value ctx (length ctx)))
-     ;; Run typing on the MAIN network
-     (define-values (pnet* root-type meta-solutions)
+     ;; Run typing on the MAIN network (returns 4 values since Phase 7)
+     (define-values (pnet* root-type meta-solutions warnings)
        (infer-on-network pnet expr ctx-val))
      ;; Rebox the updated elab-network (attribute-map cell now on main network)
      (set-box! net-box (elab-network-rewrap enet pnet*))

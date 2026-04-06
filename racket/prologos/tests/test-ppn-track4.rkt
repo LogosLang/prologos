@@ -156,14 +156,14 @@
      (parameterize ([current-attribute-map-cell-id #f])
        (define net0 (make-prop-network))
        (define e (expr-int 42))
-       (define-values (net1 result-type _solutions)
+       (define-values (net1 result-type _solutions _warnings)
          (infer-on-network net0 e context-empty-value))
        (check-equal? result-type (expr-Int))))
 
    (test-case "infer-on-network: Type(0) → Type(1)"
      (parameterize ([current-attribute-map-cell-id #f])
        (define net0 (make-prop-network))
-       (define-values (net1 result-type _solutions)
+       (define-values (net1 result-type _solutions _warnings)
          (infer-on-network net0 (expr-Type (lzero)) context-empty-value))
        (check-equal? result-type (expr-Type (lsuc (lzero))))))
 
@@ -394,7 +394,7 @@
        (define lam-e (expr-lam 'mw dom-e body-e))
        (define net0 (make-prop-network))
        (define ctx (context-cell-value '() 0))
-       (define-values (net1 result-type _solutions)
+       (define-values (net1 result-type _solutions _warnings)
          (infer-on-network net0 lam-e ctx))
        (check-true (expr-Pi? result-type)
                    "lambda produces Pi type")
@@ -408,7 +408,7 @@
        (define nat-e (expr-Nat))
        (define app-e (expr-app list-e nat-e))
        (define net0 (make-prop-network))
-       (define-values (net1 result-type _solutions)
+       (define-values (net1 result-type _solutions _warnings)
          (infer-on-network net0 app-e
            (context-cell-value '() 0)))
        (check-true (or (expr-Type? result-type) (type-bot? result-type))
