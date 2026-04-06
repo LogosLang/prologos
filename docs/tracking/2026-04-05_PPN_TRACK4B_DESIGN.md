@@ -27,7 +27,7 @@
 | 0 | Stage 2 audit + attribute grammar specification | ✅ | [Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md): 5 domains, 12 node kinds, stratification. [AG Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md): catamorphisms, CLP, aspects. |
 | 1 | Attribute Record PU: extend type-map to full attribute record | ⬜ | Type + Context + Constraint + Multiplicity + Warning facets. CHAMP-backed with shared singletons. Proper K-indexed component firing. |
 | 2 | Constraint attribute propagators (S0: creation during typing) | ⬜ | Uses the new domain lattice from Phase 0b. Trait constraints, unification constraints, capability constraints as domain-narrowing cells. |
-| 3 | Trait resolution propagators (S1: readiness-triggered) | ⬜ | P1 pattern: type→constraint narrowing. Monomorphic + parametric. Fires when arg types reach ground in the domain lattice. |
+| 3 | Trait resolution propagators (S1: readiness-triggered) | ⬜ | P1 pattern: type→constraint narrowing. Monomorphic + parametric. Fires when arg types reach ground in the domain lattice. **Acceptance: 17 failing test files (59 tests) must pass.** See §7b. |
 | 4 | Multiplicity attribute propagators (S0: usage tracking + S2: validation) | ⬜ | QTT: single-usage, zero-usage, add-usage, scale-usage as cell ops. S2 validation: compatible(declared, actual). |
 | 5 | Structural unification propagators (S0: Pi/Sigma decomposition) | ⬜ | Reuse make-structural-unify-propagator inside ephemeral PU. K-indexed sub-cell decomposition. |
 | 6 | Meta solution bridging (ephemeral → main network) | ⬜ | PU output channels for solved metas, resolved constraints. Resolved type-map resolution (F1 from Track 4A, now with correct component firing). |
@@ -438,6 +438,46 @@ Phase 9 (retire imperative fallback) is the track's climax. It is NOT complete u
 5. **Level 3 acceptance file**: the Track 4B acceptance `.prologos` file runs via `process-file` with zero errors. Exercises all 5 attribute domains across diverse expression kinds.
 6. **A/B benchmark**: `bench-ab.rkt --runs 15` shows no statistically significant regression vs pre-Track-4B baseline (Mann-Whitney U, p > 0.05).
 7. **Unhandled expression audit**: `unhandled-expr-counts` is empty — every expression kind in the SRE attribute domain is handled by a propagator, no kind falls through to "unhandled."
+
+### §7b Phase 3 Acceptance: 17 Known-Failing Test Files
+
+Triage (2026-04-06) of 17 test files (59 failing tests) revealed a **uniform root cause**: the imperative trait resolution pipeline fires before type meta-variables are solved. The resolver sees `(Eq _)` instead of `(Eq Nat)`, or the dict-meta `?metaNNNN` is never filled.
+
+This is exactly the S0→S1 ordering that Phase 3 implements: type inference (S0) quiesces → type args are ground → trait resolution (S1) fires on concrete types.
+
+**Category A — Unsolved dict-meta (10 files, 30 tests)**: Dict-meta for trait methods never solved → function never reduces → `?metaNNNN` in output.
+
+| File | Failing/Total |
+|------|--------------|
+| test-bare-methods.rkt | 7/12 |
+| test-bundles.rkt | 4/17 |
+| test-collection-fns-01.rkt | 1/14 |
+| test-eq-let-surface-01.rkt | 3/13 |
+| test-hasmethod-01.rkt | 2/10 |
+| test-method-resolution.rkt | 5/23 |
+| test-generic-ops-01-02.rkt | 1/5 |
+| test-generic-ops-02-02.rkt | 2/10 |
+| test-prelude-system-01.rkt | 4/15 |
+| test-reducible-02.rkt | 1/14 |
+
+**Category B — No-instance for unsolved type `_` (4 files, 23 tests)**: Trait resolution fires but sees `_` (unsolved meta) instead of concrete type.
+
+| File | Failing/Total |
+|------|--------------|
+| test-constraint-inference.rkt | 2/11 |
+| test-eq-ord-extended-02.rkt | 10/12 |
+| test-kind-inference-where.rkt | 5/15 |
+| test-hkt-errors.rkt | 6/9 |
+
+**Category C — Compound causes (3 files, 6 tests)**: Primarily trait resolution timing + secondary symptoms.
+
+| File | Failing/Total | Notes |
+|------|--------------|-------|
+| test-trait-resolution.rkt | 3/22 | `boolrec` arity (dict-meta not auto-inserted) + unsolved meta |
+| test-where-parsing.rkt | 2/16 | WS parse diagnostics + `no instance for (Eq _)` |
+| test-punify-integration.rkt | 1/24 | Contradiction detection — may resolve with full attribute eval |
+
+**Acceptance criterion**: Phase 3 is not complete until ALL 59 failing tests across these 17 files pass. Any that don't pass after Phase 3 indicate a secondary bug to be fixed in Phase 3 scope (not deferred).
 
 ---
 
