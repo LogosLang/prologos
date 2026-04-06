@@ -396,7 +396,107 @@ bridge attribute-output
 
 ---
 
-## §9 Cross-References
+## §9 Global Attribute Store with Structural Sharing
+
+### §9.1 The Insight
+
+Most attribute records share common structure. Every `int+` has `{type: Int→Int→Int, constraints: ∅, usage: zero, warnings: ∅}`. Every type constructor has `{type: Type(0), constraints: ∅, usage: zero, warnings: ∅}`. The constraint, usage, and warning facets are `∅/zero/∅` for ~90% of global names.
+
+With CHAMP-backed records, the shared facets are POINTER-EQUAL. A global attribute store with structural sharing means:
+- Prelude loading caches ~500 names with their full attribute records
+- Each module export has a precomputed attribute record
+- Per-use records start as references to the global record
+- Uses that add constraints (generic dispatch) are CHAMP path-copies: shared root, new constraint facet only
+- Memory: O(shared) for common facets, O(delta) for per-use variation
+
+### §9.2 Record Structure
+
+Attribute records are CHAMP-like persistent maps with facet keys:
+
+```
+Global record (e.g., int+):
+  { :signature  (Pi mw Int (Pi mw Int Int))
+    :constraints ∅                              ← shared singleton
+    :usage      zero                            ← shared singleton
+    :warnings   ∅ }                             ← shared singleton
+
+Per-use record (e.g., int+ used as (int+ x 3)):
+  same as global — no per-use delta, pointer-equal
+
+Generic record (e.g., +):
+  { :signature  (Pi mw A (Pi mw A A))
+    :constraints {(Add A)}                      ← trait constraint
+    :usage      zero
+    :warnings   ∅ }
+
+Per-use generic (e.g., (+ 3 4) where A=Int):
+  { :signature  (Pi mw Int (Pi mw Int Int))     ← resolved from generic
+    :constraints {(Add Int) → resolved}         ← CHAMP path-copy: new constraint facet
+    :usage      zero                            ← shared with global
+    :warnings   ∅ }                             ← shared with global
+```
+
+### §9.3 Signature Patterns
+
+Most attribute records fall into a small number of SIGNATURE PATTERNS:
+
+| Pattern | Type Shape | Count | Examples |
+|---------|-----------|-------|---------|
+| Binary same-type | `A → A → A` | ~50 | int-add, rat-mul, p8-add, generic-add |
+| Binary comparison | `A → A → Bool` | ~30 | int-lt, rat-eq, p8-le, generic-gt |
+| Unary same-type | `A → A` | ~15 | int-neg, rat-abs, p8-sqrt, generic-negate |
+| Conversion | `A → B` | ~20 | from-nat, p8-to-rat, from-int |
+| Type constructor | `Type(0)` | ~20 | Int, Nat, Bool, String, Posit8, ... |
+| Literal | `T` (constant) | ~15 | 42:Int, true:Bool, "hi":String |
+| Zero-arity | `T` (nullary) | ~10 | zero:Nat, unit:Unit, nil:Nil |
+
+The signature pattern IS the structural sharing key: all binary-same-type ops share the `A → A → A` template, differing only in the concrete type `A`.
+
+### §9.4 The `that` Operation (Design Thinking)
+
+A `that` operation on variables provides first-class access to the attribute record:
+
+- **Read**: `(that x :type)` → reads the type facet of x's attribute record
+- **Write**: `(that x :constraints (Add Int))` → adds a constraint claim to x's record
+- **Full record**: `(that x)` → the complete attribute record for x
+
+This grounds WHERE clauses in the attribute grammar:
+```
+spec sort {A} (that A :constraints (Ord A)) [List A] -> [List A]
+```
+
+In the propagator model, `that` IS a cell read/write on the attribute PU. The merge handles accumulation: multiple `that` writes to the same facet join via the facet's lattice.
+
+This is design-thinking — `that` may or may not become user-facing syntax. But it captures the CONCEPT: variables accumulate evidence (attributes) through elaboration, and `that` is the operation to access/extend that evidence.
+
+### §9.5 Integration with SRE Typing Domain
+
+The SRE typing domain (Track 4A §16) extends to a FULL ATTRIBUTE DOMAIN:
+
+```
+(register-attribute-rule! 'expr-int-add
+  #:arity 2
+  #:children (list expr-int-add-a expr-int-add-b)
+  #:signature (expr-Int)                         ;; type facet
+  #:constraints '()                              ;; constraint facet
+  #:usage-pattern 'binary-compose)               ;; usage: add-usage(a, b)
+```
+
+The domain entry IS the cached global attribute record template. For literals and type constructors, the template is COMPLETE. For structural nodes, the template has HOLES filled by propagators.
+
+### §9.6 .pnet Cache Integration
+
+The `.pnet` cache (used for module compilation artifacts) can cache ATTRIBUTE RECORDS alongside compiled code. When loading a module:
+1. Read `.pnet` → get pre-compiled propagator network snapshot
+2. Read attribute records → get precomputed global attribute records
+3. Populate the global attribute store with these records
+4. Per-command attribute evaluation starts from cached records — only per-use delta needs computation
+
+This makes prelude loading nearly free for attribute evaluation: ~500 names × cached attribute records = zero propagator firings for global names.
+
+---
+
+## §10 Cross-References
 
 - [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md) — Stage 1 foundation: 5 domains, 12 node kinds, stratification
 - [PPN Track 4A D.4](2026-04-04_PPN_TRACK4_DESIGN.md) — §15 Typing PU, §16 SRE Domain, §17 Three Frontiers
