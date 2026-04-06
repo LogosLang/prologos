@@ -153,18 +153,19 @@
      (check-equal? (that-read tm app-e ':type) (expr-Bool)))
 
    (test-case "infer-on-network: literal expression"
-     (define net0 (make-prop-network))
-     (define e (expr-int 42))
-     (define-values (net1 result-type _solutions)
-       (infer-on-network net0 e context-empty-value))
-     ;; Network Reality Check: result comes from cell read after quiescence
-     (check-equal? result-type (expr-Int)))
+     (parameterize ([current-attribute-map-cell-id #f])
+       (define net0 (make-prop-network))
+       (define e (expr-int 42))
+       (define-values (net1 result-type _solutions)
+         (infer-on-network net0 e context-empty-value))
+       (check-equal? result-type (expr-Int))))
 
    (test-case "infer-on-network: Type(0) → Type(1)"
-     (define net0 (make-prop-network))
-     (define-values (net1 result-type _solutions)
-       (infer-on-network net0 (expr-Type (lzero)) context-empty-value))
-     (check-equal? result-type (expr-Type (lsuc (lzero)))))
+     (parameterize ([current-attribute-map-cell-id #f])
+       (define net0 (make-prop-network))
+       (define-values (net1 result-type _solutions)
+         (infer-on-network net0 (expr-Type (lzero)) context-empty-value))
+       (check-equal? result-type (expr-Type (lsuc (lzero))))))
 
    (test-case "app propagator: fires after both inputs written"
      ;; Test the app propagator in isolation with manual writes
@@ -387,41 +388,31 @@
                    "final result: Int"))
 
    (test-case "dependent codomain: subst propagates through decomposition"
-     ;; Lambda with dependent codomain: fn [x:Int] x
-     ;; Type should be Pi(mw, Int, Int) — codomain depends on domain
-     (define dom-e (expr-Int))
-     (define body-e (expr-bvar 0))
-     (define lam-e (expr-lam 'mw dom-e body-e))
-     (define net0 (make-prop-network))
-     (define ctx (context-cell-value '() 0))
-     (define-values (net1 result-type _solutions)
-       (infer-on-network net0 lam-e ctx))
-     ;; Lambda propagator: reads dom (Type(0)→Int via context) and body (bvar→Int)
-     ;; Writes Pi(mw, Int, Int) — correctly decomposed
-     (check-true (expr-Pi? result-type)
-                 "lambda produces Pi type")
-     (when (expr-Pi? result-type)
-       (check-equal? (expr-Pi-domain result-type) dom-e
-                     "Pi domain is the original dom expression")))
+     (parameterize ([current-attribute-map-cell-id #f])
+       (define dom-e (expr-Int))
+       (define body-e (expr-bvar 0))
+       (define lam-e (expr-lam 'mw dom-e body-e))
+       (define net0 (make-prop-network))
+       (define ctx (context-cell-value '() 0))
+       (define-values (net1 result-type _solutions)
+         (infer-on-network net0 lam-e ctx))
+       (check-true (expr-Pi? result-type)
+                   "lambda produces Pi type")
+       (when (expr-Pi? result-type)
+         (check-equal? (expr-Pi-domain result-type) dom-e
+                       "Pi domain is the original dom expression"))))
 
    (test-case "type constructor application: (List Nat) via APP propagator"
-     ;; List : Type(0) → Type(0) as an fvar
-     ;; (app List Nat) should give Type(0) via APP decomposition
-     ;; This tests generic type constructor decomposition through APP
-     (define list-e (expr-fvar 'List))
-     (define nat-e (expr-Nat))
-     (define app-e (expr-app list-e nat-e))
-     (define net0 (make-prop-network))
-     (define-values (net1 result-type _solutions)
-       (infer-on-network net0 app-e
-         (context-cell-value '() 0)))
-     ;; APP reads List's type: Pi(m0, Type(0), Type(0))
-     ;; Writes Type(0) (domain) to Nat position, Type(0) (codomain) to result
-     ;; Result should be Type(0) — the type of (List Nat)
-     (check-true (or (and (expr-Type? result-type))
-                     ;; If List is not in env, result may be bot (acceptable)
-                     (type-bot? result-type))
-                 "type constructor app: (List Nat) : Type(0) or bot if not in env"))
+     (parameterize ([current-attribute-map-cell-id #f])
+       (define list-e (expr-fvar 'List))
+       (define nat-e (expr-Nat))
+       (define app-e (expr-app list-e nat-e))
+       (define net0 (make-prop-network))
+       (define-values (net1 result-type _solutions)
+         (infer-on-network net0 app-e
+           (context-cell-value '() 0)))
+       (check-true (or (expr-Type? result-type) (type-bot? result-type))
+                   "type constructor app: (List Nat) : Type(0) or bot if not in env")))
    ))
 
 (run-tests phase-1a-tests)

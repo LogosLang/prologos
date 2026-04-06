@@ -77,6 +77,7 @@
  net-cell-read
  net-cell-write
  net-cell-replace  ;; Track 7 post-fix: bypass merge for S(-1) retraction
+ net-clear-dependents  ;; Track 4B Phase 6b P3: remove all dependents from a cell
  ;; Propagator operations
  net-add-propagator
  ;; PPN Track 4 Phase 1a: component-indexed firing
@@ -690,6 +691,23 @@
   (struct-copy prop-network net
     [warm (struct-copy prop-net-warm (prop-network-warm net)
             [cells (champ-insert cells h cid new-cell)])]))
+
+;; Track 4B Phase 6b P3: Clear all dependents from a cell.
+;; The cell RETAINS its value — only the dependents CHAMP is emptied.
+;; Used after per-command quiescence to remove inert propagators.
+;; This keeps the attribute-map cell's values (computed types persist)
+;; while ensuring the next command starts with zero scheduling overhead.
+;; Non-monotone operation — call only outside quiescence.
+(define (net-clear-dependents net cid)
+  (define cells (prop-network-cells net))
+  (define h (cell-id-hash cid))
+  (define cell (champ-lookup cells h cid))
+  (if (eq? cell 'none)
+      net  ;; unknown cell — no-op (defensive)
+      (let ([new-cell (prop-cell (prop-cell-value cell) champ-empty)])
+        (struct-copy prop-network net
+          [warm (struct-copy prop-net-warm (prop-network-warm net)
+                  [cells (champ-insert cells h cid new-cell)])]))))
 
 ;; Otherwise: updates the cell, enqueues dependent propagators, and
 ;; optionally checks the contradiction predicate.

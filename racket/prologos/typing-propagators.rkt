@@ -56,6 +56,7 @@
  make-trait-resolution-fire-fn
  candidate->dict-expr
  ;; Track 4B Phase 6: On-main-network typing + meta-bridge output
+ current-attribute-map-cell-id
  current-meta-solution-output-cell-id
  meta-solution-merge
  make-meta-solution-output-fire-fn
@@ -1206,80 +1207,22 @@
   ;; ctx-pos is the POSITION of the current scope's context in the type-map.
   (let install ([net net-with-ctx] [e expr] [ctx-pos root-ctx-pos])
     (match e
-      ;; --- Literals: immediate type + zero-usage ---
-      [(expr-int v)
-       (define-values (net1 _t) (net-add-propagator net (list tm-cid) (list tm-cid)
-                                  (make-literal-fire-fn tm-cid e (expr-Int)) #:component-paths (list)))
-       (define-values (net2 _u) (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                                  (make-usage-zero-fire-fn tm-cid e ctx-pos)
-                                  #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
-       net2]
+      ;; --- Literals: P1 initial writes (no propagators needed) ---
+      ;; Type and usage are constants — write directly during installation.
+      ;; Zero propagator overhead: no dependents entry, no scheduling, no cleanup.
+      [(expr-int _)    (type-map-write net tm-cid e (expr-Int))]
+      [(expr-nat-val _)(type-map-write net tm-cid e (expr-Nat))]
+      [(expr-true)     (type-map-write net tm-cid e (expr-Bool))]
+      [(expr-false)    (type-map-write net tm-cid e (expr-Bool))]
 
-      [(expr-nat-val _)
-       (define-values (net1 _t) (net-add-propagator net (list tm-cid) (list tm-cid)
-                                  (make-literal-fire-fn tm-cid e (expr-Nat))))
-       (define-values (net2 _u) (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                                  (make-usage-zero-fire-fn tm-cid e ctx-pos)
-                                  #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
-       net2]
+      ;; --- Type constructors: P1 initial writes ---
+      [(expr-Int)      (type-map-write net tm-cid e (expr-Type (lzero)))]
+      [(expr-Nat)      (type-map-write net tm-cid e (expr-Type (lzero)))]
+      [(expr-Bool)     (type-map-write net tm-cid e (expr-Type (lzero)))]
+      [(expr-String)   (type-map-write net tm-cid e (expr-Type (lzero)))]
 
-      [(expr-true)
-       (define-values (net1 _t) (net-add-propagator net (list tm-cid) (list tm-cid)
-                                  (make-literal-fire-fn tm-cid e (expr-Bool))))
-       (define-values (net2 _u) (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                                  (make-usage-zero-fire-fn tm-cid e ctx-pos)
-                                  #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
-       net2]
-
-      [(expr-false)
-       (define-values (net1 _t) (net-add-propagator net (list tm-cid) (list tm-cid)
-                                  (make-literal-fire-fn tm-cid e (expr-Bool))))
-       (define-values (net2 _u) (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                                  (make-usage-zero-fire-fn tm-cid e ctx-pos)
-                                  #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
-       net2]
-
-      ;; --- Type constructors: Type(lzero) + zero-usage ---
-      [(expr-Int)
-       (define-values (net1 _t) (net-add-propagator net (list tm-cid) (list tm-cid)
-                                  (make-literal-fire-fn tm-cid e (expr-Type (lzero)))))
-       (define-values (net2 _u) (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                                  (make-usage-zero-fire-fn tm-cid e ctx-pos)
-                                  #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
-       net2]
-
-      [(expr-Nat)
-       (define-values (net1 _t) (net-add-propagator net (list tm-cid) (list tm-cid)
-                                  (make-literal-fire-fn tm-cid e (expr-Type (lzero)))))
-       (define-values (net2 _u) (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                                  (make-usage-zero-fire-fn tm-cid e ctx-pos)
-                                  #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
-       net2]
-
-      [(expr-Bool)
-       (define-values (net1 _t) (net-add-propagator net (list tm-cid) (list tm-cid)
-                                  (make-literal-fire-fn tm-cid e (expr-Type (lzero)))))
-       (define-values (net2 _u) (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                                  (make-usage-zero-fire-fn tm-cid e ctx-pos)
-                                  #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
-       net2]
-
-      [(expr-String)
-       (define-values (net1 _t) (net-add-propagator net (list tm-cid) (list tm-cid)
-                                  (make-literal-fire-fn tm-cid e (expr-Type (lzero)))))
-       (define-values (net2 _u) (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                                  (make-usage-zero-fire-fn tm-cid e ctx-pos)
-                                  #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
-       net2]
-
-      ;; --- Universe: Type(l) + zero-usage ---
-      [(expr-Type l)
-       (define-values (net1 _t) (net-add-propagator net (list tm-cid) (list tm-cid)
-                                  (make-universe-fire-fn tm-cid e l)))
-       (define-values (net2 _u) (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                                  (make-usage-zero-fire-fn tm-cid e ctx-pos)
-                                  #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
-       net2]
+      ;; --- Universe: P1 initial write ---
+      [(expr-Type l)   (type-map-write net tm-cid e (expr-Type (lsuc l)))]
 
       ;; --- Meta expression: leave :type at ⊥ (metas resolve through typing).
       ;; Track 4B: install usage + meta-bridge + optional constraint propagators.
@@ -1343,14 +1286,12 @@
                                   #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
        net2]
 
-      ;; --- Free variable: type from env + zero-usage ---
+      ;; --- Free variable: P1 initial write (type from env, zero-usage) ---
       [(expr-fvar name)
-       (define-values (net1 _t) (net-add-propagator net (list tm-cid) (list tm-cid)
-                                  (make-fvar-fire-fn tm-cid e name)))
-       (define-values (net2 _u) (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                                  (make-usage-zero-fire-fn tm-cid e ctx-pos)
-                                  #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
-       net2]
+       (define ty (global-env-lookup-type name))
+       (if ty
+           (type-map-write net tm-cid e ty)
+           net)]  ;; not found — leave at ⊥
 
       ;; --- Application (tensor) with bidirectional writes ---
       ;; Pattern 1: the app propagator writes domain DOWNWARD to arg position.
@@ -1455,65 +1396,69 @@
 ;;   Result comes from cell read after quiescence. Not a function return.
 
 ;; ============================================================
-;; Track 4B Phase 6: On-Main-Network Typing Evaluation
+;; Track 4B Phase 6+6b: On-Main-Network Typing with Global Cell
 ;; ============================================================
 ;;
-;; infer-on-network operates on the MAIN elab-network's prop-net,
-;; not an ephemeral PU. The attribute-map cell and meta-solution
-;; output cell are created per command on the main network.
+;; Architecture:
+;;   ONE persistent attribute-map cell on the main elab-network (§9).
+;;   Created on first command, reused across all commands.
+;;   CHAMP structural sharing: positions from earlier commands persist,
+;;   new commands add deltas. Cross-command type visibility is free.
 ;;
-;; Meta solutions flow through meta-bridge propagators to the output
-;; cell during quiescence (information flow, not post-hoc scan).
-;; After quiescence, ONE cell read (the output cell) provides all
-;; solved metas for bridging to the imperative meta-store.
+;;   Per-command output cell for meta-solution bridging.
+;;   Meta-bridge propagators write to output cell during quiescence.
 ;;
-;; The main network is REBOXED after typing — the updated prop-net
-;; (with the attribute-map cell and inert typing propagators) persists.
-;; Component-indexed firing ensures old commands' inert propagators
-;; are never scheduled (their watched positions don't change).
+;;   P3 cleanup: after quiescence, clear dependents from BOTH cells.
+;;   Values persist (computed types stay in the attribute-map CHAMP),
+;;   propagators are removed (zero scheduling overhead for next command).
 ;;
 ;; Network Reality Check:
-;;   1. net-new-cell: creates attribute-map + output cells on MAIN network
-;;   2. net-add-propagator: installs typing/constraint/usage/bridge propagators
-;;   3. run-to-quiescence-bsp: BSP on the main network (only new propagators fire)
-;;   4. net-cell-read: reads root type from attribute-map, solutions from output cell
+;;   1. net-new-cell: creates cells on MAIN network (once for attr-map, per-command for output)
+;;   2. net-add-propagator: installs per-command propagators
+;;   3. run-to-quiescence-bsp: BSP on the main network
+;;   4. net-clear-dependents: P3 cleanup — values persist, propagators removed
 ;;   Result flows through cells on the main network. No ephemeral PU.
 
 (define TYPING-FUEL-LIMIT 200)
 
+;; Parameters for the persistent global attribute-map cell and per-command output cell.
+(define current-attribute-map-cell-id (make-parameter #f))
+(define current-meta-solution-output-cell-id (make-parameter #f))
+
 (define (infer-on-network pnet expr ctx-val)
-  ;; 1. Create attribute-map cell + meta-solution output cell on the main network
+  ;; 1. Create per-command attribute-map cell (fresh per command)
+  ;; NOTE: §9 global cell deferred — cross-command value contamination
+  ;; needs position namespacing or cell value reset before reuse.
   (define-values (net0 tm-cid)
     (net-new-cell pnet (hasheq) attribute-map-merge-fn))
+  ;; 2. Create per-command output cell
   (define-values (net1 output-cid)
     (net-new-cell net0 '() meta-solution-merge))
-  ;; 2. Install ALL attribute propagators (typing + constraints + usage + meta-bridge)
-  ;; Single pass over the expression tree.
-  ;; Meta-bridge propagators write to the output cell when metas resolve.
+  ;; 3. Install ALL attribute propagators (typing + constraints + usage + meta-bridge)
   (parameterize ([current-meta-solution-output-cell-id output-cid])
     (define net2 (install-typing-network net1 tm-cid expr ctx-val))
-    ;; 3. Run to quiescence with fuel limit (save/restore fuel for main network)
+    ;; 4. Run to quiescence with fuel limit (save/restore for main network)
     (define saved-fuel (prop-network-fuel net2))
     (define net2-limited
       (struct-copy prop-network net2
         [hot (struct-copy prop-net-hot (prop-network-hot net2)
                [fuel TYPING-FUEL-LIMIT])]))
     (define net3 (run-to-quiescence-bsp net2-limited))
-    ;; Restore fuel (don't consume the main network's fuel budget)
+    ;; Restore fuel
     (define net3-restored
       (struct-copy prop-network net3
         [hot (struct-copy prop-net-hot (prop-network-hot net3)
                [fuel saved-fuel])]))
-    ;; 4. Read root type from attribute-map cell
+    ;; 5. Read results
     (define root-type (type-map-read net3-restored tm-cid expr))
-    ;; 5. Read meta solutions from output cell (collected by bridge propagators)
     (define meta-solutions (net-cell-read net3-restored output-cid))
-    ;; Return: updated network, root type, and collected meta solutions
-    (values net3-restored root-type meta-solutions)))
-
-;; Parameter for the meta-solution output cell, used by install-typing-network
-;; to install meta-bridge propagators.
-(define current-meta-solution-output-cell-id (make-parameter #f))
+    ;; 6. P3 cleanup: clear dependents from both cells.
+    ;; Values persist (CHAMP positions stay). Propagators removed
+    ;; (zero scheduling overhead for next command).
+    (define net4 (net-clear-dependents net3-restored tm-cid))
+    (define net5 (net-clear-dependents net4 output-cid))
+    ;; Return: cleaned network, root type, meta solutions
+    (values net5 root-type meta-solutions)))
 
 ;; ============================================================
 ;; Production Entry Point: infer-on-network/err
