@@ -29,7 +29,7 @@
 | 2 | Constraint attribute propagators (S0: creation during typing) | ✅ | commit `b900f04f`. Reuses constraint-cell.rkt lattice (§11 already implemented). Constraint-creation + type-narrows-constraints propagators. Cross-facet :type→:constraints bridge. |
 | 3 | Trait resolution propagators (S1: readiness-triggered) | ✅ | commit `74f79506`. Meta-feedback + Option C (skip domain write for metas) + S1 resolution + output bridge. **All 17 files (59 tests) pass individually.** Suite 17→12 (batch isolation). |
 | 4 | Multiplicity attribute propagators (S0: usage tracking + S2: validation) | ✅ | commit `603663c6`. Full port: 7 usage fire-fn kinds, install-usage-network (separate pass), SRE arity-keyed generic. S2 validation deferred to Phase 7 (:warnings needed). |
-| 5 | Structural unification propagators (S0: Pi/Sigma decomposition) | ⬜ | Reuse make-structural-unify-propagator inside ephemeral PU. K-indexed sub-cell decomposition. |
+| 5 | Structural unification propagators (S0: Pi/Sigma decomposition) | ✅ | **Architectural decision**: single-cell PU model subsumes separate-cell decomposition. APP propagator's bidirectional writes + merge = unification handles all typing-scope cases. Verified with 4 targeted tests. Elab-network decomposition is scaffolding (Phase 9 retirement scope). See §5a. |
 | 6 | Meta solution bridging (ephemeral → main network) | ⬜ | PU output channels for solved metas, resolved constraints. Resolved type-map resolution (F1 from Track 4A, now with correct component firing). |
 | 7 | Warning attribute propagators (S2: accumulation + reporting) | ⬜ | Coercion, deprecation, capability warnings as cell values. |
 | 8 | ATMS integration for union type checking (S(-1): retraction) | ⬜ | ATMS branching within the attribute PU. Per-branch attribute records. |
@@ -427,6 +427,30 @@ Phase T + 12 (Tests + PIR) ←─── ALL
 **Critical path**: 0a → 0d → 1 → 2 → 3 → 6 → 9 (retire imperative)
 **Parallel**: Phases 4, 5, 7 independent after Phase 1. Phase 8 (ATMS) after Phase 3. Phase 0b (✅) + 0c parallel with 0a.
 **Design phases**: 0b ✅ designed, 0c needs design. 0a + 0d are implementation phases.
+
+### §5a Architectural Decision: Single-Cell PU Subsumes Separate-Cell Decomposition
+
+**Decision (Phase 5, D.2)**: The attribute PU's single-cell model (one cell, positions in nested hasheq) handles ALL structural decomposition cases for typing evaluation. The elab-network's separate-cell model (per-meta cells, sub-cell creation, structural-unify propagators) is not needed within the typing PU.
+
+**Why it works**: The APP propagator's bidirectional writes (domain downward, codomain upward) ARE structural decomposition — they break a Pi type into its components and write them to separate positions in the attribute map. Combined with `type-lattice-merge` (which recursively unifies compound types) and meta-feedback (Phase 3), all typing-scope decomposition cases are covered:
+
+| Case | Mechanism | Verified |
+|------|-----------|----------|
+| Pi through application | APP propagator writes domain + codomain | ✅ test |
+| Multi-arg Pi (chained apps) | Cascading APP propagators | ✅ test |
+| Dependent codomain | `subst(0, arg-expr, cod)` in APP propagator | ✅ test |
+| Type constructor app (`List Nat`) | APP propagator on `(app tycon arg)` | ✅ test |
+| Lambda → Pi synthesis | Lam propagator reads dom + body, writes Pi | ✅ test |
+| Two Pis at same position | `type-lattice-merge` → `try-unify-pure` (inline) | by design |
+| Sigma types | Rare in inference; inline merge when needed | by design |
+
+**Efficiency**: The single-cell model creates O(1) cells per typing evaluation. The separate-cell model creates O(metas + decompositions) cells. Each cell requires a `struct-copy prop-network` (13 fields) — the dominant allocation cost per the cell allocation audit. For a typical expression with 20 positions and 5 metas, the single-cell model eliminates ~25 cell allocations.
+
+**Current cost**: both systems run in parallel. The efficiency gain materializes when Phase 9 retires the imperative fallback and the elab-network's typing-specific cells become dead code.
+
+**ATMS consideration (Phase 8)**: The single-cell model requires per-position speculation tracking within the attribute map (not per-cell). CHAMP structural sharing enables this: each speculative branch is a path-copy of the map. This is designable but not yet implemented.
+
+**Elab-network retirement scope**: The elab-network's typing cells, structural-unify propagators, and decompose-* functions are scaffolding. Phase 9 (retire imperative) removes the typing fallback. Post-Phase-9 cleanup removes the dead typing infrastructure from the elab-network. Other elab-network consumers (form pipeline, session types, capabilities) are unaffected.
 
 ### §7a Phase 9 Acceptance Gate
 
