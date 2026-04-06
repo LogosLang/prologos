@@ -472,3 +472,16 @@ Deferral".
 - Compile `.prologos` to intermediate format, skip parse/elaborate/type-check
 - Deferred until language stabilizes
 - Source: `docs/tracking/2026-02-19_PIPE_COMPOSE_AUDIT.md`
+
+### Batch-Worker Isolation: 12 Tests Fail in Suite, Pass Individually
+- **Severity**: Medium — tests pass individually but fail in parallel batch runner
+- **Symptoms**: 12 test files show unsolved dict-metas (`[?metaNNNN ...]`) in batch but resolve correctly when run individually via `raco test`
+- **Root cause investigation** (Track 4B, commit `70a5763f`):
+  - Added 12 missing constraint cell-id parameter resets to batch-worker.rkt — insufficient to fix
+  - Cell-ids are correctly reset to `#f` per-file, but the divergence persists
+  - Likely cause: `current-prop-net-box` state or elab-network setup differs between individual runs (fresh process) and batch context (shared process with parameterize isolation)
+  - The on-network path (`infer-on-network/err`) may not activate in batch context if prop-net-box is stale/absent
+- **Affected files**: test-collection-fns-01, test-eq-ord-extended-02, test-generic-ops-01-02, test-generic-ops-02-02, test-hasmethod-01, test-hkt-errors, test-kind-inference-where, test-prelude-system-01, test-punify-integration, test-reducible-02, test-trait-resolution, test-where-parsing
+- **Not blocked on**: Track 4B mechanism is correct (all pass individually). This is a test-runner infrastructure issue.
+- **Next step**: Audit `current-prop-net-box` lifecycle in batch-worker vs individual test runs. Check whether `infer-on-network/err` is even reached in batch context or falls back immediately.
+- **Source**: Track 4B Phase 3 (commit `74f79506`), batch-worker fix (commit `70a5763f`)
