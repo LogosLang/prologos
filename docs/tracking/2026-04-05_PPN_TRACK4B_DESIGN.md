@@ -996,7 +996,37 @@ The internal API is designed for future external exposure:
 
 ---
 
-## §15 Open Questions Resolved
+## §15 Self-Critique Findings (P/R/M Lenses)
+
+### Critical (must address before implementation)
+
+**R1+M1: Facet-aware diffing required.** The `pu-value-diff` currently diffs at the POSITION level (which hasheq keys changed). For the attribute map, a change to `(position-P . :constraints)` registers as "position-P changed" — ALL propagators watching P fire, not just constraint propagators. The Phase 0a multi-path fix allows propagators to declare `(cell . (position . facet))` compound paths, but the DIFF itself must also detect at the (position, facet) granularity. Without this, the attribute PU thrashes like Track 4A did. **Resolution**: Phase 0a scope must include facet-aware diffing, not just multi-path registration.
+
+**P1: Parametric instance narrowing is not set intersection.** `impl Eq (List A) where (Eq A)` requires PATTERN MATCHING during narrowing (the type narrows to `List Int`, the parametric candidate matches, and `(Eq Int)` is GENERATED as a sub-constraint). The merge function in §11.5 does simple set intersection which doesn't handle this. **Resolution**: The narrowing operation for parametric candidates needs a richer model: match → generate sub-constraints → add to attribute map. This is CONSTRAINT PROPAGATION within the domain lattice, not simple set operations. Needs design refinement in §11.7.
+
+### Medium
+
+**R2**: Constraint domain merge uses linear list scanning. Use sorted/indexed sets for O(N) intersection.
+
+**R4**: BSP topology stratum needs decomp-request infrastructure in ephemeral PU. Verify compatibility.
+
+**P2**: Cross-facet cascade (type → constraint → type) terminates via Heyting finiteness for finite candidate sets. The TYPE lattice interaction should be verified formally or empirically.
+
+### Low (acceptable as-is)
+
+**R3**: Output bridge is a function call at the PU boundary, not a propagator. Acceptable — every reactive system has a stimulus boundary.
+
+**P3**: Constraint creation reads impl registry at fire time (bridge). SRE domain registration is static. Acceptable.
+
+**M2**: Impl registry read is off-network bridge. Track 7 migrates it.
+
+**M3**: Output bridge is boundary operation. Acceptable for ephemeral PU.
+
+**M4**: S0 is confirmed monotone. Bidirectional app feedback is safe (merge idempotence). ✓
+
+---
+
+## §16 Open Questions Resolved
 
 ### Q1: The `that` Operation — User-Facing Syntax
 
