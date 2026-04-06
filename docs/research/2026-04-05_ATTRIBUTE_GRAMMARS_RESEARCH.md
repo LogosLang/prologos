@@ -127,7 +127,81 @@ The CHAMP-backed global attribute store IS a memoized catamorphism. Common sub-f
 
 ---
 
-## §8 Key References
+## §8 DCGs, CLP, and Semantically Enriched CFGs
+
+### §8.1 Prolog DCGs ARE Attribute Grammars
+
+A DCG rule with `{...}` blocks IS an attribute grammar production:
+
+```prolog
+sentence(S) --> noun_phrase(NP), verb_phrase(VP), { S = s(NP, VP) }.
+```
+
+- **Inherited attribute**: threaded difference list (remaining input)
+- **Synthesized attribute**: `S = s(NP, VP)` (computed parse tree)
+- **Attribute equation**: the `{...}` block (arbitrary Prolog goal)
+
+Since Prolog predicates are labelled hyperedges (from our Hypergraph Rewriting research), DCG rules are hyperedge rewriting rules with attribute equations. This IS Engelfriet-Heyker applied to parsing.
+
+### §8.2 CLP as Attribute Constraints on Variables
+
+CLP(Z) and CLP(B) set ATTRIBUTES on variables:
+
+```prolog
+%% CLP(Z): domain constraint = attribute on variable
+Vars ins 0..9,           %% domain attribute: 0..9
+all_different(Vars),     %% constraint attribute: all-different
+S*1000 + E*100 + ... #= M*10000 + ...   %% arithmetic constraint attribute
+```
+
+Each variable's attribute record: `{domain: 0..9, constraints: {all_different, #= ...}, current_value: unknown}`. The CLP solver propagates constraints by narrowing domains — which IS attribute evaluation on a constraint network. The constraint store IS the attribute record.
+
+CLP(B) is explicit attribute setting:
+```prolog
+sat(X + Y), X = 1.   %% sets boolean satisfiability attribute, then narrows
+```
+
+### §8.3 The Prologos Connection
+
+In Prologos `(where (Ord A))` IS a CLP-style domain constraint on type variable `A`. The `that` operation is the Prologos equivalent of CLP(Z)'s domain assertion:
+
+```
+;; CLP(Z) style         Prologos attribute style
+;; X ins 0..9           (that A :domain Type)
+;; all_different(Vars)  (that A :constraints (Ord A))
+;; X #= Y + Z          (that result :type (subst 0 arg cod))
+```
+
+### §8.4 "Semantically Enriching CFGs"
+
+The common pattern across DCGs, CLP, and Prologos elaboration:
+
+1. **Start with structural skeleton**: CFG derivation (parse tree), variable declaration, expression AST
+2. **Progressively add semantic information**: attributes (types, constraints, multiplicities, domains)
+3. **Propagate to fixpoint**: attribute evaluation (AG), constraint propagation (CLP), propagator quiescence (Prologos)
+
+A "semantically enriched CFG" IS a context-free grammar + attribute grammar + constraint system. The parse tree gains attributes through evaluation. The attributes include type information, constraint domains, and multiplicity tracking. The enrichment IS elaboration.
+
+For Prologos Track 4B: the parse tree (CFG from PPN Track 1-3) is enriched with the full attribute record (type + context + constraint + multiplicity + warning) through propagator evaluation to fixpoint. The ephemeral PU IS the evaluation engine. The SRE attribute domain IS the grammar specification. The result IS the semantically enriched CFG — a fully-typed, fully-constrained, fully-checked expression.
+
+### §8.5 Cross-Cutting Disciplines
+
+The attribute grammar / CLP connection reveals cross-cutting patterns:
+
+| Discipline | Variables | Attributes | Propagation | Fixpoint |
+|-----------|-----------|-----------|-------------|----------|
+| Type inference | Type variables | Type domain | Unification | Type lattice join |
+| Trait resolution | Type params | Trait constraints | Instance lookup | Constraint satisfaction |
+| CLP(Z) | Integer variables | Domain (0..9) | Arc consistency | Domain narrowing |
+| CLP(B) | Boolean variables | SAT constraints | Unit propagation | Boolean fixpoint |
+| QTT | Binding variables | Multiplicity (m0/m1/mw) | Usage composition | Mult semiring |
+| Dataflow analysis | Program points | Live variables | Liveness equations | Set fixpoint |
+
+ALL of these are attribute evaluation with constraint propagation to fixpoint. The Prologos propagator network IS the GENERAL mechanism that subsumes all of them.
+
+---
+
+## §9 Key References
 
 ### Foundational
 - Fokkinga, Jeuring, Meertens & Meijer (1991). [A translation from attribute grammars to catamorphisms](https://research.utwente.nl/en/publications/a-translation-from-attribute-grammars-to-catamorphisms/). Squiggolist 2(1).
