@@ -344,85 +344,180 @@ Phase T + 12 (Tests + PIR) ←─── ALL
 ```
 -- Elaboration as attribute evaluation on the propagator network.
 -- The attribute grammar IS the specification. The propagator network IS the evaluator.
+-- The constraint domain IS a Heyting algebra on candidate sets.
+-- All evaluation uses BSP scheduler (CALM-invariant enforcement).
 
+-- ================================================================
 -- The Attribute Record: one per AST node position
+-- ================================================================
 cell attribute-map
-  :carrier (HasheqOf Position AttributeRecord)
-  :merge   component-wise:
-    type:        type-lattice-merge
-    context:     context-cell-merge
-    usage:       usage-vector-join
-    constraints: set-union
-    warnings:    set-union
-  :bot     empty map (all positions ⊥ in all facets)
+  :carrier (HasheqOf Position (HasheqOf Facet Value))
+  :merge   component-wise per position, per facet:
+    :type        type-lattice-merge          ;; Track 2H quantale
+    :context     context-cell-merge          ;; Track 4A Phase 1c
+    :usage       usage-vector-join           ;; pointwise mult-add
+    :constraints constraint-domain-merge     ;; §11: set intersection (Heyting)
+    :warnings    set-union                   ;; monotone accumulation
+  :bot     empty map (all positions, all facets at ⊥)
   :top     any type facet = type-top (contradiction)
+  :index   K-indexed by (position . facet) — multi-path component firing (Phase 0a)
 
--- Typing attribute propagator (S0) — from Track 4A, now one facet
+-- ================================================================
+-- S0 Monotone Propagators (type, context, constraints, usage)
+-- ================================================================
+
+-- Typing attribute propagator
 propagator type-attribute
-  :reads   sub-expression type facets
-  :writes  parent expression type facet
-  :fire    SRE typing domain lookup → compute type from sub-types
+  :reads   attribute-map @ [(sub-expr-pos . :type), ...]
+  :writes  attribute-map @ [(this-pos . :type)]
+  :fire    SRE attribute domain lookup → compute type from sub-types
   :stratum S0
 
--- Context attribute propagator (S0) — from Track 4A Pattern 5
+-- Context extension propagator (scope tensor)
 propagator context-attribute
-  :reads   parent context facet + binder domain
-  :writes  child scope context facet
-  :fire    context-extend-value (tensor on context lattice)
+  :reads   attribute-map @ [(parent-ctx-pos . :context), (domain-pos . :type)]
+  :writes  attribute-map @ [(child-ctx-pos . :context)]
+  :fire    context-extend-value(parent-ctx, domain-expr, mult)
   :stratum S0
 
--- Constraint creation propagator (S0) — NEW
+-- Bidirectional application propagator
+propagator app-attribute
+  :reads   attribute-map @ [(func-pos . :type)]
+  :writes  attribute-map @ [(arg-pos . :type),     -- DOWNWARD: domain constraint
+                            (this-pos . :type)]    -- UPWARD: subst(0, arg, cod)
+  :fire    if func-type is Pi(m, dom, cod):
+             that-write(arg-pos, :type, dom)        -- merge IS unification
+             that-write(this-pos, :type, subst(0, arg-expr, cod))
+  :stratum S0
+
+-- Constraint domain creation propagator
 propagator constraint-creation
-  :reads   function type facet (to detect trait domain)
-  :writes  constraint facet of the app node
-  :fire    if domain is trait type: add (trait-name, type-arg-positions) to constraints
+  :reads   attribute-map @ [(func-pos . :type)]
+  :writes  attribute-map @ [(this-pos . :constraints)]
+  :fire    read registered trait-constraint-info for this app
+           build constraint-domain from impl registry candidates
+           that-write(this-pos, :constraints, domain)
   :stratum S0
 
--- Trait resolution propagator (S1) — NEW
-propagator trait-resolution
-  :reads   constraint facet + type-arg type facets
-  :writes  dict-meta type facet (resolved type)
-  :fire    when all type-args are ground:
-           resolve-trait-constraint-pure → dict expression
-           write dict type to dict-meta position
-  :stratum S1
+-- Type → constraint domain narrowing bridge
+propagator type-narrows-constraints
+  :reads   attribute-map @ [(type-arg-pos . :type)]
+  :writes  attribute-map @ [(constraint-pos . :constraints)]
+  :fire    when type-arg gains concrete value:
+             candidates-for-type = lookup-impls(trait, type-val)
+             narrowed = constraint-domain-merge(current, candidates-for-type)
+             that-write(constraint-pos, :constraints, narrowed)
+  :stratum S0 (monotone: domains only narrow)
 
--- Usage tracking propagator (S0) — NEW
+-- Usage tracking propagator
 propagator usage-tracking
-  :reads   sub-expression usage facets + Pi multiplicity
-  :writes  parent expression usage facet
-  :fire    compose usages: add-usage, scale-usage per AG §4 rules
+  :reads   attribute-map @ [(sub-expr-pos . :usage), ..., (func-pos . :type)]
+  :writes  attribute-map @ [(this-pos . :usage)]
+  :fire    compose: add-usage(func.usage, scale-usage(m, arg.usage))
   :stratum S0
 
--- Usage validation propagator (S2) — NEW
+-- ================================================================
+-- S1 Readiness Propagators (trait resolution, constraint retry)
+-- ================================================================
+
+-- Trait resolution propagator (fires when constraint domain narrows to singleton)
+propagator trait-resolution
+  :reads   attribute-map @ [(constraint-pos . :constraints)]
+  :writes  attribute-map @ [(dict-meta-pos . :type)]   -- resolved dict expression
+  :fire    when constraint-domain is singleton {candidate}:
+             dict-expr = build-dict(candidate)
+             that-write(dict-meta-pos, :type, dict-expr)
+  :stratum S1 (readiness: fires only when domain reaches singleton)
+
+-- Constraint retry propagator (structural unification)
+propagator constraint-retry
+  :reads   attribute-map @ [(lhs-pos . :type), (rhs-pos . :type)]
+  :writes  attribute-map @ [(lhs-pos . :type), (rhs-pos . :type)]
+  :fire    when both types are now ground:
+             merged = type-lattice-merge(lhs-type, rhs-type)
+             that-write both positions with merged
+  :stratum S1 (readiness: fires when dependency metas solved)
+
+-- ================================================================
+-- S2 Commitment Propagators (defaulting, validation, collection)
+-- ================================================================
+
+-- Meta default propagator (fan-in threshold)
+propagator meta-default
+  :reads   internal-readiness-cell (bitmask of solved metas)
+  :writes  attribute-map @ [(unsolved-meta-pos . :type), ...]
+  :fire    when S0+S1 quiesce:
+             for each unsolved meta:
+               that-write(meta-pos, :type, default-value)   -- lzero, mw, sess-end
+  :stratum S2
+
+-- Usage validation propagator
 propagator usage-validation
-  :reads   all usage facets + context (declared multiplicities)
-  :writes  warning facet (if incompatible)
-  :fire    for each binding: compatible(declared-mult, actual-usage)?
-           if not: add multiplicity-violation warning
+  :reads   attribute-map @ [(all-positions . :usage), (root . :context)]
+  :writes  attribute-map @ [(all-positions . :warnings)]
+  :fire    for each binding position:
+             if not compatible(declared-mult, actual-usage):
+               that-write(pos, :warnings, {multiplicity-violation(...)})
   :stratum S2
 
--- Warning collection propagator (S2) — NEW
+-- Warning collection propagator
 propagator warning-collection
-  :reads   all warning facets across all positions
-  :writes  aggregated warning list (output channel)
-  :fire    union all position warnings into report
+  :reads   attribute-map @ [(all-positions . :warnings)]
+  :writes  output-warning-cell (on containing network)
+  :fire    union all position warnings → write to output channel
   :stratum S2
 
--- ATMS branching for union types (S(-1))
+-- ================================================================
+-- S(-1) ATMS Retraction
+-- ================================================================
+
 assumption union-branch
+  :api     atms-assume / atms-retract (pure functional, PM Track 8 B1)
   :creates worldview where one union component holds
-  :contradiction retracts branch + dependent attributes
-  :mechanism existing ATMS from PM Track 8 B1
+  :per-branch attribute records diverge under assumption
+  :contradiction retracts branch via net-retract-assumption
+  :commit  surviving branch promotes via net-commit-assumption
   :stratum S(-1)
 
--- Output channels (ephemeral PU → main elab-network)
-bridge attribute-output
-  :root-type    read type facet at root position → return value
-  :meta-solves  for each meta position with non-⊥ type: solve-meta! on main network
-  :trait-solves for each resolved constraint: update main network constraint cells
-  :warnings     report collected warnings
+-- ================================================================
+-- Output Channels: PU → Containing Network (Galois Connection)
+-- ================================================================
+
+bridge output-channels
+  :trigger internal-readiness threshold (all strata quiesced)
+  :stratum S2 (after all internal computation complete)
+  :channels
+    root-type-cell        ← that-read(root-pos, :type) → write to containing network
+    meta-solution-cells   ← for each meta with non-⊥ type: solve-meta! on main network
+    constraint-cells      ← resolved constraint domain values
+    mult-validation-cell  ← pass/fail for multiplicity checks
+    warning-cell          ← accumulated warning set
+  :galois
+    α: attribute-map → (root-type × meta-solutions × constraint-resolutions × warnings)
+    γ: outputs → attribute-map (injection)
+    adjunction: α(map) ⊑ outputs ⟺ map ⊑ γ(outputs)
 ```
+
+### NTT Correspondence Table
+
+| NTT Construct | Racket Implementation | File |
+|---------------|----------------------|------|
+| `attribute-map` cell | Extended from Track 4A type-map to 5-facet hasheq | typing-propagators.rkt |
+| `type-attribute` propagator | Existing typing propagators + SRE domain | typing-propagators.rkt |
+| `context-attribute` propagator | Existing context-extension propagators | typing-propagators.rkt |
+| `app-attribute` propagator | Existing bidirectional app propagator | typing-propagators.rkt |
+| `constraint-creation` propagator | NEW: reads trait-constraint-info, builds domain | typing-propagators.rkt |
+| `type-narrows-constraints` bridge | NEW: P1 pattern from constraint-propagators.rkt | constraint-propagators.rkt |
+| `usage-tracking` propagator | NEW: from qtt.rkt inferQ rules as propagators | typing-propagators.rkt |
+| `trait-resolution` propagator (S1) | Existing resolve-trait-constraint-pure as fire-fn | resolution.rkt |
+| `constraint-retry` propagator (S1) | Existing retry-unify-constraint-pure as fire-fn | resolution.rkt |
+| `meta-default` propagator (S2) | Existing meta-readiness fan-in (Track 4A Phase 4b-i) | typing-propagators.rkt |
+| `usage-validation` propagator (S2) | NEW: from qtt.rkt check-all-usages as propagator | typing-propagators.rkt |
+| `warning-collection` propagator (S2) | NEW: accumulating set cell | typing-propagators.rkt |
+| `union-branch` assumption | Existing ATMS from PM Track 8 B1 | elab-speculation-bridge.rkt |
+| `output-channels` bridge | NEW: threshold → external cell writes | typing-propagators.rkt |
+| BSP scheduler | Existing propagator.rkt run-to-quiescence-bsp | propagator.rkt |
+| Constraint domain lattice | NEW: §11 design, replaces Phase 6 flat lattice | typing-propagators.rkt |
 
 ---
 
