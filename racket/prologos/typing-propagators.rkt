@@ -52,10 +52,13 @@
  make-constraint-creation-fire-fn
  make-type-narrows-constraints-fire-fn
  type-expr->tag
- ;; Track 4B Phase 3: Trait Resolution + Bridging
+ ;; Track 4B Phase 3: Trait Resolution
  make-trait-resolution-fire-fn
  candidate->dict-expr
- install-typing-network/with-constraints
+ ;; Track 4B Phase 6: On-main-network typing + meta-bridge output
+ current-meta-solution-output-cell-id
+ meta-solution-merge
+ make-meta-solution-output-fire-fn
  that-read
  that-write
  facet-bot
@@ -476,6 +479,38 @@
        (if (type-bot? current-type)
            (that-write net tm-cid dict-meta-pos ':type dict-expr)
            net)])))  ;; already has a type — don't overwrite
+
+;; ============================================================
+;; Track 4B Phase 6: Meta-Solution Output Propagator
+;; ============================================================
+;;
+;; Per-meta propagator that watches a meta position's :type facet.
+;; When the meta gets a concrete type (from feedback, S1 resolution, etc.),
+;; writes (cons meta-id solution) to a shared output cell.
+;; After quiescence, the output cell is read ONCE — not a scan of the
+;; attribute map. The collection happens through propagator firings
+;; (information flow), not post-hoc iteration.
+;;
+;; The output cell is a monotone list (append-merge). Each meta-bridge
+;; propagator adds at most one entry.
+
+;; Merge for the meta-solution output cell: monotone list append.
+(define (meta-solution-merge old new)
+  (append old new))
+
+;; Meta-solution output propagator: watches one meta's :type facet,
+;; writes (meta-id . solution) to the output cell when resolved.
+(define (make-meta-solution-output-fire-fn tm-cid meta-pos meta-id output-cid)
+  (lambda (net)
+    (define tm (net-cell-read net tm-cid))
+    (define type-val (that-read tm meta-pos ':type))
+    (cond
+      [(type-bot? type-val) net]     ;; not yet resolved
+      [(type-top? type-val) net]     ;; contradiction — don't bridge
+      [(expr-meta? type-val) net]    ;; still a meta — not concrete
+      [else
+       ;; Concrete type at this meta position — write to output cell
+       (net-cell-write net output-cid (list (cons meta-id type-val)))])))
 
 ;; ============================================================
 ;; Track 4B Phase 4: Usage Tracking Propagators (S0)
@@ -1154,9 +1189,6 @@
 ;;   - net-cell-write: each fire-fn writes to type-map
 ;;   - Trace: type-map[pos] = ⊥ → propagator fires → writes type → cascade → read
 
-;; Track 4B Phase 3b: parameter for collecting constraint-meta positions
-;; during install-typing-network. Used by install-typing-network/with-constraints.
-(define current-constraint-meta-positions (make-parameter #f))
 
 (define (install-typing-network net tm-cid expr ctx-val)
   ;; Write initial context to root context position via :context facet
@@ -1167,9 +1199,8 @@
   ;; firing. The constraints were registered by the imperative elaborator.
   ;; The resulting propagators are on-network.
   (define trait-constraints (read-trait-constraints))  ;; hasheq: meta-id → trait-constraint-info
-  ;; Track 4B Phase 3b: collect dict-meta positions for output bridging.
-  ;; Uses a parameter so install-typing-network/with-constraints can read it.
-  (define cmp-box (current-constraint-meta-positions))
+  ;; Track 4B Phase 6: meta-bridge propagators write to output cell (parameter).
+  ;; No more constraint-meta collection — bridging is through propagator output cell.
   ;; Recursive structural decomposition.
   ;; For each sub-expression, assign it as its own position key (eq? identity).
   ;; ctx-pos is the POSITION of the current scope's context in the type-map.
@@ -1251,30 +1282,36 @@
        net2]
 
       ;; --- Meta expression: leave :type at ⊥ (metas resolve through typing).
-      ;; Track 4B Phase 2: if this meta has a registered trait constraint,
-      ;; install constraint-creation, type-narrows-constraints, and S1 resolution.
-      ;; Track 4B Phase 3b: collect position for output bridging.
+      ;; Track 4B: install usage + meta-bridge + optional constraint propagators.
       [(expr-meta id _)
        ;; Usage: zero-usage (metas are implicit args, not user variables)
        (define-values (net-u _u-pid)
          (net-add-propagator net (list tm-cid) (list tm-cid)
                              (make-usage-zero-fire-fn tm-cid e ctx-pos)
                              #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
+       ;; Phase 6: meta-bridge propagator — watches :type, writes to output cell.
+       ;; Installed for ALL metas, not just constraint ones.
+       (define output-cid (current-meta-solution-output-cell-id))
+       (define net-b
+         (if output-cid
+             (let-values ([(n _) (net-add-propagator net-u (list tm-cid) (list output-cid)
+                                   (make-meta-solution-output-fire-fn tm-cid e id output-cid)
+                                   #:component-paths
+                                   (list (cons tm-cid (cons e ':type))))])
+               n)
+             net-u))
+       ;; Phase 2+3: constraint propagators (only for metas with trait constraints)
        (define tc-info (hash-ref trait-constraints id #f))
        (cond
-         [(not tc-info) net-u]  ;; no trait constraint → just usage
+         [(not tc-info) net-b]  ;; no trait constraint → just usage + bridge
          [else
           (define trait-name (trait-constraint-info-trait-name tc-info))
           (define type-arg-exprs (trait-constraint-info-type-arg-exprs tc-info))
-          ;; Phase 3b: collect this dict-meta for output bridging
-          (when cmp-box
-            (set-box! cmp-box
-                      (cons (cons id e) (unbox cmp-box))))
           ;; 1. Constraint-creation propagator (Phase 2): builds initial domain
           (define-values (net1 _cc-pid)
-            (net-add-propagator net-u (list tm-cid) (list tm-cid)
+            (net-add-propagator net-b (list tm-cid) (list tm-cid)
                                 (make-constraint-creation-fire-fn tm-cid e trait-name)
-                                #:component-paths (list)))  ;; fires once (no watched paths)
+                                #:component-paths (list)))
           ;; 2. Type-narrows-constraints bridge (Phase 2): one per type-arg.
           (define net2
             (for/fold ([n net1]) ([ta (in-list type-arg-exprs)])
@@ -1288,8 +1325,7 @@
                                        (list (cons tm-cid (cons ta ':type)))))
                  n2]
                 [else n])))
-          ;; 3. S1 trait-resolution propagator (Phase 3a): watches :constraints,
-          ;; writes dict expr to :type when constraint reaches singleton.
+          ;; 3. S1 trait-resolution propagator (Phase 3a)
           (define-values (net3 _res-pid)
             (net-add-propagator net2 (list tm-cid) (list tm-cid)
                                 (make-trait-resolution-fire-fn tm-cid e)
@@ -1398,20 +1434,9 @@
 ;; Track 4B Phase 3b: expose collected constraint-meta positions.
 ;; install-typing-network returns only the network (backward compat).
 ;; The constraint positions are captured in the box and accessed by
-;; install-typing-network/with-constraints which wraps the call.
-(define (install-typing-network/with-constraints net tm-cid expr ctx-val)
-  ;; Delegate to install-typing-network (which populates constraint-meta-positions box)
-  ;; Then read the box. The box is scoped to each install-typing-network call.
-  ;; PROBLEM: the box is local to install-typing-network's let body.
-  ;; SOLUTION: use a parameter to thread the collection.
-  (define positions-box (box '()))
-  ;; Single pass: install-typing-network installs ALL attribute propagators
-  ;; (typing + constraints + usage) in one walk. Track 4B Phase 4 correction:
-  ;; merged from separate pass into single pass per user design review.
-  (define result-net
-    (parameterize ([current-constraint-meta-positions positions-box])
-      (install-typing-network net tm-cid expr ctx-val)))
-  (values result-net (unbox positions-box)))
+;; Track 4B Phase 6: install-typing-network/with-constraints REMOVED.
+;; Meta-bridge propagators now write to the output cell during quiescence.
+;; No collection, no wrapper. install-typing-network is called directly.
 
 
 ;; ============================================================
@@ -1429,69 +1454,78 @@
 ;;   4. net-cell-read: reads the root type from the type-map
 ;;   Result comes from cell read after quiescence. Not a function return.
 
-;; infer-on-network: the production entry point for propagator-native typing.
-;; Takes a prop-network, a core expr, and a context cell value.
-;; Returns: (values updated-network inferred-type)
-;;   inferred-type is the type at the root position (the expr itself),
-;;   or type-bot if the propagators couldn't compute it.
-;; §15 Typing PU: fuel limit for the internal prop-network.
-;; Simple expressions: 2-10 firings. Complex: up to ~100.
-;; If exceeded, the network is cycling — bail out (type-bot → fallback).
-(define TYPING-FUEL-LIMIT 200)
-
-(define (infer-on-network net expr ctx-val)
-  ;; 1. Create a fresh attribute cell (nested hasheq, attribute-map-merge-fn)
-  (define-values (net1 tm-cid)
-    (net-new-cell net (hasheq) attribute-map-merge-fn))
-  ;; 2. Install typing + constraint + resolution propagators for the expr tree.
-  ;; Track 4B Phase 3b: use /with-constraints to collect dict-meta positions.
-  (define-values (net2 constraint-metas)
-    (install-typing-network/with-constraints net1 tm-cid expr ctx-val))
-  ;; 3. Run to quiescence with fuel limit
-  (define original-fuel (prop-network-fuel net2))
-  (define net2-limited
-    (struct-copy prop-network net2
-      [hot (struct-copy prop-net-hot (prop-network-hot net2)
-             [fuel TYPING-FUEL-LIMIT])]))
-  ;; Track 4B Phase 0d: explicit BSP for stratified attribute evaluation.
-  ;; Ephemeral PUs MUST use BSP for CALM-invariant enforcement.
-  (define net3 (run-to-quiescence-bsp net2-limited))
-  ;; 4. Read the root type from the type-map
-  (define root-type (type-map-read net3 tm-cid expr))
-  ;; 5. Track 4B Phase 3b: bridge resolved constraints to main network.
-  ;; For each dict-meta that reached constraint-one in the PU, call solve-meta!
-  ;; to bridge the solution to the imperative meta-store. This enables the
-  ;; imperative pipeline to see resolved dicts without running resolve-trait-constraints!.
-  (unless (<= (prop-network-fuel net3) 0)
-    (define tm (net-cell-read net3 tm-cid))
-    (for ([pair (in-list constraint-metas)])
-      (define meta-id (car pair))
-      (define meta-expr (cdr pair))  ;; the expr-meta node (position key)
-      (unless (meta-solved? meta-id)
-        (define constraint-val (that-read tm meta-expr ':constraints))
-        (when (constraint-one? constraint-val)
-          (define candidate (constraint-one-candidate constraint-val))
-          (define dict-expr (candidate->dict-expr candidate))
-          (solve-meta! meta-id dict-expr)))))
-  ;; If fuel exhausted (cycling), return type-bot → fallback
-  (if (<= (prop-network-fuel net3) 0)
-      (values net3 type-bot)
-      (values net3 root-type)))
-
-
 ;; ============================================================
-;; Phase 7 (D.4): Surface→Type Bridge — Production Entry Point
+;; Track 4B Phase 6: On-Main-Network Typing Evaluation
 ;; ============================================================
 ;;
-;; infer-on-network/err: drop-in replacement for infer/err in process-command.
-;; Same contract: takes ctx and expr, returns type or prologos-error.
-;; Internally: extracts prop-network from elab-network box, runs
-;; infer-on-network, writes updated network back, returns type.
+;; infer-on-network operates on the MAIN elab-network's prop-net,
+;; not an ephemeral PU. The attribute-map cell and meta-solution
+;; output cell are created per command on the main network.
+;;
+;; Meta solutions flow through meta-bridge propagators to the output
+;; cell during quiescence (information flow, not post-hoc scan).
+;; After quiescence, ONE cell read (the output cell) provides all
+;; solved metas for bridging to the imperative meta-store.
+;;
+;; The main network is REBOXED after typing — the updated prop-net
+;; (with the attribute-map cell and inert typing propagators) persists.
+;; Component-indexed firing ensures old commands' inert propagators
+;; are never scheduled (their watched positions don't change).
+;;
+;; Network Reality Check:
+;;   1. net-new-cell: creates attribute-map + output cells on MAIN network
+;;   2. net-add-propagator: installs typing/constraint/usage/bridge propagators
+;;   3. run-to-quiescence-bsp: BSP on the main network (only new propagators fire)
+;;   4. net-cell-read: reads root type from attribute-map, solutions from output cell
+;;   Result flows through cells on the main network. No ephemeral PU.
 
-;; §15 Typing PU Architecture: ephemeral network as Pocket Universe.
-;; Creates a FRESH prop-network for typing (not the main elab-network).
-;; The typing network is created, run, read, and discarded (GC'd).
-;; This prevents accumulation of typing propagators across commands.
+(define TYPING-FUEL-LIMIT 200)
+
+(define (infer-on-network pnet expr ctx-val)
+  ;; 1. Create attribute-map cell + meta-solution output cell on the main network
+  (define-values (net0 tm-cid)
+    (net-new-cell pnet (hasheq) attribute-map-merge-fn))
+  (define-values (net1 output-cid)
+    (net-new-cell net0 '() meta-solution-merge))
+  ;; 2. Install ALL attribute propagators (typing + constraints + usage + meta-bridge)
+  ;; Single pass over the expression tree.
+  ;; Meta-bridge propagators write to the output cell when metas resolve.
+  (parameterize ([current-meta-solution-output-cell-id output-cid])
+    (define net2 (install-typing-network net1 tm-cid expr ctx-val))
+    ;; 3. Run to quiescence with fuel limit (save/restore fuel for main network)
+    (define saved-fuel (prop-network-fuel net2))
+    (define net2-limited
+      (struct-copy prop-network net2
+        [hot (struct-copy prop-net-hot (prop-network-hot net2)
+               [fuel TYPING-FUEL-LIMIT])]))
+    (define net3 (run-to-quiescence-bsp net2-limited))
+    ;; Restore fuel (don't consume the main network's fuel budget)
+    (define net3-restored
+      (struct-copy prop-network net3
+        [hot (struct-copy prop-net-hot (prop-network-hot net3)
+               [fuel saved-fuel])]))
+    ;; 4. Read root type from attribute-map cell
+    (define root-type (type-map-read net3-restored tm-cid expr))
+    ;; 5. Read meta solutions from output cell (collected by bridge propagators)
+    (define meta-solutions (net-cell-read net3-restored output-cid))
+    ;; Return: updated network, root type, and collected meta solutions
+    (values net3-restored root-type meta-solutions)))
+
+;; Parameter for the meta-solution output cell, used by install-typing-network
+;; to install meta-bridge propagators.
+(define current-meta-solution-output-cell-id (make-parameter #f))
+
+;; ============================================================
+;; Production Entry Point: infer-on-network/err
+;; ============================================================
+;;
+;; Drop-in replacement for infer/err in process-command.
+;; Same contract: takes ctx and expr, returns type or prologos-error.
+;;
+;; Track 4B Phase 6: operates on the MAIN elab-network, not an ephemeral PU.
+;; Unboxes the elab-network, runs typing on its prop-net, reads results,
+;; bridges meta solutions to the imperative meta-store (scaffolding),
+;; reboxes the updated elab-network.
 (define on-network-success-count (box 0))
 (define on-network-fallback-count (box 0))
 
@@ -1500,12 +1534,24 @@
   (cond
     [(not net-box) type-bot]  ;; no network → signal fallback
     [else
-     ;; Ephemeral typing network — isolated from main elab-network
-     (define pnet (make-prop-network))
+     ;; Unbox the main elab-network, extract its prop-net
+     (define enet (unbox net-box))
+     (define pnet (elab-network-prop-net enet))
      (define ctx-val (context-cell-value ctx (length ctx)))
-     (define-values (_pnet* root-type) (infer-on-network pnet expr ctx-val))
-     ;; Main elab-network UNCHANGED — typing PU is ephemeral
-     ;; Convert result: fall back for incomplete/partial results
+     ;; Run typing on the MAIN network
+     (define-values (pnet* root-type meta-solutions)
+       (infer-on-network pnet expr ctx-val))
+     ;; Rebox the updated elab-network (attribute-map cell now on main network)
+     (set-box! net-box (elab-network-rewrap enet pnet*))
+     ;; Bridge meta solutions to imperative meta-store (SCAFFOLDING until Phase 9)
+     ;; This is ONE cell read (the output cell), not a scan. The solutions were
+     ;; collected by meta-bridge propagators during quiescence.
+     (for ([pair (in-list meta-solutions)])
+       (define meta-id (car pair))
+       (define solution (cdr pair))
+       (unless (meta-solved? meta-id)
+         (solve-meta! meta-id solution)))
+     ;; Return type (with fallback checks)
      (cond
        [(type-bot? root-type)
         (set-box! on-network-fallback-count (add1 (unbox on-network-fallback-count)))

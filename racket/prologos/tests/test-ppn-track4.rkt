@@ -155,14 +155,14 @@
    (test-case "infer-on-network: literal expression"
      (define net0 (make-prop-network))
      (define e (expr-int 42))
-     (define-values (net1 result-type)
+     (define-values (net1 result-type _solutions)
        (infer-on-network net0 e context-empty-value))
      ;; Network Reality Check: result comes from cell read after quiescence
      (check-equal? result-type (expr-Int)))
 
    (test-case "infer-on-network: Type(0) → Type(1)"
      (define net0 (make-prop-network))
-     (define-values (net1 result-type)
+     (define-values (net1 result-type _solutions)
        (infer-on-network net0 (expr-Type (lzero)) context-empty-value))
      (check-equal? result-type (expr-Type (lsuc (lzero)))))
 
@@ -394,7 +394,7 @@
      (define lam-e (expr-lam 'mw dom-e body-e))
      (define net0 (make-prop-network))
      (define ctx (context-cell-value '() 0))
-     (define-values (net1 result-type)
+     (define-values (net1 result-type _solutions)
        (infer-on-network net0 lam-e ctx))
      ;; Lambda propagator: reads dom (Type(0)→Int via context) and body (bvar→Int)
      ;; Writes Pi(mw, Int, Int) — correctly decomposed
@@ -412,7 +412,7 @@
      (define nat-e (expr-Nat))
      (define app-e (expr-app list-e nat-e))
      (define net0 (make-prop-network))
-     (define-values (net1 result-type)
+     (define-values (net1 result-type _solutions)
        (infer-on-network net0 app-e
          (context-cell-value '() 0)))
      ;; APP reads List's type: Pi(m0, Type(0), Type(0))
