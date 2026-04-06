@@ -241,6 +241,22 @@
          [current-raw-node                #f]
          ;; metavar-store.rkt — fresh mutable hash per file
          [current-mult-meta-store         (make-hasheq)]
+         ;; Track 4B: constraint cell-id isolation — reset exported cell-id
+         ;; parameters per file. Each test creates fresh cells via
+         ;; reset-meta-store!; stale cell-ids from a prior test cause
+         ;; read-trait-constraints to read wrong cells (empty or stale data).
+         [current-constraint-cell-id           #f]
+         [current-trait-constraint-cell-id     #f]
+         [current-trait-cell-map-cell-id       #f]
+         [current-hasmethod-constraint-cell-id #f]
+         [current-capability-constraint-cell-id #f]
+         [current-wakeup-registry-cell-id      #f]
+         [current-trait-wakeup-cell-id         #f]
+         [current-hasmethod-wakeup-cell-id     #f]
+         [current-hasmethod-cell-map-cell-id   #f]
+         [current-constraint-status-cell-id    #f]
+         [current-error-descriptor-cell-id     #f]
+         [current-ready-queue-cell-id          #f]
          ;; errors.rkt — emit formatted errors to stderr for failure logs
          [current-emit-error-diagnostics  #t]
          ;; Set load-relative-directory so dynamic-require with relative
