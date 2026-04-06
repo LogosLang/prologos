@@ -1,199 +1,262 @@
-# PPN Track 4B: Side-Effect Migration — Stage 2/3 Design
+# PPN Track 4B: Elaboration as Attribute Evaluation — Stage 3 Design (D.1)
 
 **Date**: 2026-04-05
 **Series**: [PPN (Propagator-Parsing-Network)](2026-03-26_PPN_MASTER.md) — Track 4B
-**Predecessor**: [PPN Track 4A D.4](2026-04-04_PPN_TRACK4_DESIGN.md) — Elaboration as Attribute Evaluation
+**Predecessor**: [PPN Track 4A D.4](2026-04-04_PPN_TRACK4_DESIGN.md)
 **Predecessor PIR**: [PPN Track 4A PIR](2026-04-04_PPN_TRACK4_PIR.md)
-**Status**: Stage 2 (Audit complete) / Stage 3 (Design thinking in progress)
+**Foundation**: [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md) — formal attribute mapping
+**Principle**: Propagator Design Mindspace, Engelfriet-Heyker equivalence (HR grammars = attribute grammars)
+
+**Research**:
+- [Lattice Foundations for PPN](../research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md) — type-lattice semiring, Galois bridges
+- [Adhesive Categories](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md) — CALM-adhesive guarantee
+- [Hypergraph Rewriting](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md) — Engelfriet-Heyker
+- [Grammar Form Design Thinking](2026-04-03_GRAMMAR_FORM_DESIGN_THINKING.md) — attribute grammar thread
+
+---
+
+## Progress Tracker
+
+| Phase | Description | Status | Notes |
+|-------|-------------|--------|-------|
+| 0 | Stage 2 audit + attribute grammar specification | ✅ | [Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md): 5 domains, 12 node kinds, stratification map |
+| 1 | Attribute Record PU: extend type-map to full attribute record | ⬜ | Type + Context + Constraint + Multiplicity + Warning facets |
+| 2 | Constraint attribute propagators (S0: creation during typing) | ⬜ | Trait constraints, unification constraints, capability constraints |
+| 3 | Trait resolution propagators (S1: readiness-triggered) | ⬜ | P1 pattern: type→constraint narrowing. Monomorphic + parametric. |
+| 4 | Multiplicity attribute propagators (S0: usage tracking) | ⬜ | QTT: single-usage, zero-usage, add-usage, scale-usage as cell ops |
+| 5 | Structural unification propagators (S0: Pi/Sigma decomposition) | ⬜ | Reuse make-structural-unify-propagator inside ephemeral PU |
+| 6 | Meta solution bridging (ephemeral → main network) | ⬜ | PU output channels for solved metas, resolved constraints |
+| 7 | Warning attribute propagators (S2: accumulation + reporting) | ⬜ | Coercion, deprecation, capability warnings as cell values |
+| 8 | ATMS integration for union type checking (S(-1): retraction) | ⬜ | ATMS branching for union speculation within the attribute PU |
+| 9 | Elaboration attributes: implicit args + name resolution on-network | ⬜ | Move insert-implicits-with-tagging into attribute propagators |
+| 10 | Retire imperative fallback entirely | ⬜ | infer-on-network/err becomes the ONLY path |
+| 11 | Zonk retirement (from Track 4A Phase 4b) | ⬜ | Cell-refs replace expr-meta; fan-in default propagator |
+| 12 | Scaffolding retirement (from Track 4A Phase 8) | ⬜ | 8 items from Tracks 2H + 2D |
+| T | Dedicated test file | ⬜ | Attribute-level tests: per-domain, per-node-kind, per-stratum |
+| 13 | Verification + PIR | ⬜ | Full suite GREEN, A/B benchmark, acceptance file, PIR |
 
 ---
 
 ## §0 Objectives
 
-**End state**: Retire the imperative `infer/check` fallback. 100% of type inference is on-network. ALL side effects (trait resolution, constraint creation, meta solving, multiplicity checking, coercion warnings) are propagator firings or cell operations.
+**End state**: Elaboration IS attribute evaluation on the propagator network. The parse tree gains attributes (type, context, multiplicity, constraints, warnings) through propagator fixpoint — not through imperative tree walks. The typed, resolved, checked expression EMERGES from quiescence. The imperative `infer/check`, `resolve-trait-constraints!`, `checkQ`, and `freeze` are retired.
 
-**Track 4A delivered**: 46% on-network typing, ephemeral PU architecture, SRE typing domain (~150 expr kinds), bidirectional app writes, context-as-cells. Zero regressions.
-
-**Track 4A identified the blocker**: the imperative `infer` produces side effects alongside type computation. Moving type computation on-network (46%) is straightforward. Moving side effects on-network is the remaining 54%.
+**Reframing from Track 4A**: Track 4A framed this as "move side effects on-network." The attribute grammar analysis (§0 foundation) revealed this framing was too narrow. The side effects ARE attributes — they're not separate things to migrate, they're facets of the same evaluation. The right framing: elaboration is attribute evaluation on a structured PU value.
 
 **What Track 4B delivers**:
-1. Constraint creation as cell operations (unification constraints on the ephemeral typing PU)
-2. Trait resolution as constraint propagators (P1 pattern: type → constraint narrowing)
-3. Meta solution bridging (ephemeral → main network via PU output channels)
-4. Multiplicity checking as propagator computation (QTT on-network)
-5. Coercion warning emission as cell-based detection
-6. Retire the imperative fallback (infer-on-network/err becomes the ONLY path)
+1. The Attribute Record PU — each AST node has a record with 5 facets (type, context, multiplicity, constraints, warnings)
+2. Attribute propagators for ALL 5 domains at the appropriate strata (S0/S1/S2)
+3. Elaboration-specific attributes (implicit arg insertion, name resolution) as on-network propagators
+4. Retirement of the imperative `infer/check`, `resolve-trait-constraints!`, `checkQ`, and `freeze`
+5. The SRE typing domain extended to full attribute rules (not just type rules)
+
+**What this track is NOT**:
+- It does NOT move reduction on-network — that's SRE Track 6
+- It does NOT move the surface→core structural transformation on-network — that's already on-network via PPN Track 3's form pipeline
+- It does NOT implement the self-hosted compiler — but it provides the attribute grammar data that the self-hosted compiler will consume
 
 ---
 
-## §1 Stage 2 Audit Findings
+## §1 The Attribute Grammar Foundation
 
-### The Side-Effect Inventory
+### §1.1 Five Attribute Domains
 
-The imperative `infer` produces these side effects alongside type computation:
+The [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md) identifies five domains. Each has a lattice, a direction (inherited/synthesized), and a stratum:
 
-| Side Effect | Imperative Function | Propagator Equivalent (exists) | Status |
-|-------------|--------------------|---------------------------------|--------|
-| Create meta | `fresh-meta` | Meta position in type-map (⊥) | Track 4A Pattern 2 |
-| Solve meta | `solve-meta!` | Cell write (downward write fills position) | Track 4A Pattern 1 |
-| Create unification constraint | `add-constraint!` | `elab-add-unify-constraint` → structural-unify-propagator | **Ready** |
-| Resolve trait | `resolve-trait-constraint!` | `resolve-trait-constraint-pure` + bridge fire fn | **Ready** |
-| Resolve hasmethod | `resolve-hasmethod-constraint!` | `resolve-hasmethod-constraint-pure` | **Ready** |
-| Retry constraint | `retry-unify-constraint!` | `retry-unify-constraint-pure` + action-retry-constraint | **Ready** |
-| Check multiplicity | `checkQ` / `compatible` | Mult cells + type↔mult bridge | **Ready** |
-| Emit warning | `emit-*-warning!` | None (accumulating cell needed) | **New** |
+| Domain | Direction | Lattice | Stratum | Track 4A Status |
+|--------|-----------|---------|---------|----------------|
+| **Type** | Synthesized ↑ + Inherited ↓ (check mode) | Type lattice (Track 2H) | S0 | 46% on-network |
+| **Context** | Inherited ↓ | Context lattice (Phase 1c) | S0 | On-network (Pattern 5) |
+| **Constraint** | Synthesized ↑ (created at nodes) | Constraint lattice (Phase 6) | S0 (creation), S1 (resolution) | Lattice built, not wired |
+| **Multiplicity** | Synthesized ↑ | Mult semiring (m0, m1, mw) | S0 (tracking), S2 (validation) | Mult cells exist (PM Track 8), not wired to typing PU |
+| **Warning** | Synthesized ↑ (accumulated) | Set lattice (monotone union) | S2 (collection) | Not on-network |
 
-### Existing Infrastructure (from Stage 2 audit)
+### §1.2 The Attribute Record
 
-**All pieces exist.** The constraint narrowing patterns (P1-P4), structural decomposition, trait resolution (monomorphic + parametric), multiplicity bridge, and resolution dispatcher are all implemented. The gap is WIRING — connecting these to the ephemeral typing PU.
+Each AST node position in the PU has a RECORD with one field per domain:
 
-### The Architectural Question: PU Output Channels
+```
+AttributeRecord = {
+  type        : TypeLattice            ;; ⊥ → concrete → ⊤
+  context     : ContextLattice         ;; binding stack (inherited from parent scope)
+  usage       : UsageVector            ;; (listof mult) — one per context binding
+  constraints : (Setof ConstraintInfo) ;; trait, unification, capability
+  warnings    : (Setof WarningInfo)    ;; coercion, deprecation, capability
+}
+```
 
-Track 4A's ephemeral PU model (create, run, read, discard) works for pure type computation. But side effects need to PERSIST — constraint cells, meta solutions, and trait resolutions must survive the ephemeral network's lifecycle.
+Track 4A's type-map held only the TYPE facet. Track 4B extends this to the full record.
+
+### §1.3 Cross-Domain Bridges
+
+Information flows BETWEEN attribute domains via bridge propagators:
+
+| Bridge | From → To | Mechanism | Stratum |
+|--------|-----------|-----------|---------|
+| Type → Constraint | App typing reveals trait constraints | Implicit arg insertion detects trait domains | S0 |
+| Constraint → Type | Resolved trait fills dict-meta type | `solve-meta!` writes to type position | S1 |
+| Type ↔ Mult | Pi multiplicity extracted/injected | `type->mult-alpha` / `mult->type-gamma` bridge | S0 |
+| Type → Warning | Cross-family types → coercion warning | Comparison of arg types at app positions | S2 |
+| Constraint → Warning | Unresolved constraint → error | `build-trait-error` at S2 commitment | S2 |
+
+### §1.4 Stratification
+
+| Stratum | What Evaluates | Monotonicity | When |
+|---------|---------------|--------------|------|
+| **S0** | Type inference/checking, context extension, constraint CREATION, usage tracking | Monotone (cells only gain info) | Main fixpoint |
+| **S1** | Trait resolution, hasmethod resolution, constraint retry | Readiness-triggered (fires when dependencies are ground) | After S0 quiescence |
+| **S2** | Meta defaulting, multiplicity VALIDATION, warning collection, error reporting | Non-monotone (commitment decisions) | After S0+S1 quiescence |
+| **S(-1)** | ATMS retraction (union type branches that contradict) | Non-monotone (remove info) | On contradiction |
 
 ---
 
-## §2 The Propagator Design Mindspace: Four Questions for Side Effects
+## §2 The Propagator Design Mindspace: Four Questions
 
 ### Question 1: What is the INFORMATION?
 
-Each side effect IS information:
-- "These two types must agree" (unification constraint)
-- "This trait instance resolves to this dictionary" (trait resolution)
-- "This meta has this value" (meta solution)
-- "This variable is used N times" (multiplicity)
-- "This operation involves cross-family coercion" (warning)
-
-All of these are FACTS that accumulate monotonically. They fit the lattice model.
+The typed, resolved, checked expression. Not just types — the FULL attribute record for every node. Every fact that the current imperative pipeline computes.
 
 ### Question 2: What is the LATTICE?
 
-- **Constraint**: pending → resolved → contradicted (Phase 6 lattice, already built)
-- **Trait resolution**: unresolved → resolved(dict-expr) (same constraint lattice structure)
-- **Meta solution**: ⊥ → concrete type (type lattice on meta positions)
-- **Multiplicity**: m0 ≤ m1 ≤ mw (mult lattice, already on-network)
-- **Warning**: empty → (listof warning) (accumulating set, monotone)
+The REDUCED PRODUCT of all five domain lattices. Each domain has its own lattice (§1.1). The cross-domain bridges (§1.3) create interactions. The product is NOT a formal Cousot-Cousot reduced product — it's a multi-domain product with bridge propagators (same terminology correction as Track 4A D.3 §2d).
 
 ### Question 3: What is the IDENTITY?
 
-Each side effect has a CELL:
-- Unification constraint = a PAIR of type-map positions that must agree (the merge at a shared position)
-- Trait constraint = a constraint cell watching argument type positions
-- Meta solution = a type-map position transitioning from ⊥ to concrete
-- Multiplicity = a mult cell bridged to a type cell
-- Warning = a warning cell accumulating diagnostics
+Each AST node IS a position in the attribute PU. The position holds an attribute record. Two propagators writing to the same position's type facet merge via type-lattice-merge. Two propagators writing to the same position's constraint facet merge via set-union. Identity IS the position.
 
 ### Question 4: What EMERGES?
 
-The fully-typed, fully-resolved, fully-checked expression EMERGES from all cells reaching quiescence:
-- All type-map positions have concrete types (no ⊥, no metas)
-- All trait constraints are resolved (dict-metas filled)
-- All multiplicity checks pass (usage compatible with declarations)
-- All warnings accumulated (reported to user)
-- Contradiction (type-top) at any position = type error with ATMS trace
+The fully-elaborated expression EMERGES from all positions reaching stable attribute records:
+- All type facets are concrete (no ⊥, no unsolved metas)
+- All constraint facets are resolved (traits found, constraints satisfied)
+- All usage facets are validated (multiplicities compatible)
+- All warning facets are collected (diagnostics ready)
+- Contradiction at any type facet = type error with ATMS dependency trace
 
 ---
 
-## §3 Architecture: PU with Output Channels (Option C from §15)
+## §3 Architecture: The Attribute PU
 
-### The Model
+### §3.1 PU Structure
 
-The typing PU has DEFINED OUTPUT CHANNELS — cells on the MAIN elab-network that the PU writes to. The PU is ephemeral internally, but its outputs persist.
+The attribute PU is an ephemeral prop-network (Track 4A §15) whose single cell value is the ATTRIBUTE MAP — a hasheq mapping AST node positions to attribute records.
 
 ```
-Main elab-network:
-  form cell ← parse tree + pipeline (existing)
-  typing result cell ← root type (PU output channel 1)
-  meta solution cells ← one per meta (PU output channel 2)
-  trait constraint cells ← one per trait constraint (PU output channel 3)
-  mult check cells ← one per variable (PU output channel 4)
-  warning accumulator cell ← diagnostics (PU output channel 5)
+Attribute PU (ephemeral prop-network):
+  ONE cell: attribute-map (hasheq position → attribute-record)
+  Merge: component-wise across all 5 facets
+    type:        type-lattice-merge
+    context:     context-cell-merge
+    usage:       usage-vector-join (pointwise mult-add)
+    constraints: set-union (monotone)
+    warnings:    set-union (monotone)
 
-  Ephemeral typing PU (internal prop-network):
-    Type-map positions (expression → type)
-    Context positions (scope → context cell value)
-    Constraint positions (unification → agreement check via merge)
-    Trait resolution propagators (P1 pattern: type → constraint narrowing)
+  Propagators (installed per AST node, fire at appropriate strata):
+    S0: typing propagators (existing from Track 4A)
+    S0: context-extension propagators (existing from Track 4A Pattern 5)
+    S0: constraint-creation propagators (NEW: detect trait domains, create constraint entries)
+    S0: usage-tracking propagators (NEW: compute usage vectors per node)
+    S1: trait-resolution propagators (NEW: watch type facets, resolve when ground)
+    S1: constraint-retry propagators (NEW: retry unification when metas solve)
+    S2: meta-default propagator (existing: Track 4A Phase 4b-i fan-in readiness)
+    S2: usage-validation propagator (NEW: check compatibility with declared mults)
+    S2: warning-collection propagator (NEW: gather all warnings for reporting)
 
-    Quiesces internally → writes outputs to main network channels
-    GC'd after quiescence
+  Output channels (bridge to main elab-network):
+    Root type → for return to process-command
+    Solved metas → solve-meta! on main network (for zonk + downstream)
+    Resolved traits → trait constraint cells on main network
+    Diagnostics → warning reporting
 ```
 
-### How It Works
+### §3.2 How Evaluation Works
 
-1. **Create output channel cells** on the main elab-network (one per meta, one per trait constraint, one for the root type, one for warnings).
+1. **Form cell at 'done'** → `elaborate-top-level` produces core expr (still imperative for structural transformation).
 
-2. **Create ephemeral typing PU** (fresh prop-network).
+2. **Create attribute PU** — ephemeral prop-network with attribute-map cell.
 
-3. **Install typing propagators** (existing: `install-typing-network` + SRE domain).
+3. **Install attribute propagators** — `install-attribute-network(net, cell, expr, ctx)`:
+   - For each AST node: install typing propagator (S0) + usage propagator (S0)
+   - For each app with implicit args: install constraint-creation propagator (S0)
+   - For each binder: install context-extension propagator (S0)
+   - For each trait constraint: install resolution propagator (S1)
+   - Install meta-default propagator (S2) + usage-validator (S2) + warning-collector (S2)
 
-4. **Install constraint propagators** inside the PU:
-   - For each `expr-app` with a Pi function type: the bidirectional write to the arg position IS the unification constraint (type-lattice-merge).
-   - For structural decomposition (Pi vs Pi): install `make-structural-unify-propagator` on sub-cells within the PU.
-   - For trait constraints: install P1 propagator (type → constraint narrowing) within the PU.
+4. **Run to stratified quiescence**:
+   - S0: types, contexts, constraints, usages flow to fixpoint
+   - S1: traits resolve, constraints retry
+   - S2: defaults written, multiplicities validated, warnings collected
 
-5. **Run to quiescence** on the ephemeral network.
+5. **Bridge outputs** — read the attribute map, write results to main network:
+   - Root type → return value
+   - Solved metas → `solve-meta!` for each resolved meta position
+   - Trait solutions → update constraint cells
+   - Warnings → accumulate for reporting
 
-6. **Bridge outputs to main network**:
-   - Read root type from type-map → write to typing result cell on main network.
-   - For each solved meta position: call `solve-meta!` on the main elab-network.
-   - For each resolved trait constraint: the constraint cell value persists.
-   - For multiplicity: the mult cell values persist via bridge.
-   - For warnings: accumulate to warning cell.
+6. **Discard PU** — GC the ephemeral network.
 
-7. **Discard ephemeral PU** (GC).
+### §3.3 Why Attribute Records, Not Separate Maps
 
-### Why Output Channels, Not Integrated Network
+Track 4A used separate maps: type-map for types, separate context positions for contexts. This created complexity — different merge functions, different position key spaces, special cases for context-cell-values in the type-map merge.
 
-The Track 4A investigation showed that adding typing propagators to the MAIN elab-network causes accumulation (timeout regression). The ephemeral PU avoids this. Output channels bridge the boundary cleanly — the PU's COMPUTATION is ephemeral, the RESULTS persist on the main network.
+The attribute record unifies these: ONE map, ONE merge (component-wise), ONE position space (AST nodes). Each facet merges independently via its domain's lattice. No special cases.
 
-This is the same pattern as PPN Track 1-2: the parse tree PU computes internally, then `extract-surfs-from-form-cells` reads the result and dispatches it to the main pipeline.
+### §3.4 Relation to Track 4A
 
----
+Track 4A's infrastructure becomes FACETS of the attribute record:
+- `type-map` → the TYPE facet of the attribute map
+- `context positions` → the CONTEXT facet
+- `meta-readiness cell` → the META-STATUS sub-facet for S2 defaulting
+- `constraint lattice` → the CONSTRAINT facet's merge function
+- `SRE typing domain` → extended to ATTRIBUTE domain (type + usage + constraints per entry)
 
-## §4 Phase Plan
-
-| Phase | Description | Depends On |
-|-------|-------------|-----------|
-| 1 | Output channel infrastructure: create cells on main network, bridge API | — |
-| 2 | Trait constraint propagators in the typing PU (P1 pattern) | Phase 1 |
-| 3 | Meta solution bridging (ephemeral → main via solve-meta!) | Phase 1 |
-| 4 | Structural unification propagators in the PU (Pi/Sigma decomposition) | Phase 1 |
-| 5 | Multiplicity checking propagators | Phase 1 |
-| 6 | Warning emission as cell accumulation | Phase 1 |
-| 7 | Retire imperative fallback (infer-on-network/err becomes sole path) | Phases 2-6 |
-| T | Dedicated test file | Throughout |
-| 8 | Phase 4b zonk retirement (from Track 4A) | Phase 7 |
-| 9 | Phase 8 scaffolding retirement (from Track 4A) | Phase 7 |
-| 10 | Verification + PIR | All |
-
-### Parallelization
-
-Phases 2-6 are PARALLEL after Phase 1. Each adds one side-effect category to the PU with its output channel. They can be developed and tested independently.
+All Track 4A code is reusable — it's the TYPE facet implementation. Track 4B adds the other four facets alongside it.
 
 ---
 
-## §5 Prior Art and Existing Infrastructure
+## §4 Elaboration-Specific Attributes
 
-### Constraint Narrowing (constraint-propagators.rkt)
+The attribute grammar (§1 foundation, §5 of the AG document) identifies elaboration-specific attributes beyond typing:
 
-P1-P4 patterns are implemented and tested. P1 (type → constraint) is the core pattern for trait resolution. The typing PU installs P1 propagators alongside typing propagators — when a type-map position gains a value, the P1 propagator narrows the trait constraint.
+### §4.1 Implicit Argument Insertion
 
-### Structural Decomposition (elaborator-network.rkt)
+Currently imperative in `insert-implicits-with-tagging` (elaborator.rkt:362-528). This creates metas for implicit params, registers trait constraints, and detects capabilities.
 
-`make-structural-unify-propagator` + `maybe-decompose` handle Pi/Sigma/app/generic structural unification. Sub-cells are created for decomposition, reconstructors rebuild parent types. Bare metas are reused via `identify-sub-cell` + `current-structural-meta-lookup`.
+**On-network**: the form pipeline (Track 3) produces the surface syntax with arity information. An implicit-insertion propagator watches the function type and argument count. When the function type is a Pi chain with m0 binders and the arg count is less than the total parameter count, the propagator inserts meta POSITIONS in the attribute map for each implicit argument.
 
-This infrastructure operates on the prop-network — it can be used INSIDE the ephemeral PU directly.
+This is structurally similar to Track 4A Pattern 1 (implicit argument positions ARE structural components of the Pi decomposition). The difference: Track 4A relied on the elaborator to insert the metas BEFORE typing. Track 4B makes the insertion itself an attribute propagator.
 
-### Trait Resolution (trait-resolution.rkt + resolution.rkt)
+### §4.2 Name Resolution
 
-`resolve-trait-constraint-pure` + `resolve-hasmethod-constraint-pure` are PURE FUNCTIONS (enet → enet*). They can be called from the PU output bridge without imperative state.
+Currently imperative in `elaborate` (elaborator.rkt:755+). Translates surface names to qualified fvars and de Bruijn bvars.
 
-`make-trait-resolution-bridge-fire-fn` is already a PROPAGATOR fire function that wraps trait resolution. It syncs the elab-network, resolves, and writes back.
+**On-network**: this is ALREADY on-network via the form pipeline (Track 3). The surface→core structural transformation happens in the form cell's pipeline propagators. Track 4B doesn't change this.
 
-### Multiplicity (qtt.rkt + elaborator-network.rkt)
+### §4.3 Constraint Registration
 
-Mult cells exist. `elab-add-type-mult-bridge` creates cross-domain propagators (type → mult). The QTT inference (`inferQ`) computes usage alongside types. The mult lattice (m0 ≤ m1 ≤ mw) is already on-network.
+Currently imperative: `register-trait-constraint!`, `register-hasmethod-constraint!`, `register-capability-constraint!`.
+
+**On-network**: constraint CREATION is an S0 attribute propagator. When an app's function type reveals an implicit trait domain, the constraint-creation propagator writes a constraint entry to the CONSTRAINT facet of that node's attribute record. The constraint entry includes: trait name, type-arg positions (metas that need solving), dict-meta position.
+
+At S1, the trait-resolution propagator watches the type-arg positions. When they gain ground values, it resolves the instance and writes the dict-meta position's type facet.
+
+---
+
+## §5 Existing Infrastructure Mapping
+
+| Infrastructure | File | Maps To | Reuse Strategy |
+|---------------|------|---------|----------------|
+| Type propagators (install-typing-network) | typing-propagators.rkt | TYPE facet S0 propagators | Direct reuse — becomes one facet of install-attribute-network |
+| Context-extension propagators | typing-propagators.rkt | CONTEXT facet S0 propagators | Direct reuse |
+| SRE typing domain (~150 entries) | typing-propagators.rkt | Attribute domain TYPE column | Extend entries with usage + constraint columns |
+| Constraint lattice (join/meet) | typing-propagators.rkt | CONSTRAINT facet merge | Direct reuse |
+| Meta-readiness fan-in | typing-propagators.rkt | META-STATUS sub-facet for S2 | Direct reuse |
+| Constraint narrowing P1-P4 | constraint-propagators.rkt | S1 trait resolution propagators | Install P1 inside the attribute PU |
+| Structural unify propagators | elaborator-network.rkt | S0/S1 unification propagators | Install inside the attribute PU for Pi/Sigma decomposition |
+| Trait resolution (pure) | trait-resolution.rkt | S1 resolution fire function | Call from S1 propagator's fire-fn |
+| Multiplicity cells + bridge | elaborator-network.rkt + qtt.rkt | MULT facet propagators | Install mult bridge inside attribute PU |
+| ATMS (atms-assume/retract) | atms.rkt + elab-speculation-bridge.rkt | S(-1) for union type branching | Integrate with attribute PU's quiescence |
+| BSP stratification | propagator.rkt | Attribute PU evaluation order | Existing S0/S1/S2/S(-1) strata |
 
 ---
 
@@ -201,19 +264,146 @@ Mult cells exist. `elab-add-type-mult-bridge` creates cross-domain propagators (
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| Accumulation regression (from Track 4A Pattern 2) | High | Ephemeral PU with output channels — typing propagators don't persist on main network |
-| Constraint propagator interaction with existing resolution loop | Medium | Phase 2 tests validate P1 pattern in isolation before integration |
-| Meta solution bridging creates double-solve errors | Medium | Guard: only bridge metas that are unsolved on the main network |
-| Performance regression from output channel overhead | Low | Track 4A showed cell ops are 300-1000× cheaper than typing computation |
-| Multiplicity checking changes error behavior | Medium | Phase 5 validates error parity with imperative checkQ |
+| Accumulation regression | High | Ephemeral PU (validated in Track 4A) — attribute propagators don't persist |
+| Attribute record merge complexity | Medium | Component-wise merge is independent per facet — each facet uses its existing lattice |
+| Stratified quiescence in ephemeral PU | Medium | BSP scheduler already handles S0/S1/S2. The ephemeral PU uses the same scheduler. |
+| Implicit arg insertion as propagator | High | This is the most complex elaboration logic. Incremental: start with explicit-only, add implicit handling in Phase 9. |
+| Performance from full attribute records vs type-only | Low | Track 4A showed cell ops are 300-1000× cheaper than typing computation. Adding facets adds merge cost but not typing cost. |
+| Interaction between ephemeral PU strata and main network strata | Medium | The ephemeral PU completes ALL strata before bridging outputs. Main network sees only final results. |
 
 ---
 
-## §7 Cross-References
+## §7 Phase Dependencies
 
-- [PPN Track 4A D.4](2026-04-04_PPN_TRACK4_DESIGN.md) — §15 Typing PU Architecture, §17 Three Frontiers
+```
+Phase 0 (audit + AG spec) ✅
+  ↓
+Phase 1 (Attribute Record PU)
+  ↓
+Phase 2 (Constraint creation S0) ←─── Phase 1
+  ↓
+Phase 3 (Trait resolution S1) ←─── Phase 2 (constraints exist to resolve)
+  |
+  ├→ Phase 4 (Multiplicity S0/S2) ←─── Phase 1 (independent of constraints)
+  |
+  ├→ Phase 5 (Structural unification S0) ←─── Phase 1 (independent)
+  |
+  └→ Phase 7 (Warnings S2) ←─── Phase 2+3 (constraints + resolution feed warnings)
+
+Phase 6 (Meta bridging) ←─── Phase 3 (resolved traits produce meta solutions)
+  ↓
+Phase 8 (ATMS) ←─── Phase 2+3 (constraints + resolution under assumptions)
+  ↓
+Phase 9 (Elaboration attributes: implicit args) ←─── Phases 2+3+8 (needs constraints + ATMS)
+  ↓
+Phase 10 (Retire imperative fallback) ←─── ALL above
+  ↓
+Phase 11 (Zonk retirement) ←─── Phase 10
+  ↓
+Phase 12 (Scaffolding retirement) ←─── Phase 10
+  ↓
+Phase T + 13 (Tests + PIR) ←─── ALL
+```
+
+Phases 4, 5, 7 are PARALLEL with Phase 3. Phase 9 (implicit args) is the HARDEST and depends on most other phases.
+
+---
+
+## §8 NTT Model
+
+```
+-- Elaboration as attribute evaluation on the propagator network.
+-- The attribute grammar IS the specification. The propagator network IS the evaluator.
+
+-- The Attribute Record: one per AST node position
+cell attribute-map
+  :carrier (HasheqOf Position AttributeRecord)
+  :merge   component-wise:
+    type:        type-lattice-merge
+    context:     context-cell-merge
+    usage:       usage-vector-join
+    constraints: set-union
+    warnings:    set-union
+  :bot     empty map (all positions ⊥ in all facets)
+  :top     any type facet = type-top (contradiction)
+
+-- Typing attribute propagator (S0) — from Track 4A, now one facet
+propagator type-attribute
+  :reads   sub-expression type facets
+  :writes  parent expression type facet
+  :fire    SRE typing domain lookup → compute type from sub-types
+  :stratum S0
+
+-- Context attribute propagator (S0) — from Track 4A Pattern 5
+propagator context-attribute
+  :reads   parent context facet + binder domain
+  :writes  child scope context facet
+  :fire    context-extend-value (tensor on context lattice)
+  :stratum S0
+
+-- Constraint creation propagator (S0) — NEW
+propagator constraint-creation
+  :reads   function type facet (to detect trait domain)
+  :writes  constraint facet of the app node
+  :fire    if domain is trait type: add (trait-name, type-arg-positions) to constraints
+  :stratum S0
+
+-- Trait resolution propagator (S1) — NEW
+propagator trait-resolution
+  :reads   constraint facet + type-arg type facets
+  :writes  dict-meta type facet (resolved type)
+  :fire    when all type-args are ground:
+           resolve-trait-constraint-pure → dict expression
+           write dict type to dict-meta position
+  :stratum S1
+
+-- Usage tracking propagator (S0) — NEW
+propagator usage-tracking
+  :reads   sub-expression usage facets + Pi multiplicity
+  :writes  parent expression usage facet
+  :fire    compose usages: add-usage, scale-usage per AG §4 rules
+  :stratum S0
+
+-- Usage validation propagator (S2) — NEW
+propagator usage-validation
+  :reads   all usage facets + context (declared multiplicities)
+  :writes  warning facet (if incompatible)
+  :fire    for each binding: compatible(declared-mult, actual-usage)?
+           if not: add multiplicity-violation warning
+  :stratum S2
+
+-- Warning collection propagator (S2) — NEW
+propagator warning-collection
+  :reads   all warning facets across all positions
+  :writes  aggregated warning list (output channel)
+  :fire    union all position warnings into report
+  :stratum S2
+
+-- ATMS branching for union types (S(-1))
+assumption union-branch
+  :creates worldview where one union component holds
+  :contradiction retracts branch + dependent attributes
+  :mechanism existing ATMS from PM Track 8 B1
+  :stratum S(-1)
+
+-- Output channels (ephemeral PU → main elab-network)
+bridge attribute-output
+  :root-type    read type facet at root position → return value
+  :meta-solves  for each meta position with non-⊥ type: solve-meta! on main network
+  :trait-solves for each resolved constraint: update main network constraint cells
+  :warnings     report collected warnings
+```
+
+---
+
+## §9 Cross-References
+
+- [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md) — Stage 1 foundation: 5 domains, 12 node kinds, stratification
+- [PPN Track 4A D.4](2026-04-04_PPN_TRACK4_DESIGN.md) — §15 Typing PU, §16 SRE Domain, §17 Three Frontiers
 - [PPN Track 4A PIR](2026-04-04_PPN_TRACK4_PIR.md) — side-effect boundary finding, longitudinal survey
 - [SRE Track 2H](2026-04-02_SRE_TRACK2H_DESIGN.md) — type-lattice quantale (merge = unification)
-- [SRE Track 2D](2026-04-03_SRE_TRACK2D_DESIGN.md) — DPO rewrite rules, critical pair analysis
+- [SRE Track 2D](2026-04-03_SRE_TRACK2D_DESIGN.md) — DPO rewrite rules
 - [PPN Track 3](2026-04-01_PPN_TRACK3_DESIGN.md) — form cells, pipeline PU pattern
 - [PM Track 8](2026-03-22_TRACK8_PIR.md) — elaboration network, ATMS, TMS worldview
+- [Hypergraph Rewriting](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md) — Engelfriet-Heyker
+- [Grammar Form Design Thinking](2026-04-03_GRAMMAR_FORM_DESIGN_THINKING.md) — attribute grammar thread
