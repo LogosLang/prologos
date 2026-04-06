@@ -20,10 +20,10 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0a | Fix multi-path component-indexed firing (foundational) | ⬜ | Fix `assoc` first-match bug in propagator.rkt. Multi-map for paths per cell-id. NTT K-indexed read/write specification. Audit Track 4A for thrashing from incorrect firing. |
+| 0a | Fix multi-path component-indexed firing (foundational) | ✅ | commit `246e4fb3`. Fixed `assoc` first-match → list-based multi-path. App/lam/pi propagators now declare exact read positions. |
 | 0b | Constraint domain lattice design (explicit design phase) | ✅ | CLP-inspired domain narrowing. Powerset lattice (⊇ ordering, intersection join). Heyting algebra. SRE domain registered. Replaces Track 4A Phase 6 flat lattice. See §11. |
 | 0c | .pnet attribute cache design | ⬜ | What's cached, invalidation strategy, structural sharing format, warm-start preloading. See §9.6. |
-| 0d | BSP scheduler audit + correction | ⬜ | Correct Track 4A to use BSP scheduler by default. Audit all `run-to-quiescence` calls. Ensure all Track 4B implementation uses BSP. CALM-invariant enforcement. Stratum ordering via BSP, not ad-hoc. |
+| 0d | BSP scheduler audit + correction | ✅ | commit `246e4fb3`. Default was already `#t` (corrected D.1). Hardened 3 ephemeral PU sites to explicit `run-to-quiescence-bsp`. 3 test DFS overrides verified legitimate. |
 | 0 | Stage 2 audit + attribute grammar specification | ✅ | [Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md): 5 domains, 12 node kinds, stratification. [AG Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md): catamorphisms, CLP, aspects. |
 | 1 | Attribute Record PU: extend type-map to full attribute record | ⬜ | Type + Context + Constraint + Multiplicity + Warning facets. CHAMP-backed with shared singletons. Proper K-indexed component firing. |
 | 2 | Constraint attribute propagators (S0: creation during typing) | ⬜ | Uses the new domain lattice from Phase 0b. Trait constraints, unification constraints, capability constraints as domain-narrowing cells. |
