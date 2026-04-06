@@ -508,6 +508,11 @@
 ;; Application with BIDIRECTIONAL writes (§15 Typing PU Architecture).
 ;; DOWNWARD (check): writes domain to arg position. Merge = unification.
 ;; UPWARD (infer): writes subst(0, arg-EXPR, codomain) to result position.
+;; FEEDBACK (Track 4B Phase 3): when domain is a meta and arg has a concrete
+;;   type, write the arg's type to the meta's position. This is "unification
+;;   feedback" — the merge at the arg position resolves the meta, but that
+;;   resolution must flow back to the meta's position so the constraint
+;;   narrowing bridge can see it. §3.5: Unification = Merge.
 ;;   Pattern 2: substitution uses expression keys (values), not type-map values.
 ;;   Dependent codomains handled correctly: subst(0, arg-pos, bvar(0)) = arg-pos.
 (define (make-app-fire-fn tm-cid position func-pos arg-pos)
@@ -518,11 +523,31 @@
       [(expr-Pi? func-type)
        (define dom (expr-Pi-domain func-type))
        (define cod (expr-Pi-codomain func-type))
-       ;; DOWNWARD: write expected domain to arg position.
-       (define net1 (type-map-write net tm-cid arg-pos dom))
+       ;; DOWNWARD: write expected domain to arg position — but NOT for meta args.
+       ;; Track 4B Phase 3: Option C — skip downward write for meta positions.
+       ;; Meta args (like ?A in Pi(m0, Type(0), ...)) have kind info (Type(0))
+       ;; from elaboration. Writing the kind to :type conflicts with the SOLUTION
+       ;; (e.g., Nat) that the feedback mechanism writes. By skipping, the meta's
+       ;; :type stays at ⊥ until the feedback writes the solution.
+       (define net1
+         (if (expr-meta? arg-pos)
+             net  ;; skip downward write for meta positions
+             (type-map-write net tm-cid arg-pos dom)))
+       ;; FEEDBACK: if domain is a meta, write arg's resolved type to the meta's
+       ;; position. This closes the typing→constraint loop: ?A gets Nat at its own
+       ;; position, the constraint bridge narrows (Eq ?A) to (Eq Nat), S1 resolves.
+       ;; §3.5: Unification = Merge — the feedback IS the meta-solution.
+       (define net2
+         (if (expr-meta? dom)
+             (let ([arg-type (type-map-read net1 tm-cid arg-pos)])
+               (if (and (not (type-bot? arg-type))
+                        (not (expr-meta? arg-type)))
+                   (type-map-write net1 tm-cid dom arg-type)
+                   net1))
+             net1))
        ;; UPWARD: subst uses arg-pos (expression key) — handles ALL codomains.
        (define result-type (subst 0 arg-pos cod))
-       (type-map-write net1 tm-cid position result-type)]
+       (type-map-write net2 tm-cid position result-type)]
       ;; Non-Pi func type — try tensor directly (union types etc.)
       [else
        (define arg-type (type-map-read net tm-cid arg-pos))
