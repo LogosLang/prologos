@@ -31,6 +31,7 @@
                   solve-meta! meta-solved?)
          "constraint-cell.rkt"  ;; Track 4B Phase 2: reuse existing constraint lattice
          "constraint-propagators.rkt"  ;; Track 4B Phase 2: build-trait-constraint, refine-constraint-by-type-tag
+         (only-in "qtt.rkt" zero-usage single-usage add-usage scale-usage)  ;; Track 4B Phase 4
          "elab-network-types.rkt"
          "errors.rkt"
          "pretty-print.rkt"
@@ -249,8 +250,9 @@
        [else (context-cell-merge old-v new-v)])]
     ;; Track 4B Phase 2: constraint domain uses existing constraint-cell lattice
     [(:constraints) (constraint-merge old-v new-v)]
-    ;; Future facets (Phases 4, 7) — identity merge until implemented
-    [(:usage) new-v]
+    ;; Track 4B Phase 4: usage vectors merge via pointwise mult-add
+    [(:usage) (add-usage old-v new-v)]
+    ;; Future facet (Phase 7) — identity merge until implemented
     [(:warnings) new-v]
     [else new-v]))
 
@@ -474,6 +476,164 @@
        (if (type-bot? current-type)
            (that-write net tm-cid dict-meta-pos ':type dict-expr)
            net)])))  ;; already has a type — don't overwrite
+
+;; ============================================================
+;; Track 4B Phase 4: Usage Tracking Propagators (S0)
+;; ============================================================
+;;
+;; Each expression kind gets a usage propagator that reads sub-expression
+;; :usage facets and the :context facet (for depth), computes the combined
+;; usage via the multiplicity semiring, and writes to :usage.
+;;
+;; Usage vectors are context-relative: length = scope depth at this position.
+;; The semiring: mult-add (combine uses), mult-mul (scale by binder mult).
+;;
+;; Network Reality Check:
+;;   1. net-add-propagator: YES — one per expression, writes :usage
+;;   2. net-cell-write: YES — via that-write to :usage facet
+;;   3. Cell trace: sub-expr :usage → propagator → this :usage
+
+;; Helper: read context depth from :context facet at a context position.
+;; Returns 0 if context is not yet available.
+(define (read-ctx-depth net tm-cid ctx-pos)
+  (define ctx-val (that-read (net-cell-read net tm-cid) ctx-pos ':context))
+  (if (context-cell-value? ctx-val)
+      (context-cell-value-depth ctx-val)
+      0))
+
+;; Zero-usage propagator: for literals, type constructors, fvar.
+;; Writes zero-usage(depth) to :usage facet.
+(define (make-usage-zero-fire-fn tm-cid position ctx-pos)
+  (lambda (net)
+    (define depth (read-ctx-depth net tm-cid ctx-pos))
+    (if (> depth 0)
+        (that-write net tm-cid position ':usage (zero-usage depth))
+        net)))  ;; wait for context
+
+;; Single-usage propagator: for (expr-bvar k).
+;; Writes single-usage(k, depth) — uses variable k exactly once.
+(define (make-usage-bvar-fire-fn tm-cid position k ctx-pos)
+  (lambda (net)
+    (define depth (read-ctx-depth net tm-cid ctx-pos))
+    (if (and (> depth 0) (< k depth))
+        (that-write net tm-cid position ':usage (single-usage k depth))
+        net)))  ;; wait for context or out of bounds
+
+;; App usage propagator: add-usage(func-usage, scale-usage(m, arg-usage))
+;; where m is the multiplicity from the function's Pi type.
+(define (make-usage-app-fire-fn tm-cid position func-pos arg-pos)
+  (lambda (net)
+    (define tm (net-cell-read net tm-cid))
+    (define func-usage (that-read tm func-pos ':usage))
+    (define arg-usage (that-read tm arg-pos ':usage))
+    (define func-type (that-read tm func-pos ':type))
+    (cond
+      ;; Wait for all inputs
+      [(or (null? func-usage) (null? arg-usage)) net]
+      [(not (expr-Pi? func-type)) net]  ;; need Pi type for mult
+      [else
+       (define m (expr-Pi-mult func-type))
+       ;; If mult is a meta (unsolved), use mw as default for tracking
+       (define effective-m (if (or (eq? m 'm0) (eq? m 'm1) (eq? m 'mw)) m 'mw))
+       (define combined (add-usage func-usage (scale-usage effective-m arg-usage)))
+       (that-write net tm-cid position ':usage combined)])))
+
+;; Lambda usage propagator: body usage minus the binder's own usage.
+;; The body's usage vector has one extra position (index 0 = binder usage).
+;; We extract it with cdr (= utail) and return the remaining vector.
+(define (make-usage-lam-fire-fn tm-cid position body-pos)
+  (lambda (net)
+    (define tm (net-cell-read net tm-cid))
+    (define body-usage (that-read tm body-pos ':usage))
+    (cond
+      [(null? body-usage) net]  ;; wait for body usage
+      [(pair? body-usage)
+       ;; utail: drop the binder's usage from the vector
+       (that-write net tm-cid position ':usage (cdr body-usage))]
+      [else net])))
+
+;; Pi usage propagator: same as lambda — body usage minus binder position.
+(define (make-usage-pi-fire-fn tm-cid position cod-pos)
+  (lambda (net)
+    (define tm (net-cell-read net tm-cid))
+    (define cod-usage (that-read tm cod-pos ':usage))
+    (cond
+      [(null? cod-usage) net]
+      [(pair? cod-usage)
+       (that-write net tm-cid position ':usage (cdr cod-usage))]
+      [else net])))
+
+;; Binary compose usage: add-usage(child1, child2).
+;; Used for SRE domain rules with arity 2 (int-add, rat-mul, etc.)
+(define (make-usage-binary-fire-fn tm-cid position child1-pos child2-pos)
+  (lambda (net)
+    (define tm (net-cell-read net tm-cid))
+    (define u1 (that-read tm child1-pos ':usage))
+    (define u2 (that-read tm child2-pos ':usage))
+    (cond
+      [(or (null? u1) (null? u2)) net]
+      [else (that-write net tm-cid position ':usage (add-usage u1 u2))])))
+
+;; Unary pass usage: child's usage unchanged.
+;; Used for SRE domain rules with arity 1 (from-nat, neg, abs, etc.)
+(define (make-usage-unary-fire-fn tm-cid position child-pos)
+  (lambda (net)
+    (define tm (net-cell-read net tm-cid))
+    (define u (that-read tm child-pos ':usage))
+    (if (null? u) net
+        (that-write net tm-cid position ':usage u))))
+
+;; Generic usage installer for SRE domain rules, keyed by arity.
+;; Arity 0: zero-usage. Arity 1: pass child. Arity 2: add children.
+;; Arity 3+: fold add-usage across all children.
+(define (install-usage-from-rule net tm-cid e ctx-pos rule)
+  (define children (typing-domain-rule-children rule))
+  (define arity (typing-domain-rule-arity rule))
+  (define child-exprs (map (lambda (fn) (fn e)) children))
+  (cond
+    [(= arity 0)
+     ;; Zero-arity: zero usage
+     (define-values (net1 _pid)
+       (net-add-propagator net (list tm-cid) (list tm-cid)
+                           (make-usage-zero-fire-fn tm-cid e ctx-pos)
+                           #:component-paths
+                           (list (cons tm-cid (cons ctx-pos ':context)))))
+     net1]
+    [(= arity 1)
+     ;; Unary: pass through child usage
+     (define child (car child-exprs))
+     (define-values (net1 _pid)
+       (net-add-propagator net (list tm-cid) (list tm-cid)
+                           (make-usage-unary-fire-fn tm-cid e child)
+                           #:component-paths
+                           (list (cons tm-cid (cons child ':usage)))))
+     net1]
+    [(= arity 2)
+     ;; Binary: add child usages
+     (define c1 (car child-exprs))
+     (define c2 (cadr child-exprs))
+     (define-values (net1 _pid)
+       (net-add-propagator net (list tm-cid) (list tm-cid)
+                           (make-usage-binary-fire-fn tm-cid e c1 c2)
+                           #:component-paths
+                           (list (cons tm-cid (cons c1 ':usage))
+                                 (cons tm-cid (cons c2 ':usage)))))
+     net1]
+    [else
+     ;; Arity 3+: fold add-usage across all children
+     ;; Watch all children's :usage facets
+     (define paths (map (lambda (c) (cons tm-cid (cons c ':usage))) child-exprs))
+     (define-values (net1 _pid)
+       (net-add-propagator net (list tm-cid) (list tm-cid)
+                           (lambda (n)
+                             (define tm (net-cell-read n tm-cid))
+                             (define usages (map (lambda (c) (that-read tm c ':usage)) child-exprs))
+                             (if (ormap null? usages)
+                                 n
+                                 (that-write n tm-cid e ':usage
+                                             (foldl add-usage (car usages) (cdr usages)))))
+                           #:component-paths paths))
+     net1]))
 
 ;; --- Fire functions: one per AST node kind ---
 ;; Each returns a (lambda (net) ...) that reads inputs, computes, writes output.
@@ -976,6 +1136,98 @@
 (install-default-typing-domain!)
 
 
+;; --- install-usage-network: Phase 4 usage propagator installer ---
+;;
+;; Recursively walks the expression tree (same decomposition as install-typing-network)
+;; and installs usage-tracking propagators for each position. Separate from typing
+;; installation for clean separation of concerns.
+(define (install-usage-network net tm-cid expr ctx-pos)
+  (let install-u ([net net] [e expr] [ctx-pos ctx-pos])
+    (match e
+      ;; Literals + type constructors: zero-usage
+      [(or (expr-int _) (expr-nat-val _) (expr-true) (expr-false)
+           (expr-zero) (expr-string _) (expr-symbol _)
+           (expr-Int) (expr-Nat) (expr-Bool) (expr-String)
+           (expr-Type _) (expr-unit) (expr-nil) (expr-refl)
+           (expr-hole) (expr-error) (expr-cut))
+       (define-values (net1 _pid)
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-usage-zero-fire-fn tm-cid e ctx-pos)
+                             #:component-paths
+                             (list (cons tm-cid (cons ctx-pos ':context)))))
+       net1]
+
+      ;; Meta: zero-usage (metas are implicit args, not user variables)
+      [(expr-meta _ _)
+       (define-values (net1 _pid)
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-usage-zero-fire-fn tm-cid e ctx-pos)
+                             #:component-paths
+                             (list (cons tm-cid (cons ctx-pos ':context)))))
+       net1]
+
+      ;; Bound variable: single-usage at de Bruijn index k
+      [(expr-bvar k)
+       (define-values (net1 _pid)
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-usage-bvar-fire-fn tm-cid e k ctx-pos)
+                             #:component-paths
+                             (list (cons tm-cid (cons ctx-pos ':context)))))
+       net1]
+
+      ;; Free variable: zero-usage (globals don't consume local resources)
+      [(expr-fvar _)
+       (define-values (net1 _pid)
+         (net-add-propagator net (list tm-cid) (list tm-cid)
+                             (make-usage-zero-fire-fn tm-cid e ctx-pos)
+                             #:component-paths
+                             (list (cons tm-cid (cons ctx-pos ':context)))))
+       net1]
+
+      ;; Application: add-usage(func, scale(m, arg))
+      [(expr-app func arg)
+       (define net1 (install-u net func ctx-pos))
+       (define net2 (install-u net1 arg ctx-pos))
+       (define-values (net3 _pid)
+         (net-add-propagator net2 (list tm-cid) (list tm-cid)
+                             (make-usage-app-fire-fn tm-cid e func arg)
+                             #:component-paths
+                             (list (cons tm-cid (cons func ':usage))
+                                   (cons tm-cid (cons arg ':usage))
+                                   (cons tm-cid (cons func ':type)))))
+       net3]
+
+      ;; Lambda: install domain + body in child scope, compose usages
+      [(expr-lam m dom body)
+       (define net1 (install-u net dom ctx-pos))
+       (define child-ctx-pos (gensym 'uctx-lam))
+       (define net2 (install-u net1 body child-ctx-pos))
+       (define-values (net3 _pid)
+         (net-add-propagator net2 (list tm-cid) (list tm-cid)
+                             (make-usage-lam-fire-fn tm-cid e body)
+                             #:component-paths
+                             (list (cons tm-cid (cons body ':usage)))))
+       net3]
+
+      ;; Pi: install domain + codomain in child scope, compose usages
+      [(expr-Pi m dom cod)
+       (define child-ctx-pos (gensym 'uctx-pi))
+       (define net1 (install-u net dom ctx-pos))
+       (define net2 (install-u net1 cod child-ctx-pos))
+       (define-values (net3 _pid)
+         (net-add-propagator net2 (list tm-cid) (list tm-cid)
+                             (make-usage-pi-fire-fn tm-cid e cod)
+                             #:component-paths
+                             (list (cons tm-cid (cons cod ':usage)))))
+       net3]
+
+      ;; SRE domain fallback: install usage based on rule arity
+      [_
+       (define rule (lookup-typing-rule e))
+       (if rule
+           (install-usage-from-rule net tm-cid e ctx-pos rule)
+           net)])))
+
 ;; --- install-typing-network: the core Phase 2 deliverable ---
 ;;
 ;; Takes a prop-network, a form cell id, and a core expr (from elaborate-top-level).
@@ -1212,9 +1464,14 @@
   ;; PROBLEM: the box is local to install-typing-network's let body.
   ;; SOLUTION: use a parameter to thread the collection.
   (define positions-box (box '()))
-  (define result-net
+  (define typing-net
     (parameterize ([current-constraint-meta-positions positions-box])
       (install-typing-network net tm-cid expr ctx-val)))
+  ;; Track 4B Phase 4: install usage propagators in a second pass.
+  ;; Same expression decomposition, separate concern (Decomplection principle).
+  (define root-ctx-pos (gensym 'uctx-root))
+  (define net-with-uctx (that-write typing-net tm-cid root-ctx-pos ':context ctx-val))
+  (define result-net (install-usage-network net-with-uctx tm-cid expr root-ctx-pos))
   (values result-net (unbox positions-box)))
 
 
