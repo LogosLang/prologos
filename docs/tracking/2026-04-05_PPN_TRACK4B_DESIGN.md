@@ -496,7 +496,98 @@ This makes prelude loading nearly free for attribute evaluation: ~500 names × c
 
 ---
 
-## §10 Cross-References
+## §10 Open Questions Resolved
+
+### Q1: The `that` Operation — User-Facing Syntax
+
+**Decision**: `that` IS user-facing syntax. Design for external considerations; implement now for internal use.
+
+`that` is the first-class mechanism for accessing and extending the attribute grammar at the language level. Users can denote attributes in grammar forms and on variables:
+```
+;; Set constraint attribute (like CLP(Z)'s `ins`)
+spec sort {A} (that A :constraints (Ord A)) [List A] -> [List A]
+
+;; Query attribute record
+(that x :type)         ;; → Int
+(that x :constraints)  ;; → {(Eq Int)}
+
+;; In grammar forms (future)
+grammar my-expr :target :type (that :result :constraints ...)
+```
+
+For Track 4B implementation: `that` is the internal API for propagator attribute access — cell read/write on the attribute PU. The user-facing syntax design is deferred to the Grammar Form R&D track, but the MECHANISM is built now.
+
+### Q2: Attribute Record Implementation
+
+**Decision**: Whatever's most efficient. No architectural consequence either way.
+
+Options: CHAMP-backed hasheq with facet keys (most flexible) or struct with optional fields (fastest access). Since the global attribute store uses CHAMP for structural sharing (§9), the hasheq approach is consistent.
+
+The shared singletons (`∅` for constraints, `zero` for usage, `∅` for warnings) are global constants. ~90% of records share these facets pointer-equally.
+
+### Q3: Encapsulated PU Shells with Own Stratification
+
+**Decision**: Each PU has its own stratified evaluation. Contained monotonic computational shells.
+
+The "network soup" problem (Track 4A's accumulation timeout) validates this. Each PU is:
+- **Isolated**: no cross-contamination with other PUs or the main network
+- **Self-stratified**: S0→S1→S2 evaluated WITHIN the PU
+- **Composable**: the PU IS a cell value on the parent network
+- **GC-friendly**: internal state disappears on discard
+
+The parent network sees the PU as a single cell transitioning from ⊥ to a complete attribute record. The PU's internal stratification is invisible to the parent.
+
+This IS the Pocket Universe model: a self-contained lattice computation with its own monotone shells. The S0 shell computes types + contexts + constraints. The S1 shell resolves traits + retries constraints. The S2 shell defaults metas + validates multiplicities.
+
+### Q4: Auditing Imperative Ordering — Essential vs Incidental
+
+**Decision**: Audit closely using AG dependency analysis.
+
+From the AG research: the evaluation order is determined by the ATTRIBUTE DEPENDENCY GRAPH. Essential ordering = attribute dependency. Incidental ordering = sequential implementation artifact.
+
+**Essential ordering identified**:
+- Can't resolve trait constraint until argument type is ground → S0 (types) before S1 (trait resolution)
+- Can't validate multiplicity until all usages are computed → S0 (usage tracking) before S2 (validation)
+- Can't default unsolved metas until monotone fixpoint is reached → S0+S1 before S2 (defaulting)
+- Can't check if meta is solved until it has a value → monotone lattice progression (⊥ → value)
+
+**Incidental ordering in the imperative path**:
+- "Elaborate first, then type-check" → in AG, these are attribute evaluations at different levels of the same grammar (higher-order attributes, §4 of AG research)
+- "Create meta, then solve it" → in AG, the meta IS a position that starts at ⊥ and gains a value through attribute propagation
+- "Register trait constraint, then resolve it" → in AG, constraint creation is S0 (monotone), resolution is S1 (readiness)
+- "Walk left-to-right through arguments" → in AG, argument order is irrelevant (all positions evaluate independently to fixpoint)
+
+**The stratification that emerges**:
+- **S0**: ALL monotone attribute computation (types, contexts, constraints, usage) — this is the main fixpoint where most work happens
+- **S1**: Readiness-dependent resolution (trait resolution, constraint retry) — fires ONLY when S0 produces ground values that enable resolution
+- **S2**: Non-monotone commitment (meta defaults, multiplicity validation, warning collection) — fires ONLY after S0+S1 quiesce
+- **S(-1)**: ATMS retraction (union type contradiction) — fires on contradiction
+
+This matches the BSP scheduler's existing strata exactly.
+
+---
+
+## §11 Research Integration
+
+See [Attribute Grammar Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md) for the full theoretical grounding.
+
+Key findings integrated into this design:
+
+1. **AG = catamorphisms** (§1 of research): The imperative `infer` IS a hand-written catamorphism. Track 4B replaces it with the declarative attribute grammar specification evaluated by propagators.
+
+2. **Aspects = domain facets** (§2): Each attribute domain IS an aspect in the Silver/JastAdd sense. The SRE attribute domain IS aspect weaving.
+
+3. **CRAGs = propagator fixpoint** (§3): Circular attribute dependencies ARE propagator quiescence. BSP stratification adds ordered evaluation beyond standard CRAGs.
+
+4. **Higher-order attributes = elaboration** (§4): Surface→core IS a higher-order attribute. Elaboration and typing are NOT separate phases.
+
+5. **CLP = attribute constraints** (§8): Trait constraints ARE CLP-style domain constraints on type variables. The propagator network IS the general constraint propagation engine.
+
+6. **Semantically enriched CFGs** (§8.4): The parse tree gains attributes through evaluation. The attributes are the full record (type + context + constraint + multiplicity + warning). The enrichment IS elaboration.
+
+---
+
+## §12 Cross-References
 
 - [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md) — Stage 1 foundation: 5 domains, 12 node kinds, stratification
 - [PPN Track 4A D.4](2026-04-04_PPN_TRACK4_DESIGN.md) — §15 Typing PU, §16 SRE Domain, §17 Three Frontiers
