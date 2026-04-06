@@ -452,6 +452,42 @@ Phase T + 12 (Tests + PIR) ←─── ALL
 
 **Elab-network retirement scope**: The elab-network's typing cells, structural-unify propagators, and decompose-* functions are scaffolding. Phase 9 (retire imperative) removes the typing fallback. Post-Phase-9 cleanup removes the dead typing infrastructure from the elab-network. Other elab-network consumers (form pipeline, session types, capabilities) are unaffected.
 
+### §6a Profiling Data + Propagator Patterns (Phase 6b)
+
+**Micro-benchmark results** (bench-typing-propagators.rkt, 15 samples, median):
+
+| Expression | Time (ms) | Memory (KB/call) | Propagators | Cells |
+|---|---|---|---|---|
+| Literal `42` | 0.039 | 3.6 | 0 (P1 initial write) | 3 |
+| `(int+ 1 2)` | 0.059 | 3.1 | 4 | 3 |
+| `(fn [x:Int] x)` | 0.267 | 5.3 | 5 | 3 |
+| Nested lambda | 0.747 | 14.6 | 8 | 3 |
+| Deep int+ (4 levels) | 0.825 | 29.6 | 16 | 3 |
+
+**Key findings**:
+- **3-cell constant**: §9 global cell delivers. ONE attribute-map + ONE output + ONE decomp-request. No per-position cells.
+- **~1.8 KB per propagator**: CHAMP overhead (dependents entry, propagators entry, closure). This is the budget for deciding whether to create a propagator vs an initial write.
+- **P1 initial writes**: 0 propagators for literals/type-constructors/fvar. 3.6 KB is pure infrastructure. Clear win.
+- **Lambda is disproportionate**: 6.8× literal cost for 5 propagators. Context-extension CHAMP path-copy is the culprit. Future optimization target.
+
+**Three propagator efficiency patterns** (established by Track 4B):
+
+| Pattern | When to use | Mechanism | Effect |
+|---|---|---|---|
+| **P1: Initial writes** | Value known at installation time | `type-map-write` during install, no propagator | Zero propagator overhead, zero scheduling |
+| **P2: Fire-once guard** | Propagator fires exactly once then is done | `net-add-fire-once-propagator` wraps fire-fn with flag-guard | Zero re-computation cost, instant no-op on rescheduling. Micro-benchmarked: zero measurable overhead. Also serves as correctness discipline — exposed the context bot bug. |
+| **P3: Per-command cleanup** | After quiescence, propagators are inert | `net-clear-dependents` clears cell's dependents CHAMP | Zero cross-command scheduling overhead. Values persist (CHAMP structural sharing). |
+
+**P2 A/B micro-benchmark** (15 samples each):
+- With P2 vs without: all cases within noise (CV ~10%). No measurable overhead.
+- P2 exposed a latent correctness bug: `context-empty-value` as facet bot was indistinguishable from valid empty context. The context-extension propagator would fire twice (once on empty, once on real parent), and the second fire's merge corrected the first. P2's flag-guard made this visible — the first fire set `fired? = #t` on the wrong result, blocking the corrective second fire. Fixed by changing facet-bot for `:context` from `context-empty-value` to `#f`.
+
+**Design guidance for new propagators**:
+- If the value is a constant → **P1** (no propagator)
+- If the propagator reads one input that arrives once → **P2** (fire-once)
+- If the propagator reads multiple inputs that may arrive at different times → regular propagator (may fire 2-3 times as inputs arrive)
+- After quiescence → **P3** (bulk cleanup)
+
 ### §7a Phase 9 Acceptance Gate
 
 Phase 9 (retire imperative fallback) is the track's climax. It is NOT complete until ALL of the following are satisfied:

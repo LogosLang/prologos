@@ -16,6 +16,7 @@
          "../../global-env.rkt"
          "../../metavar-store.rkt"
          "../../driver.rkt"
+         "../../champ.rkt"
          racket/port)
 
 ;; ============================================================
@@ -111,7 +112,60 @@
 ;; Print results
 ;; ============================================================
 
-(displayln "\n=== Typing Propagator Micro-Benchmarks ===\n")
+;; ============================================================
+;; Memory profiling: measure allocation per infer-on-network call
+;; ============================================================
+
+(define (measure-memory-per-call expr label n-calls)
+  (collect-garbage)
+  (collect-garbage)
+  (collect-garbage)
+  (define mem-before (current-memory-use))
+  (for ([_ (in-range n-calls)])
+    (parameterize ([current-attribute-map-cell-id #f])
+      (define net (make-prop-network))
+      (define ctx (context-cell-value '() 0))
+      (infer-on-network net expr ctx)))
+  (define mem-after (current-memory-use))
+  (define per-call (exact->inexact (/ (- mem-after mem-before) n-calls)))
+  (printf "  ~a\n    ~a calls: ~a bytes total, ~a bytes/call (~a KB/call)\n\n"
+          label n-calls (- mem-after mem-before)
+          (round per-call)
+          (exact->inexact (/ (round per-call) 1024))))
+
+(displayln "\n=== Memory Profiling (per infer-on-network call) ===\n")
+(measure-memory-per-call (expr-int 42) "literal (expr-int 42)" 1000)
+(measure-memory-per-call app2 "application (int+ 1 2)" 1000)
+(measure-memory-per-call lam-e "lambda (fn [x:Int] x)" 1000)
+(measure-memory-per-call nested-lam "nested lambda (fn [x:Int] (fn [y:Bool] x))" 500)
+(measure-memory-per-call deep-app "deep int+ (4 levels)" 500)
+
+;; ============================================================
+;; Network size profiling: count cells + propagators after quiescence
+;; ============================================================
+
+(define (measure-network-size expr label)
+  (parameterize ([current-attribute-map-cell-id #f])
+    (define net (make-prop-network))
+    (define ctx (context-cell-value '() 0))
+    (define-values (net* _type _solutions)
+      (infer-on-network net expr ctx))
+    ;; Count cells and propagators in the returned network
+    (define cell-count (prop-network-next-cell-id net*))
+    (define prop-count
+      (let ([props (prop-network-propagators net*)])
+        (champ-fold props (lambda (_k _v acc) (add1 acc)) 0)))
+    (printf "  ~a: ~a cells, ~a propagators\n"
+            label cell-count prop-count)))
+
+(displayln "\n=== Network Size (cells + propagators after quiescence) ===\n")
+(measure-network-size (expr-int 42) "literal")
+(measure-network-size app2 "int+ 1 2")
+(measure-network-size lam-e "fn [x:Int] x")
+(measure-network-size nested-lam "nested lambda")
+(measure-network-size deep-app "deep int+ (4 levels)")
+
+(displayln "\n=== Timing Micro-Benchmarks ===\n")
 (for ([b (list b-literal b-app b-lam b-nested-lam b-deep-app)])
   (define s (bench-result-stats b))
   (printf "  ~a\n    median: ~a ms  mean: ~a ms  cv: ~a%  n: ~a\n\n"
