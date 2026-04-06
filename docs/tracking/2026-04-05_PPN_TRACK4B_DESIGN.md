@@ -1,6 +1,6 @@
-# PPN Track 4B: Elaboration as Attribute Evaluation — Stage 3 Design (D.1)
+# PPN Track 4B: Elaboration as Attribute Evaluation — Stage 3 Design (D.2)
 
-**Date**: 2026-04-05
+**Date**: 2026-04-05 (D.1), 2026-04-06 (D.2 — external critique integration)
 **Series**: [PPN (Propagator-Parsing-Network)](2026-03-26_PPN_MASTER.md) — Track 4B
 **Predecessor**: [PPN Track 4A D.4](2026-04-04_PPN_TRACK4_DESIGN.md)
 **Predecessor PIR**: [PPN Track 4A PIR](2026-04-04_PPN_TRACK4_PIR.md)
@@ -182,6 +182,16 @@ Attribute PU (ephemeral prop-network):
     Diagnostics → warning reporting
 ```
 
+### §3.1a Position Identity Protocol
+
+Each AST node in the core expr IS a position in the attribute map. The position key is the **eq?-identity** of the `expr-*` struct produced by `elaborate-top-level`. This works because elaboration produces a fresh struct tree per command — no struct is shared across commands.
+
+**Position assignment**: `install-attribute-network` recursively decomposes the core expr tree. Each `expr-*` struct encountered becomes a position key in the attribute map. Sub-expression positions are linked to their parent by the propagators installed at each node (e.g., the app propagator reads from func-pos and arg-pos, writes to this-pos).
+
+**Substitution-created nodes**: When a dependent codomain requires substitution (`subst(0, arg-expr, cod)`), the substitution creates FRESH expr structs. These get fresh positions in the attribute map — they are new nodes, not aliases of existing ones. Track 4A's expression-key substitution (commit `d8a22c3`) established this pattern: the substituted codomain is a new position whose type is written by the app propagator's upward write.
+
+**Meta-variable positions**: `expr-meta` nodes from implicit argument insertion are positions like any other. They start with type facet = ⊥ (type-bot). Propagators write to them (bidirectional app writes domain type, structural unification writes decomposed types). The meta IS the position — there is no separate "meta-variable" entity. See §3.6 for the full meta lifecycle.
+
 ### §3.2 How Evaluation Works
 
 1. **Form cell at 'done'** → `elaborate-top-level` produces core expr (still imperative for structural transformation).
@@ -208,19 +218,19 @@ Attribute PU (ephemeral prop-network):
 
 6. **Discard PU** — GC the ephemeral network.
 
-### §3.3 Reactive Output: Scoped Propagators on Main Network (Preferred)
+**Cross-command composition**: results from one command's attribute PU are visible to subsequent commands through the ENVIRONMENT, not through PU-to-PU communication. When `def f [x] [+ x 1]` is evaluated, the output bridge writes `f`'s type to the environment. When `[f 42]` is evaluated, `elaborate-top-level` resolves `f` to `expr-fvar` and the typing propagator reads the type from `lookup-toplevel-type`. The global attribute store (§9) caches full attribute records for this purpose — subsequent references to `f` start from the cached record, avoiding re-evaluation.
 
-The D.1 self-critique (R/M3) identified that an ephemeral PU with function-call output bridging puts results OFF-NETWORK. Every off-network operation is something that later needs fixing for self-hosting, provenance, error-reporting, and observability.
+### §3.3 Network Hosting Decision
 
-**Preferred architecture**: the attribute-map cell lives ON the main elab-network. Typing/constraint/usage propagators are installed on the main network for the duration of one command, then become INERT (not deleted — inert, because their inputs stabilize after quiescence).
+**Track 4B implements the EPHEMERAL PU architecture** (§3.1). Each command's attribute evaluation runs in a fresh, isolated prop-network. Results are bridged to the main elab-network via output channels (§13). The ephemeral PU is discarded after output bridging.
 
-This is how the FORM PIPELINE already works: form cells persist, pipeline propagators fire during `dispatch-form-productions`, and after 'done' the propagators are inert. No ephemeral network needed.
+This is a **deliberate, validated choice**: Track 4A proved ephemeral PUs work (no accumulation regression, clean GC, isolation between commands). The alternative — scoped propagators on the main network — is theoretically superior but unvalidated at scale.
 
-**Accumulation concern**: Track 4A showed propagators on the main network cause accumulation. The fix: propagator INERTNESS. After quiescence, a propagator whose inputs are all stable NEVER fires again. The `net-cell-write` no-change guard ensures this — writing the same value is a no-op. Over many commands, inert propagators exist in the CHAMP but never fire. Memory grows slowly (CHAMP structural sharing), performance is unaffected (inert propagators are never scheduled).
+**Future target: scoped propagators on the main elab-network.** In this model, attribute propagators live ON the main network, become INERT after quiescence (no deletion, no firing — inputs stabilize). Results stay on-network, observable to downstream propagators, composable with the form pipeline. This follows the same pattern as form-cell pipeline propagators in Track 3. Advantages: provenance, error-reporting, and observability benefit from on-network results. Self-hosting compilation can read attribute records directly from the main network.
 
-**BSP CALM guarantee**: with BSP scheduler, monotone propagators on the main network are safe to parallelize (CALM). Non-monotone operations (S2 defaulting, S(-1) retraction) are stratified. The main network's BSP scheduler handles the strata.
+**Why not now**: Track 4A's 3-timeout regression was caused by propagator accumulation on the main network. The inertness argument (stable inputs → no re-firing) is sound in theory but needs empirical validation: do inert propagators cause memory pressure over hundreds of commands? Does CHAMP structural sharing keep growth sub-linear? These questions require Track 4B's full attribute evaluation working first.
 
-**Fallback**: if accumulation proves problematic in practice (profiling shows memory/time growth), fall back to ephemeral PU with explicit output writes. The attribute-map cell structure is the same either way — only the network hosting changes.
+**Migration path**: the attribute-map cell structure and propagator fire functions are IDENTICAL in both models — only the network hosting changes. Phase 11 (scaffolding retirement) or a follow-on track evaluates migration from ephemeral to scoped-on-main once accumulation behavior is characterized under full attribute evaluation load. The internal API (`that-read`, `that-write`, `install-attribute-network`) abstracts over the hosting model.
 
 ### §3.4 Why Attribute Records, Not Separate Maps
 
@@ -239,6 +249,50 @@ Track 4A's infrastructure becomes FACETS of the attribute record:
 
 All Track 4A code is reusable — it's the TYPE facet implementation. Track 4B adds the other four facets alongside it.
 
+### §3.5 Unification = Merge (Foundational Invariant)
+
+**There is no separate unification step.** Unification IS the merge function on the type facet of the attribute map.
+
+When two propagators write different type values to the SAME position, `type-lattice-merge` (Track 2H quantale) computes the most-general unifier:
+- Compatible types merge to the unified type: `merge(Int, Int) = Int`
+- Meta meets concrete: `merge(⊥, Int) = Int` (the meta gains its solution)
+- Incompatible types merge to ⊤: `merge(Int, String) = ⊤` (type error)
+
+This is NOT an approximation of unification — it IS unification, by construction. The Track 2H type lattice was designed so that the merge operation coincides with the most-general unifier on the type carrier. The lattice merge is commutative, associative, and idempotent — exactly the properties required for sound unification in a concurrent propagator network where write order is non-deterministic.
+
+**Bidirectional application writes ARE unification**. The app propagator writes `dom` downward to the arg position and `subst(0, arg-expr, cod)` upward to the result position. If the arg position already has a type from its own typing propagator, the merge of `dom` with that type IS the unification of the function's expected argument type with the argument's inferred type. Merge failure (⊤) = type mismatch.
+
+**Structural unification** handles compound types. When `merge(Pi(m, ?A, ?B), Pi(m, Int, String))` is needed, a structural unification propagator (Phase 5) DECOMPOSES this into sub-writes: `?A ← Int`, `?B ← String`. Each sub-write is itself a merge on the sub-position. This is the propagator equivalent of the "decompose" rule in standard unification algorithms, but distributed across cells rather than executed as a sequential algorithm.
+
+**Occurs check**: The standard unification occurs check (`?A ∉ FV(T)` before solving `?A = T`) is handled by contradiction detection — if a cyclic merge produces ⊤, the type error is reported. This is sound because the type lattice has no infinite ascending chains (well-founded by construction).
+
+### §3.6 Meta-Variable Lifecycle on the Network
+
+A meta-variable is NOT a special entity — it is an **attribute-map position that starts at ⊥**.
+
+**1. Creation** (imperative elaborator, before attribute PU):
+`elaborate-top-level` inserts `expr-meta` nodes for implicit arguments. Each `expr-meta` becomes a position in the attribute map with type facet = ⊥ (type-bot). The meta IS the position. The imperative `meta-store` (CHAMP mapping meta-id → meta-info) tracks metadata (origin, kind, expected-type), but the TYPE SOLUTION lives in the attribute map.
+
+**2. Solution** (S0 propagators, during attribute evaluation):
+Propagators write to meta positions through normal cell writes:
+- **Bidirectional app**: writes domain type downward to arg-meta position → merge(⊥, dom) = dom. The meta is solved.
+- **Structural unification** (Phase 5): decomposes `Pi(?A, ?B)` matching against `Pi(Int, String)` → writes `Int` to `?A`'s position, `String` to `?B`'s position.
+- **Constraint narrowing**: when a constraint domain reaches singleton, the resolution propagator writes the resolved dict expression to the dict-meta position.
+
+Each write is a MERGE — if multiple paths converge on the same meta (e.g., two uses of `?A` in different positions), they must agree (merge to the same type) or contradict (⊤ = type error).
+
+**3. Bridging** (Phase 6, output channels):
+After internal quiescence, the output bridge reads solved meta positions (type facet ≠ ⊥) and calls `solve-meta!` on the main network for each. This bridges the ephemeral PU's solutions into the main `meta-store` CHAMP, triggering downstream resolution (trait constraints that depend on the solved meta, hasmethod retry, etc.).
+
+**4. Defaulting** (S2, after S0+S1 quiescence):
+Metas that remain at ⊥ after all monotone (S0) and readiness (S1) computation are UNSOLVED. The meta-default propagator (fan-in threshold from Track 4A Phase 4b-i) writes default values:
+- Level metas → `lzero` (universe level 0)
+- Multiplicity metas → `mw` (unrestricted usage)
+- Session metas → `sess-end` (session termination)
+- Type metas with no constraints → type error (genuinely ambiguous)
+
+Defaulting is S2 (non-monotone commitment) because it OVERWRITES ⊥ with a chosen value, foreclosing other possible solutions. This is safe only after S0+S1 prove no further monotone progress is possible.
+
 ---
 
 ## §4 Elaboration Boundary and Scope
@@ -251,6 +305,22 @@ Track 4B receives the CORE EXPR from `elaborate-top-level`. By the time the attr
 - Names have been resolved to qualified `expr-fvar` / de Bruijn `expr-bvar`
 - Trait constraints have been registered via `register-trait-constraint!`
 - HasMethod constraints have been registered via `register-hasmethod-constraint!`
+
+### §4.1a Handoff Protocol: Elaborator → Attribute PU
+
+The handoff from imperative elaboration to attribute evaluation is a FUNCTION CALL, not a cell write:
+
+1. `process-command` calls `elaborate-top-level(surface-expr, env)` → returns core expr (imperative)
+2. `infer-on-network(core-expr, env, ctx)` creates the ephemeral attribute PU:
+   a. `(make-prop-network)` — fresh network
+   b. `(install-attribute-network net cell core-expr ctx)` — recursive decomposition installs propagators
+   c. `(run-to-quiescence-bsp net)` — stratified evaluation
+   d. Read output channels → bridge results to main network
+   e. Discard PU
+
+This boundary is DELIBERATE — `elaborate-top-level` does structural transformation (surface → core) which is imperative in Track 4B. Track 4C moves structural transformation on-network via DPO rewriting. The handoff protocol in Track 4B is simple: imperative function produces data (core expr), propagator network consumes it.
+
+**Error handling**: if `elaborate-top-level` fails (parse error, name resolution error), no attribute PU is created. Elaboration errors are reported directly. The attribute PU only sees WELL-FORMED core expressions.
 
 ### §4.2 What Track 4B Evaluates (attribute propagators)
 
@@ -277,6 +347,12 @@ Track 4C depends on SRE Track 6 for the DPO rewriting + e-graph infrastructure.
 The imperative elaborator ALREADY registers trait constraints before the attribute PU runs. Track 4B's constraint propagators READ these registrations and create corresponding constraint domain cells in the attribute PU.
 
 The constraint-creation propagator (S0) reads the registered `trait-constraint-info` from the main elab-network (via bridge read) and creates a constraint domain entry in the attribute record for the corresponding node. The domain lattice (Phase 0b) represents the set of possible trait instances, narrowed as type information refines.
+
+**Known off-network boundary: impl registry.** The impl registry (`current-impl-registry`) is a Racket-side hash table, NOT a cell on any propagator network. Constraint-creation and trait-resolution propagators read this registry at fire time via direct hash-table lookup. This is an off-network oracle read.
+
+This is acceptable for Track 4B because the impl registry is **STATIC within a single command's attribute evaluation** — impl registrations happen at module-load time, before any command is processed. During attribute evaluation, no new impls are registered. Reading a constant is not an information-flow violation.
+
+**Migration plan**: PM Track 7 (module loading infrastructure) migrates the impl registry to cells. When the registry becomes a cell, adding a new impl (loading a new module) triggers re-evaluation of affected constraints — enabling incremental recompilation. This is out of scope for Track 4B but the constraint-creation propagator's interface (`lookup-impls-for-type(trait, type)`) is designed to be swappable: replace the hash-table read with a cell read when Track 7 provides it.
 
 ---
 
@@ -350,6 +426,18 @@ Phase T + 12 (Tests + PIR) ←─── ALL
 **Critical path**: 0a → 0d → 1 → 2 → 3 → 6 → 9 (retire imperative)
 **Parallel**: Phases 4, 5, 7 independent after Phase 1. Phase 8 (ATMS) after Phase 3. Phase 0b (✅) + 0c parallel with 0a.
 **Design phases**: 0b ✅ designed, 0c needs design. 0a + 0d are implementation phases.
+
+### §7a Phase 9 Acceptance Gate
+
+Phase 9 (retire imperative fallback) is the track's climax. It is NOT complete until ALL of the following are satisfied:
+
+1. **On-network success rate = 100%**: `on-network-success-count` = total, `on-network-fallback-count` = 0 across the full test suite. No expression kind falls back to imperative `infer/check`.
+2. **Zero fallback invocations**: the `infer-on-network/err` fallback path (calling imperative `infer/err`) is NEVER taken. This is verified by counter + logging.
+3. **Dead code confirmation**: `infer`, `check`, `resolve-trait-constraints!`, `checkQ`, and `freeze` have NO call sites in the production path. Grep confirms. They may remain as test utilities or be removed entirely.
+4. **Full test suite GREEN**: all ~7300 tests pass with the imperative path removed (not just bypassed — removed from `process-command`).
+5. **Level 3 acceptance file**: the Track 4B acceptance `.prologos` file runs via `process-file` with zero errors. Exercises all 5 attribute domains across diverse expression kinds.
+6. **A/B benchmark**: `bench-ab.rkt --runs 15` shows no statistically significant regression vs pre-Track-4B baseline (Mann-Whitney U, p > 0.05).
+7. **Unhandled expression audit**: `unhandled-expr-counts` is empty — every expression kind in the SRE attribute domain is handled by a propagator, no kind falls through to "unhandled."
 
 ---
 
@@ -715,7 +803,7 @@ The constraint domain lattice:
 ⊤ (contradiction) = ∅ (no type satisfies all constraints)
 ```
 
-**Ordering**: ⊇ means "less information" (more possibilities). ⊆ means "more information" (fewer possibilities). This is the DUAL of the powerset lattice.
+**⚠️ DUAL ORDERING WARNING**: This lattice uses the OPPOSITE of the standard powerset ordering. In the standard powerset lattice, ⊆ means "less" and bigger sets are "higher." Here, ⊇ means "less information" (more possibilities = less constrained) and SMALLER sets are "higher" (more constrained = more information). This dual arises because we're tracking REMAINING CANDIDATES, not ACCUMULATED EVIDENCE — fewer candidates = more is known. Confusion between the two orderings will invert join/meet and produce unsound narrowing. When in doubt: narrowing (gaining info) = INTERSECTION (removing candidates). Relaxing (losing info) = UNION (adding candidates).
 
 **Join** (⊔ = gaining information): SET INTERSECTION. Adding a constraint removes candidates.
 **Meet** (⊓ = relaxing): SET UNION. Removing a constraint adds candidates.
@@ -1149,6 +1237,31 @@ Key findings integrated into this design:
 5. **CLP = attribute constraints** (§8): Trait constraints ARE CLP-style domain constraints on type variables. The propagator network IS the general constraint propagation engine.
 
 6. **Semantically enriched CFGs** (§8.4): The parse tree gains attributes through evaluation. The attributes are the full record (type + context + constraint + multiplicity + warning). The enrichment IS elaboration.
+
+---
+
+## §17 External Critique Integration (D.2)
+
+External architectural critique received 2026-04-06. Ten recommendations across six categories. Dispositions:
+
+| ID | Finding | Severity | Disposition | D.2 Action |
+|----|---------|----------|-------------|------------|
+| A1 | Elaboration-to-attribute handoff protocol unspecified | Medium | Partially Accept | Added §4.1a Handoff Protocol |
+| L1 | Dual ordering convention needs explicit warning | Low | Accept | Added ⚠️ callout in §11.2 |
+| L2 | Unification must be explicitly stated as merge | High | Accept | Added §3.5 Unification = Merge |
+| I1 | Impl registry is off-network oracle | Medium | Accept observation, reject severity | Strengthened §4.4 with boundary analysis |
+| I2 | Trait resolution reads registry at fire time | Medium | Same as I1 | Same as I1 |
+| C1 | Cross-command PU composition unaddressed | Medium | Reject (already handled) | Added clarifying paragraph in §3.2 |
+| G3 | Meta-variable lifecycle is largest gap | High | Partially Accept | Added §3.6 Meta-Variable Lifecycle |
+| G4 | Missing AST-node position identity protocol | Medium | Partially Accept | Added §3.1a Position Identity Protocol |
+| G5 | No Phase 9 acceptance criteria | High | Accept | Added §7a Phase 9 Acceptance Gate |
+| R1 | §3.1 vs §3.3 present contradictory architectures | High | Accept | Rewrote §3.3 as Network Hosting Decision |
+
+**No architectural changes resulted from the critique.** All accepted findings were EXPOSITION gaps — the design decisions were sound but not clearly documented. The strongest finding (L2: unification = merge) addressed a conceptual foundation that the document assumed implicitly from Track 2H context. Making it explicit in §3.5 strengthens the document for readers who come from an imperative type-checking background.
+
+**Rejected with rationale:**
+- **C1** (cross-command composition): already handled by environment threading + global attribute store (§9). The standard compilation model — not a gap.
+- **I1/I2 severity**: the impl registry IS off-network, but it's STATIC during attribute evaluation. Track 7 migrates it. Named as known boundary, not blocked.
 
 ---
 
