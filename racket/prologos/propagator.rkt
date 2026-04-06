@@ -77,6 +77,7 @@
  net-cell-read
  net-cell-write
  net-cell-replace  ;; Track 7 post-fix: bypass merge for S(-1) retraction
+ net-remove-propagator-from-dependents  ;; Track 4B P2: remove ONE propagator from cell dependents
  net-clear-dependents  ;; Track 4B Phase 6b P3: remove all dependents from a cell
  ;; Propagator operations
  net-add-propagator
@@ -691,6 +692,25 @@
   (struct-copy prop-network net
     [warm (struct-copy prop-net-warm (prop-network-warm net)
             [cells (champ-insert cells h cid new-cell)])]))
+
+;; Track 4B P2: Remove ONE propagator from a cell's dependents.
+;; Used by fire-once self-cleaning propagators after producing output.
+;; The propagator is removed from the dependents CHAMP — it won't be
+;; scheduled on future writes to this cell.
+;; Non-monotone — runs in the topology stratum via callback-topology-request.
+(define (net-remove-propagator-from-dependents net pid cid)
+  (define cells (prop-network-cells net))
+  (define h (cell-id-hash cid))
+  (define cell (champ-lookup cells h cid))
+  (if (eq? cell 'none)
+      net  ;; unknown cell — no-op
+      (let* ([deps (prop-cell-dependents cell)]
+             [ph (prop-id-hash pid)]
+             [new-deps (champ-delete deps ph pid)]
+             [new-cell (prop-cell (prop-cell-value cell) new-deps)])
+        (struct-copy prop-network net
+          [warm (struct-copy prop-net-warm (prop-network-warm net)
+                  [cells (champ-insert cells h cid new-cell)])]))))
 
 ;; Track 4B Phase 6b P3: Clear all dependents from a cell.
 ;; The cell RETAINS its value — only the dependents CHAMP is emptied.
