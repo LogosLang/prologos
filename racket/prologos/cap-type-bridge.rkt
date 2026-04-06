@@ -235,8 +235,8 @@
                   (net-cell-write n caller-cap-cid callee-caps))))
             net*))))
 
-  ;; Step 5: Run to quiescence (fixed point across both domains)
-  (define net-final (run-to-quiescence net2))
+  ;; Step 5: Run to quiescence — explicit BSP for CALM-invariant enforcement
+  (define net-final (run-to-quiescence-bsp net2))
 
   ;; Step 6: Extract results from both cell types
   (define type-closures

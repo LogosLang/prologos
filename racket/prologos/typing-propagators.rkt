@@ -814,10 +814,13 @@
       [(expr-app func arg)
        (define net1 (install net func ctx-pos))
        (define net2 (install net1 arg ctx-pos))
-       ;; Watch entire cell (multiple positions on same cell-id)
+       ;; Track 4B Phase 0a: multi-path — watches func AND arg positions
        (define-values (net3 _pid)
          (net-add-propagator net2 (list tm-cid) (list tm-cid)
-                             (make-app-fire-fn tm-cid e func arg)))
+                             (make-app-fire-fn tm-cid e func arg)
+                             #:component-paths
+                             (list (cons tm-cid func)
+                                   (cons tm-cid arg))))
        net3]
 
       ;; --- Lambda: creates child scope via context-extension propagator ---
@@ -834,11 +837,13 @@
                              (list (cons tm-cid ctx-pos))))
        ;; Install body propagator in child scope
        (define net3 (install net2 body child-ctx-pos))
-       ;; Install lambda propagator — watches entire cell (multiple positions
-       ;; on same cell-id can't use component-paths due to assoc first-match)
+       ;; Track 4B Phase 0a: multi-path — watches dom AND body positions
        (define-values (net4 _pid)
          (net-add-propagator net3 (list tm-cid) (list tm-cid)
-                             (make-lam-fire-fn tm-cid e dom body m)))
+                             (make-lam-fire-fn tm-cid e dom body m)
+                             #:component-paths
+                             (list (cons tm-cid dom)
+                                   (cons tm-cid body))))
        net4]
 
       ;; --- Pi formation ---
@@ -852,10 +857,13 @@
                              (list (cons tm-cid ctx-pos))))
        (define net1 (install net0 dom ctx-pos))
        (define net2 (install net1 cod child-ctx-pos))
-       ;; Watch entire cell (multiple positions on same cell-id)
+       ;; Track 4B Phase 0a: multi-path — watches dom AND cod positions
        (define-values (net3 _pid)
          (net-add-propagator net2 (list tm-cid) (list tm-cid)
-                             (make-pi-fire-fn tm-cid e dom cod)))
+                             (make-pi-fire-fn tm-cid e dom cod)
+                             #:component-paths
+                             (list (cons tm-cid dom)
+                                   (cons tm-cid cod))))
        net3]
 
       ;; --- Domain lookup: SRE typing domain handles remaining expr kinds ---
@@ -909,7 +917,9 @@
     (struct-copy prop-network net2
       [hot (struct-copy prop-net-hot (prop-network-hot net2)
              [fuel TYPING-FUEL-LIMIT])]))
-  (define net3 (run-to-quiescence net2-limited))
+  ;; Track 4B Phase 0d: explicit BSP for stratified attribute evaluation.
+  ;; Ephemeral PUs MUST use BSP for CALM-invariant enforcement.
+  (define net3 (run-to-quiescence-bsp net2-limited))
   ;; 4. Read the root type from the type-map
   (define root-type (type-map-read net3 tm-cid expr))
   ;; If fuel exhausted (cycling), return type-bot → fallback

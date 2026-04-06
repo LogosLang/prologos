@@ -1003,7 +1003,7 @@ The new lattice adds ALL intermediate states between universe and singleton — 
 
 ## §12 Phase 0d Design: BSP Scheduler Audit
 
-Track 4A used Gauss-Seidel (`run-to-quiescence-inner`) because `current-use-bsp-scheduler?` defaults to `#f`. For Track 4B:
+**Correction (D.2)**: `current-use-bsp-scheduler?` already defaults to `#t` (BSP is the global default). The D.1 claim that it defaults to `#f` was stale. However, ephemeral PU sites used the generic `run-to-quiescence` dispatcher (which inherits the global default) rather than explicit `run-to-quiescence-bsp`. Phase 0d hardens these to explicit BSP calls. For Track 4B:
 
 1. **Audit all `run-to-quiescence` calls in Track 4A code** — `infer-on-network` and any internal uses. Verify they work correctly under BSP.
 2. **Set BSP as default for ephemeral PUs** — `(parameterize ([current-use-bsp-scheduler? #t]) ...)` around PU creation and evaluation.

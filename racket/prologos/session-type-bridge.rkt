@@ -375,8 +375,8 @@
   (define channel-cells (hasheq 'self self-cell))
   (define-values (net2 trace constraints)
     (compile-proc-with-type-bridges net1 proc channel-cells init-trace))
-  ;; 5. Run to quiescence
-  (define net3 (run-to-quiescence net2))
+  ;; 5. Run to quiescence — explicit BSP for CALM-invariant enforcement
+  (define net3 (run-to-quiescence-bsp net2))
   ;; 6. Check session contradictions first
   (define contradiction-cell (prop-network-contradiction net3))
   (cond

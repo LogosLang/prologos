@@ -610,7 +610,10 @@
     [else #f]))
 
 ;; PPN Track 4 Phase 1a: filter dependent prop-ids by component paths.
-;; deps-champ: prop-id → component-path-or-#f
+;; PPN Track 4B Phase 0a: multi-path support — each dependent stores a
+;; LIST of paths, not a single path. A propagator fires if ANY of its
+;; watched paths intersects the changed set.
+;; deps-champ: prop-id → (listof component-path-or-#f)
 ;; changed-paths: list of changed path keys, or #f meaning "all changed"
 ;; Returns: list of prop-id to enqueue.
 (define (filter-dependents-by-paths deps-champ changed-paths)
@@ -626,13 +629,19 @@
      (define changed-set changed-paths)
      (champ-fold
       deps-champ
-      (lambda (pid path acc)
+      (lambda (pid paths acc)
         (cond
-          ;; path = #f → watch all, always fire
-          [(not path) (cons pid acc)]
-          ;; path is in the changed set → fire
-          [(member path changed-set) (cons pid acc)]
-          ;; path not changed → skip
+          ;; Single #f (legacy) or list containing #f → watch all, always fire
+          [(not paths) (cons pid acc)]
+          [(and (list? paths) (memq #f paths)) (cons pid acc)]
+          ;; List of paths: fire if ANY path is in the changed set
+          [(and (list? paths)
+                (for/or ([p (in-list paths)])
+                  (member p changed-set)))
+           (cons pid acc)]
+          ;; Legacy single path (non-list): fire if in changed set
+          [(member paths changed-set) (cons pid acc)]
+          ;; None matched → skip
           [else acc]))
       '())]))
 
@@ -690,9 +699,16 @@
              ;; and only enqueue dependents whose path intersects the diff.
              ;; If ALL dependents have path=#f, fast path: enqueue all (no diff needed).
              [deps-champ (prop-cell-dependents cell)]
+             ;; PPN Track 4B Phase 0a: paths are now lists or #f.
+             ;; has-component-paths? if any dependent has a non-#f paths value
+             ;; containing at least one non-#f path.
              [deps (let ([has-component-paths?
                           (champ-fold deps-champ
-                                      (lambda (_k v found?) (or found? v))
+                                      (lambda (_k paths found?)
+                                        (or found?
+                                            (and paths
+                                                 (list? paths)
+                                                 (for/or ([p (in-list paths)]) p))))
                                       #f)])
                      (if has-component-paths?
                          ;; Slow path: compute diff, filter dependents
@@ -1084,12 +1100,17 @@
       (define cell (champ-lookup (prop-network-cells net) ch cid))
       (if (eq? cell 'none)
           cn  ;; unknown cell — skip (defensive)
-          ;; PPN Track 4 Phase 1a: look up component path for this cell-id.
-          ;; If found in component-paths, store the path. Otherwise #f (watch all).
-          (let* ([path (let ([pair (assoc cid component-paths equal?)])
-                         (if pair (cdr pair) #f))]
+          ;; PPN Track 4B Phase 0a: collect ALL matching paths for this cell-id.
+          ;; A propagator may watch multiple component paths on the same cell
+          ;; (e.g., app propagator watching both func-pos and arg-pos).
+          ;; The old code used `assoc` which found only the first match.
+          (let* ([paths (let ([matches (filter (lambda (pair) (equal? cid (car pair)))
+                                              component-paths)])
+                          (if (null? matches)
+                              #f  ;; no paths declared for this cell → watch all
+                              (map cdr matches)))]
                  [new-deps (champ-insert (prop-cell-dependents cell)
-                                          ph pid path)])
+                                          ph pid paths)])
             (define-values (cn* _)
               (tchamp-insert-owned! cn sb ch cid
                                     (struct-copy prop-cell cell
