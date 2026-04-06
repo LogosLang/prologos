@@ -27,7 +27,8 @@
          (only-in "metavar-store.rkt" meta-solution/cell-id current-prop-net-box
                   trait-constraint-info trait-constraint-info?
                   trait-constraint-info-trait-name trait-constraint-info-type-arg-exprs
-                  read-trait-constraints)
+                  read-trait-constraints
+                  solve-meta! meta-solved?)
          "constraint-cell.rkt"  ;; Track 4B Phase 2: reuse existing constraint lattice
          "constraint-propagators.rkt"  ;; Track 4B Phase 2: build-trait-constraint, refine-constraint-by-type-tag
          "elab-network-types.rkt"
@@ -50,6 +51,10 @@
  make-constraint-creation-fire-fn
  make-type-narrows-constraints-fire-fn
  type-expr->tag
+ ;; Track 4B Phase 3: Trait Resolution + Bridging
+ make-trait-resolution-fire-fn
+ candidate->dict-expr
+ install-typing-network/with-constraints
  that-read
  that-write
  facet-bot
@@ -425,6 +430,50 @@
              (if (equal? narrowed current-domain)
                  net
                  (that-write net tm-cid dict-meta-pos ':constraints narrowed))])])])))
+
+;; ============================================================
+;; Track 4B Phase 3a: Trait Resolution Propagator (S1)
+;; ============================================================
+;;
+;; Watches the :constraints facet at a dict-meta position.
+;; When the constraint domain reaches singleton (constraint-one),
+;; extracts the resolved dict expression and writes it to the
+;; :type facet at the same position.
+;;
+;; S1 = readiness-triggered: fires only when S0 (typing + constraint
+;; narrowing) has produced enough information to resolve.
+;;
+;; Network Reality Check:
+;;   1. net-add-propagator: YES — installed per dict-meta with constraint
+;;   2. net-cell-write: YES — that-write to :type facet with dict expr
+;;   3. Cell trace: :constraints narrowed → S1 fires → :type written →
+;;      app propagators can now compute result types
+
+;; Build the dict expression from a resolved monomorphic constraint candidate.
+;; For monomorphic: simply (expr-fvar dict-name).
+;; For parametric: would need pattern var bindings (Phase 3 handles monomorphic;
+;; parametric deferred to later iteration).
+(define (candidate->dict-expr candidate)
+  (expr-fvar (constraint-candidate-dict-name candidate)))
+
+;; S1 trait-resolution propagator: watches :constraints, writes :type when resolved.
+(define (make-trait-resolution-fire-fn tm-cid dict-meta-pos)
+  (lambda (net)
+    (define tm (net-cell-read net tm-cid))
+    (define constraint-val (that-read tm dict-meta-pos ':constraints))
+    (cond
+      ;; Not yet resolved — wait
+      [(not (constraint-one? constraint-val)) net]
+      [else
+       ;; Resolved: extract the single candidate
+       (define candidate (constraint-one-candidate constraint-val))
+       (define dict-expr (candidate->dict-expr candidate))
+       ;; Write the dict expression to the :type facet at the dict-meta position.
+       ;; This makes the dict type available to app propagators above.
+       (define current-type (that-read tm dict-meta-pos ':type))
+       (if (type-bot? current-type)
+           (that-write net tm-cid dict-meta-pos ':type dict-expr)
+           net)])))  ;; already has a type — don't overwrite
 
 ;; --- Fire functions: one per AST node kind ---
 ;; Each returns a (lambda (net) ...) that reads inputs, computes, writes output.
@@ -920,6 +969,10 @@
 ;;   - net-cell-write: each fire-fn writes to type-map
 ;;   - Trace: type-map[pos] = ⊥ → propagator fires → writes type → cascade → read
 
+;; Track 4B Phase 3b: parameter for collecting constraint-meta positions
+;; during install-typing-network. Used by install-typing-network/with-constraints.
+(define current-constraint-meta-positions (make-parameter #f))
+
 (define (install-typing-network net tm-cid expr ctx-val)
   ;; Write initial context to root context position via :context facet
   (define root-ctx-pos (gensym 'ctx-root))
@@ -929,6 +982,9 @@
   ;; firing. The constraints were registered by the imperative elaborator.
   ;; The resulting propagators are on-network.
   (define trait-constraints (read-trait-constraints))  ;; hasheq: meta-id → trait-constraint-info
+  ;; Track 4B Phase 3b: collect dict-meta positions for output bridging.
+  ;; Uses a parameter so install-typing-network/with-constraints can read it.
+  (define cmp-box (current-constraint-meta-positions))
   ;; Recursive structural decomposition.
   ;; For each sub-expression, assign it as its own position key (eq? identity).
   ;; ctx-pos is the POSITION of the current scope's context in the type-map.
@@ -994,7 +1050,8 @@
 
       ;; --- Meta expression: leave :type at ⊥ (metas resolve through typing).
       ;; Track 4B Phase 2: if this meta has a registered trait constraint,
-      ;; install constraint-creation and type-narrows-constraints propagators.
+      ;; install constraint-creation, type-narrows-constraints, and S1 resolution.
+      ;; Track 4B Phase 3b: collect position for output bridging.
       [(expr-meta id _)
        (define tc-info (hash-ref trait-constraints id #f))
        (cond
@@ -1002,31 +1059,36 @@
          [else
           (define trait-name (trait-constraint-info-trait-name tc-info))
           (define type-arg-exprs (trait-constraint-info-type-arg-exprs tc-info))
-          ;; 1. Constraint-creation propagator: builds initial domain from registry
+          ;; Phase 3b: collect this dict-meta for output bridging
+          (when cmp-box
+            (set-box! cmp-box
+                      (cons (cons id e) (unbox cmp-box))))
+          ;; 1. Constraint-creation propagator (Phase 2): builds initial domain
           (define-values (net1 _cc-pid)
             (net-add-propagator net (list tm-cid) (list tm-cid)
                                 (make-constraint-creation-fire-fn tm-cid e trait-name)
                                 #:component-paths (list)))  ;; fires once (no watched paths)
-          ;; 2. Type-narrows-constraints bridge: one per type-arg expression.
-          ;; Watches the :type facet of each type-arg position.
-          ;; When the type-arg becomes concrete, narrows the constraint domain.
-          (for/fold ([n net1]) ([ta (in-list type-arg-exprs)])
-            (cond
-              ;; Only install bridge for type-args that are positions in the
-              ;; attribute map (expr nodes). Concrete types don't need bridges.
-              [(or (expr-meta? ta) (expr-bvar? ta) (expr-fvar? ta)
-                   (expr-app? ta) (expr-lam? ta) (expr-Pi? ta))
-               (define-values (n2 _bridge-pid)
-                 (net-add-propagator n (list tm-cid) (list tm-cid)
-                                     (make-type-narrows-constraints-fire-fn tm-cid e ta)
-                                     #:component-paths
-                                     (list (cons tm-cid (cons ta ':type)))))
-               n2]
-              ;; Concrete type-arg (e.g., (expr-Int)) — narrow immediately
-              ;; by writing a refined domain in the creation propagator.
-              ;; This is handled by the creation propagator's initial domain
-              ;; already being filtered when type args are known.
-              [else n]))])]
+          ;; 2. Type-narrows-constraints bridge (Phase 2): one per type-arg.
+          (define net2
+            (for/fold ([n net1]) ([ta (in-list type-arg-exprs)])
+              (cond
+                [(or (expr-meta? ta) (expr-bvar? ta) (expr-fvar? ta)
+                     (expr-app? ta) (expr-lam? ta) (expr-Pi? ta))
+                 (define-values (n2 _bridge-pid)
+                   (net-add-propagator n (list tm-cid) (list tm-cid)
+                                       (make-type-narrows-constraints-fire-fn tm-cid e ta)
+                                       #:component-paths
+                                       (list (cons tm-cid (cons ta ':type)))))
+                 n2]
+                [else n])))
+          ;; 3. S1 trait-resolution propagator (Phase 3a): watches :constraints,
+          ;; writes dict expr to :type when constraint reaches singleton.
+          (define-values (net3 _res-pid)
+            (net-add-propagator net2 (list tm-cid) (list tm-cid)
+                                (make-trait-resolution-fire-fn tm-cid e)
+                                #:component-paths
+                                (list (cons tm-cid (cons e ':constraints)))))
+          net3])]
 
       ;; --- Bound variable: reads from :context facet at ctx-pos ---
       [(expr-bvar k)
@@ -1115,6 +1177,21 @@
                (hash-update! unhandled-expr-counts tag add1 0))
              net))])))
 
+;; Track 4B Phase 3b: expose collected constraint-meta positions.
+;; install-typing-network returns only the network (backward compat).
+;; The constraint positions are captured in the box and accessed by
+;; install-typing-network/with-constraints which wraps the call.
+(define (install-typing-network/with-constraints net tm-cid expr ctx-val)
+  ;; Delegate to install-typing-network (which populates constraint-meta-positions box)
+  ;; Then read the box. The box is scoped to each install-typing-network call.
+  ;; PROBLEM: the box is local to install-typing-network's let body.
+  ;; SOLUTION: use a parameter to thread the collection.
+  (define positions-box (box '()))
+  (define result-net
+    (parameterize ([current-constraint-meta-positions positions-box])
+      (install-typing-network net tm-cid expr ctx-val)))
+  (values result-net (unbox positions-box)))
+
 
 ;; ============================================================
 ;; Phase 3 (D.4): Production Integration — infer-on-network
@@ -1145,8 +1222,10 @@
   ;; 1. Create a fresh attribute cell (nested hasheq, attribute-map-merge-fn)
   (define-values (net1 tm-cid)
     (net-new-cell net (hasheq) attribute-map-merge-fn))
-  ;; 2. Install typing propagators for the expr tree
-  (define net2 (install-typing-network net1 tm-cid expr ctx-val))
+  ;; 2. Install typing + constraint + resolution propagators for the expr tree.
+  ;; Track 4B Phase 3b: use /with-constraints to collect dict-meta positions.
+  (define-values (net2 constraint-metas)
+    (install-typing-network/with-constraints net1 tm-cid expr ctx-val))
   ;; 3. Run to quiescence with fuel limit
   (define original-fuel (prop-network-fuel net2))
   (define net2-limited
@@ -1158,6 +1237,21 @@
   (define net3 (run-to-quiescence-bsp net2-limited))
   ;; 4. Read the root type from the type-map
   (define root-type (type-map-read net3 tm-cid expr))
+  ;; 5. Track 4B Phase 3b: bridge resolved constraints to main network.
+  ;; For each dict-meta that reached constraint-one in the PU, call solve-meta!
+  ;; to bridge the solution to the imperative meta-store. This enables the
+  ;; imperative pipeline to see resolved dicts without running resolve-trait-constraints!.
+  (unless (<= (prop-network-fuel net3) 0)
+    (define tm (net-cell-read net3 tm-cid))
+    (for ([pair (in-list constraint-metas)])
+      (define meta-id (car pair))
+      (define meta-expr (cdr pair))  ;; the expr-meta node (position key)
+      (unless (meta-solved? meta-id)
+        (define constraint-val (that-read tm meta-expr ':constraints))
+        (when (constraint-one? constraint-val)
+          (define candidate (constraint-one-candidate constraint-val))
+          (define dict-expr (candidate->dict-expr candidate))
+          (solve-meta! meta-id dict-expr)))))
   ;; If fuel exhausted (cycling), return type-bot → fallback
   (if (<= (prop-network-fuel net3) 0)
       (values net3 type-bot)
