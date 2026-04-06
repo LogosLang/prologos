@@ -33,6 +33,7 @@
          "constraint-cell.rkt"  ;; Track 4B Phase 2: reuse existing constraint lattice
          "constraint-propagators.rkt"  ;; Track 4B Phase 2: build-trait-constraint, refine-constraint-by-type-tag
          (only-in "qtt.rkt" zero-usage single-usage add-usage scale-usage)  ;; Track 4B Phase 4
+         (only-in "atms.rkt" assumption-id)  ;; Track 4B Phase 8: union branching
          "elab-network-types.rkt"
          "errors.rkt"
          "pretty-print.rkt"
@@ -240,6 +241,34 @@
     (net-add-propagator net inputs outputs wrapped #:component-paths cpaths))
   (set-box! pid-box pid)
   (values net* pid))
+
+;; ============================================================
+;; Track 4B Phase 8: Assumption-Capturing Propagator Wrapper
+;; ============================================================
+;;
+;; Wraps a fire function to parameterize current-speculation-stack
+;; with a captured assumption. Used by Option D union branching:
+;; two sets of propagators fire concurrently under different
+;; assumptions within the same BSP quiescence.
+;;
+;; net-cell-write auto-wraps plain values via tms-write under
+;; the parameterized stack. net-cell-read uses tms-read to
+;; navigate to the correct branch. Both are TMS-transparent.
+
+(define (wrap-with-assumption fire-fn assumption-id)
+  (lambda (net)
+    (parameterize ([current-speculation-stack
+                    (cons assumption-id (current-speculation-stack))])
+      (fire-fn net))))
+
+;; Promote a cell's plain value to TMS-wrapped, enabling speculation.
+;; The current value becomes the TMS base; branches start empty.
+;; Must be called BEFORE speculative propagators fire.
+(define (promote-cell-to-tms net cid)
+  (define val (net-cell-read-raw net cid))
+  (if (tms-cell-value? val)
+      net  ;; already TMS — no-op
+      (net-cell-reset net cid (tms-cell-value val (hasheq)))))
 
 ;; ============================================================
 ;; Track 4B Phase 1: Attribute Record PU
@@ -1432,6 +1461,65 @@
                                   #:component-paths
                                   (list (cons tm-cid (cons cod ':usage)))))
        net4]
+
+      ;; --- Union type: Phase 8 Option D — branch via assumption-capturing propagators ---
+      ;; Two sets of propagators installed concurrently, each capturing its assumption.
+      ;; Both fire in the same BSP quiescence. TMS keeps branch values separate.
+      ;; Contradiction in one branch → retract. Survivor → commit.
+      [(expr-union left right)
+       ;; Create two fresh assumptions for the branches
+       (define aid-left (assumption-id (gensym 'union-left)))
+       (define aid-right (assumption-id (gensym 'union-right)))
+       ;; Promote the attribute-map cell to TMS (needed before speculative writes)
+       (define net-tms (promote-cell-to-tms net tm-cid))
+       ;; Install propagators for the LEFT branch under assumption-left.
+       ;; Each propagator's fire-fn is wrapped to parameterize current-speculation-stack.
+       (define net-left
+         (parameterize ([current-speculation-stack
+                         (cons aid-left (current-speculation-stack))])
+           (install net-tms left ctx-pos)))
+       ;; Write left's type to the union position under assumption-left
+       (define net-left2
+         (parameterize ([current-speculation-stack
+                         (cons aid-left (current-speculation-stack))])
+           (type-map-write net-left tm-cid e left)))
+       ;; Install propagators for the RIGHT branch under assumption-right
+       (define net-right
+         (parameterize ([current-speculation-stack
+                         (cons aid-right (current-speculation-stack))])
+           (install net-left2 right ctx-pos)))
+       ;; Write right's type to the union position under assumption-right
+       (define net-right2
+         (parameterize ([current-speculation-stack
+                         (cons aid-right (current-speculation-stack))])
+           (type-map-write net-right tm-cid e right)))
+       net-right2]
+
+      ;; --- Type annotation: return type IS the annotation + check term ---
+      ;; Phase 9 prep: ann(term, T) → T, with T written downward to term
+      ;; as a check constraint. Merge at term position IS unification.
+      [(expr-ann term type-expr)
+       ;; Install sub-expression propagators for term and type-expr
+       (define net1 (install net term ctx-pos))
+       (define net2 (install net1 type-expr ctx-pos))
+       ;; Write T as this expression's type (the annotation IS the type)
+       (define net3 (type-map-write net2 tm-cid e type-expr))
+       ;; Write T downward to term position (CHECK: term must have type T)
+       ;; Merge at term: if term's inferred type ≠ T → type-top (error)
+       (type-map-write net3 tm-cid term type-expr)]
+
+      ;; --- Type constructor: kind from arity ---
+      ;; Phase 9 prep: tycon(name) → curried Pi type from arity table.
+      [(expr-tycon name)
+       (define arity (tycon-arity name))
+       (if arity
+           ;; Build curried Pi: Type → Type → ... → Type (arity arrows)
+           (let ([kind (let loop ([n arity])
+                         (if (= n 0)
+                             (expr-Type (lzero))
+                             (expr-Pi 'm0 (expr-Type (lzero)) (loop (- n 1)))))])
+             (type-map-write net tm-cid e kind))
+           net)]  ;; unknown tycon — leave at ⊥
 
       ;; --- Domain lookup: SRE typing domain handles remaining expr kinds ---
       [_
