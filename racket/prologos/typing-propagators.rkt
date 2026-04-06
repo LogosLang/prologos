@@ -217,6 +217,27 @@
     [_ #f]))
 
 
+;; Convenience: install a fire-once propagator with flag-guard.
+;; After first successful fire, subsequent scheduling is an instant no-op.
+;; P3 bulk cleanup removes the dependents entry after quiescence.
+(define (net-add-fire-once-propagator net inputs outputs fire-fn watched-cid
+                                      #:component-paths [cpaths '()])
+  (define pid-box (box #f))
+  (define fired? (box #f))
+  (define wrapped
+    (lambda (n)
+      (cond
+        [(unbox fired?) n]
+        [else
+         (define result (fire-fn n))
+         (cond
+           [(eq? result n) n]
+           [else (set-box! fired? #t) result])])))
+  (define-values (net* pid)
+    (net-add-propagator net inputs outputs wrapped #:component-paths cpaths))
+  (set-box! pid-box pid)
+  (values net* pid))
+
 ;; ============================================================
 ;; Track 4B Phase 1: Attribute Record PU
 ;; ============================================================
@@ -250,8 +271,8 @@
        [else (type-lattice-merge old-v new-v)])]
     [(:context)
      (cond
-       [(equal? old-v context-empty-value) new-v]
-       [(equal? new-v context-empty-value) old-v]
+       [(not old-v) new-v]   ;; #f (bot) + X = X
+       [(not new-v) old-v]   ;; X + #f (bot) = X
        [(equal? old-v new-v) old-v]
        [else (context-cell-merge old-v new-v)])]
     ;; Track 4B Phase 2: constraint domain uses existing constraint-cell lattice
@@ -265,7 +286,7 @@
 (define (facet-bot facet)
   (case facet
     [(:type) type-bot]
-    [(:context) context-empty-value]
+    [(:context) #f]  ;; #f = not yet written (distinguishes from context-empty-value)
     [(:constraints) constraint-bot]  ;; constraint-cell.rkt: all candidates possible
     [(:usage) '()]               ;; empty usage vector
     [(:warnings) '()]            ;; no warnings
@@ -274,7 +295,7 @@
 (define (facet-bot? facet v)
   (case facet
     [(:type) (type-bot? v)]
-    [(:context) (equal? v context-empty-value)]
+    [(:context) (not v)]  ;; #f = bot (not yet written)
     [(:constraints) (constraint-bot? v)]
     [(:usage) (null? v)]
     [(:warnings) (null? v)]
@@ -630,29 +651,29 @@
   (define child-exprs (map (lambda (fn) (fn e)) children))
   (cond
     [(= arity 0)
-     ;; Zero-arity: zero usage
+     ;; Zero-arity: zero usage — P2 fire-once
      (define-values (net1 _pid)
-       (net-add-propagator net (list tm-cid) (list tm-cid)
-                           (make-usage-zero-fire-fn tm-cid e ctx-pos)
+       (net-add-fire-once-propagator net (list tm-cid) (list tm-cid)
+                           (make-usage-zero-fire-fn tm-cid e ctx-pos) tm-cid
                            #:component-paths
                            (list (cons tm-cid (cons ctx-pos ':context)))))
      net1]
     [(= arity 1)
-     ;; Unary: pass through child usage
+     ;; Unary: pass through child usage — P2 fire-once
      (define child (car child-exprs))
      (define-values (net1 _pid)
-       (net-add-propagator net (list tm-cid) (list tm-cid)
-                           (make-usage-unary-fire-fn tm-cid e child)
+       (net-add-fire-once-propagator net (list tm-cid) (list tm-cid)
+                           (make-usage-unary-fire-fn tm-cid e child) tm-cid
                            #:component-paths
                            (list (cons tm-cid (cons child ':usage)))))
      net1]
     [(= arity 2)
-     ;; Binary: add child usages
+     ;; Binary: add child usages — P2 fire-once
      (define c1 (car child-exprs))
      (define c2 (cadr child-exprs))
      (define-values (net1 _pid)
-       (net-add-propagator net (list tm-cid) (list tm-cid)
-                           (make-usage-binary-fire-fn tm-cid e c1 c2)
+       (net-add-fire-once-propagator net (list tm-cid) (list tm-cid)
+                           (make-usage-binary-fire-fn tm-cid e c1 c2) tm-cid
                            #:component-paths
                            (list (cons tm-cid (cons c1 ':usage))
                                  (cons tm-cid (cons c2 ':usage)))))
@@ -1229,35 +1250,34 @@
       ;; --- Meta expression: leave :type at ⊥ (metas resolve through typing).
       ;; Track 4B: install usage + meta-bridge + optional constraint propagators.
       [(expr-meta id _)
-       ;; Usage: zero-usage (metas are implicit args, not user variables)
+       ;; Usage: zero-usage — P2 fire-once
        (define-values (net-u _u-pid)
-         (net-add-propagator net (list tm-cid) (list tm-cid)
-                             (make-usage-zero-fire-fn tm-cid e ctx-pos)
+         (net-add-fire-once-propagator net (list tm-cid) (list tm-cid)
+                             (make-usage-zero-fire-fn tm-cid e ctx-pos) tm-cid
                              #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
-       ;; Phase 6: meta-bridge propagator — watches :type, writes to output cell.
-       ;; Installed for ALL metas, not just constraint ones.
+       ;; Phase 6: meta-bridge propagator — P2 fire-once
        (define output-cid (current-meta-solution-output-cell-id))
        (define net-b
          (if output-cid
-             (let-values ([(n _) (net-add-propagator net-u (list tm-cid) (list output-cid)
-                                   (make-meta-solution-output-fire-fn tm-cid e id output-cid)
+             (let-values ([(n _) (net-add-fire-once-propagator net-u (list tm-cid) (list output-cid)
+                                   (make-meta-solution-output-fire-fn tm-cid e id output-cid) tm-cid
                                    #:component-paths
                                    (list (cons tm-cid (cons e ':type))))])
                n)
              net-u))
-       ;; Phase 2+3: constraint propagators (only for metas with trait constraints)
+       ;; Phase 2+3: constraint propagators
        (define tc-info (hash-ref trait-constraints id #f))
        (cond
-         [(not tc-info) net-b]  ;; no trait constraint → just usage + bridge
+         [(not tc-info) net-b]
          [else
           (define trait-name (trait-constraint-info-trait-name tc-info))
           (define type-arg-exprs (trait-constraint-info-type-arg-exprs tc-info))
-          ;; 1. Constraint-creation propagator (Phase 2): builds initial domain
+          ;; 1. Constraint-creation — P2 fire-once
           (define-values (net1 _cc-pid)
-            (net-add-propagator net-b (list tm-cid) (list tm-cid)
-                                (make-constraint-creation-fire-fn tm-cid e trait-name)
+            (net-add-fire-once-propagator net-b (list tm-cid) (list tm-cid)
+                                (make-constraint-creation-fire-fn tm-cid e trait-name) tm-cid
                                 #:component-paths (list)))
-          ;; 2. Type-narrows-constraints bridge (Phase 2): one per type-arg.
+          ;; 2. Type-narrows-constraints bridge (NOT fire-once — may fire multiple times)
           (define net2
             (for/fold ([n net1]) ([ta (in-list type-arg-exprs)])
               (cond
@@ -1270,21 +1290,21 @@
                                        (list (cons tm-cid (cons ta ':type)))))
                  n2]
                 [else n])))
-          ;; 3. S1 trait-resolution propagator (Phase 3a)
+          ;; 3. S1 trait-resolution — P2 fire-once
           (define-values (net3 _res-pid)
-            (net-add-propagator net2 (list tm-cid) (list tm-cid)
-                                (make-trait-resolution-fire-fn tm-cid e)
+            (net-add-fire-once-propagator net2 (list tm-cid) (list tm-cid)
+                                (make-trait-resolution-fire-fn tm-cid e) tm-cid
                                 #:component-paths
                                 (list (cons tm-cid (cons e ':constraints)))))
           net3])]
 
-      ;; --- Bound variable: type from context + single-usage ---
+      ;; --- Bound variable: type + usage — both P2 fire-once ---
       [(expr-bvar k)
-       (define-values (net1 _t) (net-add-propagator net (list tm-cid) (list tm-cid)
-                                  (make-bvar-fire-fn/ctx-pos tm-cid e k ctx-pos)
+       (define-values (net1 _t) (net-add-fire-once-propagator net (list tm-cid) (list tm-cid)
+                                  (make-bvar-fire-fn/ctx-pos tm-cid e k ctx-pos) tm-cid
                                   #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
-       (define-values (net2 _u) (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                                  (make-usage-bvar-fire-fn tm-cid e k ctx-pos)
+       (define-values (net2 _u) (net-add-fire-once-propagator net1 (list tm-cid) (list tm-cid)
+                                  (make-usage-bvar-fire-fn tm-cid e k ctx-pos) tm-cid
                                   #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
        net2]
 
@@ -1317,32 +1337,32 @@
                                         (cons tm-cid (cons func ':type)))))
        net4]
 
-      ;; --- Lambda: context-extension + typing + usage ---
+      ;; --- Lambda: context-extension (P2) + typing + usage (P2) ---
       [(expr-lam m dom body)
        (define net1 (install net dom ctx-pos))
        (define child-ctx-pos (gensym 'ctx-lam))
-       (define-values (net2 _ctx) (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                                    (make-context-extension-fire-fn tm-cid ctx-pos dom child-ctx-pos m)
+       (define-values (net2 _ctx) (net-add-fire-once-propagator net1 (list tm-cid) (list tm-cid)
+                                    (make-context-extension-fire-fn tm-cid ctx-pos dom child-ctx-pos m) tm-cid
                                     #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
        (define net3 (install net2 body child-ctx-pos))
-       ;; Typing: lam propagator
+       ;; Typing: lam propagator (NOT fire-once)
        (define-values (net4 _t) (net-add-propagator net3 (list tm-cid) (list tm-cid)
                                   (make-lam-fire-fn tm-cid e dom body m)
                                   #:component-paths
                                   (list (cons tm-cid (cons dom ':type))
                                         (cons tm-cid (cons body ':type)))))
-       ;; Usage: utail(body-usage)
-       (define-values (net5 _u) (net-add-propagator net4 (list tm-cid) (list tm-cid)
-                                  (make-usage-lam-fire-fn tm-cid e body)
+       ;; Usage: utail — P2 fire-once
+       (define-values (net5 _u) (net-add-fire-once-propagator net4 (list tm-cid) (list tm-cid)
+                                  (make-usage-lam-fire-fn tm-cid e body) tm-cid
                                   #:component-paths
                                   (list (cons tm-cid (cons body ':usage)))))
        net5]
 
-      ;; --- Pi formation: context-extension + typing + usage ---
+      ;; --- Pi formation: context-extension (P2) + typing + usage (P2) ---
       [(expr-Pi m dom cod)
        (define child-ctx-pos (gensym 'ctx-pi))
-       (define-values (net0 _ctx) (net-add-propagator net (list tm-cid) (list tm-cid)
-                                    (make-context-extension-fire-fn tm-cid ctx-pos dom child-ctx-pos m)
+       (define-values (net0 _ctx) (net-add-fire-once-propagator net (list tm-cid) (list tm-cid)
+                                    (make-context-extension-fire-fn tm-cid ctx-pos dom child-ctx-pos m) tm-cid
                                     #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
        (define net1 (install net0 dom ctx-pos))
        (define net2 (install net1 cod child-ctx-pos))
@@ -1352,9 +1372,9 @@
                                   #:component-paths
                                   (list (cons tm-cid (cons dom ':type))
                                         (cons tm-cid (cons cod ':type)))))
-       ;; Usage: utail(cod-usage)
-       (define-values (net4 _u) (net-add-propagator net3 (list tm-cid) (list tm-cid)
-                                  (make-usage-pi-fire-fn tm-cid e cod)
+       ;; Usage: utail — P2 fire-once
+       (define-values (net4 _u) (net-add-fire-once-propagator net3 (list tm-cid) (list tm-cid)
+                                  (make-usage-pi-fire-fn tm-cid e cod) tm-cid
                                   #:component-paths
                                   (list (cons tm-cid (cons cod ':usage)))))
        net4]
