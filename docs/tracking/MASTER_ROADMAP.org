@@ -80,7 +80,8 @@ Solver) and is the foundation for the SRE Series.
 |-------+-------------+--------+------------|
 | 0 | Allocation Efficiency | ✅ [[file:2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md][Design]] [[file:2026-03-21_BSP_LE_TRACK0_PIR.md][PIR]] + [[file:2026-03-21_CHAMP_PERFORMANCE_DESIGN.md][CHAMP]] [[file:2026-03-21_CHAMP_PERFORMANCE_PIR.md][CHAMP PIR]] | — ([[file:2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md][Audit]], [[file:2026-03-21_CHAMP_PERFORMANCE_AUDIT.md][CHAMP Audit]]) |
 | 1 | UnionFind (persistent disjoint sets) | ⬜ | Track 0 |
-| 2 | ATMS Solver (Multiverse Multiplexer) | ⬜ | Track 0 |
+| 1.5 | Cell-Based TMS (Truth Maintenance on Network) | ⬜ | Track 0. [[file:../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md][Design Note]]. Blocks PPN 4B Phase 8 + Track 2. |
+| 2 | ATMS Solver (Multiverse Multiplexer) | ⬜ | Track 0, Track 1.5 |
 | 3 | Tabling (SLG memoization) | ⬜ | Track 2 |
 | 4 | BSP Pipeline (Kan extension architecture) | ⬜ → *PAR Series* | Track 3; SUPERSEDED by PAR Series (parallel scheduling across all propagator architectures) |
 | 5 | Solver Language | ⬜ | All previous |

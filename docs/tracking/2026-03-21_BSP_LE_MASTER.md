@@ -105,6 +105,19 @@ PUnify Cleanup ──→ Track 0 (Allocation Efficiency)
 
 **Key design question**: UF updates are monotone (union grows the equivalence class) but find has a non-monotone optimization (path compression writes). Persistent path compression returns a new UF without mutating the original — compatible with ATMS worldview branching.
 
+### Track 1.5: Cell-Based TMS (Truth Maintenance on Network)
+
+**Source**: PPN Track 4B Phase 8 design conversation (2026-04-06)
+**Design note**: `docs/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`
+
+**Scope**: Rearchitect TMS from parameter-based (`current-speculation-stack`) to cell-based (worldview as a cell value). Propagators read worldview from a cell input, not from ambient state. `net-cell-write` / `net-cell-read` use worldview from cell, not from parameter.
+
+**Why before Track 2**: The ATMS Solver (Track 2) relies on TMS for worldview management. Cell-based TMS makes speculation fully on-network — branches are information flowing through cells, not ambient parameter state. This enables Option D concurrent branch evaluation (two sets of propagators under different worldview cells, evaluating in the same BSP quiescence).
+
+**Blocks**: PPN Track 4B Phase 8 (union type branching in attribute PU), BSP-LE Track 2 (ATMS Solver)
+
+**Estimated scope**: ~450 lines across propagator.rkt + migration of 5-6 speculation users
+
 ### Track 2: ATMS Solver (The Multiverse Multiplexer)
 
 **Source**: Logic Engine Design Phase 5 + Part 3 §6 (`2026-03-19_PUNIFY_PART3_ATMS_SOLVER_ARCHITECTURE.md`)
