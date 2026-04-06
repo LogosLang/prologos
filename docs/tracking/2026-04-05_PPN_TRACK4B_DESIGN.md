@@ -21,8 +21,9 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0a | Fix multi-path component-indexed firing (foundational) | ⬜ | Fix `assoc` first-match bug in propagator.rkt. Multi-map for paths per cell-id. NTT K-indexed read/write specification. Audit Track 4A for thrashing from incorrect firing. |
-| 0b | Constraint domain lattice design (explicit design phase) | ⬜ | CLP-inspired domain narrowing, not flat pending→resolved→contradicted. SRE algebraic structure. Design BEFORE implementation. |
-| 0c | .pnet attribute cache design | ⬜ | What's cached, invalidation strategy, structural sharing format, warm-start preloading. |
+| 0b | Constraint domain lattice design (explicit design phase) | ✅ | CLP-inspired domain narrowing. Powerset lattice (⊇ ordering, intersection join). Heyting algebra. SRE domain registered. Replaces Track 4A Phase 6 flat lattice. See §11. |
+| 0c | .pnet attribute cache design | ⬜ | What's cached, invalidation strategy, structural sharing format, warm-start preloading. See §9.6. |
+| 0d | BSP scheduler audit + correction | ⬜ | Correct Track 4A to use BSP scheduler by default. Audit all `run-to-quiescence` calls. Ensure all Track 4B implementation uses BSP. CALM-invariant enforcement. Stratum ordering via BSP, not ad-hoc. |
 | 0 | Stage 2 audit + attribute grammar specification | ✅ | [Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md): 5 domains, 12 node kinds, stratification. [AG Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md): catamorphisms, CLP, aspects. |
 | 1 | Attribute Record PU: extend type-map to full attribute record | ⬜ | Type + Context + Constraint + Multiplicity + Warning facets. CHAMP-backed with shared singletons. Proper K-indexed component firing. |
 | 2 | Constraint attribute propagators (S0: creation during typing) | ⬜ | Uses the new domain lattice from Phase 0b. Trait constraints, unification constraints, capability constraints as domain-narrowing cells. |
@@ -301,13 +302,15 @@ The constraint-creation propagator (S0) reads the registered `trait-constraint-i
 ```
 Phase 0a (Fix multi-path component-indexed firing) ← FOUNDATIONAL, blocks everything
   ↓
-Phase 0b (Constraint domain lattice DESIGN) ← design phase, before implementation
+Phase 0b (Constraint domain lattice DESIGN) ✅ designed, ready to implement
   ↓
-Phase 0c (.pnet attribute cache design) ← design phase
+Phase 0c (.pnet attribute cache design)
   ↓
-Phase 1 (Attribute Record PU) ← depends on 0a (correct K-indexed firing)
+Phase 0d (BSP scheduler audit + correction) ← audit Track 4A, correct to BSP default
   ↓
-Phase 2 (Constraint creation S0) ←─── Phase 1 + 0b (domain lattice designed)
+Phase 1 (Attribute Record PU) ← depends on 0a (correct K-indexed) + 0d (BSP)
+  ↓
+Phase 2 (Constraint creation S0) ←─── Phase 1 + 0b (domain lattice)
   ↓
 Phase 3 (Trait resolution S1) ←─── Phase 2 (constraints exist to resolve)
   |
@@ -317,7 +320,7 @@ Phase 3 (Trait resolution S1) ←─── Phase 2 (constraints exist to resolve
   |
   └→ Phase 7 (Warnings S2) ←─── Phase 2+3 (constraints + resolution feed warnings)
 
-Phase 6 (Meta bridging) ←─── Phase 3 (resolved traits produce meta solutions)
+Phase 6 (Meta bridging via output channels) ←─── Phase 3
   ↓
 Phase 8 (ATMS) ←─── Phase 2+3 (constraints + resolution under assumptions)
   ↓
@@ -330,9 +333,9 @@ Phase 11 (Scaffolding retirement) ←─── Phase 9
 Phase T + 12 (Tests + PIR) ←─── ALL
 ```
 
-**Critical path**: 0a → 0b → 1 → 2 → 3 → 6 → 9 (retire imperative)
-**Parallel**: Phases 4, 5, 7 independent after Phase 1. Phase 8 (ATMS) after Phase 3.
-**Design phases**: 0a, 0b, 0c are design+implementation before main attribute work.
+**Critical path**: 0a → 0d → 1 → 2 → 3 → 6 → 9 (retire imperative)
+**Parallel**: Phases 4, 5, 7 independent after Phase 1. Phase 8 (ATMS) after Phase 3. Phase 0b (✅) + 0c parallel with 0a.
+**Design phases**: 0b ✅ designed, 0c needs design. 0a + 0d are implementation phases.
 
 ---
 
@@ -571,40 +574,334 @@ With the fix in place, audit ALL propagators in `install-typing-network`:
 
 ---
 
-## §11 Phase 0b Design: Constraint Domain Lattice (NEEDS DESIGN)
+## §11 Phase 0b Design: Constraint Domain Lattice
 
-### The Problem
+### §11.1 The Problem
 
-Track 4A Phase 6 built a flat constraint lattice: `pending → resolved(instance) → contradicted`. This is too simple for CLP-inspired domain narrowing.
+Track 4A Phase 6 built a flat constraint lattice: `pending → resolved(instance) → contradicted`. This is too simple. It has no notion of PROGRESSIVE NARROWING — a constraint jumps from "pending" to "resolved" in one step.
 
-### The Vision (from CLP(Z) analogy)
+CLP solvers work differently: a variable has a DOMAIN (set of possible values), and constraints NARROW the domain monotonically. `X ∈ {0..9}, X > 5 → X ∈ {6..9}`. The narrowing IS the computation.
 
-A type variable `?A` with constraint `(Add ?A)` should have a DOMAIN: the set of types that implement `Add`. As type information refines, the domain narrows:
+### §11.2 The Constraint Domain Lattice
+
+The constraint domain is NOT a separate lattice — it's an ADDITIONAL RELATION on the type carrier, following the SRE Track 2H pattern (equality and subtype are different relations on the same carrier).
+
+| Relation | Carrier | Ordering | Merge | Properties |
+|----------|---------|----------|-------|------------|
+| Equality | Type expressions | Flat (equal or ⊤) | `type-lattice-merge` | Comm, Assoc, Idemp |
+| Subtype | Type expressions | Partial order (Nat ≤ Int) | `subtype-lattice-merge` | Comm, Assoc, Idemp, Distributive, Heyting (ground) |
+| **Constraint domain** | **(Setof impl-candidate)** | **⊇ (superset = less info)** | **Set intersection** | **Comm, Assoc, Idemp, Distributive, Heyting** |
+
+The constraint domain lattice:
 
 ```
-(Add ?A)  where ?A : Type
-  domain = {Int, Nat, Rat, String, Posit8, Posit16, Posit32, Posit64}  ;; all Add impls
-
-?A gains info: ?A appears in (int+ ?A 3)  →  ?A narrows toward Int
-  domain = {Int}  ;; only Int compatible
-
-Resolve: impl Add Int → dict = Int--Add--dict
+⊥ (no info) = universe of all types (all candidates possible)
+  ↓ (gaining info = narrowing)
+{Int, Nat, Rat, String, Posit8, ...} = types with Add instance
+  ↓
+{Int, Nat} = types with both Add and Ord instances (intersection)
+  ↓
+{Int} = fully resolved (one candidate)
+  ↓
+⊤ (contradiction) = ∅ (no type satisfies all constraints)
 ```
 
-### What Needs Designing (explicit design phase)
+**Ordering**: ⊇ means "less information" (more possibilities). ⊆ means "more information" (fewer possibilities). This is the DUAL of the powerset lattice.
 
-1. **The domain lattice structure**: `(Setof Candidate)` ordered by subset (⊇ = more info). The bot is the full candidate set. The top is empty (contradiction — no valid instance).
-2. **SRE algebraic properties**: commutativity, associativity, idempotence of domain intersection. Is this a Heyting algebra? Does it form a quantale with the type lattice?
-3. **Integration with type lattice**: when a type-map position narrows (meta → Int), the constraint domain for that position's trait constraints narrows correspondingly.
-4. **Parametric instance handling**: CLP narrowing for parametric impls (e.g., `impl Eq (List A) where (Eq A)`) — the domain includes parametric entries that generate sub-constraints.
-5. **Relation to SRE Track 2H properties**: the constraint domain should be registered as an SRE domain with declared properties that property inference validates.
-6. **This IS the bridge between functional types and relational constraints**: types as CLP domains, trait constraints as domain constraints, elaboration as constraint propagation. The design must account for future use as domain constraints in the Relational Language.
+**Join** (⊔ = gaining information): SET INTERSECTION. Adding a constraint removes candidates.
+**Meet** (⊓ = relaxing): SET UNION. Removing a constraint adds candidates.
+**Bot** (⊥): the universal set (all impl candidates).
+**Top** (⊤): the empty set (no candidates — contradiction).
 
-### Status: NEEDS DEDICATED DESIGN before Phase 2 implementation
+### §11.3 Algebraic Properties
+
+Powerset lattices under intersection are ALWAYS Heyting algebras:
+
+| Property | Status | Proof |
+|----------|--------|-------|
+| Commutative | ✅ | A ∩ B = B ∩ A |
+| Associative | ✅ | (A ∩ B) ∩ C = A ∩ (B ∩ C) |
+| Idempotent | ✅ | A ∩ A = A |
+| Has-meet | ✅ | A ∪ B (set union) |
+| Distributive | ✅ | A ∩ (B ∪ C) = (A ∩ B) ∪ (A ∩ C) |
+| Heyting | ✅ | Pseudo-complement: ¬A = complement(A). For error reporting: "types that DON'T satisfy the constraint" |
+
+The pseudo-complement is the key for error reporting: `¬{types with Eq impl}` = `{types WITHOUT Eq impl}`. When a type `Posit8` is found to lack `Eq`, the pseudo-complement produces the error context.
+
+### §11.4 SRE Domain Registration
+
+```
+(make-sre-domain
+  'constraint-domain
+  ;; merge-registry: narrowing relation = set intersection
+  (hasheq 'narrowing constraint-domain-merge)
+  ;; contradicts?: empty set
+  constraint-domain-contradicts?
+  ;; bot?: universe
+  constraint-domain-bot?
+  ;; bot-value
+  constraint-domain-universe
+  ;; top-value
+  constraint-domain-empty
+  ;; meta-recognizer / meta-resolver: #f (no metas in domain values)
+  #f #f
+  ;; dual-pairs: #f
+  #f
+  ;; property-cell-ids: from property inference
+  (hasheq)
+  ;; declared-properties (per-relation):
+  (hasheq 'narrowing
+    (hasheq 'commutative #t
+            'associative #t
+            'idempotent #t
+            'has-meet #t
+            'distributive #t
+            'heyting #t))
+  ;; operations
+  (hasheq 'pseudo-complement constraint-domain-complement))
+```
+
+### §11.5 Concrete Representation
+
+```racket
+;; A constraint domain value: set of impl candidates for a trait
+(struct constraint-domain
+  (trait-name    ;; symbol: 'Add, 'Eq, 'Ord, etc.
+   candidates    ;; (listof impl-candidate) | 'universe
+   ;; Each candidate: monomorphic (concrete fqn) or parametric (pattern + where-constraints)
+   )
+  #:transparent)
+
+;; Bot: all candidates possible (no narrowing yet)
+(define (constraint-domain-universe trait-name)
+  (constraint-domain trait-name 'universe))
+
+;; Top: no candidates (contradiction)
+(define (constraint-domain-empty trait-name)
+  (constraint-domain trait-name '()))
+
+;; Merge (join = narrowing = intersection)
+(define (constraint-domain-merge a b)
+  (cond
+    ;; Universe ∩ X = X
+    [(eq? (constraint-domain-candidates a) 'universe) b]
+    [(eq? (constraint-domain-candidates b) 'universe) a]
+    ;; Empty ∩ X = Empty (contradiction absorbs)
+    [(null? (constraint-domain-candidates a)) a]
+    [(null? (constraint-domain-candidates b)) b]
+    ;; Set intersection
+    [else
+     (define intersected
+       (filter (lambda (c) (member c (constraint-domain-candidates b) equal?))
+               (constraint-domain-candidates a)))
+     (constraint-domain (constraint-domain-trait-name a) intersected)]))
+
+;; Contradicts?: empty candidate set
+(define (constraint-domain-contradicts? d)
+  (and (constraint-domain? d)
+       (not (eq? (constraint-domain-candidates d) 'universe))
+       (null? (constraint-domain-candidates d))))
+
+;; Pseudo-complement for error reporting
+(define (constraint-domain-complement d all-impls)
+  ;; Returns candidates NOT in d — for "available instances" error message
+  (if (eq? (constraint-domain-candidates d) 'universe)
+      '()  ;; complement of universe is empty
+      (filter (lambda (c) (not (member c (constraint-domain-candidates d) equal?)))
+              all-impls)))
+```
+
+### §11.6 Integration with Type Lattice
+
+When a type-map position narrows (e.g., meta `?A` gains type `Int`), the constraint domain for trait constraints on `?A` narrows correspondingly:
+
+**Bridge propagator (type → constraint domain)**:
+```
+propagator type-narrows-constraint-domain
+  :reads   type-map @ [?A-position] (type facet)
+  :writes  attribute-map @ [?A-position] (constraint facet)
+  :fire
+    type-val = that-read(attribute-map, ?A-position, :type)
+    if type-val is concrete (not bot, not meta):
+      for each constraint on ?A:
+        current-domain = that-read(attribute-map, ?A-position, :constraints)
+        candidates-for-type = lookup-impls-for-type(trait-name, type-val)
+        narrowed = constraint-domain-merge(current-domain, candidates-for-type)
+        that-write(net, attribute-cell, ?A-position, :constraints, narrowed)
+  :stratum S0 (monotone: domains only narrow)
+```
+
+### §11.7 Parametric Instance Handling
+
+Parametric impls (e.g., `impl Eq (List A) where (Eq A)`) are candidates whose match GENERATES sub-constraints:
+
+```racket
+(struct parametric-candidate
+  (impl-entry      ;; the parametric impl registration
+   pattern-vars    ;; type variables in the pattern
+   where-clauses)  ;; sub-constraints that must also be satisfied
+  #:transparent)
+```
+
+When a parametric candidate matches during narrowing:
+1. The candidate stays in the domain (it's a valid possibility)
+2. Sub-constraints are GENERATED for the pattern variables
+3. The sub-constraints are NEW constraint domain entries in the attribute map
+4. These sub-constraints narrow independently via the same lattice
+
+This is the CLP analogy: `X ∈ {1..9}, X = Y + Z` generates sub-constraints on Y and Z. In Prologos: `(Eq (List A))` matches `impl Eq (List A) where (Eq A)`, generating `(Eq A)` as a sub-constraint.
+
+### §11.8 Generalization: Universal Constraint Domain Solving
+
+The constraint domain lattice generalizes to ANY domain-solving scenario:
+
+| Use Case | Carrier | Domain Values | Narrowing |
+|----------|---------|--------------|-----------|
+| **Trait resolution** | Type expressions | {types with trait impl} | Type info narrows candidates |
+| **CLP(Z) integers** | Integers | {0..9} or arbitrary ranges | Arithmetic constraints narrow ranges |
+| **CLP(B) booleans** | {true, false} | Boolean domain | SAT constraints narrow |
+| **Relational language** | Ground terms | {terms matching a pattern} | Unification narrows |
+| **Type inference** | Type expressions | {types compatible with constraints} | Unification + subtyping narrow |
+
+The lattice structure is IDENTICAL across all cases: (Setof carrier-values) ordered by ⊇, join = intersection, meet = union, Heyting algebra. The ONLY difference is the carrier and the narrowing operations.
+
+By designing the constraint domain lattice NOW with this generalization in mind, we build infrastructure that serves:
+1. Track 4B: trait resolution as domain narrowing
+2. SRE Track 6: reduction constraints
+3. Relational Language: CLP-style domain variables
+4. Future: any domain-solving scenario
+
+### §11.9 Replaces Track 4A Phase 6 Constraint Lattice
+
+The flat lattice from Track 4A Phase 6 (`pending → resolved → contradicted`) is RETIRED. The constraint domain lattice subsumes it:
+
+| Old (Phase 6) | New (Domain Lattice) |
+|---------------|---------------------|
+| `pending` | Universe (all candidates) |
+| `resolved(instance)` | Singleton set ({one candidate}) |
+| `contradicted` | Empty set (∅) |
+
+The new lattice adds ALL intermediate states between universe and singleton — progressive narrowing that the flat lattice couldn't express.
 
 ---
 
-## §12 Open Questions Resolved
+## §12 Phase 0d Design: BSP Scheduler Audit
+
+Track 4A used Gauss-Seidel (`run-to-quiescence-inner`) because `current-use-bsp-scheduler?` defaults to `#f`. For Track 4B:
+
+1. **Audit all `run-to-quiescence` calls in Track 4A code** — `infer-on-network` and any internal uses. Verify they work correctly under BSP.
+2. **Set BSP as default for ephemeral PUs** — `(parameterize ([current-use-bsp-scheduler? #t]) ...)` around PU creation and evaluation.
+3. **CALM-invariant enforcement** — BSP snapshot isolation guarantees monotone operations are safe to parallelize. Any non-monotone write across BSP rounds is a CALM violation → flag for review.
+4. **Stratum ordering via BSP** — S0→S1→S2 within the PU is implemented by the BSP outer/inner loop structure. Value stratum (S0) is the inner BSP loop. Topology/readiness stratum (S1) is the outer loop. Commitment (S2) is after full quiescence.
+
+---
+
+## §13 Output Channel Protocol: PU → Containing Network
+
+### The Mechanism
+
+A propagator INSIDE the ephemeral PU fires into a cell on the CONTAINING network. This IS a Galois connection: the PU's internal lattice (full attribute map) maps to the containing network's lattice (specific output values).
+
+### The Pattern (from prior art)
+
+`make-trait-resolution-bridge-fire-fn` in resolution.rkt IS this pattern: a propagator fires from one context (resolution stratum) into cells on the main elab-network. It syncs state, computes, writes back.
+
+### The Design
+
+The ephemeral PU has a THRESHOLD PROPAGATOR watching an internal "all-done" cell (the meta-readiness fan-in from Track 4A Phase 4b-i, extended to all attribute facets). When all internal strata quiesce (S0+S1+S2 complete), the threshold fires and writes results to external cells:
+
+```
+propagator output-bridge
+  :reads   internal-readiness-cell (within PU)
+  :writes  external cells (on containing network):
+    root-type-cell     ← type facet of root position
+    meta-solution-cells ← solve-meta! for each resolved meta
+    constraint-cells    ← resolved constraint domain values
+    warning-cell        ← accumulated warnings
+  :fire
+    when all-done?(readiness):
+      for each output channel:
+        read internal value → write to external cell
+  :stratum S2 (fires after S0+S1 quiesce within PU)
+```
+
+The containing network sees SINGLE WRITES (⊥ → final value) on each output channel cell. These writes trigger downstream propagators on the containing network (e.g., constraint retry, trait resolution at the containing level).
+
+### Galois Connection Formalization
+
+The output bridge IS a Galois connection between the PU lattice (attribute map) and the containing network lattice (individual output cells):
+
+- **α (abstraction)**: PU attribute map → individual output values (projection per output channel)
+- **γ (concretization)**: individual output values → attribute map (injection into the full record)
+- **Adjunction**: α(attribute-map) ⊑ output-value ⟺ attribute-map ⊑ γ(output-value)
+
+This ensures: the output is CONSISTENT with the PU's internal computation. The containing network's view of the PU is a sound abstraction of the PU's full state.
+
+---
+
+## §14 `that` Internal API Specification
+
+### Concrete Racket API
+
+```racket
+;; Read a specific facet of a position's attribute record
+(define (that-read attribute-map position facet)
+  ;; attribute-map: hasheq position → (hasheq facet → value)
+  ;; position: AST node (eq? identity)
+  ;; facet: ':type | ':context | ':usage | ':constraints | ':warnings
+  ;; Returns: facet value, or facet-specific ⊥ if not present
+  (define record (hash-ref attribute-map position (hasheq)))
+  (hash-ref record facet (facet-bot facet)))
+
+;; Write a specific facet (cell write, triggers component-indexed firing)
+(define (that-write net attribute-cell-id position facet value)
+  ;; Writes a SINGLE-FACET update to the attribute map cell
+  ;; The merge handles: existing record + new facet value → merged record
+  ;; Component-indexed firing: only propagators watching this position+facet fire
+  (net-cell-write net attribute-cell-id
+    (hasheq position (hasheq facet value))))
+
+;; Facet-specific bot values
+(define (facet-bot facet)
+  (case facet
+    [(:type) type-bot]
+    [(:context) context-empty-value]
+    [(:usage) '()]                    ;; empty usage vector
+    [(:constraints) (constraint-domain-universe #f)]  ;; all candidates
+    [(:warnings) '()]))              ;; no warnings
+```
+
+### Component-Indexed Firing for Facets
+
+With the Phase 0a multi-path fix, a propagator can watch a SPECIFIC position AND facet:
+
+```racket
+;; A typing propagator watches position P's type facet
+(net-add-propagator net (list attribute-cell)
+  (list attribute-cell)
+  typing-fire-fn
+  #:component-paths (list (cons attribute-cell (cons position ':type))))
+
+;; A constraint propagator watches position P's type AND constraint facets
+(net-add-propagator net (list attribute-cell)
+  (list attribute-cell)
+  constraint-fire-fn
+  #:component-paths (list (cons attribute-cell (cons position ':type))
+                          (cons attribute-cell (cons position ':constraints))))
+```
+
+The component path is now a COMPOUND KEY: `(cell-id . (position . facet))`. The `pu-value-diff` detects which position+facet combinations changed. Only propagators watching those specific combinations fire.
+
+### Relation to User-Facing `that` (future)
+
+The internal API is designed for future external exposure:
+- `(that x :type)` in user code → `(that-read current-attribute-map x ':type)` internally
+- `(that x :constraints (Ord A))` → `(that-write net cell x ':constraints (constraint-domain 'Ord ...))`
+- The Grammar Form system will compile `that` expressions to these internal operations
+
+---
+
+## §15 Open Questions Resolved
 
 ### Q1: The `that` Operation — User-Facing Syntax
 
