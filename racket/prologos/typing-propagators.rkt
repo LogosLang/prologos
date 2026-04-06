@@ -221,9 +221,8 @@
 ;; After first successful fire, subsequent scheduling is an instant no-op.
 ;; P3 bulk cleanup removes the dependents entry after quiescence.
 ;; P2: fire-once flag-guard. After first successful fire, instant no-op.
-;; Benchmark: ~1.4% overhead (2s on 134s baseline). Marginal cost for
-;; correctness benefit (prevents re-computation). Keep enabled —
-;; overhead is within noise range.
+;; Micro-benchmark: zero measurable overhead (within CV ~10%).
+;; Suite-level: ~1.4% (within noise). Keep enabled for correctness.
 (define (net-add-fire-once-propagator net inputs outputs fire-fn watched-cid
                                       #:component-paths [cpaths '()])
   (define pid-box (box #f))
