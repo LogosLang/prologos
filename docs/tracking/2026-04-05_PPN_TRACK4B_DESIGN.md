@@ -25,7 +25,7 @@
 | 0c | .pnet attribute cache design | ⬜ | What's cached, invalidation strategy, structural sharing format, warm-start preloading. See §9.6. |
 | 0d | BSP scheduler audit + correction | ✅ | commit `246e4fb3`. Default was already `#t` (corrected D.1). Hardened 3 ephemeral PU sites to explicit `run-to-quiescence-bsp`. 3 test DFS overrides verified legitimate. |
 | 0 | Stage 2 audit + attribute grammar specification | ✅ | [Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md): 5 domains, 12 node kinds, stratification. [AG Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md): catamorphisms, CLP, aspects. |
-| 1 | Attribute Record PU: extend type-map to full attribute record | ⬜ | Type + Context + Constraint + Multiplicity + Warning facets. CHAMP-backed with shared singletons. Proper K-indexed component firing. |
+| 1 | Attribute Record PU: extend type-map to full attribute record | ✅ | commit `90e4979e`. Nested (position → (hasheq facet → value)). that-read/that-write API. Facet-aware diffing. Compound component-paths. :type + :context facets. |
 | 2 | Constraint attribute propagators (S0: creation during typing) | ⬜ | Uses the new domain lattice from Phase 0b. Trait constraints, unification constraints, capability constraints as domain-narrowing cells. |
 | 3 | Trait resolution propagators (S1: readiness-triggered) | ⬜ | P1 pattern: type→constraint narrowing. Monomorphic + parametric. Fires when arg types reach ground in the domain lattice. **Acceptance: 17 failing test files (59 tests) must pass.** See §7b. |
 | 4 | Multiplicity attribute propagators (S0: usage tracking + S2: validation) | ⬜ | QTT: single-usage, zero-usage, add-usage, scale-usage as cell ops. S2 validation: compatible(declared, actual). |
