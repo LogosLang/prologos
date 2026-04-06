@@ -1719,7 +1719,8 @@
   (when prn-box
     (init-macros-cells! prn-box)
     (init-warning-cells! prn-box)
-    (init-narrow-cells! prn-box))
+    (init-narrow-cells! prn-box)
+    (init-attribute-map-cell! prn-box))  ;; Track 4B Phase 0c: global attribute store
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
                    [current-provenance-counters pv]

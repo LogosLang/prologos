@@ -28,7 +28,8 @@
                   trait-constraint-info trait-constraint-info?
                   trait-constraint-info-trait-name trait-constraint-info-type-arg-exprs
                   read-trait-constraints
-                  solve-meta! meta-solved?)
+                  solve-meta! meta-solved?
+                  current-persistent-registry-net-box)
          "constraint-cell.rkt"  ;; Track 4B Phase 2: reuse existing constraint lattice
          "constraint-propagators.rkt"  ;; Track 4B Phase 2: build-trait-constraint, refine-constraint-by-type-tag
          (only-in "qtt.rkt" zero-usage single-usage add-usage scale-usage)  ;; Track 4B Phase 4
@@ -55,7 +56,8 @@
  ;; Track 4B Phase 3: Trait Resolution
  make-trait-resolution-fire-fn
  candidate->dict-expr
- ;; Track 4B Phase 6: On-main-network typing + meta-bridge output
+ ;; Track 4B Phase 0c+6: Persistent attribute-map cell + meta-bridge
+ init-attribute-map-cell!
  current-attribute-map-cell-id
  current-meta-solution-output-cell-id
  meta-solution-merge
@@ -1425,16 +1427,33 @@
 (define current-attribute-map-cell-id (make-parameter #f))
 (define current-meta-solution-output-cell-id (make-parameter #f))
 
+;; Phase 0c: Initialize the global attribute-map cell on the persistent
+;; registry network. Called once per file alongside init-macros-cells!,
+;; init-warning-cells!, init-narrow-cells!. The cell is a MODULE-LEVEL
+;; attribute store — the typing facet of the module environment.
+;; §9: CHAMP structural sharing across commands. .pnet cache populates it.
+(define (init-attribute-map-cell! prn-box)
+  (when prn-box
+    (define pnet (unbox prn-box))
+    (define-values (pnet* cid)
+      (net-new-cell pnet (hasheq) attribute-map-merge-fn))
+    (current-attribute-map-cell-id cid)
+    (set-box! prn-box pnet*)))
+
 (define (infer-on-network pnet expr ctx-val)
-  ;; 1. Create per-command attribute-map cell
-  ;; NOTE: §9 global cell requires the PERSISTENT registry network,
-  ;; not the per-command elab-network. reset-meta-store! creates a fresh
-  ;; elab-network each command (make-elaboration-network), resetting the
-  ;; cell-id counter. Global cell on elab-network gets ID collisions.
-  ;; Deferred to Phase 0c which addresses the persistent registry integration.
-  (define-values (net0 tm-cid)
-    (net-new-cell pnet (hasheq) attribute-map-merge-fn))
-  ;; 2. Create per-command output cell
+  ;; 1. Get the GLOBAL attribute-map cell from the persistent registry network.
+  ;; If not initialized (e.g., test context), create per-command.
+  (define prn-box (current-persistent-registry-net-box))
+  (define-values (net0 tm-cid use-persistent?)
+    (cond
+      ;; Persistent network available + global cell initialized → use it
+      [(and prn-box (current-attribute-map-cell-id))
+       (values (unbox prn-box) (current-attribute-map-cell-id) #t)]
+      ;; Fallback: per-command cell on the provided network (test context)
+      [else
+       (define-values (n c) (net-new-cell pnet (hasheq) attribute-map-merge-fn))
+       (values n c #f)]))
+  ;; 2. Create per-command output cell (on the same network as the attribute map)
   (define-values (net1 output-cid)
     (net-new-cell net0 '() meta-solution-merge))
   ;; 3. Install ALL attribute propagators (typing + constraints + usage + meta-bridge)
@@ -1460,8 +1479,14 @@
     ;; (zero scheduling overhead for next command).
     (define net4 (net-clear-dependents net3-restored tm-cid))
     (define net5 (net-clear-dependents net4 output-cid))
+    ;; 7. Rebox the persistent network if we used it.
+    ;; The global cell retains its values (§9 structural sharing).
+    (when use-persistent?
+      (set-box! prn-box net5))
     ;; Return: cleaned network, root type, meta solutions
-    (values net5 root-type meta-solutions)))
+    ;; When persistent: return the ELAB network's prop-net unchanged (typing was on persistent)
+    ;; When per-command: return the updated prop-net
+    (values (if use-persistent? pnet net5) root-type meta-solutions)))
 
 ;; ============================================================
 ;; Production Entry Point: infer-on-network/err
