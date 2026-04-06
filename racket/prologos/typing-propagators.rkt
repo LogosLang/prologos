@@ -1521,6 +1521,107 @@
              (type-map-write net tm-cid e kind))
            net)]  ;; unknown tycon — leave at ⊥
 
+      ;; --- Pattern matching: structural unification across branches ---
+      ;; Phase 9 prep: each arm decomposes the constructor's Pi chain into
+      ;; pattern variable bindings (context extension), installs body propagators
+      ;; in the child context, and body types merge at the result position.
+      ;; All arms are independent — concurrent evaluation during quiescence.
+      [(expr-reduce scrutinee arms _structural?)
+       ;; Install scrutinee propagators
+       (define net1 (install net scrutinee ctx-pos))
+       ;; For each arm: decompose constructor, extend context, install body
+       (for/fold ([n net1]) ([arm (in-list arms)])
+         (define ctor-name (expr-reduce-arm-ctor-name arm))
+         (define bc (expr-reduce-arm-binding-count arm))
+         (define body (expr-reduce-arm-body arm))
+         (cond
+           [(= bc 0)
+            ;; No bindings — install body in same context
+            (define n2 (install n body ctx-pos))
+            ;; Body type writes to result position via merge (join)
+            (define-values (n3 _pid)
+              (net-add-fire-once-propagator n2 (list tm-cid) (list tm-cid)
+                (lambda (net)
+                  (define body-type (type-map-read net tm-cid body))
+                  (if (type-bot? body-type) net
+                      (type-map-write net tm-cid e body-type)))
+                tm-cid
+                #:component-paths (list (cons tm-cid (cons body ':type)))))
+            n3]
+           [else
+            ;; bc > 0: create child context with pattern variable bindings.
+            ;; Constructor type from env gives the Pi chain for binding types.
+            (define ctor-type (global-env-lookup-type ctor-name))
+            (if (not ctor-type)
+                ;; Unknown constructor — skip this arm
+                n
+                ;; Walk the Pi chain: each domain = one pattern variable type
+                (let ([child-ctx-pos (gensym 'ctx-match)])
+                  ;; Install context-extension propagators for each binding.
+                  ;; Walk ctor-type Pi chain, extract domain types.
+                  (define-values (ext-net ext-type)
+                    (let loop ([net-acc n] [ty ctor-type] [remaining bc]
+                               [current-ctx-pos ctx-pos])
+                      (if (= remaining 0)
+                          (values net-acc ty)
+                          (match ty
+                            [(expr-Pi m dom cod)
+                             (define next-ctx-pos (gensym 'ctx-match-bind))
+                             ;; Context extension: bind pattern var with type dom
+                             (define-values (n2 _) (net-add-fire-once-propagator net-acc
+                               (list tm-cid) (list tm-cid)
+                               (make-context-extension-fire-fn tm-cid current-ctx-pos dom next-ctx-pos m)
+                               tm-cid
+                               #:component-paths (list (cons tm-cid (cons current-ctx-pos ':context)))))
+                             (loop n2 cod (- remaining 1) next-ctx-pos)]
+                            ;; Not a Pi — can't decompose further
+                            [_ (values net-acc ty)]))))
+                  ;; Install body in the innermost child context
+                  (define innermost-ctx
+                    (let find-innermost ([p ctx-pos] [ty ctor-type] [rem bc])
+                      (if (= rem 0) p
+                          (match ty
+                            [(expr-Pi _ _ cod) (find-innermost (gensym 'skip) cod (- rem 1))]
+                            [_ p]))))
+                  ;; Actually, the loop above already created the context positions.
+                  ;; The innermost is the last next-ctx-pos created. Let me track it.
+                  ;; SIMPLIFIED: use a single context extension that adds all bindings at once.
+                  ;; Walk the Pi chain, collect domain types, create one child context with all bindings.
+                  (define binding-types
+                    (let loop ([ty ctor-type] [remaining bc] [acc '()])
+                      (if (= remaining 0) (reverse acc)
+                          (match ty
+                            [(expr-Pi m dom cod)
+                             (loop cod (- remaining 1) (cons (cons dom m) acc))]
+                            [_ (reverse acc)]))))
+                  ;; Create child context by extending with all bindings
+                  (define child-ctx-pos2 (gensym 'ctx-match-all))
+                  (define-values (ext-net2 _ctx-pid)
+                    (net-add-fire-once-propagator ext-net (list tm-cid) (list tm-cid)
+                      (lambda (net)
+                        (define parent-ctx (that-read (net-cell-read net tm-cid) ctx-pos ':context))
+                        (cond
+                          [(not (context-cell-value? parent-ctx)) net]
+                          [else
+                           (define extended
+                             (for/fold ([ctx parent-ctx]) ([bt (in-list binding-types)])
+                               (context-extend-value ctx (car bt) (cdr bt))))
+                           (that-write net tm-cid child-ctx-pos2 ':context extended)]))
+                      tm-cid
+                      #:component-paths (list (cons tm-cid (cons ctx-pos ':context)))))
+                  ;; Install body in child context
+                  (define body-net (install ext-net2 body child-ctx-pos2))
+                  ;; Body type merges at result position
+                  (define-values (result-net _pid)
+                    (net-add-fire-once-propagator body-net (list tm-cid) (list tm-cid)
+                      (lambda (net)
+                        (define body-type (type-map-read net tm-cid body))
+                        (if (type-bot? body-type) net
+                            (type-map-write net tm-cid e body-type)))
+                      tm-cid
+                      #:component-paths (list (cons tm-cid (cons body ':type)))))
+                  result-net))]))]
+
       ;; --- Domain lookup: SRE typing domain handles remaining expr kinds ---
       [_
        (define rule (lookup-typing-rule e))
