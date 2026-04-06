@@ -1426,9 +1426,12 @@
 (define current-meta-solution-output-cell-id (make-parameter #f))
 
 (define (infer-on-network pnet expr ctx-val)
-  ;; 1. Create per-command attribute-map cell (fresh per command)
-  ;; NOTE: §9 global cell deferred — cross-command value contamination
-  ;; needs position namespacing or cell value reset before reuse.
+  ;; 1. Create per-command attribute-map cell
+  ;; NOTE: §9 global cell requires the PERSISTENT registry network,
+  ;; not the per-command elab-network. reset-meta-store! creates a fresh
+  ;; elab-network each command (make-elaboration-network), resetting the
+  ;; cell-id counter. Global cell on elab-network gets ID collisions.
+  ;; Deferred to Phase 0c which addresses the persistent registry integration.
   (define-values (net0 tm-cid)
     (net-new-cell pnet (hasheq) attribute-map-merge-fn))
   ;; 2. Create per-command output cell

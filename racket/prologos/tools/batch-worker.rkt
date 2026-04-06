@@ -57,7 +57,8 @@
          "../metavar-store.rkt"
          "../errors.rkt"
          "../driver.rkt"
-         "../tree-parser.rkt")  ;; §11: current-source-str, current-raw-node
+         "../tree-parser.rkt"  ;; §11: current-source-str, current-raw-node
+         (only-in "../typing-propagators.rkt" current-attribute-map-cell-id))  ;; Track 4B Phase 6b
 
 ;; Track 10 Phase 3a: Read .pnet cache setting from environment
 ;; The test runner sets PROLOGOS_PNET_CACHE=1 when cache is enabled.
@@ -257,6 +258,8 @@
          [current-constraint-status-cell-id    #f]
          [current-error-descriptor-cell-id     #f]
          [current-ready-queue-cell-id          #f]
+         ;; Track 4B Phase 6b: global attribute-map cell — reset per file
+         [current-attribute-map-cell-id       #f]
          ;; errors.rkt — emit formatted errors to stderr for failure logs
          [current-emit-error-diagnostics  #t]
          ;; Set load-relative-directory so dynamic-require with relative
