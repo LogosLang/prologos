@@ -28,7 +28,7 @@
 | 1 | Attribute Record PU: extend type-map to full attribute record | ✅ | commit `90e4979e`. Nested (position → (hasheq facet → value)). that-read/that-write API. Facet-aware diffing. Compound component-paths. :type + :context facets. |
 | 2 | Constraint attribute propagators (S0: creation during typing) | ✅ | commit `b900f04f`. Reuses constraint-cell.rkt lattice (§11 already implemented). Constraint-creation + type-narrows-constraints propagators. Cross-facet :type→:constraints bridge. |
 | 3 | Trait resolution propagators (S1: readiness-triggered) | ✅ | commit `74f79506`. Meta-feedback + Option C (skip domain write for metas) + S1 resolution + output bridge. **All 17 files (59 tests) pass individually.** Suite 17→12 (batch isolation). |
-| 4 | Multiplicity attribute propagators (S0: usage tracking + S2: validation) | ⬜ | QTT: single-usage, zero-usage, add-usage, scale-usage as cell ops. S2 validation: compatible(declared, actual). |
+| 4 | Multiplicity attribute propagators (S0: usage tracking + S2: validation) | ✅ | commit `603663c6`. Full port: 7 usage fire-fn kinds, install-usage-network (separate pass), SRE arity-keyed generic. S2 validation deferred to Phase 7 (:warnings needed). |
 | 5 | Structural unification propagators (S0: Pi/Sigma decomposition) | ⬜ | Reuse make-structural-unify-propagator inside ephemeral PU. K-indexed sub-cell decomposition. |
 | 6 | Meta solution bridging (ephemeral → main network) | ⬜ | PU output channels for solved metas, resolved constraints. Resolved type-map resolution (F1 from Track 4A, now with correct component firing). |
 | 7 | Warning attribute propagators (S2: accumulation + reporting) | ⬜ | Coercion, deprecation, capability warnings as cell values. |
