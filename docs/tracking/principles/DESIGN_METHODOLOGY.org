@@ -548,17 +548,19 @@ at each phase, raising design issues as they surface.
   more work than a simple boolean flag, but it produced the correct
   abstraction that composes with the rest of the trait system.
 
-- *Per-phase completion protocol*: Every phase completes with 4 steps
+- *Per-phase completion protocol*: Every phase completes with 5 steps
   IN ORDER:
 
-  1. /Commit/: ~git add~ + ~git commit~ with descriptive message
-  2. /Tracker/: Update the design doc's progress tracker (⬜ → ✅ +
+  1. /Test coverage/: If the phase added behavior, verify tests exist.
+     If no tests are needed, state why in the commit message.
+  2. /Commit/: ~git add~ + ~git commit~ with descriptive message
+  3. /Tracker/: Update the design doc's progress tracker (⬜ → ✅ +
      commit hash + key result)
-  3. /Dailies/: Append to current dailies: what was done, why, design
+  4. /Dailies/: Append to current dailies: what was done, why, design
      choices made, lessons/surprises encountered
-  4. /Proceed/: Move to next phase only after steps 1-3 are done
+  5. /Proceed/: Move to next phase only after steps 1-4 are done
 
-  A phase is NOT complete until all 4 steps are done. This prevents
+  A phase is NOT complete until all 5 steps are done. This prevents
   the pattern of batching dailies updates at session end, which loses
   the context of /why/ decisions were made. The dailies entry should be
   written IMMEDIATELY after the commit, while the reasoning is fresh.
@@ -601,6 +603,55 @@ at each phase, raising design issues as they surface.
   (the ~new-lattice-cell~ generic wrapper, for instance), add it to
   ~DEFERRED.md~ in the same commit. Deferred work not tracked is
   abandoned work.
+
+*** Conversational Implementation Cadence
+
+Long autonomous implementation stretches allow the implementer's
+defaults to override the design's intent. The implementer (whether
+human or AI) gravitates toward familiar patterns --- imperative
+control flow, function-call wrappers, scan-and-dispatch --- even when
+the design specifies a different architecture. The divergence is
+invisible during implementation because the data structures and
+vocabulary /feel/ right while the underlying computation is wrong.
+
+PPN Track 4 demonstrated this failure mode: 4 critique rounds validated
+a propagator-native design (D.1→D.4), then 69 commits of autonomous
+implementation built imperative function-call wrappers. The design was
+good; the implementation drifted. The divergence was only discovered
+retroactively.
+
+PPN Track 4B demonstrated the countermeasure: phase-by-phase dialogue
+checkpoints. Only 2 design iterations (D.1→D.2), but 47 commits of
+implementation that stayed on-architecture throughout. The difference
+was not design quality --- it was implementation cadence.
+
+*Why conversational checkpoints work*:
+
+1. /Prevention, not just detection/. When the implementer knows the
+   next step is a dialogue about what was built, it changes /how they
+   think/ during implementation. "Is this actually a propagator?" becomes
+   a live question, not a retroactive audit.
+
+2. /Real-time calibration/. Mid-implementation pushback ("there isn't a
+   'walking' of the AST in propagators", "scan... iterate... loop...
+   this is step-think") recalibrates the implementer's instincts for
+   subsequent phases. Each correction makes the next phase cleaner.
+   This calibration cannot happen in a critique round that precedes
+   implementation.
+
+3. /Drift correlates with autonomy length/. Track 4B's phases averaged
+   ~45 minutes between checkpoints; the architecture held. Phase 9
+   (4h 33m, the longest autonomous stretch) was also the messiest ---
+   failed first attempt, 12 sub-commits. The pattern is consistent:
+   shorter autonomous stretches produce more architecturally faithful
+   implementations.
+
+*The operational rule*: Each phase ends with a dialogue checkpoint.
+Maximum autonomous stretch: ~1 hour or 1 phase boundary, whichever
+comes first. If a phase will exceed 1 hour, break it into sub-phases
+with intermediate checkpoints. The checkpoint surfaces what was built,
+what surprised, and what's next. See ~workflow.md~ §
+"Conversational implementation cadence" for the compact rule.
 
 *** Implementation Protocol
 
@@ -666,13 +717,20 @@ For each implementation phase:
    deviations. Question (b) catches §12-type deviations. Question (c)
    is the general guard against incremental pragmatic drift.
 
-5. *Phase completion* (4 steps IN ORDER):
-   a. /Commit/: ~git add~ + ~git commit~ with descriptive message
-   b. /Tracker/: Update design doc progress tracker (⬜ → ✅ + commit
+5. *Phase completion* (5 steps IN ORDER):
+   a. /Test coverage/: If the phase added behavior, it needs tests. If
+      no tests are needed (pure refactor, design-only, verification
+      phase), state why in the commit message. "No tests: refactor with
+      zero behavioral change" is valid. "Will add tests later" is not.
+      Three consecutive tracks (PPN 3, SRE 2H, SRE 2D) deferred
+      testing to a follow-up Phase T; Track 4B's Phase T immediately
+      found 2 production bugs that per-phase testing would have caught.
+   b. /Commit/: ~git add~ + ~git commit~ with descriptive message
+   c. /Tracker/: Update design doc progress tracker (⬜ → ✅ + commit
       hash + key result)
-   c. /Dailies/: Append to current dailies --- what was done, why,
+   d. /Dailies/: Append to current dailies --- what was done, why,
       design choices, lessons/surprises
-   d. /Proceed/: Next phase only after a-c are done
+   e. /Proceed/: Next phase only after a-d are done
 
 **** Post-Implementation Protocol
 
