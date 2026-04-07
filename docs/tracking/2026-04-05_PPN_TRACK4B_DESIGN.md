@@ -37,7 +37,7 @@
 | 10 | Zonk retirement (from Track 4A Phase 4b) | ⬜ | Cell-refs replace expr-meta; fan-in default propagator at S2. |
 | 11 | Scaffolding retirement (from Track 4A Phase 8) | ⬜ | 8 items from Tracks 2H + 2D. |
 | T | Dedicated test files | ✅ | commit `f4be1b38`. 31 tests across 4 files: test-attribute-record (10), test-propagator-patterns (5), test-sre-coverage (9), test-meta-feedback (7). Fixed generic op on-network typing (numeric-join, Bool, identity). 391/391 files, 7609 tests, 134.1s. |
-| 12 | Verification + PIR | ⬜ | Full suite GREEN, A/B benchmark, acceptance file, PIR. |
+| 12 | Verification + PIR | ✅ | PIR: `docs/tracking/2026-04-07_PPN_TRACK4B_PIR.md`. 391/391, 7609 tests, 134.1s. 16-section PIR with longitudinal survey of 11 PIRs. |
 
 ---
 
