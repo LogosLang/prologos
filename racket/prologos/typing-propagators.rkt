@@ -884,50 +884,48 @@
          (if (expr-meta? arg-pos)
              net  ;; skip downward write for meta positions
              (type-map-write net tm-cid arg-pos dom)))
-       ;; FEEDBACK: write resolved types back to meta positions.
-       ;; Simple: domain IS a meta → write arg type to meta position.
-       ;; Structural: domain CONTAINS metas → extract bindings from matching
-       ;; domain against arg type, write each binding.
-       ;; §3.5: Unification = Merge — the feedback IS the meta-solution.
-       (define net2
-         (let ([arg-type (type-map-read net1 tm-cid arg-pos)])
-           (cond
-             ;; Arg type not available yet — wait
-             [(or (type-bot? arg-type) (expr-meta? arg-type)) net1]
-             ;; Simple meta feedback (Phase 3)
-             [(expr-meta? dom) (type-map-write net1 tm-cid dom arg-type)]
-             ;; Structural meta feedback: extract internal meta bindings
-             ;; by parallel-walking domain and arg-type. When domain has
-             ;; expr-meta and arg-type has concrete → write binding.
-             [else
-              (let extract-bindings ([d dom] [a arg-type] [n net1])
-                (cond
-                  ;; Meta in domain, concrete in arg → write binding
-                  [(and (expr-meta? d) (not (expr-meta? a)) (not (type-bot? a)))
-                   (type-map-write n tm-cid d a)]
-                  ;; Parallel walk compound types
-                  [(and (expr-app? d) (expr-app? a))
-                   (extract-bindings
-                    (expr-app-func d) (expr-app-func a)
-                    (extract-bindings (expr-app-arg d) (expr-app-arg a) n))]
-                  [(and (expr-Pi? d) (expr-Pi? a))
-                   (extract-bindings
-                    (expr-Pi-domain d) (expr-Pi-domain a)
-                    (extract-bindings (expr-Pi-codomain d) (expr-Pi-codomain a) n))]
-                  [(and (expr-Sigma? d) (expr-Sigma? a))
-                   (extract-bindings
-                    (expr-Sigma-fst-type d) (expr-Sigma-fst-type a)
-                    (extract-bindings (expr-Sigma-snd-type d) (expr-Sigma-snd-type a) n))]
-                  ;; Built-in parameterized types with element fields
-                  [(and (expr-PVec? d) (expr-PVec? a))
-                   (extract-bindings (expr-PVec-elem-type d) (expr-PVec-elem-type a) n)]
-                  [(and (expr-Vec? d) (expr-Vec? a))
-                   (extract-bindings (expr-Vec-elem-type d) (expr-Vec-elem-type a) n)]
-                  ;; No match — no bindings to extract
-                  [else n]))])))
-       ;; UPWARD: subst uses arg-pos (expression key) — handles ALL codomains.
-       (define result-type (subst 0 arg-pos cod))
-       (type-map-write net2 tm-cid position result-type)]
+       ;; Contradiction check: if arg position merged to type-top → propagate error
+       (define arg-after-merge (type-map-read net1 tm-cid arg-pos))
+       (cond
+         [(type-top? arg-after-merge)
+          ;; Type mismatch at arg position → result is contradiction
+          (type-map-write net1 tm-cid position type-top)]
+         [else
+          ;; FEEDBACK: write resolved types back to meta positions.
+          ;; Simple: domain IS a meta → write arg type to meta position.
+          ;; Structural: domain CONTAINS metas → extract bindings from matching
+          ;; domain against arg type, write each binding.
+          ;; §3.5: Unification = Merge — the feedback IS the meta-solution.
+          (define net2
+            (let ([arg-type arg-after-merge])
+              (cond
+                [(or (type-bot? arg-type) (expr-meta? arg-type)) net1]
+                [(expr-meta? dom) (type-map-write net1 tm-cid dom arg-type)]
+                [else
+                 (let extract-bindings ([d dom] [a arg-type] [n net1])
+                   (cond
+                     [(and (expr-meta? d) (not (expr-meta? a)) (not (type-bot? a)))
+                      (type-map-write n tm-cid d a)]
+                     [(and (expr-app? d) (expr-app? a))
+                      (extract-bindings
+                       (expr-app-func d) (expr-app-func a)
+                       (extract-bindings (expr-app-arg d) (expr-app-arg a) n))]
+                     [(and (expr-Pi? d) (expr-Pi? a))
+                      (extract-bindings
+                       (expr-Pi-domain d) (expr-Pi-domain a)
+                       (extract-bindings (expr-Pi-codomain d) (expr-Pi-codomain a) n))]
+                     [(and (expr-Sigma? d) (expr-Sigma? a))
+                      (extract-bindings
+                       (expr-Sigma-fst-type d) (expr-Sigma-fst-type a)
+                       (extract-bindings (expr-Sigma-snd-type d) (expr-Sigma-snd-type a) n))]
+                     [(and (expr-PVec? d) (expr-PVec? a))
+                      (extract-bindings (expr-PVec-elem-type d) (expr-PVec-elem-type a) n)]
+                     [(and (expr-Vec? d) (expr-Vec? a))
+                      (extract-bindings (expr-Vec-elem-type d) (expr-Vec-elem-type a) n)]
+                     [else n]))])))
+          ;; UPWARD: subst uses arg-pos (expression key) — handles ALL codomains.
+          (define result-type (subst 0 arg-pos cod))
+          (type-map-write net2 tm-cid position result-type)])]
       ;; Non-Pi func type — try tensor directly (union types etc.)
       [else
        (define arg-type (type-map-read net tm-cid arg-pos))
@@ -1584,8 +1582,22 @@
        ;; Write T as this expression's type (the annotation IS the type)
        (define net3 (type-map-write net2 tm-cid e type-expr))
        ;; Write T downward to term position (CHECK: term must have type T)
-       ;; Merge at term: if term's inferred type ≠ T → type-top (error)
-       (type-map-write net3 tm-cid term type-expr)]
+       (define net4 (type-map-write net3 tm-cid term type-expr))
+       ;; Quick shape check: if annotation is non-Pi and term is lambda, → contradiction.
+       ;; Lambda requires Pi annotation. Non-Pi annotations on lambdas are always errors.
+       (if (and (expr-lam? term) (not (expr-Pi? type-expr)))
+           (type-map-write net4 tm-cid e type-top)
+           ;; Contradiction detection propagator: watches term for type-top
+           (let-values ([(net5 _check-pid)
+                         (net-add-fire-once-propagator net4 (list tm-cid) (list tm-cid)
+                           (lambda (net)
+                             (define term-type (type-map-read net tm-cid term))
+                             (if (type-top? term-type)
+                                 (type-map-write net tm-cid e type-top)
+                                 net))
+                           tm-cid
+                           #:component-paths (list (cons tm-cid (cons term ':type))))])
+             net5))]
 
       ;; --- Type constructor: kind from arity ---
       ;; Phase 9 prep: tycon(name) → curried Pi type from arity table.
