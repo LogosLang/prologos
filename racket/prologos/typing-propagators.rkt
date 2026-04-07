@@ -884,18 +884,42 @@
          (if (expr-meta? arg-pos)
              net  ;; skip downward write for meta positions
              (type-map-write net tm-cid arg-pos dom)))
-       ;; FEEDBACK: if domain is a meta, write arg's resolved type to the meta's
-       ;; position. This closes the typing→constraint loop: ?A gets Nat at its own
-       ;; position, the constraint bridge narrows (Eq ?A) to (Eq Nat), S1 resolves.
+       ;; FEEDBACK: write resolved types back to meta positions.
+       ;; Simple: domain IS a meta → write arg type to meta position.
+       ;; Structural: domain CONTAINS metas → extract bindings from matching
+       ;; domain against arg type, write each binding.
        ;; §3.5: Unification = Merge — the feedback IS the meta-solution.
        (define net2
-         (if (expr-meta? dom)
-             (let ([arg-type (type-map-read net1 tm-cid arg-pos)])
-               (if (and (not (type-bot? arg-type))
-                        (not (expr-meta? arg-type)))
-                   (type-map-write net1 tm-cid dom arg-type)
-                   net1))
-             net1))
+         (let ([arg-type (type-map-read net1 tm-cid arg-pos)])
+           (cond
+             ;; Arg type not available yet — wait
+             [(or (type-bot? arg-type) (expr-meta? arg-type)) net1]
+             ;; Simple meta feedback (Phase 3)
+             [(expr-meta? dom) (type-map-write net1 tm-cid dom arg-type)]
+             ;; Structural meta feedback: extract internal meta bindings
+             ;; by parallel-walking domain and arg-type. When domain has
+             ;; expr-meta and arg-type has concrete → write binding.
+             [else
+              (let extract-bindings ([d dom] [a arg-type] [n net1])
+                (cond
+                  ;; Meta in domain, concrete in arg → write binding
+                  [(and (expr-meta? d) (not (expr-meta? a)) (not (type-bot? a)))
+                   (type-map-write n tm-cid d a)]
+                  ;; Parallel walk compound types
+                  [(and (expr-app? d) (expr-app? a))
+                   (extract-bindings
+                    (expr-app-func d) (expr-app-func a)
+                    (extract-bindings (expr-app-arg d) (expr-app-arg a) n))]
+                  [(and (expr-Pi? d) (expr-Pi? a))
+                   (extract-bindings
+                    (expr-Pi-domain d) (expr-Pi-domain a)
+                    (extract-bindings (expr-Pi-codomain d) (expr-Pi-codomain a) n))]
+                  [(and (expr-Sigma? d) (expr-Sigma? a))
+                   (extract-bindings
+                    (expr-Sigma-fst-type d) (expr-Sigma-fst-type a)
+                    (extract-bindings (expr-Sigma-snd-type d) (expr-Sigma-snd-type a) n))]
+                  ;; No match — no bindings to extract
+                  [else n]))])))
        ;; UPWARD: subst uses arg-pos (expression key) — handles ALL codomains.
        (define result-type (subst 0 arg-pos cod))
        (type-map-write net2 tm-cid position result-type)]
