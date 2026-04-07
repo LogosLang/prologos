@@ -22,6 +22,8 @@
          (only-in "namespace.rkt" ns-context?))
 
 (provide zonk zonk-ctx zonk-final freeze zonk-at-depth
+         ;; Phase 10 diagnostics
+         freeze-substitution-counts reset-freeze-counts!
          ;; Track 10B Phase B0: call counters for frequency measurement
          current-zonk-call-counts reset-zonk-call-counts!)
 
@@ -936,6 +938,24 @@
 ;;
 ;; Future (WS-B): when metas ARE cells, freeze becomes a single-pass cell-read
 ;; with no tree-walking. Currently it's still zonk+defaults (tree walk).
+;; Phase 10 diagnostics: count substitutions per freeze call
+(define freeze-meta-subs (box 0))    ;; expr-meta substitutions in zonk
+(define freeze-level-defaults (box 0)) ;; level-meta defaults
+(define freeze-mult-defaults (box 0))  ;; mult-meta defaults
+(define freeze-sess-defaults (box 0))  ;; sess-meta defaults
+
+(define (reset-freeze-counts!)
+  (set-box! freeze-meta-subs 0)
+  (set-box! freeze-level-defaults 0)
+  (set-box! freeze-mult-defaults 0)
+  (set-box! freeze-sess-defaults 0))
+
+(define (freeze-substitution-counts)
+  (list (cons 'meta-subs (unbox freeze-meta-subs))
+        (cons 'level-defaults (unbox freeze-level-defaults))
+        (cons 'mult-defaults (unbox freeze-mult-defaults))
+        (cons 'sess-defaults (unbox freeze-sess-defaults))))
+
 (define (freeze e)
   (zonk-count! 'freeze)
   (define z (zonk e))
