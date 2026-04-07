@@ -35,7 +35,7 @@
          "constraint-propagators.rkt"  ;; Track 4B Phase 2: build-trait-constraint, refine-constraint-by-type-tag
          (only-in "qtt.rkt" zero-usage single-usage add-usage scale-usage)  ;; Track 4B Phase 4
          (only-in "warnings.rkt" emit-coercion-warning!)  ;; Phase 9 prep: coercion bridge
-         (only-in "typing-core.rkt" numeric-join)  ;; Phase 9 prep: generic op return type
+         (only-in "trait-resolution.rkt" resolve-trait-constraints!)  ;; Phase 9: parametric bridge
          (only-in "atms.rkt" assumption-id)  ;; Track 4B Phase 8: union branching
          "elab-network-types.rkt"
          "errors.rkt"
@@ -1277,10 +1277,25 @@
   (register-typing-rule! expr-set-diff? 2 (list expr-set-diff-s1 expr-set-diff-s2) #f 'set-diff)
   (register-typing-rule! expr-set-to-list? 1 (list expr-set-to-list-s) #f 'set-to-list)
 
-  ;; ===== GENERIC ARITHMETIC: REMOVED from SRE domain =====
-  ;; Generic ops are handled by custom match cases in install-typing-network
-  ;; using numeric-join (pure function of both arg types).
-  ;; No SRE registration needed — the custom case handles typing + coercion.
+  ;; ===== GENERIC ARITHMETIC: #f (return type depends on coercion rules) =====
+  ;; Coercion infrastructure in place (type-family, coercion-detection propagator,
+  ;; warning bridge). But the return type for cross-family ops is NOT "same as
+  ;; first arg" — it depends on coercion rules (e.g., Int + Posit32 → Posit32).
+  ;; The imperative path handles this correctly. Generic ops stay at #f until
+  ;; the return-type computation accounts for coercion.
+  (for ([info (list (list expr-generic-add? expr-generic-add-a expr-generic-add-b 'generic-add)
+                    (list expr-generic-sub? expr-generic-sub-a expr-generic-sub-b 'generic-sub)
+                    (list expr-generic-mul? expr-generic-mul-a expr-generic-mul-b 'generic-mul)
+                    (list expr-generic-div? expr-generic-div-a expr-generic-div-b 'generic-div)
+                    (list expr-generic-mod? expr-generic-mod-a expr-generic-mod-b 'generic-mod)
+                    (list expr-generic-lt? expr-generic-lt-a expr-generic-lt-b 'generic-lt)
+                    (list expr-generic-le? expr-generic-le-a expr-generic-le-b 'generic-le)
+                    (list expr-generic-gt? expr-generic-gt-a expr-generic-gt-b 'generic-gt)
+                    (list expr-generic-ge? expr-generic-ge-a expr-generic-ge-b 'generic-ge)
+                    (list expr-generic-eq? expr-generic-eq-a expr-generic-eq-b 'generic-eq))])
+    (register-typing-rule! (car info) 2 (list (cadr info) (caddr info)) #f (cadddr info)))
+  (register-typing-rule! expr-generic-negate? 1 (list expr-generic-negate-a) #f 'generic-negate)
+  (register-typing-rule! expr-generic-abs? 1 (list expr-generic-abs-a) #f 'generic-abs)
 
   ;; Conversion: return type = target-type field (first child EXPRESSION).
   ;; generic-from-int(target-type, arg) → target-type
@@ -1689,73 +1704,6 @@
                  (cons tm-cid (cons snd-expr ':type)))))
        net3]
 
-      ;; --- Generic binary arithmetic: numeric-join of both arg types ---
-      ;; Phase 9 prep: return type = numeric-join(type-of-a, type-of-b).
-      ;; Pure function — no trait dispatch, no dict-meta. Cross-family
-      ;; coercion is implicit in the join (approximate wins).
-      ;; P2 fire-once. S2 coercion-detection installed alongside.
-      [(or (expr-generic-add a b) (expr-generic-sub a b)
-           (expr-generic-mul a b) (expr-generic-div a b)
-           (expr-generic-mod a b))
-       (define net1 (install net a ctx-pos))
-       (define net2 (install net1 b ctx-pos))
-       ;; Typing propagator: reads both arg types, writes numeric-join
-       (define-values (net3 _t-pid)
-         (net-add-fire-once-propagator net2 (list tm-cid) (list tm-cid)
-           (lambda (net)
-             (define ta (type-map-read net tm-cid a))
-             (define tb (type-map-read net tm-cid b))
-             (cond
-               [(or (type-bot? ta) (type-bot? tb)) net]
-               [else
-                (define joined (numeric-join ta tb))
-                (if joined
-                    (type-map-write net tm-cid e joined)
-                    net)]))  ;; non-numeric → leave at bot
-           tm-cid
-           #:component-paths
-           (list (cons tm-cid (cons a ':type))
-                 (cons tm-cid (cons b ':type)))))
-       ;; Coercion detection (S2, P2)
-       (define-values (net4 _c-pid)
-         (net-add-fire-once-propagator net3 (list tm-cid) (list tm-cid)
-           (make-coercion-detection-fire-fn tm-cid e a b) tm-cid
-           #:component-paths
-           (list (cons tm-cid (cons a ':type))
-                 (cons tm-cid (cons b ':type)))))
-       net4]
-
-      ;; --- Generic comparisons: always return Bool ---
-      [(or (expr-generic-lt a b) (expr-generic-le a b)
-           (expr-generic-gt a b) (expr-generic-ge a b)
-           (expr-generic-eq a b))
-       (define net1 (install net a ctx-pos))
-       (define net2 (install net1 b ctx-pos))
-       ;; P1 initial write: Bool
-       (define net3 (type-map-write net2 tm-cid e (expr-Bool)))
-       ;; Coercion detection (S2, P2)
-       (define-values (net4 _c-pid)
-         (net-add-fire-once-propagator net3 (list tm-cid) (list tm-cid)
-           (make-coercion-detection-fire-fn tm-cid e a b) tm-cid
-           #:component-paths
-           (list (cons tm-cid (cons a ':type))
-                 (cons tm-cid (cons b ':type)))))
-       net4]
-
-      ;; --- Generic unary: return type = arg type ---
-      [(or (expr-generic-negate a) (expr-generic-abs a))
-       (define net1 (install net a ctx-pos))
-       (define-values (net2 _t-pid)
-         (net-add-fire-once-propagator net1 (list tm-cid) (list tm-cid)
-           (lambda (net)
-             (define ta (type-map-read net tm-cid a))
-             (if (type-bot? ta) net
-                 (type-map-write net tm-cid e ta)))
-           tm-cid
-           #:component-paths
-           (list (cons tm-cid (cons a ':type)))))
-       net2]
-
       ;; --- Domain lookup: SRE typing domain handles remaining expr kinds ---
       [_
        (define rule (lookup-typing-rule e))
@@ -1950,6 +1898,8 @@
      (for ([w (in-list warnings)])
        (when (and (list? w) (pair? w) (eq? (car w) 'coercion-warning))
          (emit-coercion-warning! (cadr w) (caddr w))))
+     ;; Parametric trait resolution bridge (SCAFFOLDING)
+     (resolve-trait-constraints!)
      ;; Return type (with fallback checks)
      (cond
        [(type-bot? root-type)
