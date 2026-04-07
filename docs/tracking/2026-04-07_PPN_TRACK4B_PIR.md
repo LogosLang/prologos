@@ -1,7 +1,7 @@
 # PPN Track 4B: Elaboration as Attribute Evaluation — Post-Implementation Review
 
 **Date**: 2026-04-07
-**Duration**: ~3 sessions across 3 working days (Apr 5-7)
+**Duration**: ~16h 40m active across 3 sessions, 2 working days (Apr 6-7). Wall clock 31h 31m.
 **Commits**: 47 (from `246e4fb3` Phase 0a through `f4be1b38` Phase T)
 **Test delta**: 7578 → 7609 (+31 tests in 4 new files, +27 in existing test-ppn-track4.rkt)
 **Code delta**: 2117 insertions, 281 deletions across 13 .rkt files
@@ -30,27 +30,57 @@ Key deliverables:
 
 ## §2. Timeline and Phases
 
-| Phase | Description | Commit | Notes |
-|-------|-------------|--------|-------|
-| 0a+0d | Multi-path component firing + BSP hardening | `246e4fb3` | Fixed `assoc` first-match → list-based multi-path |
-| 0b | Constraint domain lattice design | — | CLP-inspired. Powerset lattice. Heyting algebra. Design only. |
-| 0 | Stage 2 audit + attribute grammar specification | — | AG research, 5 domains, 12 node kinds, stratification |
-| 1 | Attribute Record PU | `90e4979e` | Nested 5-facet structure. that-read/that-write API. |
-| 2 | Constraint attribute propagators (S0) | `b900f04f` | Reuses constraint-cell.rkt. Cross-facet bridge. |
-| 3 | Trait resolution + meta-feedback (S1) | `74f79506` | Option C, structural feedback, output bridge. 17→0 failures. |
-| 4 | Usage tracking propagators (S0+S2) | `603663c6` | 7 fire-fn kinds. SRE arity-keyed generic. |
-| 5 | Structural decomposition verification | `87a04bba` | Single-cell PU subsumes separate cells. APP bidirectional writes = unification. |
-| 6 | On-main-network + meta-bridge output cell | `a8b597de` | Eliminated ephemeral PU. 20% time increase. |
-| 6b | P1 initial writes + P3 cleanup | `6df6e7cc` | Recovered performance: 142.5s (from 164.8s). |
-| 0c | Global attribute-map cell on persistent network | `b5ccd5dc` | §9 design: persistent cell survives across commands. |
-| P2 | Fire-once self-cleaning propagators | `86d1bf30` | ~1.4% overhead. net-remove-propagator-from-dependents. |
-| 7 | Warning attribute propagators (S2) | `cc4bad36` | All 5 domains active. Warning output cell. |
-| 8 | ATMS integration (blocked) | — | ⏸️ Blocked on BSP-LE Track 1.5 (Cell-Based TMS) |
-| 9 | SRE expression coverage + on-network primary | `9358b18d`→`6f112854` | 12 sub-commits. ann, tycon, reduce, pair, generics, contradiction. |
-| 10 | Zonk measurement | `933a3aff` | freeze makes 1-21 substitutions/call. Not yet retirable. |
-| T | Dedicated test files | `f4be1b38` | 31 tests in 4 files. Fixed generic op on-network typing. |
+### Session breakdown
 
-Design-to-implementation ratio: ~40% design / 60% implementation (AG research + D.2 design doc substantial).
+| Session | Date | Active Time | Phases |
+|---------|------|-------------|--------|
+| Session 1 | Apr 6, 04:11–17:37 | 13h 25m | 0a+0d through 9 (pre-sleep half) |
+| Session 2 | Apr 7, 03:38–05:46 | 2h 08m | 9 (post-sleep half) through ALL GREEN |
+| Session 3 | Apr 7, 10:54–12:30+ | ~1h 35m | 10, 4C design note, T (with fixes), 12 (PIR) |
+| **Total** | | **~17h 08m** | |
+
+### Per-phase timing (from git commit timestamps)
+
+| Phase | Description | Time | % | Commit | Notes |
+|-------|-------------|------|---|--------|-------|
+| 0a+0d | Multi-path firing + BSP hardening | 1m | 0.1% | `246e4fb3` | Fixed `assoc` → list-based multi-path |
+| — | Triage 17 failing tests | 16m | 1.6% | `f3464eeb` | Root-caused → Phase 3 acceptance |
+| 1 | Attribute Record PU | 45m | 4.5% | `90e4979e` | 5-facet nested hasheq, that-read/that-write |
+| 2 | Constraint attribute propagators (S0) | 43m | 4.3% | `b900f04f` | Reuses constraint-cell.rkt. Cross-facet bridge. |
+| 3 | Trait resolution + meta-feedback (S1) | **2h 25m** | **14.5%** | `74f79506` | Option C, structural feedback, 17→0 failures |
+| — | ↳ Batch-worker isolation diagnosis | 1h 17m | 7.7% | `70a5763f` | 12 missing parameter resets |
+| 4 | Usage tracking propagators (S0) | 33m | 3.3% | `603663c6` | 7 fire-fn kinds. SRE arity-keyed generic. |
+| 5 | Structural decomp verification | 48m | 4.8% | `87a04bba` | Single-cell PU subsumes separate cells |
+| 6 | On-main-network + meta-bridge | 49m | 4.9% | `a8b597de` | Eliminated ephemeral PU. 20% time increase. |
+| 6b | P1 initial writes + P3 cleanup | 38m | 3.8% | `6df6e7cc` | Recovered: 142.5s (from 164.8s) |
+| 0c | Global cell on persistent network | 31m | 3.1% | `b5ccd5dc` | root cause: reset-meta-store! resets elab-network |
+| P2 | Fire-once self-cleaning + benchmarking | 1h 16m | 7.6% | `86d1bf30` | ~1.4% overhead accepted |
+| 7 | Warning attribute propagators (S2) | 6m | 0.6% | `cc4bad36` | All 5 domains active |
+| 8 | ATMS → Cell-Based TMS design note | 44m | 4.4% | `d6e8d43f` | ⏸️ Redirected to BSP-LE Track 1.5 |
+| 9 | SRE coverage + on-network primary | **4h 33m** | **27.4%** | `9358b18d`→`6f112854` | 12 sub-commits. Spans sleep break. |
+| — | ↳ 9a (pre-sleep): ann, tycon, reduce, pair, coercion | 2h 25m | | 6 commits | Vocab expansion |
+| — | ↳ 9b (post-sleep): generics, meta-feedback, contradiction | 2h 08m | | 8 commits | Structural + bridge + GREEN |
+| 10 | Zonk measurement | ~25m | 2.5% | `933a3aff` | 1-21 subs/call. Not retirable. |
+| 4C | Design note (6 bridges) | 24m | 2.4% | `99a1210d` | Root causes + resolution paths |
+| T | Dedicated test files | ~1h | ~6% | `f4be1b38` | 31 tests, 4 files. Fixed generic ops typing. |
+| 12 | PIR | ~45m | ~4.5% | `ba9afee1` | 21 sections. 11-PIR longitudinal survey. |
+
+### Category breakdown
+
+| Category | Time | % |
+|----------|------|---|
+| **Implementation** (Phases 0–7, 9) | ~12h 47m | 75% |
+| **Debugging/Diagnosis** (batch-worker, global cell, Phase 9 fixes) | ~2h 13m | 13% |
+| **Design/Analysis** (triage, Phase 8 note, 4C note, Phase 10) | ~1h 49m | 10% |
+| **Testing + PIR** (Phase T, Phase 12) | ~1h 45m | 10% |
+
+### Observations on time allocation
+
+- **Phase 3 was the costliest single phase** (2h 25m + 1h 17m batch-worker = 3h 42m, 22%). Meta-feedback + Option C + structural feedback + resolving 17 pre-existing failures. This is where the architectural complexity lived.
+- **Phase 9 was the costliest aggregate** (4h 33m, 27%). The first attempt failed (30m wasted on "NOT READY"), then 12 sub-commits across a session break. An expression vocabulary audit BEFORE Phase 9 would have saved ~30-45m.
+- **Phase 7 was the fastest** (6m). All infrastructure was in place from prior phases — just one propagator + one merge function.
+- **Design time was low** (10%) because Track 4B inherited the D.2 design from a prior design-heavy session (AG research + attribute grammar specification). The design investment happened before the implementation clock started.
+- **The 10h sleep break** in Phase 9 (17:37→03:38) split the hardest phase. Post-sleep work was more productive: 8 commits in 2h 08m vs 6 commits in 2h 25m pre-sleep.
 
 ## §3. Test Coverage
 
