@@ -445,15 +445,25 @@
 ;; approximate = machine-precision (Posit*, Float*)
 ;; other = no coercion concern (Bool, String, etc.)
 (define (type-family type-val)
-  (define tag (type-expr->tag type-val))
   (cond
-    [(not tag) 'other]
-    [(memq tag '(Int Nat Rat NegInt PosInt Zero NegRat PosRat)) 'exact]
-    ;; For FQN tags, check the string representation
-    [(and (symbol? tag)
-          (let ([s (symbol->string tag)])
-            (or (string-contains? s "Posit") (string-contains? s "Float"))))
-     'approximate]
+    ;; Direct struct types (builtins)
+    [(or (expr-Int? type-val) (expr-Nat? type-val)) 'exact]
+    [(expr-Rat? type-val) 'exact]
+    [(expr-Posit8? type-val) 'approximate]
+    [(expr-Posit16? type-val) 'approximate]
+    [(expr-Posit32? type-val) 'approximate]
+    [(expr-Posit64? type-val) 'approximate]
+    ;; FQN types (from global env)
+    [(expr-fvar? type-val)
+     (define s (symbol->string (expr-fvar-name type-val)))
+     (cond
+       [(or (string-contains? s "Rat") (string-contains? s "NegInt")
+            (string-contains? s "PosInt") (string-contains? s "Zero")
+            (string-contains? s "NegRat") (string-contains? s "PosRat"))
+        'exact]
+       [(or (string-contains? s "Posit") (string-contains? s "Float"))
+        'approximate]
+       [else 'other])]
     [else 'other]))
 
 ;; S2 coercion-detection propagator: reads both arg types at a generic
@@ -1266,12 +1276,12 @@
   (register-typing-rule! expr-set-diff? 2 (list expr-set-diff-s1 expr-set-diff-s2) #f 'set-diff)
   (register-typing-rule! expr-set-to-list? 1 (list expr-set-to-list-s) #f 'set-to-list)
 
-  ;; ===== GENERIC ARITHMETIC: #f until coercion warning bridge is complete =====
-  ;; Infrastructure in place: S2 coercion-detection propagator + type-family
-  ;; classifier + warning bridge in infer-on-network/err. But the bridge
-  ;; doesn't reach the imperative warning parameters in all code paths
-  ;; (process-string vs direct infer-on-network/err). Generic ops stay with
-  ;; #f until the bridge is fully validated.
+  ;; ===== GENERIC ARITHMETIC: #f (return type depends on coercion rules) =====
+  ;; Coercion infrastructure in place (type-family, coercion-detection propagator,
+  ;; warning bridge). But the return type for cross-family ops is NOT "same as
+  ;; first arg" — it depends on coercion rules (e.g., Int + Posit32 → Posit32).
+  ;; The imperative path handles this correctly. Generic ops stay at #f until
+  ;; the return-type computation accounts for coercion.
   (for ([info (list (list expr-generic-add? expr-generic-add-a expr-generic-add-b 'generic-add)
                     (list expr-generic-sub? expr-generic-sub-a expr-generic-sub-b 'generic-sub)
                     (list expr-generic-mul? expr-generic-mul-a expr-generic-mul-b 'generic-mul)
@@ -1884,8 +1894,6 @@
        (unless (meta-solved? meta-id)
          (solve-meta! meta-id solution)))
      ;; Bridge on-network warnings to imperative warning parameters (SCAFFOLDING)
-     ;; Coercion warnings flow through :warnings facet → warning output cell →
-     ;; bridge to imperative current-coercion-warnings parameter.
      (for ([w (in-list warnings)])
        (when (and (list? w) (pair? w) (eq? (car w) 'coercion-warning))
          (emit-coercion-warning! (cadr w) (caddr w))))
