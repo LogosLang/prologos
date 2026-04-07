@@ -34,6 +34,7 @@
          "constraint-cell.rkt"  ;; Track 4B Phase 2: reuse existing constraint lattice
          "constraint-propagators.rkt"  ;; Track 4B Phase 2: build-trait-constraint, refine-constraint-by-type-tag
          (only-in "qtt.rkt" zero-usage single-usage add-usage scale-usage)  ;; Track 4B Phase 4
+         (only-in "typing-core.rkt" numeric-join)  ;; Phase T: generic op return types
          (only-in "warnings.rkt" emit-coercion-warning!)  ;; Phase 9 prep: coercion bridge
          (only-in "trait-resolution.rkt" resolve-trait-constraints!)  ;; Phase 9: parametric bridge
          (only-in "atms.rkt" assumption-id)  ;; Track 4B Phase 8: union branching
@@ -57,6 +58,9 @@
  make-constraint-creation-fire-fn
  make-type-narrows-constraints-fire-fn
  type-expr->tag
+ ;; Track 4B Phase 7: Coercion Detection
+ type-family
+ make-coercion-detection-fire-fn
  ;; Track 4B Phase 3: Trait Resolution
  make-trait-resolution-fire-fn
  candidate->dict-expr
@@ -71,6 +75,8 @@
  facet-bot
  facet-bot?
  facet-merge
+ ;; Track 4B Phase 6b: Fire-once propagator pattern
+ net-add-fire-once-propagator
  ;; Phase 2 (D.4): Propagator-native typing
  install-typing-network
  make-literal-fire-fn
@@ -1057,22 +1063,22 @@
   (cond
     [(not ret-type) net]  ;; special handling needed — not in domain
     [(procedure? ret-type)
-     ;; COMPUTED return type: function from first child's type → result type.
-     ;; Install children first, then a propagator that watches the first child's
-     ;; type-map position and applies the function.
+     ;; COMPUTED return type: function from (listof child-type) → result type.
+     ;; Install children first, then a propagator that watches ALL children's
+     ;; type-map positions and applies the function when all are non-bot.
      (define child-exprs (map (lambda (fn) (fn e)) children))
      (define net-with-children
        (for/fold ([n net]) ([child-fn (in-list children)])
          (install-typing-network n tm-cid (child-fn e) ctx-pos)))
-     (define first-child (car child-exprs))
      (define-values (net* _pid)
        (net-add-propagator net-with-children (list tm-cid) (list tm-cid)
          (lambda (net)
-           (define child-type (type-map-read net tm-cid first-child))
+           (define child-types
+             (map (lambda (c) (type-map-read net tm-cid c)) child-exprs))
            (cond
-             [(type-bot? child-type) net]  ;; wait for child type
+             [(ormap type-bot? child-types) net]  ;; wait for all children
              [else
-              (define result (ret-type child-type))
+              (define result (ret-type child-types))
               (if result
                   (type-map-write net tm-cid e result)
                   net)]))))  ;; function returned #f — can't compute
@@ -1304,25 +1310,37 @@
   (register-typing-rule! expr-set-diff? 2 (list expr-set-diff-s1 expr-set-diff-s2) #f 'set-diff)
   (register-typing-rule! expr-set-to-list? 1 (list expr-set-to-list-s) #f 'set-to-list)
 
-  ;; ===== GENERIC ARITHMETIC: #f (return type depends on coercion rules) =====
-  ;; Coercion infrastructure in place (type-family, coercion-detection propagator,
-  ;; warning bridge). But the return type for cross-family ops is NOT "same as
-  ;; first arg" — it depends on coercion rules (e.g., Int + Posit32 → Posit32).
-  ;; The imperative path handles this correctly. Generic ops stay at #f until
-  ;; the return-type computation accounts for coercion.
+  ;; ===== GENERIC ARITHMETIC: computed return types via numeric-join =====
+  ;; Binary arithmetic: numeric-join of both operand types.
+  ;; Comparisons: always Bool.
+  ;; Unary: identity (same as operand type).
+  (define (generic-arithmetic-ret ts) (numeric-join (car ts) (cadr ts)))
+  (define (generic-comparison-ret ts) (expr-Bool))
+  (define (generic-unary-ret ts) (car ts))
+
+  ;; Binary arithmetic ops: return type = numeric-join(a, b)
   (for ([info (list (list expr-generic-add? expr-generic-add-a expr-generic-add-b 'generic-add)
                     (list expr-generic-sub? expr-generic-sub-a expr-generic-sub-b 'generic-sub)
                     (list expr-generic-mul? expr-generic-mul-a expr-generic-mul-b 'generic-mul)
                     (list expr-generic-div? expr-generic-div-a expr-generic-div-b 'generic-div)
-                    (list expr-generic-mod? expr-generic-mod-a expr-generic-mod-b 'generic-mod)
-                    (list expr-generic-lt? expr-generic-lt-a expr-generic-lt-b 'generic-lt)
+                    (list expr-generic-mod? expr-generic-mod-a expr-generic-mod-b 'generic-mod))])
+    (register-typing-rule! (car info) 2 (list (cadr info) (caddr info))
+                           generic-arithmetic-ret (cadddr info)))
+
+  ;; Comparison ops: return type = Bool
+  (for ([info (list (list expr-generic-lt? expr-generic-lt-a expr-generic-lt-b 'generic-lt)
                     (list expr-generic-le? expr-generic-le-a expr-generic-le-b 'generic-le)
                     (list expr-generic-gt? expr-generic-gt-a expr-generic-gt-b 'generic-gt)
                     (list expr-generic-ge? expr-generic-ge-a expr-generic-ge-b 'generic-ge)
                     (list expr-generic-eq? expr-generic-eq-a expr-generic-eq-b 'generic-eq))])
-    (register-typing-rule! (car info) 2 (list (cadr info) (caddr info)) #f (cadddr info)))
-  (register-typing-rule! expr-generic-negate? 1 (list expr-generic-negate-a) #f 'generic-negate)
-  (register-typing-rule! expr-generic-abs? 1 (list expr-generic-abs-a) #f 'generic-abs)
+    (register-typing-rule! (car info) 2 (list (cadr info) (caddr info))
+                           generic-comparison-ret (cadddr info)))
+
+  ;; Unary ops: return type = same as operand
+  (register-typing-rule! expr-generic-negate? 1 (list expr-generic-negate-a)
+                         generic-unary-ret 'generic-negate)
+  (register-typing-rule! expr-generic-abs? 1 (list expr-generic-abs-a)
+                         generic-unary-ret 'generic-abs)
 
   ;; Conversion: return type = target-type field (first child EXPRESSION).
   ;; generic-from-int(target-type, arg) → target-type
