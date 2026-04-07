@@ -504,9 +504,9 @@
                          "OK"))]
 
                   ;; (eval expr)
-                  ;; PPN Track 4 D.4 Phase 7: try propagator-native typing first.
-                  ;; Falls back to imperative infer/err for expressions the network
-                  ;; can't yet handle (side effects not on-network).
+                  ;; Track 4B Phase 9: on-network first, imperative fallback for
+                  ;; unhandled expression kinds (ATMS ops, narrowing, auto-implicits).
+                  ;; Fallback is diagnostic — logged for SRE coverage tracking.
                   [(list 'eval expr)
                    (let ([ty (time-phase! type-check
                               (let ([net-ty (infer-on-network/err ctx-empty expr)])
@@ -533,7 +533,7 @@
                                                  (pp-expr (expr-panic-msg val)))))
                                          (format "~a : ~a" (pp-expr val) (pp-expr ty-nf))))))))))]
 
-                  ;; (infer expr)
+                  ;; (infer expr) — Track 4B Phase 9: on-network first, fallback for unhandled
                   [(list 'infer expr)
                    (let ([ty (time-phase! type-check
                               (let ([net-ty (infer-on-network/err ctx-empty expr)])
@@ -643,10 +643,13 @@
                        (format "~a satisfies ~a: true" type-name trait-name)
                        (format "~a satisfies ~a: false" type-name trait-name))]
 
-                  ;; (defr name expr) — named relation definition (Phase 7)
-                  ;; Type-infer the relation, register in global env + relation store
+                  ;; (defr name expr) — Track 4B Phase 9: on-network first, fallback for unhandled
                   [(list 'defr name expr)
-                   (let ([ty (time-phase! type-check (infer/err ctx-empty expr))])
+                   (let ([ty (time-phase! type-check
+                              (let ([net-ty (infer-on-network/err ctx-empty expr)])
+                                (if (prologos-error? net-ty)
+                                    (infer/err ctx-empty expr)
+                                    net-ty)))])
                      (if (prologos-error? ty) ty
                          (begin
                            ;; Track 2: trait + hasmethod resolution handled reactively by propagator callbacks
@@ -1070,7 +1073,13 @@
      (cond
        [(prologos-error? body) body]
        [else
-        (define inferred-type (time-phase! type-check (infer/err ctx-empty body)))
+        ;; Track 4B Phase 9: on-network first, fallback for unhandled
+        (define inferred-type
+          (time-phase! type-check
+            (let ([net-ty (infer-on-network/err ctx-empty body)])
+              (if (prologos-error? net-ty)
+                  (infer/err ctx-empty body)
+                  net-ty))))
         (cond
           [(prologos-error? inferred-type) inferred-type]
           [else
