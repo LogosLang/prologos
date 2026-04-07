@@ -1940,7 +1940,17 @@
        (when (and (list? w) (pair? w) (eq? (car w) 'coercion-warning))
          (emit-coercion-warning! (cadr w) (caddr w))))
      ;; Parametric trait resolution bridge (SCAFFOLDING)
+     ;; Resolves parametric constraints (Seqable, Foldable, Reducible) where
+     ;; monomorphic on-network resolution succeeded for type-args but the
+     ;; dict-meta needs parametric pattern matching.
      (resolve-trait-constraints!)
+     ;; Check for remaining unsolved dict-metas (parametric constraints
+     ;; that couldn't be resolved on-network because erased type-arg
+     ;; metas have no on-network path to their solutions).
+     (define has-unsolved-dict?
+       (let ([constraints (read-trait-constraints)])
+         (for/or ([(mid _) (in-hash constraints)])
+           (not (meta-solved? mid)))))
      ;; Return type (with fallback checks)
      (cond
        [(type-bot? root-type)
@@ -1952,6 +1962,11 @@
        [(has-unsolved-meta? root-type)
         (set-box! on-network-fallback-count (add1 (unbox on-network-fallback-count)))
         (inference-failed-error loc "on-network: unsolved meta" (pp-expr expr names))]
+       ;; Unsolved dict-metas → trigger fallback to imperative path
+       ;; which has CHECK mode for resolving erased type-arg metas
+       [has-unsolved-dict?
+        (set-box! on-network-fallback-count (add1 (unbox on-network-fallback-count)))
+        (inference-failed-error loc "on-network: unsolved dict" (pp-expr expr names))]
        [else
         (set-box! on-network-success-count (add1 (unbox on-network-success-count)))
         root-type])]))
