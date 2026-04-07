@@ -918,6 +918,11 @@
                    (extract-bindings
                     (expr-Sigma-fst-type d) (expr-Sigma-fst-type a)
                     (extract-bindings (expr-Sigma-snd-type d) (expr-Sigma-snd-type a) n))]
+                  ;; Built-in parameterized types with element fields
+                  [(and (expr-PVec? d) (expr-PVec? a))
+                   (extract-bindings (expr-PVec-elem-type d) (expr-PVec-elem-type a) n)]
+                  [(and (expr-Vec? d) (expr-Vec? a))
+                   (extract-bindings (expr-Vec-elem-type d) (expr-Vec-elem-type a) n)]
                   ;; No match — no bindings to extract
                   [else n]))])))
        ;; UPWARD: subst uses arg-pos (expression key) — handles ALL codomains.
