@@ -1,0 +1,65 @@
+#+TITLE: Standup — 2026-04-07
+#+DATE: 2026-04-07
+
+* Yesterday (since 2026-04-05 standup, created Apr 5 13:07)
+
+** PPN Track 4B: Elaboration as Attribute Evaluation — COMPLETE
+
+*** Design (D.1→D.2, ~4h)
+- D.1: Constraint domain lattice (CLP-inspired Heyting algebra), BSP audit, output channels, =that= API, §9 global attribute store, NTT model
+- AG Research: attribute grammar formal mapping (catamorphisms, aspects, propagator correspondence), DCGs, CLP semantically enriched CFGs
+- D.2: Self-critique (3 findings: facet-aware diffing, parametric narrowing) + external critique (7 new sections integrated)
+
+*** Implementation (47 commits, ~17h active, 3 sessions Apr 6–7)
+- Phase 0a+0d: multi-path component firing fix + BSP hardening
+- Phase 0c: global attribute-map cell on persistent registry network
+- Phase 1: Attribute Record PU — 5-facet nested hasheq (type, context, constraints, usage, warnings)
+- Phase 2: Constraint attribute propagators (S0) — powerset lattice, cross-facet bridge
+- Phase 3: Trait resolution + meta-feedback (S1) — Option C, structural feedback, 17→0 failures
+- Phase 4: Usage tracking propagators (S0) — 7 fire-fn kinds
+- Phase 5: Structural decomposition verification — single-cell PU subsumes separate cells
+- Phase 6+6b: On-main-network typing + P1 initial writes + P3 cleanup (recovered 20% regression)
+- P2: Fire-once self-cleaning propagators (~1.4% overhead)
+- Phase 7: Warning attribute propagators (S2) — all 5 domains active
+- Phase 8: Redirected to BSP-LE Track 1.5 (Cell-Based TMS design note)
+- Phase 9: SRE expression coverage (12 sub-commits) — ann, tycon, reduce, pair, generics, contradiction
+- Phase 10: Zonk measurement (1-21 subs/call, not yet retirable)
+- Phase T: 31 dedicated tests across 4 files. Fixed generic ops on-network typing (numeric-join).
+- Phase 12: PIR (21 sections, 11-PIR longitudinal survey, detailed per-phase timing)
+
+*** Results
+- 90% on-network (up from 46% in Track 4A)
+- All 5 attribute domains active (type, context, constraints, usage, warnings)
+- 391/391 files, 7609 tests, 134.1s — all green
+- 6 imperative bridges documented for Track 4C
+- 9 bugs found and fixed (context-bot, Option C, generic ops, contradiction, batch-worker, etc.)
+- +2117/-281 lines code, 13 .rkt files modified
+
+** PPN Track 4C: Design Note
+- Captured 6 remaining imperative bridges with root causes and resolution paths
+- Not yet a full design cycle — scoped as next design target
+
+** BSP-LE Track 1.5: Cell-Based TMS Design Note
+- Worldview as cell value (on-network) instead of parameter-based speculation stack
+- Blocks PPN 4B Phase 8 (ATMS union branching)
+
+** Process Improvements Codified
+- Conversational implementation cadence: max ~1h autonomous stretch, dialogue at every phase boundary (DESIGN_METHODOLOGY.org Stage 4 + workflow.md)
+- Per-phase test gate: test coverage verification as step (a) of phase completion checklist
+- Origin: PPN Track 4 diverged during long autonomous implementation; Track 4B stayed on-architecture via phase-by-phase dialogue
+
+** Micro-benchmarking
+- bench-typing-propagators.rkt: 5 benchmarks (literal, app, lambda, nested, deep nesting)
+- P2 A/B comparison: 1.4% overhead, accepted
+
+* Today
+
+** Next Implementation Track
+- Review DEFERRED.md for newly-unblocked items
+- Decide next track: PPN 4C (dissolve bridges), BSP-LE 1.5 (cell-based TMS), SRE continuation, or other
+
+* Blockers
+
+- PPN 4B Phase 8 (ATMS) blocked on BSP-LE Track 1.5 (cell-based TMS)
+- PPN 4B Phase 10 (zonk retirement) needs cell-refs replacing expr-meta
+- PPN 4B Phase 11 (scaffolding retirement) — 8 items from Tracks 2H + 2D
