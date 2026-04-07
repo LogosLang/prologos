@@ -16,6 +16,7 @@
 
 (require racket/match
          racket/set
+         racket/string
          "syntax.rkt"
          "prelude.rkt"
          "substitution.rkt"
@@ -33,6 +34,7 @@
          "constraint-cell.rkt"  ;; Track 4B Phase 2: reuse existing constraint lattice
          "constraint-propagators.rkt"  ;; Track 4B Phase 2: build-trait-constraint, refine-constraint-by-type-tag
          (only-in "qtt.rkt" zero-usage single-usage add-usage scale-usage)  ;; Track 4B Phase 4
+         (only-in "warnings.rkt" emit-coercion-warning!)  ;; Phase 9 prep: coercion bridge
          (only-in "atms.rkt" assumption-id)  ;; Track 4B Phase 8: union branching
          "elab-network-types.rkt"
          "errors.rkt"
@@ -437,6 +439,42 @@
           (symbol? (expr-fvar-name type-val)))
      (expr-fvar-name type-val)]
     [else #f]))
+
+;; Type family classifier for coercion detection.
+;; exact = arbitrary-precision (Int, Nat, Rat and subtypes)
+;; approximate = machine-precision (Posit*, Float*)
+;; other = no coercion concern (Bool, String, etc.)
+(define (type-family type-val)
+  (define tag (type-expr->tag type-val))
+  (cond
+    [(not tag) 'other]
+    [(memq tag '(Int Nat Rat NegInt PosInt Zero NegRat PosRat)) 'exact]
+    ;; For FQN tags, check the string representation
+    [(and (symbol? tag)
+          (let ([s (symbol->string tag)])
+            (or (string-contains? s "Posit") (string-contains? s "Float"))))
+     'approximate]
+    [else 'other]))
+
+;; S2 coercion-detection propagator: reads both arg types at a generic
+;; op position. If they're from different families (exact vs approximate),
+;; writes a coercion warning to :warnings. P2 fire-once.
+(define (make-coercion-detection-fire-fn tm-cid position arg1-pos arg2-pos)
+  (lambda (net)
+    (define tm (net-cell-read net tm-cid))
+    (define t1 (that-read tm arg1-pos ':type))
+    (define t2 (that-read tm arg2-pos ':type))
+    (cond
+      [(or (type-bot? t1) (type-bot? t2)) net]  ;; wait for both types
+      [else
+       (define f1 (type-family t1))
+       (define f2 (type-family t2))
+       (cond
+         [(and (not (eq? f1 'other)) (not (eq? f2 'other)) (not (eq? f1 f2)))
+          ;; Cross-family: emit coercion warning
+          (define warning (list 'coercion-warning (pp-expr t1) (pp-expr t2)))
+          (that-write net tm-cid position ':warnings (list warning))]
+         [else net])])))
 
 ;; Constraint-creation propagator: builds initial constraint domain from
 ;; the impl registry. This is a PROPAGATOR (on-network), not a literal
@@ -1228,30 +1266,23 @@
   (register-typing-rule! expr-set-diff? 2 (list expr-set-diff-s1 expr-set-diff-s2) #f 'set-diff)
   (register-typing-rule! expr-set-to-list? 1 (list expr-set-to-list-s) #f 'set-to-list)
 
-  ;; ===== GENERIC ARITHMETIC: ALL #f — stay with imperative fallback =====
-  ;; Generic ops need the imperative path for coercion warning detection.
-  ;; The on-network path succeeds before coercion warnings can be emitted,
-  ;; causing test-coercion-warnings to miss expected warnings.
-  ;; Comparisons (lt, le, gt, ge, eq) return Bool but still need the
-  ;; imperative path for cross-family comparison warnings.
-  (for ([info (list (list expr-generic-lt? expr-generic-lt-a expr-generic-lt-b 'generic-lt)
+  ;; ===== GENERIC ARITHMETIC: #f until coercion warning bridge is complete =====
+  ;; Infrastructure in place: S2 coercion-detection propagator + type-family
+  ;; classifier + warning bridge in infer-on-network/err. But the bridge
+  ;; doesn't reach the imperative warning parameters in all code paths
+  ;; (process-string vs direct infer-on-network/err). Generic ops stay with
+  ;; #f until the bridge is fully validated.
+  (for ([info (list (list expr-generic-add? expr-generic-add-a expr-generic-add-b 'generic-add)
+                    (list expr-generic-sub? expr-generic-sub-a expr-generic-sub-b 'generic-sub)
+                    (list expr-generic-mul? expr-generic-mul-a expr-generic-mul-b 'generic-mul)
+                    (list expr-generic-div? expr-generic-div-a expr-generic-div-b 'generic-div)
+                    (list expr-generic-mod? expr-generic-mod-a expr-generic-mod-b 'generic-mod)
+                    (list expr-generic-lt? expr-generic-lt-a expr-generic-lt-b 'generic-lt)
                     (list expr-generic-le? expr-generic-le-a expr-generic-le-b 'generic-le)
                     (list expr-generic-gt? expr-generic-gt-a expr-generic-gt-b 'generic-gt)
                     (list expr-generic-ge? expr-generic-ge-a expr-generic-ge-b 'generic-ge)
                     (list expr-generic-eq? expr-generic-eq-a expr-generic-eq-b 'generic-eq))])
     (register-typing-rule! (car info) 2 (list (cadr info) (caddr info)) #f (cadddr info)))
-  ;; Arithmetic: return-type #f — stays with imperative fallback until
-  ;; coercion detection is on-network. The imperative path handles
-  ;; cross-family coercion warnings (Int + Posit32 → warn).
-  ;; Without cross-family detection on-network, computed return types
-  ;; bypass coercion warnings (confirmed by test-coercion-warnings regression).
-  (for ([info (list (list expr-generic-add? expr-generic-add-a expr-generic-add-b 'generic-add)
-                    (list expr-generic-sub? expr-generic-sub-a expr-generic-sub-b 'generic-sub)
-                    (list expr-generic-mul? expr-generic-mul-a expr-generic-mul-b 'generic-mul)
-                    (list expr-generic-div? expr-generic-div-a expr-generic-div-b 'generic-div)
-                    (list expr-generic-mod? expr-generic-mod-a expr-generic-mod-b 'generic-mod))])
-    (register-typing-rule! (car info) 2 (list (cadr info) (caddr info)) #f (cadddr info)))
-  ;; Unary: same issue — coercion context needed for correct warnings.
   (register-typing-rule! expr-generic-negate? 1 (list expr-generic-negate-a) #f 'generic-negate)
   (register-typing-rule! expr-generic-abs? 1 (list expr-generic-abs-a) #f 'generic-abs)
 
@@ -1666,9 +1697,30 @@
       [_
        (define rule (lookup-typing-rule e))
        (if rule
-           ;; Install BOTH typing and usage propagators from the rule
-           (let ([net1 (install-from-rule net tm-cid e ctx-pos rule)])
-             (install-usage-from-rule net1 tm-cid e ctx-pos rule))
+           ;; Install typing + usage propagators from the rule
+           ;; PLUS coercion detection for binary generic ops (S2, P2)
+           (let* ([net1 (install-from-rule net tm-cid e ctx-pos rule)]
+                  [net2 (install-usage-from-rule net1 tm-cid e ctx-pos rule)]
+                  ;; Coercion detection: for binary generic ops, install S2 propagator
+                  [net3 (if (and (= (typing-domain-rule-arity rule) 2)
+                                (let ([name (typing-domain-rule-name rule)])
+                                  (memq name '(generic-add generic-sub generic-mul generic-div
+                                               generic-mod generic-lt generic-le generic-gt
+                                               generic-ge generic-eq))))
+                            (let ([children (typing-domain-rule-children rule)])
+                              (define child1 ((car children) e))
+                              (define child2 ((cadr children) e))
+                              (define-values (n _pid)
+                                (net-add-fire-once-propagator net2
+                                  (list tm-cid) (list tm-cid)
+                                  (make-coercion-detection-fire-fn tm-cid e child1 child2)
+                                  tm-cid
+                                  #:component-paths
+                                  (list (cons tm-cid (cons child1 ':type))
+                                        (cons tm-cid (cons child2 ':type)))))
+                              n)
+                            net2)])
+             net3)
            ;; Truly unhandled — leave at ⊥, log for coverage tracking
            (begin
              (when (struct? e)
@@ -1831,6 +1883,12 @@
        (define solution (cdr pair))
        (unless (meta-solved? meta-id)
          (solve-meta! meta-id solution)))
+     ;; Bridge on-network warnings to imperative warning parameters (SCAFFOLDING)
+     ;; Coercion warnings flow through :warnings facet → warning output cell →
+     ;; bridge to imperative current-coercion-warnings parameter.
+     (for ([w (in-list warnings)])
+       (when (and (list? w) (pair? w) (eq? (car w) 'coercion-warning))
+         (emit-coercion-warning! (cadr w) (caddr w))))
      ;; Return type (with fallback checks)
      (cond
        [(type-bot? root-type)
