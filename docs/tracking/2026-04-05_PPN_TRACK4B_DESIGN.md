@@ -36,7 +36,7 @@
 | 9 | Retire imperative fallback: infer/check + resolve-trait-constraints! + checkQ + freeze | ✅ | commit `9358b18d`. On-network PRIMARY for all 4 command types. Imperative fallback DIAGNOSTIC for ~10% unhandled expressions (ATMS, narrowing, auto-implicits). SRE coverage: ann, tycon, reduce, pair, from-int/from-rat, ALL generics (numeric-join + coercion). |
 | 10 | Zonk retirement (from Track 4A Phase 4b) | ⬜ | Cell-refs replace expr-meta; fan-in default propagator at S2. |
 | 11 | Scaffolding retirement (from Track 4A Phase 8) | ⬜ | 8 items from Tracks 2H + 2D. |
-| T | Dedicated test file | ⬜ | Attribute-level tests: per-domain, per-node-kind, per-stratum. |
+| T | Dedicated test files | ✅ | commit `f4be1b38`. 31 tests across 4 files: test-attribute-record (10), test-propagator-patterns (5), test-sre-coverage (9), test-meta-feedback (7). Fixed generic op on-network typing (numeric-join, Bool, identity). 391/391 files, 7609 tests, 134.1s. |
 | 12 | Verification + PIR | ⬜ | Full suite GREEN, A/B benchmark, acceptance file, PIR. |
 
 ---
