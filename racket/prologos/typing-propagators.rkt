@@ -1228,35 +1228,43 @@
   (register-typing-rule! expr-set-diff? 2 (list expr-set-diff-s1 expr-set-diff-s2) #f 'set-diff)
   (register-typing-rule! expr-set-to-list? 1 (list expr-set-to-list-s) #f 'set-to-list)
 
-  ;; ===== GENERIC ARITHMETIC: return-type #f (Pattern 4: full trait dispatch) =====
-  ;; F2 Option C attempted but REVERTED: computed return types (same-as-arg-type)
-  ;; produce correct types for same-type ops but bypass coercion warnings for
-  ;; cross-family ops (Int + Posit32). The imperative path handles coercion
-  ;; detection and warning emission. Until coercion logic moves on-network,
-  ;; generic ops must fall back to imperative for correct warning behavior.
-  (for ([info (list (list expr-generic-add? expr-generic-add-a expr-generic-add-b 'generic-add)
-                    (list expr-generic-sub? expr-generic-sub-a expr-generic-sub-b 'generic-sub)
-                    (list expr-generic-mul? expr-generic-mul-a expr-generic-mul-b 'generic-mul)
-                    (list expr-generic-div? expr-generic-div-a expr-generic-div-b 'generic-div)
-                    (list expr-generic-mod? expr-generic-mod-a expr-generic-mod-b 'generic-mod)
-                    (list expr-generic-lt? expr-generic-lt-a expr-generic-lt-b 'generic-lt)
+  ;; ===== GENERIC ARITHMETIC: ALL #f — stay with imperative fallback =====
+  ;; Generic ops need the imperative path for coercion warning detection.
+  ;; The on-network path succeeds before coercion warnings can be emitted,
+  ;; causing test-coercion-warnings to miss expected warnings.
+  ;; Comparisons (lt, le, gt, ge, eq) return Bool but still need the
+  ;; imperative path for cross-family comparison warnings.
+  (for ([info (list (list expr-generic-lt? expr-generic-lt-a expr-generic-lt-b 'generic-lt)
                     (list expr-generic-le? expr-generic-le-a expr-generic-le-b 'generic-le)
                     (list expr-generic-gt? expr-generic-gt-a expr-generic-gt-b 'generic-gt)
                     (list expr-generic-ge? expr-generic-ge-a expr-generic-ge-b 'generic-ge)
                     (list expr-generic-eq? expr-generic-eq-a expr-generic-eq-b 'generic-eq))])
     (register-typing-rule! (car info) 2 (list (cadr info) (caddr info)) #f (cadddr info)))
+  ;; Arithmetic: return-type #f — stays with imperative fallback until
+  ;; coercion detection is on-network. The imperative path handles
+  ;; cross-family coercion warnings (Int + Posit32 → warn).
+  ;; Without cross-family detection on-network, computed return types
+  ;; bypass coercion warnings (confirmed by test-coercion-warnings regression).
+  (for ([info (list (list expr-generic-add? expr-generic-add-a expr-generic-add-b 'generic-add)
+                    (list expr-generic-sub? expr-generic-sub-a expr-generic-sub-b 'generic-sub)
+                    (list expr-generic-mul? expr-generic-mul-a expr-generic-mul-b 'generic-mul)
+                    (list expr-generic-div? expr-generic-div-a expr-generic-div-b 'generic-div)
+                    (list expr-generic-mod? expr-generic-mod-a expr-generic-mod-b 'generic-mod))])
+    (register-typing-rule! (car info) 2 (list (cadr info) (caddr info)) #f (cadddr info)))
+  ;; Unary: same issue — coercion context needed for correct warnings.
   (register-typing-rule! expr-generic-negate? 1 (list expr-generic-negate-a) #f 'generic-negate)
   (register-typing-rule! expr-generic-abs? 1 (list expr-generic-abs-a) #f 'generic-abs)
 
-  ;; Conversion: return type = target-type field (first field, not arg)
+  ;; Conversion: return type = target-type field (first child EXPRESSION).
   ;; generic-from-int(target-type, arg) → target-type
-  ;; generic-from-rat(target-type, arg) → target-type
-  ;; The target-type is an EXPRESSION (like (expr-Int)), and its type-map value is Type(0).
-  ;; But we want the expression itself as the return type. Use a computed function that
-  ;; reads the target-type expression from the type-map and returns it if it's a type constructor.
-  ;; Conversion: target-type field is an EXPRESSION (e.g., (expr-Rat)), not a type.
-  ;; The return type IS the expression, not its type-map value (Type(0)).
-  ;; Registered as #f for now — needs expression-value access in computed types.
+  ;; The target-type is the expression itself (e.g., (expr-Int)), not Type(0).
+  ;; Use identity function: the first child's "type" in the computed path
+  ;; is actually the target-type expression flowing through as a value.
+  ;; This works because the computed return-type function receives whatever
+  ;; is at the first child's :type position — if the target-type is a type
+  ;; constructor like (expr-Int), its :type is Type(0). So we need a custom
+  ;; propagator instead.
+  ;; KEPT AS #f: handled by custom case in install-typing-network below.
   (register-typing-rule! expr-generic-from-int? 2
                          (list expr-generic-from-int-target-type expr-generic-from-int-arg)
                          #f 'generic-from-int)
@@ -1621,6 +1629,38 @@
                       tm-cid
                       #:component-paths (list (cons tm-cid (cons body ':type)))))
                   result-net))]))]
+
+      ;; --- Generic from-int/from-rat: return type = target-type EXPRESSION ---
+      ;; The target-type field is the first child. Its VALUE (the expression itself,
+      ;; e.g., (expr-Int)) is the return type. P1 initial write.
+      [(expr-generic-from-int target-type arg)
+       (define net1 (install net target-type ctx-pos))
+       (define net2 (install net1 arg ctx-pos))
+       (type-map-write net2 tm-cid e target-type)]
+
+      [(expr-generic-from-rat target-type arg)
+       (define net1 (install net target-type ctx-pos))
+       (define net2 (install net1 arg ctx-pos))
+       (type-map-write net2 tm-cid e target-type)]
+
+      ;; --- Pair: type = Sigma(type-of-fst, type-of-snd) ---
+      [(expr-pair fst-expr snd-expr)
+       (define net1 (install net fst-expr ctx-pos))
+       (define net2 (install net1 snd-expr ctx-pos))
+       ;; Propagator reads both component types, writes Sigma
+       (define-values (net3 _pid)
+         (net-add-fire-once-propagator net2 (list tm-cid) (list tm-cid)
+           (lambda (net)
+             (define fst-type (type-map-read net tm-cid fst-expr))
+             (define snd-type (type-map-read net tm-cid snd-expr))
+             (cond
+               [(or (type-bot? fst-type) (type-bot? snd-type)) net]
+               [else (type-map-write net tm-cid e (expr-Sigma fst-type snd-type))]))
+           tm-cid
+           #:component-paths
+           (list (cons tm-cid (cons fst-expr ':type))
+                 (cons tm-cid (cons snd-expr ':type)))))
+       net3]
 
       ;; --- Domain lookup: SRE typing domain handles remaining expr kinds ---
       [_
