@@ -221,24 +221,63 @@ These are doing the same thing — maintaining branch-specific cell values — t
 
 ### 4.2 The Worldview Cell Design Space
 
-Three options for how worldview flows to propagators:
+Six options explored for how worldview flows to propagators:
 
-**Option A: Explicit worldview cell as propagator input.**
-Each speculation-aware propagator declares a worldview cell in its input list. The propagator reads it explicitly.
-- Pro: Pure, explicit, composable.
-- Con: Every propagator needs to know about worldview. Changes fire function signature conceptually (though `net → net` is preserved).
+| Option | Worldview lives... | Propagator sees worldview via... | Concurrent branches? |
+|---|---|---|---|
+| **A** | Explicit propagator input | Propagator declares worldview in input list | Yes |
+| **B** | Per-network designated cell | `net-cell-read` auto-reads it | No — one worldview per network |
+| **C** | Per-network default + per-propagator override | Override at installation | Yes |
+| **D** | Facet of attribute map | `that-read(tm, pos, :worldview)` | Yes — per-position |
+| **E** | Lattice value (powerset of assumptions) | Cell with proper algebraic structure | Yes — algebraic composition |
+| **F** | Network topology (Pocket Universe) | PU boundary = worldview boundary | Yes — structural isolation |
 
-**Option B: Per-network worldview cell.**
-The prop-network has a designated worldview cell. `net-cell-read`/`net-cell-write` auto-read it.
-- Pro: Transparent to propagators. No fire function changes.
-- Con: One worldview per network. Concurrent worldviews need separate networks (or network partitioning).
+**Decision: Option E (worldview as lattice value).**
 
-**Option C: Hybrid — worldview cell with per-propagator override.**
-Default worldview cell on the network, but propagators can be installed with an explicit worldview cell that overrides the default.
-- Pro: Most propagators are transparent; speculation-aware propagators can override.
-- Con: More complex dispatch in `net-cell-read`/`net-cell-write`.
+The believed assumption set IS a lattice — powerset under subset ordering. Meet of two worldviews = intersection (conservative: facts both branches agree on). Join = union (optimistic: all facts from both branches). Nogood checking becomes a lattice operation: a worldview is contradicted if it contains any nogood subset.
 
-**Recommendation**: Option B for Track 2 (simplest, unblocks everything). Option C if Track 4 (BSP Pipeline) needs concurrent worldviews in the same network — but that can be a Track 4 extension.
+This gives:
+- Concurrent branches via separate worldview cells ✓
+- Algebraic composition (meet/join of worldviews) ✓
+- Fully on-network (cell value, not parameter) ✓
+- Nogood propagation as monotone cell writes ✓
+- Composable with existing propagator infrastructure ✓
+
+Options B and C were considered but rejected: B limits to one worldview (no concurrency); C is a stepping stone to E without the algebraic structure. Option D couples worldview to typing infrastructure (wrong scope). Option F (PU-per-worldview) is heavier than needed — PU creation overhead and explicit bridges vs. shared cells with TMS isolation.
+
+### 4.2a Nogood Propagation: Filtered Right Kan Extension
+
+**The cascade problem**: Naive shared-nogood-cell (Model 2) triggers every worldview-aware propagator to re-check consistency on every nogood write. For N branches, this is O(all propagators in all branches) per nogood — nearly all of which conclude "still fine" and do nothing.
+
+**The stratum alternative** (Model 3): Batch nogood checking at S(-1) barrier. Simpler, uses existing infrastructure, but branches do wasted work within a superstep after their nogood is discovered.
+
+**The principled solution: Filtered per-branch nogood watcher (Right Kan extension).**
+
+Each branch installs ONE filtered-nogood-watcher propagator:
+- **Inputs**: `[nogood-cell]`
+- **Outputs**: `[worldview-cell-B]`
+- **Filter**: Only fire when `nogood-cell` gains a nogood N where `N ∩ assumptions(B) ≠ ∅`
+- **Action**: Write `'contradicted` to `worldview-cell-B`
+
+The filter IS the right Kan extension: of all information flowing through the nogood cell, forward to branch B only what B has demanded (nogoods involving B's assumptions).
+
+**Cost analysis**:
+- Per nogood discovery: O(branches) intersection checks, each O(|nogood|) — typically 2-3 assumptions
+- Per affected branch: that branch's propagators see contradiction and stop
+- Per unaffected branch: watcher checked, found no intersection, no cell write, no downstream firing
+- Total: O(branches × |nogood|) for filtering + O(affected_branch_propagators) for reaction
+
+Compare Model 3: O(all_branch_propagators) wasted work within superstep + O(branches × total_nogoods) at barrier. Filtered model wins when affected-branches-per-nogood ≪ total branches — which is almost always the case (nogoods involve 2-3 specific assumptions out of potentially hundreds).
+
+**The pattern generalizes**: This filtered-bridge-per-consumer is the concrete form of the right Kan extension. It applies to any cross-branch information flow — not just nogoods but learned clauses, constraint propagation across branches, partial-result sharing between worldviews. Building it here establishes the pattern for BSP-LE Track 4 and beyond.
+
+### 4.2b Open Question Resolutions
+
+**Q1 (UnionFind): NOT a dependency.** `union-find.rkt` exists (181 lines, fully implemented) but is imported and never called in `relations.rkt`. The solver uses hasheq substitutions (DFS path) or solver-env with cell-tree (PUnify path). Both handle var-var bindings without UF. Cell-tree unification is the principled approach for Track 2. UF is an optional optimization for BSP-LE Track 1 (large equivalence classes).
+
+**Q3 (PUnify parity): NOT a blocker.** The 5 parity bugs are in the PUnify toggle path (`current-punify-enabled?` = `#t`). Track 2 designs against the cell-tree infrastructure directly (always on-network), not the toggle. Track 2 can proceed with PUnify disabled.
+
+**Q6 (Concurrent worldview exploration): IN SCOPE for Track 2.** The parallelism infrastructure exists (BSP scheduler, persistent networks). Option E (worldview as lattice) + filtered nogood propagation (right Kan extension) enables concurrent branches without the cascade problem or barrier-based batching. This delivers the OR-parallel worldview search.
 
 ### 4.3 OR-Parallel Worldview Exploration
 
