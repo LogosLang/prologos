@@ -337,10 +337,23 @@ impl Lattice (DecisionDomain G)
 
 **Exceptions**: Scalar cells (Nat, Bool, single values) and flat set cells (set-union accumulators) don't have addressable positions — component-paths is N/A. The invariant applies only to cells with `:kind :structural` or explicitly compound value types.
 
-**Audit (Track 2)**: All 13 propagators in the NTT model verified:
+**Audit (Track 2)**: All propagators and interfaces verified:
+
+NTT §3 propagators:
 - 4 propagators access compound cells WITH component-paths ✅ (broadcast-commit-tracker, nogood-narrower, decision-contradiction-detector, branch-committer)
 - 1 propagator accessing compound cells REMOVED (per-nogood-watcher — superseded by commitment-cell decomposition, which uses component-paths)
 - 8 propagators access only scalar/flat cells — invariant N/A ✅
+
+NTT §3 interfaces (Level 3):
+- `BranchPU` interface: reads `decision-G` (compound) WITH component-path `(decision-G . h_i)` ✅ — fires only when this branch's alternative status changes
+
+Phase descriptions (§4, §6):
+- Phase 6 Step 2: branch PU access to decision cell has component-path ✅
+- Phase 6 Step 2: sub-goal propagators read PU-local variable cells (not compound outer cells) ✅
+- Phase 6 Step 2: outer arg cells are resolved (ground values, no compound structure) ✅
+- Phase 3: commitment cells use component-indexed writes ✅
+- Phase 7: conjunction propagators operate on PU-local cells ✅
+- Phase 7: NAF cross-PU bridge writes to flat outer result cell (no compound) ✅
 
 ### §3.2 Level 0: Properties and Lattice Laws
 
@@ -497,12 +510,14 @@ propagator table-consumer
 
 ```prologos
 ;; The polynomial functor interface for a solver branch PU
-interface BranchPU
-  :inputs  [decision-G : Cell (DecisionDomain G),   ;; which alternative this branch represents
-            nogoods : Cell NogoodSet,                ;; shared across all branches
-            parent-facts : Cell (Set Fact) ...]      ;; inherited from parent
-  :outputs [result : Cell Answer,                    ;; branch result
-            new-nogoods : Cell NogoodSet]             ;; nogoods discovered in this branch
+;; §3.1a invariant: all compound cell inputs declare component-paths
+interface BranchPU {h_i : AssumptionId}
+  :inputs  [decision-G : Cell (DecisionDomain G)     ;; group-level decision (compound)
+              :component-paths [(decision-G . h_i)]   ;; fire only when THIS branch's alternative changes
+            nogoods : Cell NogoodSet                  ;; shared (flat — no component-paths needed)
+            parent-facts : Cell (Set Fact) ...]       ;; inherited (flat)
+  :outputs [result : Cell Answer                      ;; branch result (flat)
+            new-nogoods : Cell NogoodSet]              ;; nogoods discovered (flat)
   :lifetime :speculative
   :tagged-by Assumption
 
@@ -1013,10 +1028,10 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
 
      **Step 2 — Branch creation (only for survivors):**
      For the M matching clauses, call `atms-amb-on-network` (now: create M decision cell entries + M branch PUs). Each PU gets:
-     - A worldview cell extending parent with this clause's assumption
-     - Fresh variable cells for this clause's bindings (from Step 1)
-     - Sub-goal propagators installed for the clause body
-     - A filtered nogood watcher bridging the shared nogood cell
+     - Access to the group-level decision cell **with component-path `(decision-G . h_i)`** — the PU fires only when ITS alternative's status changes, not when sibling alternatives are narrowed. This is the §3.1a invariant applied to the BranchPU interface.
+     - Fresh variable cells for this clause's bindings (from Step 1) — PU-local, not compound cross-PU reads
+     - Sub-goal propagators installed for the clause body via broadcast conjunction (Phase 7). These read PU-local variable cells (not compound outer cells). Outer arg cells are resolved (ground values, 3.2 precondition) — no compound structure to component-index.
+     - Per-nogood commitment infrastructure (Phase 3) for any nogoods involving this branch's group — commitment cells use component-indexed writes (§3.1a compliant)
 
      This is the N-to-M pattern from the [array-programming research](../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md) §5: N candidates → M survivors, with PU allocation only for survivors. For deterministic cases (M=1), no PU is created — Tier 1 behavior.
 
