@@ -327,6 +327,21 @@ impl Lattice (DecisionDomain G)
   top?  [d]   := [set-empty? d]         ;; contradiction = over-constrained
 ```
 
+### §3.1a NTT Invariant: Component-Path Required for Compound Cell Access
+
+**Invariant**: Any propagator that reads or writes a compound cell (a cell whose value is a nested structure with addressable positions — hasheq, attribute-map, commitment-status, etc.) MUST declare `:component-paths` specifying which positions it accesses. A propagator reading a compound cell without component-paths is a TYPE ERROR in the NTT model.
+
+**Rationale**: Without component-paths, a propagator watching a compound cell fires on EVERY change to the cell, including changes to positions the propagator doesn't care about. This causes thrashing — unnecessary firings that do no useful work. For cells with many positions (e.g., a decision cell in a 100-alternative group, or an attribute-map with 30+ positions), the thrashing is proportional to the position count.
+
+**The invariant prevents specification of thrashing patterns.** A design that type-checks under this invariant is guaranteed to have precise firing — every propagator fires only when its specific interests change.
+
+**Exceptions**: Scalar cells (Nat, Bool, single values) and flat set cells (set-union accumulators) don't have addressable positions — component-paths is N/A. The invariant applies only to cells with `:kind :structural` or explicitly compound value types.
+
+**Audit (Track 2)**: All 13 propagators in the NTT model verified:
+- 4 propagators access compound cells WITH component-paths ✅ (broadcast-commit-tracker, nogood-narrower, decision-contradiction-detector, branch-committer)
+- 1 propagator accessing compound cells REMOVED (per-nogood-watcher — superseded by commitment-cell decomposition, which uses component-paths)
+- 8 propagators access only scalar/flat cells — invariant N/A ✅
+
 ### §3.2 Level 0: Properties and Lattice Laws
 
 ```prologos
@@ -362,6 +377,7 @@ propagator branch-creator {clauses : (List ClauseInfo)}    ;; atms-amb
 propagator decision-contradiction-detector {G : AmbGroup}
   :reads  [decision-G : Cell (DecisionDomain G)]
   :writes [topology-requests : Cell (Set TopologyRequest)]
+  :component-paths [(decision-G . :domain)]              ;; watches domain cardinality, not specific alternatives
   (when [empty? [read decision-G]]
     [write topology-requests [set [drop-pu G]]])         ;; M3: emit REQUEST, not direct drop
 
@@ -370,6 +386,8 @@ propagator branch-committer {G : AmbGroup}
            result-G : Cell Answer]
   :writes [answer-accumulator : Cell (Set Answer),
            topology-requests : Cell (Set TopologyRequest)]
+  :component-paths [(decision-G . :domain)               ;; watches domain for singleton
+                    (result-G . :value)]                  ;; watches result for non-bot
   (when [and [singleton? [read decision-G]]
              [not [bot? [read result-G]]]]
     [write answer-accumulator [set [read result-G]]]     ;; M5: answer accumulator
@@ -393,25 +411,15 @@ propagator broadcast-clause-match                          ;; M1: ONE propagator
 ;; that fires when domain → ∅. Global consistency EMERGES from the absence
 ;; of any contradiction — no aggregation step, no centralized worldview.
 
-propagator per-nogood-watcher {ng : Nogood}                ;; (4.1) one per nogood
-  :reads  [decision-G : Cell (DecisionDomain G)            ;; for each group G in ng
-           for G in [groups-of ng]]
-  :writes [decision-remaining : Cell (DecisionDomain G')]  ;; the last un-narrowed group
-  ;; Fires when ANY of its input decision cells changes.
-  ;; Reads all |ng| decision cells (typically 2-3).
-  ;; If all except one are committed singletons containing their nogood member:
-  ;; narrows the remaining group to exclude its member.
-  ;; No filter/map/length — reads 2-3 cells, checks directly.
-  (let [statuses [for/list [G [groups-of ng]]
-                   [cons G [read [decision G]]]]]
-    (let [committed [filter [fn [pair] [and [singleton? [cdr pair]]
-                                            [= [the-element [cdr pair]]
-                                               [member-of ng [car pair]]]]]
-                            statuses]]
-      (when [= [length committed] [- [length statuses] 1]]
-        (let [remaining [the-uncommitted statuses committed]]
-          [narrow [decision [car remaining]]
-                  [exclude [member-of ng [car remaining]]]]))))
+;; per-nogood-watcher SUPERSEDED by broadcast-commit-tracker + nogood-narrower.
+;; The commitment-cell decomposition (below) handles the same logic with:
+;;   - Component-indexed writes (no thrashing on irrelevant decision changes)
+;;   - Emergent counting in the merge function
+;;   - Threshold-triggered narrowing
+;; The per-nogood-watcher without component-paths would thrash: it fires on
+;; EVERY decision cell narrowing, even irrelevant ones. The commitment-cell
+;; decomposition avoids this by only tracking the specific alternatives
+;; each nogood cares about.
 
 ;; Per-nogood commitment tracking: broadcast + component-indexing + emergent counting
 ;; Cell value: { committed-count: Nat, groups: {G: Bool, ...} }
@@ -447,6 +455,7 @@ propagator broadcast-commit-tracker {ng : Nogood}
 propagator nogood-narrower {ng : Nogood}
   :reads  [commitment-{ng} : Cell CommitmentStatus]
   :writes [decision-remaining : Cell (DecisionDomain G')]
+  :component-paths [(commitment-{ng} . :committed-count)]   ;; only fire when count changes
   ;; Threshold: fires when committed-count = |ng| - 1
   ;; Finds the ONE uncommitted group, narrows its decision cell.
   ;; Hash scan of size |ng| (2-3) — no filter/map/length chain.
