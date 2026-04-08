@@ -393,17 +393,111 @@ exchange S0 <-> S1
 
 ### Phase 0: Pre-0 Benchmarks + Acceptance File
 
-**Deliverables**:
-- `benchmarks/comparative/solve-adversarial.prologos`: baseline DFS solver performance (current: 14.3s)
-- `racket/prologos/examples/2026-04-07-bsp-le-track2.prologos`: acceptance file exercising solver features in ideal WS syntax
-- Benchmark the existing DFS solver path via `bench-ab.rkt`
+**Existing infrastructure** (17 solver test files, ~889 assertions; 3 adversarial benchmarks; 2 solver micro-benchmarks):
 
-**Acceptance file sections** (commented out initially, uncommented as phases complete):
-- Basic `solve` with ground facts
-- Multi-clause `defr` with backtracking
-- Tabled predicate (non-recursive)
-- Solver config: `:strategy :auto`, `:strategy :depth-first`
-- Explanation/provenance query
+| Asset | Purpose | Baseline |
+|---|---|---|
+| `solve-adversarial.prologos` (281 lines, 14 sections) | Full DFS solver path: unification, backtracking, conjunction, is-goals, narrowing, facts, constructors | bench-ab.rkt baseline |
+| `constraints-adversarial.prologos` | Prelude loading + registry + per-command cell allocation | bench-ab.rkt baseline |
+| `scheduler-adversarial.prologos` | BSP overhead: deep nesting, wide types, topology ping-pong | bench-ab.rkt baseline |
+| `bench-solve-pipeline.rkt` | Micro: full solve path with controlled relation stores | bench-micro.rkt |
+| `bench-solver-unify.rkt` | Micro: DFS unification primitives (walk, unify-terms, normalize) | bench-micro.rkt |
+| 17 solver test files (~889 assertions) | Functional correctness: relations, narrowing, WF engine, solver config, tabling | raco test |
+
+#### Phase 0a: Baseline Capture
+
+**Run and record** (all before any code changes):
+
+```bash
+# 1. Comparative: A/B baseline for all adversarial benchmarks
+racket tools/bench-ab.rkt --runs 15 benchmarks/comparative/solve-adversarial.prologos --output data/benchmarks/bsp-le-t2-baseline-solve.json
+racket tools/bench-ab.rkt --runs 15 benchmarks/comparative/constraints-adversarial.prologos --output data/benchmarks/bsp-le-t2-baseline-constraints.json
+racket tools/bench-ab.rkt --runs 15 benchmarks/comparative/scheduler-adversarial.prologos --output data/benchmarks/bsp-le-t2-baseline-scheduler.json
+
+# 2. Micro: solver primitives baseline
+racket benchmarks/micro/bench-solve-pipeline.rkt > data/benchmarks/bsp-le-t2-baseline-micro-pipeline.txt
+racket benchmarks/micro/bench-solver-unify.rkt > data/benchmarks/bsp-le-t2-baseline-micro-unify.txt
+
+# 3. Full suite: record timings for regression detection
+raco make driver.rkt
+racket tools/run-affected-tests.rkt --all --no-precompile
+
+# 4. Per-command verbose: identify hotspots in solve-adversarial
+racket -e '(require "driver.rkt") (process-file "benchmarks/comparative/solve-adversarial.prologos" #:verbose #t)' 2> data/benchmarks/bsp-le-t2-baseline-verbose.txt
+```
+
+#### Phase 0b: New Micro-Benchmarks
+
+**`bench-bsp-le-track2.rkt`** — new micro-benchmark targeting Track 2 infrastructure:
+
+| Benchmark | What it measures | Why it matters |
+|---|---|---|
+| `worldview-cell-create` | Time to create a worldview lattice cell | N cells per N branches |
+| `worldview-merge` | Time to merge two worldview sets (set-union) | Every cell write under speculation |
+| `nogood-check` | Time to check worldview against M nogoods | Per-branch per-nogood-write |
+| `nogood-intersection-filter` | Time to check intersection of nogood with branch assumptions | Core of filtered RKan watcher |
+| `pu-create-from-parent` | Time to create a branch PU from parent network | N PUs per N-way amb |
+| `pu-drop` | Time to drop a branch PU | Structural GC on contradiction |
+| `pu-commit` | Time to commit a branch PU to parent | Promoting winning branch |
+| `tms-read-depth-N` | Time to read through TMS tree at depth N (1, 2, 5, 10) | Deep speculation overhead |
+| `tms-write-depth-N` | Time to write through TMS tree at depth N | Deep branch divergence cost |
+| `clause-match-bulk-N` | Time to bulk-match N clauses (α-rename + unify) | N→M filtering cost |
+
+These provide per-operation baselines that isolate Track 2 infrastructure costs from end-to-end solver costs. The adversarial benchmarks measure the whole pipeline; the micro-benchmarks measure the building blocks.
+
+#### Phase 0c: New Adversarial Benchmark
+
+**`atms-adversarial.prologos`** — new comparative benchmark targeting propagator-native search:
+
+| Section | What it stresses | Expected behavior |
+|---|---|---|
+| A1: Deterministic queries (no amb) | Tier 1 overhead: zero ATMS cost for deterministic queries | Must match DFS within 5% |
+| A2: Binary choice (2 clauses) | Minimal branching: 2 PUs, 1 nogood possible | < 2× DFS (branching overhead) |
+| A3: Wide choice (10+ clauses) | N→M filtering: bulk clause matching efficiency | N PUs created, M survive |
+| A4: Deep choice nesting (5+ levels) | TMS depth: speculation stack → TMS tree depth 5+ | TMS read/write at depth |
+| A5: Contradiction cascade | Nogood propagation: one contradiction triggers pruning across branches | Filtered RKan efficiency |
+| A6: Tabled predicate (non-recursive) | Producer/consumer: memoization avoids redundant derivation | First call = producer, subsequent = consumer |
+| A7: Many small solves (50+) | Per-command ATMS overhead: worldview cell setup/teardown | Tier 1 for deterministic, Tier 2 only when needed |
+| A8: Shared variables across branches | Branch cell isolation: writes in branch A invisible to branch B | TMS branch separation |
+| A9: Mixed deterministic + nondeterministic | Tier 1→2 transition mid-query | Seamless transition |
+| A10: Concurrent worldview exploration | Multiple PUs in same BSP superstep | Parallelism without interference |
+| A11: Transitive variable chains | Substitution propagation depth in cell-tree model | Cell-tree walk chains vs hasheq walk |
+| A12: NAF + ATMS interaction | Negation-as-failure under worldview branching | S1 fires after S0 quiescence per worldview |
+
+Each section is designed to be run independently AND as part of the full benchmark. Sections A1 and A7 specifically measure overhead — they should be competitive with (or better than) DFS, since deterministic queries should never touch ATMS infrastructure.
+
+#### Phase 0d: Acceptance File
+
+**`examples/2026-04-07-bsp-le-track2.prologos`** — exercises all Track 2 features in ideal WS syntax:
+
+```
+Section 1: Basic solve (Phase 6-7 baseline)
+  - Ground fact lookup
+  - Single-clause defr
+  - Multi-clause defr with backtracking
+  - Inline rel with conjunction
+  
+Section 2: Propagator-native search (Phase 6)
+  - Multi-clause dispatch → comment: "PU-per-clause"
+  - Shared variables across goals → comment: "dataflow-ordered"
+  - Contradiction → comment: "nogood recorded, branch pruned"
+  
+Section 3: Tabling (Phase 8)
+  - Non-recursive tabled predicate
+  - Consumer reads producer's answers
+  
+Section 4: Solver config (Phase 9-10)
+  - :strategy :depth-first (DFS backward compat)
+  - :strategy :auto (Tier 1 → Tier 2)
+  - :tabling :by-default
+  
+Section 5: Explanation/provenance (future — commented out)
+  - explain query → derivation tree
+```
+
+Sections 1-4 are uncommented as phases complete. Section 5 is aspirational (Track 5 scope — `:provenance :atms`).
+
+**Phase completion gate**: Acceptance file runs at Level 3 (`process-file`) with 0 errors. Each phase uncomments its corresponding section.
 
 ### Phase 1: Worldview Lattice Cell (Option E)
 
