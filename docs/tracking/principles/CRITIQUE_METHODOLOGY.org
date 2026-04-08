@@ -158,6 +158,70 @@ constraint solving) but think in sequential algorithms. Their domain
 knowledge is invaluable; their instinct to express solutions as
 algorithms must be redirected toward information-flow descriptions.
 
+* Receiving External Critique: Grounded Pushback
+
+External critique is valuable precisely because it comes from outside
+our context. But that same distance means the critic may not understand:
+our codebase realities, our principled commitments, or the specific
+architectural decisions that led to the current design.
+
+*We must ARGUE BACK — grounded in our codebase AND our principles.*
+
+This is not defensiveness. This is intellectual rigor applied in both
+directions: we challenge our own designs (self-critique), and we
+challenge the critique's claims (response). A critique that goes
+unexamined is as dangerous as a design that goes unchallenged.
+
+** How to Evaluate External Critique
+
+For each finding from an external critic:
+
+1. *Is it grounded in our codebase?* Does the critique reference actual
+   code, actual files, actual function signatures? Or is it arguing
+   from abstract principles without checking whether they apply to our
+   specific infrastructure? If the latter, do the reality-check (R
+   lens) ourselves: is the critique's premise true in our code?
+
+2. *Does it align with our principles?* A critique may be technically
+   sound but architecturally wrong for Prologos. "You should use a
+   hash table for O(1) lookup instead of a propagator cell" is
+   algorithmically correct and principally wrong. Evaluate every
+   suggestion against the ten principles — especially Propagator-First,
+   the Hyperlattice Conjecture, and Correct-by-Construction.
+
+3. *Is it step-think?* Apply the M lens to the critique itself. If the
+   critic suggests sequential algorithms, scanning, iterating, or
+   imposed ordering, challenge it: is there a propagator-native
+   expression? Often the domain expert's insight is correct (the
+   PROBLEM they identify is real) but their SOLUTION is algorithmic
+   where a lattice solution exists.
+
+4. *Does it reveal something we missed?* The most valuable critiques
+   identify problems we didn't see, not solutions we should adopt.
+   When a critique identifies a real gap, we should find OUR solution
+   — grounded in our architecture — not adopt the critic's solution
+   uncritically.
+
+** The Response Format
+
+For each external critique finding, respond with:
+
+- *Accept*: The finding is correct AND the suggested resolution aligns
+  with our principles. Incorporate as-is.
+- *Accept problem, reject solution*: The finding identifies a real gap,
+  but the suggested resolution is algorithmic/off-network/principle-
+  violating. State why, propose our own resolution.
+- *Reject with justification*: The finding is based on a premise that
+  doesn't hold in our codebase, or conflicts with a load-bearing
+  principle. State the specific principle and the specific code that
+  refutes the premise.
+- *Defer with tracking*: The finding is valid but out of scope for this
+  track. Add to DEFERRED.md with a tracking reference.
+
+Never accept a critique finding without evaluation. Never reject
+without stating which principle or code reality justifies the
+rejection.
+
 * Anti-Patterns in Critique
 
 ** Cataloguing Instead of Challenging
@@ -267,10 +331,14 @@ compositional errors that per-lattice analysis misses.
 
 The three lenses apply at every critique round:
 - *D.2 (self-critique)*: Apply P/R/M before circulating for external
-  review. Tag findings.
+  review. Tag findings. Write findings to a SEPARATE FILE (not inline
+  in the design doc): ~YYYY-MM-DD_TRACK_SELF_CRITIQUE.md~. Link from
+  the design doc. This creates a persistent paper trail, keeps detail
+  reviewable as-is, and doesn't bloat the design document.
 - *D.3+ (external critique)*: Include the external briefing (§4).
-  Evaluate external findings through the M lens — are they suggesting
-  algorithms or information flow?
+  Write the critique and our response to a SEPARATE FILE:
+  ~YYYY-MM-DD_TRACK_EXTERNAL_CRITIQUE.md~. Apply "Receiving External
+  Critique: Grounded Pushback" (§5) to every finding.
 - *Implementation pivots*: When a mid-implementation finding changes
   the design, apply P/R/M to the changed component before proceeding.
 
