@@ -1,0 +1,61 @@
+#+TITLE: Standup — 2026-04-08
+#+DATE: 2026-04-08
+
+* Yesterday (since 2026-04-07 standup, created Apr 7 ~13:00)
+
+** BSP-LE Track 2: ATMS Solver + Cell-Based TMS — Full Design Cycle (24 commits)
+
+*** Stage 1/2: Research + Codebase Audit
+- Synthesized 14 source documents (LE Design, PUnify Part 3, Cell-Based TMS, PAR Track 1, categorical foundations, OR-parallel Prolog)
+- Audited: TMS (2 integration points), 6 speculation users, ATMS (397 lines), DFS solver (300 lines), solver config (all knobs exist, most ignored)
+- All 6 open questions resolved: UF not a dependency, PUnify not a blocker, concurrent worldview IN SCOPE, tabling pull-in, general engine before cross-migration
+
+*** Stage 3: Design Iteration D.1 → D.3
+- D.1: 13-phase design, NTT model across all 7 levels (lattice, propagator, interface, network, functor, bridge, stratification, exchange)
+- Pre-0 benchmarks: 21 micro-benchmarks + new atms-adversarial.prologos (12 sections). TMS depth scaling linear, PU creation ~5μs, set-intersection 62ns
+- Self-critique (P/R/M three-lens, 17 findings): parallel-map propagator pattern, answer accumulator, topology-stratum transitions, ATMS struct dissolution
+- D.2: ATMS struct fully dissolved into cells. Decisions ARE primary, worldview emerges. Retraction = SRE narrowing. Tropical hitting set via CSP.
+- External critique (architect review, 16 findings): per-nogood propagators, constraint-cell convention, two-level decision structure, dual-path compression, per-table completion
+- D.3: All 33 findings (17 self + 16 external) incorporated. Design at 1157 lines.
+
+*** Key Architectural Decisions
+- Option E: worldview as Boolean algebra powerset lattice
+- Decision cells as PRIMARY structural construct (SRE form registry). No worldview cell.
+- PU-per-branch with structural GC. TMS = correctness, PU = efficiency.
+- Per-nogood propagators (right Kan extension). Fan-in = |nogood| (typically 2-3).
+- Propagator-native search (not "backtracking"): forward-only information flow + monotone pruning
+- Parallel-map propagator as first-class reusable pattern (polynomial functor)
+- Two-tier activation via topology stratum (`:auto` default)
+
+** Process Codification
+- CRITIQUE_METHODOLOGY.org: P/R/M three lenses, external critic briefing, grounded pushback, SRE lattice lens
+- DESIGN_METHODOLOGY.org: Stage 3 updated with three lenses + conversational cadence
+- DESIGN_PRINCIPLES.org: Hyperlattice Conjecture (every computation → fixpoint on lattices)
+- workflow.md: SRE lattice lens mandatory, conversational cadence, per-phase test gate
+
+** PPN Track 4B Completion (from earlier in interval)
+- Phase T: 31 tests across 4 files. Fixed generic ops on-network typing.
+- Phase 12: PIR (21 sections, 11-PIR longitudinal survey, detailed per-phase timing)
+- Process retrospective: conversational cadence vs autonomous divergence
+
+** System Diagnostics (non-project)
+- WiFi subsystem spin loop diagnosed + resolved (reboot)
+- VPS WireGuard traffic spike investigated (queued flush, not exfiltration)
+- VPS hardening discussed (SYN cookies, per-IP rate limiting, fail2ban)
+
+* Today
+
+** BSP-LE Track 2 Phase 0d: Acceptance File
+- Model after WF-LE acceptance file (653 lines, best example to date)
+- Exercise solver features in ideal WS syntax
+- Level 3 validation gate for implementation
+
+** Session Restart
+- Restart session after acceptance file
+- Fresh context for implementation phases
+
+* Blockers
+
+- PPN 4C remains blocked on BSP-LE Track 2 (cell-based TMS)
+- PPN 4B Phase 10 (zonk retirement) needs cell-refs
+- PPN 4B Phase 11 (scaffolding retirement) — 8 items
