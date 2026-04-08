@@ -63,6 +63,16 @@
  ;; Debug
  decision->datum
 
+ ;; === Commitment Cell ===
+ commitment-initial
+ commitment-merge
+ commitment-contradicts?
+ commitment-filled-count
+ commitment-provenance
+ commitment-remaining-group
+ ;; === Nogood Install Request ===
+ (struct-out nogood-install-request)
+
  ;; === Nogood Lattice ===
  nogood-empty
  nogood-merge
@@ -221,6 +231,71 @@
     [(decision-one? v) `(decision-one ,(decision-one-assumption v))]
     [(decision-set? v) `(decision-set ,(hash-keys (decision-set-alternatives v)))]
     [else v]))
+
+
+;; ============================================================
+;; Commitment Cell (Phase 3: per-nogood structural unification)
+;; ============================================================
+;; A commitment cell tracks how much of a nogood pattern has been
+;; matched against decision state. One compound cell per nogood,
+;; component-indexed by group.
+;;
+;; Value: hasheq { group-id → #f | assumption-id }
+;;   #f = group not yet committed to its nogood member
+;;   assumption-id = group committed — carries the identity (provenance)
+;;
+;; Merge: per-position OR (once set, stays set)
+;; Contradiction: all positions non-#f (full pattern match = nogood realized)
+;; The cell value IS the provenance — no separate gathering.
+
+;; Create initial commitment value for a nogood.
+;; groups: (listof group-id)
+;; Returns: hasheq with all positions at #f.
+(define (commitment-initial groups)
+  (for/hasheq ([g (in-list groups)])
+    (values g #f)))
+
+;; Merge: per-position OR. Once a position becomes non-#f, it stays.
+(define (commitment-merge old new)
+  (for/hasheq ([(g _) (in-hash old)])
+    (values g (or (hash-ref new g #f) (hash-ref old g #f)))))
+
+;; Contradiction: all positions non-#f.
+(define (commitment-contradicts? v)
+  (and (for/and ([(g val) (in-hash v)])
+         val)
+       #t))
+
+;; How many positions are committed (non-#f)?
+(define (commitment-filled-count v)
+  (for/sum ([(g val) (in-hash v)])
+    (if val 1 0)))
+
+;; Extract the provenance: the set of assumption-ids from committed positions.
+;; Returns: (listof assumption-id) — only the non-#f values.
+(define (commitment-provenance v)
+  (for/list ([(g val) (in-hash v)]
+             #:when val)
+    val))
+
+;; Find the remaining uncommitted group (the one with #f).
+;; Returns: group-id or #f if none remain (all committed = contradiction).
+(define (commitment-remaining-group v)
+  (for/first ([(g val) (in-hash v)]
+              #:when (not val))
+    g))
+
+
+;; ============================================================
+;; Nogood Install Request (Phase 3: topology descriptor)
+;; ============================================================
+;; Data-driven topology request — NOT a callback.
+;; Written to the topology-request cell. The topology stratum
+;; pattern-matches on this struct and installs per-nogood infrastructure.
+(struct nogood-install-request
+  (nogood-set       ;; hasheq of assumption-id → #t (the nogood)
+   group-entries)   ;; (listof (list group-id cell-id nogood-member-aid))
+  #:transparent)
 
 
 ;; ============================================================
