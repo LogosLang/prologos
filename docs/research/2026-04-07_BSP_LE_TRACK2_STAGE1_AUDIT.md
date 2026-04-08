@@ -295,7 +295,57 @@ The OR-parallel Prolog connection (Muse, Aurora):
 
 **Key advantage over classical OR-parallelism**: No environment copying. CHAMP structural sharing means branching is O(1) for the initial split and O(writes) for branch divergence. The TMS tree tracks exactly what's different per branch; everything else is shared automatically.
 
-**Concurrent exploration model (Track 4 extension)**: Two worldview cells (A and B) on the same network. Propagators under A fire and write to TMS branches tagged with A's assumption-id. Propagators under B do the same with B's. BSP fires both sets in the same superstep. Cell merges are safe because TMS branches are independent — A's writes don't interfere with B's.
+**Concurrent exploration model**: See §4.3a (PU-per-branch).
+
+### 4.3a PU-Per-Branch Architecture (Allocation Efficiency)
+
+**The cost concern**: Each `atms-amb` with N alternatives creates N × M propagators (N branches × M goal propagators per branch). For 10 choice points of 5 alternatives, combinatorial explosion produces hundreds to thousands of propagator installations — even with nogood pruning, branches are created before being discovered contradicted. Accumulated dead propagators in a shared network's CHAMP maps are the primary scaling cost (Track 4B P3 demonstrated this with typing propagators).
+
+**The design: each worldview branch IS a Pocket Universe.**
+
+```
+atms-amb creates N branches:
+  For each branch B:
+    Create PU-B (scoped sub-network, reads parent cells)
+    Install worldview-cell-B in PU-B
+    Install branch-specific goal propagators in PU-B
+    Install filtered nogood watcher bridging nogood-cell → PU-B
+
+  Shared across all PUs (outer network):
+    Base network (facts, existing constraints)
+    Nogood cell (monotone accumulator, set-union merge)
+    Base cell values (TMS depth-0, visible to all branches)
+```
+
+**Lifecycle**:
+- **Contradiction**: Drop PU-B. All its cells and propagators are garbage-collected structurally. O(1) — no CHAMP cleanup, no `net-clear-dependents`. The nogood cell retains the nogood (monotone).
+- **Success**: Commit PU-B. Promote its cell values to the parent network via `tms-commit`. PU structure dissolved, values survive.
+- **Cost model**: O(live branches) not O(total branches ever created). Dead branches leave zero debris in the outer network.
+
+**Interface (polynomial functor pattern)**: A PU's interface is defined by which outer cells it reads (worldview, nogoods, base facts) and which it writes (results, new nogoods). Component-indexed propagators enable PU propagators to watch specific facets of shared outer cells without over-firing.
+
+**PU infrastructure requirements**:
+1. PU creation from parent network (reading parent cells as inputs) — exists from Track 4B ephemeral PU
+2. PU dissolution on contradiction (drop, O(1)) — exists
+3. PU commit on success (promote values to parent) — needs `tms-commit` integration
+4. Cross-PU bridges (filtered nogood watcher, result propagation) — the filtered nogood watcher IS this; result bridges are the same pattern in reverse
+
+### 4.3b Open Question Resolutions (continued)
+
+**Q2 (Tabling scope): Partial pull-in.** `tabling.rkt` (252 lines) is MORE built out than the BSP-LE master suggests:
+- `table-store`, `table-register`, `table-add`, `table-answers`, `table-freeze`, `table-complete?`, `table-run` — all implemented
+- Well-founded 3-valued variant (`wf-table-entry`, `wf-table-add`, `wf-table-complete`) — implemented
+- AST nodes, type rules, QTT rules, pretty-printing — all in place
+- Already used by `stratified-eval.rkt` for well-founded evaluation
+
+What's MISSING for BSP-LE Track 3's full scope:
+1. Producer/consumer propagator pattern (first call = producer, subsequent calls = consumer)
+2. SLG completion detection (quiescence of table cell = complete)
+3. Table answers tagged with worldview (ATMS integration)
+
+Items 1-2 are natural extensions of the ATMS solver architecture — the "first call" detection is an `amb` with one assumption that becomes the producer. Item 3 is the ATMS↔tabling bridge. **Recommendation**: Include tabling hooks in Track 2's goal-as-propagator design (the `app` goal propagator should check the table registry before installing clause-as-assumption propagators). The table store should live on the network as a cell. Full SLG completion detection is Track 3 scope.
+
+**Q4 (Narrowing integration): Build the general engine, don't cross-migrate yet.** Track 2 builds the general speculative branching engine (cell-based TMS + ATMS solver + PU-per-branch + filtered nogoods). Narrowing, elaboration speculation, and type-level speculation become consumers of this engine in future tracks. Track 2 does NOT attempt to unify these disparate paths — it builds the substrate they'll converge onto.
 
 ### 4.4 Tier 1/Tier 2 Transition
 
