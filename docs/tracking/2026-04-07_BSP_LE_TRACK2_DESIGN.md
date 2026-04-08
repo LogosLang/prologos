@@ -3,7 +3,7 @@
 **Date**: 2026-04-07
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: Cell-Based TMS (folding Track 1.5) + ATMS Solver + Non-Recursive Tabling
-**Status**: D.1 — first draft, pre-critique
+**Status**: D.2 — post self-critique (P/R/M three-lens), all 17 findings incorporated
 **Stage 1/2**: [Research + Audit](../research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md)
 **Prior art**: [Logic Engine Design](2026-02-24_LOGIC_ENGINE_DESIGN.org) §4-7, [PUnify Part 3](2026-03-19_PUNIFY_PART3_ATMS_SOLVER_ARCHITECTURE.md), [Cell-Based TMS Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md)
 
@@ -13,18 +13,18 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Pre-0: benchmarks + acceptance file | ⬜ | Baseline DFS solver perf |
-| 1 | Worldview lattice cell (Option E) | ⬜ | Boolean algebra on powerset |
-| 2 | PU-per-branch lifecycle | ⬜ | Create from parent, commit, drop |
-| 3 | Filtered nogood watcher (RKan) | ⬜ | Per-branch intersection-filtered bridge |
-| 4 | Speculation migration | ⬜ | 5 files: elab-speculation-bridge, metavar-store, cell-ops, typing-propagators, narrowing |
-| 5 | ATMS↔worldview bridge | ⬜ | Unify two-layer TMS into one |
-| 6 | Clause-as-assumption in PUs | ⬜ | New solver path replacing DFS |
-| 7 | Goal-as-propagator dispatch | ⬜ | Propagator installation per goal type |
-| 8 | Producer/consumer tabling | ⬜ | Table registry check in goal dispatcher |
-| 9 | Two-tier activation | ⬜ | Tier 1→2 on first `amb` |
+| 0 | Pre-0: benchmarks + acceptance file | ✅ | Baselines captured (0a-0c). Acceptance file (0d) at implementation start. |
+| 1 | Decision cell infrastructure + parallel-map propagator | ⬜ | Decision domain (SRE structural), nogood cell, assumptions cell, counter cell, parallel-map pattern |
+| 2 | PU-per-branch lifecycle | ⬜ | Create from parent, commit via topology request, drop via topology request |
+| 3 | Filtered nogood watcher (RKan) | ⬜ | Per-DECISION intersection-filtered bridge. Contradiction → topology drop request. |
+| 4 | Speculation migration | ⬜ | 6 files (R1): propagator.rkt, elab-speculation-bridge, typing-propagators, metavar-store, cell-ops, test-tms-cell |
+| 5 | ATMS struct dissolution | ⬜ | All 7 fields → cells. Struct REMOVED. atms.rkt becomes query function library. (P4) |
+| 6 | Clause-as-assumption in PUs | ⬜ | Parallel-map clause matching (M1) + PU per surviving clause |
+| 7 | Goal-as-propagator dispatch | ⬜ | 5 goal types (no cut — P2). NAF at S1 via BSP barrier (M6). Answer accumulator (M5). |
+| 8 | Producer/consumer tabling | ⬜ | Table registry check in goal dispatcher. Non-recursive completion. |
+| 9 | Two-tier activation | ⬜ | Tier 1→2 via topology stratum (M4). `:auto` default (P1). |
 | 10 | Solver config wiring | ⬜ | `:strategy`, `:execution`, `:tabling` operational |
-| 11 | Parity validation | ⬜ | DFS ↔ ATMS result equivalence |
+| 11 | Parity validation | ⬜ | DFS ↔ propagator-native result equivalence. Deep nesting hotspot (R7). |
 | T | Dedicated test files | ⬜ | Per-phase |
 | PIR | Post-implementation review | ⬜ | |
 
@@ -32,9 +32,9 @@
 
 ## §1 Objectives
 
-**End state**: The logic engine's search, branching, and memoization operate entirely on the propagator network. Choice points are ATMS assumptions in worldview lattice cells. Branch isolation is structural (PU-per-branch). Nogood propagation is demand-driven (filtered right Kan extension). Backtracking is nogood accumulation. Tabling is producer/consumer propagators on accumulator cells. The `solver-config` knobs are operational. The DFS solver (`solve-goals` at `relations.rkt:600`) is retired as the default path.
+**End state**: The logic engine's search, branching, and memoization operate entirely on the propagator network. Choice points are decision cells (SRE structural lattice, alternatives = constructors). Branch isolation is structural (PU-per-branch). Nogood propagation narrows decision cells via filtered right Kan extension. The ATMS struct is dissolved — all state lives in cells, all mutations are cell writes, query functions read cell values. Tabling is producer/consumer propagators on accumulator cells. The `solver-config` knobs are operational. The DFS solver (`solve-goals` at `relations.rkt:600`) is retired as the default path.
 
-**What changes**: DFS `append-map` → propagator quiescence. Sequential clause iteration → concurrent PU-per-branch exploration. Explicit substitution threading → implicit propagation through cells. `current-speculation-stack` parameter → worldview lattice cells.
+**What changes**: DFS `append-map` → propagator quiescence. Sequential clause iteration → concurrent PU-per-branch exploration. Explicit substitution threading → implicit propagation through cells. `current-speculation-stack` parameter → decision cells (no worldview cell — the worldview EMERGES from decisions). The `atms` struct → dissolved into cells + query functions.
 
 **What doesn't change**: Cell-tree unification substrate (Part 2). Constructor descriptor registry. User-facing `solve`/`defr`/`explain` syntax. Relation registration and clause storage. `solver-config` struct and key set.
 
@@ -284,19 +284,9 @@ These are correctly off-network: they are CONSUMERS of propagation results, like
 ### §3.1 Lattice Declarations
 
 ```prologos
-lattice Worldview
-  :type  (Set AssumptionId)
-  :bot   (set-empty)
-  :top   assumption-universe
-  :meet  set-intersection
-  :join  set-union
-  :properties [:boolean :distributive :complemented :heyting :frame]
-  :kind  :value                          ;; DERIVED — computed from decision cells
-  :derived-from [Decision ...]           ;; union of all decision singletons
-
-impl Lattice Worldview
-  merge [a b] := [set-union a b]
-  bot?  [w]   := [set-empty? w]
+;; NO worldview lattice cell — worldview EMERGES from decision cells (§2.6b)
+;; The Worldview type exists for the type bridge (§3.5) but is not a cell.
+;; It is a READ-ONLY aggregate computed via fan-in when needed.
 
 lattice NogoodSet
   :type  (Set (Set AssumptionId))
@@ -341,42 +331,54 @@ property Frame {L : Type}
 ### §3.3 Level 2: Propagator Declarations
 
 ```prologos
-propagator branch-creator                          ;; atms-amb
-  :reads  [worldview-parent : Cell Worldview]
-  :writes [worldview-B1 : Cell Worldview, ...,
+propagator branch-creator {clauses : (List ClauseInfo)}    ;; atms-amb
+  :reads  [assumptions : Cell (Set Assumption),
+           counter : Cell Nat]
+  :writes [assumptions : Cell (Set Assumption),
+           counter : Cell Nat,
            nogoods : Cell NogoodSet]
   :non-monotone                                    ;; topology mutation (CALM)
-  [atms-amb-on-network [read worldview-parent] clauses]
+  ;; Create N assumptions, decision cell, pairwise nogoods, N PUs
+  ;; Emits topology requests for decision cell + PU creation
+  [atms-amb-on-network clauses]
 
-propagator filtered-nogood-watcher {B : Branch}    ;; right Kan extension
+propagator filtered-nogood-decision-watcher {G : AmbGroup}  ;; right Kan extension
   :reads  [nogoods : Cell NogoodSet]
-  :writes [worldview-B : Cell Worldview]
+  :writes [decision-G : Cell (DecisionDomain G)]
   (let [ngs [read nogoods]]
-    (when [any? [fn [ng] [intersects? ng [assumptions B]]] ngs]
-      [write worldview-B 'contradicted]))
+    (for-each [ng ngs]
+      (when [and [intersects? ng [alternatives G]]
+                 [other-assumptions-committed? ng G]]
+        [narrow decision-G [exclude [group-member ng G]]])))
 
-propagator contradiction-detector {B : Branch}
-  :reads  [suspect : Cell L]                       ;; any lattice cell in PU-B
-  :writes [nogoods : Cell NogoodSet]
-  (when [top? [read suspect]]
-    [write nogoods [set [assumptions B]]])
+propagator decision-contradiction-detector {G : AmbGroup}
+  :reads  [decision-G : Cell (DecisionDomain G)]
+  :writes [topology-requests : Cell (Set TopologyRequest)]
+  (when [empty? [read decision-G]]
+    [write topology-requests [set [drop-pu G]]])         ;; M3: emit REQUEST, not direct drop
 
-propagator branch-pruner {B : Branch}
-  :reads  [worldview-B : Cell Worldview]
-  :writes []                                       ;; side effect: drop PU
-  :non-monotone
-  (when [= [read worldview-B] 'contradicted]
-    [pu-drop B])
+propagator branch-committer {G : AmbGroup}
+  :reads  [decision-G : Cell (DecisionDomain G),
+           result-G : Cell Answer]
+  :writes [answer-accumulator : Cell (Set Answer),
+           topology-requests : Cell (Set TopologyRequest)]
+  (when [and [singleton? [read decision-G]]
+             [not [bot? [read result-G]]]]
+    [write answer-accumulator [set [read result-G]]]     ;; M5: answer accumulator
+    [write topology-requests [set [commit-pu G]]])       ;; M3: topology request
 
-propagator branch-committer {B : Branch}
-  :reads  [worldview-B : Cell Worldview,
-           result-B : Cell Answer]
-  :writes [parent-result : Cell Answer]
-  :non-monotone
-  (when [and [consistent? [read worldview-B]]
-             [not [bot? [read result-B]]]]
-    [pu-commit B]
-    [write parent-result [read result-B]])
+propagator parallel-map-clause {ci : ClauseInfo}          ;; M1: one per clause
+  :reads  [arg-cells : Cell TermValue ...]
+  :writes [match-results : Cell (Set (Pair ClauseInfo Bindings))]
+  (let [args [map read arg-cells]]
+    (let [bindings [try-alpha-rename-and-unify ci args]]
+      (when bindings
+        [write match-results [set [pair ci bindings]]])))
+
+propagator consistency-fan-in                              ;; AND of per-decision viability
+  :reads  [decision-G : Cell (DecisionDomain G) ...]      ;; all decision cells
+  :writes [consistent : Cell Bool]
+  [write consistent [all? [fn [d] [not [empty? d]]] [map read decisions]]]
 
 propagator goal-unify
   :reads  [lhs : Cell TermValue, rhs : Cell TermValue]
@@ -412,20 +414,25 @@ propagator table-consumer
 ```prologos
 ;; The polynomial functor interface for a solver branch PU
 interface BranchPU
-  :inputs  [worldview : Cell Worldview,
-            nogoods : Cell NogoodSet,
-            parent-facts : Cell (Set Fact) ...]     ;; inherited from parent
-  :outputs [result : Cell Answer,
-            new-nogoods : Cell NogoodSet]            ;; nogoods discovered in this branch
+  :inputs  [decision-G : Cell (DecisionDomain G),   ;; which alternative this branch represents
+            nogoods : Cell NogoodSet,                ;; shared across all branches
+            parent-facts : Cell (Set Fact) ...]      ;; inherited from parent
+  :outputs [result : Cell Answer,                    ;; branch result
+            new-nogoods : Cell NogoodSet]             ;; nogoods discovered in this branch
   :lifetime :speculative
   :tagged-by Assumption
 
 ;; The interface for the overall solver network
+;; Note: NO atms struct. Solver context = cell-ids (phone book, not state).
 interface SolverNet
   :inputs  [query-goals : Cell (List GoalDesc),
             relation-store : Cell RelationStore,
             table-store : Cell TableStore]
-  :outputs [answers : Cell (Set Answer)]
+  :outputs [answers : Cell (Set Answer)]             ;; M5: answer accumulator
+  :cells   [assumptions : Cell (Set Assumption),     ;; dissolved ATMS fields
+            nogoods : Cell NogoodSet,
+            counter : Cell Nat,
+            decisions : Cell (Set CellId)]            ;; list of decision cell-ids
 
 ;; Parameterized network: one branch per matching clause
 ;; THIS is the N→M functor from Phase 6
@@ -436,6 +443,7 @@ functor ClauseBranch {ci : ClauseInfo, bindings : FreshBindings}
           body-goals.outputs -> result
 
 ;; Parameterized conjunction: simultaneous goal installation
+;; M2: goals list is an ENUMERATION, not an ordering
 functor GoalConjunction {goals : (List GoalDesc)}
   interface
     :inputs  [var-cells : Cell TermValue ...]
@@ -612,6 +620,37 @@ exchange S0 <-> S1
 | `bench-solver-unify.rkt` | Micro: DFS unification primitives (walk, unify-terms, normalize) | bench-micro.rkt |
 | 17 solver test files (~889 assertions) | Functional correctness: relations, narrowing, WF engine, solver config, tabling | raco test |
 
+#### Pre-0 Baseline Data (R6: captured, informs design)
+
+| Benchmark | Baseline | Notes |
+|---|---|---|
+| solve-adversarial.prologos | 4221ms median | DFS solver: 14 sections, 281 lines |
+| constraints-adversarial.prologos | 4392ms median | Prelude + registry + per-command cells |
+| scheduler-adversarial.prologos | 3855ms median | BSP overhead: deep/wide types |
+| atms-adversarial.prologos | 4521ms median | NEW: 12 sections, 125 commands |
+| bench-solve-pipeline: simple unify ×2000 | 0.24ms | Per-goal overhead |
+| bench-solve-pipeline: 50 goals ×500 | 6.61ms | Conjunction overhead |
+| bench-solver-unify: deep walk ×50 bindings | 14.67ms | Substitution walk |
+| bench-solver-unify: binary tree d=8 | 4.27ms | Structural unification |
+
+**Track 2 infrastructure baselines** (bench-bsp-le-track2.rkt):
+
+| Operation | Time | Per-op | Design implication |
+|---|---|---|---|
+| TMS read depth 1/5/10 | 1.9/8.3/17.8ms per 100K | 19/83/178 ns | Linear in depth → PU-per-branch avoids depth scaling |
+| TMS write depth 1/5/10 | 1.1/6.9/14.3ms per 50K | 21/137/287 ns | Linear in depth |
+| TMS commit leaf/nested | 13.7/3.7ms per 100K/50K | 137/75 ns | Commit is cheap |
+| ATMS assume | 1.9ms per 10K | 190 ns | Cheap per-assumption |
+| ATMS amb (3/10 alternatives) | 12.5/20.9ms per 5K/2K | 2.5/10.5 μs | Linear in N |
+| Intersection check (10∩2) | 12.5ms per 200K | 62 ns | Filtered nogood watcher is viable |
+| Subset check (2⊆10) | 6.1ms per 200K | 30 ns | Consistency check is cheap |
+| make-prop-network | 0.9ms per 10K | 90 ns | PU creation base cost |
+| net-new-cell | 1.4ms per 5K | 270 ns | Cell allocation |
+| net-add-propagator | 1.6ms per 2K | 810 ns | Propagator registration |
+| run-to-quiescence (empty/1-prop) | 3.3/15.1ms per 10K/5K | 330ns/3μs | Scheduler overhead |
+
+**Key design implications from data**: PU creation (network + cells + propagators) ≈ 5-10μs. For 10-way branching ≈ 50-100μs — dominated by computation, not allocation. Decision cell narrowing (set-intersection) ≈ 62ns — negligible. The architecture is viable from a performance standpoint.
+
 #### Phase 0a: Baseline Capture
 
 **Run and record** (all before any code changes):
@@ -707,35 +746,42 @@ Sections 1-4 are uncommented as phases complete. Section 5 is aspirational (Trac
 
 **Phase completion gate**: Acceptance file runs at Level 3 (`process-file`) with 0 errors. Each phase uncomments its corresponding section.
 
-### Phase 1: Worldview Lattice Cell (Option E)
+### Phase 1: Decision Cell Infrastructure + Parallel-Map Propagator
 
 **What changes**:
 
-1. **`propagator.rkt`**: Add worldview lattice infrastructure:
-   - `worldview-merge`: `set-union` on `seteq` sets
-   - `worldview-bot`: `(seteq)` (empty set)
-   - `worldview-bot?`: `(hash-empty? wv)`
-   - `worldview-contradicts?`: checks worldview against a nogood set
-   - `nogood-merge`: `set-union` on sets of sets
+1. **`propagator.rkt`**: Decision cell lattice infrastructure:
+   - `decision-domain-merge`: `set-intersection` (narrowing: more restrictions = more info)
+   - `decision-domain-bot?`: `(equal? domain all-alternatives)` (all viable = least info)
+   - `decision-domain-top?`: `(hash-empty? domain)` (empty = contradicted)
+   - Decision cells are SRE structural lattice cells — alternatives = constructors
+   - Register decision domain as SRE domain via Track 2G property infrastructure
 
-2. **`propagator.rkt`**: Add per-network worldview cell slot:
-   - `prop-net-cold` gains a `worldview-cid` field (or `#f` for Tier 1 networks)
-   - `net-cell-read` checks: if `worldview-cid` is set, use it for TMS navigation instead of `(current-speculation-stack)`
-   - `net-cell-write` same change
-   - Both fall back to `(current-speculation-stack)` when `worldview-cid` is `#f` — backward compatibility for Tier 1
+2. **`propagator.rkt`**: Nogood cell infrastructure:
+   - `nogood-merge`: `set-union` on sets of sets (monotone: nogoods only grow)
+   - Nogood cell is a regular cell created by `net-new-cell` with `nogood-merge`
 
-3. **`propagator.rkt`**: Add nogood cell infrastructure:
-   - `net-new-nogood-cell`: creates a cell with `nogood-merge`
-   - Nogood cell id stored alongside worldview cell id in `prop-net-cold`
+3. **`propagator.rkt`**: Assumptions accumulator cell + counter cell:
+   - `assumptions-merge`: `set-union` (monotone: assumptions only added)
+   - Counter cell: `max` merge (monotone Nat)
 
-**Key design decision**: The worldview cell is a REGULAR cell in the prop-network, created by `net-new-cell` with `worldview-merge`. It participates in the normal cell infrastructure — no special-casing except that `net-cell-read`/`net-cell-write` know to read it for TMS navigation.
+4. **`propagator.rkt`**: Parallel-map propagator pattern (M1):
+   - `net-add-parallel-map-propagator`: takes a list of input sets, a fire function, installs N independent propagators — one per input set
+   - All N fire in the same BSP superstep
+   - Results accumulate in a shared output cell via set-union merge
+   - This IS a polynomial functor: fan-out depends on input data
+   - First consumer: clause matching (Phase 6). Generalizes to: pattern matching, trait lookup, module resolution.
 
-**Test coverage**: Worldview cell creation, merge (union is idempotent), bot detection, contradiction detection against nogoods.
+5. **NO worldview cell** (§2.6b): The worldview emerges from decision cells. No `worldview-cid` on the network. `net-cell-read`/`net-cell-write` use decision cells for TMS navigation in Tier 2 (Phase 9 activates this). Tier 1 uses `current-speculation-stack` as before.
+
+**R3 revision**: No field added to `prop-net-cold` or `prop-net-warm`. Decision cell IDs are tracked by the solver infrastructure (per-query), not by the network struct.
+
+**Test coverage**: Decision cell creation + narrowing. Nogood cell creation + accumulation. Parallel-map propagator with 3/5/10 inputs. SRE domain registration for decision domain.
 
 **Network Reality Check**:
-1. `net-new-cell` calls: worldview cell, nogood cell
-2. `net-cell-write` produces result: worldview written via cell write, read back via cell read
-3. Cell creation → write → read = worldview value: yes
+1. `net-new-cell` calls: decision cells, nogood cell, assumptions cell, counter cell
+2. `net-cell-write` produces result: decision narrowing via cell write
+3. Cell creation → propagator installation → cell write → cell read = narrowed domain: yes
 
 ### Phase 2: PU-Per-Branch Lifecycle
 
@@ -764,68 +810,81 @@ Sections 1-4 are uncommented as phases complete. Section 5 is aspirational (Trac
 
 **What changes**:
 
-1. **`propagator.rkt`**: `install-nogood-watcher`:
-   - `(install-nogood-watcher net nogoods-cid worldview-cid branch-assumptions)`
-   - Creates one propagator per branch that watches the nogood cell
-   - Fire function: read nogoods, filter by intersection with `branch-assumptions`, if any match → write `'contradicted` to the branch's worldview cell
-   - Component-path: watches `nogoods-cid` (the entire cell, not a sub-path — nogoods are flat sets)
+1. **`propagator.rkt`**: `install-nogood-decision-watcher`:
+   - `(install-nogood-decision-watcher net nogoods-cid decision-cid group-alternatives)`
+   - Creates one propagator **per decision cell** that watches the nogood cell
+   - Fire function: read nogoods, filter by intersection with `group-alternatives`. For each matching nogood: if the OTHER assumptions in the nogood are committed (their decision cells are singletons), NARROW this decision cell to exclude the group's assumption from the nogood.
+   - Nogoods narrow DECISIONS, not worldviews (§2.5c). Information flows to where narrowing happens.
+   - Component-path: watches `nogoods-cid`
 
-2. **Integration with PU lifecycle**: When a branch PU is created (Phase 2), `install-nogood-watcher` is called to bridge the shared nogood cell to the branch's worldview cell. When the branch is dropped, the watcher propagator is dropped with the PU (structural GC).
+2. **Integration with PU lifecycle**: When a branch PU is created (Phase 2), `install-nogood-decision-watcher` is called to bridge the shared nogood cell to the branch's decision cell. When the branch is dropped, the watcher propagator is dropped with the PU (structural GC).
 
-**Cost analysis** (from Stage 1/2 §4.2a):
-- Per nogood discovery: O(branches) intersection checks, each O(|nogood|)
-- Per affected branch: propagators see contradiction and stop
-- Per unaffected branch: nothing happens
-- Total: O(branches × |nogood|) for filtering + O(affected_propagators) for reaction
+3. **Contradiction detection**: When a decision cell narrows to ∅ (empty), it's contradicted. A per-decision contradiction propagator watches the decision cell and emits a topology request to drop the branch PU (M3: via topology request, not direct drop).
 
-**This IS the right Kan extension**: of all information in the nogood cell, forward to branch B only what B has demanded (nogoods involving B's assumptions).
+**Cost analysis** (Pre-0 data, §0b):
+- Intersection check: 62ns per (10-element set ∩ 2-element nogood)
+- Per nogood discovery: O(decisions) intersection checks, each O(|nogood|)
+- Per affected decision: cell narrows, dependent propagators react
+- Per unaffected decision: nothing happens
+- Total: O(decisions × |nogood|) for filtering + O(affected_propagators) for reaction
 
-**Test coverage**: Watcher fires on relevant nogood, doesn't fire on irrelevant nogood, multiple branches each with own watcher, cascading nogoods.
+**This IS the right Kan extension**: of all information in the nogood cell, forward to decision G only nogoods involving G's alternatives.
+
+**Test coverage**: Watcher narrows decision on relevant nogood, ignores irrelevant nogoods, contradiction detection (domain → ∅), multiple decisions with independent watchers.
 
 ### Phase 4: Speculation Migration
 
-**What changes** (5 files, backward-compatible):
+**What changes** (6 files per R1 audit, backward-compatible):
 
-1. **`elab-speculation-bridge.rkt`**: Replace `(parameterize ([current-speculation-stack (cons hyp-id (current-speculation-stack))]) ...)` with worldview cell write + fire function that reads worldview from cell. The `with-speculative-rollback` wrapper reads the worldview cell instead of the parameter.
+1. **`propagator.rkt`** (lines 577, 751): The two integration points where `net-cell-read`/`net-cell-write` read `(current-speculation-stack)`. Add optional decision-cell-based TMS navigation: when a decision cell context is active, derive the speculation stack from decision cells instead of the parameter.
 
-2. **`metavar-store.rkt`** (line 1321): Replace `(define stack (current-speculation-stack))` with a worldview cell read when available, parameter fallback when not.
+2. **`elab-speculation-bridge.rkt`** (line 227, 1 parameterize site): Replace `(parameterize ([current-speculation-stack (cons hyp-id ...)]) ...)` with decision cell write + fire function that reads decision context from cells.
 
-3. **`cell-ops.rkt`** (lines 82-83): Replace `(current-speculation-stack)` check with worldview cell read. The `worldview-visible?` function already exists — it just needs to read from a cell instead of a parameter.
+3. **`typing-propagators.rkt`** (6 parameterize sites, lines 258-1589): The Phase 8 union branching code uses `parameterize` around fire functions. Replace with decision cell input to the fire function.
 
-4. **`typing-propagators.rkt`**: The Phase 8 union branching code (lines 1571-1589) already uses `parameterize` around fire functions. Replace with worldview cell input to the fire function.
+4. **`metavar-store.rkt`** (line 1321, 1 read site): Replace `(define stack (current-speculation-stack))` with decision cell read when available, parameter fallback when not.
 
-5. **`narrowing.rkt`**: Or-nodes that use `atms-amb` currently install propagators under `parameterize`. Replace with PU-per-branch from Phase 2.
+5. **`cell-ops.rkt`** (lines 82-83, 2 read sites): Replace `(current-speculation-stack)` check with decision cell read. The `worldview-visible?` function reads from decision cells instead of parameter.
 
-**Migration strategy**: Each file gets an optional worldview-cell-id parameter. When present, read worldview from cell. When absent, fall back to `(current-speculation-stack)`. This allows incremental migration — files migrate one at a time, and the test suite stays green throughout.
+6. **`tests/test-tms-cell.rkt`** (R1: missed in D.1): Test infrastructure that parameterizes `current-speculation-stack`. Update to support decision-cell-based testing.
 
-**`current-speculation-stack` is NOT removed in this phase** — it remains as fallback. Phase 9 (two-tier activation) makes the worldview cell the default. The parameter is removed in a cleanup sub-phase after all consumers are migrated.
+**R1 correction**: `narrowing.rkt` does NOT directly use `current-speculation-stack`. It uses `atms-amb` via `elab-speculation.rkt` but doesn't read the parameter. Removed from migration scope.
 
-**Test coverage**: Each migrated file passes existing tests (behavioral parity). New tests verify worldview cell read produces same results as parameter read.
+**Migration strategy**: Each file gets an optional decision-cell context. When present, derive TMS stack from decision cells. When absent, fall back to `(current-speculation-stack)`. Incremental migration — files migrate one at a time, suite stays green throughout.
 
-### Phase 5: ATMS↔Worldview Bridge
+**`current-speculation-stack` is NOT removed in this phase** — it remains as Tier 1 fallback. Phase 9 (two-tier activation) establishes decision cells as the mechanism. The parameter is removed in a cleanup sub-phase after all consumers are migrated.
 
-**What changes**:
+**Test coverage**: Each migrated file passes existing tests (behavioral parity). New tests verify decision-cell-based TMS produces same results as parameter-based TMS.
 
-The Stage 1/2 audit (§4.1) identified two separate TMS mechanisms:
-1. Cell-level TMS (`tms-cell-value` in propagator.rkt)
-2. ATMS-level TMS (`atms-read-cell`/`atms-write-cell` in atms.rkt)
+### Phase 5: ATMS Struct Dissolution
 
-Phase 5 unifies them.
+**What changes** (per §2.6):
 
-1. **`atms.rkt`**: `atms-worldview-cell`:
-   - New function: given an ATMS and its believed set, create/update a worldview lattice cell whose value is the believed assumption set.
-   - `atms-amb` now creates worldview cells (via Phase 2's `make-branch-pu`) instead of just returning hypothesis lists.
-   - `atms-read-cell` / `atms-write-cell` are reimplemented as `net-cell-read` / `net-cell-write` on the worldview-aware network — the ATMS no longer maintains its own parallel cell map.
+The `atms` struct (7 fields) is dissolved entirely into cells on the propagator network. No off-network state remains.
 
-2. **`atms.rkt`**: Retire the `tms-cells` field from the `atms` struct:
-   - The ATMS struct currently has: `network`, `assumptions`, `nogoods`, `tms-cells`, `next-assumption`, `believed`
-   - After Phase 5: `tms-cells` is removed. Cell values live in the prop-network (where they belong). The ATMS manages assumptions, nogoods, and believed set — worldview management, not cell storage.
+1. **`atms.rkt`**: The `atms` struct is REMOVED. In its place:
+   - **Solver context**: a lightweight record holding cell-ids for the solver's cells (assumptions-cid, nogoods-cid, counter-cid, answer-accumulator-cid, plus a list of decision-cids). This is metadata about WHERE the cells are, not the cells' VALUES.
+   - `atms-assume` → write to assumptions-cell + counter-cell. Create trivial decision cell `{h}`.
+   - `atms-add-nogood` → write to nogood cell (set-union). Monotone.
+   - `atms-amb` → create N assumption writes + decision cell + pairwise nogood writes. Topology request for PU creation.
+   - `atms-retract` → narrow decision cell to exclude assumption (SRE structural narrowing, §2.6c). The word "retract" is ALIASED to decision-cell narrowing.
+   - `atms-consistent?` → propagator: AND-fan-in of per-decision non-empty checks.
+   - `atms-read-cell` / `atms-write-cell` → RETIRED. Use `net-cell-read` / `net-cell-write`.
 
-3. **Bridge propagator**: When the ATMS `believed` set changes (e.g., after `atms-add-nogood` prunes a worldview), write the new believed set to the worldview cell. This is a bridge from ATMS operations (which are still imperative — `atms-add-nogood` returns a new ATMS value) to the propagator network (where the worldview cell reflects the current state).
+2. **`atms.rkt`**: Retained as query function library (§2.6f):
+   - `explain-hypothesis`: reads nogood cell + assumptions cell → filter → explanation
+   - `explain-all`: reads nogoods + decision cells → violated nogoods
+   - `minimal-diagnoses`: formulated as tropical semiring CSP (§2.6e) — future phase or deferred
+   - `conflict-graph`: reads nogoods → builds graph
+   - These are read-only consumers of cell values. Correctly off-network.
 
-**Key architectural decision**: The ATMS remains a persistent value (CHAMP-backed, pure operations). But its cell storage is delegated to the prop-network. The ATMS is a worldview MANAGER; the prop-network is the cell STORE. One mechanism, not two.
+3. **R2 note**: The `amb-groups` field becomes the list of decision-cell-ids in the solver context. `atms-solve-all` is REPLACED by the answer accumulator (M5) — branching topology covers the product space, committed results accumulate via set-union merge.
 
-**Test coverage**: ATMS `amb` creates worldview cells. ATMS cell reads go through prop-network. ATMS nogood prunes worldview cell. Existing ATMS tests pass (behavioral parity).
+4. **R5 note**: Only 3 sites actually call `atms-amb` as an operation (atms.rkt internal, elab-speculation.rkt, reduction.rkt). The 26 `atms-amb` references in the pipeline (parser, pretty-print, substitution, zonk) handle the `expr-atms-amb` AST node — UNCHANGED by this phase.
+
+**Key architectural point**: There is no "ATMS struct managing worldviews" alongside cells. The cells ARE the state. The solver context is a phone book (which cell-ids to read), not a second source of truth (P4 resolution).
+
+**Test coverage**: All existing ATMS tests rewritten to use cell operations. `atms-assume` → cell write parity. `atms-amb` → decision cell creation parity. `atms-add-nogood` → nogood cell write parity. Existing solver tests pass (behavioral parity via relations.rkt).
 
 ---
 
@@ -852,11 +911,13 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
    - **Single-clause path** (no branching): If only one clause matches, install it directly in the current network. No `amb`, no PU overhead. This IS Tier 1 behavior — deterministic queries never touch ATMS.
    - **Multi-clause path** (branching): Two-step process following the array-programming pattern:
 
-     **Step 1 — Bulk clause matching (parallel map + filter):**
-     A single `clause-match-bulk` propagator takes resolved args + the full clause list. For each clause: α-rename, attempt unification with args. This is an embarrassingly parallel map — each clause is independent. The result: the set of M matching clauses (M ≤ N) with their bindings. Clauses that fail unification are eliminated HERE, before any PU allocation.
+     **Step 1 — Bulk clause matching (parallel-map propagator, M1):**
+     The goal-app propagator installs a **parallel-map propagator** (Phase 1 infrastructure) over the clause list. N independent fire functions — one per clause — each do α-rename + attempt unification with args. All N fire in the same BSP superstep. Results accumulate in a shared match-result cell via set-union merge. The result: the set of M matching clauses (M ≤ N) with their bindings. Clauses that fail unification are eliminated HERE, before any PU allocation.
+
+     This is NOT "a function called inside a propagator" (M1 critique). It IS N propagators — one per clause — installed by the parallel-map pattern. The matching is genuinely parallel and genuinely on-network.
 
      **Step 2 — Branch creation (only for survivors):**
-     For the M matching clauses, call `atms-amb-on-network` to create M branch PUs. Each PU gets:
+     For the M matching clauses, call `atms-amb-on-network` (now: create M decision cell entries + M branch PUs). Each PU gets:
      - A worldview cell extending parent with this clause's assumption
      - Fresh variable cells for this clause's bindings (from Step 1)
      - Sub-goal propagators installed for the clause body
@@ -881,6 +942,10 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
 
 **Key architectural point**: The DFS `solve-goals` function threading substitutions through recursive `append-map` is GONE. The replacement is two-level: bulk matching (parallel, no allocation) then PU branching (only for survivors). This minimizes both propagator count and PU count.
 
+**P3 clarification**: TMS provides CORRECTNESS isolation (branch-tagged values are invisible across branches via the TMS tree). PU provides EFFICIENCY isolation (structural GC on contradiction — drop PU = O(1), no CHAMP cleanup). Both are needed, for different reasons.
+
+**R4 note**: The solver entry point is `reduction.rkt` (4 call sites at lines 528, 546, 599, 633 calling `stratified-solve-goal`), which dispatches to `relations.rkt`. Phase 9 (two-tier) needs to modify the dispatch in `reduction.rkt`, not just `relations.rkt`.
+
 **Test coverage**: Single-clause dispatch (no PU), multi-clause dispatch (PU-per-clause), fact matching, clause body recursion, variable freshening as cell creation.
 
 ### Phase 7: Goal-as-Propagator Dispatch
@@ -892,13 +957,17 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
 1. **`relations.rkt`**: New function `install-goal-propagator`:
    - Dispatches on goal kind, installs appropriate propagator:
 
-   | Goal Kind | Propagator | Inputs | Outputs | Notes |
-   |---|---|---|---|---|
-   | `app` | Phase 6's `install-clause-propagators` | arg cells | result cell | May create PUs |
-   | `unify` | Unification propagator | lhs cell, rhs cell | (constraint) | Cell-tree unify: write to cells |
-   | `is` | Evaluation propagator | expr cell | var cell | Evaluate functional expr, write to var |
-   | `not` | NAF propagator | inner goal result | negated result | S1: fires after inner goal quiesces |
-   | `guard` | Guard propagator | condition cell | gate | S1: gates subsequent goals on condition |
+   | Goal Kind | Propagator | Inputs | Outputs | Stratum | Notes |
+   |---|---|---|---|---|---|
+   | `app` | Phase 6's `install-clause-propagators` | arg cells | result cell | S0 | May create PUs via topology request |
+   | `unify` | Unification propagator | lhs cell, rhs cell | (constraint) | S0 | Cell-tree unify: write to cells |
+   | `is` | Evaluation propagator | expr cell | var cell | S0 | Evaluate functional expr, write to var |
+   | `not` | NAF propagator | inner goal result | negated result | **S1** | Fires after S0 quiesces (M6: BSP barrier IS the completion signal) |
+   | `guard` | Guard propagator | condition cell | gate | **S1** | Gates subsequent goals on condition |
+
+   **P2**: `cut` is NOT implemented and is OUT OF SCOPE. Not listed.
+   
+   **M6 (NAF completion)**: The NAF propagator fires at S1, AFTER the S0→S1 BSP barrier confirms quiescence. The inner goal's result cell value at S1 fire time is its final S0 value. If ⊥ → inner goal genuinely failed → NAF succeeds. If non-⊥ → inner goal succeeded → NAF fails. The barrier IS the completion signal — no separate completion detection needed.
 
 2. **Conjunction as simultaneous installation (order-independent)**:
    `solve-goals` (the recursive append-map) is replaced by `install-conjunction`:
@@ -908,6 +977,9 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
    - Execution order emerges from DATAFLOW: if goal A writes to cell `?x` and goal B reads `?x`, B fires after A — but this is a cell dependency discovered by the propagator network, not an ordering imposed by installation
    - Independent goals (no shared variables) fire concurrently in the same BSP superstep
    - This IS the true-parallel order-independent search: the clause-body ordering is irrelevant; the dataflow graph determines the execution schedule
+   - **M2**: The goals list passed to `install-conjunction` is an ENUMERATION (which goals to install), not an ORDERING (what sequence to execute). Installation order is irrelevant.
+
+3. **Answer accumulator cell (M5)**: Each query has an answer accumulator cell with set-union merge. Branch-committer propagators (Phase 2) write results to the accumulator. After quiescence + S(-1) pruning + commit, the accumulator holds all answers. No scanning, no "collect results from surviving branches" — answers arrive via cell writes.
 
 3. **NAF as stratum**: Negation-as-failure is inherently non-monotone (succeed if inner FAILS). This is S1 — fires after S0 quiesces. The inner goal is installed as S0 propagators. The NAF propagator is an S1 readiness-triggered propagator that checks: did the inner goal's result cell reach a value (inner succeeded → NAF fails) or stay at ⊥ (inner failed → NAF succeeds)?
 
@@ -954,16 +1026,16 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
    - `:atms` → create worldview cell + ATMS from the start, use propagator path
    - `:auto` (default) → start in Tier 1 (plain prop-network), upgrade on first multi-clause match
 
-2. **Tier 1 → Tier 2 transition**:
-   - Tier 1: No worldview cell. Single-clause matches install directly. Facts unify directly. The solver-env is a plain prop-network.
-   - First multi-clause match detected → upgrade:
-     - Create worldview cell on the network
-     - Set `worldview-cid` in `prop-net-cold`
-     - Create nogood cell
-     - Proceed with `atms-amb-on-network` for this and all subsequent multi-clause matches
-   - The transition is O(1) — create two cells, set a field. No cell scanning, no value wrapping.
+2. **Tier 1 → Tier 2 transition** (M4: via topology stratum, NOT scaffolding):
+   - Tier 1: No decision cells, no nogood cell. Single-clause matches install directly. Facts unify directly. The solver uses a plain prop-network.
+   - First multi-clause match detected → goal-app propagator emits a **topology request**: "create decision infrastructure (nogood cell, assumptions cell, counter cell) on this network"
+   - The topology stratum EXECUTES the request — same protocol as PAR Track 1's dynamic topology for CALM-safe structural mutation
+   - CHAMP structural sharing: transition cost is O(cells added), not O(network size). Network-without-decisions → topology adds infrastructure cells → network-with-decisions.
+   - Proceed with `atms-amb-on-network` for this and all subsequent multi-clause matches
 
-3. **Existing cells continue to work**: Cells created during Tier 1 are plain values. When `net-cell-read` detects `worldview-cid` is now set, it checks if the cell value is a `tms-cell-value`. If not (plain Tier 1 value), it returns it directly — the Tier 1 value is the base (depth-0) value. TMS reads with `'()` stack return base directly. No wrapping needed.
+3. **Existing cells continue to work**: Cells created during Tier 1 are plain values. When the decision infrastructure appears (Tier 2), `net-cell-read`/`net-cell-write` detect whether a decision context is active. If not (Tier 1), they use `current-speculation-stack` as before. If yes (Tier 2), they derive the TMS stack from decision cells. Tier 1 values are depth-0 (base) values — TMS reads with `'()` stack return them directly. No wrapping needed.
+
+**P1 confirmation**: Two-tier IS the correct and complete design. `:auto` is the right default. Deterministic code should not pay overhead for infrastructure it doesn't use. The Tier 1→2 transition is a topology stratum operation — architecturally clean, not a code-path branch.
 
 **Test coverage**: `:strategy :depth-first` produces same results as current DFS. `:strategy :auto` produces same results. `:strategy :atms` produces same results. Tier 1→2 transition mid-query (first few goals deterministic, later goal has choice point).
 
@@ -1002,11 +1074,14 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
 
 3. **Acceptance file validation**: Run `examples/2026-04-07-bsp-le-track2.prologos` at Level 3 (`process-file`). All sections must pass.
 
-4. **Edge cases**:
+4. **R7: Deep nesting and wide-clause hotspots**:
+   Pre-0 data shows `level4` (5 levels binary branching, 32 leaves) at 314ms — 2× the next command. `color-code` (10-clause query-all) at 187ms. These are the patterns where propagator-native search has the most opportunity (concurrent exploration) and the most risk (PU allocation overhead × branch count). Benchmark these specifically.
+
+5. **Edge cases**:
    - Empty relation (no facts, no clauses) → fail
-   - Single-fact relation → succeed, no ATMS
+   - Single-fact relation → succeed, no ATMS (Tier 1)
    - Deeply nested recursion → tabling prevents divergence (non-recursive cases)
-   - Contradictory goals → empty result set
+   - Contradictory goals → empty result set via answer accumulator (M5)
    - NAF with WF oracle → 3-valued behavior preserved
 
 **Test coverage**: Parity tests, benchmark comparison, acceptance file, edge cases.
@@ -1054,11 +1129,14 @@ The design uses "propagator-native search" throughout. The DFS path (`:strategy 
 ## §8 Success Criteria
 
 1. All existing solver tests pass (behavioral parity with DFS)
-2. `current-speculation-stack` parameter eliminated (all consumers migrated to worldview cells)
-3. `atms.rkt` `tms-cells` field removed (unified cell storage)
-4. Solve-adversarial benchmark does not regress >15% from baseline
+2. `current-speculation-stack` parameter eliminated (all 6 consumers migrated to decision cells)
+3. **`atms` struct REMOVED** (all fields dissolved into cells, §2.6). `atms.rkt` is a query function library.
+4. Solve-adversarial + atms-adversarial benchmarks do not regress >15% from baseline
 5. Non-recursive tabled predicates terminate and memoize
-6. `:strategy :auto` activates two-tier (Tier 1 → Tier 2 on first `amb`)
+6. `:strategy :auto` activates two-tier (Tier 1 → Tier 2 via topology stratum on first `amb`)
 7. `:strategy :depth-first` preserves exact DFS semantics
 8. Acceptance file passes at Level 3
-9. Concurrent worldview exploration functional (multiple PUs in same BSP superstep)
+9. Concurrent branch exploration functional (multiple PUs in same BSP superstep)
+10. **No worldview cell** — worldview emerges from decision cells, consistency via AND-fan-in
+11. Answer accumulator cell collects results from committed branches (no scanning)
+12. Parallel-map propagator pattern functional and reusable for future consumers
