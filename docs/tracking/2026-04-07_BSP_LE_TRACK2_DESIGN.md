@@ -136,87 +136,236 @@ lattice NogoodSet
   :merge set-union
 ```
 
-### §3.2 Cell Declarations
+### §3.2 Level 0: Properties and Lattice Laws
 
-```
-cell worldview-base : Worldview
-  :writes [tier2-activator, branch-creator]
-  :reads  [all-propagators-at-depth-0]
+```prologos
+property Boolean {L : Type}
+  :where [Lattice L]
+         [BoundedLattice L]
+         [Complemented L]
+         [Distributive L]
 
-cell worldview-B : Worldview                      ;; one per branch B
-  :writes [branch-creator]
-  :reads  [PU-B-propagators, nogood-watcher-B]
-
-cell nogoods : NogoodSet
-  :writes [contradiction-detectors...]
-  :reads  [nogood-watchers...]
-
-cell table-answers-P : (Set Answer)               ;; one per tabled predicate P
-  :writes [producer-P]
-  :reads  [consumers-P...]
-  :merge  set-union                               ;; answers only accumulate
+property Frame {L : Type}
+  :where [Lattice L]
+         [Distributive L]
+         ;; meet distributes over arbitrary joins
 ```
 
-### §3.3 Propagator Declarations
+### §3.3 Level 2: Propagator Declarations
 
-```
+```prologos
 propagator branch-creator                          ;; atms-amb
-  :inputs  [worldview-parent]
-  :outputs [worldview-B1 ... worldview-BN, nogoods]
-  :fire    Create N PUs, each extending parent worldview with one assumption.
-           Record pairwise mutual-exclusion nogoods.
-  :topology-mutation yes                           ;; CALM: stratified topology protocol
-  :stratum S0 (request), topology-stratum (execution)
+  :reads  [worldview-parent : Cell Worldview]
+  :writes [worldview-B1 : Cell Worldview, ...,
+           nogoods : Cell NogoodSet]
+  :non-monotone                                    ;; topology mutation (CALM)
+  [atms-amb-on-network [read worldview-parent] clauses]
 
-propagator filtered-nogood-watcher                 ;; right Kan extension (one per branch)
-  :inputs  [nogoods]
-  :outputs [worldview-B]
-  :guard   (any? (λ (ng) (intersects? ng assumptions-B)) new-nogoods)
-  :fire    Write 'contradicted to worldview-B
-  :stratum S0
+propagator filtered-nogood-watcher {B : Branch}    ;; right Kan extension
+  :reads  [nogoods : Cell NogoodSet]
+  :writes [worldview-B : Cell Worldview]
+  (let [ngs [read nogoods]]
+    (when [any? [fn [ng] [intersects? ng [assumptions B]]] ngs]
+      [write worldview-B 'contradicted]))
 
-propagator contradiction-detector                  ;; inside PU-B
-  :inputs  [some-cell-in-PU-B]
-  :outputs [nogoods]
-  :guard   (= val lattice-top)
-  :fire    Write (set assumptions-of-B) to nogoods
-  :stratum S0
+propagator contradiction-detector {B : Branch}
+  :reads  [suspect : Cell L]                       ;; any lattice cell in PU-B
+  :writes [nogoods : Cell NogoodSet]
+  (when [top? [read suspect]]
+    [write nogoods [set [assumptions B]]])
 
-propagator branch-pruner                           ;; S(-1) retraction
-  :inputs  [worldview-B]
-  :outputs [PU-B-lifecycle]
-  :guard   (= wv 'contradicted)
-  :fire    Drop PU-B (structural GC)
-  :stratum S(-1)
+propagator branch-pruner {B : Branch}
+  :reads  [worldview-B : Cell Worldview]
+  :writes []                                       ;; side effect: drop PU
+  :non-monotone
+  (when [= [read worldview-B] 'contradicted]
+    [pu-drop B])
 
-propagator branch-committer                        ;; S(-1) commitment
-  :inputs  [worldview-B, result-cell-B]
-  :outputs [parent-result-cell]
-  :guard   (and (consistent? wv) (not (bot? result)))
-  :fire    Commit PU-B: promote values to parent, dissolve PU
-  :stratum S(-1)
+propagator branch-committer {B : Branch}
+  :reads  [worldview-B : Cell Worldview,
+           result-B : Cell Answer]
+  :writes [parent-result : Cell Answer]
+  :non-monotone
+  (when [and [consistent? [read worldview-B]]
+             [not [bot? [read result-B]]]]
+    [pu-commit B]
+    [write parent-result [read result-B]])
 
-propagator goal-app                                ;; clause dispatch
-  :inputs  [relation-cell, arg-cells...]
-  :outputs [result-cell]
-  :fire    Lookup matching clauses.
-           If tabled: check table registry (producer/consumer).
-           If single clause: install directly (no amb, Tier 1).
-           If multiple: atms-amb → branch-creator → PU per clause.
-  :stratum S0
+propagator goal-unify
+  :reads  [lhs : Cell TermValue, rhs : Cell TermValue]
+  :writes [lhs : Cell TermValue, rhs : Cell TermValue]      ;; bidirectional
+  [unify-cells lhs rhs]
 
-propagator table-producer                          ;; first call to tabled pred
-  :inputs  [clause-body-cells...]
-  :outputs [table-answers-P]
-  :fire    Derive answers from clause body, write to accumulator
-  :stratum S0
+propagator goal-is
+  :reads  [expr : Cell TermValue]
+  :writes [var : Cell TermValue]
+  [write var [eval [read expr]]]
 
-propagator table-consumer                          ;; subsequent calls to tabled pred
-  :inputs  [table-answers-P]
-  :outputs [result-cell]
-  :fire    Read answers from accumulator, propagate to local result
-  :stratum S0
+propagator goal-naf
+  :reads  [inner-result : Cell Answer]
+  :writes [naf-result : Cell Answer]
+  :non-monotone                                    ;; succeeds on ABSENCE of info
+  (if [bot? [read inner-result]]
+    [write naf-result success]     ;; inner failed → naf succeeds
+    [write naf-result failure])    ;; inner succeeded → naf fails
+
+propagator table-producer
+  :reads  [clause-body-results : Cell Answer ...]
+  :writes [table-answers : Cell (Set Answer)]
+  [write table-answers [set [read clause-body-results]]]
+
+propagator table-consumer
+  :reads  [table-answers : Cell (Set Answer)]
+  :writes [local-result : Cell Answer]
+  [write local-result [read table-answers]]
 ```
+
+### §3.4 Level 3: Network Interfaces and Implementations
+
+```prologos
+;; The polynomial functor interface for a solver branch PU
+interface BranchPU
+  :inputs  [worldview : Cell Worldview,
+            nogoods : Cell NogoodSet,
+            parent-facts : Cell (Set Fact) ...]     ;; inherited from parent
+  :outputs [result : Cell Answer,
+            new-nogoods : Cell NogoodSet]            ;; nogoods discovered in this branch
+  :lifetime :speculative
+  :tagged-by Assumption
+
+;; The interface for the overall solver network
+interface SolverNet
+  :inputs  [query-goals : Cell (List GoalDesc),
+            relation-store : Cell RelationStore,
+            table-store : Cell TableStore]
+  :outputs [answers : Cell (Set Answer)]
+
+;; Parameterized network: one branch per matching clause
+;; THIS is the N→M functor from Phase 6
+functor ClauseBranch {ci : ClauseInfo, bindings : FreshBindings}
+  interface BranchPU
+  embed body-goals : GoalConjunction (clause-info-goals ci)
+  connect bindings -> body-goals.inputs
+          body-goals.outputs -> result
+
+;; Parameterized conjunction: simultaneous goal installation
+functor GoalConjunction {goals : (List GoalDesc)}
+  interface
+    :inputs  [var-cells : Cell TermValue ...]
+    :outputs [result : Cell Answer]
+  ;; All goals installed simultaneously — order-independent
+  ;; Dataflow determines execution order
+```
+
+### §3.5 Level 4: Bridges (Galois Connections)
+
+```prologos
+;; Worldview gates type inference: assumptions constrain what types are visible
+bridge WorldviewToType
+  :from Worldview
+  :to   TypeLattice
+  :alpha worldview->type-filter         ;; under worldview W, filter to types consistent with W
+  ;; No gamma — one-way (worldview constrains types, not vice versa)
+
+;; Worldview gates term values
+bridge WorldviewToTerm
+  :from Worldview
+  :to   TermValue
+  :alpha worldview->term-filter
+
+;; Nogood accumulation prunes worldviews (the filtered RKan watcher)
+bridge NogoodToWorldview
+  :from NogoodSet
+  :to   Worldview
+  :alpha nogood->contradiction-filter   ;; intersection-filtered per branch
+  ;; This IS the right Kan extension: demand-driven forwarding
+  :preserves [Monotone]                 ;; nogoods only grow → contradictions only grow
+```
+
+### §3.6 Level 5: Stratification
+
+```prologos
+stratification SolverLoop
+  :strata [S-neg1 S0 S1]
+  :scheduler :bsp
+  :fixpoint :lfp
+  :fuel 1000000
+
+  :fiber S0
+    :mode monotone
+    :speculation :atms                   ;; TMS-based branching enabled
+    :branch-on [multi-clause-match]      ;; amb trigger
+    :bridges [WorldviewToType WorldviewToTerm NogoodToWorldview]
+    :networks [solver-net]
+
+  :fiber S1
+    :mode monotone
+    :scheduler :gauss-seidel             ;; NAF needs sequential evaluation
+    ;; goal-naf fires here: after S0 quiesces, check if inner goals succeeded
+
+  :barrier S0 -> S-neg1
+    :commit prune-contradicted-branches  ;; drop PUs with contradicted worldviews
+
+  :where [WellFounded SolverLoop]
+
+;; The solver config IS a stratification (subsumes solver keyword)
+stratification DepthFirstSolver
+  :extends SolverLoop
+  :fiber S0
+    :speculation :none                   ;; no branching — DFS backtracking
+    :scheduler :sequential
+
+stratification ParallelSolver
+  :extends SolverLoop
+  :fiber S0
+    :scheduler :bsp                      ;; parallel worldview exploration
+    :speculation :atms
+```
+
+### §3.7 Level 6: Exchange (Inter-Stratum Adjunctions)
+
+```prologos
+;; Filtered nogood propagation IS an exchange:
+;; S0 (computation) discovers nogoods → S(-1) (retraction) prunes branches
+exchange S0 <-> S-neg1
+  :left  new-nogoods -> pruning-targets          ;; left: forward nogoods
+  :right pruned-worldviews -> freed-resources    ;; right: reclaim PU resources
+  :kind  kan                                     ;; right Kan: demand-filtered
+
+;; NAF exchange: S0 results → S1 negation check
+exchange S0 <-> S1
+  :left  partial-fixpoint -> naf-inputs          ;; left: S0 results feed NAF
+  :right naf-results -> s0-constraints           ;; right: NAF outcomes constrain S0
+  :kind  suspension-loop                         ;; S1 suspends until S0 quiesces
+```
+
+### §3.8 NTT ↔ Racket Correspondence Table (Expanded)
+
+| NTT Level | NTT Construct | Racket Implementation | File |
+|---|---|---|---|
+| **L0** | `lattice Worldview` | `worldview-merge`, `worldview-bot` | propagator.rkt |
+| **L0** | `lattice NogoodSet` | `nogood-merge` (= `set-union`) | propagator.rkt |
+| **L0** | `property Boolean` | SRE property declaration via Track 2G | sre-core.rkt |
+| **L2** | `propagator branch-creator` | `atms-amb-on-network` | relations.rkt |
+| **L2** | `propagator filtered-nogood-watcher` | `install-nogood-watcher` | propagator.rkt |
+| **L2** | `propagator contradiction-detector` | Extension of `net-cell-write` contradiction path | propagator.rkt |
+| **L2** | `propagator branch-pruner` | `pu-drop` | propagator.rkt |
+| **L2** | `propagator branch-committer` | `pu-commit` + `tms-commit` | propagator.rkt |
+| **L2** | `propagator goal-unify` | Cell-tree unification propagator | relations.rkt |
+| **L2** | `propagator goal-naf` | NAF propagator at S1 | relations.rkt |
+| **L2** | `propagator table-producer/consumer` | `install-table-producer/consumer` | tabling.rkt |
+| **L3** | `interface BranchPU` | PU struct with input/output cell lists | propagator.rkt |
+| **L3** | `interface SolverNet` | Solver network entry point | relations.rkt |
+| **L3** | `functor ClauseBranch` | `install-clause-propagators` per matching clause | relations.rkt |
+| **L3** | `functor GoalConjunction` | `install-conjunction` (simultaneous) | relations.rkt |
+| **L4** | `bridge WorldviewToType` | Worldview cell → type constraint filtering | typing-propagators.rkt |
+| **L4** | `bridge NogoodToWorldview` | `install-nogood-watcher` (filtered RKan) | propagator.rkt |
+| **L5** | `stratification SolverLoop` | BSP scheduler config + stratum assignment | propagator.rkt / solver.rkt |
+| **L5** | `:speculation :atms` on fiber | Worldview cell + TMS branching on S0 | propagator.rkt |
+| **L6** | `exchange S0 <-> S-neg1` | Nogood → pruning cycle at barrier | propagator.rkt |
+| **L6** | `exchange S0 <-> S1` | NAF suspension until S0 quiesces | relations.rkt |
+| — | `current-speculation-stack` (RETIRED) | Worldview cell read inside fire functions | propagator.rkt |
+| — | PU-per-branch | `make-branch-pu` (implements `BranchPU` interface) | propagator.rkt |
 
 ### §3.4 NTT ↔ Racket Correspondence Table
 
