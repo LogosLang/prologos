@@ -95,7 +95,7 @@ But this reads as a function call: take input, iterate clauses, return matches. 
 
 **Assessment**: `clause-match-bulk` is correctly a FUNCTION, not a propagator. It's called WITHIN a propagator's fire function — the propagator watches the arg cells, and when args are available, fires and calls the matching function internally. The matching results then drive PU creation (topology mutation at the topology stratum).
 
-**Resolution**: Clarify in the design: `clause-match-bulk` is a pure function called inside a goal-app propagator's fire function. It's NOT itself a propagator. This is analogous to how `numeric-join` is a pure function called inside Track 4B's typing propagator — the propagator watches cells, the function computes the result.
+**Resolution**: REVISED after review. `clause-match-bulk` SHOULD be a truly-parallel propagator — a **parallel-map propagator** as a first-class pattern. N clause inputs → N independent fire functions (one per clause, α-rename + unify) → M outputs to shared accumulator (set-union merge). All N fire in the same BSP superstep. This IS a polynomial functor: fan-out depends on data (clause count). The pattern generalizes to ANY "for each X, do Y independently" — pattern matching, trait instance lookup, module resolution. Build it here as reusable infrastructure; stop deferring parallel-map.
 
 ### M2: Phase 7 conjunction — CORRECTED but verify the correction
 
@@ -127,7 +127,7 @@ Phase 9 describes: "First multi-clause match detected → upgrade: create worldv
 
 But there's a subtlety: the transition only happens once (Tier 1 → 2 is irreversible). It's not a recurring non-monotone operation — it's a one-time structural upgrade. After the transition, everything is on-network.
 
-**Resolution**: Accept this as scaffolding — the tier transition is an imperative one-shot that creates the on-network infrastructure. Label it explicitly as "not on-network: one-time topology creation." Future work: if the network always starts with a worldview cell (Tier 2 from the start), the transition is unnecessary. The `:strategy :atms` configuration already does this.
+**Resolution**: REVISED after review. NOT scaffolding. The tier transition IS a topology stratum operation. When goal-app detects multi-clause match, it emits a topology request: "create worldview cell + nogood cell." The topology stratum executes it — same protocol as PAR Track 1 dynamic topology. CHAMP structural sharing means transition cost is O(cells added), not O(network size). Network-without-worldview → topology adds 2 cells → network-with-worldview. Clean, on-network, using existing infrastructure.
 
 ### M5: `atms-solve-all` — is answer enumeration on-network?
 
@@ -163,7 +163,7 @@ The two-tier model (Tier 1 = no ATMS, Tier 2 = full ATMS) means deterministic qu
 
 The question: is 19μs per query worth the architectural purity of "always have a worldview cell"?
 
-**Resolution**: This is a genuine trade-off. Tier 1 (no worldview cell) is a performance optimization that sacrifices architectural uniformity. Tier 2 (always worldview cell) is principled but adds ~19μs per deterministic query. The design should present this as a decision with data, not assume Tier 1 is correct. The `:strategy :atms` configuration already provides Tier 2 — making it the default and removing Tier 1 is architecturally cleaner.
+**Resolution**: REVISED after review. Two-tier IS the complete and correct design. `:auto` is the right default. Deterministic code should not pay overhead for infrastructure it doesn't use. "Complete" = handling both cases correctly and efficiently. Making everything `:atms` would be the lazy choice. The Tier 1→2 transition is a topology stratum operation (see M4 revision), not a code path branch — architecturally clean.
 
 ### P2: Completeness — does the design handle ALL goal types?
 
@@ -179,7 +179,7 @@ Phase 7 lists 5 goal types: app, unify, is, not, guard. Are there others?
 
 The design doesn't mention `cut`. The PUnify Part 3 document (§3.4) explicitly says "No `cut`" — it's deprecated under ATMS. But the code still has a `cut` case (line 674-676: returns current substitution).
 
-**Resolution**: Design should explicitly address `cut`: under `:strategy :atms` and `:strategy :auto`, `cut` is a no-op (ATMS handles pruning via nogoods, not control-flow cuts). Under `:strategy :depth-first`, `cut` preserves existing DFS semantics. Add a note to Phase 7.
+**Resolution**: REVISED after review. `cut` is not implemented even for DFS, and is out of scope for Track 2. Remove from consideration entirely.
 
 ### P3: Correct-by-Construction — is PU isolation guaranteed?
 
@@ -218,13 +218,13 @@ The design puts worldview cells on the outer network and computation in PUs. But
 | R5: atms-amb has 3 real callers, not 26 | R | Low | Correct scope note |
 | R6: Benchmark data confirms PU-per-branch viable | R | — | Capture data in design |
 | R7: Deep nesting is the hotspot to benchmark | R | Low | Add to Phase 11 |
-| M1: clause-match-bulk is a function, not a propagator | M | Medium | Clarify in design |
+| M1: clause-match-bulk → build parallel-map propagator pattern | M | **High** | New infrastructure: first-class parallel-map propagator. Polynomial functor. |
 | M2: GoalConjunction list is enumeration, not ordering | M | Low | Note in NTT model |
 | M3: branch-pruner should emit request, not directly drop | M | Medium | Align with PAR Track 1 topology protocol |
-| M4: Tier 1→2 transition is imperative one-shot | M | Low | Label as scaffolding |
+| M4: Tier 1→2 transition via topology stratum, not scaffolding | M | Medium | Topology request for worldview/nogood cell creation |
 | M5: Answer collection needs accumulator cell | M | **High** | Add accumulator to design |
 | M6: NAF completion signal = BSP S0→S1 barrier | M | Medium | Make explicit |
-| P1: Two-tier vs always-worldview — 19μs trade-off | P | Medium | Present as decision with data |
-| P2: `cut` goal type missing from Phase 7 | P | Low | Address explicitly |
+| P1: Two-tier IS complete and correct | P | — | Confirmed: `:auto` default, deterministic pays no overhead |
+| P2: `cut` out of scope | P | — | Not implemented, not in Track 2 |
 | P3: PU isolation = efficiency; TMS = correctness | P | Medium | Clarify both roles |
-| P4: ATMS struct is second source of truth | P | Medium | Label as scaffolding for Track 2 |
+| P4: ATMS struct second source of truth — dissolve into cells | P | **High** | Needs dedicated design conversation. Do NOT accept as scaffolding. |
