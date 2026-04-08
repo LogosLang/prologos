@@ -413,18 +413,47 @@ propagator per-nogood-watcher {ng : Nogood}                ;; (4.1) one per nogo
           [narrow [decision [car remaining]]
                   [exclude [member-of ng [car remaining]]]]))))
 
-;; Per-nogood commitment tracking via broadcast propagator:
-;; For nogoods of size 3+, decompose into broadcast over groups.
-;; Each group's commitment status tracked via component-indexed cell.
+;; Per-nogood commitment tracking: broadcast + component-indexing + emergent counting
+;; Cell value: { committed-count: Nat, groups: {G: Bool, ...} }
+;; Merge: per-position OR for group bools, max for count.
+;; Count EMERGES from the merge — no counting in fire functions.
+;; Contradiction: committed-count = |ng| (all members committed = full nogood realized)
+;; Narrowing trigger: committed-count = |ng| - 1
+
+cell commitment-{ng} : CommitmentStatus
+  :value   { committed-count : Nat, groups : (Hasheq Group Bool) }
+  :merge   (λ [old new]
+             ;; Merge group bools (OR: once committed, stays committed)
+             ;; Recount committed-count from merged groups
+             (let [merged-groups [hash-union (groups old) (groups new) #:combine or]]
+               { committed-count [count-true merged-groups]
+                 groups merged-groups }))
+  :contradicts? (λ [v] [= (committed-count v) [length ng]])
+
 propagator broadcast-commit-tracker {ng : Nogood}
   :reads  [decision-G : Cell (DecisionDomain G) for G in [groups-of ng]]
-  :writes [commitment-{ng} : Cell (Hasheq Group Bool)]
+  :writes [commitment-{ng} : Cell CommitmentStatus]
   :broadcast-profile
     :items    [groups-of ng]
-    :item-fn  (λ [G decisions] [cons G [singleton? [hash-ref decisions G]]])
-    :merge-fn hash-merge
+    :item-fn  (λ [G decisions]
+               ;; Check: is this group's decision a singleton containing the nogood member?
+               (let [d [hash-ref decisions G]]
+                 (when [and [singleton? d] [= [the-element d] [member-of ng G]]]
+                   { committed-count 1, groups { G : #t } })))
+    :merge-fn commitment-merge
   :component-paths [(commitment-{ng} . G) for G in [groups-of ng]]
   ;; ONE fire, reads all group decisions, writes component-indexed commitment status
+
+propagator nogood-narrower {ng : Nogood}
+  :reads  [commitment-{ng} : Cell CommitmentStatus]
+  :writes [decision-remaining : Cell (DecisionDomain G')]
+  ;; Threshold: fires when committed-count = |ng| - 1
+  ;; Finds the ONE uncommitted group, narrows its decision cell.
+  ;; Hash scan of size |ng| (2-3) — no filter/map/length chain.
+  (let [status [read commitment-{ng}]]
+    (when [= (committed-count status) [- [length ng] 1]]
+      (let [remaining [find-uncommitted (groups status)]]
+        [narrow [decision remaining] [exclude [member-of ng remaining]]])))
 
 propagator goal-unify
   :reads  [lhs : Cell TermValue, rhs : Cell TermValue]
@@ -859,25 +888,28 @@ Sections 1-4 are uncommented as phases complete. Section 5 is aspirational (Trac
 
 **What changes** (4.1: per-NOGOOD propagators, not per-decision watchers):
 
-1. **`propagator.rkt`**: `install-nogood-propagator`:
-   - `(install-nogood-propagator net nogood-set decision-cids)`
-   - Creates ONE propagator per NOGOOD (not per decision cell)
-   - Inputs: the decision cells of ALL groups mentioned in this nogood (fan-in = |nogood|, typically 2-3)
-   - Fire function: when all groups in the nogood except one are committed (their decision cell is a singleton containing the nogood's assumption), NARROW the remaining group's decision cell to exclude its member of the nogood
-   - This IS the right Kan extension: each nogood is its own information-flow unit. The propagator fires only when its specific nogood becomes relevant.
+1. **`propagator.rkt`**: Per-nogood infrastructure (three components per nogood):
+
+   **(a) Commitment cell** (one per nogood): Component-indexed cell tracking which groups' members are committed. Cell value: `{ committed-count: Nat, groups: {G: Bool, ...} }`. The merge function ORs per-group bools and recomputes count — the count EMERGES from the merge, no counting in fire functions. Contradiction when `committed-count = |ng|` (all members committed = full nogood realized).
+
+   **(b) Broadcast commit-tracker** (one broadcast propagator per nogood): Reads ALL group decision cells (fan-in = |ng|, typically 2-3). Processes all groups in ONE fire via broadcast pattern. For each group: checks if its decision cell is a singleton containing the nogood member. Writes component-indexed `{G: #t}` to the commitment cell. ONE propagator, ONE fire, ONE write.
+
+   **(c) Nogood narrower** (one threshold propagator per nogood): Reads the commitment cell. Fires when `committed-count = |ng| - 1` (all except one committed). Finds the uncommitted group (one hash scan of size |ng|), narrows its decision cell to exclude the nogood member. No filter/map/length chain — reads one cell, one hash scan.
+
+   Total per nogood: 1 commitment cell + 1 broadcast propagator + 1 threshold propagator. For 100 nogoods: 100 cells + 200 propagators. Each broadcast propagator has fan-in 2-3 (typical nogood size).
 
 2. **When nogoods are discovered**: A contradiction in a branch writes a new nogood to the shared nogood cell. A watching propagator reads the nogood cell and installs a new per-nogood propagator for the new nogood. This is topology creation at the topology stratum — same protocol as PAR Track 1.
 
 3. **Contradiction detection**: When a group-level decision cell narrows to ∅ (empty), it's contradicted. A per-decision contradiction propagator watches the decision cell and emits a topology request to drop ALL branch PUs that committed to alternatives in that group (M3: via topology request, not direct drop).
 
-**Cost analysis** (Pre-0 data, §0b):
-- Intersection check: 62ns per (10-element set ∩ 2-element nogood)
-- Per nogood discovery: O(decisions) intersection checks, each O(|nogood|)
-- Per affected decision: cell narrows, dependent propagators react
-- Per unaffected decision: nothing happens
-- Total: O(decisions × |nogood|) for filtering + O(affected_propagators) for reaction
+**Cost analysis** (Pre-0 data, §0b; corrected per 4.2):
+- Per nogood: 1 commitment cell (~270ns) + 1 broadcast propagator (~810ns) + 1 narrower (~810ns) = ~1.9μs install
+- Per broadcast fire: ONE fire processing |ng| groups (2-3 checks at ~62ns each) = ~186ns
+- Per narrowing fire: ONE hash scan of size |ng| = ~60ns
+- Total per new nogood discovery: ~2.1μs (install + first fire). Subsequent fires: ~250ns.
+- At 100 nogoods: ~210μs install, then propagation overhead proportional to affected nogoods only.
 
-**This IS the right Kan extension**: of all information in the nogood cell, forward to decision G only nogoods involving G's alternatives.
+**This IS the right Kan extension**: each nogood is its own information-flow unit (commitment cell + broadcast tracker + narrower). No scanning over all nogoods. No scanning over all decisions. Information flows from decision cells → per-nogood commitment → narrowing, filtered by the nogood's own group membership.
 
 **Test coverage**: Watcher narrows decision on relevant nogood, ignores irrelevant nogoods, contradiction detection (domain → ∅), multiple decisions with independent watchers.
 
@@ -916,7 +948,7 @@ The `atms` struct (7 fields) is dissolved entirely into cells on the propagator 
    - **Solver context**: a lightweight record holding cell-ids for the solver's cells (assumptions-cid, nogoods-cid, counter-cid, answer-accumulator-cid, plus a list of decision-cids). This is metadata about WHERE the cells are, not the cells' VALUES.
    - `atms-assume` → write to assumptions-cell + counter-cell. Create trivial decision cell `{h}`.
    - `atms-add-nogood` → write to nogood cell (set-union). Monotone.
-   - `atms-amb` → create N assumption writes + decision cell + pairwise nogood writes. Topology request for PU creation.
+   - `atms-amb` → create N assumption writes + decision cell + pairwise nogood writes via **broadcast propagator** over N(N-1)/2 pairs (§6b). Topology request for PU creation.
    - `atms-retract` → narrow decision cell to exclude assumption (SRE structural narrowing, §2.6c). The word "retract" is ALIASED to decision-cell narrowing.
    - `atms-consistent?` → propagator: AND-fan-in of per-decision non-empty checks.
    - `atms-read-cell` / `atms-write-cell` → RETIRED. Use `net-cell-read` / `net-cell-write`.
@@ -1025,15 +1057,16 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
 
    **(6.3) NAF inner-result cell scope**: The NAF propagator's inner-result cell MUST be on the NAF's own network scope (outer), NOT inside any sub-PU. Inner goal propagators write to this cell via cross-PU bridges (same pattern as the answer accumulator). If inner goals branch into sub-PUs, some may be dropped (contradicted). The inner-result cell on the outer network survives PU drops. Its value at S1 reflects whether any inner derivation survived — ⊥ = all sub-PUs dropped = inner goal genuinely failed.
 
-2. **Conjunction as simultaneous installation (order-independent)**:
+2. **Conjunction as broadcast (order-independent, §6b deployment)**:
    `solve-goals` (the recursive append-map) is replaced by `install-conjunction`:
-   - Takes a list of goals and a parent network/PU
-   - Installs ALL goal propagators simultaneously — no sequencing
+   - Takes a list of K goals and a parent network/PU
+   - `install-conjunction` IS a **broadcast propagator deployment** over the goals list: ONE broadcast propagator reads the shared variable cells and installs all K goal propagators in a single fire. The installation of each goal is independent (polynomial functor: fan-out = K goals).
    - Goal ordering within the clause body does NOT affect execution. `(A, B, C)` and `(C, A, B)` produce the same network topology and the same results
    - Execution order emerges from DATAFLOW: if goal A writes to cell `?x` and goal B reads `?x`, B fires after A — but this is a cell dependency discovered by the propagator network, not an ordering imposed by installation
    - Independent goals (no shared variables) fire concurrently in the same BSP superstep
    - This IS the true-parallel order-independent search: the clause-body ordering is irrelevant; the dataflow graph determines the execution schedule
-   - **M2**: The goals list passed to `install-conjunction` is an ENUMERATION (which goals to install), not an ORDERING (what sequence to execute). Installation order is irrelevant.
+   - **M2**: The goals list is an ENUMERATION (which goals to install), not an ORDERING (what sequence to execute).
+   - **NAF inner goals**: When NAF's inner goal branches into sub-PUs, the sub-PU conjunction is a nested broadcast deployment — the same pattern applied recursively.
 
 3. **Answer accumulator cell (M5)**: Each query has an answer accumulator cell with set-union merge. Branch-committer propagators (Phase 2) write results to the accumulator. After quiescence + S(-1) pruning + commit, the accumulator holds all answers. No scanning, no "collect results from surviving branches" — answers arrive via cell writes.
 
@@ -1061,6 +1094,7 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
    - Wraps Phase 6's clause installation with an additional write: answers are written to the table accumulator cell via `table-add`
    - The table cell uses `all-mode-merge` (set-union) — answers only accumulate
    - Producer propagators fire and write answers; the cell monotonically grows
+   - **§6b broadcast deployment**: The producer's clause body goals are installed via `install-conjunction` (Phase 7), which IS a broadcast over the goal list. The broadcast pattern cascades through tabling.
 
 3. **`tabling.rkt`**: `install-table-consumer`:
    - Installs a propagator that reads from the table accumulator cell
