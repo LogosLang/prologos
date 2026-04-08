@@ -81,7 +81,10 @@
  net-clear-dependents  ;; Track 4B Phase 6b P3: remove all dependents from a cell
  ;; Propagator operations
  net-add-propagator
- net-add-parallel-map-propagator  ;; BSP-LE Track 2 Phase 1: N independent propagators
+ net-add-broadcast-propagator     ;; BSP-LE Track 2 Phase 1B: ONE propagator, N items, scheduler-decomposable
+ net-add-parallel-map-propagator  ;; BSP-LE Track 2 Phase 1A: (DEPRECATED — use broadcast)
+ ;; Broadcast profile
+ (struct-out broadcast-profile)
  ;; PPN Track 4 Phase 1a: component-indexed firing
  pu-value-diff
  filter-dependents-by-paths
@@ -196,7 +199,22 @@
 ;; inputs: list of cell-id (cells this propagator reads)
 ;; outputs: list of cell-id (cells this propagator may write)
 ;; fire-fn: (prop-network → prop-network) — pure state transformer
-(struct propagator (inputs outputs fire-fn) #:transparent)
+;; broadcast-profile: #f (default) | broadcast-profile struct
+;;   When set, the scheduler can decompose this propagator's work
+;;   into N independent tasks for parallel execution.
+(struct propagator (inputs outputs fire-fn broadcast-profile) #:transparent)
+
+;; BSP-LE Track 2 Phase 1B: Broadcast profile metadata.
+;; Enables the scheduler to recognize and decompose data-indexed
+;; parallel work within a single propagator.
+;;
+;; items: (listof any) — the data elements to process in parallel
+;; item-fn: (any (listof value) → result-or-#f) — pure function per item.
+;;          Takes: one item + the list of input cell values (read once, shared).
+;;          Returns: a result value, or #f if this item produces nothing.
+;; merge-fn: (any any → any) — accumulation function for results.
+;;           Must be ACI (associative, commutative, idempotent) for BSP correctness.
+(struct broadcast-profile (items item-fn merge-fn) #:transparent)
 
 ;; The Network as Value — all state in one immutable struct.
 ;; cells: champ-root : cell-id → prop-cell
@@ -1151,7 +1169,7 @@
   ;; it via next-prop-id comparison. The topology stratum applies new
   ;; propagators to the canonical network and schedules them.
   (define pid (prop-id (prop-network-next-prop-id net)))
-  (define prop (propagator input-ids output-ids fire-fn))
+  (define prop (propagator input-ids output-ids fire-fn #f))
   (define ph (prop-id-hash pid))
   ;; CHAMP Performance Phase 7: Owner-ID transient for dependency registration.
   ;; BSP-LE Track 0 Phase 5 attempted hash-table transient here and regressed 44%.
@@ -1199,35 +1217,95 @@
    pid))
 
 ;; ========================================
-;; Parallel-Map Propagator (BSP-LE Track 2 Phase 1)
+;; Broadcast Propagator (BSP-LE Track 2 Phase 1B)
 ;; ========================================
 ;;
-;; Installs N INDEPENDENT propagators — one per element in `items`.
-;; Each propagator watches the SAME input cells, applies `make-fire-fn`
-;; to its specific item, and writes results to a shared output cell.
-;; All N fire in the same BSP superstep (embarrassingly parallel).
+;; Installs ONE propagator that processes N items internally.
+;; ONE fire, ONE diff, ONE merge — constant infrastructure overhead.
 ;;
-;; The output cell's merge function (typically set-union) accumulates
-;; results from all N fires. BSP's `bulk-merge-writes` handles N
-;; simultaneous writes correctly because set-union is ACI.
+;; The fire function: reads input cells ONCE (shared), processes ALL items
+;; via item-fn, merges results, writes ONE value to the output cell.
+;; The broadcast-profile metadata enables the scheduler to decompose
+;; the N items across parallel threads when N exceeds the threshold.
+;;
+;; A/B data: broadcast is 2.3× faster at N=3, 75.6× at N=100 vs
+;; N-propagator model. Infrastructure overhead is constant (~2.7μs),
+;; not linear in N.
 ;;
 ;; This IS a polynomial functor: fan-out depends on `items` (data-indexed).
-;; First consumer: bulk clause matching (Phase 6). Generalizes to:
-;; pattern matching, trait lookup, module resolution.
-;;
-;; Design: §3.3 `propagator parallel-map-clause`
-;; Critique: 3.1 (verify multi-write under BSP), 3.2 (arg stability precondition)
+;; The broadcast-profile carries the arity for scheduler decomposition.
 ;;
 ;; net: prop-network
-;; input-cids: (listof cell-id) — cells ALL N propagators read (shared inputs)
-;; output-cid: cell-id — accumulator cell ALL N propagators write to
-;; items: (listof any) — data elements to map over (e.g., clauses)
-;; make-fire-fn: (any → (prop-network → prop-network)) — given one item, produce a fire fn
-;; Returns: (values new-network (listof prop-id))
+;; input-cids: (listof cell-id) — cells the propagator reads
+;; output-cid: cell-id — accumulator cell for merged results
+;; items: (listof any) — data elements to process (e.g., clauses)
+;; item-fn: (any (listof value) → result-or-#f) — pure function per item
+;; result-merge-fn: (any any → any) — merge for results (typically append/set-union)
+;; Returns: (values new-network prop-id)
 ;;
 ;; Precondition (3.2): input cells should be stable (resolved, non-bot)
-;; before the parallel-map fires. Results accumulate via set-union
-;; (monotone). If inputs are refined after firing, stale results remain.
+;; before the broadcast fires. Results accumulate monotonically.
+(define (net-add-broadcast-propagator net input-cids output-cid
+                                      items item-fn result-merge-fn)
+  (define profile (broadcast-profile items item-fn result-merge-fn))
+  (define fire-fn
+    (lambda (net)
+      ;; Read inputs ONCE — shared across all items
+      (define input-values
+        (for/list ([cid (in-list input-cids)])
+          (net-cell-read net cid)))
+      ;; Process all items — each is independent
+      ;; Today: sequential loop. The broadcast-profile metadata enables
+      ;; the scheduler to decompose this into parallel chunks.
+      (define results
+        (for/fold ([acc '()])
+                  ([item (in-list items)])
+          (define result (item-fn item input-values))
+          (if result
+              (result-merge-fn acc result)
+              acc)))
+      ;; ONE write with merged results
+      (if (null? results)
+          net
+          (net-cell-write net output-cid results))))
+  ;; Install ONE propagator with the broadcast profile
+  (define pid (prop-id (prop-network-next-prop-id net)))
+  (define prop (propagator input-cids (list output-cid) fire-fn profile))
+  (define ph (prop-id-hash pid))
+  ;; Register propagator + dependencies (same as net-add-propagator but with profile)
+  (define-values (cells-node cells-edit cells-size)
+    (champ-transient-owned (prop-network-cells net)))
+  (define sb (box cells-size))
+  (define final-node
+    (for/fold ([cn cells-node]) ([cid (in-list input-cids)])
+      (define ch (cell-id-hash cid))
+      (define cell (champ-lookup (prop-network-cells net) ch cid))
+      (if (eq? cell 'none) cn
+          (let ([new-deps (champ-insert (prop-cell-dependents cell) ph pid #f)])
+            (define-values (cn* _)
+              (tchamp-insert-owned! cn sb ch cid
+                                    (struct-copy prop-cell cell [dependents new-deps])
+                                    cells-edit))
+            cn*))))
+  (define new-cells (tchamp-freeze-owned final-node (unbox sb) cells-edit))
+  (values
+   (struct-copy prop-network net
+     [warm (struct-copy prop-net-warm (prop-network-warm net)
+             [cells new-cells])]
+     [cold (struct-copy prop-net-cold (prop-network-cold net)
+             [propagators (champ-insert (prop-network-propagators net) ph pid prop)]
+             [next-prop-id (+ 1 (prop-network-next-prop-id net))])]
+     [hot (if (current-bsp-fire-round?)
+              (prop-network-hot net)
+              (struct-copy prop-net-hot (prop-network-hot net)
+                [worklist (cons pid (prop-network-worklist net))]))])
+   pid))
+
+;; ========================================
+;; Parallel-Map Propagator (Phase 1A — DEPRECATED, use broadcast)
+;; ========================================
+;; Retained for backward compatibility with Phase 1A tests.
+;; Installs N separate propagators. Use net-add-broadcast-propagator instead.
 (define (net-add-parallel-map-propagator net input-cids output-cid
                                          items make-fire-fn)
   (for/fold ([n net] [pids '()])

@@ -299,6 +299,103 @@
 
 
 ;; ============================================================
+;; Broadcast Propagator Tests (Phase 1Bii)
+;; ============================================================
+
+(define broadcast-tests
+  (test-suite "BSP-LE Track 2 Phase 1B: Broadcast propagator"
+
+    (test-case "broadcast: 3 items, one fire, one write"
+      (define net0 (make-prop-network))
+      (define-values (net1 input-cid)
+        (net-new-cell net0 'ready (lambda (a b) b)))
+      (define (set-union-merge old new)
+        (cond [(null? old) new] [(null? new) old] [else (append old new)]))
+      (define-values (net2 output-cid)
+        (net-new-cell net1 '() set-union-merge))
+      (define items '("alpha" "beta" "gamma"))
+      (define (item-fn item _input-values) (list item))
+      (define-values (net3 pid)
+        (net-add-broadcast-propagator net2 (list input-cid) output-cid
+                                      items item-fn append))
+      ;; ONE propagator installed (not 3)
+      (check-true (prop-id? pid))
+      (define net4 (run-to-quiescence net3))
+      (define result (net-cell-read net4 output-cid))
+      (check-equal? (length result) 3)
+      (check-not-false (member "alpha" result))
+      (check-not-false (member "beta" result))
+      (check-not-false (member "gamma" result)))
+
+    (test-case "broadcast: 10 items under BSP"
+      (define net0 (make-prop-network))
+      (define-values (net1 input-cid)
+        (net-new-cell net0 'ready (lambda (a b) b)))
+      (define (set-union-merge old new)
+        (cond [(null? old) new] [(null? new) old] [else (append old new)]))
+      (define-values (net2 output-cid)
+        (net-new-cell net1 '() set-union-merge))
+      (define items (for/list ([i (in-range 10)]) i))
+      (define (item-fn item _input-values) (list item))
+      (define-values (net3 _pid)
+        (net-add-broadcast-propagator net2 (list input-cid) output-cid
+                                      items item-fn append))
+      (define net4 (run-to-quiescence-bsp net3))
+      (define result (net-cell-read net4 output-cid))
+      (check-equal? (length result) 10)
+      (for ([i (in-list items)])
+        (check-not-false (member i result))))
+
+    (test-case "broadcast: 0 items = no-op fire"
+      (define net0 (make-prop-network))
+      (define-values (net1 input-cid)
+        (net-new-cell net0 'ready (lambda (a b) b)))
+      (define-values (net2 output-cid)
+        (net-new-cell net1 '() append))
+      (define-values (net3 _pid)
+        (net-add-broadcast-propagator net2 (list input-cid) output-cid
+                                      '()
+                                      (lambda (item vals) item)
+                                      append))
+      (define net4 (run-to-quiescence net3))
+      (check-equal? (net-cell-read net4 output-cid) '()))
+
+    (test-case "broadcast: item-fn can return #f to skip"
+      (define net0 (make-prop-network))
+      (define-values (net1 input-cid)
+        (net-new-cell net0 'ready (lambda (a b) b)))
+      (define (set-union-merge old new)
+        (cond [(null? old) new] [(null? new) old] [else (append old new)]))
+      (define-values (net2 output-cid)
+        (net-new-cell net1 '() set-union-merge))
+      ;; Items 1-5, but item-fn returns #f for even numbers
+      (define items '(1 2 3 4 5))
+      (define (item-fn item _input-values)
+        (if (odd? item) (list item) #f))
+      (define-values (net3 _pid)
+        (net-add-broadcast-propagator net2 (list input-cid) output-cid
+                                      items item-fn append))
+      (define net4 (run-to-quiescence net3))
+      (define result (net-cell-read net4 output-cid))
+      ;; Only odd items: 1, 3, 5
+      (check-equal? (length result) 3)
+      (check-not-false (member 1 result))
+      (check-not-false (member 3 result))
+      (check-not-false (member 5 result)))
+
+    (test-case "broadcast: profile struct is well-formed"
+      ;; Verify broadcast-profile struct works correctly
+      (define items '(a b c))
+      (define my-item-fn (lambda (item vals) item))
+      (define profile (broadcast-profile items my-item-fn append))
+      (check-true (broadcast-profile? profile))
+      (check-equal? (broadcast-profile-items profile) '(a b c))
+      (check-equal? (broadcast-profile-item-fn profile) my-item-fn)
+      (check-equal? (broadcast-profile-merge-fn profile) append))
+    ))
+
+
+;; ============================================================
 ;; Run all tests
 ;; ============================================================
 
@@ -306,3 +403,4 @@
 (run-tests nogood-tests)
 (run-tests accumulator-tests)
 (run-tests parallel-map-tests)
+(run-tests broadcast-tests)
