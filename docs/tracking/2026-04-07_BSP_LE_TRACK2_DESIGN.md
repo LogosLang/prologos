@@ -3,7 +3,9 @@
 **Date**: 2026-04-07
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: Cell-Based TMS (folding Track 1.5) + ATMS Solver + Non-Recursive Tabling
-**Status**: D.2 — post self-critique (P/R/M three-lens), all 17 findings incorporated
+**Status**: D.3 — post external critique (16 findings incorporated)
+**Self-critique**: [P/R/M Analysis](2026-04-07_BSP_LE_TRACK2_SELF_CRITIQUE.md) (17 findings, D.2)
+**External critique**: [Architect Review](2026-04-08_BSP_LE_TRACK2_EXTERNAL_CRITIQUE.md) (16 findings, D.3)
 **Stage 1/2**: [Research + Audit](../research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md)
 **Prior art**: [Logic Engine Design](2026-02-24_LOGIC_ENGINE_DESIGN.org) §4-7, [PUnify Part 3](2026-03-19_PUNIFY_PART3_ATMS_SOLVER_ARCHITECTURE.md), [Cell-Based TMS Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md)
 
@@ -16,13 +18,13 @@
 | 0 | Pre-0: benchmarks + acceptance file | ✅ | Baselines captured (0a-0c). Acceptance file (0d) at implementation start. |
 | 1 | Decision cell infrastructure + parallel-map propagator | ⬜ | Decision domain (SRE structural), nogood cell, assumptions cell, counter cell, parallel-map pattern |
 | 2 | PU-per-branch lifecycle | ⬜ | Create from parent, commit via topology request, drop via topology request |
-| 3 | Filtered nogood watcher (RKan) | ⬜ | Per-DECISION intersection-filtered bridge. Contradiction → topology drop request. |
+| 3 | Per-nogood propagators (RKan) | ⬜ | (4.1) Per-NOGOOD propagator, fan-in=|ng|. Contradiction → topology drop request. |
 | 4 | Speculation migration | ⬜ | 6 files (R1): propagator.rkt, elab-speculation-bridge, typing-propagators, metavar-store, cell-ops, test-tms-cell |
 | 5 | ATMS struct dissolution | ⬜ | All 7 fields → cells. Struct REMOVED. atms.rkt becomes query function library. (P4) |
 | 6 | Clause-as-assumption in PUs | ⬜ | Parallel-map clause matching (M1) + PU per surviving clause |
 | 7 | Goal-as-propagator dispatch | ⬜ | 5 goal types (no cut — P2). NAF at S1 via BSP barrier (M6). Answer accumulator (M5). |
 | 8 | Producer/consumer tabling | ⬜ | Table registry check in goal dispatcher. Non-recursive completion. |
-| 9 | Two-tier activation | ⬜ | Tier 1→2 via topology stratum (M4). `:auto` default (P1). |
+| 9 | Two-tier activation + parameter removal | ⬜ | 9a: Tier 1→2 via topology stratum (M4). 9b: REMOVE `current-speculation-stack` (6.1). |
 | 10 | Solver config wiring | ⬜ | `:strategy`, `:execution`, `:tabling` operational |
 | 11 | Parity validation | ⬜ | DFS ↔ propagator-native result equivalence. Deep nesting hotspot (R7). |
 | T | Dedicated test files | ⬜ | Per-phase |
@@ -117,6 +119,12 @@ Seven lattices participate in the solver architecture. Each is classified as VAL
 
 #### §2.5a Key Architectural Finding: Decisions Are Primary, Worldview Is Derived
 
+**(1.3) Two-level decision structure:**
+- **Group-level decision cell**: ONE per `atms-amb` call, on the OUTER network. Tracks which alternatives remain viable across all branches. Shared. Narrows as nogoods eliminate alternatives.
+- **Branch PU**: Each branch reads its group's decision cell but does NOT have its own "decision cell." A branch has a committed assumption that is either in the group's domain (alive) or not (pruned via narrowing). The branch PU is alive iff its assumption is still in the group-level cell's domain.
+
+Per-nogood propagators (4.1) narrow the GROUP-level cell. Contradiction detection watches the GROUP-level cell. Branch PUs react to narrowing of the group cell they participate in.
+
 The SRE analysis reveals that **decision cells are the primary structural construct**. The worldview is a derived aggregate — the union of all decision singletons. This reframes the architecture:
 
 - Each `atms-amb` creates a **decision cell** (SRE structural domain, alternatives = constructors)
@@ -170,9 +178,9 @@ Assumptions ──(accumulate)──→ Worldview ←──(aggregate)── Dec
 | WorldviewToType | Worldview | Type lattice | Assumptions constrain type visibility | Cross-system |
 | WorldviewToTerm | Worldview | Term lattice | Assumptions constrain term values | Cross-system |
 
-The critical bridge is **Narrow (Nogoods → Decisions)**: nogoods flow to decision cells, not to worldview cells. A nogood involving assumption h from group G eliminates h from G's decision domain. The filtered watcher pattern (right Kan extension) applies per-decision: each decision cell has one watcher that fires only on nogoods involving its alternatives.
+The critical bridge is **Narrow (Nogoods → Decisions)**: nogoods flow to decision cells, not to worldview cells. (4.1) Each NOGOOD gets its own propagator — one per nogood, with fan-in = |nogood| (typically 2-3 cells). The propagator reads the decision cells of ALL groups mentioned in the nogood. When all assumptions except one are committed (their group's decision cell is a singleton), it narrows the remaining group's decision cell to exclude that assumption.
 
-This is more precise than the D.1 design's nogood→worldview bridge. Information flows to where narrowing happens (decision cells), not to the derived aggregate (worldview).
+This is per-NOGOOD, not per-decision (4.1 correction from external critique). Each nogood is its own information-flow unit. Cost per new nogood: O(|nogood|) propagator installation + O(1) when it fires. Scale: O(nogoods) propagators total, each with fan-in 2-3. At 10000 nogoods: 10000 propagators with fan-in 2-3 = 20000-30000 dependency edges. (4.2: corrected from O(decisions × |nogood|) to O(|nogood|) per nogood.)
 
 ---
 
@@ -188,7 +196,7 @@ The ATMS struct (`atms.rkt`, 7 fields) dissolves entirely into cells on the prop
 | `assumptions` | Assumptions accumulator cell | P(Assumption), ⊆ | set-union | Monotone: assumptions only added |
 | `nogoods` | Nogood cell (already designed §2.2) | P(P(AssumptionId)), ⊆ | set-union | Monotone: nogoods only grow |
 | `tms-cells` | RETIRED (Phase 5) | — | — | Cell storage moves to prop-network |
-| `next-assumption` | Counter cell | Nat, ≤ | max | Monotone: counter only grows |
+| `next-assumption` | Counter cell | Nat, ≤ | max | Monotone. (2.3) Written ONLY at topology stratum (sequential) — prevents concurrent ID collision. |
 | `believed` | **ELIMINATED** | — | — | Worldview emerges from decision cells — no separate representation |
 | `amb-groups` | Decision cells (one per amb, §2.5a) | P(Alternatives), ⊇ | set-intersection | Structural lattice, SRE-registered |
 
@@ -246,12 +254,15 @@ For each violated nogood S_i:
   decision-cell-i : DecisionDomain = alternatives(S_i)
   ;; "choose which assumption to retract from this nogood"
 
-Cost accumulator:
-  total-retractions : TropicalNat
-  merge = min  (tropical: minimize cost)
-  Each committed decision contributes +1 to the sum
+Cost accumulator (5.2: deduplicates shared retractions):
+  retracted-assumptions : Cell (Set AssumptionId)
+  merge = set-union  (unique assumptions retracted)
+  Cost = cardinality of the set (not sum of per-nogood counts)
   
-  The minimum-cost worldview across all decision combinations
+  If nogood-1 chooses h2 and nogood-2 also chooses h2,
+  the set contains h2 ONCE → cost = 1 (correct).
+  
+  The minimum-cost worldview (tropical min over all combinations)
   = the minimum hitting set
 ```
 
@@ -260,7 +271,7 @@ The tropical semiring `(Nat, min, +, ∞, 0)`:
 - `+` accumulates retraction costs
 - Each decision cell contributes its choice's cost to the total
 
-This is self-referential: the ATMS solver uses its own decision-cell + PU-per-branch + nogood-narrowing infrastructure to compute its own diagnoses. The "greedy algorithm" dissolves into lattice operations. The computation is parallel by construction (CALM: monotone cost accumulation is coordination-free).
+This uses the same solver infrastructure (same code, same functions) but on a FRESH, SEPARATE propagator network (5.1). The diagnostic solver does NOT run on the outer solver's network — that would cause diagnostic decision cells to interact with outer nogood watchers. The set of violated nogoods is extracted as data, a fresh solver context is created, and the diagnostic CSP is solved on the fresh network. The "self-referential" nature is in the CODE (same functions), not the NETWORK (same cells). The "greedy algorithm" dissolves into lattice operations. The computation is parallel by construction (CALM: monotone cost accumulation is coordination-free).
 
 For our typically small nogoods (2-3 assumptions), this is a near-2-SAT problem — propagation solves it in very few rounds.
 
@@ -296,21 +307,24 @@ lattice NogoodSet
   :kind  :value
 
 ;; THE PRIMARY STRUCTURAL LATTICE: Decision domain per amb group
-;; Dual powerset — alternatives narrow monotonically
+;; Follows constraint-cell.rkt convention (1.1): powerset under intersection,
+;; bot = unconstrained, top = empty = contradiction.
+;; Compatible with bulk-merge-writes — merge is intersection (narrowing).
 lattice DecisionDomain {G : AmbGroup}
   :type  (Set AssumptionId)              ;; subset of G's alternatives
-  :bot   [alternatives G]               ;; all viable (least info)
-  :top   (set-empty)                    ;; contradicted (no alternatives left)
-  :meet  set-intersection               ;; combine restrictions
-  :join  set-union                      ;; relax restrictions
+  :bot   [alternatives G]               ;; all viable (unconstrained — constraint-cell bot)
+  :top   (set-empty)                    ;; contradicted (empty — constraint-cell top)
+  :meet  set-intersection               ;; narrowing (= constraint-cell merge)
+  :join  set-union                      ;; relaxing
   :properties [:boolean :distributive :complemented]
   :kind  :structural                    ;; SRE: alternatives = constructors
   :lattice :structural                  ;; SRE form registry applies
+  :convention :constraint-cell           ;; (1.1) explicitly uses constraint-cell.rkt pattern
 
 impl Lattice (DecisionDomain G)
-  merge [a b] := [set-intersection a b] ;; narrowing: more restrictions = more info
-  bot?  [d]   := [= d [alternatives G]]
-  top?  [d]   := [set-empty? d]         ;; contradiction
+  merge [a b] := [set-intersection a b] ;; constraint-cell merge: intersection = narrowing
+  bot?  [d]   := [= d [alternatives G]] ;; unconstrained = least info
+  top?  [d]   := [set-empty? d]         ;; contradiction = over-constrained
 ```
 
 ### §3.2 Level 0: Properties and Lattice Laws
@@ -375,10 +389,21 @@ propagator parallel-map-clause {ci : ClauseInfo}          ;; M1: one per clause
       (when bindings
         [write match-results [set [pair ci bindings]]])))
 
-propagator consistency-fan-in                              ;; AND of per-decision viability
-  :reads  [decision-G : Cell (DecisionDomain G) ...]      ;; all decision cells
-  :writes [consistent : Cell Bool]
-  [write consistent [all? [fn [d] [not [empty? d]]] [map read decisions]]]
+;; (1.2) NO global consistency-fan-in. Consistency = absence of per-decision
+;; contradiction. Each decision cell has a contradiction detector (Phase 3)
+;; that fires when domain → ∅. Global consistency EMERGES from the absence
+;; of any contradiction — no aggregation step, no centralized worldview.
+
+propagator per-nogood-watcher {ng : Nogood}                ;; (4.1) one per nogood
+  :reads  [decision-G : Cell (DecisionDomain G)            ;; for each group G in ng
+           for G in [groups-of ng]]
+  :writes [decision-remaining : Cell (DecisionDomain G')]  ;; the last un-narrowed group
+  ;; Fires when all groups in the nogood except one are committed (singletons).
+  ;; Narrows the remaining group to exclude its member of the nogood.
+  (let [committed [filter singleton? [map read [groups-of ng]]]]
+    (when [= [length committed] [- [length ng] 1]]
+      (let [remaining-group [the-uncommitted-group ng committed]]
+        [narrow [decision remaining-group] [exclude [member-of ng remaining-group]]])))
 
 propagator goal-unify
   :reads  [lhs : Cell TermValue, rhs : Cell TermValue]
@@ -511,7 +536,7 @@ stratification SolverLoop
     :mode monotone
     :speculation :atms                   ;; TMS-based branching enabled
     :branch-on [multi-clause-match]      ;; amb trigger
-    :bridges [WorldviewToType WorldviewToTerm NogoodToWorldview]
+    :bridges [WorldviewToType WorldviewToTerm NogoodToDecision]
     :networks [solver-net]
 
   :fiber S1
@@ -519,8 +544,11 @@ stratification SolverLoop
     :scheduler :gauss-seidel             ;; NAF needs sequential evaluation
     ;; goal-naf fires here: after S0 quiesces, check if inner goals succeeded
 
-  :barrier S0 -> S-neg1
-    :commit prune-contradicted-branches  ;; drop PUs with contradicted worldviews
+  ;; (6.5) Using exchange model (bidirectional) instead of barrier (unidirectional).
+  ;; The fixpoint cycle is: S0 → S(-1) → S0 (re-enter). :fixpoint :lfp implies this.
+  :exchange S0 <-> S-neg1
+    :left  new-nogoods -> pruning-targets
+    :right pruned-decisions -> re-fire-surviving-propagators
 
   :where [WellFounded SolverLoop]
 
@@ -563,7 +591,7 @@ exchange S0 <-> S1
 | **L0** | `lattice NogoodSet` | `nogood-merge` (= `set-union`) | propagator.rkt |
 | **L0** | `property Boolean` | SRE property declaration via Track 2G | sre-core.rkt |
 | **L2** | `propagator branch-creator` | `atms-amb-on-network` | relations.rkt |
-| **L2** | `propagator filtered-nogood-watcher` | `install-nogood-watcher` | propagator.rkt |
+| **L2** | `propagator per-nogood-watcher` | `install-nogood-propagator` (one per nogood, fan-in = |ng|) | propagator.rkt |
 | **L2** | `propagator contradiction-detector` | Extension of `net-cell-write` contradiction path | propagator.rkt |
 | **L2** | `propagator branch-pruner` | `pu-drop` | propagator.rkt |
 | **L2** | `propagator branch-committer` | `pu-commit` + `tms-commit` | propagator.rkt |
@@ -583,25 +611,7 @@ exchange S0 <-> S1
 | — | `current-speculation-stack` (RETIRED) | Worldview cell read inside fire functions | propagator.rkt |
 | — | PU-per-branch | `make-branch-pu` (implements `BranchPU` interface) | propagator.rkt |
 
-### §3.4 NTT ↔ Racket Correspondence Table
-
-| NTT Construct | Racket Implementation | File |
-|---|---|---|
-| `lattice Worldview` | `worldview-merge`, `worldview-bot`, `worldview-contradicts?` | propagator.rkt (new) |
-| `lattice NogoodSet` | `nogood-merge` (= `set-union`) | propagator.rkt (new) |
-| `cell worldview-B` | `net-new-cell net (seteq) worldview-merge` | propagator.rkt |
-| `cell nogoods` | `net-new-cell net (seteq) nogood-merge` | propagator.rkt |
-| `cell table-answers-P` | `table-register ts name 'all` | tabling.rkt (existing) |
-| `propagator branch-creator` | `atms-amb-on-network` (new) | relations.rkt or atms.rkt |
-| `propagator filtered-nogood-watcher` | `install-nogood-watcher net nogoods-cid wv-cid assumptions` | propagator.rkt (new) |
-| `propagator contradiction-detector` | Extension of existing `net-cell-write` contradiction path | propagator.rkt |
-| `propagator branch-pruner` | `pu-drop` (new) | propagator.rkt |
-| `propagator branch-committer` | `pu-commit` / `tms-commit` integration | propagator.rkt |
-| `propagator goal-app` | `install-goal-propagator` case `:app` | relations.rkt (new) |
-| `propagator table-producer` | `install-table-producer` | relations.rkt / tabling.rkt |
-| `propagator table-consumer` | `install-table-consumer` | relations.rkt / tabling.rkt |
-| `current-speculation-stack` (RETIRED) | Worldview cell read inside fire functions | propagator.rkt |
-| PU-per-branch | `make-branch-pu parent-net worldview-cid` (new) | propagator.rkt |
+*(6.2: D.1 correspondence table removed. See §3.8 for the expanded D.2+ version.)*
 
 ---
 
@@ -806,20 +816,20 @@ Sections 1-4 are uncommented as phases complete. Section 5 is aspirational (Trac
 
 **Test coverage**: PU creation from parent, cell visibility (parent cells readable from branch), branch-local writes invisible to parent, pu-drop (branch garbage-collected), pu-commit (branch values promoted).
 
-### Phase 3: Filtered Nogood Watcher (Right Kan Extension)
+### Phase 3: Per-Nogood Propagators (Right Kan Extension)
 
-**What changes**:
+**What changes** (4.1: per-NOGOOD propagators, not per-decision watchers):
 
-1. **`propagator.rkt`**: `install-nogood-decision-watcher`:
-   - `(install-nogood-decision-watcher net nogoods-cid decision-cid group-alternatives)`
-   - Creates one propagator **per decision cell** that watches the nogood cell
-   - Fire function: read nogoods, filter by intersection with `group-alternatives`. For each matching nogood: if the OTHER assumptions in the nogood are committed (their decision cells are singletons), NARROW this decision cell to exclude the group's assumption from the nogood.
-   - Nogoods narrow DECISIONS, not worldviews (§2.5c). Information flows to where narrowing happens.
-   - Component-path: watches `nogoods-cid`
+1. **`propagator.rkt`**: `install-nogood-propagator`:
+   - `(install-nogood-propagator net nogood-set decision-cids)`
+   - Creates ONE propagator per NOGOOD (not per decision cell)
+   - Inputs: the decision cells of ALL groups mentioned in this nogood (fan-in = |nogood|, typically 2-3)
+   - Fire function: when all groups in the nogood except one are committed (their decision cell is a singleton containing the nogood's assumption), NARROW the remaining group's decision cell to exclude its member of the nogood
+   - This IS the right Kan extension: each nogood is its own information-flow unit. The propagator fires only when its specific nogood becomes relevant.
 
-2. **Integration with PU lifecycle**: When a branch PU is created (Phase 2), `install-nogood-decision-watcher` is called to bridge the shared nogood cell to the branch's decision cell. When the branch is dropped, the watcher propagator is dropped with the PU (structural GC).
+2. **When nogoods are discovered**: A contradiction in a branch writes a new nogood to the shared nogood cell. A watching propagator reads the nogood cell and installs a new per-nogood propagator for the new nogood. This is topology creation at the topology stratum — same protocol as PAR Track 1.
 
-3. **Contradiction detection**: When a decision cell narrows to ∅ (empty), it's contradicted. A per-decision contradiction propagator watches the decision cell and emits a topology request to drop the branch PU (M3: via topology request, not direct drop).
+3. **Contradiction detection**: When a group-level decision cell narrows to ∅ (empty), it's contradicted. A per-decision contradiction propagator watches the decision cell and emits a topology request to drop ALL branch PUs that committed to alternatives in that group (M3: via topology request, not direct drop).
 
 **Cost analysis** (Pre-0 data, §0b):
 - Intersection check: 62ns per (10-element set ∩ 2-element nogood)
@@ -852,7 +862,8 @@ Sections 1-4 are uncommented as phases complete. Section 5 is aspirational (Trac
 
 **Migration strategy**: Each file gets an optional decision-cell context. When present, derive TMS stack from decision cells. When absent, fall back to `(current-speculation-stack)`. Incremental migration — files migrate one at a time, suite stays green throughout.
 
-**`current-speculation-stack` is NOT removed in this phase** — it remains as Tier 1 fallback. Phase 9 (two-tier activation) establishes decision cells as the mechanism. The parameter is removed in a cleanup sub-phase after all consumers are migrated.
+**`current-speculation-stack` dual-path window** (6.1: compressed per "Validated Is Not Deployed"):
+Phase 4 migrates all 6 consumers to support both paths (decision cells when available, parameter fallback when not). Phase 9 establishes decision cells as the primary mechanism via topology stratum. **Phase 9 sub-phase 9b: REMOVE the parameter.** Tier 1 with empty decision context = equivalent to `'()` stack. The dual-path window is Phases 4–9a (not 4–"someday"). The parameter is gone by the end of Phase 9.
 
 **Test coverage**: Each migrated file passes existing tests (behavioral parity). New tests verify decision-cell-based TMS produces same results as parameter-based TMS.
 
@@ -916,6 +927,8 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
 
      This is NOT "a function called inside a propagator" (M1 critique). It IS N propagators — one per clause — installed by the parallel-map pattern. The matching is genuinely parallel and genuinely on-network.
 
+     **(3.2) Precondition: arg cells must be stable** (resolved, non-bot) before the parallel-map fires. Match results accumulate via set-union (monotone), which means results only grow. If arg cells were refined after matching, previously-matching clauses might no longer match, but they'd remain in the accumulator (stale). In our solver, args ARE resolved once (query arguments are elaborated before the solver runs, solver variables only gain information). The readiness guard (fire only when all args are non-bot) ensures this precondition.
+
      **Step 2 — Branch creation (only for survivors):**
      For the M matching clauses, call `atms-amb-on-network` (now: create M decision cell entries + M branch PUs). Each PU gets:
      - A worldview cell extending parent with this clause's assumption
@@ -969,6 +982,8 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
    
    **M6 (NAF completion)**: The NAF propagator fires at S1, AFTER the S0→S1 BSP barrier confirms quiescence. The inner goal's result cell value at S1 fire time is its final S0 value. If ⊥ → inner goal genuinely failed → NAF succeeds. If non-⊥ → inner goal succeeded → NAF fails. The barrier IS the completion signal — no separate completion detection needed.
 
+   **(6.3) NAF inner-result cell scope**: The NAF propagator's inner-result cell MUST be on the NAF's own network scope (outer), NOT inside any sub-PU. Inner goal propagators write to this cell via cross-PU bridges (same pattern as the answer accumulator). If inner goals branch into sub-PUs, some may be dropped (contradicted). The inner-result cell on the outer network survives PU drops. Its value at S1 reflects whether any inner derivation survived — ⊥ = all sub-PUs dropped = inner goal genuinely failed.
+
 2. **Conjunction as simultaneous installation (order-independent)**:
    `solve-goals` (the recursive append-map) is replaced by `install-conjunction`:
    - Takes a list of goals and a parent network/PU
@@ -1011,7 +1026,7 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
    - When the table has answers, propagates them to the local result cell
    - Consumer doesn't install any clause propagators — it free-rides on the producer's work
 
-4. **Non-recursive completion**: A table is "complete" when its accumulator cell has quiesced — no new answers after a full BSP round. Detection: after `run-to-quiescence`, check if any table cell was written during the last round. If not, mark all active tables as complete.
+4. **Non-recursive completion** (6.4: per-table, not network-wide): A table is complete when ALL its producer propagators have fired AND no new answers arrived in the last round. This is a per-table check, not whole-network quiescence (which would conflate unrelated propagator activity with table stability). Each table tracks its producer count and last-written superstep. After network quiescence, a table is complete if `last-written-superstep < current-superstep` AND all producers have fired.
 
 **What's NOT in scope**: Left-recursive tabling (where predicate A calls A during its own derivation). This requires SLG completion frames — a stack of "active tables" with inter-table dependency tracking. Deferred to BSP-LE Track 3.
 
