@@ -17,7 +17,7 @@
 |-------|-------------|--------|-------|
 | 0 | Pre-0: benchmarks + acceptance file | ✅ | Baselines captured (0a-0c). Acceptance file (0d) at implementation start. |
 | 1 | Decision cell infrastructure + broadcast propagator | ✅ | 1A: `4df2a4d8` decision-cell.rkt. 1Bi: `a50fc138` A/B data. 1Bii: `fb0650a3` broadcast propagator + profile. 35 tests, 392/392, 7644 tests. |
-| 2 | PU-per-branch lifecycle | ⬜ | Create from parent, commit via topology request, drop via topology request |
+| 2 | PU-per-branch lifecycle | ⬜ | Assumption-tagged dependents (emergent dissolution). No pu-drop. Commit = cell write to accumulator. Inert-dependent instrumentation. |
 | 3 | Per-nogood propagators (RKan) | ⬜ | (4.1) Per-NOGOOD propagator, fan-in=|ng|. Contradiction → topology drop request. |
 | 4 | Speculation migration | ⬜ | 6 files (R1): propagator.rkt, elab-speculation-bridge, typing-propagators, metavar-store, cell-ops, test-tms-cell |
 | 5 | ATMS struct dissolution | ⬜ | All 7 fields → cells. Struct REMOVED. atms.rkt becomes query function library. (P4) |
@@ -887,26 +887,92 @@ Sections 1-4 are uncommented as phases complete. Section 5 is aspirational (Trac
 
 ### Phase 2: PU-Per-Branch Lifecycle
 
+**Design resolutions from Phase 2 mini-design conversation:**
+
+#### 2.1 What a branch PU IS
+
+A branch PU is a `fork-prop-network` of the parent (existing infrastructure, line 437 in propagator.rkt). CHAMP structural sharing means the branch starts as a reference to the same cells/propagators. Branch-local cell writes and propagator registrations create new CHAMP paths in the branch only — the parent is structurally unmodified.
+
+The branch PU's identity is its assumption-id `h_i` in the group-level decision cell. **No worldview cell.** The branch accesses the decision cell via component-path `(decision-G . h_i)`, firing only when its own alternative's status changes.
+
+Fresh variable cells for the clause's bindings are created on the branch network after forking. These are PU-local — not visible to the parent or sibling branches.
+
+#### 2.2 Assumption-tagged dependents (emergent branch dissolution)
+
+**There is no `pu-drop` operation.** Branches die by information flow.
+
+Dependent entries in the cell dependents CHAMP gain an optional assumption-id:
+- `prop-id → { path, assumption-id-or-#f }`
+- Parent propagators: `assumption-id = #f` (always active)
+- Branch propagators: `assumption-id = h_i` (active while h_i is viable)
+
+`filter-dependents-by-paths` (which already runs on every cell change) gains one additional check per entry: "is this propagator's assumption still in its decision cell's domain?" This is one CHAMP lookup (~30ns) per dependent entry.
+
+When a decision cell narrows to eliminate alternative h_i:
+- All propagators tagged with h_i become invisible to the scheduler
+- They are never fired again — their assumption check fails
+- No explicit removal, no iteration, no topology request
+- The branch "dissolves" by information flow through the decision cell
+
+This is the TMS principle applied to DEPENDENTS: a TMS-tagged value is invisible under the wrong worldview; a TMS-tagged dependent is invisible when its assumption is not viable. Same mechanism, applied to scheduling rather than cell reads.
+
+#### 2.3 `pu-commit` = cell write to outer accumulator
+
+Committing a branch does NOT merge the branch CHAMP into the parent. It writes the branch's RESULT to the outer answer-accumulator cell. The branch-committer propagator (NTT §3.3) fires when:
+1. The decision cell is a singleton containing h_i (this branch was chosen)
+2. The branch's result cell is non-bot
+
+It writes the result to the outer accumulator (cross-PU bridge — branch fire function writes to parent's cell). After the write, the branch network is discarded same as a dead branch. The answer survives because it was written to the parent's cell.
+
+**The distinction between drop and commit is ONLY whether the branch-committer fires before dissolution.** Both end with the branch becoming inert (assumption-tagged dependents ignored by scheduler).
+
+#### 2.4 Inert dependent accumulation + instrumentation checkpoint
+
+Inert dependent entries accumulate in the dependents CHAMP. Cost: ~30ns per inert entry per cell change (one decision cell lookup). For a cell with 16 inert entries, ~480ns overhead per change.
+
+**Instrumentation**: Add a performance counter `perf-inc-inert-dependent-skip!` in `filter-dependents-by-paths`. Count how many inert entries are skipped per cell per change. This gives real data from adversarial benchmarks.
+
+**Explicit checkpoint (SMART request)**: After Phase 11 parity validation, review the inert-dependent instrumentation data. If any cell accumulates >50 inert entries on hot paths, design and implement S(-1) dependents cleanup:
+- The dependents set IS a lattice (set under ⊇, narrowing via intersection)
+- Cleanup = `current-dependents ∩ viable-dependents` (lattice narrowing operation)
+- A per-cell "dependents-cleaner" propagator at S(-1) reads dependents + decision cells, writes narrowed set
+- Multiple cells fire their cleaners in parallel in the same S(-1) superstep (broadcast)
+- This IS emergent, parallel, on-network — not step-think iteration
+
+The cleanup is DEFERRED, not omitted. The instrumentation ensures we return to the question with data.
+
+#### 2.5 Implementation
+
 **What changes**:
 
 1. **`propagator.rkt`**: `make-branch-pu`:
-   - Creates a new `prop-network` that reads specified parent cells as inputs
-   - The branch PU has its own worldview cell (extending parent's worldview with the branch assumption)
-   - Returns `(values branch-net worldview-cid)` — the branch network and its worldview cell
+   - Calls `fork-prop-network` (existing) on the parent network
+   - Takes assumption-id `h_i` as parameter — stored for tagging branch propagators
+   - Returns `(values branch-net h_i)` — the branch network and its assumption identity
 
-2. **`propagator.rkt`**: `pu-drop`:
-   - Drops a branch PU — removes all references. O(1): just discard the branch network reference.
-   - The parent network is unchanged (persistent/immutable — the branch network was a derivative, not a mutation).
+2. **`propagator.rkt`**: Extend `net-add-propagator` with `#:assumption` parameter:
+   - When `#:assumption h_i` is provided, the dependent entry in the cell's dependents CHAMP carries `h_i`
+   - Default `#f` = always active (backward compatible)
+   - `make-branch-pu` propagators use `#:assumption h_i`
 
-3. **`propagator.rkt`**: `pu-commit`:
-   - Promotes branch cell values to the parent network via `tms-commit` for each cell that was written in the branch.
-   - Dissolves the PU structure — branch-specific cells are merged into parent.
+3. **`propagator.rkt`**: Extend `filter-dependents-by-paths`:
+   - For each dependent entry with an assumption-id, check viability: is the assumption still in its decision cell's domain?
+   - Requires access to decision cell state during filtering — the solver context provides the decision cell-id map
+   - If not viable: skip (don't schedule). Increment `perf-inc-inert-dependent-skip!`.
 
-**Key design decision**: A branch PU is a `prop-network` value (not a separate struct). It shares the parent's cell values via CHAMP structural sharing. Branch-specific writes go to branch-local CHAMP nodes. `pu-drop` = discard the reference. `pu-commit` = merge branch CHAMP into parent CHAMP.
+4. **No `pu-drop` function.** Branch dissolution is emergent from decision cell narrowing.
 
-**Interaction with existing PU infrastructure**: Track 4B's `infer-on-network` already creates per-command typing on the main network with P3 cleanup. Branch PUs are a different pattern — they're ephemeral sub-networks with parent-cell visibility, not scoped regions of a shared network. The two patterns coexist.
+5. **No `pu-commit` function.** Branch commitment is the `branch-committer` propagator writing to the outer accumulator cell.
 
-**Test coverage**: PU creation from parent, cell visibility (parent cells readable from branch), branch-local writes invisible to parent, pu-drop (branch garbage-collected), pu-commit (branch values promoted).
+**Interaction with existing infrastructure**: `fork-prop-network` (Track 10 Phase 3b) already does the CHAMP fork. `net-remove-propagator-from-dependents` (P2) and `net-clear-dependents` (P3) exist but are NOT used for branch lifecycle — the assumption-tagging mechanism replaces them for this use case.
+
+**Test coverage**:
+- Branch creation via fork: parent cells readable from branch
+- Branch-local writes invisible to parent (CHAMP isolation)
+- Assumption-tagged dependents: tagged propagator fires when assumption viable, skipped when not
+- Decision cell narrows → tagged propagator becomes inert (emergent dissolution)
+- Branch-committer writes to outer accumulator (cross-PU bridge)
+- Inert dependent counter increments correctly
 
 ### Phase 3: Per-Nogood Propagators (Right Kan Extension)
 
