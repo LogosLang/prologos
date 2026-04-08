@@ -399,22 +399,36 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
    - Look up relation in store → get variants → get facts + clauses
    - **Facts path** (no branching): For each fact row, install a unification propagator that unifies resolved args with fact terms. Facts are deterministic — no `amb`, no PU. Write results directly to the result accumulator cell.
    - **Single-clause path** (no branching): If only one clause matches, install it directly in the current network. No `amb`, no PU overhead. This IS Tier 1 behavior — deterministic queries never touch ATMS.
-   - **Multi-clause path** (branching): Call `atms-amb-on-network` to create N branch PUs (one per clause). Each PU gets:
+   - **Multi-clause path** (branching): Two-step process following the array-programming pattern:
+
+     **Step 1 — Bulk clause matching (parallel map + filter):**
+     A single `clause-match-bulk` propagator takes resolved args + the full clause list. For each clause: α-rename, attempt unification with args. This is an embarrassingly parallel map — each clause is independent. The result: the set of M matching clauses (M ≤ N) with their bindings. Clauses that fail unification are eliminated HERE, before any PU allocation.
+
+     **Step 2 — Branch creation (only for survivors):**
+     For the M matching clauses, call `atms-amb-on-network` to create M branch PUs. Each PU gets:
      - A worldview cell extending parent with this clause's assumption
-     - α-renamed fresh variable cells for this clause
-     - Unification propagators: arg cells ↔ fresh param cells
-     - Sub-goal propagators installed recursively for the clause body
+     - Fresh variable cells for this clause's bindings (from Step 1)
+     - Sub-goal propagators installed for the clause body
      - A filtered nogood watcher bridging the shared nogood cell
 
+     This is the N-to-M pattern from the [array-programming research](../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md) §5: N candidates → M survivors, with PU allocation only for survivors. For deterministic cases (M=1), no PU is created — Tier 1 behavior.
+
 2. **`relations.rkt`**: New function `atms-amb-on-network`:
-   - Creates N PUs via Phase 2's `make-branch-pu`
-   - Records pairwise mutual-exclusion nogoods
+   - Creates M PUs via Phase 2's `make-branch-pu` (only for matching clauses)
+   - Records pairwise mutual-exclusion nogoods among the M branches
    - Installs filtered nogood watchers (Phase 3)
    - Returns the list of `(branch-pu . worldview-cid)` pairs
 
-3. **Variable representation**: Logic variables become cells in the branch PU's network (not symbols in a hasheq). `?x = suc ?y` becomes: write `(suc cell-y)` to `cell-x`. This is the cell-tree model from PUnify Part 2 — variables ARE cells, unification IS cell writes.
+3. **`relations.rkt`**: New function `clause-match-bulk`:
+   - Takes resolved args + clause list
+   - For each clause: α-rename all variables, attempt arg↔param unification
+   - Returns `(listof (clause-info . fresh-bindings))` — only successful matches
+   - This is a pure function (no network mutation) — suitable for parallel execution within a BSP superstep
+   - Future optimization: the scheduler can recognize this as an embarrassingly parallel map and distribute across OS threads
 
-**Key architectural point**: The DFS `solve-goals` function threading substitutions through recursive `append-map` is GONE. Conjunction becomes network topology: goal A's output cells are goal B's input cells. The propagator network handles evaluation order via quiescence — goals fire when their inputs have information, not when a sequential scheduler reaches them.
+4. **Variable representation**: Logic variables become cells in the branch PU's network (not symbols in a hasheq). `?x = suc ?y` becomes: write `(suc cell-y)` to `cell-x`. This is the cell-tree model from PUnify Part 2 — variables ARE cells, unification IS cell writes.
+
+**Key architectural point**: The DFS `solve-goals` function threading substitutions through recursive `append-map` is GONE. The replacement is two-level: bulk matching (parallel, no allocation) then PU branching (only for survivors). This minimizes both propagator count and PU count.
 
 **Test coverage**: Single-clause dispatch (no PU), multi-clause dispatch (PU-per-clause), fact matching, clause body recursion, variable freshening as cell creation.
 
@@ -435,11 +449,14 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
    | `not` | NAF propagator | inner goal result | negated result | S1: fires after inner goal quiesces |
    | `guard` | Guard propagator | condition cell | gate | S1: gates subsequent goals on condition |
 
-2. **Conjunction as topology**: `solve-goals` (the recursive append-map) is replaced by `install-conjunction`:
+2. **Conjunction as simultaneous installation (order-independent)**:
+   `solve-goals` (the recursive append-map) is replaced by `install-conjunction`:
    - Takes a list of goals and a parent network/PU
-   - Installs goal propagators in sequence, chaining output→input
-   - The "sequencing" is implicit in cell dependencies, not explicit in call order
-   - If goal A writes to cell C, and goal B reads cell C, B fires after A — no explicit ordering needed
+   - Installs ALL goal propagators simultaneously — no sequencing
+   - Goal ordering within the clause body does NOT affect execution. `(A, B, C)` and `(C, A, B)` produce the same network topology and the same results
+   - Execution order emerges from DATAFLOW: if goal A writes to cell `?x` and goal B reads `?x`, B fires after A — but this is a cell dependency discovered by the propagator network, not an ordering imposed by installation
+   - Independent goals (no shared variables) fire concurrently in the same BSP superstep
+   - This IS the true-parallel order-independent search: the clause-body ordering is irrelevant; the dataflow graph determines the execution schedule
 
 3. **NAF as stratum**: Negation-as-failure is inherently non-monotone (succeed if inner FAILS). This is S1 — fires after S0 quiesces. The inner goal is installed as S0 propagators. The NAF propagator is an S1 readiness-triggered propagator that checks: did the inner goal's result cell reach a value (inner succeeded → NAF fails) or stay at ⊥ (inner failed → NAF succeeds)?
 
