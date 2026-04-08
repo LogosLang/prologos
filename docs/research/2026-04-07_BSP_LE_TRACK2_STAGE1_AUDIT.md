@@ -343,7 +343,9 @@ What's MISSING for BSP-LE Track 3's full scope:
 2. SLG completion detection (quiescence of table cell = complete)
 3. Table answers tagged with worldview (ATMS integration)
 
-Items 1-2 are natural extensions of the ATMS solver architecture — the "first call" detection is an `amb` with one assumption that becomes the producer. Item 3 is the ATMS↔tabling bridge. **Recommendation**: Include tabling hooks in Track 2's goal-as-propagator design (the `app` goal propagator should check the table registry before installing clause-as-assumption propagators). The table store should live on the network as a cell. Full SLG completion detection is Track 3 scope.
+Items 1 and 3 compose directly with the ATMS solver architecture being designed — the producer is a goal-as-propagator that writes to an accumulator cell; the consumer reads from that cell; PU-per-branch handles worldview tagging structurally (PU commit promotes answers, PU drop discards them). Item 2 (SLG completion) has two cases: non-recursive (quiescence = complete, straightforward) and left-recursive (full SLG completion frames, complex interaction with BSP barriers).
+
+**Decision**: Pull items 1 + 3 + non-recursive completion into Track 2 scope. The `app` goal propagator checks the table registry: first call installs producer, subsequent calls install consumer. Table store lives on the network as a cell. Non-recursive tabling works via simple quiescence detection. Left-recursive tabling (full SLG completion frame stack) remains Track 3 scope — it needs its own design cycle for the BSP barrier interaction. This gives working tabling for the common case (memoize ground facts, cache deterministic subgoals) while Track 3 shrinks to "handle left-recursive tabling + SLG completion."
 
 **Q4 (Narrowing integration): Build the general engine, don't cross-migrate yet.** Track 2 builds the general speculative branching engine (cell-based TMS + ATMS solver + PU-per-branch + filtered nogoods). Narrowing, elaboration speculation, and type-level speculation become consumers of this engine in future tracks. Track 2 does NOT attempt to unify these disparate paths — it builds the substrate they'll converge onto.
 
@@ -362,43 +364,56 @@ The transition must be: (a) O(1) (no full-network scan to wrap cells), (b) invis
 
 ## 5. Scope Estimate and Phase Sketch
 
-### 5.1 Estimated Scope
+### 5.1 Estimated Scope (revised — includes tabling pull-in)
 
 | Component | Lines | Complexity |
 |-----------|-------|------------|
-| Cell-based TMS core (propagator.rkt) | ~150 | Medium — worldview cell, net-cell-read/write changes |
-| ATMS → cell-based bridge | ~100 | Medium — atms worldview → worldview cell value |
-| Migration of 5 speculation users | ~200 | Low per file — replace `parameterize` with cell read |
+| Worldview lattice cell (Option E) | ~200 | High — powerset lattice, meet/join, integration with net-cell-read/write |
+| PU-per-branch infrastructure | ~150 | Medium — PU creation from parent, commit/drop lifecycle |
+| Filtered nogood watcher (RKan) | ~100 | Medium — per-branch watcher, intersection filter |
+| Speculation migration (5 files) | ~200 | Low per file — replace `parameterize` with worldview cell read |
 | Clause-as-assumption solver | ~400 | High — new solver loop replacing DFS |
-| Goal-as-propagator dispatch | ~300 | High — propagator installation per goal type |
+| Goal-as-propagator dispatch | ~350 | High — propagator installation per goal type + tabling check |
+| Producer/consumer tabling | ~150 | Medium — producer installs on first call, consumer reads on subsequent |
+| Non-recursive tabling completion | ~100 | Medium — quiescence-based completion for non-recursive tables |
 | Two-tier activation | ~100 | Medium — Tier 1→2 transition |
 | Solver config wiring | ~150 | Low — connect existing knobs |
-| Tests | ~300 | Medium — worldview cells, solver parity, ATMS integration |
-| **Total** | **~1700** | |
+| Tests | ~400 | Medium — worldview cells, solver parity, tabling, ATMS integration |
+| **Total** | **~2300** | |
 
 ### 5.2 Suggested Phase Structure (for Stage 3 design)
 
 | Phase | Description | Scope |
 |-------|-------------|-------|
 | 0 | Pre-0 benchmarks + acceptance file | Baseline DFS solver performance |
-| 1 | Cell-based TMS: worldview cell + net-cell-read/write changes | propagator.rkt core |
-| 2 | Speculation migration: elab-speculation-bridge, metavar-store, cell-ops | 5 files |
-| 3 | ATMS↔TMS bridge: ATMS worldview → worldview cell value | atms.rkt + propagator.rkt |
-| 4 | Clause-as-assumption: `atms-amb` over matching clauses | New solver path in relations.rkt |
-| 5 | Goal-as-propagator: propagator installation per goal type | relations.rkt refactor |
-| 6 | Two-tier activation: Tier 1→2 on first `amb` | solver.rkt + relations.rkt |
-| 7 | Solver config wiring: `:strategy`, `:execution` operational | solver.rkt |
-| 8 | Parity validation: DFS ↔ ATMS result equivalence | Test suite |
-| T | Dedicated test files | Per-phase testing |
+| 1 | Worldview lattice cell (Option E) + net-cell-read/write integration | propagator.rkt core |
+| 2 | PU-per-branch: creation from parent, commit, drop | propagator.rkt PU lifecycle |
+| 3 | Filtered nogood watcher (right Kan extension) | Cross-PU bridge pattern |
+| 4 | Speculation migration: elab-speculation-bridge, metavar-store, cell-ops | 5 files |
+| 5 | ATMS↔worldview bridge: ATMS worldview → lattice cell value | atms.rkt integration |
+| 6 | Clause-as-assumption: `atms-amb` over matching clauses in PUs | New solver path |
+| 7 | Goal-as-propagator: propagator installation per goal type | relations.rkt refactor |
+| 8 | Producer/consumer tabling: table registry check in goal dispatcher | tabling.rkt + relations.rkt |
+| 9 | Two-tier activation: Tier 1→2 on first `amb` | solver.rkt + relations.rkt |
+| 10 | Solver config wiring: `:strategy`, `:execution`, `:tabling` operational | solver.rkt |
+| 11 | Parity validation: DFS ↔ ATMS result equivalence | Test suite |
+| T | Dedicated test files (per-phase) | Per-phase testing |
 | PIR | Post-implementation review | Retrospective |
 
 ---
 
 ## 6. Open Questions for Stage 3
 
-1. **UnionFind ordering**: BSP-LE Track 1 (UnionFind) is listed as parallel with Track 2. Does the ATMS solver need UF for var-var bindings, or can it use cell-tree unification exclusively? If UF is needed, it's a dependency; if not, it can follow.
+All resolved. Summary of resolutions:
 
-2. **Tabling scope boundary**: Track 3 (Tabling) depends on Track 2. But some tabling infrastructure (table registry, accumulator cells) could be designed alongside Track 2's solver. Should Phase 4-5 (clause/goal propagators) include tabling hooks, or leave them for Track 3?
+| # | Question | Resolution |
+|---|----------|------------|
+| 1 | UnionFind dependency | NOT a dependency. Cell-tree unification sufficient. (§4.2b) |
+| 2 | Tabling scope | Pull in producer/consumer + non-recursive completion. Left-recursive SLG remains Track 3. (§4.3b) |
+| 3 | PUnify parity | NOT a blocker. Design against cell-tree directly. (§4.2b) |
+| 4 | Narrowing integration | Build general engine; don't cross-migrate yet. (§4.3b) |
+| 5 | Worldview cell API | Option E (lattice) + PU-per-branch. Worldview/nogood cells on outer network, computation in PUs. (§4.2, §4.3a) |
+| 6 | Concurrent exploration | IN SCOPE. PU-per-branch + filtered nogoods enables OR-parallel. (§4.2b) |
 
 3. **PUnify parity**: The PUnify Cleanup track (5 parity bugs) is listed as a BSP-LE prerequisite. Are these bugs blockers for Track 2, or can Track 2 proceed with `current-punify-enabled? = #f`?
 
