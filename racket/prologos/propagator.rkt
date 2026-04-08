@@ -81,6 +81,7 @@
  net-clear-dependents  ;; Track 4B Phase 6b P3: remove all dependents from a cell
  ;; Propagator operations
  net-add-propagator
+ net-add-parallel-map-propagator  ;; BSP-LE Track 2 Phase 1: N independent propagators
  ;; PPN Track 4 Phase 1a: component-indexed firing
  pu-value-diff
  filter-dependents-by-paths
@@ -1196,6 +1197,45 @@
               (struct-copy prop-net-hot (prop-network-hot net)
                 [worklist (cons pid (prop-network-worklist net))]))])
    pid))
+
+;; ========================================
+;; Parallel-Map Propagator (BSP-LE Track 2 Phase 1)
+;; ========================================
+;;
+;; Installs N INDEPENDENT propagators — one per element in `items`.
+;; Each propagator watches the SAME input cells, applies `make-fire-fn`
+;; to its specific item, and writes results to a shared output cell.
+;; All N fire in the same BSP superstep (embarrassingly parallel).
+;;
+;; The output cell's merge function (typically set-union) accumulates
+;; results from all N fires. BSP's `bulk-merge-writes` handles N
+;; simultaneous writes correctly because set-union is ACI.
+;;
+;; This IS a polynomial functor: fan-out depends on `items` (data-indexed).
+;; First consumer: bulk clause matching (Phase 6). Generalizes to:
+;; pattern matching, trait lookup, module resolution.
+;;
+;; Design: §3.3 `propagator parallel-map-clause`
+;; Critique: 3.1 (verify multi-write under BSP), 3.2 (arg stability precondition)
+;;
+;; net: prop-network
+;; input-cids: (listof cell-id) — cells ALL N propagators read (shared inputs)
+;; output-cid: cell-id — accumulator cell ALL N propagators write to
+;; items: (listof any) — data elements to map over (e.g., clauses)
+;; make-fire-fn: (any → (prop-network → prop-network)) — given one item, produce a fire fn
+;; Returns: (values new-network (listof prop-id))
+;;
+;; Precondition (3.2): input cells should be stable (resolved, non-bot)
+;; before the parallel-map fires. Results accumulate via set-union
+;; (monotone). If inputs are refined after firing, stale results remain.
+(define (net-add-parallel-map-propagator net input-cids output-cid
+                                         items make-fire-fn)
+  (for/fold ([n net] [pids '()])
+            ([item (in-list items)])
+    (define fire-fn (make-fire-fn item))
+    (define-values (n* pid)
+      (net-add-propagator n input-cids (list output-cid) fire-fn))
+    (values n* (cons pid pids))))
 
 ;; ========================================
 ;; Threshold Propagators (Phase 2.5b)
