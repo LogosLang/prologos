@@ -1,0 +1,452 @@
+ns examples.bsp-le-track2
+
+;; ========================================================================
+;;
+;;   BSP-LE Track 2: Propagator-Native Search — Acceptance Test File
+;;
+;;   STATUS: Phase 0d (Pre-Implementation)
+;;   All target expressions are COMMENTED OUT unless in Section A (baseline).
+;;   Uncomment as phases complete.
+;;   The track is not DONE until this file runs with 0 errors via process-file.
+;;
+;;   Design: docs/tracking/2026-04-07_BSP_LE_TRACK2_DESIGN.md (D.3, 1157 lines)
+;;   Methodology: docs/tracking/principles/ACCEPTANCE_FILE_METHODOLOGY.org
+;;
+;;   Sections:
+;;     A. Baseline — existing solver features (should already work)
+;;     B. Decision cell infrastructure — narrowing, contradiction
+;;     C. Multi-clause branching — PU-per-branch, concurrent exploration
+;;     D. Conjunction — order-independent goal evaluation
+;;     E. Tabling — producer/consumer, non-recursive memoization
+;;     F. Solver configuration — :strategy, :execution, :tabling
+;;     G. Negation-as-failure — NAF under branching, WF oracle
+;;     H. Interaction with functional language — solve results in exprs
+;;     I. Interaction with type system — typed relations
+;;     J. Explanation and provenance — derivation traces
+;;     K. Edge cases and error conditions
+;;
+;; ========================================================================
+
+
+;; ========================================================================
+;; SECTION A: BASELINE — Existing Solver Features
+;; ========================================================================
+;;
+;; These exercise the DFS solver path that Track 2 replaces.
+;; ALL must pass before implementation begins.
+
+;; --- A1: Ground facts ---
+
+defr color [?item ?hue]
+  || "apple"  "red"
+     "banana" "yellow"
+     "grape"  "purple"
+     "lime"   "green"
+
+solve (color "apple" ?hue)
+;; => [{:hue "red"}]
+
+solve (color ?item "yellow")
+;; => [{:item "banana"}]
+
+solve (color ?item ?hue)
+;; => 4 answers
+
+;; --- A2: Single-clause rules ---
+
+defr double [?n ?result]
+  &> (is result [int* n 2])
+
+solve (double 21 ?result)
+;; => [{:result 42}]
+
+;; --- A3: Multi-clause rules (backtracking) ---
+
+defr sign [?n ?label]
+  &> (guard [int-lt n 0]) (= label "negative")
+  &> (= n 0) (= label "zero")
+  &> (guard [int-lt 0 n]) (= label "positive")
+
+solve (sign 5 ?label)
+;; => [{:label "positive"}]
+
+solve (sign 0 ?label)
+;; => [{:label "zero"}]
+
+;; --- A4: Recursive rules ---
+
+defr edge [?from ?to]
+  || "a" "b"
+     "b" "c"
+     "c" "d"
+     "d" "e"
+
+defr path [?from ?to]
+  &> (edge from to)
+  &> (edge from ?mid) (path mid to)
+
+solve (path "a" ?dest)
+;; => [{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}]
+
+solve (path ?src "e")
+;; => [{:src "d"} {:src "c"} {:src "b"} {:src "a"}]
+
+;; --- A5: Unification goals ---
+
+solve (= ?x 42)
+;; => [{:x 42}]
+
+solve (= [pair ?a ?b] [pair 1 2])
+;; => [{:a 1, :b 2}]
+
+solve (= [some [some ?x]] [some [some 99]])
+;; => [{:x 99}]
+
+;; --- A6: is-goals (functional evaluation) ---
+
+solve (is ?x [int+ 10 20])
+;; => [{:x 30}]
+
+solve (rel [?a ?b ?sum]
+  (is ?a [int* 3 3])
+  (is ?b [int* 4 4])
+  (is ?sum [int+ ?a ?b]))
+;; => [{:a 9, :b 16, :sum 25}]
+
+;; --- A7: Negation-as-failure (ground, stratifiable) ---
+
+defr blocked [?node]
+  || "c"
+
+defr reachable [?from ?to]
+  &> (edge from to) (not (blocked to))
+  &> (edge from ?mid) (not (blocked mid)) (reachable mid to)
+
+solve (reachable "a" ?dest)
+;; => [{:dest "b"}] — c is blocked, so d and e unreachable
+
+;; --- A8: Inline relations ---
+
+solve (rel [?x ?y ?sum]
+  (= ?x 10)
+  (= ?y 20)
+  (is ?sum [int+ ?x ?y]))
+;; => [{:x 10, :y 20, :sum 30}]
+
+;; --- A9: Named relation conjunction ---
+
+defr compute [?a ?b ?sum ?prod]
+  &> (is sum [int+ a b]) (is prod [int* a b])
+
+solve (compute 5 3 ?sum ?prod)
+;; => [{:sum 8, :prod 15}]
+
+;; --- A10: solve-one (first answer) ---
+
+solve-one (color ?item ?hue)
+;; => [{:item "apple", :hue "red"}] (first answer only)
+
+;; --- A11: Many small solves (per-command overhead) ---
+
+solve (= ?v1 1)
+solve (= ?v2 2)
+solve (= ?v3 3)
+solve (= ?v4 4)
+solve (= ?v5 5)
+solve (= ?v6 6)
+solve (= ?v7 7)
+solve (= ?v8 8)
+solve (= ?v9 9)
+solve (= ?v10 10)
+
+
+;; ========================================================================
+;; SECTION B: DECISION CELL INFRASTRUCTURE (Phases 1, 3, 5)
+;; ========================================================================
+;;
+;; Track 2 replaces DFS backtracking with decision cells + nogood
+;; propagation. These tests validate that the new mechanism produces
+;; the same answers as DFS.
+
+;; --- B1: Binary choice — 2 clauses, both should match ---
+
+;; defr binary-choice [?x ?y]
+;;   &> (= x "left") (= y 1)
+;;   &> (= x "right") (= y 2)
+;;
+;; solve (binary-choice ?x ?y)
+;; => [{:x "left", :y 1} {:x "right", :y 2}]
+
+;; --- B2: Wide choice — 10 clauses ---
+
+;; defr digit [?name ?val]
+;;   &> (= name "zero") (= val 0)
+;;   &> (= name "one") (= val 1)
+;;   &> (= name "two") (= val 2)
+;;   &> (= name "three") (= val 3)
+;;   &> (= name "four") (= val 4)
+;;   &> (= name "five") (= val 5)
+;;   &> (= name "six") (= val 6)
+;;   &> (= name "seven") (= val 7)
+;;   &> (= name "eight") (= val 8)
+;;   &> (= name "nine") (= val 9)
+;;
+;; solve (digit ?name 5)
+;; => [{:name "five"}]
+;;
+;; solve (digit ?name ?val)
+;; => 10 answers
+
+;; --- B3: Deep nesting — 3 levels of binary branching = 8 answers ---
+
+;; defr level1 [?x]
+;;   &> (= x "a")
+;;   &> (= x "b")
+;;
+;; defr level2 [?x ?y]
+;;   &> (level1 x) (= y "p")
+;;   &> (level1 x) (= y "q")
+;;
+;; defr level3 [?x ?y ?z]
+;;   &> (level2 x y) (= z 1)
+;;   &> (level2 x y) (= z 2)
+;;
+;; solve (level3 ?x ?y ?z)
+;; => 8 answers: all combinations of {a,b} × {p,q} × {1,2}
+
+
+;; ========================================================================
+;; SECTION C: MULTI-CLAUSE BRANCHING (Phase 6)
+;; ========================================================================
+;;
+;; Clause-as-assumption with PU-per-branch. Parallel-map clause matching.
+
+;; --- C1: Facts + clauses in same relation ---
+
+;; defr info [?key ?val]
+;;   || "name" "prologos"
+;;      "type" "language"
+;;   &> (= key "version") (= val "0.1")
+;;
+;; solve (info "name" ?val)
+;; => [{:val "prologos"}]
+;;
+;; solve (info "version" ?val)
+;; => [{:val "0.1"}]
+;;
+;; solve (info ?key ?val)
+;; => 3 answers
+
+;; --- C2: Shared variables across branches (transitive binding) ---
+
+;; solve (rel [?x ?y ?z]
+;;   (= ?x ?y) (= ?y ?z) (= ?z 42))
+;; => [{:x 42, :y 42, :z 42}]
+
+;; --- C3: Constructor unification in branches ---
+
+;; solve (rel [?outer]
+;;   (= ?outer [pair [some ?a] [some ?b]])
+;;   (= ?a 1) (= ?b 2))
+;; => [{:outer (pair (some 1) (some 2))}]
+
+
+;; ========================================================================
+;; SECTION D: ORDER-INDEPENDENT CONJUNCTION (Phase 7)
+;; ========================================================================
+;;
+;; Goal ordering within a clause body should not affect results.
+;; These test the same conjunction in different orders.
+
+;; --- D1: Goal order doesn't matter ---
+
+;; defr order-test-1 [?a ?b ?c]
+;;   &> (= a 1) (= b 2) (is c [int+ a b])
+;;
+;; defr order-test-2 [?a ?b ?c]
+;;   &> (is c [int+ a b]) (= a 1) (= b 2)
+;;
+;; defr order-test-3 [?a ?b ?c]
+;;   &> (= b 2) (is c [int+ a b]) (= a 1)
+;;
+;; solve (order-test-1 ?a ?b ?c)
+;; => [{:a 1, :b 2, :c 3}]
+;;
+;; solve (order-test-2 ?a ?b ?c)
+;; => [{:a 1, :b 2, :c 3}]  ;; SAME result regardless of goal order
+;;
+;; solve (order-test-3 ?a ?b ?c)
+;; => [{:a 1, :b 2, :c 3}]  ;; SAME result regardless of goal order
+
+
+;; ========================================================================
+;; SECTION E: TABLING (Phase 8)
+;; ========================================================================
+;;
+;; Producer/consumer tabling for non-recursive predicates.
+
+;; --- E1: Basic tabling — repeated query is memoized ---
+
+;; defr square [?n ?result]
+;;   &> (is result [int* n n])
+;;
+;; solve (square 5 ?r1)
+;; => [{:r1 25}]
+;;
+;; solve (square 5 ?r2)
+;; => [{:r2 25}]  ;; same result, but from table (memoized)
+;;
+;; solve (square 7 ?r3)
+;; => [{:r3 49}]  ;; different arg = new computation
+
+;; --- E2: Tabled relation used by another relation ---
+
+;; defr sum-of-squares [?a ?b ?result]
+;;   &> (square a ?sa) (square b ?sb) (is result [int+ ?sa ?sb])
+;;
+;; solve (sum-of-squares 3 4 ?result)
+;; => [{:result 25}]  ;; 9 + 16
+
+
+;; ========================================================================
+;; SECTION F: SOLVER CONFIGURATION (Phases 9, 10)
+;; ========================================================================
+;;
+;; The solver-config knobs become operational.
+
+;; --- F1: :strategy :depth-first preserves DFS semantics ---
+
+;; solver dfs-config
+;;   :strategy depth-first
+;;
+;; solve-with dfs-config (path "a" ?dest)
+;; => [{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}]
+
+;; --- F2: :strategy :auto activates Tier 2 on first amb ---
+
+;; solver auto-config
+;;   :strategy auto
+;;
+;; solve-with auto-config (binary-choice ?x ?y)
+;; => [{:x "left", :y 1} {:x "right", :y 2}]  ;; Tier 2 activated
+
+;; --- F3: :tabling controls memoization ---
+
+;; solver no-table-config
+;;   :tabling off
+;;
+;; solver table-config
+;;   :tabling by-default
+
+
+;; ========================================================================
+;; SECTION G: NAF UNDER BRANCHING (Phase 7)
+;; ========================================================================
+;;
+;; Negation-as-failure interacting with choice points.
+;; NAF fires at S1 after S0 quiescence.
+
+;; --- G1: NAF with simple branching ---
+
+;; defr has-value [?x]
+;;   || 1
+;;      3
+;;      5
+;;
+;; defr candidate [?x]
+;;   || 2
+;;      4
+;;      6
+;;
+;; solve (rel [?x]
+;;   (candidate ?x) (not (has-value ?x)))
+;; => [{:x 2} {:x 4} {:x 6}]  ;; all candidates pass NAF
+
+;; --- G2: NAF filtering some branches ---
+
+;; defr mixed [?x]
+;;   || 1     ;; in has-value → NAF fails
+;;      2     ;; not in has-value → NAF succeeds
+;;      3     ;; in has-value → NAF fails
+;;      4     ;; not in has-value → NAF succeeds
+;;
+;; solve (rel [?x]
+;;   (mixed ?x) (not (has-value ?x)))
+;; => [{:x 2} {:x 4}]  ;; only 2 and 4 survive NAF
+
+
+;; ========================================================================
+;; SECTION H: INTERACTION WITH FUNCTIONAL LANGUAGE (Phase 11)
+;; ========================================================================
+;;
+;; Solver results used in functional expressions.
+
+;; --- H1: solve result bound to def ---
+
+;; def colors := solve (color ?item ?hue)
+;; eval colors
+;; => list of answer maps
+
+;; --- H2: solve-one in expression position ---
+
+;; def apple-color := solve-one (color "apple" ?hue)
+;; eval apple-color
+;; => [{:hue "red"}]
+
+
+;; ========================================================================
+;; SECTION I: INTERACTION WITH TYPE SYSTEM (Phase 11)
+;; ========================================================================
+;;
+;; Typed relations with solver.
+
+;; --- I1: Typed relation spec ---
+
+;; spec color-typed [?item : String] [?hue : String] -> Bool
+;; ;; (future: typed solve results)
+
+
+;; ========================================================================
+;; SECTION J: EXPLANATION AND PROVENANCE (Future — Track 3+)
+;; ========================================================================
+;;
+;; Derivation traces from the ATMS. These exercise provenance
+;; capabilities that may not be in Track 2 scope.
+
+;; --- J1: explain query ---
+;; explain (path "a" "d")
+;; => derivation tree showing: path("a","d") :- edge("a","b"), path("b","d")
+
+
+;; ========================================================================
+;; SECTION K: EDGE CASES AND ERROR CONDITIONS
+;; ========================================================================
+
+;; --- K1: Empty relation (no facts, no clauses) ---
+
+;; defr empty-rel [?x]
+;;
+;; solve (empty-rel ?x)
+;; => [] (no answers)
+
+;; --- K2: Contradictory goals ---
+
+;; solve (rel [?x]
+;;   (= ?x 1) (= ?x 2))
+;; => [] (no answers — contradiction)
+
+;; --- K3: Unknown relation ---
+
+;; solve (nonexistent ?x)
+;; => error: Unknown relation
+
+;; --- K4: Deep recursion with tabling ---
+
+;; ;; Without tabling, this would hit depth limit.
+;; ;; With tabling, it should terminate.
+;; defr chain [?from ?to]
+;;   &> (edge from to)
+;;   &> (edge from ?mid) (chain mid to)
+;;
+;; solve-with table-config (chain "a" ?dest)
+;; => [{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}]

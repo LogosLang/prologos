@@ -1,0 +1,182 @@
+#+TITLE: Acceptance File Methodology
+#+SUBTITLE: Writing Effective .prologos Acceptance Files
+#+AUTHOR: The Prologos Project
+#+DATE: 2026-04-08
+
+* Purpose
+
+An acceptance file is a ~.prologos~ file that exercises the FULL
+capability envelope of a track's deliverables in user-facing WS-mode
+syntax. It is the Level 3 validation gate: the track is not DONE
+until this file runs with 0 errors via ~process-file~.
+
+The acceptance file serves four roles simultaneously:
+
+1. *Diagnostic instrument*: catches WS-mode regressions that
+   infrastructure changes introduce. Many features pass Level 1 (sexp)
+   and Level 2 (WS string) but fail Level 3 (WS file) due to
+   top-level scoping, file-level preparse, and multi-form interaction.
+
+2. *Living showcase*: demonstrates the language as users will actually
+   write it. Ideal syntax, idiomatic patterns, real use cases.
+
+3. *Incremental validation gate*: sections are uncommented phase by
+   phase. Each phase's completion criteria include: "these acceptance
+   sections now pass at Level 3."
+
+4. *Regression safety net*: run before AND after each implementation
+   phase. Broad coverage catches regressions from infrastructure
+   changes that individual unit tests miss.
+
+* Structure
+
+** Header
+
+#+begin_example
+ns examples.{date}-{feature}
+
+;; ========================================================================
+;;
+;;   {Feature Name} — Acceptance Test File
+;;
+;;   STATUS: Phase 0 (Pre-Implementation)
+;;   All target expressions are COMMENTED OUT. Uncomment as phases complete.
+;;   The track is not DONE until this file runs with 0 errors via process-file.
+;;
+;;   Sections:
+;;     A. Baseline — existing features (should already work)
+;;     B-N. Feature-specific sections (commented out initially)
+;;     Z. Edge cases and error conditions
+;;
+;; ========================================================================
+#+end_example
+
+** Section A: Baseline (MANDATORY)
+
+The FIRST section exercises existing features that the track BUILDS ON.
+These should already pass. If any fail, there is a pre-existing gap
+to fix before implementation begins.
+
+For the solver: facts, rules, unification, NAF, mode annotations.
+For typing: basic inference, trait resolution, dependent types.
+For a new syntax: existing similar syntax forms.
+
+Baseline failures are blockers. Fix them before writing new code.
+
+** Sections B-N: Feature Sections
+
+One section per major deliverable or capability. Each section contains:
+
+1. *A descriptive comment* explaining what the section tests and why
+2. *Positive cases*: expressions that should succeed, with expected
+   results in ~;; =>~ comments
+3. *Negative cases* (where applicable): expressions that should fail
+   gracefully, with expected error behavior documented
+4. *Edge cases*: boundary conditions, empty inputs, maximal inputs
+
+Organize sections by PHASE: each section maps to one or more
+implementation phases. The design document's progress tracker should
+reference which acceptance sections each phase unlocks.
+
+** Section Z: Edge Cases and Error Conditions (MANDATORY)
+
+The LAST section exercises error paths and boundary conditions:
+- Empty inputs (no facts, no clauses, no goals)
+- Contradictory inputs
+- Timeout behavior
+- Error message quality
+
+** Commenting Convention
+
+- *Baseline (Section A)*: UNCOMMENTED from the start. Must pass before
+  implementation.
+- *Feature sections (B-N)*: COMMENTED OUT initially. Uncomment as
+  phases complete. A phase is not DONE until its sections pass.
+- *Edge cases (Z)*: COMMENTED OUT initially. Uncomment when the feature
+  is functionally complete.
+
+* Quality Criteria
+
+** What Makes a Good Acceptance File
+
+1. *Exercises the FULL capability envelope*: not just the happy path.
+   Includes: positive cases, negative cases, edge cases, interaction
+   with other language features, multi-form interaction (later forms
+   depending on earlier forms).
+
+2. *Written in IDEAL syntax*: the file demonstrates how users SHOULD
+   write this feature. Not workarounds, not sexp fallbacks. If the
+   ideal syntax doesn't work yet, that's what the file is tracking.
+
+3. *Expected results documented*: every expression has a ~;; =>~
+   comment showing the expected output. This serves as documentation
+   AND as a manual verification reference.
+
+4. *Progressive complexity*: starts with the simplest case and builds.
+   A reader encountering the feature for the first time can follow
+   the acceptance file as a tutorial.
+
+5. *Self-contained*: uses ~ns~ to avoid polluting the prelude. Defines
+   all needed relations, types, and functions within the file.
+   No external dependencies beyond the prelude.
+
+6. *Broad coverage*: exercises Prologos features broadly, not just the
+   track's deliverables. This makes the file a SAFETY NET: if an
+   infrastructure change breaks something unrelated, the acceptance
+   file catches it.
+
+** What Makes a BAD Acceptance File
+
+1. *Only happy paths*: no edge cases, no error conditions, no
+   interaction with other features.
+2. *Sexp syntax*: uses ~(expr ...)~ instead of WS-mode syntax.
+   Defeats the purpose of Level 3 validation.
+3. *No expected results*: expressions without ~;; =>~ comments can't
+   be verified manually or compared against actual output.
+4. *Too narrow*: only exercises the specific feature, missing
+   regressions in surrounding infrastructure.
+5. *Too long without structure*: no section headers, no phase mapping,
+   no progressive complexity.
+
+* Best Example
+
+~racket/prologos/examples/2026-03-14-wfle-acceptance.prologos~ (653
+lines, 9 sections A-I) is the gold standard:
+
+- Section A (Baseline) exercises existing relational features (facts,
+  rules, unification, NAF, mode annotations) before WFLE-specific tests
+- Sections B-H progress from solver configuration through well-founded
+  semantics, explanation, tabling, advanced features, functional
+  interaction, and type system interaction
+- Section I covers edge cases and error conditions
+- Every expression has expected results documented
+- Written in ideal WS syntax with idiomatic patterns
+- Self-contained (defines all needed relations within the file)
+- Broad enough to catch WS-mode regressions beyond WFLE scope
+
+* Process Integration
+
+** When to Write
+
+Write the acceptance file as Phase 0 (or Phase 0d if benchmarks are
+Phase 0a-0c). Write it BEFORE implementation begins. The file captures
+what "done" looks like — writing it forces clarity about deliverables.
+
+** When to Run
+
+1. *Before implementation*: Section A (baseline) must pass. If not,
+   fix the baseline first.
+2. *After each phase*: Uncomment the phase's sections. Run via
+   ~process-file~. The phase is not DONE until its sections pass.
+3. *After the final phase*: ALL sections uncommented, 0 errors.
+4. *During PIR*: Record final acceptance file status in the PIR.
+
+** Location
+
+~racket/prologos/examples/{date}-{feature}.prologos~
+
+** Cross-References
+
+- [[file:DESIGN_METHODOLOGY.org][DESIGN_METHODOLOGY.org]] § "WS-Mode Validation Protocol": three-level validation
+- ~.claude/rules/workflow.md~ § "Acceptance file as Phase 0": the operational rule
+- ~.claude/rules/testing.md~ § "Three-level WS validation": Level 3 is the gap
