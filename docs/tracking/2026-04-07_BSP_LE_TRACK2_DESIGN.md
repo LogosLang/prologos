@@ -176,6 +176,109 @@ This is more precise than the D.1 design's nogood→worldview bridge. Informatio
 
 ---
 
+## §2.6 ATMS Struct Dissolution (P4 Resolution)
+
+The ATMS struct (`atms.rkt`, 7 fields) dissolves entirely into cells on the propagator network. No field requires off-network storage.
+
+### §2.6a Field → Cell Mapping
+
+| ATMS Field | Cell Replacement | Lattice | Merge | Notes |
+|---|---|---|---|---|
+| `network` | IS the prop-network | — | — | The substrate, not a field to dissolve |
+| `assumptions` | Assumptions accumulator cell | P(Assumption), ⊆ | set-union | Monotone: assumptions only added |
+| `nogoods` | Nogood cell (already designed §2.2) | P(P(AssumptionId)), ⊆ | set-union | Monotone: nogoods only grow |
+| `tms-cells` | RETIRED (Phase 5) | — | — | Cell storage moves to prop-network |
+| `next-assumption` | Counter cell | Nat, ≤ | max | Monotone: counter only grows |
+| `believed` | **ELIMINATED** | — | — | Worldview emerges from decision cells — no separate representation |
+| `amb-groups` | Decision cells (one per amb, §2.5a) | P(Alternatives), ⊇ | set-intersection | Structural lattice, SRE-registered |
+
+### §2.6b No Worldview Cell — Worldview Emerges from Decisions
+
+The worldview is NOT a cell. It is the COLLECTION of decision cells. Any propagator needing assumption information reads the relevant decision cell(s) directly.
+
+- A propagator in branch B reads decision-cell-B for its assumption
+- Consistency checking decomposes per-decision: "is decision G still viable?" = "is decision-cell-G non-empty?" — a per-cell check, not a global scan
+- Global consistency = conjunction (AND-fan-in) of per-decision viability cells
+- Global consistency EMERGES from the fan-in. No aggregation step. No derived cell.
+
+If a cross-system bridge needs the full assumption set (e.g., worldview→type filtering), it reads the relevant decision cells via fan-in. This is more decomplected than a single worldview aggregate — each propagator reads only the decisions it cares about.
+
+### §2.6c Retraction = Decision Cell Narrowing (SRE Structural Operation)
+
+The word "retract" disappears from the architecture. All worldview changes are **decision cell narrowing**:
+
+- Nogood involving h2 → narrow decision-cell-G to exclude h2
+- Explicit retraction of h2 → narrow decision-cell-G to exclude h2
+- Branch commitment to h1 → narrow decision-cell-G to {h1}
+
+These are ALL the same cell write: `set-intersection(current-domain, domain-minus-excluded)`. The mechanism is unified. Decision cell narrowing IS SRE structural narrowing — the same operation that narrows a type's constructor set when pattern matching eliminates a constructor.
+
+Standalone assumptions (not from any amb) are decision cells with one alternative: `{h}`. Retraction = narrow from `{h}` to `∅`. Everything goes through decision cells.
+
+### §2.6d ATMS Operations → Cell Operations + Query Functions
+
+| ATMS Operation | Replacement | On-network? |
+|---|---|---|
+| `atms-assume` | Write to assumptions-cell + counter-cell. Create trivial decision cell `{h}`. | ✓ Cell writes |
+| `atms-retract` | Narrow decision cell to exclude assumption | ✓ Cell write (SRE narrowing) |
+| `atms-add-nogood` | Write to nogood cell (set-union) | ✓ Cell write |
+| `atms-consistent?` | Fan-in: AND of per-decision non-empty checks | ✓ Propagator (fan-in) |
+| `atms-with-worldview` | Set decision cells to specific values | ✓ Cell writes |
+| `atms-amb` | Create N assumptions + decision cell + pairwise nogoods | ✓ Cell writes + topology (decision cell creation) |
+| `atms-read-cell` | RETIRED — `net-cell-read` with decision context | ✓ |
+| `atms-write-cell` | RETIRED — `net-cell-write` | ✓ |
+| `atms-solve-all` | REPLACED — answer accumulator cell. Branching topology covers product space. | ✓ |
+| `atms-explain-hypothesis` | Query function: read nogood cell + assumptions cell, filter | ✓ Read-only (correctly off-network — consumer of cell state) |
+| `atms-explain` | Query function: read nogoods + decision cells | ✓ Read-only |
+| `atms-minimal-diagnoses` | **Tropical semiring CSP** (see §2.6e) | ✓ Our own solver infrastructure |
+| `atms-conflict-graph` | Query function: read nogoods, build graph | ✓ Read-only |
+
+### §2.6e Tropical Hitting Set: Diagnosis as Constraint Satisfaction
+
+The greedy hitting-set algorithm for `atms-minimal-diagnoses` dissolves into a constraint satisfaction problem over a tropical semiring — solvable by our own ATMS solver infrastructure.
+
+**Formulation:**
+
+Each violated nogood S_i = {a1, a2, a3} becomes an `amb` (decision cell): "which assumption from this nogood do we retract?" The alternatives are the nogood's assumptions. The cost = number of assumptions retracted (minimize via tropical semiring).
+
+```
+For each violated nogood S_i:
+  decision-cell-i : DecisionDomain = alternatives(S_i)
+  ;; "choose which assumption to retract from this nogood"
+
+Cost accumulator:
+  total-retractions : TropicalNat
+  merge = min  (tropical: minimize cost)
+  Each committed decision contributes +1 to the sum
+  
+  The minimum-cost worldview across all decision combinations
+  = the minimum hitting set
+```
+
+The tropical semiring `(Nat, min, +, ∞, 0)`:
+- `min` selects the cheapest diagnosis
+- `+` accumulates retraction costs
+- Each decision cell contributes its choice's cost to the total
+
+This is self-referential: the ATMS solver uses its own decision-cell + PU-per-branch + nogood-narrowing infrastructure to compute its own diagnoses. The "greedy algorithm" dissolves into lattice operations. The computation is parallel by construction (CALM: monotone cost accumulation is coordination-free).
+
+For our typically small nogoods (2-3 assumptions), this is a near-2-SAT problem — propagation solves it in very few rounds.
+
+**Hyperlattice Conjecture**: Every computable function can be represented as a fixpoint calculation on lattices. The hitting-set algorithm was the test case: the "algorithm" was a failure of imagination about lattice structure, not a genuine limit of the model. The tropical semiring provides the right structure. See `DESIGN_PRINCIPLES.org` § "The Hyperlattice Conjecture."
+
+### §2.6f What Remains of atms.rkt
+
+The `atms` struct is eliminated. `atms.rkt` becomes a **library of query functions** that read cell values and compute derived results:
+
+- `explain-hypothesis`: read nogood cell + assumptions cell → filter → explanation
+- `explain-all`: read nogoods + decision cells → filter → violated nogoods
+- `minimal-diagnoses`: formulate as tropical CSP → solve via solver infrastructure
+- `conflict-graph`: read nogoods → build graph
+
+These are correctly off-network: they are CONSUMERS of propagation results, like pretty-printing. They run after quiescence, reading final cell values. The module provides a query API over network state, not a state management mechanism.
+
+---
+
 ## §3 NTT Model
 
 ### §3.1 Lattice Declarations

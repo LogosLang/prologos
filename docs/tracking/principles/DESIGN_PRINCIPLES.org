@@ -429,6 +429,45 @@ risk assessments when evaluating whether to pursue an architectural
 direction. The question is not "will this pay off?" but "will we learn
 something valuable?" The answer is always yes.
 
+** The Hyperlattice Conjecture
+
+Every computable function can be represented as a fixpoint calculation
+on lattices, and for each computation there exists an optimal lattice
+structure (by some axis of optimality: parallelism, communication cost,
+convergence rate) that makes the fixpoint EMERGE through monotone
+information flow.
+
+This conjecture is the sharpening of "Propagators as Universal
+Computational Substrate." It is not a theorem --- it is a design
+mandate. When confronted with a computation that appears to require
+sequential algorithmic steps, we do NOT accept "this has to be an
+algorithm." We look for the lattice structure that makes it a fixpoint:
+
+- The greedy hitting-set algorithm → constraint satisfaction over a
+  tropical semiring: each nogood is an ~amb~ (decision cell), cost
+  minimization is tropical accumulation, the minimum-cost worldview IS
+  the minimum hitting set. The "algorithm" dissolves into lattice
+  operations solvable by our own ATMS infrastructure.
+
+- Sequential scan / iterate / walk → ask what information flows where.
+  The "scanning" is usually a propagator that watches a collection cell
+  and fires when the collection grows. The "iteration" is usually
+  convergence to fixpoint. The "walking" is usually structural
+  decomposition via the SRE.
+
+The decision point is never "this couldn't possibly be a lattice
+fixpoint." It is: "what is the right lattice structure to represent
+this information flow?" Finding that structure is harder than writing
+the algorithm --- but the result is parallel by construction (monotone
+fixpoint → CALM theorem → coordination-free).
+
+Origin: BSP-LE Track 2 self-critique (2026-04-08). The greedy
+hitting-set for ATMS diagnosis was challenged: "is there really not a
+propagator-friendly parallel treatment over a tropical semiring?" The
+answer was yes --- the hitting set IS a constraint satisfaction problem
+solvable by the ATMS solver itself. The "algorithm" was a failure of
+imagination about lattice structure, not a genuine limit of the model.
+
 ** Relationship to Other Principles
 
 - *Propagator-First Infrastructure* is the /practical application/ of
