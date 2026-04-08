@@ -1,0 +1,377 @@
+ns benchmarks::comparative::atms-adversarial
+
+;; ============================================================
+;; Adversarial benchmark for propagator-native search (BSP-LE Track 2)
+;; ============================================================
+;;
+;; Pre-0 baseline: measures DFS solver behavior on patterns that
+;; Track 2's propagator-native search must match or beat.
+;;
+;; Run with bench-ab.rkt for A/B comparison:
+;;   racket tools/bench-ab.rkt benchmarks/comparative/atms-adversarial.prologos --runs 15
+;;
+;; Sections:
+;;   A1:  Deterministic queries (no branching) — Tier 1 overhead ceiling
+;;   A2:  Binary choice (2 clauses) — minimal branching cost
+;;   A3:  Wide choice (10 clauses) — N→M filtering
+;;   A4:  Deep choice nesting (5 levels) — TMS depth / speculation depth
+;;   A5:  Contradiction cascade — nogood propagation efficiency
+;;   A6:  Non-recursive tabled predicate — memoization benefit
+;;   A7:  Many small solves (50) — per-command overhead
+;;   A8:  Shared variables across branches — branch isolation
+;;   A9:  Mixed deterministic + nondeterministic — Tier 1→2 transition
+;;   A10: Variable fan-in (many goals unifying same var) — cell contention
+;;   A11: Transitive chains (long walk paths) — cell-tree vs hasheq walk
+;;   A12: NAF under branching — S1 + worldview interaction
+
+;; ── A1: Deterministic queries (Tier 1 overhead ceiling) ──
+;; No branching needed. Track 2 Tier 1 must match DFS within 5%.
+
+;; Single fact lookup
+defr known-fact [?x]
+  || 42
+
+solve (known-fact ?x)
+
+;; Single-clause relation
+defr double [?n ?result]
+  &> (is result [int* n 2])
+
+solve (double 21 ?result)
+
+;; Chain of deterministic calls
+defr triple [?n ?result]
+  &> (is result [int* n 3])
+
+defr six-times [?n ?result]
+  &> (double n ?mid) (triple mid result)
+
+solve (six-times 7 ?result)
+
+;; Ground-only unification
+solve (= [pair 1 2] [pair 1 2])
+solve (= [some [some 42]] [some [some 42]])
+
+;; 10 sequential deterministic solves
+solve (double 1 ?r1)
+solve (double 2 ?r2)
+solve (double 3 ?r3)
+solve (double 4 ?r4)
+solve (double 5 ?r5)
+solve (double 6 ?r6)
+solve (double 7 ?r7)
+solve (double 8 ?r8)
+solve (double 9 ?r9)
+solve (double 10 ?r10)
+
+;; ── A2: Binary choice (2 clauses) ──
+;; Minimal branching: exactly 2 matching clauses.
+
+defr binary-choice [?x ?y]
+  &> (= x "left") (= y 1)
+  &> (= x "right") (= y 2)
+
+solve (binary-choice ?x ?y)
+
+;; Binary with shared variable
+defr binary-shared [?x ?r]
+  &> (= x 10) (is r [int+ x 1])
+  &> (= x 20) (is r [int+ x 2])
+
+solve (binary-shared ?x ?r)
+
+;; Binary with deeper body
+defr binary-deep [?a ?b ?c]
+  &> (= a 1) (is b [int+ a 10]) (is c [int* b 2])
+  &> (= a 2) (is b [int+ a 20]) (is c [int* b 3])
+
+solve (binary-deep ?a ?b ?c)
+
+;; ── A3: Wide choice (10 clauses) ──
+;; Tests N→M filtering efficiency: 10 clauses, only 1-2 match per query.
+
+defr color-code [?name ?code]
+  &> (= name "red") (= code 1)
+  &> (= name "green") (= code 2)
+  &> (= name "blue") (= code 3)
+  &> (= name "yellow") (= code 4)
+  &> (= name "cyan") (= code 5)
+  &> (= name "magenta") (= code 6)
+  &> (= name "white") (= code 7)
+  &> (= name "black") (= code 8)
+  &> (= name "orange") (= code 9)
+  &> (= name "purple") (= code 10)
+
+;; Specific match (1 result): first clause
+solve (color-code "red" ?code)
+
+;; Specific match: last clause
+solve (color-code "purple" ?code)
+
+;; All matches (10 results)
+solve (color-code ?name ?code)
+
+;; Query with partial binding
+solve (color-code ?name 5)
+
+;; ── A4: Deep choice nesting (5 levels) ──
+;; Binary branching at each level = 2^5 = 32 leaf branches.
+;; Tests TMS depth / speculation stack depth.
+
+defr level1 [?x]
+  &> (= x "a")
+  &> (= x "b")
+
+defr level2 [?x ?y]
+  &> (level1 x) (= y "p")
+  &> (level1 x) (= y "q")
+
+defr level3 [?x ?y ?z]
+  &> (level2 x y) (= z 1)
+  &> (level2 x y) (= z 2)
+
+;; 2^3 = 8 solutions
+solve (level3 ?x ?y ?z)
+
+;; 4 levels: 2^4 = 16 branches
+defr level4 [?x ?y ?z ?w]
+  &> (level3 x y z) (= w "i")
+  &> (level3 x y z) (= w "ii")
+
+solve (level4 ?x ?y ?z ?w)
+
+;; ── A5: Contradiction cascade ──
+;; One branch's failure should NOT cost other branches.
+;; Tests: is nogood propagation efficient? Do surviving branches pay
+;; for contradicted branches?
+
+defr contradicting [?x ?y]
+  &> (= x 1) (= y "one")
+  &> (= x 2) (= y [int+ 1 "oops"])  ;; type error → contradiction
+  &> (= x 3) (= y "three")
+
+;; 2 of 3 clauses succeed; 1 contradicts
+solve (contradicting ?x ?y)
+
+;; Multiple contradictions
+defr many-fail [?x]
+  &> (= x 1)
+  &> (= x [int+ "a" "b"])  ;; fail
+  &> (= x 3)
+  &> (= x [int+ "c" "d"])  ;; fail
+  &> (= x 5)
+  &> (= x [int+ "e" "f"])  ;; fail
+  &> (= x 7)
+
+;; 4 of 7 succeed, 3 contradict
+solve (many-fail ?x)
+
+;; ── A6: Non-recursive tabled predicate ──
+;; First call computes; subsequent calls should be free (memoized).
+;; Tests producer/consumer tabling.
+
+defr expensive-fact [?n ?result]
+  &> (is result [int* n n])
+
+;; First call: computes
+solve (expensive-fact 5 ?r1)
+
+;; Repeat: should be memoized
+solve (expensive-fact 5 ?r2)
+solve (expensive-fact 5 ?r3)
+
+;; Different argument: new computation
+solve (expensive-fact 7 ?r4)
+
+;; Repeat of new argument: memoized
+solve (expensive-fact 7 ?r5)
+solve (expensive-fact 7 ?r6)
+
+;; 10 repeats of same query
+solve (expensive-fact 5 ?rep1)
+solve (expensive-fact 5 ?rep2)
+solve (expensive-fact 5 ?rep3)
+solve (expensive-fact 5 ?rep4)
+solve (expensive-fact 5 ?rep5)
+solve (expensive-fact 5 ?rep6)
+solve (expensive-fact 5 ?rep7)
+solve (expensive-fact 5 ?rep8)
+solve (expensive-fact 5 ?rep9)
+solve (expensive-fact 5 ?rep10)
+
+;; ── A7: Many small solves (per-command overhead) ──
+;; Each solve is an independent command. Measures setup/teardown cost.
+;; Track 2 Tier 1 must not regress vs DFS.
+
+solve (= ?v1 1)
+solve (= ?v2 2)
+solve (= ?v3 3)
+solve (= ?v4 4)
+solve (= ?v5 5)
+solve (= ?v6 6)
+solve (= ?v7 7)
+solve (= ?v8 8)
+solve (= ?v9 9)
+solve (= ?v10 10)
+solve (= ?v11 11)
+solve (= ?v12 12)
+solve (= ?v13 13)
+solve (= ?v14 14)
+solve (= ?v15 15)
+solve (= ?v16 16)
+solve (= ?v17 17)
+solve (= ?v18 18)
+solve (= ?v19 19)
+solve (= ?v20 20)
+solve (= ?v21 21)
+solve (= ?v22 22)
+solve (= ?v23 23)
+solve (= ?v24 24)
+solve (= ?v25 25)
+solve (= ?v26 26)
+solve (= ?v27 27)
+solve (= ?v28 28)
+solve (= ?v29 29)
+solve (= ?v30 30)
+solve (= ?v31 31)
+solve (= ?v32 32)
+solve (= ?v33 33)
+solve (= ?v34 34)
+solve (= ?v35 35)
+solve (= ?v36 36)
+solve (= ?v37 37)
+solve (= ?v38 38)
+solve (= ?v39 39)
+solve (= ?v40 40)
+solve (= ?v41 41)
+solve (= ?v42 42)
+solve (= ?v43 43)
+solve (= ?v44 44)
+solve (= ?v45 45)
+solve (= ?v46 46)
+solve (= ?v47 47)
+solve (= ?v48 48)
+solve (= ?v49 49)
+solve (= ?v50 50)
+
+;; ── A8: Shared variables across branches ──
+;; Tests variable isolation between branches and transitive binding.
+
+solve (rel [?x ?y ?z]
+  (= ?x ?y) (= ?y ?z) (= ?z 42))
+
+solve (rel [?a ?b ?c ?d]
+  (= ?a [pair ?b ?c])
+  (= ?c [some ?d])
+  (= ?d 99))
+
+;; Transitive through constructors
+solve (rel [?p ?q ?r ?s]
+  (= [pair ?p ?q] [pair 1 ?r])
+  (= [pair ?r ?s] [pair 2 3]))
+
+;; Long transitive chain
+solve (rel [?a ?b ?c ?d ?e ?f]
+  (= ?a ?b) (= ?b ?c) (= ?c ?d)
+  (= ?d ?e) (= ?e ?f) (= ?f 100))
+
+;; ── A9: Mixed deterministic + nondeterministic ──
+;; First goals are deterministic (Tier 1). Later goal has choice point (Tier 2).
+;; Tests: seamless Tier 1→2 transition mid-query.
+
+defr choose-sign [?sign]
+  &> (= sign "positive")
+  &> (= sign "negative")
+
+solve (rel [?n ?doubled ?sign]
+  (= ?n 7)
+  (is ?doubled [int* ?n 2])
+  (choose-sign ?sign))
+
+;; More complex: 3 deterministic + 1 branching + 2 more deterministic
+defr choose-color [?c]
+  &> (= c "red")
+  &> (= c "blue")
+  &> (= c "green")
+
+solve (rel [?a ?b ?c ?sum ?color ?label]
+  (= ?a 10)
+  (= ?b 20)
+  (is ?sum [int+ ?a ?b])
+  (choose-color ?color)
+  (= ?label "done"))
+
+;; ── A10: Variable fan-in (many goals binding same var) ──
+;; Multiple goals all contribute information about the same variable.
+;; Tests cell contention in propagator model.
+
+solve (rel [?x]
+  (= ?x [pair ?a ?b])
+  (= ?a 1)
+  (= ?b 2))
+
+;; Wider fan-in: 5 goals about components of one structure
+solve (rel [?result]
+  (= ?result [pair [pair ?a ?b] [pair ?c ?d]])
+  (= ?a 1) (= ?b 2)
+  (= ?c 3) (= ?d 4))
+
+;; ── A11: Transitive variable chains ──
+;; Long walk paths in DFS substitution.
+;; Tests cell-tree propagation depth.
+
+solve (rel [?v1 ?v2 ?v3 ?v4 ?v5 ?v6 ?v7 ?v8 ?v9 ?v10]
+  (= ?v1 ?v2) (= ?v2 ?v3) (= ?v3 ?v4) (= ?v4 ?v5)
+  (= ?v5 ?v6) (= ?v6 ?v7) (= ?v7 ?v8) (= ?v8 ?v9)
+  (= ?v9 ?v10) (= ?v10 42))
+
+;; Chain with constructor wrapping at each step
+solve (rel [?x ?y ?z ?w ?v]
+  (= ?x [some ?y])
+  (= ?y [some ?z])
+  (= ?z [some ?w])
+  (= ?w [some ?v])
+  (= ?v 42))
+
+;; ── A12: NAF under branching ──
+;; Negation-as-failure interacting with choice points.
+;; Tests S1 (NAF) firing after S0 (regular goals) quiescence.
+
+defr has-value [?x]
+  || 1
+     3
+     5
+     7
+
+;; NAF: succeed because 2 is NOT in has-value
+solve (rel [?result]
+  (= ?result "not-found")
+  (not (has-value 2)))
+
+;; NAF: fail because 3 IS in has-value
+;; (This should return no results)
+
+;; NAF with branching: choose a value, then check it's not in has-value
+defr candidate [?x]
+  || 2
+     4
+     6
+     8
+
+;; All candidates should succeed (none are in has-value)
+solve (rel [?x ?label]
+  (candidate ?x)
+  (not (has-value ?x))
+  (= ?label "passed"))
+
+;; Mixed: some candidates in has-value, some not
+defr mixed-candidate [?x]
+  || 1     ;; in has-value → NAF fails
+     2     ;; not in has-value → NAF succeeds
+     3     ;; in has-value → NAF fails
+     4     ;; not in has-value → NAF succeeds
+
+;; Should return 2 results: x=2 and x=4
+solve (rel [?x]
+  (mixed-candidate ?x)
+  (not (has-value ?x)))
