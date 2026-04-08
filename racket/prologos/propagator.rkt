@@ -85,6 +85,10 @@
  net-add-parallel-map-propagator  ;; BSP-LE Track 2 Phase 1A: (DEPRECATED — use broadcast)
  ;; Broadcast profile
  (struct-out broadcast-profile)
+ ;; BSP-LE Track 2 Phase 2: assumption-tagged dependents
+ (struct-out dependent-entry)
+ current-assumption-viable?
+ make-branch-pu
  ;; PPN Track 4 Phase 1a: component-indexed firing
  pu-value-diff
  filter-dependents-by-paths
@@ -189,11 +193,20 @@
 
 ;; Propagator cell — immutable.
 ;; value: any Racket value (lattice element; starts at bot)
-;; dependents: champ-root (prop-id → component-path-or-#f)
-;;   component-path = #f means "fire on ANY change to this cell" (default, backward compat)
-;;   component-path = symbol or list means "fire only when this PU component changes"
+;; dependents: champ-root (prop-id → dependent-entry)
 ;;   PPN Track 4 Phase 1a: component-indexed propagator firing
+;;   BSP-LE Track 2 Phase 2: assumption-tagged dependents (emergent dissolution)
 (struct prop-cell (value dependents) #:transparent)
+
+;; BSP-LE Track 2 Phase 2: Dependent entry with component-path + assumption tag.
+;; paths: #f | symbol | (listof component-path-or-#f)
+;;   #f = fire on ANY change (default, backward compat)
+;;   symbol/list = fire only when matching PU component changes
+;; assumption-id: #f | assumption-id
+;;   #f = always active (parent propagator, default)
+;;   assumption-id = active only while this assumption is in its decision cell's domain
+;;   When not viable: scheduler skips this dependent (emergent dissolution)
+(struct dependent-entry (paths assumption-id) #:transparent)
 
 ;; Propagator — monotone function, immutable.
 ;; inputs: list of cell-id (cells this propagator reads)
@@ -660,24 +673,37 @@
 ;; PPN Track 4B Phase 0a: multi-path support — each dependent stores a
 ;; LIST of paths, not a single path. A propagator fires if ANY of its
 ;; watched paths intersects the changed set.
-;; deps-champ: prop-id → (listof component-path-or-#f)
+;; BSP-LE Track 2 Phase 2: dependent entries are now dependent-entry structs
+;; with paths + assumption-id. The assumption check skips inert dependents.
+;; deps-champ: prop-id → dependent-entry
 ;; changed-paths: list of changed path keys, or #f meaning "all changed"
+;; assumption-viable?: (assumption-id → boolean) | #f — viability checker
+;;   When #f (default): all dependents are active (Tier 1 / no ATMS)
+;;   When provided: dependents with non-viable assumptions are skipped
 ;; Returns: list of prop-id to enqueue.
-(define (filter-dependents-by-paths deps-champ changed-paths)
+(define (filter-dependents-by-paths deps-champ changed-paths
+                                    [assumption-viable? #f])
   (cond
-    ;; All changed (non-structured value) → enqueue all dependents
-    [(not changed-paths)
+    ;; All changed (non-structured value) → check all dependents (still need assumption filter)
+    [(and (not changed-paths) (not assumption-viable?))
      (champ-keys deps-champ)]
-    ;; Nothing changed → enqueue nothing (shouldn't happen, caller checks)
-    [(null? changed-paths)
-     '()]
-    ;; Specific paths changed → filter
+    ;; Specific filtering needed
     [else
-     (define changed-set changed-paths)
+     (define changed-set (or changed-paths #f))
      (champ-fold
       deps-champ
-      (lambda (pid paths acc)
+      (lambda (pid entry acc)
+        (define paths (if (dependent-entry? entry) (dependent-entry-paths entry) entry))
+        (define aid (if (dependent-entry? entry) (dependent-entry-assumption-id entry) #f))
         (cond
+          ;; BSP-LE Track 2: assumption viability check (emergent dissolution)
+          [(and aid assumption-viable? (not (assumption-viable? aid)))
+           (perf-inc-inert-dependent-skip!)
+           acc]  ;; inert — skip
+          ;; All changed + no path filtering → enqueue
+          [(not changed-set) (cons pid acc)]
+          ;; Nothing changed → skip
+          [(null? changed-set) acc]
           ;; Single #f (legacy) or list containing #f → watch all, always fire
           [(not paths) (cons pid acc)]
           [(and (list? paths) (memq #f paths)) (cons pid acc)]
@@ -785,19 +811,34 @@
              ;; PPN Track 4B Phase 0a: paths are now lists or #f.
              ;; has-component-paths? if any dependent has a non-#f paths value
              ;; containing at least one non-#f path.
-             [deps (let ([has-component-paths?
+             ;; BSP-LE Track 2 Phase 2: extract paths from dependent-entry structs
+            [deps (let ([has-component-paths?
                           (champ-fold deps-champ
-                                      (lambda (_k paths found?)
+                                      (lambda (_k entry found?)
+                                        (define paths (if (dependent-entry? entry)
+                                                          (dependent-entry-paths entry)
+                                                          entry))
                                         (or found?
                                             (and paths
                                                  (list? paths)
                                                  (for/or ([p (in-list paths)]) p))))
+                                      #f)]
+                        ;; Check if any dependent has an assumption tag
+                        [has-assumptions?
+                          (champ-fold deps-champ
+                                      (lambda (_k entry found?)
+                                        (or found?
+                                            (and (dependent-entry? entry)
+                                                 (dependent-entry-assumption-id entry))))
                                       #f)])
-                     (if has-component-paths?
-                         ;; Slow path: compute diff, filter dependents
-                         (let ([changed (pu-value-diff old-val merged)])
-                           (filter-dependents-by-paths deps-champ changed))
-                         ;; Fast path: no component paths registered, enqueue all
+                     (if (or has-component-paths? has-assumptions?)
+                         ;; Slow path: compute diff, filter dependents (+ assumption check)
+                         (let ([changed (if has-component-paths?
+                                            (pu-value-diff old-val merged)
+                                            #f)])
+                           (filter-dependents-by-paths deps-champ changed
+                                                       (current-assumption-viable?)))
+                         ;; Fast path: no component paths, no assumptions → enqueue all
                          (champ-keys deps-champ)))]
              [new-wl (append deps (prop-network-worklist net))]
              ;; Check contradiction
@@ -1135,6 +1176,13 @@
 ;; Topology changes require stratum boundaries (stratification).
 (define current-bsp-fire-round? (make-parameter #f))
 
+;; BSP-LE Track 2 Phase 2: Assumption viability checker for emergent dissolution.
+;; When set (Tier 2): (assumption-id → boolean) — checks if assumption is still
+;; in its decision cell's domain. Used by filter-dependents-by-paths to skip
+;; inert branch propagators.
+;; When #f (Tier 1 / default): all dependents are active.
+(define current-assumption-viable? (make-parameter #f))
+
 ;; B2f Phase 0: Per-quiescence cell-write instrumentation.
 ;; When non-#f, these are boxes that net-cell-write increments.
 ;; - write-counter: every net-cell-write call
@@ -1158,11 +1206,15 @@
 ;; of (cell-id . path) pairs declaring which PU component a propagator
 ;; watches for each input cell. If omitted (or a cell-id is not in the
 ;; assoc), the propagator watches the entire cell (path = #f, backward compat).
+;; BSP-LE Track 2 Phase 2: #:assumption is an optional assumption-id.
+;; When set, the dependent entry is tagged — the scheduler skips it when
+;; the assumption is no longer viable (emergent branch dissolution).
 ;; Path values are arbitrary keys (symbols, integers, etc.) that correspond
 ;; to keys in a hasheq PU value. The component path is stored in the cell's
 ;; dependent set: prop-id → path-or-#f.
 (define (net-add-propagator net input-ids output-ids fire-fn
-                            #:component-paths [component-paths '()])
+                            #:component-paths [component-paths '()]
+                            #:assumption [assumption-id #f])
   ;; PAR Track 1: During BSP fire rounds, propagator creation is allowed
   ;; but the new propagator is NOT scheduled on the worklist. It exists
   ;; in the result-net's propagator CHAMP. fire-and-collect-writes captures
@@ -1192,8 +1244,9 @@
                           (if (null? matches)
                               #f  ;; no paths declared for this cell → watch all
                               (map cdr matches)))]
+                 [entry (dependent-entry paths assumption-id)]
                  [new-deps (champ-insert (prop-cell-dependents cell)
-                                          ph pid paths)])
+                                          ph pid entry)])
             (define-values (cn* _)
               (tchamp-insert-owned! cn sb ch cid
                                     (struct-copy prop-cell cell
@@ -1215,6 +1268,24 @@
               (struct-copy prop-net-hot (prop-network-hot net)
                 [worklist (cons pid (prop-network-worklist net))]))])
    pid))
+
+;; ========================================
+;; Branch PU (BSP-LE Track 2 Phase 2)
+;; ========================================
+;;
+;; Creates a branch Pocket Universe by forking the parent network.
+;; CHAMP structural sharing: branch starts as reference to parent's cells/propagators.
+;; Branch-local writes diverge at the write point; parent is unmodified.
+;;
+;; The branch's identity is its assumption-id in the group-level decision cell.
+;; NO worldview cell — the branch accesses the decision cell via component-path.
+;;
+;; Propagators installed on the branch use #:assumption to tag their dependent
+;; entries. The scheduler's filter-dependents-by-paths checks viability — when
+;; the assumption is eliminated from the decision cell, the branch's propagators
+;; become invisible (emergent dissolution, no explicit pu-drop).
+(define (make-branch-pu parent-net assumption-id)
+  (values (fork-prop-network parent-net) assumption-id))
 
 ;; ========================================
 ;; Broadcast Propagator (BSP-LE Track 2 Phase 1B)
@@ -1281,7 +1352,7 @@
       (define ch (cell-id-hash cid))
       (define cell (champ-lookup (prop-network-cells net) ch cid))
       (if (eq? cell 'none) cn
-          (let ([new-deps (champ-insert (prop-cell-dependents cell) ph pid #f)])
+          (let ([new-deps (champ-insert (prop-cell-dependents cell) ph pid (dependent-entry #f #f))])
             (define-values (cn* _)
               (tchamp-insert-owned! cn sb ch cid
                                     (struct-copy prop-cell cell [dependents new-deps])

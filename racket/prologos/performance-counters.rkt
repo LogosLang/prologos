@@ -34,6 +34,7 @@
  perf-inc-resolution-cycle!
  perf-inc-prop-firing!
  perf-inc-cell-alloc!
+ perf-inc-inert-dependent-skip!
  perf-inc-prop-alloc!
 
  ;; Lifecycle
@@ -136,7 +137,9 @@
    resolution-cycles      ;; iterations of run-stratified-resolution! loop
    prop-firings           ;; propagator firings in run-to-quiescence
    cell-allocs            ;; cells allocated via net-new-cell
-   prop-allocs)           ;; PUnify Phase 1: propagators added via net-add-propagator
+   prop-allocs            ;; PUnify Phase 1: propagators added via net-add-propagator
+   ;; BSP-LE Track 2 Phase 2: inert dependent instrumentation
+   inert-dependent-skips)  ;; times filter-dependents skipped an inert assumption-tagged dependent
   #:mutable #:transparent)
 
 ;; Parameter: #f = disabled (default), perf-counters struct = enabled
@@ -211,6 +214,11 @@
   (let ([pc (current-perf-counters)])
     (when pc (set-perf-counters-cell-allocs! pc (add1 (perf-counters-cell-allocs pc))))))
 
+;; BSP-LE Track 2 Phase 2: inert dependent instrumentation
+(define-syntax-rule (perf-inc-inert-dependent-skip!)
+  (let ([pc (current-perf-counters)])
+    (when pc (set-perf-counters-inert-dependent-skips! pc (add1 (perf-counters-inert-dependent-skips pc))))))
+
 (define-syntax-rule (perf-inc-prop-alloc!)
   (let ([pc (current-perf-counters)])
     (when pc (set-perf-counters-prop-allocs! pc (add1 (perf-counters-prop-allocs pc))))))
@@ -221,7 +229,7 @@
 
 ;; with-perf-counters: set up fresh counters, run body, return (values result pc)
 (define-syntax-rule (with-perf-counters body ...)
-  (let ([pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)])
+  (let ([pc (perf-counters 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)])
     (parameterize ([current-perf-counters pc])
       (let ([result (begin body ...)])
         (values result pc)))))
