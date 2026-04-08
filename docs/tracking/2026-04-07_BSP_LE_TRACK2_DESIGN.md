@@ -17,7 +17,7 @@
 |-------|-------------|--------|-------|
 | 0 | Pre-0: benchmarks + acceptance file | ✅ | Baselines captured (0a-0c). Acceptance file (0d) at implementation start. |
 | 1 | Decision cell infrastructure + broadcast propagator | ✅ | 1A: `4df2a4d8` decision-cell.rkt. 1Bi: `a50fc138` A/B data. 1Bii: `fb0650a3` broadcast propagator + profile. 35 tests, 392/392, 7644 tests. |
-| 2 | PU-per-branch lifecycle | ⬜ | Assumption-tagged dependents (emergent dissolution). No pu-drop. Commit = cell write to accumulator. Inert-dependent instrumentation. |
+| 2 | PU-per-branch lifecycle | ✅ | commit `0a78069a`. dependent-entry struct, #:assumption on net-add-propagator, make-branch-pu, perf-inc-inert-dependent-skip!, 7 tests. 393/393, 7651 tests. |
 | 3 | Per-nogood propagators (RKan) | ⬜ | (4.1) Per-NOGOOD propagator, fan-in=|ng|. Contradiction → topology drop request. |
 | 4 | Speculation migration | ⬜ | 6 files (R1): propagator.rkt, elab-speculation-bridge, typing-propagators, metavar-store, cell-ops, test-tms-cell |
 | 5 | ATMS struct dissolution | ⬜ | All 7 fields → cells. Struct REMOVED. atms.rkt becomes query function library. (P4) |
