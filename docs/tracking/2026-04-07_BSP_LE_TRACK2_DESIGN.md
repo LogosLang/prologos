@@ -434,48 +434,56 @@ propagator broadcast-clause-match                          ;; M1: ONE propagator
 ;; decomposition avoids this by only tracking the specific alternatives
 ;; each nogood cares about.
 
-;; Per-nogood commitment tracking: broadcast + component-indexing + emergent counting
-;; Cell value: { committed-count: Nat, groups: {G: Bool, ...} }
-;; Merge: per-position OR for group bools, max for count.
-;; Count EMERGES from the merge — no counting in fire functions.
-;; Contradiction: committed-count = |ng| (all members committed = full nogood realized)
-;; Narrowing trigger: committed-count = |ng| - 1
+;; Per-nogood commitment tracking: structural unification of nogood pattern against decisions
+;; Cell value: { G_A: #f | h_A, G_B: #f | h_B, ... }  — partial nogood pattern match
+;; Merge: per-position OR (once committed, stays committed). Carries assumption-id, not Bool.
+;; Full match (all non-#f) = contradiction. Cell value IS the provenance.
 
-cell commitment-{ng} : CommitmentStatus
-  :value   { committed-count : Nat, groups : (Hasheq Group Bool) }
-  :merge   (λ [old new]
-             ;; Merge group bools (OR: once committed, stays committed)
-             ;; Recount committed-count from merged groups
-             (let [merged-groups [hash-union (groups old) (groups new) #:combine or]]
-               { committed-count [count-true merged-groups]
-                 groups merged-groups }))
-  :contradicts? (λ [v] [= (committed-count v) [length ng]])
+cell commitment-{ng} : (Hasheq Group (Option AssumptionId))
+  :value   { G_A : #f, G_B : #f, ... }               ;; initially unmatched
+  :merge   (λ [old new] [hash-union old new #:combine or])  ;; per-position OR
+  :contradicts? (λ [v] [for/and [val [hash-values v]] val])  ;; all non-#f
+  :kind :structural                                    ;; SRE: component-indexed by group
+  :component-paths [G for G in [groups-of ng]]
 
 propagator broadcast-commit-tracker {ng : Nogood}
   :reads  [decision-G : Cell (DecisionDomain G) for G in [groups-of ng]]
-  :writes [commitment-{ng} : Cell CommitmentStatus]
+  :writes [commitment-{ng}]
   :broadcast-profile
     :items    [groups-of ng]
-    :item-fn  (λ [G decisions]
-               ;; Check: is this group's decision a singleton containing the nogood member?
-               (let [d [hash-ref decisions G]]
-                 (when [and [singleton? d] [= [the-element d] [member-of ng G]]]
-                   { committed-count 1, groups { G : #t } })))
-    :merge-fn commitment-merge
+    :item-fn  (λ [G decision-values]
+               ;; Structural: is decision-G a singleton containing the nogood member?
+               (let [d [decision-value-for G decision-values]]
+                 (when [and [decision-committed? d]
+                            [equal? [decision-committed-assumption d]
+                                    [nogood-member-for ng G]]]
+                   (hasheq G [nogood-member-for ng G]))))
+    :merge-fn hash-union-or
   :component-paths [(commitment-{ng} . G) for G in [groups-of ng]]
-  ;; ONE fire, reads all group decisions, writes component-indexed commitment status
 
 propagator nogood-narrower {ng : Nogood}
-  :reads  [commitment-{ng} : Cell CommitmentStatus]
+  :reads  [commitment-{ng}]
   :writes [decision-remaining : Cell (DecisionDomain G')]
-  :component-paths [(commitment-{ng} . :committed-count)]   ;; only fire when count changes
-  ;; Threshold: fires when committed-count = |ng| - 1
-  ;; Finds the ONE uncommitted group, narrows its decision cell.
-  ;; Hash scan of size |ng| (2-3) — no filter/map/length chain.
-  (let [status [read commitment-{ng}]]
-    (when [= (committed-count status) [- [length ng] 1]]
-      (let [remaining [find-uncommitted (groups status)]]
-        [narrow [decision remaining] [exclude [member-of ng remaining]]])))
+  :component-paths [(commitment-{ng} . G) for G in [groups-of ng]]  ;; fire when any position changes
+  ;; For |ng|=2: read two positions. One non-#f, one #f → narrow the #f group.
+  ;; For |ng|=3: read three positions. Two non-#f, one #f → narrow the #f group.
+  ;; The output target is WHICH position is still #f — structural, not scanned.
+  (let [positions [read-all-positions commitment-{ng} [groups-of ng]]]
+    (let [filled [filter non-false? positions]]
+      (when [= [length filled] [- [length ng] 1]]
+        (let [remaining-group [the-group-with-#f positions]]
+          [narrow [decision remaining-group]
+                  [exclude [nogood-member-for ng remaining-group]]]))))
+
+propagator nogood-contradiction-detector {ng : Nogood}
+  :reads  [commitment-{ng}]
+  :writes [nogoods : Cell NogoodSet]
+  :component-paths [(commitment-{ng} . G) for G in [groups-of ng]]
+  ;; When all positions are non-#f, the cell value IS the provenance.
+  ;; Write the assumption-id set to the nogoods cell.
+  (let [positions [read-all-positions commitment-{ng} [groups-of ng]]]
+    (when [all? non-false? positions]
+      [write nogoods [set [hash-values positions]]]))
 
 propagator goal-unify
   :reads  [lhs : Cell TermValue, rhs : Cell TermValue]
@@ -665,7 +673,9 @@ exchange S0 <-> S1
 | **L0** | `lattice NogoodSet` | `nogood-merge` (= `set-union`) | decision-cell.rkt |
 | **L0** | `property Boolean` | SRE property declaration via Track 2G | sre-core.rkt |
 | **L2** | `propagator broadcast-clause-match` | `net-add-broadcast-propagator` (ONE propagator, N items) | propagator.rkt |
-| **L2** | `propagator broadcast-commit-tracker` | Broadcast over groups in nogood, component-indexed | propagator.rkt |
+| **L2** | `propagator broadcast-commit-tracker` | Broadcast over groups, writes assumption-id to component positions | propagator.rkt |
+| **L2** | `propagator nogood-narrower` | Threshold on commitment cell, narrows remaining group | propagator.rkt |
+| **L2** | `propagator nogood-contradiction-detector` | Full commitment → write provenance to nogoods cell | propagator.rkt |
 | **L2** | `propagator branch-creator` | `atms-amb-on-network` | relations.rkt |
 | **L2** | `propagator per-nogood-watcher` | `install-nogood-propagator` (one per nogood, fan-in = |ng|) | propagator.rkt |
 | **L2** | `propagator contradiction-detector` | Extension of `net-cell-write` contradiction path | propagator.rkt |
@@ -976,32 +986,110 @@ The cleanup is DEFERRED, not omitted. The instrumentation ensures we return to t
 
 ### Phase 3: Per-Nogood Propagators (Right Kan Extension)
 
-**What changes** (4.1: per-NOGOOD propagators, not per-decision watchers):
+**Design resolutions from Phase 3 mini-design conversation:**
 
-1. **`propagator.rkt`**: Per-nogood infrastructure (three components per nogood):
+#### 3.1 Commitment cell — SRE structural lattice analysis
 
-   **(a) Commitment cell** (one per nogood): Component-indexed cell tracking which groups' members are committed. Cell value: `{ committed-count: Nat, groups: {G: Bool, ...} }`. The merge function ORs per-group bools and recomputes count — the count EMERGES from the merge, no counting in fire functions. Contradiction when `committed-count = |ng|` (all members committed = full nogood realized).
+**(SRE lattice lens applied):**
+- **Classification**: STRUCTURAL — component-indexed by group. One compound cell per nogood, not |ng| separate cells (saves cell allocation, uses component-indexing).
+- **Algebraic properties**: Product of |ng| OR-lattices. Per-position: `#f ⊔ aid = aid`, `aid ⊔ aid = aid`. Idempotent, commutative, associative.
+- **Bridges**: Decision cell → commitment position (per-group bridge). Commitment cell → narrower (fan-in threshold). Commitment cell → nogood cell (contradiction = provenance).
+- **Primary vs derived**: Commitment positions are PRIMARY (written by bridges from decisions). No `committed-count` field — the narrower reads positions directly (2-3 reads for |ng| = 2-3).
+- **Structural unification insight**: The commitment cell IS the nogood pattern in the process of being unified against decision state. Each position fill is a partial match. Full fill = pattern fully matched = contradiction proven. The cell value IS the provenance (no gathering needed).
 
-   **(b) Broadcast commit-tracker** (one broadcast propagator per nogood): Reads ALL group decision cells (fan-in = |ng|, typically 2-3). Processes all groups in ONE fire via broadcast pattern. For each group: checks if its decision cell is a singleton containing the nogood member. Writes component-indexed `{G: #t}` to the commitment cell. ONE propagator, ONE fire, ONE write.
+**Cell value**: `hasheq { G_A: #f | h_A,  G_B: #f | h_B, ... }`
+- `#f` = group not yet committed to its nogood member
+- `h_G` (assumption-id) = group committed — carries the IDENTITY of what committed (provenance)
+- Merge: per-position `(λ [old new] (or new old))` — once set, stays set
+- Contradiction: all positions non-#f (full pattern match = nogood realized)
+- §3.1a compliant: propagators access via component-paths per group
 
-   **(c) Nogood narrower** (one threshold propagator per nogood): Reads the commitment cell. Fires when `committed-count = |ng| - 1` (all except one committed). Finds the uncommitted group (one hash scan of size |ng|), narrows its decision cell to exclude the nogood member. No filter/map/length chain — reads one cell, one hash scan.
+#### 3.2 Commit-tracker — broadcast over groups
 
-   Total per nogood: 1 commitment cell + 1 broadcast propagator + 1 threshold propagator. For 100 nogoods: 100 cells + 200 propagators. Each broadcast propagator has fan-in 2-3 (typical nogood size).
+ONE broadcast propagator per nogood. Items = groups in the nogood. For each group: reads decision-cell-G via the broadcast's shared input values. If decision-cell-G is a singleton containing the nogood member h_G → writes `{G: h_G}` to the commitment cell at component position G.
 
-2. **When nogoods are discovered**: A contradiction in a branch writes a new nogood to the shared nogood cell. A watching propagator reads the nogood cell and installs a new per-nogood propagator for the new nogood. This is topology creation at the topology stratum — same protocol as PAR Track 1.
+Cell-ids for each group's decision cell are captured at installation time (structural co-installation, not a mapping lookup). The broadcast `item-fn`:
+```
+(λ [group-id input-values]
+  ;; input-values[i] = decision cell value for group-id
+  ;; (positional, established at installation — no mapping)
+  (when (and (decision-committed? decision-val)
+             (equal? (decision-committed-assumption decision-val)
+                     (nogood-member-for-group ng group-id)))
+    {group-id: (nogood-member-for-group ng group-id)}))
+```
 
-3. **Contradiction detection**: When a group-level decision cell narrows to ∅ (empty), it's contradicted. A per-decision contradiction propagator watches the decision cell and emits a topology request to drop ALL branch PUs that committed to alternatives in that group (M3: via topology request, not direct drop).
+#### 3.3 Narrower — threshold on commitment cell
 
-**Cost analysis** (Pre-0 data, §0b; corrected per 4.2):
-- Per nogood: 1 commitment cell (~270ns) + 1 broadcast propagator (~810ns) + 1 narrower (~810ns) = ~1.9μs install
-- Per broadcast fire: ONE fire processing |ng| groups (2-3 checks at ~62ns each) = ~186ns
-- Per narrowing fire: ONE hash scan of size |ng| = ~60ns
-- Total per new nogood discovery: ~2.1μs (install + first fire). Subsequent fires: ~250ns.
-- At 100 nogoods: ~210μs install, then propagation overhead proportional to affected nogoods only.
+Watches commitment cell (all positions via component-paths). For |ng| = 2: reads two positions. If one is non-#f and the other is #f → narrow the #f group's decision cell to exclude its nogood member. Two reads, one conditional, zero scanning.
 
-**This IS the right Kan extension**: each nogood is its own information-flow unit (commitment cell + broadcast tracker + narrower). No scanning over all nogoods. No scanning over all decisions. Information flows from decision cells → per-nogood commitment → narrowing, filtered by the nogood's own group membership.
+For |ng| = 3: reads three positions. If two non-#f, one #f → narrow the #f group. Three reads, one conditional.
 
-**Test coverage**: Watcher narrows decision on relevant nogood, ignores irrelevant nogoods, contradiction detection (domain → ∅), multiple decisions with independent watchers.
+The output target (which decision cell to narrow) is determined by WHICH position is still #f — structural, not scanned.
+
+#### 3.4 Contradiction detector — provenance IS the cell value
+
+When ALL commitment positions are non-#f, the cell value `{G_A: h_A, G_B: h_B}` IS the nogood. A contradiction bridge reads the commitment cell and writes the set of assumption-ids `{h_A, h_B}` to the nogoods cell. **No gathering, no scanning — the cell value IS the explanation.**
+
+This is the structural dual: the commitment cell is the nogood "proof in progress." Each position fill is evidence. Full fill = proof complete. The proof IS the data.
+
+#### 3.5 Topology trigger — data-driven descriptors, not callbacks
+
+When new nogoods are discovered (nogoods cell grows), a topology watcher broadcasts `nogood-install-request` DESCRIPTORS (data, not callbacks) to the topology-request cell:
+
+```racket
+(struct nogood-install-request
+  (nogood-set       ;; hasheq of assumption-ids
+   group-cell-ids)  ;; (listof (cons group-id cell-id))
+  #:transparent)
+```
+
+The topology-request cell's merge = set-union. Duplicate requests for the same nogood deduplicate naturally (struct equality). **No "last-seen" cell, no diff computation, no installed-set tracking.** The watcher broadcasts requests for ALL nogoods in the cell each time it fires. Duplicates merge to no-op. New nogoods produce new requests. The topology stratum pattern-matches on `nogood-install-request` and installs the per-nogood infrastructure (commitment cell + commit-tracker + narrower + contradiction detector).
+
+#### 3.6 Decision-level contradiction detection
+
+When a group-level decision cell narrows to ∅ (empty), the per-decision contradiction detector (installed per group at `atms-amb` time) writes to the nogoods cell. The nogood = the branch's own assumption-id set. The branch knows its own identity (from `make-branch-pu`'s assumption-id). The detector writes `{h_i}` for a single-branch contradiction, or the full assumption set for compound contradictions derived from the commitment cell (§3.4).
+
+#### 3.7 Implementation
+
+**What changes**:
+
+1. **`decision-cell.rkt`**: Commitment cell merge function + contradiction predicate:
+   - `commitment-merge`: per-position OR (using hash-union with `or` combiner)
+   - `commitment-contradicts?`: all positions non-#f
+   - `commitment-provenance`: extract assumption-id set from committed positions
+
+2. **`propagator.rkt`**: `install-per-nogood-infrastructure`:
+   - Creates commitment cell (one compound cell, component-indexed by group)
+   - Installs broadcast commit-tracker (broadcast over groups, writes component positions)
+   - Installs narrower (threshold propagator, watches commitment positions)
+   - Installs contradiction detector (bridge: commitment cell → nogoods cell when full)
+
+3. **`propagator.rkt`**: `nogood-install-request` struct + topology handler:
+   - Struct: `(nogood-set, group-cell-ids)` — data descriptor
+   - Topology stratum pattern-matches on this struct, calls `install-per-nogood-infrastructure`
+
+4. **`propagator.rkt`**: Nogood topology watcher:
+   - Watches nogoods cell
+   - Broadcasts `nogood-install-request` for all nogoods in the cell
+   - Topology-request cell merge deduplicates
+
+**Cost analysis** (Pre-0 data; corrected per 4.2):
+- Per nogood: 1 commitment cell (~270ns) + 1 broadcast propagator (~810ns) + 1 narrower (~810ns) + 1 contradiction detector (~810ns) = ~2.7μs install
+- Per commit-tracker fire: ONE broadcast fire processing |ng| groups (2-3 reads) = ~180ns
+- Per narrower fire: |ng| position reads (2-3) + one conditional = ~90ns
+- Per contradiction write: read commitment cell + write to nogoods cell = ~600ns
+- At 100 nogoods: ~270μs install, then propagation overhead proportional to affected nogoods only
+
+**This IS the right Kan extension**: each nogood is its own information-flow unit. The commitment cell IS the structural unification of the nogood pattern against decision state. Provenance emerges from the cell value. Topology installation is data-driven. No scanning, no callbacks, no mutable closure state.
+
+**Test coverage**:
+- Commitment cell merge (per-position OR, non-#f survives)
+- Commit-tracker fires on decision singleton, writes correct position
+- Narrower fires at N-1 threshold, narrows correct remaining group
+- Contradiction detector fires at all-filled, writes correct provenance
+- Topology watcher deduplicates duplicate nogood requests
+- End-to-end: decision narrows → commitment tracks → narrower narrows sibling → contradiction if all committed
 
 ### Phase 4: Speculation Migration
 
