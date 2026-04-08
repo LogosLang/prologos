@@ -16,7 +16,7 @@
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 0 | Pre-0: benchmarks + acceptance file | ✅ | Baselines captured (0a-0c). Acceptance file (0d) at implementation start. |
-| 1 | Decision cell infrastructure + parallel-map propagator | ✅ | commit `4df2a4d8`. decision-cell.rkt (pure leaf), net-add-parallel-map-propagator, 30 tests. SRE registration deferred to Phase 5. |
+| 1 | Decision cell infrastructure + broadcast propagator | ✅ → 🔄 | 1A: `4df2a4d8` decision-cell.rkt (pure leaf), 30 tests. 1Bi: A/B data (broadcast 2.3-75.6× faster). 1Bii: revise to broadcast model. |
 | 2 | PU-per-branch lifecycle | ⬜ | Create from parent, commit via topology request, drop via topology request |
 | 3 | Per-nogood propagators (RKan) | ⬜ | (4.1) Per-NOGOOD propagator, fan-in=|ng|. Contradiction → topology drop request. |
 | 4 | Speculation migration | ⬜ | 6 files (R1): propagator.rkt, elab-speculation-bridge, typing-propagators, metavar-store, cell-ops, test-tms-cell |
@@ -356,14 +356,8 @@ propagator branch-creator {clauses : (List ClauseInfo)}    ;; atms-amb
   ;; Emits topology requests for decision cell + PU creation
   [atms-amb-on-network clauses]
 
-propagator filtered-nogood-decision-watcher {G : AmbGroup}  ;; right Kan extension
-  :reads  [nogoods : Cell NogoodSet]
-  :writes [decision-G : Cell (DecisionDomain G)]
-  (let [ngs [read nogoods]]
-    (for-each [ng ngs]
-      (when [and [intersects? ng [alternatives G]]
-                 [other-assumptions-committed? ng G]]
-        [narrow decision-G [exclude [group-member ng G]]])))
+;; OLD filtered-nogood-decision-watcher REMOVED (had for-each step-think).
+;; Replaced by per-nogood-watcher (4.1) + broadcast commit-trackers below.
 
 propagator decision-contradiction-detector {G : AmbGroup}
   :reads  [decision-G : Cell (DecisionDomain G)]
@@ -381,13 +375,18 @@ propagator branch-committer {G : AmbGroup}
     [write answer-accumulator [set [read result-G]]]     ;; M5: answer accumulator
     [write topology-requests [set [commit-pu G]]])       ;; M3: topology request
 
-propagator parallel-map-clause {ci : ClauseInfo}          ;; M1: one per clause
+propagator broadcast-clause-match                          ;; M1: ONE propagator, N items
   :reads  [arg-cells : Cell TermValue ...]
   :writes [match-results : Cell (Set (Pair ClauseInfo Bindings))]
+  :broadcast-profile
+    :items    clauses                                      ;; data-indexed arity
+    :item-fn  (λ [ci args] [try-alpha-rename-and-unify ci args])
+    :merge-fn set-union
+  ;; Fire function: read inputs ONCE, process ALL clauses, ONE write
   (let [args [map read arg-cells]]
-    (let [bindings [try-alpha-rename-and-unify ci args]]
-      (when bindings
-        [write match-results [set [pair ci bindings]]])))
+    (let [results [for/list [ci clauses]
+                    [try-alpha-rename-and-unify ci args]]]
+      [write match-results [filter-not-false results]]))
 
 ;; (1.2) NO global consistency-fan-in. Consistency = absence of per-decision
 ;; contradiction. Each decision cell has a contradiction detector (Phase 3)
@@ -398,12 +397,34 @@ propagator per-nogood-watcher {ng : Nogood}                ;; (4.1) one per nogo
   :reads  [decision-G : Cell (DecisionDomain G)            ;; for each group G in ng
            for G in [groups-of ng]]
   :writes [decision-remaining : Cell (DecisionDomain G')]  ;; the last un-narrowed group
-  ;; Fires when all groups in the nogood except one are committed (singletons).
-  ;; Narrows the remaining group to exclude its member of the nogood.
-  (let [committed [filter singleton? [map read [groups-of ng]]]]
-    (when [= [length committed] [- [length ng] 1]]
-      (let [remaining-group [the-uncommitted-group ng committed]]
-        [narrow [decision remaining-group] [exclude [member-of ng remaining-group]]])))
+  ;; Fires when ANY of its input decision cells changes.
+  ;; Reads all |ng| decision cells (typically 2-3).
+  ;; If all except one are committed singletons containing their nogood member:
+  ;; narrows the remaining group to exclude its member.
+  ;; No filter/map/length — reads 2-3 cells, checks directly.
+  (let [statuses [for/list [G [groups-of ng]]
+                   [cons G [read [decision G]]]]]
+    (let [committed [filter [fn [pair] [and [singleton? [cdr pair]]
+                                            [= [the-element [cdr pair]]
+                                               [member-of ng [car pair]]]]]
+                            statuses]]
+      (when [= [length committed] [- [length statuses] 1]]
+        (let [remaining [the-uncommitted statuses committed]]
+          [narrow [decision [car remaining]]
+                  [exclude [member-of ng [car remaining]]]]))))
+
+;; Per-nogood commitment tracking via broadcast propagator:
+;; For nogoods of size 3+, decompose into broadcast over groups.
+;; Each group's commitment status tracked via component-indexed cell.
+propagator broadcast-commit-tracker {ng : Nogood}
+  :reads  [decision-G : Cell (DecisionDomain G) for G in [groups-of ng]]
+  :writes [commitment-{ng} : Cell (Hasheq Group Bool)]
+  :broadcast-profile
+    :items    [groups-of ng]
+    :item-fn  (λ [G decisions] [cons G [singleton? [hash-ref decisions G]]])
+    :merge-fn hash-merge
+  :component-paths [(commitment-{ng} . G) for G in [groups-of ng]]
+  ;; ONE fire, reads all group decisions, writes component-indexed commitment status
 
 propagator goal-unify
   :reads  [lhs : Cell TermValue, rhs : Cell TermValue]
@@ -587,14 +608,16 @@ exchange S0 <-> S1
 
 | NTT Level | NTT Construct | Racket Implementation | File |
 |---|---|---|---|
-| **L0** | `lattice Worldview` | `worldview-merge`, `worldview-bot` | propagator.rkt |
-| **L0** | `lattice NogoodSet` | `nogood-merge` (= `set-union`) | propagator.rkt |
+| **L0** | `lattice DecisionDomain` | `decision-domain-merge`, `decision-from-alternatives` | decision-cell.rkt |
+| **L0** | `lattice NogoodSet` | `nogood-merge` (= `set-union`) | decision-cell.rkt |
 | **L0** | `property Boolean` | SRE property declaration via Track 2G | sre-core.rkt |
+| **L2** | `propagator broadcast-clause-match` | `net-add-broadcast-propagator` (ONE propagator, N items) | propagator.rkt |
+| **L2** | `propagator broadcast-commit-tracker` | Broadcast over groups in nogood, component-indexed | propagator.rkt |
 | **L2** | `propagator branch-creator` | `atms-amb-on-network` | relations.rkt |
 | **L2** | `propagator per-nogood-watcher` | `install-nogood-propagator` (one per nogood, fan-in = |ng|) | propagator.rkt |
 | **L2** | `propagator contradiction-detector` | Extension of `net-cell-write` contradiction path | propagator.rkt |
-| **L2** | `propagator branch-pruner` | `pu-drop` | propagator.rkt |
-| **L2** | `propagator branch-committer` | `pu-commit` + `tms-commit` | propagator.rkt |
+| **L2** | `propagator branch-pruner` | Topology request via `pu-drop` | propagator.rkt |
+| **L2** | `propagator branch-committer` | Topology request via `pu-commit` + `tms-commit` | propagator.rkt |
 | **L2** | `propagator goal-unify` | Cell-tree unification propagator | relations.rkt |
 | **L2** | `propagator goal-naf` | NAF propagator at S1 | relations.rkt |
 | **L2** | `propagator table-producer/consumer` | `install-table-producer/consumer` | tabling.rkt |
@@ -775,12 +798,28 @@ Sections 1-4 are uncommented as phases complete. Section 5 is aspirational (Trac
    - `assumptions-merge`: `set-union` (monotone: assumptions only added)
    - Counter cell: `max` merge (monotone Nat)
 
-4. **`propagator.rkt`**: Parallel-map propagator pattern (M1):
-   - `net-add-parallel-map-propagator`: takes a list of input sets, a fire function, installs N independent propagators — one per input set
-   - All N fire in the same BSP superstep
-   - Results accumulate in a shared output cell via set-union merge
-   - This IS a polynomial functor: fan-out depends on input data
-   - First consumer: clause matching (Phase 6). Generalizes to: pattern matching, trait lookup, module resolution.
+4. **`propagator.rkt`**: Broadcast propagator pattern (M1, replaces N-propagator model):
+   - `net-add-broadcast-propagator`: installs ONE propagator that processes N items internally
+   - ONE fire, ONE diff, ONE merge — constant infrastructure overhead regardless of N
+   - Results accumulated via single cell write with merged output
+   - The `propagator` struct gains an optional `broadcast-profile` field:
+     `(broadcast-profile items item-fn merge-fn)` — metadata the scheduler uses to decompose for parallel execution
+   - When `broadcast-profile` is `#f` (default): existing behavior, zero overhead for non-broadcast propagators
+   - When `broadcast-profile` is set: the scheduler checks item count vs threshold. Below: sequential loop. Above: decompose into K chunks across parallel threads (Racket 9 `thread #:pool 'own`).
+   - This IS a polynomial functor: fan-out depends on input data. The broadcast-profile carries the arity.
+
+   **A/B benchmark data (Phase 1Bi)**:
+   | N | A (N-propagator) | B (broadcast) | Ratio |
+   |---|---|---|---|
+   | 3 | 6.2 μs | 2.7 μs | 2.3× |
+   | 10 | 17.3 μs | 2.9 μs | 5.9× |
+   | 50 | 127.2 μs | 3.7 μs | 34.7× |
+   | 100 | 364.4 μs | 4.8 μs | 75.6× |
+
+   N-propagator model: linear overhead (810ns install + 3μs fire per propagator).
+   Broadcast model: constant overhead (~2.7μs base + ~0.02μs per item).
+
+   First consumer: clause matching (Phase 6). Generalizes to: per-nogood commitment tracking (Phase 3), goal conjunction (Phase 7), pairwise nogood installation (Phase 5), pattern matching, trait lookup, module resolution.
 
 5. **NO worldview cell** (§2.6b): The worldview emerges from decision cells. No `worldview-cid` on the network. `net-cell-read`/`net-cell-write` use decision cells for TMS navigation in Tier 2 (Phase 9 activates this). Tier 1 uses `current-speculation-stack` as before.
 
@@ -922,12 +961,14 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
    - **Single-clause path** (no branching): If only one clause matches, install it directly in the current network. No `amb`, no PU overhead. This IS Tier 1 behavior — deterministic queries never touch ATMS.
    - **Multi-clause path** (branching): Two-step process following the array-programming pattern:
 
-     **Step 1 — Bulk clause matching (parallel-map propagator, M1):**
-     The goal-app propagator installs a **parallel-map propagator** (Phase 1 infrastructure) over the clause list. N independent fire functions — one per clause — each do α-rename + attempt unification with args. All N fire in the same BSP superstep. Results accumulate in a shared match-result cell via set-union merge. The result: the set of M matching clauses (M ≤ N) with their bindings. Clauses that fail unification are eliminated HERE, before any PU allocation.
+     **Step 1 — Bulk clause matching (broadcast propagator, M1):**
+     The goal-app propagator installs ONE **broadcast propagator** (Phase 1 infrastructure) over the clause list. The broadcast propagator reads the arg cells ONCE, processes ALL N clauses internally (each does α-rename + attempt unification), and writes ONE merged result to the match-result cell. Clauses that fail unification are eliminated HERE, before any PU allocation.
 
-     This is NOT "a function called inside a propagator" (M1 critique). It IS N propagators — one per clause — installed by the parallel-map pattern. The matching is genuinely parallel and genuinely on-network.
+     The broadcast-profile metadata enables the scheduler to decompose the N items across parallel threads when N exceeds the threshold. Today: sequential internal loop. With parallel thread executor: K chunks on K cores. The propagator network sees ONE fire, ONE diff, ONE merge regardless.
 
-     **(3.2) Precondition: arg cells must be stable** (resolved, non-bot) before the parallel-map fires. Match results accumulate via set-union (monotone), which means results only grow. If arg cells were refined after matching, previously-matching clauses might no longer match, but they'd remain in the accumulator (stale). In our solver, args ARE resolved once (query arguments are elaborated before the solver runs, solver variables only gain information). The readiness guard (fire only when all args are non-bot) ensures this precondition.
+     **A/B data**: At N=10 clauses, broadcast is 5.9× faster than N-propagator model. At N=50, 34.7×. Infrastructure overhead is constant (~2.7μs), not linear in N.
+
+     **(3.2) Precondition: arg cells must be stable** (resolved, non-bot) before the broadcast fires. Match results accumulate via set-union (monotone), which means results only grow. If arg cells were refined after matching, previously-matching clauses might no longer match, but they'd remain in the accumulator (stale). In our solver, args ARE resolved once (query arguments are elaborated before the solver runs, solver variables only gain information). The readiness guard (fire only when all args are non-bot) ensures this precondition.
 
      **Step 2 — Branch creation (only for survivors):**
      For the M matching clauses, call `atms-amb-on-network` (now: create M decision cell entries + M branch PUs). Each PU gets:
@@ -949,7 +990,7 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
    - For each clause: α-rename all variables, attempt arg↔param unification
    - Returns `(listof (clause-info . fresh-bindings))` — only successful matches
    - This is a pure function (no network mutation) — suitable for parallel execution within a BSP superstep
-   - Future optimization: the scheduler can recognize this as an embarrassingly parallel map and distribute across OS threads
+   - The broadcast-profile metadata enables the scheduler to decompose into parallel chunks across OS threads (Racket 9 `thread #:pool 'own`)
 
 4. **Variable representation**: Logic variables become cells in the branch PU's network (not symbols in a hasheq). `?x = suc ?y` becomes: write `(suc cell-y)` to `cell-x`. This is the cell-tree model from PUnify Part 2 — variables ARE cells, unification IS cell writes.
 
@@ -1103,6 +1144,26 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
 
 ---
 
+## §6b Broadcast Propagator Deployment Audit
+
+Every place in the Track 2 design where data-indexed parallel processing occurs MUST use the broadcast propagator pattern, not N separate propagators. Audit of all deployment sites:
+
+| Phase | Component | Items | Item Function | Merge | Notes |
+|---|---|---|---|---|---|
+| **3** | Per-nogood commitment tracking | Groups in a nogood (2-3) | Check if decision cell committed to nogood member | Component-indexed hash merge | Broadcast over groups, writes to commitment cell |
+| **5** | `atms-amb` pairwise nogood creation | N(N-1)/2 pairs from N alternatives | Create one nogood hasheq per pair | Nogood cell set-union | Broadcast over pairs, one write to nogood cell |
+| **6** | Clause matching | N clauses | α-rename + try-unify per clause | Set-union of matching results | PRIMARY consumer. Broadcast over clause list. |
+| **7** | Goal conjunction installation | K goals in clause body | Install goal propagator per goal | N/A (topology, not value) | Each goal installs independently. Broadcast over goals for TOPOLOGY REQUESTS. |
+| **8** | Producer clause body | Clause body goals | Same as Phase 7 (conjunction) | Same | Tabled relation body = conjunction |
+
+**Pattern reuse beyond Track 2** (future tracks):
+- SRE Track 5 (pattern compilation): broadcast over constructor alternatives
+- SRE Track 3 (trait resolution): broadcast over candidate impls
+- SRE Track 7 (module loading): broadcast over export/import pairs
+- PPN Track 6/7 (grammar rules): broadcast over grammar productions
+
+The broadcast propagator is the **polynomial functor made operational**. Building it here establishes the reusable pattern for all data-indexed parallel processing across the entire project.
+
 ## §6a Naming: Propagator-Native Search
 
 The search mechanism in this design is not "backtracking" — there is no going back. The operational model:
@@ -1154,4 +1215,4 @@ The design uses "propagator-native search" throughout. The DFS path (`:strategy 
 9. Concurrent branch exploration functional (multiple PUs in same BSP superstep)
 10. **No worldview cell** — worldview emerges from decision cells, consistency via AND-fan-in
 11. Answer accumulator cell collects results from committed branches (no scanning)
-12. Parallel-map propagator pattern functional and reusable for future consumers
+12. Broadcast propagator pattern functional with scheduler decomposition for parallel execution. A/B data: 2.3-75.6× faster than N-propagator model. Deployed in Phases 3, 5, 6, 7, 8 (see §6b audit).
