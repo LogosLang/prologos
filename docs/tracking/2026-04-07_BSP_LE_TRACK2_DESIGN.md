@@ -26,7 +26,7 @@
 | 8 | Producer/consumer tabling | ⬜ | Table registry check in goal dispatcher. Non-recursive completion. |
 | 9 | Two-tier activation + parameter removal | ⬜ | 9a: Tier 1→2 via topology stratum (M4). 9b: REMOVE `current-speculation-stack` (6.1). |
 | 10 | Solver config wiring | ⬜ | `:strategy`, `:execution`, `:tabling` operational |
-| 11 | Parity validation | ⬜ | DFS ↔ propagator-native result equivalence. Deep nesting hotspot (R7). |
+| 11 | Parity validation + inert-dependent checkpoint | ⬜ | DFS ↔ propagator-native equivalence. R7 hotspot. **CHECKPOINT**: review inert-dependent data → S(-1) lattice-narrowing cleanup if warranted. |
 | T | Dedicated test files | ⬜ | Per-phase |
 | PIR | Post-implementation review | ⬜ | |
 
@@ -1264,7 +1264,22 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
    - Contradictory goals → empty result set via answer accumulator (M5)
    - NAF with WF oracle → 3-valued behavior preserved
 
-**Test coverage**: Parity tests, benchmark comparison, acceptance file, edge cases.
+6. **CHECKPOINT: Inert-dependent instrumentation review** (from Phase 2 §2.4):
+   Review the `perf-inc-inert-dependent-skip!` counter data from the parity benchmarks.
+   - How many inert entries per cell on hot paths?
+   - Is any cell accumulating >50 inert entries?
+   - What is the per-change overhead from inert checks on the adversarial benchmarks?
+
+   If the data warrants it, design and implement **S(-1) dependents cleanup as lattice narrowing**:
+   - Dependents set IS a lattice (set under ⊇)
+   - Cleanup = `current-dependents ∩ viable-dependents` (lattice narrowing)
+   - Per-cell "dependents-cleaner" propagator at S(-1): reads dependents + decision cells, writes narrowed set
+   - Multiple cells fire cleaners in parallel (broadcast over affected cells)
+   - This is emergent, parallel, on-network retraction — NOT step-think iteration
+
+   **This is an important propagator design pattern**: retraction expressed as lattice narrowing on metadata (dependents), not as imperative removal. The pattern generalizes: any network metadata that accumulates (dependents, provenance tags, trace entries) can be retracted via lattice narrowing at S(-1). Capture in `PATTERNS_AND_CONVENTIONS.org` after validation.
+
+**Test coverage**: Parity tests, benchmark comparison, acceptance file, edge cases, inert-dependent data review.
 
 ---
 
