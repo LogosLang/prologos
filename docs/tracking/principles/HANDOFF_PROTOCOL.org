@@ -1,0 +1,138 @@
+#+TITLE: Session Handoff Protocol
+#+SUBTITLE: Maintaining Thread Across Context Boundaries
+#+AUTHOR: The Prologos Project
+#+DATE: 2026-04-08
+
+* Purpose
+
+When a Claude session ends and a new one begins, context is lost. The
+compaction summary is thin — it captures /what happened/ but not /what
+was understood/. The new session starts cold and must reconstruct the
+understanding that the previous session spent hours building.
+
+This protocol codifies how to create a /handoff document/ that bridges
+sessions. The handoff is not a summary — it is a /transfer of
+understanding/: what the project is, what was decided, why, what was
+surprising, what the current state is, and what to load to warm up
+properly.
+
+* The Handoff Document
+
+** When to Create
+
+Create a handoff document when:
+1. Context window pressure suggests a session restart
+2. A natural checkpoint is reached (design complete, phase complete)
+3. The user requests a transition
+
+Location: ~docs/tracking/handoffs/YYYY-MM-DD_TOPIC_handoff.md~
+
+** Structure
+
+*** §1: Current Work State (PRECISE)
+
+What is being built. What phase. What commit. What is done and what
+remains. Not prose — structured data:
+
+- Track and phase number
+- Design document path (with version: D.3, D.6, etc.)
+- Last commit hash + message
+- Progress tracker status (copy the table)
+- Next immediate task
+
+*** §2: Documents to Hot-Load (ORDERED)
+
+The new session MUST read these documents IN THIS ORDER before doing
+any work. Reading 40 lines and saying "I have full context" is not
+acceptable.
+
+Two categories:
+
+**** Always-Load (every session)
+
+These establish the project's identity and process:
+
+1. ~CLAUDE.md~ + ~.claude/rules/*.md~ — project instructions
+2. ~MEMORY.md~ — auto-memory index
+3. ~DESIGN_METHODOLOGY.org~ — the 5 stages, implementation protocol
+4. ~DESIGN_PRINCIPLES.org~ — the 10 principles + Hyperlattice Conjecture
+5. ~CRITIQUE_METHODOLOGY.org~ — P/R/M lenses, SRE lattice lens
+6. ~ACCEPTANCE_FILE_METHODOLOGY.org~ — how to write/validate .prologos files
+7. ~HANDOFF_PROTOCOL.org~ (this document) — so the session knows the protocol
+
+**** Session-Specific (varies per handoff)
+
+These are specific to the work in progress:
+
+- The current design document (READ IN FULL — not 40 lines)
+- The self-critique and external critique documents
+- The Stage 1/2 research/audit document
+- The current acceptance file
+- The most recent dailies
+- Any research notes referenced by the design
+
+Each entry includes: file path, line count, and WHY it matters for
+the current work.
+
+*** §3: Key Design Decisions (RATIONALE)
+
+List every major design decision made in the session, with:
+- What was decided
+- Why (which principle, which critique finding, which data)
+- What was rejected and why
+
+These are the decisions the new session must NOT revisit without good
+reason. Revisiting a settled decision wastes the work that settled it.
+
+*** §4: Surprises and Non-Obvious Findings
+
+Things that were counterintuitive or that took significant discussion
+to resolve. These are the highest-risk items for a new session to
+get wrong:
+
+- "The commitment cell must NOT use contradicts? parameter — it halts
+  the network"
+- "current-assumption-viable? was a parameter violation — replaced
+  with on-network cell read"
+- "The N-propagator model is 75× slower than broadcast at N=100"
+
+Each entry: what, why it's surprising, and the resolution.
+
+*** §5: Open Questions and Deferred Work
+
+What was explicitly NOT resolved and where it's tracked:
+
+- DEFERRED.md references
+- Design document "CHECKPOINT" items (e.g., Phase 11 inert-dependent review)
+- Open questions from the most recent design conversation
+
+*** §6: Process Notes
+
+Any process improvements or conventions established during the session
+that the new session should follow:
+
+- "We use conversational cadence — max 1h autonomous stretch"
+- "Phase completion is a 5-step blocking checklist"
+- "The SRE lattice lens is mandatory for any lattice design"
+- "Every PU propagator must declare component-paths (§3.1a invariant)"
+
+* Hot-Load Reading Protocol
+
+When a new session starts with a handoff document:
+
+1. Read the handoff document FIRST (§1-§6)
+2. Read the Always-Load documents (§2a) — skim if recently read,
+   but DO read them
+3. Read EVERY Session-Specific document (§2b) — IN FULL, not sampled
+4. Summarize understanding back to the user BEFORE starting work
+5. The user validates the understanding — only then proceed
+
+"I have full context" requires: having read every document listed in
+§2, being able to articulate every decision in §3, and knowing every
+surprise in §4. If any of these are unclear, ASK before proceeding.
+
+* Cross-References
+
+- [[file:DESIGN_METHODOLOGY.org][DESIGN_METHODOLOGY.org]] § Stage 4: implementation protocol
+- ~.claude/rules/workflow.md~: operational rules
+- ~MEMORY.md~: auto-memory index (always loaded, but handoff adds specificity)
