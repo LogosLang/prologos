@@ -203,6 +203,64 @@ Domain expertise + algorithmic instinct = the most common source of
 well-intentioned but architecturally harmful critique. The briefing
 (§ Orientation for External Critics) exists to redirect this.
 
+* SRE Lattice Lens (Mandatory for All Lattice Design Decisions)
+
+Every lattice that appears in a design — whether newly introduced or
+referenced from existing infrastructure — must be analyzed through the
+SRE lens. This analysis is not optional; it is the mechanism by which
+we ensure lattices compose correctly with the rest of the architecture.
+
+** What the SRE Lattice Lens Asks
+
+For each lattice:
+
+1. *Classification*: Is this a VALUE lattice (pure join) or a
+   STRUCTURAL lattice (SRE-derived decomposition with constructor
+   tags)? If structural, register it in the SRE form registry.
+
+2. *Algebraic properties*: What properties does it have? Boolean?
+   Distributive? Heyting? Quantale (tensor)? Complemented? Each
+   property gates what operations and optimizations are available.
+   Declare properties via the Track 2G property infrastructure.
+
+3. *Bridges to other domains*: How does this lattice connect to every
+   other lattice in the design? Each connection is a Galois bridge
+   (α/γ adjunction). If two lattices interact but no bridge is
+   declared, information is flowing off-network.
+
+4. *Composition*: Draw the full bridge diagram — all lattices and all
+   connections. Does the diagram have gaps? Does information flow from
+   A to C without passing through a declared bridge? Gaps are
+   architectural impurities.
+
+5. *Primary vs derived*: Is this lattice a primary source of
+   information, or is it derived (computed from other lattice cells)?
+   Derived lattices should be labeled as such. Their cells are
+   read-only aggregates, not independent sources of truth.
+
+** Origin
+
+BSP-LE Track 2 D.1 self-critique discovered that the worldview
+lattice was treated as primary, but the SRE analysis revealed that
+DECISION cells are primary and the worldview is derived (the union
+of all decision singletons). This reframing changed the architecture:
+nogoods narrow decisions (not worldviews), branches are created
+per-decision (not per-worldview), and the ATMS struct's ~believed~
+field is unnecessary.
+
+This finding would have been invisible without the SRE lattice lens.
+The worldview lattice's algebraic properties were correct; its
+RELATIONSHIP to other lattices was wrong. The lens catches
+compositional errors that per-lattice analysis misses.
+
+** When to Apply
+
+- *Every Stage 3 design* that introduces or references a lattice
+- *Every critique round* (P/R/M) — as a sub-lens of M (Propagator-Mindspace)
+- *Every NTT model* — the lattice declarations should include
+  ~:kind :value~ or ~:kind :structural~, ~:derived-from~ if applicable
+- *Any implementation phase* that creates new cells with merge functions
+
 * Integration with Design Methodology
 
 ** When to Apply

@@ -101,14 +101,78 @@ The nogood set is a separate lattice cell with set-union merge (monotone: nogood
    #:properties '(boolean distributive complemented heyting frame)))
 ```
 
-### §2.5 Galois Connections to Other Domains
+### §2.5 SRE Lattice Composition Analysis
 
-| Source | Target | Bridge | Direction |
-|---|---|---|---|
-| Worldview | Type lattice | Assumption gates type: under W, meta ?x has type T | W → Type |
-| Worldview | Term lattice | Assumption gates term: under W, solver var ?y = V | W → Term |
-| Worldview | Constraint lattice | Worldview activates constraints | W → Constraints |
-| Nogood set | Worldview | Filtered nogood → contradiction | Nogoods → W (RKan) |
+Seven lattices participate in the solver architecture. Each is classified as VALUE (pure join) or STRUCTURAL (SRE-derived decomposition), with algebraic properties declared:
+
+| Lattice | Carrier | Order | Merge | Kind | Properties |
+|---|---|---|---|---|---|
+| Worldview | P(AssumptionId) | ⊆ | set-union | Value (DERIVED) | Boolean, distributive, Heyting, frame |
+| Nogood | P(P(AssumptionId)) | ⊆ | set-union | Value | Boolean, distributive |
+| Decision (per amb) | P(Alternatives) | ⊇ (reverse) | set-intersection | **Structural** | Boolean (dual powerset), constraint narrowing |
+| Term Value | existing structural | — | SRE merge | Structural | Per Track 2H (Heyting ground sublattice) |
+| Answer Accumulator | P(Answer) | ⊆ | set-union | Value | Boolean, distributive |
+| Assumptions | P(Assumption) | ⊆ | set-union | Value | Boolean, distributive |
+| Counter | Nat | ≤ | max | Value | Chain |
+
+#### §2.5a Key Architectural Finding: Decisions Are Primary, Worldview Is Derived
+
+The SRE analysis reveals that **decision cells are the primary structural construct**. The worldview is a derived aggregate — the union of all decision singletons. This reframes the architecture:
+
+- Each `atms-amb` creates a **decision cell** (SRE structural domain, alternatives = constructors)
+- Nogoods narrow **decisions** (not worldviews) — eliminating alternatives from decision domains
+- Branches are created per-**decision alternative**, not per-worldview-combination
+- The worldview cell is COMPUTED from decision cells: `worldview = ∪ {chosen(D) | D ∈ decisions}`
+- The ATMS struct's `believed` field is unnecessary — the worldview is derived
+
+The decision lattice maps directly onto the SRE form registry:
+- Alternatives = constructors (mutually exclusive tags)
+- Choosing alternative h = matching constructor h → decompose into h's clause body
+- Two alternatives simultaneously = contradiction (same as merging Pi with Sigma → type-top)
+- Narrowing = eliminating constructors (same as constraint narrowing on types via Track 2H)
+
+This uses EXISTING infrastructure: constraint-cell.rkt (powerset under intersection), SRE form registry (constructor decomposition), Track 2H (structural narrowing).
+
+#### §2.5b Lattice Bridge Diagram
+
+```
+Assumptions ──(accumulate)──→ Worldview ←──(aggregate)── Decisions
+                                  │                         ↑
+                                  │                    (narrow)
+                                  │                         │
+                                  │                      Nogoods
+                                  │
+                          (gate per-branch)
+                                  │
+                    ┌─────────────┼─────────────┐
+                    ↓             ↓             ↓
+              Term cells    Term cells    Term cells
+              (branch 1)    (branch 2)    (branch K)
+                    │             │             │
+                    └─────────────┼─────────────┘
+                                  │
+                          (commit results)
+                                  ↓
+                          Answer Accumulator
+```
+
+#### §2.5c Bridges (Galois Connections Between Domains)
+
+| Bridge | From | To | α (forward) | Notes |
+|---|---|---|---|---|
+| Accumulate | Assumptions | Worldview | New assumption → extend worldview | Monotone |
+| Aggregate | Decisions (all) | Worldview | Union of singletons → worldview | Derived; worldview is read-only aggregate |
+| Narrow | Nogoods | Decisions | Nogood eliminates alternative from decision domain | Filtered RKan per-decision |
+| Decompose | Worldview | Decisions | `π_G(W) = W ∩ alternatives(G)` | Structural projection |
+| Gate | Worldview | Term cells | TMS-tagged read under worldview | Per-branch filtering |
+| Choose | Decision (singleton) | Branch topology | Committed choice → install clause body in PU | Topology mutation |
+| Commit | Term cells (per-branch) | Answer Acc | Branch result → answer set | Monotone set-union |
+| WorldviewToType | Worldview | Type lattice | Assumptions constrain type visibility | Cross-system |
+| WorldviewToTerm | Worldview | Term lattice | Assumptions constrain term values | Cross-system |
+
+The critical bridge is **Narrow (Nogoods → Decisions)**: nogoods flow to decision cells, not to worldview cells. A nogood involving assumption h from group G eliminates h from G's decision domain. The filtered watcher pattern (right Kan extension) applies per-decision: each decision cell has one watcher that fires only on nogoods involving its alternatives.
+
+This is more precise than the D.1 design's nogood→worldview bridge. Information flows to where narrowing happens (decision cells), not to the derived aggregate (worldview).
 
 ---
 
@@ -116,7 +180,7 @@ The nogood set is a separate lattice cell with set-union merge (monotone: nogood
 
 ### §3.1 Lattice Declarations
 
-```
+```prologos
 lattice Worldview
   :type  (Set AssumptionId)
   :bot   (set-empty)
@@ -124,6 +188,8 @@ lattice Worldview
   :meet  set-intersection
   :join  set-union
   :properties [:boolean :distributive :complemented :heyting :frame]
+  :kind  :value                          ;; DERIVED — computed from decision cells
+  :derived-from [Decision ...]           ;; union of all decision singletons
 
 impl Lattice Worldview
   merge [a b] := [set-union a b]
@@ -134,6 +200,24 @@ lattice NogoodSet
   :bot   (set-empty)
   :join  set-union
   :merge set-union
+  :kind  :value
+
+;; THE PRIMARY STRUCTURAL LATTICE: Decision domain per amb group
+;; Dual powerset — alternatives narrow monotonically
+lattice DecisionDomain {G : AmbGroup}
+  :type  (Set AssumptionId)              ;; subset of G's alternatives
+  :bot   [alternatives G]               ;; all viable (least info)
+  :top   (set-empty)                    ;; contradicted (no alternatives left)
+  :meet  set-intersection               ;; combine restrictions
+  :join  set-union                      ;; relax restrictions
+  :properties [:boolean :distributive :complemented]
+  :kind  :structural                    ;; SRE: alternatives = constructors
+  :lattice :structural                  ;; SRE form registry applies
+
+impl Lattice (DecisionDomain G)
+  merge [a b] := [set-intersection a b] ;; narrowing: more restrictions = more info
+  bot?  [d]   := [= d [alternatives G]]
+  top?  [d]   := [set-empty? d]         ;; contradiction
 ```
 
 ### §3.2 Level 0: Properties and Lattice Laws
@@ -260,26 +344,47 @@ functor GoalConjunction {goals : (List GoalDesc)}
 ### §3.5 Level 4: Bridges (Galois Connections)
 
 ```prologos
-;; Worldview gates type inference: assumptions constrain what types are visible
+;; PRIMARY BRIDGE: Nogoods narrow decision domains (not worldviews)
+;; This is the filtered RKan watcher, per-decision
+bridge NogoodToDecision {G : AmbGroup}
+  :from NogoodSet
+  :to   (DecisionDomain G)
+  :alpha (λ [ngs] 
+    ;; For each nogood involving an alternative from G:
+    ;; if the other assumptions in the nogood are all believed,
+    ;; eliminate G's alternative from the decision domain
+    [decision-narrow-by-nogoods ngs G])
+  :preserves [Monotone]                 ;; nogoods grow → domain shrinks (dual monotone)
+
+;; Decisions aggregate into worldview (worldview is DERIVED)
+bridge DecisionsToWorldview
+  :from (DecisionDomain G) ...          ;; all decision cells
+  :to   Worldview
+  :alpha (λ [decisions] [set-union-all [map singleton decisions]])
+  :preserves [Monotone Structural]
+
+;; Worldview gates type inference
 bridge WorldviewToType
   :from Worldview
   :to   TypeLattice
-  :alpha worldview->type-filter         ;; under worldview W, filter to types consistent with W
-  ;; No gamma — one-way (worldview constrains types, not vice versa)
+  :alpha worldview->type-filter
 
-;; Worldview gates term values
+;; Worldview gates term values (per-branch TMS read)
 bridge WorldviewToTerm
   :from Worldview
   :to   TermValue
   :alpha worldview->term-filter
 
-;; Nogood accumulation prunes worldviews (the filtered RKan watcher)
-bridge NogoodToWorldview
-  :from NogoodSet
-  :to   Worldview
-  :alpha nogood->contradiction-filter   ;; intersection-filtered per branch
-  ;; This IS the right Kan extension: demand-driven forwarding
-  :preserves [Monotone]                 ;; nogoods only grow → contradictions only grow
+;; Decision singleton triggers branch topology creation
+bridge DecisionToTopology {G : AmbGroup}
+  :from (DecisionDomain G)
+  :to   TopologyRequest
+  :alpha (λ [domain]
+    (when [singleton? domain]
+      [topology-request :commit-branch [the-element domain]])
+    (when [empty? domain]
+      [topology-request :drop-branch G]))
+  :preserves [Monotone]                 ;; domain only shrinks → requests only accumulate
 ```
 
 ### §3.6 Level 5: Stratification
