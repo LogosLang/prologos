@@ -159,29 +159,38 @@ This is an iterative cycle:
    or the bottleneck is different from expected. 4 confirmed instances
    where Pre-0 changed the design fundamentally.
 4. *Critique (D.3+)*: Subject the design to rigorous, independent
-   critique. Include a "codebase reality check" --- for each phase,
-   can you point to the specific lines of code it changes? If not,
-   the scope is speculative.
+   critique. Include the propagator-mindspace orientation (see
+   [[file:CRITIQUE_METHODOLOGY.org][CRITIQUE_METHODOLOGY.org]] § Orientation for External Critics).
 5. *Respond*: Address critiques --- accept, refine, or justify
-6. *Self-Critique (D.4)*: Two explicit lenses, both mandatory:
+6. *Self-Critique (D.2/D.4)*: Three explicit lenses (P/R/M), all
+   mandatory. See [[file:CRITIQUE_METHODOLOGY.org][CRITIQUE_METHODOLOGY.org]] for the full methodology.
+   Brief summary:
 
-   *Lens 1 — Principles Challenge*: Take each major design decision
-   and challenge it against the 10 load-bearing principles. Not
-   cataloguing ("✓ we use cells") but genuinely challenging: "could
+   *Lens P — Principles Challenged*: Take each major design decision
+   and actively /challenge/ it against the 10 load-bearing principles.
+   Not cataloguing ("✓ we use cells") but genuinely challenging: "could
    this be MORE aligned? Is there a principle being violated that
    we're rationalizing?" Red-flag phrases ("temporary bridge",
-   "keeping the old path") demand scrutiny. A decision that doesn't
-   clearly serve any principle should be questioned. A decision that
-   conflicts with a principle must name and justify the conflict.
+   "keeping the old path") demand scrutiny.
 
-   *Lens 2 — Codebase Reality Check*: For each phase and each claim
-   in the design, verify it against the actual code. Read the
-   functions. Run the greps. Check that signatures, call counts,
-   and data flow match what the design assumes --- not what the
-   audit said (audits can be wrong too), but what the code ACTUALLY
-   does right now. This is a redundant fallback against both design
-   speculation and audit error. If you can't point to the specific
-   lines of code a phase changes, the scope is speculative.
+   *Lens R — Reality-Check (Code Audit)*: For each phase, gather
+   precise counts and signatures from the actual codebase. How many
+   files, which functions, what line numbers, how many call sites?
+   Verify the design's claims against what the code ACTUALLY does ---
+   not what the Stage 2 audit said (audits can be wrong too). If you
+   can't point to the specific lines of code a phase changes, the
+   scope is speculative.
+
+   *Lens M — Propagator-Mindspace*: Challenge each design point for
+   imperative "step-think" process smells. Is this information flowing
+   through cells to a fixpoint, or is it a sequential algorithm
+   described with propagator vocabulary? The words "scan", "walk",
+   "iterate", "for each" are process smells. Every component must pass
+   the Network Reality Check: which ~net-add-propagator~ calls, which
+   ~net-cell-write~ calls, can you trace cell → propagator → cell →
+   result? PPN Track 4 demonstrated the failure mode: three critique
+   rounds validated a "propagator-native" design that was actually
+   function-call wrappers --- the M lens catches this.
 7. *Repeat*: Continue until all parties have clarity and confidence
 
 *** Key practices

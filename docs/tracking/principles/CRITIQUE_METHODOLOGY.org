@@ -1,0 +1,249 @@
+#+TITLE: Design Critique Methodology
+#+SUBTITLE: The Three Lenses and the Propagator-Mindspace Orientation
+#+AUTHOR: The Prologos Project
+#+DATE: 2026-04-08
+
+* Purpose
+
+This document codifies the methodology for design critiques in the
+Prologos project. It is referenced by [[file:DESIGN_METHODOLOGY.org][DESIGN_METHODOLOGY.org]] at Stage 3
+(critique rounds). It serves three roles:
+
+1. *Checklist for self-critique*: Apply all three lenses before
+   advancing a design to external critique.
+2. *Briefing for external critics*: Hand this document to anyone
+   reviewing a Prologos design. It orients them to evaluate from the
+   right mindspace.
+3. *Anti-pattern reference*: Names the specific failure modes that
+   critique exists to catch.
+
+* The Three Lenses (P/R/M)
+
+Every design critique applies three lenses. Findings are tagged with
+their lens code (e.g., P1, R3, M2) for traceability.
+
+** P: Principles Challenged
+
+Take each major design decision and actively /challenge/ it against the
+ten load-bearing principles (see [[file:../principles/DESIGN_PRINCIPLES.org][DESIGN_PRINCIPLES.org]] and MEMORY.md §
+"Principles-First Design Gate").
+
+/Challenging/ is NOT /cataloguing/. "Propagator-First: ✓ we use cells"
+is cataloguing. Challenging is: "Could this be MORE propagator-first?
+Is there a way to put this information on-network that we haven't
+considered? Is this off-network code truly necessary, or is it a
+convenience that could be structural?"
+
+For each decision, ask:
+- Which principle does this serve?
+- Could it be /more/ aligned with that principle?
+- Does it conflict with any other principle? If so, is the conflict
+  named and justified?
+
+The red-flag phrases from the workflow rules apply here with full force:
+"temporary bridge", "belt-and-suspenders", "partial retirement",
+"keeping the old path as fallback", "adding a parameter/callback to
+inject X", "scanning/polling for readiness", "defaults to #f for
+safety", "pragmatic approach", "opt-in for now", "validated but not
+deployed".
+
+** R: Reality-Check (Code Audit)
+
+Do a /concrete code audit/ of the codebase surfaces the design touches.
+Gather precise counts and signatures:
+
+- How many files does this design touch?
+- What are the specific functions/structs being modified?
+- How many call sites exist for each?
+- What are the exact line numbers and current signatures?
+- What parameter/global state does the current code depend on?
+- What tests cover this code path?
+
+The reality-check grounds the design in what EXISTS. Designs that
+float above the codebase produce implementation surprises. Designs
+that name specific files, functions, and line counts produce
+implementations that match.
+
+*Process*: For each phase in the design, the reality-check produces a
+mini-audit (see DESIGN_METHODOLOGY.org § Implementation Protocol,
+Step 1). The critique-time reality-check does the same audit at
+design scope — across all phases, not just one.
+
+*What to look for*:
+- Is the scope accurate? (Does the design claim to touch 3 files
+  when the code audit shows 8?)
+- Are there hidden consumers? (Code that uses the infrastructure
+  being changed, but isn't mentioned in the design.)
+- Are the migration paths realistic? (Can you see the actual
+  ~parameterize~ calls that need to change?)
+
+** M: Propagator-Mindspace
+
+Challenge each design point for imperative "step-think" process smells.
+The propagator model is /information flow on a network/, not
+/algorithmic steps in sequence/. The question for every component:
+
+#+begin_quote
+Is this information flowing through cells to a fixpoint, or is this
+a sequential algorithm described with propagator vocabulary?
+#+end_quote
+
+*Specific challenges*:
+
+1. *Information vs. instruction*: Does the design describe what
+   information flows where (declarative), or what steps happen in what
+   order (imperative)? Propagator designs should read as "when cell X
+   has value V, propagator P writes value W to cell Y." If they read
+   as "first do A, then do B, then check C," the mindspace is wrong.
+
+2. *All-at-once vs. sequential*: Could the described operations happen
+   simultaneously? If independent goals, independent branches, or
+   independent checks are described as sequential, ask why they can't
+   be parallel. "For each clause, try unification" is step-think.
+   "Install unification propagators for all clauses; they fire when
+   inputs are available" is propagator-think.
+
+3. *Emergent vs. imposed ordering*: Does the execution order emerge
+   from dataflow dependencies, or is it imposed by the design? If
+   "goal A must fire before goal B," ask: is that because A writes to
+   a cell B reads (dataflow — correct) or because the design says so
+   (imposed — suspect)?
+
+4. *Scanning and walking*: The words "scan", "walk", "iterate",
+   "traverse", "loop", "for each" are process smells. Each one
+   deserves scrutiny: is there a propagator-native way to express
+   this? Sometimes scanning is genuinely necessary (e.g., reading
+   all nogoods to check consistency). But often it reveals an
+   imperative algorithm disguised as on-network computation.
+
+5. *Network Reality Check*: For any component claimed to be on-network,
+   verify three concrete questions:
+   - Which ~net-add-propagator~ calls are added?
+   - Which ~net-cell-write~ calls produce the result?
+   - Can you trace: cell creation → propagator installation →
+     cell write → cell read = result?
+   If all three answers are "none/no," the component is imperative
+   regardless of what data structures it uses.
+
+* Orientation for External Critics
+
+When handing a Prologos design to an external critic, include this
+briefing:
+
+#+begin_quote
+*Prologos designs are evaluated from a propagator-mindspace.*
+
+The system's computational model is monotone information flow on a
+propagator network — not sequential algorithmic steps. When reviewing:
+
+- Do NOT suggest solutions that involve "first do X, then do Y."
+  Instead, suggest what information flows where, through which cells.
+- Do NOT suggest scanning/iterating data structures. Instead, suggest
+  which propagators watch which cells and fire when information
+  arrives.
+- Sequential ordering should EMERGE from dataflow dependencies, not
+  be imposed by design.
+- Every component should be traceable as: cell creation → propagator
+  installation → cell writes → cell reads = result.
+- If a component can't be traced this way, it should be explicitly
+  labeled as scaffolding with a retirement plan.
+- The ten design principles (especially Propagator-First, Data
+  Orientation, and Correct-by-Construction) are the evaluation
+  criteria, not algorithmic efficiency or implementation convenience.
+#+end_quote
+
+This orientation prevents a common failure mode: external critics
+who are experts in their domain (type theory, logic programming,
+constraint solving) but think in sequential algorithms. Their domain
+knowledge is invaluable; their instinct to express solutions as
+algorithms must be redirected toward information-flow descriptions.
+
+* Anti-Patterns in Critique
+
+** Cataloguing Instead of Challenging
+
+A principles section that says "Propagator-First: ✓ we use cells" is
+cataloguing — listing which principles are superficially present. It
+catches nothing. The challenge is: "Does this specific decision move
+us TOWARD or AWAY from the principle? Could it be MORE aligned?"
+
+Cataloguing is the default mode for both self-critique and LLM-based
+critique. It must be actively resisted.
+
+** Floating Above the Codebase
+
+A critique that discusses design decisions in the abstract, without
+referencing specific files, functions, or line numbers. This misses
+hidden consumers, incorrect scope estimates, and migration path
+infeasibility. The R lens exists to prevent this.
+
+** Step-Think Disguised as Propagator-Think
+
+A design that uses propagator vocabulary ("fire", "propagate",
+"quiescence") but describes sequential algorithms. The M lens exists
+to catch this. PPN Track 4 demonstrated the failure mode: three
+critique rounds validated a "propagator-native" design that was
+actually function-call wrappers.
+
+The signature: if you can re-describe the component as a ~for~ loop
+or a recursive function without changing its semantics, it's not a
+propagator — it's an algorithm using propagator data structures.
+
+** Steering Toward Algorithms
+
+An external critic suggests: "You could optimize this by sorting the
+nogoods and doing binary search." This is algorithmically sound but
+mindspace-wrong. The propagator-native solution is: "Each branch has
+a watcher propagator that fires when a relevant nogood arrives."
+The binary search is an implementation optimization WITHIN the
+propagator's fire function — not a replacement for the propagator
+architecture.
+
+Domain expertise + algorithmic instinct = the most common source of
+well-intentioned but architecturally harmful critique. The briefing
+(§ Orientation for External Critics) exists to redirect this.
+
+* Integration with Design Methodology
+
+** When to Apply
+
+The three lenses apply at every critique round:
+- *D.2 (self-critique)*: Apply P/R/M before circulating for external
+  review. Tag findings.
+- *D.3+ (external critique)*: Include the external briefing (§4).
+  Evaluate external findings through the M lens — are they suggesting
+  algorithms or information flow?
+- *Implementation pivots*: When a mid-implementation finding changes
+  the design, apply P/R/M to the changed component before proceeding.
+
+** Finding Format
+
+Each finding is tagged with its lens and a sequential number:
+
+#+begin_example
+P1: The nogood accumulation design uses set-union merge, but does not
+    challenge whether the merge could be a lattice operation with
+    richer algebraic properties (e.g., BDD-compressed representation).
+    → Resolution: set-union is correct; BDD is a future optimization.
+
+R3: The design claims 5 speculation users to migrate, but the code
+    audit finds 7 (including 2 in test-support.rkt that parameterize
+    current-speculation-stack).
+    → Resolution: add test-support.rkt to migration scope.
+
+M2: Phase 7 describes goal conjunction as "install goal propagators
+    in sequence, chaining output→input." This is step-think — goals
+    should be installed simultaneously with ordering emerging from
+    dataflow. Revised.
+#+end_example
+
+The M2 example above is a real finding from BSP-LE Track 2 D.1
+critique — the original Phase 7 description was step-think that was
+caught and corrected during review.
+
+* Cross-References
+
+- [[file:DESIGN_METHODOLOGY.org][DESIGN_METHODOLOGY.org]] § Stage 3: where critique rounds live in the process
+- [[file:DESIGN_PRINCIPLES.org][DESIGN_PRINCIPLES.org]]: the 10 load-bearing principles for the P lens
+- MEMORY.md § "Principles-First Design Gate": the operational rule for principles application
+- ~.claude/rules/workflow.md~ § "Network Reality Check": the 3 binary questions for the M lens
