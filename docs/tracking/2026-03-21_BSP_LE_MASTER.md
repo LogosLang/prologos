@@ -46,7 +46,7 @@ These inform the BSP Pipeline Track specifically and the Series architecture gen
 |---|-------|-------------|--------|------------|-------|
 | 0 | Allocation Efficiency | struct-copy optimization, CHAMP batching, field-group splitting | ⬜ | Pending | Audit complete (`f7bd03d`); foundation track — benefits all subsequent |
 | 1 | UnionFind | Persistent disjoint sets for solver state; UF + PropNetwork dual | ⬜ | Pending | LE Phase 4; can proceed in parallel with Track 2 |
-| 2 | ATMS Solver | Clause-as-assumption, N-ary speculation, worldview enumeration, two-tier activation | ⬜ | Pending | LE Phase 5 + Part 3 §6; the Multiverse Multiplexer |
+| 2 | ATMS Solver + Cell-Based TMS | Clause-as-assumption, N-ary speculation, worldview enumeration, two-tier activation. Folds in Track 1.5. | 🔄 | [Stage 1/2](../research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md) | LE Phase 5 + Part 3 §6 + Cell-Based TMS. ~1700 lines est. |
 | 3 | Tabling | Table registry, producer/consumer propagators, SLG completion detection | ⬜ | Pending | LE Phase 6; depends on Track 2 |
 | 4 | BSP Pipeline | Pipelined strata (left Kan), demand-driven forwarding (right Kan), partial barriers | ⬜ | Pending | Extends LE Phase 2.5; Kan extension architecture |
 | 5 | Solver Language | Connect solver-config knobs, pre-defined configurations, surface syntax | ⬜ | Pending | LE Phase 7; depends on all previous |
