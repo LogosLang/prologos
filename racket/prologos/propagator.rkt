@@ -902,7 +902,13 @@
                                       (cell-id-hash worldview-cache-cell-id)
                                       worldview-cache-cell-id))
        (define wv-bitmask (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))
-       (tagged-cell-write old-val wv-bitmask new-val)]
+       ;; Wrap as a DELTA tagged-cell-value (base=new-val, entry if worldview non-zero).
+       ;; The merge function combines old+delta correctly without entry duplication.
+       ;; Do NOT use tagged-cell-write here (it incorporates old state, merge would double it).
+       (if (zero? wv-bitmask)
+           (tagged-cell-value new-val '())  ;; unconditional write → update base
+           (tagged-cell-value (tagged-cell-value-base old-val)
+                              (list (cons wv-bitmask new-val))))]
       [(and (tms-cell-value? old-val) (not (tms-cell-value? new-val)))
        ;; Legacy TMS path — still needed during Phase 4 migration
        (tms-write old-val (current-speculation-stack) new-val)]
@@ -2419,7 +2425,11 @@
                                       (cell-id-hash worldview-cache-cell-id)
                                       worldview-cache-cell-id))
        (define wv-bitmask (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))
-       (tagged-cell-write old-val wv-bitmask new-val)]
+       ;; Delta tagged-cell-value (same fix as net-cell-write — no entry duplication)
+       (if (zero? wv-bitmask)
+           (tagged-cell-value new-val '())
+           (tagged-cell-value (tagged-cell-value-base old-val)
+                              (list (cons wv-bitmask new-val))))]
       [(and (tms-cell-value? old-val) (not (tms-cell-value? new-val)))
        ;; Legacy TMS path
        (tms-write old-val (current-speculation-stack) new-val)]

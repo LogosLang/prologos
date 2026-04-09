@@ -625,33 +625,36 @@
 ;; net: prop-network (the computation substrate, evolves with each operation)
 
 ;; key-map: hasheq arbitrary-key → cell-id (for atms-read-cell/write-cell compat)
-(struct solver-state (ctx net key-map) #:transparent)
+;; amb-groups: (listof (listof assumption-id)) — one group per solver-state-amb call
+(struct solver-state (ctx net key-map amb-groups) #:transparent)
 
 ;; Create a solver-state from a prop-network.
 ;; Allocates solver cells and installs the worldview projection.
 (define (make-solver-state net)
   (define-values (net* ctx) (make-solver-context net))
-  (solver-state ctx net* (hasheq)))
+  (solver-state ctx net* (hasheq) '()))
 
 ;; Assume: returns (values new-solver-state assumption-id)
 (define (solver-state-assume ss name datum)
   (define-values (net* aid) (solver-assume (solver-state-ctx ss) (solver-state-net ss) name datum))
-  (values (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss)) aid))
+  (values (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss) (solver-state-amb-groups ss)) aid))
 
 ;; Retract: returns new-solver-state
 (define (solver-state-retract ss aid)
   (define net* (solver-retract (solver-state-ctx ss) (solver-state-net ss) aid))
-  (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss)))
+  (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss) (solver-state-amb-groups ss)))
 
 ;; Add nogood: returns new-solver-state
 (define (solver-state-add-nogood ss nogood-set)
   (define net* (solver-add-nogood (solver-state-ctx ss) (solver-state-net ss) nogood-set))
-  (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss)))
+  (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss) (solver-state-amb-groups ss)))
 
 ;; Amb: returns (values new-solver-state (listof assumption-id))
 (define (solver-state-amb ss alternatives)
   (define-values (net* hyps) (solver-amb (solver-state-ctx ss) (solver-state-net ss) alternatives))
-  (values (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss)) hyps))
+  (values (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss)
+                        (append (solver-state-amb-groups ss) (list hyps)))
+          hyps))
 
 ;; Consistent?: returns boolean
 (define (solver-state-consistent? ss assumption-set)
@@ -663,21 +666,20 @@
 ;; With-worldview: for each assumption-id in new-believed that has a decision
 ;; component, leave it as-is. For assumptions NOT in new-believed, narrow their
 ;; component to exclude them. Returns: new-solver-state
+;; With-worldview: set the worldview cache bitmask to reflect new-believed.
+;; Does NOT narrow decision components (that's solver-retract's job).
+;; Decision components represent which assumptions EXIST; the worldview
+;; cache represents which are currently BELIEVED for reads.
+;; new-believed: hasheq assumption-id → #t
 (define (solver-state-with-worldview ss new-believed)
-  (define ctx (solver-state-ctx ss))
   (define net (solver-state-net ss))
-  (define dec-cid (solver-context-decisions-cid ctx))
-  (define ds (net-cell-read-raw net dec-cid))
-  (if (decisions-state? ds)
-      (let ([updated-ds
-             (for/fold ([acc ds]) ([(gid dv) (in-hash (decisions-state-components ds))])
-               (define aid (decision-committed-assumption dv))
-               (cond
-                 [(not aid) acc]  ;; multi-alternative group — leave as-is
-                 [(hash-has-key? new-believed aid) acc]  ;; still believed — no change
-                 [else (decisions-state-narrow-component acc gid aid)]))])
-        (solver-state ctx (net-cell-write net dec-cid updated-ds) (solver-state-key-map ss)))
-      ss))
+  ;; Compute bitmask from believed set
+  (define wv-bitmask
+    (for/fold ([bm 0]) ([(aid _) (in-hash new-believed)])
+      (bitwise-ior bm (arithmetic-shift 1 (assumption-id-n aid)))))
+  ;; Write directly to worldview cache cell
+  (define net* (net-cell-write net worldview-cache-cell-id wv-bitmask))
+  (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss) (solver-state-amb-groups ss)))
 
 ;; Read cell: read a prop-network cell under the current worldview.
 ;; Read cell: if cell-key is a cell-id, reads directly from network.
@@ -698,53 +700,50 @@
   (if (cell-id? cell-key)
       (solver-state (solver-state-ctx ss)
                     (net-cell-write (solver-state-net ss) cell-key value)
-                    (solver-state-key-map ss))
+                    (solver-state-key-map ss)
+                    (solver-state-amb-groups ss))
       ;; Arbitrary key: look up or allocate cell
       (let ([cid (hash-ref (solver-state-key-map ss) cell-key #f)])
         (if cid
             ;; Existing cell — write
             (solver-state (solver-state-ctx ss)
                           (net-cell-write (solver-state-net ss) cid value)
-                          (solver-state-key-map ss))
-            ;; New key — allocate tagged-cell-value cell, write, record in key-map.
-            ;; Tagged cells enable multi-worldview storage: writes under different
-            ;; worldview bitmasks create separate entries, reads filter by bitmask.
-            (let-values ([(net* new-cid) (net-new-cell (solver-state-net ss)
-                                                        (tagged-cell-value value '())
-                                                        tagged-cell-merge)])
+                          (solver-state-key-map ss)
+                          (solver-state-amb-groups ss))
+            ;; New key — allocate tagged-cell-value cell with bot base, then write
+            ;; through net-cell-write so the worldview bitmask auto-tags the entry.
+            ;; Uses make-tagged-merge with last-write-wins domain merge to avoid
+            ;; entry duplication (plain tagged-cell-merge would double entries
+            ;; because net-cell-write produces a delta, merge combines old+delta).
+            (let-values ([(net-alloc new-cid) (net-new-cell (solver-state-net ss)
+                                                             (tagged-cell-value 'bot '())
+                                                             (make-tagged-merge
+                                                              (lambda (old new) new)))])
+              (define net-written (net-cell-write net-alloc new-cid value))
               (solver-state (solver-state-ctx ss)
-                            net*
-                            (hash-set (solver-state-key-map ss) cell-key new-cid)))))))
+                            net-written
+                            (hash-set (solver-state-key-map ss) cell-key new-cid)
+                            (solver-state-amb-groups ss)))))))
 
 ;; Solve-all: enumerate consistent worldviews and collect goal cell values.
-;; PURE QUERY: reads the raw tagged-cell-value and filters with each worldview
-;; bitmask via tagged-cell-read. No network mutation. No with-worldview.
+;; Switches worldview for each consistent combination, reads goal cell.
+;; NOTE: This is a compatibility shim — the on-network replacement is the
+;; Phase 6-7 branching topology with answer accumulator (M5). The pure
+;; tagged-cell-read query requires writes under distinct worldviews (PU isolation).
 ;; Returns: (listof value) — distinct answers.
 (define (solver-state-solve-all ss goal-cell-key)
   (define ctx (solver-state-ctx ss))
   (define net (solver-state-net ss))
   (define dec-cid (solver-context-decisions-cid ctx))
   (define ds (net-cell-read-raw net dec-cid))
-  ;; Resolve goal cell-id (may be a symbol key via key-map)
-  (define goal-cid
-    (if (cell-id? goal-cell-key)
-        goal-cell-key
-        (hash-ref (solver-state-key-map ss) goal-cell-key #f)))
   (cond
-    [(not goal-cid) '()]  ;; unknown key
     [(not (decisions-state? ds)) '()]
     [else
-     ;; Read the goal cell's raw value ONCE
-     (define raw (net-cell-read-raw net goal-cid))
-     ;; Collect amb groups: components with >1 alternative
-     (define groups
-       (for/list ([(_gid dv) (in-hash (decisions-state-components ds))]
-                  #:when (decision-set? dv))
-         (hash-keys (decision-set-alternatives dv))))
+     ;; Use stored amb groups (one group per solver-state-amb call)
+     (define groups (solver-state-amb-groups ss))
      (cond
        [(null? groups)
-        ;; No amb: read under current worldview (base value for tagged, plain otherwise)
-        (define val (if (tagged-cell-value? raw) (tagged-cell-value-base raw) raw))
+        (define val (solver-state-read-cell ss goal-cell-key))
         (if (eq? val 'bot) '() (list val))]
        [else
         (define combos (cartesian-product groups))
@@ -753,12 +752,8 @@
                     ([combo (in-list combos)])
             (define believed (aids->set combo))
             (if (solver-state-consistent? ss believed)
-                ;; Compute worldview bitmask for this combo
-                (let* ([wv-bitmask (for/fold ([bm 0]) ([aid (in-list combo)])
-                                     (bitwise-ior bm (arithmetic-shift 1 (assumption-id-n aid))))]
-                       [val (if (tagged-cell-value? raw)
-                                (tagged-cell-read raw wv-bitmask)
-                                raw)])
+                (let* ([ss* (solver-state-with-worldview ss believed)]
+                       [val (solver-state-read-cell ss* goal-cell-key)])
                   (if (or (eq? val 'bot) (member val acc))
                       acc
                       (cons val acc)))

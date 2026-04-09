@@ -299,6 +299,88 @@
 
 
 ;; ============================================================
+;; 6. Deployed chain: solver-state → tagged-cell-value → solve-all
+;; ============================================================
+
+(define deployed-chain-tests
+  (test-suite "Phase 5.9: deployed tagged-cell-value chain"
+
+    (test-case "eager cache: solver-assume updates worldview cache immediately"
+      (define ss0 (make-solver-state (make-prop-network)))
+      (define-values (ss1 aid) (solver-state-assume ss0 'h 'data))
+      ;; WITHOUT running quiescence, the worldview cache should already be updated
+      ;; (eager write in solver-assume, not waiting for projection propagator)
+      (define wv (net-cell-read-raw (solver-state-net ss1) worldview-cache-cell-id))
+      (check-equal? wv (arithmetic-shift 1 (assumption-id-n aid))))
+
+    (test-case "key-map cells are tagged-cell-values"
+      (define ss0 (make-solver-state (make-prop-network)))
+      (define ss1 (solver-state-write-cell ss0 'my-cell 42))
+      ;; Look up the cell-id from key-map
+      (define cid (hash-ref (solver-state-key-map ss1) 'my-cell))
+      ;; Raw value should be a tagged-cell-value
+      (define raw (net-cell-read-raw (solver-state-net ss1) cid))
+      (check-true (tagged-cell-value? raw)))
+
+    (test-case "write under worldview tags the entry"
+      (define ss0 (make-solver-state (make-prop-network)))
+      ;; Create an assumption (sets worldview cache bit)
+      (define-values (ss1 aid) (solver-state-assume ss0 'h0 'data))
+      ;; Write to a symbol-keyed cell — should be auto-tagged with worldview bitmask
+      (define ss2 (solver-state-write-cell ss1 'goal 'speculative-val))
+      (define cid (hash-ref (solver-state-key-map ss2) 'goal))
+      (define raw (net-cell-read-raw (solver-state-net ss2) cid))
+      (check-true (tagged-cell-value? raw))
+      ;; The tagged-cell-value should have an entry with the assumption's bitmask
+      (define entries (tagged-cell-value-entries raw))
+      (check-true (pair? entries))
+      ;; The entry's bitmask should match the assumption's bit
+      (check-equal? (caar entries) (arithmetic-shift 1 (assumption-id-n aid))))
+
+    (test-case "solve-all: enumeration through with-worldview + read-cell"
+      ;; Compatibility shim: solve-all switches worldview per combo, reads cell.
+      ;; Pure tagged-cell-read query requires PU isolation (Phase 6+).
+      (define ss0 (make-solver-state (make-prop-network)))
+      (define-values (ss1 hyps) (solver-state-amb ss0 '(left right)))
+      (define h-left (car hyps))
+      (define h-right (cadr hyps))
+      ;; Write under left worldview
+      (define ss-left (solver-state-with-worldview ss1 (hasheq h-left #t)))
+      (define ss-left2 (solver-state-write-cell ss-left 'goal 'val-left))
+      ;; Restore full worldview for right write (amb creates fresh state)
+      (define ss-full (solver-state-with-worldview ss-left2 (hasheq h-left #t h-right #t)))
+      ;; Switch to right worldview and write
+      (define ss-right (solver-state-with-worldview ss-full (hasheq h-right #t)))
+      (define ss-right2 (solver-state-write-cell ss-right 'goal 'val-right))
+      ;; Restore full worldview for solve-all
+      (define ss-final (solver-state-with-worldview ss-right2 (hasheq h-left #t h-right #t)))
+      ;; solve-all should find both values
+      (define answers (solver-state-solve-all ss-final 'goal))
+      (check-equal? (length answers) 2)
+      (check-not-false (member 'val-left answers))
+      (check-not-false (member 'val-right answers)))
+
+    (test-case "promote-cell-to-tagged: wraps plain cell value"
+      (define net0 (make-prop-network))
+      (define-values (net1 cid) (net-new-cell net0 42 (lambda (a b) b)))
+      (check-false (tagged-cell-value? (net-cell-read-raw net1 cid)))
+      (define net2 (promote-cell-to-tagged net1 cid))
+      (define raw (net-cell-read-raw net2 cid))
+      (check-true (tagged-cell-value? raw))
+      (check-equal? (tagged-cell-value-base raw) 42)
+      (check-equal? (tagged-cell-value-entries raw) '()))
+
+    (test-case "promote-cell-to-tagged: no-op if already tagged"
+      (define net0 (make-prop-network))
+      (define tcv (tagged-cell-value 42 '()))
+      (define-values (net1 cid) (net-new-cell net0 tcv tagged-cell-merge))
+      (define net2 (promote-cell-to-tagged net1 cid))
+      ;; Should be eq? (same network — no change)
+      (check-eq? net1 net2))
+    ))
+
+
+;; ============================================================
 ;; Run all tests
 ;; ============================================================
 
@@ -307,3 +389,4 @@
 (run-tests end-to-end-tests)
 (run-tests commitments-tests)
 (run-tests fire-once-tests)
+(run-tests deployed-chain-tests)
