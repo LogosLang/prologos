@@ -1506,20 +1506,21 @@
                                         env store config answer-cid ctx))
                   ;; Run the PU to quiescence
                   (define pu-done (run-to-quiescence pu-net*))
-                  ;; The parent network is unchanged (CHAMP isolation).
-                  ;; Results from each PU are visible through the tagged-cell-value
-                  ;; entries on the shared arg cells (each PU tagged its writes
-                  ;; with its own worldview bitmask).
-                  ;; For now: merge PU results back to parent by reading PU cells
-                  ;; and writing to parent (simple approach — answer accumulator
-                  ;; replaces this in Phase 6e).
-                  (for/fold ([n n-parent])
-                            ([arg (in-list resolved-args)]
-                             #:when (cell-id? arg))
-                    (define val (net-cell-read pu-done arg))
-                    (if (eq? val logic-var-bot) n
-                        (net-cell-write n arg val))))))]))]))
-
+                  ;; Phase 6e: Project result from PU, write to answer accumulator.
+                  ;; Read each resolved-arg cell from the PU's quiesced network.
+                  ;; Build a result hasheq mapping arg-index → value.
+                  ;; Write to answer-cid on the parent network (set-union merge).
+                  (define pu-result
+                    (for/hasheq ([arg (in-list resolved-args)]
+                                 [i (in-naturals)]
+                                 #:when (cell-id? arg))
+                      (define val (net-cell-read pu-done arg))
+                      (values i (if (eq? val logic-var-bot) #f val))))
+                  (define has-binding?
+                    (for/or ([(_k v) (in-hash pu-result)]) v))
+                  (if has-binding?
+                      (net-cell-write n-parent answer-cid (list pu-result))
+                      n-parent))))]))]))
 ;; ----------------------------------------
 ;; solve-goal-propagator (entry point)
 ;; ----------------------------------------
@@ -1555,14 +1556,34 @@
   ;; Run to quiescence
   (define net4 (run-to-quiescence net3))
 
-  ;; Project query variables
-  (define result-subst
-    (for/hasheq ([qv (in-list query-vars)])
-      (define cid (hash-ref query-env qv))
-      (define val (net-cell-read net4 cid))
-      (values qv (if (eq? val logic-var-bot) qv val))))
+  ;; Read results: check answer accumulator first (multi-clause path writes here),
+  ;; fall back to reading query variable cells directly (single-clause/facts path).
+  (define accumulator-results (net-cell-read net4 answer-cid))
 
-  (if (for/and ([qv (in-list query-vars)])
-        (eq? (hash-ref result-subst qv) qv))
-      '()
-      (list result-subst)))
+  (cond
+    ;; Multi-clause path: results in accumulator
+    [(pair? accumulator-results)
+     ;; Build index → query-var-name mapping from effective-args
+     ;; The accumulator stores (hasheq arg-index → value)
+     ;; We need to map back to query variable names.
+     (define index->qv
+       (for/hasheq ([a (in-list effective-args)]
+                     [i (in-naturals)]
+                     #:when (and (symbol? a) (member a query-vars)))
+         (values i a)))
+     (for/list ([pu-result (in-list accumulator-results)])
+       (for/hasheq ([(idx val) (in-hash pu-result)]
+                     #:when (and val (hash-has-key? index->qv idx)))
+         (values (hash-ref index->qv idx) val)))]
+
+    ;; Single-clause/facts path: read query variables directly
+    [else
+     (define result-subst
+       (for/hasheq ([qv (in-list query-vars)])
+         (define cid (hash-ref query-env qv))
+         (define val (net-cell-read net4 cid))
+         (values qv (if (eq? val logic-var-bot) qv val))))
+     (if (for/and ([qv (in-list query-vars)])
+           (eq? (hash-ref result-subst qv) qv))
+         '()
+         (list result-subst))]))
