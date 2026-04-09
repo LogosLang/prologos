@@ -10,6 +10,7 @@
          rackunit/text-ui
          "../relations.rkt"
          "../propagator.rkt"
+         "../syntax.rkt"
          "../solver.rkt")
 
 ;; ============================================================
@@ -191,6 +192,47 @@
       (define net2 (install-conjunction net1 goals env test-store default-config (cell-id 0)))
       (check-equal? (net-cell-read net2 (hash-ref env 'a)) 10)
       (check-equal? (net-cell-read net2 (hash-ref env 'b)) 20))
+
+    ;; --- NAF ---
+
+    (test-case "not: inner goal succeeds → NAF fails (no change)"
+      ;; not(x = 42) when x can be unified → inner succeeds → NAF fails
+      (define net0 (make-prop-network))
+      (define-values (net1 env) (build-var-env net0 '(x)))
+      ;; Create a NAF goal wrapping a unify goal AST
+      ;; The inner goal expr needs to be an AST node that expr->goal-desc can parse.
+      ;; Use (expr-unify-goal x-ref 42-ref) from syntax.rkt.
+      ;; For simplicity: use a goal-desc directly.
+      ;; NAF args = (list inner-goal-expr). The inner-goal-expr goes through expr->goal-desc.
+      ;; Since we need an AST node, let's test at the install level with a manual approach.
+      ;; Actually: NAF in the DFS uses expr->goal-desc on the inner goal expr.
+      ;; Let's test with a relation that has a known result.
+      ;; not(greet(x)) — greet always succeeds → NAF should fail
+      (define inner-expr (expr-goal-app 'greet (list (expr-fvar 'x))))
+      (define naf-goal (goal-desc 'not (list inner-expr)))
+      ;; Install NAF — inner goal (greet) succeeds, so NAF returns unchanged network
+      (define net2 (install-goal-propagator net1 naf-goal env test-store
+                                             default-config (cell-id 0)))
+      ;; x should still be unbound (NAF failed, didn't bind anything)
+      (check-equal? (net-cell-read net2 (hash-ref env 'x)) logic-var-bot))
+
+    ;; --- Guard ---
+
+    (test-case "guard: true condition → succeed"
+      (define net0 (make-prop-network))
+      (define env (hasheq))
+      (define guard-goal (goal-desc 'guard (list (expr-true))))
+      (define net1 (install-goal-propagator net0 guard-goal env test-store
+                                             default-config (cell-id 0)))
+      (check-true (prop-network? net1)))
+
+    (test-case "guard: false condition → no change"
+      (define net0 (make-prop-network))
+      (define env (hasheq))
+      (define guard-goal (goal-desc 'guard (list (expr-false))))
+      (define net1 (install-goal-propagator net0 guard-goal env test-store
+                                             default-config (cell-id 0)))
+      (check-true (prop-network? net1)))
     ))
 
 

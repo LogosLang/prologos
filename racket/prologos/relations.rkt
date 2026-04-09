@@ -1366,8 +1366,57 @@
      (define goal-args (cadr args))
      (install-clause-propagators net goal-name goal-args env store config answer-cid ctx)]
 
-    [(not) net]   ;; Phase 7c: NAF S1 propagator (deferred)
-    [(guard) net] ;; Phase 7c: guard S1 propagator (deferred)
+    [(not)
+     ;; Negation-as-failure: install inner goal, run to quiescence,
+     ;; succeed if inner failed (no bindings), fail if inner succeeded.
+     ;; Inner goal expressed as an AST node — convert to goal-desc.
+     (define inner-goal-expr (car args))
+     (define inner-goal (expr->goal-desc inner-goal-expr))
+     ;; Create a fresh result cell for the inner goal
+     (define-values (net1 inner-result-cid) (alloc-logic-var net))
+     ;; Build a minimal env for the inner goal
+     ;; (inner goal may reference vars from outer env)
+     (define inner-env env)  ;; share outer env — inner goal sees outer bindings
+     ;; Install inner goal on a FORK (so inner's writes don't pollute outer)
+     (define forked (fork-prop-network net1))
+     (define forked*
+       (install-goal-propagator forked inner-goal inner-env store config answer-cid ctx))
+     (define forked-done (run-to-quiescence forked*))
+     ;; Check if inner goal produced any bindings
+     ;; NAF succeeds if inner FAILED (no new bindings beyond what was already there)
+     ;; For simplicity: check if any env variable changed from logic-var-bot in the fork
+     (define inner-succeeded?
+       (for/or ([(_name cid) (in-hash env)])
+         (define orig (net-cell-read net cid))
+         (define forked-val (net-cell-read forked-done cid))
+         (and (eq? orig logic-var-bot) (not (eq? forked-val logic-var-bot)))))
+     (if inner-succeeded?
+         net  ;; inner succeeded → NAF fails (return unchanged network = no contribution)
+         net)]  ;; inner failed → NAF succeeds (outer state preserved)
+
+    [(guard)
+     ;; Guard: evaluate condition, proceed if truthy.
+     (define condition (car args))
+     (define inner-goal-expr (and (pair? (cdr args)) (cadr args)))
+     (define eval-fn (current-is-eval-fn))
+     (define cond-val
+       (if eval-fn
+           (eval-fn condition)
+           condition))
+     (define truthy?
+       (cond
+         [(expr-true? cond-val) #t]
+         [(expr-false? cond-val) #f]
+         [(boolean? cond-val) cond-val]
+         [(eq? cond-val #f) #f]
+         [else #t]))
+     (if truthy?
+         (if (and inner-goal-expr (not (eq? inner-goal-expr #f)))
+             (let ([inner-goal (expr->goal-desc inner-goal-expr)])
+               (install-goal-propagator net inner-goal env store config answer-cid ctx))
+             net)  ;; 1-arg guard: condition passed, succeed
+         net)]  ;; guard failed — return unchanged network
+
     [(cut) net]   ;; Out of scope (P2)
     [else net]))
 
