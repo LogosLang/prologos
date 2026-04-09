@@ -19,7 +19,7 @@
 | 1 | Decision cell infrastructure + broadcast propagator | ✅ | 1A: `4df2a4d8` decision-cell.rkt. 1Bi: `a50fc138` A/B data. 1Bii: `fb0650a3` broadcast propagator + profile. 35 tests, 392/392, 7644 tests. |
 | 2 | PU-per-branch lifecycle | ✅ | commit `0a78069a`. dependent-entry struct, #:assumption on net-add-propagator, make-branch-pu, perf-inc-inert-dependent-skip!, 7 tests. 393/393, 7651 tests. |
 | 3 | Per-nogood propagators (RKan) | ✅ | commit `a38baefb`. Commitment cell (structural, provenance=value), broadcast commit-tracker, narrower, contradiction detector, topology handler. 9 tests. |
-| 4 | Speculation migration | ⬜ | 6 files (R1): propagator.rkt, elab-speculation-bridge, typing-propagators, metavar-store, cell-ops, test-tms-cell |
+| 4 | Speculation migration (PU-based, no TMS) | ⬜ | 6 files (R1). PU replaces parameterize. TMS tree becomes dead code. No dual-path — fresh network per command. |
 | 5 | ATMS struct dissolution | ⬜ | All 7 fields → cells. Struct REMOVED. atms.rkt becomes query function library. (P4) |
 | 6 | Clause-as-assumption in PUs | ⬜ | Parallel-map clause matching (M1) + PU per surviving clause |
 | 7 | Goal-as-propagator dispatch | ⬜ | 5 goal types (no cut — P2). NAF at S1 via BSP barrier (M6). Answer accumulator (M5). |
@@ -1129,30 +1129,48 @@ When a group-level decision cell narrows to ∅ (empty), the per-decision contra
 - Topology watcher deduplicates duplicate nogood requests
 - End-to-end: decision narrows → commitment tracks → narrower narrows sibling → contradiction if all committed
 
-### Phase 4: Speculation Migration
+### Phase 4: Speculation Migration (PU-Based, No TMS Navigation)
 
-**What changes** (6 files per R1 audit, backward-compatible):
+**Design resolution from Phase 4 mini-design conversation:**
 
-1. **`propagator.rkt`** (lines 577, 751): The two integration points where `net-cell-read`/`net-cell-write` read `(current-speculation-stack)`. Add optional decision-cell-based TMS navigation: when a decision cell context is active, derive the speculation stack from decision cells instead of the parameter.
+The original design proposed migrating speculation consumers from `current-speculation-stack` parameter to "decision-cell-based TMS navigation." The hypercube pivot + PU-per-branch infrastructure reveals a simpler and more principled approach:
 
-2. **`elab-speculation-bridge.rkt`** (line 227, 1 parameterize site): Replace `(parameterize ([current-speculation-stack (cons hyp-id ...)]) ...)` with decision cell write + fire function that reads decision context from cells.
+**PU-based speculation REPLACES TMS navigation entirely.** The TMS tree data structure (`tms-cell-value`, `tms-read`, `tms-write`) is bypassed — not navigated differently. The key enabler: `reset-meta-store!` creates a fresh elab-network per command, so no TMS-wrapped values survive between commands. If Phase 4 migrates ALL speculation consumers within a command, no cell in the network will ever have TMS-wrapped values.
 
-3. **`typing-propagators.rkt`** (6 parameterize sites, lines 258-1589): The Phase 8 union branching code uses `parameterize` around fire functions. Replace with decision cell input to the fire function.
+**Why TMS navigation is step-think**: `tms-read(cell, stack)` walks a recursive tree indexed by an ORDERED list. Stack `(h1 h2)` and `(h2 h1)` give different results despite representing the SAME worldview in Q_n. The ordering is an artifact of imperative `parameterize`. In the hypercube model, a worldview is an UNORDERED set — a bitmask. The TMS tree bakes in ordering that shouldn't exist.
 
-4. **`metavar-store.rkt`** (line 1321, 1 read site): Replace `(define stack (current-speculation-stack))` with decision cell read when available, parameter fallback when not.
+**Why PU isolation replaces TMS**: Each branch PU runs on a forked network (CHAMP structural sharing from Phase 2). Branch-specific cell writes diverge from the parent at the write point — they're in the branch's CHAMP. Two branches writing to the same cell produce divergent CHAMP paths. The PU IS the value isolation. No TMS tree needed.
 
-5. **`cell-ops.rkt`** (lines 82-83, 2 read sites): Replace `(current-speculation-stack)` check with decision cell read. The `worldview-visible?` function reads from decision cells instead of parameter.
+**What changes** (6 files per R1 audit):
 
-6. **`tests/test-tms-cell.rkt`** (R1: missed in D.1): Test infrastructure that parameterizes `current-speculation-stack`. Update to support decision-cell-based testing.
+For each consumer that uses `(parameterize ([current-speculation-stack ...]) ...)`:
+- Replace with `(make-branch-pu parent-net assumption-id)` → work on branch PU's network
+- Cell reads/writes on the branch PU's network are PLAIN values — CHAMP fork provides isolation
+- Branch succeeds → commit (write result to outer network/accumulator, discard PU)
+- Branch fails → discard PU (emergent dissolution via Phase 2)
 
-**R1 correction**: `narrowing.rkt` does NOT directly use `current-speculation-stack`. It uses `atms-amb` via `elab-speculation.rkt` but doesn't read the parameter. Removed from migration scope.
+1. **`elab-speculation-bridge.rkt`** (line 227): Replace `parameterize` with `make-branch-pu`. Speculative elaboration runs on branch PU's network. `save-meta-state`/`restore-meta-state!` replaced by PU fork/discard — CHAMP fork IS the save, discard IS the restore.
 
-**Migration strategy**: Each file gets an optional decision-cell context. When present, derive TMS stack from decision cells. When absent, fall back to `(current-speculation-stack)`. Incremental migration — files migrate one at a time, suite stays green throughout.
+2. **`typing-propagators.rkt`** (6 parameterize sites, lines 258-1589): Union branching code uses `parameterize` around fire functions. Replace with PU-per-branch — each branch's fire function runs on its own PU network.
 
-**`current-speculation-stack` dual-path window** (6.1: compressed per "Validated Is Not Deployed"):
-Phase 4 migrates all 6 consumers to support both paths (decision cells when available, parameter fallback when not). Phase 9 establishes decision cells as the primary mechanism via topology stratum. **Phase 9 sub-phase 9b: REMOVE the parameter.** Tier 1 with empty decision context = equivalent to `'()` stack. The dual-path window is Phases 4–9a (not 4–"someday"). The parameter is gone by the end of Phase 9.
+3. **`metavar-store.rkt`** (line 1321): Replace `(current-speculation-stack)` read. With PU-based, the meta solution is written to the branch PU's network. The worldview is the PU's identity (assumption-id), not a stack parameter.
 
-**Test coverage**: Each migrated file passes existing tests (behavioral parity). New tests verify decision-cell-based TMS produces same results as parameter-based TMS.
+4. **`cell-ops.rkt`** (lines 82-83): `worldview-visible?` checks speculation stack for entry visibility. With PU-based, visibility is CHAMP isolation — if you're on the branch PU, you see the branch's values automatically. The check simplifies or becomes unnecessary.
+
+5. **`propagator.rkt`** (lines 577, 751): `net-cell-read`/`net-cell-write` TMS check (`tms-cell-value?`) becomes **dead code** after Phase 4. No cell in the fresh-per-command network will have TMS-wrapped values. The check remains for safety but never triggers.
+
+6. **`tests/test-tms-cell.rkt`**: Update to test PU-based speculation. TMS-specific tests may become legacy.
+
+**R1 correction**: `narrowing.rkt` does NOT directly use `current-speculation-stack`. Removed from scope.
+
+**No dual-path needed** (simplification of 6.1): Because `reset-meta-store!` creates a fresh elab-network per command, there are no pre-existing TMS-wrapped cells to handle. Phase 4 migrates ALL consumers to PU-based in one shot. The `current-speculation-stack` parameter becomes unused after Phase 4, removable in Phase 9 (or sooner — it's dead code after Phase 4).
+
+**TMS tree retirement**: After Phase 4, `tms-cell-value`, `tms-read`, `tms-write`, `tms-commit` are dead code. Phase 9 removes the parameter. A cleanup sub-phase can remove the TMS tree data structure entirely once confirmed unused.
+
+**Test coverage**:
+- Each migrated file passes existing tests (behavioral parity — same elaboration results)
+- New tests verify PU-based speculation produces same results as parameter-based
+- TMS-wrapped value path confirmed unreachable (no `tms-cell-value?` hits in instrumented runs)
 
 ### Phase 5: ATMS Struct Dissolution
 
