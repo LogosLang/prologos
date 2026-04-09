@@ -1427,15 +1427,28 @@
 ;; CHAMP structural sharing: branch starts as reference to parent's cells/propagators.
 ;; Branch-local writes diverge at the write point; parent is unmodified.
 ;;
-;; The branch's identity is its assumption-id in the group-level decision cell.
-;; NO worldview cell — the branch accesses the decision cell via component-path.
+;; Phase 6a (D.11): Each PU gets its own worldview via eager cache write.
+;; The fork's worldview cache cell (cell-id 1) is set to the branch's
+;; assumption bitmask. All cell writes in the fork are auto-tagged with
+;; this bitmask. Net-cell-read in the fork returns entries matching
+;; this branch's worldview. Commit/retract emergent from filtering.
 ;;
 ;; Propagators installed on the branch use #:assumption to tag their dependent
 ;; entries. The scheduler's filter-dependents-by-paths checks viability — when
 ;; the assumption is eliminated from the decision cell, the branch's propagators
 ;; become invisible (emergent dissolution, no explicit pu-drop).
-(define (make-branch-pu parent-net assumption-id)
-  (values (fork-prop-network parent-net) assumption-id))
+;; bit-position: integer — the assumption's bit position for worldview bitmask.
+;;   Callers with assumption-id structs pass (assumption-id-n aid).
+;;   #f = no worldview initialization (legacy, backward compat with Phase 2 tests).
+(define (make-branch-pu parent-net assumption-id [bit-position #f])
+  (define forked (fork-prop-network parent-net))
+  (if bit-position
+      ;; Eager worldview: set fork's cache to this branch's assumption bit.
+      ;; All cell writes in the fork are auto-tagged with this bitmask.
+      (let ([bitmask (arithmetic-shift 1 bit-position)])
+        (values (net-cell-write forked worldview-cache-cell-id bitmask) assumption-id))
+      ;; Legacy: no worldview initialization (Phase 2 tests don't use tagged cells)
+      (values forked assumption-id)))
 
 ;; ========================================
 ;; Per-Nogood Infrastructure (BSP-LE Track 2 Phase 3)

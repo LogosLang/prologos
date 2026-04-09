@@ -50,6 +50,32 @@
       (check-equal? (net-cell-read branch-net2 local-cid) 'local-val)
       (check-exn exn:fail?
         (lambda () (net-cell-read net0 local-cid))))
+
+    ;; Phase 6a: PU worldview isolation
+    (test-case "branch with bit-position sets worldview cache"
+      (define net0 (make-prop-network))
+      ;; h1 = assumption-id 1, bit position = 1
+      (define-values (branch-net _aid) (make-branch-pu net0 h1 1))
+      ;; Fork's worldview cache should have bit 1 set
+      (define wv (net-cell-read-raw branch-net worldview-cache-cell-id))
+      (check-equal? wv (arithmetic-shift 1 1))
+      ;; Parent's worldview cache should be unchanged (0)
+      (check-equal? (net-cell-read-raw net0 worldview-cache-cell-id) 0))
+
+    (test-case "branch worldview: tagged writes auto-tagged with branch bitmask"
+      (define net0 (make-prop-network))
+      ;; Create a tagged cell on the parent
+      (define tcv (tagged-cell-value 'base '()))
+      (define-values (net1 cid) (net-new-cell net0 tcv tagged-cell-merge))
+      ;; Fork with bit position 2
+      (define-values (branch-net _aid) (make-branch-pu net1 h3 2))
+      ;; Write a value in the branch — should be auto-tagged with bit 2
+      (define branch-net2 (net-cell-write branch-net cid 'branch-val))
+      (define raw (net-cell-read-raw branch-net2 cid))
+      (check-true (tagged-cell-value? raw))
+      (check-true (pair? (tagged-cell-value-entries raw)))
+      ;; Entry should have bitmask = (1 << 2) = 4
+      (check-equal? (caar (tagged-cell-value-entries raw)) (arithmetic-shift 1 2)))
     ))
 
 ;; ============================================================
