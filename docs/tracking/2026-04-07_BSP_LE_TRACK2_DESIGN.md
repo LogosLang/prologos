@@ -3,7 +3,7 @@
 **Date**: 2026-04-07
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: Cell-Based TMS (folding Track 1.5) + ATMS Solver + Non-Recursive Tabling
-**Status**: D.11 — Merged Phase 6+7 propagator-native solver (mutual recursion: clause matching ↔ goal dispatch, PU worldview isolation, typing-propagators migration, answer accumulator)
+**Status**: D.12 — Phase 8 on-network tabling (table-store dissolved, registry cell, one-true-tabling, emergent completion, SRE lattice lens, self-hosting path)
 **Self-critique**: [P/R/M Analysis](2026-04-07_BSP_LE_TRACK2_SELF_CRITIQUE.md) (17 findings, D.2)
 **External critique**: [Architect Review](2026-04-08_BSP_LE_TRACK2_EXTERNAL_CRITIQUE.md) (16 findings, D.3)
 **Stage 1/2**: [Research + Audit](../research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md)
@@ -22,7 +22,7 @@
 | 4 | Bitmask-tagged cell values (TMS retired) | ✅ | 4a+4b: `72394146`. 4-tests: `PENDING`. tagged-cell-value + worldview cache + net-cell-read/write. 35 new tests. Consumer migration deferred to Phase 5 (decision cells → worldview derivation) + Phase 9 (parameter removal). |
 | 5 | ATMS struct dissolution + compound cells + consumer migration | ✅ | 18 commits. Compound cells + solver-context + projection: on-network ✅. 8 consumers migrated ✅. 25 architecture tests ✅. Tagged-cell-value path deployed: eager worldview cache update, promote-cell-to-tagged, key-map cells as tagged-cell-values, elab-speculation-bridge dual-write. **Remaining scaffolding**: solver-state-solve-all (compatibility shim — per-assumption writes need Phase 6 PU isolation). 396/396, 7731 tests. |
 | 6+7 | Propagator-native solver (merged: clause matching + goal dispatch) | ✅ | 9 commits. All 5 goal types (unify, is, app, not, guard). Multi-clause PU branching with answer accumulator. Gray code ordering. typing-propagators union branching migration (dual-write). 16 tests. Vision gates ✅. Scaffolding: NAF/guard synchronous (S1 in Phase 9). |
-| 8 | Producer/consumer tabling | ⬜ | Table registry check in goal dispatcher. Non-recursive completion. |
+| 8 | On-network tabling | ⬜ | D.12: table-store dissolved → cells on solver network. Registry cell (self-hosting path). One-true-tabling (all defr tabled by default). Producer/consumer propagators. Completion emergent from BSP fixpoint. SRE: P(Bindings) join-semilattice, CALM-safe. |
 | 9 | Two-tier activation + parameter removal | ⬜ | 9a: Tier 1→2 via topology stratum (M4). 9b: REMOVE `current-speculation-stack` (6.1). |
 | 10 | Solver config wiring | ⬜ | `:strategy`, `:execution`, `:tabling` operational |
 | 11 | Parity validation + inert-dependent checkpoint | ⬜ | DFS ↔ propagator-native equivalence. R7 hotspot. **CHECKPOINT**: review inert-dependent data → S(-1) lattice-narrowing cleanup if warranted. |
@@ -1618,34 +1618,84 @@ Bottom-up to manage the mutual recursion:
 
 **Test coverage**: Each goal type in isolation, conjunction chaining, NAF (inner succeeds → fail, inner fails → succeed), guard (true → proceed, false → block).
 
-### Phase 8: Producer/Consumer Tabling
+### Phase 8: On-Network Tabling (D.12)
 
-**What changes**:
+**Updated design**: dissolves `table-store` into cells on the solver's network. No separate table network. Table registration, answer accumulation, and completion are all on-network. One-true-tabling: every `defr` relation is tabled by default. Self-hosting path: table registry as a cell, pioneering the pattern for all registries (module, relation, trait).
 
-1. **`relations.rkt`**: Modify `install-clause-propagators` (Phase 6) to check table registry:
-   - Before installing clauses for a relation call, check: `(table-complete? ts rel-name)`
-   - If complete: install a **consumer** — read from table accumulator cell, no clause installation
-   - If active (producer exists but not complete): install a **consumer** — same
-   - If not registered: check `(relation-info-tabled? rel)` and `(solver-config-tabling config)`
-     - If should table: call `table-register`, install a **producer** (clause propagators that write to the table cell instead of / in addition to the result cell)
-     - If not: install clauses normally (Phase 6)
+#### 8.1 SRE Lattice Lens on Table Answers
 
-2. **`tabling.rkt`**: `install-table-producer`:
-   - Wraps Phase 6's clause installation with an additional write: answers are written to the table accumulator cell via `table-add`
-   - The table cell uses `all-mode-merge` (set-union) — answers only accumulate
-   - Producer propagators fire and write answers; the cell monotonically grows
-   - **§6b broadcast deployment**: The producer's clause body goals are installed via `install-conjunction` (Phase 7), which IS a broadcast over the goal list. The broadcast pattern cascades through tabling.
+| Question | Analysis |
+|---|---|
+| Q1 Classification | VALUE lattice: P(Bindings) under ⊆ |
+| Q2 Properties | Join-semilattice (⊥=∅, join=set-union). Monotone. CALM-safe: coordination-free. |
+| Q3 Bridges | Table cell → consumer propagator → query variable cells. Bridge is relational projection (Galois connection: preserves joins). |
+| Q4 Composition | clause-execution → table-cell → consumer-propagator → query-vars. All monotone. |
+| Q5 Primary/Derived | Table cell is PRIMARY (canonical answer set). Consumer results are DERIVED (projections). |
+| Q6 Hasse | P(Bindings) = Boolean lattice on possible answer tuples. Each new answer moves one step up. Well-founded (no infinite descending chains) → guarantees fixpoint. |
 
-3. **`tabling.rkt`**: `install-table-consumer`:
-   - Installs a propagator that reads from the table accumulator cell
-   - When the table has answers, propagates them to the local result cell
-   - Consumer doesn't install any clause propagators — it free-rides on the producer's work
+#### 8.2 On-Network Architecture
 
-4. **Non-recursive completion** (6.4: per-table, not network-wide): A table is complete when ALL its producer propagators have fired AND no new answers arrived in the last round. This is a per-table check, not whole-network quiescence (which would conflate unrelated propagator activity with table stability). Each table tracks its producer count and last-written superstep. After network quiescence, a table is complete if `last-written-superstep < current-superstep` AND all producers have fired.
+**Table registry**: a CELL on the solver's network. Value: hasheq mapping relation-name → table-cell-id. Merge: hash-union (keys only added — monotone). Self-hosting path: all compiler registries (module, relation, trait) follow this pattern.
 
-**What's NOT in scope**: Left-recursive tabling (where predicate A calls A during its own derivation). This requires SLG completion frames — a stack of "active tables" with inter-table dependency tracking. Deferred to BSP-LE Track 3.
+**Table registration**: topology request. When `install-clause-propagators` encounters a tabled relation not yet in the registry, emits a topology request: "allocate a table cell, register it." Topology stratum handles cell allocation + registry write. Same protocol as PAR Track 1.
 
-**Test coverage**: Non-recursive tabled predicate (memoizes), consumer reads producer's answers, table completion detection, tabled + non-tabled predicates coexist.
+**Table cell**: one cell per tabled relation on the solver's network. Initial value: `'()`. Merge: `all-mode-merge` (set-union with dedup). Answers accumulate monotonically.
+
+**Completion**: EMERGENT from BSP fixpoint. A table cell that stops changing IS complete. No explicit `table-freeze`, no status field, no per-table completion tracking. Per the CALM theorem, monotone set-union is coordination-free. BSP guarantees: if a cell doesn't change in a superstep, its dependents aren't re-enqueued.
+
+**`table-store` wrapper**: ELIMINATED. Table cells live on the solver's network. `tabling.rkt` becomes a library of merge functions and the consumer propagator pattern — not a network wrapper.
+
+#### 8.3 Producer/Consumer Pattern
+
+**Producer**: `install-clause-propagators` with one addition — each clause's result also writes to the table cell. Same concurrent execution model as Phase 6+7: all clauses on one network, per-propagator worldview bitmask, BSP fires all concurrently. The table cell's set-union merge accumulates answers from all clauses.
+
+**Consumer**: ONE propagator per consumer call site. Reads the table cell, reads ground arg cells, computes relational projection (filter by ground args, project free args), writes to query variable cells. Fires whenever table cell grows or ground args change. NOT fire-once — must re-fire as new answers arrive.
+
+**Call-site dispatch** in `install-clause-propagators`:
+1. Read table registry cell for relation-name
+2. If present (table cell exists): install **consumer propagator** (reads table cell → projects to query vars). No clause installation.
+3. If absent: check if relation should be tabled (default: yes). If yes: emit topology request to register table cell, install clauses as **producer** (normal execution + write to table cell). If no: install normally.
+
+#### 8.4 One True Tabling
+
+Every `defr` relation is tabled by default. The cost per table: one cell + one propagator per consumer call site. Both O(1) CHAMP operations — negligible.
+
+Config: `:tabling :off` for debugging/benchmarking only. No `:all` vs `:first` per-relation mode. Deterministic relations naturally converge to singleton answer sets under set-union merge. The merge function handles it structurally — no special case.
+
+**Dropped**: `first-mode-merge`, per-relation `answer-mode`, `table-freeze`, `table-complete?` status flag. All replaced by emergent fixpoint.
+
+#### 8.5 What Changes
+
+| Current (`tabling.rkt`) | On-Network |
+|---|---|
+| `table-store` wraps separate network | Table cells on solver's network |
+| `table-register` allocates on table-store's network | Topology request → solver network cell |
+| `table-add` writes to table-store's cell | Producer propagator writes to solver cell |
+| `table-answers` reads table-store's cell | Consumer propagator reads solver cell |
+| `table-freeze` explicit status change | ELIMINATED — BSP fixpoint = complete |
+| `table-complete?` status flag | ELIMINATED — cell didn't change = complete |
+| `table-run` runs table-store's network | `run-to-quiescence` handles everything |
+| `table-store-empty` creates separate network | ELIMINATED — no separate network |
+
+#### 8.6 Critique Resolution
+
+**6.4 (External)**: "conflates network and table quiescence." Resolved by emergent per-cell fixpoint. A table cell that stops changing IS complete, regardless of other cells. BSP superstep semantics guarantee this.
+
+#### 8.7 Self-Hosting Path
+
+Table registry as a cell pioneers the pattern for self-hosting. Every Racket `make-parameter` holding a hasheq of "things the system knows about" → a cell on the network. The current-relation-store, current-module-registry, trait dispatch tables — all become cells with merge-based accumulation. Information about the language's structure flows through the network, not through Racket-level ambient state. The Hyperlattice Conjecture operationalized: even compiler metadata is lattice-valued, flowing through cells.
+
+#### 8.8 Test Coverage
+
+- Table registration via topology request
+- Producer writes + consumer reads (same network)
+- Multiple consumers for same tabled relation
+- Cross-table dependencies (non-recursive)
+- Completion emerges from fixpoint (no explicit freeze)
+- Tabled + non-tabled predicates coexist
+- Answer projection correctness (ground args filter, free args project)
+
+**What's NOT in scope**: Left-recursive tabling (predicate A calls A). Requires SLG completion frames — deferred to BSP-LE Track 3.
 
 ### Phase 9: Two-Tier Activation
 
