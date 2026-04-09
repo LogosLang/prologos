@@ -1,0 +1,83 @@
+#+TITLE: Standup — 2026-04-09
+#+DATE: 2026-04-09
+
+* Yesterday (since 2026-04-08 standup, created Apr 8 ~04:01)
+
+** BSP-LE Track 2: Implementation Phases 1-3 (21 commits)
+
+*** Phase 1A (commit 4df2a4d8)
+- decision-cell.rkt: Decision domain lattice (constraint-cell convention), nogood lattice, assumptions accumulator, counter
+- net-add-parallel-map-propagator (N-propagator model — later superseded)
+- 30 tests
+
+*** Phase 1Bi (commit a50fc138)
+- A/B benchmark: broadcast 2.3-75.6× faster than N-propagator model
+- Data drove fundamental redesign from N-propagator to broadcast model
+
+*** Phase 1Bii (commit fb0650a3)
+- Broadcast propagator with scheduler-decomposable profile
+- propagator struct extended with broadcast-profile field
+- net-add-broadcast-propagator: ONE propagator, N items, constant overhead
+- 5 new tests (35 total)
+
+*** Phase 2 (commits 0a78069a + fd82dac7)
+- Assumption-tagged dependents with ON-NETWORK viability
+- dependent-entry struct: paths + assumption-id + decision-cell-id
+- make-branch-pu: fork-prop-network + assumption identity
+- NO pu-drop — emergent dissolution via information flow
+- Phase 2 CORRECTION: replaced current-assumption-viable? parameter with on-network cell read (parameter violation caught by user)
+- Inert-dependent instrumentation counter (perf-inc-inert-dependent-skip!)
+- 7 tests
+
+*** Phase 3 (commit a38baefb)
+- Per-nogood commitment cell as structural unification
+- Cell value IS the provenance (assumption-ids, not Bools)
+- Broadcast commit-tracker + narrower + contradiction detector
+- nogood-install-request topology descriptor (data, not callback)
+- 9 tests
+
+*** Design Evolution: D.3 → D.6 (8 design commits)
+- D.4: Broadcast propagator replaces N-propagator throughout
+- D.4b: Complete broadcast deployment audit (§6b: 5 Track 2 sites + 4 future)
+- D.4c: Component-path invariant (§3.1a NTT type check)
+- D.4d: PU component-path audit (BranchPU interface)
+- D.5: Phase 2 redesigned — assumption-tagged dependents, emergent dissolution
+- D.6: Phase 3 redesigned — commitment cell through SRE lattice lens
+
+*** Process + Methodology (3 commits)
+- Handoff Protocol (HANDOFF_PROTOCOL.org)
+- Acceptance File Methodology (ACCEPTANCE_FILE_METHODOLOGY.org)
+- Hypercube design addendum (draft)
+
+*** Key Findings
+- Broadcast propagator is the polynomial functor made operational (75.6× faster at N=100)
+- Cell-level contradicts? halts network — use propagator-level detection
+- Parameters for on-network decisions are an anti-pattern (caught: current-assumption-viable?)
+- Struct field additions cause stale .zo cascades (recurring pattern)
+- Commitment cell value IS provenance — structural unification insight
+- Component-paths on compound cells prevent thrashing (§3.1a invariant)
+
+** Hypercube Research Pivot
+- Research conversation: ATMS worldview space IS hypercube Q_n (Boolean lattice 2^n)
+- Design addendum drafted (199 lines): Gray code traversal, subcube pruning, hypercube all-reduce, bitmask representation
+- Needs deepening through SRE lattice lens + design dialogue
+
+** Suite State
+- 394/394 files, 7660 tests, 142.6s, all pass
+- Acceptance file baseline (Section A) passes Level 3
+
+* Today
+
+** Deepen Hypercube Design Addendum
+- SRE lattice lens on Boolean powerset adjacency
+- Design iterate through dialogue
+- Consider how bitmask representation integrates with existing decision cells
+
+** Continue BSP-LE Track 2 Implementation
+- Phase 4: Speculation migration (6 files)
+- Phase 5+: Depending on addendum conclusions
+
+* Blockers
+
+- PPN 4C remains blocked on BSP-LE Track 2 (cell-based TMS)
+- PPN 4B Phase 10 (zonk retirement) needs cell-refs
