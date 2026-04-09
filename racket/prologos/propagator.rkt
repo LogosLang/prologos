@@ -93,6 +93,8 @@
  make-branch-pu
  ;; BSP-LE Track 2 Phase 3: per-nogood infrastructure
  install-per-nogood-infrastructure
+ ;; BSP-LE Track 2 Phase 5.4: worldview projection propagator
+ install-worldview-projection
  ;; PPN Track 4 Phase 1a: component-indexed firing
  pu-value-diff
  filter-dependents-by-paths
@@ -447,6 +449,28 @@
 ;; propagation when the bitmask hasn't actually changed.
 (define (worldview-cache-merge old new)
   (if (= old new) old new))
+
+;; BSP-LE Track 2 Phase 5.4: Install a projection propagator that watches
+;; a compound decisions cell and writes the bitmask field to the worldview
+;; cache cell (cell-id 1). O(1) per fire: extract struct field, write integer.
+;;
+;; decisions-cid: cell-id of the compound decisions cell (decisions-state)
+;; Returns: (values new-network prop-id)
+;;
+;; NOT fire-once — fires on every compound cell change (bitmask evolves
+;; as decisions commit). But lightweight: one field extraction, one write.
+;; The worldview cache merge (equality check) prevents spurious propagation
+;; when the bitmask hasn't actually changed.
+(define (install-worldview-projection net decisions-cid)
+  (define wv-cid worldview-cache-cell-id)
+  (define fire-fn
+    (lambda (n)
+      (define raw (net-cell-read-raw n decisions-cid))
+      (define bm (if (decisions-state? raw)
+                     (decisions-state-bitmask raw)
+                     0))
+      (net-cell-write n wv-cid bm)))
+  (net-add-propagator net (list decisions-cid) (list wv-cid) fire-fn))
 
 ;; Create an empty propagator network.
 ;; fuel: maximum number of propagator firings before run-to-quiescence stops.
