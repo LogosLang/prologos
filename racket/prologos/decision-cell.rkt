@@ -431,8 +431,9 @@
     [(and (tagged-cell-value? old) (tagged-cell-value? new))
      (tagged-cell-value
       (tagged-cell-value-base new)  ;; newer base wins (or caller merges)
-      (append (tagged-cell-value-entries old)
-              (tagged-cell-value-entries new)))]
+      ;; NEW entries first — later writes win at same specificity
+      (append (tagged-cell-value-entries new)
+              (tagged-cell-value-entries old)))]
     [(tagged-cell-value? old)
      ;; New is plain — treat as base update
      (struct-copy tagged-cell-value old [base new])]
@@ -455,8 +456,11 @@
        (tagged-cell-value
         (domain-merge (tagged-cell-value-base old)
                       (tagged-cell-value-base new))
-        (append (tagged-cell-value-entries old)
-                (tagged-cell-value-entries new)))]
+        ;; NEW entries first — later writes appear earlier in the list.
+        ;; tagged-cell-read uses strict > for popcount, so the first match
+        ;; at max specificity wins. Newest write = first in list = returned.
+        (append (tagged-cell-value-entries new)
+                (tagged-cell-value-entries old)))]
       [(tagged-cell-value? old)
        (struct-copy tagged-cell-value old
          [base (domain-merge (tagged-cell-value-base old) new)])]
