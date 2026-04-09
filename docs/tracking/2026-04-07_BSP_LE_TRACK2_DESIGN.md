@@ -3,7 +3,7 @@
 **Date**: 2026-04-07
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: Cell-Based TMS (folding Track 1.5) + ATMS Solver + Non-Recursive Tabling
-**Status**: D.7 — hypercube insights woven throughout (Gray code, subcube pruning, all-reduce, bitmask, Hasse Q6)
+**Status**: D.9 — bitmask-tagged cell values replace TMS tree (Phase 4 redesign from hypercube + PUnify insights)
 **Self-critique**: [P/R/M Analysis](2026-04-07_BSP_LE_TRACK2_SELF_CRITIQUE.md) (17 findings, D.2)
 **External critique**: [Architect Review](2026-04-08_BSP_LE_TRACK2_EXTERNAL_CRITIQUE.md) (16 findings, D.3)
 **Stage 1/2**: [Research + Audit](../research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md)
@@ -19,7 +19,7 @@
 | 1 | Decision cell infrastructure + broadcast propagator | ✅ | 1A: `4df2a4d8` decision-cell.rkt. 1Bi: `a50fc138` A/B data. 1Bii: `fb0650a3` broadcast propagator + profile. 35 tests, 392/392, 7644 tests. |
 | 2 | PU-per-branch lifecycle | ✅ | commit `0a78069a`. dependent-entry struct, #:assumption on net-add-propagator, make-branch-pu, perf-inc-inert-dependent-skip!, 7 tests. 393/393, 7651 tests. |
 | 3 | Per-nogood propagators (RKan) | ✅ | commit `a38baefb`. Commitment cell (structural, provenance=value), broadcast commit-tracker, narrower, contradiction detector, topology handler. 9 tests. |
-| 4 | Speculation migration (PU-based, no TMS) | ⬜ | 6 files (R1). PU replaces parameterize. TMS tree becomes dead code. No dual-path — fresh network per command. |
+| 4 | Bitmask-tagged cell values (TMS retired) | ⬜ | 6 files. tagged-cell-value replaces tms-cell-value. Worldview cache cell. Commit/retract emergent. PUnify composes. |
 | 5 | ATMS struct dissolution | ⬜ | All 7 fields → cells. Struct REMOVED. atms.rkt becomes query function library. (P4) |
 | 6 | Clause-as-assumption in PUs | ⬜ | Parallel-map clause matching (M1) + PU per surviving clause |
 | 7 | Goal-as-propagator dispatch | ⬜ | 5 goal types (no cut — P2). NAF at S1 via BSP barrier (M6). Answer accumulator (M5). |
@@ -213,7 +213,7 @@ The ATMS struct (`atms.rkt`, 7 fields) dissolves entirely into cells on the prop
 | `network` | IS the prop-network | — | — | The substrate, not a field to dissolve |
 | `assumptions` | Assumptions accumulator cell | P(Assumption), ⊆ | set-union | Monotone: assumptions only added |
 | `nogoods` | Nogood cell (already designed §2.2) | P(P(AssumptionId)), ⊆ | set-union | Monotone: nogoods only grow |
-| `tms-cells` | RETIRED (Phase 5) | — | — | Cell storage moves to prop-network |
+| `tms-cells` | RETIRED (Phase 4) | — | — | TMS tree replaced by bitmask-tagged cell values |
 | `next-assumption` | Counter cell | Nat, ≤ | max | Monotone. (2.3) Written ONLY at topology stratum (sequential) — prevents concurrent ID collision. |
 | `believed` | **ELIMINATED** | — | — | Worldview emerges from decision cells — no separate representation |
 | `amb-groups` | Decision cells (one per amb, §2.5a) | P(Alternatives), ⊇ | set-intersection | Structural lattice, SRE-registered |
@@ -1129,48 +1129,119 @@ When a group-level decision cell narrows to ∅ (empty), the per-decision contra
 - Topology watcher deduplicates duplicate nogood requests
 - End-to-end: decision narrows → commitment tracks → narrower narrows sibling → contradiction if all committed
 
-### Phase 4: Speculation Migration (PU-Based, No TMS Navigation)
+### Phase 4: Bitmask-Tagged Cell Values (TMS Tree Retired)
 
-**Design resolution from Phase 4 mini-design conversation:**
+**Design resolution from Phase 4 mini-design conversation (hypercube-informed + PUnify-informed):**
 
-The original design proposed migrating speculation consumers from `current-speculation-stack` parameter to "decision-cell-based TMS navigation." The hypercube pivot + PU-per-branch infrastructure reveals a simpler and more principled approach:
+#### 4.1 The Insight Chain
 
-**PU-based speculation REPLACES TMS navigation entirely.** The TMS tree data structure (`tms-cell-value`, `tms-read`, `tms-write`) is bypassed — not navigated differently. The key enabler: `reset-meta-store!` creates a fresh elab-network per command, so no TMS-wrapped values survive between commands. If Phase 4 migrates ALL speculation consumers within a command, no cell in the network will ever have TMS-wrapped values.
+1. **TMS tree walk is step-think**: `tms-read(cell, stack)` walks a recursive tree indexed by an ORDERED list. Stack `(h1 h2)` ≠ `(h2 h1)` despite representing the SAME worldview in Q_n. The ordering is an imperative artifact.
 
-**Why TMS navigation is step-think**: `tms-read(cell, stack)` walks a recursive tree indexed by an ORDERED list. Stack `(h1 h2)` and `(h2 h1)` give different results despite representing the SAME worldview in Q_n. The ordering is an artifact of imperative `parameterize`. In the hypercube model, a worldview is an UNORDERED set — a bitmask. The TMS tree bakes in ordering that shouldn't exist.
+2. **PU fork replaces TMS for value isolation**: CHAMP structural sharing provides branch isolation. BUT commit requires merging the fork back — `bulk-merge-writes` is an imperative loop (step-think heritage).
 
-**Why PU isolation replaces TMS**: Each branch PU runs on a forked network (CHAMP structural sharing from Phase 2). Branch-specific cell writes diverge from the parent at the write point — they're in the branch's CHAMP. Two branches writing to the same cell produce divergent CHAMP paths. The PU IS the value isolation. No TMS tree needed.
+3. **Bitmask-tagged cell values eliminate BOTH**: Writes during speculation are tagged with the worldview bitmask. Reads filter by bitmask subset check. Commit/retract EMERGE from worldview information flow — no explicit operations needed.
 
-**What changes** (6 files per R1 audit):
+4. **PUnify composes naturally**: Unification propagators during speculation are assumption-tagged (Phase 2). Their writes are bitmask-tagged. Reconciliation between branches is SRE structural unification (already on-network). No new infrastructure.
 
-For each consumer that uses `(parameterize ([current-speculation-stack ...]) ...)`:
-- Replace with `(make-branch-pu parent-net assumption-id)` → work on branch PU's network
-- Cell reads/writes on the branch PU's network are PLAIN values — CHAMP fork provides isolation
-- Branch succeeds → commit (write result to outer network/accumulator, discard PU)
-- Branch fails → discard PU (emergent dissolution via Phase 2)
+#### 4.2 Bitmask-Tagged Cell Value Model
 
-1. **`elab-speculation-bridge.rkt`** (line 227): Replace `parameterize` with `make-branch-pu`. Speculative elaboration runs on branch PU's network. `save-meta-state`/`restore-meta-state!` replaced by PU fork/discard — CHAMP fork IS the save, discard IS the restore.
+```
+tagged-cell-value:
+  base:     value               ;; unconditional (worldview = 0, always visible)
+  entries:  (listof (cons bitmask value))  ;; speculative writes
 
-2. **`typing-propagators.rkt`** (6 parameterize sites, lines 258-1589): Union branching code uses `parameterize` around fire functions. Replace with PU-per-branch — each branch's fire function runs on its own PU network.
+Read under worldview W (from worldview cache cell):
+  Find entry with MOST-SPECIFIC bitmask that is SUBSET of W:
+  max { (bm . v) ∈ entries | (bm AND W) == bm } by popcount(bm)
+  If no entry matches: return base
+  O(K) bitmask checks for K entries, each O(1)
 
-3. **`metavar-store.rkt`** (line 1321): Replace `(current-speculation-stack)` read. With PU-based, the meta solution is written to the branch PU's network. The worldview is the PU's identity (assumption-id), not a stack parameter.
+Write under worldview W:
+  Append (cons W new-value) to entries
+  Monotone: entries only accumulate
 
-4. **`cell-ops.rkt`** (lines 82-83): `worldview-visible?` checks speculation stack for entry visibility. With PU-based, visibility is CHAMP isolation — if you're on the branch PU, you see the branch's values automatically. The check simplifies or becomes unnecessary.
+Merge:
+  Union entries from both sides (monotone)
+```
 
-5. **`propagator.rkt`** (lines 577, 751): `net-cell-read`/`net-cell-write` TMS check (`tms-cell-value?`) becomes **dead code** after Phase 4. No cell in the fresh-per-command network will have TMS-wrapped values. The check remains for safety but never triggers.
+For elaboration speculation: K = 2-3 (Church fold binary, union types binary). Negligible overhead.
 
-6. **`tests/test-tms-cell.rkt`**: Update to test PU-based speculation. TMS-specific tests may become legacy.
+The Hasse diagram insight (Q6): the "most specific match" IS the nearest ancestor in the hypercube. The bitmask subset check IS the Hasse containment test from §3.2.
 
-**R1 correction**: `narrowing.rkt` does NOT directly use `current-speculation-stack`. Removed from scope.
+**SRE lattice lens on tagged-cell-value:**
+- Classification: VALUE lattice (entries accumulate, no structural decomposition)
+- Properties: monotone (entries only grow), order-independent (entry ordering irrelevant)
+- Hasse: the entries' bitmasks form a sub-poset of Q_n. The read finds the maximum of this sub-poset below the worldview node.
+- Bridges: Decision cells → worldview cache → tagged-cell-value reads (filtering)
 
-**No dual-path needed** (simplification of 6.1): Because `reset-meta-store!` creates a fresh elab-network per command, there are no pre-existing TMS-wrapped cells to handle. Phase 4 migrates ALL consumers to PU-based in one shot. The `current-speculation-stack` parameter becomes unused after Phase 4, removable in Phase 9 (or sooner — it's dead code after Phase 4).
+#### 4.3 Worldview Bitmask Cache Cell
 
-**TMS tree retirement**: After Phase 4, `tms-cell-value`, `tms-read`, `tms-write`, `tms-commit` are dead code. Phase 9 removes the parameter. A cleanup sub-phase can remove the TMS tree data structure entirely once confirmed unused.
+A derived cell (well-known cell-id, e.g., cell-id 1) holds the current worldview bitmask. Computed by a fan-in propagator that watches all decision cells and ORs committed assumptions' bit positions.
+
+- `net-cell-read` reads this ONE cell for O(1) bitmask filtering.
+- Derived, not primary — consistent with decision #1 (worldview emerges from decisions).
+- In Tier 1 (no speculation): cache cell holds 0 (empty worldview) → reads return base value → zero overhead.
+
+#### 4.4 Commit and Retract Are Eliminated
+
+**Commit** (branch succeeds): The worldview naturally includes the branch's assumption. The worldview cache cell's bitmask has the assumption's bit set. Future reads of tagged cells see the branch's entries because `(entry-bitmask AND worldview) == entry-bitmask` passes. **Nothing to do.**
+
+**Retract** (branch fails): The assumption is eliminated from its decision cell. The worldview cache cell's bitmask does NOT include the assumption's bit. Future reads skip the branch's entries. **Nothing to do.**
+
+`net-commit-assumption` (fold over all cells) → **eliminated**
+`net-retract-assumption` (fold over all cells) → **eliminated**
+`save-meta-state`/`restore-meta-state!` → **eliminated**
+
+Commit/retract emerge from information flow through decision cells → worldview cache → tagged-cell-value reads. Fully on-network.
+
+#### 4.5 PUnify Composition
+
+PUnify propagators installed during speculation:
+- Are assumption-tagged (Phase 2) → fire only when branch is viable
+- Write to parent cells with bitmask tag → visible only under branch's worldview
+- Reconciliation between branches = SRE structural unification (on-network, all-at-once)
+- No new PUnify infrastructure needed — it composes with bitmask tags naturally
+
+#### 4.6 What Changes (6 files per R1 audit)
+
+1. **`propagator.rkt`**: Core cell operations gain bitmask-tagged support:
+   - New `tagged-cell-value` struct (base + entries list)
+   - `net-cell-read`: if `tagged-cell-value?` → filter entries by worldview cache bitmask → most-specific match. Replaces TMS check.
+   - `net-cell-write`: if worldview bitmask is non-zero → tag the write. Replaces TMS wrapping.
+   - Worldview cache cell infrastructure (well-known cell-id, fan-in propagator)
+   - `net-commit-assumption` / `net-retract-assumption` → deprecated (dead code)
+   - `tms-cell-value` / `tms-read` / `tms-write` → deprecated (dead code)
+
+2. **`elab-speculation-bridge.rkt`** (line 227): Replace `parameterize` + `net-commit-assumption` with: write assumption to decision cell (worldview changes, tagged values become visible). Replace `net-retract-assumption` with: narrow decision cell (worldview changes, tagged values become invisible). The thunk runs with the worldview cache reflecting the assumption — all writes are automatically tagged.
+
+3. **`typing-propagators.rkt`** (6 parameterize sites): Replace `parameterize` around fire functions with: the fire function runs under a worldview that includes the branch assumption. The worldview cache cell reflects this. Writes are automatically tagged.
+
+4. **`metavar-store.rkt`** (line 1321): Replace `(current-speculation-stack)` read with worldview cache cell read. Meta solution under speculation = bitmask-tagged entry.
+
+5. **`cell-ops.rkt`** (lines 82-83): `worldview-visible?` reads the worldview cache bitmask and checks entry tag. Replaces speculation stack membership check with bitmask subset check.
+
+6. **`tests/test-tms-cell.rkt`**: Rewrite for bitmask-tagged model. TMS tree tests become legacy.
+
+**R1 correction**: `narrowing.rkt` NOT in scope (doesn't read the parameter).
+
+#### 4.7 Cascade Effects on Later Phases
+
+- **Phase 5 (ATMS dissolution)**: `tms-cells` field retirement now happens in Phase 4 (TMS tree is dead code here). Phase 5 scope shrinks.
+- **Phase 9 (parameter removal)**: `current-speculation-stack` is dead code after Phase 4. Phase 9 removes it + the deprecated TMS functions. Simpler.
+- **Phase 6+ (solver)**: The solver uses bitmask-tagged cell values from the start. No separate "solver cell model" — same model as elaboration.
+
+#### 4.8 Inert Entry Accumulation
+
+Tagged entries from failed branches remain in cells (invisible but present). For elaboration (K = 2-3): negligible. For deep solver exploration (K = 100+): extends the Phase 11 checkpoint to cover inert tagged entries alongside inert dependents. The S(-1) lattice-narrowing cleanup pattern applies: `current-entries ∩ viable-entries`.
 
 **Test coverage**:
-- Each migrated file passes existing tests (behavioral parity — same elaboration results)
-- New tests verify PU-based speculation produces same results as parameter-based
-- TMS-wrapped value path confirmed unreachable (no `tms-cell-value?` hits in instrumented runs)
+- Tagged-cell-value merge (append entries, monotone)
+- Read with worldview bitmask (most-specific match, subset check)
+- Write under non-zero worldview (auto-tagging)
+- Worldview cache cell (fan-in from decision cells)
+- Elaboration speculation parity (same results as TMS-based)
+- PUnify propagators produce bitmask-tagged writes correctly
+- TMS code path confirmed dead (no `tms-cell-value?` hits)
 
 ### Phase 5: ATMS Struct Dissolution
 
