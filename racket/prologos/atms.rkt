@@ -21,7 +21,8 @@
 ;;; Design reference: docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org §5
 ;;;
 
-(require "propagator.rkt")
+(require "propagator.rkt"
+         "decision-cell.rkt")  ;; Phase 5.6: compound cells
 
 (provide
  ;; Core structs
@@ -29,9 +30,9 @@
  (struct-out assumption)
  (struct-out supported-value)
  (struct-out tms-cell)
- (struct-out atms)
+ (struct-out atms)              ;; DEPRECATED — Phase 5.6: use solver-context
  ;; Construction
- atms-empty
+ atms-empty                     ;; DEPRECATED — Phase 5.6: use make-solver-context
  ;; Assumption management
  atms-assume
  atms-retract
@@ -56,7 +57,25 @@
  atms-conflict-graph
  ;; Helpers
  assumption-id-hash
- hash-subset?)
+ hash-subset?
+
+ ;; ============================================================
+ ;; Phase 5.6: Solver Context (replaces atms struct)
+ ;; ============================================================
+ ;; A phone book of cell-ids — metadata about WHERE cells are,
+ ;; not WHAT they hold. The cells are on the prop-network.
+ ;; No second source of truth (P4 self-critique resolution).
+ (struct-out solver-context)
+ make-solver-context
+ ;; Cell-based operations (take solver-context + net, return net)
+ solver-assume
+ solver-retract
+ solver-add-nogood
+ solver-amb
+ solver-consistent?
+ ;; Query functions (read-only, correctly off-network)
+ solver-explain-hypothesis
+ solver-explain)
 
 ;; ========================================
 ;; Core structs
@@ -395,3 +414,176 @@
   ;; Convert to immutable
   (for/hasheq ([(aid ngs) (in-hash graph)])
     (values aid (reverse ngs))))
+
+
+;; ========================================
+;; Phase 5.6: Solver Context
+;; ========================================
+;;
+;; Replaces the atms struct. A phone book of cell-ids — metadata about
+;; WHERE the cells are, not WHAT they hold. The cells live on the
+;; prop-network. Operations take (solver-context, network) and return
+;; an updated network.
+;;
+;; No second source of truth: the solver-context is IMMUTABLE after
+;; creation. All state changes go through cell writes on the network.
+;;
+;; Design reference: D.10, §2.6, §5.6
+
+;; The solver-context: cell-ids for all solver state.
+;; decisions-cid: compound decisions cell (decisions-state, §5.2)
+;; commitments-cid: compound commitments cell (commitments-state, §5.3)
+;; assumptions-cid: assumptions accumulator cell (hasheq aid → assumption)
+;; nogoods-cid: nogood accumulator cell (set of nogood sets)
+;; counter-cid: assumption counter cell (nat, max merge)
+;; All immutable after creation. State flows through the network.
+(struct solver-context
+  (decisions-cid commitments-cid assumptions-cid nogoods-cid counter-cid)
+  #:transparent)
+
+;; Create a solver context: allocate all cells on the network,
+;; install the worldview projection propagator.
+;; Returns: (values new-network solver-context)
+(define (make-solver-context net)
+  ;; 1. Compound decisions cell
+  (define-values (net1 dec-cid)
+    (net-new-cell net
+                  (decisions-state-empty assumption-id-n)
+                  decisions-state-merge))
+  ;; 2. Compound commitments cell
+  (define-values (net2 com-cid)
+    (net-new-cell net1
+                  (commitments-state-empty)
+                  commitments-state-merge))
+  ;; 3. Assumptions accumulator (hasheq, set-union merge)
+  (define-values (net3 asn-cid)
+    (net-new-cell net2 (hasheq) assumptions-merge))
+  ;; 4. Nogoods accumulator (nogood lattice)
+  (define-values (net4 ng-cid)
+    (net-new-cell net3 nogood-empty nogood-merge))
+  ;; 5. Counter (nat, max merge)
+  (define-values (net5 cnt-cid)
+    (net-new-cell net4 0 counter-merge))
+  ;; 6. Install worldview projection: decisions → worldview cache cell-id 1
+  (define-values (net6 _proj-pid)
+    (install-worldview-projection net5 dec-cid))
+  ;; Return network with all cells allocated + solver-context phone book
+  (values net6 (solver-context dec-cid com-cid asn-cid ng-cid cnt-cid)))
+
+;; ========================================
+;; Solver operations (cell-based)
+;; ========================================
+
+;; Create a new assumption. Writes to assumptions-cell + counter-cell.
+;; Creates a trivial decision cell component {h} for the assumption.
+;; Returns: (values new-network assumption-id)
+(define (solver-assume ctx net name datum)
+  (define cnt-cid (solver-context-counter-cid ctx))
+  ;; Read current counter, create assumption-id
+  (define n (net-cell-read net cnt-cid))
+  (define aid (assumption-id n))
+  (define asn (assumption name datum))
+  ;; Write: increment counter
+  (define net1 (net-cell-write net cnt-cid (+ n 1)))
+  ;; Write: add to assumptions accumulator
+  (define net2 (net-cell-write net1 (solver-context-assumptions-cid ctx)
+                               (assumptions-add (hasheq) aid asn)))
+  ;; Write: add trivial decision component {h} to compound decisions cell
+  (define dec-cid (solver-context-decisions-cid ctx))
+  (define ds (net-cell-read-raw net2 dec-cid))
+  (define net3 (net-cell-write net2 dec-cid
+                               (decisions-state-add-component
+                                ds aid
+                                (decision-from-alternatives
+                                 (list aid)
+                                 (bit->mask (assumption-id-n aid))
+                                 (list (assumption-id-n aid))))))
+  (values net3 aid))
+
+;; Retract an assumption: narrow its decision cell component to exclude it.
+;; Returns: new-network
+(define (solver-retract ctx net aid)
+  (define dec-cid (solver-context-decisions-cid ctx))
+  (define ds (net-cell-read-raw net dec-cid))
+  (net-cell-write net dec-cid
+                  (decisions-state-narrow-component ds aid aid)))
+
+;; Record a nogood. Writes to the nogoods accumulator cell.
+;; nogood-set: hasheq assumption-id → #t
+;; Returns: new-network
+(define (solver-add-nogood ctx net nogood-set)
+  (net-cell-write net (solver-context-nogoods-cid ctx)
+                  (nogood-add nogood-empty nogood-set)))
+
+;; Create a choice point with N alternatives.
+;; Creates N assumptions, adds them as components of the compound decisions cell,
+;; records pairwise mutual-exclusion nogoods.
+;; Returns: (values new-network (listof assumption-id))
+(define (solver-amb ctx net alternatives)
+  ;; 1. Create fresh assumptions, one per alternative
+  (define-values (net1 hyps-rev)
+    (for/fold ([n net] [hs '()])
+              ([alt (in-list alternatives)]
+               [i (in-naturals)])
+      (define-values (n2 hid) (solver-assume ctx n (string->symbol (format "h~a" i)) alt))
+      (values n2 (cons hid hs))))
+  (define hyps (reverse hyps-rev))
+  ;; 2. Record mutual exclusion: every pair of hypotheses is a nogood
+  (define net2
+    (for*/fold ([n net1])
+               ([i (in-range (length hyps))]
+                [j (in-range (+ i 1) (length hyps))])
+      (solver-add-nogood ctx n (hasheq (list-ref hyps i) #t
+                                        (list-ref hyps j) #t))))
+  (values net2 hyps))
+
+;; Check consistency: are all decision cell components non-empty?
+;; Reads compound decisions cell components directly (no fan-in propagator).
+;; Returns: boolean
+(define (solver-consistent? ctx net)
+  (define dec-cid (solver-context-decisions-cid ctx))
+  (define ds (net-cell-read-raw net dec-cid))
+  (if (decisions-state? ds)
+      (for/and ([(_gid dv) (in-hash (decisions-state-components ds))])
+        (not (decision-top? dv)))
+      #t))
+
+;; ========================================
+;; Solver query functions (read-only)
+;; ========================================
+
+;; Explain a hypothesis: return all nogoods containing it.
+;; Returns: (listof nogood-explanation)
+(define (solver-explain-hypothesis ctx net hypothesis-id)
+  (define ng-list (net-cell-read-raw net (solver-context-nogoods-cid ctx)))
+  (define assumptions-raw (net-cell-read-raw net (solver-context-assumptions-cid ctx)))
+  (for/list ([ng (in-list (if (list? ng-list) ng-list '()))]
+             #:when (hash-has-key? ng hypothesis-id))
+    (define others
+      (for/list ([(aid _) (in-hash ng)]
+                 #:when (not (equal? aid hypothesis-id)))
+        (cons aid (hash-ref assumptions-raw aid #f))))
+    (nogood-explanation ng others)))
+
+;; Explain: return all nogoods violated under current worldview.
+;; Reads compound decisions cell for the current committed assumptions.
+;; Returns: (listof nogood-explanation)
+(define (solver-explain ctx net)
+  (define ng-list (net-cell-read-raw net (solver-context-nogoods-cid ctx)))
+  (define assumptions-raw (net-cell-read-raw net (solver-context-assumptions-cid ctx)))
+  (define dec-cid (solver-context-decisions-cid ctx))
+  (define ds (net-cell-read-raw net dec-cid))
+  ;; Build believed set from committed decisions
+  (define believed
+    (if (decisions-state? ds)
+        (for/fold ([acc (hasheq)]) ([(_gid dv) (in-hash (decisions-state-components ds))])
+          (if (decision-committed? dv)
+              (hash-set acc (decision-committed-assumption dv) #t)
+              acc))
+        (hasheq)))
+  (for/list ([ng (in-list (if (list? ng-list) ng-list '()))]
+             #:when (hash-subset? ng believed))
+    (define members
+      (for/list ([(aid _) (in-hash ng)])
+        (cons aid (hash-ref assumptions-raw aid #f))))
+    (nogood-explanation ng members)))

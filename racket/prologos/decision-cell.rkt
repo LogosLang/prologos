@@ -65,6 +65,7 @@
  ;; Hasse diagram operations (bitmask-based, O(1))
  decision-bitmask
  aids->bitmask
+ bit->mask    ;; Phase 5.6: exported for solver-assume
  popcount
  hamming-distance
  hasse-adjacent?
