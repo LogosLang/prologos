@@ -1342,6 +1342,17 @@
                 #:when (< (gray-code i) m))
        (gray-code i))]))
 
+;; Auto-wrap a fire function with the current worldview bitmask if set.
+;; Ensures propagators installed during a clause's installation inherit
+;; that clause's worldview for their fire-time reads and writes.
+(define (maybe-wrap-worldview fire-fn)
+  (define bm (current-worldview-bitmask))
+  (if (zero? bm)
+      fire-fn
+      (lambda (net)
+        (parameterize ([current-worldview-bitmask bm])
+          (fire-fn net)))))
+
 ;; ----------------------------------------
 ;; install-goal-propagator (7a)
 ;; ----------------------------------------
@@ -1368,7 +1379,7 @@
             [(equal? v1 v2) net]
             [else net]))
         (define-values (net* _pid)
-          (net-add-propagator net (list lhs rhs) (list lhs rhs) unify-fire))
+          (net-add-propagator net (list lhs rhs) (list lhs rhs) (maybe-wrap-worldview unify-fire)))
         net*]
        ;; One cell, one ground: write ground to cell
        [(cell-id? lhs) (net-cell-write net lhs rhs)]
@@ -1483,11 +1494,68 @@
                       (net-cell-write net pcid va)]
                      [else net]))])
             (let-values ([(n* _pid)
-                          (net-add-propagator n (list arg pcid) (list arg pcid) unify-fire)])
+                          (net-add-propagator n (list arg pcid) (list arg pcid)
+                                              (maybe-wrap-worldview unify-fire))])
               n*))
           ;; Ground arg: write directly to param cell
           (net-cell-write n pcid arg))))
   (install-conjunction n3 clause-goals clause-env store config answer-cid ctx))
+
+;; ----------------------------------------
+;; install-one-clause-concurrent (Phase 6+7 concurrent)
+;; ----------------------------------------
+;; Like install-one-clause, but ALL propagators are wrapped with
+;; wrap-with-worldview so their writes are tagged with this clause's
+;; bitmask. For concurrent multi-clause execution on the SAME network.
+;; bit-position: integer — this clause's assumption bit position.
+;; aid: assumption-id — for #:assumption tagging on propagators.
+(define (install-one-clause-concurrent net ci resolved-args param-names
+                                       env store config answer-cid ctx
+                                       bit-position aid)
+  (define clause-goals (clause-info-goals ci))
+  (define bitmask (arithmetic-shift 1 bit-position))
+  ;; Fresh variable scope for this clause (clause-local cells)
+  (define-values (n2 clause-env) (build-var-env net param-names))
+  ;; Unify resolved args with clause param cells.
+  ;; Arg↔param propagators are WRAPPED with the clause's worldview bitmask.
+  (define n3
+    (for/fold ([n n2])
+              ([arg (in-list resolved-args)]
+               [pname (in-list param-names)])
+      (define pcid (hash-ref clause-env pname))
+      (if (cell-id? arg)
+          ;; Bidirectional propagator wrapped with worldview
+          (let ([unify-fire
+                 (wrap-with-worldview
+                  (lambda (net)
+                    (define va (net-cell-read net arg))
+                    (define vp (net-cell-read net pcid))
+                    (cond
+                      [(eq? va logic-var-bot)
+                       (if (eq? vp logic-var-bot) net
+                           (net-cell-write net arg vp))]
+                      [(eq? vp logic-var-bot)
+                       (net-cell-write net pcid va)]
+                      [else net]))
+                  bit-position)])
+            (let-values ([(n* _pid)
+                          (net-add-propagator n (list arg pcid) (list arg pcid) unify-fire
+                                              #:assumption aid)])
+              n*))
+          ;; Ground arg: write under this clause's worldview
+          (parameterize ([current-worldview-bitmask bitmask])
+            (net-cell-write n pcid arg)))))
+  ;; Install clause body goals under this clause's worldview.
+  ;; Goal propagators will also use current-worldview-bitmask when they fire.
+  ;; For now: install-conjunction installs propagators directly.
+  ;; Each goal's propagator fire-fn should be wrapped — but install-goal-propagator
+  ;; creates the fire functions inline. The simplest approach: set
+  ;; current-worldview-bitmask during installation for direct writes,
+  ;; and the propagators pick up the bitmask at fire time via wrap-with-worldview.
+  ;; TODO: wrap all goal propagators with worldview. For now, direct writes
+  ;; during installation use the bitmask; propagator fires need wrapping.
+  (parameterize ([current-worldview-bitmask bitmask])
+    (install-conjunction n3 clause-goals clause-env store config answer-cid ctx)))
 
 ;; ----------------------------------------
 ;; install-clause-propagators (6c + 6d)
@@ -1533,18 +1601,17 @@
           (install-one-clause n-facts (car clauses) resolved-args param-names
                               env store config answer-cid ctx)]
 
-         ;; Multi-clause: PU-per-clause with worldview isolation (Phase 6d)
+         ;; Multi-clause: CONCURRENT propagators on SAME network.
+         ;; All M clauses' propagators installed on ONE network, each wrapped
+         ;; with wrap-with-worldview for per-clause bitmask tagging.
+         ;; ONE run-to-quiescence fires all concurrently via BSP.
+         ;; Tagged-cell-value entries keep clause results separate.
+         ;; Clause ordering is IRRELEVANT — dataflow determines execution.
          [else
-          (if (not ctx)
-              ;; No solver-context: fall back to sequential (no isolation)
-              (for/fold ([n n-facts])
-                        ([ci (in-list clauses)])
-                (install-one-clause n ci resolved-args param-names
-                                    env store config answer-cid ctx))
-              ;; PU-per-clause: create assumption per clause, fork per clause
-              (let ()
-                ;; Create assumptions for each clause
-                (define-values (n-assumed aids-rev)
+          (let ()
+            ;; Create assumptions for each clause (integer IDs for bitmask)
+            (define-values (n-assumed aids-rev)
+              (if ctx
                   (for/fold ([n n-facts] [aids '()])
                             ([ci (in-list clauses)]
                              [i (in-naturals)])
@@ -1552,67 +1619,41 @@
                       (solver-assume ctx n
                                     (string->symbol (format "clause-~a-~a" goal-name i))
                                     ci))
-                    (values n* (cons aid aids))))
-                (define aids (reverse aids-rev))
+                    (values n* (cons aid aids)))
+                  ;; No solver-context: use local counter for assumption IDs
+                  (for/fold ([n n-facts] [aids '()])
+                            ([ci (in-list clauses)]
+                             [i (in-naturals)])
+                    (values n (cons (assumption-id i) aids)))))
+            (define aids (reverse aids-rev))
 
-                ;; Fork a PU per clause with its own worldview
-                ;; Each PU gets the clause's assumption bit in its worldview cache.
-                ;; Promote query arg cells to tagged-cell-value before forking
-                ;; so writes in the PU are auto-tagged.
-                (define n-promoted
-                  (for/fold ([n n-assumed])
-                            ([arg (in-list resolved-args)]
-                             #:when (cell-id? arg))
-                    (promote-cell-to-tagged n arg)))
+            ;; Promote shared arg cells to tagged-cell-value
+            (define n-promoted
+              (for/fold ([n n-assumed])
+                        ([arg (in-list resolved-args)]
+                         #:when (cell-id? arg))
+                (promote-cell-to-tagged n arg)))
 
-                ;; ALL-AT-ONCE PU branching: fork ALL PUs from the SAME parent,
-                ;; install + run independently, collect results to accumulator.
-                ;; No sequential dependency between PU iterations.
-                ;;
-                ;; Gray code ordering (Phase 6d-ii): determines fork order for
-                ;; CHAMP sharing. Each successive fork from the same n-promoted
-                ;; base shares structure with the parent (O(1) per fork).
-                ;;
-                ;; Step 1: Fork all PUs from the same parent state.
-                ;; Each PU is independent (CHAMP isolation).
-                (define clauses-vec (list->vector clauses))
-                (define aids-vec (list->vector aids))
-                (define gc-order (gray-code-order (length clauses)))
+            ;; Install ALL clauses' propagators on the SAME network.
+            ;; Each clause's body goals are installed with propagators wrapped
+            ;; via current-worldview-bitmask (set per-fire by wrap-with-worldview
+            ;; in install-one-clause-concurrent). Bidirectional arg↔param
+            ;; propagators are ALSO wrapped so their writes are tagged.
+            ;; BSP fires all clauses' propagators concurrently.
+            (define n-installed
+              (for/fold ([n n-promoted])
+                        ([ci (in-list clauses)]
+                         [aid (in-list aids)])
+                (define bit-pos (assumption-id-n aid))
+                (install-one-clause-concurrent n ci resolved-args param-names
+                                               env store config answer-cid ctx
+                                               bit-pos aid)))
 
-                ;; Step 2: Install + run all PUs, collect results.
-                ;; This is the embarrassingly parallel step — each PU's
-                ;; fork→install→run→project is independent. Today: sequential
-                ;; for/list. The broadcast-profile metadata enables the scheduler
-                ;; to decompose across OS threads when wired (Phase 9).
-                (define pu-results
-                  (for/list ([gc-idx (in-list gc-order)]
-                             #:when (< gc-idx (vector-length clauses-vec)))
-                    (define ci (vector-ref clauses-vec gc-idx))
-                    (define aid (vector-ref aids-vec gc-idx))
-                    (define bit-pos (assumption-id-n aid))
-                    ;; Fork from SAME parent (not previous PU)
-                    (define-values (pu-net _pu-aid) (make-branch-pu n-promoted aid bit-pos))
-                    ;; Install clause body in fork
-                    (define pu-net*
-                      (install-one-clause pu-net ci resolved-args param-names
-                                          env store config answer-cid ctx))
-                    ;; Run fork to quiescence
-                    (define pu-done (run-to-quiescence pu-net*))
-                    ;; Project result: arg-index → value
-                    (for/hasheq ([arg (in-list resolved-args)]
-                                 [i (in-naturals)]
-                                 #:when (cell-id? arg))
-                      (define val (net-cell-read pu-done arg))
-                      (values i (if (eq? val logic-var-bot) #f val)))))
-
-                ;; Step 3: Collect all results to accumulator (one pass).
-                (for/fold ([n n-promoted])
-                          ([pu-result (in-list pu-results)])
-                  (define has-binding?
-                    (for/or ([(_k v) (in-hash pu-result)]) v))
-                  (if has-binding?
-                      (net-cell-write n answer-cid (list pu-result))
-                      n))))]))]))
+            ;; ONE run-to-quiescence: all clauses' propagators fire concurrently.
+            ;; Results accumulate in the answer accumulator via set-union.
+            ;; NOTE: run-to-quiescence happens in solve-goal-propagator (the caller).
+            ;; Here we just return the network with all propagators installed.
+            n-installed)]))]))
 ;; ----------------------------------------
 ;; solve-goal-propagator (entry point)
 ;; ----------------------------------------
@@ -1648,27 +1689,35 @@
   ;; Run to quiescence
   (define net4 (run-to-quiescence net3))
 
-  ;; Read results: check answer accumulator first (multi-clause path writes here),
-  ;; fall back to reading query variable cells directly (single-clause/facts path).
-  (define accumulator-results (net-cell-read net4 answer-cid))
+  ;; Read results from query variable cells.
+  ;; For tagged-cell-value cells (multi-clause): enumerate each clause's
+  ;; bitmask and read via tagged-cell-read. Each clause's tagged entries
+  ;; give that clause's bindings.
+  ;; For plain cells (single-clause/facts): read directly.
+  (define first-qv-cid (and (pair? query-vars) (hash-ref query-env (car query-vars) #f)))
+  (define first-raw (and first-qv-cid (net-cell-read-raw net4 first-qv-cid)))
+  (define is-tagged? (and first-raw (tagged-cell-value? first-raw)))
 
   (cond
-    ;; Multi-clause path: results in accumulator
-    [(pair? accumulator-results)
-     ;; Build index → query-var-name mapping from effective-args
-     ;; The accumulator stores (hasheq arg-index → value)
-     ;; We need to map back to query variable names.
-     (define index->qv
-       (for/hasheq ([a (in-list effective-args)]
-                     [i (in-naturals)]
-                     #:when (and (symbol? a) (member a query-vars)))
-         (values i a)))
-     (for/list ([pu-result (in-list accumulator-results)])
-       (for/hasheq ([(idx val) (in-hash pu-result)]
-                     #:when (and val (hash-has-key? index->qv idx)))
-         (values (hash-ref index->qv idx) val)))]
+    ;; Multi-clause concurrent: tagged-cell-value cells.
+    ;; Read each clause's result via its bitmask.
+    [(and is-tagged? (pair? (tagged-cell-value-entries first-raw)))
+     ;; Collect unique bitmasks from entries on any query variable cell
+     (define bitmasks
+       (remove-duplicates
+        (for/list ([entry (in-list (tagged-cell-value-entries first-raw))])
+          (car entry))))
+     ;; For each bitmask (= one clause's worldview), project query vars
+     (for/list ([bm (in-list bitmasks)])
+       (for/hasheq ([qv (in-list query-vars)])
+         (define cid (hash-ref query-env qv))
+         (define raw (net-cell-read-raw net4 cid))
+         (define val (if (tagged-cell-value? raw)
+                         (tagged-cell-read raw bm)
+                         raw))
+         (values qv (if (eq? val logic-var-bot) qv val))))]
 
-    ;; Single-clause/facts path: read query variables directly
+    ;; Single-clause/facts: read query variables directly
     [else
      (define result-subst
        (for/hasheq ([qv (in-list query-vars)])

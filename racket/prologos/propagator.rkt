@@ -147,6 +147,12 @@
  ;; Lives in propagator.rkt (not elab-speculation-bridge.rkt) to avoid
  ;; circular dependency: metavar-store.rkt needs it for TMS-aware reads.
  current-speculation-stack
+ ;; Phase 6+7: Per-propagator worldview bitmask for concurrent clause execution.
+ ;; Each clause's fire function sets this before executing. net-cell-write reads
+ ;; it for tagged-cell-value tagging. Enables M clauses' propagators on the SAME
+ ;; network with distinct bitmask tags. 0 = no per-propagator override (use cache cell).
+ current-worldview-bitmask
+ wrap-with-worldview
  ;; Track 8 C5a: Global BSP scheduler override for A/B benchmarking
  current-use-bsp-scheduler?
  ;; CALM topology guard: #t during BSP fire rounds
@@ -668,11 +674,20 @@
       (let ([v (prop-cell-value cell)])
         (cond
           [(tagged-cell-value? v)
-           ;; Read worldview bitmask from cache cell (cell-id 1)
-           (define wv-cell (champ-lookup (prop-network-cells net)
-                                          (cell-id-hash worldview-cache-cell-id)
-                                          worldview-cache-cell-id))
-           (define wv-bitmask (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))
+           ;; Determine worldview bitmask for filtering.
+           ;; Per-propagator bitmask (current-worldview-bitmask) takes priority —
+           ;; enables concurrent clause propagators to read their own tagged entries,
+           ;; not entries from sibling clauses. Without this, all propagators sharing
+           ;; a network would see the same (cache cell) bitmask, destroying isolation.
+           ;; Fallback: worldview cache cell (for network-wide worldview).
+           (define per-prop-wv (current-worldview-bitmask))
+           (define wv-bitmask
+             (if (not (zero? per-prop-wv))
+                 per-prop-wv
+                 (let ([wv-cell (champ-lookup (prop-network-cells net)
+                                              (cell-id-hash worldview-cache-cell-id)
+                                              worldview-cache-cell-id)])
+                   (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))))
            (tagged-cell-read v wv-bitmask)]
           [(tms-cell-value? v)
            ;; Legacy TMS path — still needed during Phase 4 migration
@@ -839,7 +854,19 @@
   (define val (net-cell-read-raw net cid))
   (if (tagged-cell-value? val)
       net  ;; already tagged — no-op
-      (net-cell-reset net cid (tagged-cell-value val '()))))
+      ;; Reset value to tagged-cell-value AND update merge function to
+      ;; make-tagged-merge. Without this, the original merge function (e.g.,
+      ;; logic-var-merge) doesn't understand tagged-cell-value structure
+      ;; and would destroy entries on merge.
+      (let* ([old-merge (champ-lookup (prop-network-merge-fns net)
+                                       (cell-id-hash cid) cid)]
+             [domain-merge (if (eq? old-merge 'none) (lambda (o n) n) old-merge)]
+             [new-merge (make-tagged-merge domain-merge)]
+             [net1 (net-cell-reset net cid (tagged-cell-value val '()))]
+             [h (cell-id-hash cid)])
+        (struct-copy prop-network net1
+          [cold (struct-copy prop-net-cold (prop-network-cold net1)
+                  [merge-fns (champ-insert (prop-network-merge-fns net1) h cid new-merge)])]))))
 
 ;; Track 4B P2: Remove ONE propagator from a cell's dependents.
 ;; Used by fire-once self-cleaning propagators after producing output.
@@ -897,14 +924,23 @@
   (define actual-new-val
     (cond
       [(and (tagged-cell-value? old-val) (not (tagged-cell-value? new-val)))
-       ;; Read worldview bitmask from cache cell
-       (define wv-cell (champ-lookup cells
-                                      (cell-id-hash worldview-cache-cell-id)
-                                      worldview-cache-cell-id))
-       (define wv-bitmask (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))
+       ;; Determine worldview bitmask for tagging.
+       ;; Phase 6+7: per-propagator bitmask (current-worldview-bitmask) takes priority.
+       ;; This enables concurrent clause propagators on the same network — each fire
+       ;; function sets its own bitmask via wrap-with-worldview. BSP fires them
+       ;; concurrently, each sees its own bitmask, writes are tagged distinctly.
+       ;; Fallback: read worldview cache cell (for network-wide worldview, e.g.,
+       ;; elab-speculation-bridge sequential speculation).
+       (define per-prop-wv (current-worldview-bitmask))
+       (define wv-bitmask
+         (if (not (zero? per-prop-wv))
+             per-prop-wv
+             (let ([wv-cell (champ-lookup cells
+                                          (cell-id-hash worldview-cache-cell-id)
+                                          worldview-cache-cell-id)])
+               (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))))
        ;; Wrap as a DELTA tagged-cell-value (base=new-val, entry if worldview non-zero).
        ;; The merge function combines old+delta correctly without entry duplication.
-       ;; Do NOT use tagged-cell-write here (it incorporates old state, merge would double it).
        (if (zero? wv-bitmask)
            (tagged-cell-value new-val '())  ;; unconditional write → update base
            (tagged-cell-value (tagged-cell-value-base old-val)
@@ -1282,6 +1318,23 @@
 ;; metavar-store.rkt needs this for TMS-aware reads, but
 ;; elab-speculation-bridge.rkt depends on metavar-store.rkt.
 (define current-speculation-stack (make-parameter '()))
+
+;; Phase 6+7: Per-propagator worldview bitmask.
+;; When non-zero, net-cell-write uses this bitmask for tagged-cell-value tagging
+;; instead of reading the worldview cache cell. This enables concurrent clause
+;; propagators on the SAME network: each fire function sets its clause's bitmask,
+;; BSP fires them concurrently, writes are tagged distinctly.
+;; 0 = no override → net-cell-write reads worldview cache cell as before.
+(define current-worldview-bitmask (make-parameter 0))
+
+;; Wrap a fire function to set current-worldview-bitmask before executing.
+;; bit-position: integer — the assumption's bit position.
+;; Returns a new fire function that parameterizes the bitmask.
+(define (wrap-with-worldview fire-fn bit-position)
+  (define bitmask (arithmetic-shift 1 bit-position))
+  (lambda (net)
+    (parameterize ([current-worldview-bitmask bitmask])
+      (fire-fn net))))
 
 ;; Track 8 C5a: Global scheduler override.
 ;; When #t, ALL run-to-quiescence calls use BSP scheduling instead of Gauss-Seidel.
@@ -2434,11 +2487,15 @@
   (define actual-new-val
     (cond
       [(and (tagged-cell-value? old-val) (not (tagged-cell-value? new-val)))
-       (define wv-cell (champ-lookup cells
-                                      (cell-id-hash worldview-cache-cell-id)
-                                      worldview-cache-cell-id))
-       (define wv-bitmask (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))
-       ;; Delta tagged-cell-value (same fix as net-cell-write — no entry duplication)
+       ;; Same per-propagator bitmask logic as net-cell-write
+       (define per-prop-wv (current-worldview-bitmask))
+       (define wv-bitmask
+         (if (not (zero? per-prop-wv))
+             per-prop-wv
+             (let ([wv-cell (champ-lookup cells
+                                          (cell-id-hash worldview-cache-cell-id)
+                                          worldview-cache-cell-id)])
+               (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))))
        (if (zero? wv-bitmask)
            (tagged-cell-value new-val '())
            (tagged-cell-value (tagged-cell-value-base old-val)
