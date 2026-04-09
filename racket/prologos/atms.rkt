@@ -75,7 +75,24 @@
  solver-consistent?
  ;; Query functions (read-only, correctly off-network)
  solver-explain-hypothesis
- solver-explain)
+ solver-explain
+ ;; Convenience wrapper: solver-state = solver-context + prop-network
+ ;; Mirrors the old atms calling convention for easy migration.
+ (struct-out solver-state)
+ make-solver-state
+ solver-state-assume
+ solver-state-retract
+ solver-state-add-nogood
+ solver-state-amb
+ solver-state-solve-all
+ solver-state-read-cell
+ solver-state-write-cell
+ solver-state-consistent?
+ solver-state-with-worldview
+ solver-state-explain-hypothesis
+ solver-state-explain
+ solver-state-assumptions
+ solver-state-minimal-diagnoses)
 
 ;; ========================================
 ;; Core structs
@@ -587,3 +604,149 @@
       (for/list ([(aid _) (in-hash ng)])
         (cons aid (hash-ref assumptions-raw aid #f))))
     (nogood-explanation ng members)))
+
+
+;; ========================================
+;; Solver State: solver-context + network pair
+;; ========================================
+;;
+;; Convenience wrapper that mirrors the old atms calling convention
+;; (take state, return state) for easy migration. The solver-state
+;; is what gets stored in expr-atms-store — it replaces the atms struct.
+;;
+;; ctx: solver-context (immutable phone book)
+;; net: prop-network (the computation substrate, evolves with each operation)
+
+(struct solver-state (ctx net) #:transparent)
+
+;; Create a solver-state from a prop-network.
+;; Allocates solver cells and installs the worldview projection.
+(define (make-solver-state net)
+  (define-values (net* ctx) (make-solver-context net))
+  (solver-state ctx net*))
+
+;; Assume: returns (values new-solver-state assumption-id)
+(define (solver-state-assume ss name datum)
+  (define-values (net* aid) (solver-assume (solver-state-ctx ss) (solver-state-net ss) name datum))
+  (values (solver-state (solver-state-ctx ss) net*) aid))
+
+;; Retract: returns new-solver-state
+(define (solver-state-retract ss aid)
+  (define net* (solver-retract (solver-state-ctx ss) (solver-state-net ss) aid))
+  (solver-state (solver-state-ctx ss) net*))
+
+;; Add nogood: returns new-solver-state
+(define (solver-state-add-nogood ss nogood-set)
+  (define net* (solver-add-nogood (solver-state-ctx ss) (solver-state-net ss) nogood-set))
+  (solver-state (solver-state-ctx ss) net*))
+
+;; Amb: returns (values new-solver-state (listof assumption-id))
+(define (solver-state-amb ss alternatives)
+  (define-values (net* hyps) (solver-amb (solver-state-ctx ss) (solver-state-net ss) alternatives))
+  (values (solver-state (solver-state-ctx ss) net*) hyps))
+
+;; Consistent?: returns boolean
+(define (solver-state-consistent? ss assumption-set)
+  (define ng-list (net-cell-read-raw (solver-state-net ss)
+                                      (solver-context-nogoods-cid (solver-state-ctx ss))))
+  (not (for/or ([ng (in-list (if (list? ng-list) ng-list '()))])
+         (hash-subset? ng assumption-set))))
+
+;; With-worldview: for each assumption-id in new-believed that has a decision
+;; component, leave it as-is. For assumptions NOT in new-believed, narrow their
+;; component to exclude them. Returns: new-solver-state
+(define (solver-state-with-worldview ss new-believed)
+  (define ctx (solver-state-ctx ss))
+  (define net (solver-state-net ss))
+  (define dec-cid (solver-context-decisions-cid ctx))
+  (define ds (net-cell-read-raw net dec-cid))
+  (if (decisions-state? ds)
+      (let ([updated-ds
+             (for/fold ([acc ds]) ([(gid dv) (in-hash (decisions-state-components ds))])
+               (define aid (decision-committed-assumption dv))
+               (cond
+                 [(not aid) acc]  ;; multi-alternative group — leave as-is
+                 [(hash-has-key? new-believed aid) acc]  ;; still believed — no change
+                 [else (decisions-state-narrow-component acc gid aid)]))])
+        (solver-state ctx (net-cell-write net dec-cid updated-ds)))
+      ss))
+
+;; Read cell: read a prop-network cell under the current worldview.
+(define (solver-state-read-cell ss cell-key)
+  (net-cell-read (solver-state-net ss) cell-key))
+
+;; Write cell: write to a prop-network cell. Returns: new-solver-state
+(define (solver-state-write-cell ss cell-key value)
+  (solver-state (solver-state-ctx ss)
+                (net-cell-write (solver-state-net ss) cell-key value)))
+
+;; Solve-all: enumerate consistent worldviews and collect goal cell values.
+;; Returns: (listof value) — distinct answers.
+(define (solver-state-solve-all ss goal-cell-key)
+  (define ctx (solver-state-ctx ss))
+  (define net (solver-state-net ss))
+  (define dec-cid (solver-context-decisions-cid ctx))
+  (define ds (net-cell-read-raw net dec-cid))
+  (cond
+    [(not (decisions-state? ds)) '()]
+    [else
+     ;; Collect amb groups: components with >1 alternative
+     (define groups
+       (for/list ([(_gid dv) (in-hash (decisions-state-components ds))]
+                  #:when (decision-set? dv))
+         (hash-keys (decision-set-alternatives dv))))
+     (cond
+       [(null? groups)
+        (define val (net-cell-read net goal-cell-key))
+        (if (eq? val 'bot) '() (list val))]
+       [else
+        (define combos (cartesian-product groups))
+        (define answers
+          (for/fold ([acc '()])
+                    ([combo (in-list combos)])
+            (define believed (aids->set combo))
+            (if (solver-state-consistent? ss believed)
+                (let* ([ss* (solver-state-with-worldview ss believed)]
+                       [val (solver-state-read-cell ss* goal-cell-key)])
+                  (if (or (eq? val 'bot) (member val acc))
+                      acc
+                      (cons val acc)))
+                acc)))
+        (reverse answers)])]))
+
+;; Explain-hypothesis wrapper
+(define (solver-state-explain-hypothesis ss hypothesis-id)
+  (solver-explain-hypothesis (solver-state-ctx ss) (solver-state-net ss) hypothesis-id))
+
+;; Explain wrapper
+(define (solver-state-explain ss)
+  (solver-explain (solver-state-ctx ss) (solver-state-net ss)))
+
+;; Read assumptions map (for typing-errors.rkt and pretty-print.rkt)
+(define (solver-state-assumptions ss)
+  (net-cell-read-raw (solver-state-net ss)
+                     (solver-context-assumptions-cid (solver-state-ctx ss))))
+
+;; Minimal diagnoses (delegates to greedy algorithm)
+;; TODO: Replace with tropical semiring CSP when available
+(define (solver-state-minimal-diagnoses ss)
+  (define ng-list (net-cell-read-raw (solver-state-net ss)
+                                      (solver-context-nogoods-cid (solver-state-ctx ss))))
+  (define dec-cid (solver-context-decisions-cid (solver-state-ctx ss)))
+  (define ds (net-cell-read-raw (solver-state-net ss) dec-cid))
+  (define believed
+    (if (decisions-state? ds)
+        (for/fold ([acc (hasheq)]) ([(_gid dv) (in-hash (decisions-state-components ds))])
+          (if (decision-committed? dv)
+              (hash-set acc (decision-committed-assumption dv) #t)
+              acc))
+        (hasheq)))
+  (define violated
+    (for/list ([ng (in-list (if (list? ng-list) ng-list '()))]
+               #:when (hash-subset? ng believed))
+      ng))
+  (cond
+    [(null? violated) '()]
+    [else
+     (define diagnosis (greedy-hitting-set violated))
+     (if (hash-empty? diagnosis) '() (list diagnosis))]))
