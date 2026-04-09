@@ -1510,7 +1510,10 @@
 ;; Precondition (3.2): input cells should be stable (resolved, non-bot)
 ;; before the broadcast fires. Results accumulate monotonically.
 (define (net-add-broadcast-propagator net input-cids output-cid
-                                      items item-fn result-merge-fn)
+                                      items item-fn result-merge-fn
+                                      #:component-paths [component-paths '()]
+                                      #:assumption [assumption-id #f]
+                                      #:decision-cell [decision-cell-id #f])
   (define profile (broadcast-profile items item-fn result-merge-fn))
   (define fire-fn
     (lambda (net)
@@ -1537,6 +1540,8 @@
   (define prop (propagator input-cids (list output-cid) fire-fn profile))
   (define ph (prop-id-hash pid))
   ;; Register propagator + dependencies (same as net-add-propagator but with profile)
+  ;; BSP-LE Track 2 Phase 5.1b: component-paths + assumption + decision-cell support.
+  ;; Same dependent-entry construction as net-add-propagator.
   (define-values (cells-node cells-edit cells-size)
     (champ-transient-owned (prop-network-cells net)))
   (define sb (box cells-size))
@@ -1545,7 +1550,13 @@
       (define ch (cell-id-hash cid))
       (define cell (champ-lookup (prop-network-cells net) ch cid))
       (if (eq? cell 'none) cn
-          (let ([new-deps (champ-insert (prop-cell-dependents cell) ph pid (dependent-entry #f #f #f))])
+          (let* ([paths (let ([matches (filter (lambda (pair) (equal? cid (car pair)))
+                                              component-paths)])
+                          (if (null? matches)
+                              #f  ;; no paths declared for this cell → watch all
+                              (map cdr matches)))]
+                 [new-deps (champ-insert (prop-cell-dependents cell) ph pid
+                                         (dependent-entry paths assumption-id decision-cell-id))])
             (define-values (cn* _)
               (tchamp-insert-owned! cn sb ch cid
                                     (struct-copy prop-cell cell [dependents new-deps])
