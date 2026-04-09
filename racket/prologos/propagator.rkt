@@ -1999,18 +1999,43 @@
 
 ;; BSP-LE Track 2 Phase 3: Topology handler for nogood-install-request.
 ;; Installs per-nogood infrastructure (commitment cell + commit-tracker + narrower + contradiction detector).
+;; D.7 subcube pruning: before installing, check if the nogood's subcube
+;; intersects active decision domains. If any member is already narrowed out
+;; of its group's domain, the nogood is already resolved — skip installation.
 (register-topology-handler!
  (lambda (net req)
    (and (nogood-install-request? req)
         (let ([ng-set (nogood-install-request-nogood-set req)]
-              [group-cids (nogood-install-request-group-entries req)])
+              [group-entries (nogood-install-request-group-entries req)])
           (define pair-key (cons 'nogood ng-set))
-          (if (net-pair-decomp? net pair-key)
-              net  ;; Already installed — dedup
-              (let ([net* (install-per-nogood-infrastructure
-                           net ng-set group-cids
-                           decomp-request-cell-id)])
-                (net-pair-decomp-insert net* pair-key)))))))
+          (cond
+            ;; Already installed — dedup
+            [(net-pair-decomp? net pair-key) net]
+            ;; Subcube pruning: check if all nogood members are still viable
+            ;; in their respective decision cells. If any member is already
+            ;; narrowed out, this nogood is resolved — no infrastructure needed.
+            [(for/or ([entry (in-list group-entries)])
+               (define group-id (car entry))
+               (define cell-id (cadr entry))
+               (define expected-aid (caddr entry))
+               (define decision-val (net-cell-read net cell-id))
+               ;; Check: is the expected assumption still in the domain?
+               (not (cond
+                      [(decision-bot? decision-val) #t]  ;; bot = all viable
+                      [(decision-top? decision-val) #f]  ;; top = none viable
+                      [(decision-one? decision-val)
+                       (equal? (decision-one-assumption decision-val) expected-aid)]
+                      [(decision-set? decision-val)
+                       (hash-has-key? (decision-set-alternatives decision-val) expected-aid)]
+                      [else #t])))
+             ;; At least one member already narrowed — nogood resolved, skip
+             (net-pair-decomp-insert net pair-key)]  ;; mark as "handled" to prevent future re-checks
+            ;; All members still viable — install infrastructure
+            [else
+             (let ([net* (install-per-nogood-infrastructure
+                          net ng-set group-entries
+                          decomp-request-cell-id)])
+               (net-pair-decomp-insert net* pair-key))])))))
 
 ;; BSP run-to-quiescence: two-fixpoint loop (D.4 stratified topology).
 ;; Outer loop: alternates value stratum (BSP rounds) and topology stratum.
