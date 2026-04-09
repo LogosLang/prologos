@@ -19,7 +19,7 @@
 | 1 | Decision cell infrastructure + broadcast propagator | ✅ | 1A: `4df2a4d8` decision-cell.rkt. 1Bi: `a50fc138` A/B data. 1Bii: `fb0650a3` broadcast propagator + profile. 35 tests, 392/392, 7644 tests. |
 | 2 | PU-per-branch lifecycle | ✅ | commit `0a78069a`. dependent-entry struct, #:assumption on net-add-propagator, make-branch-pu, perf-inc-inert-dependent-skip!, 7 tests. 393/393, 7651 tests. |
 | 3 | Per-nogood propagators (RKan) | ✅ | commit `a38baefb`. Commitment cell (structural, provenance=value), broadcast commit-tracker, narrower, contradiction detector, topology handler. 9 tests. |
-| 4 | Bitmask-tagged cell values (TMS retired) | ⬜ | 6 files. tagged-cell-value replaces tms-cell-value. Worldview cache cell. Commit/retract emergent. PUnify composes. |
+| 4 | Bitmask-tagged cell values (TMS retired) | ✅ | 4a+4b: `72394146`. 4-tests: `PENDING`. tagged-cell-value + worldview cache + net-cell-read/write. 35 new tests. Consumer migration deferred to Phase 5 (decision cells → worldview derivation) + Phase 9 (parameter removal). |
 | 5 | ATMS struct dissolution | ⬜ | All 7 fields → cells. Struct REMOVED. atms.rkt becomes query function library. (P4) |
 | 6 | Clause-as-assumption in PUs | ⬜ | Parallel-map clause matching (M1) + PU per surviving clause |
 | 7 | Goal-as-propagator dispatch | ⬜ | 5 goal types (no cut — P2). NAF at S1 via BSP barrier (M6). Answer accumulator (M5). |
