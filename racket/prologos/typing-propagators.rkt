@@ -75,7 +75,7 @@
  facet-bot
  facet-bot?
  facet-merge
- ;; Track 4B Phase 6b: Fire-once propagator pattern
+ ;; Track 4B Phase 6b: Fire-once propagator pattern (now in propagator.rkt, re-exported)
  net-add-fire-once-propagator
  ;; Phase 2 (D.4): Propagator-native typing
  install-typing-network
@@ -227,29 +227,8 @@
     [_ #f]))
 
 
-;; Convenience: install a fire-once propagator with flag-guard.
-;; After first successful fire, subsequent scheduling is an instant no-op.
-;; P3 bulk cleanup removes the dependents entry after quiescence.
-;; P2: fire-once flag-guard. After first successful fire, instant no-op.
-;; Micro-benchmark: zero measurable overhead (within CV ~10%).
-;; Suite-level: ~1.4% (within noise). Keep enabled for correctness.
-(define (net-add-fire-once-propagator net inputs outputs fire-fn watched-cid
-                                      #:component-paths [cpaths '()])
-  (define pid-box (box #f))
-  (define fired? (box #f))
-  (define wrapped
-    (lambda (n)
-      (cond
-        [(unbox fired?) n]
-        [else
-         (define result (fire-fn n))
-         (cond
-           [(eq? result n) n]
-           [else (set-box! fired? #t) result])])))
-  (define-values (net* pid)
-    (net-add-propagator net inputs outputs wrapped #:component-paths cpaths))
-  (set-box! pid-box pid)
-  (values net* pid))
+;; net-add-fire-once-propagator: moved to propagator.rkt (BSP-LE Track 2 Phase 5).
+;; Re-exported from this module for backward compatibility.
 
 ;; ============================================================
 ;; Track 4B Phase 8: Assumption-Capturing Propagator Wrapper

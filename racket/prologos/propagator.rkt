@@ -83,6 +83,7 @@
  net-clear-dependents  ;; Track 4B Phase 6b P3: remove all dependents from a cell
  ;; Propagator operations
  net-add-propagator
+ net-add-fire-once-propagator     ;; BSP-LE Track 2 Phase 5: general fire-once with flag-guard
  net-add-broadcast-propagator     ;; BSP-LE Track 2 Phase 1B: ONE propagator, N items, scheduler-decomposable
  net-add-parallel-map-propagator  ;; BSP-LE Track 2 Phase 1A: (DEPRECATED — use broadcast)
  ;; Broadcast profile
@@ -1335,6 +1336,39 @@
               (struct-copy prop-net-hot (prop-network-hot net)
                 [worklist (cons pid (prop-network-worklist net))]))])
    pid))
+
+;; ========================================
+;; Fire-Once Propagator (BSP-LE Track 2 Phase 5, moved from typing-propagators.rkt)
+;; ========================================
+;;
+;; Install a propagator with a flag-guard: after first successful fire
+;; (fire-fn returns a different network), subsequent scheduling is an
+;; instant no-op (unbox fired? → return n immediately).
+;; General infrastructure pattern for propagators that produce output
+;; exactly once: nogood narrowers, contradiction detectors, type-writes,
+;; usage-writes, constraint-creation, etc.
+;; Micro-benchmark: zero measurable overhead (within CV ~10%).
+(define (net-add-fire-once-propagator net inputs outputs fire-fn
+                                      [_watched-cid #f]  ;; legacy positional param (ignored)
+                                      #:component-paths [cpaths '()]
+                                      #:assumption [assumption-id #f]
+                                      #:decision-cell [decision-cell-id #f])
+  (define fired? (box #f))
+  (define wrapped
+    (lambda (n)
+      (cond
+        [(unbox fired?) n]
+        [else
+         (define result (fire-fn n))
+         (cond
+           [(eq? result n) n]  ;; no change → don't set flag (will retry)
+           [else (set-box! fired? #t) result])])))
+  (define-values (net* pid)
+    (net-add-propagator net inputs outputs wrapped
+                        #:component-paths cpaths
+                        #:assumption assumption-id
+                        #:decision-cell decision-cell-id))
+  (values net* pid))
 
 ;; ========================================
 ;; Branch PU (BSP-LE Track 2 Phase 2)
