@@ -3,7 +3,7 @@
 **Date**: 2026-04-07
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: Cell-Based TMS (folding Track 1.5) + ATMS Solver + Non-Recursive Tabling
-**Status**: D.10 — Phase 5 compound cell architecture (compound decisions/commitments cells, broadcast #:component-paths, fire-once audit, consumer migration, worldview cache wiring)
+**Status**: D.11 — Merged Phase 6+7 propagator-native solver (mutual recursion: clause matching ↔ goal dispatch, PU worldview isolation, typing-propagators migration, answer accumulator)
 **Self-critique**: [P/R/M Analysis](2026-04-07_BSP_LE_TRACK2_SELF_CRITIQUE.md) (17 findings, D.2)
 **External critique**: [Architect Review](2026-04-08_BSP_LE_TRACK2_EXTERNAL_CRITIQUE.md) (16 findings, D.3)
 **Stage 1/2**: [Research + Audit](../research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md)
@@ -21,8 +21,7 @@
 | 3 | Per-nogood propagators (RKan) | ✅ | commit `a38baefb`. Commitment cell (structural, provenance=value), broadcast commit-tracker, narrower, contradiction detector, topology handler. 9 tests. |
 | 4 | Bitmask-tagged cell values (TMS retired) | ✅ | 4a+4b: `72394146`. 4-tests: `PENDING`. tagged-cell-value + worldview cache + net-cell-read/write. 35 new tests. Consumer migration deferred to Phase 5 (decision cells → worldview derivation) + Phase 9 (parameter removal). |
 | 5 | ATMS struct dissolution + compound cells + consumer migration | ✅ | 18 commits. Compound cells + solver-context + projection: on-network ✅. 8 consumers migrated ✅. 25 architecture tests ✅. Tagged-cell-value path deployed: eager worldview cache update, promote-cell-to-tagged, key-map cells as tagged-cell-values, elab-speculation-bridge dual-write. **Remaining scaffolding**: solver-state-solve-all (compatibility shim — per-assumption writes need Phase 6 PU isolation). 396/396, 7731 tests. |
-| 6 | Clause-as-assumption in PUs | ⬜ | Parallel-map clause matching (M1) + PU per surviving clause |
-| 7 | Goal-as-propagator dispatch | ⬜ | 5 goal types (no cut — P2). NAF at S1 via BSP barrier (M6). Answer accumulator (M5). |
+| 6+7 | Propagator-native solver (merged: clause matching + goal dispatch) | ⬜ | D.11: Merged — mutual recursion (install-clause-propagators ↔ install-goal-propagator). 6a: make-branch-pu worldview init. 7a: goal dispatcher (5 types). 7b: install-conjunction (broadcast). 6b-d: clause-match-bulk + install-clause-propagators + create-branch-pus (Gray code). 6e: answer accumulator. 6f: typing-propagators PU migration. 7c: NAF+guard S1. Integration parity. |
 | 8 | Producer/consumer tabling | ⬜ | Table registry check in goal dispatcher. Non-recursive completion. |
 | 9 | Two-tier activation + parameter removal | ⬜ | 9a: Tier 1→2 via topology stratum (M4). 9b: REMOVE `current-speculation-stack` (6.1). |
 | 10 | Solver config wiring | ⬜ | `:strategy`, `:execution`, `:tabling` operational |
@@ -1395,9 +1394,132 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
 
 ---
 
-## §6 Phase Design: Phases 6–11
+## §6 Phase Design: Phases 6+7 – 11
 
-### Phase 6: Clause-as-Assumption in PUs
+### Phase 6+7 (Merged): Propagator-Native Solver
+
+**D.11**: Merged Phase 6 (clause-as-assumption) and Phase 7 (goal-as-propagator) into one design scope. Reason: mutual recursion — `install-clause-propagators` calls `install-conjunction` which calls `install-goal-propagator` which calls `install-clause-propagators` for app goals. Cannot be implemented or tested independently.
+
+**What this replaces**: `solve-goals` (relations.rkt:600), `solve-single-goal` (relations.rkt:612), `solve-app-goal` (relations.rkt:825) — the recursive evaluation functions that thread substitutions through `append-map`. The new functions install propagators on a network; execution emerges from dataflow.
+
+**Dual path**: The new propagator-native functions coexist with the DFS functions. `:strategy :atms` uses the propagator path; `:strategy :depth-first` preserves the DFS path. Phase 9 wires `:strategy :auto` to choose.
+
+#### 6+7.1 Core Functions (Mutual Recursion)
+
+**`install-goal-propagator`** — dispatches on goal kind:
+
+| Goal Kind | Action | Stratum | Notes |
+|---|---|---|---|
+| `app` | `install-clause-propagators` | S0 | May create PUs via topology request |
+| `unify` | Unification propagator (cell-tree write) | S0 | Variable cells, PUnify composition |
+| `is` | Evaluation propagator (functional expr → cell) | S0 | |
+| `not` | NAF propagator (inner goal result → negated) | **S1** | BSP barrier = completion signal (M6). Inner-result cell on outer scope (6.3). |
+| `guard` | Guard propagator (condition cell → gate) | **S1** | |
+
+P2: `cut` is NOT implemented, OUT OF SCOPE.
+
+**`install-conjunction`** — takes K goals + parent context:
+- ONE broadcast propagator (§6b) over the goals list
+- Each goal installed independently via `install-goal-propagator`
+- Goal ordering is IRRELEVANT — dataflow determines execution
+- Independent goals fire concurrently in the same BSP superstep
+- M2: goals list is enumeration, not ordering
+
+**`install-clause-propagators`** — three paths:
+- **Facts**: unification propagator per fact row. No branching, no PU.
+- **Single clause**: install directly. Tier 1 behavior — deterministic queries never touch ATMS.
+- **Multi-clause**: broadcast matching (Step 1) → PU-per-survivor (Step 2).
+
+**`create-branch-pus`** — creates M PUs from M matching clauses:
+- Gray code ordering on assumption-id bit positions (hypercube §2.1). Each successive fork from previous fork's network → maximizes CHAMP sharing.
+- Each PU gets worldview isolation: `make-branch-pu` writes branch's bitmask to fork's worldview cache cell (eager update, same pattern as solver-assume 5.9a).
+- Pairwise nogoods via broadcast (§6b).
+- Per-nogood infrastructure (Phase 3, compound commitments cell, fire-once narrower/detector).
+
+**`clause-match-bulk`** — pure function (no network mutation):
+- Takes resolved args + clause list
+- Per clause: α-rename all variables, attempt arg↔param unification
+- Returns `(listof (clause-info . fresh-bindings))` — only survivors
+- Called WITHIN broadcast propagator's fire function (M1 resolution)
+- Broadcast-profile metadata enables scheduler decomposition
+
+#### 6+7.2 PU Worldview Isolation (Phase 5 Integration)
+
+Each branch PU gets its own worldview via the Phase 5 infrastructure chain:
+
+```
+make-branch-pu:
+  1. fork-prop-network (CHAMP sharing)
+  2. Write branch's compound decisions component to fork's decisions cell
+     (narrow: commit this branch, exclude siblings)
+  3. Eager worldview cache write: bitmask → fork's cell-id 1
+  → All cell writes in fork auto-tagged with branch's bitmask
+  → net-cell-read in fork returns branch's tagged entries
+  → Commit/retract emergent from worldview bitmask filtering
+```
+
+This resolves Phase 5's remaining scaffolding: `solver-state-solve-all` can become a pure query on the answer accumulator cell. PU-per-branch writes under distinct worldviews → distinct tagged entries → `tagged-cell-read` filters correctly per worldview.
+
+#### 6+7.3 typing-propagators Migration (6f)
+
+Phase 5 deferred this because `parameterize` per-fire scoping couldn't be replaced by the network-wide worldview cache. PU isolation resolves it:
+
+- `wrap-with-assumption(fire-fn, aid)` → fire-fn runs in a PU fork with the fork's worldview cache set to aid's bit. No `parameterize` needed.
+- `promote-cell-to-tms` → `promote-cell-to-tagged` (Phase 5.9b infrastructure)
+- `(assumption-id (gensym 'union-left))` → `solver-state-assume` (integer IDs)
+- `current-speculation-stack` → **dead code** after this sub-phase for ALL consumers
+
+#### 6+7.4 Answer Accumulator (M5)
+
+Each query has an answer accumulator cell with set-union merge. Branch-committer propagators write results. After quiescence + S(-1) pruning, the accumulator holds all answers. No scanning.
+
+`solver-state-solve-all` changes from worldview enumeration to: read the answer accumulator cell. Pure query, correctly off-network.
+
+#### 6+7.5 Implementation Order
+
+Bottom-up to manage the mutual recursion:
+
+| Step | What | Dependencies |
+|---|---|---|
+| 6a | Update `make-branch-pu`: worldview cache init + compound decisions narrowing | Phase 5 compound cell |
+| 7a | `install-goal-propagator`: unify + is cases (no recursion) | None |
+| 7b | `install-conjunction`: broadcast over goals | 7a |
+| 6b | `clause-match-bulk`: pure function | None |
+| 6c+d | `install-clause-propagators` + `create-branch-pus`: three-path handler, Gray code PUs | 6a, 6b, 7b |
+| 6e | Answer accumulator + solver-state-solve-all update | 6c |
+| 6f | typing-propagators PU migration | 6a |
+| 7c | NAF + guard S1 propagators | 7a, BSP stratification |
+| T | Integration + parity testing | All |
+
+#### 6+7.6 Critique Resolutions
+
+- **3.2**: Arg stability precondition. Readiness guard on broadcast. ✅
+- **1.3**: One group-level decision component per amb. PUs read it, don't own it. ✅ (compound cell)
+- **M1**: clause-match-bulk is a pure function within a broadcast fire. ✅
+- **6.1**: Dual path compressed: Phase 5 deployed tagged path, Phase 6+7 deploys PU isolation → `current-speculation-stack` dead code. ✅
+- **6.3**: NAF inner-result cell on outer scope. ✅
+- **P3**: PU isolation = correctness (worldview bitmask) + efficiency (structural GC). ✅
+- **Hypercube §2.1**: Gray code ordering for CHAMP sharing. ✅
+
+#### 6+7.7 Test Coverage
+
+**Architecture-validating**:
+- PU worldview isolation: fork's tagged-cell-value reads filtered by fork's bitmask
+- Clause matching: broadcast produces correct survivors, rejected clauses eliminated pre-PU
+- Conjunction: order-independent installation, dataflow-determined execution
+- Answer accumulator: multi-branch answers collected via set-union
+
+**Behavioral parity**:
+- Single-clause queries: same results as DFS
+- Multi-clause queries: same answer sets as DFS (order may differ)
+- Recursive queries: same results
+- Each goal type in isolation
+
+**Old Phase 6 and Phase 7 sections retained below for reference.**
+
+---
+
+### Phase 6 (Original — Superseded by §6+7): Clause-as-Assumption in PUs
 
 **What this replaces**: `solve-app-goal` (relations.rkt:825-893) — the inner loop that iterates clauses via `append-map`, α-renames, unifies arguments, and recurses on clause bodies.
 
