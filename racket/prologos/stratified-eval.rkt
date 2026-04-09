@@ -178,13 +178,32 @@
          (wf-solve-goal-tabled config store goal-name goal-args query-vars)))
      (wf-answers->standard wf-answers 'strict)]
     [else
-     ;; Stratified path (default)
-     ;; Scope stratification to predicates reachable from the query,
-     ;; so unstratifiable predicates elsewhere in the store don't
-     ;; block stratifiable queries.
-     (cond
-       [(not (store-has-negation? store))
-        (solve-goal config store goal-name goal-args query-vars)]
+     ;; Phase 9a: strategy dispatch.
+     ;; :depth-first → DFS (existing solve-goal)
+     ;; :atms → propagator-native (solve-goal-propagator)
+     ;; :auto (default) → propagator-native when available, DFS fallback
+     (define strategy (solver-config-strategy config))
+     (define use-propagator?
+       (case strategy
+         [(atms) #t]
+         [(auto) #f]  ;; Phase 9a: :auto stays DFS for now. :atms opts into propagator.
+         [(depth-first) #f]
+         [else #f]))
+
+     (if use-propagator?
+         ;; Propagator-native solver (Phase 6+7+8)
+         (parameterize ([current-is-eval-fn
+                         (or (current-is-eval-fn)
+                             ;; If no eval fn set, use identity (tests may not set it)
+                             (lambda (x) x))])
+           (solve-goal-propagator config store goal-name goal-args query-vars))
+         ;; DFS path (original)
+         ;; Scope stratification to predicates reachable from the query,
+         ;; so unstratifiable predicates elsewhere in the store don't
+         ;; block stratifiable queries.
+         (cond
+           [(not (store-has-negation? store))
+            (solve-goal config store goal-name goal-args query-vars)]
        [else
         (define reachable (transitive-pred-closure store goal-name))
         (define reachable-dep-infos
@@ -200,7 +219,7 @@
           [(<= (length strata) 1)
            (solve-goal config store goal-name goal-args query-vars)]
           [else
-           (stratified-solve-multi config store strata goal-name goal-args query-vars)])])]))
+           (stratified-solve-multi config store strata goal-name goal-args query-vars)])]))]))
 
 ;; Multi-stratum evaluation.
 ;; Evaluates strata bottom-up: for each stratum, solve all predicates once
