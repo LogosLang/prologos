@@ -276,9 +276,24 @@
   ;; Track 10B: use absolute path for raco make.
   ;; Subprocess inherits OS CWD (not Racket current-directory).
   ;; Using absolute driver-path ensures correct compilation regardless of CWD.
+  ;;
+  ;; Phase 6+7 fix: ALSO compile test files. Test files are not in driver.rkt's
+  ;; dependency graph, so `raco make driver.rkt` alone leaves their .zo files
+  ;; stale when struct layouts change in core modules (propagator.rkt, atms.rkt).
+  ;; The batch workers use dynamic-require which trusts cached .zo — stale .zo
+  ;; causes linklet mismatch ("reference to a variable that is not exported").
+  ;; Fix: compile driver.rkt + all test files in one raco make invocation.
   (define driver-path (path->string (simplify-path (build-path project-root "driver.rkt"))))
+  (define tests-dir (build-path project-root "tests"))
+  (define test-files
+    (if (directory-exists? tests-dir)
+        (for/list ([f (in-directory tests-dir)]
+                   #:when (regexp-match? #rx"\\.rkt$" (path->string f)))
+          (path->string (simplify-path f)))
+        '()))
+  (define all-paths (cons driver-path test-files))
   (define-values (proc out in err)
-    (subprocess #f #f #f raco-path "make" driver-path))
+    (apply subprocess #f #f #f raco-path "make" all-paths))
   (close-output-port in)
   (subprocess-wait proc)
   (close-input-port out)
