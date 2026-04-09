@@ -168,6 +168,8 @@
  current-parallel-executor
  ;; BSP-LE Track 2 Phase 4: worldview cache cell-id (for external consumers)
  worldview-cache-cell-id
+ ;; BSP-LE Track 2 Phase 5.9b: promote cell to tagged-cell-value
+ promote-cell-to-tagged
  ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
  net-cell-read-raw
  ;; Track 6 Phase 2+3: Network-wide TMS commit
@@ -827,6 +829,17 @@
   (struct-copy prop-network net
     [warm (struct-copy prop-net-warm (prop-network-warm net)
             [cells (champ-insert cells h cid new-cell)])]))
+
+;; BSP-LE Track 2 Phase 5.9b: Promote a cell to tagged-cell-value.
+;; Analogous to promote-cell-to-tms (typing-propagators.rkt).
+;; The current value becomes the base; entries start empty.
+;; Must be called BEFORE speculative writes under a non-zero worldview.
+;; No-op if the cell already holds a tagged-cell-value.
+(define (promote-cell-to-tagged net cid)
+  (define val (net-cell-read-raw net cid))
+  (if (tagged-cell-value? val)
+      net  ;; already tagged — no-op
+      (net-cell-reset net cid (tagged-cell-value val '()))))
 
 ;; Track 4B P2: Remove ONE propagator from a cell's dependents.
 ;; Used by fire-once self-cleaning propagators after producing output.

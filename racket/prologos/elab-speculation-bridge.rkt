@@ -214,15 +214,26 @@
      ;; no synchronous restore needed, no timing gap. The speculation stack IS the
      ;; worldview. S(-1) becomes GC (cleaning invisible entries), not correctness.
      ;;
-     ;; Run the speculation with TMS stack push (Track 6 Phases 2–4)
-     ;; Push hyp-id onto the speculation stack so cell writes are routed to
-     ;; TMS branches at this depth. On success, commit-on-success promotes
-     ;; branch values to base. On failure, TMS retraction removes the branch,
-     ;; then network-box restore handles rollback (belt-and-suspenders).
+     ;; DUAL-WRITE (Phase 5.9d): Two speculation paths active simultaneously:
+     ;; 1. TMS path: parameterize current-speculation-stack (for typing-propagators
+     ;;    per-fire scoping — stays until Phase 6 PU isolation)
+     ;; 2. Tagged-cell-value path: write assumption bitmask to elaboration network's
+     ;;    worldview cache cell. Tagged cells auto-tag writes via net-cell-write.
+     ;;    Sequential speculation only (elab-speculation-bridge is sequential).
      ;;
-     ;; Track 6 Phase 4: Push at ALL depths (nested speculation too).
-     ;; The tms-read nested fallback bug is now fixed — on branch miss,
-     ;; tms-read checks outer hypotheses instead of falling to base.
+     ;; Phase 5.9d: Write assumption's bit to the elaboration network's worldview cache.
+     ;; This enables tagged-cell-value auto-tagging for cells promoted to tagged.
+     (define elab-net-box (current-prop-net-box))
+     (when (and elab-net-box (unbox elab-net-box) (assumption-id? hyp-id))
+       (define enet (unbox elab-net-box))
+       (define pnet (elab-network-prop-net enet))
+       (define current-wv (net-cell-read-raw pnet worldview-cache-cell-id))
+       (define new-wv (bitwise-ior (if (number? current-wv) current-wv 0)
+                                    (arithmetic-shift 1 (assumption-id-n hyp-id))))
+       (define pnet* (net-cell-write pnet worldview-cache-cell-id new-wv))
+       (set-box! elab-net-box (struct-copy elab-network enet [prop-net pnet*])))
+     ;;
+     ;; TMS path: Push at ALL depths (nested speculation too).
      (define result
        (parameterize ([current-speculation-stack
                        (cons hyp-id (current-speculation-stack))])
