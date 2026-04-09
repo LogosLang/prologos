@@ -617,33 +617,34 @@
 ;; ctx: solver-context (immutable phone book)
 ;; net: prop-network (the computation substrate, evolves with each operation)
 
-(struct solver-state (ctx net) #:transparent)
+;; key-map: hasheq arbitrary-key → cell-id (for atms-read-cell/write-cell compat)
+(struct solver-state (ctx net key-map) #:transparent)
 
 ;; Create a solver-state from a prop-network.
 ;; Allocates solver cells and installs the worldview projection.
 (define (make-solver-state net)
   (define-values (net* ctx) (make-solver-context net))
-  (solver-state ctx net*))
+  (solver-state ctx net* (hasheq)))
 
 ;; Assume: returns (values new-solver-state assumption-id)
 (define (solver-state-assume ss name datum)
   (define-values (net* aid) (solver-assume (solver-state-ctx ss) (solver-state-net ss) name datum))
-  (values (solver-state (solver-state-ctx ss) net*) aid))
+  (values (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss)) aid))
 
 ;; Retract: returns new-solver-state
 (define (solver-state-retract ss aid)
   (define net* (solver-retract (solver-state-ctx ss) (solver-state-net ss) aid))
-  (solver-state (solver-state-ctx ss) net*))
+  (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss)))
 
 ;; Add nogood: returns new-solver-state
 (define (solver-state-add-nogood ss nogood-set)
   (define net* (solver-add-nogood (solver-state-ctx ss) (solver-state-net ss) nogood-set))
-  (solver-state (solver-state-ctx ss) net*))
+  (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss)))
 
 ;; Amb: returns (values new-solver-state (listof assumption-id))
 (define (solver-state-amb ss alternatives)
   (define-values (net* hyps) (solver-amb (solver-state-ctx ss) (solver-state-net ss) alternatives))
-  (values (solver-state (solver-state-ctx ss) net*) hyps))
+  (values (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss)) hyps))
 
 ;; Consistent?: returns boolean
 (define (solver-state-consistent? ss assumption-set)
@@ -668,17 +669,42 @@
                  [(not aid) acc]  ;; multi-alternative group — leave as-is
                  [(hash-has-key? new-believed aid) acc]  ;; still believed — no change
                  [else (decisions-state-narrow-component acc gid aid)]))])
-        (solver-state ctx (net-cell-write net dec-cid updated-ds)))
+        (solver-state ctx (net-cell-write net dec-cid updated-ds) (solver-state-key-map ss)))
       ss))
 
 ;; Read cell: read a prop-network cell under the current worldview.
+;; Read cell: if cell-key is a cell-id, reads directly from network.
+;; If cell-key is an arbitrary key (symbol, etc.), looks up in key-map.
+;; Returns 'bot for unknown keys.
 (define (solver-state-read-cell ss cell-key)
-  (net-cell-read (solver-state-net ss) cell-key))
+  (if (cell-id? cell-key)
+      (net-cell-read (solver-state-net ss) cell-key)
+      (let ([cid (hash-ref (solver-state-key-map ss) cell-key #f)])
+        (if cid
+            (net-cell-read (solver-state-net ss) cid)
+            'bot))))
 
-;; Write cell: write to a prop-network cell. Returns: new-solver-state
+;; Write cell: if cell-key is a cell-id, writes directly to network.
+;; If cell-key is an arbitrary key, looks up (or allocates) in key-map.
+;; Returns: new-solver-state
 (define (solver-state-write-cell ss cell-key value)
-  (solver-state (solver-state-ctx ss)
-                (net-cell-write (solver-state-net ss) cell-key value)))
+  (if (cell-id? cell-key)
+      (solver-state (solver-state-ctx ss)
+                    (net-cell-write (solver-state-net ss) cell-key value)
+                    (solver-state-key-map ss))
+      ;; Arbitrary key: look up or allocate cell
+      (let ([cid (hash-ref (solver-state-key-map ss) cell-key #f)])
+        (if cid
+            ;; Existing cell — write
+            (solver-state (solver-state-ctx ss)
+                          (net-cell-write (solver-state-net ss) cid value)
+                          (solver-state-key-map ss))
+            ;; New key — allocate cell, write, record in key-map
+            (let-values ([(net* new-cid) (net-new-cell (solver-state-net ss) value
+                                                        (lambda (old new) new))])
+              (solver-state (solver-state-ctx ss)
+                            net*
+                            (hash-set (solver-state-key-map ss) cell-key new-cid)))))))
 
 ;; Solve-all: enumerate consistent worldviews and collect goal cell values.
 ;; Returns: (listof value) — distinct answers.

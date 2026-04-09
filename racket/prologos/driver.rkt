@@ -449,7 +449,7 @@
   (register-namespace-cells! (current-prop-net-box) (current-prop-new-infra-cell))
   ;; Phase D: Initialize ATMS for dependency-directed error tracking.
   (when (not (current-command-atms))
-    (current-command-atms (box (atms-empty))))
+    (current-command-atms (box (make-solver-state (make-prop-network)))))
   (init-speculation-tracking!)
   ;; Track 7 Phase 5: Initialize retraction tracking for S(-1) stratum.
   (when (not (current-retracted-assumptions))

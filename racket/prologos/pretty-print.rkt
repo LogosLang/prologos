@@ -496,7 +496,9 @@
     [(expr-atms-type) "ATMS"]
     [(expr-assumption-id-type) "AssumptionId"]
     [(expr-atms-store v)
-     (format "#<atms ~a>" (hash-count (atms-assumptions v)))]
+     (format "#<atms ~a>" (if (solver-state? v)
+                              (hash-count (solver-state-assumptions v))
+                              (if (atms? v) (hash-count (atms-assumptions v)) 0)))]
     [(expr-assumption-id-val v)
      (format "#<assumption-id ~a>" (assumption-id-n v))]
     [(expr-atms-new net) (format "[atms-new ~a]" (pp-expr net names))]

@@ -80,8 +80,8 @@
 ;; enet: the current elab-network (fork point)
 ;; labels: (listof string) — one per alternative
 (define (speculation-begin enet labels)
-  (define a (atms-empty))
-  (define-values (a* hyps) (atms-amb a labels))
+  (define a (make-solver-state (make-prop-network)))
+  (define-values (a* hyps) (solver-state-amb a labels))
   (define branches
     (for/list ([h (in-list hyps)]
                [lbl (in-list labels)])
@@ -119,8 +119,8 @@
   ;; Update ATMS: record nogood if contradiction
   (define a*
     (if has-contradiction
-        (atms-add-nogood (speculation-atms spec)
-                         (hasheq (branch-hypothesis-id br*) #t))
+        (solver-state-add-nogood (speculation-atms spec)
+                                (hasheq (branch-hypothesis-id br*) #t))
         (speculation-atms spec)))
   ;; Replace branch in list
   (define branches*

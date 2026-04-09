@@ -362,7 +362,7 @@
 ;; Create an infra-state with a fresh ATMS wrapping the given prop-network.
 ;; If no network is given, starts from a fresh prop-network.
 (define (make-infra-state [net #f] [names (hasheq)])
-  (infra-state (atms-empty (or net (make-prop-network))) names))
+  (infra-state (make-solver-state (or net (make-prop-network))) names))
 
 ;; --- Assumption Lifecycle ---
 
@@ -370,15 +370,15 @@
 ;; name: symbol (for debugging, e.g., 'per-command, 'speculation-church-fold)
 ;; datum: any value (e.g., the form being elaborated)
 (define (infra-assume is name [datum #f])
-  (define-values (atms* aid) (atms-assume (infra-state-atms is) name datum))
-  (values (struct-copy infra-state is [atms atms*]) aid))
+  (define-values (ss* aid) (solver-state-assume (infra-state-atms is) name datum))
+  (values (struct-copy infra-state is [atms ss*]) aid))
 
 ;; Retract an assumption: all TMS cell values tagged with this assumption
 ;; become non-believed. They still exist in the TMS (for history/nogoods),
 ;; but `infra-read-believed` will no longer return them.
 (define (infra-retract is aid)
   (struct-copy infra-state is
-    [atms (atms-retract (infra-state-atms is) aid)]))
+    [atms (solver-state-retract (infra-state-atms is) aid)]))
 
 ;; Commit an assumption: makes it permanent. In practice, this is a no-op
 ;; for the current ATMS (assumptions start believed). The semantic intent
@@ -410,17 +410,18 @@
            "no active assumption — use infra-assume or parameterize current-infra-assumption"))
   (define support (hasheq aid #t))
   (struct-copy infra-state is
-    [atms (atms-write-cell (infra-state-atms is) cell-key value support)]))
+    [atms (solver-state-write-cell (infra-state-atms is) cell-key value)]))
 
 ;; Read the believed value from a TMS cell under the current worldview.
 ;; Returns 'infra-bot if no compatible value exists (mirrors bot convention).
 (define (infra-read-believed is cell-key)
-  (define val (atms-read-cell (infra-state-atms is) cell-key))
+  (define val (solver-state-read-cell (infra-state-atms is) cell-key))
   (if (eq? val 'bot) 'infra-bot val))
 
 ;; Read all supported values for a TMS cell (regardless of worldview).
 ;; Returns a list of supported-value structs.
 ;; Useful for debugging, inspection, and understanding what's been written.
+;; DEPRECATED (Phase 5.7): solver-state cells are on the prop-network,
+;; not in a separate TMS cell map. Use net-cell-read-raw for introspection.
 (define (infra-read-all-supported is cell-key)
-  (define tc (hash-ref (atms-tms-cells (infra-state-atms is)) cell-key #f))
-  (if tc (tms-cell-values tc) '()))
+  '())

@@ -2831,11 +2831,12 @@
     [(expr-assumption-id-val _) e]
 
     ;; atms-new : PropNetwork -> ATMS
+    ;; BSP-LE Track 2 Phase 5.7: ATMS operations use solver-state (cell-based)
     [(expr-atms-new network)
      (let ([network* (whnf network)])
        (match network*
          [(expr-prop-network rnet)
-          (expr-atms-store (atms-empty rnet))]
+          (expr-atms-store (make-solver-state rnet))]
          [_ (if (equal? network* network) e (whnf (expr-atms-new network*)))]))]
 
     ;; atms-assume : ATMS -> Keyword -> A -> [ATMS * AssumptionId]
@@ -2847,8 +2848,8 @@
             (define sym (if (expr-keyword? name*)
                             (expr-keyword-name name*)
                             'unknown))
-            (define-values (new-atms aid) (atms-assume rstore sym datum*))
-            (expr-pair (expr-atms-store new-atms) (expr-assumption-id-val aid)))]
+            (define-values (new-ss aid) (solver-state-assume rstore sym datum*))
+            (expr-pair (expr-atms-store new-ss) (expr-assumption-id-val aid)))]
          [_ (if (equal? store* store) e (whnf (expr-atms-assume store* name datum)))]))]
 
     ;; atms-retract : ATMS -> AssumptionId -> ATMS
@@ -2856,7 +2857,7 @@
      (let ([store* (whnf store)] [aid* (whnf aid)])
        (match* (store* aid*)
          [((expr-atms-store rstore) (expr-assumption-id-val raid))
-          (expr-atms-store (atms-retract rstore raid))]
+          (expr-atms-store (solver-state-retract rstore raid))]
          [(_ _)
           (cond
             [(not (equal? store* store)) (whnf (expr-atms-retract store* aid))]
@@ -2870,7 +2871,7 @@
          [(expr-atms-store rstore)
           (let ([aset (prologos-list->assumption-set (whnf aids))])
             (if aset
-                (expr-atms-store (atms-add-nogood rstore aset))
+                (expr-atms-store (solver-state-add-nogood rstore aset))
                 ;; List not yet reducible
                 (if (equal? store* store) e (whnf (expr-atms-nogood store* aids)))))]
          [_ (if (equal? store* store) e (whnf (expr-atms-nogood store* aids)))]))]
@@ -2882,8 +2883,8 @@
          [(expr-atms-store rstore)
           (let ([alt-list (prologos-list->racket-list (whnf alternatives))])
             (if alt-list
-                (let-values ([(new-atms hyps) (atms-amb rstore alt-list)])
-                  (expr-pair (expr-atms-store new-atms)
+                (let-values ([(new-ss hyps) (solver-state-amb rstore alt-list)])
+                  (expr-pair (expr-atms-store new-ss)
                              (racket-list->prologos-list (map expr-assumption-id-val hyps))))
                 ;; List not yet reducible
                 (if (equal? store* store) e (whnf (expr-atms-amb store* alternatives)))))]
@@ -2894,7 +2895,7 @@
      (let ([store* (whnf store)] [goal* (whnf goal)])
        (match* (store* goal*)
          [((expr-atms-store rstore) (expr-cell-id cid))
-          (racket-list->prologos-list (atms-solve-all rstore cid))]
+          (racket-list->prologos-list (solver-state-solve-all rstore cid))]
          [(_ _)
           (cond
             [(not (equal? store* store)) (whnf (expr-atms-solve-all store* goal))]
@@ -2906,7 +2907,7 @@
      (let ([store* (whnf store)] [cell* (whnf cell)])
        (match* (store* cell*)
          [((expr-atms-store rstore) (expr-cell-id cid))
-          (let ([val (atms-read-cell rstore cid)])
+          (let ([val (solver-state-read-cell rstore cid)])
             (if (eq? val 'bot) (expr-hole) val))]
          [(_ _)
           (cond
@@ -2915,6 +2916,10 @@
             [else e])]))]
 
     ;; atms-write : ATMS -> CellId -> A -> List AssumptionId -> ATMS
+    ;; NOTE: solver-state-write-cell doesn't take a support set — it writes
+    ;; directly to the prop-network cell. The support semantics change:
+    ;; under solver-state, worldview filtering is via tagged-cell-value bitmasks
+    ;; (Phase 4), not per-value support sets. For now, support is ignored.
     [(expr-atms-write store cell val support)
      (let ([store* (whnf store)] [cell* (whnf cell)])
        (match* (store* cell*)
@@ -2922,7 +2927,7 @@
           (let ([val* (whnf val)]
                 [sup (prologos-list->assumption-set (whnf support))])
             (if sup
-                (expr-atms-store (atms-write-cell rstore cid val* sup))
+                (expr-atms-store (solver-state-write-cell rstore cid val*))
                 ;; Support list not yet reducible
                 (if (equal? store* store) e (whnf (expr-atms-write store* cell val support)))))]
          [(_ _)
@@ -2938,7 +2943,7 @@
          [(expr-atms-store rstore)
           (let ([aset (prologos-list->assumption-set (whnf aids))])
             (if aset
-                (if (atms-consistent? rstore aset) (expr-true) (expr-false))
+                (if (solver-state-consistent? rstore aset) (expr-true) (expr-false))
                 (if (equal? store* store) e (whnf (expr-atms-consistent store* aids)))))]
          [_ (if (equal? store* store) e (whnf (expr-atms-consistent store* aids)))]))]
 
@@ -2949,7 +2954,7 @@
          [(expr-atms-store rstore)
           (let ([aset (prologos-list->assumption-set (whnf aids))])
             (if aset
-                (expr-atms-store (atms-with-worldview rstore aset))
+                (expr-atms-store (solver-state-with-worldview rstore aset))
                 (if (equal? store* store) e (whnf (expr-atms-worldview store* aids)))))]
          [_ (if (equal? store* store) e (whnf (expr-atms-worldview store* aids)))]))]
 

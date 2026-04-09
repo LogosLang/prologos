@@ -93,8 +93,8 @@
   ;; Cheap: empty ATMS = ~3 hasheq allocations.
   (define atms-box (current-command-atms))
   (cond
-    [atms-box (set-box! atms-box (atms-empty))]
-    [else (current-command-atms (box (atms-empty)))])
+    [atms-box (set-box! atms-box (make-solver-state (make-prop-network)))]
+    [else (current-command-atms (box (make-solver-state (make-prop-network))))])
   ;; GDE-1: initialize context assumptions tracking
   (current-context-assumptions (box '())))
 
@@ -138,7 +138,7 @@
   (define ctx-box (current-context-assumptions))
   (cond
     [(and atms-box ctx-box)
-     (define-values (a* aid) (atms-assume (unbox atms-box) name datum))
+     (define-values (a* aid) (solver-state-assume (unbox atms-box) name datum))
      (set-box! atms-box a*)
      (set-box! ctx-box (cons aid (unbox ctx-box)))
      (perf-inc-atms-hypothesis!)
@@ -177,13 +177,13 @@
   ;; Track 6 BUG fix: lazy init replaces hard error.
   (define atms-box
     (or (current-command-atms)
-        (let ([b (box (atms-empty))])
+        (let ([b (box (make-solver-state (make-prop-network)))])
           (current-command-atms b)
           (current-speculation-failures (box '()))
           (current-context-assumptions (box '()))
           b)))
   (define-values (_a* hyp-id)
-    (let-values ([(a* aid) (atms-assume (unbox atms-box) (string->symbol label) label)])
+    (let-values ([(a* aid) (solver-state-assume (unbox atms-box) (string->symbol label) label)])
       (set-box! atms-box a*)
       (perf-inc-atms-hypothesis!)
       (values a* aid)))
@@ -198,7 +198,7 @@
               ([aid (in-list ctx-aids)])
       (hash-set s aid #t)))
   (cond
-    [(not (atms-consistent? (unbox atms-box) proposed-set))
+    [(not (solver-state-consistent? (unbox atms-box) proposed-set))
      ;; Branch pruned by a learned nogood — skip entirely.
      (perf-inc-speculation-pruned!)
      (record-speculation-failure! label hyp-id #f '())
@@ -293,7 +293,7 @@
                                    ([aid (in-list ctx-aids)])
                            (hash-set s aid #t))])
                    (set-box! atms-box
-                             (atms-add-nogood (unbox atms-box) nogood-set))
+                             (solver-state-add-nogood (unbox atms-box) nogood-set))
                    (perf-inc-atms-nogood!)
                    nogood-set))
                (values subs ss)])))

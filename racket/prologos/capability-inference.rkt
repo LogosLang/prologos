@@ -393,17 +393,17 @@
   ;; The assumptions map uses equal?-based hash (cons-pair keys).
   ;; ATMS cell keys use interned symbols via atms-cell-key (ATMS uses hasheq internally).
   (define-values (a0 assumptions)  ;; hash: (cons func cap) → assumption-id
-    (for/fold ([a (atms-empty)] [mapping (hash)])
+    (for/fold ([a (make-solver-state (make-prop-network))] [mapping (hash)])
               ([(key _) (in-hash direct-decls)])
       (define func-name (car key))
       (define cap-name (cdr key))
       (define-values (a* aid)
-        (atms-assume a
-                     (string->symbol (format "~a:~a" func-name cap-name))
-                     key))
-      ;; Also seed the ATMS cell for this direct declaration
+        (solver-state-assume a
+                             (string->symbol (format "~a:~a" func-name cap-name))
+                             key))
+      ;; Also seed the solver cell for this direct declaration
       (define cell-k (atms-cell-key func-name cap-name))
-      (define a** (atms-write-cell a* cell-k #t (hasheq aid #t)))
+      (define a** (solver-state-write-cell a* cell-k #t))
       (values a** (hash-set mapping key aid))))
 
   ;; Step 4: For each direct declarer (h, c), reverse-BFS to find all
@@ -490,7 +490,7 @@
         (define root-key (cons root cap-name))
         (define aid (hash-ref assumptions root-key #f))
         (if aid
-            (atms-write-cell a cell-k #t (hasheq aid #t))
+            (solver-state-write-cell a cell-k #t)
             a))))  ;; root may be unqualified form — assumption might only have qualified
 
   (values a-final prov-roots-imm))

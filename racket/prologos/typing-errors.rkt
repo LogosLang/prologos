@@ -160,7 +160,7 @@
     [(not hyp-id) ""]
     [else
      (define a (unbox atms-box))
-     (define explanations (atms-explain-hypothesis a hyp-id))
+     (define explanations (solver-state-explain-hypothesis a hyp-id))
      (if (null? explanations)
          ""
          ;; Collect all conflicting assumption names across all nogoods
@@ -203,19 +203,19 @@
           (remove-duplicates
            (for*/list ([ss (in-list all-support-sets)]
                        [(aid _) (in-hash ss)]
-                       #:when (let ([asn (hash-ref (atms-assumptions a) aid #f)])
+                       #:when (let ([asn (hash-ref (solver-state-assumptions a) aid #f)])
                                 (and asn
                                      (memq (assumption-name asn)
                                            '(def-type-annotation check-type-annotation)))))
              aid)))
         (define context-lines
           (for/list ([aid (in-list context-aids)])
-            (define asn (hash-ref (atms-assumptions a) aid #f))
+            (define asn (hash-ref (solver-state-assumptions a) aid #f))
             (if asn
                 (format "user annotated ~a" (assumption-datum asn))
                 "")))
         ;; Minimal diagnosis: which assumptions to retract
-        (define diags (atms-minimal-diagnoses a))
+        (define diags (solver-state-minimal-diagnoses a))
         (when (pair? diags) (perf-inc-gde-diagnosis!))
         (define diag-lines
           (cond
@@ -224,7 +224,7 @@
              (define diag (car diags))
              (define diag-datums
                (for/list ([(aid _) (in-hash diag)])
-                 (define asn (hash-ref (atms-assumptions a) aid #f))
+                 (define asn (hash-ref (solver-state-assumptions a) aid #f))
                  (if asn (format "~a" (assumption-datum asn))
                      (format "assumption-~a" (assumption-id-n aid)))))
              (if (null? diag-datums) '()
