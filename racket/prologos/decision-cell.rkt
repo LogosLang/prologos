@@ -70,6 +70,14 @@
  hasse-adjacent?
  subcube-member?
 
+ ;; === Tagged Cell Values (Phase 4: replaces TMS tree) ===
+ (struct-out tagged-cell-value)
+ tagged-cell-value?
+ tagged-cell-read
+ tagged-cell-write
+ tagged-cell-merge
+ make-tagged-merge  ;; domain-aware merge wrapper (analogous to make-tms-merge)
+
  ;; === Commitment Cell ===
  commitment-initial
  commitment-merge
@@ -326,6 +334,115 @@
 ;; O(1) — single AND + comparison.
 (define (subcube-member? wv-bitmask ng-bitmask)
   (= (bitwise-and wv-bitmask ng-bitmask) ng-bitmask))
+
+
+;; ============================================================
+;; Tagged Cell Values (Phase 4: replaces TMS tree)
+;; ============================================================
+;; A tagged-cell-value holds a base value + a list of bitmask-tagged
+;; speculative entries. Reads filter entries by the current worldview
+;; bitmask — most-specific match (highest popcount subset of worldview).
+;; Writes under a non-zero worldview append a tagged entry.
+;;
+;; Replaces the recursive tms-cell-value tree:
+;;   tms-cell-value (ordered stack, O(depth) walk) → RETIRED
+;;   tagged-cell-value (unordered bitmask, O(K) filter, each O(1)) → NEW
+;;
+;; Commit = worldview includes assumption → tagged entry visible. Nothing to do.
+;; Retract = assumption eliminated → tagged entry invisible. Nothing to do.
+;; Both emerge from decision cell information flow.
+;;
+;; base: the unconditional value (worldview = 0, always visible)
+;; entries: (listof (cons bitmask value)) — speculative writes
+;;   Each entry: (cons worldview-bitmask-at-write-time value)
+;;   Monotone: entries only accumulate (append)
+(struct tagged-cell-value (base entries) #:transparent)
+
+;; Read: find the most-specific entry whose bitmask is a subset of worldview W.
+;; Most-specific = highest popcount (most assumptions committed).
+;; If no entry matches: return base.
+;; worldview-bitmask: the current worldview (from worldview cache cell)
+(define (tagged-cell-read tcv worldview-bitmask)
+  (cond
+    [(not (tagged-cell-value? tcv)) tcv]  ;; plain value — pass through
+    [(zero? worldview-bitmask)
+     ;; No speculation active — return base directly (Tier 1 fast path)
+     (tagged-cell-value-base tcv)]
+    [else
+     ;; Find most-specific matching entry
+     (define best-val (tagged-cell-value-base tcv))
+     (define best-bits 0)  ;; popcount of best match (0 = base)
+     (for ([entry (in-list (tagged-cell-value-entries tcv))])
+       (define entry-bm (car entry))
+       (define entry-val (cdr entry))
+       ;; Subset check: is this entry's worldview ⊆ current worldview?
+       (when (and (= (bitwise-and entry-bm worldview-bitmask) entry-bm)
+                  (> (popcount entry-bm) best-bits))
+         (set! best-val entry-val)
+         (set! best-bits (popcount entry-bm))))
+     best-val]))
+
+;; Write: if worldview is non-zero, append a tagged entry.
+;; If worldview is zero, update the base.
+;; Returns a new tagged-cell-value.
+(define (tagged-cell-write tcv worldview-bitmask new-val)
+  (cond
+    [(not (tagged-cell-value? tcv))
+     ;; Plain value being written under speculation for the first time.
+     ;; Wrap it: old value becomes base, new write is a tagged entry.
+     (if (zero? worldview-bitmask)
+         new-val  ;; no speculation — plain write
+         (tagged-cell-value tcv (list (cons worldview-bitmask new-val))))]
+    [(zero? worldview-bitmask)
+     ;; Unconditional write — update base
+     (struct-copy tagged-cell-value tcv [base new-val])]
+    [else
+     ;; Speculative write — append tagged entry
+     (struct-copy tagged-cell-value tcv
+       [entries (cons (cons worldview-bitmask new-val)
+                      (tagged-cell-value-entries tcv))])]))
+
+;; Merge: union entries from both sides. Base merges via the caller's merge-fn.
+;; The caller (net-cell-write) applies the cell's registered merge-fn to the
+;; overall value. For tagged-cell-value, the merge unions entry lists.
+(define (tagged-cell-merge old new)
+  (cond
+    [(and (tagged-cell-value? old) (tagged-cell-value? new))
+     (tagged-cell-value
+      (tagged-cell-value-base new)  ;; newer base wins (or caller merges)
+      (append (tagged-cell-value-entries old)
+              (tagged-cell-value-entries new)))]
+    [(tagged-cell-value? old)
+     ;; New is plain — treat as base update
+     (struct-copy tagged-cell-value old [base new])]
+    [(tagged-cell-value? new) new]  ;; old is plain, new is tagged
+    [else new]))  ;; both plain
+
+;; Create a tagged-cell merge function that applies a domain merge at base level.
+;; domain-merge: (old-val new-val → merged-val) — the underlying lattice join.
+;; Returns a merge function suitable for use as a cell's merge-fn.
+;; Analogous to make-tms-merge for TMS cells.
+;;
+;; For tagged-cell-values: merges bases with domain-merge, unions entry lists.
+;; For plain values: delegates to domain-merge directly.
+(define (make-tagged-merge domain-merge)
+  (lambda (old new)
+    (cond
+      [(eq? old 'infra-bot) new]
+      [(eq? new 'infra-bot) old]
+      [(and (tagged-cell-value? old) (tagged-cell-value? new))
+       (tagged-cell-value
+        (domain-merge (tagged-cell-value-base old)
+                      (tagged-cell-value-base new))
+        (append (tagged-cell-value-entries old)
+                (tagged-cell-value-entries new)))]
+      [(tagged-cell-value? old)
+       (struct-copy tagged-cell-value old
+         [base (domain-merge (tagged-cell-value-base old) new)])]
+      [(tagged-cell-value? new)
+       (struct-copy tagged-cell-value new
+         [base (domain-merge old (tagged-cell-value-base new))])]
+      [else (domain-merge old new)])))
 
 
 ;; ============================================================

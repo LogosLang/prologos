@@ -163,6 +163,8 @@
  ;; PAR Track 2 R2: Parallel thread executor
  make-parallel-thread-fire-all
  current-parallel-executor
+ ;; BSP-LE Track 2 Phase 4: worldview cache cell-id (for external consumers)
+ worldview-cache-cell-id
  ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
  net-cell-read-raw
  ;; Track 6 Phase 2+3: Network-wide TMS commit
@@ -430,6 +432,15 @@
 ;; Network Construction
 ;; ========================================
 
+;; Well-known cell-id for the worldview bitmask cache.
+;; Convention: cell-id 1 in every network. Holds the current worldview bitmask.
+;; Derived from decision cells via fan-in (OR of committed assumptions).
+;; net-cell-read uses this for O(1) bitmask-tagged value filtering.
+(define worldview-cache-cell-id (cell-id 1))
+
+;; Worldview cache merge: bitwise OR (monotone — bits only accumulate).
+(define (worldview-cache-merge old new) (bitwise-ior old new))
+
 ;; Create an empty propagator network.
 ;; fuel: maximum number of propagator firings before run-to-quiescence stops.
 (define (make-prop-network [fuel 1000000])
@@ -438,14 +449,22 @@
   (define req-cid decomp-request-cell-id)
   (define req-h (cell-id-hash req-cid))
   (define req-cell (prop-cell (set) champ-empty))  ;; empty set, no dependents
+  ;; BSP-LE Track 2 Phase 4: cell-id 1 is the worldview bitmask cache.
+  ;; Pre-allocated with 0 (no speculation) and bitwise-ior as merge.
+  (define wv-cid worldview-cache-cell-id)
+  (define wv-h (cell-id-hash wv-cid))
+  (define wv-cell (prop-cell 0 champ-empty))  ;; 0 = no assumptions, no dependents
   (prop-network
    (prop-net-hot '() fuel)
-   (prop-net-warm (champ-insert champ-empty req-h req-cid req-cell) #f)
-   (prop-net-cold (champ-insert champ-empty req-h req-cid decomp-request-merge)
+   (prop-net-warm (champ-insert (champ-insert champ-empty req-h req-cid req-cell)
+                                wv-h wv-cid wv-cell)
+                  #f)
+   (prop-net-cold (champ-insert (champ-insert champ-empty req-h req-cid decomp-request-merge)
+                                wv-h wv-cid worldview-cache-merge)
                   champ-empty        ;;   contradiction-fns
                   champ-empty        ;;   widen-fns
                   champ-empty        ;;   propagators
-                  1                  ;;   next-cell-id (0 is taken by request cell)
+                  2                  ;;   next-cell-id (0=decomp-request, 1=worldview-cache)
                   0                  ;;   next-prop-id
                   champ-empty        ;;   cell-decomps
                   champ-empty        ;;   pair-decomps
@@ -603,9 +622,10 @@
   (if (eq? dir 'none) 'ascending dir))
 
 ;; Read a cell's current value.
-;; Track 4 Phase 2: TMS-transparent. If the cell holds a tms-cell-value,
-;; automatically applies tms-read with the current speculation stack.
-;; At depth 0, this returns base directly (one null? check).
+;; BSP-LE Track 2 Phase 4: tagged-cell-value aware. If the cell holds a
+;; tagged-cell-value, reads the worldview cache cell for the current bitmask
+;; and filters entries via O(K) bitmask subset checks.
+;; Falls back to TMS-transparent read for backward compatibility during migration.
 ;; Errors on unknown cell-id.
 (define (net-cell-read net cid)
   (define cell (champ-lookup (prop-network-cells net)
@@ -613,9 +633,18 @@
   (if (eq? cell 'none)
       (error 'net-cell-read "unknown cell: ~a" cid)
       (let ([v (prop-cell-value cell)])
-        (if (tms-cell-value? v)
-            (tms-read v (current-speculation-stack))
-            v))))
+        (cond
+          [(tagged-cell-value? v)
+           ;; Read worldview bitmask from cache cell (cell-id 1)
+           (define wv-cell (champ-lookup (prop-network-cells net)
+                                          (cell-id-hash worldview-cache-cell-id)
+                                          worldview-cache-cell-id))
+           (define wv-bitmask (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))
+           (tagged-cell-read v wv-bitmask)]
+          [(tms-cell-value? v)
+           ;; Legacy TMS path — still needed during Phase 4 migration
+           (tms-read v (current-speculation-stack))]
+          [else v]))))
 
 ;; Read a cell's raw value without TMS unwrapping.
 ;; Used for commit operations and provenance inspection where
@@ -818,11 +847,20 @@
   (define merge-fn
     (champ-lookup (prop-network-merge-fns net) h cid))
   (define old-val (prop-cell-value cell))
-  ;; TMS-transparent write: wrap plain values into TMS tree structure
+  ;; BSP-LE Track 2 Phase 4: tagged-cell-value write.
+  ;; If old value is tagged-cell-value and new is plain, wrap with worldview bitmask.
+  ;; Falls back to TMS wrapping for legacy cells during migration.
   (define actual-new-val
     (cond
+      [(and (tagged-cell-value? old-val) (not (tagged-cell-value? new-val)))
+       ;; Read worldview bitmask from cache cell
+       (define wv-cell (champ-lookup cells
+                                      (cell-id-hash worldview-cache-cell-id)
+                                      worldview-cache-cell-id))
+       (define wv-bitmask (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))
+       (tagged-cell-write old-val wv-bitmask new-val)]
       [(and (tms-cell-value? old-val) (not (tms-cell-value? new-val)))
-       ;; Plain value → insert at current speculation depth in the tree
+       ;; Legacy TMS path — still needed during Phase 4 migration
        (tms-write old-val (current-speculation-stack) new-val)]
       [else new-val]))
   (define merged (merge-fn old-val actual-new-val))
@@ -2281,10 +2319,17 @@
   (define merge-fn
     (champ-lookup (prop-network-merge-fns net) h cid))
   (define old-val (prop-cell-value cell))
-  ;; Track 4 Phase 2: TMS-transparent write (same pattern as net-cell-write)
+  ;; BSP-LE Track 2 Phase 4: tagged-cell-value write (same pattern as net-cell-write)
   (define actual-new-val
     (cond
+      [(and (tagged-cell-value? old-val) (not (tagged-cell-value? new-val)))
+       (define wv-cell (champ-lookup cells
+                                      (cell-id-hash worldview-cache-cell-id)
+                                      worldview-cache-cell-id))
+       (define wv-bitmask (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))
+       (tagged-cell-write old-val wv-bitmask new-val)]
       [(and (tms-cell-value? old-val) (not (tms-cell-value? new-val)))
+       ;; Legacy TMS path
        (tms-write old-val (current-speculation-stack) new-val)]
       [else new-val]))
   (define merged (merge-fn old-val actual-new-val))

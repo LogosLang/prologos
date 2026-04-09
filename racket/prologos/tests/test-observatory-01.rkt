@@ -304,9 +304,9 @@
   (check-not-eq? meta-c 'none)
   (check-eq? (cell-meta-subsystem meta-a) 'user)
   (check-eq? (cell-meta-domain meta-a) 'lattice)
-  (check-equal? (cell-meta-label meta-a) "cell-1")  ;; PAR Track 1: cell-id 0 = request cell
-  (check-equal? (cell-meta-label meta-b) "cell-2")
-  (check-equal? (cell-meta-label meta-c) "cell-3"))
+  (check-equal? (cell-meta-label meta-a) "cell-2")  ;; BSP-LE Track 2: cell-ids 0,1 are pre-allocated
+  (check-equal? (cell-meta-label meta-b) "cell-3")
+  (check-equal? (cell-meta-label meta-c) "cell-4"))
 
 ;; ========================================
 ;; 11. Multiple captures accumulate
