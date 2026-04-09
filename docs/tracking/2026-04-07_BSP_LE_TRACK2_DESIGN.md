@@ -3,7 +3,7 @@
 **Date**: 2026-04-07
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: Cell-Based TMS (folding Track 1.5) + ATMS Solver + Non-Recursive Tabling
-**Status**: D.9 — bitmask-tagged cell values replace TMS tree (Phase 4 redesign from hypercube + PUnify insights)
+**Status**: D.10 — Phase 5 compound cell architecture (compound decisions/commitments cells, broadcast #:component-paths, fire-once audit, consumer migration, worldview cache wiring)
 **Self-critique**: [P/R/M Analysis](2026-04-07_BSP_LE_TRACK2_SELF_CRITIQUE.md) (17 findings, D.2)
 **External critique**: [Architect Review](2026-04-08_BSP_LE_TRACK2_EXTERNAL_CRITIQUE.md) (16 findings, D.3)
 **Stage 1/2**: [Research + Audit](../research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md)
@@ -20,7 +20,7 @@
 | 2 | PU-per-branch lifecycle | ✅ | commit `0a78069a`. dependent-entry struct, #:assumption on net-add-propagator, make-branch-pu, perf-inc-inert-dependent-skip!, 7 tests. 393/393, 7651 tests. |
 | 3 | Per-nogood propagators (RKan) | ✅ | commit `a38baefb`. Commitment cell (structural, provenance=value), broadcast commit-tracker, narrower, contradiction detector, topology handler. 9 tests. |
 | 4 | Bitmask-tagged cell values (TMS retired) | ✅ | 4a+4b: `72394146`. 4-tests: `PENDING`. tagged-cell-value + worldview cache + net-cell-read/write. 35 new tests. Consumer migration deferred to Phase 5 (decision cells → worldview derivation) + Phase 9 (parameter removal). |
-| 5 | ATMS struct dissolution | ⬜ | All 7 fields → cells. Struct REMOVED. atms.rkt becomes query function library. (P4) |
+| 5 | ATMS struct dissolution + compound cells + consumer migration | ⬜ | D.10: compound decisions cell (merge-maintained bitmask), compound commitments cell, broadcast #:component-paths extension, fire-once for narrower/detector, worldview projection, elab-speculation-bridge + cell-ops + metavar-store migration. atms struct → solver-context. |
 | 6 | Clause-as-assumption in PUs | ⬜ | Parallel-map clause matching (M1) + PU per surviving clause |
 | 7 | Goal-as-propagator dispatch | ⬜ | 5 goal types (no cut — P2). NAF at S1 via BSP barrier (M6). Answer accumulator (M5). |
 | 8 | Producer/consumer tabling | ⬜ | Table registry check in goal dispatcher. Non-recursive completion. |
@@ -218,16 +218,22 @@ The ATMS struct (`atms.rkt`, 7 fields) dissolves entirely into cells on the prop
 | `believed` | **ELIMINATED** | — | — | Worldview emerges from decision cells — no separate representation |
 | `amb-groups` | Decision cells (one per amb, §2.5a) | P(Alternatives), ⊇ | set-intersection | Structural lattice, SRE-registered |
 
-### §2.6b No Worldview Cell — Worldview Emerges from Decisions
+### §2.6b Worldview Emerges from Decisions via Compound Cell
 
-The worldview is NOT a cell. It is the COLLECTION of decision cells. Any propagator needing assumption information reads the relevant decision cell(s) directly.
+**Updated D.10** (reconciles with Phase 4 worldview cache cell, Phase 5 compound decisions cell design):
 
-- A propagator in branch B reads decision-cell-B for its assumption
-- Consistency checking decomposes per-decision: "is decision G still viable?" = "is decision-cell-G non-empty?" — a per-cell check, not a global scan
-- Global consistency = conjunction (AND-fan-in) of per-decision viability cells
-- Global consistency EMERGES from the fan-in. No aggregation step. No derived cell.
+Decision cells are PRIMARY. The worldview is a DERIVED bitmask, maintained structurally by the compound decisions cell's merge function — not by propagators.
 
-If a cross-system bridge needs the full assumption set (e.g., worldview→type filtering), it reads the relevant decision cells via fan-in. This is more decomplected than a single worldview aggregate — each propagator reads only the decisions it cares about.
+**Compound decisions cell**: ONE cell holds ALL decision state, component-indexed by group-id. Value struct: `(decisions-state components bitmask)` where `components` is `(hasheq group-id → decision-domain-value)` and `bitmask` is the OR of all committed assumptions' bit positions. The merge function recomputes the bitmask from all components on every merge — retraction (component narrowing) naturally removes bits.
+
+**Worldview cache cell** (cell-id 1, pre-allocated in Phase 4): Holds the current worldview bitmask for `net-cell-read`'s tagged-cell-value filtering. Updated by ONE projection propagator that watches the compound decisions cell, extracts the bitmask field, writes to cell-id 1. O(1) work per fire. Merge: replacement (not ior — the projection writes the complete recomputed bitmask each time).
+
+**No fan-in aggregation**: The merge function IS the aggregation. No N micro-propagators, no centralized fan-in. The cell's merge maintains the bitmask structurally. The single projection propagator is a transparent bridge to cell-id 1, not an aggregation step.
+
+- A propagator in branch B reads its group's component of the compound decisions cell via component-path
+- Consistency checking: per-decision contradiction detection (Phase 3 infrastructure), not a global fan-in (1.2 external critique resolution)
+- The compound decisions cell eliminates M separate decision cell allocations → 1 cell
+- Component-indexed access preserves per-group precision for per-nogood propagators
 
 ### §2.6c Retraction = Decision Cell Narrowing (SRE Structural Operation)
 
@@ -248,7 +254,7 @@ Standalone assumptions (not from any amb) are decision cells with one alternativ
 | `atms-assume` | Write to assumptions-cell + counter-cell. Create trivial decision cell `{h}`. | ✓ Cell writes |
 | `atms-retract` | Narrow decision cell to exclude assumption | ✓ Cell write (SRE narrowing) |
 | `atms-add-nogood` | Write to nogood cell (set-union) | ✓ Cell write |
-| `atms-consistent?` | Fan-in: AND of per-decision non-empty checks | ✓ Propagator (fan-in) |
+| `atms-consistent?` | Per-decision contradiction detection (Phase 3 infrastructure, 1.2 resolution). Read compound decisions cell components. No global fan-in. | ✓ Component reads |
 | `atms-with-worldview` | Set decision cells to specific values | ✓ Cell writes |
 | `atms-amb` | Create N assumptions + decision cell + pairwise nogoods | ✓ Cell writes + topology (decision cell creation) |
 | `atms-read-cell` | RETIRED — `net-cell-read` with decision context | ✓ |
@@ -912,7 +918,7 @@ Sections 1-4 are uncommented as phases complete. Section 5 is aspirational (Trac
 
    First consumer: clause matching (Phase 6). Generalizes to: per-nogood commitment tracking (Phase 3), goal conjunction (Phase 7), pairwise nogood installation (Phase 5), pattern matching, trait lookup, module resolution.
 
-5. **NO worldview cell** (§2.6b): The worldview emerges from decision cells. No `worldview-cid` on the network. `net-cell-read`/`net-cell-write` use decision cells for TMS navigation in Tier 2 (Phase 9 activates this). Tier 1 uses `current-speculation-stack` as before.
+5. **Worldview = derived bitmask** (§2.6b, updated D.10): Decision cells are PRIMARY, organized in ONE compound decisions cell (component-indexed by group-id). The compound cell's merge maintains a derived bitmask (OR of committed assumptions' bit positions). ONE projection propagator writes this bitmask to the worldview cache cell (cell-id 1). `net-cell-read` reads the cache for O(1) tagged-cell-value filtering. Retraction = component narrowing → merge recomputes bitmask → bits naturally disappear. No micro-propagators, no fan-in aggregation — the merge IS the aggregation.
 
 6. **Bitmask representation** (Hasse diagram, additive): The `decision-set` struct gains an optional `bitmask` field — a fixnum where bit i = 1 means "assumption with integer id i is viable." Computed at creation time from the alternatives (one-time cost: OR of assumption-id integers). Maintained through merge/narrow (one extra bitwise op per merge). Enables O(1) Hasse-diagram operations:
    - Hamming distance: `popcount(a XOR b)` — metric for Gray code traversal
@@ -1243,35 +1249,141 @@ Tagged entries from failed branches remain in cells (invisible but present). For
 - PUnify propagators produce bitmask-tagged writes correctly
 - TMS code path confirmed dead (no `tms-cell-value?` hits)
 
-### Phase 5: ATMS Struct Dissolution
+### Phase 5: ATMS Struct Dissolution + Compound Cell Architecture + Consumer Migration
 
-**What changes** (per §2.6):
+**Updated D.10**: Incorporates compound cell design, fire-once audit, component-path compliance, broadcast extension, worldview cache wiring, and deferred Phase 4c consumer migration.
 
-The `atms` struct (7 fields) is dissolved entirely into cells on the propagator network. No off-network state remains.
+#### 5.1 Infrastructure Prep
 
-1. **`atms.rkt`**: The `atms` struct is REMOVED. In its place:
-   - **Solver context**: a lightweight record holding cell-ids for the solver's cells (assumptions-cid, nogoods-cid, counter-cid, answer-accumulator-cid, plus a list of decision-cids). This is metadata about WHERE the cells are, not the cells' VALUES.
-   - `atms-assume` → write to assumptions-cell + counter-cell. Create trivial decision cell `{h}`.
-   - `atms-add-nogood` → write to nogood cell (set-union). Monotone.
-   - `atms-amb` → create N assumption writes + decision cell + pairwise nogood writes via **broadcast propagator** over N(N-1)/2 pairs (§6b). Topology request for PU creation.
-   - `atms-retract` → narrow decision cell to exclude assumption (SRE structural narrowing, §2.6c). The word "retract" is ALIASED to decision-cell narrowing.
-   - `atms-consistent?` → propagator: AND-fan-in of per-decision non-empty checks.
-   - `atms-read-cell` / `atms-write-cell` → RETIRED. Use `net-cell-read` / `net-cell-write`.
+**5.1a: Move `net-add-fire-once-propagator` to propagator.rkt.** Currently in typing-propagators.rkt. Fire-once is a general infrastructure pattern, not typing-specific. Move to propagator.rkt and export.
 
-2. **`atms.rkt`**: Retained as query function library (§2.6f):
-   - `explain-hypothesis`: reads nogood cell + assumptions cell → filter → explanation
-   - `explain-all`: reads nogoods + decision cells → violated nogoods
-   - `minimal-diagnoses`: formulated as tropical semiring CSP (§2.6e) — future phase or deferred
-   - `conflict-graph`: reads nogoods → builds graph
-   - These are read-only consumers of cell values. Correctly off-network.
+**5.1b: Extend `net-add-broadcast-propagator` for component-paths.** Currently hardcodes `(dependent-entry #f #f #f)`. Add optional `#:component-paths`, `#:assumption`, `#:decision-cell` parameters (same interface as `net-add-propagator`). The commit-tracker broadcast (Phase 3) needs component-indexed watching of the compound decisions cell.
 
-3. **R2 note**: The `amb-groups` field becomes the list of decision-cell-ids in the solver context. `atms-solve-all` is REPLACED by the answer accumulator (M5) — branching topology covers the product space, committed results accumulate via set-union merge.
+**5.1c: Update worldview cache cell merge.** Change from `bitwise-ior` (monotone accumulate) to replacement merge `(lambda (old new) new)`. The projection propagator writes the complete recomputed bitmask — replacement handles retraction correctly (removed bits disappear).
 
-4. **R5 note**: Only 3 sites actually call `atms-amb` as an operation (atms.rkt internal, elab-speculation.rkt, reduction.rkt). The 26 `atms-amb` references in the pipeline (parser, pretty-print, substitution, zonk) handle the `expr-atms-amb` AST node — UNCHANGED by this phase.
+#### 5.2 Compound Decisions Cell
 
-**Key architectural point**: There is no "ATMS struct managing worldviews" alongside cells. The cells ARE the state. The solver context is a phone book (which cell-ids to read), not a second source of truth (P4 resolution).
+ONE cell holds ALL decision state, component-indexed by group-id.
 
-**Test coverage**: All existing ATMS tests rewritten to use cell operations. `atms-assume` → cell write parity. `atms-amb` → decision cell creation parity. `atms-add-nogood` → nogood cell write parity. Existing solver tests pass (behavioral parity via relations.rkt).
+```
+(struct decisions-state (components bitmask) #:transparent)
+;; components: hasheq group-id → decision-domain-value
+;; bitmask: integer — DERIVED, recomputed by merge from all components
+```
+
+Merge function:
+```
+(define (decisions-state-merge old new)
+  ;; Per-component: decision-domain-merge (set-intersection narrowing)
+  (define merged-comps ...)   ;; merge-per-key: union keys, merge shared
+  ;; Recompute bitmask from ALL components (O(M) for M groups, each O(1))
+  (define bm
+    (for/fold ([acc 0]) ([(gid dv) (in-hash merged-comps)])
+      (if (decision-committed? dv)
+          (bitwise-ior acc (arithmetic-shift 1 (assumption-id-n
+                            (decision-committed-assumption dv))))
+          acc)))
+  (decisions-state merged-comps bm))
+```
+
+The bitmask is a **structural property of the compound value**, maintained by the merge, not by any propagator. Retraction (component narrowing) naturally removes bits — the merge recomputes from scratch each time.
+
+**Cell allocation**: M `atms-amb` calls → 1 compound cell (not M separate cells).
+
+**Solver context**: The `atms` struct is REMOVED. Replaced by `solver-context` record holding cell-ids:
+- `decisions-cid`: the ONE compound decisions cell
+- `assumptions-cid`: assumptions accumulator cell (set-union)
+- `nogoods-cid`: nogood accumulator cell (set-union)
+- `counter-cid`: assumption counter cell (max merge)
+- `answer-accumulator-cid`: answer accumulator (set-union)
+
+This is a phone book (WHERE the cells are), not state (what the cells HOLD). P4 self-critique resolution: no second source of truth.
+
+#### 5.3 Compound Commitments Cell
+
+Same pattern for per-nogood commitment tracking. ONE cell, component-indexed by nogood-id.
+
+```
+(struct commitments-state (components) #:transparent)
+;; components: hasheq nogood-id → commitment-value
+```
+
+Merge: per-component dispatch to `commitment-merge`. Each nogood's commitment state is independent — component-indexed access preserves per-nogood precision.
+
+**Cell allocation**: K nogoods → 1 compound cell (not K separate cells).
+
+#### 5.4 Worldview Cache Wiring
+
+ONE projection propagator watches the compound decisions cell, extracts the `bitmask` field, writes to the worldview cache cell (cell-id 1).
+
+```
+;; Projection propagator: compound decisions → worldview cache
+(define projection-fire-fn
+  (lambda (net)
+    (define ds (net-cell-read-raw net decisions-cid))  ;; read compound value
+    (define bm (if (decisions-state? ds) (decisions-state-bitmask ds) 0))
+    (net-cell-write net worldview-cache-cell-id bm)))
+```
+
+O(1) work per fire: extract a struct field, write an integer. NOT fire-once — fires on every compound cell change (bitmask evolves as decisions commit). But lightweight: one field extraction, one integer comparison (merge checks equality).
+
+#### 5.5 Per-Nogood Propagator Updates (Fire-Once + Component-Paths)
+
+The Phase 3 per-nogood propagators are updated:
+
+| Propagator | Fire-once? | Component-paths | Change |
+|---|---|---|---|
+| Broadcast commit-tracker | No (fires on each decision change) | `((decisions-cid . group-A) (decisions-cid . group-B) ...)` per nogood members | Add component-paths via extended broadcast (5.1b) |
+| Nogood narrower | **Yes** (fire-once, self-cleaning) | `((commitments-cid . nogood-id))` | Change to `net-add-fire-once-propagator`. Reads specific commitment component. |
+| Contradiction detector | **Yes** (fire-once, self-cleaning) | `((commitments-cid . nogood-id))` | Change to `net-add-fire-once-propagator`. Reads specific commitment component. |
+| Worldview projection | No (fires on each compound change) | N/A (watches entire compound cell) | New. |
+
+#### 5.6 ATMS Operation Migration
+
+| ATMS Operation | Replacement | Notes |
+|---|---|---|
+| `atms-assume` | Write to assumptions-cell + counter-cell. Add trivial `{h}` component to compound decisions cell. | Component write to compound cell |
+| `atms-retract` | Narrow component in compound decisions cell (§2.6c) | SRE structural narrowing. Merge recomputes bitmask. |
+| `atms-add-nogood` | Write to nogood cell (set-union). Install per-nogood infrastructure against compound cells. | Broadcast commit-tracker uses component-paths on compound decisions cell. |
+| `atms-consistent?` | Read compound decisions cell components, check per-component non-empty. No global fan-in (1.2 resolution). | Synchronous query function — correctly off-network. |
+| `atms-amb` | Create N assumptions + N components in compound decisions cell + pairwise nogoods via broadcast (§6b) | Single compound cell write adds all N components |
+| `atms-read-cell` / `atms-write-cell` | RETIRED — `net-cell-read` / `net-cell-write` | |
+| `atms-solve-all` | REPLACED — answer accumulator cell (M5) | |
+
+Retained as query functions (§2.6f): `explain-hypothesis`, `explain-all`, `conflict-graph`, `minimal-diagnoses` (tropical semiring CSP, deferred).
+
+**R5 note**: Only 3 sites call `atms-amb` as an operation (atms.rkt internal, elab-speculation.rkt, reduction.rkt). The 26 `atms-amb` references in the pipeline handle the `expr-atms-amb` AST node — UNCHANGED.
+
+#### 5.7 Consumer Migration (Deferred 4c)
+
+With the compound decisions cell + worldview cache wired via projection propagator, the Phase 4c consumer migration completes:
+
+**`elab-speculation-bridge.rkt`**: Instead of `parameterize([current-speculation-stack (cons hyp-id ...)])`, write a committed component `{hyp-id}` to the compound decisions cell. The merge recomputes the bitmask. The projection propagator updates the worldview cache. `net-cell-write` auto-tags writes via the tagged-cell-value path (Phase 4b). On success: leave the component (committed values visible under bitmask). On failure: restore network box (component disappears with restored network). `net-commit-assumption` and `net-retract-assumption` → **dead code**.
+
+**`cell-ops.rkt`**: `worldview-visible?` changes from stack membership check to bitmask subset check on the worldview cache cell. Read cache cell (cell-id 1), check `(= (bitwise-and entry-bitmask worldview) entry-bitmask)`.
+
+**`metavar-store.rkt`**: `current-speculation-assumption` reads worldview cache cell instead of `current-speculation-stack`.
+
+**`typing-propagators.rkt`**: DEFERRED to Phase 6 (per-fire scoping needs PU isolation; gensym-based assumption-ids need integer conversion).
+
+**`current-speculation-stack`**: Dead code after Phase 5 for sequential speculation consumers. Formal removal in Phase 9 (after typing-propagators migration in Phase 6).
+
+#### 5.8 Test Coverage
+
+**Behavioral parity**:
+- `atms-assume` → compound cell component write parity
+- `atms-amb` → compound cell N-component creation parity
+- `atms-add-nogood` → compound commitments cell + per-nogood infrastructure parity
+- Existing solver tests pass via relations.rkt (behavioral parity with DFS)
+
+**Architecture-validating**:
+- Compound decisions cell: component writes, merge-maintained bitmask, component-indexed reads
+- Worldview projection: compound change → cache update → `net-cell-read` sees correct bitmask
+- Compound commitments cell: per-nogood component isolation, commitment-merge per-component
+- Fire-once narrower/contradiction detector: fires once, subsequent scheduling is no-op
+- Component-path precision: broadcast commit-tracker fires only when watched group changes
+- Consumer migration: `elab-speculation-bridge` writes compound cell → auto-tagged cell writes → correct `net-cell-read` under worldview
+- Retraction: component narrowing → merge recomputes bitmask → removed bits disappear → tagged-cell-read returns correct value
 
 ---
 
@@ -1507,13 +1619,15 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
 
 Every place in the Track 2 design where data-indexed parallel processing occurs MUST use the broadcast propagator pattern, not N separate propagators. Audit of all deployment sites:
 
-| Phase | Component | Items | Item Function | Merge | Notes |
-|---|---|---|---|---|---|
-| **3** | Per-nogood commitment tracking | Groups in a nogood (2-3) | Check if decision cell committed to nogood member | Component-indexed hash merge | Broadcast over groups, writes to commitment cell |
-| **5** | `atms-amb` pairwise nogood creation | N(N-1)/2 pairs from N alternatives | Create one nogood hasheq per pair | Nogood cell set-union | Broadcast over pairs, one write to nogood cell |
-| **6** | Clause matching | N clauses | α-rename + try-unify per clause | Set-union of matching results | PRIMARY consumer. Broadcast over clause list. |
-| **7** | Goal conjunction installation | K goals in clause body | Install goal propagator per goal | N/A (topology, not value) | Each goal installs independently. Broadcast over goals for TOPOLOGY REQUESTS. |
-| **8** | Producer clause body | Clause body goals | Same as Phase 7 (conjunction) | Same | Tabled relation body = conjunction |
+| Phase | Component | Items | Item Function | Merge | Component-Paths? | Notes |
+|---|---|---|---|---|---|---|
+| **3** | Per-nogood commitment tracking | Groups in a nogood (2-3) | Check if compound decisions cell component committed to nogood member | Component-indexed hash merge | **Yes** — `((decisions-cid . group-A) ...)` per nogood members | Broadcast over groups, writes to compound commitment cell component. Requires 5.1b extension. |
+| **5** | `atms-amb` pairwise nogood creation | N(N-1)/2 pairs from N alternatives | Create one nogood hasheq per pair | Nogood cell set-union | No — nogoods cell is scalar | Broadcast over pairs, one write to nogood cell |
+| **6** | Clause matching | N clauses | α-rename + try-unify per clause | Set-union of matching results | No — match-result is scalar | PRIMARY consumer. Broadcast over clause list. |
+| **7** | Goal conjunction installation | K goals in clause body | Install goal propagator per goal | N/A (topology, not value) | No | Each goal installs independently. Broadcast over goals for TOPOLOGY REQUESTS. |
+| **8** | Producer clause body | Clause body goals | Same as Phase 7 (conjunction) | Same | No | Tabled relation body = conjunction |
+
+**D.10 addition**: Phase 5.1b extends `net-add-broadcast-propagator` to accept `#:component-paths`, `#:assumption`, `#:decision-cell` — same interface as `net-add-propagator`. The Phase 3 commit-tracker is the first consumer that requires component-indexed broadcast on a compound cell.
 
 **Pattern reuse beyond Track 2** (future tracks):
 - SRE Track 5 (pattern compilation): broadcast over constructor alternatives
