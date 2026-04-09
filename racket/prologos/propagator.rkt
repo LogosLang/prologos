@@ -1473,7 +1473,9 @@
     (net-add-broadcast-propagator net1 decision-cids commitment-cid
                                   groups commit-item-fn
                                   merge-commitment-results))
-  ;; 3. Narrower: when N-1 positions committed, narrow the remaining group
+  ;; 3. Narrower: when N-1 positions committed, narrow the remaining group.
+  ;; FIRE-ONCE (Phase 5.5a): after narrowing the last group, this propagator
+  ;; has done its job. Subsequent fires would be no-ops (all positions filled).
   (define narrower-fire-fn
     (lambda (net)
       (define cv (net-cell-read net commitment-cid))
@@ -1491,8 +1493,10 @@
              net)]
         [else net])))
   (define-values (net3 _narrower-pid)
-    (net-add-propagator net2 (list commitment-cid) decision-cids narrower-fire-fn))
-  ;; 4. Contradiction detector: all committed → write provenance to nogoods cell
+    (net-add-fire-once-propagator net2 (list commitment-cid) decision-cids narrower-fire-fn))
+  ;; 4. Contradiction detector: all committed → write provenance to nogoods cell.
+  ;; FIRE-ONCE (Phase 5.5a): after writing provenance once, the nogood is
+  ;; recorded. Subsequent fires would produce the same write (no cell change).
   (define contradiction-fire-fn
     (lambda (net)
       (define cv (net-cell-read net commitment-cid))
@@ -1505,7 +1509,7 @@
                                           (values aid #t)))))
           net)))
   (define-values (net4 _contra-pid)
-    (net-add-propagator net3 (list commitment-cid) (list nogoods-cid) contradiction-fire-fn))
+    (net-add-fire-once-propagator net3 (list commitment-cid) (list nogoods-cid) contradiction-fire-fn))
   net4)
 
 ;; Topology handler registered below (after register-topology-handler! is defined).
