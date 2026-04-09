@@ -1317,9 +1317,18 @@
 ;; Track 7 Phase 4: Get the current speculation assumption ID.
 ;; Returns #f at depth 0 (unconditional), or the current hypothesis assumption-id
 ;; during speculation. Used to tag scoped cell entries.
+;; Phase 9b: also checks current-worldview-bitmask for per-propagator worldview.
+;; When the bitmask is non-zero, synthesizes an assumption-id from it.
 (define (current-speculation-assumption)
-  (define stack (current-speculation-stack))
-  (if (pair? stack) (car stack) #f))
+  (define bm (current-worldview-bitmask))
+  (if (not (zero? bm))
+      ;; Phase 9b: per-propagator worldview active.
+      ;; Return the bitmask integer as the assumption identity.
+      ;; Tagged-entry uses eq? for identity — integers work.
+      bm
+      ;; Fallback: read speculation stack (legacy TMS path)
+      (let ([stack (current-speculation-stack)])
+        (if (pair? stack) (car stack) #f))))
 
 ;; Track 7 Phase 5: S(-1) Retraction Stratum.
 ;; Tracks retracted assumptions and cleans scoped cell entries on demand.
