@@ -21,7 +21,8 @@
 ;;; Design reference: docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org §5
 ;;;
 
-(require "propagator.rkt"
+(require racket/list  ;; Phase 8: remove-duplicates for table-answer-merge
+         "propagator.rkt"
          "decision-cell.rkt")  ;; Phase 5.6: compound cells
 
 (provide
@@ -83,6 +84,9 @@
  solver-state-assume
  solver-state-retract
  solver-state-add-nogood
+ ;; Phase 8.4: Table operations
+ solver-table-lookup
+ solver-table-register
  solver-state-amb
  solver-state-solve-all
  solver-state-read-cell
@@ -454,8 +458,10 @@
 ;; nogoods-cid: nogood accumulator cell (set of nogood sets)
 ;; counter-cid: assumption counter cell (nat, max merge)
 ;; All immutable after creation. State flows through the network.
+;; Phase 8.4: table-registry-cid added for on-network tabling.
 (struct solver-context
-  (decisions-cid commitments-cid assumptions-cid nogoods-cid counter-cid)
+  (decisions-cid commitments-cid assumptions-cid nogoods-cid counter-cid
+   table-registry-cid)
   #:transparent)
 
 ;; Create a solver context: allocate all cells on the network,
@@ -484,8 +490,19 @@
   ;; 6. Install worldview projection: decisions → worldview cache cell-id 1
   (define-values (net6 _proj-pid)
     (install-worldview-projection net5 dec-cid))
+  ;; 7. Phase 8.4: Table registry cell (hasheq name → table-cell-id, hash-union merge)
+  ;; Monotone: table registrations only accumulate. Self-hosting path:
+  ;; this pattern generalizes to all compiler registries.
+  (define (table-registry-merge old new)
+    (cond
+      [(eq? old (hasheq)) new]
+      [(eq? new (hasheq)) old]
+      [else (for/fold ([acc old]) ([(k v) (in-hash new)])
+              (hash-set acc k v))]))
+  (define-values (net7 reg-cid)
+    (net-new-cell net6 (hasheq) table-registry-merge))
   ;; Return network with all cells allocated + solver-context phone book
-  (values net6 (solver-context dec-cid com-cid asn-cid ng-cid cnt-cid)))
+  (values net7 (solver-context dec-cid com-cid asn-cid ng-cid cnt-cid reg-cid)))
 
 ;; ========================================
 ;; Solver operations (cell-based)
@@ -571,6 +588,32 @@
       (for/and ([(_gid dv) (in-hash (decisions-state-components ds))])
         (not (decision-top? dv)))
       #t))
+
+;; ========================================
+;; Phase 8.4: Table operations
+;; ========================================
+
+;; Look up a tabled relation in the registry.
+;; Returns: table-cell-id or #f (not registered).
+(define (solver-table-lookup ctx net rel-name)
+  (define reg-cid (solver-context-table-registry-cid ctx))
+  (define registry (net-cell-read-raw net reg-cid))
+  (if (hash? registry)
+      (hash-ref registry rel-name #f)
+      #f))
+
+;; Register a tabled relation: allocate a table cell, add to registry.
+;; The table cell uses all-mode-merge (set-union with dedup).
+;; Returns: (values new-network table-cell-id)
+(define (solver-table-register ctx net rel-name)
+  (define reg-cid (solver-context-table-registry-cid ctx))
+  ;; Allocate table cell (answer accumulator: list with set-union merge)
+  (define (table-answer-merge old new)
+    (remove-duplicates (append old new)))
+  (define-values (net1 table-cid) (net-new-cell net '() table-answer-merge))
+  ;; Register: write name→cell-id mapping to registry cell
+  (define net2 (net-cell-write net1 reg-cid (hasheq rel-name table-cid)))
+  (values net2 table-cid))
 
 ;; ========================================
 ;; Solver query functions (read-only)
