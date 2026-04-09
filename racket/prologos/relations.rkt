@@ -1655,11 +1655,12 @@
          (resolve-term env a)))
 
      ;; Phase 8.5-8.7: Tabling check.
-     ;; If relation is tabled and registered → install consumer (read table cell).
-     ;; If relation is tabled and not registered → register + install as producer.
-     ;; One-true-tabling: all relations are tabled when ctx is available.
+     ;; Phase 10b: :tabling :off skips tabling entirely.
+     ;; :by-default (default): all relations tabled when ctx available.
+     (define tabling-enabled?
+       (not (eq? (solver-config-tabling config) 'off)))
      (define table-cid
-       (and ctx (solver-table-lookup ctx net goal-name)))
+       (and ctx tabling-enabled? (solver-table-lookup ctx net goal-name)))
 
      (cond
        ;; Consumer path: table exists, read from it
@@ -1667,7 +1668,7 @@
         (install-table-consumer net table-cid resolved-args env)]
 
        ;; Producer path: register table + install clauses normally + write to table
-       [ctx
+       [(and ctx tabling-enabled?)
         (define-values (net-reg new-table-cid) (solver-table-register ctx net goal-name))
         (define net-with-clauses
           (install-clause-propagators-inner net-reg goal-name resolved-args rel store config answer-cid ctx))
@@ -1866,8 +1867,12 @@
           (map param-info-name params))
         goal-args))
 
-  ;; Create network + solver-context (for multi-clause branching)
-  (define net0 (make-prop-network))
+  ;; Phase 10c: Create network with fuel from :timeout config.
+  ;; :timeout is milliseconds; approximate as fuel (1ms ≈ 1000 firings).
+  ;; #f = no timeout → default fuel (1000000).
+  (define timeout-ms (solver-config-timeout config))
+  (define fuel (if timeout-ms (* timeout-ms 1000) 1000000))
+  (define net0 (make-prop-network fuel))
   (define-values (net-ctx ctx) (make-solver-context net0))
   (define-values (net1 query-env) (build-var-env net-ctx query-vars))
 

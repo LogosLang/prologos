@@ -21,6 +21,7 @@
          "tabling.rkt"
          "relations.rkt"
          "solver.rkt"
+         "propagator.rkt"  ;; Phase 10a: current-use-bsp-scheduler?
          "provenance.rkt"
          "wf-engine.rkt")
 
@@ -192,9 +193,12 @@
 
      (if use-propagator?
          ;; Propagator-native solver (Phase 6+7+8)
-         (parameterize ([current-is-eval-fn
+         ;; Phase 10a: wire :execution config to BSP scheduler override.
+         ;; :parallel (default) → BSP. :sequential → Gauss-Seidel.
+         (parameterize ([current-use-bsp-scheduler?
+                         (eq? (solver-config-execution config) 'parallel)]
+                        [current-is-eval-fn
                          (or (current-is-eval-fn)
-                             ;; If no eval fn set, use identity (tests may not set it)
                              (lambda (x) x))])
            (solve-goal-propagator config store goal-name goal-args query-vars))
          ;; DFS path (original)
