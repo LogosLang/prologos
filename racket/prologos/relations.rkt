@@ -1319,6 +1319,28 @@
       (hash-ref env term)
       term))
 
+;; Gray code: i → i XOR (i >> 1).
+;; Generates a Hamiltonian path on Q_n that changes one bit per step.
+;; Used to order branch PU creation for maximal CHAMP structural sharing.
+(define (gray-code i)
+  (bitwise-xor i (arithmetic-shift i -1)))
+
+;; Generate Gray code ordering for M items. Returns a permutation of 0..M-1
+;; where successive elements differ by one bit (Hamming distance 1).
+;; For M that isn't a power of 2, walks the Gray code sequence and collects
+;; indices < M in encounter order.
+;; Examples: M=2 → (0 1), M=3 → (0 1 3→skip 2), M=4 → (0 1 3 2)
+(define (gray-code-order m)
+  (cond
+    [(<= m 1) (list 0)]
+    [else
+     ;; Walk gray codes for enough bits, collect indices < m
+     (define bits (let loop ([b 1]) (if (>= (arithmetic-shift 1 b) m) b (loop (add1 b)))))
+     (define total (arithmetic-shift 1 bits))
+     (for/list ([i (in-range total)]
+                #:when (< (gray-code i) m))
+       (gray-code i))]))
+
 ;; ----------------------------------------
 ;; install-goal-propagator (7a)
 ;; ----------------------------------------
@@ -1542,10 +1564,17 @@
                              #:when (cell-id? arg))
                     (promote-cell-to-tagged n arg)))
 
-                ;; Install each clause in its own PU fork
+                ;; Install each clause in its own PU fork.
+                ;; Gray code ordering (Phase 6d-ii): successive forks differ by
+                ;; one assumption bit → maximizes CHAMP structural sharing.
+                (define clauses-vec (list->vector clauses))
+                (define aids-vec (list->vector aids))
+                (define gc-order (gray-code-order (length clauses)))
                 (for/fold ([n-parent n-promoted])
-                          ([ci (in-list clauses)]
-                           [aid (in-list aids)])
+                          ([gc-idx (in-list gc-order)]
+                           #:when (< gc-idx (vector-length clauses-vec)))
+                  (define ci (vector-ref clauses-vec gc-idx))
+                  (define aid (vector-ref aids-vec gc-idx))
                   ;; Fork from parent with this clause's worldview
                   (define bit-pos (assumption-id-n aid))
                   (define-values (pu-net _pu-aid) (make-branch-pu n-parent aid bit-pos))
