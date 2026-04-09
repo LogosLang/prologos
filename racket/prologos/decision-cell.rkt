@@ -113,6 +113,17 @@
  decisions-state-component-ref
  decisions-state-component-keys
 
+ ;; === Compound Scope Cell (Phase 8.1) ===
+ (struct-out scope-cell)
+ scope-cell?
+ scope-cell-empty
+ scope-cell-merge
+ scope-cell-ref
+ scope-cell-set
+ scope-cell-keys
+ scope-cell-bindings
+ scope-cell-bot  ;; sentinel for unbound variables
+
  ;; === Compound Commitments Cell (Phase 5.3) ===
  (struct-out commitments-state)
  commitments-state?
@@ -740,3 +751,91 @@
        (hash-set comps nogood-id
                  (commitment-merge cv (hasheq group-id aid))))
       cs))  ;; unknown nogood — no-op
+
+
+;; ============================================================
+;; Compound Scope Cell (Phase 8.1)
+;; ============================================================
+;; A scope cell holds all variables for one clause instantiation
+;; (or query scope) as a single compound value on the network.
+;;
+;; Value: hasheq var-name → value (or scope-cell-bot for unbound)
+;; Merge: per-key join. Unbound + value = value. Value + value = last-write.
+;;
+;; One cell per scope instead of N cells per variable.
+;; Component-indexed propagators watch specific variables via component-paths.
+;;
+;; Table entries ARE scope cells — the table cell holds a set of scope values.
+;; Consumer matching is structural comparison of scope values.
+;;
+;; SRE: the scope cell IS a substitution. Unification writes to specific
+;; components. The merge handles per-variable composition. The scope cell
+;; is a product lattice: Var₁ × Var₂ × ... × Varₙ where each component
+;; is a flat lattice (⊥ → value → ⊤ for conflict).
+;;
+;; Design reference: D.12, §8.1
+
+;; Sentinel for unbound variables in scope cells.
+(define scope-cell-bot 'scope-cell-bot)
+
+;; The compound scope cell value.
+;; bindings: hasheq var-name → value (scope-cell-bot for unbound)
+(struct scope-cell (bindings) #:transparent)
+
+;; Create an empty scope cell.
+(define (scope-cell-empty)
+  (scope-cell (hasheq)))
+
+;; Create a scope cell with variables initialized to bot.
+;; var-names: (listof symbol)
+(define (scope-cell-with-vars var-names)
+  (scope-cell (for/hasheq ([v (in-list var-names)])
+                (values v scope-cell-bot))))
+
+;; Merge: per-key join. For each variable:
+;;   bot + x = x (unbound gains value)
+;;   x + bot = x (keep existing)
+;;   x + y = y (last-write-wins for non-bot)
+;; New keys from either side are included (union of variable sets).
+(define (scope-cell-merge old new)
+  (cond
+    [(eq? old 'infra-bot) new]
+    [(eq? new 'infra-bot) old]
+    [(and (scope-cell? old) (scope-cell? new))
+     (define old-b (scope-cell-bindings old))
+     (define new-b (scope-cell-bindings new))
+     ;; Union keys, per-key merge
+     (define merged
+       (for/fold ([acc old-b]) ([(k v) (in-hash new-b)])
+         (define existing (hash-ref acc k scope-cell-bot))
+         (hash-set acc k
+           (cond
+             [(eq? existing scope-cell-bot) v]
+             [(eq? v scope-cell-bot) existing]
+             [else v]))))  ;; both non-bot: new wins
+     (scope-cell merged)]
+    [else new]))
+
+;; Read a variable from a scope cell.
+(define (scope-cell-ref sc var-name [default scope-cell-bot])
+  (if (scope-cell? sc)
+      (hash-ref (scope-cell-bindings sc) var-name default)
+      default))
+
+;; Write a variable in a scope cell. Returns new scope-cell.
+(define (scope-cell-set sc var-name value)
+  (if (scope-cell? sc)
+      (scope-cell (hash-set (scope-cell-bindings sc) var-name value))
+      (scope-cell (hasheq var-name value))))
+
+;; List all variable names.
+(define (scope-cell-keys sc)
+  (if (scope-cell? sc)
+      (hash-keys (scope-cell-bindings sc))
+      '()))
+
+;; Get the full bindings hasheq.
+(define (scope-cell-bindings-ref sc)
+  (if (scope-cell? sc)
+      (scope-cell-bindings sc)
+      (hasheq)))

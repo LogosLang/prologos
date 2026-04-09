@@ -74,7 +74,11 @@
  logic-var-bot
  build-var-env
  resolve-term
- gray-code-order)
+ gray-code-order
+ ;; Phase 8: Scope cell variable access
+ scope-ref?
+ logic-var-read
+ logic-var-write)
 
 ;; ========================================
 ;; Evaluation callback
@@ -1300,20 +1304,60 @@
 
 ;; Allocate a fresh logic variable cell on the network.
 ;; Returns: (values new-network cell-id)
+;; DEPRECATED in favor of build-var-env with scope cells.
+;; Kept for NAF inner-result cell allocation.
 (define (alloc-logic-var net)
   (net-new-cell net logic-var-bot logic-var-merge))
 
-;; Build a variable environment: hasheq var-name → cell-id.
-;; Allocates a fresh cell for each variable name.
-;; Returns: (values new-network env)
+;; Phase 8.2: Build a variable environment using ONE compound scope cell.
+;; Allocates a single cell holding a scope-cell value (hasheq var-name → value).
+;; Returns: (values new-network scope-cell-id env)
+;;   scope-cell-id: the single cell-id for the compound scope
+;;   env: hasheq var-name → (cons scope-cell-id var-name) for caller convenience
+;; The env preserves the same interface as the old build-var-env —
+;; callers use resolve-term to look up variables. The difference:
+;; resolve-term now returns a scope-ref (cons cell-id var-name) for variables.
 (define (build-var-env net var-names)
-  (for/fold ([n net] [env (hasheq)])
-            ([name (in-list var-names)])
-    (define-values (n* cid) (alloc-logic-var n))
-    (values n* (hash-set env name cid))))
+  (define initial-scope
+    (scope-cell (for/hasheq ([v (in-list var-names)])
+                  (values v scope-cell-bot))))
+  (define-values (n scope-cid) (net-new-cell net initial-scope scope-cell-merge))
+  (define env
+    (for/hasheq ([v (in-list var-names)])
+      (values v (cons scope-cid v))))
+  (values n env))
+
+;; A scope-ref: (cons scope-cell-id var-name). Returned by build-var-env.
+(define (scope-ref? x) (and (pair? x) (cell-id? (car x)) (symbol? (cdr x))))
+(define (scope-ref-cid x) (car x))
+(define (scope-ref-var x) (cdr x))
+
+;; Read a logic variable from the network.
+;; Handles both old-style cell-ids and new scope-refs.
+(define (logic-var-read net ref)
+  (cond
+    [(scope-ref? ref)
+     (define sc (net-cell-read net (scope-ref-cid ref)))
+     (if (scope-cell? sc)
+         (scope-cell-ref sc (scope-ref-var ref))
+         scope-cell-bot)]
+    [(cell-id? ref) (net-cell-read net ref)]
+    [else ref]))
+
+;; Write a logic variable on the network.
+;; Handles both old-style cell-ids and new scope-refs.
+;; For scope-refs: writes a delta scope-cell (one variable set) →
+;; scope-cell-merge handles per-key join.
+(define (logic-var-write net ref value)
+  (cond
+    [(scope-ref? ref)
+     (net-cell-write net (scope-ref-cid ref)
+                     (scope-cell (hasheq (scope-ref-var ref) value)))]
+    [(cell-id? ref) (net-cell-write net ref value)]
+    [else net]))
 
 ;; Resolve a term against a variable environment.
-;; If the term is a symbol in env, return its cell-id.
+;; If the term is a symbol in env, return the scope-ref (or cell-id for old-style).
 ;; Otherwise return the term as-is (ground value).
 (define (resolve-term env term)
   (if (and (symbol? term) (hash-has-key? env term))
@@ -1366,24 +1410,40 @@
     [(unify)
      (define lhs (resolve-term env (car args)))
      (define rhs (resolve-term env (cadr args)))
+     ;; Helper: is this a variable ref (scope-ref or cell-id)?
+     (define (var-ref? x) (or (scope-ref? x) (cell-id? x)))
+     ;; Helper: get the cell-id(s) a ref watches
+     (define (ref->input-cids x)
+       (if (scope-ref? x) (list (scope-ref-cid x)) (list x)))
      (cond
-       ;; Both cells: bidirectional unification propagator
-       [(and (cell-id? lhs) (cell-id? rhs))
+       ;; Both variable refs: bidirectional unification propagator
+       [(and (var-ref? lhs) (var-ref? rhs))
         (define (unify-fire net)
-          (define v1 (net-cell-read net lhs))
-          (define v2 (net-cell-read net rhs))
+          (define v1 (logic-var-read net lhs))
+          (define v2 (logic-var-read net rhs))
           (cond
-            [(eq? v1 logic-var-bot)
-             (if (eq? v2 logic-var-bot) net (net-cell-write net lhs v2))]
-            [(eq? v2 logic-var-bot) (net-cell-write net rhs v1)]
+            [(eq? v1 scope-cell-bot)
+             (if (eq? v2 scope-cell-bot) net (logic-var-write net lhs v2))]
+            [(eq? v2 scope-cell-bot) (logic-var-write net rhs v1)]
             [(equal? v1 v2) net]
             [else net]))
+        (define input-cids (append (ref->input-cids lhs) (ref->input-cids rhs)))
+        (define output-cids input-cids)
+        ;; Component-paths: tell the scheduler which scope components to watch
+        (define cpaths
+          (append (if (scope-ref? lhs)
+                      (list (cons (scope-ref-cid lhs) (scope-ref-var lhs)))
+                      '())
+                  (if (scope-ref? rhs)
+                      (list (cons (scope-ref-cid rhs) (scope-ref-var rhs)))
+                      '())))
         (define-values (net* _pid)
-          (net-add-propagator net (list lhs rhs) (list lhs rhs) (maybe-wrap-worldview unify-fire)))
+          (net-add-propagator net input-cids output-cids (maybe-wrap-worldview unify-fire)
+                              #:component-paths cpaths))
         net*]
-       ;; One cell, one ground: write ground to cell
-       [(cell-id? lhs) (net-cell-write net lhs rhs)]
-       [(cell-id? rhs) (net-cell-write net rhs lhs)]
+       ;; One variable, one ground: write ground to variable
+       [(var-ref? lhs) (logic-var-write net lhs rhs)]
+       [(var-ref? rhs) (logic-var-write net rhs lhs)]
        ;; Both ground: no network change
        [else net])]
 
@@ -1391,8 +1451,8 @@
      (define var (resolve-term env (car args)))
      (define expr (cadr args))
      (define eval-fn (current-is-eval-fn))
-     (if (and (cell-id? var) eval-fn)
-         (net-cell-write net var (eval-fn expr))
+     (if (and (or (scope-ref? var) (cell-id? var)) eval-fn)
+         (logic-var-write net var (eval-fn expr))
          net)]
 
     [(app)
@@ -1420,10 +1480,10 @@
      ;; NAF succeeds if inner FAILED (no new bindings beyond what was already there)
      ;; For simplicity: check if any env variable changed from logic-var-bot in the fork
      (define inner-succeeded?
-       (for/or ([(_name cid) (in-hash env)])
-         (define orig (net-cell-read net cid))
-         (define forked-val (net-cell-read forked-done cid))
-         (and (eq? orig logic-var-bot) (not (eq? forked-val logic-var-bot)))))
+       (for/or ([(_name ref) (in-hash env)])
+         (define orig (logic-var-read net ref))
+         (define forked-val (logic-var-read forked-done ref))
+         (and (eq? orig scope-cell-bot) (not (eq? forked-val scope-cell-bot)))))
      (if inner-succeeded?
          net  ;; inner succeeded → NAF fails (return unchanged network = no contribution)
          net)]  ;; inner failed → NAF succeeds (outer state preserved)
@@ -1474,31 +1534,42 @@
   (define clause-goals (clause-info-goals ci))
   ;; Fresh variable scope for this clause
   (define-values (n2 clause-env) (build-var-env net param-names))
-  ;; Unify resolved args with clause param cells
+  ;; Unify resolved args with clause param refs
   (define n3
     (for/fold ([n n2])
               ([arg (in-list resolved-args)]
                [pname (in-list param-names)])
-      (define pcid (hash-ref clause-env pname))
-      (if (cell-id? arg)
-          ;; Both cells: bidirectional propagator (arg ↔ param)
+      (define pref (hash-ref clause-env pname))
+      (define (var-ref? x) (or (scope-ref? x) (cell-id? x)))
+      (if (var-ref? arg)
+          ;; Both variable refs: bidirectional propagator (arg ↔ param)
           (let ([unify-fire
                  (lambda (net)
-                   (define va (net-cell-read net arg))
-                   (define vp (net-cell-read net pcid))
+                   (define va (logic-var-read net arg))
+                   (define vp (logic-var-read net pref))
                    (cond
-                     [(eq? va logic-var-bot)
-                      (if (eq? vp logic-var-bot) net
-                          (net-cell-write net arg vp))]
-                     [(eq? vp logic-var-bot)
-                      (net-cell-write net pcid va)]
-                     [else net]))])
+                     [(eq? va scope-cell-bot)
+                      (if (eq? vp scope-cell-bot) net
+                          (logic-var-write net arg vp))]
+                     [(eq? vp scope-cell-bot)
+                      (logic-var-write net pref va)]
+                     [else net]))]
+                [input-cids (append (if (scope-ref? arg) (list (scope-ref-cid arg)) (list arg))
+                                    (if (scope-ref? pref) (list (scope-ref-cid pref)) (list pref)))]
+                [cpaths (append (if (scope-ref? arg)
+                                    (list (cons (scope-ref-cid arg) (scope-ref-var arg)))
+                                    '())
+                                (if (scope-ref? pref)
+                                    (list (cons (scope-ref-cid pref) (scope-ref-var pref)))
+                                    '()))])
             (let-values ([(n* _pid)
-                          (net-add-propagator n (list arg pcid) (list arg pcid)
-                                              (maybe-wrap-worldview unify-fire))])
+                          (net-add-propagator n
+                            (remove-duplicates input-cids) (remove-duplicates input-cids)
+                            (maybe-wrap-worldview unify-fire)
+                            #:component-paths cpaths)])
               n*))
-          ;; Ground arg: write directly to param cell
-          (net-cell-write n pcid arg))))
+          ;; Ground arg: write directly to param variable
+          (logic-var-write n pref arg))))
   (install-conjunction n3 clause-goals clause-env store config answer-cid ctx))
 
 ;; ----------------------------------------
@@ -1516,35 +1587,46 @@
   (define bitmask (arithmetic-shift 1 bit-position))
   ;; Fresh variable scope for this clause (clause-local cells)
   (define-values (n2 clause-env) (build-var-env net param-names))
-  ;; Unify resolved args with clause param cells.
+  ;; Unify resolved args with clause param refs.
   ;; Arg↔param propagators are WRAPPED with the clause's worldview bitmask.
   (define n3
     (for/fold ([n n2])
               ([arg (in-list resolved-args)]
                [pname (in-list param-names)])
-      (define pcid (hash-ref clause-env pname))
-      (if (cell-id? arg)
+      (define pref (hash-ref clause-env pname))
+      (define (var-ref? x) (or (scope-ref? x) (cell-id? x)))
+      (if (var-ref? arg)
           ;; Bidirectional propagator wrapped with worldview
           (let ([unify-fire
                  (wrap-with-worldview
                   (lambda (net)
-                    (define va (net-cell-read net arg))
-                    (define vp (net-cell-read net pcid))
+                    (define va (logic-var-read net arg))
+                    (define vp (logic-var-read net pref))
                     (cond
-                      [(eq? va logic-var-bot)
-                       (if (eq? vp logic-var-bot) net
-                           (net-cell-write net arg vp))]
-                      [(eq? vp logic-var-bot)
-                       (net-cell-write net pcid va)]
+                      [(eq? va scope-cell-bot)
+                       (if (eq? vp scope-cell-bot) net
+                           (logic-var-write net arg vp))]
+                      [(eq? vp scope-cell-bot)
+                       (logic-var-write net pref va)]
                       [else net]))
-                  bit-position)])
+                  bit-position)]
+                [input-cids (remove-duplicates
+                             (append (if (scope-ref? arg) (list (scope-ref-cid arg)) (list arg))
+                                     (if (scope-ref? pref) (list (scope-ref-cid pref)) (list pref))))]
+                [cpaths (append (if (scope-ref? arg)
+                                    (list (cons (scope-ref-cid arg) (scope-ref-var arg)))
+                                    '())
+                                (if (scope-ref? pref)
+                                    (list (cons (scope-ref-cid pref) (scope-ref-var pref)))
+                                    '()))])
             (let-values ([(n* _pid)
-                          (net-add-propagator n (list arg pcid) (list arg pcid) unify-fire
-                                              #:assumption aid)])
+                          (net-add-propagator n input-cids input-cids unify-fire
+                                              #:assumption aid
+                                              #:component-paths cpaths)])
               n*))
           ;; Ground arg: write under this clause's worldview
           (parameterize ([current-worldview-bitmask bitmask])
-            (net-cell-write n pcid arg)))))
+            (logic-var-write n pref arg)))))
   ;; Install clause body goals under this clause's worldview.
   ;; Goal propagators will also use current-worldview-bitmask when they fire.
   ;; For now: install-conjunction installs propagators directly.
@@ -1578,7 +1660,7 @@
        (define clauses (variant-info-clauses variant))
        (define param-names (map param-info-name params))
 
-       ;; Facts: write each fact row's values to the corresponding arg cells
+       ;; Facts: write each fact row's values to the corresponding arg variables
        (define n-facts
          (for/fold ([n n])
                    ([fr (in-list facts)])
@@ -1587,8 +1669,8 @@
                (for/fold ([n n])
                          ([arg (in-list resolved-args)]
                           [val (in-list row)])
-                 (if (cell-id? arg)
-                     (net-cell-write n arg val)
+                 (if (or (scope-ref? arg) (cell-id? arg))
+                     (logic-var-write n arg val)
                      n))
                n)))
 
@@ -1627,12 +1709,15 @@
                     (values n (cons (assumption-id i) aids)))))
             (define aids (reverse aids-rev))
 
-            ;; Promote shared arg cells to tagged-cell-value
+            ;; Promote shared scope cells to tagged-cell-value
+            (define promoted-cids (remove-duplicates
+              (for/list ([arg (in-list resolved-args)]
+                         #:when (or (scope-ref? arg) (cell-id? arg)))
+                (if (scope-ref? arg) (scope-ref-cid arg) arg))))
             (define n-promoted
               (for/fold ([n n-assumed])
-                        ([arg (in-list resolved-args)]
-                         #:when (cell-id? arg))
-                (promote-cell-to-tagged n arg)))
+                        ([cid (in-list promoted-cids)])
+                (promote-cell-to-tagged n cid)))
 
             ;; Install ALL clauses' propagators on the SAME network.
             ;; Each clause's body goals are installed with propagators wrapped
@@ -1689,41 +1774,46 @@
   ;; Run to quiescence
   (define net4 (run-to-quiescence net3))
 
-  ;; Read results from query variable cells.
-  ;; For tagged-cell-value cells (multi-clause): enumerate each clause's
-  ;; bitmask and read via tagged-cell-read. Each clause's tagged entries
-  ;; give that clause's bindings.
-  ;; For plain cells (single-clause/facts): read directly.
-  (define first-qv-cid (and (pair? query-vars) (hash-ref query-env (car query-vars) #f)))
-  (define first-raw (and first-qv-cid (net-cell-read-raw net4 first-qv-cid)))
-  (define is-tagged? (and first-raw (tagged-cell-value? first-raw)))
+  ;; Read results from scope cells.
+  ;; Phase 8.2: query-env maps var-name → scope-ref.
+  ;; All query vars are in ONE scope cell. Read the scope cell and
+  ;; extract each variable's binding.
+  (define first-qv-ref (and (pair? query-vars) (hash-ref query-env (car query-vars) #f)))
+  (define scope-cid (and (scope-ref? first-qv-ref) (scope-ref-cid first-qv-ref)))
+  (define scope-raw (and scope-cid (net-cell-read-raw net4 scope-cid)))
 
   (cond
-    ;; Multi-clause concurrent: tagged-cell-value cells.
+    ;; Multi-clause concurrent: scope cell is tagged-cell-value.
     ;; Read each clause's result via its bitmask.
-    [(and is-tagged? (pair? (tagged-cell-value-entries first-raw)))
-     ;; Collect unique bitmasks from entries on any query variable cell
+    [(and scope-raw (tagged-cell-value? scope-raw)
+          (pair? (tagged-cell-value-entries scope-raw)))
      (define bitmasks
        (remove-duplicates
-        (for/list ([entry (in-list (tagged-cell-value-entries first-raw))])
+        (for/list ([entry (in-list (tagged-cell-value-entries scope-raw))])
           (car entry))))
-     ;; For each bitmask (= one clause's worldview), project query vars
      (for/list ([bm (in-list bitmasks)])
        (for/hasheq ([qv (in-list query-vars)])
-         (define cid (hash-ref query-env qv))
-         (define raw (net-cell-read-raw net4 cid))
-         (define val (if (tagged-cell-value? raw)
-                         (tagged-cell-read raw bm)
-                         raw))
-         (values qv (if (eq? val logic-var-bot) qv val))))]
+         (define ref (hash-ref query-env qv))
+         ;; Read the scope cell under this bitmask
+         (define sc-val
+           (if (tagged-cell-value? scope-raw)
+               (tagged-cell-read scope-raw bm)
+               scope-raw))
+         (define val (if (scope-cell? sc-val)
+                         (scope-cell-ref sc-val qv)
+                         scope-cell-bot))
+         (values qv (if (eq? val scope-cell-bot) qv val))))]
 
-    ;; Single-clause/facts: read query variables directly
+    ;; Single-clause/facts: read scope cell directly
     [else
+     (define sc-val
+       (if scope-cid (net-cell-read net4 scope-cid) #f))
      (define result-subst
        (for/hasheq ([qv (in-list query-vars)])
-         (define cid (hash-ref query-env qv))
-         (define val (net-cell-read net4 cid))
-         (values qv (if (eq? val logic-var-bot) qv val))))
+         (define val (if (scope-cell? sc-val)
+                         (scope-cell-ref sc-val qv)
+                         scope-cell-bot))
+         (values qv (if (eq? val scope-cell-bot) qv val))))
      (if (for/and ([qv (in-list query-vars)])
            (eq? (hash-ref result-subst qv) qv))
          '()

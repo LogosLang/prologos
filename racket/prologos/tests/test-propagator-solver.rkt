@@ -10,6 +10,7 @@
          rackunit/text-ui
          "../relations.rkt"
          "../propagator.rkt"
+         "../decision-cell.rkt"
          "../syntax.rkt"
          "../solver.rkt")
 
@@ -167,23 +168,22 @@
       (define goal (goal-desc 'unify '(a b)))
       (define net2 (install-goal-propagator net1 goal env test-store default-config (cell-id 0)))
       ;; Write a value to 'a — propagator should copy to 'b
-      (define net3 (net-cell-write net2 (hash-ref env 'a) 42))
+      (define net3 (logic-var-write net2 (hash-ref env 'a) 42))
       (define net4 (run-to-quiescence net3))
-      (check-equal? (net-cell-read net4 (hash-ref env 'b)) 42))
+      (check-equal? (logic-var-read net4 (hash-ref env 'b)) 42))
 
     (test-case "unify: variable with ground value"
       (define net0 (make-prop-network))
       (define-values (net1 env) (build-var-env net0 '(x)))
       (define goal (goal-desc 'unify '(x hello)))
       (define net2 (install-goal-propagator net1 goal env test-store default-config (cell-id 0)))
-      (check-equal? (net-cell-read net2 (hash-ref env 'x)) 'hello))
+      (check-equal? (logic-var-read net2 (hash-ref env 'x)) 'hello))
 
     (test-case "unify: ground with ground (no cell change)"
       (define net0 (make-prop-network))
       (define env (hasheq))  ;; no variables
       (define goal (goal-desc 'unify '(42 42)))
       (define net1 (install-goal-propagator net0 goal env test-store default-config (cell-id 0)))
-      ;; Should not crash, no cell change
       (check-true (prop-network? net1)))
 
     (test-case "conjunction: two unify goals"
@@ -192,8 +192,8 @@
       (define goals (list (goal-desc 'unify '(a 10))
                           (goal-desc 'unify '(b 20))))
       (define net2 (install-conjunction net1 goals env test-store default-config (cell-id 0)))
-      (check-equal? (net-cell-read net2 (hash-ref env 'a)) 10)
-      (check-equal? (net-cell-read net2 (hash-ref env 'b)) 20))
+      (check-equal? (logic-var-read net2 (hash-ref env 'a)) 10)
+      (check-equal? (logic-var-read net2 (hash-ref env 'b)) 20))
 
     ;; --- NAF ---
 
@@ -216,7 +216,7 @@
       (define net2 (install-goal-propagator net1 naf-goal env test-store
                                              default-config (cell-id 0)))
       ;; x should still be unbound (NAF failed, didn't bind anything)
-      (check-equal? (net-cell-read net2 (hash-ref env 'x)) logic-var-bot))
+      (check-equal? (logic-var-read net2 (hash-ref env 'x)) scope-cell-bot))
 
     ;; --- Guard ---
 
