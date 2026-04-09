@@ -62,6 +62,13 @@
  decision-domain-narrow
  ;; Debug
  decision->datum
+ ;; Hasse diagram operations (bitmask-based, O(1))
+ decision-bitmask
+ aids->bitmask
+ popcount
+ hamming-distance
+ hasse-adjacent?
+ subcube-member?
 
  ;; === Commitment Cell ===
  commitment-initial
@@ -101,8 +108,11 @@
 
 ;; Multiple alternatives remain (partially narrowed).
 ;; alternatives: hasheq assumption-id → #t
+;; bitmask: exact-nonneg-integer — bit i = 1 iff assumption-id i is viable
+;;   Additive field for O(1) Hasse diagram operations (Q6).
+;;   Derived from alternatives at creation; maintained through merge/narrow.
 ;; Invariant: (hash-count alternatives) >= 2
-(struct decision-set (alternatives) #:transparent)
+(struct decision-set (alternatives bitmask) #:transparent)
 
 ;; Single alternative (fully committed — singleton).
 ;; assumption: the surviving assumption-id
@@ -115,12 +125,22 @@
 ;;   0 alternatives → decision-top
 ;;   1 alternative  → decision-one
 ;;   N alternatives → decision-set
-(define (decision-from-alternatives aids)
+;; Optional bitmask: if provided, used directly. If #f, computed from
+;; aid-integers (a list of integer bit positions, one per alternative).
+;; Callers that have assumption-id structs extract integers via assumption-id-n.
+;; This keeps decision-cell.rkt as a pure leaf (no atms.rkt dependency).
+(define (decision-from-alternatives aids [bitmask #f] [aid-integers #f])
   (cond
     [(null? aids) decision-top]
     [(null? (cdr aids)) (decision-one (car aids))]
-    [else (decision-set (for/hasheq ([a (in-list aids)])
-                          (values a #t)))]))
+    [else
+     (define mask (or bitmask
+                      (if aid-integers
+                          (aids->bitmask aid-integers)
+                          0)))  ;; 0 = bitmask unknown (backward compat)
+     (decision-set (for/hasheq ([a (in-list aids)])
+                     (values a #t))
+                   mask)]))
 
 ;; ============================================================
 ;; Merge (= constraint-cell convention: set intersection = narrowing)
@@ -157,7 +177,10 @@
        (for/hasheq ([(k _) (in-hash s1)]
                     #:when (hash-has-key? s2 k))
          (values k #t)))
-     (normalize-decision intersection)]
+     ;; Bitmask: AND of bitmasks = intersection (O(1))
+     (define mask (bitwise-and (decision-set-bitmask old)
+                               (decision-set-bitmask new)))
+     (normalize-decision intersection mask)]
     ;; set ⊔ one: keep the one if it's in the set
     [(and (decision-set? old) (decision-one? new))
      (if (hash-has-key? (decision-set-alternatives old) (decision-one-assumption new))
@@ -171,15 +194,17 @@
     ;; Fallback (shouldn't reach here)
     [else decision-top]))
 
-;; Normalize a hasheq set to the appropriate lattice value
-(define (normalize-decision alternatives)
+;; Normalize a hasheq set to the appropriate lattice value.
+;; bitmask: the pre-computed bitmask for these alternatives.
+;; If 0 (unknown), the bitmask is unavailable (backward compat).
+(define (normalize-decision alternatives [bitmask 0])
   (define count (hash-count alternatives))
   (cond
     [(= count 0) decision-top]
     [(= count 1)
      (define pos (hash-iterate-first alternatives))
      (decision-one (hash-iterate-key alternatives pos))]
-    [else (decision-set alternatives)]))
+    [else (decision-set alternatives bitmask)]))
 
 ;; Contradiction predicate (for net-new-cell contradicts? parameter)
 (define (decision-domain-contradicts? v)
@@ -208,19 +233,28 @@
     [(decision-set? v) (hash-keys (decision-set-alternatives v))]
     [else '()]))
 
-;; Narrow: remove a specific alternative from the domain
+;; Narrow: remove a specific alternative from the domain.
+;; excluded-bit: optional integer bit position for the excluded assumption.
+;;   When provided, the bitmask is updated precisely (clear one bit, O(1)).
+;;   When #f, the bitmask may be stale (has extra bit) — callers needing
+;;   precise bitmask should provide the bit. Pure leaf: no assumption-id-n here.
 ;; Returns the new decision value.
-(define (decision-domain-narrow v excluded-aid)
+(define (decision-domain-narrow v excluded-aid [excluded-bit #f])
   (cond
-    [(decision-bot? v) v]  ;; can't narrow bot (don't know alternatives)
-    [(decision-top? v) v]  ;; already contradicted
+    [(decision-bot? v) v]
+    [(decision-top? v) v]
     [(decision-one? v)
      (if (equal? (decision-one-assumption v) excluded-aid)
-         decision-top  ;; removing the only alternative = contradiction
-         v)]           ;; removing something not present = no-op
+         decision-top
+         v)]
     [(decision-set? v)
      (define remaining (hash-remove (decision-set-alternatives v) excluded-aid))
-     (normalize-decision remaining)]
+     (define old-mask (decision-set-bitmask v))
+     (define new-mask
+       (if excluded-bit
+           (bitwise-and old-mask (bitwise-not (bit->mask excluded-bit)))
+           old-mask))  ;; stale if bit not provided
+     (normalize-decision remaining new-mask)]
     [else v]))
 
 ;; Debug: convert to a datum for display
@@ -231,6 +265,67 @@
     [(decision-one? v) `(decision-one ,(decision-one-assumption v))]
     [(decision-set? v) `(decision-set ,(hash-keys (decision-set-alternatives v)))]
     [else v]))
+
+
+;; ============================================================
+;; Hasse Diagram Operations (D.7: hypercube structure, SRE Q6)
+;; ============================================================
+;; The decision domain's Hasse diagram IS a (dual) hypercube Q_n.
+;; These operations exploit the bitmask representation for O(1)
+;; parallel compute structure queries. See CRITIQUE_METHODOLOGY.org
+;; SRE Lattice Lens Q6 and the hypercube research addendum.
+
+;; Convert an integer bit position to a single-bit mask.
+(define (bit->mask n)
+  (arithmetic-shift 1 n))
+
+;; Compute bitmask from a list of integer bit positions.
+;; Callers extract the integer from assumption-id via assumption-id-n.
+;; decision-cell.rkt stays a pure leaf — no atms.rkt dependency.
+(define (aids->bitmask aid-integers)
+  (for/fold ([mask 0]) ([n (in-list aid-integers)])
+    (bitwise-ior mask (bit->mask n))))
+
+;; Extract the bitmask from any decision value.
+;; bot → 0 (unknown alternatives)
+;; top → 0 (empty domain)
+;; one(h) → needs bit position; use optional aid->int accessor or return 0
+;; set(S, bitmask) → the stored bitmask
+;; aid->int: optional (assumption-id → integer) function for decision-one.
+;;   Callers with access to assumption-id-n pass it here.
+;;   Pure leaf: decision-cell.rkt can't import atms.rkt.
+(define (decision-bitmask v [aid->int #f])
+  (cond
+    [(decision-bot? v) 0]
+    [(decision-top? v) 0]
+    [(decision-one? v)
+     (if aid->int
+         (bit->mask (aid->int (decision-one-assumption v)))
+         0)]  ;; no accessor → bitmask unavailable for singletons
+    [(decision-set? v) (decision-set-bitmask v)]
+    [else 0]))
+
+;; Population count: number of set bits.
+;; Uses Kernighan's trick: O(set bits), not O(total bits).
+(define (popcount n)
+  (let loop ([n n] [count 0])
+    (if (zero? n) count
+        (loop (bitwise-and n (sub1 n)) (add1 count)))))
+
+;; Hamming distance: number of differing bits between two bitmasks.
+;; This IS the metric on the Hasse diagram of the Boolean lattice.
+(define (hamming-distance a b)
+  (popcount (bitwise-xor a b)))
+
+;; Hasse adjacency: two elements are adjacent iff they differ in exactly one bit.
+(define (hasse-adjacent? a b)
+  (= 1 (popcount (bitwise-xor a b))))
+
+;; Subcube membership: is worldview `wv` in the subcube defined by nogood `ng`?
+;; True iff every bit in `ng` is also set in `wv` (ng ⊆ wv as sets).
+;; O(1) — single AND + comparison.
+(define (subcube-member? wv-bitmask ng-bitmask)
+  (= (bitwise-and wv-bitmask ng-bitmask) ng-bitmask))
 
 
 ;; ============================================================

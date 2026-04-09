@@ -396,6 +396,75 @@
 
 
 ;; ============================================================
+;; Hasse Diagram / Bitmask Tests (D.7 touchup)
+;; ============================================================
+
+(define hasse-tests
+  (test-suite "D.7: Hasse diagram bitmask operations"
+
+    (test-case "aids->bitmask: computes OR of bit positions"
+      (check-equal? (aids->bitmask '(0 2 4)) #b10101)
+      (check-equal? (aids->bitmask '(1 3)) #b1010)
+      (check-equal? (aids->bitmask '()) 0))
+
+    (test-case "popcount: counts set bits"
+      (check-equal? (popcount #b10101) 3)
+      (check-equal? (popcount #b1111) 4)
+      (check-equal? (popcount 0) 0)
+      (check-equal? (popcount 255) 8))
+
+    (test-case "hamming-distance: symmetric difference cardinality"
+      (check-equal? (hamming-distance #b10101 #b01010) 5)
+      (check-equal? (hamming-distance #b10101 #b10101) 0)
+      (check-equal? (hamming-distance #b10101 #b10100) 1))
+
+    (test-case "hasse-adjacent?: differ in exactly one bit"
+      (check-true (hasse-adjacent? #b101 #b100))   ;; differ in bit 0
+      (check-true (hasse-adjacent? #b101 #b111))   ;; differ in bit 1
+      (check-false (hasse-adjacent? #b101 #b110))  ;; differ in bits 0+1
+      (check-false (hasse-adjacent? #b101 #b101))) ;; same = not adjacent
+
+    (test-case "subcube-member?: nogood containment"
+      (check-true (subcube-member? #b111 #b101))   ;; 111 contains 101
+      (check-false (subcube-member? #b110 #b101))  ;; 110 doesn't contain 101
+      (check-true (subcube-member? #b1111 #b0101)) ;; 1111 contains 0101
+      (check-true (subcube-member? #b101 #b101))   ;; exact match = contained
+      (check-true (subcube-member? #b111 0)))      ;; everything contains empty
+
+    (test-case "decision-set carries bitmask"
+      (define d (decision-from-alternatives (list h1 h2 h3)
+                                            #f
+                                            (list 1 2 3)))
+      (check-true (decision-set? d))
+      (check-equal? (decision-set-bitmask d) #b1110))  ;; bits 1,2,3
+
+    (test-case "merge preserves bitmask (AND)"
+      (define d1 (decision-from-alternatives (list h1 h2 h3) #f '(1 2 3)))
+      (define d2 (decision-from-alternatives (list h2 h3 h4) #f '(2 3 4)))
+      (define merged (decision-domain-merge d1 d2))
+      ;; Intersection: {h2, h3}, bitmask = bits 2,3 = #b1100
+      (check-true (decision-set? merged))
+      (check-equal? (decision-set-bitmask merged) (bitwise-and #b1110 #b11100)))
+
+    (test-case "narrow with bit position updates bitmask"
+      (define d (decision-from-alternatives (list h1 h2 h3) #f '(1 2 3)))
+      ;; Narrow: remove h2 (bit position 2)
+      (define narrowed (decision-domain-narrow d h2 2))
+      (check-true (decision-set? narrowed))
+      ;; Bitmask should have bit 2 cleared: #b1110 → #b1010
+      (check-equal? (decision-set-bitmask narrowed) #b1010))
+
+    (test-case "decision-bitmask for set"
+      (define d (decision-from-alternatives (list h1 h2) #f '(1 2)))
+      (check-equal? (decision-bitmask d) #b110))
+
+    (test-case "decision-bitmask for bot/top"
+      (check-equal? (decision-bitmask decision-bot) 0)
+      (check-equal? (decision-bitmask decision-top) 0))
+    ))
+
+
+;; ============================================================
 ;; Run all tests
 ;; ============================================================
 
@@ -404,3 +473,4 @@
 (run-tests accumulator-tests)
 (run-tests parallel-map-tests)
 (run-tests broadcast-tests)
+(run-tests hasse-tests)
