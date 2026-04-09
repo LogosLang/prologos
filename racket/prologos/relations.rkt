@@ -69,7 +69,11 @@
  install-goal-propagator
  install-conjunction
  install-clause-propagators
- solve-goal-propagator)
+ solve-goal-propagator
+ ;; Phase 6+7: Variable environment helpers (for tests + consumers)
+ logic-var-bot
+ build-var-env
+ resolve-term)
 
 ;; ========================================
 ;; Evaluation callback
@@ -1430,13 +1434,22 @@
                          [pname (in-list param-names)])
                 (define pcid (hash-ref clause-env pname))
                 (if (cell-id? arg)
-                    (let-values ([(n* _pid)
-                                  (net-add-propagator n (list arg) (list pcid)
-                                    (lambda (net)
-                                      (define v (net-cell-read net arg))
-                                      (if (eq? v logic-var-bot) net
-                                          (net-cell-write net pcid v))))])
-                      n*)
+                    ;; Both cells: bidirectional propagator (arg ↔ param)
+                    (let ([unify-fire
+                           (lambda (net)
+                             (define va (net-cell-read net arg))
+                             (define vp (net-cell-read net pcid))
+                             (cond
+                               [(eq? va logic-var-bot)
+                                (if (eq? vp logic-var-bot) net
+                                    (net-cell-write net arg vp))]
+                               [(eq? vp logic-var-bot)
+                                (net-cell-write net pcid va)]
+                               [else net]))])
+                      (let-values ([(n* _pid)
+                                    (net-add-propagator n (list arg pcid) (list arg pcid) unify-fire)])
+                        n*))
+                    ;; Ground arg: write directly to param cell
                     (net-cell-write n pcid arg))))
             (install-conjunction n3 clause-goals clause-env store config answer-cid))]))]))
 
