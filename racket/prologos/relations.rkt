@@ -1653,6 +1653,34 @@
      (define resolved-args
        (for/list ([a (in-list goal-args)])
          (resolve-term env a)))
+
+     ;; Phase 8.5-8.7: Tabling check.
+     ;; If relation is tabled and registered → install consumer (read table cell).
+     ;; If relation is tabled and not registered → register + install as producer.
+     ;; One-true-tabling: all relations are tabled when ctx is available.
+     (define table-cid
+       (and ctx (solver-table-lookup ctx net goal-name)))
+
+     (cond
+       ;; Consumer path: table exists, read from it
+       [table-cid
+        (install-table-consumer net table-cid resolved-args env)]
+
+       ;; Producer path: register table + install clauses normally + write to table
+       [ctx
+        (define-values (net-reg new-table-cid) (solver-table-register ctx net goal-name))
+        (define net-with-clauses
+          (install-clause-propagators-inner net-reg goal-name resolved-args rel store config answer-cid ctx))
+        ;; Install a producer propagator: when query vars have values,
+        ;; project results to the table cell
+        (install-table-producer net-with-clauses new-table-cid resolved-args env)]
+
+       ;; No ctx: install normally (no tabling)
+       [else
+        (install-clause-propagators-inner net goal-name resolved-args rel store config answer-cid ctx)])]))
+
+;; Inner clause installation (the actual variant loop, extracted for tabling).
+(define (install-clause-propagators-inner net goal-name resolved-args rel store config answer-cid ctx [env (hasheq)])
      (for/fold ([n net])
                ([variant (in-list (relation-info-variants rel))])
        (define params (variant-info-params variant))
@@ -1738,7 +1766,88 @@
             ;; Results accumulate in the answer accumulator via set-union.
             ;; NOTE: run-to-quiescence happens in solve-goal-propagator (the caller).
             ;; Here we just return the network with all propagators installed.
-            n-installed)]))]))
+            n-installed)])))
+
+
+;; ----------------------------------------
+;; Table consumer: install a propagator that reads the table cell and
+;; writes matching answers to the query's arg variables.
+;; table-cid: cell-id of the table cell (list of answer scope-cells)
+;; resolved-args: (listof scope-ref | ground-value)
+;; env: the query's variable environment
+;; Returns: new-network
+(define (install-table-consumer net table-cid resolved-args env)
+  ;; Consumer propagator: reads table cell, filters by ground args,
+  ;; writes matching values to free arg variables.
+  ;; NOT fire-once: must re-fire as new answers arrive.
+  (define consumer-fire
+    (maybe-wrap-worldview
+     (lambda (net)
+       (define answers (net-cell-read net table-cid))
+       (if (or (not (list? answers)) (null? answers))
+           net
+           ;; For each answer (a scope-cell bindings hasheq),
+           ;; check if ground args match, write free args
+           (for/fold ([n net])
+                     ([answer (in-list answers)])
+             (if (not (hash? answer))
+                 n
+                 ;; Check ground args match
+                 (let ([matches?
+                        (for/and ([arg (in-list resolved-args)]
+                                  [i (in-naturals)])
+                          (if (or (scope-ref? arg) (cell-id? arg))
+                              #t  ;; free arg — always matches
+                              (equal? arg (hash-ref answer i #f))))])
+                   (if matches?
+                       ;; Write free arg values from answer
+                       (for/fold ([n n])
+                                 ([arg (in-list resolved-args)]
+                                  [i (in-naturals)])
+                         (if (and (or (scope-ref? arg) (cell-id? arg))
+                                  (hash-has-key? answer i))
+                             (logic-var-write n arg (hash-ref answer i))
+                             n))
+                       n))))))))
+  (define-values (net* _pid)
+    (net-add-propagator net (list table-cid) '() consumer-fire))
+  net*)
+
+;; Table producer: after clause propagators are installed, add a propagator
+;; that projects resolved-args to the table cell when they have values.
+;; Returns: new-network
+(define (install-table-producer net table-cid resolved-args env)
+  ;; Producer propagator: reads query arg values, writes binding tuple to table cell.
+  ;; Fires when any arg changes. Projects current bindings.
+  (define input-cids
+    (remove-duplicates
+     (for/list ([arg (in-list resolved-args)]
+                #:when (or (scope-ref? arg) (cell-id? arg)))
+       (if (scope-ref? arg) (scope-ref-cid arg) arg))))
+  (define producer-fire
+    (maybe-wrap-worldview
+     (lambda (net)
+       ;; Read all args, build binding tuple
+       (define bindings
+         (for/hasheq ([arg (in-list resolved-args)]
+                       [i (in-naturals)])
+           (define val (if (or (scope-ref? arg) (cell-id? arg))
+                           (logic-var-read net arg)
+                           arg))
+           (values i val)))
+       ;; Only write if at least one variable is bound (non-bot)
+       (define has-binding?
+         (for/or ([(_k v) (in-hash bindings)])
+           (and (not (eq? v scope-cell-bot)) (not (eq? v 'logic-var-bot)))))
+       (if has-binding?
+           (net-cell-write net table-cid (list bindings))
+           net))))
+  (if (null? input-cids)
+      net  ;; no input cells — nothing to watch
+      (let-values ([(net* _pid)
+                    (net-add-propagator net input-cids (list table-cid) producer-fire)])
+        net*)))
+
 ;; ----------------------------------------
 ;; solve-goal-propagator (entry point)
 ;; ----------------------------------------
