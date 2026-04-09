@@ -1323,8 +1323,9 @@
 ;; install-goal-propagator (7a)
 ;; ----------------------------------------
 ;; Dispatches on goal kind, installs propagator(s) on the network.
+;; ctx: solver-context or #f (needed for multi-clause branching)
 ;; Returns: new-network
-(define (install-goal-propagator net goal env store config answer-cid)
+(define (install-goal-propagator net goal env store config answer-cid [ctx #f])
   (define kind (goal-desc-kind goal))
   (define args (goal-desc-args goal))
   (case kind
@@ -1363,7 +1364,7 @@
     [(app)
      (define goal-name (car args))
      (define goal-args (cadr args))
-     (install-clause-propagators net goal-name goal-args env store config answer-cid)]
+     (install-clause-propagators net goal-name goal-args env store config answer-cid ctx)]
 
     [(not) net]   ;; Phase 7c: NAF S1 propagator (deferred)
     [(guard) net] ;; Phase 7c: guard S1 propagator (deferred)
@@ -1375,17 +1376,54 @@
 ;; ----------------------------------------
 ;; Install all goals in a clause body. Order-irrelevant.
 ;; Returns: new-network
-(define (install-conjunction net goals env store config answer-cid)
+(define (install-conjunction net goals env store config answer-cid [ctx #f])
   (for/fold ([n net])
             ([goal (in-list goals)])
-    (install-goal-propagator n goal env store config answer-cid)))
+    (install-goal-propagator n goal env store config answer-cid ctx)))
 
 ;; ----------------------------------------
-;; install-clause-propagators (6c)
+;; install-one-clause (helper)
 ;; ----------------------------------------
-;; Three paths: facts, single clause, multi-clause.
+;; Install a single clause's bindings + body goals on a network.
+;; resolved-args: (listof (cell-id | ground-value))
 ;; Returns: new-network
-(define (install-clause-propagators net goal-name goal-args env store config answer-cid)
+(define (install-one-clause net ci resolved-args param-names env store config answer-cid ctx)
+  (define clause-goals (clause-info-goals ci))
+  ;; Fresh variable scope for this clause
+  (define-values (n2 clause-env) (build-var-env net param-names))
+  ;; Unify resolved args with clause param cells
+  (define n3
+    (for/fold ([n n2])
+              ([arg (in-list resolved-args)]
+               [pname (in-list param-names)])
+      (define pcid (hash-ref clause-env pname))
+      (if (cell-id? arg)
+          ;; Both cells: bidirectional propagator (arg ↔ param)
+          (let ([unify-fire
+                 (lambda (net)
+                   (define va (net-cell-read net arg))
+                   (define vp (net-cell-read net pcid))
+                   (cond
+                     [(eq? va logic-var-bot)
+                      (if (eq? vp logic-var-bot) net
+                          (net-cell-write net arg vp))]
+                     [(eq? vp logic-var-bot)
+                      (net-cell-write net pcid va)]
+                     [else net]))])
+            (let-values ([(n* _pid)
+                          (net-add-propagator n (list arg pcid) (list arg pcid) unify-fire)])
+              n*))
+          ;; Ground arg: write directly to param cell
+          (net-cell-write n pcid arg))))
+  (install-conjunction n3 clause-goals clause-env store config answer-cid ctx))
+
+;; ----------------------------------------
+;; install-clause-propagators (6c + 6d)
+;; ----------------------------------------
+;; Three paths: facts, single clause, multi-clause (PU-per-clause).
+;; ctx: solver-context or #f (needed for multi-clause branching)
+;; Returns: new-network
+(define (install-clause-propagators net goal-name goal-args env store config answer-cid [ctx #f])
   (define rel (relation-lookup store goal-name))
   (cond
     [(not rel) net]
@@ -1417,41 +1455,70 @@
        ;; Clauses
        (cond
          [(null? clauses) n-facts]
+
+         ;; Single clause: install directly, no PU (Tier 1 behavior)
+         [(null? (cdr clauses))
+          (install-one-clause n-facts (car clauses) resolved-args param-names
+                              env store config answer-cid ctx)]
+
+         ;; Multi-clause: PU-per-clause with worldview isolation (Phase 6d)
          [else
-          ;; For each clause: build fresh var env, unify args with params,
-          ;; install clause body goals.
-          ;; TODO Phase 6d: multi-clause → PU-per-clause with Gray code.
-          ;; For now: sequential installation (no branching isolation).
-          (for/fold ([n n-facts])
-                    ([ci (in-list clauses)])
-            (define clause-goals (clause-info-goals ci))
-            ;; Fresh variable scope for this clause
-            (define-values (n2 clause-env) (build-var-env n param-names))
-            ;; Unify resolved args with clause param cells
-            (define n3
-              (for/fold ([n n2])
-                        ([arg (in-list resolved-args)]
-                         [pname (in-list param-names)])
-                (define pcid (hash-ref clause-env pname))
-                (if (cell-id? arg)
-                    ;; Both cells: bidirectional propagator (arg ↔ param)
-                    (let ([unify-fire
-                           (lambda (net)
-                             (define va (net-cell-read net arg))
-                             (define vp (net-cell-read net pcid))
-                             (cond
-                               [(eq? va logic-var-bot)
-                                (if (eq? vp logic-var-bot) net
-                                    (net-cell-write net arg vp))]
-                               [(eq? vp logic-var-bot)
-                                (net-cell-write net pcid va)]
-                               [else net]))])
-                      (let-values ([(n* _pid)
-                                    (net-add-propagator n (list arg pcid) (list arg pcid) unify-fire)])
-                        n*))
-                    ;; Ground arg: write directly to param cell
-                    (net-cell-write n pcid arg))))
-            (install-conjunction n3 clause-goals clause-env store config answer-cid))]))]))
+          (if (not ctx)
+              ;; No solver-context: fall back to sequential (no isolation)
+              (for/fold ([n n-facts])
+                        ([ci (in-list clauses)])
+                (install-one-clause n ci resolved-args param-names
+                                    env store config answer-cid ctx))
+              ;; PU-per-clause: create assumption per clause, fork per clause
+              (let ()
+                ;; Create assumptions for each clause
+                (define-values (n-assumed aids-rev)
+                  (for/fold ([n n-facts] [aids '()])
+                            ([ci (in-list clauses)]
+                             [i (in-naturals)])
+                    (define-values (n* aid)
+                      (solver-assume ctx n
+                                    (string->symbol (format "clause-~a-~a" goal-name i))
+                                    ci))
+                    (values n* (cons aid aids))))
+                (define aids (reverse aids-rev))
+
+                ;; Fork a PU per clause with its own worldview
+                ;; Each PU gets the clause's assumption bit in its worldview cache.
+                ;; Promote query arg cells to tagged-cell-value before forking
+                ;; so writes in the PU are auto-tagged.
+                (define n-promoted
+                  (for/fold ([n n-assumed])
+                            ([arg (in-list resolved-args)]
+                             #:when (cell-id? arg))
+                    (promote-cell-to-tagged n arg)))
+
+                ;; Install each clause in its own PU fork
+                (for/fold ([n-parent n-promoted])
+                          ([ci (in-list clauses)]
+                           [aid (in-list aids)])
+                  ;; Fork from parent with this clause's worldview
+                  (define bit-pos (assumption-id-n aid))
+                  (define-values (pu-net _pu-aid) (make-branch-pu n-parent aid bit-pos))
+                  ;; Install clause in the PU's network
+                  (define pu-net*
+                    (install-one-clause pu-net ci resolved-args param-names
+                                        env store config answer-cid ctx))
+                  ;; Run the PU to quiescence
+                  (define pu-done (run-to-quiescence pu-net*))
+                  ;; The parent network is unchanged (CHAMP isolation).
+                  ;; Results from each PU are visible through the tagged-cell-value
+                  ;; entries on the shared arg cells (each PU tagged its writes
+                  ;; with its own worldview bitmask).
+                  ;; For now: merge PU results back to parent by reading PU cells
+                  ;; and writing to parent (simple approach — answer accumulator
+                  ;; replaces this in Phase 6e).
+                  (for/fold ([n n-parent])
+                            ([arg (in-list resolved-args)]
+                             #:when (cell-id? arg))
+                    (define val (net-cell-read pu-done arg))
+                    (if (eq? val logic-var-bot) n
+                        (net-cell-write n arg val))))))]))]))
 
 ;; ----------------------------------------
 ;; solve-goal-propagator (entry point)
@@ -1471,18 +1538,19 @@
           (map param-info-name params))
         goal-args))
 
-  ;; Create network + allocate query variable cells
+  ;; Create network + solver-context (for multi-clause branching)
   (define net0 (make-prop-network))
-  (define-values (net1 query-env) (build-var-env net0 query-vars))
+  (define-values (net-ctx ctx) (make-solver-context net0))
+  (define-values (net1 query-env) (build-var-env net-ctx query-vars))
 
   ;; Answer accumulator cell
   (define (answer-merge old new)
     (cond [(null? old) new] [(null? new) old] [else (append old new)]))
   (define-values (net2 answer-cid) (net-new-cell net1 '() answer-merge))
 
-  ;; Install the top-level goal
+  ;; Install the top-level goal (pass ctx for PU branching)
   (define top-goal (goal-desc 'app (list goal-name effective-args)))
-  (define net3 (install-goal-propagator net2 top-goal query-env store config answer-cid))
+  (define net3 (install-goal-propagator net2 top-goal query-env store config answer-cid ctx))
 
   ;; Run to quiescence
   (define net4 (run-to-quiescence net3))

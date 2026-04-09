@@ -48,12 +48,24 @@
            '()))
     #f #f))
 
+;; multi-clause: choice(x) &> x = left. choice(x) &> x = right.
+(define choice-rel
+  (relation-info 'choice 1
+    (list (variant-info
+           (list (param-info 'x 'free))
+           (list (clause-info (list (goal-desc 'unify (list 'x 'left))))
+                 (clause-info (list (goal-desc 'unify (list 'x 'right)))))
+           '()))
+    #f #f))
+
 (define test-store
   (relation-register
    (relation-register
-    (relation-register (make-relation-store) parent-rel)
-    color-rel)
-   greet-rel))
+    (relation-register
+     (relation-register (make-relation-store) parent-rel)
+     color-rel)
+    greet-rel)
+   choice-rel))
 
 (define default-config default-solver-config)
 
@@ -122,6 +134,24 @@
     ))
 
 ;; ============================================================
+;; 2b. Multi-clause queries (PU branching)
+;; ============================================================
+
+(define multi-clause-tests
+  (test-suite "Phase 6d: multi-clause PU branching"
+
+    (test-case "choice(?x): two clauses, PU per clause"
+      (define results
+        (solve-goal-propagator default-solver-config test-store
+                               'choice (list 'x) '(x)))
+      ;; With PU isolation, each clause writes to its own fork.
+      ;; The parent reads PU results. Should get a value from one of the clauses.
+      (check-true (pair? results))
+      (define x-val (hash-ref (car results) 'x))
+      (check-not-false (memq x-val '(left right))))
+    ))
+
+;; ============================================================
 ;; 3. Goal types in isolation
 ;; ============================================================
 
@@ -170,4 +200,5 @@
 
 (run-tests fact-tests)
 (run-tests clause-tests)
+(run-tests multi-clause-tests)
 (run-tests goal-type-tests)
