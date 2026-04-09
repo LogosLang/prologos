@@ -20,7 +20,7 @@
 | 2 | PU-per-branch lifecycle | ✅ | commit `0a78069a`. dependent-entry struct, #:assumption on net-add-propagator, make-branch-pu, perf-inc-inert-dependent-skip!, 7 tests. 393/393, 7651 tests. |
 | 3 | Per-nogood propagators (RKan) | ✅ | commit `a38baefb`. Commitment cell (structural, provenance=value), broadcast commit-tracker, narrower, contradiction detector, topology handler. 9 tests. |
 | 4 | Bitmask-tagged cell values (TMS retired) | ✅ | 4a+4b: `72394146`. 4-tests: `PENDING`. tagged-cell-value + worldview cache + net-cell-read/write. 35 new tests. Consumer migration deferred to Phase 5 (decision cells → worldview derivation) + Phase 9 (parameter removal). |
-| 5 | ATMS struct dissolution + compound cells + consumer migration | ⬜ | D.10: compound decisions cell (merge-maintained bitmask), compound commitments cell, broadcast #:component-paths extension, fire-once for narrower/detector, worldview projection, elab-speculation-bridge + cell-ops + metavar-store migration. atms struct → solver-context. |
+| 5 | ATMS struct dissolution + compound cells + consumer migration | ✅ | 11 commits. Infrastructure: fire-once→propagator.rkt, broadcast #:component-paths, worldview cache→replacement. Compound cells: decisions-state, commitments-state. Wiring: worldview projection. Per-nogood: fire-once. solver-context + solver-state. 8 consumer files migrated. 4 test files updated. 395/395, 7706 tests. |
 | 6 | Clause-as-assumption in PUs | ⬜ | Parallel-map clause matching (M1) + PU per surviving clause |
 | 7 | Goal-as-propagator dispatch | ⬜ | 5 goal types (no cut — P2). NAF at S1 via BSP barrier (M6). Answer accumulator (M5). |
 | 8 | Producer/consumer tabling | ⬜ | Table registry check in goal dispatcher. Non-recursive completion. |
