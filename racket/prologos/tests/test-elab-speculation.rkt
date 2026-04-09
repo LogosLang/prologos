@@ -23,6 +23,12 @@
 ;; Test Helpers
 ;; ========================================
 
+;; Extract nogoods list from a solver-state (replaces old atms-nogoods field accessor).
+(define (solver-state-nogoods ss)
+  (define ng-list (net-cell-read-raw (solver-state-net ss)
+                                      (solver-context-nogoods-cid (solver-state-ctx ss))))
+  (if (list? ng-list) ng-list '()))
+
 ;; Create a try-fn that writes a value to a cell.
 (define (make-write-fn cid val)
   (lambda (enet) (elab-cell-write enet cid val)))
@@ -71,7 +77,7 @@
      (check-equal? (speculation-branch-count spec) 3)
      ;; ATMS should have 3 mutual exclusion nogoods (C(3,2) = 3 pairs)
      (define a (speculation-atms spec))
-     (check-equal? (length (atms-nogoods a)) 3))
+     (check-equal? (length (solver-state-nogoods a)) 3))
 
    (test-case "each branch forks from the same base elab-network"
      (define-values (enet cids) (make-test-network 2))
@@ -313,8 +319,8 @@
      (define spec-inner (speculation-begin enet '("inner-x" "inner-y")))
      (define a-inner (speculation-atms spec-inner))
      ;; Each ATMS has independent nogoods
-     (check-equal? (length (atms-nogoods a-outer)) 1)  ;; C(2,2) = 1
-     (check-equal? (length (atms-nogoods a-inner)) 1)
+     (check-equal? (length (solver-state-nogoods a-outer)) 1)  ;; C(2,2) = 1
+     (check-equal? (length (solver-state-nogoods a-inner)) 1)
      ;; Both have 2 branches
      (check-equal? (speculation-branch-count spec-outer) 2)
      (check-equal? (speculation-branch-count spec-inner) 2))))

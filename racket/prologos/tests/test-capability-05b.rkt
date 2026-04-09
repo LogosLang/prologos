@@ -201,25 +201,25 @@
      "(def atms-fn : (Pi (c :0 ReadCap) (Pi (x :w Nat) Nat))
         := (fn (c :0 ReadCap) (fn (x :w Nat) x)))"))
   (define prov-atms (cap-inference-result-provenance-atms result))
-  ;; The ATMS should have at least one assumption
-  (check-true (> (hash-count (atms-assumptions prov-atms)) 0)
+  ;; The solver-state should have at least one assumption
+  (check-true (> (hash-count (solver-state-assumptions prov-atms)) 0)
               "ATMS should have assumptions"))
 
 (test-case "atms/supported-values-for-direct-declarer"
-  ;; ATMS cell for (direct-declarer, cap) should have a supported value
+  ;; Solver cell for (direct-declarer, cap) should have a value
   (define result
     (run-and-infer
      "(def sv-fn : (Pi (c :0 ReadCap) (Pi (x :w Nat) Nat))
         := (fn (c :0 ReadCap) (fn (x :w Nat) x)))"))
   (define prov-atms (cap-inference-result-provenance-atms result))
-  ;; ATMS cell keys are interned symbols via atms-cell-key
+  ;; Cell keys are interned symbols via atms-cell-key
   (define cell-k (atms-cell-key 'sv-fn 'ReadCap))
-  (define tc (hash-ref (atms-tms-cells prov-atms) cell-k #f))
-  (check-true (and tc (pair? (tms-cell-values tc)))
-              "Direct declarer should have supported values"))
+  (define val (solver-state-read-cell prov-atms cell-k))
+  (check-true (not (eq? val 'bot))
+              "Direct declarer should have a cell value"))
 
 (test-case "atms/supported-values-for-transitive"
-  ;; ATMS cell for (caller, cap) should also have supported values
+  ;; Solver cell for (caller, cap) should also have a value
   ;; when the cap is inherited transitively
   (define result
     (run-and-infer
@@ -230,13 +230,13 @@
       " := (fn (c :0 ReadCap) (fn (x :w Nat) (sv-callee x))))")))
   (define prov-atms (cap-inference-result-provenance-atms result))
   (define cell-k (atms-cell-key 'sv-caller 'ReadCap))
-  (define tc (hash-ref (atms-tms-cells prov-atms) cell-k #f))
-  (check-true (and tc (pair? (tms-cell-values tc)))
-              "Transitive inheritor should have supported values"))
+  (define val (solver-state-read-cell prov-atms cell-k))
+  (check-true (not (eq? val 'bot))
+              "Transitive inheritor should have a cell value"))
 
 (test-case "atms/support-set-traces-to-root"
-  ;; The support set for a transitive inheritor should include
-  ;; the assumption for the root declarer
+  ;; The provenance roots for a transitive inheritor should include
+  ;; the root declarer
   (define result
     (run-and-infer
      (string-append
@@ -247,31 +247,28 @@
       "(def top-fn : (Pi (c :0 ReadCap) (Pi (x :w Nat) Nat))"
       " := (fn (c :0 ReadCap) (fn (x :w Nat) (mid-fn x))))")))
   (define prov-atms (cap-inference-result-provenance-atms result))
-  ;; Get top-fn's cell via atms-cell-key
+  ;; Verify cell has a value via solver-state
   (define cell-k (atms-cell-key 'top-fn 'ReadCap))
-  (define tc (hash-ref (atms-tms-cells prov-atms) cell-k #f))
-  (check-true (and tc (pair? (tms-cell-values tc)))
-              "top-fn should have supported values")
-  ;; Extract all assumption IDs from support sets
-  (define all-aids
-    (for/fold ([aids (hasheq)])
-              ([sv (in-list (tms-cell-values tc))])
-      (for/fold ([aids aids])
-                ([(aid _) (in-hash (supported-value-support sv))])
-        (hash-set aids aid #t))))
-  ;; Look up the assumptions — at least one should reference root-fn
-  ;; (datum is (cons func-name cap-name))
-  (define assumption-data
-    (for/list ([(aid _) (in-hash all-aids)])
-      (define asn (hash-ref (atms-assumptions prov-atms) aid #f))
-      (and asn (assumption-datum asn))))
-  (check-true (for/or ([datum (in-list assumption-data)]
-                       #:when datum)
-                (and (pair? datum)
-                     (or (eq? (car datum) 'root-fn)
-                         (let ([s (symbol->string (car datum))])
+  (define val (solver-state-read-cell prov-atms cell-k))
+  (check-true (not (eq? val 'bot))
+              "top-fn should have a cell value")
+  ;; Check provenance roots directly — root-fn should be listed
+  (define prov-roots (cap-inference-result-provenance-roots result))
+  (define top-fn-roots (hash-ref prov-roots (cons 'top-fn 'ReadCap)
+                                 (lambda ()
+                                   ;; Try qualified name
+                                   (for/first ([(k v) (in-hash prov-roots)]
+                                               #:when (and (pair? k)
+                                                           (let ([s (symbol->string (car k))])
+                                                             (string-suffix? s "top-fn"))
+                                                           (eq? (cdr k) 'ReadCap)))
+                                     v))))
+  (check-true (and top-fn-roots
+                   (for/or ([r (in-set top-fn-roots)])
+                     (or (eq? r 'root-fn)
+                         (let ([s (symbol->string r)])
                            (string-suffix? s "root-fn")))))
-              "Support set should trace back to root-fn"))
+              "Provenance roots should trace back to root-fn"))
 
 ;; ========================================
 ;; Integration Tests: Audit Trail with ATMS
