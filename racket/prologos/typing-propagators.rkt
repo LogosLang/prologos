@@ -37,7 +37,8 @@
          (only-in "typing-core.rkt" numeric-join)  ;; Phase T: generic op return types
          (only-in "warnings.rkt" emit-coercion-warning!)  ;; Phase 9 prep: coercion bridge
          (only-in "trait-resolution.rkt" resolve-trait-constraints!)  ;; Phase 9: parametric bridge
-         (only-in "atms.rkt" assumption-id)  ;; Track 4B Phase 8: union branching
+         (only-in "atms.rkt" assumption-id assumption-id-n
+                  solver-state-assume solver-state?)  ;; Track 4B Phase 8 + Phase 6f
          "elab-network-types.rkt"
          "errors.rkt"
          "pretty-print.rkt"
@@ -1537,32 +1538,47 @@
        net4]
 
       ;; --- Union type: Phase 8 Option D — branch via assumption-capturing propagators ---
-      ;; Two sets of propagators installed concurrently, each capturing its assumption.
-      ;; Both fire in the same BSP quiescence. TMS keeps branch values separate.
-      ;; Contradiction in one branch → retract. Survivor → commit.
+      ;; Phase 6f: union branching with worldview-scoped writes.
+      ;; Both branches install propagators on the SAME network. Each branch's
+      ;; writes are tagged with its worldview bitmask via the worldview cache cell.
+      ;; Tagged-cell-value entries keep branch values separate.
+      ;; DUAL-WRITE: TMS parameterize kept alongside worldview cache for
+      ;; backward compatibility (cells not yet promoted to tagged still use TMS).
+      ;; Retires gensym assumption-ids → integer IDs via solver-state-assume.
       [(expr-union left right)
-       ;; Create two fresh assumptions for the branches
-       (define aid-left (assumption-id (gensym 'union-left)))
-       (define aid-right (assumption-id (gensym 'union-right)))
-       ;; Promote the attribute-map cell to TMS (needed before speculative writes)
-       (define net-tms (promote-cell-to-tms net tm-cid))
-       ;; Install propagators for the LEFT branch under assumption-left.
-       ;; Each propagator's fire-fn is wrapped to parameterize current-speculation-stack.
+       ;; Phase 6f: Create assumptions with integer IDs for worldview tagging.
+       ;; Uses a process-local counter for deterministic bit positions.
+       ;; These assumptions are local to this union expression — they don't
+       ;; need to go through the solver-state (which tracks query-level assumptions).
+       (define left-n (begin0 (union-assumption-counter)
+                        (union-assumption-counter (add1 (union-assumption-counter)))))
+       (define right-n (begin0 (union-assumption-counter)
+                         (union-assumption-counter (add1 (union-assumption-counter)))))
+       (define aid-left (assumption-id left-n))
+       (define aid-right (assumption-id right-n))
+       ;; DUAL-WRITE: promote to BOTH tagged + TMS for dual-path compatibility.
+       ;; Tagged path: worldview cache bitmask tags writes.
+       ;; TMS path: parameterize tags writes (for cells not yet promoted to tagged).
+       (define net-tagged (promote-cell-to-tagged net tm-cid))
+       (define net-promoted (promote-cell-to-tms net-tagged tm-cid))
+       ;; LEFT branch: set worldview + parameterize
+       (define left-bitmask (arithmetic-shift 1 (assumption-id-n aid-left)))
+       (define net-left-wv (net-cell-write net-promoted worldview-cache-cell-id left-bitmask))
        (define net-left
          (parameterize ([current-speculation-stack
                          (cons aid-left (current-speculation-stack))])
-           (install net-tms left ctx-pos)))
-       ;; Write left's type to the union position under assumption-left
+           (install net-left-wv left ctx-pos)))
        (define net-left2
          (parameterize ([current-speculation-stack
                          (cons aid-left (current-speculation-stack))])
            (type-map-write net-left tm-cid e left)))
-       ;; Install propagators for the RIGHT branch under assumption-right
+       ;; RIGHT branch: set worldview + parameterize
+       (define right-bitmask (arithmetic-shift 1 (assumption-id-n aid-right)))
+       (define net-right-wv (net-cell-write net-left2 worldview-cache-cell-id right-bitmask))
        (define net-right
          (parameterize ([current-speculation-stack
                          (cons aid-right (current-speculation-stack))])
-           (install net-left2 right ctx-pos)))
-       ;; Write right's type to the union position under assumption-right
+           (install net-right-wv right ctx-pos)))
        (define net-right2
          (parameterize ([current-speculation-stack
                          (cons aid-right (current-speculation-stack))])
@@ -1830,6 +1846,9 @@
 ;; Parameters for the persistent global attribute-map cell and per-command output cell.
 (define current-attribute-map-cell-id (make-parameter #f))
 (define current-meta-solution-output-cell-id (make-parameter #f))
+;; Phase 6f: counter for union branching assumption IDs (integer, deterministic).
+;; Reset per command (same scope as attribute-map-cell-id).
+(define union-assumption-counter (make-parameter 0))
 
 ;; Phase 0c: Initialize the global attribute-map cell on the persistent
 ;; registry network. Called once per file alongside init-macros-cells!,
