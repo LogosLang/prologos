@@ -1987,11 +1987,16 @@
   ;; Diff output cells for value writes (correct delta for merge-based cells).
   ;; Also check the decomp-request cell (cell-id 0).
   (define output-cids (cons decomp-request-cell-id (propagator-outputs prop)))
+  ;; Phase 6+7 fix: use net-cell-read-raw for diffing (not net-cell-read).
+  ;; net-cell-read applies worldview filtering (tagged-cell-value bitmask).
+  ;; After the fire function returns, current-worldview-bitmask is 0,
+  ;; making tagged entries invisible to the diff. Raw read sees the full
+  ;; tagged-cell-value including entries — the diff captures the actual change.
   (define value-writes
     (for/fold ([writes '()])
               ([cid (in-list output-cids)])
-      (define old (net-cell-read snapshot-net cid))
-      (define new (net-cell-read result-net cid))
+      (define old (net-cell-read-raw snapshot-net cid))
+      (define new (net-cell-read-raw result-net cid))
       (if (equal? old new)
           writes
           (cons (cons cid new) writes))))

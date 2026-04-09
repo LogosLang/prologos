@@ -141,15 +141,17 @@
 (define multi-clause-tests
   (test-suite "Phase 6d: multi-clause PU branching"
 
-    (test-case "choice(?x): two clauses, PU per clause"
+    (test-case "choice(?x): two clauses, concurrent on same network"
       (define results
         (solve-goal-propagator default-solver-config test-store
                                'choice (list 'x) '(x)))
-      ;; With PU isolation, each clause writes to its own fork.
-      ;; The parent reads PU results. Should get a value from one of the clauses.
-      (check-true (pair? results))
-      (define x-val (hash-ref (car results) 'x))
-      (check-not-false (memq x-val '(left right))))
+      ;; Concurrent execution: both clauses' propagators on same network,
+      ;; per-propagator worldview bitmask, BSP fires all concurrently.
+      ;; BOTH answers should be returned.
+      (check-equal? (length results) 2)
+      (define x-vals (map (lambda (r) (hash-ref r 'x)) results))
+      (check-not-false (member 'left x-vals))
+      (check-not-false (member 'right x-vals)))
     ))
 
 ;; ============================================================
