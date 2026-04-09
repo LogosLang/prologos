@@ -262,6 +262,42 @@
 
 
 ;; ============================================================
+;; 5. Tabling (Phase 8)
+;; ============================================================
+
+;; two-call: tabled relation called twice in clause body.
+;; two_call(x,y) &> greet(x), greet(y).
+;; First greet(x) is producer, second greet(y) should use consumer (table).
+(define two-call-rel
+  (relation-info 'two_call 2
+    (list (variant-info
+           (list (param-info 'x 'free) (param-info 'y 'free))
+           (list (clause-info
+                  (list (goal-desc 'app (list 'greet (list 'x)))
+                        (goal-desc 'app (list 'greet (list 'y))))))
+           '()))
+    #f #f))
+
+(define tabling-store
+  (relation-register
+   (relation-register (make-relation-store) greet-rel)
+   two-call-rel))
+
+(define tabling-tests
+  (test-suite "Phase 8: on-network tabling"
+
+    (test-case "tabled relation: producer + consumer on same network"
+      (define results
+        (solve-goal-propagator default-solver-config tabling-store
+                               'two_call (list 'x 'y) '(x y)))
+      (check-true (pair? results))
+      ;; Both x and y should get 'hello from greet
+      (define r (car results))
+      (check-equal? (hash-ref r 'x) 'hello)
+      (check-equal? (hash-ref r 'y) 'hello))
+    ))
+
+;; ============================================================
 ;; Run all tests
 ;; ============================================================
 
@@ -270,3 +306,4 @@
 (run-tests multi-clause-tests)
 (run-tests goal-type-tests)
 (run-tests gray-code-tests)
+(run-tests tabling-tests)
