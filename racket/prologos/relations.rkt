@@ -17,6 +17,8 @@
 
 (require racket/list
          "propagator.rkt"
+         "atms.rkt"            ;; Phase 6+7: solver-state operations
+         "decision-cell.rkt"   ;; Phase 6+7: compound cells, tagged-cell-value
          "tabling.rkt"
          "union-find.rkt"
          "solver.rkt"
@@ -62,7 +64,12 @@
  explain-goal
  ;; D4 Provenance: parallel explain solver internals (for wf-engine.rkt)
  explain-goals
- explain-app-goal)
+ explain-app-goal
+ ;; Phase 6+7: Propagator-native solver (D.11)
+ install-goal-propagator
+ install-conjunction
+ install-clause-propagators
+ solve-goal-propagator)
 
 ;; ========================================
 ;; Evaluation callback
@@ -1264,3 +1271,217 @@
 
      (append fact-results clause-results))
    (relation-info-variants rel)))
+
+
+;; ========================================
+;; Phase 6+7: Propagator-Native Solver (D.11)
+;; ========================================
+;;
+;; Logic variables = cells on the prop-network.
+;; Goals = propagator installations (not function calls).
+;; Conjunction = sequential installation (broadcast in Phase 7b).
+;; Results = answer accumulator cell (set-union merge).
+;;
+;; Coexists with the DFS solver above. Selected by :strategy config.
+
+;; Sentinel for unbound logic variables.
+(define logic-var-bot 'logic-var-bot)
+
+;; Logic variable cell merge: last binding wins.
+(define (logic-var-merge old new)
+  (if (eq? old logic-var-bot) new
+      (if (eq? new logic-var-bot) old
+          new)))
+
+;; Allocate a fresh logic variable cell on the network.
+;; Returns: (values new-network cell-id)
+(define (alloc-logic-var net)
+  (net-new-cell net logic-var-bot logic-var-merge))
+
+;; Build a variable environment: hasheq var-name → cell-id.
+;; Allocates a fresh cell for each variable name.
+;; Returns: (values new-network env)
+(define (build-var-env net var-names)
+  (for/fold ([n net] [env (hasheq)])
+            ([name (in-list var-names)])
+    (define-values (n* cid) (alloc-logic-var n))
+    (values n* (hash-set env name cid))))
+
+;; Resolve a term against a variable environment.
+;; If the term is a symbol in env, return its cell-id.
+;; Otherwise return the term as-is (ground value).
+(define (resolve-term env term)
+  (if (and (symbol? term) (hash-has-key? env term))
+      (hash-ref env term)
+      term))
+
+;; ----------------------------------------
+;; install-goal-propagator (7a)
+;; ----------------------------------------
+;; Dispatches on goal kind, installs propagator(s) on the network.
+;; Returns: new-network
+(define (install-goal-propagator net goal env store config answer-cid)
+  (define kind (goal-desc-kind goal))
+  (define args (goal-desc-args goal))
+  (case kind
+    [(unify)
+     (define lhs (resolve-term env (car args)))
+     (define rhs (resolve-term env (cadr args)))
+     (cond
+       ;; Both cells: bidirectional unification propagator
+       [(and (cell-id? lhs) (cell-id? rhs))
+        (define (unify-fire net)
+          (define v1 (net-cell-read net lhs))
+          (define v2 (net-cell-read net rhs))
+          (cond
+            [(eq? v1 logic-var-bot)
+             (if (eq? v2 logic-var-bot) net (net-cell-write net lhs v2))]
+            [(eq? v2 logic-var-bot) (net-cell-write net rhs v1)]
+            [(equal? v1 v2) net]
+            [else net]))
+        (define-values (net* _pid)
+          (net-add-propagator net (list lhs rhs) (list lhs rhs) unify-fire))
+        net*]
+       ;; One cell, one ground: write ground to cell
+       [(cell-id? lhs) (net-cell-write net lhs rhs)]
+       [(cell-id? rhs) (net-cell-write net rhs lhs)]
+       ;; Both ground: no network change
+       [else net])]
+
+    [(is)
+     (define var (resolve-term env (car args)))
+     (define expr (cadr args))
+     (define eval-fn (current-is-eval-fn))
+     (if (and (cell-id? var) eval-fn)
+         (net-cell-write net var (eval-fn expr))
+         net)]
+
+    [(app)
+     (define goal-name (car args))
+     (define goal-args (cadr args))
+     (install-clause-propagators net goal-name goal-args env store config answer-cid)]
+
+    [(not) net]   ;; Phase 7c: NAF S1 propagator (deferred)
+    [(guard) net] ;; Phase 7c: guard S1 propagator (deferred)
+    [(cut) net]   ;; Out of scope (P2)
+    [else net]))
+
+;; ----------------------------------------
+;; install-conjunction (7b)
+;; ----------------------------------------
+;; Install all goals in a clause body. Order-irrelevant.
+;; Returns: new-network
+(define (install-conjunction net goals env store config answer-cid)
+  (for/fold ([n net])
+            ([goal (in-list goals)])
+    (install-goal-propagator n goal env store config answer-cid)))
+
+;; ----------------------------------------
+;; install-clause-propagators (6c)
+;; ----------------------------------------
+;; Three paths: facts, single clause, multi-clause.
+;; Returns: new-network
+(define (install-clause-propagators net goal-name goal-args env store config answer-cid)
+  (define rel (relation-lookup store goal-name))
+  (cond
+    [(not rel) net]
+    [else
+     (define resolved-args
+       (for/list ([a (in-list goal-args)])
+         (resolve-term env a)))
+     (for/fold ([n net])
+               ([variant (in-list (relation-info-variants rel))])
+       (define params (variant-info-params variant))
+       (define facts (variant-info-facts variant))
+       (define clauses (variant-info-clauses variant))
+       (define param-names (map param-info-name params))
+
+       ;; Facts: write each fact row's values to the corresponding arg cells
+       (define n-facts
+         (for/fold ([n n])
+                   ([fr (in-list facts)])
+           (define row (fact-row-terms fr))
+           (if (= (length row) (length resolved-args))
+               (for/fold ([n n])
+                         ([arg (in-list resolved-args)]
+                          [val (in-list row)])
+                 (if (cell-id? arg)
+                     (net-cell-write n arg val)
+                     n))
+               n)))
+
+       ;; Clauses
+       (cond
+         [(null? clauses) n-facts]
+         [else
+          ;; For each clause: build fresh var env, unify args with params,
+          ;; install clause body goals.
+          ;; TODO Phase 6d: multi-clause → PU-per-clause with Gray code.
+          ;; For now: sequential installation (no branching isolation).
+          (for/fold ([n n-facts])
+                    ([ci (in-list clauses)])
+            (define clause-goals (clause-info-goals ci))
+            ;; Fresh variable scope for this clause
+            (define-values (n2 clause-env) (build-var-env n param-names))
+            ;; Unify resolved args with clause param cells
+            (define n3
+              (for/fold ([n n2])
+                        ([arg (in-list resolved-args)]
+                         [pname (in-list param-names)])
+                (define pcid (hash-ref clause-env pname))
+                (if (cell-id? arg)
+                    (let-values ([(n* _pid)
+                                  (net-add-propagator n (list arg) (list pcid)
+                                    (lambda (net)
+                                      (define v (net-cell-read net arg))
+                                      (if (eq? v logic-var-bot) net
+                                          (net-cell-write net pcid v))))])
+                      n*)
+                    (net-cell-write n pcid arg))))
+            (install-conjunction n3 clause-goals clause-env store config answer-cid))]))]))
+
+;; ----------------------------------------
+;; solve-goal-propagator (entry point)
+;; ----------------------------------------
+;; The propagator-native alternative to solve-goal.
+;; Returns: (listof hasheq) — projected query variable bindings.
+(define (solve-goal-propagator config store goal-name goal-args query-vars)
+  (define rel (relation-lookup store goal-name))
+  (unless rel
+    (error 'solve-goal-propagator "Unknown relation: ~a" goal-name))
+
+  (define effective-args
+    (if (null? goal-args)
+        (let ([params (if (pair? (relation-info-variants rel))
+                          (variant-info-params (car (relation-info-variants rel)))
+                          '())])
+          (map param-info-name params))
+        goal-args))
+
+  ;; Create network + allocate query variable cells
+  (define net0 (make-prop-network))
+  (define-values (net1 query-env) (build-var-env net0 query-vars))
+
+  ;; Answer accumulator cell
+  (define (answer-merge old new)
+    (cond [(null? old) new] [(null? new) old] [else (append old new)]))
+  (define-values (net2 answer-cid) (net-new-cell net1 '() answer-merge))
+
+  ;; Install the top-level goal
+  (define top-goal (goal-desc 'app (list goal-name effective-args)))
+  (define net3 (install-goal-propagator net2 top-goal query-env store config answer-cid))
+
+  ;; Run to quiescence
+  (define net4 (run-to-quiescence net3))
+
+  ;; Project query variables
+  (define result-subst
+    (for/hasheq ([qv (in-list query-vars)])
+      (define cid (hash-ref query-env qv))
+      (define val (net-cell-read net4 cid))
+      (values qv (if (eq? val logic-var-bot) qv val))))
+
+  (if (for/and ([qv (in-list query-vars)])
+        (eq? (hash-ref result-subst qv) qv))
+      '()
+      (list result-subst)))
