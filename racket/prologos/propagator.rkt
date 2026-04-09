@@ -439,8 +439,14 @@
 ;; net-cell-read uses this for O(1) bitmask-tagged value filtering.
 (define worldview-cache-cell-id (cell-id 1))
 
-;; Worldview cache merge: bitwise OR (monotone — bits only accumulate).
-(define (worldview-cache-merge old new) (bitwise-ior old new))
+;; Worldview cache merge: replacement (D.10).
+;; The projection propagator writes the complete recomputed bitmask from
+;; the compound decisions cell's merge-maintained field. Replacement (not ior)
+;; handles retraction correctly — removed bits disappear when the projection
+;; writes a bitmask without them. Equality check prevents spurious change
+;; propagation when the bitmask hasn't actually changed.
+(define (worldview-cache-merge old new)
+  (if (= old new) old new))
 
 ;; Create an empty propagator network.
 ;; fuel: maximum number of propagator firings before run-to-quiescence stops.

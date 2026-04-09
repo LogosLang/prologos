@@ -204,21 +204,29 @@
       (define raw (net-cell-read-raw net worldview-cache-cell-id))
       (check-equal? raw 0))
 
-    (test-case "worldview cache cell: bitwise-ior merge"
+    (test-case "worldview cache cell: replacement merge (D.10)"
       (define net0 (make-prop-network))
       ;; Write bit 0
       (define net1 (net-cell-write net0 worldview-cache-cell-id #b01))
       (check-equal? (net-cell-read-raw net1 worldview-cache-cell-id) #b01)
-      ;; Write bit 1 — merges via bitwise-ior
+      ;; Write #b10 — replacement merge, NOT bitwise-ior
       (define net2 (net-cell-write net1 worldview-cache-cell-id #b10))
-      (check-equal? (net-cell-read-raw net2 worldview-cache-cell-id) #b11))
+      (check-equal? (net-cell-read-raw net2 worldview-cache-cell-id) #b10))
 
-    (test-case "worldview cache cell: monotone (bits only accumulate)"
+    (test-case "worldview cache cell: replacement handles retraction"
       (define net0 (make-prop-network))
       (define net1 (net-cell-write net0 worldview-cache-cell-id #b111))
-      ;; Writing a subset doesn't reduce — ior is monotone
+      ;; Writing a subset REPLACES — bits CAN decrease (retraction)
       (define net2 (net-cell-write net1 worldview-cache-cell-id #b001))
-      (check-equal? (net-cell-read-raw net2 worldview-cache-cell-id) #b111))
+      (check-equal? (net-cell-read-raw net2 worldview-cache-cell-id) #b001))
+
+    (test-case "worldview cache cell: no-change write is no-op"
+      (define net0 (make-prop-network))
+      (define net1 (net-cell-write net0 worldview-cache-cell-id #b101))
+      ;; Same value → merge returns eq? old → no cell change
+      (define net2 (net-cell-write net1 worldview-cache-cell-id #b101))
+      ;; Should be eq? (same network object — no change detected)
+      (check-eq? net1 net2))
 
     ;; --- net-cell-read with tagged-cell-value ---
 
