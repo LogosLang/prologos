@@ -3,7 +3,7 @@
 **Date**: 2026-04-07
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: Cell-Based TMS (folding Track 1.5) + ATMS Solver + Non-Recursive Tabling
-**Status**: D.3 — post external critique (16 findings incorporated)
+**Status**: D.7 — hypercube insights woven throughout (Gray code, subcube pruning, all-reduce, bitmask, Hasse Q6)
 **Self-critique**: [P/R/M Analysis](2026-04-07_BSP_LE_TRACK2_SELF_CRITIQUE.md) (17 findings, D.2)
 **External critique**: [Architect Review](2026-04-08_BSP_LE_TRACK2_EXTERNAL_CRITIQUE.md) (16 findings, D.3)
 **Stage 1/2**: [Research + Audit](../research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md)
@@ -107,15 +107,30 @@ The nogood set is a separate lattice cell with set-union merge (monotone: nogood
 
 Seven lattices participate in the solver architecture. Each is classified as VALUE (pure join) or STRUCTURAL (SRE-derived decomposition), with algebraic properties declared:
 
-| Lattice | Carrier | Order | Merge | Kind | Properties |
-|---|---|---|---|---|---|
-| Worldview | P(AssumptionId) | ⊆ | set-union | Value (DERIVED) | Boolean, distributive, Heyting, frame |
-| Nogood | P(P(AssumptionId)) | ⊆ | set-union | Value | Boolean, distributive |
-| Decision (per amb) | P(Alternatives) | ⊇ (reverse) | set-intersection | **Structural** | Boolean (dual powerset), constraint narrowing |
-| Term Value | existing structural | — | SRE merge | Structural | Per Track 2H (Heyting ground sublattice) |
-| Answer Accumulator | P(Answer) | ⊆ | set-union | Value | Boolean, distributive |
-| Assumptions | P(Assumption) | ⊆ | set-union | Value | Boolean, distributive |
-| Counter | Nat | ≤ | max | Value | Chain |
+| Lattice | Carrier | Order | Merge | Kind | Properties | Hasse diagram |
+|---|---|---|---|---|---|---|
+| Worldview | P(AssumptionId) | ⊆ | set-union | Value (DERIVED) | Boolean, distributive, Heyting, frame | **Hypercube Q_n** — optimal traversal via Gray code, O(log n) diameter |
+| Nogood | P(P(AssumptionId)) | ⊆ | set-union | Value | Boolean, distributive | Powerset of powerset — complex; nogoods are independent units |
+| Decision (per amb) | P(Alternatives) | ⊇ (reverse) | set-intersection | **Structural** | Boolean (dual powerset), constraint narrowing | **Dual hypercube** — narrowing traverses downward; bitmask enables O(1) subcube ops |
+| Term Value | existing structural | — | SRE merge | Structural | Per Track 2H (Heyting ground sublattice) | Constructor tree — adjacency = differ by one constructor field |
+| Answer Accumulator | P(Answer) | ⊆ | set-union | Value | Boolean, distributive | Powerset — grows monotonically, no traversal optimization needed |
+| Assumptions | P(Assumption) | ⊆ | set-union | Value | Boolean, distributive | Hypercube — but only grows, never traversed for search |
+| Counter | Nat | ≤ | max | Value | Chain | Linear chain — trivial adjacency |
+
+**(SRE Lattice Lens Q6: Hasse diagram analysis)**
+
+The worldview and decision lattices have hypercube Hasse diagrams (Boolean powerset). This is a structural identity: the ATMS worldview space for n assumptions IS Q_n. Two worldviews are Hasse-adjacent iff they differ by exactly one assumption (Hamming distance 1).
+
+This identity enables:
+- **Gray code traversal**: explore worldviews changing one assumption per step — maximizes CHAMP structural sharing (Hamming-adjacent worldviews share almost all network state)
+- **Subcube pruning**: a nogood `{h_A, h_B, h_C}` identifies a subcube Q_{n-3} of contradicted worldviews. Membership test: `(wv AND ng) == ng` — O(1) bitmask operation
+- **Hypercube broadcast**: distribute nogoods to all worldviews in log_2(W) rounds
+- **Hypercube all-reduce**: synchronize BSP barriers in log_2(T) rounds for T threads
+- **Recursive decomposition**: Q_n = Q_{n-1} × Q_1 — splitting on one assumption halves the space
+
+These Hasse-diagram operations require **bitmask representation** of assumption sets (see Phase 1, §4 additive bitmask). For n ≤ 63 (Racket fixnum), all operations are O(1) machine instructions. For n > 63, Racket exact integers handle arbitrary precision.
+
+Research note: [Hypercube BSP-LE Design Addendum](../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)
 
 #### §2.5a Key Architectural Finding: Decisions Are Primary, Worldview Is Derived
 
@@ -177,6 +192,9 @@ Assumptions ──(accumulate)──→ Worldview ←──(aggregate)── Dec
 | Commit | Term cells (per-branch) | Answer Acc | Branch result → answer set | Monotone set-union |
 | WorldviewToType | Worldview | Type lattice | Assumptions constrain type visibility | Cross-system |
 | WorldviewToTerm | Worldview | Term lattice | Assumptions constrain term values | Cross-system |
+| HammingToCHAMP | Adjacency distance | CHAMP structural diff | Lower Hamming distance = more CHAMP sharing | Gray code exploits this |
+| SubcubeToNogood | Subcube bitmask | Pruned worldview set | `(wv AND ng) == ng` = O(1) subcube membership | Bitmask enables |
+| DimensionToBSP | Hypercube dimension k | BSP superstep k | One dimension per round = log_2 synchronization | All-reduce topology |
 
 The critical bridge is **Narrow (Nogoods → Decisions)**: nogoods flow to decision cells, not to worldview cells. (4.1) Each NOGOOD gets its own propagator — one per nogood, with fan-in = |nogood| (typically 2-3 cells). The propagator reads the decision cells of ALL groups mentioned in the nogood. When all assumptions except one are committed (their group's decision cell is a singleton), it narrows the remaining group's decision cell to exclude that assumption.
 
@@ -368,6 +386,16 @@ property Frame {L : Type}
   :where [Lattice L]
          [Distributive L]
          ;; meet distributes over arbitrary joins
+
+;; Hasse diagram structure for Boolean lattices (SRE Lattice Lens Q6)
+;; The Hasse diagram of a Boolean lattice IS a hypercube Q_n.
+;; This property enables optimal parallel communication patterns.
+property HypercubeAdjacency {L : Type}
+  :where [Boolean L]
+  :metric hamming-distance                    ;; |a Δ b| = number of differing elements
+  :diameter n                                 ;; max distance = number of generators
+  :recursive-decomposition (L = L_{n-1} × L_1)  ;; splitting on one generator
+  :bitmask-representable (n ≤ 63)            ;; fixnum O(1) operations
 ```
 
 ### §3.3 Level 2: Propagator Declarations
@@ -886,6 +914,14 @@ Sections 1-4 are uncommented as phases complete. Section 5 is aspirational (Trac
 
 5. **NO worldview cell** (§2.6b): The worldview emerges from decision cells. No `worldview-cid` on the network. `net-cell-read`/`net-cell-write` use decision cells for TMS navigation in Tier 2 (Phase 9 activates this). Tier 1 uses `current-speculation-stack` as before.
 
+6. **Bitmask representation** (Hasse diagram, additive): The `decision-set` struct gains an optional `bitmask` field — a fixnum where bit i = 1 means "assumption with integer id i is viable." Computed at creation time from the alternatives (one-time cost: OR of assumption-id integers). Maintained through merge/narrow (one extra bitwise op per merge). Enables O(1) Hasse-diagram operations:
+   - Hamming distance: `popcount(a XOR b)` — metric for Gray code traversal
+   - Adjacency test: `popcount(a XOR b) == 1` — Hasse neighbors
+   - Subcube membership: `(wv AND ng) == ng` — nogood containment
+   - Gray code generation: standard reflected code on bit positions
+   
+   This is ADDITIVE — the hasheq remains the primary representation for enumeration and merge. The bitmask is a derived projection for fast Hasse operations. Phase 6 reads it for Gray code traversal. Phase 3 reads it for subcube pruning.
+
 **R3 revision**: No field added to `prop-net-cold` or `prop-net-warm`. Decision cell IDs are tracked by the solver infrastructure (per-query), not by the network struct.
 
 **Test coverage**: Decision cell creation + narrowing. Nogood cell creation + accumulation. Parallel-map propagator with 3/5/10 inputs. SRE domain registration for decision domain.
@@ -1083,6 +1119,8 @@ When a group-level decision cell narrows to ∅ (empty), the per-decision contra
 
 **This IS the right Kan extension**: each nogood is its own information-flow unit. The commitment cell IS the structural unification of the nogood pattern against decision state. Provenance emerges from the cell value. Topology installation is data-driven. No scanning, no callbacks, no mutable closure state.
 
+**(Hasse diagram: subcube pruning)** When a nogood is learned, the contradicted worldviews form a subcube of the worldview hypercube. With bitmask representation (Phase 1 item 6), subcube membership is O(1): `(wv AND ng-mask) == ng-mask`. The nogood topology watcher can use this for fast filtering — only install per-nogood infrastructure for nogoods whose subcube intersects the currently active worldviews. Subcubes that are entirely outside the explored region need no infrastructure.
+
 **Test coverage**:
 - Commitment cell merge (per-position OR, non-#f survives)
 - Commit-tracker fires on decision singleton, writes correct position
@@ -1191,9 +1229,10 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
 
 2. **`relations.rkt`**: New function `atms-amb-on-network`:
    - Creates M PUs via Phase 2's `make-branch-pu` (only for matching clauses)
+   - **(Hasse diagram: Gray code ordering)** The M branch PUs are ordered by Gray code — each successive branch differs from the previous by one assumption. `make-branch-pu` forks from the PREVIOUS branch's network (not the parent's), maximizing CHAMP structural sharing. For M = 2: trivial (0→1). For M = 3+: standard reflected Gray code on the assumption-id bit positions. The bitmask field (Phase 1 item 6) enables O(1) Hamming distance computation for ordering.
    - Records pairwise mutual-exclusion nogoods among the M branches
-   - Installs filtered nogood watchers (Phase 3)
-   - Returns the list of `(branch-pu . worldview-cid)` pairs
+   - Installs per-nogood infrastructure (Phase 3) for each pairwise nogood
+   - Returns the list of `(branch-pu . assumption-id)` pairs in Gray code order
 
 3. **`relations.rkt`**: New function `clause-match-bulk`:
    - Takes resolved args + clause list
@@ -1323,6 +1362,10 @@ WS impact: **none**. No preparse changes, no reader changes, no keyword conflict
    | `:semantics` | Respected (WF oracle) | Unchanged — WF oracle path already works |
 
 2. **`:execution :parallel` integration**: When strategy is `:atms` or `:auto` (Tier 2), and execution is `:parallel`, worldview exploration uses `run-to-quiescence-bsp`. Multiple PU branches fire in the same BSP superstep. The `:threshold` parameter gates parallelism — if fewer than N runnable propagators, run sequentially.
+
+   **(Hasse diagram: hypercube all-reduce for BSP barriers)** When T ≥ 4 threads, the BSP barrier's merge phase should use hypercube all-reduce instead of flat sequential merge. In round k (for k = 0, ..., log_2(T)-1), thread i communicates with thread `i XOR 2^k` — partners exchange local cell writes and merge. After log_2(T) rounds, every thread has the complete merged state. For T = 8 (M-series Mac): 3 rounds of pairwise merge instead of 7 sequential merges. The existing `make-parallel-thread-fire-all` executor partitions work across threads — the barrier merge phase adopts the hypercube pattern.
+   
+   **(Hasse diagram: nogood broadcast)** When a nogood is discovered in one worldview and must be propagated to W active worldviews, the hypercube broadcast pattern reaches all in log_2(W) rounds via binomial tree. The nogood topology watcher's broadcast of `nogood-install-request` descriptors follows hypercube dimension ordering: process dimension 0 (lowest bit) first, then dimension 1, etc.
 
 3. **Pre-defined configurations**: Wire the four configurations from PUnify Part 3 §3.3:
    - `default-solver`: `:parallel`, `:auto`, `:by-default` tabling

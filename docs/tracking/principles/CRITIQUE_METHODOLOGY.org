@@ -302,6 +302,32 @@ For each lattice:
    Derived lattices should be labeled as such. Their cells are
    read-only aggregates, not independent sources of truth.
 
+6. *Hasse diagram and compute topology*: What is the Hasse diagram of
+   this lattice? Does our information flow topology (which propagators
+   communicate with which cells) follow the Hasse diagram's adjacency
+   structure? If not, we are paying communication overhead that the
+   lattice structure says is unnecessary.
+
+   The Hasse diagram of ANY lattice is the optimal communication graph
+   for parallel computation on that lattice. For Boolean lattices
+   (powerset), the Hasse diagram IS the hypercube Q_n — and optimal
+   communication follows hypercube algorithms (log_2 diameter,
+   recursive decomposition, Gray code traversal).
+
+   For each lattice, ask:
+   - What is the adjacency structure? (Which elements are "one step apart"?)
+   - Does our propagator topology follow this adjacency?
+   - Can we exploit the Hasse structure for optimal traversal order?
+     (Gray code for Boolean lattices, dimension-ordered operations)
+   - Can we exploit it for O(1) structural operations?
+     (Bitmask for subcube membership, Hamming distance for sharing estimation)
+
+   Origin: BSP-LE Track 2 hypercube research (2026-04-08). The ATMS
+   worldview space IS hypercube Q_n. Hypercube algorithms on this
+   structure give optimal parallel synchronization, nogood broadcast,
+   and worldview traversal. The insight generalizes: every lattice's
+   Hasse diagram reveals its optimal parallel compute structure.
+
 ** Origin
 
 BSP-LE Track 2 D.1 self-critique discovered that the worldview
