@@ -1565,41 +1565,54 @@
                              #:when (cell-id? arg))
                     (promote-cell-to-tagged n arg)))
 
-                ;; Install each clause in its own PU fork.
-                ;; Gray code ordering (Phase 6d-ii): successive forks differ by
-                ;; one assumption bit → maximizes CHAMP structural sharing.
+                ;; ALL-AT-ONCE PU branching: fork ALL PUs from the SAME parent,
+                ;; install + run independently, collect results to accumulator.
+                ;; No sequential dependency between PU iterations.
+                ;;
+                ;; Gray code ordering (Phase 6d-ii): determines fork order for
+                ;; CHAMP sharing. Each successive fork from the same n-promoted
+                ;; base shares structure with the parent (O(1) per fork).
+                ;;
+                ;; Step 1: Fork all PUs from the same parent state.
+                ;; Each PU is independent (CHAMP isolation).
                 (define clauses-vec (list->vector clauses))
                 (define aids-vec (list->vector aids))
                 (define gc-order (gray-code-order (length clauses)))
-                (for/fold ([n-parent n-promoted])
-                          ([gc-idx (in-list gc-order)]
-                           #:when (< gc-idx (vector-length clauses-vec)))
-                  (define ci (vector-ref clauses-vec gc-idx))
-                  (define aid (vector-ref aids-vec gc-idx))
-                  ;; Fork from parent with this clause's worldview
-                  (define bit-pos (assumption-id-n aid))
-                  (define-values (pu-net _pu-aid) (make-branch-pu n-parent aid bit-pos))
-                  ;; Install clause in the PU's network
-                  (define pu-net*
-                    (install-one-clause pu-net ci resolved-args param-names
-                                        env store config answer-cid ctx))
-                  ;; Run the PU to quiescence
-                  (define pu-done (run-to-quiescence pu-net*))
-                  ;; Phase 6e: Project result from PU, write to answer accumulator.
-                  ;; Read each resolved-arg cell from the PU's quiesced network.
-                  ;; Build a result hasheq mapping arg-index → value.
-                  ;; Write to answer-cid on the parent network (set-union merge).
-                  (define pu-result
+
+                ;; Step 2: Install + run all PUs, collect results.
+                ;; This is the embarrassingly parallel step — each PU's
+                ;; fork→install→run→project is independent. Today: sequential
+                ;; for/list. The broadcast-profile metadata enables the scheduler
+                ;; to decompose across OS threads when wired (Phase 9).
+                (define pu-results
+                  (for/list ([gc-idx (in-list gc-order)]
+                             #:when (< gc-idx (vector-length clauses-vec)))
+                    (define ci (vector-ref clauses-vec gc-idx))
+                    (define aid (vector-ref aids-vec gc-idx))
+                    (define bit-pos (assumption-id-n aid))
+                    ;; Fork from SAME parent (not previous PU)
+                    (define-values (pu-net _pu-aid) (make-branch-pu n-promoted aid bit-pos))
+                    ;; Install clause body in fork
+                    (define pu-net*
+                      (install-one-clause pu-net ci resolved-args param-names
+                                          env store config answer-cid ctx))
+                    ;; Run fork to quiescence
+                    (define pu-done (run-to-quiescence pu-net*))
+                    ;; Project result: arg-index → value
                     (for/hasheq ([arg (in-list resolved-args)]
                                  [i (in-naturals)]
                                  #:when (cell-id? arg))
                       (define val (net-cell-read pu-done arg))
-                      (values i (if (eq? val logic-var-bot) #f val))))
+                      (values i (if (eq? val logic-var-bot) #f val)))))
+
+                ;; Step 3: Collect all results to accumulator (one pass).
+                (for/fold ([n n-promoted])
+                          ([pu-result (in-list pu-results)])
                   (define has-binding?
                     (for/or ([(_k v) (in-hash pu-result)]) v))
                   (if has-binding?
-                      (net-cell-write n-parent answer-cid (list pu-result))
-                      n-parent))))]))]))
+                      (net-cell-write n answer-cid (list pu-result))
+                      n))))]))]))
 ;; ----------------------------------------
 ;; solve-goal-propagator (entry point)
 ;; ----------------------------------------
