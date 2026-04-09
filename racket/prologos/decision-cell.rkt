@@ -110,7 +110,17 @@
  decisions-state-add-component
  decisions-state-narrow-component
  decisions-state-component-ref
- decisions-state-component-keys)
+ decisions-state-component-keys
+
+ ;; === Compound Commitments Cell (Phase 5.3) ===
+ (struct-out commitments-state)
+ commitments-state?
+ commitments-state-empty
+ commitments-state-merge
+ commitments-state-add-nogood
+ commitments-state-component-ref
+ commitments-state-component-keys
+ commitments-state-write-position)
 
 
 ;; ============================================================
@@ -659,3 +669,69 @@
 ;; List all component group-ids.
 (define (decisions-state-component-keys ds)
   (hash-keys (decisions-state-components ds)))
+
+
+;; ============================================================
+;; Compound Commitments Cell (Phase 5.3)
+;; ============================================================
+;; ONE cell holds ALL per-nogood commitment tracking, component-indexed
+;; by nogood-id. Each component is a commitment-value (hasheq group → #f/aid).
+;; K nogoods → 1 compound cell (not K separate cells).
+;;
+;; The merge dispatches to commitment-merge per-component.
+;; Component-indexed propagators (narrower, contradiction detector) watch
+;; their specific nogood-id via component-paths.
+;;
+;; Design reference: D.10, §5.3
+
+(struct commitments-state (components) #:transparent)
+
+;; Create empty commitments state.
+(define (commitments-state-empty)
+  (commitments-state (hasheq)))
+
+;; Merge: per-component commitment-merge, union keys.
+(define (commitments-state-merge old new)
+  (cond
+    [(eq? old 'infra-bot) new]
+    [(eq? new 'infra-bot) old]
+    [(and (commitments-state? old) (commitments-state? new))
+     (define old-comps (commitments-state-components old))
+     (define new-comps (commitments-state-components new))
+     (define merged
+       (for/fold ([acc old-comps]) ([(nid cv) (in-hash new-comps)])
+         (define existing (hash-ref acc nid #f))
+         (if existing
+             (hash-set acc nid (commitment-merge existing cv))
+             (hash-set acc nid cv))))
+     (commitments-state merged)]
+    [else new]))
+
+;; Add a new nogood's commitment tracking. groups = (listof group-id).
+;; Returns updated commitments-state with a fresh commitment (all #f) for nogood-id.
+(define (commitments-state-add-nogood cs nogood-id groups)
+  (commitments-state
+   (hash-set (commitments-state-components cs) nogood-id
+             (commitment-initial groups))))
+
+;; Read a single nogood's commitment value.
+(define (commitments-state-component-ref cs nogood-id [default #f])
+  (hash-ref (commitments-state-components cs) nogood-id default))
+
+;; List all nogood-ids.
+(define (commitments-state-component-keys cs)
+  (hash-keys (commitments-state-components cs)))
+
+;; Write a commitment position for a specific nogood.
+;; nogood-id: which nogood's commitment to update
+;; group-id: which group position within that commitment
+;; aid: the assumption-id to commit at that position
+;; Returns updated commitments-state.
+(define (commitments-state-write-position cs nogood-id group-id aid)
+  (define comps (commitments-state-components cs))
+  (define cv (hash-ref comps nogood-id #f))
+  (if cv
+      (commitments-state
+       (hash-set comps nogood-id
+                 (commitment-merge cv (hasheq group-id aid))))
+      cs))  ;; unknown nogood — no-op
