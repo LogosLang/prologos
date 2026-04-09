@@ -73,7 +73,8 @@
  ;; Phase 6+7: Variable environment helpers (for tests + consumers)
  logic-var-bot
  build-var-env
- resolve-term)
+ resolve-term
+ gray-code-order)
 
 ;; ========================================
 ;; Evaluation callback

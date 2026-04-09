@@ -237,6 +237,29 @@
 
 
 ;; ============================================================
+;; 4. Gray code ordering
+;; ============================================================
+
+(define gray-code-tests
+  (test-suite "Phase 6d-ii: Gray code"
+
+    (test-case "gray-code-order M=2"
+      (check-equal? (gray-code-order 2) '(0 1)))
+
+    (test-case "gray-code-order M=4"
+      (check-equal? (gray-code-order 4) '(0 1 3 2)))
+
+    (test-case "gray-code-order M=3 (non-power-of-2)"
+      (define order (gray-code-order 3))
+      (check-equal? (length order) 3)
+      ;; All indices present
+      (check-not-false (member 0 order))
+      (check-not-false (member 1 order))
+      (check-not-false (member 2 order)))
+    ))
+
+
+;; ============================================================
 ;; Run all tests
 ;; ============================================================
 
@@ -244,3 +267,4 @@
 (run-tests clause-tests)
 (run-tests multi-clause-tests)
 (run-tests goal-type-tests)
+(run-tests gray-code-tests)
