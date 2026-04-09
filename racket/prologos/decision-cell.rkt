@@ -100,7 +100,17 @@
  assumptions-add
 
  ;; === Counter (Monotone Nat) ===
- counter-merge)
+ counter-merge
+
+ ;; === Compound Decisions Cell (Phase 5.2) ===
+ (struct-out decisions-state)
+ decisions-state?
+ decisions-state-empty
+ decisions-state-merge
+ decisions-state-add-component
+ decisions-state-narrow-component
+ decisions-state-component-ref
+ decisions-state-component-keys)
 
 
 ;; ============================================================
@@ -569,3 +579,83 @@
 
 (define (counter-merge old new)
   (max old new))
+
+
+;; ============================================================
+;; Compound Decisions Cell (Phase 5.2)
+;; ============================================================
+;; ONE cell holds ALL decision state, component-indexed by group-id.
+;; The merge maintains a derived bitmask (OR of committed assumptions'
+;; bit positions) — the merge IS the fan-in aggregation. No propagators
+;; needed for worldview derivation.
+;;
+;; components: hasheq group-id → decision-domain-value
+;; bitmask: exact-nonneg-integer — derived, recomputed by merge
+;; aid->int: (assumption-id → integer) — extracts bit position from assumption.
+;;   Stored in the struct so the merge function can compute bitmasks
+;;   without importing atms.rkt (pure leaf preservation).
+;;
+;; Design reference: D.10, §2.6b, §5.2
+
+(struct decisions-state (components bitmask aid->int) #:transparent)
+
+;; Create empty decisions state. aid->int is the function that extracts
+;; an integer bit position from an assumption-id value.
+(define (decisions-state-empty aid->int)
+  (decisions-state (hasheq) 0 aid->int))
+
+;; Recompute bitmask from all components. O(M) for M groups, each O(1).
+(define (recompute-bitmask components aid->int)
+  (for/fold ([bm 0]) ([(_gid dv) (in-hash components)])
+    (cond
+      [(decision-committed? dv)
+       (define aid (decision-committed-assumption dv))
+       (bitwise-ior bm (bit->mask (aid->int aid)))]
+      [else bm])))
+
+;; Merge: per-component decision-domain-merge, then recompute bitmask.
+;; Handles both same-struct merges and infra-bot initial values.
+(define (decisions-state-merge old new)
+  (cond
+    [(eq? old 'infra-bot) new]
+    [(eq? new 'infra-bot) old]
+    [(and (decisions-state? old) (decisions-state? new))
+     (define aid->int (decisions-state-aid->int new))
+     ;; Merge component maps: union keys, per-key decision-domain-merge
+     (define old-comps (decisions-state-components old))
+     (define new-comps (decisions-state-components new))
+     (define merged
+       (for/fold ([acc old-comps]) ([(gid dv) (in-hash new-comps)])
+         (define existing (hash-ref acc gid #f))
+         (if existing
+             (hash-set acc gid (decision-domain-merge existing dv))
+             (hash-set acc gid dv))))
+     (define bm (recompute-bitmask merged aid->int))
+     (decisions-state merged bm aid->int)]
+    [else new]))
+
+;; Add a component (group-id → decision-domain-value) to the compound cell.
+;; Returns updated decisions-state.
+(define (decisions-state-add-component ds group-id decision-val)
+  (define comps (hash-set (decisions-state-components ds) group-id decision-val))
+  (define bm (recompute-bitmask comps (decisions-state-aid->int ds)))
+  (decisions-state comps bm (decisions-state-aid->int ds)))
+
+;; Narrow a component by excluding an assumption. Returns updated decisions-state.
+(define (decisions-state-narrow-component ds group-id excluded-aid)
+  (define comps (decisions-state-components ds))
+  (define current (hash-ref comps group-id #f))
+  (if current
+      (let* ([narrowed (decision-domain-narrow current excluded-aid)]
+             [new-comps (hash-set comps group-id narrowed)]
+             [bm (recompute-bitmask new-comps (decisions-state-aid->int ds))])
+        (decisions-state new-comps bm (decisions-state-aid->int ds)))
+      ds))  ;; unknown group — no-op
+
+;; Read a single component's decision value.
+(define (decisions-state-component-ref ds group-id [default #f])
+  (hash-ref (decisions-state-components ds) group-id default))
+
+;; List all component group-ids.
+(define (decisions-state-component-keys ds)
+  (hash-keys (decisions-state-components ds)))
