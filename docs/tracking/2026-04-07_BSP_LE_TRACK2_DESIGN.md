@@ -27,7 +27,7 @@
 | 10 | Solver config wiring | ✅ | `6fe6679c`. :execution (BSP/Gauss-Seidel), :tabling (:off skips registry), :timeout (fuel from ms). All knobs operational. |
 | 11 | Unified speculation + parity validation | ✅ | D.13. `f1f71412` tagged-only + union fix. `d0074a74` elab-bridge TMS removed. `58fc137b` stack fallback removed. Root cause: TMS nesting hid tagged path. Fix: tagged-only promotion + combined worldview bitmask + same-specificity merge. Commit=O(1) worldview persistence. Retract=O(1) bit clear + snapshot restore (scaffolding for off-network stores, PPN 4C scope). current-speculation-stack RETIRED. |
 | T | Dedicated test files | ⬜ | Per-phase |
-| PIR | Post-implementation review | ⬜ | |
+| PIR | Post-implementation review | ✅ | `docs/tracking/2026-04-10_BSP_LE_TRACK2_PIR.md`. A/B: 13/15 no regression, 2 flagged (high CV). Acceptance: <15% MET. |
 
 ---
 
