@@ -214,61 +214,54 @@
      ;; no synchronous restore needed, no timing gap. The speculation stack IS the
      ;; worldview. S(-1) becomes GC (cleaning invisible entries), not correctness.
      ;;
-     ;; DUAL-WRITE (Phase 5.9d): Two speculation paths active simultaneously:
-     ;; 1. TMS path: parameterize current-speculation-stack (for typing-propagators
-     ;;    per-fire scoping — stays until Phase 6 PU isolation)
-     ;; 2. Tagged-cell-value path: write assumption bitmask to elaboration network's
-     ;;    worldview cache cell. Tagged cells auto-tag writes via net-cell-write.
-     ;;    Sequential speculation only (elab-speculation-bridge is sequential).
+     ;; Phase 11.4-6: UNIFIED speculation via worldview cache.
+     ;; TMS path REMOVED. Tagged-cell-value is the sole mechanism.
      ;;
-     ;; Phase 5.9d: Write assumption's bit to the elaboration network's worldview cache.
-     ;; This enables tagged-cell-value auto-tagging for cells promoted to tagged.
+     ;; Write assumption's bit to the elaboration network's worldview cache.
+     ;; This tags all cell writes during the thunk via net-cell-write's tagged path.
+     ;; Commit = worldview cache retains the bit (no explicit operation).
+     ;; Retract = clear the bit from worldview cache (one cell write).
      (define elab-net-box (current-prop-net-box))
-     (when (and elab-net-box (unbox elab-net-box) (assumption-id? hyp-id))
+     (define hyp-bit
+       (and (assumption-id? hyp-id)
+            (arithmetic-shift 1 (assumption-id-n hyp-id))))
+     (when (and elab-net-box (unbox elab-net-box) hyp-bit)
        (define enet (unbox elab-net-box))
        (define pnet (elab-network-prop-net enet))
        (define current-wv (net-cell-read-raw pnet worldview-cache-cell-id))
-       (define new-wv (bitwise-ior (if (number? current-wv) current-wv 0)
-                                    (arithmetic-shift 1 (assumption-id-n hyp-id))))
+       (define new-wv (bitwise-ior (if (number? current-wv) current-wv 0) hyp-bit))
        (define pnet* (net-cell-write pnet worldview-cache-cell-id new-wv))
        (set-box! elab-net-box (struct-copy elab-network enet [prop-net pnet*])))
      ;;
-     ;; TMS path: Push at ALL depths (nested speculation too).
+     ;; Run the speculation thunk with worldview bitmask set.
+     ;; current-worldview-bitmask enables net-cell-read/write to use the bit
+     ;; for tagged-cell-value operations during the thunk.
      (define result
-       (parameterize ([current-speculation-stack
-                       (cons hyp-id (current-speculation-stack))])
-         (thunk)))
+       (if hyp-bit
+           (parameterize ([current-worldview-bitmask
+                           (bitwise-ior (current-worldview-bitmask) hyp-bit)])
+             (thunk))
+           (thunk)))
      (cond
        [(success? result)
-        ;; Track 6 Phase 3: Commit-on-success — promote TMS branch values to base.
-        ;; All cell writes during the thunk went to TMS branches at hyp-id depth.
-        ;; Now promote them so depth-0 reads see the committed values.
-        ;; The box holds an elab-network; unwrap to prop-network, commit, rewrap.
-        (define net-box (current-prop-net-box))
-        (when net-box
-          (define enet (unbox net-box))
-          (define committed-pnet
-            (net-commit-assumption (elab-network-prop-net enet) hyp-id))
-          (set-box! net-box (struct-copy elab-network enet [prop-net committed-pnet])))
+        ;; Phase 11.4: Commit = NOTHING.
+        ;; Worldview cache retains the assumption's bit. Future reads via
+        ;; net-cell-read find tagged entries visible under the committed worldview.
+        ;; No net-commit-assumption. No fold. O(1).
         result]
        [else
-        ;; Track 6 Phase 4: TMS retraction — remove the failed assumption's branches.
-        ;; This cleans TMS branch metadata. restore-meta-state! follows to handle
-        ;; full structural rollback (meta-info, id-map, infrastructure cells).
-        ;; Phase 5b finding: TMS retraction alone is insufficient because:
-        ;; - Infrastructure cells (constraint store, unsolved-metas) use accumulative
-        ;;   merge, not TMS branches — constraints added during speculation aren't retracted
-        ;; - meta-info CHAMP in elab-network isn't TMS-managed — solved metas persist
-        ;; Full retirement requires making all speculation-scoped state TMS-aware.
-        (let ([net-box (current-prop-net-box)])
-          (when net-box
-            (define enet (unbox net-box))
-            (define retracted-pnet
-              (net-retract-assumption (elab-network-prop-net enet) hyp-id))
-            (set-box! net-box (struct-copy elab-network enet [prop-net retracted-pnet]))))
-        ;; Track 7 Phase 5: Record retraction for S(-1) GC pass.
-        ;; S(-1) will clean invisible entries — but correctness doesn't depend on it.
-        ;; Worldview-aware reads (B1) make retracted entries invisible immediately.
+        ;; Phase 11.5: Retract = clear the bit from worldview cache.
+        ;; Tagged entries from the failed branch become invisible (bitmask
+        ;; not ⊆ worldview). S(-1) can clean up dead entries lazily.
+        (when (and elab-net-box (unbox elab-net-box) hyp-bit)
+          (define enet (unbox elab-net-box))
+          (define pnet (elab-network-prop-net enet))
+          (define current-wv (net-cell-read-raw pnet worldview-cache-cell-id))
+          (define cleared-wv (bitwise-and (if (number? current-wv) current-wv 0)
+                                           (bitwise-not hyp-bit)))
+          (define pnet* (net-cell-write pnet worldview-cache-cell-id cleared-wv))
+          (set-box! elab-net-box (struct-copy elab-network enet [prop-net pnet*])))
+        ;; Record retraction for S(-1) GC pass.
         (record-assumption-retraction! hyp-id)
         ;; Track 8 Phase B1: restore-meta-state! RETIRED.
         ;; Worldview-aware reads filter by speculation stack — sibling branch
