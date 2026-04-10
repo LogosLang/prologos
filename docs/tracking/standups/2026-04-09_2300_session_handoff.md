@@ -81,12 +81,27 @@ Not just the value. Without updating the merge function, the original merge (e.g
 3. **Phase completion checklist is BLOCKING**: Vision Alignment Gate + Network Reality Check before marking a phase complete. Architecture tests, not just behavioral parity.
 4. **"Validated Is Not Deployed"**: infrastructure exists alongside old path is NOT completion. Deployment = old path removed or honestly labeled as scaffolding with retirement plan.
 
+## Tooling Added This Session
+
+- `tools/check-parens.sh` — run after EVERY `.rkt` edit, before `raco make`. Instant delimiter balance check using Racket's reader. Eliminates bracket-balancing trial-and-error.
+- `tools/bench-lib.rkt` — precompile-modules! now compiles test files (not just driver.rkt). Eliminates stale `.zo` class of false failures.
+
+## Next Session: Phase 11
+
+Phase 11 scope:
+1. **TMS merge gap investigation**: why does `<Nat | Bool>` regress when TMS parameterize removed? The tagged-cell-value merge on the attribute-map cell doesn't replicate TMS tree isolation. Start by adding a focused debug test that isolates the nested speculation case.
+2. **DFS ↔ propagator parity**: run existing solver test suite through `:strategy :atms` path. Identify which tests fail and categorize (substitution threading, NAF, recursive clauses).
+3. **Inert-dependent data review**: run adversarial benchmarks, check `perf-inc-inert-dependent-skip!` counters.
+4. **`:auto` → propagator**: once parity gaps are understood and addressed, switch `:auto` from DFS to propagator-native.
+
 ## File Index (Hot-Load for Next Session)
 
 - Design doc: `docs/tracking/2026-04-07_BSP_LE_TRACK2_DESIGN.md` (D.12)
+- Handoff Protocol: `docs/tracking/principles/HANDOFF_PROTOCOL.org` (updated with rules docs)
 - Dailies: `docs/tracking/standups/2026-04-09_dailies.md`
-- Propagator solver: `racket/prologos/relations.rkt` (install-goal-propagator, install-clause-propagators, solve-goal-propagator)
+- Propagator solver: `racket/prologos/relations.rkt` (install-goal-propagator, install-clause-propagators, solve-goal-propagator, scope cells, tabling)
 - Compound cells: `racket/prologos/decision-cell.rkt` (decisions-state, commitments-state, scope-cell)
 - Solver context: `racket/prologos/atms.rkt` (solver-context, solver-state, table operations)
-- Propagator core: `racket/prologos/propagator.rkt` (worldview cache, fire-once, broadcast, promote-cell-to-tagged)
+- Propagator core: `racket/prologos/propagator.rkt` (worldview cache, fire-once, broadcast, promote-cell-to-tagged, current-worldview-bitmask)
 - Tests: `racket/prologos/tests/test-propagator-solver.rkt`, `test-solver-context.rkt`
+- Process rules: `.claude/rules/` (propagator-design, on-network, structural-thinking, testing, pipeline)
