@@ -704,7 +704,9 @@
                  merge-fn-raw))
            (tagged-cell-read v wv-bitmask domain-merge)]
           [(tms-cell-value? v)
-           ;; Legacy TMS path — still needed during Phase 4 migration
+           ;; Phase 11: TMS fallback — retained for backward compat with any
+           ;; cells that might still be TMS-wrapped (e.g., from old test fixtures).
+           ;; Active consumers use tagged-cell-value exclusively.
            (tms-read v (current-speculation-stack))]
           [else v]))))
 

@@ -48,9 +48,7 @@
  record-speculation-failure!
  ;; Phase D: ATMS integration
  current-command-atms
- ;; Track 4 Phase 1: Speculation stack (TMS cell navigation)
- ;; Re-exported from propagator.rkt (defined there to avoid circular deps)
- current-speculation-stack
+ ;; Phase 11: current-speculation-stack RETIRED. Worldview bitmask only.
  ;; GDE-1: Context assumptions (user annotations)
  current-context-assumptions
  add-context-assumption!

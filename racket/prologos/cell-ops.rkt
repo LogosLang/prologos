@@ -77,19 +77,11 @@
      (cond
        [(not aid) #t]  ;; #f assumption = depth-0 = always visible
        [else
-        ;; Phase 9b-2: check per-propagator worldview bitmask first.
-        ;; When non-zero, entries tagged with the same bitmask integer
-        ;; (from 9b-1's current-speculation-assumption) are visible.
-        ;; Fallback: check speculation stack (legacy TMS path).
+        ;; Phase 11: worldview bitmask only. TMS stack fallback removed.
+        ;; Entry visible if its aid equals the current bitmask (from
+        ;; current-speculation-assumption, which reads worldview bitmask).
         (define bm (current-worldview-bitmask))
-        (if (not (zero? bm))
-            ;; Per-propagator worldview: entry is visible if its aid
-            ;; equals the current bitmask (set by 9b-1) or is #f (depth-0).
-            (equal? aid bm)
-            ;; Legacy: check speculation stack
-            (and (pair? (current-speculation-stack))
-                 (memq aid (current-speculation-stack))
-                 #t))])]))
+        (and (not (zero? bm)) (equal? aid bm))])]))
 
 ;; Look up a key in a CHAMP with worldview filtering.
 ;; Returns the unwrapped value if visible, or #f if absent or invisible.
