@@ -3,7 +3,7 @@
 **Date**: 2026-04-10
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: DFS↔Propagator parity validation, fact-row isolation, NAF/guard as async propagators, parallel executor default, `:auto` deployment
-**Status**: D.2 — revised from design conversation (async NAF, set-equality parity, data-driven thresholds, expanded Phase 0)
+**Status**: D.3 — hypercube-guided optimality lens + Phase 0 investigation scope
 **Predecessor**: [BSP-LE Track 2 PIR](2026-04-10_BSP_LE_TRACK2_PIR.md) — ATMS Solver + Cell-Based TMS
 **Design doc**: [BSP-LE Track 2 Design](2026-04-07_BSP_LE_TRACK2_DESIGN.md) (D.13, ~2000 lines)
 **Prior art**: [Track 2 Session Handoff](standups/2026-04-09_2300_session_handoff.md), [Track 2 PIR §10-§12](2026-04-10_BSP_LE_TRACK2_PIR.md)
@@ -221,7 +221,47 @@ Currently, guard evaluates its condition synchronously during installation and i
 
 **Termination**: Guard evaluation is pure (no side effects, no recursion). Fires once when inputs resolve.
 
-### §3.4 Conjunction — Installation Order vs Execution Order
+### §3.4 Hypercube-Guided Optimality Lens (D.3)
+
+The Hypercube Conversation (standup-2026-04-08.org) establishes that **the Hasse diagram of ANY lattice is the communication graph for optimal parallel computation on that lattice.** The hypercube Q_n (Hasse diagram of the Boolean lattice 2^n) is the canonical case. Our ATMS worldview space IS Q_n — structural identity, not metaphor.
+
+This is formal ground for the second half of the Hyperlattice Conjecture: **optimality**. The Hasse diagram IS the optimal parallel decomposition. This lens must guide every design decision in this track.
+
+#### Fact-Row Branching (Phase 1) through the Hypercube Lens
+
+K fact rows = K-bit Boolean lattice Q_{log₂ K}. The exploration of all K fact-row results IS a traversal of Q_{log₂ K}. Gray code traversal (already implemented for multi-clause in Track 2 via `gray-code-order`) maximizes CHAMP structural sharing between adjacent fact-row explorations — each step changes one bit, adjacent states share almost all network state.
+
+For K=8 fact rows, Q_3 has diameter 3. Gray code traversal visits all 8 results changing one bit per step. The BSP scheduler fires all 8 fact-row propagators concurrently (same round). The answer accumulator merges results via set-union (monotone, CALM-safe).
+
+The micro-benchmark in Phase 0b should measure: does Gray code ordering of fact-row PUs actually improve CHAMP sharing compared to arbitrary ordering? At what K does the difference become measurable?
+
+#### BSP Barrier Synchronization (Phase 4) through the Hypercube Lens
+
+For T threads, the BSP barrier is an all-reduce operation. Flat barrier: all threads synchronize at a single point (contention). Hypercube all-reduce: log₂(T) rounds of pairwise synchronization, each thread communicates with one partner per round. Optimal for T > 4-8 threads.
+
+The existing `make-parallel-thread-fire-all` partitions work per core count but uses flat thread joins (channel collect). Phase 0c should measure: for M-series Macs with 8-10 performance cores, is the hypercube pairwise-sync pattern faster than flat barrier?
+
+The all-reduce pattern: round k, each thread communicates with the thread differing in bit k. After log₂(T) rounds, all threads hold the global result. This IS the BSP superstep synchronization — merge all thread-local cell writes into the global network state.
+
+#### Async NAF (Phase 2) through the Hypercube Lens
+
+NAF sub-computation is a **Pocket Universe**: Q_1 decomposition (NAF succeeded / NAF failed). The inner BSP runs on a forked network (Q_{n-1} × Q_1 decomposition — fixing the NAF bit to "evaluate", leaving all other assumptions free). Completion signal is a broadcast from the inner PU to the outer network — writing to the NAF-result cell.
+
+For multiple concurrent NAF goals (rare but possible), each is an independent Q_1 decomposition. K concurrent NAFs = K independent sub-computations, each writing to its own NAF-result cell. The outer conjunction residuates on all K cells — a fan-in that IS the merge of K ternary lattice values.
+
+#### Recursive Decomposition and fork-prop-network
+
+`fork-prop-network` IS the Q_n = Q_{n-1} × Q_1 decomposition. Fixing one dimension (one assumption) and exploring the remaining (n-1)-dimensional sub-hypercube. CHAMP structural sharing makes this O(1) fork — the two sub-hypercubes share almost all state (only the cells affected by the fixed assumption differ).
+
+This recursive decomposition is the structural basis for:
+- Multi-clause branching (one dimension per alternative)
+- Fact-row branching (one dimension per row)
+- NAF evaluation (one dimension: inner goal succeeds/fails)
+- Speculative type checking (one dimension per union branch)
+
+The hypercube structure unifies all these as Q_1 decompositions composed into Q_n. The Hasse diagram IS the parallel exploration structure.
+
+### §3.5 Conjunction — Installation Order vs Execution Order
 
 `install-conjunction` uses `for/fold` (sequential installation). This is acceptable because:
 - Installation order ≠ execution order. Propagators fire in BSP rounds regardless of installation order.
@@ -382,6 +422,10 @@ Phase 0 is design input, not validation. Its findings may change Phases 1-4 scop
    - Measure: wall time, thread creation overhead, BSP round count
 
 3. **Fuel consumption profile**: Run adversarial benchmarks with verbose output, measure fuel consumption per relation. This informs whether shared-fuel or per-fork-fuel is better for NAF.
+
+4. **Gray code vs arbitrary ordering**: For multi-clause and fact-row branching, measure CHAMP allocation count with Gray code ordering vs arbitrary bit assignment. The hypercube lens predicts Gray code should minimize CHAMP structural divergence between adjacent branches. Measure at N=4, 8, 16.
+
+5. **Hypercube all-reduce vs flat barrier**: For the parallel thread executor, measure BSP barrier overhead with flat join (current) vs hypercube pairwise-sync pattern. Test at T=2, 4, 8 threads on M-series hardware.
 
 #### Phase 0c: A/B Executor Comparison (~1h)
 
