@@ -220,8 +220,13 @@
      ;; Write assumption's bit to the elaboration network's worldview cache.
      ;; This tags all cell writes during the thunk via net-cell-write's tagged path.
      ;; Commit = worldview cache retains the bit (no explicit operation).
-     ;; Retract = clear the bit from worldview cache (one cell write).
+     ;; Retract = clear bit + restore elab-network snapshot.
+     ;;
+     ;; Save elab-network snapshot for failure rollback. Off-network stores
+     ;; (meta-info CHAMP, constraint store, id-map) aren't worldview-filtered —
+     ;; they need snapshot/restore. Scaffolding until these migrate to cells.
      (define elab-net-box (current-prop-net-box))
+     (define saved-enet (and elab-net-box (unbox elab-net-box)))
      (define hyp-bit
        (and (assumption-id? hyp-id)
             (arithmetic-shift 1 (assumption-id-n hyp-id))))
@@ -250,9 +255,13 @@
         ;; No net-commit-assumption. No fold. O(1).
         result]
        [else
-        ;; Phase 11.5: Retract = clear the bit from worldview cache.
-        ;; Tagged entries from the failed branch become invisible (bitmask
-        ;; not ⊆ worldview). S(-1) can clean up dead entries lazily.
+        ;; Phase 11.5: Retract = restore elab-network snapshot + clear worldview bit.
+        ;; Snapshot restore handles off-network stores (meta-info, constraints, id-map).
+        ;; Worldview bit clear handles tagged-cell-value visibility.
+        ;; Scaffolding: off-network stores will migrate to cells in future tracks.
+        (when (and elab-net-box saved-enet)
+          (set-box! elab-net-box saved-enet))
+        ;; Clear the assumption's bit from the restored network's worldview cache
         (when (and elab-net-box (unbox elab-net-box) hyp-bit)
           (define enet (unbox elab-net-box))
           (define pnet (elab-network-prop-net enet))
