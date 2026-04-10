@@ -38,6 +38,8 @@
  store-has-negation?
  stratified-solve-goal
  stratified-explain-goal
+ ;; Phase 0a (Track 2B): Strategy override for parity testing
+ current-solver-strategy-override
  ;; D4 structured answer type (re-exported from provenance.rkt via relations.rkt)
  (struct-out answer-result)
  (struct-out provenance-data)
@@ -167,6 +169,11 @@
 ;; query-vars: (listof symbol)
 ;;
 ;; Returns: (listof hasheq) — each maps query var names to values
+;; Track 2B Phase 0a: Strategy override for parity testing.
+;; When non-#f, overrides the per-expression solver-config strategy.
+;; Allows running the entire test suite under :atms without modifying tests.
+(define current-solver-strategy-override (make-parameter #f))
+
 (define (stratified-solve-goal config store goal-name goal-args query-vars)
   ;; Well-founded semantics dispatch
   (define semantics (solver-config-semantics config))
@@ -183,7 +190,9 @@
      ;; :depth-first → DFS (existing solve-goal)
      ;; :atms → propagator-native (solve-goal-propagator)
      ;; :auto (default) → propagator-native when available, DFS fallback
-     (define strategy (solver-config-strategy config))
+     ;; Track 2B: current-solver-strategy-override takes precedence if set.
+     (define strategy (or (current-solver-strategy-override)
+                          (solver-config-strategy config)))
      (define use-propagator?
        (case strategy
          [(atms) #t]

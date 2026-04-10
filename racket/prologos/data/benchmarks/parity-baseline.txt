@@ -1,0 +1,21 @@
+# BSP-LE Track 2B Phase 0a: Parity Baseline
+# file | dfs | atms
+tests/test-relational-e2e.rkt | PASS | PASS
+tests/test-stratified-eval.rkt | PASS | PASS
+tests/test-bound-args-01.rkt | PASS | PASS
+tests/test-relational-types.rkt | PASS | PASS
+tests/test-generic-arith-03.rkt | PASS | PASS
+tests/test-punify-integration.rkt | PASS | PASS
+tests/test-relations-runtime.rkt | PASS | PASS
+tests/test-solver-context.rkt | PASS | PASS
+tests/test-solver-config.rkt | PASS | PASS
+tests/test-propagator-solver.rkt | PASS | PASS
+tests/test-global-constraints-01.rkt | PASS | PASS
+tests/test-search-heuristics-01.rkt | PASS | PASS
+tests/test-atms-types.rkt | PASS | PASS
+tests/test-cfa-analysis-02.rkt | PASS | PASS
+tests/test-wf-engine-01.rkt | PASS | PASS
+tests/test-wf-benchmark-01.rkt | PASS | PASS
+tests/test-wf-comparison-01.rkt | PASS | PASS
+tests/test-wf-errors-01.rkt | PASS | PASS
+tests/test-wf-literature-01.rkt | PASS | PASS

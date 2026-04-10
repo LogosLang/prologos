@@ -1,0 +1,350 @@
+ns benchmarks::comparative::parity-adversarial
+
+;; ============================================================
+;; BSP-LE Track 2B Phase 0b: Parity + Parallel Search Adversarial
+;; ============================================================
+;;
+;; Designed to find edge cases where DFS and propagator solvers diverge,
+;; measure fact-row branching overhead, stress parallel execution patterns,
+;; and provide data for open design questions.
+;;
+;; Run with bench-ab.rkt for A/B comparison:
+;;   racket tools/bench-ab.rkt benchmarks/comparative/parity-adversarial.prologos --runs 15
+;;
+;; Run with strategy override to compare DFS vs ATMS:
+;;   racket tools/bench-ab.rkt --ref HEAD benchmarks/comparative/parity-adversarial.prologos --runs 15
+;;   (with current-solver-strategy-override parameterized in each run)
+;;
+;; Sections:
+;;   P1:  Fact-row scaling (N=1,2,4,8,16) — PU overhead threshold
+;;   P2:  Multi-result set-equality — ordering divergence detection
+;;   P3:  NAF edge cases — DFS/propagator semantic parity
+;;   P4:  Guard with inner bodies — completeness gap
+;;   P5:  Recursive relations (depth stress) — fuel vs depth-limit
+;;   P6:  Conjunction ordering — clause-order independence
+;;   P7:  Cross-clause variable sharing — isolation stress
+;;   P8:  Nested branching + NAF — compound speculation
+;;   P9:  Fact + clause mixed relations — unified treatment
+;;   P10: Wide fan-out (32 clauses) — parallel scaling stress
+
+;; ── P1: Fact-row scaling ──
+;; Measures propagator overhead for pure fact-row queries at varying N.
+;; Key data: at what N does PU branching pay for itself?
+
+;; N=1: single fact
+defr fact1 [?x]
+  || 42
+
+solve (fact1 ?x)
+
+;; N=2: two facts
+defr fact2 [?x]
+  || 1
+     2
+
+solve (fact2 ?x)
+
+;; N=4: four facts
+defr fact4 [?x]
+  || 10
+     20
+     30
+     40
+
+solve (fact4 ?x)
+
+;; N=8: eight facts
+defr fact8 [?x]
+  || 1
+     2
+     3
+     4
+     5
+     6
+     7
+     8
+
+solve (fact8 ?x)
+
+;; N=16: sixteen facts
+defr fact16 [?x ?y]
+  || 1  "a"
+     2  "b"
+     3  "c"
+     4  "d"
+     5  "e"
+     6  "f"
+     7  "g"
+     8  "h"
+     9  "i"
+     10 "j"
+     11 "k"
+     12 "l"
+     13 "m"
+     14 "n"
+     15 "o"
+     16 "p"
+
+;; All 16
+solve (fact16 ?x ?y)
+
+;; Specific match (should return 1 result regardless of N)
+solve (fact16 8 ?y)
+
+;; ── P2: Multi-result set-equality ──
+;; Relations that produce multiple results in different orders.
+;; DFS returns in clause-order. Propagator returns in bitmask-order.
+;; Tests set-equality, not ordered equality.
+
+defr color-pair [?c1 ?c2]
+  &> (= c1 "red") (= c2 "blue")
+  &> (= c1 "blue") (= c2 "red")
+  &> (= c1 "green") (= c2 "yellow")
+
+;; 3 results. DFS: red/blue first. Propagator: bitmask order.
+solve (color-pair ?c1 ?c2)
+
+;; Same query twice — results should be identical (set-equal)
+solve (color-pair ?c1 ?c2)
+
+;; Wider: 5 clauses producing 5 distinct results
+defr five-way [?x ?y]
+  &> (= x 1) (= y "one")
+  &> (= x 2) (= y "two")
+  &> (= x 3) (= y "three")
+  &> (= x 4) (= y "four")
+  &> (= x 5) (= y "five")
+
+solve (five-way ?x ?y)
+
+;; Partial binding narrows to 1 result
+solve (five-way 3 ?y)
+
+;; ── P3: NAF edge cases ──
+;; Finds semantic divergence between DFS NAF and propagator NAF.
+
+defr ground-vals [?x]
+  || 10
+     20
+     30
+
+;; NAF on value NOT in facts (should succeed)
+solve (rel [?r]
+  (= ?r "yes")
+  (not (ground-vals 15)))
+
+;; NAF on value IN facts (should fail → no results)
+solve (rel [?r]
+  (= ?r "yes")
+  (not (ground-vals 20)))
+
+;; NAF with variable: ground after earlier unification
+solve (rel [?x ?label]
+  (= ?x 15)
+  (not (ground-vals ?x))
+  (= ?label "passed"))
+
+;; NAF with unground variable — DFS may differ from propagator here
+;; This is a known edge case: unground NAF semantics vary by solver
+solve (rel [?x ?label]
+  (ground-vals ?x)
+  (not (ground-vals 15))
+  (= ?label "both-passed"))
+
+;; NAF interleaved with facts from another relation
+defr other-vals [?x]
+  || 15
+     25
+
+solve (rel [?x ?y]
+  (ground-vals ?x)
+  (other-vals ?y)
+  (not (= ?x ?y)))
+
+;; ── P4: Guard with inner bodies ──
+;; Guards that gate further goals. Tests guard-as-propagator completeness.
+
+defr pos-neg [?n ?label]
+  &> (guard [int> n 0]) (= label "positive")
+  &> (guard [int< n 0]) (= label "negative")
+  &> (guard [int= n 0]) (= label "zero")
+
+solve (pos-neg 5 ?label)
+solve (pos-neg 0 ?label)
+solve (pos-neg -3 ?label)
+
+;; Guard with compound body after guard
+defr classify [?n ?category ?doubled]
+  &> (guard [int> n 10]) (= category "big") (is doubled [int* n 2])
+  &> (guard [int< n 10]) (= category "small") (is doubled [int* n 3])
+
+solve (classify 15 ?cat ?dbl)
+solve (classify 3 ?cat ?dbl)
+
+;; ── P5: Recursive relations (depth stress) ──
+;; Tests fuel-based termination vs DFS depth-limit.
+;; DFS: DEFAULT-DEPTH-LIMIT = 100.
+;; Propagator: fuel = 1,000,000 firings.
+
+defr ancestor [?x ?y]
+  || "alice" "bob"
+     "bob" "carol"
+     "carol" "dave"
+     "dave" "eve"
+  &> (ancestor x ?mid) (ancestor mid y)
+
+;; Direct: 4 solutions from facts
+solve (ancestor "alice" ?y)
+
+;; Transitive: should find "alice" → "dave" via bob → carol → dave
+solve (ancestor "alice" "dave")
+
+;; Deeper transitive
+solve (ancestor "alice" "eve")
+
+;; All ancestors (potentially expensive with recursive clause)
+solve (ancestor ?x ?y)
+
+;; ── P6: Conjunction ordering ──
+;; Same goals in different orders must produce same results.
+;; Tests clause-order independence.
+
+defr lookup [?key ?val]
+  || "a" 1
+     "b" 2
+     "c" 3
+
+;; Order 1: lookup then unify
+solve (rel [?k ?v ?label]
+  (lookup ?k ?v)
+  (= ?label "found"))
+
+;; Order 2: unify then lookup (commuted)
+solve (rel [?k ?v ?label]
+  (= ?label "found")
+  (lookup ?k ?v))
+
+;; Order 3: interleaved
+solve (rel [?k ?v ?label]
+  (= ?k "b")
+  (lookup ?k ?v)
+  (= ?label "specific"))
+
+;; ── P7: Cross-clause variable sharing ──
+;; Multiple clauses unifying overlapping variables.
+;; Tests branch isolation in propagator model.
+
+defr produce [?x ?y]
+  &> (= x 1) (= y 10)
+  &> (= x 2) (= y 20)
+  &> (= x 3) (= y 30)
+
+defr consume [?a ?b ?sum]
+  &> (produce a b) (is sum [int+ a b])
+
+;; Should produce 3 results: {1,10,11}, {2,20,22}, {3,30,33}
+solve (consume ?a ?b ?sum)
+
+;; Double consumption: results from first feed into second
+defr double-consume [?x ?y ?z ?total]
+  &> (produce x y)
+     (produce x z)
+     (is total [int+ y z])
+
+;; If both produce calls bind x to same value (correlated)
+;; → 3 results: {1,10,10,20}, {2,20,20,40}, {3,30,30,60}
+solve (double-consume ?x ?y ?z ?total)
+
+;; ── P8: Nested branching + NAF ──
+;; Compound speculation: branching inside NAF scope.
+
+defr valid [?x]
+  || 1
+     2
+     3
+
+defr invalid [?x]
+  || 4
+     5
+
+;; Branch (valid) + NAF (not invalid): all valid should pass
+solve (rel [?x ?label]
+  (valid ?x)
+  (not (invalid ?x))
+  (= ?label "ok"))
+
+;; Branch (from valid) + NAF where one branch fails
+defr mixed-valid [?x]
+  || 1
+     4     ;; this is in invalid → NAF should block it
+     3
+
+solve (rel [?x]
+  (mixed-valid ?x)
+  (not (invalid ?x)))
+
+;; ── P9: Fact + clause mixed relations ──
+;; A relation with BOTH fact rows and clause bodies.
+;; Tests unified treatment of facts and clauses.
+
+defr hybrid [?x ?y]
+  || 1 "fact-a"
+     2 "fact-b"
+  &> (= x 3) (= y "clause-c")
+  &> (= x 4) (is y "clause-d")
+
+;; Should produce 4 results
+solve (hybrid ?x ?y)
+
+;; Specific match hitting a fact
+solve (hybrid 1 ?y)
+
+;; Specific match hitting a clause
+solve (hybrid 3 ?y)
+
+;; ── P10: Wide fan-out (32 clauses) ──
+;; Stress test for parallel clause execution.
+;; 32 clauses = 5-bit hypercube Q_5.
+
+defr wide32 [?x ?y]
+  &> (= x 1) (= y "a")
+  &> (= x 2) (= y "b")
+  &> (= x 3) (= y "c")
+  &> (= x 4) (= y "d")
+  &> (= x 5) (= y "e")
+  &> (= x 6) (= y "f")
+  &> (= x 7) (= y "g")
+  &> (= x 8) (= y "h")
+  &> (= x 9) (= y "i")
+  &> (= x 10) (= y "j")
+  &> (= x 11) (= y "k")
+  &> (= x 12) (= y "l")
+  &> (= x 13) (= y "m")
+  &> (= x 14) (= y "n")
+  &> (= x 15) (= y "o")
+  &> (= x 16) (= y "p")
+  &> (= x 17) (= y "q")
+  &> (= x 18) (= y "r")
+  &> (= x 19) (= y "s")
+  &> (= x 20) (= y "t")
+  &> (= x 21) (= y "u")
+  &> (= x 22) (= y "v")
+  &> (= x 23) (= y "w")
+  &> (= x 24) (= y "x")
+  &> (= x 25) (= y "y")
+  &> (= x 26) (= y "z")
+  &> (= x 27) (= y "aa")
+  &> (= x 28) (= y "bb")
+  &> (= x 29) (= y "cc")
+  &> (= x 30) (= y "dd")
+  &> (= x 31) (= y "ee")
+  &> (= x 32) (= y "ff")
+
+;; All 32 results
+solve (wide32 ?x ?y)
+
+;; Specific match in middle
+solve (wide32 16 ?y)
+
+;; Specific match at end
+solve (wide32 32 ?y)
