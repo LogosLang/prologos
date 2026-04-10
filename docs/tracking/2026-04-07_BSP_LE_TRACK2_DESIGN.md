@@ -3,7 +3,7 @@
 **Date**: 2026-04-07
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: Cell-Based TMS (folding Track 1.5) + ATMS Solver + Non-Recursive Tabling
-**Status**: D.12 — Phase 8 on-network tabling (table-store dissolved, registry cell, one-true-tabling, emergent completion, SRE lattice lens, self-hosting path)
+**Status**: D.13 — Phase 11 unified speculation (TMS nesting root cause found, worldview cache persistence IS commit, O(1) commit/retract via cell writes)
 **Self-critique**: [P/R/M Analysis](2026-04-07_BSP_LE_TRACK2_SELF_CRITIQUE.md) (17 findings, D.2)
 **External critique**: [Architect Review](2026-04-08_BSP_LE_TRACK2_EXTERNAL_CRITIQUE.md) (16 findings, D.3)
 **Stage 1/2**: [Research + Audit](../research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md)
@@ -25,7 +25,7 @@
 | 8 | On-network tabling | ✅ | 8.1-3: `f2410a57` compound scope cells. 8.4: `54a5fce4` table registry cell. 8.5-7: `5261df52` producer/consumer. Test: `b9f2862d`. One-true-tabling. Vision gates ✅. 17 tests. |
 | 9 | Strategy dispatch + parameter migration | ✅ | 9a: `97d8048d` :strategy dispatch (auto→DFS, atms→propagator). 9b-1: `5af7f1aa` metavar-store reads worldview bitmask. 9b-2: `48c718b4` cell-ops reads worldview bitmask. 9b-4: `29344a04` typing-propagators TMS removal REVERTED — union type regression. current-speculation-stack retained (dual-write). Full retirement → Phase 11. |
 | 10 | Solver config wiring | ✅ | `6fe6679c`. :execution (BSP/Gauss-Seidel), :tabling (:off skips registry), :timeout (fuel from ms). All knobs operational. |
-| 11 | Parity validation + inert-dependent checkpoint | ⬜ | DFS ↔ propagator-native equivalence. R7 hotspot. **CHECKPOINT**: review inert-dependent data → S(-1) lattice-narrowing cleanup if warranted. |
+| 11 | Unified speculation + parity validation | ⬜ | D.13: TMS nesting root cause → tagged-only promotion. Worldview cache persistence IS commit (O(1)). Remove TMS, current-speculation-stack, net-commit/retract-assumption. Parity validation. Inert-dependent checkpoint. |
 | T | Dedicated test files | ⬜ | Per-phase |
 | PIR | Post-implementation review | ⬜ | |
 
@@ -1748,42 +1748,97 @@ Table registry as a cell pioneers the pattern for self-hosting. Every Racket `ma
 
 **Test coverage**: Each configuration produces correct results. `:parallel` vs `:sequential` produce same answers (determinism). `:tabling :off` does not table. `:tabling :by-default` tables all tabled predicates.
 
-### Phase 11: Parity Validation
+### Phase 11: Unified Speculation + Parity Validation (D.13)
 
-**What changes**:
+**D.13**: Unifies the TMS and tagged-cell-value speculation mechanisms into ONE path. The root cause of the Phase 9b-4 regression (union type `<Nat | Bool>` = Bool instead of Type 0) was NOT a gap in tagged-cell-value semantics — it was the **nesting order** of dual promotion. `promote-cell-to-tms` wrapped the tagged-cell-value INSIDE a tms-cell-value: `(tms-cell-value (tagged-cell-value ...) (hasheq))`. `net-cell-read` dispatches on the OUTER type — TMS, not tagged. The tagged path was invisible to reads.
 
-1. **Full test suite with both engines**: Run every existing solver test under both `:strategy :depth-first` (DFS, existing behavior) and `:strategy :auto` (new propagator engine). Results must be identical (same answers, possibly different order).
+#### 11.1 The Unified Path: Worldview Cache Persistence IS Commit
 
-2. **Solve-adversarial benchmark**: Run via `bench-ab.rkt` comparing DFS baseline vs new engine. Acceptance criteria: <15% regression.
+**Commit is emergent.** No fold, no per-cell operation, no explicit commit call.
 
-3. **Acceptance file validation**: Run `examples/2026-04-07-bsp-le-track2.prologos` at Level 3 (`process-file`). All sections must pass.
+When speculation succeeds:
+- The worldview cache cell (cell-id 1) ALREADY has the assumption's bit (set at speculation entry, line 232 of elab-speculation-bridge.rkt)
+- After success, the worldview cache RETAINS the bit
+- Future `net-cell-read` on tagged-cell-value cells reads the worldview cache → bitmask includes the committed bit → entries tagged with that bit are VISIBLE
+- The committed speculative value is visible at "depth 0" because the worldview includes the committed assumption
 
-4. **R7: Deep nesting and wide-clause hotspots**:
-   Pre-0 data shows `level4` (5 levels binary branching, 32 leaves) at 314ms — 2× the next command. `color-code` (10-clause query-all) at 187ms. These are the patterns where propagator-native search has the most opportunity (concurrent exploration) and the most risk (PU allocation overhead × branch count). Benchmark these specifically.
+No `net-commit-assumption`. No network-wide fold. The persistence of the worldview cache bit IS the commit. Information flow through the cache cell determines visibility.
 
-5. **Edge cases**:
-   - Empty relation (no facts, no clauses) → fail
-   - Single-fact relation → succeed, no ATMS (Tier 1)
-   - Deeply nested recursion → tabling prevents divergence (non-recursive cases)
-   - Contradictory goals → empty result set via answer accumulator (M5)
-   - NAF with WF oracle → 3-valued behavior preserved
+**Retract is emergent.** When speculation fails:
+- Clear the assumption's bit from the worldview cache: `bitwise-and(current-wv, bitwise-not(bit))` — ONE cell write
+- Tagged entries from the failed branch remain in cells but are invisible (bitmask not ⊆ worldview)
+- S(-1) can clean up dead entries lazily
 
-6. **CHECKPOINT: Inert-dependent instrumentation review** (from Phase 2 §2.4):
-   Review the `perf-inc-inert-dependent-skip!` counter data from the parity benchmarks.
-   - How many inert entries per cell on hot paths?
-   - Is any cell accumulating >50 inert entries?
-   - What is the per-change overhead from inert checks on the adversarial benchmarks?
+No `net-retract-assumption`. No per-cell fold. One worldview cache write.
 
-   If the data warrants it, design and implement **S(-1) dependents cleanup as lattice narrowing**:
-   - Dependents set IS a lattice (set under ⊇)
-   - Cleanup = `current-dependents ∩ viable-dependents` (lattice narrowing)
-   - Per-cell "dependents-cleaner" propagator at S(-1): reads dependents + decision cells, writes narrowed set
-   - Multiple cells fire cleaners in parallel (broadcast over affected cells)
-   - This is emergent, parallel, on-network retraction — NOT step-think iteration
+#### 11.2 Root Cause and Fix
 
-   **This is an important propagator design pattern**: retraction expressed as lattice narrowing on metadata (dependents), not as imperative removal. The pattern generalizes: any network metadata that accumulates (dependents, provenance tags, trace entries) can be retracted via lattice narrowing at S(-1). Capture in `PATTERNS_AND_CONVENTIONS.org` after validation.
+**Root cause**: `promote-cell-to-tms` after `promote-cell-to-tagged` created `(tms-cell-value (tagged-cell-value ...) (hasheq))`. `net-cell-read` checks `tagged-cell-value?` first (line 676), but the raw value is `tms-cell-value` (outer type). The tagged path was never reached.
 
-**Test coverage**: Parity tests, benchmark comparison, acceptance file, edge cases, inert-dependent data review.
+**Fix** (4 changes):
+
+1. **typing-propagators union branching**: promote to tagged ONLY. Remove `promote-cell-to-tms` call. Remove `current-speculation-stack` parameterize. Keep `current-worldview-bitmask` parameterize.
+
+2. **elab-speculation-bridge success path**: remove `net-commit-assumption` call. The worldview cache persistence IS the commit.
+
+3. **elab-speculation-bridge failure path**: replace `net-retract-assumption` with one worldview cache write (clear the bit). Record retraction for S(-1) as before.
+
+4. **propagator.rkt**: TMS fallback in `net-cell-read`/`net-cell-write` becomes dead code. Remove after validation.
+
+#### 11.3 SRE Analysis: Worldview Cache as Commit Lattice
+
+The worldview cache cell IS the commit/retract mechanism:
+
+| Operation | TMS (old) | Tagged (new) |
+|---|---|---|
+| Write under speculation | parameterize stack + tms-write | parameterize bitmask + tagged delta |
+| Read under speculation | tms-read walks stack | tagged-cell-read filters by bitmask |
+| Commit (success) | net-commit-assumption (fold ALL cells) | Nothing — worldview cache retains bit |
+| Retract (failure) | net-retract-assumption (fold ALL cells) | Clear bit in worldview cache (1 cell write) |
+
+Commit/retract are BOTH O(1) — one cell read (checking worldview) or one cell write (clearing bit). The TMS path was O(cells) for both. This is a fundamental improvement.
+
+**Lattice analysis**: the worldview cache is a flat lattice with replacement merge. Each bit represents an assumption. Setting a bit = speculation entry. Retaining = commit. Clearing = retract. The Hasse diagram is the Boolean lattice Q_n (same as the ATMS worldview space). The commit/retract operations are single-bit flips on this lattice — Hasse-adjacent transitions. Optimal by the Hyperlattice Conjecture.
+
+#### 11.4 What Gets Removed
+
+After validation:
+- `current-speculation-stack` parameter (propagator.rkt)
+- `tms-cell-value` struct and all TMS functions (propagator.rkt, ~200 lines)
+- `net-commit-assumption`, `net-retract-assumption` (propagator.rkt)
+- `promote-cell-to-tms` (typing-propagators.rkt)
+- `wrap-with-assumption` (typing-propagators.rkt)
+- `make-tms-merge`, `merge-tms-cell` (propagator.rkt)
+- `net-new-tms-cell` (propagator.rkt)
+- TMS tests (test-tms-cell.rkt — rewrite for tagged-cell-value)
+
+One mechanism. One investment path. Improvements to tagged-cell-value benefit everything.
+
+#### 11.5 Parity Validation
+
+After the unified mechanism is deployed:
+
+1. **Full test suite**: All 7750+ tests pass under tagged-only speculation.
+2. **Union type regression test**: `(infer <Nat | Bool>)` = `[Type 0]` (not Bool).
+3. **Solve-adversarial benchmark**: DFS vs propagator comparison. <15% regression.
+4. **`:auto` → propagator**: switch default strategy once parity validated.
+
+#### 11.6 Inert-Dependent Checkpoint
+
+Review `perf-inc-inert-dependent-skip!` counter data from parity benchmarks. If warranted, implement S(-1) dependents cleanup as lattice narrowing. This is independent of the speculation unification and can proceed in parallel.
+
+#### 11.7 Implementation Order
+
+1. Remove `promote-cell-to-tms` from typing-propagators (tagged-only promotion)
+2. Remove `current-speculation-stack` parameterize from typing-propagators
+3. Verify union type test passes (the regression test)
+4. Remove `net-commit-assumption` call from elab-speculation-bridge success path
+5. Replace `net-retract-assumption` with worldview cache bit clear in failure path
+6. Remove `current-speculation-stack` parameterize from elab-speculation-bridge
+7. Full regression gate
+8. Remove TMS dead code from propagator.rkt
+9. Parity testing (DFS vs propagator)
+10. `:auto` → propagator switch
 
 ---
 
