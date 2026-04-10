@@ -9,12 +9,16 @@
 - **Separate compile from test timing**: When measuring suite wall time for performance comparison, run `raco make driver.rkt` as a SEPARATE step first, THEN run the test suite with `--no-precompile`. Compilation time varies by cache state and pollutes wall time measurements.
 - **DAG impact**: `prelude.rkt` or `syntax.rkt` -> nearly all tests; single `.prologos` lib -> 1-15 tests; single test -> 1 test
 - **Fallback**: `raco test -j 10 prologos/tests/` -- no timing recorded
-- **Full suite = regression gate only** (CRITICAL): The full suite (~150s) is for regression checks after completing a phase, not for investigation. NEVER run the full suite to diagnose failures. When failures appear:
-  1. **STOP** — do NOT re-run the full suite
-  2. **Read failure logs**: `data/benchmarks/failures/*.log` (use Read tool)
-  3. **Run individual failing tests**: `raco test tests/test-NAME.rkt`
-  4. **If linklet mismatch**: `raco make tests/test-NAME.rkt` then re-run (stale .zo)
-  5. **Only after all failures are fixed**: run the full suite ONE time as regression gate
+- **Full suite = regression gate only** (CRITICAL — STOP AND READ BEFORE ACTING): The full suite (~130s) is for regression checks after completing a phase, not for investigation. NEVER run the full suite to diagnose failures.
+  **TRIGGER**: The moment output shows "N FAILURES" — STOP. Do NOT re-run.
+  **PROTOCOL** (follow IN ORDER, do not skip steps):
+  1. **Read failure logs**: `data/benchmarks/failures/*.log` (use Read tool). The logs persist — no re-run needed to see them.
+  2. **Categorize**: linklet mismatch (stale .zo) vs real failure vs file-not-found (stale log)
+  3. **If linklet mismatch**: `raco make tests/test-NAME.rkt` then `raco test tests/test-NAME.rkt`. NOT a full suite re-run.
+  4. **If real failure**: `raco test tests/test-NAME.rkt > /tmp/test-NAME.txt 2>&1` — capture FULL output on FIRST run. Read with Read tool.
+  5. **Fix the issue**. Re-run the INDIVIDUAL test to verify.
+  6. **Only after ALL failures are individually fixed**: run the full suite ONE time as regression gate.
+  **Anti-pattern observed 5+ times this session**: re-running full suite to "see which tests fail" or "check if fix worked." Each re-run wastes ~130s. Read the logs. Run individual tests. The full suite is the FINAL step, not the diagnostic tool.
   A guard script (`tools/guard-suite-rerun.sh`) blocks re-runs within 5 minutes if no `.rkt` files changed.
 - **Output capture** (CRITICAL): Run the test suite ONCE and capture sufficient output. NEVER re-run the full suite just to see different parts of the output. Correct patterns:
   - `racket tools/run-affected-tests.rkt --all 2>&1 | tail -30` -- captures failures AND summary in one invocation
