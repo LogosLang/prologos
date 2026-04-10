@@ -3,7 +3,7 @@
 **Date**: 2026-04-10
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: DFS↔Propagator parity validation, fact-row isolation, NAF/guard as async propagators, parallel executor default, `:auto` deployment
-**Status**: D.1 — initial design from Track 2 PIR findings
+**Status**: D.2 — revised from design conversation (async NAF, set-equality parity, data-driven thresholds, expanded Phase 0)
 **Predecessor**: [BSP-LE Track 2 PIR](2026-04-10_BSP_LE_TRACK2_PIR.md) — ATMS Solver + Cell-Based TMS
 **Design doc**: [BSP-LE Track 2 Design](2026-04-07_BSP_LE_TRACK2_DESIGN.md) (D.13, ~2000 lines)
 **Prior art**: [Track 2 Session Handoff](standups/2026-04-09_2300_session_handoff.md), [Track 2 PIR §10-§12](2026-04-10_BSP_LE_TRACK2_PIR.md)
@@ -14,12 +14,14 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | Pre-0: parity baseline + benchmarks | ⬜ | Run DFS tests through `:atms`, categorize failures |
-| 1 | Fact-row branching | ⬜ | Per-fact-row PU isolation |
-| 2 | NAF as async propagator | ⬜ | Replace blocking fork with NAF-result cell + BSP sub-computation |
-| 3 | Guard as propagator | ⬜ | Replace synchronous eval with guard-test propagator |
-| 4 | Parallel executor default + `:auto` switch | ⬜ | Enable `make-parallel-thread-fire-all`, flip `:auto` → propagator |
-| T | Dedicated test file | ⬜ | Parity regression suite |
+| 0a | Pre-0: parity baseline | ⬜ | Run ALL 95 DFS test files through `:atms`, categorize every failure |
+| 0b | Pre-0: micro-benchmarks | ⬜ | Fact-row PU overhead at N=1,2,4,8,16; NAF sync vs async; executor comparison |
+| 0c | Pre-0: A/B executor comparison | ⬜ | Sequential vs futures vs threads on comparative suite; analyze with data |
+| 1 | Fact-row branching | ⬜ | Per-fact-row PU isolation (threshold data-driven from 0b) |
+| 2 | NAF as async propagator | ⬜ | Async from start: thread-spawned inner BSP, NAF-result cell, NAF-gate |
+| 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
+| 4 | Parallel executor default + `:auto` switch | ⬜ | Enable optimal executor (from 0c data), flip `:auto` → propagator |
+| T | Parity regression suite | ⬜ | `test-solver-parity.rkt` — representative queries, BOTH strategies, set-equal results |
 | PIR | Post-implementation review | ⬜ | |
 
 **Per-phase completion protocol** (from DESIGN_METHODOLOGY.org §4):
@@ -132,6 +134,22 @@ The parallel infrastructure EXISTS from PAR Track 1. It has never been the defau
 
 The dispatch exists. `:auto` → propagator is a one-line change. The WORK is in making the propagator solver handle all the cases that `:auto`'s 95 test files exercise.
 
+### §2.7 Infrastructure Findings (D.2)
+
+Key findings from code audit that change the design:
+
+1. **BSP nesting is supported**: `run-to-quiescence-bsp` takes a `net` parameter, can be called recursively. No global state conflicts. Fuel is per-network (immutable in `prop-network` struct). The forked network gets its own fuel budget.
+
+2. **Current NAF uses Gauss-Seidel, not BSP**: Line 1475 calls `run-to-quiescence` (GS), not `run-to-quiescence-bsp`. Even the synchronous fix of switching to BSP would be an improvement.
+
+3. **Fork is O(1)**: `fork-prop-network` creates fresh worklist + fuel, shares cells/propagators/merge-fns via CHAMP structural sharing. Copy-on-write isolation. Two struct allocations.
+
+4. **Thread infrastructure exists**: `make-parallel-thread-fire-all` (propagator.rkt lines 2404-2434) uses Racket 9 parallel threads with per-core partitioning. The thread spawn/join pattern is proven.
+
+5. **Fuel is propagator-firings, not wall-clock**: `fuel := fuel - length(deduplicated_worklist)` per BSP round (line 2290). The `solver-config-timeout` converts ms to firings via `fuel = timeout_ms * 1000` (rough heuristic, line 1873). Default: 1,000,000 firings.
+
+6. **DFS depth limit is independent**: `DEFAULT-DEPTH-LIMIT = 100` (line 551), counts call stack depth, errors on overflow. Completely separate mechanism from fuel.
+
 ---
 
 ## §3 Algebraic Foundation
@@ -157,9 +175,25 @@ This reuses Track 2's concurrent multi-clause infrastructure exactly:
 
 ### §3.2 NAF as Async Propagator — Lattice Analysis
 
-Currently, NAF forks the network and runs to quiescence SYNCHRONOUSLY inside the outer propagator's fire function. This blocks the entire BSP round.
+Currently, NAF (lines 1463-1489 of relations.rkt) forks the network and runs to quiescence SYNCHRONOUSLY inside the outer propagator's fire function, using Gauss-Seidel (NOT BSP). This blocks the entire BSP round.
 
-**The correct model**: NAF is a propagator that watches its input cells, creates a sub-computation (inner goal on a forked network), and writes `succeeded?` / `failed?` to a NAF-result cell. The outer conjunction reads the NAF-result cell and residuates until it resolves.
+**Infrastructure audit (D.2)**: The async path requires LESS new infrastructure than expected:
+- `run-to-quiescence-bsp` takes a `net` parameter, CAN be called recursively, no global state conflicts
+- `fork-prop-network` provides O(1) CHAMP structural sharing (copy-on-write)
+- `make-parallel-thread-fire-all` already supports thread spawning
+- `with-forked-network` macro explicitly supports parameterizing the network box around forks
+- No global parameter conflicts (`current-use-bsp-scheduler?`, `current-parallel-executor` are all parameterizable)
+
+**The async model** (designed directly, skipping synchronous intermediate):
+
+A NAF propagator that:
+1. When input bindings resolve, spawns a thread
+2. The thread: forks network → installs inner goal → runs `run-to-quiescence-bsp` on the fork
+3. On completion, writes `succeeded` or `failed` to a NAF-result cell on the OUTER network
+4. A NAF-gate propagator on the outer network watches the NAF-result cell
+5. The outer BSP continues with other clauses while the NAF thread runs
+
+The difference from sync is literally: wrap the inner BSP in `thread`, write result to a cell instead of reading inline.
 
 **SRE Lattice Lens for NAF-result cell**:
 - **Q1**: VALUE lattice (ternary: unknown → succeeded / failed)
@@ -168,9 +202,9 @@ Currently, NAF forks the network and runs to quiescence SYNCHRONOUSLY inside the
 - **Q5**: NAF-result is derived from inner computation
 - **Q6**: Hasse diagram is a three-element lattice (fork from unknown to two endpoints)
 
-**Termination**: NAF inner goal terminates by the same argument as the outer solver (finite clauses, monotone cells, fuel limit). The NAF propagator fires ONCE (fire-once pattern) when the inner computation completes.
+**Termination**: NAF inner goal terminates by fuel limit (propagator firings). Fork inherits fuel from parent or gets its own budget (design choice — Phase 0b data should inform whether shared fuel or per-fork fuel is better). The NAF propagator fires ONCE (fire-once pattern).
 
-**Key design question**: The NAF inner goal needs its OWN BSP loop (sub-computation). This is a nested quiescence — the inner goal runs to fixpoint, then the result flows to the outer network. This is the **Pocket Universe** pattern: the inner network IS a cell value from the outer network's perspective.
+**Thread safety**: The inner BSP runs on its own thread with its own forked network. The ONLY shared write is the NAF-result cell on the outer network. Cell writes are already thread-safe (CHAMP operations are pure functional; `net-cell-write` produces a new CHAMP, doesn't mutate). The NAF-result cell write happens ONCE (fire-once).
 
 ### §3.3 Guard as Propagator — Lattice Analysis
 
@@ -235,16 +269,19 @@ cell naf-result : NafResult := unknown
 
 propagator naf-evaluator
   :reads  [input-bindings : ScopeCell]  -- outer scope
-  :writes [naf-result : NafResult]
+  :writes [naf-result : NafResult]      -- on OUTER network
   :fire-once true
+  :async true                           -- D.2: async from start
   fire =
-    let inner-net = fork-prop-network(outer-net)
-    install inner-goal on inner-net
-    run-to-quiescence(inner-net)  -- nested BSP
-    if inner produced bindings:
-      write succeeded to naf-result
-    else:
-      write failed to naf-result
+    spawn-thread:                       -- parallel-ready
+      let inner-net = fork-prop-network(outer-net)
+      install inner-goal on inner-net
+      run-to-quiescence-bsp(inner-net)  -- BSP, not Gauss-Seidel
+      if inner produced bindings:
+        write succeeded to naf-result   -- cross-network cell write
+      else:
+        write failed to naf-result
+    ;; Outer BSP continues; NAF-gate fires when cell resolves
 
 ;; Outer conjunction residuates on naf-result
 propagator naf-gate
@@ -287,35 +324,77 @@ propagator guard-gate
 
 ### NTT Model Observations
 
-1. **Is everything on-network?** Yes. NAF result, guard result, and fact-row branching all flow through cells. The NAF inner computation is a nested BSP (Pocket Universe) — the inner network IS the computation. No off-network state introduced.
+1. **Is everything on-network?** Yes. NAF result, guard result, and fact-row branching all flow through cells. The NAF inner computation is a nested BSP (Pocket Universe) on a forked network. The cross-network write (NAF thread → outer network's NAF-result cell) is the ONLY shared-state interaction.
 
-2. **Did the model reveal impurities?** Yes — the NAF evaluator still calls `run-to-quiescence` synchronously inside its fire function. This means the inner BSP loop runs during the outer BSP round. This is not truly async — it's synchronous-within-a-fire. To be TRULY async, the inner computation should be scheduled as a sub-network that the BSP scheduler manages. However, this is the Pocket Universe pattern — the inner network is a self-contained computation. The outer network doesn't need to proceed until NAF resolves. This is acceptable for Phase 2 as long as NAF doesn't block OTHER clauses.
+2. **Did the model reveal impurities?** The D.1 impurity (synchronous NAF) is resolved in D.2 by async design. The remaining impurity is the **cross-network cell write**: the NAF thread writes to a cell on the outer network. This is thread-safe (CHAMP is pure functional, cell write produces new CHAMP), but the outer BSP scheduler needs to detect the new write and schedule the NAF-gate propagator. This may require a "pending writes from sub-networks" queue that the BSP outer loop checks between rounds.
 
-3. **Did the model reveal NTT syntax gaps?** Yes — NTT has no syntax for "nested quiescence" or "Pocket Universe sub-computation." A `sub-network` construct would be useful.
+3. **Did the model reveal NTT syntax gaps?** Yes:
+   - NTT has no syntax for `:async` propagators or `spawn-thread`
+   - NTT has no syntax for cross-network cell writes
+   - A `sub-network` construct and `async-fire` keyword would be useful NTT extensions
 
 4. **Termination arguments**:
    - Fact-row propagators: fire-once, terminates trivially
-   - NAF evaluator: inner goal terminates by fuel limit (same as outer solver). Fire-once.
+   - NAF evaluator: inner goal terminates by fuel limit on forked network (independent fuel budget). Fire-once. Thread terminates when inner BSP quiesces.
    - Guard evaluator: pure evaluation, no recursion. Fire-once.
    - NAF/guard gates: fire-once, triggered by result cell.
+   - Async thread: bounded by fork's fuel. No unbounded spawning (one thread per NAF goal, NAF goals are finite).
 
 ---
 
 ## §5 Phased Roadmap
 
-### Phase 0: Parity Baseline (~1-2h)
+### Phase 0: Investigation + Benchmarks (~3-4h)
+
+Phase 0 is design input, not validation. Its findings may change Phases 1-4 scope and ordering.
+
+#### Phase 0a: Parity Baseline (~1-2h)
 
 **Objective**: Establish the exact gap between DFS and propagator solver across ALL 95 test files.
 
 **Steps**:
 1. Create a parity test harness that runs each test file's `defr`/`solve` expressions through BOTH `:strategy :depth-first` AND `:strategy :atms`
-2. Compare results: same answers? Same count? Same bindings?
+2. Compare results using **set-equality** (not ordered comparison). Non-deterministic multiple solutions have no canonical ordering; requiring order-parity would assert an implementation detail of DFS, not a semantic property.
 3. Categorize every failure: fact-row (expected), NAF (expected), guard (expected), cut (expected), depth-limit (expected), OTHER (investigate)
-4. Capture DFS baseline timings for A/B comparison
+4. Record which tests assert on result ordering — these need adjustment for set-equality
 
-**Deliverable**: Parity matrix (95 files × pass/fail per strategy) + failure categorization.
+**Deliverable**: Parity matrix (95 files × pass/fail per strategy) + failure categorization + list of order-dependent tests.
 
 **Design input**: The categorization may reveal gaps not identified in §2.3. If the failure count is <10, the track scope may be smaller than estimated. If >50, there may be fundamental issues beyond the 5 identified gaps.
+
+#### Phase 0b: Micro-Benchmarks (~1h)
+
+**Objective**: Data-driven answers to open design questions.
+
+**Benchmarks to run** (using `bench-micro.rkt` infrastructure for statistical rigor):
+
+1. **Fact-row PU overhead**: Measure solve-goal-propagator on a fact-only relation with N rows, for N = 1, 2, 4, 8, 16, 32. Compare:
+   - Current (last-write-wins, no PU branching)
+   - Per-row PU branching (with tagged-cell-value)
+   - Measure: wall time, cell allocations, propagator firings
+
+   This determines the **fact-row threshold**: at what N does PU branching become worth the overhead? The D.1 estimate of N=4 was borrowed from broadcast A/B data (different mechanism). We need fact-row-specific data.
+
+2. **NAF sync vs async overhead**: Measure a relation with NAF goals:
+   - Current (Gauss-Seidel fork, inline quiescence)
+   - BSP fork (same thread, BSP scheduler on inner)
+   - Thread-spawned BSP fork (new thread, async result)
+   - Measure: wall time, thread creation overhead, BSP round count
+
+3. **Fuel consumption profile**: Run adversarial benchmarks with verbose output, measure fuel consumption per relation. This informs whether shared-fuel or per-fork-fuel is better for NAF.
+
+#### Phase 0c: A/B Executor Comparison (~1h)
+
+**Objective**: Determine which parallel executor should be default.
+
+**Method**: Run `bench-ab.rkt` comparative suite with three configurations:
+1. `sequential-fire-all` (current default)
+2. `make-parallel-fire-all` (futures, threshold=4)
+3. `make-parallel-thread-fire-all` (OS threads, per-core partitioning)
+
+On BOTH the standard comparative suite (13 programs) AND the adversarial benchmarks (designed for N-clause stress). Use `--runs 15` for statistical significance.
+
+**Deliverable**: Performance matrix (3 executors × 13+ programs) with Mann-Whitney U significance tests. This directly answers: which executor should be default?
 
 ### Phase 1: Fact-Row Branching (~2-3h)
 
@@ -334,25 +413,30 @@ propagator guard-gate
 
 ### Phase 2: NAF as Async Propagator (~3-4h)
 
-**Objective**: Replace blocking fork-and-check NAF with a NAF-result cell + fire-once propagator.
+**Objective**: Replace blocking fork-and-check NAF with async thread-spawned inner BSP + NAF-result cell.
 
 **Steps**:
-1. Define `naf-result` lattice (three-element: unknown/succeeded/failed)
-2. Create `install-naf-propagator` that:
+1. Define `naf-result` lattice (three-element: unknown/succeeded/failed) in `decision-cell.rkt`
+2. Create `install-naf-propagator` in `relations.rkt` that:
    a. Allocates a NAF-result cell on the outer network
-   b. Installs a fire-once propagator that, when all input bindings are resolved:
-      - Forks the network
-      - Installs the inner goal on the forked network
-      - Runs the inner goal to quiescence (nested BSP)
-      - Writes succeeded/failed to the NAF-result cell
-3. Update `install-conjunction` to handle NAF goals: subsequent goals residuate on the NAF-result cell (they watch it and only fire when it resolves to `failed`)
-4. Verify semantic parity with DFS NAF: ground-instantiation checking must match
+   b. Installs a fire-once propagator that, when input bindings resolve:
+      - Spawns a thread (using existing thread infrastructure from PAR Track 1)
+      - Thread: forks network → installs inner goal → runs `run-to-quiescence-bsp` (BSP, not Gauss-Seidel — the current NAF uses GS which is a known deficiency)
+      - Thread: writes `succeeded` or `failed` to NAF-result cell on outer network
+      - Thread terminates (bounded by fork's fuel budget)
+   c. Installs a NAF-gate propagator (fire-once) that watches NAF-result:
+      - `failed` → write current scope to continuation (NAF succeeds)
+      - `succeeded` → no-op (NAF fails, clause blocked)
+      - `unknown` → residuate
+3. Implement cross-network write mechanism (Phase 0b data determines: channel, direct write, or topology-request protocol)
+4. Update `install-conjunction` to handle NAF goals: subsequent goals residuate on NAF-result cell
+5. Verify semantic parity with DFS NAF (ground-instantiation check must match)
 
-**Key design decision**: The inner BSP runs synchronously within the NAF propagator's fire function (Pocket Universe pattern). This means the NAF doesn't truly "unblock" other clauses — it still takes time. But it separates the NAF computation from the outer network's cell writes, enabling correct behavior. True async (the inner network runs as a scheduled sub-task) is a future optimization for PAR Track 2.
+**Fuel budget**: Per Phase 0b data. Default: fork gets own budget (not competing with outer solver).
 
-**Tests**: All 4 well-founded test files must pass. NAF-specific test cases in parity matrix.
+**Tests**: All 4 well-founded test files must pass. NAF-specific parity cases. Async-specific tests: verify outer clauses proceed while NAF thread runs.
 
-**Vision gate**: On-network? NAF-result is a cell. Inner computation is a Pocket Universe. Complete? NAF semantics match DFS. Vision-advancing? NAF as information flow, not imperative control.
+**Vision gate**: On-network? NAF-result is a cell. Inner computation is a Pocket Universe. Async? Thread-spawned, non-blocking. Complete? NAF semantics match DFS. Vision-advancing? NAF as parallel sub-computation, not blocking control flow.
 
 ### Phase 3: Guard as Propagator (~2-3h)
 
@@ -426,14 +510,31 @@ This track does NOT add or modify user-facing syntax. All changes are internal s
 
 ---
 
-## §9 Open Design Questions (for D.2 iteration)
+## §9 Open Design Questions
 
-1. **NAF: synchronous Pocket Universe vs truly async sub-network?** The NTT model (§4) notes that the inner BSP runs synchronously within the NAF propagator's fire. This doesn't block other clauses (different worldview bitmask), but it does consume time in the same BSP round. For Phase 2, synchronous PU is sufficient. True async (inner network scheduled as BSP sub-task) is PAR Track 2 scope. But should the design anticipate the async path?
+### Resolved in D.2
 
-2. **Parallel executor: futures vs threads?** `make-parallel-fire-all` uses Racket futures (lightweight but limited by Racket VM — no allocation in futures). `make-parallel-thread-fire-all` uses true threads (more overhead but no restrictions). Which should be default? Need A/B data from Phase 0 benchmarks.
+1. ~~**NAF: synchronous vs async?**~~ → **Async from start.** Infrastructure audit shows minimal additional work (thread spawn + cell write vs inline read). The BSP scheduler supports nested `run-to-quiescence-bsp` calls. No global parameter conflicts. Phase 0b will measure the overhead delta.
 
-3. **Parity definition**: Should propagator solver return results in the SAME ORDER as DFS? Or is set-equality sufficient? DFS returns results in clause-order (first clause's results first). Propagator returns in bitmask order (worldview tagging). If tests assert on ordering, parity fails even when results are correct.
+2. ~~**Parallel executor: futures vs threads?**~~ → **Data-driven from Phase 0c.** Both exist. A/B comparison on comparative suite will determine which is default. Futures have Racket VM restrictions (no allocation); threads have more overhead but no restrictions.
 
-4. **Depth limiting**: DFS uses a recursive depth counter. Propagator uses fuel (time-based). Should propagator also track recursive depth? Or is fuel sufficient as a termination mechanism?
+3. ~~**Parity definition?**~~ → **Set-equality.** Non-deterministic multiple solutions have no canonical ordering. Tests asserting DFS clause-order are asserting an implementation detail. Phase 0a will identify order-dependent tests for adjustment.
 
-5. **Fact-row branching threshold**: For N=1 fact row, branching overhead is unnecessary. For N=100, it's essential. Should there be a threshold below which facts are handled without PU branching? Or should the uniform treatment (all facts = branches) be the principle?
+### Open for D.3
+
+4. **Fuel: propagator-firings, not wall-clock** — the "timeout in ms" config is misleading (1ms ≈ 1000 firings heuristic). Should we rename the config key? Should fuel be per-network or shared across forks? Phase 0b fuel consumption profiles will inform this.
+
+5. **Fact-row threshold** — D.1's N=4 was arbitrary (borrowed from broadcast A/B). Phase 0b micro-benchmarks at N=1,2,4,8,16,32 will give data-driven answer. Possible outcomes:
+   - PU overhead is negligible at all N → uniform treatment (Completeness principle)
+   - PU overhead significant at N=1-2 → threshold at N=3 or N=4
+   - PU overhead significant at all N → different approach needed
+
+6. **Cross-network cell write for async NAF** — the NAF thread writes to a cell on the OUTER network. The outer BSP needs to detect this write and schedule the NAF-gate. Options:
+   - (a) NAF thread writes to a shared mailbox/channel; outer BSP checks between rounds
+   - (b) NAF thread directly writes to outer network's cells CHAMP; outer BSP re-scans worklist
+   - (c) NAF thread signals completion via a Racket channel; outer BSP picks up in topology stratum
+   Option (c) aligns with the existing topology-request protocol (between BSP rounds, sequential processing). Phase 0b NAF benchmarks should test all three.
+
+7. **Recursive depth tracking** — DFS counts call stack depth (`DEFAULT-DEPTH-LIMIT = 100`). Propagator uses fuel (propagator-firings). For recursive relations (e.g., `ancestor` calling itself), does the propagator solver need a recursive depth counter? Or does fuel naturally bound recursive unfolding? Phase 0a parity testing on recursive relation tests will reveal whether fuel alone is sufficient.
+
+8. **NAF fuel budget** — should the NAF fork inherit the parent's remaining fuel (shared budget, NAF competes for firings), or get its own budget (independent, NAF can't starve the outer solver)? Independent budgets risk total fuel exceeding the user's intent; shared budgets risk NAF consuming all fuel. Phase 0b data will inform.
