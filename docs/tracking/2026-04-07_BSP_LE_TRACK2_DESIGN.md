@@ -25,7 +25,7 @@
 | 8 | On-network tabling | ✅ | 8.1-3: `f2410a57` compound scope cells. 8.4: `54a5fce4` table registry cell. 8.5-7: `5261df52` producer/consumer. Test: `b9f2862d`. One-true-tabling. Vision gates ✅. 17 tests. |
 | 9 | Strategy dispatch + parameter migration | ✅ | 9a: `97d8048d` :strategy dispatch (auto→DFS, atms→propagator). 9b-1: `5af7f1aa` metavar-store reads worldview bitmask. 9b-2: `48c718b4` cell-ops reads worldview bitmask. 9b-4: `29344a04` typing-propagators TMS removal REVERTED — union type regression. current-speculation-stack retained (dual-write). Full retirement → Phase 11. |
 | 10 | Solver config wiring | ✅ | `6fe6679c`. :execution (BSP/Gauss-Seidel), :tabling (:off skips registry), :timeout (fuel from ms). All knobs operational. |
-| 11 | Unified speculation + parity validation | ⬜ | D.13: TMS nesting root cause → tagged-only promotion. Worldview cache persistence IS commit (O(1)). Remove TMS, current-speculation-stack, net-commit/retract-assumption. Parity validation. Inert-dependent checkpoint. |
+| 11 | Unified speculation + parity validation | ✅ | D.13. `f1f71412` tagged-only + union fix. `d0074a74` elab-bridge TMS removed. `58fc137b` stack fallback removed. Root cause: TMS nesting hid tagged path. Fix: tagged-only promotion + combined worldview bitmask + same-specificity merge. Commit=O(1) worldview persistence. Retract=O(1) bit clear + snapshot restore (scaffolding for off-network stores, PPN 4C scope). current-speculation-stack RETIRED. |
 | T | Dedicated test files | ⬜ | Per-phase |
 | PIR | Post-implementation review | ⬜ | |
 
