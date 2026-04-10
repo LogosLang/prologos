@@ -52,13 +52,32 @@ Two categories:
 
 These establish the project's identity and process:
 
-1. ~CLAUDE.md~ + ~.claude/rules/*.md~ — project instructions
+1. ~CLAUDE.md~ + ~CLAUDE.local.md~ — project + local instructions
 2. ~MEMORY.md~ — auto-memory index
 3. ~DESIGN_METHODOLOGY.org~ — the 5 stages, implementation protocol
 4. ~DESIGN_PRINCIPLES.org~ — the 10 principles + Hyperlattice Conjecture
-5. ~CRITIQUE_METHODOLOGY.org~ — P/R/M lenses, SRE lattice lens
-6. ~ACCEPTANCE_FILE_METHODOLOGY.org~ — how to write/validate .prologos files
-7. ~HANDOFF_PROTOCOL.org~ (this document) — so the session knows the protocol
+5. ~HANDOFF_PROTOCOL.org~ (this document) — so the session knows the protocol
+
+**** Architectural Rules (every session — loaded via .claude/rules/)
+
+These are automatically loaded by the rules system but MUST be
+internalized, not just present in context. Each encodes patterns that
+should be reflexes:
+
+6. ~.claude/rules/propagator-design.md~ — fire-once, broadcast,
+   component-indexing, per-propagator worldview bitmask, cell allocation
+   efficiency. Every propagator installation evaluated against these.
+7. ~.claude/rules/on-network.md~ — the self-hosting mandate. Every
+   off-network structure is debt. Migration checklist and red flags.
+8. ~.claude/rules/structural-thinking.md~ — SRE lattice lens (6
+   questions), Hasse diagram optimality argument, module theory,
+   structural unification (PUnify), retraction as lattice narrowing.
+   THE architectural reasoning framework for all design decisions.
+9. ~.claude/rules/testing.md~ — the diagnostic protocol. TRIGGER-level
+   intervention when failures appear. Never re-run full suite for
+   diagnostics. Read the logs. Run individual tests.
+10. ~.claude/rules/pipeline.md~ — exhaustiveness checklists for new AST
+    nodes, parameters, struct fields, pattern kinds.
 
 **** Session-Specific (varies per handoff)
 
@@ -67,7 +86,6 @@ These are specific to the work in progress:
 - The current design document (READ IN FULL — not 40 lines)
 - The self-critique and external critique documents
 - The Stage 1/2 research/audit document
-- The current acceptance file
 - The most recent dailies
 - Any research notes referenced by the design
 
