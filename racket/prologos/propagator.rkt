@@ -688,7 +688,21 @@
                                               (cell-id-hash worldview-cache-cell-id)
                                               worldview-cache-cell-id)])
                    (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))))
-           (tagged-cell-read v wv-bitmask)]
+           ;; Phase 11: extract domain merge from cell's merge-fn for
+           ;; same-specificity entry merging (e.g., union type Nat+Bool→Type 0).
+           ;; The merge-fn is make-tagged-merge(domain-merge). When called with
+           ;; two plain values, it delegates to domain-merge. We use this as the
+           ;; domain-merge callback for tagged-cell-read.
+           (define h (cell-id-hash cid))
+           (define merge-fn-raw (champ-lookup (prop-network-merge-fns net) h cid))
+           (define domain-merge
+             (if (eq? merge-fn-raw 'none)
+                 #f
+                 ;; The merge-fn handles tagged-cell-values at the outer level.
+                 ;; For plain values, it delegates to domain-merge. We can use it
+                 ;; directly as the merge for same-specificity entries.
+                 merge-fn-raw))
+           (tagged-cell-read v wv-bitmask domain-merge)]
           [(tms-cell-value? v)
            ;; Legacy TMS path — still needed during Phase 4 migration
            (tms-read v (current-speculation-stack))]

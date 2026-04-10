@@ -1556,42 +1556,36 @@
                          (union-assumption-counter (add1 (union-assumption-counter)))))
        (define aid-left (assumption-id left-n))
        (define aid-right (assumption-id right-n))
-       ;; DUAL-WRITE: promote to BOTH tagged + TMS for dual-path compatibility.
-       ;; Tagged path: worldview cache bitmask tags writes.
-       ;; TMS path: parameterize tags writes (for cells not yet promoted to tagged).
-       ;; Phase 9b-4: TMS parameterize RETAINED — removing it causes union type
-       ;; inference regression (infer <Nat | Bool> = Bool instead of Type 0).
-       ;; The TMS path provides additional isolation for attribute-map cells that
-       ;; the tagged-cell-value path alone doesn't replicate. Full retirement
-       ;; requires all speculative cells to be tagged-cell-value with correct
-       ;; merge semantics. Tracked as Phase 11 scope.
-       (define net-tagged (promote-cell-to-tagged net tm-cid))
-       (define net-promoted (promote-cell-to-tms net-tagged tm-cid))
-       ;; LEFT branch: set worldview + parameterize (dual-write)
+       ;; Phase 11.1: tagged-only promotion. TMS promotion REMOVED.
+       ;; Root cause of Phase 9b-4 regression: promote-cell-to-tms AFTER
+       ;; promote-cell-to-tagged created (tms-cell-value (tagged-cell-value ...)).
+       ;; net-cell-read dispatched on outer type (TMS), tagged path never reached.
+       ;; With tagged-only, net-cell-read hits the tagged-cell-value branch,
+       ;; worldview cache persistence provides commit, no TMS needed.
+       (define net-promoted (promote-cell-to-tagged net tm-cid))
+       ;; Phase 11.2: LEFT branch — worldview bitmask only (TMS stack REMOVED).
+       ;; current-worldview-bitmask controls: net-cell-write tagging,
+       ;; net-cell-read filtering, current-speculation-assumption (9b-1),
+       ;; worldview-visible? (9b-2). Worldview cache persistence IS commit.
        (define left-bitmask (arithmetic-shift 1 (assumption-id-n aid-left)))
        (define net-left-wv (net-cell-write net-promoted worldview-cache-cell-id left-bitmask))
        (define net-left
-         (parameterize ([current-speculation-stack
-                         (cons aid-left (current-speculation-stack))]
-                        [current-worldview-bitmask left-bitmask])
+         (parameterize ([current-worldview-bitmask left-bitmask])
            (install net-left-wv left ctx-pos)))
        (define net-left2
-         (parameterize ([current-speculation-stack
-                         (cons aid-left (current-speculation-stack))]
-                        [current-worldview-bitmask left-bitmask])
+         (parameterize ([current-worldview-bitmask left-bitmask])
            (type-map-write net-left tm-cid e left)))
-       ;; RIGHT branch: set worldview + parameterize (dual-write)
+       ;; RIGHT branch — worldview bitmask only.
+       ;; Phase 11: OR with existing worldview (not replace) so BOTH branches'
+       ;; bits are set. tagged-cell-read with the combined bitmask merges entries.
        (define right-bitmask (arithmetic-shift 1 (assumption-id-n aid-right)))
-       (define net-right-wv (net-cell-write net-left2 worldview-cache-cell-id right-bitmask))
+       (define combined-bitmask (bitwise-ior left-bitmask right-bitmask))
+       (define net-right-wv (net-cell-write net-left2 worldview-cache-cell-id combined-bitmask))
        (define net-right
-         (parameterize ([current-speculation-stack
-                         (cons aid-right (current-speculation-stack))]
-                        [current-worldview-bitmask right-bitmask])
+         (parameterize ([current-worldview-bitmask right-bitmask])
            (install net-right-wv right ctx-pos)))
        (define net-right2
-         (parameterize ([current-speculation-stack
-                         (cons aid-right (current-speculation-stack))]
-                        [current-worldview-bitmask right-bitmask])
+         (parameterize ([current-worldview-bitmask right-bitmask])
            (type-map-write net-right tm-cid e right)))
        net-right2]
 

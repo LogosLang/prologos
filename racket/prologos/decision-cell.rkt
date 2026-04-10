@@ -388,31 +388,49 @@
 ;; entries: (listof (cons bitmask value)) — speculative writes
 ;;   Each entry: (cons worldview-bitmask-at-write-time value)
 ;;   Monotone: entries only accumulate (append)
+;;   Monotone: entries only accumulate (append)
 (struct tagged-cell-value (base entries) #:transparent)
 
-;; Read: find the most-specific entry whose bitmask is a subset of worldview W.
+;; Read: find the most-specific entries whose bitmask is a subset of worldview W.
 ;; Most-specific = highest popcount (most assumptions committed).
+;; If multiple entries match at the same specificity, MERGE them via domain-merge.
 ;; If no entry matches: return base.
 ;; worldview-bitmask: the current worldview (from worldview cache cell)
-(define (tagged-cell-read tcv worldview-bitmask)
+;; domain-merge: optional merge function for same-specificity entries.
+;;   When #f (default), returns the first match (backward compat).
+;;   When provided, merges all matching entries at max specificity.
+;;   This is essential for union type speculation where BOTH branches succeed
+;;   and their results must be joined (e.g., Nat ∪ Bool → Type 0).
+(define (tagged-cell-read tcv worldview-bitmask [domain-merge #f])
   (cond
     [(not (tagged-cell-value? tcv)) tcv]  ;; plain value — pass through
     [(zero? worldview-bitmask)
      ;; No speculation active — return base directly (Tier 1 fast path)
      (tagged-cell-value-base tcv)]
     [else
-     ;; Find most-specific matching entry
-     (define best-val (tagged-cell-value-base tcv))
-     (define best-bits 0)  ;; popcount of best match (0 = base)
+     ;; Collect matching entries grouped by specificity (popcount)
+     (define best-bits 0)
+     (define best-vals '())  ;; list of values at max specificity
      (for ([entry (in-list (tagged-cell-value-entries tcv))])
        (define entry-bm (car entry))
        (define entry-val (cdr entry))
-       ;; Subset check: is this entry's worldview ⊆ current worldview?
-       (when (and (= (bitwise-and entry-bm worldview-bitmask) entry-bm)
-                  (> (popcount entry-bm) best-bits))
-         (set! best-val entry-val)
-         (set! best-bits (popcount entry-bm))))
-     best-val]))
+       (when (= (bitwise-and entry-bm worldview-bitmask) entry-bm)
+         (define pc (popcount entry-bm))
+         (cond
+           [(> pc best-bits)
+            (set! best-bits pc)
+            (set! best-vals (list entry-val))]
+           [(= pc best-bits)
+            (set! best-vals (cons entry-val best-vals))])))
+     (cond
+       [(null? best-vals) (tagged-cell-value-base tcv)]
+       [(null? (cdr best-vals)) (car best-vals)]  ;; single match
+       [(not domain-merge) (car best-vals)]  ;; no merge fn → first match (compat)
+       [else
+        ;; Multiple matches at same specificity → merge all
+        (for/fold ([acc (car best-vals)])
+                  ([v (in-list (cdr best-vals))])
+          (domain-merge acc v))])]))
 
 ;; Write: if worldview is non-zero, append a tagged entry.
 ;; If worldview is zero, update the base.
