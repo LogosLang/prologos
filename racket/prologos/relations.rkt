@@ -16,6 +16,7 @@
 ;;;
 
 (require racket/list
+         racket/set          ;; Track 2B Phase 1a: set-intersect, seteq for viable-indices
          "propagator.rkt"
          "atms.rkt"            ;; Phase 6+7: solver-state operations
          "decision-cell.rkt"   ;; Phase 6+7: compound cells, tagged-cell-value
@@ -1772,6 +1773,10 @@
         (install-clause-propagators-inner net goal-name resolved-args rel store config answer-cid ctx)])]))
 
 ;; Inner clause installation (the actual variant loop, extracted for tabling).
+;; Track 2B Phase 1a: uses discrimination map to narrow which facts/clauses
+;; are viable based on bound (ground) arguments. This is the clause-viability
+;; lattice narrowing — same lattice as Track 2 decision cells (P(N) under ⊇,
+;; set-intersection merge), with bound arguments as the narrowing source.
 (define (install-clause-propagators-inner net goal-name resolved-args rel store config answer-cid ctx [env (hasheq)])
      (for/fold ([n net])
                ([variant (in-list (relation-info-variants rel))])
@@ -1780,42 +1785,71 @@
        (define clauses (variant-info-clauses variant))
        (define param-names (map param-info-name params))
 
-       ;; Facts: write each fact row's values to the corresponding arg variables
+       ;; Track 2B Phase 1a: build discrimination map and narrow viable set
+       (define discrim-map (build-discrimination-map variant))
+       (define n-alternatives (+ (length facts) (length clauses)))
+
+       ;; Compute viable alternative indices by narrowing on each bound arg
+       ;; (Distributivity: narrowing order doesn't affect result)
+       (define viable-indices
+         (for/fold ([viable (for/seteq ([i (in-range n-alternatives)]) i)])
+                   ([arg (in-list resolved-args)]
+                    [pos (in-naturals)])
+           (if (or (scope-ref? arg) (cell-id? arg))
+               viable  ;; free arg — no narrowing at this position
+               ;; ground arg — narrow to compatible alternatives
+               (let ([compatible (discrimination-lookup discrim-map pos arg)])
+                 (if compatible
+                     (set-intersect viable (list->seteq compatible))
+                     viable)))))  ;; no entry = wildcard (all compatible)
+
+       ;; Facts: write ONLY viable fact rows' values to arg variables
        (define n-facts
          (for/fold ([n n])
-                   ([fr (in-list facts)])
-           (define row (fact-row-terms fr))
-           (if (= (length row) (length resolved-args))
-               (for/fold ([n n])
-                         ([arg (in-list resolved-args)]
-                          [val (in-list row)])
-                 (if (or (scope-ref? arg) (cell-id? arg))
-                     (logic-var-write n arg val)
-                     n))
-               n)))
+                   ([fr (in-list facts)]
+                    [fact-idx (in-naturals)])
+           (if (not (set-member? viable-indices fact-idx))
+               n  ;; fact row filtered out by bound-arg narrowing
+               (let ([row (fact-row-terms fr)])
+                 (if (= (length row) (length resolved-args))
+                     (for/fold ([n n])
+                               ([arg (in-list resolved-args)]
+                                [val (in-list row)])
+                       (if (or (scope-ref? arg) (cell-id? arg))
+                           (logic-var-write n arg val)
+                           n))
+                     n)))))
 
-       ;; Clauses
+       ;; Track 2B Phase 1a: filter clauses to only viable ones
+       (define n-facts-count (length facts))
+       (define viable-clauses
+         (for/list ([ci (in-list clauses)]
+                    [i (in-naturals n-facts-count)]
+                    #:when (set-member? viable-indices i))
+           ci))
+
+       ;; Clauses (viable only — narrowed by discrimination map)
        (cond
-         [(null? clauses) n-facts]
+         [(null? viable-clauses) n-facts]
 
-         ;; Single clause: install directly, no PU (Tier 1 behavior)
-         [(null? (cdr clauses))
-          (install-one-clause n-facts (car clauses) resolved-args param-names
+         ;; Single viable clause: install directly, no PU (Tier 1 behavior)
+         [(null? (cdr viable-clauses))
+          (install-one-clause n-facts (car viable-clauses) resolved-args param-names
                               env store config answer-cid ctx)]
 
          ;; Multi-clause: CONCURRENT propagators on SAME network.
-         ;; All M clauses' propagators installed on ONE network, each wrapped
+         ;; All M viable clauses' propagators installed on ONE network, each wrapped
          ;; with wrap-with-worldview for per-clause bitmask tagging.
          ;; ONE run-to-quiescence fires all concurrently via BSP.
          ;; Tagged-cell-value entries keep clause results separate.
          ;; Clause ordering is IRRELEVANT — dataflow determines execution.
          [else
           (let ()
-            ;; Create assumptions for each clause (integer IDs for bitmask)
+            ;; Create assumptions for each viable clause (integer IDs for bitmask)
             (define-values (n-assumed aids-rev)
               (if ctx
                   (for/fold ([n n-facts] [aids '()])
-                            ([ci (in-list clauses)]
+                            ([ci (in-list viable-clauses)]
                              [i (in-naturals)])
                     (define-values (n* aid)
                       (solver-assume ctx n
@@ -1824,7 +1858,7 @@
                     (values n* (cons aid aids)))
                   ;; No solver-context: use local counter for assumption IDs
                   (for/fold ([n n-facts] [aids '()])
-                            ([ci (in-list clauses)]
+                            ([ci (in-list viable-clauses)]
                              [i (in-naturals)])
                     (values n (cons (assumption-id i) aids)))))
             (define aids (reverse aids-rev))
@@ -1847,7 +1881,7 @@
             ;; BSP fires all clauses' propagators concurrently.
             (define n-installed
               (for/fold ([n n-promoted])
-                        ([ci (in-list clauses)]
+                        ([ci (in-list viable-clauses)]
                          [aid (in-list aids)])
                 (define bit-pos (assumption-id-n aid))
                 (install-one-clause-concurrent n ci resolved-args param-names
