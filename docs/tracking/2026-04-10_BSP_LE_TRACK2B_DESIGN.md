@@ -3,7 +3,7 @@
 **Date**: 2026-04-10
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: DFS↔Propagator parity validation, fact-row isolation, NAF/guard as async propagators, parallel executor default, `:auto` deployment
-**Status**: D.3 — hypercube-guided optimality lens + Phase 0 investigation scope
+**Status**: D.4 — clause selection as decision-cell narrowing (Phase 0a findings integrated)
 **Predecessor**: [BSP-LE Track 2 PIR](2026-04-10_BSP_LE_TRACK2_PIR.md) — ATMS Solver + Cell-Based TMS
 **Design doc**: [BSP-LE Track 2 Design](2026-04-07_BSP_LE_TRACK2_DESIGN.md) (D.13, ~2000 lines)
 **Prior art**: [Track 2 Session Handoff](standups/2026-04-09_2300_session_handoff.md), [Track 2 PIR §10-§12](2026-04-10_BSP_LE_TRACK2_PIR.md)
@@ -17,7 +17,8 @@
 | 0a | Pre-0: parity baseline | ⬜ | Run ALL 95 DFS test files through `:atms`, categorize every failure |
 | 0b | Pre-0: micro-benchmarks | ⬜ | Fact-row PU overhead at N=1,2,4,8,16; NAF sync vs async; executor comparison |
 | 0c | Pre-0: A/B executor comparison | ⬜ | Sequential vs futures vs threads on comparative suite; analyze with data |
-| 1 | Fact-row branching | ⬜ | Per-fact-row PU isolation (threshold data-driven from 0b) |
+| 1a | Clause selection as decision-cell narrowing | ⬜ | Argument-watching propagator + clause decision cell. Fixes Category 1+2. |
+| 1b | Position-discriminant analysis | ⬜ | Needed-narrowing-inspired: identify best discriminating position, hierarchical narrowing |
 | 2 | NAF as async propagator | ⬜ | Async from start: thread-spawned inner BSP, NAF-result cell, NAF-gate |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
 | 4 | Parallel executor default + `:auto` switch | ⬜ | Enable optimal executor (from 0c data), flip `:auto` → propagator |
@@ -134,7 +135,23 @@ The parallel infrastructure EXISTS from PAR Track 1. It has never been the defau
 
 The dispatch exists. `:auto` → propagator is a one-line change. The WORK is in making the propagator solver handle all the cases that `:auto`'s 95 test files exercise.
 
-### §2.7 Infrastructure Findings (D.2)
+### §2.7 Phase 0a Findings (D.4)
+
+**Parity harness**: `current-solver-strategy-override` parameter added to `stratified-eval.rkt` — one parameter + one `or` in dispatch. Enables running any test under `:atms` without code changes.
+
+**Existing test suite**: 19/19 solver test files pass under BOTH strategies. No existing tests exercise the edge cases that diverge.
+
+**Adversarial benchmark** (`parity-adversarial.prologos`): Found 3 categories of divergence:
+
+| Category | Symptom | Root Cause | Scope |
+|---|---|---|---|
+| 1: Fact-row last-write-wins | `fact8 ?x` → 1 result (should be 8) | Facts path writes ALL rows without checking bound args | Phase 1a |
+| 2: Multi-clause variable binding | `five-way 3 ?y` → 5 results (should be 1); `color-pair ?c1 ?c2` → unresolved `c1` | Clauses installed concurrently without narrowing on bound args | Phase 1a |
+| 3: NAF semantic divergence | `not (ground-vals 20)` → should fail, returns success | Fork doesn't correctly detect inner goal success | Phase 2 |
+
+**Key insight**: Categories 1 and 2 are the SAME problem — clause selection doesn't narrow on bound arguments. This is solved by one mechanism: clause decision-cell narrowing (§3.1).
+
+### §2.8 Infrastructure Findings (D.2)
 
 Key findings from code audit that change the design:
 
@@ -154,24 +171,107 @@ Key findings from code audit that change the design:
 
 ## §3 Algebraic Foundation
 
-### §3.1 Fact-Row Branching — The Missing Lattice
+### §3.1 Clause Selection as Decision-Cell Narrowing (D.4 — from Phase 0a findings)
 
-Currently, fact queries write all matching fact values to the same cells in sequence. The last write wins. This is NOT a lattice operation — it's imperative overwrite.
+#### The Problem (Phase 0a Adversarial Findings)
 
-**The correct model**: Each fact row is a branch (same as each clause is a branch). The result is the JOIN of all fact-row results — the answer accumulator collects all solutions.
+The propagator solver has two related bugs:
 
-This reuses Track 2's concurrent multi-clause infrastructure exactly:
-- Each fact row gets a worldview bitmask bit
-- Each writes to scope cells tagged with its bitmask
-- The answer accumulator collects all tagged results
+**Category 1 (facts)**: Fact rows write ALL values to free argument cells without checking bound arguments. `fact8 ?x` returns 1 result (last-write-wins) instead of 8. `fact16 8 ?y` returns wrong result.
 
-**SRE Lattice Lens**:
-- **Q1 (Classification)**: VALUE lattice (answer set accumulates monotonically)
-- **Q2 (Properties)**: Boolean (powerset of answers), distributive
-- **Q3 (Bridges)**: Fact-row scope → answer accumulator (same as clause-scope → answer)
-- **Q4 (Composition)**: Identical to multi-clause composition — fact rows ARE clauses structurally
-- **Q5 (Primary/Derived)**: Per-row scope cells are primary; answer accumulator is derived
-- **Q6 (Hasse)**: For K fact rows, the answer set lattice is P(K) — powerset. Same as multi-clause.
+**Category 2 (clauses)**: Multi-clause propagators are installed for ALL clauses concurrently without filtering on bound arguments. `five-way 3 ?y` returns 5 results instead of 1. `color-pair ?c1 ?c2` returns unresolved variables for `:c1`.
+
+Both are the SAME problem: **clause selection doesn't narrow on bound arguments**.
+
+#### The Structural Frame
+
+**What is the information?** Two things intersect:
+1. Query arguments — which positions are bound, to what values
+2. Clause head patterns — what each clause/fact expects at each position
+
+**What is the lattice?** The clause-viability lattice:
+
+```
+Carrier:   P(ClauseIndices)          — subsets of clause/fact-row indices
+Order:     ⊇ (reverse inclusion)     — fewer alternatives = more information
+Bot:       {0, 1, ..., N-1}          — all N clauses/fact-rows viable
+Top:       ∅                         — contradiction (no clause matches)
+Merge:     set-intersection          — combining constraints narrows alternatives
+```
+
+This IS a decision cell from Track 2. We already have `decisions-state` with exactly these semantics.
+
+**What emerges?** When a ground value arrives at query argument position k:
+- Clauses whose head at position k is incompatible are eliminated from the domain
+- Their assumption bits are cleared in the decision cell
+- Their propagators become inert (assumption no longer in viable domain)
+- Only matching clauses' propagators fire
+
+Clause selection IS decision-cell narrowing. The mechanism is structurally identical to what Track 2 built for ATMS alternatives.
+
+#### SRE Lattice Lens
+
+- **Q1 (Classification)**: STRUCTURAL lattice (clause domain, alternatives = constructors)
+- **Q2 (Properties)**: Boolean (dual powerset), constraint narrowing — same as Track 2 decision cells
+- **Q3 (Bridges)**: Query argument cells → clause decision cell (narrowing). Clause decision cell → clause propagator installation (topology gating).
+- **Q4 (Composition)**: Clause decision cell composes with per-clause worldview bitmasks (Track 2). Narrowing the decision cell makes inert the corresponding worldview-tagged propagators.
+- **Q5 (Primary/Derived)**: Clause decision cell is primary. Per-clause viability is derived.
+- **Q6 (Hasse)**: For N clauses, the clause decision cell's Hasse diagram is the dual hypercube Q_N — narrowing traverses downward. Bitmask enables O(1) subcube operations (same as Track 2 nogood pruning).
+
+#### Three Components
+
+**1. Discrimination map** (static, computed once at relation registration):
+
+For each clause/fact-row, extract what ground value it expects at each argument position:
+- **Fact rows**: the row values ARE the expected values (`|| 1 2 3` → position 0 expects `{1: row0, 2: row1, 3: row2}`)
+- **Clause bodies**: peek at the first unification goal (`&> (= c1 "red") ...` → position 0 expects `"red"` for this clause)
+- **No first-goal**: clause is compatible with any value at that position (wildcard)
+
+Result: `hasheq position → (hasheq value → (listof clause-index))` — for each position, which values map to which clauses.
+
+**2. Clause decision cell** (Track 2 `decisions-state`):
+
+Created at solve time. Alternatives = all clause/fact-row indices. Merge = set-intersection (narrowing). One per relation invocation.
+
+**3. Argument-watching propagator** (fire-once per position):
+
+For each argument position that has discrimination power:
+- Watch the query argument cell at position k
+- When a ground value arrives, look up the discrimination map
+- Narrow the clause decision cell to only clauses compatible with that value
+- Non-matching clauses' assumption bits are cleared → their propagators become inert
+
+This propagator does NOT need to be installed for positions with no discrimination power (all clauses accept any value). The discrimination map analysis identifies which positions matter.
+
+#### Needed-Narrowing Optimization (Phase 1b)
+
+Inspired by FL-Narrowing's definitional trees, but built natively on Track 2 infrastructure:
+
+**Position analysis**: Which argument position BEST discriminates? If position 0 splits N clauses into N singletons, it's maximally discriminating. If position 0 groups into {A: [c1,c2], B: [c3,c4,c5]}, it's partially discriminating — within each group, another position may further split.
+
+**Hierarchical narrowing**: Build a tree of argument-watching propagators. Level 0 watches position p0 (best discriminant). Level 1 watches position p1 within each group from level 0. Each level is a Q_1 decomposition — the recursive structure of the hypercube.
+
+This is the definitional tree structure, but realized as nested decision cells on the network:
+- Each level IS a decision cell with its own merge
+- Each level's propagator watches a specific argument position
+- The tree of decision cells IS the Hasse diagram of the hierarchical clause decomposition
+
+Unlike FL-Narrowing's off-network tree walking, this puts the entire clause selection on-network. Information flows through cells. Narrowing is lattice operations. The structure IS the parallel decomposition (hypercube optimality).
+
+**When to build the tree**: At relation registration time (static analysis, no runtime cost). The tree structure is stored alongside the relation's `variant-info`. At solve time, the tree guides propagator installation — only install what the discrimination tree doesn't eliminate.
+
+#### Why This Is New Composition, Not Integration
+
+| Aspect | FL-Narrowing (old) | Clause Selection (new) |
+|---|---|---|
+| Clause filtering | Off-network tree walking | Decision-cell narrowing on network |
+| Branch dispatch | `make-branch-fire-fn` callback | Assumption-tagged dependents (Track 2) |
+| Position analysis | `extract-definitional-tree` | Discrimination map extraction (simpler — `defr` heads are ground values, not patterns) |
+| Topology mutation | Direct propagator installation | Topology requests (CALM-safe protocol) |
+| Residuation | Custom wait logic | Cell residuation (propagator fires when cell resolves) |
+| Hierarchical | Tree data structure | Nested decision cells on network |
+
+The theory is the same (needed narrowing). The realization is entirely Track 2 infrastructure.
 
 ### §3.2 NAF as Async Propagator — Lattice Analysis
 
@@ -275,25 +375,43 @@ However, for future self-hosting, conjunction installation should be a broadcast
 ## §4 NTT Model
 
 ```
-;; ===== Fact-Row Branching (Phase 1) =====
+;; ===== Clause Selection as Decision-Cell Narrowing (Phase 1a) =====
 
-;; Fact rows = branches, same as multi-clause
-lattice FactAnswer : Set Answer where
-  bot   = {}
-  join  = set-union
-  -- Monotone: answers only accumulate
+;; Clause viability = decision cell (Track 2 infrastructure)
+lattice ClauseViability : DecisionDomain where
+  bot   = {0, 1, ..., N-1}   -- all clauses viable
+  top   = {}                  -- contradiction
+  merge = set-intersection    -- narrowing
 
-cell fact-answer-acc : FactAnswer := bot
+cell clause-decision : ClauseViability := bot
 
-;; One propagator per fact row, worldview-tagged
-propagator install-fact-row-propagator
+;; Discrimination map (static, computed at registration)
+;; position -> (value -> [clause-indices])
+;;   e.g., {0: {"red" -> [0], "blue" -> [1], "green" -> [2]}}
+
+;; Argument-watching propagator: narrows clause decision on ground arrival
+propagator arg-watcher
+  :reads  [arg-cell-k : TermCell]       -- query argument at position k
+  :writes [clause-decision : ClauseViability]
+  :fire-once true
+  fire =
+    let val = read arg-cell-k
+    if val is ground:
+      let compatible = discrimination-map[k][val]  -- {clause-indices}
+      narrow clause-decision to compatible
+    else:
+      no-op  -- all clauses remain viable for unbound args
+
+;; Surviving fact rows get per-row PU branching (same as multi-clause)
+propagator fact-row-propagator
   :reads  [resolved-args : TermCell]
-  :writes [scope-vars : ScopeCell, fact-answer-acc : FactAnswer]
+  :writes [scope-vars : ScopeCell, answer-acc : AnswerSet]
   :worldview bit-k  -- per-row isolation
+  :assumption aid   -- gated on clause-decision viability
   :fire-once true
   fire = unify row-terms with resolved-args,
          write bindings to scope-vars (tagged with bit-k),
-         write result to fact-answer-acc
+         write result to answer-acc
 
 ;; ===== NAF as Async Propagator (Phase 2) =====
 
@@ -440,20 +558,55 @@ On BOTH the standard comparative suite (13 programs) AND the adversarial benchma
 
 **Deliverable**: Performance matrix (3 executors × 13+ programs) with Mann-Whitney U significance tests. This directly answers: which executor should be default?
 
-### Phase 1: Fact-Row Branching (~2-3h)
+### Phase 1a: Clause Selection as Decision-Cell Narrowing (~3-4h)
 
-**Objective**: Per-fact-row PU isolation so that fact queries return ALL matching rows, not just the last.
+**Objective**: Bound arguments narrow clause/fact-row selection via decision cell. Fixes Category 1 (fact-row last-write-wins) AND Category 2 (multi-clause variable binding).
 
 **Steps**:
-1. In `install-clause-propagators`, detect the fact-row path (already distinct at lines 1692-1704)
-2. For N fact rows, create N worldview bitmask bits (reuse `install-one-clause-concurrent` pattern)
-3. Each fact row gets its own `wrap-with-worldview` fire function that writes to scope cells tagged with its bitmask
-4. Answer accumulator collects all N tagged results
-5. Gray code ordering for CHAMP sharing (same as multi-clause)
+1. **Discrimination map extraction** (~50 lines in `relations.rkt`):
+   - For fact rows: extract ground values at each position
+   - For clause bodies: peek at first unification goal to extract discriminating value
+   - Store as `hasheq position → (hasheq value → (listof clause-index))`
+   - Compute at relation registration time (static, no runtime cost)
 
-**Tests**: Fact queries with N>1 matching rows must return all N results. Verify ordering independence.
+2. **Clause decision cell** (~30 lines):
+   - At solve time, create a `decisions-state` for the relation's clauses/fact-rows
+   - Alternatives = all clause/fact-row indices
+   - Wire into the existing `solver-context` infrastructure
 
-**Vision gate**: On-network? Yes (tagged writes). Complete? All fact rows isolated. Vision-advancing? Fact rows are structurally equivalent to clauses — this unifies the treatment.
+3. **Argument-watching propagator** (~50 lines):
+   - For each discriminating position, install a fire-once propagator
+   - Watches the query argument cell at that position
+   - On ground value arrival: look up discrimination map, narrow decision cell
+   - Non-matching clauses become inert (assumption bit cleared)
+
+4. **Gate clause installation on decision cell** (~30 lines):
+   - `install-clause-propagators` reads the clause decision cell
+   - Only installs propagators for clauses still in the viable set
+   - Fact-row writes only execute for matching rows
+
+5. **Per-fact-row PU branching** (for N>1 matching facts after narrowing):
+   - Surviving fact rows get worldview bitmask bits (same as multi-clause)
+   - Gray code ordering for CHAMP sharing
+   - Answer accumulator collects all tagged results
+
+**Tests**: All parity-adversarial.prologos sections P1 + P2 must match DFS results. `fact16 8 ?y` returns 1 result. `five-way 3 ?y` returns 1 result. `five-way ?x ?y` returns 5 results.
+
+**Vision gate**: On-network? Decision cell + narrowing propagator. Complete? Facts + clauses unified. Vision-advancing? Clause selection IS information flow (lattice narrowing), not imperative filtering.
+
+### Phase 1b: Position-Discriminant Analysis (~2h)
+
+**Objective**: Needed-narrowing-inspired optimization: identify best discriminating argument position, build hierarchical narrowing.
+
+**Steps**:
+1. **Position scoring**: For each argument position, count how many distinct groups the discrimination map creates. Best = most groups (highest discrimination power).
+2. **Hierarchical tree building**: If position p0 groups clauses into subgroups, recurse: within each subgroup, find the next best position p1. Build a tree of (position, value → subgroup) entries.
+3. **Nested decision cells**: Each tree level becomes a decision cell on the network. Level 0 narrows on p0. Level 1 narrows on p1 within each group. Propagators watch the corresponding argument cells.
+4. **Integration**: Store the discrimination tree alongside `variant-info` at registration time. At solve time, use the tree to guide propagator installation.
+
+**Tests**: Relations with multiple discriminating positions (e.g., 2-arg relation where both args have unique values per clause). Verify that narrowing cascades correctly through levels.
+
+**Vision gate**: On-network? Nested decision cells. Complete? Multi-position discrimination. Vision-advancing? The tree IS the Hasse diagram of the clause decomposition.
 
 ### Phase 2: NAF as Async Propagator (~3-4h)
 
