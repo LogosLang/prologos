@@ -42,10 +42,12 @@
  relation-register
  relation-lookup
  relation-store-names
- ;; Track 2B Phase 1a: discrimination map
- build-discrimination-map
+ ;; Track 2B Phase 1a: on-network discrimination
+ build-discrimination-data
+ discrimination-data-merge
+ discrimination-data-bot
  position-discriminates?
- discrimination-lookup
+ install-discrimination-propagators
  ;; AST → runtime conversion
  expr-defr->relation-info
  expr-rel->relation-info
@@ -275,90 +277,173 @@
   (hash-set store (relation-info-name rel) rel))
 
 ;; ========================================
-;; Track 2B Phase 1a: Discrimination Map
+;; Track 2B Phase 1a: Discrimination Infrastructure
 ;; ========================================
 ;;
-;; Extracts which clause/fact-row indices are compatible with which
-;; ground values at each argument position. Used by the arg-watcher
-;; propagator to narrow the clause-viability decision cell.
+;; On-network clause discrimination via broadcast propagators.
 ;;
-;; Structure: (hasheq position → (hasheq value → (listof index)))
-;; where index is an integer identifying a specific fact-row or clause
-;; within the variant's unified alternatives list.
+;; Each discriminating argument position gets ONE compound discrimination
+;; cell (Pocket Universe pattern: one cell, components indexed by clause/
+;; fact-row index). The cell value is a hasheq mapping clause-idx to the
+;; expected ground value at that position. Wildcard clauses (no discriminator)
+;; are omitted — they match any value.
+;;
+;; At query time, ONE broadcast propagator per discriminating position reads
+;; the query argument cell + discrimination cell, compares each clause's
+;; expected value with the query arg using `equal?` (same semantics as
+;; solver-unify-terms line 175), and writes the viable set to the clause-
+;; viability cell.
 ;;
 ;; Alternatives ordering: fact rows first (indices 0..F-1), then
-;; clauses (indices F..F+C-1). This ordering is stable and matches
-;; the assumption-id allocation in install-clause-propagators.
+;; clauses (indices F..F+C-1). Stable; matches assumption-id allocation.
 ;;
-;; On-network: the discrimination map is written to a discrimination
-;; cell (lattice: hash-union merge). Currently computed eagerly at
-;; registration time (scaffolding for self-hosting, where a derivation
-;; propagator would watch the relation registry cell).
+;; Lattice: compound cell with hash-union merge (monotone — new clause
+;; registrations add components). Self-hosting: derivation propagator
+;; watches relation registry cell.
 
-(define (build-discrimination-map variant)
+;; A discrimination-data value: hasheq clause-idx → expected-value.
+;; Stored as the value of a discrimination cell at position k.
+;; Clauses not in the map are wildcards (match any value).
+(define discrimination-data-bot (hasheq))
+
+(define (discrimination-data-merge old new)
+  (if (eq? old discrimination-data-bot) new
+      (if (eq? new discrimination-data-bot) old
+          ;; hash-union: new clauses add to existing
+          (for/fold ([acc old]) ([(k v) (in-hash new)])
+            (hash-set acc k v)))))
+
+;; Build discrimination data for each position from a variant's facts + clauses.
+;; Returns: (hasheq position → discrimination-data)
+;; where discrimination-data = (hasheq clause-idx → expected-ground-value)
+(define (build-discrimination-data variant)
   (define params (variant-info-params variant))
   (define facts (variant-info-facts variant))
   (define clauses (variant-info-clauses variant))
   (define param-names (map param-info-name params))
   (define n-facts (length facts))
 
-  ;; Start with empty map: position → (value → indices)
-  (define discrim
+  ;; Fact rows: each row contributes its ground value at each position
+  (define from-facts
     (for/fold ([dm (hasheq)])
               ([fr (in-list facts)]
                [fact-idx (in-naturals)])
-      ;; Each fact row: position k → value at k → fact-idx
       (for/fold ([dm dm])
                 ([val (in-list (fact-row-terms fr))]
                  [pos (in-naturals)])
-        (define pos-map (hash-ref dm pos (hasheq)))
-        (define existing (hash-ref pos-map val '()))
-        (hash-set dm pos
-                  (hash-set pos-map val (cons fact-idx existing))))))
+        (define pos-data (hash-ref dm pos discrimination-data-bot))
+        (hash-set dm pos (hash-set pos-data fact-idx val)))))
 
-  ;; Add clause discriminators: peek at first unify goal
-  (for/fold ([dm discrim])
+  ;; Clauses: peek at first unify goal for discriminating value
+  (for/fold ([dm from-facts])
             ([ci (in-list clauses)]
-             [clause-idx (in-naturals n-facts)])  ;; indices continue after facts
+             [clause-idx (in-naturals n-facts)])
     (define goals (clause-info-goals ci))
     (if (null? goals)
-        dm  ;; no goals = wildcard
+        dm  ;; no goals = wildcard (not added to discrimination data)
         (let ([first-goal (car goals)])
           (if (eq? (goal-desc-kind first-goal) 'unify)
-              ;; First goal is (= lhs rhs). Extract discriminating value.
               (let* ([args (goal-desc-args first-goal)]
                      [lhs (car args)]
                      [rhs (cadr args)])
-                ;; lhs should be a param name, rhs should be a ground value
                 (define param-pos
                   (for/or ([pname (in-list param-names)]
                            [pos (in-naturals)])
                     (and (equal? pname lhs) pos)))
                 (if (and param-pos (not (symbol? rhs)))
-                    ;; Ground value at a known position → discriminates
-                    (let* ([pos-map (hash-ref dm param-pos (hasheq))]
-                           [existing (hash-ref pos-map rhs '())])
-                      (hash-set dm param-pos
-                                (hash-set pos-map rhs (cons clause-idx existing))))
-                    dm))  ;; non-ground rhs or unknown param → wildcard
-              dm)))))     ;; non-unify first goal → wildcard
+                    (let ([pos-data (hash-ref dm param-pos discrimination-data-bot)])
+                      (hash-set dm param-pos (hash-set pos-data clause-idx rhs)))
+                    dm))
+              dm)))))
 
-;; Check if position k has discrimination power (not all alternatives
-;; map to the same set). Returns #t if narrowing at position k can
-;; eliminate at least one alternative.
-(define (position-discriminates? discrim-map pos n-alternatives)
-  (define pos-map (hash-ref discrim-map pos (hasheq)))
-  (and (not (hash-empty? pos-map))
-       ;; At least one value maps to a proper subset of alternatives
-       (for/or ([(val indices) (in-hash pos-map)])
-         (< (length indices) n-alternatives))))
+;; Check if position k has discrimination power.
+(define (position-discriminates? discrim-data pos n-alternatives)
+  (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
+  (and (not (hash-empty? pos-data))
+       ;; Discriminates if not ALL alternatives are in the map
+       ;; (some are wildcards) or if values are not all identical
+       (or (< (hash-count pos-data) n-alternatives)
+           (let ([vals (hash-values pos-data)])
+             (not (for/and ([v (in-list (cdr vals))])
+                    (equal? v (car vals))))))))
 
-;; Given a discrimination map and a ground value at position k,
-;; return the set of compatible alternative indices.
-;; If value is not in the map, return #f (wildcard — all alternatives viable).
-(define (discrimination-lookup discrim-map pos value)
-  (define pos-map (hash-ref discrim-map pos (hasheq)))
-  (hash-ref pos-map value #f))
+;; Install discrimination broadcast propagators on the network.
+;; For each discriminating position k:
+;;   - Allocate a discrimination cell (compound: clause-idx → expected-value)
+;;   - Write the discrimination data to the cell
+;;   - Install a broadcast propagator that reads query-arg + discrim cell,
+;;     compares using equal?, writes viable set to viability cell
+;;
+;; Returns: (values new-network viability-cid)
+(define (install-discrimination-propagators net variant resolved-args n-alternatives)
+  (define discrim-data (build-discrimination-data variant))
+
+  ;; Allocate viability cell: starts with all alternatives viable
+  (define all-viable (for/seteq ([i (in-range n-alternatives)]) i))
+  (define (viability-merge old new)
+    (if (equal? old all-viable) new
+        (if (equal? new all-viable) old
+            (set-intersect old new))))
+  (define-values (net1 viability-cid)
+    (net-new-cell net all-viable viability-merge))
+
+  ;; For each discriminating position, install a broadcast propagator
+  (define net-final
+    (for/fold ([n net1])
+              ([pos (in-naturals)]
+               [arg (in-list resolved-args)])
+      (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
+      ;; Skip positions with no discrimination data or where arg is already ground
+      ;; and we can narrow immediately
+      (cond
+        [(hash-empty? pos-data) n]  ;; no discriminators at this position
+        [(or (scope-ref? arg) (cell-id? arg))
+         ;; Free argument: install broadcast propagator that fires when arg resolves
+         (define arg-cid (if (scope-ref? arg) (scope-ref-cid arg) arg))
+         (define discrim-pairs
+           (for/list ([(clause-idx expected) (in-hash pos-data)])
+             (cons clause-idx expected)))
+         ;; Broadcast propagator: one fire, checks all clauses at this position
+         (define (discrim-fire net)
+           (define arg-val
+             (let ([raw (net-cell-read net arg-cid)])
+               (if (scope-cell? raw)
+                   ;; Read the specific variable from the scope cell
+                   (let ([var-name (and (scope-ref? arg) (scope-ref-var arg))])
+                     (if var-name (scope-cell-ref raw var-name) raw))
+                   raw)))
+           (if (or (eq? arg-val scope-cell-bot) (not arg-val))
+               net  ;; arg not yet resolved — residuate (no write)
+               ;; Compute viable set: clauses whose expected value matches arg
+               (let ([viable
+                      (for/seteq ([pair (in-list discrim-pairs)]
+                                  #:when (equal? (cdr pair) arg-val))
+                        (car pair))])
+                 ;; Include wildcards: clauses NOT in discrim-data are always viable
+                 (define wildcards
+                   (for/seteq ([i (in-range n-alternatives)]
+                               #:when (not (hash-has-key? pos-data i)))
+                     i))
+                 (define full-viable (set-union viable wildcards))
+                 (net-cell-write n viability-cid full-viable))))
+         (define-values (n2 _pid)
+           (net-add-fire-once-propagator n (list arg-cid) (list viability-cid)
+                                         discrim-fire))
+         n2]
+        [else
+         ;; Ground argument: narrow immediately (construction-time, but through cell write)
+         (define viable
+           (for/seteq ([pair (in-list (hash->list pos-data))]
+                       #:when (equal? (cdr pair) arg))
+             (car pair)))
+         (define wildcards
+           (for/seteq ([i (in-range n-alternatives)]
+                       #:when (not (hash-has-key? pos-data i)))
+             i))
+         (define full-viable (set-union viable wildcards))
+         (net-cell-write n viability-cid full-viable)])))
+
+  (values net-final viability-cid))
 
 ;; Look up a relation by name.
 ;; Returns relation-info or #f.
@@ -1785,31 +1870,27 @@
        (define clauses (variant-info-clauses variant))
        (define param-names (map param-info-name params))
 
-       ;; Track 2B Phase 1a: build discrimination map and narrow viable set
-       (define discrim-map (build-discrimination-map variant))
+       ;; Track 2B Phase 1a: on-network discrimination via broadcast propagators.
+       ;; Install discrimination propagators that narrow the viable set based
+       ;; on bound arguments. Returns viability cell that gates clause/fact
+       ;; installation.
        (define n-alternatives (+ (length facts) (length clauses)))
+       (define-values (n-discrim viability-cid)
+         (install-discrimination-propagators n variant resolved-args n-alternatives))
 
-       ;; Compute viable alternative indices by narrowing on each bound arg
-       ;; (Distributivity: narrowing order doesn't affect result)
-       (define viable-indices
-         (for/fold ([viable (for/seteq ([i (in-range n-alternatives)]) i)])
-                   ([arg (in-list resolved-args)]
-                    [pos (in-naturals)])
-           (if (or (scope-ref? arg) (cell-id? arg))
-               viable  ;; free arg — no narrowing at this position
-               ;; ground arg — narrow to compatible alternatives
-               (let ([compatible (discrimination-lookup discrim-map pos arg)])
-                 (if compatible
-                     (set-intersect viable (list->seteq compatible))
-                     viable)))))  ;; no entry = wildcard (all compatible)
+       ;; For ground args, discrimination propagators write to viability cell
+       ;; immediately (construction-time narrowing via cell write). For free args,
+       ;; fire-once propagators will narrow when args resolve during BSP.
+       ;; Read the viability cell to get the current viable set.
+       (define viable-indices (net-cell-read n-discrim viability-cid))
 
        ;; Facts: write ONLY viable fact rows' values to arg variables
        (define n-facts
-         (for/fold ([n n])
+         (for/fold ([n n-discrim])
                    ([fr (in-list facts)]
                     [fact-idx (in-naturals)])
            (if (not (set-member? viable-indices fact-idx))
-               n  ;; fact row filtered out by bound-arg narrowing
+               n  ;; fact row filtered out by discrimination narrowing
                (let ([row (fact-row-terms fr)])
                  (if (= (length row) (length resolved-args))
                      (for/fold ([n n])
