@@ -41,6 +41,10 @@
  relation-register
  relation-lookup
  relation-store-names
+ ;; Track 2B Phase 1a: discrimination map
+ build-discrimination-map
+ position-discriminates?
+ discrimination-lookup
  ;; AST → runtime conversion
  expr-defr->relation-info
  expr-rel->relation-info
@@ -265,8 +269,95 @@
 
 ;; Register a relation in the store.
 ;; Returns updated store.
+;; Track 2B Phase 1a: computes discrimination map at registration time.
 (define (relation-register store rel)
   (hash-set store (relation-info-name rel) rel))
+
+;; ========================================
+;; Track 2B Phase 1a: Discrimination Map
+;; ========================================
+;;
+;; Extracts which clause/fact-row indices are compatible with which
+;; ground values at each argument position. Used by the arg-watcher
+;; propagator to narrow the clause-viability decision cell.
+;;
+;; Structure: (hasheq position → (hasheq value → (listof index)))
+;; where index is an integer identifying a specific fact-row or clause
+;; within the variant's unified alternatives list.
+;;
+;; Alternatives ordering: fact rows first (indices 0..F-1), then
+;; clauses (indices F..F+C-1). This ordering is stable and matches
+;; the assumption-id allocation in install-clause-propagators.
+;;
+;; On-network: the discrimination map is written to a discrimination
+;; cell (lattice: hash-union merge). Currently computed eagerly at
+;; registration time (scaffolding for self-hosting, where a derivation
+;; propagator would watch the relation registry cell).
+
+(define (build-discrimination-map variant)
+  (define params (variant-info-params variant))
+  (define facts (variant-info-facts variant))
+  (define clauses (variant-info-clauses variant))
+  (define param-names (map param-info-name params))
+  (define n-facts (length facts))
+
+  ;; Start with empty map: position → (value → indices)
+  (define discrim
+    (for/fold ([dm (hasheq)])
+              ([fr (in-list facts)]
+               [fact-idx (in-naturals)])
+      ;; Each fact row: position k → value at k → fact-idx
+      (for/fold ([dm dm])
+                ([val (in-list (fact-row-terms fr))]
+                 [pos (in-naturals)])
+        (define pos-map (hash-ref dm pos (hasheq)))
+        (define existing (hash-ref pos-map val '()))
+        (hash-set dm pos
+                  (hash-set pos-map val (cons fact-idx existing))))))
+
+  ;; Add clause discriminators: peek at first unify goal
+  (for/fold ([dm discrim])
+            ([ci (in-list clauses)]
+             [clause-idx (in-naturals n-facts)])  ;; indices continue after facts
+    (define goals (clause-info-goals ci))
+    (if (null? goals)
+        dm  ;; no goals = wildcard
+        (let ([first-goal (car goals)])
+          (if (eq? (goal-desc-kind first-goal) 'unify)
+              ;; First goal is (= lhs rhs). Extract discriminating value.
+              (let* ([args (goal-desc-args first-goal)]
+                     [lhs (car args)]
+                     [rhs (cadr args)])
+                ;; lhs should be a param name, rhs should be a ground value
+                (define param-pos
+                  (for/or ([pname (in-list param-names)]
+                           [pos (in-naturals)])
+                    (and (equal? pname lhs) pos)))
+                (if (and param-pos (not (symbol? rhs)))
+                    ;; Ground value at a known position → discriminates
+                    (let* ([pos-map (hash-ref dm param-pos (hasheq))]
+                           [existing (hash-ref pos-map rhs '())])
+                      (hash-set dm param-pos
+                                (hash-set pos-map rhs (cons clause-idx existing))))
+                    dm))  ;; non-ground rhs or unknown param → wildcard
+              dm)))))     ;; non-unify first goal → wildcard
+
+;; Check if position k has discrimination power (not all alternatives
+;; map to the same set). Returns #t if narrowing at position k can
+;; eliminate at least one alternative.
+(define (position-discriminates? discrim-map pos n-alternatives)
+  (define pos-map (hash-ref discrim-map pos (hasheq)))
+  (and (not (hash-empty? pos-map))
+       ;; At least one value maps to a proper subset of alternatives
+       (for/or ([(val indices) (in-hash pos-map)])
+         (< (length indices) n-alternatives))))
+
+;; Given a discrimination map and a ground value at position k,
+;; return the set of compatible alternative indices.
+;; If value is not in the map, return #f (wildcard — all alternatives viable).
+(define (discrimination-lookup discrim-map pos value)
+  (define pos-map (hash-ref discrim-map pos (hasheq)))
+  (hash-ref pos-map value #f))
 
 ;; Look up a relation by name.
 ;; Returns relation-info or #f.
