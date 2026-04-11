@@ -3,7 +3,7 @@
 **Date**: 2026-04-10
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: DFS↔Propagator parity validation, fact-row isolation, NAF/guard as async propagators, parallel executor default, `:auto` deployment
-**Status**: D.8 — external critique responses incorporated (GS-to-BSP prerequisite, deferred-spawn NAF, conjunction wiring, consistency pass)
+**Status**: D.9 — Phase 1 lattice design deepened (SRE lens, module theory, Hasse optimality, forward composition)
 **Self-critique**: [P/R/M Analysis](2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md) (15 findings, 5 revised via self-hosting lens)
 **External critique**: [Architect Review](2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md) (18 findings, 2 critical, 8 major)
 **Critique response**: [Response](2026-04-10_BSP_LE_TRACK2B_CRITIQUE_RESPONSE.md) (15 actions incorporated)
@@ -342,25 +342,23 @@ The propagator solver has two related bugs:
 
 Both are the SAME problem: **clause selection doesn't narrow on bound arguments**.
 
-#### The Structural Frame
+#### The Structural Frame — Not a New Lattice
 
-**What is the information?** Two things intersect:
-1. Query arguments — which positions are bound, to what values
-2. Clause head patterns — what each clause/fact expects at each position
+The clause-viability lattice is NOT a new algebraic structure. It is an **instance** of the existing Track 2 decision cell lattice with a new narrowing SOURCE:
 
-**What is the lattice?** The clause-viability lattice:
+| | ATMS Decision Cell (Track 2) | Clause-Viability Cell (Track 2B) |
+|---|---|---|
+| Carrier | P(Alternatives) | P(ClauseIndices) |
+| Order | ⊇ (reverse inclusion) | ⊇ (reverse inclusion) |
+| Bot | all alternatives viable | all clauses viable |
+| Top | ∅ (contradiction) | ∅ (no clause matches) |
+| Merge | set-intersection | set-intersection |
+| **Narrowing source** | **Nogoods** (contradictions) | **Bound arguments** (query constraints) |
 
-```
-Carrier:   P(ClauseIndices)          — subsets of clause/fact-row indices
-Order:     ⊇ (reverse inclusion)     — fewer alternatives = more information
-Bot:       {0, 1, ..., N-1}          — all N clauses/fact-rows viable
-Top:       ∅                         — contradiction (no clause matches)
-Merge:     set-intersection          — combining constraints narrows alternatives
-```
-
-This IS a decision cell from Track 2. We already have `decisions-state` with exactly these semantics.
+Same lattice. Same infrastructure (`decisions-state`). Same merge. We are adding a new **bridge** to an existing lattice, not introducing a new algebraic structure.
 
 **What emerges?** When a ground value arrives at query argument position k:
+- The arg-watcher propagator fires, looks up the discrimination map
 - Clauses whose head at position k is incompatible are eliminated from the domain
 - Their assumption bits are cleared in the decision cell
 - Their propagators become inert (assumption no longer in viable domain)
@@ -368,14 +366,110 @@ This IS a decision cell from Track 2. We already have `decisions-state` with exa
 
 Clause selection IS decision-cell narrowing. The mechanism is structurally identical to what Track 2 built for ATMS alternatives.
 
-#### SRE Lattice Lens
+#### SRE Lattice Lens — Full Analysis
 
-- **Q1 (Classification)**: STRUCTURAL lattice (clause domain, alternatives = constructors)
-- **Q2 (Properties)**: Boolean (dual powerset), constraint narrowing — same as Track 2 decision cells
-- **Q3 (Bridges)**: Query argument cells → clause decision cell (narrowing). Clause decision cell → clause propagator installation (topology gating).
-- **Q4 (Composition)**: Clause decision cell composes with per-clause worldview bitmasks (Track 2). Narrowing the decision cell makes inert the corresponding worldview-tagged propagators.
-- **Q5 (Primary/Derived)**: Clause decision cell is primary. Per-clause viability is derived.
-- **Q6 (Hasse)**: For N clauses, the clause decision cell's Hasse diagram is the dual hypercube Q_N — narrowing traverses downward. Bitmask enables O(1) subcube operations (same as Track 2 nogood pruning).
+**Q1 (Classification)**: STRUCTURAL lattice. Clause indices ARE constructors — each clause is a mutually exclusive alternative. Maps directly onto SRE form registry: alternatives = constructors, narrowing = eliminating constructors. Same classification as Track 2 decision cells.
+
+**Q2 (Algebraic Properties)**: Boolean (dual powerset), distributive, complemented, Heyting, frame — inherits ALL properties from P(N) under ⊇.
+
+Distributivity is critical for Phase 1b: narrowing by (position 0 AND position 1) = (narrow by 0) THEN (narrow by 1) = (narrow by 1) THEN (narrow by 0). The order of multi-position narrowing does NOT affect the result. The "best position first" optimization (needed narrowing) is about PERFORMANCE (fewer intermediate states), not CORRECTNESS (same final result guaranteed by distributivity).
+
+**Q3 (Bridges to other lattices)**:
+
+```
+Query Argument Cells ──(narrow-by-arg)──→ Clause-Viability Cell
+                                              │
+                                         (gate branches)
+                                              │
+                                    ┌─────────┼─────────┐
+                                    ↓         ↓         ↓
+                              Branch PU₁  Branch PU₂  Branch PUₖ
+                              (worldview  (worldview  (worldview
+                               bitmask)   bitmask)    bitmask)
+                                    │         │         │
+                                    ↓         ↓         ↓
+                             Scope cells (per-clause, tagged)
+                                    │         │         │
+                                    └─────────┼─────────┘
+                                              │
+                                       Answer Accumulator
+```
+
+| Bridge | From | To | α (forward) | Galois? |
+|---|---|---|---|---|
+| **Narrow-by-arg** | Query arg cell (position k) | Clause-viability cell | `ground_value → compatible_clause_set` via discrimination map | Yes: α preserves joins |
+| **Gate-branches** | Clause-viability cell | Branch topology | Viable set → PU branches for viable clauses only | Topology mutation (CALM-safe) |
+| **Inherit assumptions** | Clause-viability (per-clause) | Worldview (compound decisions) | Each viable clause's assumption bit → worldview bitmask | Composition with existing Track 2 bridge |
+
+The narrow-by-arg bridge IS a Galois connection. The discrimination map defines α (forward: value → clause set). The adjoint γ (backward: clause set → "what values keep these viable?") is the inverse of the map.
+
+**Q4 (Composition)**: The clause-viability cell sits BETWEEN query arguments and Track 2 branching. It's a pre-filter that reduces the input to the branching infrastructure:
+
+```
+                                   Track 2B (new)
+                                  ┌─────────────────┐
+Query Args ──(narrow-by-arg)──→  │ Clause-Viability │
+                                  │      Cell        │
+                                  └────────┬────────┘
+                                           │
+                                    (gate branches)
+                                           │
+                                   Track 2 (existing)
+                                  ┌────────┴────────┐
+                                  │  Per-Clause PU   │
+                                  │  Branches with   │
+                                  │  Worldview Bits  │
+                                  └────────┬────────┘
+                                           │
+                           ┌───────────────┼───────────────┐
+                    Decision Cells    Commitment Cells   Nogood Cell
+                           │               │               │
+                           └───────────────┼───────────────┘
+                                    Worldview Cache (cell-id 1)
+```
+
+The clause-viability cell does NOT replace any Track 2 lattice. It COMPOSES with them by reducing the input. Fewer viable clauses = fewer branches = less ATMS overhead.
+
+**Q5 (Primary/Derived)**: Clause-viability cell is **PRIMARY** — derived from query arguments (inputs), not from other solver lattice cells. The discrimination map is a STATIC FUNCTION applied by the arg-watcher propagator. Per-clause viability (whether propagators fire) is DERIVED from the viability cell + Track 2 assumption-tagged dependents.
+
+**Q6 (Hasse Diagram — Optimality)**: For N clauses, the Hasse diagram is dual hypercube Q_N:
+- Nodes: all subsets of {0, ..., N-1}
+- Edges: subsets differing by one element
+- Bot: {0, ..., N-1} (all viable) at top
+- Top: ∅ (none viable) at bottom
+- Narrowing traverses DOWNWARD
+
+For Phase 1b hierarchical narrowing: each argument position is a DIMENSION. Q_N = Q_{N-1} × Q_1 — each position splits the clause space in half. The optimal narrowing order (needed narrowing) IS the dimension order that minimizes traversal depth.
+
+Bitmask representation enables O(1): narrowing = `viable AND compatible_mask`, viability check = `viable AND (1 << idx)`, contradiction = `viable == 0`.
+
+#### Module-Theoretic Decomposition
+
+A relation R with N clauses is a **direct sum of clause modules**:
+
+```
+R = C₁ ⊕ C₂ ⊕ ... ⊕ Cₙ
+```
+
+Each clause Cᵢ is a sub-module: `(input bindings) → (output bindings)` via the clause body.
+
+The clause-viability cell computes a **projection**: given query arguments, project R onto the sub-module spanned by compatible clauses. If arguments narrow to {C₂, C₅}, then R_projected = C₂ ⊕ C₅.
+
+The discrimination map IS the **kernel** of this projection — it determines which clauses project to zero for a given argument value. The arg-watcher propagator IS the projection morphism.
+
+For Phase 1b: hierarchical narrowing is **iterated projection** through the module's decomposition tree. Each argument position defines a further projection. The tree of projections IS the module's composition series.
+
+#### Forward Composition with Phases 2-6
+
+| Phase | How Clause-Viability Composes |
+|---|---|
+| Phase 2 (NAF) | NAF inner goal creates its own clause-viability cell. No interaction with outer viability. |
+| Phase 3 (Guard) | Guard-gate watches guard-result, not clause-viability. Independent lattices. |
+| Phase 5a (Fire-once) | Viability may narrow to 0-1 clauses → BSP worklist empty → fire-once fast-path triggers. Narrowing FEEDS the fast-path. |
+| Phase 5b (Lazy context) | Viability narrows to 0-1 clauses → never reaches `amb` → lazy context stays minimal. Narrowing REDUCES context allocation. |
+| Phase 6 (Parallel) | Narrowing reduces N (concurrent propagators). Fewer viable clauses = closer to sequential fast-path. Narrowing is an anti-parallelism optimization. |
+
+The key insight: clause-viability narrowing **compounds** with every Tier 1 optimization. Better narrowing → fewer branches → more queries hit fire-once → lower overhead. The lattice IS the optimization's input.
 
 #### Three Components
 
