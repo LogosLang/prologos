@@ -3,7 +3,7 @@
 **Date**: 2026-04-10
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: DFS↔Propagator parity validation, fact-row isolation, NAF/guard as async propagators, parallel executor default, `:auto` deployment
-**Status**: D.6 — executor scaling data + hypercube merge topology
+**Status**: D.7 — self-critique responses incorporated (self-hosting lens, fire-once fast-path, on-network mandate)
 **Predecessor**: [BSP-LE Track 2 PIR](2026-04-10_BSP_LE_TRACK2_PIR.md) — ATMS Solver + Cell-Based TMS
 **Design doc**: [BSP-LE Track 2 Design](2026-04-07_BSP_LE_TRACK2_DESIGN.md) (D.13, ~2000 lines)
 **Prior art**: [Track 2 Session Handoff](standups/2026-04-09_2300_session_handoff.md), [Track 2 PIR §10-§12](2026-04-10_BSP_LE_TRACK2_PIR.md)
@@ -21,10 +21,9 @@
 | 1b | Position-discriminant analysis | ⬜ | Needed-narrowing-inspired: identify best discriminating position, hierarchical narrowing |
 | 2 | NAF as async propagator | ⬜ | Async from start: thread-spawned inner BSP, NAF-result cell, NAF-gate |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
-| 5a | Tier 1 fast-path: deterministic query bypass | ⬜ | Skip solver-context + BSP for non-branching queries. Target: <3x DFS. |
+| 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
 | 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
-| 5c | BSP empty-worklist fast-path | ⬜ | Skip BSP scheduling when no propagators on worklist after installation. |
-| 5d | Context pooling | ⬜ | Pre-allocate solver-context, reuse across queries via CHAMP snapshots. |
+| 5c | Solver-template cell (was: context pooling — on-network per critique) | ⬜ | First-write-wins cell replaces parameter. Template reused via CHAMP fork. |
 | 6 | Parallel executor default + `:auto` switch | ⬜ | Enable optimal executor, flip `:auto` → propagator, full regression gate. |
 | T | Parity regression suite | ⬜ | `test-solver-parity.rkt` — representative queries, BOTH strategies, set-equal results |
 | PIR | Post-implementation review | ⬜ | |
@@ -314,6 +313,16 @@ Tier C applies the Hyperlattice Conjecture's optimality claim to the BSP barrier
 
 **No current workload benefits from parallelism.** All programs have too few concurrent propagators per BSP round.
 
+### §2.11 R4 Verification: Lazy Context + Worldview Cache (D.7)
+
+**Verified safe.** Audit findings:
+1. Cell-id 1 (worldview cache) is **always pre-allocated** in `make-prop-network` with initial value 0 — independent of `make-solver-context`. Lazy context doesn't affect it.
+2. `promote-cell-to-tagged` makes **no reference to cell-id 1** — it only operates on the specific cell being promoted (its value + merge function).
+3. `net-cell-read` with tagged values: if cell-id 1 is `'none`, defaults to bitmask=0 (base value, no filtering). If cell-id 1 has value 0, same result. Both paths safe.
+4. Multi-clause installation supports `ctx = #f` fallback (local assumption IDs) and calls `promote-cell-to-tagged` regardless — but the main entry point (`solve-goal-propagator`) always creates a context first.
+
+**Conclusion**: lazy solver-context (Phase 5b) is safe. No interaction hazards with tagged-cell-value infrastructure.
+
 ---
 
 ## §3 Algebraic Foundation
@@ -521,17 +530,20 @@ However, for future self-hosting, conjunction installation should be a broadcast
 
 Phase 0b reveals the ATMS solver is 25x slower than DFS for trivial single-fact queries. The overhead decomposes to: BSP scheduling 52.6%, goal installation 30.4%, context allocation 15.5%, result reading 0.4%. Four optimizations target each component, together aiming for <3x DFS on Tier 1 queries.
 
-#### Optimization 1: Deterministic Query Fast-Path (Phase 5a) — targets 52.6% BSP overhead
+#### Optimization 1: BSP Fire-Once Fast-Path (Phase 5a, merged from critique P2+R2) — targets 52.6% BSP overhead
 
-**The insight**: For deterministic queries (no `amb`, single clause or facts only), BSP scheduling is pure waste. The query can be answered by direct cell writes and reads — no propagators need to fire, no worklist needs scheduling, no topology stratum needs checking.
+**The insight**: The BSP scheduler's fixed overhead (worklist dedup, fuel check, outer loop, topology stratum) is disproportionate for queries with 0-1 propagators. Fire-once propagators (which cover both fact-row writes and single-clause unification) can execute directly without scheduling ceremony.
 
-**The mechanism**: Before calling `run-to-quiescence`, check if the worklist is empty after goal installation. For a single-fact query, `install-goal-propagator` writes fact values directly to scope cells (no propagators installed). The worklist is empty → skip BSP entirely → read cells directly.
+**The mechanism**: Inside `run-to-quiescence-bsp`, at entry:
+- **Empty worklist** (fact-only queries): return immediately. No scheduling needed — fact values are already in cells from `install-goal-propagator`.
+- **Single fire-once propagator on worklist**: fire it directly (call its fire function, merge writes), return. No BSP loop, no topology stratum check. This is the self-cleaning property of fire-once: it fires once and becomes inert, so no second round is possible.
+- **Multiple propagators or non-fire-once**: proceed to full BSP.
 
-This is NOT a special case — it's recognizing that deterministic queries don't need the scheduler at all. The information is already in the cells after installation. BSP is for convergence of interdependent propagators, not for reading pre-computed values.
+This is ONE fast-path inside the scheduler (not a separate caller-side check — critique P2 resolved). It handles both fact-only (worklist=0) AND single-clause (worklist=1 fire-once) queries. The scheduler handles scheduling; the solver handles solving (Decomplection).
 
-**Expected savings**: ~12.1us (52.6% of 23us). Target: ~11us → 12x DFS (still high — need other optimizations).
+**Expected savings**: ~12.1us for fact-only; ~8-10us for single-clause (eliminates BSP ceremony for the single fire). Combined target: Tier 1 queries under 10us.
 
-**SRE lens**: This is the CALM observation made operational. Deterministic queries are trivially monotone — one write, one read, no fixpoint needed. The BSP scheduler is coordination infrastructure; CALM says coordination-free computations don't need it.
+**SRE lens**: CALM observation made operational. Fire-once propagators are trivially convergent — one fire, one merge, fixpoint. The scheduler recognizes this structurally (fire-once flag), not by counting worklist items.
 
 #### Optimization 2: Lazy Solver-Context (Phase 5b) — targets 15.5% allocation overhead
 
@@ -545,45 +557,37 @@ This is a structural optimization: the solver-context IS a lattice value that st
 
 **Expected savings**: ~3.6us for Tier 1 queries (15.5% of 23us). Combined with Opt 1: ~7.3us → 8x DFS.
 
-#### Optimization 3: BSP Empty-Worklist Fast-Path (Phase 5c) — targets BSP entry overhead
+#### Optimization 3: Solver-Template Cell (Phase 5c, revised from critique P6/M4) — targets repeated query overhead
 
-**The insight**: Even when the worklist is non-empty, the BSP loop has fixed entry overhead: dedup worklist, check fuel, enter outer loop, check topology stratum. For queries with very few propagators (1-2), this overhead is disproportionate.
+**The insight**: Multiple `solve` blocks in the same file each create fresh network + solver-context. CHAMP immutability enables safe reuse.
 
-**The mechanism**: In `run-to-quiescence-bsp`, add a fast-path check at entry:
-- If worklist has ≤ 1 item AND no topology requests pending: fire the single propagator directly (bypass BSP loop), return network
-- If worklist is empty: return network immediately (no scheduling at all)
+**The mechanism (on-network, per §3.8)**: A `solver-template-cell` with first-write-wins merge:
+- First solver invocation: creates full context, writes to template cell
+- Subsequent invocations: read template cell, fork via CHAMP (O(1))
+- Merge: `(lambda (old new) (if (eq? old 'bot) new old))` — first non-bot value becomes the fixed template
 
-This is the degenerate case of BSP: when the "bulk" in Bulk Synchronous Parallel is N=0 or N=1, the synchronization protocol is overhead without benefit. The fast-path recognizes this.
+No parameter. The template IS a cell value — observable, composable, on-network.
 
-**Expected savings**: ~2-3us for trivial queries (reduces step 6 delta from 12.1us to ~9-10us). Smaller than Opt 1 but compounds with it.
+Phase 0b data: context reuse saves 33% (23.0us → 15.5us). For 50 sequential solves, ~375us total.
 
-#### Optimization 4: Context Pooling (Phase 5d) — targets repeated query overhead
-
-**The insight**: When multiple `solve` blocks appear in the same `.prologos` file (very common — see A7 section of `atms-adversarial.prologos` with 50 sequential solves), each creates a fresh network + solver-context from scratch. CHAMP immutability means a pre-built context can be safely reused as a snapshot base.
-
-**The mechanism**: Maintain a `current-solver-context-pool` parameter. On first query, build the full context. On subsequent queries, fork from the pooled context (O(1) CHAMP fork) instead of allocating from scratch.
-
-Phase 0b data: context reuse saves 33% (23.0us → 15.5us). For 50 sequential solves, this saves ~375us total.
-
-**Expected savings**: Per-query savings of ~7.5us after first query. Amortized over N queries: `(7.5 * (N-1)) / N` us savings per query.
+**Expected savings**: ~7.5us per query after first. Amortized over N queries: `(7.5 * (N-1)) / N` us.
 
 #### Combined Optimization Target
 
 | Optimization | Targets | Savings (us) | Cumulative ATMS (us) | vs DFS |
 |---|---|---|---|---|
 | Baseline | — | — | 23.0 | 25.3x |
-| 5a: Empty-worklist fast-path | BSP scheduling (52.6%) | ~12.1 | ~10.9 | ~12x |
+| 5a: Fire-once fast-path (merged 5a+5c) | BSP scheduling (52.6%) | ~12.1 | ~10.9 | ~12x |
 | 5b: Lazy solver-context | Allocation (15.5%) | ~3.6 | ~7.3 | ~8x |
-| 5c: BSP entry fast-path | BSP entry overhead | ~2-3 | ~4.5 | ~5x |
-| 5d: Context pooling | Repeated query amortization | ~7.5 (amortized) | ~4.0 (amort.) | ~4.4x |
+| 5c: Solver-template cell | Repeated query amortization | ~7.5 (amortized) | ~4.0 (amort.) | ~4.4x |
 | **All combined (Tier 1)** | | | **~3-5** | **~3-5x** |
 
 Target: <5x DFS for Tier 1 deterministic queries. For Tier 2 branching queries, the overhead is already more acceptable (8.3x for 3-clause) and the propagator solver provides genuine parallelism that DFS cannot.
 
 #### Architectural Integrity
 
-All four optimizations preserve the on-network architecture:
-- **5a** skips BSP for queries that have no propagators — the information is already in cells
+All three optimizations preserve the on-network architecture:
+- **5a** recognizes fire-once convergence structurally (flag-based, not conditional check) — fires directly, no scheduling ceremony
 - **5b** defers allocation, doesn't eliminate it — branching queries still get the full context
 - **5c** is a scheduler optimization inside `run-to-quiescence-bsp` — transparent to callers
 - **5d** reuses CHAMP snapshots — immutability guarantees isolation
@@ -679,6 +683,62 @@ This is a significant optimization but architecturally clean — it changes the 
 - **Phase 6 scope**: implement alongside `:auto` switch as the production parallel executor
 - **Future track**: defer to PAR Track 2 (parallel scheduling) where it compounds with other parallel optimizations
 - **Data-driven**: implement Phase 5a-5d first (Tier 1 fast-path), re-measure. If Tier 1 is <5x DFS, the parallel executor is less urgent and can be deferred
+
+### §3.8 Self-Hosting Lens — On-Network Mandate for All Compiler State (D.7)
+
+The self-critique (P1, P5, P6, M1, M4) dismissed five instances of off-network state as "constants," "static data," or "write-once parameters." The self-hosting lens challenges ALL five dismissals: **in the self-hosted compiler, all compiler state flows through cells. "Constant" is a lattice element at fixpoint after one write — it still belongs on-network.**
+
+#### Why Off-Network Constants Are Self-Hosting Debt
+
+The self-hosted compiler runs ON the propagator network. It needs to:
+- **Observe** its own state (debugging, tracing, introspection)
+- **Compose** state from different compiler phases (relation registration → clause selection → solver execution)
+- **Extend** state incrementally (new modules add new relations → discrimination map grows)
+
+Off-network constants are invisible to all three. A discrimination map in a hasheq is opaque — the compiler can't trace how it was derived, compose it with other lattice values, or extend it when new clauses arrive.
+
+#### Revised Design Decisions
+
+**1. Discrimination map → discrimination cell** (was P5, "justified constant")
+
+The discrimination map IS derived information:
+- **Source**: relation registration (writes clause heads to relation registry cell)
+- **Derivation**: extract ground values at each position from clause heads/first-goals
+- **Lattice**: `hasheq position → (hasheq value → (listof clause-index))`, with hash-union merge (new clause registrations extend the map monotonically)
+- **Merge**: `(hash-union old new #:combine append)` — new clauses ADD to existing position entries
+
+At self-hosting, the discrimination map is a cell written by a propagator that watches the relation registry cell. When a new clause is registered, the propagator fires and updates the discrimination map. This is reactive, not computed-once.
+
+Cost: one cell allocation per relation. Near-zero ongoing cost. Benefit: the map is observable, composable, and extensible on-network.
+
+**2. Construction-time narrowing → reactive narrowing always** (was P1/M1, "acceptable optimization")
+
+The self-hosting lens eliminates the need for two mechanisms. The arg-watcher propagator IS the general mechanism:
+- When arguments are ground at query time, the watcher fires **immediately in BSP round 1** — the "construction-time optimization" falls out naturally from BSP scheduling
+- When arguments are partially bound, the watcher fires **when information arrives** — same mechanism, no separate path
+- No imperative dispatch, no construction-time filter, no bifurcation
+
+One mechanism. Information flow. The BSP scheduler handles timing. This is SIMPLER than the D.6 design (which had two paths) and MORE aligned with the propagator model.
+
+**3. Context pool → solver-template cell** (was P6/M4, "write-once parameter acceptable")
+
+The solver-template is information about available solver infrastructure. On-network:
+- **Cell**: `solver-template-cell` with first-write-wins merge
+- **Write**: first solver invocation creates the template, writes to cell
+- **Read**: subsequent invocations read the cell, fork via CHAMP
+- **Merge**: `(lambda (old new) (if (eq? old 'bot) new old))` — first non-bot value wins
+
+No parameter. The template IS a cell value. The network can observe it, compose with it, and (at self-hosting) the compiler can reason about available solver infrastructure through the network.
+
+#### Summary: Off-Network → On-Network
+
+| Item | D.6 (dismissed) | D.7 (on-network) | Self-hosting benefit |
+|---|---|---|---|
+| Discrimination map | Static hasheq, off-network | Cell with hash-union merge | Reactive updates when new clauses registered |
+| Construction-time narrowing | Imperative filter for ground args | Arg-watcher fires in BSP round 1 | One mechanism, no bifurcation |
+| Context pool | `make-parameter`, write-once | Cell with first-write-wins merge | Observable solver infrastructure |
+
+The cost is ~2 additional cell allocations. The benefit is architectural integrity for self-hosting and design simplification (one narrowing mechanism instead of two).
 
 ---
 
