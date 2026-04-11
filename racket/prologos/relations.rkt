@@ -2111,13 +2111,19 @@
        (remove-duplicates
         (for/list ([entry (in-list (tagged-cell-value-entries scope-raw))])
           (car entry))))
+     ;; Domain-merge for same-bitmask entry merging.
+     ;; Multiple writes at same bitmask (e.g., c1 and c2 written separately)
+     ;; must be merged via scope-cell-merge to produce a complete binding.
+     ;; We use make-tagged-merge(scope-cell-merge) because tagged-cell-read's
+     ;; domain-merge receives the tagged merge wrapper (same as net-cell-read uses).
+     (define domain-merge (make-tagged-merge scope-cell-merge))
      (for/list ([bm (in-list bitmasks)])
        (for/hasheq ([qv (in-list query-vars)])
          (define ref (hash-ref query-env qv))
-         ;; Read the scope cell under this bitmask
+         ;; Read the scope cell under this bitmask, merging same-bitmask entries
          (define sc-val
            (if (tagged-cell-value? scope-raw)
-               (tagged-cell-read scope-raw bm)
+               (tagged-cell-read scope-raw bm domain-merge)
                scope-raw))
          (define val (if (scope-cell? sc-val)
                          (scope-cell-ref sc-val qv)
