@@ -3,7 +3,10 @@
 **Date**: 2026-04-10
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: DFS↔Propagator parity validation, fact-row isolation, NAF/guard as async propagators, parallel executor default, `:auto` deployment
-**Status**: D.7 — self-critique responses incorporated (self-hosting lens, fire-once fast-path, on-network mandate)
+**Status**: D.8 — external critique responses incorporated (GS-to-BSP prerequisite, deferred-spawn NAF, conjunction wiring, consistency pass)
+**Self-critique**: [P/R/M Analysis](2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md) (15 findings, 5 revised via self-hosting lens)
+**External critique**: [Architect Review](2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md) (18 findings, 2 critical, 8 major)
+**Critique response**: [Response](2026-04-10_BSP_LE_TRACK2B_CRITIQUE_RESPONSE.md) (15 actions incorporated)
 **Predecessor**: [BSP-LE Track 2 PIR](2026-04-10_BSP_LE_TRACK2_PIR.md) — ATMS Solver + Cell-Based TMS
 **Design doc**: [BSP-LE Track 2 Design](2026-04-07_BSP_LE_TRACK2_DESIGN.md) (D.13, ~2000 lines)
 **Prior art**: [Track 2 Session Handoff](standups/2026-04-09_2300_session_handoff.md), [Track 2 PIR §10-§12](2026-04-10_BSP_LE_TRACK2_PIR.md)
@@ -16,7 +19,7 @@
 |-------|-------------|--------|-------|
 | 0a | Pre-0: parity baseline | ✅ | 19/19 test files pass both strategies. Adversarial: 3 divergence categories found. |
 | 0b | Pre-0: micro-benchmarks | ✅ | 28 benchmarks + overhead decomposition. ATMS 24.5x overhead identified → 4 optimization paths. |
-| 0c | Pre-0: A/B executor comparison | ⬜ | Sequential vs futures vs threads on comparative suite |
+| 0c | Pre-0: A/B executor comparison | ✅ | Sequential wins all current workloads. Threads cross over at N≥128. Futures eliminated. |
 | 1a | Clause selection as decision-cell narrowing | ⬜ | Argument-watching propagator + clause decision cell. Fixes Category 1+2. |
 | 1b | Position-discriminant analysis | ⬜ | Needed-narrowing-inspired: identify best discriminating position, hierarchical narrowing |
 | 2 | NAF as async propagator | ⬜ | Async from start: thread-spawned inner BSP, NAF-result cell, NAF-gate |
@@ -24,7 +27,7 @@
 | 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
 | 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
 | 5c | Solver-template cell (was: context pooling — on-network per critique) | ⬜ | First-write-wins cell replaces parameter. Template reused via CHAMP fork. |
-| 6 | Parallel executor default + `:auto` switch | ⬜ | Enable optimal executor, flip `:auto` → propagator, full regression gate. |
+| 6 | `:auto` switch + adaptive parallel executor | ⬜ | Sequential default, threads at N≥128. Flip `:auto` → propagator. Full regression gate. |
 | T | Parity regression suite | ⬜ | `test-solver-parity.rkt` — representative queries, BOTH strategies, set-equal results |
 | PIR | Post-implementation review | ⬜ | |
 
@@ -39,7 +42,7 @@
 
 ## §1 Objectives
 
-**End state**: The propagator-native solver IS the default solver. `:auto` routes to `solve-goal-propagator`. The parallel thread executor is the default. Clause ordering has no effect on results (already true — CALM) AND no effect on performance (BSP parallel firing). All 95 test files that exercise `defr`/`solve` pass through the propagator path. The DFS solver (`solve-goals`/`solve-single-goal`) is retained as a fallback but is NOT the default.
+**End state**: The propagator-native solver IS the default solver. `:auto` routes to `solve-goal-propagator`. Clause ordering has no effect on results (already true — CALM) AND no effect on performance (BSP parallel firing). All test files that exercise `defr`/`solve` pass through the propagator path. The DFS solver remains as the `:depth-first` backend — one of multiple solver strategies (DFS, BSP/propagator-native, well-founded/bilattice), not a fallback.
 
 **What changes**:
 - `:auto` → propagator (was DFS)
@@ -524,7 +527,9 @@ The hypercube structure unifies all these as Q_1 decompositions composed into Q_
 - The `for/fold` threads the network struct (needed for cell allocation). This is a construction-time concern, not an execution-time concern.
 - CALM guarantees convergence regardless of firing order.
 
-However, for future self-hosting, conjunction installation should be a broadcast-like pattern (install all goals' propagators in one pass). This is a future optimization, not a correctness issue.
+For conjunction goals with dependency chains (goal A's output feeds goal B, which feeds goal C), the **parallel prefix** algorithm from the hypercube research applies: the chain converges in O(log(chain_length)) BSP rounds instead of O(chain_length). Each goal's propagator is installed without ordering; the BSP scheduler's dataflow-driven firing naturally produces prefix-optimal convergence. NAF-gate and guard-gate propagators residuate until their input cells resolve — this IS the parallel prefix pattern (each gate is a "join" that waits for its input).
+
+Installation order does not affect correctness (CALM) or convergence rate (BSP round count is determined by dataflow depth, not installation order). The `for/fold` is scaffolding for self-hosting — the self-hosted compiler would install conjunction goals as a broadcast (all at once, via topology request).
 
 ### §3.6 Tier 1 Optimization Pipeline (D.5 — from Phase 0b data)
 
@@ -657,27 +662,32 @@ This connects to Gray code: the hypercube all-reduce's pairwise merge follows th
 
 With shared-memory coordination (semaphore-gated buffers), the hypercube topology reduces both communication AND merge costs. The merge time itself is parallelized — at each round, K/2^r independent merges run simultaneously.
 
-#### Implementation Sketch
+#### Propagator Network Description
+
+The merge tree IS a propagator network. Each pairwise merge is a propagator that reads two input cells and writes to an output cell:
 
 ```
-;; Per-round pairwise merge (dimension k of the hypercube)
-(for each round k from 0 to log₂(K)-1:
-  ;; Each worker i communicates with partner i XOR 2^k
-  (for each worker i in parallel:
-    partner = i XOR (1 << k)
-    if i < partner:
-      ;; i is the "receiver": merge partner's result into own
-      merged = cell-merge(my-result, shared-buffer[partner])
-      my-result = merged
-    else:
-      ;; i is the "sender": write result to shared buffer for partner
-      shared-buffer[i] = my-result
-  ;; Barrier (semaphore) between rounds)
+;; Merge tree for K=8 workers (log₂ 8 = 3 levels of depth)
+;;
+;; Level 0 (inputs): cells w₀ w₁ w₂ w₃ w₄ w₅ w₆ w₇
+;;                     ↘↙     ↘↙     ↘↙     ↘↙
+;; Level 1 (merges):  m₀₁    m₂₃    m₄₅    m₆₇     ← 4 merge propagators
+;;                      ↘↙         ↘↙
+;; Level 2 (merges):  m₀₁₂₃      m₄₅₆₇              ← 2 merge propagators
+;;                        ↘↙
+;; Level 3 (result):  m₀₁₂₃₄₅₆₇                      ← 1 merge propagator
+;;
+;; Each merge propagator: reads 2 cells, writes merged result to output cell
+;; Fire function: (cell-merge (net-cell-read left) (net-cell-read right))
+;; All propagators at each level are INDEPENDENT — fire in same BSP round
+;; Depth = log₂(K) — the number of BSP rounds to reach global merge
 ```
 
-After log₂(K) rounds, worker 0 holds the global merged result. This is the standard hypercube all-reduce algorithm adapted for CHAMP merge.
+The merge tree's depth (log₂ K) determines the BSP round count. This is EMERGENT from the propagator topology — not imposed by a scheduling algorithm. The BSP scheduler fires all propagators whose inputs are available; at each round, the next level's inputs become available from the previous level's outputs. The "rounds" ARE BSP supersteps.
 
-**Note (critique M2)**: The "rounds" here are NOT imposed temporal ordering — they are the **depth of the merge tree**, which EMERGES from the pairwise propagator topology. Each worker IS a propagator; pairwise connections ARE propagator edges. The BSP scheduler fires all workers; the merge tree's depth determines how many supersteps are needed. The rounds are emergent from dataflow, not from an imposed schedule. The implementation may use explicit dimension iteration for efficiency (the tree structure is known at construction time), but the design semantics are information flow through a merge network.
+For CHAMP specifically: each pairwise merge preserves structural sharing (Hamming-adjacent entries share almost all structure). The tree topology produces optimal CHAMP sharing because adjacent workers (differing by one bit position) are merged first.
+
+After log₂(K) supersteps, the root cell holds the global merged result.
 
 #### Scope Decision
 
@@ -852,6 +862,46 @@ propagator guard-gate
       unknown -> residuate
 ```
 
+#### Conjunction Wiring (D.8 — critique M5)
+
+```
+;; ===== Conjunction: how goals compose =====
+;; Conjunction is NOT sequential installation — it is a dataflow topology.
+;; Each goal's output cells ARE the next goal's input cells (shared scope).
+
+;; Example: conjunction of [unify-goal, naf-goal, app-goal]
+;;
+;;   scope-cell (shared across all goals)
+;;       ↑ writes              ↑ reads           ↑ reads+writes
+;;   [unify-propagator]   [naf-evaluator]    [app clause propagators]
+;;                              ↓ writes
+;;                         naf-result cell
+;;                              ↓ reads
+;;                         [naf-gate]
+;;                              ↓ writes (on success)
+;;                         scope-cell (continuation)
+;;
+;; Dataflow: unify writes to scope → naf-evaluator reads scope →
+;;   naf writes to naf-result → naf-gate reads result →
+;;   gate writes continuation → app reads continuation scope
+;;
+;; Ordering EMERGES from cell dependencies:
+;;   - naf-evaluator residuates until scope has non-bot bindings
+;;   - naf-gate residuates until naf-result resolves
+;;   - app clause propagators residuate until their input bindings resolve
+;;
+;; Guard wiring (similar):
+;;   guard-evaluator reads condition inputs from scope →
+;;   writes guard-result → guard-gate reads result →
+;;   gate emits topology-request (inner goals installed in SAME scope) →
+;;   inner goals fire in next BSP round, writing to shared scope
+
+;; All goals installed simultaneously (broadcast, no ordering).
+;; BSP scheduler fires those whose inputs are available.
+;; Convergence follows parallel prefix pattern: O(log(depth)) rounds
+;; for chains of depth D.
+```
+
 ### NTT Model Observations
 
 1. **Is everything on-network?** Yes. NAF result, guard result, and fact-row branching all flow through cells. The NAF inner computation is a nested BSP (Pocket Universe) on a forked network. The cross-network write (NAF thread → outer network's NAF-result cell) is the ONLY shared-state interaction.
@@ -935,11 +985,14 @@ On BOTH the standard comparative suite (13 programs) AND the adversarial benchma
 **Objective**: Bound arguments narrow clause/fact-row selection via decision cell. Fixes Category 1 (fact-row last-write-wins) AND Category 2 (multi-clause variable binding).
 
 **Steps**:
-1. **Discrimination map extraction** (~50 lines in `relations.rkt`):
+0. **GS-to-BSP switch** (critique P1/R1 prerequisite): Change `solve-goal-propagator` line 1889 from `run-to-quiescence` to `run-to-quiescence-bsp`. This is the foundational change — BSP IS the architecture. Arg-watcher propagators need BSP rounds to fire reactively. Micro-benchmark after switch to measure Tier 1 cost delta (GS vs BSP baseline).
+
+1. **Discrimination cell allocation** (~50 lines in `relations.rkt`, critique P4):
    - For fact rows: extract ground values at each position
    - For clause bodies: peek at first unification goal to extract discriminating value
-   - Store as `hasheq position → (hasheq value → (listof clause-index))`
-   - Compute at relation registration time (static, no runtime cost)
+   - Write to a **discrimination cell** (on-network per §3.8) with hash-union merge
+   - Allocate cell at relation registration time; write map eagerly (scaffolding — self-hosting: derivation propagator watches relation registry cell)
+   - **Limitation (critique R1)**: clauses with non-unification first goals (`app`, `is`, `guard`) are wildcards — no discrimination at that position
 
 2. **Clause decision cell** (~30 lines):
    - At solve time, create a `decisions-state` for the relation's clauses/fact-rows
@@ -957,8 +1010,8 @@ On BOTH the standard comparative suite (13 programs) AND the adversarial benchma
    - Only installs propagators for clauses still in the viable set
    - Fact-row writes only execute for matching rows
 
-5. **Per-fact-row PU branching** (for N>1 matching facts after narrowing):
-   - Surviving fact rows get worldview bitmask bits (same as multi-clause)
+5. **Per-fact-row PU branching** (~60-80 lines, mirrors multi-clause PU infrastructure, critique R2):
+   - Surviving fact rows get worldview bitmask bits via `solver-assume` (same counter as multi-clause — critique R3: coordinated namespace prevents collision for mixed fact+clause relations)
    - Gray code ordering for CHAMP sharing
    - Answer accumulator collects all tagged results
 
@@ -1016,9 +1069,17 @@ On BOTH the standard comparative suite (13 programs) AND the adversarial benchma
 
 **Tests**: All 4 well-founded test files must pass. NAF-specific parity cases. Async-specific tests: verify outer clauses proceed while NAF thread runs.
 
-**Information-flow invariant (critique P3+M3)**: BOTH sync and async paths write to the NAF-result cell + NAF-gate propagator fires. The cell write IS the architectural contract. Whether the inner BSP blocks the current thread (sync, for trivial inner goals) or spawns a new thread (async, for clause-bearing inner goals) is an implementation choice orthogonal to the information flow. No inline return values — the result flows through the network.
+**Information-flow invariant (critique P3+M3)**: BOTH sync and async paths write to the NAF-result cell + NAF-gate propagator fires. The cell write IS the architectural contract. No inline return values — the result flows through the network.
 
-**Adaptive thread dispatch (from Phase 0b S4 data)**: Thread overhead is 3.6us. For facts-only inner goals (trivial computation), run inner BSP on current thread (sync). For clause-bearing inner goals (non-trivial), spawn thread (async). The distinction is structural: check `variant-info-clauses` emptiness. Both paths write to NAF-result cell identically.
+**Deferred-spawn pattern (critique P3, D.8)**: Instead of inspecting relation structure to choose sync/async upfront, the thread decision is EMERGENT:
+1. Always start inner BSP on current thread
+2. If inner BSP converges in one round (fire-once, trivially convergent): result is immediate, no thread needed
+3. If inner BSP does NOT converge in one round (multiple rounds needed): spawn thread, continue outer BSP asynchronously
+4. The NAF propagator is agnostic to its inner goal's structure — no `variant-info-clauses` introspection
+
+This makes the thread decision emerge from computation behavior, not from static analysis. Trivial inner goals (facts-only) converge in one round → no thread overhead (0.31us). Complex inner goals (clauses) trigger thread spawn only when proven necessary.
+
+**Inner success detection (critique M1)**: Answer-accumulator cell read (single cell, not env-scanning). Inner BSP's answer accumulator starts at bot (empty); non-bot = inner goal succeeded. This replaces the current imperative `for/or` env-variable scan.
 
 **Vision gate**: On-network? NAF-result is a cell. Inner computation is a Pocket Universe. Complete? NAF semantics match DFS. Vision-advancing? NAF as information flow — result via cell write, not return value.
 
@@ -1031,72 +1092,63 @@ On BOTH the standard comparative suite (13 programs) AND the adversarial benchma
 2. Create `install-guard-propagator` that:
    a. Allocates a guard-result cell
    b. Installs a fire-once propagator that evaluates the condition when inputs resolve
-   c. On `passed`: emits a topology request to install inner goals
-   d. On `failed`: no-op (clause fails)
-3. Handle guard with inner body: when guard passes, install inner goals via topology request (between BSP rounds)
+   c. **Capture `current-is-eval-fn` at installation time** (critique R6 — parameter must survive into propagator fire context, especially under parallel executor)
+   d. On `passed`: emits a topology request to install inner goals (in the conjunction's scope — the topology request carries the env and answer-cid, per NTT conjunction wiring)
+   e. On `failed`: no-op (clause fails)
+3. Handle guard with inner body: when guard passes, install inner goals via topology request (between BSP rounds). Note: adds one BSP outer round per guard (critique M4 — acceptable, CALM-safe cost of dynamic topology mutation)
 4. Verify semantic parity: DFS guard evaluation + inner-goal continuation
 
-**Tests**: Guard-specific test cases. Guards with inner bodies.
+**Tests**: Guard-specific test cases. Guards with inner bodies. Guards chained in a conjunction (verify O(log N) convergence via parallel prefix, not O(N)).
 
 **Vision gate**: On-network? Guard result is a cell. Topology request is the CALM-safe protocol. Complete? Inner-goal continuation supported. Vision-advancing? Guard as data-driven topology mutation.
 
-### Phase 5a: Deterministic Query Fast-Path (~2h)
+### Phase 5a: BSP Fire-Once Fast-Path (~2h)
 
-**Objective**: Skip BSP scheduling for queries with no propagators on worklist after installation. Targets the 52.6% BSP overhead.
+**Objective**: Inside `run-to-quiescence-bsp`, fire-once propagators execute directly without BSP scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator) queries. Targets the 52.6% BSP overhead.
 
-**Steps**:
-1. After `install-goal-propagator`, check `prop-network-worklist` length
-2. If worklist is empty (pure fact query, all values already written to cells): skip `run-to-quiescence` entirely, read cells directly
-3. If worklist has 1 item: fire the single propagator directly (bypass BSP loop), return network
-4. Otherwise: proceed to BSP as normal
+**Steps** (all INSIDE the BSP scheduler — caller does not check):
+1. At entry to `run-to-quiescence-bsp`, check worklist
+2. If empty: return immediately (fact-only queries — values already in cells)
+3. If single fire-once propagator: fire it directly, merge writes, return (no BSP loop, no topology stratum, no outer loop). The fire-once flag IS the structural recognition that this propagator converges trivially.
+4. If multiple propagators or non-fire-once: proceed to full BSP
 
-**Tests**: All parity-adversarial P1 fact queries produce correct results via fast-path. Single-fact benchmark target: <5us (from 23us baseline).
+**This is ONE fast-path inside the scheduler** (critique P2 resolution — not a caller-side check). The scheduler handles scheduling; the solver handles solving (Decomplection). Fire-once is the structural mechanism (from Track 2 infrastructure) — not a conditional worklist-length check.
 
-**Vision gate**: Not a special case — recognizing that CALM-trivial queries don't need coordination infrastructure.
+**Tests**: Parity-adversarial P1 fact queries + single-clause queries. Benchmark target: Tier 1 under 5us (from 23us baseline).
 
-### Phase 5b: Lazy Solver-Context (~2h)
+### Phase 5b: Lazy Solver-Context as Monotone Cell Refinement (~2h)
 
 **Objective**: Defer allocation of decisions/commitments/assumptions/nogoods/counter/table-registry cells until first `amb`. For Tier 1 queries, these are never used.
 
 **Steps**:
-1. Create `make-lazy-solver-context` that allocates only 2 cells (scope + answer accumulator)
-2. On first `amb` call: promote to full context (allocate remaining 5 cells + projection propagator)
-3. `solver-context` struct gains a `promoted?` field or lazy accessor pattern
+1. Solver-context IS a cell whose value is a lattice element: `{minimal, full}` with `minimal < full`, merge = max
+2. Minimal context: 2 cells (scope + answer accumulator) — sufficient for Tier 1
+3. On first `amb`: write `full` to the context cell, triggering allocation of remaining 5 cells + projection propagator
+4. Promotion IS a cell write, not a boolean flag check (critique M2 resolution)
 
-**Tests**: Tier 1 queries work with lazy context. Tier 2 (branching) queries promote and work correctly.
+**Tests**: Tier 1 queries work with minimal context. Tier 2 (branching) queries promote via cell write and work correctly. Verify promote-cell-to-tagged handles minimal context (R4 verified safe in §2.11).
 
-### Phase 5c: BSP Empty-Worklist Fast-Path (~1h)
+### Phase 5c: Solver-Template Cell (~2h)
 
-**Objective**: Inside `run-to-quiescence-bsp`, add fast-path for N≤1 worklist items.
+**Objective**: Reuse solver-context across queries via on-network template cell with CHAMP fork.
 
-**Steps**:
-1. At entry to `run-to-quiescence-bsp`, check worklist length
-2. If 0: return network immediately (no scheduling overhead)
-3. If 1: fire the single propagator, collect writes, merge, return (skip BSP loop ceremony)
-4. If >1: proceed to BSP as normal
-
-**Tests**: Benchmark regression: BSP overhead for trivial queries should drop to near-zero.
-
-### Phase 5d: Context Pooling (~2h)
-
-**Objective**: Pre-allocate solver-context for reuse across queries via CHAMP snapshot.
-
-**Steps**:
-1. Add `current-solver-context-pool` parameter (default `#f`)
-2. On first query in a file: build full context, store in pool
-3. On subsequent queries: `fork-prop-network` from pooled context (O(1) CHAMP fork)
-4. Wire into `solve-goal-propagator` entry point
+**Steps** (on-network per §3.8, critique P6/M4 resolution):
+1. `solver-template-cell` with first-write-wins merge: `(lambda (old new) (if (eq? old 'bot) new old))`
+2. First solver invocation: creates full context, writes template to cell
+3. Subsequent invocations: read cell, fork via CHAMP (O(1))
+4. No parameter — the template IS a cell value, observable and composable
 
 **Tests**: 50 sequential solves (atms-adversarial A7) — measure per-query savings vs fresh allocation.
 
-### Phase 6: Parallel Executor Default + `:auto` Switch (~2-3h)
+### Phase 6: `:auto` Switch + Adaptive Parallel Executor (~2-3h)
 
-**Objective**: Make the propagator solver the default and enable true OS-level parallelism.
+**Objective**: Make the propagator solver the default. Parallel executor enabled adaptively (sequential default, threads at N≥128).
 
 **Steps**:
-1. **Re-run parity matrix**: After Phases 1-3, all 95 files should pass through `:atms`. Any remaining failures are investigated individually.
-2. **Enable parallel executor**: Set `current-parallel-executor` to `make-parallel-thread-fire-all` as default (or `make-parallel-fire-all` as conservative option)
-3. **A/B benchmarks**: Run comparative suite with `:depth-first` vs `:atms` + parallel executor. Acceptance: ≤15% regression on single-clause benchmarks, measurable speedup on multi-clause (N≥4).
+1. **Re-run parity matrix**: After Phases 1-3 + 5a-5c, all test files should pass through `:atms`
+2. **Flip `:auto`**: Change `stratified-eval.rkt` dispatch from `solve-goal` to `solve-goal-propagator`
+3. **Adaptive executor**: Sequential default. BSP scheduler checks worklist size; enables thread executor when N≥128 (from Phase 0c scaling data). Futures eliminated (never beneficial, Racket VM restriction).
+4. **A/B benchmarks**: Comparative suite with `:depth-first` vs `:atms`. Acceptance: ≤15% regression on Tier 1, measurable benefit on Tier 2.
 4. **Flip `:auto`**: Change `stratified-eval.rkt` line ~200 from `solve-goal` to `solve-goal-propagator`
 5. **Full regression gate**: 397/397 files, all pass
 
