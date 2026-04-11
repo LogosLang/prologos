@@ -517,96 +517,49 @@
   (define-values (net1 viability-cid)
     (net-new-cell net all-viable viability-merge))
 
-  ;; Phase 1b: Use discrimination tree to guide propagator installation.
-  ;; The tree identifies which positions are NEEDED — avoids redundant propagators
-  ;; for positions that don't add discrimination within the current viable group.
-  ;; Falls back to flat (all-positions) if no tree is available.
-  (define tree (build-discrimination-tree discrim-data all-viable
-                 (for/list ([i (in-range (length resolved-args))]) i)))
-
-  ;; Install discrimination propagators guided by the tree.
-  ;; For ground args: traverse tree immediately (construction-time narrowing).
-  ;; For free args: install fire-once propagator at that tree level.
-  (define (install-tree-propagators net tree-node)
-    (cond
-      [(discrim-leaf? tree-node) net]  ;; leaf — no further discrimination
-      [(discrim-node? tree-node)
-       (define pos (discrim-node-position tree-node))
-       (define children (discrim-node-children tree-node))
-       (define wildcards (discrim-node-wildcard-indices tree-node))
-       (define arg (list-ref resolved-args pos))
-       (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
-
-       (cond
-         [(or (scope-ref? arg) (cell-id? arg))
-          ;; Free argument at this tree level: install fire-once propagator
-          ;; for THIS position, then descend into ALL children's subtrees
-          ;; to ensure OTHER positions with ground args still narrow.
-          (define arg-cid (if (scope-ref? arg) (scope-ref-cid arg) arg))
-          (define discrim-pairs
-            (for/list ([(clause-idx expected) (in-hash pos-data)])
-              (cons clause-idx expected)))
-          (define (discrim-fire net)
-            (define arg-val
-              (let ([raw (net-cell-read net arg-cid)])
-                (if (scope-cell? raw)
-                    (let ([var-name (and (scope-ref? arg) (scope-ref-var arg))])
-                      (if var-name (scope-cell-ref raw var-name) raw))
-                    raw)))
-            (if (or (eq? arg-val scope-cell-bot) (not arg-val))
-                net  ;; arg not yet resolved — residuate
-                (let ([viable
-                       (for/seteq ([pair (in-list discrim-pairs)]
-                                   #:when (equal? (cdr pair) arg-val))
-                         (car pair))])
-                  (define full-viable (set-union viable wildcards))
-                  (net-cell-write net viability-cid full-viable))))
-          (define-values (n2 _pid)
-            (net-add-fire-once-propagator net (list arg-cid) (list viability-cid)
-                                          discrim-fire))
-          ;; Descend into ALL children's subtrees — other positions in the tree
-          ;; may have ground args that can narrow at construction time.
-          (for/fold ([n n2])
-                    ([(val subtree) (in-hash children)])
-            (install-tree-propagators n subtree))]
-
-         [else
-          ;; Ground argument: traverse tree immediately
-          ;; Find which child matches this value
-          (define matching-child
-            (for/or ([(val subtree) (in-hash children)])
-              (and (equal? val arg) subtree)))
-          (if matching-child
-              ;; Narrow viability to this child's indices + wildcards, then descend
-              (let ()
-                (define child-indices (tree-all-indices matching-child))
-                (define full-viable (set-union child-indices wildcards))
-                (define n2 (net-cell-write net viability-cid full-viable))
-                ;; Descend into matching subtree — further positions may narrow more
-                (install-tree-propagators n2 matching-child))
-              ;; No match — only wildcards are viable
-              (if (set-empty? wildcards)
-                  (net-cell-write net viability-cid (seteq))  ;; contradiction
-                  (net-cell-write net viability-cid wildcards)))])]
-      [else net]))
-
-  (define net-after-tree (install-tree-propagators net1 tree))
-
-  ;; Phase 1b: After tree traversal, do a flat pass for any ground args at
-  ;; positions NOT reached by the tree (tree may have chosen a different position
-  ;; order than the query's bound/free pattern). This ensures that ALL ground
-  ;; args contribute to narrowing regardless of tree structure.
+  ;; Flat propagator installation: one fire-once propagator per discriminating
+  ;; position. ALL positions install propagators — ordering EMERGES from BSP
+  ;; dataflow (which arg cells resolve first). Distributivity guarantees
+  ;; same result regardless of narrowing order. The discrimination tree (Phase 1b)
+  ;; is a data value for analysis/self-hosting, not an imperative installation guide.
   (define net-final
-    (for/fold ([n net-after-tree])
+    (for/fold ([n net1])
               ([pos (in-naturals)]
                [arg (in-list resolved-args)])
       (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
       (cond
-        [(hash-empty? pos-data) n]
-        [(or (scope-ref? arg) (cell-id? arg)) n]  ;; free arg — handled by tree propagators
+        [(hash-empty? pos-data) n]  ;; no discriminators at this position
+        [(or (scope-ref? arg) (cell-id? arg))
+         ;; Free argument: install fire-once propagator that fires when arg resolves
+         (define arg-cid (if (scope-ref? arg) (scope-ref-cid arg) arg))
+         (define discrim-pairs
+           (for/list ([(clause-idx expected) (in-hash pos-data)])
+             (cons clause-idx expected)))
+         (define (discrim-fire net)
+           (define arg-val
+             (let ([raw (net-cell-read net arg-cid)])
+               (if (scope-cell? raw)
+                   (let ([var-name (and (scope-ref? arg) (scope-ref-var arg))])
+                     (if var-name (scope-cell-ref raw var-name) raw))
+                   raw)))
+           (if (or (eq? arg-val scope-cell-bot) (not arg-val))
+               net  ;; arg not yet resolved — residuate (no write)
+               (let ([viable
+                      (for/seteq ([pair (in-list discrim-pairs)]
+                                  #:when (equal? (cdr pair) arg-val))
+                        (car pair))])
+                 (define wildcards
+                   (for/seteq ([i (in-range n-alternatives)]
+                               #:when (not (hash-has-key? pos-data i)))
+                     i))
+                 (define full-viable (set-union viable wildcards))
+                 (net-cell-write net viability-cid full-viable))))
+         (define-values (n2 _pid)
+           (net-add-fire-once-propagator n (list arg-cid) (list viability-cid)
+                                         discrim-fire))
+         n2]
         [else
-         ;; Ground arg — check if viability already narrowed for this value.
-         ;; Write to viability cell (set-intersect merge handles redundancy).
+         ;; Ground argument: narrow immediately via cell write
          (define viable
            (for/seteq ([pair (in-list (hash->list pos-data))]
                        #:when (equal? (cdr pair) arg))
