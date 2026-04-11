@@ -21,7 +21,7 @@
 | 0b | Pre-0: micro-benchmarks | ✅ | 28 benchmarks + overhead decomposition. ATMS 24.5x overhead identified → 4 optimization paths. |
 | 0c | Pre-0: A/B executor comparison | ✅ | Sequential wins all current workloads. Threads cross over at N≥128. Futures eliminated. |
 | 1a | Clause selection as decision-cell narrowing | ✅ | `a1df50f4`→`b47b9787`. On-network discrimination (broadcast), fact-row PU branching, domain-merge fix. Categories 1+2 FIXED. |
-| 1b | Position-discriminant analysis | ⬜ | Needed-narrowing-inspired: identify best discriminating position, hierarchical narrowing |
+| 1b | Position-discriminant analysis | ✅ | `1eae7eb8`. Discrimination tree: position scoring, recursive partitioning, tree-guided installation. Flat ground-arg pass ensures coverage regardless of tree order. |
 | 2 | NAF as async propagator | ⬜ | Async from start: thread-spawned inner BSP, NAF-result cell, NAF-gate |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
 | 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
