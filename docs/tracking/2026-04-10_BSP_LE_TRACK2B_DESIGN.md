@@ -3,7 +3,7 @@
 **Date**: 2026-04-10
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: DFS↔Propagator parity validation, fact-row isolation, NAF/guard as async propagators, parallel executor default, `:auto` deployment
-**Status**: D.4 — clause selection as decision-cell narrowing (Phase 0a findings integrated)
+**Status**: D.5 — benchmark data + Tier 1 optimization pipeline
 **Predecessor**: [BSP-LE Track 2 PIR](2026-04-10_BSP_LE_TRACK2_PIR.md) — ATMS Solver + Cell-Based TMS
 **Design doc**: [BSP-LE Track 2 Design](2026-04-07_BSP_LE_TRACK2_DESIGN.md) (D.13, ~2000 lines)
 **Prior art**: [Track 2 Session Handoff](standups/2026-04-09_2300_session_handoff.md), [Track 2 PIR §10-§12](2026-04-10_BSP_LE_TRACK2_PIR.md)
@@ -14,14 +14,18 @@
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0a | Pre-0: parity baseline | ⬜ | Run ALL 95 DFS test files through `:atms`, categorize every failure |
-| 0b | Pre-0: micro-benchmarks | ⬜ | Fact-row PU overhead at N=1,2,4,8,16; NAF sync vs async; executor comparison |
-| 0c | Pre-0: A/B executor comparison | ⬜ | Sequential vs futures vs threads on comparative suite; analyze with data |
+| 0a | Pre-0: parity baseline | ✅ | 19/19 test files pass both strategies. Adversarial: 3 divergence categories found. |
+| 0b | Pre-0: micro-benchmarks | ✅ | 28 benchmarks + overhead decomposition. ATMS 24.5x overhead identified → 4 optimization paths. |
+| 0c | Pre-0: A/B executor comparison | ⬜ | Sequential vs futures vs threads on comparative suite |
 | 1a | Clause selection as decision-cell narrowing | ⬜ | Argument-watching propagator + clause decision cell. Fixes Category 1+2. |
 | 1b | Position-discriminant analysis | ⬜ | Needed-narrowing-inspired: identify best discriminating position, hierarchical narrowing |
 | 2 | NAF as async propagator | ⬜ | Async from start: thread-spawned inner BSP, NAF-result cell, NAF-gate |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
-| 4 | Parallel executor default + `:auto` switch | ⬜ | Enable optimal executor (from 0c data), flip `:auto` → propagator |
+| 5a | Tier 1 fast-path: deterministic query bypass | ⬜ | Skip solver-context + BSP for non-branching queries. Target: <3x DFS. |
+| 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
+| 5c | BSP empty-worklist fast-path | ⬜ | Skip BSP scheduling when no propagators on worklist after installation. |
+| 5d | Context pooling | ⬜ | Pre-allocate solver-context, reuse across queries via CHAMP snapshots. |
+| 6 | Parallel executor default + `:auto` switch | ⬜ | Enable optimal executor, flip `:auto` → propagator, full regression gate. |
 | T | Parity regression suite | ⬜ | `test-solver-parity.rkt` — representative queries, BOTH strategies, set-equal results |
 | PIR | Post-implementation review | ⬜ | |
 
@@ -166,6 +170,94 @@ Key findings from code audit that change the design:
 5. **Fuel is propagator-firings, not wall-clock**: `fuel := fuel - length(deduplicated_worklist)` per BSP round (line 2290). The `solver-config-timeout` converts ms to firings via `fuel = timeout_ms * 1000` (rough heuristic, line 1873). Default: 1,000,000 firings.
 
 6. **DFS depth limit is independent**: `DEFAULT-DEPTH-LIMIT = 100` (line 551), counts call stack depth, errors on overflow. Completely separate mechanism from fuel.
+
+### §2.9 Phase 0b Benchmark Data (D.5)
+
+#### S1: Fact-Row Scaling (Current Solver Baseline)
+
+| N facts | Median (us/query) | vs N=1 |
+|---|---|---|
+| 1 | 11.7 | 1.00x |
+| 2 | 11.9 | 1.02x |
+| 4 | 13.2 | 1.13x |
+| 8 | 15.6 | 1.33x |
+| 16 | 20.4 | 1.74x |
+| 32 | 29.4 | 2.51x |
+
+**Linear in N** — ~0.56us per additional fact row. The current (broken) last-write-wins approach costs proportional to N because it writes all facts to cells.
+
+#### S2: Decision-Cell Narrowing Cost (Clause Selection Mechanism)
+
+| Operation | Per-op (us) |
+|---|---|
+| Narrow 4→1 | 0.125 |
+| Narrow 8→2 | 0.289 |
+| Narrow 16→4 | 0.602 |
+| Narrow 32→8 | 1.56 |
+
+**Sub-microsecond to low-microsecond.** Negligible vs query cost (11-29us). No threshold needed — narrowing is effectively free.
+
+#### S3: Fork + Quiescence (NAF Baseline)
+
+| Operation | Per-op (us) |
+|---|---|
+| Fork (10 cells) | 0.022 |
+| Fork (50 cells) | 0.023 |
+| GS quiescence (empty fork) | 0.192 |
+| BSP quiescence (empty fork) | 0.307 |
+
+**Fork is O(1)** — 22ns regardless of cell count. BSP is 1.6x GS on empty forks.
+
+#### S4: Thread Spawn Overhead (Async NAF)
+
+| Operation | Per-op (us) |
+|---|---|
+| Thread no-op spawn+join | 3.6 |
+| Thread fork+quiesce | 4.1 |
+| Sync fork+quiesce (no thread) | 0.31 |
+
+**Thread overhead: ~3.6us.** Async NAF costs 13x sync. Worth it only for non-trivial inner goals.
+
+#### S5: Tagged-Cell-Value Operations
+
+| Read N entries | Per-op (us) | Write | Per-op (us) |
+|---|---|---|---|
+| N=4 | 0.043 | to N=4 | 0.009 |
+| N=8 | 0.070 | — | — |
+| N=16 | 0.129 | to N=16 | 0.008 |
+| N=32 | 0.236 | — | — |
+
+Reads scale linearly with N. Writes are constant (prepend).
+
+#### S6: Discrimination Map Lookup
+
+| Map size | Per-op (us) |
+|---|---|
+| N=4 | 0.010 |
+| N=32 | 0.013 |
+
+**Hash lookup is constant-time.** Negligible cost.
+
+#### S7: DFS vs ATMS Full Pipeline
+
+| Query | DFS (us) | ATMS (us) | Ratio |
+|---|---|---|---|
+| Single fact | 0.91 | 23.0 | **25.3x** |
+| 3-clause | 6.1 | 50.5 | **8.3x** |
+| 8-fact | 1.8 | 16.0 | **8.7x** |
+
+#### ATMS Overhead Decomposition (Single-Fact Query, 23.0us total)
+
+| Component | Cost (us) | % of Total |
+|---|---|---|
+| Network + context allocation (steps 1-4) | 3.6 | 15.5% |
+| Goal installation (step 5 delta) | 7.0 | 30.4% |
+| **BSP scheduling + propagator firing (step 6 delta)** | **12.1** | **52.6%** |
+| Result reading (step 7) | 0.1 | 0.4% |
+
+**The dominant cost is BSP scheduling (52.6%)** — worklist dedup, fuel check, outer loop, topology stratum. Even for a query with zero propagators to fire, the scheduler has fixed overhead.
+
+**Context reuse**: Skipping network+context allocation saves 33% (23.0us → 15.5us). Still 17x DFS.
 
 ---
 
@@ -369,6 +461,88 @@ The hypercube structure unifies all these as Q_1 decompositions composed into Q_
 - CALM guarantees convergence regardless of firing order.
 
 However, for future self-hosting, conjunction installation should be a broadcast-like pattern (install all goals' propagators in one pass). This is a future optimization, not a correctness issue.
+
+### §3.6 Tier 1 Optimization Pipeline (D.5 — from Phase 0b data)
+
+Phase 0b reveals the ATMS solver is 25x slower than DFS for trivial single-fact queries. The overhead decomposes to: BSP scheduling 52.6%, goal installation 30.4%, context allocation 15.5%, result reading 0.4%. Four optimizations target each component, together aiming for <3x DFS on Tier 1 queries.
+
+#### Optimization 1: Deterministic Query Fast-Path (Phase 5a) — targets 52.6% BSP overhead
+
+**The insight**: For deterministic queries (no `amb`, single clause or facts only), BSP scheduling is pure waste. The query can be answered by direct cell writes and reads — no propagators need to fire, no worklist needs scheduling, no topology stratum needs checking.
+
+**The mechanism**: Before calling `run-to-quiescence`, check if the worklist is empty after goal installation. For a single-fact query, `install-goal-propagator` writes fact values directly to scope cells (no propagators installed). The worklist is empty → skip BSP entirely → read cells directly.
+
+This is NOT a special case — it's recognizing that deterministic queries don't need the scheduler at all. The information is already in the cells after installation. BSP is for convergence of interdependent propagators, not for reading pre-computed values.
+
+**Expected savings**: ~12.1us (52.6% of 23us). Target: ~11us → 12x DFS (still high — need other optimizations).
+
+**SRE lens**: This is the CALM observation made operational. Deterministic queries are trivially monotone — one write, one read, no fixpoint needed. The BSP scheduler is coordination infrastructure; CALM says coordination-free computations don't need it.
+
+#### Optimization 2: Lazy Solver-Context (Phase 5b) — targets 15.5% allocation overhead
+
+**The insight**: `make-solver-context` allocates 7 cells + 1 projection propagator for EVERY query — even queries that never branch. The decisions cell, commitments cell, assumptions cell, nogoods cell, counter cell, and table registry cell are all unused for deterministic queries.
+
+**The mechanism**: Replace eager `make-solver-context` with a lazy version that allocates only:
+- Minimum: scope cell + answer accumulator (2 cells)
+- On first `amb`: promote to full solver-context (remaining 5 cells + projection)
+
+This is a structural optimization: the solver-context IS a lattice value that starts at bot (minimal allocation) and grows monotonically (more cells allocated as needed). Promotion is a one-time cost paid only by branching queries.
+
+**Expected savings**: ~3.6us for Tier 1 queries (15.5% of 23us). Combined with Opt 1: ~7.3us → 8x DFS.
+
+#### Optimization 3: BSP Empty-Worklist Fast-Path (Phase 5c) — targets BSP entry overhead
+
+**The insight**: Even when the worklist is non-empty, the BSP loop has fixed entry overhead: dedup worklist, check fuel, enter outer loop, check topology stratum. For queries with very few propagators (1-2), this overhead is disproportionate.
+
+**The mechanism**: In `run-to-quiescence-bsp`, add a fast-path check at entry:
+- If worklist has ≤ 1 item AND no topology requests pending: fire the single propagator directly (bypass BSP loop), return network
+- If worklist is empty: return network immediately (no scheduling at all)
+
+This is the degenerate case of BSP: when the "bulk" in Bulk Synchronous Parallel is N=0 or N=1, the synchronization protocol is overhead without benefit. The fast-path recognizes this.
+
+**Expected savings**: ~2-3us for trivial queries (reduces step 6 delta from 12.1us to ~9-10us). Smaller than Opt 1 but compounds with it.
+
+#### Optimization 4: Context Pooling (Phase 5d) — targets repeated query overhead
+
+**The insight**: When multiple `solve` blocks appear in the same `.prologos` file (very common — see A7 section of `atms-adversarial.prologos` with 50 sequential solves), each creates a fresh network + solver-context from scratch. CHAMP immutability means a pre-built context can be safely reused as a snapshot base.
+
+**The mechanism**: Maintain a `current-solver-context-pool` parameter. On first query, build the full context. On subsequent queries, fork from the pooled context (O(1) CHAMP fork) instead of allocating from scratch.
+
+Phase 0b data: context reuse saves 33% (23.0us → 15.5us). For 50 sequential solves, this saves ~375us total.
+
+**Expected savings**: Per-query savings of ~7.5us after first query. Amortized over N queries: `(7.5 * (N-1)) / N` us savings per query.
+
+#### Combined Optimization Target
+
+| Optimization | Targets | Savings (us) | Cumulative ATMS (us) | vs DFS |
+|---|---|---|---|---|
+| Baseline | — | — | 23.0 | 25.3x |
+| 5a: Empty-worklist fast-path | BSP scheduling (52.6%) | ~12.1 | ~10.9 | ~12x |
+| 5b: Lazy solver-context | Allocation (15.5%) | ~3.6 | ~7.3 | ~8x |
+| 5c: BSP entry fast-path | BSP entry overhead | ~2-3 | ~4.5 | ~5x |
+| 5d: Context pooling | Repeated query amortization | ~7.5 (amortized) | ~4.0 (amort.) | ~4.4x |
+| **All combined (Tier 1)** | | | **~3-5** | **~3-5x** |
+
+Target: <5x DFS for Tier 1 deterministic queries. For Tier 2 branching queries, the overhead is already more acceptable (8.3x for 3-clause) and the propagator solver provides genuine parallelism that DFS cannot.
+
+#### Architectural Integrity
+
+All four optimizations preserve the on-network architecture:
+- **5a** skips BSP for queries that have no propagators — the information is already in cells
+- **5b** defers allocation, doesn't eliminate it — branching queries still get the full context
+- **5c** is a scheduler optimization inside `run-to-quiescence-bsp` — transparent to callers
+- **5d** reuses CHAMP snapshots — immutability guarantees isolation
+
+None introduce off-network state. None create special cases that bypass the propagator model. They recognize that the GENERAL infrastructure has fixed costs that are amortizable for the COMMON case.
+
+#### NAF Adaptive Dispatch (from S4 data)
+
+Phase 0b S4 shows async NAF costs 13x sync (4.1us vs 0.31us). This argues for adaptive dispatch:
+- **Facts-only inner goal**: sync NAF (inner computation is trivial, thread overhead dominates)
+- **Clause-bearing inner goal**: async NAF (inner computation is expensive, thread overhead is amortized)
+- **Heuristic**: if the inner goal's relation has clauses (not just facts), use async
+
+This is not a special case but an optimization: the choice between sync and async is an implementation detail of the NAF propagator, invisible to the outer network.
 
 ---
 
@@ -653,7 +827,56 @@ On BOTH the standard comparative suite (13 programs) AND the adversarial benchma
 
 **Vision gate**: On-network? Guard result is a cell. Topology request is the CALM-safe protocol. Complete? Inner-goal continuation supported. Vision-advancing? Guard as data-driven topology mutation.
 
-### Phase 4: Parallel Executor Default + `:auto` Switch (~2-3h)
+### Phase 5a: Deterministic Query Fast-Path (~2h)
+
+**Objective**: Skip BSP scheduling for queries with no propagators on worklist after installation. Targets the 52.6% BSP overhead.
+
+**Steps**:
+1. After `install-goal-propagator`, check `prop-network-worklist` length
+2. If worklist is empty (pure fact query, all values already written to cells): skip `run-to-quiescence` entirely, read cells directly
+3. If worklist has 1 item: fire the single propagator directly (bypass BSP loop), return network
+4. Otherwise: proceed to BSP as normal
+
+**Tests**: All parity-adversarial P1 fact queries produce correct results via fast-path. Single-fact benchmark target: <5us (from 23us baseline).
+
+**Vision gate**: Not a special case — recognizing that CALM-trivial queries don't need coordination infrastructure.
+
+### Phase 5b: Lazy Solver-Context (~2h)
+
+**Objective**: Defer allocation of decisions/commitments/assumptions/nogoods/counter/table-registry cells until first `amb`. For Tier 1 queries, these are never used.
+
+**Steps**:
+1. Create `make-lazy-solver-context` that allocates only 2 cells (scope + answer accumulator)
+2. On first `amb` call: promote to full context (allocate remaining 5 cells + projection propagator)
+3. `solver-context` struct gains a `promoted?` field or lazy accessor pattern
+
+**Tests**: Tier 1 queries work with lazy context. Tier 2 (branching) queries promote and work correctly.
+
+### Phase 5c: BSP Empty-Worklist Fast-Path (~1h)
+
+**Objective**: Inside `run-to-quiescence-bsp`, add fast-path for N≤1 worklist items.
+
+**Steps**:
+1. At entry to `run-to-quiescence-bsp`, check worklist length
+2. If 0: return network immediately (no scheduling overhead)
+3. If 1: fire the single propagator, collect writes, merge, return (skip BSP loop ceremony)
+4. If >1: proceed to BSP as normal
+
+**Tests**: Benchmark regression: BSP overhead for trivial queries should drop to near-zero.
+
+### Phase 5d: Context Pooling (~2h)
+
+**Objective**: Pre-allocate solver-context for reuse across queries via CHAMP snapshot.
+
+**Steps**:
+1. Add `current-solver-context-pool` parameter (default `#f`)
+2. On first query in a file: build full context, store in pool
+3. On subsequent queries: `fork-prop-network` from pooled context (O(1) CHAMP fork)
+4. Wire into `solve-goal-propagator` entry point
+
+**Tests**: 50 sequential solves (atms-adversarial A7) — measure per-query savings vs fresh allocation.
+
+### Phase 6: Parallel Executor Default + `:auto` Switch (~2-3h)
 
 **Objective**: Make the propagator solver the default and enable true OS-level parallelism.
 
@@ -686,10 +909,13 @@ This track does NOT add or modify user-facing syntax. All changes are internal s
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| NAF semantic divergence (propagator produces different results than DFS) | Medium | High | Phase 0 parity baseline catches this. DFS retained as fallback. |
+| NAF semantic divergence (propagator produces different results than DFS) | Medium | High | Phase 0a adversarial caught 3 divergences. DFS retained as `:depth-first` fallback. |
 | Parallel executor introduces non-determinism | Low | High | BSP guarantees confluence (CALM). Parallel changes firing order, not results. |
-| Performance regression >15% | Low | Medium | A/B benchmarks as gate. Sequential executor as fallback. |
-| Fact-row branching increases cell allocation significantly | Medium | Low | K fact rows = K bitmask bits + K tagged writes. Track 2 compound cells mitigate. |
+| **Tier 1 performance regression >5x DFS** | **High** | **High** | **Phase 0b: currently 25x. Optimizations 5a-5d target <5x. A/B gate after each.** |
+| Optimizations 5a-5d don't compound as expected | Medium | Medium | Each optimization measured independently via A/B. If target not met, DFS retained for Tier 1 via tiered dispatch. |
+| Lazy context promotion (5b) creates mid-query allocation spike | Low | Medium | Promotion is one-time per query. CHAMP allocation is amortized. |
+| Context pooling (5d) leaks state between queries | Low | High | CHAMP immutability guarantees isolation. Fork creates independent snapshot. |
+| Fact-row branching increases cell allocation significantly | Low | Low | Phase 0b S2: narrowing is sub-microsecond. PU branching adds K bitmask bits — same as multi-clause. |
 | Guard topology requests create BSP round overhead | Low | Low | One topology request per guard. Topology stratum runs between value strata. |
 
 ---
@@ -698,12 +924,16 @@ This track does NOT add or modify user-facing syntax. All changes are internal s
 
 | File | Phases | Changes |
 |---|---|---|
-| `relations.rkt` | 1, 2, 3 | Fact-row branching, NAF propagator, guard propagator |
-| `stratified-eval.rkt` | 4 | `:auto` → propagator |
-| `propagator.rkt` | 4 | `current-parallel-executor` default |
-| `decision-cell.rkt` | 2, 3 | NAF-result and guard-result lattice values (if not using existing cell infrastructure) |
-| `test-propagator-solver.rkt` | 1, 2, 3 | Extended with fact-row, NAF, guard tests |
+| `relations.rkt` | 1a, 1b, 2, 3, 5a, 5b, 5d | Clause selection, fact-row PU, NAF propagator, guard propagator, fast-paths, lazy context, pooling |
+| `stratified-eval.rkt` | 0a, 6 | Strategy override parameter; `:auto` → propagator |
+| `propagator.rkt` | 5c, 6 | BSP empty-worklist fast-path; `current-parallel-executor` default |
+| `atms.rkt` | 5b, 5d | Lazy solver-context; context pooling |
+| `decision-cell.rkt` | 1a, 2, 3 | Clause viability, NAF-result, guard-result lattice values |
+| `test-propagator-solver.rkt` | 1a, 1b, 2, 3 | Extended with clause selection, fact-row, NAF, guard tests |
 | `test-solver-parity.rkt` | T | NEW — parity regression suite |
+| `bench-track2b-solver.rkt` | 0b | Micro-benchmarks (28 benchmarks) |
+| `bench-track2b-overhead.rkt` | 0b | ATMS overhead decomposition |
+| `parity-adversarial.prologos` | 0a | Adversarial parity benchmark (10 sections) |
 
 ---
 
@@ -717,21 +947,26 @@ This track does NOT add or modify user-facing syntax. All changes are internal s
 
 3. ~~**Parity definition?**~~ → **Set-equality.** Non-deterministic multiple solutions have no canonical ordering. Tests asserting DFS clause-order are asserting an implementation detail. Phase 0a will identify order-dependent tests for adjustment.
 
-### Open for D.3
+### Resolved in D.5 (from Phase 0b data)
 
-4. **Fuel: propagator-firings, not wall-clock** — the "timeout in ms" config is misleading (1ms ≈ 1000 firings heuristic). Should we rename the config key? Should fuel be per-network or shared across forks? Phase 0b fuel consumption profiles will inform this.
+5. ~~**Fact-row threshold?**~~ → **No threshold needed.** Phase 0b S2 shows narrowing is sub-microsecond (0.125us for 4→1) — negligible vs query cost. Uniform treatment: all facts = branches, all get decision-cell narrowing. Completeness principle applies.
 
-5. **Fact-row threshold** — D.1's N=4 was arbitrary (borrowed from broadcast A/B). Phase 0b micro-benchmarks at N=1,2,4,8,16,32 will give data-driven answer. Possible outcomes:
-   - PU overhead is negligible at all N → uniform treatment (Completeness principle)
-   - PU overhead significant at N=1-2 → threshold at N=3 or N=4
-   - PU overhead significant at all N → different approach needed
+8. ~~**NAF fuel budget?**~~ → **Adaptive dispatch.** Phase 0b S4 shows async costs 13x sync (4.1us vs 0.31us). Adaptive: sync for facts-only inner goals, async for clause-bearing. Budget: independent per fork (don't let NAF starve outer solver).
 
-6. **Cross-network cell write for async NAF** — the NAF thread writes to a cell on the OUTER network. The outer BSP needs to detect this write and schedule the NAF-gate. Options:
-   - (a) NAF thread writes to a shared mailbox/channel; outer BSP checks between rounds
-   - (b) NAF thread directly writes to outer network's cells CHAMP; outer BSP re-scans worklist
-   - (c) NAF thread signals completion via a Racket channel; outer BSP picks up in topology stratum
-   Option (c) aligns with the existing topology-request protocol (between BSP rounds, sequential processing). Phase 0b NAF benchmarks should test all three.
+### Open for D.6
 
-7. **Recursive depth tracking** — DFS counts call stack depth (`DEFAULT-DEPTH-LIMIT = 100`). Propagator uses fuel (propagator-firings). For recursive relations (e.g., `ancestor` calling itself), does the propagator solver need a recursive depth counter? Or does fuel naturally bound recursive unfolding? Phase 0a parity testing on recursive relation tests will reveal whether fuel alone is sufficient.
+4. **Fuel config naming** — `solver-config-timeout` in "ms" is misleading (1ms ≈ 1000 firings heuristic). Rename to `:fuel` or `:max-firings`? Or keep `:timeout` with documentation clarification?
+
+6. **Cross-network cell write for async NAF** — the NAF thread writes to a cell on the OUTER network. Options:
+   - (a) Shared mailbox/channel; outer BSP checks between rounds
+   - (b) Direct CHAMP write; outer BSP re-scans worklist
+   - (c) Racket channel; outer BSP picks up in topology stratum
+   Option (c) aligns with topology-request protocol. Needs prototyping.
+
+7. **Recursive depth tracking** — does fuel alone bound recursive relations? Phase 0a parity adversarial P5 (`ancestor`) test showed both strategies ran successfully, but deeper recursion (100+ levels) hasn't been tested.
+
+9. **Optimization ordering** — Phase 5a-5d are presented as independent optimizations, but implementation order matters. 5a (worklist fast-path) is simplest and highest-value. 5b (lazy context) and 5d (pooling) interact (lazy makes pooling less valuable). Should 5c (BSP entry fast-path) be folded into 5a? Proposed order: 5a → 5c → 5b → 5d, with A/B benchmarks after each to measure actual savings.
+
+10. **Tier 1/Tier 2 dispatch** — should `solve-goal-propagator` detect Tier 1 queries (no branching) and take a dedicated fast-path? Or should the optimizations (5a-5d) make Tier 1 fast enough that a single path works? A dedicated Tier 1 path is simpler but creates a bifurcation. A unified path with optimizations is more architecturally clean but may not achieve <5x DFS.
 
 8. **NAF fuel budget** — should the NAF fork inherit the parent's remaining fuel (shared budget, NAF competes for firings), or get its own budget (independent, NAF can't starve the outer solver)? Independent budgets risk total fuel exceeding the user's intent; shared budgets risk NAF consuming all fuel. Phase 0b data will inform.
