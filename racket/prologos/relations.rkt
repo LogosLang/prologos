@@ -1884,22 +1884,81 @@
        ;; Read the viability cell to get the current viable set.
        (define viable-indices (net-cell-read n-discrim viability-cid))
 
-       ;; Facts: write ONLY viable fact rows' values to arg variables
+       ;; Track 2B Phase 1a Step 5: Per-fact-row PU branching.
+       ;; Viable fact rows get worldview bitmask bits (same as multi-clause).
+       ;; Each row writes under its own bitmask → tagged-cell-value entries
+       ;; keep results separate. Coordinated with clause assumptions via
+       ;; solver-assume (shared namespace, critique R3).
+       (define viable-facts
+         (for/list ([fr (in-list facts)]
+                    [fact-idx (in-naturals)]
+                    #:when (set-member? viable-indices fact-idx))
+           fr))
+
        (define n-facts
-         (for/fold ([n n-discrim])
-                   ([fr (in-list facts)]
-                    [fact-idx (in-naturals)])
-           (if (not (set-member? viable-indices fact-idx))
-               n  ;; fact row filtered out by discrimination narrowing
-               (let ([row (fact-row-terms fr)])
-                 (if (= (length row) (length resolved-args))
-                     (for/fold ([n n])
-                               ([arg (in-list resolved-args)]
-                                [val (in-list row)])
-                       (if (or (scope-ref? arg) (cell-id? arg))
-                           (logic-var-write n arg val)
-                           n))
-                     n)))))
+         (cond
+           ;; No viable facts: skip
+           [(null? viable-facts) n-discrim]
+
+           ;; Single viable fact: write directly (no PU overhead)
+           [(null? (cdr viable-facts))
+            (let ([row (fact-row-terms (car viable-facts))])
+              (if (= (length row) (length resolved-args))
+                  (for/fold ([n n-discrim])
+                            ([arg (in-list resolved-args)]
+                             [val (in-list row)])
+                    (if (or (scope-ref? arg) (cell-id? arg))
+                        (logic-var-write n arg val)
+                        n))
+                  n-discrim))]
+
+           ;; Multiple viable facts: PU branching with worldview bitmasks.
+           ;; Same pattern as multi-clause concurrent execution.
+           [else
+            (let ()
+              ;; Create assumptions per viable fact row
+              (define-values (n-assumed fact-aids-rev)
+                (if ctx
+                    (for/fold ([net n-discrim] [aids '()])
+                              ([fr (in-list viable-facts)]
+                               [i (in-naturals)])
+                      (define-values (net* aid)
+                        (solver-assume ctx net
+                                      (string->symbol (format "fact-~a-~a" goal-name i))
+                                      fr))
+                      (values net* (cons aid aids)))
+                    ;; No solver-context: local counter
+                    (for/fold ([net n-discrim] [aids '()])
+                              ([fr (in-list viable-facts)]
+                               [i (in-naturals)])
+                      (values net (cons (assumption-id i) aids)))))
+              (define fact-aids (reverse fact-aids-rev))
+
+              ;; Promote shared scope cells to tagged-cell-value
+              (define promoted-cids (remove-duplicates
+                (for/list ([arg (in-list resolved-args)]
+                           #:when (or (scope-ref? arg) (cell-id? arg)))
+                  (if (scope-ref? arg) (scope-ref-cid arg) arg))))
+              (define n-promoted
+                (for/fold ([net n-assumed])
+                          ([cid (in-list promoted-cids)])
+                  (promote-cell-to-tagged net cid)))
+
+              ;; Write each fact row under its worldview bitmask
+              (for/fold ([net n-promoted])
+                        ([fr (in-list viable-facts)]
+                         [aid (in-list fact-aids)])
+                (define row (fact-row-terms fr))
+                (define bitmask (arithmetic-shift 1 (assumption-id-n aid)))
+                (if (= (length row) (length resolved-args))
+                    (parameterize ([current-worldview-bitmask bitmask])
+                      (for/fold ([net net])
+                                ([arg (in-list resolved-args)]
+                                 [val (in-list row)])
+                        (if (or (scope-ref? arg) (cell-id? arg))
+                            (logic-var-write net arg val)
+                            net)))
+                    net)))]))
 
        ;; Track 2B Phase 1a: filter clauses to only viable ones
        (define n-facts-count (length facts))

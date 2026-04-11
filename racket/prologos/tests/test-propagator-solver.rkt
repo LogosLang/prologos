@@ -108,16 +108,18 @@
       ;; or empty list (no vars to project = trivially succeeds)
       (check-true (or (null? results) (pair? results))))
 
-    (test-case "color(?c): unary fact"
-      ;; With current implementation (no branching), only last fact row
-      ;; overwrites the cell. This tests the propagator path works at all.
+    (test-case "color(?c): unary fact — all rows via PU branching"
+      ;; Track 2B Phase 1a: per-fact-row PU branching returns ALL matching rows.
+      ;; Each row gets its own worldview bitmask → tagged-cell-value entries.
       (define results
         (solve-goal-propagator default-config test-store
                                'color (list 'c) '(c)))
-      (check-equal? (length results) 1)
-      ;; Value should be one of the colors (last-write-wins without PU isolation)
-      (define c (hash-ref (car results) 'c))
-      (check-not-false (memq c '(red green blue))))
+      (check-equal? (length results) 3)
+      ;; All 3 colors should be present (set-equality, order doesn't matter)
+      (define c-vals (map (lambda (r) (hash-ref r 'c)) results))
+      (check-not-false (member 'red c-vals))
+      (check-not-false (member 'green c-vals))
+      (check-not-false (member 'blue c-vals)))
     ))
 
 ;; ============================================================
