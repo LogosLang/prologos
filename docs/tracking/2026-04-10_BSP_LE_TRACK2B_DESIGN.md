@@ -3,7 +3,7 @@
 **Date**: 2026-04-10
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: DFS↔Propagator parity validation, fact-row isolation, NAF/guard as async propagators, parallel executor default, `:auto` deployment
-**Status**: D.5 — benchmark data + Tier 1 optimization pipeline
+**Status**: D.6 — executor scaling data + hypercube merge topology
 **Predecessor**: [BSP-LE Track 2 PIR](2026-04-10_BSP_LE_TRACK2_PIR.md) — ATMS Solver + Cell-Based TMS
 **Design doc**: [BSP-LE Track 2 Design](2026-04-07_BSP_LE_TRACK2_DESIGN.md) (D.13, ~2000 lines)
 **Prior art**: [Track 2 Session Handoff](standups/2026-04-09_2300_session_handoff.md), [Track 2 PIR §10-§12](2026-04-10_BSP_LE_TRACK2_PIR.md)
@@ -258,6 +258,61 @@ Reads scale linearly with N. Writes are constant (prepend).
 **The dominant cost is BSP scheduling (52.6%)** — worklist dedup, fuel check, outer loop, topology stratum. Even for a query with zero propagators to fire, the scheduler has fixed overhead.
 
 **Context reuse**: Skipping network+context allocation saves 33% (23.0us → 15.5us). Still 17x DFS.
+
+### §2.10 Executor Scaling + Thread Pool Analysis (D.6)
+
+#### Parallel Scaling (N × W matrix)
+
+Synthetic workload: N concurrent propagators, 3 work levels, 3 executors. (`bench-parallel-scaling.rkt`)
+
+| N | Fut/Seq | **Thr/Seq** | Winner |
+|---|---|---|---|
+| 4 | 2.7-7.1x slower | ~1.0x | sequential |
+| 8 | 4-19x slower | 13-29x slower | sequential |
+| 16 | 31-35x slower | 12-27x slower | sequential |
+| 32 | 11-18x slower | 3.5-5.7x slower | sequential |
+| 64 | 4.5-5.4x slower | 1.4-1.6x slower | sequential |
+| **128** | 2.2-2.8x slower | **0.52-0.56x (1.9x speedup)** | **threads** |
+
+**Futures never win** — Racket VM restrictions (no allocation during future execution) make them unsuitable. **Eliminated from consideration.**
+
+**Threads cross over at N=128** — 1.9x speedup. At N=64 still 1.4-1.6x slower.
+
+#### Thread Synchronization Cost Stack (`bench-thread-pool.rkt`)
+
+| Mechanism | Cost/op (us) |
+|---|---|
+| Thread create+join | 3.6 |
+| Channel round-trip (persistent thread) | 1.57 |
+| Semaphore post+wait | 0.01 |
+| Thread pool dispatch (4 items, channels) | 6.5 (1.6/item) |
+
+**Channel communication (1.57us) is the floor** for any pool-based approach. Even eliminating thread creation cost entirely, channel dispatch limits the crossover to ~N=64.
+
+#### Three Optimization Tiers
+
+| Tier | Mechanism | Per-round cost (K=8) | Est. crossover |
+|---|---|---|---|
+| Current | Fresh threads per round | 27us | N=128 |
+| A: Thread pool (channels) | Persistent workers, channel dispatch | ~13us | N≈64 |
+| B: Shared-memory + semaphore | Workers on shared buffer, semaphore gate | ~1us | N≈8-16 |
+| C: Hypercube all-reduce (§3.7) | Pairwise merge tree, shared-memory | ~0.06us | N≈4-8 |
+
+Tier C applies the Hyperlattice Conjecture's optimality claim to the BSP barrier merge itself — see §3.7.
+
+#### Real-World Benchmark Comparison (7 programs, 10 runs each)
+
+| Program | Seq (ms) | Fut (ms) | Thr (ms) | Change |
+|---|---|---|---|---|
+| simple-typed | 104.6 | 104.9 | 105.4 | noise |
+| nat-arithmetic | 110.5 | 112.0 | 113.4 | +1-3% regression |
+| higher-order | 160.6 | 162.9 | 162.9 | +1.4% regression |
+| solve-adversarial | 3834 | 3835 | 3842 | noise |
+| atms-adversarial | 4146 | 4152 | 4163 | noise |
+| parity-adversarial | 3577 | 3579 | 3573 | noise |
+| constraints-adversarial | 5249 | 5510 | 5378 | +2-5% regression *** |
+
+**No current workload benefits from parallelism.** All programs have too few concurrent propagators per BSP round.
 
 ---
 
@@ -543,6 +598,87 @@ Phase 0b S4 shows async NAF costs 13x sync (4.1us vs 0.31us). This argues for ad
 - **Heuristic**: if the inner goal's relation has clauses (not just facts), use async
 
 This is not a special case but an optimization: the choice between sync and async is an implementation detail of the NAF propagator, invisible to the outer network.
+
+### §3.7 Hypercube Merge Topology for BSP Barriers (D.6)
+
+The current parallel executor uses a **star topology** for result collection:
+
+```
+Dispatch:  dispatcher ──→ K workers     (fan-out, 1 round, K sends)
+Execute:   K workers fire independently
+Collect:   K workers ──→ dispatcher     (fan-in, 1 round, K sequential channel-gets)
+                                         ^^^^ bottleneck: sequential merge
+```
+
+The collection phase is sequential: `(apply append (for/list ([ch ...]) (channel-get ch)))` — K channel-gets in order. For K=8, this is 8 × 1.57us = 12.6us of channel overhead alone.
+
+#### The Structural Insight
+
+Merging K workers' cell writes IS a **lattice join** — cell merge functions are lattice joins by construction. The Hyperlattice Conjecture's optimality claim: **the Hasse diagram of the lattice IS the optimal communication topology.**
+
+For lattice join of K values, the Hasse diagram gives the **binary merge tree** — which IS the hypercube all-reduce:
+
+```
+Star (current):
+  w₀ ─┐
+  w₁ ─┤
+  w₂ ─┼──→ collector (8 sequential merges)
+  ...  ┤
+  w₇ ─┘
+
+Hypercube all-reduce (log₂ K rounds of pairwise merge):
+  Round 1: (w₀⊕w₁) (w₂⊕w₃) (w₄⊕w₅) (w₆⊕w₇)   — 4 independent merges
+  Round 2: (w₀₁⊕w₂₃) (w₄₅⊕w₆₇)                  — 2 independent merges
+  Round 3: (w₀₁₂₃⊕w₄₅₆₇)                          — 1 merge → global result
+```
+
+Star: 1 round, K sequential merges (collector bottleneck).
+Hypercube: log₂(K) rounds, each with K/2^round **independent parallel** merges.
+
+For K=8: star = 8 sequential merges; hypercube = 3 rounds of 4→2→1 parallel merges. Each round's merges are independent — they can run in parallel (CHAMP merges are pure functional).
+
+#### CHAMP Structural Sharing Benefit
+
+Pairwise merge preserves CHAMP structural sharing better than sequential merge. When w₀'s CHAMP and w₁'s CHAMP are merged, the result shares structure with both inputs (Hamming distance 1 in the hypercube). When that merged result merges with w₂₃'s result, sharing cascades through the tree. Sequential merge (star) builds a progressively larger CHAMP that shares less with later workers' contributions.
+
+This connects to Gray code: the hypercube all-reduce's pairwise merge follows the Hasse diagram's adjacency — each merge combines maximally-sharing pairs.
+
+#### Cost Model
+
+| Topology | Communication | Merge rounds | Total cost (K=8, shared-memory) |
+|---|---|---|---|
+| Star (channels) | K × 1.57us | K sequential | ~12.6us |
+| Star (shared-memory) | K × 0.01us | K sequential | ~0.08us + merge time |
+| **Hypercube (shared-memory)** | log₂(K) × 2 × 0.01us | log₂(K) parallel | **~0.06us + parallel merge time** |
+
+With shared-memory coordination (semaphore-gated buffers), the hypercube topology reduces both communication AND merge costs. The merge time itself is parallelized — at each round, K/2^r independent merges run simultaneously.
+
+#### Implementation Sketch
+
+```
+;; Per-round pairwise merge (dimension k of the hypercube)
+(for each round k from 0 to log₂(K)-1:
+  ;; Each worker i communicates with partner i XOR 2^k
+  (for each worker i in parallel:
+    partner = i XOR (1 << k)
+    if i < partner:
+      ;; i is the "receiver": merge partner's result into own
+      merged = cell-merge(my-result, shared-buffer[partner])
+      my-result = merged
+    else:
+      ;; i is the "sender": write result to shared buffer for partner
+      shared-buffer[i] = my-result
+  ;; Barrier (semaphore) between rounds)
+```
+
+After log₂(K) rounds, worker 0 holds the global merged result. This is the standard hypercube all-reduce algorithm adapted for CHAMP merge.
+
+#### Scope Decision
+
+This is a significant optimization but architecturally clean — it changes the BSP barrier's merge topology without affecting the propagator model. Options:
+- **Phase 6 scope**: implement alongside `:auto` switch as the production parallel executor
+- **Future track**: defer to PAR Track 2 (parallel scheduling) where it compounds with other parallel optimizations
+- **Data-driven**: implement Phase 5a-5d first (Tier 1 fast-path), re-measure. If Tier 1 is <5x DFS, the parallel executor is less urgent and can be deferred
 
 ---
 
