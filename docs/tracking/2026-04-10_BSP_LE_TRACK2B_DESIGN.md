@@ -677,6 +677,8 @@ With shared-memory coordination (semaphore-gated buffers), the hypercube topolog
 
 After log₂(K) rounds, worker 0 holds the global merged result. This is the standard hypercube all-reduce algorithm adapted for CHAMP merge.
 
+**Note (critique M2)**: The "rounds" here are NOT imposed temporal ordering — they are the **depth of the merge tree**, which EMERGES from the pairwise propagator topology. Each worker IS a propagator; pairwise connections ARE propagator edges. The BSP scheduler fires all workers; the merge tree's depth determines how many supersteps are needed. The rounds are emergent from dataflow, not from an imposed schedule. The implementation may use explicit dimension iteration for efficiency (the tree structure is known at construction time), but the design semantics are information flow through a merge network.
+
 #### Scope Decision
 
 This is a significant optimization but architecturally clean — it changes the BSP barrier's merge topology without affecting the propagator model. Options:
@@ -962,7 +964,18 @@ On BOTH the standard comparative suite (13 programs) AND the adversarial benchma
 
 **Tests**: All parity-adversarial.prologos sections P1 + P2 must match DFS results. `fact16 8 ?y` returns 1 result. `five-way 3 ?y` returns 1 result. `five-way ?x ?y` returns 5 results.
 
-**Vision gate**: On-network? Decision cell + narrowing propagator. Complete? Facts + clauses unified. Vision-advancing? Clause selection IS information flow (lattice narrowing), not imperative filtering.
+**Discrimination map limitation (critique R1)**: Clauses whose first goal is NOT a unification (`app`, `is`, `guard`) are **wildcards** in the discrimination map — they match any argument value at all positions. For relations where ALL clauses start with non-unification goals, the map is empty and no narrowing occurs (all clauses tried). This is correct behavior but should be noted: the optimization benefits relations with unification-first clause heads (the common case for `defr` with `&>` clauses and fact rows).
+
+**Estimate (critique R3)**: ~210 lines (revised from ~150). Breakdown: discrimination cell extraction (~50), clause decision cell (~30), arg-watcher propagator (~50), clause installation gating (~30), fact-row PU branching (~30), relation-register integration (~20).
+
+**Test plan (critique R5)**: Phase 1a must include 5 test categories:
+- (a) Narrowing with bound arguments — `five-way 3 ?y` returns 1 result
+- (b) No narrowing with free arguments — `five-way ?x ?y` returns 5 results
+- (c) Partial binding — `fact16 8 ?y` returns 1 result from 16 rows
+- (d) Wildcard first goals — clauses with `app`/`is` first goal are not filtered
+- (e) Mixed facts + clauses — `hybrid ?x ?y` returns results from both fact rows and clause bodies
+
+**Vision gate**: On-network? Discrimination cell + arg-watcher propagator + clause decision cell. Complete? Facts + clauses unified. Vision-advancing? Clause selection IS information flow (lattice narrowing on decision cell), not imperative filtering. Self-hosting: discrimination cell is reactive to new clause registrations (§3.8).
 
 ### Phase 1b: Position-Discriminant Analysis (~2h)
 
@@ -1003,7 +1016,11 @@ On BOTH the standard comparative suite (13 programs) AND the adversarial benchma
 
 **Tests**: All 4 well-founded test files must pass. NAF-specific parity cases. Async-specific tests: verify outer clauses proceed while NAF thread runs.
 
-**Vision gate**: On-network? NAF-result is a cell. Inner computation is a Pocket Universe. Async? Thread-spawned, non-blocking. Complete? NAF semantics match DFS. Vision-advancing? NAF as parallel sub-computation, not blocking control flow.
+**Information-flow invariant (critique P3+M3)**: BOTH sync and async paths write to the NAF-result cell + NAF-gate propagator fires. The cell write IS the architectural contract. Whether the inner BSP blocks the current thread (sync, for trivial inner goals) or spawns a new thread (async, for clause-bearing inner goals) is an implementation choice orthogonal to the information flow. No inline return values — the result flows through the network.
+
+**Adaptive thread dispatch (from Phase 0b S4 data)**: Thread overhead is 3.6us. For facts-only inner goals (trivial computation), run inner BSP on current thread (sync). For clause-bearing inner goals (non-trivial), spawn thread (async). The distinction is structural: check `variant-info-clauses` emptiness. Both paths write to NAF-result cell identically.
+
+**Vision gate**: On-network? NAF-result is a cell. Inner computation is a Pocket Universe. Complete? NAF semantics match DFS. Vision-advancing? NAF as information flow — result via cell write, not return value.
 
 ### Phase 3: Guard as Propagator (~2-3h)
 

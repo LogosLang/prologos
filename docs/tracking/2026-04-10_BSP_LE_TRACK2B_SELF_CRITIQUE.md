@@ -139,29 +139,32 @@ The design says: "on first query, build the full context, store in pool." This i
 
 ## Summary
 
-| ID | Lens | Finding | Severity | Resolution |
-|---|---|---|---|---|
-| P1 | P | Step 4 ambiguous: imperative vs topology-gated | Medium | Split: construction-time for ground args, topology-request for partial. Name both. |
-| P2 | P | Phases 5a+5c duplicate fast-paths | Medium | Merge 5a into 5c. Scheduler handles scheduling. |
-| P3 | P | NAF sync path violates information-flow | Medium | Always use NAF-result cell. Thread choice is orthogonal to flow. |
-| P4 | P | DFS fallback justified | Low | Keep as diagnostic tool. ~170 lines, no interaction. |
-| P5 | P | Discrimination map off-network | Low | Justified — it's a constant, not a lattice value. |
-| P6 | P | Pool parameter vs cell | Low | Write-once parameter acceptable. Cell if ever needs update. |
-| R1 | R | Non-unification first goals → wildcard in discrim map | Medium | State explicitly. Document limitation. |
-| R2 | R | Phase 5a only helps fact-only queries, not all Tier 1 | High | Rename or expand scope. Single-clause needs different fast-path. |
-| R3 | R | Line count estimate low (~150 → ~210) | Low | Update estimate. |
-| R4 | R | Lazy context + worldview cache interaction | Medium | Verify promote-cell-to-tagged handles 0-cache. |
-| R5 | R | Internal API test gap | Medium | Phase 1a must add narrowing-specific tests. |
-| M1 | M | Construction-time narrowing is imperative but acceptable | Low | Name as optimization of the general topology-request mechanism. |
-| M2 | M | "Rounds" in §3.7 is step-think vocabulary | Low | Reframe as merge network depth. |
-| M3 | M | NAF sync path returns inline, not via cell | Medium | Same as P3. Cell write invariant. |
-| M4 | M | Context pool parameter is mutable state | Low | Acceptable scaffolding. Cell if rigorous. |
-| M5 | M | Phase 1a passes Network Reality Check | — | ✅ Clean trace. |
+| ID | Lens | Finding | Severity | Original Resolution | **D.7 Outcome** |
+|---|---|---|---|---|---|
+| P1 | P | Step 4 ambiguous: imperative vs topology-gated | Medium | Split: construction-time for ground args, topology-request for partial. | **REVISED (§3.8)**: Eliminated construction-time path. Reactive narrowing always — arg-watcher fires in BSP round 1 for ground args. One mechanism. |
+| P2 | P | Phases 5a+5c duplicate fast-paths | Medium | Merge 5a into 5c. | **ACCEPTED**: Merged into single fire-once fast-path inside BSP scheduler. Handles fact-only (worklist=0) AND single-clause (fire-once). |
+| P3 | P | NAF sync path violates information-flow | Medium | Always use NAF-result cell. | **ACCEPTED**: Both sync/async write to NAF-result cell. Thread choice orthogonal to information flow. Updated in Phase 2 description. |
+| P4 | P | DFS fallback justified | Low | Keep as diagnostic tool. | **ACCEPTED**: ~170 lines, no interaction with propagator infra. Diagnostic tool. |
+| P5 | P | Discrimination map off-network | Low | ~~Justified — constant.~~ | **REVISED (§3.8, self-hosting lens)**: Dismissed too readily. On-network: discrimination cell with hash-union merge. Reactive updates when new clauses registered. Cost: 1 cell. |
+| P6 | P | Pool parameter vs cell | Low | ~~Write-once parameter acceptable.~~ | **REVISED (§3.8, self-hosting lens)**: On-network: solver-template cell with first-write-wins merge. Observable, composable. |
+| R1 | R | Non-unification first goals → wildcard in discrim map | Medium | State explicitly. | **ACCEPTED**: Documented in §3.1 + Phase 1a limitations section. |
+| R2 | R | Phase 5a only helps fact-only queries, not all Tier 1 | High | Rename or expand scope. | **ACCEPTED + EXPANDED**: Fire-once fast-path handles both fact-only AND single-clause. User insight: fire-once (self-cleaning) propagator keeps single-clause on fast path. |
+| R3 | R | Line count estimate low (~150 → ~210) | Low | Update estimate. | **ACCEPTED**: Estimate updated to ~210 lines. |
+| R4 | R | Lazy context + worldview cache interaction | Medium | Verify. | **VERIFIED SAFE (§2.11)**: Cell-id 1 always pre-allocated, promote-cell-to-tagged has no dependency, net-cell-read defaults to 0. |
+| R5 | R | Internal API test gap | Medium | Phase 1a test plan needed. | **ACCEPTED**: 5 test categories added to Phase 1a. |
+| M1 | M | Construction-time narrowing is imperative but acceptable | Low | ~~Name as optimization.~~ | **REVISED (§3.8, self-hosting lens)**: Eliminated. Reactive narrowing is the only mechanism. Ground args fire watcher in BSP round 1 — "optimization" falls out from BSP scheduling. |
+| M2 | M | "Rounds" in §3.7 is step-think vocabulary | Low | Reframe as merge network depth. | **ACCEPTED**: §3.7 notes that rounds emerge from merge tree depth, not imposed schedule. |
+| M3 | M | NAF sync path returns inline, not via cell | Medium | Same as P3. Cell write invariant. | **ACCEPTED**: Same as P3. |
+| M4 | M | Context pool parameter is mutable state | Low | ~~Acceptable scaffolding.~~ | **REVISED (§3.8, self-hosting lens)**: On-network: solver-template cell. No parameter. |
+| M5 | M | Phase 1a passes Network Reality Check | — | ✅ Clean trace. | **CONFIRMED** |
 
-### Findings Requiring Design Changes
+### Design Changes Incorporated in D.7
 
-1. **P2 + R2**: Merge Phase 5a into 5c. Expand 5c to handle both empty-worklist (fact queries) and single-propagator (single-clause queries). One fast-path inside the scheduler.
-2. **P3 + M3**: Phase 2 NAF: always write to NAF-result cell. Sync vs async is thread choice only, not information-flow choice.
-3. **P1 + M1**: Phase 1a: name both construction-time narrowing (fully-ground args) and reactive narrowing (partial args). Construction-time is optimization of the general mechanism.
-4. **R1**: Document non-unification first goals as wildcards in discrimination map.
-5. **R5**: Phase 1a test plan: 5 specific test categories for narrowing behavior.
+1. **P2 + R2**: ✅ Merged into fire-once fast-path (Phase 5a). User expanded scope to fire-once pattern for single-clause.
+2. **P3 + M3**: ✅ NAF always writes to cell. Thread choice orthogonal. Updated in Phase 2 + §3.2.
+3. **P1 + M1 + P5 + P6 + M4** (self-hosting lens): ✅ All five off-network dismissals REVISED. New §3.8: discrimination map → cell, construction-time path eliminated, context pool → cell.
+4. **R1**: ✅ Wildcard limitation documented in §3.1 discrimination map section + Phase 1a limitations.
+5. **R3**: ✅ Estimate updated to ~210 lines.
+6. **R4**: ✅ Verified safe, documented in §2.11.
+7. **R5**: ✅ 5 test categories specified in Phase 1a.
+8. **M2**: ✅ Noted in §3.7 (rounds = emergent from merge tree depth).
