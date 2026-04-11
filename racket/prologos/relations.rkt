@@ -42,12 +42,18 @@
  relation-register
  relation-lookup
  relation-store-names
- ;; Track 2B Phase 1a: on-network discrimination
+ ;; Track 2B Phase 1a+1b: on-network discrimination
  build-discrimination-data
  discrimination-data-merge
  discrimination-data-bot
  position-discriminates?
  install-discrimination-propagators
+ ;; Phase 1b: discrimination tree
+ (struct-out discrim-node)
+ (struct-out discrim-leaf)
+ build-discrimination-tree
+ variant-discrimination-tree
+ tree-all-indices
  ;; AST → runtime conversion
  expr-defr->relation-info
  expr-rel->relation-info
@@ -367,6 +373,130 @@
              (not (for/and ([v (in-list (cdr vals))])
                     (equal? v (car vals))))))))
 
+;; ========================================
+;; Track 2B Phase 1b: Discrimination Tree (Needed-Narrowing-Inspired)
+;; ========================================
+;;
+;; Hierarchical clause discrimination. Each level of the tree represents
+;; a Q_1 decomposition of the clause space at one argument position.
+;; The tree IS the Hasse diagram of the clause decomposition.
+;;
+;; At solve time, the tree guides propagator installation: only install
+;; discrimination propagators for positions that add narrowing power
+;; within the current viable group. Avoids redundant propagators.
+;;
+;; SRE: each tree level is a decision cell. The recursive decomposition
+;; Q_N = Q_{N-1} × Q_1 matches the tree's recursive structure.
+
+;; Tree node: discriminate at `position` using value → subtree mapping.
+;; `wildcard-indices`: clause indices with no discriminator at this position
+;; (always viable regardless of value).
+(struct discrim-node (position children wildcard-indices) #:transparent)
+;; Leaf: no further discrimination needed. `indices` = viable clause set.
+(struct discrim-leaf (indices) #:transparent)
+
+;; Score a position's discrimination power for a given set of clause indices.
+;; Returns the number of distinct GROUPS the position creates.
+;; Higher = more discriminating. 0 = no discrimination.
+(define (position-score discrim-data pos indices)
+  (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
+  (if (hash-empty? pos-data) 0
+      (let ()
+        ;; Group indices by their expected value at this position
+        (define groups (make-hash))  ;; value → (listof index)
+        (define wildcards '())
+        (for ([idx (in-set indices)])
+          (define val (hash-ref pos-data idx #f))
+          (if val
+              (hash-update! groups val (lambda (lst) (cons idx lst)) '())
+              (set! wildcards (cons idx wildcards))))
+        ;; Score = number of distinct groups (excluding wildcards)
+        ;; A position that creates N groups from M indices is more discriminating
+        (hash-count groups))))
+
+;; Build a discrimination tree for a set of clause indices.
+;; `discrim-data`: (hasheq position → (hasheq clause-idx → expected-value))
+;; `indices`: seteq of clause indices to discriminate among
+;; `positions`: list of argument positions still available for discrimination
+;; Returns: discrim-node or discrim-leaf
+(define (build-discrimination-tree discrim-data indices positions)
+  (cond
+    ;; Base case: 0-1 indices — no further discrimination needed
+    [(<= (set-count indices) 1)
+     (discrim-leaf indices)]
+
+    ;; No more positions to discriminate on
+    [(null? positions)
+     (discrim-leaf indices)]
+
+    [else
+     ;; Score each remaining position
+     (define scored
+       (for/list ([pos (in-list positions)])
+         (cons (position-score discrim-data pos indices) pos)))
+     ;; Best position = highest score
+     (define best-pair
+       (for/fold ([best (car scored)])
+                 ([pair (in-list (cdr scored))])
+         (if (> (car pair) (car best)) pair best)))
+
+     (if (zero? (car best-pair))
+         ;; No position discriminates further — leaf
+         (discrim-leaf indices)
+         ;; Build tree node at best position
+         (let ()
+           (define best-pos (cdr best-pair))
+           (define pos-data (hash-ref discrim-data best-pos discrimination-data-bot))
+           (define remaining-positions (remove best-pos positions))
+
+           ;; Group indices by value at best-pos
+           (define groups (make-hash))
+           (define wildcard-indices (seteq))
+           (for ([idx (in-set indices)])
+             (define val (hash-ref pos-data idx #f))
+             (if val
+                 (hash-update! groups val
+                               (lambda (s) (set-add s idx))
+                               (seteq))
+                 (set! wildcard-indices (set-add wildcard-indices idx))))
+
+           ;; Recursively build subtrees for each group
+           ;; Wildcards are added to EVERY group (they match any value)
+           (define children
+             (for/hasheq ([(val group-indices) (in-hash groups)])
+               (define full-group (set-union group-indices wildcard-indices))
+               (values val (build-discrimination-tree discrim-data full-group remaining-positions))))
+
+           (discrim-node best-pos children wildcard-indices)))]))
+
+;; Collect all clause indices reachable from a tree node.
+(define (tree-all-indices tree-node)
+  (cond
+    [(discrim-leaf? tree-node) (discrim-leaf-indices tree-node)]
+    [(discrim-node? tree-node)
+     (define wildcards (discrim-node-wildcard-indices tree-node))
+     (for/fold ([acc wildcards])
+               ([(val subtree) (in-hash (discrim-node-children tree-node))])
+       (set-union acc (tree-all-indices subtree)))]
+    [else (seteq)]))
+
+;; Build a discrimination tree for a variant.
+;; Returns: discrim-node or discrim-leaf (or #f if no discrimination possible)
+(define (variant-discrimination-tree variant)
+  (define discrim-data (build-discrimination-data variant))
+  (define n-facts (length (variant-info-facts variant)))
+  (define n-clauses (length (variant-info-clauses variant)))
+  (define n-total (+ n-facts n-clauses))
+  (if (<= n-total 1) #f  ;; no discrimination needed for 0-1 alternatives
+      (let ()
+        (define all-indices (for/seteq ([i (in-range n-total)]) i))
+        (define all-positions
+          (for/list ([i (in-range (length (variant-info-params variant)))])
+            i))
+        (define tree (build-discrimination-tree discrim-data all-indices all-positions))
+        ;; Only return tree if it actually discriminates (not just a leaf of everything)
+        (if (discrim-leaf? tree) #f tree))))
+
 ;; Install discrimination broadcast propagators on the network.
 ;; For each discriminating position k:
 ;;   - Allocate a discrimination cell (compound: clause-idx → expected-value)
@@ -387,51 +517,96 @@
   (define-values (net1 viability-cid)
     (net-new-cell net all-viable viability-merge))
 
-  ;; For each discriminating position, install a broadcast propagator
+  ;; Phase 1b: Use discrimination tree to guide propagator installation.
+  ;; The tree identifies which positions are NEEDED — avoids redundant propagators
+  ;; for positions that don't add discrimination within the current viable group.
+  ;; Falls back to flat (all-positions) if no tree is available.
+  (define tree (build-discrimination-tree discrim-data all-viable
+                 (for/list ([i (in-range (length resolved-args))]) i)))
+
+  ;; Install discrimination propagators guided by the tree.
+  ;; For ground args: traverse tree immediately (construction-time narrowing).
+  ;; For free args: install fire-once propagator at that tree level.
+  (define (install-tree-propagators net tree-node)
+    (cond
+      [(discrim-leaf? tree-node) net]  ;; leaf — no further discrimination
+      [(discrim-node? tree-node)
+       (define pos (discrim-node-position tree-node))
+       (define children (discrim-node-children tree-node))
+       (define wildcards (discrim-node-wildcard-indices tree-node))
+       (define arg (list-ref resolved-args pos))
+       (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
+
+       (cond
+         [(or (scope-ref? arg) (cell-id? arg))
+          ;; Free argument at this tree level: install fire-once propagator
+          ;; for THIS position, then descend into ALL children's subtrees
+          ;; to ensure OTHER positions with ground args still narrow.
+          (define arg-cid (if (scope-ref? arg) (scope-ref-cid arg) arg))
+          (define discrim-pairs
+            (for/list ([(clause-idx expected) (in-hash pos-data)])
+              (cons clause-idx expected)))
+          (define (discrim-fire net)
+            (define arg-val
+              (let ([raw (net-cell-read net arg-cid)])
+                (if (scope-cell? raw)
+                    (let ([var-name (and (scope-ref? arg) (scope-ref-var arg))])
+                      (if var-name (scope-cell-ref raw var-name) raw))
+                    raw)))
+            (if (or (eq? arg-val scope-cell-bot) (not arg-val))
+                net  ;; arg not yet resolved — residuate
+                (let ([viable
+                       (for/seteq ([pair (in-list discrim-pairs)]
+                                   #:when (equal? (cdr pair) arg-val))
+                         (car pair))])
+                  (define full-viable (set-union viable wildcards))
+                  (net-cell-write net viability-cid full-viable))))
+          (define-values (n2 _pid)
+            (net-add-fire-once-propagator net (list arg-cid) (list viability-cid)
+                                          discrim-fire))
+          ;; Descend into ALL children's subtrees — other positions in the tree
+          ;; may have ground args that can narrow at construction time.
+          (for/fold ([n n2])
+                    ([(val subtree) (in-hash children)])
+            (install-tree-propagators n subtree))]
+
+         [else
+          ;; Ground argument: traverse tree immediately
+          ;; Find which child matches this value
+          (define matching-child
+            (for/or ([(val subtree) (in-hash children)])
+              (and (equal? val arg) subtree)))
+          (if matching-child
+              ;; Narrow viability to this child's indices + wildcards, then descend
+              (let ()
+                (define child-indices (tree-all-indices matching-child))
+                (define full-viable (set-union child-indices wildcards))
+                (define n2 (net-cell-write net viability-cid full-viable))
+                ;; Descend into matching subtree — further positions may narrow more
+                (install-tree-propagators n2 matching-child))
+              ;; No match — only wildcards are viable
+              (if (set-empty? wildcards)
+                  (net-cell-write net viability-cid (seteq))  ;; contradiction
+                  (net-cell-write net viability-cid wildcards)))])]
+      [else net]))
+
+  (define net-after-tree (install-tree-propagators net1 tree))
+
+  ;; Phase 1b: After tree traversal, do a flat pass for any ground args at
+  ;; positions NOT reached by the tree (tree may have chosen a different position
+  ;; order than the query's bound/free pattern). This ensures that ALL ground
+  ;; args contribute to narrowing regardless of tree structure.
   (define net-final
-    (for/fold ([n net1])
+    (for/fold ([n net-after-tree])
               ([pos (in-naturals)]
                [arg (in-list resolved-args)])
       (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
-      ;; Skip positions with no discrimination data or where arg is already ground
-      ;; and we can narrow immediately
       (cond
-        [(hash-empty? pos-data) n]  ;; no discriminators at this position
-        [(or (scope-ref? arg) (cell-id? arg))
-         ;; Free argument: install broadcast propagator that fires when arg resolves
-         (define arg-cid (if (scope-ref? arg) (scope-ref-cid arg) arg))
-         (define discrim-pairs
-           (for/list ([(clause-idx expected) (in-hash pos-data)])
-             (cons clause-idx expected)))
-         ;; Broadcast propagator: one fire, checks all clauses at this position
-         (define (discrim-fire net)
-           (define arg-val
-             (let ([raw (net-cell-read net arg-cid)])
-               (if (scope-cell? raw)
-                   ;; Read the specific variable from the scope cell
-                   (let ([var-name (and (scope-ref? arg) (scope-ref-var arg))])
-                     (if var-name (scope-cell-ref raw var-name) raw))
-                   raw)))
-           (if (or (eq? arg-val scope-cell-bot) (not arg-val))
-               net  ;; arg not yet resolved — residuate (no write)
-               ;; Compute viable set: clauses whose expected value matches arg
-               (let ([viable
-                      (for/seteq ([pair (in-list discrim-pairs)]
-                                  #:when (equal? (cdr pair) arg-val))
-                        (car pair))])
-                 ;; Include wildcards: clauses NOT in discrim-data are always viable
-                 (define wildcards
-                   (for/seteq ([i (in-range n-alternatives)]
-                               #:when (not (hash-has-key? pos-data i)))
-                     i))
-                 (define full-viable (set-union viable wildcards))
-                 (net-cell-write net viability-cid full-viable))))
-         (define-values (n2 _pid)
-           (net-add-fire-once-propagator n (list arg-cid) (list viability-cid)
-                                         discrim-fire))
-         n2]
+        [(hash-empty? pos-data) n]
+        [(or (scope-ref? arg) (cell-id? arg)) n]  ;; free arg — handled by tree propagators
         [else
-         ;; Ground argument: narrow immediately (construction-time, but through cell write)
+         ;; Ground arg — check if viability already narrowed for this value.
+         ;; Write to viability cell (set-intersect merge handles redundancy).
          (define viable
            (for/seteq ([pair (in-list (hash->list pos-data))]
                        #:when (equal? (cdr pair) arg))
