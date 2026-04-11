@@ -425,7 +425,7 @@
                                #:when (not (hash-has-key? pos-data i)))
                      i))
                  (define full-viable (set-union viable wildcards))
-                 (net-cell-write n viability-cid full-viable))))
+                 (net-cell-write net viability-cid full-viable))))
          (define-values (n2 _pid)
            (net-add-fire-once-propagator n (list arg-cid) (list viability-cid)
                                          discrim-fire))
