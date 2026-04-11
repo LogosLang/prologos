@@ -20,7 +20,7 @@
 | 0a | Pre-0: parity baseline | ✅ | 19/19 test files pass both strategies. Adversarial: 3 divergence categories found. |
 | 0b | Pre-0: micro-benchmarks | ✅ | 28 benchmarks + overhead decomposition. ATMS 24.5x overhead identified → 4 optimization paths. |
 | 0c | Pre-0: A/B executor comparison | ✅ | Sequential wins all current workloads. Threads cross over at N≥128. Futures eliminated. |
-| 1a | Clause selection as decision-cell narrowing | ⬜ | Argument-watching propagator + clause decision cell. Fixes Category 1+2. |
+| 1a | Clause selection as decision-cell narrowing | ✅ | `a1df50f4`→`b47b9787`. On-network discrimination (broadcast), fact-row PU branching, domain-merge fix. Categories 1+2 FIXED. |
 | 1b | Position-discriminant analysis | ⬜ | Needed-narrowing-inspired: identify best discriminating position, hierarchical narrowing |
 | 2 | NAF as async propagator | ⬜ | Async from start: thread-spawned inner BSP, NAF-result cell, NAF-gate |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
