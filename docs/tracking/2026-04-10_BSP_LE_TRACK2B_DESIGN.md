@@ -3,7 +3,7 @@
 **Date**: 2026-04-10
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: DFS↔Propagator parity validation, fact-row isolation, NAF/guard as async propagators, parallel executor default, `:auto` deployment
-**Status**: D.11 — Phase 2 NAF redesigned: stratified evaluation (S1 stratum at S0 fixpoint, Kan extension, no fork/bitmask)
+**Status**: D.12 — Phase 2 NAF as worldview assumption + S1 nogood elimination (reuses Track 2 infrastructure entirely)
 **Self-critique**: [P/R/M Analysis](2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md) (15 findings, 5 revised via self-hosting lens)
 **External critique**: [Architect Review](2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md) (18 findings, 2 critical, 8 major)
 **Critique response**: [Response](2026-04-10_BSP_LE_TRACK2B_CRITIQUE_RESPONSE.md) (15 actions incorporated)
@@ -22,8 +22,8 @@
 | 0c | Pre-0: A/B executor comparison | ✅ | Sequential wins all current workloads. Threads cross over at N≥128. Futures eliminated. |
 | 1a | Clause selection as decision-cell narrowing | ✅ | `a1df50f4`→`b47b9787`. On-network discrimination (broadcast), fact-row PU branching, domain-merge fix. Categories 1+2 FIXED. |
 | 1b | Position-discriminant analysis | ✅ | `1eae7eb8`. Discrimination tree: position scoring, recursive partitioning, tree-guided installation. Flat ground-arg pass ensures coverage regardless of tree order. |
-| 2a | NAF registration + S1 provability check | 🔄 | `e928dbc0`. Stratified NAF: register at S0, evaluate at S0 fixpoint via discrimination provability. Basic+variable cases FIXED. Complex cross-relation cases remaining. |
-| 2b | NAF evaluation stratum in BSP (S1) | ⬜ | Add S1 stratum to run-to-quiescence-bsp. Broadcast-evaluate pending NAFs. Retires scaffolding in solve-goal-propagator. |
+| 2a | NAF assumption + S0 tagged installation | ⬜ | NAF gets worldview assumption via solver-assume. Subsequent goals tagged with h_naf. Register for S1. ~20 lines. |
+| 2b | S1 NAF nogood stratum in BSP | ⬜ | S1 checks provability, writes nogoods for invalid NAF assumptions. Track 2 narrowing handles elimination. ~40-50 lines. |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
 | 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
 | 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
@@ -1139,76 +1139,74 @@ On BOTH the standard comparative suite (13 programs) AND the adversarial benchma
 
 **Vision gate**: On-network? Nested decision cells. Complete? Multi-position discrimination. Vision-advancing? The tree IS the Hasse diagram of the clause decomposition.
 
-### Phase 2a+2b: Stratified NAF (~3-4h)
+### Phase 2a+2b: NAF as Worldview Assumption + S1 Nogood Elimination (~2-3h)
 
-**Objective**: NAF as a non-monotone operation in its own BSP stratum (S1), evaluated AFTER positive goals reach S0 fixpoint. No fork, no worldview-bitmask isolation, no cross-network bridge. NAF reads the completed S0 state and writes NAF-result cells.
+**Objective**: NAF goals get worldview assumptions (same as clause branches). NAF-dependent writes are tagged with the NAF bitmask. S1 stratum validates NAF assumptions by checking provability at S0 fixpoint. Invalid NAF assumptions → nogoods → Track 2 worldview narrowing eliminates them. Tagged-cell-value filtering makes correct results visible. REUSES EXISTING INFRASTRUCTURE ENTIRELY.
 
-**Key architectural insight (D.11 design conversation)**: NAF is fundamentally non-monotone — "if not provable, then negation holds" requires the positive computation to be COMPLETE before evaluation. CALM guarantees confluence only for monotone computations. Putting NAF on the same S0 layer violates this — every implementation issue (construction-time vs BSP-time, ground goal detection, variable binding visibility) stemmed from conflating monotone and non-monotone on the same stratum. Stratification is the principled solution.
+**Key architectural insight (D.12 design conversation)**: NAF is a stratification ON TOP of worldviews, not a separate mechanism alongside them. Each NAF assumption IS a worldview element — the assumption `h_naf` means "this NAF succeeded." The S1 stratum determines which NAF assumptions are valid by checking inner goal provability. Invalid NAF assumptions are eliminated via nogoods — the SAME mechanism Track 2 uses for clause branch elimination. No new cells, no new result-reading filters, no step-think.
 
-**Stratified BSP loop**:
+**The structural model**: worldviews × NAF = Q_n × Q_1^k
+
+Each NAF goal adds a Q_1 dimension to the worldview space. The combined space is the product lattice. Nogoods express which combinations in the product are contradicted. Tagged-cell-value filtering on the product gives the correct results.
+
 ```
-BSP outer loop:
-  1. Value stratum (S0): fire all MONOTONE propagators to fixpoint
-     (unify, is, app, guard — all positive goals)
+S0: Positive goals reach fixpoint
+    - Clause branches: assumptions h_1, h_2, ..., h_m (from solver-assume)
+    - NAF assumptions: h_naf_1, h_naf_2, ..., h_naf_k (from solver-assume)
+    - NAF-dependent writes tagged with h_naf_i (via wrap-with-worldview)
+    - All goals fire concurrently; worldview filtering isolates branches
 
-  2. NAF stratum (S1): evaluate all pending NAF goals
-     - Read S0 fixpoint state (scope cells, viability cells have final values)
-     - For each NAF: is the inner goal provable? (read viability cell)
-     - Write NAF-result cells (naf-succeeded / naf-failed)
-     - Broadcast: evaluate ALL pending NAFs in one pass (Kan extension on product)
+S1: Validate NAF assumptions via provability check
+    - For each NAF h_naf_i: is the inner goal provable at S0 fixpoint?
+    - If provable: {h_naf_i} is a nogood (or {h_branch_j, h_naf_i} for branch-dependent)
+    - Write nogoods → Track 2 infrastructure narrows worldview
+    - If any narrowing: back to S0 (tagged writes under eliminated assumptions become invisible)
 
-  3. Topology stratum: process topology requests
-
-  4. If any new writes from (2) or (3): go to (1) — NAF results trigger new S0 propagation
-  5. Else: full quiescence
+Result: worldview filtering in tagged-cell-read produces correct results
+    - NAF-succeeded branches: h_naf assumption present → tagged writes visible
+    - NAF-failed branches: h_naf assumption eliminated → tagged writes invisible
+    - Branch-dependent NAF: per-branch nogoods eliminate specific (branch, NAF) combinations
 ```
 
-**Why stratification is the principled solution**:
-- S0 fixpoint guarantees ALL positive goals have converged before NAF reads them
-- Variable bindings are complete (`x = 15` is in the scope cell when NAF evaluates)
-- Ground goal viability is determined (discrimination has narrowed the viability cell)
-- No worldview isolation, cell promotion, NAF-success cells, or probe variables needed
-- NAF reads plain cell values at S0 fixpoint — one cell read per NAF goal
-- The S0→S1→S0 loop handles dependent NAFs (NAF A's result affects NAF B's provability) via fixpoint iteration — this IS the well-founded semantics realized as BSP strata
+**Why this reuses Track 2 infrastructure entirely**:
+- `solver-assume` → allocates NAF assumption (same as clause branches)
+- `wrap-with-worldview` → tags NAF-dependent writes (same as concurrent clauses)
+- `promote-cell-to-tagged` → enables worldview tagging (same as multi-clause)
+- `solver-add-nogood` → registers NAF provability contradictions (Track 2 Phase 3)
+- `tagged-cell-read` worldview filtering → makes correct results visible (already works)
+- No NAF-result cells. No NAF filters in result reading. No step-think.
 
-**Kan extension optimization**: The NAF stratum computes a right Kan extension from the positive-goal provability to the negated domain. For N independent NAFs, this is a broadcast: one propagator, N items, N results, O(1) BSP rounds. For dependent NAFs, the S0↔S1 loop converges in O(depth) iterations (parallel prefix applies for chains).
+**Phase 2a: NAF Assumption + S0 Installation** (~20 lines in relations.rkt):
 
-**Phase 2a: NAF Registration + Result Gating** (~20 lines in relations.rkt):
+1. `install-goal-propagator` ('not case):
+   a. Get fresh NAF assumption via `solver-assume` (provides h_naf bit position)
+   b. Promote outer scope cells to tagged-cell-value (same as multi-clause)
+   c. Install subsequent goals in the conjunction under `wrap-with-worldview(h_naf)` — their writes are tagged with the NAF assumption
+   d. Register the NAF for S1 evaluation (record: inner-goal, env, store, h_naf)
+   e. Return — no inner goal installation at S0
 
-1. `install-goal-propagator` ('not case): register NAF in `current-naf-pending` registry
-   - Record: inner-goal-desc, outer-env, relation-store, answer-cid
-   - Allocate NAF-result cell (three-element lattice: unknown/succeeded/failed)
-   - Return network with NAF-result cell allocated — no inner goal installation, no fork, no worldview bitmask
+2. No result-reading changes needed — worldview filtering handles NAF automatically
 
-2. Result reading: filter on NAF-result cells (already implemented from prior work)
+**Phase 2b: S1 NAF Nogood Stratum** (~40-50 lines in propagator.rkt + relations.rkt):
 
-**Phase 2b: NAF Evaluation Stratum in BSP** (~40-50 lines in propagator.rkt + relations.rkt):
+1. Add S1 stratum to `run-to-quiescence-bsp` outer loop
+2. For each registered NAF: check inner goal provability via discrimination
+   - Resolve args against S0 fixpoint (read scope cells with their final values)
+   - Build discrimination data, compute viable set
+   - If viable → inner provable → `solver-add-nogood` for `{h_naf}` (or `{h_branch, h_naf}`)
+   - If not viable → inner not provable → h_naf remains valid (no action)
+3. Nogoods trigger Track 2 narrowing → worldview contracts → back to S0 if changed
 
-1. Add S1 stratum to `run-to-quiescence-bsp` outer loop:
-   - After value stratum reaches fixpoint
-   - Before topology stratum
-   - Calls NAF evaluation function for all pending NAFs
+**Branch-dependent NAF** (`not(= ?x ?y)` where x, y vary per branch):
+- S1 resolves `?x` and `?y` under EACH branch's worldview bitmask
+- For branch h_j: read `(logic-var-read net x)` under bitmask including h_j
+- If `x = y` under h_j: `{h_j, h_naf}` is a nogood (NAF fails for this branch)
+- If `x ≠ y` under h_j: valid (NAF succeeds for this branch)
+- Per-branch nogoods compose with the worldview lattice structurally
 
-2. NAF evaluation function (broadcast over pending NAFs):
-   - For each pending NAF: install inner goal on the CURRENT network (S0 fixpoint state), read viability cell directly
-   - If viability non-empty (inner goal provable) → write `'naf-failed`
-   - If viability empty (inner goal not provable) → write `'naf-succeeded`
-   - If any NAF-result changed → new writes exist → outer loop goes back to S0
+**Tests**: All adversarial parity P3 cases. Ground NAF, variable NAF, multi-branch NAF, cross-relation NAF, branch-dependent NAF.
 
-3. Subsequent goals in the conjunction watch NAF-result cells:
-   - `naf-succeeded` → conjunction continues (information starvation on failure prevents results)
-   - `naf-failed` → clause eliminated via result filtering
-
-**What gets removed** (from worldview-bitmask approach):
-- Worldview isolation for NAF (no `combined-bm`, no `wrap-with-worldview` for inner goals)
-- Cell promotion for NAF (no `promote-cell-to-tagged` for scope cells)
-- NAF-success cell and `current-naf-success-cid` parameter
-- Probe variable approach (fresh names, unification goals, probe env)
-- Post-quiescence completion scaffolding in `solve-goal-propagator`
-
-**Tests**: All adversarial parity P3 NAF cases match DFS. All 4 well-founded test files pass. Complex cases: NAF with variable bindings (`(= x 15) not(ground-vals ?x)`), NAF under multi-clause branching, cross-relation NAF.
-
-**Vision gate**: On-network? NAF registration is a cell write. NAF evaluation is a BSP stratum (structural). NAF-result is a cell. Complete? Handles ground goals, variable bindings, multi-clause context. Vision-advancing? Non-monotone operations isolated in their own stratum — CALM-compliant architecture. The right Kan extension formulation gives the theoretical foundation.
+**Vision gate**: On-network? NAF assumption IS a worldview element. Writes tagged. Nogoods flow through Track 2 infrastructure. Complete? Handles all cases structurally. Vision-advancing? NAF is NOT a special mechanism — it IS worldview assumption + stratified validation. One infrastructure for branches AND negation.
 
 ### Phase 3: Guard as Propagator (~2-3h)
 
