@@ -22,7 +22,8 @@
 | 0c | Pre-0: A/B executor comparison | ✅ | Sequential wins all current workloads. Threads cross over at N≥128. Futures eliminated. |
 | 1a | Clause selection as decision-cell narrowing | ✅ | `a1df50f4`→`b47b9787`. On-network discrimination (broadcast), fact-row PU branching, domain-merge fix. Categories 1+2 FIXED. |
 | 1b | Position-discriminant analysis | ✅ | `1eae7eb8`. Discrimination tree: position scoring, recursive partitioning, tree-guided installation. Flat ground-arg pass ensures coverage regardless of tree order. |
-| 2 | NAF via worldview-bitmask isolation + completion cell | ⬜ | Same network, NAF bitmask, completion cell, early termination. No fork/bridge/thread. |
+| 2a | NAF via worldview-bitmask isolation + completion cell | ⬜ | Same network, NAF bitmask, completion cell, early termination. No fork/bridge/thread. |
+| 2b | BSP completion stratum | ⬜ | Add completion detection stratum to run-to-quiescence-bsp. Retires post-quiescence scaffolding. ~30-40 lines. |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
 | 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
 | 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
@@ -1214,6 +1215,36 @@ The completion cell is a GENERAL sub-computation tracking pattern — reusable f
 **Tests**: All adversarial parity P3 NAF cases match DFS. All 4 well-founded test files pass. New: NAF under multi-clause branching (clause elimination on failure). Early termination test (inner produces answer before full quiescence).
 
 **Vision gate**: On-network? Same network, worldview-isolated. No fork. No bridge. Complete? NAF semantics match DFS. Vision-advancing? NAF IS another clause branch on the same network — the worldview bitmask unifies NAF isolation with multi-clause isolation. One mechanism.
+
+### Phase 2b: BSP Completion Stratum (~1h)
+
+**Objective**: Add a completion detection stratum to `run-to-quiescence-bsp` that detects quiesced sub-computations and writes to their completion cells. Retires the post-quiescence scaffolding in `solve-goal-propagator`.
+
+**BSP loop with completion stratum**:
+```
+BSP inner loop:
+  1. Value stratum: fire all propagators, merge writes
+  2. Repeat until value fixpoint
+
+BSP outer loop:
+  3. Completion stratum: for each registered sub-computation,
+     check if its propagators have quiesced (none pending on worklist
+     with matching bitmask). If so, write 'completed to completion cell.
+  4. Topology stratum: process topology requests
+  5. If any new writes from (3) or (4): go to (1)
+  6. Else: full quiescence
+```
+
+**Steps**:
+1. Add a `pending-completions` registry to the prop-network (or solver-context): maps NAF-bitmask → completion-cell-id
+2. In `run-to-quiescence-bsp` outer loop (between value and topology strata): iterate registered completions, check if worklist has any propagators with matching bitmask, write `completed` if none pending
+3. Remove the post-quiescence completion write from `solve-goal-propagator`
+
+**Scope**: ~30-40 lines in `propagator.rkt` (completion stratum check) + ~5 lines removal from `relations.rkt` (scaffolding retirement).
+
+**Tests**: NAF parity unchanged. Verify completion cell is written DURING BSP (not after). Verify NAF-gate fires before full quiescence when inner fails.
+
+**Vision gate**: On-network? Completion detection IS a BSP stratum — structural, not imperative. Complete? Retires scaffolding. Vision-advancing? Sub-computation quiescence detection as infrastructure, not per-feature code.
 
 ### Phase 3: Guard as Propagator (~2-3h)
 
