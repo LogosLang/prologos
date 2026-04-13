@@ -63,9 +63,8 @@
  collect-ast-vars
  ;; Evaluation callback (set by reduction.rkt to break circular dep)
  current-is-eval-fn
- ;; Track 2B Phase 2a: NAF infrastructure
+ ;; Track 2B Phase 2a: NAF infrastructure (stratified)
  current-naf-completions
- current-naf-success-cid
  ;; NAF oracle (set by wf-engine.rkt for well-founded semantics)
  current-naf-oracle
  ;; Solver internals (for run-solve-goal in reduction.rkt + benchmarks)
@@ -112,11 +111,6 @@
 ;; Scaffolding — Phase 2b replaces with BSP completion stratum.
 (define current-naf-completions (make-parameter #f))
 
-;; Track 2B Phase 2a: NAF success cell.
-;; When non-#f, the inner goal's fact/clause installation writes 'naf-inner-matched
-;; to this cell-id when viable alternatives are found. NAF-context-only:
-;; defaults to #f, zero overhead for non-NAF paths.
-(define current-naf-success-cid (make-parameter #f))
 
 ;; NAF oracle callback for well-founded semantics.
 ;; When #f (default), standard NAF is used (try to prove inner goal;
@@ -1782,103 +1776,32 @@
      (install-clause-propagators net goal-name goal-args env store config answer-cid ctx)]
 
     [(not)
-     ;; Track 2B Phase 2a: NAF via worldview-bitmask isolation.
-     ;; Inner goal runs on SAME network under NAF-specific bitmask.
-     ;; No fork. No cross-network bridge. Worldview isolation:
-     ;;   inner reads outer bindings (bitmask subset match)
-     ;;   outer can't read inner writes (superset check fails)
-     ;; Completion cell (Option C) for sub-computation tracking.
-     ;; Early termination: NAF fails as soon as inner answer appears.
+     ;; Track 2B Phase 2a: Stratified NAF.
+     ;; NAF is non-monotone — CALM requires evaluation in a separate stratum (S1)
+     ;; AFTER positive goals reach S0 fixpoint. At S0, we only REGISTER the NAF
+     ;; and allocate its result cell. Evaluation happens in S1 (Phase 2b).
      (define inner-goal-expr (car args))
      (define inner-goal (expr->goal-desc inner-goal-expr))
 
-     (cond
-       [(not ctx)
-        ;; No solver context — fall back to simple fork-based NAF
-        ;; (this path is used by tests without full solver infrastructure)
-        (define forked (fork-prop-network net))
-        (define-values (fnet1 inner-ans-cid) (net-new-cell forked '() (lambda (a b) (if (null? a) b (if (null? b) a (append a b))))))
-        (define fnet2 (install-goal-propagator fnet1 inner-goal env store config inner-ans-cid #f))
-        (define fnet3 (run-to-quiescence fnet2))
-        (define inner-answers (net-cell-read fnet3 inner-ans-cid))
-        (define inner-succeeded? (and (list? inner-answers) (pair? inner-answers)))
-        ;; NAF succeeds if inner failed; fails if inner succeeded.
-        ;; Both return outer net unchanged — clause elimination handled by caller.
-        ;; Write NAF result so caller can detect failure.
-        net]  ;; scaffolding: no ctx = no clause elimination mechanism
+     ;; Allocate NAF-result cell (three-element: unknown/succeeded/failed)
+     (define-values (net1 naf-result-cid)
+       (net-new-cell net 'naf-unknown
+                     (lambda (old new)
+                       (if (eq? old 'naf-unknown) new old))))
 
-       [else
-        ;; Full worldview-bitmask NAF.
-        ;; 1. Get fresh NAF assumption (provides bitmask bit position)
-        (define-values (net1 naf-aid)
-          (solver-assume ctx net (gensym 'naf) 'naf-probe))
-        (define naf-bit-pos (assumption-id-n naf-aid))
-        (define naf-bitmask (arithmetic-shift 1 naf-bit-pos))
-        (define outer-bm (current-worldview-bitmask))
-        (define combined-bm (bitwise-ior outer-bm naf-bitmask))
+     ;; Register this NAF for S1 evaluation.
+     ;; Record everything S1 needs: inner goal, env, store, config.
+     (when (current-naf-completions)
+       (hash-set! (current-naf-completions) naf-result-cid
+                  (hasheq 'inner-goal inner-goal
+                          'env env
+                          'store store
+                          'config config
+                          'outer-bm (current-worldview-bitmask))))
 
-        ;; 2. Allocate completion cell + inner answer accumulator on SAME network
-        (define-values (net2 completion-cid)
-          (net-new-cell net1 completion-bot completion-merge))
-        (define (inner-answer-merge old new)
-          (cond [(null? old) new] [(null? new) old] [else (append old new)]))
-        (define-values (net3 inner-answer-cid)
-          (net-new-cell net2 '() inner-answer-merge))
-
-        ;; 3. Allocate NAF-result cell (three-element: unknown/succeeded/failed)
-        (define-values (net4 naf-result-cid)
-          (net-new-cell net3 'naf-unknown
-                        (lambda (old new)
-                          ;; Once decided, stays decided (monotone)
-                          (if (eq? old 'naf-unknown) new old))))
-
-        ;; 4. Allocate NAF-success cell. Written by inner goal's fact/clause path
-        ;; when viable alternatives are found (via current-naf-success-cid parameter).
-        ;; NAF-context-only: zero overhead for non-NAF paths.
-        (define-values (net4a naf-success-cid)
-          (net-new-cell net4 'naf-no-match
-                        (lambda (old new)
-                          (if (eq? new 'naf-inner-matched) 'naf-inner-matched old))))
-
-        ;; 5. Install inner goal under NAF worldview bitmask + NAF success context.
-        (define net5
-          (parameterize ([current-worldview-bitmask combined-bm]
-                         [current-naf-success-cid naf-success-cid])
-            (install-goal-propagator net4a inner-goal env store config
-                                    inner-answer-cid #f)))
-
-        ;; 6. Install NAF-gate propagator (fire-once).
-        ;; Watches completion-cid + naf-success-cid.
-        ;; Success cell: 'naf-inner-matched = inner goal found viable alternatives.
-        (define (naf-gate-fire net)
-          (define completed? (completion-done? (net-cell-read net completion-cid)))
-          (define matched? (eq? (net-cell-read net naf-success-cid) 'naf-inner-matched))
-          (cond
-            [matched?
-             (net-cell-write net naf-result-cid 'naf-failed)]
-            [completed?
-             (net-cell-write net naf-result-cid 'naf-succeeded)]
-            [else net]))
-
-        (define gate-input-cids
-          (list completion-cid naf-success-cid))
-
-        (define-values (net6 _gate-pid)
-          (net-add-fire-once-propagator net5
-            gate-input-cids
-            (list naf-result-cid)
-            naf-gate-fire))
-
-        ;; 6. Register this NAF for post-quiescence completion write + result filtering.
-        ;; Stores: completion-cid, naf-result-cid, outer-bitmask.
-        ;; Phase 2b replaces completion write with BSP completion stratum.
-        (when (current-naf-completions)
-          (hash-set! (current-naf-completions) completion-cid
-                     (hasheq 'naf-result-cid naf-result-cid
-                             'outer-bm outer-bm
-                             'naf-bitmask naf-bitmask)))
-
-        net6])]
+     ;; Return network with NAF-result cell allocated.
+     ;; No inner goal installation — S1 handles that at S0 fixpoint.
+     net1]
 
     [(guard)
      ;; Guard: evaluate condition, proceed if truthy.
@@ -2099,14 +2022,9 @@
        ;; Read the viability cell to get the current viable set.
        (define viable-indices (net-cell-read n-discrim viability-cid))
 
-       ;; Track 2B Phase 2a: If inside NAF context and viable alternatives exist,
-       ;; write success to the NAF success cell. Zero overhead when not in NAF
-       ;; (current-naf-success-cid defaults to #f).
-       (define n-naf-signal
-         (let ([naf-cid (current-naf-success-cid)])
-           (if (and naf-cid (not (set-empty? viable-indices)))
-               (net-cell-write n-discrim naf-cid 'naf-inner-matched)
-               n-discrim)))
+       ;; Track 2B D.11: NAF success detection moved to S1 stratum.
+       ;; No NAF-success cell write at S0 — S1 reads viability directly.
+       (define n-naf-signal n-discrim)
 
        ;; Track 2B Phase 1a Step 5: Per-fact-row PU branching.
        ;; Viable fact rows get worldview bitmask bits (same as multi-clause).
@@ -2382,27 +2300,87 @@
   ;; Run to quiescence (inner + outer propagators converge)
   (define net4 (run-to-quiescence net3))
 
-  ;; Phase 2a scaffolding: post-quiescence completion write.
-  ;; For each registered NAF, write 'completed to its completion cell.
-  ;; This triggers NAF-gates in the next BSP round.
-  ;; Phase 2b replaces this with a BSP completion stratum.
+  ;; Phase 2a scaffolding: S1 NAF evaluation at S0 fixpoint.
+  ;; For each registered NAF, install inner goal on current (fixpoint) network,
+  ;; check viability, write NAF-result. Phase 2b moves this to a BSP stratum.
   (define net5
     (if (hash-empty? naf-completions)
         net4  ;; no NAFs → skip
-        (let ([net-completed
-               (for/fold ([n net4])
-                         ([(comp-cid _info) (in-hash naf-completions)])
-                 (net-cell-write n comp-cid completion-done))])
-          ;; Run again to let NAF-gates fire
-          (run-to-quiescence net-completed))))
+        (let ()
+          ;; S1: evaluate each pending NAF by checking inner goal provability
+          (define net-with-naf-results
+            (for/fold ([n net4])
+                      ([(_naf-res-cid info) (in-hash naf-completions)])
+              (define inner-goal (hash-ref info 'inner-goal))
+              (define naf-env (hash-ref info 'env))
+              (define naf-store (hash-ref info 'store))
+              (define naf-config (hash-ref info 'config))
+              (define naf-result-cid _naf-res-cid)
+              ;; S1 provability check: is the inner goal provable given S0 fixpoint?
+              ;; For app goals: check discrimination against S0-resolved args.
+              ;; For other goal types: install on fork and check.
+              (define inner-succeeded?
+                (cond
+                  ;; App goal: check if any fact/clause matches the resolved args
+                  [(eq? (goal-desc-kind inner-goal) 'app)
+                   (define goal-name (car (goal-desc-args inner-goal)))
+                   (define goal-args (cadr (goal-desc-args inner-goal)))
+                   (define rel (relation-lookup naf-store goal-name))
+                   (if (not rel) #f  ;; unknown relation → not provable
+                       (for/or ([variant (in-list (relation-info-variants rel))])
+                         (define discrim-data (build-discrimination-data variant))
+                         (define n-facts (length (variant-info-facts variant)))
+                         (define n-clauses (length (variant-info-clauses variant)))
+                         (define n-alts (+ n-facts n-clauses))
+                         ;; Resolve args against S0 state
+                         (define resolved
+                           (for/list ([a (in-list goal-args)])
+                             (define r (resolve-term naf-env a))
+                             ;; If r is a scope-ref, read its S0 value
+                             (if (scope-ref? r)
+                                 (let ([v (logic-var-read n r)])
+                                   (if (eq? v scope-cell-bot) r v))  ;; unresolved → keep as ref
+                                 r)))
+                         ;; Compute viable set using discrimination
+                         (define viable
+                           (for/fold ([v (for/seteq ([i (in-range n-alts)]) i)])
+                                     ([arg (in-list resolved)]
+                                      [pos (in-naturals)])
+                             (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
+                             (cond
+                               [(hash-empty? pos-data) v]
+                               [(or (scope-ref? arg) (cell-id? arg)) v]  ;; unresolved → no narrowing
+                               [else
+                                (define compatible
+                                  (for/seteq ([pair (in-list (hash->list pos-data))]
+                                              #:when (equal? (cdr pair) arg))
+                                    (car pair)))
+                                (define wildcards
+                                  (for/seteq ([i (in-range n-alts)]
+                                              #:when (not (hash-has-key? pos-data i)))
+                                    i))
+                                (set-intersect v (set-union compatible wildcards))])))
+                         ;; Inner goal is provable if ANY alternative is viable
+                         (not (set-empty? viable))))]
+                  ;; Unify goal: check if unification succeeds at S0 state
+                  [(eq? (goal-desc-kind inner-goal) 'unify)
+                   (define lhs (resolve-term naf-env (car (goal-desc-args inner-goal))))
+                   (define rhs (resolve-term naf-env (cadr (goal-desc-args inner-goal))))
+                   (define lv (if (scope-ref? lhs) (logic-var-read n lhs) lhs))
+                   (define rv (if (scope-ref? rhs) (logic-var-read n rhs) rhs))
+                   (or (eq? lv scope-cell-bot) (eq? rv scope-cell-bot) (equal? lv rv))]
+                  ;; Other goal types: conservatively assume provable
+                  [else #t]))
+              ;; Write NAF-result to the accumulating network
+              (net-cell-write n naf-result-cid
+                              (if inner-succeeded? 'naf-failed 'naf-succeeded))))
+          ;; Run S0 again — NAF results may trigger new propagation
+          (run-to-quiescence net-with-naf-results))))
 
-  ;; Phase 2a: Collect NAF-failed bitmasks for result filtering.
-  ;; If a NAF-gate wrote 'naf-failed, the clause at that outer-bm
-  ;; should not contribute results.
+  ;; Collect NAF-failed bitmasks for result filtering.
   (define naf-failed-bitmasks
     (for/fold ([blocked (seteq)])
-              ([(_comp-cid info) (in-hash naf-completions)])
-      (define naf-res-cid (hash-ref info 'naf-result-cid))
+              ([(naf-res-cid info) (in-hash naf-completions)])
       (define outer-bm (hash-ref info 'outer-bm))
       (define naf-result (net-cell-read net5 naf-res-cid))
       (if (eq? naf-result 'naf-failed)
