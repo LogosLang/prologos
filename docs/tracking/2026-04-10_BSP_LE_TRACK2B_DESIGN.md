@@ -3,7 +3,7 @@
 **Date**: 2026-04-10
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: DFS↔Propagator parity validation, fact-row isolation, NAF/guard as async propagators, parallel executor default, `:auto` deployment
-**Status**: D.9 — Phase 1 lattice design deepened (SRE lens, module theory, Hasse optimality, forward composition)
+**Status**: D.10 — Phase 2 NAF redesigned: worldview-bitmask isolation (no fork), completion cell (Option C), early termination
 **Self-critique**: [P/R/M Analysis](2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md) (15 findings, 5 revised via self-hosting lens)
 **External critique**: [Architect Review](2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md) (18 findings, 2 critical, 8 major)
 **Critique response**: [Response](2026-04-10_BSP_LE_TRACK2B_CRITIQUE_RESPONSE.md) (15 actions incorporated)
@@ -22,7 +22,7 @@
 | 0c | Pre-0: A/B executor comparison | ✅ | Sequential wins all current workloads. Threads cross over at N≥128. Futures eliminated. |
 | 1a | Clause selection as decision-cell narrowing | ✅ | `a1df50f4`→`b47b9787`. On-network discrimination (broadcast), fact-row PU branching, domain-merge fix. Categories 1+2 FIXED. |
 | 1b | Position-discriminant analysis | ✅ | `1eae7eb8`. Discrimination tree: position scoring, recursive partitioning, tree-guided installation. Flat ground-arg pass ensures coverage regardless of tree order. |
-| 2 | NAF as async propagator | ⬜ | Async from start: thread-spawned inner BSP, NAF-result cell, NAF-gate |
+| 2 | NAF via worldview-bitmask isolation + completion cell | ⬜ | Same network, NAF bitmask, completion cell, early termination. No fork/bridge/thread. |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
 | 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
 | 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
@@ -1138,44 +1138,82 @@ On BOTH the standard comparative suite (13 programs) AND the adversarial benchma
 
 **Vision gate**: On-network? Nested decision cells. Complete? Multi-position discrimination. Vision-advancing? The tree IS the Hasse diagram of the clause decomposition.
 
-### Phase 2: NAF as Async Propagator (~3-4h)
+### Phase 2: NAF via Worldview-Bitmask Isolation + Completion Cell (~3-4h)
 
-**Objective**: Replace blocking fork-and-check NAF with async thread-spawned inner BSP + NAF-result cell.
+**Objective**: Replace blocking fork-and-check NAF with on-network worldview-bitmask isolation. Inner goal runs on the SAME network as outer, under a NAF-specific bitmask. No fork. No cross-network bridge. No thread. BSP fires inner and outer propagators concurrently.
+
+**Key architectural insight (D.10 design conversation)**: The fork exists to prevent inner writes from polluting outer scope. But worldview bitmask isolation (Track 2) already provides this on a SINGLE network. NAF's inner goal is structurally equivalent to another clause branch — same network, different bitmask, independent writes, BSP-concurrent. The cross-network bridge problem dissolves entirely.
+
+**Worldview isolation semantics**:
+```
+Inner goal worldview = outer_bitmask | naf_bit
+
+Inner reads (worldview = outer | naf):
+  - Outer entries (bitmask = outer): subset check passes → inner sees outer bindings ✅
+  - Inner entries (bitmask = outer | naf): subset check passes → inner sees own writes ✅
+
+Outer reads (worldview = outer):
+  - Inner entries (bitmask = outer | naf): subset check FAILS → outer isolated ✅
+
+NAF-gate reads (worldview = outer | naf):
+  - Sees BOTH outer and inner entries → detects inner success ✅
+```
+
+**Completion cell (Option C from design conversation)**:
+```
+completion-status: {unknown → completed}
+  bot = unknown, top = completed, merge = max (monotone)
+
+inner-answer-cell: {empty → non-empty}
+  Allocated on SAME network, written by inner goal under NAF bitmask
+
+NAF decision (from NAF-gate propagator watching both cells):
+  inner-answer ≠ empty → write 'naf-failed (EARLY termination, no wait for quiescence)
+  completion = completed AND answer = empty → write 'naf-succeeded
+  else → residuate
+```
+
+The completion cell is a GENERAL sub-computation tracking pattern — reusable for guard (Phase 3), tabling, recursive calls, and self-hosting.
 
 **Steps**:
-1. Define `naf-result` lattice (three-element: unknown/succeeded/failed) in `decision-cell.rkt`
-2. Create `install-naf-propagator` in `relations.rkt` that:
-   a. Allocates a NAF-result cell on the outer network
-   b. Installs a fire-once propagator that, when input bindings resolve:
-      - Spawns a thread (using existing thread infrastructure from PAR Track 1)
-      - Thread: forks network → installs inner goal → runs `run-to-quiescence-bsp` (BSP, not Gauss-Seidel — the current NAF uses GS which is a known deficiency)
-      - Thread: writes `succeeded` or `failed` to NAF-result cell on outer network
-      - Thread terminates (bounded by fork's fuel budget)
-   c. Installs a NAF-gate propagator (fire-once) that watches NAF-result:
-      - `failed` → write current scope to continuation (NAF succeeds)
-      - `succeeded` → no-op (NAF fails, clause blocked)
-      - `unknown` → residuate
-3. Implement cross-network write mechanism (Phase 0b data determines: channel, direct write, or topology-request protocol)
-4. Update `install-conjunction` to handle NAF goals: subsequent goals residuate on NAF-result cell
-5. Verify semantic parity with DFS NAF (ground-instantiation check must match)
+1. **Define completion lattice** (~10 lines in `decision-cell.rkt`):
+   - `completion-bot` = `'unknown`, `completion-done` = `'completed`
+   - `completion-merge` — monotone max
+   - Export completion cell infrastructure
 
-**Fuel budget**: Per Phase 0b data. Default: fork gets own budget (not competing with outer solver).
+2. **Rewrite NAF in `install-goal-propagator`** (~60 lines in `relations.rkt`):
+   a. Get a fresh NAF assumption via `solver-assume` (provides NAF bit position)
+   b. Compute NAF bitmask: `outer_bitmask | (1 << naf-bit-position)`
+   c. Allocate completion cell + inner answer-accumulator on SAME network
+   d. Install inner goal's propagators wrapped with `wrap-with-worldview(naf-bitmask)`
+   e. Install a **completion propagator** (fire-once): fires after inner goal propagators, writes `'completed` to completion cell under NAF bitmask
+   f. Install **NAF-gate propagator** (fire-once): watches completion cell + inner answer cell
+      - Early termination: if inner answer non-empty → write `'naf-failed` to NAF-result cell
+      - Full check: if completed AND answer empty → write `'naf-succeeded`
+      - Else → residuate
 
-**Tests**: All 4 well-founded test files must pass. NAF-specific parity cases. Async-specific tests: verify outer clauses proceed while NAF thread runs.
+3. **NAF failure → clause elimination** (~10 lines):
+   - On `'naf-failed`: narrow the solver-context decisions cell to remove this clause's assumption (same mechanism as Phase 1a discrimination narrowing)
+   - Clause's propagators become inert (Track 2 assumption-tagged dependents)
+   - No conjunction wiring changes needed
 
-**Information-flow invariant (critique P3+M3)**: BOTH sync and async paths write to the NAF-result cell + NAF-gate propagator fires. The cell write IS the architectural contract. No inline return values — the result flows through the network.
+4. **Verify semantic parity with DFS NAF**:
+   - `not(ground-vals 20)` (inner succeeds → NAF fails)
+   - `not(ground-vals 15)` (inner fails → NAF succeeds)
+   - NAF under branching: clause with NAF failure eliminated, other clauses unaffected
+   - All adversarial parity P3 test cases
 
-**Deferred-spawn pattern (critique P3, D.8)**: Instead of inspecting relation structure to choose sync/async upfront, the thread decision is EMERGENT:
-1. Always start inner BSP on current thread
-2. If inner BSP converges in one round (fire-once, trivially convergent): result is immediate, no thread needed
-3. If inner BSP does NOT converge in one round (multiple rounds needed): spawn thread, continue outer BSP asynchronously
-4. The NAF propagator is agnostic to its inner goal's structure — no `variant-info-clauses` introspection
+**Why no fork, no thread, no bridge**:
+- **Isolation**: worldview bitmask (Track 2) — inner writes tagged, outer can't read them
+- **Visibility**: inner reads outer bindings via bitmask subset matching
+- **Concurrency**: BSP fires inner + outer propagators in same rounds — async by construction
+- **Completion**: completion cell IS the quiescence signal — on-network, observable, composable
+- **Early termination**: NAF-gate fires as soon as inner answer appears — no wait for full quiescence
+- **Generality**: completion cell pattern reusable for all sub-computations
 
-This makes the thread decision emerge from computation behavior, not from static analysis. Trivial inner goals (facts-only) converge in one round → no thread overhead (0.31us). Complex inner goals (clauses) trigger thread spawn only when proven necessary.
+**Tests**: All adversarial parity P3 NAF cases match DFS. All 4 well-founded test files pass. New: NAF under multi-clause branching (clause elimination on failure). Early termination test (inner produces answer before full quiescence).
 
-**Inner success detection (critique M1)**: Answer-accumulator cell read (single cell, not env-scanning). Inner BSP's answer accumulator starts at bot (empty); non-bot = inner goal succeeded. This replaces the current imperative `for/or` env-variable scan.
-
-**Vision gate**: On-network? NAF-result is a cell. Inner computation is a Pocket Universe. Complete? NAF semantics match DFS. Vision-advancing? NAF as information flow — result via cell write, not return value.
+**Vision gate**: On-network? Same network, worldview-isolated. No fork. No bridge. Complete? NAF semantics match DFS. Vision-advancing? NAF IS another clause branch on the same network — the worldview bitmask unifies NAF isolation with multi-clause isolation. One mechanism.
 
 ### Phase 3: Guard as Propagator (~2-3h)
 
