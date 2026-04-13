@@ -1,0 +1,36 @@
+#+TITLE: Standup — 2026-04-12
+#+DATE: 2026-04-12
+
+* Yesterday (since 2026-04-10 standup)
+
+** BSP-LE Track 2 PIR Rewrite
+- Comprehensive 16-question PIR methodology rewrite (143 -> 542 lines)
+- Full timeline for all 4 sessions, all phases 0-11
+- 7 bugs with root cause analysis, 16 lessons distilled, 10-PIR longitudinal survey
+
+** BSP-LE Track 2B Design: 9 Iterations + 2 Critique Rounds
+- D.1-D.9 with design conversations on: async NAF, set-equality parity, hypercube lens, clause selection as decision-cell narrowing, Tier 1 optimizations, self-hosting lens
+- Comprehensive Phase 0 investigation: parity baseline (19/19 pass + 3 adversarial categories), 28 micro-benchmarks + overhead decomposition (25x ATMS overhead, BSP 52.6%), executor scaling (threads cross at N>=128, futures eliminated)
+- Self-critique (15 findings, 5 revised via self-hosting lens) + external critique (18 findings, 2 critical)
+- Key architectural finding: clause-viability IS an instance of Track 2 decision cell (same lattice, new narrowing source)
+
+** Phase 1a: Clause Selection — Categories 1+2 FIXED
+- On-network discrimination via fire-once broadcast propagators
+- Per-fact-row PU branching (worldview bitmask, same as multi-clause)
+- 3 bugs found and fixed: closure capture (n->net), missing domain-merge in result reading, fact-row last-write-wins
+- New propagator design rule: fire function network parameter (CRITICAL)
+
+** Phase 1b: Discrimination Tree
+- Tree data structures retained for analysis/self-hosting value
+- Tree traversal for installation REVERTED (step-think) -> flat propagator installation, BSP-emergent ordering
+
+* Today
+
+** Phase 2: NAF as Async Propagator
+- Last correctness gap (Category 3): NAF semantics diverge from DFS
+- Design: deferred-spawn pattern (emergent thread decision), NAF-result cell (info-flow invariant)
+
+* Blockers
+
+- None
+
