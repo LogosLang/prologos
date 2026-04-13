@@ -63,6 +63,8 @@
  collect-ast-vars
  ;; Evaluation callback (set by reduction.rkt to break circular dep)
  current-is-eval-fn
+ ;; Track 2B Phase 2a: NAF completion registrations (scaffolding)
+ current-naf-completions
  ;; NAF oracle (set by wf-engine.rkt for well-founded semantics)
  current-naf-oracle
  ;; Solver internals (for run-solve-goal in reduction.rkt + benchmarks)
@@ -101,6 +103,13 @@
 ;; Set by reduction.rkt to `whnf` to break circular dependency.
 ;; When #f, is-goals fall back to raw unification (no evaluation).
 (define current-is-eval-fn (make-parameter #f))
+
+;; Track 2B Phase 2a: NAF completion registrations.
+;; Mutable hasheq: completion-cid → naf-bitmask.
+;; Written during install-goal-propagator ('not case).
+;; Read by solve-goal-propagator after BSP quiescence to write 'completed.
+;; Scaffolding — Phase 2b replaces with BSP completion stratum.
+(define current-naf-completions (make-parameter #f))
 
 ;; NAF oracle callback for well-founded semantics.
 ;; When #f (default), standard NAF is used (try to prove inner goal;
@@ -1766,32 +1775,96 @@
      (install-clause-propagators net goal-name goal-args env store config answer-cid ctx)]
 
     [(not)
-     ;; Negation-as-failure: install inner goal, run to quiescence,
-     ;; succeed if inner failed (no bindings), fail if inner succeeded.
-     ;; Inner goal expressed as an AST node — convert to goal-desc.
+     ;; Track 2B Phase 2a: NAF via worldview-bitmask isolation.
+     ;; Inner goal runs on SAME network under NAF-specific bitmask.
+     ;; No fork. No cross-network bridge. Worldview isolation:
+     ;;   inner reads outer bindings (bitmask subset match)
+     ;;   outer can't read inner writes (superset check fails)
+     ;; Completion cell (Option C) for sub-computation tracking.
+     ;; Early termination: NAF fails as soon as inner answer appears.
      (define inner-goal-expr (car args))
      (define inner-goal (expr->goal-desc inner-goal-expr))
-     ;; Create a fresh result cell for the inner goal
-     (define-values (net1 inner-result-cid) (alloc-logic-var net))
-     ;; Build a minimal env for the inner goal
-     ;; (inner goal may reference vars from outer env)
-     (define inner-env env)  ;; share outer env — inner goal sees outer bindings
-     ;; Install inner goal on a FORK (so inner's writes don't pollute outer)
-     (define forked (fork-prop-network net1))
-     (define forked*
-       (install-goal-propagator forked inner-goal inner-env store config answer-cid ctx))
-     (define forked-done (run-to-quiescence forked*))
-     ;; Check if inner goal produced any bindings
-     ;; NAF succeeds if inner FAILED (no new bindings beyond what was already there)
-     ;; For simplicity: check if any env variable changed from logic-var-bot in the fork
-     (define inner-succeeded?
-       (for/or ([(_name ref) (in-hash env)])
-         (define orig (logic-var-read net ref))
-         (define forked-val (logic-var-read forked-done ref))
-         (and (eq? orig scope-cell-bot) (not (eq? forked-val scope-cell-bot)))))
-     (if inner-succeeded?
-         net  ;; inner succeeded → NAF fails (return unchanged network = no contribution)
-         net)]  ;; inner failed → NAF succeeds (outer state preserved)
+
+     (cond
+       [(not ctx)
+        ;; No solver context — fall back to simple fork-based NAF
+        ;; (this path is used by tests without full solver infrastructure)
+        (define forked (fork-prop-network net))
+        (define-values (fnet1 inner-ans-cid) (net-new-cell forked '() (lambda (a b) (if (null? a) b (if (null? b) a (append a b))))))
+        (define fnet2 (install-goal-propagator fnet1 inner-goal env store config inner-ans-cid #f))
+        (define fnet3 (run-to-quiescence fnet2))
+        (define inner-answers (net-cell-read fnet3 inner-ans-cid))
+        (define inner-succeeded? (and (list? inner-answers) (pair? inner-answers)))
+        ;; NAF succeeds if inner failed; fails if inner succeeded.
+        ;; Both return outer net unchanged — clause elimination handled by caller.
+        ;; Write NAF result so caller can detect failure.
+        net]  ;; scaffolding: no ctx = no clause elimination mechanism
+
+       [else
+        ;; Full worldview-bitmask NAF.
+        ;; 1. Get fresh NAF assumption (provides bitmask bit position)
+        (define-values (net1 naf-aid)
+          (solver-assume ctx net (gensym 'naf) 'naf-probe))
+        (define naf-bit-pos (assumption-id-n naf-aid))
+        (define naf-bitmask (arithmetic-shift 1 naf-bit-pos))
+        (define outer-bm (current-worldview-bitmask))
+        (define combined-bm (bitwise-ior outer-bm naf-bitmask))
+
+        ;; 2. Allocate completion cell + inner answer accumulator on SAME network
+        (define-values (net2 completion-cid)
+          (net-new-cell net1 completion-bot completion-merge))
+        (define (inner-answer-merge old new)
+          (cond [(null? old) new] [(null? new) old] [else (append old new)]))
+        (define-values (net3 inner-answer-cid)
+          (net-new-cell net2 '() inner-answer-merge))
+
+        ;; 3. Allocate NAF-result cell (three-element: unknown/succeeded/failed)
+        (define-values (net4 naf-result-cid)
+          (net-new-cell net3 'naf-unknown
+                        (lambda (old new)
+                          ;; Once decided, stays decided (monotone)
+                          (if (eq? old 'naf-unknown) new old))))
+
+        ;; 4. Install inner goal under NAF worldview bitmask.
+        ;; Inner propagators see outer bindings (bitmask subset match)
+        ;; but outer can't see inner writes (isolation).
+        (define net5
+          (parameterize ([current-worldview-bitmask combined-bm])
+            (install-goal-propagator net4 inner-goal env store config
+                                    inner-answer-cid #f)))  ;; ctx=#f for inner (isolation)
+
+        ;; 5. Install NAF-gate propagator (fire-once).
+        ;; Watches inner-answer-cid + completion-cid.
+        ;; Early termination: inner answer non-empty → NAF fails immediately.
+        ;; Full check: completed + empty → NAF succeeds.
+        (define (naf-gate-fire net)
+          (define answers (net-cell-read net inner-answer-cid))
+          (define completed? (completion-done? (net-cell-read net completion-cid)))
+          (cond
+            ;; Early termination: inner produced answers → NAF fails
+            [(and (list? answers) (pair? answers))
+             (net-cell-write net naf-result-cid 'naf-failed)]
+            ;; Inner completed with no answers → NAF succeeds
+            [(and completed? (or (null? answers) (not (list? answers))))
+             (net-cell-write net naf-result-cid 'naf-succeeded)]
+            ;; Not yet decided → residuate (no write)
+            [else net]))
+
+        (define-values (net6 _gate-pid)
+          (net-add-fire-once-propagator net5
+            (list inner-answer-cid completion-cid)
+            (list naf-result-cid)
+            naf-gate-fire))
+
+        ;; 6. Register this NAF for post-quiescence completion write (scaffolding).
+        ;; The completion cell will be written by solve-goal-propagator after BSP
+        ;; quiesces. Phase 2b replaces this with a BSP completion stratum.
+        ;; Store the completion-cid for the caller to find.
+        ;; For now: use a parameter to accumulate NAF completion registrations.
+        (when (current-naf-completions)
+          (hash-set! (current-naf-completions) completion-cid naf-bitmask))
+
+        net6])]
 
     [(guard)
      ;; Guard: evaluate condition, proceed if truthy.
@@ -2274,12 +2347,31 @@
     (cond [(null? old) new] [(null? new) old] [else (append old new)]))
   (define-values (net2 answer-cid) (net-new-cell net1 '() answer-merge))
 
+  ;; Track 2B Phase 2a: NAF completion registry (scaffolding)
+  (define naf-completions (make-hasheq))
+
   ;; Install the top-level goal (pass ctx for PU branching)
   (define top-goal (goal-desc 'app (list goal-name effective-args)))
-  (define net3 (install-goal-propagator net2 top-goal query-env store config answer-cid ctx))
+  (define net3
+    (parameterize ([current-naf-completions naf-completions])
+      (install-goal-propagator net2 top-goal query-env store config answer-cid ctx)))
 
-  ;; Run to quiescence
+  ;; Run to quiescence (inner + outer propagators converge)
   (define net4 (run-to-quiescence net3))
+
+  ;; Phase 2a scaffolding: post-quiescence completion write.
+  ;; For each registered NAF, write 'completed to its completion cell.
+  ;; This triggers NAF-gates in the next BSP round.
+  ;; Phase 2b replaces this with a BSP completion stratum.
+  (define net5
+    (if (hash-empty? naf-completions)
+        net4  ;; no NAFs → skip
+        (let ([net-completed
+               (for/fold ([n net4])
+                         ([(comp-cid _bitmask) (in-hash naf-completions)])
+                 (net-cell-write n comp-cid completion-done))])
+          ;; Run again to let NAF-gates fire
+          (run-to-quiescence net-completed))))
 
   ;; Read results from scope cells.
   ;; Phase 8.2: query-env maps var-name → scope-ref.
@@ -2287,7 +2379,7 @@
   ;; extract each variable's binding.
   (define first-qv-ref (and (pair? query-vars) (hash-ref query-env (car query-vars) #f)))
   (define scope-cid (and (scope-ref? first-qv-ref) (scope-ref-cid first-qv-ref)))
-  (define scope-raw (and scope-cid (net-cell-read-raw net4 scope-cid)))
+  (define scope-raw (and scope-cid (net-cell-read-raw net5 scope-cid)))
 
   (cond
     ;; Multi-clause concurrent: scope cell is tagged-cell-value.
@@ -2320,7 +2412,7 @@
     ;; Single-clause/facts: read scope cell directly
     [else
      (define sc-val
-       (if scope-cid (net-cell-read net4 scope-cid) #f))
+       (if scope-cid (net-cell-read net5 scope-cid) #f))
      (define result-subst
        (for/hasheq ([qv (in-list query-vars)])
          (define val (if (scope-cell? sc-val)

@@ -124,6 +124,12 @@
  scope-cell-bindings
  scope-cell-bot  ;; sentinel for unbound variables
 
+ ;; === Completion Cell (Track 2B Phase 2) ===
+ completion-bot
+ completion-done
+ completion-merge
+ completion-done?
+
  ;; === Compound Commitments Cell (Phase 5.3) ===
  (struct-out commitments-state)
  commitments-state?
@@ -703,6 +709,30 @@
 ;; List all component group-ids.
 (define (decisions-state-component-keys ds)
   (hash-keys (decisions-state-components ds)))
+
+
+;; ============================================================
+;; Completion Cell (Track 2B Phase 2)
+;; ============================================================
+;; General sub-computation completion tracking. A two-element chain
+;; lattice: unknown → completed. Monotone: once completed, stays
+;; completed. Used by NAF (Phase 2) to detect when inner goal has
+;; quiesced. Reusable for guard, tabling, recursive calls, self-hosting.
+;;
+;; The completion cell separates TWO pieces of information:
+;;   1. Is the sub-computation done? (completion cell)
+;;   2. Did it produce results? (answer accumulator)
+;; The NAF decision emerges from reading both.
+
+(define completion-bot 'completion-unknown)
+(define completion-done 'completion-done)
+
+(define (completion-done? v) (eq? v completion-done))
+
+(define (completion-merge old new)
+  (if (or (eq? new completion-done) (eq? old completion-done))
+      completion-done
+      completion-bot))
 
 
 ;; ============================================================
