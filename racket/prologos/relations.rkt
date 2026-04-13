@@ -1831,19 +1831,70 @@
            (for/list ([ref (in-hash-values env)]
                       #:when (scope-ref? ref))
              (scope-ref-cid ref))))
-        ;; Promote to tagged-cell-value — required for worldview isolation.
+        ;; Promote outer scope cells to tagged-cell-value — required for worldview isolation.
         ;; Without promotion, inner writes merge directly into base (no tagging).
         (define net4a
           (for/fold ([n net4])
                     ([cid (in-list outer-scope-cids)])
             (promote-cell-to-tagged n cid)))
+        ;; Note: probe scope cells are allocated fresh by build-var-env AFTER this point,
+        ;; so they also need promotion. Done after build-var-env below.
 
         ;; 5. Install inner goal under NAF worldview bitmask.
-        ;; Inner propagators see outer bindings (bitmask subset match)
-        ;; but outer can't see inner writes (isolation).
+        ;; Fresh variable scope for the inner goal: all args become free variables,
+        ;; with unification goals for any ground constraints. This ensures that
+        ;; fact matches produce BINDINGS (detectable by NAF-gate) even for ground
+        ;; inner goals like (ground-vals 20). Without this, ground args produce no
+        ;; scope cell writes → NAF can't detect provability.
+        ;; This is the propagator analog of DFS's apply-subst-to-goal.
+        ;; Create fresh probe variables for the inner goal's arguments.
+        ;; This ensures fact matches produce BINDINGS even for ground inner goals.
+        (define inner-is-app? (eq? (goal-desc-kind inner-goal) 'app))
+        (define inner-orig-args
+          (if inner-is-app? (cadr (goal-desc-args inner-goal)) '()))
+        (define naf-fresh-names
+          (for/list ([i (in-range (length inner-orig-args))])
+            (gensym '_naf_probe_)))
+        (define-values (net4b-pre naf-probe-env)
+          (build-var-env net4a naf-fresh-names))
+        ;; Promote probe scope cells for worldview isolation
+        (define net4b
+          (let ([probe-cids (for/list ([ref (in-hash-values naf-probe-env)]
+                                       #:when (scope-ref? ref))
+                              (scope-ref-cid ref))])
+            (for/fold ([n net4b-pre])
+                      ([cid (in-list (remove-duplicates probe-cids))])
+              (promote-cell-to-tagged n cid))))
+
+        ;; Rewrite inner goal to use fresh variable names (ordered)
+        (define inner-goal-rewritten
+          (if inner-is-app?
+              (goal-desc 'app (list (car (goal-desc-args inner-goal)) naf-fresh-names))
+              inner-goal))
+
+        ;; Unification goals: each fresh var unified with the original arg value (ordered)
+        (define unify-goals
+          (for/list ([orig (in-list inner-orig-args)]
+                     [fresh (in-list naf-fresh-names)])
+            (define resolved (resolve-term env orig))
+            (goal-desc 'unify (list fresh resolved))))
+
+        ;; Merge naf-probe-env into outer env
+        (define combined-env
+          (for/fold ([e env])
+                    ([(k v) (in-hash naf-probe-env)])
+            (hash-set e k v)))
+
         (define net5
           (parameterize ([current-worldview-bitmask combined-bm])
-            (install-goal-propagator net4a inner-goal env store config
+            ;; Install unification goals first (bind fresh vars to ground args)
+            (define net-unified
+              (for/fold ([n net4b])
+                        ([ug (in-list unify-goals)])
+                (install-goal-propagator n ug combined-env store config
+                                        inner-answer-cid #f)))
+            ;; Install the rewritten inner goal with fresh variables
+            (install-goal-propagator net-unified inner-goal-rewritten combined-env store config
                                     inner-answer-cid #f)))  ;; ctx=#f for inner (isolation)
 
         ;; 5. Install NAF-gate propagator (fire-once).
@@ -1853,8 +1904,15 @@
         ;; variable is non-bot, the inner goal produced bindings → NAF fails.
         ;; This replaces the answer-accumulator approach because fact writes
         ;; go to scope cells, not answer accumulators.
-        (define outer-scope-refs
-          (for/list ([(_name ref) (in-hash env)]
+        ;; NAF-gate checks PROBE scope cells (not outer scope cells)
+        ;; because the inner goal writes to the probe variables.
+        (define probe-scope-cids
+          (remove-duplicates
+           (for/list ([ref (in-hash-values naf-probe-env)]
+                      #:when (scope-ref? ref))
+             (scope-ref-cid ref))))
+        (define probe-scope-refs
+          (for/list ([(_name ref) (in-hash naf-probe-env)]
                      #:when (scope-ref? ref))
             ref))
 
@@ -1863,15 +1921,13 @@
           ;; Check if inner goal produced any bindings by comparing scope cells
           ;; under outer-bm vs combined-bm. If they differ, the inner goal wrote
           ;; something (the extra entries are from the NAF bitmask).
+          ;; Check probe scope cells: if any probe variable is non-bot under
+          ;; the combined bitmask, the inner goal produced bindings.
           (define inner-produced-bindings?
-            (for/or ([ref (in-list outer-scope-refs)])
-              (define outer-val
-                (parameterize ([current-worldview-bitmask (if (zero? outer-bm) 0 outer-bm)])
-                  (logic-var-read net ref)))
-              (define combined-val
-                (parameterize ([current-worldview-bitmask combined-bm])
-                  (logic-var-read net ref)))
-              (not (equal? outer-val combined-val))))
+            (parameterize ([current-worldview-bitmask combined-bm])
+              (for/or ([ref (in-list probe-scope-refs)])
+                (define val (logic-var-read net ref))
+                (not (eq? val scope-cell-bot)))))
           (cond
             ;; Inner produced bindings → NAF fails (early termination possible)
             [inner-produced-bindings?
@@ -1882,10 +1938,10 @@
             ;; Not yet decided → residuate (no write)
             [else net]))
 
-        ;; NAF-gate watches: completion cell + all outer scope cells
-        ;; (scope cells receive inner writes under NAF bitmask, triggering the gate)
+        ;; NAF-gate watches: completion cell + probe scope cells
+        ;; (probe cells receive inner writes under NAF bitmask, triggering the gate)
         (define gate-input-cids
-          (cons completion-cid outer-scope-cids))
+          (cons completion-cid probe-scope-cids))
 
         (define-values (net6 _gate-pid)
           (net-add-fire-once-propagator net5
