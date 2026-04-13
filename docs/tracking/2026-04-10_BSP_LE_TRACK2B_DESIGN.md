@@ -3,7 +3,7 @@
 **Date**: 2026-04-10
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: DFS↔Propagator parity validation, fact-row isolation, NAF/guard as async propagators, parallel executor default, `:auto` deployment
-**Status**: D.10 — Phase 2 NAF redesigned: worldview-bitmask isolation (no fork), completion cell (Option C), early termination
+**Status**: D.11 — Phase 2 NAF redesigned: stratified evaluation (S1 stratum at S0 fixpoint, Kan extension, no fork/bitmask)
 **Self-critique**: [P/R/M Analysis](2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md) (15 findings, 5 revised via self-hosting lens)
 **External critique**: [Architect Review](2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md) (18 findings, 2 critical, 8 major)
 **Critique response**: [Response](2026-04-10_BSP_LE_TRACK2B_CRITIQUE_RESPONSE.md) (15 actions incorporated)
@@ -22,8 +22,8 @@
 | 0c | Pre-0: A/B executor comparison | ✅ | Sequential wins all current workloads. Threads cross over at N≥128. Futures eliminated. |
 | 1a | Clause selection as decision-cell narrowing | ✅ | `a1df50f4`→`b47b9787`. On-network discrimination (broadcast), fact-row PU branching, domain-merge fix. Categories 1+2 FIXED. |
 | 1b | Position-discriminant analysis | ✅ | `1eae7eb8`. Discrimination tree: position scoring, recursive partitioning, tree-guided installation. Flat ground-arg pass ensures coverage regardless of tree order. |
-| 2a | NAF via worldview-bitmask isolation + completion cell | ⬜ | Same network, NAF bitmask, completion cell, early termination. No fork/bridge/thread. |
-| 2b | BSP completion stratum | ⬜ | Add completion detection stratum to run-to-quiescence-bsp. Retires post-quiescence scaffolding. ~30-40 lines. |
+| 2a | NAF registration + result gating | ⬜ | Register NAFs in pending cell, allocate NAF-result cells. ~20 lines. Revert worldview-bitmask approach. |
+| 2b | NAF evaluation stratum in BSP (S1) | ⬜ | Add S1 stratum to run-to-quiescence-bsp. Broadcast-evaluate pending NAFs at S0 fixpoint. Kan extension on product. ~40-50 lines. |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
 | 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
 | 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
@@ -1139,112 +1139,76 @@ On BOTH the standard comparative suite (13 programs) AND the adversarial benchma
 
 **Vision gate**: On-network? Nested decision cells. Complete? Multi-position discrimination. Vision-advancing? The tree IS the Hasse diagram of the clause decomposition.
 
-### Phase 2: NAF via Worldview-Bitmask Isolation + Completion Cell (~3-4h)
+### Phase 2a+2b: Stratified NAF (~3-4h)
 
-**Objective**: Replace blocking fork-and-check NAF with on-network worldview-bitmask isolation. Inner goal runs on the SAME network as outer, under a NAF-specific bitmask. No fork. No cross-network bridge. No thread. BSP fires inner and outer propagators concurrently.
+**Objective**: NAF as a non-monotone operation in its own BSP stratum (S1), evaluated AFTER positive goals reach S0 fixpoint. No fork, no worldview-bitmask isolation, no cross-network bridge. NAF reads the completed S0 state and writes NAF-result cells.
 
-**Key architectural insight (D.10 design conversation)**: The fork exists to prevent inner writes from polluting outer scope. But worldview bitmask isolation (Track 2) already provides this on a SINGLE network. NAF's inner goal is structurally equivalent to another clause branch — same network, different bitmask, independent writes, BSP-concurrent. The cross-network bridge problem dissolves entirely.
+**Key architectural insight (D.11 design conversation)**: NAF is fundamentally non-monotone — "if not provable, then negation holds" requires the positive computation to be COMPLETE before evaluation. CALM guarantees confluence only for monotone computations. Putting NAF on the same S0 layer violates this — every implementation issue (construction-time vs BSP-time, ground goal detection, variable binding visibility) stemmed from conflating monotone and non-monotone on the same stratum. Stratification is the principled solution.
 
-**Worldview isolation semantics**:
+**Stratified BSP loop**:
 ```
-Inner goal worldview = outer_bitmask | naf_bit
-
-Inner reads (worldview = outer | naf):
-  - Outer entries (bitmask = outer): subset check passes → inner sees outer bindings ✅
-  - Inner entries (bitmask = outer | naf): subset check passes → inner sees own writes ✅
-
-Outer reads (worldview = outer):
-  - Inner entries (bitmask = outer | naf): subset check FAILS → outer isolated ✅
-
-NAF-gate reads (worldview = outer | naf):
-  - Sees BOTH outer and inner entries → detects inner success ✅
-```
-
-**Completion cell (Option C from design conversation)**:
-```
-completion-status: {unknown → completed}
-  bot = unknown, top = completed, merge = max (monotone)
-
-inner-answer-cell: {empty → non-empty}
-  Allocated on SAME network, written by inner goal under NAF bitmask
-
-NAF decision (from NAF-gate propagator watching both cells):
-  inner-answer ≠ empty → write 'naf-failed (EARLY termination, no wait for quiescence)
-  completion = completed AND answer = empty → write 'naf-succeeded
-  else → residuate
-```
-
-The completion cell is a GENERAL sub-computation tracking pattern — reusable for guard (Phase 3), tabling, recursive calls, and self-hosting.
-
-**Steps**:
-1. **Define completion lattice** (~10 lines in `decision-cell.rkt`):
-   - `completion-bot` = `'unknown`, `completion-done` = `'completed`
-   - `completion-merge` — monotone max
-   - Export completion cell infrastructure
-
-2. **Rewrite NAF in `install-goal-propagator`** (~60 lines in `relations.rkt`):
-   a. Get a fresh NAF assumption via `solver-assume` (provides NAF bit position)
-   b. Compute NAF bitmask: `outer_bitmask | (1 << naf-bit-position)`
-   c. Allocate completion cell + inner answer-accumulator on SAME network
-   d. Install inner goal's propagators wrapped with `wrap-with-worldview(naf-bitmask)`
-   e. Install a **completion propagator** (fire-once): fires after inner goal propagators, writes `'completed` to completion cell under NAF bitmask
-   f. Install **NAF-gate propagator** (fire-once): watches completion cell + inner answer cell
-      - Early termination: if inner answer non-empty → write `'naf-failed` to NAF-result cell
-      - Full check: if completed AND answer empty → write `'naf-succeeded`
-      - Else → residuate
-
-3. **NAF failure → clause elimination** (~10 lines):
-   - On `'naf-failed`: narrow the solver-context decisions cell to remove this clause's assumption (same mechanism as Phase 1a discrimination narrowing)
-   - Clause's propagators become inert (Track 2 assumption-tagged dependents)
-   - No conjunction wiring changes needed
-
-4. **Verify semantic parity with DFS NAF**:
-   - `not(ground-vals 20)` (inner succeeds → NAF fails)
-   - `not(ground-vals 15)` (inner fails → NAF succeeds)
-   - NAF under branching: clause with NAF failure eliminated, other clauses unaffected
-   - All adversarial parity P3 test cases
-
-**Why no fork, no thread, no bridge**:
-- **Isolation**: worldview bitmask (Track 2) — inner writes tagged, outer can't read them
-- **Visibility**: inner reads outer bindings via bitmask subset matching
-- **Concurrency**: BSP fires inner + outer propagators in same rounds — async by construction
-- **Completion**: completion cell IS the quiescence signal — on-network, observable, composable
-- **Early termination**: NAF-gate fires as soon as inner answer appears — no wait for full quiescence
-- **Generality**: completion cell pattern reusable for all sub-computations
-
-**Tests**: All adversarial parity P3 NAF cases match DFS. All 4 well-founded test files pass. New: NAF under multi-clause branching (clause elimination on failure). Early termination test (inner produces answer before full quiescence).
-
-**Vision gate**: On-network? Same network, worldview-isolated. No fork. No bridge. Complete? NAF semantics match DFS. Vision-advancing? NAF IS another clause branch on the same network — the worldview bitmask unifies NAF isolation with multi-clause isolation. One mechanism.
-
-### Phase 2b: BSP Completion Stratum (~1h)
-
-**Objective**: Add a completion detection stratum to `run-to-quiescence-bsp` that detects quiesced sub-computations and writes to their completion cells. Retires the post-quiescence scaffolding in `solve-goal-propagator`.
-
-**BSP loop with completion stratum**:
-```
-BSP inner loop:
-  1. Value stratum: fire all propagators, merge writes
-  2. Repeat until value fixpoint
-
 BSP outer loop:
-  3. Completion stratum: for each registered sub-computation,
-     check if its propagators have quiesced (none pending on worklist
-     with matching bitmask). If so, write 'completed to completion cell.
-  4. Topology stratum: process topology requests
-  5. If any new writes from (3) or (4): go to (1)
-  6. Else: full quiescence
+  1. Value stratum (S0): fire all MONOTONE propagators to fixpoint
+     (unify, is, app, guard — all positive goals)
+
+  2. NAF stratum (S1): evaluate all pending NAF goals
+     - Read S0 fixpoint state (scope cells, viability cells have final values)
+     - For each NAF: is the inner goal provable? (read viability cell)
+     - Write NAF-result cells (naf-succeeded / naf-failed)
+     - Broadcast: evaluate ALL pending NAFs in one pass (Kan extension on product)
+
+  3. Topology stratum: process topology requests
+
+  4. If any new writes from (2) or (3): go to (1) — NAF results trigger new S0 propagation
+  5. Else: full quiescence
 ```
 
-**Steps**:
-1. Add a `pending-completions` registry to the prop-network (or solver-context): maps NAF-bitmask → completion-cell-id
-2. In `run-to-quiescence-bsp` outer loop (between value and topology strata): iterate registered completions, check if worklist has any propagators with matching bitmask, write `completed` if none pending
-3. Remove the post-quiescence completion write from `solve-goal-propagator`
+**Why stratification is the principled solution**:
+- S0 fixpoint guarantees ALL positive goals have converged before NAF reads them
+- Variable bindings are complete (`x = 15` is in the scope cell when NAF evaluates)
+- Ground goal viability is determined (discrimination has narrowed the viability cell)
+- No worldview isolation, cell promotion, NAF-success cells, or probe variables needed
+- NAF reads plain cell values at S0 fixpoint — one cell read per NAF goal
+- The S0→S1→S0 loop handles dependent NAFs (NAF A's result affects NAF B's provability) via fixpoint iteration — this IS the well-founded semantics realized as BSP strata
 
-**Scope**: ~30-40 lines in `propagator.rkt` (completion stratum check) + ~5 lines removal from `relations.rkt` (scaffolding retirement).
+**Kan extension optimization**: The NAF stratum computes a right Kan extension from the positive-goal provability to the negated domain. For N independent NAFs, this is a broadcast: one propagator, N items, N results, O(1) BSP rounds. For dependent NAFs, the S0↔S1 loop converges in O(depth) iterations (parallel prefix applies for chains).
 
-**Tests**: NAF parity unchanged. Verify completion cell is written DURING BSP (not after). Verify NAF-gate fires before full quiescence when inner fails.
+**Phase 2a: NAF Registration + Result Gating** (~20 lines in relations.rkt):
 
-**Vision gate**: On-network? Completion detection IS a BSP stratum — structural, not imperative. Complete? Retires scaffolding. Vision-advancing? Sub-computation quiescence detection as infrastructure, not per-feature code.
+1. `install-goal-propagator` ('not case): register NAF in `current-naf-pending` registry
+   - Record: inner-goal-desc, outer-env, relation-store, answer-cid
+   - Allocate NAF-result cell (three-element lattice: unknown/succeeded/failed)
+   - Return network with NAF-result cell allocated — no inner goal installation, no fork, no worldview bitmask
+
+2. Result reading: filter on NAF-result cells (already implemented from prior work)
+
+**Phase 2b: NAF Evaluation Stratum in BSP** (~40-50 lines in propagator.rkt + relations.rkt):
+
+1. Add S1 stratum to `run-to-quiescence-bsp` outer loop:
+   - After value stratum reaches fixpoint
+   - Before topology stratum
+   - Calls NAF evaluation function for all pending NAFs
+
+2. NAF evaluation function (broadcast over pending NAFs):
+   - For each pending NAF: install inner goal on the CURRENT network (S0 fixpoint state), read viability cell directly
+   - If viability non-empty (inner goal provable) → write `'naf-failed`
+   - If viability empty (inner goal not provable) → write `'naf-succeeded`
+   - If any NAF-result changed → new writes exist → outer loop goes back to S0
+
+3. Subsequent goals in the conjunction watch NAF-result cells:
+   - `naf-succeeded` → conjunction continues (information starvation on failure prevents results)
+   - `naf-failed` → clause eliminated via result filtering
+
+**What gets removed** (from worldview-bitmask approach):
+- Worldview isolation for NAF (no `combined-bm`, no `wrap-with-worldview` for inner goals)
+- Cell promotion for NAF (no `promote-cell-to-tagged` for scope cells)
+- NAF-success cell and `current-naf-success-cid` parameter
+- Probe variable approach (fresh names, unification goals, probe env)
+- Post-quiescence completion scaffolding in `solve-goal-propagator`
+
+**Tests**: All adversarial parity P3 NAF cases match DFS. All 4 well-founded test files pass. Complex cases: NAF with variable bindings (`(= x 15) not(ground-vals ?x)`), NAF under multi-clause branching, cross-relation NAF.
+
+**Vision gate**: On-network? NAF registration is a cell write. NAF evaluation is a BSP stratum (structural). NAF-result is a cell. Complete? Handles ground goals, variable bindings, multi-clause context. Vision-advancing? Non-monotone operations isolated in their own stratum — CALM-compliant architecture. The right Kan extension formulation gives the theoretical foundation.
 
 ### Phase 3: Guard as Propagator (~2-3h)
 
