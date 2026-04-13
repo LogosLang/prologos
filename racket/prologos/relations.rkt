@@ -63,8 +63,9 @@
  collect-ast-vars
  ;; Evaluation callback (set by reduction.rkt to break circular dep)
  current-is-eval-fn
- ;; Track 2B Phase 2a: NAF completion registrations (scaffolding)
+ ;; Track 2B Phase 2a: NAF infrastructure
  current-naf-completions
+ current-naf-success-cid
  ;; NAF oracle (set by wf-engine.rkt for well-founded semantics)
  current-naf-oracle
  ;; Solver internals (for run-solve-goal in reduction.rkt + benchmarks)
@@ -105,11 +106,17 @@
 (define current-is-eval-fn (make-parameter #f))
 
 ;; Track 2B Phase 2a: NAF completion registrations.
-;; Mutable hasheq: completion-cid → naf-bitmask.
+;; Mutable hasheq: completion-cid → info-hasheq.
 ;; Written during install-goal-propagator ('not case).
 ;; Read by solve-goal-propagator after BSP quiescence to write 'completed.
 ;; Scaffolding — Phase 2b replaces with BSP completion stratum.
 (define current-naf-completions (make-parameter #f))
+
+;; Track 2B Phase 2a: NAF success cell.
+;; When non-#f, the inner goal's fact/clause installation writes 'naf-inner-matched
+;; to this cell-id when viable alternatives are found. NAF-context-only:
+;; defaults to #f, zero overhead for non-NAF paths.
+(define current-naf-success-cid (make-parameter #f))
 
 ;; NAF oracle callback for well-founded semantics.
 ;; When #f (default), standard NAF is used (try to prove inner goal;
@@ -1825,123 +1832,36 @@
                           ;; Once decided, stays decided (monotone)
                           (if (eq? old 'naf-unknown) new old))))
 
-        ;; 4. Identify and promote outer scope cells.
-        (define outer-scope-cids
-          (remove-duplicates
-           (for/list ([ref (in-hash-values env)]
-                      #:when (scope-ref? ref))
-             (scope-ref-cid ref))))
-        ;; Promote outer scope cells to tagged-cell-value — required for worldview isolation.
-        ;; Without promotion, inner writes merge directly into base (no tagging).
-        (define net4a
-          (for/fold ([n net4])
-                    ([cid (in-list outer-scope-cids)])
-            (promote-cell-to-tagged n cid)))
-        ;; Note: probe scope cells are allocated fresh by build-var-env AFTER this point,
-        ;; so they also need promotion. Done after build-var-env below.
+        ;; 4. Allocate NAF-success cell. Written by inner goal's fact/clause path
+        ;; when viable alternatives are found (via current-naf-success-cid parameter).
+        ;; NAF-context-only: zero overhead for non-NAF paths.
+        (define-values (net4a naf-success-cid)
+          (net-new-cell net4 'naf-no-match
+                        (lambda (old new)
+                          (if (eq? new 'naf-inner-matched) 'naf-inner-matched old))))
 
-        ;; 5. Install inner goal under NAF worldview bitmask.
-        ;; Fresh variable scope for the inner goal: all args become free variables,
-        ;; with unification goals for any ground constraints. This ensures that
-        ;; fact matches produce BINDINGS (detectable by NAF-gate) even for ground
-        ;; inner goals like (ground-vals 20). Without this, ground args produce no
-        ;; scope cell writes → NAF can't detect provability.
-        ;; This is the propagator analog of DFS's apply-subst-to-goal.
-        ;; Create fresh probe variables for the inner goal's arguments.
-        ;; This ensures fact matches produce BINDINGS even for ground inner goals.
-        (define inner-is-app? (eq? (goal-desc-kind inner-goal) 'app))
-        (define inner-orig-args
-          (if inner-is-app? (cadr (goal-desc-args inner-goal)) '()))
-        (define naf-fresh-names
-          (for/list ([i (in-range (length inner-orig-args))])
-            (gensym '_naf_probe_)))
-        (define-values (net4b-pre naf-probe-env)
-          (build-var-env net4a naf-fresh-names))
-        ;; Promote probe scope cells for worldview isolation
-        (define net4b
-          (let ([probe-cids (for/list ([ref (in-hash-values naf-probe-env)]
-                                       #:when (scope-ref? ref))
-                              (scope-ref-cid ref))])
-            (for/fold ([n net4b-pre])
-                      ([cid (in-list (remove-duplicates probe-cids))])
-              (promote-cell-to-tagged n cid))))
-
-        ;; Rewrite inner goal to use fresh variable names (ordered)
-        (define inner-goal-rewritten
-          (if inner-is-app?
-              (goal-desc 'app (list (car (goal-desc-args inner-goal)) naf-fresh-names))
-              inner-goal))
-
-        ;; Unification goals: each fresh var unified with the original arg value (ordered)
-        (define unify-goals
-          (for/list ([orig (in-list inner-orig-args)]
-                     [fresh (in-list naf-fresh-names)])
-            (define resolved (resolve-term env orig))
-            (goal-desc 'unify (list fresh resolved))))
-
-        ;; Merge naf-probe-env into outer env
-        (define combined-env
-          (for/fold ([e env])
-                    ([(k v) (in-hash naf-probe-env)])
-            (hash-set e k v)))
-
+        ;; 5. Install inner goal under NAF worldview bitmask + NAF success context.
         (define net5
-          (parameterize ([current-worldview-bitmask combined-bm])
-            ;; Install unification goals first (bind fresh vars to ground args)
-            (define net-unified
-              (for/fold ([n net4b])
-                        ([ug (in-list unify-goals)])
-                (install-goal-propagator n ug combined-env store config
-                                        inner-answer-cid #f)))
-            ;; Install the rewritten inner goal with fresh variables
-            (install-goal-propagator net-unified inner-goal-rewritten combined-env store config
-                                    inner-answer-cid #f)))  ;; ctx=#f for inner (isolation)
+          (parameterize ([current-worldview-bitmask combined-bm]
+                         [current-naf-success-cid naf-success-cid])
+            (install-goal-propagator net4a inner-goal env store config
+                                    inner-answer-cid #f)))
 
-        ;; 5. Install NAF-gate propagator (fire-once).
-        ;; Watches completion-cid + outer scope cells (under NAF bitmask).
-        ;; The inner goal writes to scope cells under the combined NAF bitmask.
-        ;; Success detection: read scope cells under NAF bitmask — if any
-        ;; variable is non-bot, the inner goal produced bindings → NAF fails.
-        ;; This replaces the answer-accumulator approach because fact writes
-        ;; go to scope cells, not answer accumulators.
-        ;; NAF-gate checks PROBE scope cells (not outer scope cells)
-        ;; because the inner goal writes to the probe variables.
-        (define probe-scope-cids
-          (remove-duplicates
-           (for/list ([ref (in-hash-values naf-probe-env)]
-                      #:when (scope-ref? ref))
-             (scope-ref-cid ref))))
-        (define probe-scope-refs
-          (for/list ([(_name ref) (in-hash naf-probe-env)]
-                     #:when (scope-ref? ref))
-            ref))
-
+        ;; 6. Install NAF-gate propagator (fire-once).
+        ;; Watches completion-cid + naf-success-cid.
+        ;; Success cell: 'naf-inner-matched = inner goal found viable alternatives.
         (define (naf-gate-fire net)
           (define completed? (completion-done? (net-cell-read net completion-cid)))
-          ;; Check if inner goal produced any bindings by comparing scope cells
-          ;; under outer-bm vs combined-bm. If they differ, the inner goal wrote
-          ;; something (the extra entries are from the NAF bitmask).
-          ;; Check probe scope cells: if any probe variable is non-bot under
-          ;; the combined bitmask, the inner goal produced bindings.
-          (define inner-produced-bindings?
-            (parameterize ([current-worldview-bitmask combined-bm])
-              (for/or ([ref (in-list probe-scope-refs)])
-                (define val (logic-var-read net ref))
-                (not (eq? val scope-cell-bot)))))
+          (define matched? (eq? (net-cell-read net naf-success-cid) 'naf-inner-matched))
           (cond
-            ;; Inner produced bindings → NAF fails (early termination possible)
-            [inner-produced-bindings?
+            [matched?
              (net-cell-write net naf-result-cid 'naf-failed)]
-            ;; Inner completed with no bindings → NAF succeeds
             [completed?
              (net-cell-write net naf-result-cid 'naf-succeeded)]
-            ;; Not yet decided → residuate (no write)
             [else net]))
 
-        ;; NAF-gate watches: completion cell + probe scope cells
-        ;; (probe cells receive inner writes under NAF bitmask, triggering the gate)
         (define gate-input-cids
-          (cons completion-cid probe-scope-cids))
+          (list completion-cid naf-success-cid))
 
         (define-values (net6 _gate-pid)
           (net-add-fire-once-propagator net5
@@ -2179,6 +2099,15 @@
        ;; Read the viability cell to get the current viable set.
        (define viable-indices (net-cell-read n-discrim viability-cid))
 
+       ;; Track 2B Phase 2a: If inside NAF context and viable alternatives exist,
+       ;; write success to the NAF success cell. Zero overhead when not in NAF
+       ;; (current-naf-success-cid defaults to #f).
+       (define n-naf-signal
+         (let ([naf-cid (current-naf-success-cid)])
+           (if (and naf-cid (not (set-empty? viable-indices)))
+               (net-cell-write n-discrim naf-cid 'naf-inner-matched)
+               n-discrim)))
+
        ;; Track 2B Phase 1a Step 5: Per-fact-row PU branching.
        ;; Viable fact rows get worldview bitmask bits (same as multi-clause).
        ;; Each row writes under its own bitmask → tagged-cell-value entries
@@ -2193,19 +2122,19 @@
        (define n-facts
          (cond
            ;; No viable facts: skip
-           [(null? viable-facts) n-discrim]
+           [(null? viable-facts) n-naf-signal]
 
            ;; Single viable fact: write directly (no PU overhead)
            [(null? (cdr viable-facts))
             (let ([row (fact-row-terms (car viable-facts))])
               (if (= (length row) (length resolved-args))
-                  (for/fold ([n n-discrim])
+                  (for/fold ([n n-naf-signal])
                             ([arg (in-list resolved-args)]
                              [val (in-list row)])
                     (if (or (scope-ref? arg) (cell-id? arg))
                         (logic-var-write n arg val)
                         n))
-                  n-discrim))]
+                  n-naf-signal))]
 
            ;; Multiple viable facts: PU branching with worldview bitmasks.
            ;; Same pattern as multi-clause concurrent execution.
@@ -2214,7 +2143,7 @@
               ;; Create assumptions per viable fact row
               (define-values (n-assumed fact-aids-rev)
                 (if ctx
-                    (for/fold ([net n-discrim] [aids '()])
+                    (for/fold ([net n-naf-signal] [aids '()])
                               ([fr (in-list viable-facts)]
                                [i (in-naturals)])
                       (define-values (net* aid)
@@ -2223,7 +2152,7 @@
                                       fr))
                       (values net* (cons aid aids)))
                     ;; No solver-context: local counter
-                    (for/fold ([net n-discrim] [aids '()])
+                    (for/fold ([net n-naf-signal] [aids '()])
                               ([fr (in-list viable-facts)]
                                [i (in-naturals)])
                       (values net (cons (assumption-id i) aids)))))
