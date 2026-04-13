@@ -22,8 +22,8 @@
 | 0c | Pre-0: A/B executor comparison | ✅ | Sequential wins all current workloads. Threads cross over at N≥128. Futures eliminated. |
 | 1a | Clause selection as decision-cell narrowing | ✅ | `a1df50f4`→`b47b9787`. On-network discrimination (broadcast), fact-row PU branching, domain-merge fix. Categories 1+2 FIXED. |
 | 1b | Position-discriminant analysis | ✅ | `1eae7eb8`. Discrimination tree: position scoring, recursive partitioning, tree-guided installation. Flat ground-arg pass ensures coverage regardless of tree order. |
-| 2a | NAF registration + result gating | ⬜ | Register NAFs in pending cell, allocate NAF-result cells. ~20 lines. Revert worldview-bitmask approach. |
-| 2b | NAF evaluation stratum in BSP (S1) | ⬜ | Add S1 stratum to run-to-quiescence-bsp. Broadcast-evaluate pending NAFs at S0 fixpoint. Kan extension on product. ~40-50 lines. |
+| 2a | NAF registration + S1 provability check | 🔄 | `e928dbc0`. Stratified NAF: register at S0, evaluate at S0 fixpoint via discrimination provability. Basic+variable cases FIXED. Complex cross-relation cases remaining. |
+| 2b | NAF evaluation stratum in BSP (S1) | ⬜ | Add S1 stratum to run-to-quiescence-bsp. Broadcast-evaluate pending NAFs. Retires scaffolding in solve-goal-propagator. |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
 | 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
 | 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
