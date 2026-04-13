@@ -1825,44 +1825,82 @@
                           ;; Once decided, stays decided (monotone)
                           (if (eq? old 'naf-unknown) new old))))
 
-        ;; 4. Install inner goal under NAF worldview bitmask.
+        ;; 4. Identify and promote outer scope cells.
+        (define outer-scope-cids
+          (remove-duplicates
+           (for/list ([ref (in-hash-values env)]
+                      #:when (scope-ref? ref))
+             (scope-ref-cid ref))))
+        ;; Promote to tagged-cell-value — required for worldview isolation.
+        ;; Without promotion, inner writes merge directly into base (no tagging).
+        (define net4a
+          (for/fold ([n net4])
+                    ([cid (in-list outer-scope-cids)])
+            (promote-cell-to-tagged n cid)))
+
+        ;; 5. Install inner goal under NAF worldview bitmask.
         ;; Inner propagators see outer bindings (bitmask subset match)
         ;; but outer can't see inner writes (isolation).
         (define net5
           (parameterize ([current-worldview-bitmask combined-bm])
-            (install-goal-propagator net4 inner-goal env store config
+            (install-goal-propagator net4a inner-goal env store config
                                     inner-answer-cid #f)))  ;; ctx=#f for inner (isolation)
 
         ;; 5. Install NAF-gate propagator (fire-once).
-        ;; Watches inner-answer-cid + completion-cid.
-        ;; Early termination: inner answer non-empty → NAF fails immediately.
-        ;; Full check: completed + empty → NAF succeeds.
+        ;; Watches completion-cid + outer scope cells (under NAF bitmask).
+        ;; The inner goal writes to scope cells under the combined NAF bitmask.
+        ;; Success detection: read scope cells under NAF bitmask — if any
+        ;; variable is non-bot, the inner goal produced bindings → NAF fails.
+        ;; This replaces the answer-accumulator approach because fact writes
+        ;; go to scope cells, not answer accumulators.
+        (define outer-scope-refs
+          (for/list ([(_name ref) (in-hash env)]
+                     #:when (scope-ref? ref))
+            ref))
+
         (define (naf-gate-fire net)
-          (define answers (net-cell-read net inner-answer-cid))
           (define completed? (completion-done? (net-cell-read net completion-cid)))
+          ;; Check if inner goal produced any bindings by comparing scope cells
+          ;; under outer-bm vs combined-bm. If they differ, the inner goal wrote
+          ;; something (the extra entries are from the NAF bitmask).
+          (define inner-produced-bindings?
+            (for/or ([ref (in-list outer-scope-refs)])
+              (define outer-val
+                (parameterize ([current-worldview-bitmask (if (zero? outer-bm) 0 outer-bm)])
+                  (logic-var-read net ref)))
+              (define combined-val
+                (parameterize ([current-worldview-bitmask combined-bm])
+                  (logic-var-read net ref)))
+              (not (equal? outer-val combined-val))))
           (cond
-            ;; Early termination: inner produced answers → NAF fails
-            [(and (list? answers) (pair? answers))
+            ;; Inner produced bindings → NAF fails (early termination possible)
+            [inner-produced-bindings?
              (net-cell-write net naf-result-cid 'naf-failed)]
-            ;; Inner completed with no answers → NAF succeeds
-            [(and completed? (or (null? answers) (not (list? answers))))
+            ;; Inner completed with no bindings → NAF succeeds
+            [completed?
              (net-cell-write net naf-result-cid 'naf-succeeded)]
             ;; Not yet decided → residuate (no write)
             [else net]))
 
+        ;; NAF-gate watches: completion cell + all outer scope cells
+        ;; (scope cells receive inner writes under NAF bitmask, triggering the gate)
+        (define gate-input-cids
+          (cons completion-cid outer-scope-cids))
+
         (define-values (net6 _gate-pid)
           (net-add-fire-once-propagator net5
-            (list inner-answer-cid completion-cid)
+            gate-input-cids
             (list naf-result-cid)
             naf-gate-fire))
 
-        ;; 6. Register this NAF for post-quiescence completion write (scaffolding).
-        ;; The completion cell will be written by solve-goal-propagator after BSP
-        ;; quiesces. Phase 2b replaces this with a BSP completion stratum.
-        ;; Store the completion-cid for the caller to find.
-        ;; For now: use a parameter to accumulate NAF completion registrations.
+        ;; 6. Register this NAF for post-quiescence completion write + result filtering.
+        ;; Stores: completion-cid, naf-result-cid, outer-bitmask.
+        ;; Phase 2b replaces completion write with BSP completion stratum.
         (when (current-naf-completions)
-          (hash-set! (current-naf-completions) completion-cid naf-bitmask))
+          (hash-set! (current-naf-completions) completion-cid
+                     (hasheq 'naf-result-cid naf-result-cid
+                             'outer-bm outer-bm
+                             'naf-bitmask naf-bitmask)))
 
         net6])]
 
@@ -2368,10 +2406,23 @@
         net4  ;; no NAFs → skip
         (let ([net-completed
                (for/fold ([n net4])
-                         ([(comp-cid _bitmask) (in-hash naf-completions)])
+                         ([(comp-cid _info) (in-hash naf-completions)])
                  (net-cell-write n comp-cid completion-done))])
           ;; Run again to let NAF-gates fire
           (run-to-quiescence net-completed))))
+
+  ;; Phase 2a: Collect NAF-failed bitmasks for result filtering.
+  ;; If a NAF-gate wrote 'naf-failed, the clause at that outer-bm
+  ;; should not contribute results.
+  (define naf-failed-bitmasks
+    (for/fold ([blocked (seteq)])
+              ([(_comp-cid info) (in-hash naf-completions)])
+      (define naf-res-cid (hash-ref info 'naf-result-cid))
+      (define outer-bm (hash-ref info 'outer-bm))
+      (define naf-result (net-cell-read net5 naf-res-cid))
+      (if (eq? naf-result 'naf-failed)
+          (set-add blocked outer-bm)
+          blocked)))
 
   ;; Read results from scope cells.
   ;; Phase 8.2: query-env maps var-name → scope-ref.
@@ -2396,30 +2447,41 @@
      ;; We use make-tagged-merge(scope-cell-merge) because tagged-cell-read's
      ;; domain-merge receives the tagged merge wrapper (same as net-cell-read uses).
      (define domain-merge (make-tagged-merge scope-cell-merge))
-     (for/list ([bm (in-list bitmasks)])
-       (for/hasheq ([qv (in-list query-vars)])
-         (define ref (hash-ref query-env qv))
-         ;; Read the scope cell under this bitmask, merging same-bitmask entries
-         (define sc-val
-           (if (tagged-cell-value? scope-raw)
-               (tagged-cell-read scope-raw bm domain-merge)
-               scope-raw))
-         (define val (if (scope-cell? sc-val)
-                         (scope-cell-ref sc-val qv)
-                         scope-cell-bot))
-         (values qv (if (eq? val scope-cell-bot) qv val))))]
+     ;; Phase 2a: filter out NAF-failed bitmasks + clauses with all-unresolved vars
+     (define raw-results
+       (for/list ([bm (in-list bitmasks)]
+                  #:unless (set-member? naf-failed-bitmasks bm))  ;; NAF filter
+         (for/hasheq ([qv (in-list query-vars)])
+           (define ref (hash-ref query-env qv))
+           (define sc-val
+             (if (tagged-cell-value? scope-raw)
+                 (tagged-cell-read scope-raw bm domain-merge)
+                 scope-raw))
+           (define val (if (scope-cell? sc-val)
+                           (scope-cell-ref sc-val qv)
+                           scope-cell-bot))
+           (values qv (if (eq? val scope-cell-bot) qv val)))))
+     ;; Filter: skip results where ALL query vars are unresolved
+     (filter (lambda (result-subst)
+               (not (for/and ([qv (in-list query-vars)])
+                      (eq? (hash-ref result-subst qv) qv))))
+             raw-results)]
 
     ;; Single-clause/facts: read scope cell directly
     [else
-     (define sc-val
-       (if scope-cid (net-cell-read net5 scope-cid) #f))
-     (define result-subst
-       (for/hasheq ([qv (in-list query-vars)])
-         (define val (if (scope-cell? sc-val)
-                         (scope-cell-ref sc-val qv)
-                         scope-cell-bot))
-         (values qv (if (eq? val scope-cell-bot) qv val))))
-     (if (for/and ([qv (in-list query-vars)])
-           (eq? (hash-ref result-subst qv) qv))
-         '()
-         (list result-subst))]))
+     ;; Phase 2a: check if NAF failed for the single-clause path (outer-bm = 0)
+     (if (set-member? naf-failed-bitmasks 0)
+         '()  ;; NAF failed in single-clause context → no results
+         (let ()
+           (define sc-val
+             (if scope-cid (net-cell-read net5 scope-cid) #f))
+           (define result-subst
+             (for/hasheq ([qv (in-list query-vars)])
+               (define val (if (scope-cell? sc-val)
+                               (scope-cell-ref sc-val qv)
+                               scope-cell-bot))
+               (values qv (if (eq? val scope-cell-bot) qv val))))
+           (if (for/and ([qv (in-list query-vars)])
+                 (eq? (hash-ref result-subst qv) qv))
+               '()
+               (list result-subst))))]))
