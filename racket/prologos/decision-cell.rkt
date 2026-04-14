@@ -414,28 +414,24 @@
      ;; No speculation active — return base directly (Tier 1 fast path)
      (tagged-cell-value-base tcv)]
     [else
-     ;; Collect matching entries grouped by specificity (popcount)
-     (define best-bits 0)
-     (define best-vals '())  ;; list of values at max specificity
+     ;; Collect ALL matching entries (bitmask is subset of worldview).
+     ;; D.12: merge across ALL specificities (not just max popcount).
+     ;; Multi-level composition (NAF+fact-row) produces entries at different
+     ;; bitmask levels; all must be merged for complete results.
+     (define all-matching '())
      (for ([entry (in-list (tagged-cell-value-entries tcv))])
        (define entry-bm (car entry))
        (define entry-val (cdr entry))
        (when (= (bitwise-and entry-bm worldview-bitmask) entry-bm)
-         (define pc (popcount entry-bm))
-         (cond
-           [(> pc best-bits)
-            (set! best-bits pc)
-            (set! best-vals (list entry-val))]
-           [(= pc best-bits)
-            (set! best-vals (cons entry-val best-vals))])))
+         (set! all-matching (cons entry-val all-matching))))
      (cond
-       [(null? best-vals) (tagged-cell-value-base tcv)]
-       [(null? (cdr best-vals)) (car best-vals)]  ;; single match
-       [(not domain-merge) (car best-vals)]  ;; no merge fn → first match (compat)
+       [(null? all-matching) (tagged-cell-value-base tcv)]
+       [(null? (cdr all-matching)) (car all-matching)]  ;; single match
+       [(not domain-merge) (car all-matching)]  ;; no merge fn → first match (compat)
        [else
-        ;; Multiple matches at same specificity → merge all
-        (for/fold ([acc (car best-vals)])
-                  ([v (in-list (cdr best-vals))])
+        ;; Multiple matches — merge ALL (across specificities)
+        (for/fold ([acc (car all-matching)])
+                  ([v (in-list (cdr all-matching))])
           (domain-merge acc v))])]))
 
 ;; Write: if worldview is non-zero, append a tagged entry.

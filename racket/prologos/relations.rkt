@@ -2508,10 +2508,22 @@
     ;; Read each clause's result via its bitmask.
     [(and scope-raw (tagged-cell-value? scope-raw)
           (pair? (tagged-cell-value-entries scope-raw)))
-     (define bitmasks
+     ;; Collect all distinct bitmasks from entries, then filter to LEAF bitmasks.
+     ;; A leaf bitmask is one that isn't a proper subset of any other bitmask.
+     ;; This ensures we only produce results for COMPLETE branching decisions
+     ;; (e.g., NAF+fact-row combined, not NAF-only partial).
+     (define all-bitmasks
        (remove-duplicates
         (for/list ([entry (in-list (tagged-cell-value-entries scope-raw))])
           (car entry))))
+     (define bitmasks
+       (filter (lambda (bm)
+                 ;; bm is a leaf if no other bitmask is a proper superset of it
+                 (not (for/or ([other (in-list all-bitmasks)])
+                        (and (not (= other bm))
+                             (= (bitwise-and bm other) bm)  ;; bm ⊂ other
+                             (not (= bm other))))))
+               all-bitmasks))
      ;; Domain-merge for same-bitmask entry merging.
      ;; Multiple writes at same bitmask (e.g., c1 and c2 written separately)
      ;; must be merged via scope-cell-merge to produce a complete binding.
