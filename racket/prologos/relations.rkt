@@ -759,6 +759,19 @@
      (if (expr-guard-goal g)
          (goal-desc 'guard (list (expr-guard-condition g) (expr-guard-goal g)))
          (goal-desc 'guard (list (expr-guard-condition g))))]
+    ;; Track 2B Phase 2: expr-app (general application) — produced by .prologos
+    ;; pipeline for goal expressions inside not(). Extract func name + collect args.
+    [(expr-app? g)
+     ;; Uncurry: expr-app is curried (func arg). Collect all args.
+     (define-values (func-name args-rev)
+       (let loop ([e g] [acc '()])
+         (cond
+           [(expr-app? e)
+            (loop (expr-app-func e) (cons (normalize-term (expr-app-arg e)) acc))]
+           [(expr-fvar? e) (values (expr-fvar-name e) acc)]
+           [(symbol? e) (values e acc)]
+           [else (values 'unknown acc)])))
+     (goal-desc 'app (list func-name (reverse args-rev)))]
     [else
      ;; Fallback: wrap as-is
      (goal-desc 'app (list 'unknown (list g)))]))
@@ -2371,8 +2384,9 @@
         net4  ;; no NAFs → skip
         (let ()
           ;; S1: evaluate each pending NAF by checking inner goal provability
-          (define net-with-nogoods
-            (for/fold ([n net4])
+          (define-values (net-with-nogoods invalid-naf-bits)
+            (for/fold ([n net4]
+                       [invalid-bits '()])
                       ([(naf-aid info) (in-hash naf-completions)])
               (define inner-goal (hash-ref info 'inner-goal))
               (define naf-env (hash-ref info 'env))
@@ -2392,13 +2406,20 @@
                          (define n-facts (length (variant-info-facts variant)))
                          (define n-clauses (length (variant-info-clauses variant)))
                          (define n-alts (+ n-facts n-clauses))
+                         ;; Resolve args: scope-refs → read S0 value.
+                         ;; AST literals → extract raw value for discrimination comparison.
                          (define resolved
                            (for/list ([a (in-list goal-args)])
                              (define r (resolve-term naf-env a))
-                             (if (scope-ref? r)
-                                 (let ([v (logic-var-read n r)])
-                                   (if (eq? v scope-cell-bot) r v))
-                                 r)))
+                             (cond
+                               [(scope-ref? r)
+                                (let ([v (logic-var-read n r)])
+                                  (if (eq? v scope-cell-bot) r v))]
+                               ;; Extract raw values from AST literal nodes
+                               [(expr-int? r) (expr-int-val r)]
+                               [(expr-string? r) (expr-string-val r)]
+                               [(expr-symbol? r) (expr-symbol-name r)]
+                               [else r])))
                          (define viable
                            (for/fold ([v (for/seteq ([i (in-range n-alts)]) i)])
                                      ([arg (in-list resolved)]
@@ -2408,9 +2429,16 @@
                                [(hash-empty? pos-data) v]
                                [(or (scope-ref? arg) (cell-id? arg)) v]
                                [else
+                                ;; Normalize discrimination values for comparison
+                                ;; (fact-row values from .prologos may be AST nodes)
+                                (define (normalize-for-compare v)
+                                  (cond [(expr-int? v) (expr-int-val v)]
+                                        [(expr-string? v) (expr-string-val v)]
+                                        [(expr-symbol? v) (expr-symbol-name v)]
+                                        [else v]))
                                 (define compatible
                                   (for/seteq ([pair (in-list (hash->list pos-data))]
-                                              #:when (equal? (cdr pair) arg))
+                                              #:when (equal? (normalize-for-compare (cdr pair)) arg))
                                     (car pair)))
                                 (define wildcards
                                   (for/seteq ([i (in-range n-alts)]
@@ -2426,18 +2454,23 @@
                    (or (eq? lv scope-cell-bot) (eq? rv scope-cell-bot) (equal? lv rv))]
                   [else #t]))
               ;; If inner is provable: h_naf is invalid.
-              ;; Clear the NAF bit from the worldview cache cell (cell-id 1).
-              ;; This makes tagged-cell-read NOT see entries under the NAF bitmask.
+              ;; Record provability result
               (if inner-provable?
-                  (let ()
-                    (define naf-bitmask (arithmetic-shift 1 naf-bit-pos))
-                    (define current-wv (net-cell-read n worldview-cache-cell-id))
-                    (define cleared-wv (bitwise-and current-wv (bitwise-not naf-bitmask)))
-                    ;; Direct write to worldview cache — replacement merge
-                    (net-cell-write n worldview-cache-cell-id cleared-wv))
-                  n)))  ;; inner not provable → h_naf remains valid
-          ;; Run S0 again — nogoods may trigger worldview narrowing + new propagation
-          (run-to-quiescence net-with-nogoods))))
+                  (values n (cons naf-bit-pos invalid-bits))
+                  (values n invalid-bits))))  ;; inner not provable → h_naf remains valid
+          ;; Clear invalid NAF bits from worldview cache AFTER second BSP.
+          ;; The projection propagator may have recomputed the cache during BSP,
+          ;; so we clear AFTER quiescence, not before.
+          (define net-quiesced (run-to-quiescence net-with-nogoods))
+          (if (null? invalid-naf-bits)
+              net-quiesced
+              (let ()
+                (define invalid-mask
+                  (for/fold ([m 0]) ([bp (in-list invalid-naf-bits)])
+                    (bitwise-ior m (arithmetic-shift 1 bp))))
+                (define current-wv (net-cell-read net-quiesced worldview-cache-cell-id))
+                (define cleared-wv (bitwise-and current-wv (bitwise-not invalid-mask)))
+                (net-cell-write net-quiesced worldview-cache-cell-id cleared-wv))))))
 
   ;; D.12: no NAF-result filtering needed — worldview narrowing handles it.
   ;; Eliminated NAF assumptions make tagged writes invisible via tagged-cell-read.
