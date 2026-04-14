@@ -1862,45 +1862,43 @@
 ;; install-conjunction (7b, revised D.12)
 ;; ----------------------------------------
 ;; Install all goals in a clause body.
-;; NAF-aware: when a 'not goal is encountered, its h_naf assumption bit
-;; is ORed into the worldview bitmask for ALL subsequent goals. This means
-;; subsequent goals' writes are tagged with h_naf — if S1 eliminates h_naf
-;; (NAF failed), those writes become invisible via worldview filtering.
+;; D.12 NAF-aware: pre-scans for NAF goals, allocates ALL NAF assumptions
+;; UPFRONT, then installs ALL goals under the combined NAF bitmask.
+;; This ensures the ENTIRE conjunction's writes are conditioned on NAF success.
+;; In DFS, if ANY goal (including NAF) fails, the entire conjunction fails —
+;; the worldview analog is: all writes tagged with NAF assumptions.
 ;; Returns: new-network
 (define (install-conjunction net goals env store config answer-cid [ctx #f])
-  (define-values (net-final _accumulated-naf-bm)
+  ;; Phase 1: Pre-scan for NAF goals, allocate assumptions
+  (define-values (net-with-nafs naf-bm)
     (for/fold ([n net]
-               [naf-bm 0])  ;; accumulated NAF bitmask
-              ([goal (in-list goals)])
-      (cond
-        [(eq? (goal-desc-kind goal) 'not)
-         ;; NAF goal: install it (allocates assumption + registers for S1).
-         ;; Then add its bit to the accumulated NAF bitmask.
-         (define n2 (install-goal-propagator n goal env store config answer-cid ctx))
-         ;; Read the NAF bit from the registry (last registered NAF)
-         (define naf-bit-pos
-           (if (current-naf-completions)
-               (let ([entries (hash-values (current-naf-completions))])
-                 (if (pair? entries)
-                     (hash-ref (last entries) 'naf-bit-pos 0)
-                     0))
-               0))
-         (define new-naf-bm (bitwise-ior naf-bm (arithmetic-shift 1 naf-bit-pos)))
-         (values n2 new-naf-bm)]
-        [else
-         ;; Non-NAF goal: install with accumulated NAF bitmask
-         ;; (subsequent goals' writes tagged with all prior NAF assumptions)
-         (define outer-bm (current-worldview-bitmask))
-         (define combined-bm (bitwise-ior outer-bm naf-bm))
-         (define n2
-           (if (zero? naf-bm)
-               ;; No NAF context — install normally
-               (install-goal-propagator n goal env store config answer-cid ctx)
-               ;; NAF context — wrap with combined bitmask
-               (parameterize ([current-worldview-bitmask combined-bm])
-                 (install-goal-propagator n goal env store config answer-cid ctx))))
-         (values n2 naf-bm)])))
-  net-final)
+               [bm 0])
+              ([goal (in-list goals)]
+               #:when (eq? (goal-desc-kind goal) 'not))
+      ;; Allocate NAF assumption + promote cells + register for S1
+      (define n2 (install-goal-propagator n goal env store config answer-cid ctx))
+      ;; Read the NAF bit position from registry
+      (define naf-bit-pos
+        (if (current-naf-completions)
+            (let ([entries (hash-values (current-naf-completions))])
+              (if (pair? entries)
+                  (hash-ref (last entries) 'naf-bit-pos 0)
+                  0))
+            0))
+      (values n2 (bitwise-ior bm (arithmetic-shift 1 naf-bit-pos)))))
+
+  ;; Phase 2: Install ALL non-NAF goals under the combined NAF bitmask.
+  ;; ALL goals' writes are tagged with the NAF assumptions — if ANY NAF
+  ;; fails (S1 writes nogood), the entire conjunction's results become invisible.
+  (define outer-bm (current-worldview-bitmask))
+  (define combined-bm (bitwise-ior outer-bm naf-bm))
+  (for/fold ([n net-with-nafs])
+            ([goal (in-list goals)]
+             #:unless (eq? (goal-desc-kind goal) 'not))  ;; skip NAF goals (already installed)
+    (if (zero? naf-bm)
+        (install-goal-propagator n goal env store config answer-cid ctx)
+        (parameterize ([current-worldview-bitmask combined-bm])
+          (install-goal-propagator n goal env store config answer-cid ctx)))))
 
 ;; ----------------------------------------
 ;; install-one-clause (helper)
@@ -2427,9 +2425,16 @@
                    (define rv (if (scope-ref? rhs) (logic-var-read n rhs) rhs))
                    (or (eq? lv scope-cell-bot) (eq? rv scope-cell-bot) (equal? lv rv))]
                   [else #t]))
-              ;; If inner is provable: h_naf is invalid → write nogood
+              ;; If inner is provable: h_naf is invalid.
+              ;; Clear the NAF bit from the worldview cache cell (cell-id 1).
+              ;; This makes tagged-cell-read NOT see entries under the NAF bitmask.
               (if inner-provable?
-                  (solver-add-nogood ctx n (hasheq naf-aid #t))
+                  (let ()
+                    (define naf-bitmask (arithmetic-shift 1 naf-bit-pos))
+                    (define current-wv (net-cell-read n worldview-cache-cell-id))
+                    (define cleared-wv (bitwise-and current-wv (bitwise-not naf-bitmask)))
+                    ;; Direct write to worldview cache — replacement merge
+                    (net-cell-write n worldview-cache-cell-id cleared-wv))
                   n)))  ;; inner not provable → h_naf remains valid
           ;; Run S0 again — nogoods may trigger worldview narrowing + new propagation
           (run-to-quiescence net-with-nogoods))))
@@ -2461,10 +2466,16 @@
      ;; We use make-tagged-merge(scope-cell-merge) because tagged-cell-read's
      ;; domain-merge receives the tagged merge wrapper (same as net-cell-read uses).
      (define domain-merge (make-tagged-merge scope-cell-merge))
-     ;; Phase 2a: filter out NAF-failed bitmasks + clauses with all-unresolved vars
+     ;; D.12: filter bitmasks against worldview — only bitmasks whose bits are
+     ;; ALL present in the worldview cache produce results. NAF-eliminated
+     ;; assumptions have their bits cleared from the cache.
+     (define final-worldview (net-cell-read net5 worldview-cache-cell-id))
+     (define (bitmask-visible? bm)
+       ;; A bitmask is visible if all its bits are set in the worldview
+       (or (zero? bm) (= (bitwise-and bm final-worldview) bm)))
      (define raw-results
        (for/list ([bm (in-list bitmasks)]
-                  #:unless (set-member? naf-failed-bitmasks bm))  ;; NAF filter
+                  #:when (bitmask-visible? bm))
          (for/hasheq ([qv (in-list query-vars)])
            (define ref (hash-ref query-env qv))
            (define sc-val
