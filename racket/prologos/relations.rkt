@@ -2365,11 +2365,25 @@
   ;; Track 2B Phase 2a: NAF completion registry (scaffolding)
   (define naf-completions (make-hasheq))
 
+  ;; D.12: Promote query scope cells to tagged-cell-value upfront.
+  ;; Required for NAF worldview-assumption approach: NAF-dependent writes
+  ;; must be tagged, which requires the cell to be promoted BEFORE any writes.
+  ;; Negligible overhead (one promote per query, even if no NAF).
+  (define query-scope-cids
+    (remove-duplicates
+     (for/list ([ref (in-hash-values query-env)]
+                #:when (scope-ref? ref))
+       (scope-ref-cid ref))))
+  (define net2a
+    (for/fold ([n net2])
+              ([cid (in-list query-scope-cids)])
+      (promote-cell-to-tagged n cid)))
+
   ;; Install the top-level goal (pass ctx for PU branching)
   (define top-goal (goal-desc 'app (list goal-name effective-args)))
   (define net3
     (parameterize ([current-naf-completions naf-completions])
-      (install-goal-propagator net2 top-goal query-env store config answer-cid ctx)))
+      (install-goal-propagator net2a top-goal query-env store config answer-cid ctx)))
 
   ;; Run to quiescence (inner + outer propagators converge)
   (define net4 (run-to-quiescence net3))
