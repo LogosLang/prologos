@@ -1973,7 +1973,9 @@
                                        env store config answer-cid ctx
                                        bit-position aid)
   (define clause-goals (clause-info-goals ci))
-  (define bitmask (arithmetic-shift 1 bit-position))
+  ;; Clause bitmask = clause bit ORed with outer worldview (includes NAF assumptions)
+  (define clause-bit (arithmetic-shift 1 bit-position))
+  (define bitmask (bitwise-ior (current-worldview-bitmask) clause-bit))
   ;; Fresh variable scope for this clause (clause-local cells)
   (define-values (n2 clause-env) (build-var-env net param-names))
   ;; Unify resolved args with clause param refs.
@@ -2160,14 +2162,17 @@
                           ([cid (in-list promoted-cids)])
                   (promote-cell-to-tagged net cid)))
 
-              ;; Write each fact row under its worldview bitmask
+              ;; Write each fact row under its worldview bitmask,
+              ;; ORed with the outer bitmask (includes NAF assumptions from conjunction)
+              (define outer-bm-for-facts (current-worldview-bitmask))
               (for/fold ([net n-promoted])
                         ([fr (in-list viable-facts)]
                          [aid (in-list fact-aids)])
                 (define row (fact-row-terms fr))
-                (define bitmask (arithmetic-shift 1 (assumption-id-n aid)))
+                (define fact-bitmask (arithmetic-shift 1 (assumption-id-n aid)))
+                (define combined-bm (bitwise-ior outer-bm-for-facts fact-bitmask))
                 (if (= (length row) (length resolved-args))
-                    (parameterize ([current-worldview-bitmask bitmask])
+                    (parameterize ([current-worldview-bitmask combined-bm])
                       (for/fold ([net net])
                                 ([arg (in-list resolved-args)]
                                  [val (in-list row)])
