@@ -1731,7 +1731,8 @@
 ;; Dispatches on goal kind, installs propagator(s) on the network.
 ;; ctx: solver-context or #f (needed for multi-clause branching)
 ;; Returns: new-network
-(define (install-goal-propagator net goal env store config answer-cid [ctx #f])
+;; Phase R1: store and config read from well-known cells on network.
+(define (install-goal-propagator net goal env answer-cid [ctx #f])
   (define kind (goal-desc-kind goal))
   (define args (goal-desc-args goal))
   (case kind
@@ -1786,7 +1787,7 @@
     [(app)
      (define goal-name (car args))
      (define goal-args (cadr args))
-     (install-clause-propagators net goal-name goal-args env store config answer-cid ctx)]
+     (install-clause-propagators net goal-name goal-args env answer-cid ctx)]
 
     [(not)
      ;; Track 2B D.12: NAF as worldview assumption.
@@ -1823,12 +1824,12 @@
                (promote-cell-to-tagged n cid)))
 
            ;; Register for S1 evaluation
+           ;; Phase R1: store and config are on well-known cells — not stored here.
+           ;; Phase R5 will replace this entire registry with S1 threshold propagators.
            (when (current-naf-completions)
              (hash-set! (current-naf-completions) naf-aid
                         (hasheq 'inner-goal inner-goal
                                 'env env
-                                'store store
-                                'config config
                                 'naf-bit-pos naf-bit-pos)))
 
            ;; Return: network with assumption allocated + cells promoted.
@@ -1864,7 +1865,7 @@
      (if truthy?
          (if (and inner-goal-expr (not (eq? inner-goal-expr #f)))
              (let ([inner-goal (expr->goal-desc inner-goal-expr)])
-               (install-goal-propagator net inner-goal env store config answer-cid ctx))
+               (install-goal-propagator net inner-goal env answer-cid ctx))
              net)  ;; 1-arg guard: condition passed, succeed
          net)]  ;; guard failed — return unchanged network
 
@@ -1881,7 +1882,8 @@
 ;; In DFS, if ANY goal (including NAF) fails, the entire conjunction fails —
 ;; the worldview analog is: all writes tagged with NAF assumptions.
 ;; Returns: new-network
-(define (install-conjunction net goals env store config answer-cid [ctx #f])
+;; Phase R1: store and config read from well-known cells on network.
+(define (install-conjunction net goals env answer-cid [ctx #f])
   ;; Phase 1: Pre-scan for NAF goals, allocate assumptions
   (define-values (net-with-nafs naf-bm)
     (for/fold ([n net]
@@ -1889,7 +1891,7 @@
               ([goal (in-list goals)]
                #:when (eq? (goal-desc-kind goal) 'not))
       ;; Allocate NAF assumption + promote cells + register for S1
-      (define n2 (install-goal-propagator n goal env store config answer-cid ctx))
+      (define n2 (install-goal-propagator n goal env answer-cid ctx))
       ;; Read the NAF bit position from registry
       (define naf-bit-pos
         (if (current-naf-completions)
@@ -1909,9 +1911,9 @@
             ([goal (in-list goals)]
              #:unless (eq? (goal-desc-kind goal) 'not))  ;; skip NAF goals (already installed)
     (if (zero? naf-bm)
-        (install-goal-propagator n goal env store config answer-cid ctx)
+        (install-goal-propagator n goal env answer-cid ctx)
         (parameterize ([current-worldview-bitmask combined-bm])
-          (install-goal-propagator n goal env store config answer-cid ctx)))))
+          (install-goal-propagator n goal env answer-cid ctx)))))
 
 ;; ----------------------------------------
 ;; install-one-clause (helper)
@@ -1919,7 +1921,8 @@
 ;; Install a single clause's bindings + body goals on a network.
 ;; resolved-args: (listof (cell-id | ground-value))
 ;; Returns: new-network
-(define (install-one-clause net ci resolved-args param-names env store config answer-cid ctx)
+;; Phase R1: store and config read from well-known cells on network.
+(define (install-one-clause net ci resolved-args param-names env answer-cid ctx)
   (define clause-goals (clause-info-goals ci))
   ;; Fresh variable scope for this clause
   (define-values (n2 clause-env) (build-var-env net param-names))
@@ -1959,7 +1962,7 @@
               n*))
           ;; Ground arg: write directly to param variable
           (logic-var-write n pref arg))))
-  (install-conjunction n3 clause-goals clause-env store config answer-cid ctx))
+  (install-conjunction n3 clause-goals clause-env answer-cid ctx))
 
 ;; ----------------------------------------
 ;; install-one-clause-concurrent (Phase 6+7 concurrent)
@@ -1969,8 +1972,9 @@
 ;; bitmask. For concurrent multi-clause execution on the SAME network.
 ;; bit-position: integer — this clause's assumption bit position.
 ;; aid: assumption-id — for #:assumption tagging on propagators.
+;; Phase R1: store and config read from well-known cells on network.
 (define (install-one-clause-concurrent net ci resolved-args param-names
-                                       env store config answer-cid ctx
+                                       env answer-cid ctx
                                        bit-position aid)
   (define clause-goals (clause-info-goals ci))
   ;; Clause bitmask = clause bit ORed with outer worldview (includes NAF assumptions)
@@ -2028,7 +2032,7 @@
   ;; TODO: wrap all goal propagators with worldview. For now, direct writes
   ;; during installation use the bitmask; propagator fires need wrapping.
   (parameterize ([current-worldview-bitmask bitmask])
-    (install-conjunction n3 clause-goals clause-env store config answer-cid ctx)))
+    (install-conjunction n3 clause-goals clause-env answer-cid ctx)))
 
 ;; ----------------------------------------
 ;; install-clause-propagators (6c + 6d)
@@ -2036,8 +2040,11 @@
 ;; Three paths: facts, single clause, multi-clause (PU-per-clause).
 ;; ctx: solver-context or #f (needed for multi-clause branching)
 ;; Returns: new-network
-(define (install-clause-propagators net goal-name goal-args env store config answer-cid [ctx #f])
-  (define rel (relation-lookup store goal-name))
+;; Phase R1: store and config read from well-known cells on network.
+(define (install-clause-propagators net goal-name goal-args env answer-cid [ctx #f])
+  ;; Phase R1: read relation store from well-known cell
+  (define the-store (net-cell-read net relation-store-cell-id))
+  (define rel (and (hash? the-store) (hash-ref the-store goal-name #f)))
   (cond
     [(not rel) net]
     [else
@@ -2047,9 +2054,10 @@
 
      ;; Phase 8.5-8.7: Tabling check.
      ;; Phase 10b: :tabling :off skips tabling entirely.
-     ;; :by-default (default): all relations tabled when ctx available.
+     ;; Phase R1: read config from well-known cell
+     (define the-config (net-cell-read net config-cell-id))
      (define tabling-enabled?
-       (not (eq? (solver-config-tabling config) 'off)))
+       (not (and the-config (eq? (solver-config-tabling the-config) 'off))))
      (define table-cid
        (and ctx tabling-enabled? (solver-table-lookup ctx net goal-name)))
 
@@ -2062,21 +2070,22 @@
        [(and ctx tabling-enabled?)
         (define-values (net-reg new-table-cid) (solver-table-register ctx net goal-name))
         (define net-with-clauses
-          (install-clause-propagators-inner net-reg goal-name resolved-args rel store config answer-cid ctx))
+          (install-clause-propagators-inner net-reg goal-name resolved-args rel answer-cid ctx))
         ;; Install a producer propagator: when query vars have values,
         ;; project results to the table cell
         (install-table-producer net-with-clauses new-table-cid resolved-args env)]
 
        ;; No ctx: install normally (no tabling)
        [else
-        (install-clause-propagators-inner net goal-name resolved-args rel store config answer-cid ctx)])]))
+        (install-clause-propagators-inner net goal-name resolved-args rel answer-cid ctx)])]))
 
 ;; Inner clause installation (the actual variant loop, extracted for tabling).
 ;; Track 2B Phase 1a: uses discrimination map to narrow which facts/clauses
 ;; are viable based on bound (ground) arguments. This is the clause-viability
 ;; lattice narrowing — same lattice as Track 2 decision cells (P(N) under ⊇,
 ;; set-intersection merge), with bound arguments as the narrowing source.
-(define (install-clause-propagators-inner net goal-name resolved-args rel store config answer-cid ctx [env (hasheq)])
+;; Phase R1: store and config read from well-known cells on network.
+(define (install-clause-propagators-inner net goal-name resolved-args rel answer-cid ctx [env (hasheq)])
      (for/fold ([n net])
                ([variant (in-list (relation-info-variants rel))])
        (define params (variant-info-params variant))
@@ -2196,7 +2205,7 @@
          ;; Single viable clause: install directly, no PU (Tier 1 behavior)
          [(null? (cdr viable-clauses))
           (install-one-clause n-facts (car viable-clauses) resolved-args param-names
-                              env store config answer-cid ctx)]
+                              env answer-cid ctx)]
 
          ;; Multi-clause: CONCURRENT propagators on SAME network.
          ;; All M viable clauses' propagators installed on ONE network, each wrapped
@@ -2246,7 +2255,7 @@
                          [aid (in-list aids)])
                 (define bit-pos (assumption-id-n aid))
                 (install-one-clause-concurrent n ci resolved-args param-names
-                                               env store config answer-cid ctx
+                                               env answer-cid ctx
                                                bit-pos aid)))
 
             ;; ONE run-to-quiescence: all clauses' propagators fire concurrently.
@@ -2359,7 +2368,15 @@
   (define timeout-ms (solver-config-timeout config))
   (define fuel (if timeout-ms (* timeout-ms 1000) 1000000))
   (define net0 (make-prop-network fuel))
-  (define-values (net-ctx ctx) (make-solver-context net0))
+
+  ;; Phase R1: Write relation store and config to well-known cells.
+  ;; These are the solver PU's shared data — read by all installation
+  ;; propagators via component-indexed cell reads. For Phase 0: snapshot
+  ;; of file-level store. Self-hosting: on elab-network, written by defr.
+  (define net0a (net-cell-write net0 relation-store-cell-id store))
+  (define net0b (net-cell-write net0a config-cell-id config))
+
+  (define-values (net-ctx ctx) (make-solver-context net0b))
   (define-values (net1 query-env) (build-var-env net-ctx query-vars))
 
   ;; Answer accumulator cell
@@ -2385,10 +2402,11 @@
       (promote-cell-to-tagged n cid)))
 
   ;; Install the top-level goal (pass ctx for PU branching)
+  ;; Phase R1: store and config are on-network — no longer passed as parameters.
   (define top-goal (goal-desc 'app (list goal-name effective-args)))
   (define net3
     (parameterize ([current-naf-completions naf-completions])
-      (install-goal-propagator net2a top-goal query-env store config answer-cid ctx)))
+      (install-goal-propagator net2a top-goal query-env answer-cid ctx)))
 
   ;; Run to quiescence (inner + outer propagators converge)
   (define net4 (run-to-quiescence net3))
@@ -2409,8 +2427,9 @@
                       ([(naf-aid info) (in-hash naf-completions)])
               (define inner-goal (hash-ref info 'inner-goal))
               (define naf-env (hash-ref info 'env))
-              (define naf-store (hash-ref info 'store))
-              (define naf-config (hash-ref info 'config))
+              ;; Phase R1: store and config from well-known cells
+              (define naf-store (net-cell-read n relation-store-cell-id))
+              (define naf-config (net-cell-read n config-cell-id))
               (define naf-bit-pos (hash-ref info 'naf-bit-pos))
               ;; S1 provability check at S0 fixpoint
               (define inner-provable?

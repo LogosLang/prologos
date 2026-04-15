@@ -174,6 +174,9 @@
  current-parallel-executor
  ;; BSP-LE Track 2 Phase 4: worldview cache cell-id (for external consumers)
  worldview-cache-cell-id
+ ;; BSP-LE Track 2B Phase R1: well-known cell-ids for relation store and config
+ relation-store-cell-id
+ config-cell-id
  ;; BSP-LE Track 2 Phase 5.9b: promote cell to tagged-cell-value
  promote-cell-to-tagged
  ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
@@ -449,6 +452,26 @@
 ;; net-cell-read uses this for O(1) bitmask-tagged value filtering.
 (define worldview-cache-cell-id (cell-id 1))
 
+;; BSP-LE Track 2B Phase R1: well-known cell-ids for solver data.
+;; Cell-id 2: relation store (hasheq relation-name → relation-info).
+;; Merge: hash-union (monotone accumulation, CALM-safe).
+;; Written once at query start; in self-hosted compiler, written by defr processing.
+;; Component-indexed by relation name: goal-installation propagators declare
+;; #:component-paths (list (cons relation-store-cell-id goal-name)).
+(define relation-store-cell-id (cell-id 2))
+(define (relation-store-merge old new)
+  (if (hash? old)
+      (if (hash? new)
+          (for/fold ([acc old]) ([(k v) (in-hash new)])
+            (hash-set acc k v))
+          old)
+      new))
+
+;; Cell-id 3: solver config (solver-config struct).
+;; Merge: first-write-wins (constant after initialization).
+(define config-cell-id (cell-id 3))
+(define (config-merge old new) old)  ;; first-write-wins: keep old value
+
 ;; Worldview cache merge: replacement (D.10).
 ;; The projection propagator writes the complete recomputed bitmask from
 ;; the compound decisions cell's merge-maintained field. Replacement (not ior)
@@ -493,17 +516,35 @@
   (define wv-cid worldview-cache-cell-id)
   (define wv-h (cell-id-hash wv-cid))
   (define wv-cell (prop-cell 0 champ-empty))  ;; 0 = no assumptions, no dependents
+  ;; BSP-LE Track 2B Phase R1: cell-id 2 = relation store, cell-id 3 = config.
+  ;; Pre-allocated with bot values. Written by solve-goal-propagator at query start.
+  (define rs-cid relation-store-cell-id)
+  (define rs-h (cell-id-hash rs-cid))
+  (define rs-cell (prop-cell (hasheq) champ-empty))  ;; empty store, no dependents
+  (define cfg-cid config-cell-id)
+  (define cfg-h (cell-id-hash cfg-cid))
+  (define cfg-cell (prop-cell #f champ-empty))  ;; #f = no config yet, no dependents
   (prop-network
    (prop-net-hot '() fuel)
-   (prop-net-warm (champ-insert (champ-insert champ-empty req-h req-cid req-cell)
-                                wv-h wv-cid wv-cell)
+   (prop-net-warm (champ-insert
+                   (champ-insert
+                    (champ-insert
+                     (champ-insert champ-empty req-h req-cid req-cell)
+                     wv-h wv-cid wv-cell)
+                    rs-h rs-cid rs-cell)
+                   cfg-h cfg-cid cfg-cell)
                   #f)
-   (prop-net-cold (champ-insert (champ-insert champ-empty req-h req-cid decomp-request-merge)
-                                wv-h wv-cid worldview-cache-merge)
+   (prop-net-cold (champ-insert
+                   (champ-insert
+                    (champ-insert
+                     (champ-insert champ-empty req-h req-cid decomp-request-merge)
+                     wv-h wv-cid worldview-cache-merge)
+                    rs-h rs-cid relation-store-merge)
+                   cfg-h cfg-cid config-merge)
                   champ-empty        ;;   contradiction-fns
                   champ-empty        ;;   widen-fns
                   champ-empty        ;;   propagators
-                  2                  ;;   next-cell-id (0=decomp-request, 1=worldview-cache)
+                  4                  ;;   next-cell-id (0=decomp, 1=worldview, 2=relation-store, 3=config)
                   0                  ;;   next-prop-id
                   champ-empty        ;;   cell-decomps
                   champ-empty        ;;   pair-decomps

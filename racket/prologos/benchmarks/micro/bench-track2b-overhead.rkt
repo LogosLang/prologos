@@ -83,11 +83,14 @@
 (bench "step5: install-goal-propagator x2000"
   (for ([_ (in-range 2000)])
     (define net0 (make-prop-network 1000000))
-    (define-values (net-ctx ctx) (make-solver-context net0))
+    ;; Phase R1: write store and config to well-known cells
+    (define net0a (net-cell-write net0 relation-store-cell-id simple-store))
+    (define net0b (net-cell-write net0a config-cell-id atms-config))
+    (define-values (net-ctx ctx) (make-solver-context net0b))
     (define-values (net1 query-env) (build-var-env net-ctx '(x)))
     (define-values (net2 answer-cid) (net-new-cell net1 '() (lambda (a b) (append a b))))
     (define top-goal (goal-desc 'app (list 'simple '(x))))
-    (install-goal-propagator net2 top-goal query-env simple-store atms-config answer-cid ctx)))
+    (install-goal-propagator net2 top-goal query-env answer-cid ctx)))
 
 ;; ============================================================
 ;; Step 6: run-to-quiescence (BSP scheduling)
@@ -97,11 +100,13 @@
 (bench "step6: run-to-quiescence (with installed goal) x2000"
   (for ([_ (in-range 2000)])
     (define net0 (make-prop-network 1000000))
-    (define-values (net-ctx ctx) (make-solver-context net0))
+    (define net0a (net-cell-write net0 relation-store-cell-id simple-store))
+    (define net0b (net-cell-write net0a config-cell-id atms-config))
+    (define-values (net-ctx ctx) (make-solver-context net0b))
     (define-values (net1 query-env) (build-var-env net-ctx '(x)))
     (define-values (net2 answer-cid) (net-new-cell net1 '() (lambda (a b) (append a b))))
     (define top-goal (goal-desc 'app (list 'simple '(x))))
-    (define net3 (install-goal-propagator net2 top-goal query-env simple-store atms-config answer-cid ctx))
+    (define net3 (install-goal-propagator net2 top-goal query-env answer-cid ctx))
     (run-to-quiescence net3)))
 
 ;; ============================================================
@@ -111,11 +116,13 @@
 
 (define (make-completed-net)
   (define net0 (make-prop-network 1000000))
-  (define-values (net-ctx ctx) (make-solver-context net0))
+  (define net0a (net-cell-write net0 relation-store-cell-id simple-store))
+  (define net0b (net-cell-write net0a config-cell-id atms-config))
+  (define-values (net-ctx ctx) (make-solver-context net0b))
   (define-values (net1 query-env) (build-var-env net-ctx '(x)))
   (define-values (net2 answer-cid) (net-new-cell net1 '() (lambda (a b) (append a b))))
   (define top-goal (goal-desc 'app (list 'simple '(x))))
-  (define net3 (install-goal-propagator net2 top-goal query-env simple-store atms-config answer-cid ctx))
+  (define net3 (install-goal-propagator net2 top-goal query-env answer-cid ctx))
   (define net4 (run-to-quiescence net3))
   (values net4 query-env))
 
@@ -152,11 +159,16 @@
 (define pre-net (make-prop-network 1000000))
 (define-values (pre-net-ctx pre-ctx) (make-solver-context pre-net))
 
+;; Phase R1: pre-allocated context also needs store/config cells
+(define pre-net-r1 (net-cell-write (net-cell-write pre-net relation-store-cell-id simple-store)
+                                    config-cell-id atms-config))
+(define-values (pre-net-ctx-r1 pre-ctx-r1) (make-solver-context pre-net-r1))
+
 (bench "reuse-ctx: build-var-env + install + quiesce x2000"
   (for ([_ (in-range 2000)])
     ;; Start from pre-allocated context (skip steps 1-2)
-    (define-values (net1 query-env) (build-var-env pre-net-ctx '(x)))
+    (define-values (net1 query-env) (build-var-env pre-net-ctx-r1 '(x)))
     (define-values (net2 answer-cid) (net-new-cell net1 '() (lambda (a b) (append a b))))
     (define top-goal (goal-desc 'app (list 'simple '(x))))
-    (define net3 (install-goal-propagator net2 top-goal query-env simple-store atms-config answer-cid pre-ctx))
+    (define net3 (install-goal-propagator net2 top-goal query-env answer-cid pre-ctx-r1))
     (run-to-quiescence net3)))

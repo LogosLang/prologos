@@ -28,7 +28,9 @@
 (define-values (net2 answer-cid) (net-new-cell net1 '() (lambda (a b) (if (null? a) b (if (null? b) a (append a b))))))
 
 (define top-goal (goal-desc 'app (list 'color-pair '(c1 c2))))
-(define net3 (install-goal-propagator net2 top-goal query-env store config answer-cid ctx))
+(define net2a (net-cell-write (net-cell-write net2 relation-store-cell-id store)
+                               config-cell-id config))
+(define net3 (install-goal-propagator net2a top-goal query-env answer-cid ctx))
 
 ;; Check scope cell state
 (define c1-ref (hash-ref query-env 'c1))

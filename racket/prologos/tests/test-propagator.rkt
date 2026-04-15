@@ -39,7 +39,7 @@
   (check-true (prop-network? net))
   (check-true (net-quiescent? net))
   (check-false (net-contradiction? net))
-  (check-equal? (prop-network-next-cell-id net) 2)  ;; cell-id 0=decomp-request, 1=worldview-cache
+  (check-equal? (prop-network-next-cell-id net) 4)  ;; cell-id 0=decomp-request, 1=worldview-cache, 2=relation-store, 3=config
   (check-equal? (prop-network-next-prop-id net) 0))
 
 (test-case "make-prop-network: custom fuel"
@@ -69,16 +69,16 @@
   (define-values (net1 cid) (net-new-cell net 'bot flat-merge))
   (check-true (prop-network? net1))
   (check-true (cell-id? cid))
-  (check-equal? (cell-id-n cid) 2))  ;; BSP-LE Track 2: first user cell is 2 (0=decomp, 1=worldview)
+  (check-equal? (cell-id-n cid) 4))  ;; BSP-LE Track 2B R1: first user cell is 4 (0=decomp, 1=worldview, 2=rel-store, 3=config)
 
 (test-case "net-new-cell: sequential cell ids"
   (define net (make-prop-network))
   (define-values (net1 cid1) (net-new-cell net 'bot flat-merge))
   (define-values (net2 cid2) (net-new-cell net1 'bot flat-merge))
   (define-values (net3 cid3) (net-new-cell net2 'bot flat-merge))
-  (check-equal? (cell-id-n cid1) 2)  ;; BSP-LE Track 2: offset by 2
-  (check-equal? (cell-id-n cid2) 3)
-  (check-equal? (cell-id-n cid3) 4))
+  (check-equal? (cell-id-n cid1) 4)  ;; BSP-LE Track 2B R1: offset by 4
+  (check-equal? (cell-id-n cid2) 5)
+  (check-equal? (cell-id-n cid3) 6))
 
 (test-case "net-new-cell: initial value accessible"
   (define-values (net cid) (net-new-cell (make-prop-network) 42 max-merge))
@@ -196,12 +196,12 @@
                       (list 'bot flat-merge)))
   (define-values (net* ids) (net-new-cells-batch net specs))
   (check-equal? (length ids) 3)
-  (check-equal? (map cell-id-n ids) '(2 3 4))  ;; BSP-LE Track 2: offset by 2
+  (check-equal? (map cell-id-n ids) '(4 5 6))  ;; BSP-LE Track 2B R1: offset by 4
   ;; All cells readable with initial values
   (for ([cid (in-list ids)])
     (check-equal? (net-cell-read net* cid) 'bot))
-  ;; next-cell-id advanced by 3 from 2
-  (check-equal? (prop-network-next-cell-id net*) 5))
+  ;; next-cell-id advanced by 3 from 4
+  (check-equal? (prop-network-next-cell-id net*) 7))
 
 (test-case "net-new-cells-batch: cells are writable and merge correctly"
   (define net (make-prop-network))
@@ -233,7 +233,7 @@
   (define specs (list (list 'bot flat-merge)
                       (list 'bot flat-merge)))
   (define-values (net2 ids) (net-new-cells-batch net1 specs))
-  ;; BSP-LE Track 2: existing cell is ID 2 (0=decomp, 1=worldview), batch starts at 3
-  (check-equal? (cell-id-n existing-id) 2)
-  (check-equal? (map cell-id-n ids) '(3 4))
-  (check-equal? (prop-network-next-cell-id net2) 5))
+  ;; BSP-LE Track 2B R1: existing cell is ID 4 (0=decomp, 1=worldview, 2=rel-store, 3=config), batch starts at 5
+  (check-equal? (cell-id-n existing-id) 4)
+  (check-equal? (map cell-id-n ids) '(5 6))
+  (check-equal? (prop-network-next-cell-id net2) 7))

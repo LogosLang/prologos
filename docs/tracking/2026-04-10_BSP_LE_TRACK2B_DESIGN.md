@@ -3,7 +3,7 @@
 **Date**: 2026-04-10
 **Series**: BSP-LE (Logic Engine on Propagators)
 **Scope**: DFS↔Propagator parity validation, fact-row isolation, NAF/guard as async propagators, parallel executor default, `:auto` deployment
-**Status**: D.12 — Phase 2 NAF as worldview assumption + S1 nogood elimination (reuses Track 2 infrastructure entirely)
+**Status**: D.13 — Phase R: on-network redesign (mantra audit). NAF as inner sub-query + S1 threshold propagator. Relations on-network. All writes propagator-mediated.
 **Self-critique**: [P/R/M Analysis](2026-04-10_BSP_LE_TRACK2B_SELF_CRITIQUE.md) (15 findings, 5 revised via self-hosting lens)
 **External critique**: [Architect Review](2026-04-10_BSP_LE_TRACK2B_EXTERNAL_CRITIQUE.md) (18 findings, 2 critical, 8 major)
 **Critique response**: [Response](2026-04-10_BSP_LE_TRACK2B_CRITIQUE_RESPONSE.md) (15 actions incorporated)
@@ -22,8 +22,12 @@
 | 0c | Pre-0: A/B executor comparison | ✅ | Sequential wins all current workloads. Threads cross over at N≥128. Futures eliminated. |
 | 1a | Clause selection as decision-cell narrowing | ✅ | `a1df50f4`→`b47b9787`. On-network discrimination (broadcast), fact-row PU branching, domain-merge fix. Categories 1+2 FIXED. |
 | 1b | Position-discriminant analysis | ✅ | `1eae7eb8`. Discrimination tree: position scoring, recursive partitioning, tree-guided installation. Flat ground-arg pass ensures coverage regardless of tree order. |
-| 2a | NAF assumption + S0 tagged installation | ⬜ | NAF gets worldview assumption via solver-assume. Subsequent goals tagged with h_naf. Register for S1. ~20 lines. |
-| 2b | S1 NAF nogood stratum in BSP | ⬜ | S1 checks provability, writes nogoods for invalid NAF assumptions. Track 2 narrowing handles elimination. ~40-50 lines. |
+| **R1** | **Relation store on-network** | ⬜ | Relation-store cell on solver network. `relation-lookup` → cell read. Discrimination-data cells derived per variant. |
+| **R2** | **Fact-row PU as per-row propagator copies** | ⬜ | Mirror `install-one-clause-concurrent`: fresh scope, `wrap-with-worldview`, per-row propagators. Fixes multi-result NAF composition. |
+| **R3** | **All goal installation propagator-mediated** | ⬜ | Ground unification → fire-once propagator (not direct write). Conjunction goals truly order-independent. |
+| **R4** | **BSP stratum extension (`#:stratum`)** | ⬜ | Propagator stratum flag. S0/S1 worklist partitioning. S0↔S1 fixpoint loop in `run-to-quiescence-bsp`. |
+| **R5** | **NAF as inner sub-query + S1 threshold** | ⬜ | Inner goal installed at S0 (standard code path, fresh scope, reads relation-store cell). S1 threshold propagator: reads inner scope, writes nogood if provable. Replaces imperative S1 + `naf-completions` hasheq. |
+| **R6** | **Result-projection propagator** | ⬜ | Watches scope cells, projects query vars per bitmask, writes to answer-cid. `answer-cid` merge → set-union. Caller does ONE cell read. |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
 | 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
 | 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
@@ -527,7 +531,311 @@ Unlike FL-Narrowing's off-network tree walking, this puts the entire clause sele
 
 The theory is the same (needed narrowing). The realization is entirely Track 2 infrastructure.
 
+### §3.R Phase R: On-Network Redesign (D.13 — Mantra Audit)
+
+> **"All-at-once, all in parallel, structurally emergent information flow ON-NETWORK."**
+
+#### Origin
+
+A mantra audit of all Track 2B code (Phases 1a-2a) revealed six components violating the design mantra. The audit challenged every line against each word: all-at-once, all-in-parallel, structurally emergent, information flow, ON-NETWORK. The violations range from correctness bugs (fact-row PU composition) to architectural debt (off-network result reading).
+
+The Completeness principle demands: if we know these components need to be on-network for self-hosting, do it now while context is fresh. Phase R addresses all six before resuming Phase 2a.
+
+#### Audit Findings Summary
+
+| Component | Mantra Violation | Severity |
+|---|---|---|
+| Fact-row PU (2105-2182) | `for/fold` direct writes, no per-branch propagators | **Correctness bug** — root cause of multi-result NAF divergence |
+| Relation store (`current-relation-store`) | Off-network `make-parameter` with hasheq | **Architectural** — blocks on-network NAF inner goal |
+| Goal installation (unify ground case, line 1773) | Direct `logic-var-write` at construction time | **Step-think** — creates ordering dependency in conjunctions |
+| S1 NAF evaluation (2401-2492) | Imperative post-processing, off-network | **Off-network** — superseded by threshold + stratum design |
+| NAF completions (`naf-completions`) | `make-hasheq` parameter | **Off-network** — superseded by S1 threshold design |
+| Result reading (2498-2576) | Imperative assembly, off-network | **Off-network** — answer-cid exists but unused |
+
+#### R1: Relation Store and Config On-Network
+
+**Architecture**: The solver query follows the PU micro-stratum pattern from PPN Track 4. The relation store and config are well-known cells on the solver's network, read by propagators via component-indexed access. Discrimination data is DERIVED from the relation store via fire-once derivation propagators.
+
+**Prior art**: PPN Track 1 (5 embedded-lattice PU cells), PPN Track 4 (typing PU as cell on elab-network), SRE Track 2D PIR (PU micro-stratum model for non-monotone operations).
+
+##### SRE Lattice Lens — Relation Store Cell
+
+**Q1 (Classification)**: VALUE lattice (registry). The relation store maps names to structured data (relation-info). Same classification as the module registry in `namespace.rkt`.
+
+**Q2 (Algebraic Properties)**: Join-semilattice. `hash-union` merge: commutative, associative, idempotent. Monotone accumulation — relations added, never removed. CALM-safe: coordination-free registration. Not Boolean (no complement).
+
+**Q3 (Bridges)**:
+
+| Bridge | From | To | α (forward) | Galois? |
+|---|---|---|---|---|
+| Register | defr AST | relation-store cell | hash-set into store | Yes: preserves joins |
+| Derive | relation-store cell | discrim-data cells | compute discrimination map per variant | Yes: hash-union preserves |
+| Goal-install | relation-store cell | solver PU internals | read relation, install propagators | Component-indexed read |
+| Result | solver PU scope cells | answer accumulator | project scope → answer tuples | Set-union |
+
+**Q4 (Composition)**:
+
+```
+         Solver Network (PU micro-stratum)
+        ┌─────────────────────────────────────────────┐
+        │                                             │
+        │  relation-store cell ←── defr snapshot      │
+        │       │          (well-known cell-id)       │
+        │       │                                     │
+        │       │ (derive, fire-once per variant,     │
+        │       │  component-indexed by rel-name)     │
+        │       ↓                                     │
+        │  discrim-data cells (per variant, DERIVED)  │
+        │       │                                     │
+        │  config cell ←── solver-config snapshot     │
+        │       │     (well-known cell-id, constant)  │
+        │       │                                     │
+        │  ┌────┴────────────────────────┐            │
+        │  │  Query scope (per solve)    │            │
+        │  │  scope cells, viability     │            │
+        │  │  discrimination propagators │            │
+        │  │  fact-row/clause propagators│            │
+        │  │  NAF threshold (S1)         │            │
+        │  │  result-projection          │            │
+        │  └────┬────────────────────────┘            │
+        │       ↓                                     │
+        │  answer-accumulator cell (PU output)        │
+        └─────────────────────────────────────────────┘
+```
+
+**Q5 (Primary/Derived)**:
+- relation-store cell: **PRIMARY** (written by defr, not derived)
+- config cell: **PRIMARY** (written by caller, constant)
+- discrim-data cells: **DERIVED** (from relation-store, via derivation propagator)
+- answer accumulator: **DERIVED** (from solver PU fixpoint)
+
+**Q6 (Hasse Diagram)**: Flat join-semilattice — each relation entry is independent, no inter-entry ordering. Hasse is a product of singletons. CALM-safe. No interesting parallel structure at the registry level; the interesting Hasse structure is inside the query scope (worldview hypercube Q_n).
+
+##### Cell Specifications
+
+**Relation store** — well-known cell-id (pre-allocated, like `worldview-cache-cell-id`):
+- **Carrier**: `hasheq relation-name → relation-info`
+- **Merge**: `hash-union` (accumulate relations monotonically)
+- **Initial**: Written once at query start with current file-level store snapshot
+- **Reads**: Component-indexed by relation name. Goal-installation propagators declare `#:component-paths (list (cons relation-store-cid goal-name))`. Registering `other-vals` does NOT fire the propagator for `ground-vals`.
+- **Phase 0 scaffolding**: Per-query network, snapshot write. Self-hosting: on elab-network, written incrementally by `defr` processing. Migration is a scope change, not a structural change.
+
+**Config** — well-known cell-id:
+- **Carrier**: `solver-config` struct
+- **Merge**: First-write-wins (constant after initialization)
+- **Reads**: By installation propagators for timeout, tabling decisions
+
+**Discrimination data** (per variant) — dynamically allocated:
+- **Carrier**: `hasheq position → (hasheq clause-idx → expected-value)`
+- **Merge**: `hash-union` (positions accumulate)
+- **Producer**: Fire-once derivation propagator, watches relation-store cell (component-indexed by relation name), computes discrimination data, writes to discrim-data cell
+- **Consumers**: Discrimination propagators in `install-discrimination-propagators` read the cell instead of calling `build-discrimination-data`
+
+##### Parameter Elimination
+
+The `store` parameter (threaded through ~20 call sites) and `config` parameter are eliminated from function signatures. Both are well-known cells — any propagator with access to the network reads them directly via component-indexed cell reads. Functions that currently take `store` and `config` lose those parameters.
+
+##### Why This Unlocks Everything
+
+With relations on-network:
+- **NAF inner goal (R5)**: installed via the same code path as any goal — `install-goal-propagator` reads from the relation-store cell. No special NAF infrastructure. The inner goal is just a goal.
+- **Discrimination (R2)**: derivation propagators produce discrimination data reactively. The self-hosted compiler gets a derivation path, not opaque pre-computed constants.
+- **Forward references (self-hosting)**: goal-installation propagators residuate until the relation is registered, then fire. No ordering dependency between `defr` and `solve`.
+- **Config reads (R4/R5)**: S1 threshold propagator reads timeout from config cell. BSP stratum extension reads config for fuel decisions.
+
+#### R2: Fact-Row PU as Per-Row Propagator Copies
+
+**What**: Replace the `for/fold` direct-write pattern (lines 2135-2182) with `install-one-clause-concurrent`-style per-row installation.
+
+Each viable fact row becomes a "trivial clause":
+1. Allocate assumption via `solver-assume` (existing, already done)
+2. Fresh inner scope via `build-var-env` for per-row local variables
+3. Arg-to-param bridge propagators wrapped with `wrap-with-worldview(fire, bit-position)`
+4. Body is trivial: no conjunction goals, just the unification writes as propagators
+5. Ground arg writes are fire-once propagators (see R3), not direct `logic-var-write`
+
+**Why this fixes multi-result NAF**: The arg-to-param bridge propagator carries its bitmask as a closure. When composed with NAF bitmask (ORed at installation time via `current-worldview-bitmask`), the propagator fire function writes under the combined bitmask. Each fact row's propagators fire independently during BSP. Multi-level composition (NAF + fact-row) works structurally because each level adds a bit to the bitmask.
+
+**The `for/fold` over rows at installation time** is acceptable scaffolding (construction-time setup, independent items). The self-hosted compiler would use broadcast or simultaneous topology requests.
+
+#### R3: All Goal Installation Propagator-Mediated
+
+**What**: Replace construction-time direct writes with fire-once propagators.
+
+The specific case: `install-goal-propagator` for `(unify)` with one variable and one ground value (line 1773):
+```racket
+;; Current (construction-time, off-network):
+[(var-ref? lhs) (logic-var-write net lhs rhs)]
+
+;; On-network: fire-once propagator
+[(var-ref? lhs)
+ (let ([write-fire (maybe-wrap-worldview
+                    (lambda (net) (logic-var-write net lhs rhs)))])
+   (net-add-fire-once-propagator net '() (list (if (scope-ref? lhs) (scope-ref-cid lhs) lhs))
+                                  write-fire))]
+```
+
+Similarly for the symmetric case (line 1774: `[(var-ref? rhs) (logic-var-write net rhs lhs)]`).
+
+**Why this matters for conjunction**: With all writes propagator-mediated, conjunction goals are truly order-independent for installation. `install-conjunction`'s `for/fold` becomes installation of N independent propagator sets — BSP-emergent convergence, same as PPN 1's character reading.
+
+**Cost**: One extra `net-add-fire-once-propagator` call per ground unification. Negligible — fire-once is a single struct allocation + CHAMP insert.
+
+#### R4: BSP Stratum Extension (`#:stratum`)
+
+**What**: Extend `net-add-propagator` with a `#:stratum` flag (default 0). The BSP scheduler partitions the worklist by stratum and processes S0 before S1.
+
+**Mechanism in `run-to-quiescence-bsp`**:
+
+```
+Outer fixpoint loop:
+  S0 value stratum (existing inner loop):
+    Fire all stratum-0 propagators until worklist empty
+  Topology stratum (existing):
+    Process decomp requests, install deferred propagators
+    If new S0 propagators → back to S0
+  S1 NAF stratum (NEW):
+    Fire all stratum-1 propagators (deferred NAF thresholds)
+    S1 propagators may write nogoods → worldview narrows → new S0 work
+    If new S0 work → back to S0 (S0↔S1 fixpoint iteration)
+  Termination: all strata empty
+```
+
+**Implementation**: The `propagator` struct gets a `stratum` field (default 0). The worklist partitions by stratum. The BSP inner loop filters to `stratum <= current-stratum`. After S0 quiesces, advance to S1. If S1 writes produce S0 work, drop back to S0.
+
+The S0↔S1 fixpoint iteration IS the well-founded semantics fixpoint. It's well-understood in logic programming: stratified evaluation converges when both strata are stable.
+
+**Why stratification is required**: NAF inverts provability — non-monotone. CALM guarantees confluence only for monotone operations within a stratum. The inner goal's S0 propagators are monotone (viability narrows, scope cells accumulate). The S1 threshold's interpretation ("inner goal succeeded → nogood") is non-monotone w.r.t. S0. Evaluating it at S0 would produce wrong answers when inner goal variables are bound by later conjunction goals. S1 fires only at S0 fixpoint, when all positive goals have converged and all variables that CAN be bound ARE bound.
+
+#### R5: NAF as Inner Sub-Query + S1 Threshold
+
+**What**: NAF `(not P)` is implemented as:
+
+1. **S0 construction**: Allocate assumption h_naf via `solver-assume` (existing). Allocate fresh inner scope via `build-var-env`. Install inner goal P's propagators via `install-goal-propagator` — **same code path as any goal**, reading from on-network relation-store cell (R1). The inner goal writes to its own fresh scope cells, not the outer conjunction's scope.
+
+2. **S1 threshold**: Install a fire-once propagator with `#:stratum 1`:
+   - Input: inner scope cell (cid from step 1)
+   - Fire function: read inner scope cell. If any component is non-bot → inner goal succeeded → P is provable → `solver-add-nogood` for h_naf
+   - Fire-once: the threshold crossing (bot → non-bot) is irreversible in a monotone lattice
+
+3. **Outer conjunction tagging**: Subsequent goals in the conjunction are tagged with h_naf bitmask (existing `install-conjunction` NAF-aware wrapping). If S1 writes the nogood, worldview narrowing makes h_naf-tagged writes invisible.
+
+**What this replaces**:
+- The entire imperative S1 evaluation (lines 2401-2492): ~90 lines removed
+- The `naf-completions` hasheq parameter: replaced by structural S1 threshold
+- The `current-naf-completions` parameter threading: eliminated
+- The post-quiescence worldview cache clearing: handled by existing nogood→worldview infrastructure
+
+**Why the inner goal is a standard sub-query**: With relations on-network (R1), the inner goal reads from the same relation-store cell. Its discrimination propagators, fact-row PU (R2), and clause concurrent propagators are all standard infrastructure. The only NAF-specific code is the S1 threshold propagator (~15 lines).
+
+**Correctness via stratification**: At S0 fixpoint, the inner goal has fully converged — all discrimination done, all fact-row/clause propagators fired, all variable bindings resolved. The S1 threshold reads this final state. No premature evaluation of NAF.
+
+#### R6: Result-Projection Propagator
+
+**What**: Replace imperative result reading (lines 2498-2576) with an on-network result-projection propagator.
+
+**Mechanism**:
+- Install a result-projection propagator watching the query scope cell
+- On fire: read all visible tagged entries (worldview-filtered via `tagged-cell-read` with `final-worldview`), project each into a query-variable binding (hasheq), write the result set to `answer-cid`
+- `answer-cid` merge becomes set-union (deduplicated `seteq` of hasheqs, not append of lists)
+- The leaf-bitmask filter, worldview visibility check, and query-variable projection all move INTO the propagator's fire function
+- After quiescence: caller does ONE cell read of `answer-cid` — that's the result list
+
+**The propagator fires at S0** (not fire-once — needs to see final scope state). At quiescence, the last fire produces the complete result set. The merge (set-union) is idempotent, so re-firing produces the same result.
+
+**What this replaces**: The entire imperative result-reading section (lines 2498-2576): ~80 lines of bitmask iteration, leaf filter, worldview check, hasheq assembly. Replaced by ~25 lines of propagator fire function + answer-cell merge.
+
+#### Phase R Ordering and Dependencies
+
+```
+R1 (relation store cell) — independent, unlocks R5
+R3 (propagator-mediated writes) — independent, unlocks R2
+R2 (fact-row per-row propagators) — depends on R3
+R4 (BSP stratum extension) — independent, unlocks R5
+R5 (NAF threshold) — depends on R1 and R4
+R6 (result-projection) — depends on R2 (correct tagged writes)
+```
+
+**Suggested order**: R1 → R3 → R4 → R2 → R5 → R6
+
+R1 and R3 are independent infrastructure. R4 is independent BSP extension. R2 uses R3's fire-once writes. R5 uses R1's relation cell and R4's stratum support. R6 uses R2's correctly tagged scope cells.
+
+#### NTT Speculative Model
+
+```ntt
+;; Relation store — well-known cell, component-indexed by relation name
+cell relation-store : Lattice(HashEq(Name, RelationInfo))
+  :merge hash-union
+  :well-known cell-id-N
+  :component-indexed-by Name
+
+;; Config — well-known cell, constant after init
+cell config : Lattice(SolverConfig)
+  :merge first-write-wins
+  :well-known cell-id-M
+
+;; Discrimination data — DERIVED from relation store, per variant
+;; Fire-once derivation propagator watches relation-store
+cell discrim-data[v] : Lattice(HashEq(Pos, HashEq(Idx, Value)))
+  :merge hash-union
+
+propagator derive-discrim[rel-name, variant-idx] :fire-once
+  :reads (relation-store)
+  :writes (discrim-data[variant-idx])
+  :component-paths ((relation-store . rel-name))
+  fire(net) →
+    rel ← hash-ref(net-cell-read(net, relation-store), rel-name)
+    variant ← list-ref(relation-info-variants(rel), variant-idx)
+    data ← build-discrimination-data(variant)
+    net-cell-write(net, discrim-data[variant-idx], data)
+
+;; Ground unification as fire-once propagator (R3)
+propagator ground-write :fire-once
+  :reads ()
+  :writes (scope-cell)
+  fire(net) → logic-var-write(net, var, ground-val)
+
+;; Fact-row PU as per-row propagator (R2)
+propagator fact-row-bridge[row-i] :fire-once
+  :reads (query-scope-cell)
+  :writes (query-scope-cell)
+  :worldview (outer-bm | row-bit-i)
+  fire(net) → for-each-arg: logic-var-write(net, arg, row-val)
+
+;; NAF S1 threshold (R5)
+propagator naf-threshold[h_naf] :fire-once :stratum 1
+  :reads (inner-scope-cell)
+  :writes (nogoods-cell)
+  fire(net) →
+    if any-component-non-bot(net-cell-read(net, inner-scope-cid))
+    then solver-add-nogood(ctx, net, h_naf)
+    else net
+
+;; Result projection (R6)
+propagator result-project
+  :reads (query-scope-cell, worldview-cache-cell)
+  :writes (answer-cid)
+  fire(net) →
+    bitmasks ← leaf-bitmasks(scope-raw)
+    results ← for-each visible bm: project(scope, bm, query-vars)
+    net-cell-write(net, answer-cid, results)
+```
+
+#### Correspondence Table
+
+| NTT Construct | Racket Implementation | File | Lines (approx) |
+|---|---|---|---|
+| `cell relation-store` | `net-new-cell` in `make-solver-context` | relations.rkt | new |
+| `cell discrim-data[v]` | `net-new-cell` in `install-discrimination-propagators` | relations.rkt | ~520 (modified) |
+| `propagator ground-write` | `net-add-fire-once-propagator` in `install-goal-propagator` | relations.rkt | ~1773 (modified) |
+| `propagator fact-row-bridge` | new function `install-one-fact-concurrent` | relations.rkt | new (~40 lines) |
+| `propagator naf-threshold` | `net-add-fire-once-propagator` with `#:stratum 1` | relations.rkt | new (~15 lines) |
+| `propagator result-project` | `net-add-propagator` in `solve-goal-propagator` | relations.rkt | new (~25 lines) |
+| `#:stratum` flag | Extended `propagator` struct + BSP worklist partitioning | propagator.rkt | ~20 lines modified |
+
 ### §3.2 NAF as Async Propagator — Lattice Analysis
+
+> **NOTE (D.13)**: §3.2's fork-based async NAF model is superseded by §3.R Phase R5: NAF as inner sub-query + S1 threshold propagator. The lattice analysis below remains valid for the NAF-result cell; the implementation mechanism changes from async fork to on-network threshold at S1.
 
 Currently, NAF (lines 1463-1489 of relations.rkt) forks the network and runs to quiescence SYNCHRONOUSLY inside the outer propagator's fire function, using Gauss-Seidel (NOT BSP). This blocks the entire BSP round.
 
@@ -616,6 +924,8 @@ This recursive decomposition is the structural basis for:
 The hypercube structure unifies all these as Q_1 decompositions composed into Q_n. The Hasse diagram IS the parallel exploration structure.
 
 ### §3.5 Conjunction — Installation Order vs Execution Order
+
+> **NOTE (D.13)**: §3.5's characterization of `for/fold` as "acceptable scaffolding" is superseded by §3.R Phase R3: all goal installation is propagator-mediated. With fire-once propagators for ground unification, conjunction goals are truly order-independent. The `for/fold` remains at installation time (construction-time scaffolding) but no longer creates ordering dependencies because there are no construction-time direct writes.
 
 `install-conjunction` uses `for/fold` (sequential installation). This is acceptable because:
 - Installation order ≠ execution order. Propagators fire in BSP rounds regardless of installation order.

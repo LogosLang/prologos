@@ -168,7 +168,9 @@
       (define net0 (make-prop-network))
       (define-values (net1 env) (build-var-env net0 '(a b)))
       (define goal (goal-desc 'unify '(a b)))
-      (define net2 (install-goal-propagator net1 goal env test-store default-config (cell-id 0)))
+      (define net1a (net-cell-write (net-cell-write net1 relation-store-cell-id test-store)
+                                    config-cell-id default-config))
+      (define net2 (install-goal-propagator net1a goal env (cell-id 0)))
       ;; Write a value to 'a — propagator should copy to 'b
       (define net3 (logic-var-write net2 (hash-ref env 'a) 42))
       (define net4 (run-to-quiescence net3))
@@ -178,14 +180,18 @@
       (define net0 (make-prop-network))
       (define-values (net1 env) (build-var-env net0 '(x)))
       (define goal (goal-desc 'unify '(x hello)))
-      (define net2 (install-goal-propagator net1 goal env test-store default-config (cell-id 0)))
+      (define net1a (net-cell-write (net-cell-write net1 relation-store-cell-id test-store)
+                                    config-cell-id default-config))
+      (define net2 (install-goal-propagator net1a goal env (cell-id 0)))
       (check-equal? (logic-var-read net2 (hash-ref env 'x)) 'hello))
 
     (test-case "unify: ground with ground (no cell change)"
       (define net0 (make-prop-network))
       (define env (hasheq))  ;; no variables
       (define goal (goal-desc 'unify '(42 42)))
-      (define net1 (install-goal-propagator net0 goal env test-store default-config (cell-id 0)))
+      (define net0a (net-cell-write (net-cell-write net0 relation-store-cell-id test-store)
+                                    config-cell-id default-config))
+      (define net1 (install-goal-propagator net0a goal env (cell-id 0)))
       (check-true (prop-network? net1)))
 
     (test-case "conjunction: two unify goals"
@@ -193,7 +199,9 @@
       (define-values (net1 env) (build-var-env net0 '(a b)))
       (define goals (list (goal-desc 'unify '(a 10))
                           (goal-desc 'unify '(b 20))))
-      (define net2 (install-conjunction net1 goals env test-store default-config (cell-id 0)))
+      (define net1a (net-cell-write (net-cell-write net1 relation-store-cell-id test-store)
+                                    config-cell-id default-config))
+      (define net2 (install-conjunction net1a goals env (cell-id 0)))
       (check-equal? (logic-var-read net2 (hash-ref env 'a)) 10)
       (check-equal? (logic-var-read net2 (hash-ref env 'b)) 20))
 
@@ -215,8 +223,9 @@
       (define inner-expr (expr-goal-app 'greet (list (expr-fvar 'x))))
       (define naf-goal (goal-desc 'not (list inner-expr)))
       ;; Install NAF — inner goal (greet) succeeds, so NAF returns unchanged network
-      (define net2 (install-goal-propagator net1 naf-goal env test-store
-                                             default-config (cell-id 0)))
+      (define net1a (net-cell-write (net-cell-write net1 relation-store-cell-id test-store)
+                                    config-cell-id default-config))
+      (define net2 (install-goal-propagator net1a naf-goal env (cell-id 0)))
       ;; x should still be unbound (NAF failed, didn't bind anything)
       (check-equal? (logic-var-read net2 (hash-ref env 'x)) scope-cell-bot))
 
@@ -226,16 +235,18 @@
       (define net0 (make-prop-network))
       (define env (hasheq))
       (define guard-goal (goal-desc 'guard (list (expr-true))))
-      (define net1 (install-goal-propagator net0 guard-goal env test-store
-                                             default-config (cell-id 0)))
+      (define net0a (net-cell-write (net-cell-write net0 relation-store-cell-id test-store)
+                                    config-cell-id default-config))
+      (define net1 (install-goal-propagator net0a guard-goal env (cell-id 0)))
       (check-true (prop-network? net1)))
 
     (test-case "guard: false condition → no change"
       (define net0 (make-prop-network))
       (define env (hasheq))
       (define guard-goal (goal-desc 'guard (list (expr-false))))
-      (define net1 (install-goal-propagator net0 guard-goal env test-store
-                                             default-config (cell-id 0)))
+      (define net0a (net-cell-write (net-cell-write net0 relation-store-cell-id test-store)
+                                    config-cell-id default-config))
+      (define net1 (install-goal-propagator net0a guard-goal env (cell-id 0)))
       (check-true (prop-network? net1)))
     ))
 
