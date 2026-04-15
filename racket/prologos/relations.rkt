@@ -117,7 +117,12 @@
     (define naf-env (hash-ref info 'env))
     (define naf-bit-pos (hash-ref info 'naf-bit-pos))
     ;; Fork: O(1) CHAMP structural sharing. Inner goal runs in isolation.
-    (define forked (fork-prop-network main-net))
+    ;; CRITICAL: clear NAF-pending cell on the fork to prevent infinite recursion.
+    ;; The fork inherits the main network's NAF-pending entries. Without clearing,
+    ;; the fork's BSP would process the S1 stratum, calling process-naf-request
+    ;; again on the fork's copy, forking again, ad infinitum.
+    (define forked (net-cell-reset (fork-prop-network main-net)
+                                   naf-pending-cell-id (hasheq)))
     ;; Resolve inner goal args using S0 fixpoint values (on fork).
     ;; Install inner goal on fork — standard code path, fresh scope.
     (define inner-goal-kind (goal-desc-kind inner-goal))
@@ -126,7 +131,9 @@
         [(eq? inner-goal-kind 'app)
          (define goal-name (car (goal-desc-args inner-goal)))
          (define goal-args (cadr (goal-desc-args inner-goal)))
-         ;; Resolve args through naf-env, reading S0 values from fork
+         ;; Resolve args through naf-env, reading S0 fixpoint values from fork.
+         ;; Ground args stay ground. Scope-refs that resolved at S0 → use resolved value.
+         ;; Unresolved scope-refs → create fresh inner var (free variable in inner goal).
          (define resolved-args
            (for/list ([a (in-list goal-args)])
              (define r (resolve-term naf-env a))
@@ -138,36 +145,90 @@
                [(expr-string? r) (expr-string-val r)]
                [(expr-symbol? r) (expr-symbol-name r)]
                [else r])))
-         ;; Build fresh inner scope on fork
-         (define inner-vars
-           (for/list ([a (in-list goal-args)]
+         ;; Build fresh inner scope ONLY for unresolved args (scope-refs still at bot).
+         ;; Ground/resolved args pass through directly as goal args.
+         (define inner-vars '())
+         (define inner-goal-args
+           (for/list ([resolved (in-list resolved-args)]
+                      [a (in-list goal-args)]
                       [i (in-naturals)])
-             (string->symbol (format "~a_inner_~a" a i))))
-         (define-values (fork1 inner-env) (build-var-env forked inner-vars))
-         ;; Install inner goal: read relation from cell, install propagators
-         (define inner-top (goal-desc 'app (list goal-name inner-vars)))
+             (if (or (scope-ref? resolved) (cell-id? resolved))
+                 ;; Unresolved: create fresh inner var
+                 (let ([v (string->symbol (format "~a_inner_~a" a i))])
+                   (set! inner-vars (cons v inner-vars))
+                   v)
+                 ;; Ground/resolved: use directly
+                 resolved)))
+         (define inner-vars-final (reverse inner-vars))
+         (define-values (fork1 inner-env) (build-var-env forked inner-vars-final))
+         ;; Install inner goal with resolved + fresh-var args
+         (define inner-top (goal-desc 'app (list goal-name inner-goal-args)))
          (define fork2 (install-goal-propagator fork1 inner-top inner-env (cell-id 0)))
          ;; Quiesce fork: inner goal converges
          (define fork3 (run-to-quiescence fork2))
-         ;; Check provability: any inner scope variable bound = inner goal succeeded
-         (define inner-scope-ref
-           (and (pair? inner-vars) (hash-ref inner-env (car inner-vars) #f)))
-         (define inner-scope-cid
-           (and (scope-ref? inner-scope-ref) (scope-ref-cid inner-scope-ref)))
-         (if inner-scope-cid
-             (let ([sc (net-cell-read fork3 inner-scope-cid)])
-               (if (scope-cell? sc)
-                   (for/or ([v (in-hash-values (scope-cell-bindings sc))])
-                     (not (eq? v scope-cell-bot)))
-                   #f))
-             ;; No inner scope → check if relation has any viable alternatives
-             ;; (zero-arity relation: provable if any fact/clause exists)
-             (let ([the-store (net-cell-read fork3 relation-store-cell-id)])
+         ;; Check provability: any inner scope variable bound = inner goal succeeded.
+         ;; If no inner vars (all args ground): check if the goal produced any output.
+         ;; For ground args, discrimination narrows to viable facts — if any survive,
+         ;; the inner goal is provable.
+         (if (null? inner-vars-final)
+             ;; All args ground: provability = viability cell non-empty after discrimination.
+             ;; The inner goal's discrimination propagators narrowed the viable set.
+             ;; If any facts/clauses are viable for the ground args → provable.
+             ;; Simple check: did any fire-once propagator fire on the fork?
+             ;; Simplest: the inner goal installed discrimination + fact-row propagators.
+             ;; If the worklist is empty AND no contradiction → the goal converged.
+             ;; Check if any scope cell (from fact-row writes) has non-bot values.
+             ;; But with all-ground args, there are no scope cells to check.
+             ;; Use discrimination directly: read the viability cell on the fork.
+             ;; The viability cell was written by discrimination propagators during BSP.
+             ;; Non-empty viable set = provable.
+             (let ()
+               (define the-store (net-cell-read fork3 relation-store-cell-id))
                (define rel (and (hash? the-store) (hash-ref the-store goal-name #f)))
-               (and rel
-                    (for/or ([variant (in-list (relation-info-variants rel))])
-                      (or (pair? (variant-info-facts variant))
-                          (pair? (variant-info-clauses variant)))))))]
+               (if (not rel) #f
+                   ;; Check each variant's discrimination against resolved args
+                   (for/or ([variant (in-list (relation-info-variants rel))])
+                     (define discrim-data (build-discrimination-data variant))
+                     (define n-facts (length (variant-info-facts variant)))
+                     (define n-clauses (length (variant-info-clauses variant)))
+                     (define n-alts (+ n-facts n-clauses))
+                     (define viable
+                       (for/fold ([v (for/seteq ([i (in-range n-alts)]) i)])
+                                 ([arg (in-list resolved-args)]
+                                  [pos (in-naturals)])
+                         (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
+                         (cond
+                           [(hash-empty? pos-data) v]
+                           [(or (scope-ref? arg) (cell-id? arg)) v]
+                           [else
+                            (define (normalize-for-compare val)
+                              (cond [(expr-int? val) (expr-int-val val)]
+                                    [(expr-string? val) (expr-string-val val)]
+                                    [(expr-symbol? val) (expr-symbol-name val)]
+                                    [else val]))
+                            (define compatible
+                              (for/seteq ([(idx expected) (in-hash pos-data)]
+                                          #:when (equal? (normalize-for-compare expected) arg))
+                                idx))
+                            (define wildcards
+                              (for/seteq ([i (in-range n-alts)]
+                                          #:when (not (hash-has-key? pos-data i)))
+                                i))
+                            (set-intersect v (set-union compatible wildcards))])))
+                     (not (set-empty? viable)))))
+             ;; Has inner vars: check if any got bound
+             (let ()
+               (define inner-scope-ref
+                 (and (pair? inner-vars-final) (hash-ref inner-env (car inner-vars-final) #f)))
+               (define inner-scope-cid
+                 (and (scope-ref? inner-scope-ref) (scope-ref-cid inner-scope-ref)))
+               (if inner-scope-cid
+                   (let ([sc (net-cell-read fork3 inner-scope-cid)])
+                     (if (scope-cell? sc)
+                         (for/or ([v (in-hash-values (scope-cell-bindings sc))])
+                           (not (eq? v scope-cell-bot)))
+                         #f))
+                   #f)))]
         [(eq? inner-goal-kind 'unify)
          ;; Unify provability: resolve both sides, check equality
          (define lhs (resolve-term naf-env (car (goal-desc-args inner-goal))))
@@ -2053,70 +2114,36 @@
 ;; ----------------------------------------
 ;; install-one-clause (helper)
 ;; ----------------------------------------
-;; Install a single clause's bindings + body goals on a network.
-;; resolved-args: (listof (cell-id | ground-value))
+;; Install a single clause's body goals on a network.
+;; Phase 2a (Resolution B): clause params share the query scope directly.
+;; No fresh clause scope, no bridge propagators. The module decomposition
+;; is via bitmask tagging (Module Theory: C₁ is a tagged layer on the
+;; shared carrier cell), not via separate cells with morphisms.
+;; Clause body goals write directly to query scope cell.
+;; resolved-args: (listof (scope-ref | ground-value))
 ;; Returns: new-network
-;; Phase R1: store and config read from well-known cells on network.
 (define (install-one-clause net ci resolved-args param-names env answer-cid ctx)
   (define clause-goals (clause-info-goals ci))
-  ;; Fresh variable scope for this clause
-  (define-values (n2 clause-env) (build-var-env net param-names))
-  ;; Unify resolved args with clause param refs
-  (define n3
-    (for/fold ([n n2])
-              ([arg (in-list resolved-args)]
-               [pname (in-list param-names)])
-      (define pref (hash-ref clause-env pname))
-      (define (var-ref? x) (or (scope-ref? x) (cell-id? x)))
-      (if (var-ref? arg)
-          ;; Both variable refs: bidirectional propagator (arg ↔ param)
-          (let ([unify-fire
-                 (lambda (net)
-                   (define va (logic-var-read net arg))
-                   (define vp (logic-var-read net pref))
-                   (cond
-                     [(eq? va scope-cell-bot)
-                      (if (eq? vp scope-cell-bot) net
-                          (logic-var-write net arg vp))]
-                     [(eq? vp scope-cell-bot)
-                      (logic-var-write net pref va)]
-                     [else net]))]
-                [input-cids (append (if (scope-ref? arg) (list (scope-ref-cid arg)) (list arg))
-                                    (if (scope-ref? pref) (list (scope-ref-cid pref)) (list pref)))]
-                [cpaths (append (if (scope-ref? arg)
-                                    (list (cons (scope-ref-cid arg) (scope-ref-var arg)))
-                                    '())
-                                (if (scope-ref? pref)
-                                    (list (cons (scope-ref-cid pref) (scope-ref-var pref)))
-                                    '()))])
-            (let-values ([(n* _pid)
-                          (net-add-propagator n
-                            (remove-duplicates input-cids) (remove-duplicates input-cids)
-                            (maybe-wrap-worldview unify-fire)
-                            #:component-paths cpaths)])
-              n*))
-          ;; Ground arg: fire-once propagator writes to param variable (Phase R3)
-          (let* ([output-cid (if (scope-ref? pref) (scope-ref-cid pref) pref)]
-                 [cpaths (if (scope-ref? pref)
-                             (list (cons (scope-ref-cid pref) (scope-ref-var pref)))
-                             '())])
-            (define-values (n* _pid)
-              (net-add-fire-once-propagator n '() (list output-cid)
-                                            (maybe-wrap-worldview
-                                             (lambda (net) (logic-var-write net pref arg)))
-                                            #:component-paths cpaths))
-            n*))))
-  (install-conjunction n3 clause-goals clause-env answer-cid ctx))
+  ;; Clause params → query scope-refs (scope sharing).
+  ;; Variable query args: clause param maps to the query scope-ref.
+  ;; Ground query args: clause param maps to the ground value.
+  ;; Clause body goals resolve params through this env → write to query scope.
+  (define clause-env
+    (for/hasheq ([pname (in-list param-names)]
+                 [arg (in-list resolved-args)])
+      (values pname arg)))
+  (install-conjunction net clause-goals clause-env answer-cid ctx))
 
 ;; ----------------------------------------
 ;; install-one-clause-concurrent (Phase 6+7 concurrent)
 ;; ----------------------------------------
-;; Like install-one-clause, but ALL propagators are wrapped with
-;; wrap-with-worldview so their writes are tagged with this clause's
-;; bitmask. For concurrent multi-clause execution on the SAME network.
+;; Phase 2a (Resolution B): clause params share the query scope directly.
+;; No fresh clause scope, no bridge propagators. Isolation is via bitmask
+;; tagging — each clause's writes are tagged with its clause bitmask.
+;; Module Theory: R = C₁ ⊕ ... ⊕ Cₙ realized as tagged layers on the
+;; shared query scope cell, not as separate cells with morphisms.
 ;; bit-position: integer — this clause's assumption bit position.
 ;; aid: assumption-id — for #:assumption tagging on propagators.
-;; Phase R1: store and config read from well-known cells on network.
 (define (install-one-clause-concurrent net ci resolved-args param-names
                                        env answer-cid ctx
                                        bit-position aid)
@@ -2124,69 +2151,18 @@
   ;; Clause bitmask = clause bit ORed with outer worldview (includes NAF assumptions)
   (define clause-bit (arithmetic-shift 1 bit-position))
   (define bitmask (bitwise-ior (current-worldview-bitmask) clause-bit))
-  ;; Fresh variable scope for this clause (clause-local cells)
-  (define-values (n2 clause-env) (build-var-env net param-names))
-  ;; Unify resolved args with clause param refs.
-  ;; Arg↔param propagators are WRAPPED with the clause's worldview bitmask.
-  (define n3
-    (for/fold ([n n2])
-              ([arg (in-list resolved-args)]
-               [pname (in-list param-names)])
-      (define pref (hash-ref clause-env pname))
-      (define (var-ref? x) (or (scope-ref? x) (cell-id? x)))
-      (if (var-ref? arg)
-          ;; Bidirectional propagator wrapped with worldview
-          (let ([unify-fire
-                 (wrap-with-worldview
-                  (lambda (net)
-                    (define va (logic-var-read net arg))
-                    (define vp (logic-var-read net pref))
-                    (cond
-                      [(eq? va scope-cell-bot)
-                       (if (eq? vp scope-cell-bot) net
-                           (logic-var-write net arg vp))]
-                      [(eq? vp scope-cell-bot)
-                       (logic-var-write net pref va)]
-                      [else net]))
-                  bit-position)]
-                [input-cids (remove-duplicates
-                             (append (if (scope-ref? arg) (list (scope-ref-cid arg)) (list arg))
-                                     (if (scope-ref? pref) (list (scope-ref-cid pref)) (list pref))))]
-                [cpaths (append (if (scope-ref? arg)
-                                    (list (cons (scope-ref-cid arg) (scope-ref-var arg)))
-                                    '())
-                                (if (scope-ref? pref)
-                                    (list (cons (scope-ref-cid pref) (scope-ref-var pref)))
-                                    '()))])
-            (let-values ([(n* _pid)
-                          (net-add-propagator n input-cids input-cids unify-fire
-                                              #:assumption aid
-                                              #:component-paths cpaths)])
-              n*))
-          ;; Ground arg: fire-once propagator under this clause's worldview (Phase R3)
-          (let* ([output-cid (if (scope-ref? pref) (scope-ref-cid pref) pref)]
-                 [cpaths (if (scope-ref? pref)
-                             (list (cons (scope-ref-cid pref) (scope-ref-var pref)))
-                             '())])
-            (define-values (n* _pid)
-              (net-add-fire-once-propagator n '() (list output-cid)
-                                            (wrap-with-worldview
-                                             (lambda (net) (logic-var-write net pref arg))
-                                             bit-position)
-                                            #:assumption aid
-                                            #:component-paths cpaths))
-            n*))))
+  ;; Clause params → query scope-refs (scope sharing).
+  ;; Same as install-one-clause but under the clause's worldview bitmask.
+  (define clause-env
+    (for/hasheq ([pname (in-list param-names)]
+                 [arg (in-list resolved-args)])
+      (values pname arg)))
   ;; Install clause body goals under this clause's worldview.
-  ;; Goal propagators will also use current-worldview-bitmask when they fire.
-  ;; For now: install-conjunction installs propagators directly.
-  ;; Each goal's propagator fire-fn should be wrapped — but install-goal-propagator
-  ;; creates the fire functions inline. The simplest approach: set
-  ;; current-worldview-bitmask during installation for direct writes,
-  ;; and the propagators pick up the bitmask at fire time via wrap-with-worldview.
-  ;; TODO: wrap all goal propagators with worldview. For now, direct writes
-  ;; during installation use the bitmask; propagator fires need wrapping.
+  ;; All writes (via fire-once propagators, R3) are tagged with the clause bitmask.
+  ;; Sub-branching within the clause (fact-row PU) adds sub-bitmask bits.
+  ;; Entries on query scope cell: (clause-bit | NAF-bit | fact-row-bit).
   (parameterize ([current-worldview-bitmask bitmask])
-    (install-conjunction n3 clause-goals clause-env answer-cid ctx)))
+    (install-conjunction net clause-goals clause-env answer-cid ctx)))
 
 ;; ----------------------------------------
 ;; install-clause-propagators (6c + 6d)
