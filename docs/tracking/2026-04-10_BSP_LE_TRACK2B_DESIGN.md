@@ -22,7 +22,7 @@
 | 0c | Pre-0: A/B executor comparison | ✅ | Sequential wins all current workloads. Threads cross over at N≥128. Futures eliminated. |
 | 1a | Clause selection as decision-cell narrowing | ✅ | `a1df50f4`→`b47b9787`. On-network discrimination (broadcast), fact-row PU branching, domain-merge fix. Categories 1+2 FIXED. |
 | 1b | Position-discriminant analysis | ✅ | `1eae7eb8`. Discrimination tree: position scoring, recursive partitioning, tree-guided installation. Flat ground-arg pass ensures coverage regardless of tree order. |
-| **R1** | **Relation store on-network** | ⬜ | Relation-store cell on solver network. `relation-lookup` → cell read. Discrimination-data cells derived per variant. |
+| **R1** | **Relation store on-network** | ✅ | `9bf8fff7`→`23041a2e`. cell-id 2=relation-store, cell-id 3=config. Discrim-data cells per variant. `store`/`config` params eliminated from 6 functions. |
 | **R2** | **Fact-row PU as per-row propagator copies** | ⬜ | Mirror `install-one-clause-concurrent`: fresh scope, `wrap-with-worldview`, per-row propagators. Fixes multi-result NAF composition. |
 | **R3** | **All goal installation propagator-mediated** | ⬜ | Ground unification → fire-once propagator (not direct write). Conjunction goals truly order-independent. |
 | **R4** | **BSP stratum extension (`#:stratum`)** | ⬜ | Propagator stratum flag. S0/S1 worklist partitioning. S0↔S1 fixpoint loop in `run-to-quiescence-bsp`. |
