@@ -773,20 +773,32 @@ exchange S0 <-> S1
   :kind  suspension-loop                   ;; S1 suspends until S0 quiesces
 ```
 
-#### R6: Result-Projection Propagator
+#### R6: PU Dissolution — Answer Egress Cell
 
-**What**: Replace imperative result reading (lines 2498-2576) with an on-network result-projection propagator.
+**What**: Implement the `SolverNet :outputs [answers]` egress cell from the NTT interface specification. The `answer-cid` becomes the solver PU's output cell, written via the PU dissolution protocol after all strata quiesce.
 
-**Mechanism**:
-- Install a result-projection propagator watching the query scope cell
-- On fire: read all visible tagged entries (worldview-filtered via `tagged-cell-read` with `final-worldview`), project each into a query-variable binding (hasheq), write the result set to `answer-cid`
-- `answer-cid` merge becomes set-union (deduplicated `seteq` of hasheqs, not append of lists)
-- The leaf-bitmask filter, worldview visibility check, and query-variable projection all move INTO the propagator's fire function
-- After quiescence: caller does ONE cell read of `answer-cid` — that's the result list
+**NTT alignment**:
+```ntt
+interface SolverNet
+  :inputs  [query-goals, relation-store, table-store]
+  :outputs [answers : Cell (Set Answer)]   ;; ← answer-cid (egress, total sink)
+  :cells   [assumptions, nogoods, counter, decisions]  ;; internal
+```
 
-**The propagator fires at S0** (not fire-once — needs to see final scope state). At quiescence, the last fire produces the complete result set. The merge (set-union) is idempotent, so re-firing produces the same result.
+**PU dissolution protocol** (after all strata quiesce):
+1. Read scope cell (raw) — cell read of internal state
+2. Read worldview cache — cell read of internal state
+3. Project: enumerate visible bitmask entries, extract query variable bindings. Pure function on cell values. Leaf-bitmask filter + worldview visibility + variable projection.
+4. Write result set to `answer-cid` — cell write to egress cell
+5. Caller reads `answer-cid` — one cell read, returns list of hasheqs
 
-**What this replaces**: The entire imperative result-reading section (lines 2498-2576): ~80 lines of bitmask iteration, leaf filter, worldview check, hasheq assembly. Replaced by ~25 lines of propagator fire function + answer-cell merge.
+**Egress invariant**: `answer-cid` is declared as `:outputs` in the SolverNet interface. No internal propagator declares it as an input. Information flows IN (dissolution write) and OUT (caller read). Total sink in the information flow graph.
+
+**answer-cid merge**: Replacement (dissolution writes the complete result set once after fixpoint). The merge function is secondary — dissolution writes once, and the egress invariant means no other writer exists.
+
+**What this replaces**: ~65 lines of imperative bitmask iteration, leaf filter, worldview check, hasheq assembly in `solve-goal-propagator`. Becomes a clean dissolution function (~30 lines) that operates on cell values, aligned with the NTT interface specification.
+
+**Phase 0 → self-hosting path**: For Phase 0, dissolution is a Racket function after `run-to-quiescence`. For self-hosting, the dissolution becomes a bridge propagator on the outer (compiler) network — the PU cell (answer-cid) on the outer network holds the projected results, consumed by downstream propagators.
 
 #### Phase R Ordering and Dependencies
 
@@ -860,13 +872,16 @@ stratum-handler naf-evaluation
     if inner-scope-has-bindings: solver-add-nogood(main-net, h_naf)
   :clears naf-pending
 
-;; Result projection (R6)
-propagator result-project
+;; PU dissolution — answer egress (R6, aligned with NTT interface SolverNet)
+;; Not a propagator — PU exit protocol after all strata quiesce
+dissolution solver-pu-exit
   :reads (query-scope-cell, worldview-cache-cell)
-  :writes (answer-cid)
-  fire(net) →
-    bitmasks ← leaf-bitmasks(scope-raw)
-    results ← for-each visible bm: project(scope, bm, query-vars)
+  :writes (answer-cid)  ;; egress cell, total sink
+  dissolve(net) →
+    scope-raw ← net-cell-read-raw(net, scope-cid)
+    worldview ← net-cell-read(net, worldview-cache-cell-id)
+    results ← project-visible-entries(scope-raw, worldview, query-vars)
+    net-cell-write(net, answer-cid, results)
     net-cell-write(net, answer-cid, results)
 ```
 
@@ -881,7 +896,7 @@ propagator result-project
 | `cell naf-pending` | `net-new-cell` well-known cell-id 4, hash-union merge | propagator.rkt | new |
 | `stratum-handler naf-evaluation` | `register-stratum-handler!` + `process-naf-request` | relations.rkt | new (~40 lines) |
 | `strata-list` in BSP outer loop | Generalized topology processing to N strata | propagator.rkt | ~30 lines modified |
-| `propagator result-project` | `net-add-propagator` in `solve-goal-propagator` | relations.rkt | new (~25 lines) |
+| `dissolution solver-pu-exit` | `dissolve-solver-pu` function in `solve-goal-propagator` | relations.rkt | new (~30 lines, replaces ~65 lines) |
 
 ### §3.2 NAF as Async Propagator — Lattice Analysis
 

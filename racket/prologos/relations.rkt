@@ -2524,6 +2524,82 @@
         net*)))
 
 ;; ----------------------------------------
+;; PU Dissolution (Phase R6)
+;; ----------------------------------------
+;; Materializes solver PU internal state to the answer egress cell.
+;; NTT: interface SolverNet :outputs [answers : Cell (Set Answer)]
+;; Reads: scope cell (raw), worldview cache. Writes: answer-cid.
+;; Returns: (listof hasheq) — projected query variable bindings.
+(define (dissolve-solver-pu net query-vars query-env answer-cid)
+  ;; Read internal cells
+  (define first-qv-ref (and (pair? query-vars) (hash-ref query-env (car query-vars) #f)))
+  (define scope-cid (and (scope-ref? first-qv-ref) (scope-ref-cid first-qv-ref)))
+  (define scope-raw (and scope-cid (net-cell-read-raw net scope-cid)))
+  (define final-worldview (net-cell-read net worldview-cache-cell-id))
+
+  ;; Project results from scope cell state
+  (define results
+    (cond
+      ;; Tagged scope cell: multi-alternative results (clauses, fact-rows, NAF branches)
+      [(and scope-raw (tagged-cell-value? scope-raw)
+            (pair? (tagged-cell-value-entries scope-raw)))
+       ;; Leaf bitmasks: not a proper subset of any other (complete branching decisions)
+       (define all-bitmasks
+         (remove-duplicates
+          (for/list ([entry (in-list (tagged-cell-value-entries scope-raw))])
+            (car entry))))
+       (define leaf-bitmasks
+         (filter (lambda (bm)
+                   (not (for/or ([other (in-list all-bitmasks)])
+                          (and (not (= other bm))
+                               (= (bitwise-and bm other) bm)
+                               (not (= bm other))))))
+                 all-bitmasks))
+       ;; Domain-merge for same-bitmask entries
+       (define domain-merge (make-tagged-merge scope-cell-merge))
+       ;; Worldview visibility: only bitmasks with all bits in worldview
+       (define (bitmask-visible? bm)
+         (or (zero? bm) (= (bitwise-and bm final-worldview) bm)))
+       ;; Project each visible leaf bitmask to a result hasheq
+       (define raw-results
+         (for/list ([bm (in-list leaf-bitmasks)]
+                    #:when (bitmask-visible? bm))
+           (for/hasheq ([qv (in-list query-vars)])
+             (define sc-val (tagged-cell-read scope-raw bm domain-merge))
+             (define val (if (scope-cell? sc-val)
+                             (scope-cell-ref sc-val qv)
+                             scope-cell-bot))
+             (values qv (if (eq? val scope-cell-bot) qv val)))))
+       ;; Filter: skip results where ALL query vars are unresolved
+       (filter (lambda (result-subst)
+                 (not (for/and ([qv (in-list query-vars)])
+                        (eq? (hash-ref result-subst qv) qv))))
+               raw-results)]
+
+      ;; Plain scope cell: single result (no branching)
+      [else
+       (define sc-val (if scope-cid (net-cell-read net scope-cid) #f))
+       (if (not sc-val)
+           '()
+           (let ([result-subst
+                  (for/hasheq ([qv (in-list query-vars)])
+                    (define val (if (scope-cell? sc-val)
+                                    (scope-cell-ref sc-val qv)
+                                    scope-cell-bot))
+                    (values qv (if (eq? val scope-cell-bot) qv val)))])
+             (if (for/and ([qv (in-list query-vars)])
+                   (eq? (hash-ref result-subst qv) qv))
+                 '()
+                 (list result-subst))))]))
+
+  ;; Write to answer-cid (egress cell — total sink, NTT :outputs)
+  ;; Phase 0: the caller reads the return value directly.
+  ;; Self-hosting: downstream propagators on the outer network read answer-cid.
+  (when (and answer-cid (pair? results))
+    (net-cell-write net answer-cid results))
+  results)
+
+;; ----------------------------------------
 ;; solve-goal-propagator (entry point)
 ;; ----------------------------------------
 ;; The propagator-native alternative to solve-goal.
@@ -2590,86 +2666,9 @@
   ;; The entire S0↔S1 fixpoint iteration is handled by the scheduler.
   (define net5 (run-to-quiescence net3))
 
-  ;; NAF results handled by worldview narrowing (nogoods written by S1 handler).
-  ;; Eliminated NAF assumptions make tagged writes invisible via tagged-cell-read.
-  (define naf-failed-bitmasks (seteq))  ;; unused — kept for result reading compat
-
-  ;; Read results from scope cells.
-  ;; Phase 8.2: query-env maps var-name → scope-ref.
-  ;; All query vars are in ONE scope cell. Read the scope cell and
-  ;; extract each variable's binding.
-  (define first-qv-ref (and (pair? query-vars) (hash-ref query-env (car query-vars) #f)))
-  (define scope-cid (and (scope-ref? first-qv-ref) (scope-ref-cid first-qv-ref)))
-  (define scope-raw (and scope-cid (net-cell-read-raw net5 scope-cid)))
-
-  (cond
-    ;; Multi-clause concurrent: scope cell is tagged-cell-value.
-    ;; Read each clause's result via its bitmask.
-    [(and scope-raw (tagged-cell-value? scope-raw)
-          (pair? (tagged-cell-value-entries scope-raw)))
-     ;; Collect all distinct bitmasks from entries, then filter to LEAF bitmasks.
-     ;; A leaf bitmask is one that isn't a proper subset of any other bitmask.
-     ;; This ensures we only produce results for COMPLETE branching decisions
-     ;; (e.g., NAF+fact-row combined, not NAF-only partial).
-     (define all-bitmasks
-       (remove-duplicates
-        (for/list ([entry (in-list (tagged-cell-value-entries scope-raw))])
-          (car entry))))
-     (define bitmasks
-       (filter (lambda (bm)
-                 ;; bm is a leaf if no other bitmask is a proper superset of it
-                 (not (for/or ([other (in-list all-bitmasks)])
-                        (and (not (= other bm))
-                             (= (bitwise-and bm other) bm)  ;; bm ⊂ other
-                             (not (= bm other))))))
-               all-bitmasks))
-     ;; Domain-merge for same-bitmask entry merging.
-     ;; Multiple writes at same bitmask (e.g., c1 and c2 written separately)
-     ;; must be merged via scope-cell-merge to produce a complete binding.
-     ;; We use make-tagged-merge(scope-cell-merge) because tagged-cell-read's
-     ;; domain-merge receives the tagged merge wrapper (same as net-cell-read uses).
-     (define domain-merge (make-tagged-merge scope-cell-merge))
-     ;; D.12: filter bitmasks against worldview — only bitmasks whose bits are
-     ;; ALL present in the worldview cache produce results. NAF-eliminated
-     ;; assumptions have their bits cleared from the cache.
-     (define final-worldview (net-cell-read net5 worldview-cache-cell-id))
-     (define (bitmask-visible? bm)
-       ;; A bitmask is visible if all its bits are set in the worldview
-       (or (zero? bm) (= (bitwise-and bm final-worldview) bm)))
-     (define raw-results
-       (for/list ([bm (in-list bitmasks)]
-                  #:when (bitmask-visible? bm))
-         (for/hasheq ([qv (in-list query-vars)])
-           (define ref (hash-ref query-env qv))
-           (define sc-val
-             (if (tagged-cell-value? scope-raw)
-                 (tagged-cell-read scope-raw bm domain-merge)
-                 scope-raw))
-           (define val (if (scope-cell? sc-val)
-                           (scope-cell-ref sc-val qv)
-                           scope-cell-bot))
-           (values qv (if (eq? val scope-cell-bot) qv val)))))
-     ;; Filter: skip results where ALL query vars are unresolved
-     (filter (lambda (result-subst)
-               (not (for/and ([qv (in-list query-vars)])
-                      (eq? (hash-ref result-subst qv) qv))))
-             raw-results)]
-
-    ;; Single-clause/facts: read scope cell directly
-    [else
-     ;; Phase 2a: check if NAF failed for the single-clause path (outer-bm = 0)
-     (if (set-member? naf-failed-bitmasks 0)
-         '()  ;; NAF failed in single-clause context → no results
-         (let ()
-           (define sc-val
-             (if scope-cid (net-cell-read net5 scope-cid) #f))
-           (define result-subst
-             (for/hasheq ([qv (in-list query-vars)])
-               (define val (if (scope-cell? sc-val)
-                               (scope-cell-ref sc-val qv)
-                               scope-cell-bot))
-               (values qv (if (eq? val scope-cell-bot) qv val))))
-           (if (for/and ([qv (in-list query-vars)])
-                 (eq? (hash-ref result-subst qv) qv))
-               '()
-               (list result-subst))))]))
+  ;; Phase R6: PU Dissolution — materialize results to answer-cid (egress cell).
+  ;; Aligned with NTT `interface SolverNet :outputs [answers : Cell (Set Answer)]`.
+  ;; answer-cid is the total sink: no internal propagator reads it.
+  ;; Dissolution reads internal cells (scope, worldview), projects results,
+  ;; writes the complete result set to answer-cid.
+  (dissolve-solver-pu net5 query-vars query-env answer-cid))
