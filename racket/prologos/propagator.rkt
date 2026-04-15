@@ -177,6 +177,11 @@
  ;; BSP-LE Track 2B Phase R1: well-known cell-ids for relation store and config
  relation-store-cell-id
  config-cell-id
+ ;; BSP-LE Track 2B Phase R4: NAF-pending cell + stratum infrastructure
+ naf-pending-cell-id
+ naf-pending-merge
+ register-stratum-handler!
+ stratum-handlers
  ;; BSP-LE Track 2 Phase 5.9b: promote cell to tagged-cell-value
  promote-cell-to-tagged
  ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
@@ -472,6 +477,20 @@
 (define config-cell-id (cell-id 3))
 (define (config-merge old new) old)  ;; first-write-wins: keep old value
 
+;; BSP-LE Track 2B Phase R4: cell-id 4 = NAF-pending (S1 request accumulator).
+;; Carrier: hasheq naf-aid → registration-info.
+;; Merge: hash-union (NAF registrations accumulate monotonically).
+;; Read by: S1 NAF handler after S0 quiesces.
+;; Same pattern as decomp-request-cell for topology stratum.
+(define naf-pending-cell-id (cell-id 4))
+(define (naf-pending-merge old new)
+  (if (hash? old)
+      (if (hash? new)
+          (for/fold ([acc old]) ([(k v) (in-hash new)])
+            (hash-set acc k v))
+          old)
+      new))
+
 ;; Worldview cache merge: replacement (D.10).
 ;; The projection propagator writes the complete recomputed bitmask from
 ;; the compound decisions cell's merge-maintained field. Replacement (not ior)
@@ -524,27 +543,35 @@
   (define cfg-cid config-cell-id)
   (define cfg-h (cell-id-hash cfg-cid))
   (define cfg-cell (prop-cell #f champ-empty))  ;; #f = no config yet, no dependents
+  ;; BSP-LE Track 2B Phase R4: cell-id 4 = NAF-pending (S1 request accumulator).
+  (define naf-cid naf-pending-cell-id)
+  (define naf-h (cell-id-hash naf-cid))
+  (define naf-cell (prop-cell (hasheq) champ-empty))  ;; empty registry, no dependents
   (prop-network
    (prop-net-hot '() fuel)
    (prop-net-warm (champ-insert
                    (champ-insert
                     (champ-insert
-                     (champ-insert champ-empty req-h req-cid req-cell)
-                     wv-h wv-cid wv-cell)
-                    rs-h rs-cid rs-cell)
-                   cfg-h cfg-cid cfg-cell)
+                     (champ-insert
+                      (champ-insert champ-empty req-h req-cid req-cell)
+                      wv-h wv-cid wv-cell)
+                     rs-h rs-cid rs-cell)
+                    cfg-h cfg-cid cfg-cell)
+                   naf-h naf-cid naf-cell)
                   #f)
    (prop-net-cold (champ-insert
                    (champ-insert
                     (champ-insert
-                     (champ-insert champ-empty req-h req-cid decomp-request-merge)
-                     wv-h wv-cid worldview-cache-merge)
-                    rs-h rs-cid relation-store-merge)
-                   cfg-h cfg-cid config-merge)
+                     (champ-insert
+                      (champ-insert champ-empty req-h req-cid decomp-request-merge)
+                      wv-h wv-cid worldview-cache-merge)
+                     rs-h rs-cid relation-store-merge)
+                    cfg-h cfg-cid config-merge)
+                   naf-h naf-cid naf-pending-merge)
                   champ-empty        ;;   contradiction-fns
                   champ-empty        ;;   widen-fns
                   champ-empty        ;;   propagators
-                  4                  ;;   next-cell-id (0=decomp, 1=worldview, 2=relation-store, 3=config)
+                  5                  ;;   next-cell-id (0=decomp, 1=worldview, 2=relation-store, 3=config, 4=naf-pending)
                   0                  ;;   next-prop-id
                   champ-empty        ;;   cell-decomps
                   champ-empty        ;;   pair-decomps
@@ -2250,6 +2277,20 @@
         (let ([result ((car handlers) net req)])
           (if result result (loop (cdr handlers)))))))
 
+;; BSP-LE Track 2B Phase R4: General stratum handler infrastructure.
+;; Each stratum is a (cons request-cell-id handler-fn) pair.
+;; handler-fn: (prop-network hasheq) → prop-network
+;;   Receives the network and the request cell value (a hasheq of registrations).
+;;   Returns updated network (may write nogoods, modify cells).
+;; Strata are processed in order after S0 + topology quiesce.
+;; Same pattern as topology: request accumulator cell + handler function.
+(define stratum-handlers (box '()))
+
+(define (register-stratum-handler! request-cell-id handler-fn)
+  (set-box! stratum-handlers
+            (append (unbox stratum-handlers)
+                    (list (cons request-cell-id handler-fn)))))
+
 ;; PAR Track 1: Built-in handler for callback-topology-request.
 ;; Calls the opaque callback outside BSP fire rounds.
 (register-topology-handler!
@@ -2384,8 +2425,41 @@
           ;; Read decomp-request cell
           (define req-val (net-cell-read value-result decomp-request-cell-id))
           (if (or (not req-val) (set-empty? req-val))
-              value-result  ;; No requests — outer fixpoint reached
-              ;; Process requests via registered handlers
+              ;; No topology requests — proceed to higher strata (Phase R4)
+              (let ([after-topo value-result])
+                ;; BSP-LE Track 2B Phase R4: Process stratum handlers in order.
+                ;; Each handler reads its request cell, processes pending requests,
+                ;; clears the cell. If any produces S0 work → restart from S0.
+                ;; Same pattern as topology: request accumulator + handler.
+                (let process-strata ([net after-topo]
+                                     [remaining (unbox stratum-handlers)])
+                  (cond
+                    [(null? remaining) net]  ;; all strata empty → fixpoint reached
+                    [(prop-network-contradiction net) net]
+                    [else
+                     (define handler-pair (car remaining))
+                     (define req-cid (car handler-pair))
+                     (define handler-fn (cdr handler-pair))
+                     (define pending (net-cell-read net req-cid))
+                     (cond
+                       [(or (not pending) (and (hash? pending) (hash-empty? pending)))
+                        ;; Nothing pending at this stratum — advance to next
+                        (process-strata net (cdr remaining))]
+                       [else
+                        ;; Process pending requests, clear cell, check for S0 work
+                        (define processed (handler-fn net pending))
+                        (define cleared (net-cell-reset processed req-cid (hasheq)))
+                        (if (pair? (prop-network-worklist cleared))
+                            ;; S0 work produced → restart from S0
+                            ;; (S0↔Sk fixpoint iteration — well-founded semantics)
+                            (begin
+                              (when (> outer-round 20)
+                                (error 'run-to-quiescence-bsp
+                                       "stratum handlers: >20 outer iterations — possible infinite loop"))
+                              (outer-loop cleared (add1 outer-round)))
+                            ;; No new S0 work → continue to next stratum
+                            (process-strata cleared (cdr remaining)))])])))
+              ;; Topology requests exist — process them, then restart
               (let* ([processed-net
                       (for/fold ([n value-result])
                                 ([req (in-set req-val)])

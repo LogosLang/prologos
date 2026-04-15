@@ -25,8 +25,7 @@
 | **R1** | **Relation store on-network** | ✅ | `9bf8fff7`→`23041a2e`. cell-id 2=relation-store, cell-id 3=config. Discrim-data cells per variant. `store`/`config` params eliminated from 6 functions. |
 | **R2** | **Fact-row PU as per-row propagator copies** | ⬜ | Mirror `install-one-clause-concurrent`: fresh scope, `wrap-with-worldview`, per-row propagators. Fixes multi-result NAF composition. |
 | **R3** | **All goal installation propagator-mediated** | ✅ | `3bdf3322`. 4 sites: unify var+ground, is-goal, one-clause ground, one-clause-concurrent ground. Fire-once with empty inputs, auto-enqueued. |
-| **R4** | **BSP stratum extension (`#:stratum`)** | ⬜ | Propagator stratum flag. S0/S1 worklist partitioning. S0↔S1 fixpoint loop in `run-to-quiescence-bsp`. |
-| **R5** | **NAF as inner sub-query + S1 threshold** | ⬜ | Inner goal installed at S0 (standard code path, fresh scope, reads relation-store cell). S1 threshold propagator: reads inner scope, writes nogood if provable. Replaces imperative S1 + `naf-completions` hasheq. |
+| **R4** | **General stratum infra + S1 NAF handler** | ⬜ | NAF-pending cell (cell-id 4). S1 handler: fork, install inner goal, BSP on fork, check provability, write nogood. Generalized BSP outer loop with strata-list. Replaces imperative S1 + `naf-completions` hasheq. Subsumes old R5. |
 | **R6** | **Result-projection propagator** | ⬜ | Watches scope cells, projects query vars per bitmask, writes to answer-cid. `answer-cid` merge → set-union. Caller does ONE cell read. |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
 | 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
@@ -681,54 +680,98 @@ Similarly for the symmetric case (line 1774: `[(var-ref? rhs) (logic-var-write n
 
 **Cost**: One extra `net-add-fire-once-propagator` call per ground unification. Negligible — fire-once is a single struct allocation + CHAMP insert.
 
-#### R4: BSP Stratum Extension (`#:stratum`)
+#### R4: General Stratum Infrastructure + S1 NAF Handler (subsumes old R4+R5)
 
-**What**: Extend `net-add-propagator` with a `#:stratum` flag (default 0). The BSP scheduler partitions the worklist by stratum and processes S0 before S1.
+**Architecture**: Follows the existing topology stratum pattern — request-accumulator cell + scheduler handler — generalized to N strata. Propagators are stratum-agnostic. The stratification is in the scheduler's control flow and request-accumulator cells.
 
-**Mechanism in `run-to-quiescence-bsp`**:
+**Prior art**: The topology stratum (lines 2379-2399 of propagator.rkt) uses exactly this pattern: the decomp-request cell (cell-id 0) accumulates requests during S0; the scheduler reads and processes them between BSP rounds; handlers are registered functions; the cell is cleared (non-monotone reset) after processing. R4 generalizes this to a list of (request-cell, handler) pairs.
+
+**Why stratification is required**: NAF inverts provability — non-monotone. CALM guarantees confluence only for monotone operations within a stratum. Evaluating NAF during S0 would produce wrong answers when inner goal variables are bound by later conjunction goals. S1 fires only at S0 fixpoint, when all positive goals have converged and all variables that CAN be bound ARE bound.
+
+**Why NOT gate cells / propagator stratum flags**: The existing topology stratum doesn't use gate cells or stratum metadata on propagators. Stratification is implicit in information flow: request accumulator cells + scheduler control flow. Adding gate cells would create two different patterns for the same concept. Adding `#:stratum` flags to propagators violates stratum-agnosticism — propagators are pure functions that shouldn't know about scheduling.
+
+##### 1. NAF-pending cell (well-known cell-id 4)
+
+Replaces the `naf-completions` make-hasheq parameter and `current-naf-completions`. Written by `install-goal-propagator` for `not` goals during S0 installation. Each NAF registers: inner goal descriptor, environment, naf assumption-id, naf bit position.
+
+- **Carrier**: `hasheq naf-aid → (hasheq 'inner-goal goal-desc 'env env 'naf-bit-pos n)`
+- **Merge**: `hash-union` (NAF registrations accumulate monotonically)
+- **Classification**: VALUE lattice (registry of pending evaluations)
+- **Read by**: S1 NAF handler after S0 quiesces
+
+##### 2. S1 NAF handler
+
+Registered as a stratum handler (like topology handlers). After S0 quiesces + topology done, the scheduler reads the NAF-pending cell. For each pending NAF:
+
+1. **Fork** the main network (O(1) — CHAMP structural sharing via `fork-prop-network`)
+2. **Resolve inner goal args** on the fork: read outer scope cells for variable bindings (S0 fixpoint values, available on the fork via structural sharing)
+3. **Install inner goal** on the fork: standard `install-goal-propagator` code path. Fresh inner scope via `build-var-env`. Reads relation-store cell from the fork. Discrimination propagators, fact-row PU, clause concurrent — all standard infrastructure.
+4. **Run BSP on the fork**: nested `run-to-quiescence`. Inner goal converges to fixpoint.
+5. **Check provability**: read inner scope cell on the fork. If any component is non-bot → inner goal succeeded → P is provable → write nogood for h_naf on the **main** network via `solver-add-nogood`.
+6. **Discard the fork**: the inner goal's propagators and cells are ephemeral. Only the nogood (if any) persists on the main network.
+
+After processing all pending NAFs: clear the NAF-pending cell (non-monotone reset, same as topology clears decomp-request). If nogoods were written → worldview narrows → S0 worklist may have new entries → restart from S0.
+
+##### 3. Generalized BSP outer loop
+
+The `run-to-quiescence-bsp` outer loop becomes:
 
 ```
-Outer fixpoint loop:
-  S0 value stratum (existing inner loop):
-    Fire all stratum-0 propagators until worklist empty
-  Topology stratum (existing):
-    Process decomp requests, install deferred propagators
-    If new S0 propagators → back to S0
-  S1 NAF stratum (NEW):
-    Fire all stratum-1 propagators (deferred NAF thresholds)
-    S1 propagators may write nogoods → worldview narrows → new S0 work
-    If new S0 work → back to S0 (S0↔S1 fixpoint iteration)
-  Termination: all strata empty
+S0 value stratum → quiesce (existing inner loop)
+for each (request-cell-id, handler-fn) in strata-list:
+  read request-cell
+  if non-empty: handler processes requests, clears cell
+  if new S0 work (worklist non-empty) → restart from S0
+termination: all request cells empty + S0 worklist empty
 ```
 
-**Implementation**: The `propagator` struct gets a `stratum` field (default 0). The worklist partitions by stratum. The BSP inner loop filters to `stratum <= current-stratum`. After S0 quiesces, advance to S1. If S1 writes produce S0 work, drop back to S0.
+The strata-list for Phase R4:
+```racket
+(list (cons decomp-request-cell-id process-topology-requests)
+      (cons naf-pending-cell-id     process-naf-requests))
+```
 
-The S0↔S1 fixpoint iteration IS the well-founded semantics fixpoint. It's well-understood in logic programming: stratified evaluation converges when both strata are stable.
+Adding future strata (S(-1) retraction, S2 well-founded) = prepending/appending to this list.
 
-**Why stratification is required**: NAF inverts provability — non-monotone. CALM guarantees confluence only for monotone operations within a stratum. The inner goal's S0 propagators are monotone (viability narrows, scope cells accumulate). The S1 threshold's interpretation ("inner goal succeeded → nogood") is non-monotone w.r.t. S0. Evaluating it at S0 would produce wrong answers when inner goal variables are bound by later conjunction goals. S1 fires only at S0 fixpoint, when all positive goals have converged and all variables that CAN be bound ARE bound.
+##### What this replaces
 
-#### R5: NAF as Inner Sub-Query + S1 Threshold
-
-**What**: NAF `(not P)` is implemented as:
-
-1. **S0 construction**: Allocate assumption h_naf via `solver-assume` (existing). Allocate fresh inner scope via `build-var-env`. Install inner goal P's propagators via `install-goal-propagator` — **same code path as any goal**, reading from on-network relation-store cell (R1). The inner goal writes to its own fresh scope cells, not the outer conjunction's scope.
-
-2. **S1 threshold**: Install a fire-once propagator with `#:stratum 1`:
-   - Input: inner scope cell (cid from step 1)
-   - Fire function: read inner scope cell. If any component is non-bot → inner goal succeeded → P is provable → `solver-add-nogood` for h_naf
-   - Fire-once: the threshold crossing (bot → non-bot) is irreversible in a monotone lattice
-
-3. **Outer conjunction tagging**: Subsequent goals in the conjunction are tagged with h_naf bitmask (existing `install-conjunction` NAF-aware wrapping). If S1 writes the nogood, worldview narrowing makes h_naf-tagged writes invisible.
-
-**What this replaces**:
 - The entire imperative S1 evaluation (lines 2401-2492): ~90 lines removed
-- The `naf-completions` hasheq parameter: replaced by structural S1 threshold
-- The `current-naf-completions` parameter threading: eliminated
+- The `naf-completions` make-hasheq parameter: replaced by NAF-pending cell
+- The `current-naf-completions` parameter: eliminated
 - The post-quiescence worldview cache clearing: handled by existing nogood→worldview infrastructure
+- The old R5 design (S1 threshold propagator): subsumed by the fork-based S1 handler
 
-**Why the inner goal is a standard sub-query**: With relations on-network (R1), the inner goal reads from the same relation-store cell. Its discrimination propagators, fact-row PU (R2), and clause concurrent propagators are all standard infrastructure. The only NAF-specific code is the S1 threshold propagator (~15 lines).
+##### Correctness
 
-**Correctness via stratification**: At S0 fixpoint, the inner goal has fully converged — all discrimination done, all fact-row/clause propagators fired, all variable bindings resolved. The S1 threshold reads this final state. No premature evaluation of NAF.
+At S0 fixpoint: all positive goals have converged, all variables that CAN be bound ARE bound. The forked network inherits all S0 cell values via CHAMP structural sharing. The inner goal installs on the fork and runs to its own fixpoint. The fork's scope cells reflect the inner goal's provability. The main network is untouched until the nogood write.
+
+The S0↔S1 fixpoint iteration: if nogoods eliminate assumptions, worldview narrows, some S0 propagators' tagged writes become invisible, scope cells may lose entries, new S0 propagators may fire. The outer loop re-enters S0. After S0 re-quiesces, S1 handler re-reads the NAF-pending cell (which may have new entries from newly-installed goals). Loop until stable.
+
+##### NTT correspondence
+
+```ntt
+;; NAF-pending cell — S1 request accumulator
+cell naf-pending : Lattice(HashEq(AssumptionId, NafRegistration))
+  :merge hash-union
+  :well-known cell-id-4
+
+;; S1 handler — processes NAF requests at S0 fixpoint
+stratum-handler naf-evaluation
+  :reads naf-pending
+  :at-fixpoint-of S0
+  :for-each (naf-aid, registration) in naf-pending:
+    fork net → inner-net
+    install inner-goal on inner-net
+    quiesce inner-net
+    if provable(inner-net): solver-add-nogood(main-net, naf-aid)
+  :clears naf-pending
+
+;; Exchange (NTT Level 6)
+exchange S0 <-> S1
+  :left  partial-fixpoint -> naf-inputs    ;; S0 scope cell values
+  :right naf-results -> s0-constraints     ;; nogoods constraining S0
+  :kind  suspension-loop                   ;; S1 suspends until S0 quiesces
+```
 
 #### R6: Result-Projection Propagator
 
@@ -748,17 +791,16 @@ The S0↔S1 fixpoint iteration IS the well-founded semantics fixpoint. It's well
 #### Phase R Ordering and Dependencies
 
 ```
-R1 (relation store cell) — independent, unlocks R5
+R1 (relation store cell) — independent, unlocks R4
 R3 (propagator-mediated writes) — independent, unlocks R2
 R2 (fact-row per-row propagators) — depends on R3
-R4 (BSP stratum extension) — independent, unlocks R5
-R5 (NAF threshold) — depends on R1 and R4
+R4 (general strata + S1 NAF handler) — depends on R1
 R6 (result-projection) — depends on R2 (correct tagged writes)
 ```
 
-**Suggested order**: R1 → R3 → R4 → R2 → R5 → R6
+**Suggested order**: R1 → R3 → R4 → R2 → R6
 
-R1 and R3 are independent infrastructure. R4 is independent BSP extension. R2 uses R3's fire-once writes. R5 uses R1's relation cell and R4's stratum support. R6 uses R2's correctly tagged scope cells.
+R1 and R3 are independent infrastructure (both ✅). R4 uses R1's relation cell for the forked inner goal. R2 uses R3's fire-once writes. R6 uses R2's correctly tagged scope cells.
 
 #### NTT Speculative Model
 
@@ -802,14 +844,21 @@ propagator fact-row-bridge[row-i] :fire-once
   :worldview (outer-bm | row-bit-i)
   fire(net) → for-each-arg: logic-var-write(net, arg, row-val)
 
-;; NAF S1 threshold (R5)
-propagator naf-threshold[h_naf] :fire-once :stratum 1
-  :reads (inner-scope-cell)
-  :writes (nogoods-cell)
-  fire(net) →
-    if any-component-non-bot(net-cell-read(net, inner-scope-cid))
-    then solver-add-nogood(ctx, net, h_naf)
-    else net
+;; NAF-pending cell — S1 request accumulator (R4)
+cell naf-pending : Lattice(HashEq(AssumptionId, NafRegistration))
+  :merge hash-union
+  :well-known cell-id-4
+
+;; S1 NAF handler — fork-based provability check (R4, replaces old R5)
+stratum-handler naf-evaluation
+  :reads naf-pending
+  :at-fixpoint-of S0
+  :for-each pending-naf:
+    fork main-net → inner-net
+    install-goal-propagator(inner-net, inner-goal, fresh-scope)
+    quiesce(inner-net)
+    if inner-scope-has-bindings: solver-add-nogood(main-net, h_naf)
+  :clears naf-pending
 
 ;; Result projection (R6)
 propagator result-project
@@ -829,9 +878,10 @@ propagator result-project
 | `cell discrim-data[v]` | `net-new-cell` in `install-discrimination-propagators` | relations.rkt | ~520 (modified) |
 | `propagator ground-write` | `net-add-fire-once-propagator` in `install-goal-propagator` | relations.rkt | ~1773 (modified) |
 | `propagator fact-row-bridge` | new function `install-one-fact-concurrent` | relations.rkt | new (~40 lines) |
-| `propagator naf-threshold` | `net-add-fire-once-propagator` with `#:stratum 1` | relations.rkt | new (~15 lines) |
+| `cell naf-pending` | `net-new-cell` well-known cell-id 4, hash-union merge | propagator.rkt | new |
+| `stratum-handler naf-evaluation` | `register-stratum-handler!` + `process-naf-request` | relations.rkt | new (~40 lines) |
+| `strata-list` in BSP outer loop | Generalized topology processing to N strata | propagator.rkt | ~30 lines modified |
 | `propagator result-project` | `net-add-propagator` in `solve-goal-propagator` | relations.rkt | new (~25 lines) |
-| `#:stratum` flag | Extended `propagator` struct + BSP worklist partitioning | propagator.rkt | ~20 lines modified |
 
 ### §3.2 NAF as Async Propagator — Lattice Analysis
 

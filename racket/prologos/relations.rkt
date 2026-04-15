@@ -63,8 +63,8 @@
  collect-ast-vars
  ;; Evaluation callback (set by reduction.rkt to break circular dep)
  current-is-eval-fn
- ;; Track 2B Phase 2a: NAF infrastructure (stratified)
- current-naf-completions
+ ;; Phase R4: S1 NAF handler (stratum-based, replaces naf-completions)
+ process-naf-request
  ;; NAF oracle (set by wf-engine.rkt for well-founded semantics)
  current-naf-oracle
  ;; Solver internals (for run-solve-goal in reduction.rkt + benchmarks)
@@ -104,12 +104,97 @@
 ;; When #f, is-goals fall back to raw unification (no evaluation).
 (define current-is-eval-fn (make-parameter #f))
 
-;; Track 2B Phase 2a: NAF completion registrations.
-;; Mutable hasheq: completion-cid → info-hasheq.
-;; Written during install-goal-propagator ('not case).
-;; Read by solve-goal-propagator after BSP quiescence to write 'completed.
-;; Scaffolding — Phase 2b replaces with BSP completion stratum.
-(define current-naf-completions (make-parameter #f))
+;; Phase R4: NAF S1 handler — processes pending NAF evaluations at S0 fixpoint.
+;; For each pending NAF: fork network, install inner goal, quiesce fork,
+;; check provability (inner scope cell non-bot → provable), write nogood.
+;; Registered as a stratum handler for naf-pending-cell-id.
+;; Replaces: current-naf-completions parameter, imperative S1 evaluation.
+(define (process-naf-request net pending-hash)
+  ;; pending-hash: hasheq naf-aid → (hasheq 'inner-goal ... 'env ... 'naf-bit-pos ...)
+  (for/fold ([main-net net])
+            ([(naf-aid info) (in-hash pending-hash)])
+    (define inner-goal (hash-ref info 'inner-goal))
+    (define naf-env (hash-ref info 'env))
+    (define naf-bit-pos (hash-ref info 'naf-bit-pos))
+    ;; Fork: O(1) CHAMP structural sharing. Inner goal runs in isolation.
+    (define forked (fork-prop-network main-net))
+    ;; Resolve inner goal args using S0 fixpoint values (on fork).
+    ;; Install inner goal on fork — standard code path, fresh scope.
+    (define inner-goal-kind (goal-desc-kind inner-goal))
+    (define inner-provable?
+      (cond
+        [(eq? inner-goal-kind 'app)
+         (define goal-name (car (goal-desc-args inner-goal)))
+         (define goal-args (cadr (goal-desc-args inner-goal)))
+         ;; Resolve args through naf-env, reading S0 values from fork
+         (define resolved-args
+           (for/list ([a (in-list goal-args)])
+             (define r (resolve-term naf-env a))
+             (cond
+               [(scope-ref? r)
+                (let ([v (logic-var-read forked r)])
+                  (if (eq? v scope-cell-bot) r v))]
+               [(expr-int? r) (expr-int-val r)]
+               [(expr-string? r) (expr-string-val r)]
+               [(expr-symbol? r) (expr-symbol-name r)]
+               [else r])))
+         ;; Build fresh inner scope on fork
+         (define inner-vars
+           (for/list ([a (in-list goal-args)]
+                      [i (in-naturals)])
+             (string->symbol (format "~a_inner_~a" a i))))
+         (define-values (fork1 inner-env) (build-var-env forked inner-vars))
+         ;; Install inner goal: read relation from cell, install propagators
+         (define inner-top (goal-desc 'app (list goal-name inner-vars)))
+         (define fork2 (install-goal-propagator fork1 inner-top inner-env (cell-id 0)))
+         ;; Quiesce fork: inner goal converges
+         (define fork3 (run-to-quiescence fork2))
+         ;; Check provability: any inner scope variable bound = inner goal succeeded
+         (define inner-scope-ref
+           (and (pair? inner-vars) (hash-ref inner-env (car inner-vars) #f)))
+         (define inner-scope-cid
+           (and (scope-ref? inner-scope-ref) (scope-ref-cid inner-scope-ref)))
+         (if inner-scope-cid
+             (let ([sc (net-cell-read fork3 inner-scope-cid)])
+               (if (scope-cell? sc)
+                   (for/or ([v (in-hash-values (scope-cell-bindings sc))])
+                     (not (eq? v scope-cell-bot)))
+                   #f))
+             ;; No inner scope → check if relation has any viable alternatives
+             ;; (zero-arity relation: provable if any fact/clause exists)
+             (let ([the-store (net-cell-read fork3 relation-store-cell-id)])
+               (define rel (and (hash? the-store) (hash-ref the-store goal-name #f)))
+               (and rel
+                    (for/or ([variant (in-list (relation-info-variants rel))])
+                      (or (pair? (variant-info-facts variant))
+                          (pair? (variant-info-clauses variant)))))))]
+        [(eq? inner-goal-kind 'unify)
+         ;; Unify provability: resolve both sides, check equality
+         (define lhs (resolve-term naf-env (car (goal-desc-args inner-goal))))
+         (define rhs (resolve-term naf-env (cadr (goal-desc-args inner-goal))))
+         (define lv (if (scope-ref? lhs) (logic-var-read forked lhs) lhs))
+         (define rv (if (scope-ref? rhs) (logic-var-read forked rhs) rhs))
+         ;; Normalize AST values for comparison
+         (define (norm v) (cond [(expr-int? v) (expr-int-val v)]
+                                [(expr-string? v) (expr-string-val v)]
+                                [(expr-symbol? v) (expr-symbol-name v)]
+                                [else v]))
+         (define lv-n (norm lv))
+         (define rv-n (norm rv))
+         (or (eq? lv-n scope-cell-bot) (eq? rv-n scope-cell-bot) (equal? lv-n rv-n))]
+        [else #t]))
+    ;; If provable: h_naf is invalid → write nogood on main network.
+    ;; Worldview narrowing makes h_naf-tagged writes invisible.
+    (if inner-provable?
+        (let ()
+          (define invalid-mask (arithmetic-shift 1 naf-bit-pos))
+          (define current-wv (net-cell-read main-net worldview-cache-cell-id))
+          (define cleared-wv (bitwise-and current-wv (bitwise-not invalid-mask)))
+          (net-cell-write main-net worldview-cache-cell-id cleared-wv))
+        main-net)))
+
+;; Register the S1 NAF handler for the NAF-pending cell.
+(register-stratum-handler! naf-pending-cell-id process-naf-request)
 
 
 ;; NAF oracle callback for well-founded semantics.
@@ -1842,16 +1927,17 @@
      (install-clause-propagators net goal-name goal-args env answer-cid ctx)]
 
     [(not)
-     ;; Track 2B D.12: NAF as worldview assumption.
+     ;; Phase R4: NAF as worldview assumption + S1 stratum handler.
      ;; NAF gets an assumption h_naf via solver-assume. The assumption means
-     ;; "this NAF succeeded." S1 validates it; if inner goal is provable,
-     ;; h_naf becomes a nogood (eliminated). Tagged writes under h_naf become
-     ;; invisible via worldview filtering.
+     ;; "this NAF succeeded." S1 handler (after S0 fixpoint) validates: forks
+     ;; network, installs inner goal, quiesces fork, checks provability. If
+     ;; provable → nogood for h_naf. Tagged writes under h_naf become invisible
+     ;; via worldview filtering.
      ;;
-     ;; At S0: allocate assumption, register for S1. The NAF goal itself does
-     ;; NOT install inner goal propagators. Subsequent goals in the conjunction
-     ;; are tagged with h_naf by install-conjunction (which wraps them with
-     ;; the NAF bitmask after encountering a 'not goal).
+     ;; At S0: allocate assumption, register in NAF-pending cell (on-network).
+     ;; The NAF goal does NOT install inner goal propagators at S0. Inner goal
+     ;; installation happens on a FORK at S1 (clean isolation).
+     ;; Subsequent conjunction goals are tagged with h_naf by install-conjunction.
      (define inner-goal-expr (car args))
      (define inner-goal (expr->goal-desc inner-goal-expr))
 
@@ -1875,28 +1961,20 @@
                        ([cid (in-list outer-scope-cids)])
                (promote-cell-to-tagged n cid)))
 
-           ;; Register for S1 evaluation
-           ;; Phase R1: store and config are on well-known cells — not stored here.
-           ;; Phase R5 will replace this entire registry with S1 threshold propagators.
-           (when (current-naf-completions)
-             (hash-set! (current-naf-completions) naf-aid
-                        (hasheq 'inner-goal inner-goal
-                                'env env
-                                'naf-bit-pos naf-bit-pos)))
+           ;; Phase R4: Write to NAF-pending cell (on-network request accumulator).
+           ;; Replaces the old naf-completions make-hasheq parameter.
+           ;; The S1 handler reads this cell after S0 fixpoint.
+           (define net3
+             (net-cell-write net2 naf-pending-cell-id
+                             (hasheq naf-aid
+                                     (hasheq 'inner-goal inner-goal
+                                             'env env
+                                             'naf-bit-pos naf-bit-pos))))
 
-           ;; Return: network with assumption allocated + cells promoted.
+           ;; Return: network with assumption allocated + cells promoted +
+           ;; NAF registered in pending cell.
            ;; install-conjunction handles wrapping subsequent goals with h_naf bitmask.
-           ;; Store the NAF bit position in the network for install-conjunction to read.
-           ;; We use a convention: return a tagged value (net . naf-bit-pos) that
-           ;; install-conjunction recognizes. (Alternatively, use a parameter.)
-           ;; Simplest: use current-worldview-bitmask to signal the NAF bitmask.
-           ;; After this goal returns, install-conjunction ORs the NAF bit into
-           ;; current-worldview-bitmask for subsequent goals.
-
-           ;; Actually — use a separate return channel. We'll modify install-conjunction
-           ;; to accumulate NAF bits. For now: store in the naf-completions registry
-           ;; and have install-conjunction check it.
-           net2))]
+           net3))]
 
     [(guard)
      ;; Guard: evaluate condition, proceed if truthy.
@@ -1936,21 +2014,26 @@
 ;; Returns: new-network
 ;; Phase R1: store and config read from well-known cells on network.
 (define (install-conjunction net goals env answer-cid [ctx #f])
-  ;; Phase 1: Pre-scan for NAF goals, allocate assumptions
+  ;; Phase 1: Pre-scan for NAF goals, allocate assumptions.
+  ;; Phase R4: reads NAF bit positions from the NAF-pending cell (on-network).
+  (define naf-pending-before (net-cell-read net naf-pending-cell-id))
   (define-values (net-with-nafs naf-bm)
     (for/fold ([n net]
                [bm 0])
               ([goal (in-list goals)]
                #:when (eq? (goal-desc-kind goal) 'not))
-      ;; Allocate NAF assumption + promote cells + register for S1
+      ;; Allocate NAF assumption + promote cells + register in NAF-pending cell
       (define n2 (install-goal-propagator n goal env answer-cid ctx))
-      ;; Read the NAF bit position from registry
+      ;; Phase R4: read NAF bit position from the NAF-pending cell.
+      ;; The NAF goal just wrote its registration. Find the new entry.
+      (define naf-pending-after (net-cell-read n2 naf-pending-cell-id))
+      (define new-entries
+        (for/list ([(k v) (in-hash naf-pending-after)]
+                   #:when (not (hash-has-key? naf-pending-before k)))
+          v))
       (define naf-bit-pos
-        (if (current-naf-completions)
-            (let ([entries (hash-values (current-naf-completions))])
-              (if (pair? entries)
-                  (hash-ref (last entries) 'naf-bit-pos 0)
-                  0))
+        (if (pair? new-entries)
+            (hash-ref (car new-entries) 'naf-bit-pos 0)
             0))
       (values n2 (bitwise-ior bm (arithmetic-shift 1 naf-bit-pos)))))
 
@@ -2456,9 +2539,6 @@
     (cond [(null? old) new] [(null? new) old] [else (append old new)]))
   (define-values (net2 answer-cid) (net-new-cell net1 '() answer-merge))
 
-  ;; Track 2B Phase 2a: NAF completion registry (scaffolding)
-  (define naf-completions (make-hasheq))
-
   ;; D.12: Promote query scope cells to tagged-cell-value upfront.
   ;; Required for NAF worldview-assumption approach: NAF-dependent writes
   ;; must be tagged, which requires the cell to be promoted BEFORE any writes.
@@ -2476,113 +2556,17 @@
   ;; Install the top-level goal (pass ctx for PU branching)
   ;; Phase R1: store and config are on-network — no longer passed as parameters.
   (define top-goal (goal-desc 'app (list goal-name effective-args)))
-  (define net3
-    (parameterize ([current-naf-completions naf-completions])
-      (install-goal-propagator net2a top-goal query-env answer-cid ctx)))
+  ;; Phase R4: no naf-completions parameter needed — NAF registrations are
+  ;; in the NAF-pending cell. install-goal-propagator writes to it on-network.
+  (define net3 (install-goal-propagator net2a top-goal query-env answer-cid ctx))
 
-  ;; Run to quiescence (inner + outer propagators converge)
-  (define net4 (run-to-quiescence net3))
+  ;; Run to quiescence: S0 value stratum + topology + S1 NAF stratum.
+  ;; Phase R4: the BSP scheduler's generalized outer loop processes the
+  ;; NAF-pending cell via the registered S1 handler after S0 quiesces.
+  ;; The entire S0↔S1 fixpoint iteration is handled by the scheduler.
+  (define net5 (run-to-quiescence net3))
 
-  ;; D.12: S1 NAF evaluation at S0 fixpoint.
-  ;; For each registered NAF, check inner goal provability using discrimination.
-  ;; If provable: h_naf is a nogood → solver-add-nogood eliminates it.
-  ;; Worldview narrowing makes tagged writes under h_naf invisible.
-  ;; Phase 2b moves this to a BSP stratum in run-to-quiescence-bsp.
-  (define net5
-    (if (hash-empty? naf-completions)
-        net4  ;; no NAFs → skip
-        (let ()
-          ;; S1: evaluate each pending NAF by checking inner goal provability
-          (define-values (net-with-nogoods invalid-naf-bits)
-            (for/fold ([n net4]
-                       [invalid-bits '()])
-                      ([(naf-aid info) (in-hash naf-completions)])
-              (define inner-goal (hash-ref info 'inner-goal))
-              (define naf-env (hash-ref info 'env))
-              ;; Phase R1: store and config from well-known cells
-              (define naf-store (net-cell-read n relation-store-cell-id))
-              (define naf-config (net-cell-read n config-cell-id))
-              (define naf-bit-pos (hash-ref info 'naf-bit-pos))
-              ;; S1 provability check at S0 fixpoint
-              (define inner-provable?
-                (cond
-                  [(eq? (goal-desc-kind inner-goal) 'app)
-                   (define goal-name (car (goal-desc-args inner-goal)))
-                   (define goal-args (cadr (goal-desc-args inner-goal)))
-                   (define rel (relation-lookup naf-store goal-name))
-                   (if (not rel) #f
-                       (for/or ([variant (in-list (relation-info-variants rel))])
-                         (define discrim-data (build-discrimination-data variant))
-                         (define n-facts (length (variant-info-facts variant)))
-                         (define n-clauses (length (variant-info-clauses variant)))
-                         (define n-alts (+ n-facts n-clauses))
-                         ;; Resolve args: scope-refs → read S0 value.
-                         ;; AST literals → extract raw value for discrimination comparison.
-                         (define resolved
-                           (for/list ([a (in-list goal-args)])
-                             (define r (resolve-term naf-env a))
-                             (cond
-                               [(scope-ref? r)
-                                (let ([v (logic-var-read n r)])
-                                  (if (eq? v scope-cell-bot) r v))]
-                               ;; Extract raw values from AST literal nodes
-                               [(expr-int? r) (expr-int-val r)]
-                               [(expr-string? r) (expr-string-val r)]
-                               [(expr-symbol? r) (expr-symbol-name r)]
-                               [else r])))
-                         (define viable
-                           (for/fold ([v (for/seteq ([i (in-range n-alts)]) i)])
-                                     ([arg (in-list resolved)]
-                                      [pos (in-naturals)])
-                             (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
-                             (cond
-                               [(hash-empty? pos-data) v]
-                               [(or (scope-ref? arg) (cell-id? arg)) v]
-                               [else
-                                ;; Normalize discrimination values for comparison
-                                ;; (fact-row values from .prologos may be AST nodes)
-                                (define (normalize-for-compare v)
-                                  (cond [(expr-int? v) (expr-int-val v)]
-                                        [(expr-string? v) (expr-string-val v)]
-                                        [(expr-symbol? v) (expr-symbol-name v)]
-                                        [else v]))
-                                (define compatible
-                                  (for/seteq ([pair (in-list (hash->list pos-data))]
-                                              #:when (equal? (normalize-for-compare (cdr pair)) arg))
-                                    (car pair)))
-                                (define wildcards
-                                  (for/seteq ([i (in-range n-alts)]
-                                              #:when (not (hash-has-key? pos-data i)))
-                                    i))
-                                (set-intersect v (set-union compatible wildcards))])))
-                         (not (set-empty? viable))))]
-                  [(eq? (goal-desc-kind inner-goal) 'unify)
-                   (define lhs (resolve-term naf-env (car (goal-desc-args inner-goal))))
-                   (define rhs (resolve-term naf-env (cadr (goal-desc-args inner-goal))))
-                   (define lv (if (scope-ref? lhs) (logic-var-read n lhs) lhs))
-                   (define rv (if (scope-ref? rhs) (logic-var-read n rhs) rhs))
-                   (or (eq? lv scope-cell-bot) (eq? rv scope-cell-bot) (equal? lv rv))]
-                  [else #t]))
-              ;; If inner is provable: h_naf is invalid.
-              ;; Record provability result
-              (if inner-provable?
-                  (values n (cons naf-bit-pos invalid-bits))
-                  (values n invalid-bits))))  ;; inner not provable → h_naf remains valid
-          ;; Clear invalid NAF bits from worldview cache AFTER second BSP.
-          ;; The projection propagator may have recomputed the cache during BSP,
-          ;; so we clear AFTER quiescence, not before.
-          (define net-quiesced (run-to-quiescence net-with-nogoods))
-          (if (null? invalid-naf-bits)
-              net-quiesced
-              (let ()
-                (define invalid-mask
-                  (for/fold ([m 0]) ([bp (in-list invalid-naf-bits)])
-                    (bitwise-ior m (arithmetic-shift 1 bp))))
-                (define current-wv (net-cell-read net-quiesced worldview-cache-cell-id))
-                (define cleared-wv (bitwise-and current-wv (bitwise-not invalid-mask)))
-                (net-cell-write net-quiesced worldview-cache-cell-id cleared-wv))))))
-
-  ;; D.12: no NAF-result filtering needed — worldview narrowing handles it.
+  ;; NAF results handled by worldview narrowing (nogoods written by S1 handler).
   ;; Eliminated NAF assumptions make tagged writes invisible via tagged-cell-read.
   (define naf-failed-bitmasks (seteq))  ;; unused — kept for result reading compat
 

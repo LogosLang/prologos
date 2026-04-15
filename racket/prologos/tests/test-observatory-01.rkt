@@ -304,9 +304,9 @@
   (check-not-eq? meta-c 'none)
   (check-eq? (cell-meta-subsystem meta-a) 'user)
   (check-eq? (cell-meta-domain meta-a) 'lattice)
-  (check-equal? (cell-meta-label meta-a) "cell-4")  ;; BSP-LE Track 2B R1: cell-ids 0-3 are pre-allocated
-  (check-equal? (cell-meta-label meta-b) "cell-5")
-  (check-equal? (cell-meta-label meta-c) "cell-6"))
+  (check-equal? (cell-meta-label meta-a) "cell-5")  ;; BSP-LE Track 2B: cell-ids 0-4 are pre-allocated (0=decomp, 1=worldview, 2=rel-store, 3=config, 4=naf-pending)
+  (check-equal? (cell-meta-label meta-b) "cell-6")
+  (check-equal? (cell-meta-label meta-c) "cell-7"))
 
 ;; ========================================
 ;; 11. Multiple captures accumulate
