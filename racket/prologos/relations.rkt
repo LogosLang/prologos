@@ -1786,9 +1786,34 @@
           (net-add-propagator net input-cids output-cids (maybe-wrap-worldview unify-fire)
                               #:component-paths cpaths))
         net*]
-       ;; One variable, one ground: write ground to variable
-       [(var-ref? lhs) (logic-var-write net lhs rhs)]
-       [(var-ref? rhs) (logic-var-write net rhs lhs)]
+       ;; One variable, one ground: fire-once propagator writes ground to variable.
+       ;; Phase R3: no construction-time direct writes. Fire-once propagator with
+       ;; empty input list is auto-enqueued on worklist at installation time
+       ;; (net-add-propagator line 1495). Fires on first BSP round, writes value,
+       ;; fire-once flag prevents re-fire. Wrapped with maybe-wrap-worldview to
+       ;; inherit clause bitmask for tagged writes.
+       [(var-ref? lhs)
+        (define output-cid (if (scope-ref? lhs) (scope-ref-cid lhs) lhs))
+        (define cpaths (if (scope-ref? lhs)
+                           (list (cons (scope-ref-cid lhs) (scope-ref-var lhs)))
+                           '()))
+        (define-values (net* _pid)
+          (net-add-fire-once-propagator net '() (list output-cid)
+                                        (maybe-wrap-worldview
+                                         (lambda (net) (logic-var-write net lhs rhs)))
+                                        #:component-paths cpaths))
+        net*]
+       [(var-ref? rhs)
+        (define output-cid (if (scope-ref? rhs) (scope-ref-cid rhs) rhs))
+        (define cpaths (if (scope-ref? rhs)
+                           (list (cons (scope-ref-cid rhs) (scope-ref-var rhs)))
+                           '()))
+        (define-values (net* _pid)
+          (net-add-fire-once-propagator net '() (list output-cid)
+                                        (maybe-wrap-worldview
+                                         (lambda (net) (logic-var-write net rhs lhs)))
+                                        #:component-paths cpaths))
+        net*]
        ;; Both ground: no network change
        [else net])]
 
@@ -1796,8 +1821,19 @@
      (define var (resolve-term env (car args)))
      (define expr (cadr args))
      (define eval-fn (current-is-eval-fn))
+     ;; Phase R3: fire-once propagator for is-goal (no construction-time write)
      (if (and (or (scope-ref? var) (cell-id? var)) eval-fn)
-         (logic-var-write net var (eval-fn expr))
+         (let* ([val (eval-fn expr)]
+                [output-cid (if (scope-ref? var) (scope-ref-cid var) var)]
+                [cpaths (if (scope-ref? var)
+                            (list (cons (scope-ref-cid var) (scope-ref-var var)))
+                            '())])
+           (define-values (net* _pid)
+             (net-add-fire-once-propagator net '() (list output-cid)
+                                           (maybe-wrap-worldview
+                                            (lambda (net) (logic-var-write net var val)))
+                                           #:component-paths cpaths))
+           net*)
          net)]
 
     [(app)
@@ -1976,8 +2012,17 @@
                             (maybe-wrap-worldview unify-fire)
                             #:component-paths cpaths)])
               n*))
-          ;; Ground arg: write directly to param variable
-          (logic-var-write n pref arg))))
+          ;; Ground arg: fire-once propagator writes to param variable (Phase R3)
+          (let* ([output-cid (if (scope-ref? pref) (scope-ref-cid pref) pref)]
+                 [cpaths (if (scope-ref? pref)
+                             (list (cons (scope-ref-cid pref) (scope-ref-var pref)))
+                             '())])
+            (define-values (n* _pid)
+              (net-add-fire-once-propagator n '() (list output-cid)
+                                            (maybe-wrap-worldview
+                                             (lambda (net) (logic-var-write net pref arg)))
+                                            #:component-paths cpaths))
+            n*))))
   (install-conjunction n3 clause-goals clause-env answer-cid ctx))
 
 ;; ----------------------------------------
@@ -2035,9 +2080,19 @@
                                               #:assumption aid
                                               #:component-paths cpaths)])
               n*))
-          ;; Ground arg: write under this clause's worldview
-          (parameterize ([current-worldview-bitmask bitmask])
-            (logic-var-write n pref arg)))))
+          ;; Ground arg: fire-once propagator under this clause's worldview (Phase R3)
+          (let* ([output-cid (if (scope-ref? pref) (scope-ref-cid pref) pref)]
+                 [cpaths (if (scope-ref? pref)
+                             (list (cons (scope-ref-cid pref) (scope-ref-var pref)))
+                             '())])
+            (define-values (n* _pid)
+              (net-add-fire-once-propagator n '() (list output-cid)
+                                            (wrap-with-worldview
+                                             (lambda (net) (logic-var-write net pref arg))
+                                             bit-position)
+                                            #:assumption aid
+                                            #:component-paths cpaths))
+            n*))))
   ;; Install clause body goals under this clause's worldview.
   ;; Goal propagators will also use current-worldview-bitmask when they fire.
   ;; For now: install-conjunction installs propagators directly.

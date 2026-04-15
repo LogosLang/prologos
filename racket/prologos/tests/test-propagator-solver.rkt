@@ -183,7 +183,9 @@
       (define net1a (net-cell-write (net-cell-write net1 relation-store-cell-id test-store)
                                     config-cell-id default-config))
       (define net2 (install-goal-propagator net1a goal env (cell-id 0)))
-      (check-equal? (logic-var-read net2 (hash-ref env 'x)) 'hello))
+      ;; Phase R3: ground write is now a fire-once propagator — must quiesce
+      (define net3 (run-to-quiescence net2))
+      (check-equal? (logic-var-read net3 (hash-ref env 'x)) 'hello))
 
     (test-case "unify: ground with ground (no cell change)"
       (define net0 (make-prop-network))
@@ -202,8 +204,10 @@
       (define net1a (net-cell-write (net-cell-write net1 relation-store-cell-id test-store)
                                     config-cell-id default-config))
       (define net2 (install-conjunction net1a goals env (cell-id 0)))
-      (check-equal? (logic-var-read net2 (hash-ref env 'a)) 10)
-      (check-equal? (logic-var-read net2 (hash-ref env 'b)) 20))
+      ;; Phase R3: ground writes are fire-once propagators — must quiesce
+      (define net3 (run-to-quiescence net2))
+      (check-equal? (logic-var-read net3 (hash-ref env 'a)) 10)
+      (check-equal? (logic-var-read net3 (hash-ref env 'b)) 20))
 
     ;; --- NAF ---
 
