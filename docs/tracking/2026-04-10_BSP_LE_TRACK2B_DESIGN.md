@@ -25,7 +25,7 @@
 | **R1** | **Relation store on-network** | ✅ | `9bf8fff7`→`23041a2e`. cell-id 2=relation-store, cell-id 3=config. Discrim-data cells per variant. `store`/`config` params eliminated from 6 functions. |
 | **R2** | **Fact-row PU as per-row propagator copies** | ⬜ | Mirror `install-one-clause-concurrent`: fresh scope, `wrap-with-worldview`, per-row propagators. Fixes multi-result NAF composition. |
 | **R3** | **All goal installation propagator-mediated** | ✅ | `3bdf3322`. 4 sites: unify var+ground, is-goal, one-clause ground, one-clause-concurrent ground. Fire-once with empty inputs, auto-enqueued. |
-| **R4** | **General stratum infra + S1 NAF handler** | ⬜ | NAF-pending cell (cell-id 4). S1 handler: fork, install inner goal, BSP on fork, check provability, write nogood. Generalized BSP outer loop with strata-list. Replaces imperative S1 + `naf-completions` hasheq. Subsumes old R5. |
+| **R4** | **General stratum infra + S1 NAF handler** | ✅ | `8fbc342b`. cell-id 4=naf-pending. S1 handler: fork+install+quiesce+check+nogood. General strata-list in BSP outer loop. -90 lines imperative S1, -naf-completions param. |
 | **R6** | **Result-projection propagator** | ⬜ | Watches scope cells, projects query vars per bitmask, writes to answer-cid. `answer-cid` merge → set-union. Caller does ONE cell read. |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
 | 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
