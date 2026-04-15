@@ -24,7 +24,7 @@
 | 1b | Position-discriminant analysis | ✅ | `1eae7eb8`. Discrimination tree: position scoring, recursive partitioning, tree-guided installation. Flat ground-arg pass ensures coverage regardless of tree order. |
 | **R1** | **Relation store on-network** | ✅ | `9bf8fff7`→`23041a2e`. cell-id 2=relation-store, cell-id 3=config. Discrim-data cells per variant. `store`/`config` params eliminated from 6 functions. |
 | **R2** | **Fact-row PU as per-row propagator copies** | ⬜ | Mirror `install-one-clause-concurrent`: fresh scope, `wrap-with-worldview`, per-row propagators. Fixes multi-result NAF composition. |
-| **R3** | **All goal installation propagator-mediated** | ⬜ | Ground unification → fire-once propagator (not direct write). Conjunction goals truly order-independent. |
+| **R3** | **All goal installation propagator-mediated** | ✅ | `3bdf3322`. 4 sites: unify var+ground, is-goal, one-clause ground, one-clause-concurrent ground. Fire-once with empty inputs, auto-enqueued. |
 | **R4** | **BSP stratum extension (`#:stratum`)** | ⬜ | Propagator stratum flag. S0/S1 worklist partitioning. S0↔S1 fixpoint loop in `run-to-quiescence-bsp`. |
 | **R5** | **NAF as inner sub-query + S1 threshold** | ⬜ | Inner goal installed at S0 (standard code path, fresh scope, reads relation-store cell). S1 threshold propagator: reads inner scope, writes nogood if provable. Replaces imperative S1 + `naf-completions` hasheq. |
 | **R6** | **Result-projection propagator** | ⬜ | Watches scope cells, projects query vars per bitmask, writes to answer-cid. `answer-cid` merge → set-union. Caller does ONE cell read. |
