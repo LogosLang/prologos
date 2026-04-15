@@ -507,16 +507,25 @@
         ;; Only return tree if it actually discriminates (not just a leaf of everything)
         (if (discrim-leaf? tree) #f tree))))
 
-;; Install discrimination broadcast propagators on the network.
+;; Install discrimination propagators on the network.
+;; Phase R1: discrimination data is ON-NETWORK as a cell value. Computed at
+;; construction time (Phase 0 scaffolding); self-hosted compiler produces it
+;; via a derivation propagator watching the relation-store cell.
+;;
 ;; For each discriminating position k:
-;;   - Allocate a discrimination cell (compound: clause-idx → expected-value)
-;;   - Write the discrimination data to the cell
-;;   - Install a broadcast propagator that reads query-arg + discrim cell,
+;;   - Fire-once propagator reads discrim-data cell + query arg,
 ;;     compares using equal?, writes viable set to viability cell
 ;;
-;; Returns: (values new-network viability-cid)
+;; Returns: (values new-network viability-cid discrim-data-cid)
 (define (install-discrimination-propagators net variant resolved-args n-alternatives)
+  ;; Phase R1: Allocate discrimination-data cell and write data.
+  ;; Carrier: hasheq position → (hasheq clause-idx → expected-value)
+  ;; Merge: hash-union (positions accumulate). For Phase 0 this cell is
+  ;; written once (construction-time). Self-hosting: derivation propagator
+  ;; watches relation-store cell, computes data, writes reactively.
   (define discrim-data (build-discrimination-data variant))
+  (define-values (net0 discrim-data-cid)
+    (net-new-cell net discrim-data discrimination-data-merge))
 
   ;; Allocate viability cell: starts with all alternatives viable
   (define all-viable (for/seteq ([i (in-range n-alternatives)]) i))
@@ -525,13 +534,16 @@
         (if (equal? new all-viable) old
             (set-intersect old new))))
   (define-values (net1 viability-cid)
-    (net-new-cell net all-viable viability-merge))
+    (net-new-cell net0 all-viable viability-merge))
 
   ;; Flat propagator installation: one fire-once propagator per discriminating
   ;; position. ALL positions install propagators — ordering EMERGES from BSP
   ;; dataflow (which arg cells resolve first). Distributivity guarantees
   ;; same result regardless of narrowing order. The discrimination tree (Phase 1b)
   ;; is a data value for analysis/self-hosting, not an imperative installation guide.
+  ;;
+  ;; Phase R1: discrimination propagators READ from discrim-data cell instead
+  ;; of capturing data in closures. The cell is the source of truth.
   (define net-final
     (for/fold ([n net1])
               ([pos (in-naturals)]
@@ -540,12 +552,14 @@
       (cond
         [(hash-empty? pos-data) n]  ;; no discriminators at this position
         [(or (scope-ref? arg) (cell-id? arg))
-         ;; Free argument: install fire-once propagator that fires when arg resolves
+         ;; Free argument: install fire-once propagator that fires when arg resolves.
+         ;; Phase R1: reads discrim-data cell at fire time (on-network).
          (define arg-cid (if (scope-ref? arg) (scope-ref-cid arg) arg))
-         (define discrim-pairs
-           (for/list ([(clause-idx expected) (in-hash pos-data)])
-             (cons clause-idx expected)))
+         (define fire-pos pos)  ;; capture position for fire function
+         (define fire-n-alts n-alternatives)
          (define (discrim-fire net)
+           (define dd (net-cell-read net discrim-data-cid))
+           (define pd (hash-ref dd fire-pos discrimination-data-bot))
            (define arg-val
              (let ([raw (net-cell-read net arg-cid)])
                (if (scope-cell? raw)
@@ -555,25 +569,27 @@
            (if (or (eq? arg-val scope-cell-bot) (not arg-val))
                net  ;; arg not yet resolved — residuate (no write)
                (let ([viable
-                      (for/seteq ([pair (in-list discrim-pairs)]
-                                  #:when (equal? (cdr pair) arg-val))
-                        (car pair))])
+                      (for/seteq ([(clause-idx expected) (in-hash pd)]
+                                  #:when (equal? expected arg-val))
+                        clause-idx)])
                  (define wildcards
-                   (for/seteq ([i (in-range n-alternatives)]
-                               #:when (not (hash-has-key? pos-data i)))
+                   (for/seteq ([i (in-range fire-n-alts)]
+                               #:when (not (hash-has-key? pd i)))
                      i))
                  (define full-viable (set-union viable wildcards))
                  (net-cell-write net viability-cid full-viable))))
          (define-values (n2 _pid)
-           (net-add-fire-once-propagator n (list arg-cid) (list viability-cid)
+           (net-add-fire-once-propagator n (list arg-cid discrim-data-cid)
+                                         (list viability-cid)
                                          discrim-fire))
          n2]
         [else
-         ;; Ground argument: narrow immediately via cell write
+         ;; Ground argument: narrow immediately via cell write.
+         ;; Reads discrim-data from cell (construction-time — data already there).
          (define viable
-           (for/seteq ([pair (in-list (hash->list pos-data))]
-                       #:when (equal? (cdr pair) arg))
-             (car pair)))
+           (for/seteq ([(clause-idx expected) (in-hash pos-data)]
+                       #:when (equal? expected arg))
+             clause-idx))
          (define wildcards
            (for/seteq ([i (in-range n-alternatives)]
                        #:when (not (hash-has-key? pos-data i)))
@@ -581,7 +597,7 @@
          (define full-viable (set-union viable wildcards))
          (net-cell-write n viability-cid full-viable)])))
 
-  (values net-final viability-cid))
+  (values net-final viability-cid discrim-data-cid))
 
 ;; Look up a relation by name.
 ;; Returns relation-info or #f.
@@ -2098,7 +2114,8 @@
        ;; on bound arguments. Returns viability cell that gates clause/fact
        ;; installation.
        (define n-alternatives (+ (length facts) (length clauses)))
-       (define-values (n-discrim viability-cid)
+       ;; Phase R1: returns discrim-data-cid (on-network discrimination data cell)
+       (define-values (n-discrim viability-cid _discrim-data-cid)
          (install-discrimination-propagators n variant resolved-args n-alternatives))
 
        ;; For ground args, discrimination propagators write to viability cell
