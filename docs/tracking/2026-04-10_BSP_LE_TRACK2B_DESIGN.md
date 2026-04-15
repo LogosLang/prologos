@@ -27,6 +27,8 @@
 | **R3** | **All goal installation propagator-mediated** | ✅ | `3bdf3322`. 4 sites: unify var+ground, is-goal, one-clause ground, one-clause-concurrent ground. Fire-once with empty inputs, auto-enqueued. |
 | **R4** | **General stratum infra + S1 NAF handler** | ✅ | `8fbc342b`. cell-id 4=naf-pending. S1 handler: fork+install+quiesce+check+nogood. General strata-list in BSP outer loop. -90 lines imperative S1, -naf-completions param. |
 | **R6** | **PU dissolution — answer egress cell** | ✅ | `8e8ea659`. dissolve-solver-pu reads scope+worldview cells, projects results, writes answer-cid (egress, total sink). NTT interface SolverNet :outputs alignment. |
+| 2a | NAF assumption + S0 tagged installation | 🔄 | D.12 basic+variable cases done pre-R. Phase R redesigned NAF: R4 S1 handler replaces imperative S1, R2 fixes fact-row composition. **Verify**: do adversarial multi-result cases now pass? |
+| 2b | S1 NAF stratum in BSP | ✅ | Subsumed by R4. General stratum infrastructure + fork-based S1 handler. No separate phase needed. |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
 | 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
 | 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
