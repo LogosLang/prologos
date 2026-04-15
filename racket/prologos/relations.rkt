@@ -2266,11 +2266,12 @@
        ;; No NAF-success cell write at S0 — S1 reads viability directly.
        (define n-naf-signal n-discrim)
 
-       ;; Track 2B Phase 1a Step 5: Per-fact-row PU branching.
-       ;; Viable fact rows get worldview bitmask bits (same as multi-clause).
-       ;; Each row writes under its own bitmask → tagged-cell-value entries
-       ;; keep results separate. Coordinated with clause assumptions via
-       ;; solver-assume (shared namespace, critique R3).
+       ;; Phase R2: Per-fact-row propagator copies.
+       ;; Each fact row gets fire-once propagators wrapped with maybe-wrap-worldview
+       ;; under the combined bitmask (outer + NAF + fact-row bit). This replaces
+       ;; the old for/fold direct-write pattern that broke NAF bitmask composition.
+       ;; Same principle as install-one-clause-concurrent: per-branch propagators
+       ;; carry their bitmask as closures, enabling multi-level composition.
        (define viable-facts
          (for/list ([fr (in-list facts)]
                     [fact-idx (in-naturals)]
@@ -2282,7 +2283,8 @@
            ;; No viable facts: skip
            [(null? viable-facts) n-naf-signal]
 
-           ;; Single viable fact: write directly (no PU overhead)
+           ;; Single viable fact: fire-once propagators (consistent architecture).
+           ;; maybe-wrap-worldview captures outer NAF bitmask if present.
            [(null? (cdr viable-facts))
             (let ([row (fact-row-terms (car viable-facts))])
               (if (= (length row) (length resolved-args))
@@ -2290,12 +2292,23 @@
                             ([arg (in-list resolved-args)]
                              [val (in-list row)])
                     (if (or (scope-ref? arg) (cell-id? arg))
-                        (logic-var-write n arg val)
+                        (let* ([output-cid (if (scope-ref? arg) (scope-ref-cid arg) arg)]
+                               [cpaths (if (scope-ref? arg)
+                                           (list (cons (scope-ref-cid arg) (scope-ref-var arg)))
+                                           '())])
+                          (define-values (n* _pid)
+                            (net-add-fire-once-propagator n '() (list output-cid)
+                                                          (maybe-wrap-worldview
+                                                           (lambda (net) (logic-var-write net arg val)))
+                                                          #:component-paths cpaths))
+                          n*)
                         n))
                   n-naf-signal))]
 
-           ;; Multiple viable facts: PU branching with worldview bitmasks.
-           ;; Same pattern as multi-clause concurrent execution.
+           ;; Multiple viable facts: per-row fire-once propagators with worldview bitmasks.
+           ;; Each row gets its own assumption + combined bitmask (outer + NAF + fact-bit).
+           ;; Fire-once propagators wrapped with maybe-wrap-worldview under parameterize
+           ;; capture the full combined bitmask. Multi-level composition works structurally.
            [else
             (let ()
               ;; Create assumptions per viable fact row
@@ -2326,22 +2339,33 @@
                           ([cid (in-list promoted-cids)])
                   (promote-cell-to-tagged net cid)))
 
-              ;; Write each fact row under its worldview bitmask,
-              ;; ORed with the outer bitmask (includes NAF assumptions from conjunction)
-              (define outer-bm-for-facts (current-worldview-bitmask))
+              ;; Phase R2: install per-row fire-once propagators.
+              ;; Each row: parameterize with combined bitmask, install fire-once
+              ;; propagators via maybe-wrap-worldview (captures combined bitmask).
+              ;; #:assumption aid for assumption-tagged dependents.
               (for/fold ([net n-promoted])
                         ([fr (in-list viable-facts)]
                          [aid (in-list fact-aids)])
                 (define row (fact-row-terms fr))
                 (define fact-bitmask (arithmetic-shift 1 (assumption-id-n aid)))
-                (define combined-bm (bitwise-ior outer-bm-for-facts fact-bitmask))
+                (define combined-bm (bitwise-ior (current-worldview-bitmask) fact-bitmask))
                 (if (= (length row) (length resolved-args))
                     (parameterize ([current-worldview-bitmask combined-bm])
                       (for/fold ([net net])
                                 ([arg (in-list resolved-args)]
                                  [val (in-list row)])
                         (if (or (scope-ref? arg) (cell-id? arg))
-                            (logic-var-write net arg val)
+                            (let* ([output-cid (if (scope-ref? arg) (scope-ref-cid arg) arg)]
+                                   [cpaths (if (scope-ref? arg)
+                                               (list (cons (scope-ref-cid arg) (scope-ref-var arg)))
+                                               '())])
+                              (define-values (n* _pid)
+                                (net-add-fire-once-propagator net '() (list output-cid)
+                                                              (maybe-wrap-worldview
+                                                               (lambda (net) (logic-var-write net arg val)))
+                                                              #:assumption aid
+                                                              #:component-paths cpaths))
+                              n*)
                             net)))
                     net)))]))
 
