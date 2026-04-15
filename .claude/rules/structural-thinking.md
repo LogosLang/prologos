@@ -1,6 +1,8 @@
 # Structural Thinking: SRE, Lattices, and the Hyperlattice Conjecture
 
-This document captures the structural reasoning framework that governs all architectural decisions in Prologos. It is not optional background — it is the lens through which every design choice is evaluated.
+> **"All-at-once, all in parallel, structurally emergent information flow ON-NETWORK."**
+
+This document captures the structural reasoning framework that governs all architectural decisions in Prologos. It is not optional background — it is the lens through which every design choice is evaluated. The design mantra above is the operational form of the Hyperlattice Conjecture — what the conjecture demands of every line of code we write.
 
 ## The Hyperlattice Conjecture
 

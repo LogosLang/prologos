@@ -1,5 +1,9 @@
 # Propagator Design Checklist
 
+> **"All-at-once, all in parallel, structurally emergent information flow ON-NETWORK."**
+
+Before applying any checklist item below, challenge the design against the mantra (see `on-network.md` § The Design Mantra). The checklist catches implementation-level mistakes. The mantra catches architectural ones — step-think disguised as propagator code, imperative dispatch wearing a cell-shaped hat, `for/fold` loops that should be broadcasts. If the mantra challenge fails, no amount of correct checklist application saves the design.
+
 Every propagator installation MUST be evaluated against these patterns. This is not optional — violations produce architectural debt that compounds across tracks.
 
 ## Fire-Once Propagators
