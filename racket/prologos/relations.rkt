@@ -2519,26 +2519,54 @@
       ;; Tagged scope cell: multi-alternative results (clauses, fact-rows, NAF branches)
       [(and scope-raw (tagged-cell-value? scope-raw)
             (pair? (tagged-cell-value-entries scope-raw)))
-       ;; Leaf bitmasks: not a proper subset of any other (complete branching decisions)
-       (define all-bitmasks
-         (remove-duplicates
-          (for/list ([entry (in-list (tagged-cell-value-entries scope-raw))])
-            (car entry))))
-       (define leaf-bitmasks
-         (filter (lambda (bm)
-                   (not (for/or ([other (in-list all-bitmasks)])
-                          (and (not (= other bm))
-                               (= (bitwise-and bm other) bm)
-                               (not (= bm other))))))
-                 all-bitmasks))
-       ;; Domain-merge for same-bitmask entries
+       ;; Phase 2a: Product-worldview enumeration.
+       ;; Independent branching sites (fact-row PU for different variables) produce
+       ;; entries at non-overlapping bitmasks. Complete results require the PRODUCT
+       ;; of all branching sites' bitmasks. Group entries by which query variables
+       ;; they bind, compute Cartesian product of groups' bitmasks, read scope cell
+       ;; at each product bitmask → tagged-cell-read merges all matching entries.
+       ;;
+       ;; Example: gv x writes at bm={3,5,9}, ov y writes at bm={17,33}.
+       ;; Product: {3|17, 3|33, 5|17, 5|33, 9|17, 9|33} = 6 compound worldviews.
+       ;; tagged-cell-read at each merges x and y entries → complete results.
+
+       ;; Step 1: Group entry bitmasks by which query vars they bind.
+       ;; Each entry's scope-cell value has non-bot bindings for specific vars.
+       (define entries (tagged-cell-value-entries scope-raw))
+       (define entry-groups (make-hash))  ;; (setof var-name) → (listof bitmask)
+       (for ([entry (in-list entries)])
+         (define bm (car entry))
+         (define val (cdr entry))
+         (define bound-vars
+           (if (scope-cell? val)
+               (for/seteq ([(k v) (in-hash (scope-cell-bindings val))]
+                           #:when (not (eq? v scope-cell-bot)))
+                 k)
+               (seteq)))
+         (when (not (set-empty? bound-vars))
+           (hash-update! entry-groups bound-vars
+                         (lambda (bms) (set-add bms bm))
+                         (seteq bm))))
+
+       ;; Step 2: Compute product of groups' bitmask sets.
+       ;; Each group represents an independent branching site.
+       ;; Product = all combinations of one bitmask per group, ORed together.
+       (define group-bitmask-sets (hash-values entry-groups))
+       (define product-worldviews
+         (if (null? group-bitmask-sets)
+             '()
+             (for/fold ([products (set->list (car group-bitmask-sets))])
+                       ([group (in-list (cdr group-bitmask-sets))])
+               (for*/list ([p (in-list products)]
+                           [g (in-set group)])
+                 (bitwise-ior p g)))))
+
+       ;; Step 3: Read scope cell at each product worldview, project query vars.
        (define domain-merge (make-tagged-merge scope-cell-merge))
-       ;; Worldview visibility: only bitmasks with all bits in worldview
        (define (bitmask-visible? bm)
          (or (zero? bm) (= (bitwise-and bm final-worldview) bm)))
-       ;; Project each visible leaf bitmask to a result hasheq
        (define raw-results
-         (for/list ([bm (in-list leaf-bitmasks)]
+         (for/list ([bm (in-list product-worldviews)]
                     #:when (bitmask-visible? bm))
            (for/hasheq ([qv (in-list query-vars)])
              (define sc-val (tagged-cell-read scope-raw bm domain-merge))
