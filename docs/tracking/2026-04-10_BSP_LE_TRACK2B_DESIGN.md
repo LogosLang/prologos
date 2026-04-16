@@ -28,7 +28,7 @@
 | **R4** | **General stratum infra + S1 NAF handler** | ✅ | `8fbc342b`. cell-id 4=naf-pending. S1 handler: fork+install+quiesce+check+nogood. General strata-list in BSP outer loop. -90 lines imperative S1, -naf-completions param. |
 | **R6** | **PU dissolution — answer egress cell** | ✅ | `8e8ea659`. dissolve-solver-pu reads scope+worldview cells, projects results, writes answer-cid (egress, total sink). NTT interface SolverNet :outputs alignment. |
 | 2a | NAF + scope sharing + product dissolution | ✅ | `a6b02159`→`4b2e5bdf`. Resolution B: scope sharing (no bridges). Product-worldview dissolution. S1 fork-based handler (R4). All adversarial NAF cases pass: basic ✅, variable ✅, both-passed 3 ✅, cross-relation 6 ✅. |
-| 2b | Parallel-ready tree-reduce merge (hypercube) | ⬜ | Replace sequential `for/fold` in `bulk-merge-writes` with tree-reduce structure. Hypercube all-reduce: log₂(T) rounds of pairwise merge. CHAMP structural sharing makes pairwise merge efficient. Phase 0: sequential tree-reduce (correct structure). Self-hosted: parallel decomposition. |
+| 2b | Parallel tree-reduce merge (hypercube) | ✅ | `bbf3eb82`. Per-propagator cell-id namespaces (high-bit encoding). CHAMP diff for new-cell capture. merge-fire-results + tree-reduce-fire-results. Parallel pairwise via threads. Threshold-configurable (default 128). |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
 | 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
 | 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
