@@ -1932,34 +1932,37 @@
           (net-add-propagator net input-cids output-cids (maybe-wrap-worldview unify-fire)
                               #:component-paths cpaths))
         net*]
-       ;; One variable, one ground: fire-once propagator writes ground to variable.
-       ;; Phase R3: no construction-time direct writes. Fire-once propagator with
-       ;; empty input list is auto-enqueued on worklist at installation time
-       ;; (net-add-propagator line 1495). Fires on first BSP round, writes value,
-       ;; fire-once flag prevents re-fire. Wrapped with maybe-wrap-worldview to
-       ;; inherit clause bitmask for tagged writes.
+       ;; One variable, one ground: write ground to variable.
+       ;; Opt 3 (scope-sensitive R3): when worldview bitmask is 0 (no NAF/guard
+       ;; tagging needed), use direct write (construction-time, avoids fire-once
+       ;; propagator overhead). When bitmask > 0: fire-once propagator with
+       ;; maybe-wrap-worldview for correct bitmask tagging.
        [(var-ref? lhs)
-        (define output-cid (if (scope-ref? lhs) (scope-ref-cid lhs) lhs))
-        (define cpaths (if (scope-ref? lhs)
-                           (list (cons (scope-ref-cid lhs) (scope-ref-var lhs)))
-                           '()))
-        (define-values (net* _pid)
-          (net-add-fire-once-propagator net '() (list output-cid)
-                                        (maybe-wrap-worldview
-                                         (lambda (net) (logic-var-write net lhs rhs)))
-                                        #:component-paths cpaths))
-        net*]
+        (if (zero? (current-worldview-bitmask))
+            (logic-var-write net lhs rhs)  ;; direct write (no tagging needed)
+            (let* ([output-cid (if (scope-ref? lhs) (scope-ref-cid lhs) lhs)]
+                   [cpaths (if (scope-ref? lhs)
+                               (list (cons (scope-ref-cid lhs) (scope-ref-var lhs)))
+                               '())])
+              (define-values (net* _pid)
+                (net-add-fire-once-propagator net '() (list output-cid)
+                                              (maybe-wrap-worldview
+                                               (lambda (net) (logic-var-write net lhs rhs)))
+                                              #:component-paths cpaths))
+              net*))]
        [(var-ref? rhs)
-        (define output-cid (if (scope-ref? rhs) (scope-ref-cid rhs) rhs))
-        (define cpaths (if (scope-ref? rhs)
-                           (list (cons (scope-ref-cid rhs) (scope-ref-var rhs)))
-                           '()))
-        (define-values (net* _pid)
-          (net-add-fire-once-propagator net '() (list output-cid)
-                                        (maybe-wrap-worldview
-                                         (lambda (net) (logic-var-write net rhs lhs)))
-                                        #:component-paths cpaths))
-        net*]
+        (if (zero? (current-worldview-bitmask))
+            (logic-var-write net rhs lhs)  ;; direct write (no tagging needed)
+            (let* ([output-cid (if (scope-ref? rhs) (scope-ref-cid rhs) rhs)]
+                   [cpaths (if (scope-ref? rhs)
+                               (list (cons (scope-ref-cid rhs) (scope-ref-var rhs)))
+                               '())])
+              (define-values (net* _pid)
+                (net-add-fire-once-propagator net '() (list output-cid)
+                                              (maybe-wrap-worldview
+                                               (lambda (net) (logic-var-write net rhs lhs)))
+                                              #:component-paths cpaths))
+              net*))]
        ;; Both ground: no network change
        [else net])]
 
@@ -1967,19 +1970,21 @@
      (define var (resolve-term env (car args)))
      (define expr (cadr args))
      (define eval-fn (current-is-eval-fn))
-     ;; Phase R3: fire-once propagator for is-goal (no construction-time write)
+     ;; Opt 3: direct write when bitmask=0, fire-once when bitmask>0
      (if (and (or (scope-ref? var) (cell-id? var)) eval-fn)
-         (let* ([val (eval-fn expr)]
-                [output-cid (if (scope-ref? var) (scope-ref-cid var) var)]
-                [cpaths (if (scope-ref? var)
-                            (list (cons (scope-ref-cid var) (scope-ref-var var)))
-                            '())])
-           (define-values (net* _pid)
-             (net-add-fire-once-propagator net '() (list output-cid)
-                                           (maybe-wrap-worldview
-                                            (lambda (net) (logic-var-write net var val)))
-                                           #:component-paths cpaths))
-           net*)
+         (let ([val (eval-fn expr)])
+           (if (zero? (current-worldview-bitmask))
+               (logic-var-write net var val)  ;; direct write
+               (let* ([output-cid (if (scope-ref? var) (scope-ref-cid var) var)]
+                      [cpaths (if (scope-ref? var)
+                                  (list (cons (scope-ref-cid var) (scope-ref-var var)))
+                                  '())])
+                 (define-values (net* _pid)
+                   (net-add-fire-once-propagator net '() (list output-cid)
+                                                 (maybe-wrap-worldview
+                                                  (lambda (net) (logic-var-write net var val)))
+                                                 #:component-paths cpaths))
+                 net*)))
          net)]
 
     [(app)
@@ -2730,6 +2735,17 @@
 ;; ----------------------------------------
 ;; The propagator-native alternative to solve-goal.
 ;; Returns: (listof hasheq) — projected query variable bindings.
+;; Phase 5c: Network template — built once, forked per query.
+;; Avoids per-query CHAMP allocation for 6 well-known cells.
+;; Fork is O(1) via CHAMP structural sharing (~22ns).
+(define solver-network-template (box #f))
+
+(define (get-or-create-solver-template fuel)
+  (or (unbox solver-network-template)
+      (let ([net (make-prop-network fuel)])
+        (set-box! solver-network-template net)
+        net)))
+
 (define (solve-goal-propagator config store goal-name goal-args query-vars)
   (define rel (relation-lookup store goal-name))
   (unless rel
@@ -2743,58 +2759,100 @@
           (map param-info-name params))
         goal-args))
 
-  ;; Phase 10c: Create network with fuel from :timeout config.
-  ;; :timeout is milliseconds; approximate as fuel (1ms ≈ 1000 firings).
-  ;; #f = no timeout → default fuel (1000000).
-  (define timeout-ms (solver-config-timeout config))
-  (define fuel (if timeout-ms (* timeout-ms 1000) 1000000))
-  (define net0 (make-prop-network fuel))
+  ;; ── Opt 2: Tier 1 direct fact return ──
+  ;; For single-fact relations with ground query args: bypass propagator network.
+  ;; Directly unify query args with fact values. No cells, no propagators, no BSP.
+  ;; Detection: 1 variant, 1+ facts, 0 clauses, all query args ground or query vars.
+  (define variants (relation-info-variants rel))
+  (define tier-1-result
+    (and (= 1 (length variants))
+         (let* ([variant (car variants)]
+                [facts (variant-info-facts variant)]
+                [clauses (variant-info-clauses variant)])
+           (and (pair? facts) (null? clauses)
+                ;; Single-variant, fact-only. Try direct fact matching.
+                ;; For each fact row: unify with effective-args. Collect matches.
+                (let ([param-names (map param-info-name (variant-info-params variant))]
+                      [results '()])
+                  (for/list ([fr (in-list facts)])
+                    (define row (fact-row-terms fr))
+                    (if (= (length row) (length effective-args))
+                        ;; Check ground args match; collect free arg bindings
+                        (let ([bindings
+                               (for/fold ([acc (hasheq)])
+                                         ([ea (in-list effective-args)]
+                                          [val (in-list row)]
+                                          [qv (in-list query-vars)]
+                                          #:break (not acc))
+                                 (cond
+                                   [(and (symbol? ea) (memq ea query-vars))
+                                    ;; Free query var: bind to fact value
+                                    (hash-set acc qv val)]
+                                   [(equal? ea val) acc]  ;; ground match
+                                   [else #f]))])          ;; ground mismatch
+                          (if bindings
+                              ;; Fill in unbound query vars
+                              (for/hasheq ([qv (in-list query-vars)])
+                                (values qv (hash-ref bindings qv qv)))
+                              #f))
+                        #f)))))))
 
-  ;; Phase R1: Write relation store and config to well-known cells.
-  ;; These are the solver PU's shared data — read by all installation
-  ;; propagators via component-indexed cell reads. For Phase 0: snapshot
-  ;; of file-level store. Self-hosting: on elab-network, written by defr.
-  (define net0a (net-cell-write net0 relation-store-cell-id store))
-  (define net0b (net-cell-write net0a config-cell-id config))
+  (cond
+    ;; Tier 1: direct fact return (skip propagator network entirely)
+    ;; TODO: disabled — needs AST normalization for fact-row value comparison.
+    ;; Fact values from .prologos are AST nodes; from test stores are raw values.
+    ;; [(and tier-1-result ...) tier-1-result]
 
-  (define-values (net-ctx ctx) (make-solver-context net0b))
-  (define-values (net1 query-env) (build-var-env net-ctx query-vars))
+    [else
+     ;; Tier 2: full propagator network
+     (let ()
+       ;; Phase 5c: fork network template instead of building from scratch
+       (define timeout-ms (solver-config-timeout config))
+       (define fuel (if timeout-ms (* timeout-ms 1000) 1000000))
+       (define net0 (fork-prop-network (get-or-create-solver-template fuel) fuel))
 
-  ;; Answer accumulator cell
-  (define (answer-merge old new)
-    (cond [(null? old) new] [(null? new) old] [else (append old new)]))
-  (define-values (net2 answer-cid) (net-new-cell net1 '() answer-merge))
+       ;; Phase R1: Write relation store and config to well-known cells.
+       (define net0a (net-cell-write net0 relation-store-cell-id store))
+       (define net0b (net-cell-write net0a config-cell-id config))
 
-  ;; D.12: Promote query scope cells to tagged-cell-value upfront.
-  ;; Required for NAF worldview-assumption approach: NAF-dependent writes
-  ;; must be tagged, which requires the cell to be promoted BEFORE any writes.
-  ;; Negligible overhead (one promote per query, even if no NAF).
-  (define query-scope-cids
-    (remove-duplicates
-     (for/list ([ref (in-hash-values query-env)]
-                #:when (scope-ref? ref))
-       (scope-ref-cid ref))))
-  (define net2a
-    (for/fold ([n net2])
-              ([cid (in-list query-scope-cids)])
-      (promote-cell-to-tagged n cid)))
+       (define-values (net-ctx ctx) (make-solver-context net0b))
+       (define-values (net1 query-env) (build-var-env net-ctx query-vars))
 
-  ;; Install the top-level goal (pass ctx for PU branching)
-  ;; Phase R1: store and config are on-network — no longer passed as parameters.
-  (define top-goal (goal-desc 'app (list goal-name effective-args)))
-  ;; Phase R4: no naf-completions parameter needed — NAF registrations are
-  ;; in the NAF-pending cell. install-goal-propagator writes to it on-network.
-  (define net3 (install-goal-propagator net2a top-goal query-env answer-cid ctx))
+       ;; Answer accumulator cell
+       (define (answer-merge old new)
+         (cond [(null? old) new] [(null? new) old] [else (append old new)]))
+       (define-values (net2 answer-cid) (net-new-cell net1 '() answer-merge))
 
-  ;; Run to quiescence: S0 value stratum + topology + S1 NAF stratum.
-  ;; Phase R4: the BSP scheduler's generalized outer loop processes the
-  ;; NAF-pending cell via the registered S1 handler after S0 quiesces.
-  ;; The entire S0↔S1 fixpoint iteration is handled by the scheduler.
-  (define net5 (run-to-quiescence net3))
+       ;; D.12: Promote query scope cells to tagged-cell-value upfront.
+       ;; Required for NAF worldview-assumption approach: NAF-dependent writes
+       ;; must be tagged, which requires the cell to be promoted BEFORE any writes.
+       ;; Negligible overhead (one promote per query, even if no NAF).
+       (define query-scope-cids
+         (remove-duplicates
+          (for/list ([ref (in-hash-values query-env)]
+                     #:when (scope-ref? ref))
+            (scope-ref-cid ref))))
+       (define net2a
+         (for/fold ([n net2])
+                   ([cid (in-list query-scope-cids)])
+           (promote-cell-to-tagged n cid)))
 
-  ;; Phase R6: PU Dissolution — materialize results to answer-cid (egress cell).
-  ;; Aligned with NTT `interface SolverNet :outputs [answers : Cell (Set Answer)]`.
-  ;; answer-cid is the total sink: no internal propagator reads it.
-  ;; Dissolution reads internal cells (scope, worldview), projects results,
-  ;; writes the complete result set to answer-cid.
-  (dissolve-solver-pu net5 query-vars query-env answer-cid))
+       ;; Install the top-level goal (pass ctx for PU branching)
+       ;; Phase R1: store and config are on-network — no longer passed as parameters.
+       (define top-goal (goal-desc 'app (list goal-name effective-args)))
+       ;; Phase R4: no naf-completions parameter needed — NAF registrations are
+       ;; in the NAF-pending cell. install-goal-propagator writes to it on-network.
+       (define net3 (install-goal-propagator net2a top-goal query-env answer-cid ctx))
+
+       ;; Run to quiescence: S0 value stratum + topology + S1 NAF stratum.
+       ;; Phase R4: the BSP scheduler's generalized outer loop processes the
+       ;; NAF-pending cell via the registered S1 handler after S0 quiesces.
+       ;; The entire S0↔S1 fixpoint iteration is handled by the scheduler.
+       (define net5 (run-to-quiescence net3))
+
+       ;; Phase R6: PU Dissolution — materialize results to answer-cid (egress cell).
+       ;; Aligned with NTT `interface SolverNet :outputs [answers : Cell (Set Answer)]`.
+       ;; answer-cid is the total sink: no internal propagator reads it.
+       ;; Dissolution reads internal cells (scope, worldview), projects results,
+       ;; writes the complete result set to answer-cid.
+       (dissolve-solver-pu net5 query-vars query-env answer-cid))]))
