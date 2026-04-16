@@ -1259,20 +1259,62 @@ Installation order does not affect correctness (CALM) or convergence rate (BSP r
 
 Phase 0b reveals the ATMS solver is 25x slower than DFS for trivial single-fact queries. The overhead decomposes to: BSP scheduling 52.6%, goal installation 30.4%, context allocation 15.5%, result reading 0.4%. Four optimizations target each component, together aiming for <3x DFS on Tier 1 queries.
 
-#### Optimization 1: BSP Fire-Once Fast-Path (Phase 5a, merged from critique P2+R2) — targets 52.6% BSP overhead
+#### Optimization 1: BSP Fire-Once Fast-Path (Phase 5a, revised D.13) — targets 52.6% BSP overhead
 
-**The insight**: The BSP scheduler's fixed overhead (worklist dedup, fuel check, outer loop, topology stratum) is disproportionate for queries with 0-1 propagators. Fire-once propagators (which cover both fact-row writes and single-clause unification) can execute directly without scheduling ceremony.
+**The insight**: The BSP scheduler's fixed overhead is disproportionate for Tier 1 queries. Phase R made ALL goal writes fire-once propagators (R3), so the worklist is never empty at BSP start. The optimization has three components that compose.
 
-**The mechanism**: Inside `run-to-quiescence-bsp`, at entry:
-- **Empty worklist** (fact-only queries): return immediately. No scheduling needed — fact values are already in cells from `install-goal-propagator`.
-- **Single fire-once propagator on worklist**: fire it directly (call its fire function, merge writes), return. No BSP loop, no topology stratum check. This is the self-cleaning property of fire-once: it fires once and becomes inert, so no second round is possible.
-- **Multiple propagators or non-fire-once**: proceed to full BSP.
+##### 5a.1: Fire-once as scheduler-level concept (propagator flags + self-clearing)
 
-This is ONE fast-path inside the scheduler (not a separate caller-side check — critique P2 resolved). It handles both fact-only (worklist=0) AND single-clause (worklist=1 fire-once) queries. The scheduler handles scheduling; the solver handles solving (Decomplection).
+**Problem**: Current fire-once is a closure wrapper with a mutable box. The scheduler doesn't know a propagator is fire-once — it fires the wrapper, which checks the box and returns unchanged. Each no-op fire costs ~1-2us of ceremony. And the propagator stays in dependents forever, causing spurious re-enqueuing.
 
-**Expected savings**: ~12.1us for fact-only; ~8-10us for single-clause (eliminates BSP ceremony for the single fire). Combined target: Tier 1 queries under 10us.
+**Fix**: Add a `flags` field to the `propagator` struct:
+```racket
+(struct propagator (inputs outputs fire-fn broadcast-profile flags) #:transparent)
+;; flags: integer bitmask
+;; Bit 0 (PROP-FIRE-ONCE = 1): scheduler implements once-semantics
+;; Bit 1 (PROP-EMPTY-INPUTS = 2): eligible for direct-fire (no snapshot)
+```
 
-**SRE lens**: CALM observation made operational. Fire-once propagators are trivially convergent — one fire, one merge, fixpoint. The scheduler recognizes this structurally (fire-once flag), not by counting worklist items.
+The scheduler implements fire-once behavior:
+- Before firing: check `flags & FIRE-ONCE` and `pid in fired-set` → **SKIP entirely** (zero cost)
+- After successful fire: add to `fired-set`, **remove from all input cells' dependents** (self-clearing)
+- The fire function is the ORIGINAL function (no wrapper, no box, no overhead)
+
+`fired-set`: mutable hasheq per BSP session, maintained by the scheduler. Not on the immutable network.
+
+Self-clearing: after firing once, the propagator is removed from dependents. Future cell changes don't enqueue it. The propagator is truly gone from active scheduling.
+
+##### 5a.2: Tier 1 single-pass flush (skip BSP entirely)
+
+**Detection**: After goal installation, read worldview cache cell. If 0 (no assumptions allocated) → Tier 1 (no speculation, no branching, deterministic).
+
+**Tier 1 flush**: Fire all worklist propagators directly on the canonical network. One pass. No snapshot, no dedup, no topology, no strata. For each propagator: call fire function, use result as new canonical.
+
+**Cost**: N × (fire function call). For single-fact query with 1-2 propagators: ~1-2us. vs BSP ceremony: ~12us. **6-10x faster.**
+
+**Correctness**: No speculation = all operations monotone, no isolation needed. Fire-once propagators produce deterministic results. CALM guarantees order-independence.
+
+##### 5a.3: Tier 2 pre-flush + ceremony skip
+
+For Tier 2 queries (speculation active): optimize BSP, don't skip it.
+
+**Pre-flush**: Partition worklist by flags. Propagators with `FIRE-ONCE | EMPTY-INPUTS` → direct-fire on canonical before BSP starts. Remaining → normal BSP with snapshot isolation.
+
+**Skip ceremony**: After BSP value stratum quiesces:
+- Skip topology check if decomp-request cell is empty
+- Skip strata check if NAF-pending cell is empty
+
+**Combined Tier 2 benefit**: fewer propagators in BSP rounds (pre-flushed fire-once removed), fewer no-op topology/strata checks, self-clearing prevents re-enqueuing.
+
+##### Expected savings
+
+| Query type | Current | With 5a | Improvement |
+|---|---|---|---|
+| Single fact | ~23us (12.1us BSP) | ~3-5us (Tier 1 flush) | 5-8x |
+| Single clause | ~23us | ~8-12us (pre-flush + fewer BSP rounds) | 2-3x |
+| Multi-clause | ~50us | ~45us (self-clearing reduces re-fires) | ~10% |
+
+Combined target: Tier 1 queries under 5us. Tier 2 queries: measurable reduction in BSP rounds.
 
 #### Optimization 2: Lazy Solver-Context (Phase 5b) — targets 15.5% allocation overhead
 

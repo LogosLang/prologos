@@ -183,6 +183,9 @@
  naf-pending-merge
  register-stratum-handler!
  stratum-handlers
+ ;; Phase 5a: propagator flags + fire-once as scheduler concept
+ PROP-FIRE-ONCE
+ PROP-EMPTY-INPUTS
  ;; BSP-LE Track 2B Phase 2b: parallel tree-reduce merge
  current-cell-id-namespace
  current-tree-reduce-threshold
@@ -261,7 +264,13 @@
 ;; broadcast-profile: #f (default) | broadcast-profile struct
 ;;   When set, the scheduler can decompose this propagator's work
 ;;   into N independent tasks for parallel execution.
-(struct propagator (inputs outputs fire-fn broadcast-profile) #:transparent)
+;; Phase 5a: flags field for scheduler-level propagator properties.
+;; Bit 0 (PROP-FIRE-ONCE = 1): scheduler implements once-semantics + self-clearing
+;; Bit 1 (PROP-EMPTY-INPUTS = 2): eligible for direct-fire (no snapshot needed)
+(define PROP-FIRE-ONCE 1)
+(define PROP-EMPTY-INPUTS 2)
+
+(struct propagator (inputs outputs fire-fn broadcast-profile flags) #:transparent)
 
 ;; BSP-LE Track 2 Phase 1B: Broadcast profile metadata.
 ;; Enables the scheduler to recognize and decompose data-indexed
@@ -1525,14 +1534,15 @@
 (define (net-add-propagator net input-ids output-ids fire-fn
                             #:component-paths [component-paths '()]
                             #:assumption [assumption-id #f]
-                            #:decision-cell [decision-cell-id #f])
+                            #:decision-cell [decision-cell-id #f]
+                            #:flags [flags 0])
   ;; PAR Track 1: During BSP fire rounds, propagator creation is allowed
   ;; but the new propagator is NOT scheduled on the worklist. It exists
   ;; in the result-net's propagator CHAMP. fire-and-collect-writes captures
   ;; it via next-prop-id comparison. The topology stratum applies new
   ;; propagators to the canonical network and schedules them.
   (define pid (prop-id (prop-network-next-prop-id net)))
-  (define prop (propagator input-ids output-ids fire-fn #f))
+  (define prop (propagator input-ids output-ids fire-fn #f flags))
   (define ph (prop-id-hash pid))
   ;; CHAMP Performance Phase 7: Owner-ID transient for dependency registration.
   ;; BSP-LE Track 0 Phase 5 attempted hash-table transient here and regressed 44%.
@@ -1584,18 +1594,24 @@
 ;; Fire-Once Propagator (BSP-LE Track 2 Phase 5, moved from typing-propagators.rkt)
 ;; ========================================
 ;;
-;; Install a propagator with a flag-guard: after first successful fire
-;; (fire-fn returns a different network), subsequent scheduling is an
-;; instant no-op (unbox fired? → return n immediately).
-;; General infrastructure pattern for propagators that produce output
-;; exactly once: nogood narrowers, contradiction detectors, type-writes,
-;; usage-writes, constraint-creation, etc.
-;; Micro-benchmark: zero measurable overhead (within CV ~10%).
+;; Phase 5a: Fire-once with BOTH closure guard AND scheduler-level optimization.
+;; The closure wrapper (fired? box) provides per-call protection — prevents
+;; double-fire within a BSP round if the propagator is self-triggered.
+;; The PROP-FIRE-ONCE flag enables scheduler-level optimization:
+;; - Fired-set: skip already-fired propagators at worklist dedup (zero cost)
+;; - Self-clearing: remove from dependents after fire (no future enqueuing)
+;; - Tier 1 detection: all fire-once + empty-inputs → single-pass flush
+;; Empty inputs → PROP-EMPTY-INPUTS (eligible for direct-fire, no snapshot).
+;;
+;; General pattern for propagators that produce output exactly once:
+;; nogood narrowers, contradiction detectors, type-writes, ground unify (R3),
+;; fact-row writes (R2), guard evaluators (Phase 3).
 (define (net-add-fire-once-propagator net inputs outputs fire-fn
                                       [_watched-cid #f]  ;; legacy positional param (ignored)
                                       #:component-paths [cpaths '()]
                                       #:assumption [assumption-id #f]
                                       #:decision-cell [decision-cell-id #f])
+  ;; Closure guard: per-call fire-once protection (belt)
   (define fired? (box #f))
   (define wrapped
     (lambda (n)
@@ -1604,13 +1620,17 @@
         [else
          (define result (fire-fn n))
          (cond
-           [(eq? result n) n]  ;; no change → don't set flag (will retry)
+           [(eq? result n) n]
            [else (set-box! fired? #t) result])])))
+  ;; Flags: scheduler-level optimization (suspenders)
+  (define flags (bitwise-ior PROP-FIRE-ONCE
+                             (if (null? inputs) PROP-EMPTY-INPUTS 0)))
   (define-values (net* pid)
     (net-add-propagator net inputs outputs wrapped
                         #:component-paths cpaths
                         #:assumption assumption-id
-                        #:decision-cell decision-cell-id))
+                        #:decision-cell decision-cell-id
+                        #:flags flags))
   (values net* pid))
 
 ;; ========================================
@@ -1797,7 +1817,7 @@
           (net-cell-write net output-cid results))))
   ;; Install ONE propagator with the broadcast profile
   (define pid (prop-id (prop-network-next-prop-id net)))
-  (define prop (propagator input-cids (list output-cid) fire-fn profile))
+  (define prop (propagator input-cids (list output-cid) fire-fn profile 0))
   (define ph (prop-id-hash pid))
   ;; Register propagator + dependencies (same as net-add-propagator but with profile)
   ;; BSP-LE Track 2 Phase 5.1b: component-paths + assumption + decision-cell support.
@@ -2499,21 +2519,65 @@
                                                              sequential-fire-all)])
   (define observer (current-bsp-observer))
   (define has-topo-handlers? (pair? (unbox topology-handlers)))
-  ;; Outer loop: value stratum → topology stratum → repeat
-  (let outer-loop ([net net] [outer-round 0])
-    (cond
-      [(prop-network-contradiction net) net]
-      [(<= (prop-network-fuel net) 0) net]
-      [else
-       ;; VALUE STRATUM: standard BSP inner loop
-       (define value-result
-         (let inner-loop ([net net] [round-number 0])
-           (cond
-             [(prop-network-contradiction net) net]
-             [(<= (prop-network-fuel net) 0) net]
-             [(null? (prop-network-worklist net)) net]
+
+  ;; Phase 5a: Tier detection.
+  ;; Worldview cache == 0 means no assumptions allocated → Tier 1 (deterministic).
+  ;; Tier 1: single-pass flush (fire all propagators directly, no BSP ceremony).
+  (define worldview (net-cell-read net worldview-cache-cell-id))
+  (cond
+    [(and (zero? worldview)
+          (pair? (prop-network-worklist net))
+          (not (prop-network-contradiction net))
+          (> (prop-network-fuel net) 0)
+          ;; No pending NAF/stratum requests
+          (let ([naf-p (net-cell-read net naf-pending-cell-id)])
+            (or (not naf-p) (and (hash? naf-p) (hash-empty? naf-p))))
+          ;; ALL worklist propagators must be fire-once with empty inputs.
+          ;; If any has inputs, it may depend on other propagators → needs BSP loop.
+          (for/and ([pid (in-list (prop-network-worklist net))])
+            (define prop (champ-lookup (prop-network-propagators net)
+                                       (prop-id-hash pid) pid))
+            (and (not (eq? prop 'none))
+                 (not (zero? (bitwise-and (propagator-flags prop)
+                                          (bitwise-ior PROP-FIRE-ONCE PROP-EMPTY-INPUTS)))))))
+     ;; TIER 1: single-pass flush. All propagators are fire-once with empty inputs.
+     ;; No speculation, no branching, no NAF, no inter-propagator dependencies.
+     ;; Fire all worklist propagators directly on canonical. One pass.
+     ;; No snapshot, no dedup, no topology, no strata.
+     (define result
+       (for/fold ([n net])
+                 ([pid (in-list (prop-network-worklist net))])
+         (define prop (champ-lookup (prop-network-propagators n)
+                                    (prop-id-hash pid) pid))
+         (if (eq? prop 'none) n
+             ((propagator-fire-fn prop) n))))
+     ;; Clear worklist after flush
+     (struct-copy prop-network result
+       [hot (struct-copy prop-net-hot (prop-network-hot result)
+              [worklist '()])])]
+
+    [else
+     ;; TIER 2 (or empty worklist): full BSP with optimizations.
+     ;; Phase 5a: fired-set for self-clearing fire-once propagators.
+     (let ([fired-set (make-hasheq)])
+      ;; Outer loop: value stratum → topology stratum → repeat
+      (let outer-loop ([net net] [outer-round 0])
+       (cond
+         [(prop-network-contradiction net) net]
+         [(<= (prop-network-fuel net) 0) net]
+         [else
+          ;; VALUE STRATUM: BSP inner loop with fire-once optimization
+          (define value-result
+            (let inner-loop ([net net] [round-number 0])
+              (cond
+                [(prop-network-contradiction net) net]
+                [(<= (prop-network-fuel net) 0) net]
+                [(null? (prop-network-worklist net)) net]
              [else
-              (let* ([pids (dedup-pids (prop-network-worklist net))]
+              (let* ([raw-pids (dedup-pids (prop-network-worklist net))]
+                     ;; Phase 5a: filter out already-fired fire-once propagators
+                     [pids (filter (lambda (pid) (not (hash-has-key? fired-set pid)))
+                                   raw-pids)]
                      [n (length pids)]
                      [snapshot (struct-copy prop-network net
                                  [hot (struct-copy prop-net-hot (prop-network-hot net)
@@ -2544,6 +2608,28 @@
                                 ([spec (in-list deferred-props)])
                         (let-values ([(n* _pid) (net-add-propagator n (car spec) (cadr spec) (caddr spec))])
                           n*))]
+                     ;; Phase 5a: mark fire-once propagators as fired + self-clear.
+                     ;; Check each fired pid: if PROP-FIRE-ONCE flag set and fire produced
+                     ;; a change, add to fired-set and remove from dependents.
+                     [merged-self-cleared
+                      (for/fold ([n merged-with-props])
+                                ([pid (in-list pids)]
+                                 [result (in-list all-writes)])
+                        (define prop (champ-lookup (prop-network-propagators n)
+                                                    (prop-id-hash pid) pid))
+                        (cond
+                          [(eq? prop 'none) n]
+                          [(zero? (bitwise-and (propagator-flags prop) PROP-FIRE-ONCE)) n]
+                          [(and (fire-result? result)
+                                (or (pair? (fire-result-value-writes result))
+                                    (pair? (fire-result-new-cells result))))
+                           ;; Fire-once propagator produced output → mark fired + self-clear
+                           (hash-set! fired-set pid #t)
+                           ;; Remove from input cells' dependents (no future enqueuing)
+                           (for/fold ([net n])
+                                     ([cid (in-list (propagator-inputs prop))])
+                             (net-remove-propagator-from-dependents net pid cid))]
+                          [else n]))]
                      ;; R1: record stats if accumulator is active
                      [_ (let ([stats-box (current-bsp-round-stats)])
                           (when stats-box
@@ -2573,10 +2659,10 @@
                                          (cdr w)
                                          pid)
                               acc))))
-                  (observer (bsp-round round-number merged-with-props (reverse diffs) pids
-                                       (prop-network-contradiction merged-with-props) '())))
-                (inner-loop merged-with-props (add1 round-number)))])))
-       ;; TOPOLOGY STRATUM: process decomposition requests (sequential, outside BSP)
+                  (observer (bsp-round round-number merged-self-cleared (reverse diffs) pids
+                                       (prop-network-contradiction merged-self-cleared) '())))
+                (inner-loop merged-self-cleared (add1 round-number)))])))
+          ;; TOPOLOGY STRATUM: process decomposition requests (sequential, outside BSP)
        (cond
          [(prop-network-contradiction value-result) value-result]
          [(not has-topo-handlers?) value-result]  ;; No handlers registered — skip topology
@@ -2629,7 +2715,7 @@
                 (when (> outer-round 20)
                   (error 'run-to-quiescence-bsp
                          "topology stratum: >20 outer iterations — possible infinite loop"))
-                (outer-loop cleared-net (add1 outer-round))))])])))
+                (outer-loop cleared-net (add1 outer-round))))])])))]))
 
 ;; ========================================
 ;; Parallel Executor (Phase 2.5c)
