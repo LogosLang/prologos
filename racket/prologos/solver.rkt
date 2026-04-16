@@ -73,7 +73,7 @@
 ;; Default values for each key
 (define solver-defaults
   (hasheq 'execution  'parallel
-          'threshold  4
+          'threshold  256   ;; Phase 6: :auto DFS↔ATMS crossover (matches BSP pool crossover)
           'strategy   'auto
           'tabling    'by-default
           'provenance 'none

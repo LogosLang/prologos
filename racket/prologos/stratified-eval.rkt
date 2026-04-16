@@ -194,18 +194,39 @@
      (cond
        [tier-1-result tier-1-result]
        [else
-     ;; Phase 9a: strategy dispatch.
+     ;; Phase 6: adaptive strategy dispatch.
      ;; :depth-first → DFS (existing solve-goal)
      ;; :atms → propagator-native (solve-goal-propagator)
-     ;; :auto (default) → propagator-native when available, DFS fallback
+     ;; :auto → adaptive: DFS below threshold, ATMS above or when NAF/guard needed
      ;; Track 2B: current-solver-strategy-override takes precedence if set.
      (define strategy (or (current-solver-strategy-override)
                           (solver-config-strategy config)))
      (define use-propagator?
        (case strategy
          [(atms) #t]
-         [(auto) #f]  ;; Phase 9a: :auto stays DFS for now. :atms opts into propagator.
          [(depth-first) #f]
+         [(auto)
+          ;; Adaptive: check if query NEEDS ATMS (NAF/guard) or benefits from it (large N).
+          (define rel (hash-ref store goal-name #f))
+          (cond
+            [(not rel) #f]  ;; unknown relation → DFS (will error there)
+            [else
+             ;; Check 1: does the relation (or its dependencies) use NAF or guard?
+             ;; NAF/guard require worldview assumptions → ATMS mandatory.
+             (define has-naf-or-guard?
+               (for*/or ([v (in-list (relation-info-variants rel))]
+                         [c (in-list (variant-info-clauses v))]
+                         [g (in-list (clause-info-goals c))])
+                 (memq (goal-desc-kind g) '(not guard))))
+             (cond
+               [has-naf-or-guard? #t]  ;; ATMS required
+               [else
+                ;; Check 2: total alternatives ≥ threshold → ATMS (parallel benefit).
+                (define total-alternatives
+                  (for/sum ([v (in-list (relation-info-variants rel))])
+                    (+ (length (variant-info-facts v))
+                       (length (variant-info-clauses v)))))
+                (>= total-alternatives (solver-config-threshold config))])])]
          [else #f]))
 
      (if use-propagator?
