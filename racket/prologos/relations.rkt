@@ -201,14 +201,11 @@
                            [(hash-empty? pos-data) v]
                            [(or (scope-ref? arg) (cell-id? arg)) v]
                            [else
-                            (define (normalize-for-compare val)
-                              (cond [(expr-int? val) (expr-int-val val)]
-                                    [(expr-string? val) (expr-string-val val)]
-                                    [(expr-symbol? val) (expr-symbol-name val)]
-                                    [else val]))
+                            ;; Phase 5: discrimination data pre-normalized at boundary.
+                            ;; Normalize arg for comparison.
                             (define compatible
                               (for/seteq ([(idx expected) (in-hash pos-data)]
-                                          #:when (equal? (normalize-for-compare expected) arg))
+                                          #:when (equal? expected (normalize-solver-value arg)))
                                 idx))
                             (define wildcards
                               (for/seteq ([i (in-range n-alts)]
@@ -291,6 +288,21 @@
 ;; Contradiction detector for solver cells.
 (define (solver-contradiction? val)
   (eq? val 'solver-contradiction))
+
+;; Phase 5: Normalize AST nodes to raw values for solver matching.
+;; PPN insight: normalize at the domain boundary (data entry), not at
+;; each comparison site. All values entering the solver domain (fact terms,
+;; query args, discrimination data) are normalized once. Downstream
+;; comparisons use simple equal?.
+;; AST nodes from .prologos elaboration → raw Racket values.
+;; Raw values from test stores → passed through unchanged.
+(define (normalize-solver-value v)
+  (cond [(expr-int? v) (expr-int-val v)]
+        [(expr-string? v) (expr-string-val v)]
+        [(expr-symbol? v) (expr-symbol-name v)]
+        [(expr-true? v) #t]
+        [(expr-false? v) #f]
+        [else v]))
 
 ;; Create an empty solver environment.
 (define (make-solver-env)
@@ -485,7 +497,8 @@
   (define param-names (map param-info-name params))
   (define n-facts (length facts))
 
-  ;; Fact rows: each row contributes its ground value at each position
+  ;; Fact rows: each row contributes its ground value at each position.
+  ;; Phase 5: normalize at boundary (PPN insight) — AST nodes → raw values.
   (define from-facts
     (for/fold ([dm (hasheq)])
               ([fr (in-list facts)]
@@ -494,7 +507,7 @@
                 ([val (in-list (fact-row-terms fr))]
                  [pos (in-naturals)])
         (define pos-data (hash-ref dm pos discrimination-data-bot))
-        (hash-set dm pos (hash-set pos-data fact-idx val)))))
+        (hash-set dm pos (hash-set pos-data fact-idx (normalize-solver-value val))))))
 
   ;; Clauses: peek at first unify goal for discriminating value
   (for/fold ([dm from-facts])
@@ -514,7 +527,7 @@
                     (and (equal? pname lhs) pos)))
                 (if (and param-pos (not (symbol? rhs)))
                     (let ([pos-data (hash-ref dm param-pos discrimination-data-bot)])
-                      (hash-set dm param-pos (hash-set pos-data clause-idx rhs)))
+                      (hash-set dm param-pos (hash-set pos-data clause-idx (normalize-solver-value rhs))))
                     dm))
               dm)))))
 
@@ -715,8 +728,10 @@
            (if (or (eq? arg-val scope-cell-bot) (not arg-val))
                net  ;; arg not yet resolved — residuate (no write)
                (let ([viable
+                      ;; Phase 5: normalize arg-val for comparison (discrimination
+                      ;; data already normalized at boundary)
                       (for/seteq ([(clause-idx expected) (in-hash pd)]
-                                  #:when (equal? expected arg-val))
+                                  #:when (equal? expected (normalize-solver-value arg-val)))
                         clause-idx)])
                  (define wildcards
                    (for/seteq ([i (in-range fire-n-alts)]
@@ -731,10 +746,10 @@
          n2]
         [else
          ;; Ground argument: narrow immediately via cell write.
-         ;; Reads discrim-data from cell (construction-time — data already there).
+         ;; Phase 5: both sides normalized for comparison.
          (define viable
            (for/seteq ([(clause-idx expected) (in-hash pos-data)]
-                       #:when (equal? expected arg))
+                       #:when (equal? expected (normalize-solver-value arg)))
              clause-idx))
          (define wildcards
            (for/seteq ([i (in-range n-alternatives)]
@@ -2779,16 +2794,20 @@
                     (if (= (length row) (length effective-args))
                         ;; Check ground args match; collect free arg bindings
                         (let ([bindings
+                               ;; Phase 5: normalize both sides at boundary.
+                               ;; Check each position independently (don't zip with query-vars —
+                               ;; query-vars is shorter than effective-args for mixed queries).
                                (for/fold ([acc (hasheq)])
                                          ([ea (in-list effective-args)]
                                           [val (in-list row)]
-                                          [qv (in-list query-vars)]
                                           #:break (not acc))
+                                 (define nval (normalize-solver-value val))
+                                 (define nea (normalize-solver-value ea))
                                  (cond
-                                   [(and (symbol? ea) (memq ea query-vars))
+                                   [(and (symbol? nea) (memq nea query-vars))
                                     ;; Free query var: bind to fact value
-                                    (hash-set acc qv val)]
-                                   [(equal? ea val) acc]  ;; ground match
+                                    (hash-set acc nea nval)]
+                                   [(equal? nea nval) acc]  ;; ground match
                                    [else #f]))])          ;; ground mismatch
                           (if bindings
                               ;; Fill in unbound query vars
@@ -2798,10 +2817,13 @@
                         #f)))))))
 
   (cond
-    ;; Tier 1: direct fact return (skip propagator network entirely)
-    ;; TODO: disabled — needs AST normalization for fact-row value comparison.
-    ;; Fact values from .prologos are AST nodes; from test stores are raw values.
-    ;; [(and tier-1-result ...) tier-1-result]
+    ;; Tier 1: direct fact return (skip propagator network entirely).
+    ;; Phase 5: enabled with boundary normalization (PPN insight).
+    [(and tier-1-result (pair? (filter values tier-1-result)))
+     (filter (lambda (r)
+               (and r (not (for/and ([qv (in-list query-vars)])
+                             (eq? (hash-ref r qv) qv)))))
+             tier-1-result)]
 
     [else
      ;; Tier 2: full propagator network
