@@ -80,6 +80,9 @@
  ;; D4 Provenance: parallel explain solver internals (for wf-engine.rkt)
  explain-goals
  explain-app-goal
+ ;; Phase 5: Tier 1 universal fast-path
+ tier-1-direct-fact-return
+ normalize-solver-value
  ;; Phase 6+7: Propagator-native solver (D.11)
  install-goal-propagator
  install-conjunction
@@ -2746,6 +2749,54 @@
   results)
 
 ;; ----------------------------------------
+;; Tier 1: Universal direct fact return
+;; ----------------------------------------
+;; For single-variant, fact-only relations: bypass ALL solver infrastructure.
+;; Direct fact matching with boundary normalization (PPN insight).
+;; Returns: (listof hasheq) or #f (Tier 1 not applicable).
+;; Called from stratified-eval.rkt BEFORE strategy dispatch — benefits all paths.
+(define (tier-1-direct-fact-return store goal-name goal-args query-vars)
+  (define rel (relation-lookup store goal-name))
+  (and rel
+       (let ([variants (relation-info-variants rel)])
+         (and (= 1 (length variants))
+              (let* ([variant (car variants)]
+                     [facts (variant-info-facts variant)]
+                     [clauses (variant-info-clauses variant)]
+                     [effective-args
+                      (if (null? goal-args)
+                          (map param-info-name (variant-info-params variant))
+                          goal-args)])
+                (and (pair? facts) (null? clauses)
+                     (let ([raw-results
+                            (for/list ([fr (in-list facts)])
+                              (define row (fact-row-terms fr))
+                              (if (= (length row) (length effective-args))
+                                  (let ([bindings
+                                         (for/fold ([acc (hasheq)])
+                                                   ([ea (in-list effective-args)]
+                                                    [val (in-list row)]
+                                                    #:break (not acc))
+                                           (define nval (normalize-solver-value val))
+                                           (define nea (normalize-solver-value ea))
+                                           (cond
+                                             [(and (symbol? nea) (memq nea query-vars))
+                                              (hash-set acc nea nval)]
+                                             [(equal? nea nval) acc]
+                                             [else #f]))])
+                                    (if bindings
+                                        (for/hasheq ([qv (in-list query-vars)])
+                                          (values qv (hash-ref bindings qv qv)))
+                                        #f))
+                                  #f))])
+                       (let ([valid (filter
+                                    (lambda (r)
+                                      (and r (not (for/and ([qv (in-list query-vars)])
+                                                    (eq? (hash-ref r qv) qv)))))
+                                    raw-results)])
+                         (and (pair? valid) valid)))))))))
+
+;; ----------------------------------------
 ;; solve-goal-propagator (entry point)
 ;; ----------------------------------------
 ;; The propagator-native alternative to solve-goal.
@@ -2774,58 +2825,12 @@
           (map param-info-name params))
         goal-args))
 
-  ;; ── Opt 2: Tier 1 direct fact return ──
-  ;; For single-fact relations with ground query args: bypass propagator network.
-  ;; Directly unify query args with fact values. No cells, no propagators, no BSP.
-  ;; Detection: 1 variant, 1+ facts, 0 clauses, all query args ground or query vars.
-  (define variants (relation-info-variants rel))
-  (define tier-1-result
-    (and (= 1 (length variants))
-         (let* ([variant (car variants)]
-                [facts (variant-info-facts variant)]
-                [clauses (variant-info-clauses variant)])
-           (and (pair? facts) (null? clauses)
-                ;; Single-variant, fact-only. Try direct fact matching.
-                ;; For each fact row: unify with effective-args. Collect matches.
-                (let ([param-names (map param-info-name (variant-info-params variant))]
-                      [results '()])
-                  (for/list ([fr (in-list facts)])
-                    (define row (fact-row-terms fr))
-                    (if (= (length row) (length effective-args))
-                        ;; Check ground args match; collect free arg bindings
-                        (let ([bindings
-                               ;; Phase 5: normalize both sides at boundary.
-                               ;; Check each position independently (don't zip with query-vars —
-                               ;; query-vars is shorter than effective-args for mixed queries).
-                               (for/fold ([acc (hasheq)])
-                                         ([ea (in-list effective-args)]
-                                          [val (in-list row)]
-                                          #:break (not acc))
-                                 (define nval (normalize-solver-value val))
-                                 (define nea (normalize-solver-value ea))
-                                 (cond
-                                   [(and (symbol? nea) (memq nea query-vars))
-                                    ;; Free query var: bind to fact value
-                                    (hash-set acc nea nval)]
-                                   [(equal? nea nval) acc]  ;; ground match
-                                   [else #f]))])          ;; ground mismatch
-                          (if bindings
-                              ;; Fill in unbound query vars
-                              (for/hasheq ([qv (in-list query-vars)])
-                                (values qv (hash-ref bindings qv qv)))
-                              #f))
-                        #f)))))))
-
-  (cond
-    ;; Tier 1: direct fact return (skip propagator network entirely).
-    ;; Phase 5: enabled with boundary normalization (PPN insight).
-    [(and tier-1-result (pair? (filter values tier-1-result)))
-     (filter (lambda (r)
-               (and r (not (for/and ([qv (in-list query-vars)])
-                             (eq? (hash-ref r qv) qv)))))
-             tier-1-result)]
-
-    [else
+  ;; Tier 1 check: also at this level for direct callers (benchmarks, tests).
+  ;; Universal dispatch (stratified-eval.rkt) checks first; this is the fallback.
+  (define tier-1 (tier-1-direct-fact-return store goal-name effective-args query-vars))
+  (when tier-1 (set! tier-1 tier-1))  ;; force — tier-1-direct-fact-return returns #f or list
+  (if tier-1 tier-1
+  (let ()
      ;; Tier 2: full propagator network
      (let ()
        ;; Phase 5c: fork network template instead of building from scratch
@@ -2877,4 +2882,4 @@
        ;; answer-cid is the total sink: no internal propagator reads it.
        ;; Dissolution reads internal cells (scope, worldview), projects results,
        ;; writes the complete result set to answer-cid.
-       (dissolve-solver-pu net5 query-vars query-env answer-cid))]))
+       (dissolve-solver-pu net5 query-vars query-env answer-cid)))))

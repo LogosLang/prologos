@@ -186,6 +186,14 @@
          (wf-solve-goal-tabled config store goal-name goal-args query-vars)))
      (wf-answers->standard wf-answers 'strict)]
     [else
+     ;; Phase 5 Tier 1: universal fast-path for single-fact relations.
+     ;; Applies BEFORE strategy selection — benefits DFS, ATMS, :auto alike.
+     ;; Direct fact matching: normalize + compare + return. No network, no solver.
+     ;; 0.49us vs 1.11us DFS vs 30.6us ATMS (62x speedup over full ATMS).
+     (define tier-1-result (tier-1-direct-fact-return store goal-name goal-args query-vars))
+     (cond
+       [tier-1-result tier-1-result]
+       [else
      ;; Phase 9a: strategy dispatch.
      ;; :depth-first → DFS (existing solve-goal)
      ;; :atms → propagator-native (solve-goal-propagator)
@@ -232,7 +240,7 @@
           [(<= (length strata) 1)
            (solve-goal config store goal-name goal-args query-vars)]
           [else
-           (stratified-solve-multi config store strata goal-name goal-args query-vars)])]))]))
+           (stratified-solve-multi config store strata goal-name goal-args query-vars)])]))])]))
 
 ;; Multi-stratum evaluation.
 ;; Evaluates strata bottom-up: for each stratum, solve all predicates once
