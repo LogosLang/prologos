@@ -32,7 +32,7 @@
 | 2c | Semaphore-based worker pool for BSP parallelism | ✅ | `a7b015dd`. Pool config cell-id 5. Persistent K workers, semaphore dispatch. Closure-as-module. Crossover at N≈256 (pool 1.6x faster at N=512). Threshold=256. |
 | 2d | Streaming BSP investigation | ✅ | Investigated: spin-wait (workers sleep during merge, ineffective), sync events (expensive dispatch), async-channel (30us/call), spin-poll (250us busy-spin). All worse than sync pool. Root cause: Racket inter-thread overhead > work granularity (~0.5us/propagator). Sync pool at N≈256 remains optimal for Phase 0. |
 | 3 | Guard as worldview assumption | ✅ | `83276b0d`. Same pattern as NAF: allocate assumption, tag subsequent goals, fire-once evaluates condition at S0, nogood if falsy. install-conjunction pre-scans both NAF + guard. |
-| 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
+| 5a | BSP fire-once fast-path + Tier detection | ✅ | `333a5667`. Propagator flags (FIRE-ONCE, EMPTY-INPUTS). Tier 1 flush (worldview==0 + all fire-once+empty → direct fire). Self-clearing (fired-set + remove from dependents). |
 | 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
 | 5c | Solver-template cell (was: context pooling — on-network per critique) | ⬜ | First-write-wins cell replaces parameter. Template reused via CHAMP fork. |
 | 6 | `:auto` switch + adaptive parallel executor | ⬜ | Sequential default, threads at N≥128. Flip `:auto` → propagator. Full regression gate. |
