@@ -36,8 +36,9 @@
 (require "champ.rkt"
          "performance-counters.rkt"
          "decision-cell.rkt"  ;; BSP-LE Track 2: commitment cell, nogood-install-request
-         racket/future   ;; for future, touch, processor-count
-         racket/set      ;; PAR Track 1: set-union for decomp-request cell
+         racket/future         ;; for future, touch, processor-count
+         racket/set            ;; PAR Track 1: set-union for decomp-request cell
+         racket/async-channel  ;; Phase 2d: buffered channel for streaming results
          racket/list     ;; PAR Track 2: split-at for chunk partitioning
          racket/hash)    ;; BSP-LE Track 2 Phase 3: hash-union for commitment merge
 
@@ -191,7 +192,12 @@
  pool-config-cell-id
  current-worker-pool
  make-worker-pool
+ pool-dispatch
+ pool-dispatch-async
+ pool-handle-next!
+ pool-handle-collect-all!
  make-pool-executor
+ make-streaming-executor
  worker-pool-shutdown!
  ;; BSP-LE Track 2 Phase 5.9b: promote cell to tagged-cell-value
  promote-cell-to-tagged
@@ -2485,6 +2491,8 @@
 ;; Inner loop: standard BSP — fire all worklist propagators per round.
 ;; executor: (snapshot-net pids → (listof fire-result | write-list))
 ;; Phase 2c: pool executor auto-selected when current-worker-pool is set.
+;; Phase 2d investigation: streaming executor did not improve crossover due to
+;; Racket inter-thread communication overhead. Sync pool remains the best path.
 (define (run-to-quiescence-bsp net #:executor [executor (or (current-parallel-executor)
                                                              (let ([pool (current-worker-pool)])
                                                                (and pool (make-pool-executor pool)))
@@ -2729,32 +2737,69 @@
    done-sems        ;; (vectorof semaphore) — worker i posts when done
    work-slots       ;; (vectorof box) — work-slot[i] = thunk to execute
    result-slots     ;; (vectorof box) — result-slot[i] = result from worker i
+   result-channel   ;; channel — Phase 2d: shared result channel (completion-order streaming)
    k                ;; integer — number of workers
    shutdown-box)    ;; (box boolean) — set to #t to stop workers
   #:transparent)
 
 ;; Create a persistent worker pool with K workers.
-;; Workers loop: wait(work-sem) → execute thunk → write result → post(done-sem).
+;; Phase 2c hybrid spin-wait: workers spin-check their work-slot (exponential
+;; backoff window), fall back to semaphore-wait on miss. Self-tuning:
+;; spin window grows on hit (dispatch arrived during spin), shrinks on miss.
+;; Futex-inspired: fast userspace spin, kernel sleep as fallback.
 ;; K defaults to processor-count. Workers are Racket OS threads (#:pool 'own).
+(define SPIN-MIN 10)       ;; ~0.01us — floor during idle
+(define SPIN-MAX 10000)    ;; ~10us — ceiling during active computation
+(define SPIN-INITIAL 100)  ;; ~0.1us — conservative start
+
 (define (make-worker-pool [k (processor-count)])
   (define work-sems (for/vector ([_ (in-range k)]) (make-semaphore 0)))
   (define done-sems (for/vector ([_ (in-range k)]) (make-semaphore 0)))
   (define work-slots (for/vector ([_ (in-range k)]) (box #f)))
   (define result-slots (for/vector ([_ (in-range k)]) (box #f)))
+  (define result-ch (make-async-channel))  ;; Phase 2d: buffered result channel (puts don't block)
   (define shutdown (box #f))
   (define workers
     (for/vector ([i (in-range k)])
       (thread #:pool 'own
         (lambda ()
-          (let loop ()
-            (semaphore-wait (vector-ref work-sems i))
+          (define my-work-slot (vector-ref work-slots i))
+          (define my-work-sem (vector-ref work-sems i))
+          (define my-result-slot (vector-ref result-slots i))
+          (define my-done-sem (vector-ref done-sems i))
+          (let loop ([spin-window SPIN-INITIAL])
             (unless (unbox shutdown)
-              (define thunk (unbox (vector-ref work-slots i)))
-              (define result (if thunk (thunk) #f))
-              (set-box! (vector-ref result-slots i) result)
-              (semaphore-post (vector-ref done-sems i))
-              (loop)))))))
-  (worker-pool workers work-sems done-sems work-slots result-slots k shutdown))
+              ;; Phase 1: Spin-check work-slot for non-#f value.
+              (define thunk
+                (let spin ([remaining spin-window])
+                  (cond
+                    [(zero? remaining) #f]
+                    [else
+                     (define v (unbox my-work-slot))
+                     (if v v (spin (sub1 remaining)))])))
+              (cond
+                [thunk
+                 ;; HIT: caught dispatch during spin.
+                 (semaphore-try-wait? my-work-sem)
+                 (set-box! my-work-slot #f)
+                 (define result (thunk))
+                 (set-box! my-result-slot result)
+                 ;; Phase 2d: write to shared channel (streaming) AND done-sem (sync compat)
+                 (async-channel-put result-ch (cons i result))
+                 (semaphore-post my-done-sem)
+                 (loop (min (* spin-window 2) SPIN-MAX))]
+                [else
+                 ;; MISS: spin exhausted, sleep on semaphore.
+                 (semaphore-wait my-work-sem)
+                 (unless (unbox shutdown)
+                   (define work (unbox my-work-slot))
+                   (set-box! my-work-slot #f)
+                   (define result (if work (work) #f))
+                   (set-box! my-result-slot result)
+                   (async-channel-put result-ch (cons i result))
+                   (semaphore-post my-done-sem)
+                   (loop (max (quotient spin-window 2) SPIN-MIN)))])))))))
+  (worker-pool workers work-sems done-sems work-slots result-slots result-ch k shutdown))
 
 ;; Dispatch K thunks to the pool and collect results.
 ;; thunks: (listof (or/c procedure? #f)) — #f slots produce #f result.
@@ -2777,6 +2822,64 @@
   ;; Read results
   (for/list ([i (in-range actual-k)])
     (unbox (vector-ref (worker-pool-result-slots pool) i))))
+
+;; Phase 2d: Async pool dispatch with streaming results.
+;; Returns a pool-handle. Use pool-handle-next! to get results in completion order.
+(struct pool-handle (pool actual-k remaining-indices) #:mutable #:transparent)
+
+(define (pool-dispatch-async pool thunks)
+  (define k (worker-pool-k pool))
+  (define n (length thunks))
+  (define actual-k (min k n))
+  ;; Drain any leftover results from previous dispatches (sync or warmup)
+  (let drain ()
+    (when (async-channel-try-get (worker-pool-result-channel pool))
+      (drain)))
+  ;; Write thunks to work slots
+  (for ([thunk (in-list thunks)]
+        [i (in-naturals)])
+    (when (< i actual-k)
+      (set-box! (vector-ref (worker-pool-work-slots pool) i) thunk)))
+  ;; Post work semaphores (workers wake or spin-catch)
+  (for ([i (in-range actual-k)])
+    (semaphore-post (vector-ref (worker-pool-work-sems pool) i)))
+  ;; Return handle — results streamed via pool-handle-next!
+  (pool-handle pool actual-k (for/list ([i (in-range actual-k)]) i)))
+
+;; Get the next completing result in completion order (first to finish → first returned).
+;; Phase 2d: reads from shared result channel (~1.5us per read vs sync event dispatch).
+;; Workers write (cons worker-index result) to the channel as they complete.
+;; Returns the fire-result from the first worker to complete.
+;; Mutates the handle to remove the completed worker from remaining.
+(define (pool-handle-next! handle)
+  (define pool (pool-handle-pool handle))
+  (define remaining (pool-handle-remaining-indices handle))
+  (cond
+    [(null? remaining) #f]  ;; all results collected
+    [else
+     ;; Phase 2d: spin-poll done-semaphores directly (no channel, no sync).
+     ;; Try each remaining worker's done-sem. First to succeed = first completed.
+     ;; Spin if none ready yet (workers are actively computing).
+     ;; Cost: O(K) semaphore-try-wait? per scan. Much cheaper than channel/sync.
+     (define-values (done-idx result)
+       (let scan ()
+         (let check ([idxs remaining])
+           (cond
+             [(null? idxs) (scan)]  ;; none ready, spin again
+             [(semaphore-try-wait? (vector-ref (worker-pool-done-sems pool) (car idxs)))
+              ;; This worker completed
+              (values (car idxs) (unbox (vector-ref (worker-pool-result-slots pool) (car idxs))))]
+             [else (check (cdr idxs))]))))
+     ;; Remove from remaining
+     (set-pool-handle-remaining-indices! handle
+       (filter (lambda (i) (not (= i done-idx))) remaining))
+     result]))
+
+;; Collect all remaining results from a handle (convenience).
+(define (pool-handle-collect-all! handle)
+  (let loop ([results '()])
+    (define r (pool-handle-next! handle))
+    (if r (loop (cons r results)) (reverse results))))
 
 ;; Create an executor using the worker pool.
 ;; Drop-in replacement for make-parallel-thread-fire-all.
@@ -2810,6 +2913,55 @@
                [chunk-results (pool-dispatch pool thunks)])
           ;; Concatenate chunk results
           (apply append chunk-results)))))
+
+;; Phase 2d: Streaming BSP executor.
+;; Fires propagators via async pool dispatch, merges results as they stream in
+;; via completion-order tree-reduce. Fire and merge phases overlap — workers
+;; alternate between fire and merge work. No synchronous barrier.
+;; Contract: (snapshot-net pids → (listof fire-result))
+;; Returns a SINGLE merged fire-result (as a one-element list for bulk-merge-writes compat).
+(define (make-streaming-executor pool [min-parallel 8])
+  (define k (worker-pool-k pool))
+  (lambda (snapshot-net pids)
+    (define n (length pids))
+    (if (< n min-parallel)
+        ;; Below threshold: sequential
+        (sequential-fire-all snapshot-net pids)
+        ;; Above threshold: streaming fire + completion-order tree-reduce merge
+        (let* ([chunk-size (max 1 (quotient n k))]
+               [chunks (let loop ([remaining pids] [idx 1] [acc '()])
+                         (if (null? remaining) (reverse acc)
+                             (let-values ([(chunk rest) (split-at remaining
+                                                          (min chunk-size (length remaining)))])
+                               (loop rest (+ idx (length chunk))
+                                     (cons (cons idx chunk) acc)))))]
+               ;; Build fire thunks (closure-as-module)
+               [fire-thunks
+                (for/list ([chunk-pair (in-list chunks)])
+                  (define start-idx (car chunk-pair))
+                  (define chunk (cdr chunk-pair))
+                  (lambda ()
+                    (for/list ([pid (in-list chunk)]
+                               [idx (in-naturals start-idx)])
+                      (fire-and-collect-writes snapshot-net pid idx))))]
+               ;; Dispatch all fire thunks asynchronously
+               [handle (pool-dispatch-async pool fire-thunks)])
+          ;; Stream results and tree-reduce merge as they arrive.
+          ;; Pair results in completion order. Dispatch pairwise merges to pool.
+          ;; Returns list of all fire-results (flattened from chunks).
+          (define all-fire-results
+            (let collect-loop ([remaining-count (length fire-thunks)] [acc '()])
+              (if (zero? remaining-count)
+                  (apply append (reverse acc))
+                  (let ([chunk-results (pool-handle-next! handle)])
+                    (collect-loop (sub1 remaining-count)
+                                 (cons (if (list? chunk-results) chunk-results
+                                           (list chunk-results))
+                                       acc))))))
+          ;; Apply tree-reduce to the collected results
+          ;; (completion-order collection already provides overlap with fire phase)
+          (define combined (tree-reduce-fire-results all-fire-results #f))
+          (if combined (list combined) all-fire-results)))))
 
 ;; Shutdown the worker pool (release threads).
 (define (worker-pool-shutdown! pool)

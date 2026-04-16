@@ -30,6 +30,7 @@
 | 2a | NAF + scope sharing + product dissolution | ✅ | `a6b02159`→`4b2e5bdf`. Resolution B: scope sharing (no bridges). Product-worldview dissolution. S1 fork-based handler (R4). All adversarial NAF cases pass: basic ✅, variable ✅, both-passed 3 ✅, cross-relation 6 ✅. |
 | 2b | Parallel tree-reduce merge (hypercube) | ✅ | `bbf3eb82`. Per-propagator cell-id namespaces (high-bit encoding). CHAMP diff for new-cell capture. merge-fire-results + tree-reduce-fire-results. Parallel pairwise via threads. Threshold-configurable (default 128). |
 | 2c | Semaphore-based worker pool for BSP parallelism | ✅ | `a7b015dd`. Pool config cell-id 5. Persistent K workers, semaphore dispatch. Closure-as-module. Crossover at N≈256 (pool 1.6x faster at N=512). Threshold=256. |
+| 2d | Streaming BSP investigation | ✅ | Investigated: spin-wait (workers sleep during merge, ineffective), sync events (expensive dispatch), async-channel (30us/call), spin-poll (250us busy-spin). All worse than sync pool. Root cause: Racket inter-thread overhead > work granularity (~0.5us/propagator). Sync pool at N≈256 remains optimal for Phase 0. |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
 | 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
 | 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
@@ -967,6 +968,189 @@ After implementation: re-run `bench-tree-reduce.rkt` with the pool executor. Mea
 - Find `:auto` threshold from data
 
 Expected: crossover at N≈8-16 (from Phase 0b Tier B estimate).
+
+**Actual results (Phase 2c)**: Pool crossover at N≈256 (pool 1.6x faster at N=512). Spin-wait ineffective due to synchronous fire→merge barrier — workers sleep during merge phase (~30-120us), spin window exhausted. Root cause: OS thread wakeup latency ~8us/worker dominates. Solution: Phase 2d streaming BSP.
+
+### §3.2d Phase 2d: Streaming BSP — Pipelined Fire+Merge
+
+#### Problem
+
+The Phase 2c benchmark revealed: the synchronous barrier between fire and merge phases kills spin-wait effectiveness. Workers complete fire work, spin for ~10us (max window), then fall asleep on semaphores. The merge phase runs on the main thread for 30-120us. By the time the next fire dispatch arrives, workers are sleeping. OS wakeup latency (~8us/worker) dominates.
+
+#### Architecture: eliminate the synchronous barrier
+
+From bulk-synchronous (fire → barrier → merge) to **streaming-synchronous** (fire+merge pipeline). Workers are never idle — they transition between fire and merge work continuously.
+
+```
+Current BSP round:
+  Fire (pool) ████████████ │ BARRIER │ Merge (main thread) ████████████
+  workers active            workers   workers sleeping
+                            sleeping
+
+Streaming BSP round:
+  W0: fire ████████ → result₀ ─┐
+                                 ├→ W0: merge(r₀,r₂) ─┐
+  W1: fire ██████████ → result₁ │                       │
+                                 │                       ├→ W2: merge(m₀₂,m₁₃) → canonical
+  W2: fire ██████ → result₂ ───┘                       │
+                                 ├→ W3: merge(r₁,r₃) ─┘
+  W3: fire ████████████ → result₃┘
+
+  Workers alternate fire↔merge. No idle phase. Spin-wait catches between tasks.
+```
+
+#### Mantra alignment
+
+- **All-at-once**: K fire operations + pairwise merges all dispatched to pool simultaneously
+- **All in parallel**: fire and merge overlap; independent merges run concurrently
+- **Structurally emergent**: merge tree emerges from completion order, not pre-assigned positions
+- **Information flow**: fire-results stream through the merge tree to canonical
+- **ON-NETWORK**: fire-results and merged networks are cell-based values flowing through the pipeline
+
+#### Components
+
+##### 1. Async pool dispatch + streaming results
+
+```racket
+(define handle (pool-dispatch-async pool thunks))
+;; Returns immediately. Workers start executing.
+
+;; Get results in COMPLETION order (first worker to finish → first result)
+(define first-result (pool-handle-next! handle))
+(define second-result (pool-handle-next! handle))
+```
+
+Implementation: `pool-handle-next!` uses Racket's `sync` to multiplex on K done-semaphores. `(sync evt₀ evt₁ ... evtₖ)` returns when the first event fires. Returns the completing worker's result.
+
+##### 2. Streaming tree-reduce merge (completion-order)
+
+As fire-results arrive, pair them and dispatch pairwise merges to available workers:
+
+```
+Result buffer: []
+
+stream → result₂ → buffer [r₂]          (worker 2 finished first)
+stream → result₀ → buffer [r₂, r₀]      → pair ready
+  → dispatch merge(r₂, r₀) to worker    (worker 2 is available — just finished fire)
+stream → result₃ → buffer [r₃]
+stream → result₁ → buffer [r₃, r₁]      → pair ready
+  → dispatch merge(r₃, r₁) to worker
+stream → merged₂₀ → buffer [m₂₀]        (merge results stream too)
+stream → merged₃₁ → buffer [m₂₀, m₃₁]   → pair ready
+  → dispatch final merge → canonical
+```
+
+The merge tree is **completion-order balanced**: first two results to arrive get paired. Workers alternate fire→merge seamlessly — the pool dispatches thunks regardless of whether they're fire or merge work.
+
+##### 3. Spin-wait effective across phases
+
+With streaming, the gap between a worker finishing one task and receiving the next is: orchestrator overhead (~0.1us for `sync` + re-dispatch). Workers that finished and haven't received new work: spinning. The spin window catches because the gap is sub-microsecond.
+
+Between rounds: the last merge produces the canonical. Next round's snapshot is taken. Fire dispatched immediately. Workers that just finished merge: spinning. Spin catches.
+
+Workers are warm across the entire computation.
+
+##### 4. BSP inner loop restructured
+
+```racket
+;; Current:
+snapshot → fire-all(pool) → wait-all → merge-all → check-worklist → loop
+
+;; Streaming:
+snapshot → dispatch-fire-async(pool) → stream-merge-tree(pool) → check-worklist → loop
+                                        ↑
+                                        processes results as they arrive,
+                                        dispatches pairwise merges to pool,
+                                        returns when tree-reduce completes
+```
+
+`stream-merge-tree` is the orchestrator: calls `pool-handle-next!` to stream results, pairs them, dispatches merges, recursively processes until one final result remains. Applies the final merged result to the snapshot → canonical network.
+
+#### Investigation Results — All Approaches Benchmarked
+
+**Goal**: Lower the parallel crossover from N≈256 (sync pool) to N≈16-32 by eliminating the synchronous fire→merge barrier. Workers should stay warm between phases via spin-wait.
+
+**Approaches tried and measured** (fire+merge pipeline, K=10 cores):
+
+##### Approach 1: Hybrid spin-wait workers (exponential backoff)
+
+Workers spin-check work-slot, fall back to semaphore on miss. Window grows on hit, shrinks on miss.
+
+- **Result**: Hot dispatch 104us, cold 160us, rapid consecutive 106us. **Same as semaphore-only pool.** Spin-wait never catches because the merge phase (~30-120us) exceeds the max spin window (~10us). Workers always sleep during merge.
+- **Lesson**: Spin-wait is ineffective when the inter-dispatch gap (merge time) exceeds the spin window. The BSP synchronous barrier kills spin-wait.
+
+##### Approach 2: Streaming via `sync` event multiplexing
+
+`pool-handle-next!` uses `(sync evt₀ ... evtₖ)` to get results in completion order.
+
+- **Result**: 152-298us, WORSE than sync pool at all N. `sync` event dispatch overhead (~15-20us per call) exceeds the pipelining benefit.
+- **Lesson**: Racket's `sync` is designed for generality, not microsecond dispatch. Event wrapper allocation + runtime dispatch is too expensive.
+
+##### Approach 3: Streaming via `async-channel`
+
+Workers write to a shared buffered channel. Orchestrator reads in FIFO order.
+
+- **Result**: 291-399us floor. WORSE than sync pool.
+- **Lesson**: `async-channel-get` has ~30us overhead (built on Racket's event system internally). Synchronous channels deadlock (unbuffered puts block when orchestrator hasn't started getting).
+
+##### Approach 4: Spin-poll done-semaphores
+
+Orchestrator busy-loops scanning `semaphore-try-wait?` across remaining workers.
+
+- **Result**: 2240-2616us. 560x slower at N=8. Catastrophically bad.
+- **Lesson**: `semaphore-try-wait?` in a tight loop has per-call Racket runtime overhead. Scanning K=10 semaphores thousands of times burns CPU without progress.
+
+##### Summary Table
+
+| Mechanism | Overhead per dispatch | N=64 | N=256 | N=512 | Crossover |
+|---|---|---|---|---|---|
+| **Sync pool (2c, BEST)** | ~80us (8us/worker wakeup) | 115us | 147us | **212us** | **N≈256** |
+| Spin-wait (hybrid) | ~100us (spin misses) | same as sync | same | same | N≈256 |
+| Streaming (sync events) | ~180us (event dispatch) | 188us | 238us | 298us | N>512 |
+| Streaming (async-channel) | ~300us (channel overhead) | 363us | 345us | 399us | N>512 |
+| Streaming (spin-poll) | ~2400us (busy spin) | 2368us | 2402us | 2616us | never |
+
+#### Root Cause Analysis
+
+**The fundamental bottleneck is Racket's inter-thread communication cost.**
+
+Per-propagator work: ~0.5us. All Racket mechanisms for cross-thread signaling cost 8-300us per interaction. The work is too cheap for the coordination overhead.
+
+| Primitive | Cost | Source |
+|---|---|---|
+| Semaphore post+wait (same thread) | 0.012us | Phase 0b |
+| Semaphore post→wake (cross-thread) | ~8us | Phase 2c diagnostic |
+| Channel round-trip | 1.57us | Phase 0b |
+| `sync` event dispatch | ~15-20us | Phase 2d |
+| `async-channel-get` | ~30us | Phase 2d |
+| `semaphore-try-wait?` (tight loop) | ~0.25us/call | Phase 2d |
+
+The gap: same-thread semaphore is 0.012us, cross-thread is 8us — **667x overhead** from OS thread wakeup latency. This is macOS scheduler cost, not Racket overhead.
+
+#### Conclusion and Forward Path
+
+**For Phase 0 Racket**: Sync pool (2c) at N≈256 is the best achievable. The parallel infrastructure is architecturally correct. Sequential tree-reduce (2b) adds ~1.1x overhead — correct structure, negligible cost.
+
+**The crossover will improve when**:
+1. **Per-propagator work becomes more expensive**: Self-hosted compiler's complex lattice merges, structural unification, trait resolution — work per propagator may be 10-100x more than the current 0.5us. At 5us/propagator, sync pool crossover drops to N≈25.
+2. **Lighter-weight concurrency runtime**: Prologos's own lightweight process model (PAR/distributed runtime series). Erlang-style processes with ~0.3us creation would drop crossover to N≈4-8.
+3. **Larger workloads**: Adversarial queries with 500+ propagators per BSP round already benefit from the current pool (1.6x at N=512).
+
+**What we delivered (permanent)**:
+- Tree-reduce structure (correct parallel shape, ~1.1x sequential overhead)
+- Per-propagator cell-id namespaces (collision-free parallel cell allocation)
+- CHAMP diff for new-cell capture (handles namespaced IDs)
+- Persistent worker pool with semaphore dispatch
+- Hybrid spin-wait workers (correct mechanism, effective when inter-dispatch gap is short)
+- Streaming dispatch API (pool-dispatch-async, pool-handle-next!) for future use
+- Configurable threshold (current-tree-reduce-threshold, solver-config overridable)
+
+#### Correctness
+
+All approaches preserve BSP correctness by construction:
+- All fire functions see the same snapshot (BSP isolation) — unchanged
+- Merge is associative+commutative — order doesn't affect result
+- The final canonical is identical regardless of fire/merge interleaving
 
 ### §3.2 NAF as Async Propagator — Lattice Analysis
 
