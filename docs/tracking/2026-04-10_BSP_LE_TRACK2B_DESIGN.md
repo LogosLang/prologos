@@ -34,7 +34,7 @@
 | 3 | Guard as worldview assumption | ✅ | `83276b0d`. Same pattern as NAF: allocate assumption, tag subsequent goals, fire-once evaluates condition at S0, nogood if falsy. install-conjunction pre-scans both NAF + guard. |
 | 5a | BSP fire-once fast-path + Tier detection | ✅ | `333a5667`. Propagator flags (FIRE-ONCE, EMPTY-INPUTS). Tier 1 flush (worldview==0 + all fire-once+empty → direct fire). Self-clearing (fired-set + remove from dependents). |
 | 5b/5c | Template + Tier 1 + boundary normalization | ✅ | `d998b06c`→`01de93f5`. Tier 1 direct fact return (0.49us, 62x speedup, 2.3x faster than DFS). Network template. Scope-sensitive fire-once. PPN boundary normalization. |
-| 6 | `:auto` switch + adaptive parallel executor | ⬜ | Sequential default, threads at N≥128. Flip `:auto` → propagator. Full regression gate. |
+| 6 | `:auto` adaptive dispatch | ✅ | `7d77d52a`. Adaptive: Tier 1 (facts), NAF/guard → ATMS, N≥threshold(256) → ATMS, else → DFS. Configurable threshold. 2 known wf-comparison parity issues (Phase T). |
 | T | Parity regression suite | ⬜ | `test-solver-parity.rkt` — representative queries, BOTH strategies, set-equal results |
 | PIR | Post-implementation review | ⬜ | |
 
