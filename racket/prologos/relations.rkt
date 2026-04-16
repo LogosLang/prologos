@@ -2038,27 +2038,129 @@
            net3))]
 
     [(guard)
-     ;; Guard: evaluate condition, proceed if truthy.
+     ;; Phase 3: Guard as worldview assumption (same pattern as NAF).
+     ;; Guard allocates an assumption h_guard. Subsequent conjunction goals
+     ;; are tagged with h_guard bitmask. If guard evaluates to false,
+     ;; h_guard becomes a nogood → worldview narrows → tagged writes invisible.
+     ;; Guard evaluates at S0 (monotone — condition known once inputs resolve).
+     ;; NAF evaluates at S1 (non-monotone — inverts provability).
      (define condition (car args))
      (define inner-goal-expr (and (pair? (cdr args)) (cadr args)))
      (define eval-fn (current-is-eval-fn))
-     (define cond-val
-       (if eval-fn
-           (eval-fn condition)
-           condition))
-     (define truthy?
-       (cond
-         [(expr-true? cond-val) #t]
-         [(expr-false? cond-val) #f]
-         [(boolean? cond-val) cond-val]
-         [(eq? cond-val #f) #f]
-         [else #t]))
-     (if truthy?
-         (if (and inner-goal-expr (not (eq? inner-goal-expr #f)))
-             (let ([inner-goal (expr->goal-desc inner-goal-expr)])
-               (install-goal-propagator net inner-goal env answer-cid ctx))
-             net)  ;; 1-arg guard: condition passed, succeed
-         net)]  ;; guard failed — return unchanged network
+
+     (if (not ctx)
+         net  ;; no solver context — guard is construction-time eval (test scaffolding)
+         (let ()
+           ;; Allocate guard assumption
+           (define-values (net1 guard-aid)
+             (solver-assume ctx net (gensym 'guard) 'guard-probe))
+           (define guard-bit-pos (assumption-id-n guard-aid))
+
+           ;; Promote outer scope cells to tagged-cell-value
+           (define outer-scope-cids
+             (remove-duplicates
+              (for/list ([ref (in-hash-values env)]
+                         #:when (scope-ref? ref))
+                (scope-ref-cid ref))))
+           (define net2
+             (for/fold ([n net1])
+                       ([cid (in-list outer-scope-cids)])
+               (promote-cell-to-tagged n cid)))
+
+           ;; Collect condition's variable references for the guard-test propagator
+           (define (collect-expr-vars expr)
+             (cond
+               [(expr-logic-var? expr)
+                (define ref (hash-ref env (expr-logic-var-name expr) #f))
+                (if (and ref (scope-ref? ref)) (list ref) '())]
+               [(symbol? expr)
+                (define ref (hash-ref env expr #f))
+                (if (and ref (scope-ref? ref)) (list ref) '())]
+               [(expr-app? expr)
+                (append (collect-expr-vars (expr-app-func expr))
+                        (collect-expr-vars (expr-app-arg expr)))]
+               [(pair? expr)
+                (append (collect-expr-vars (car expr))
+                        (collect-expr-vars (cdr expr)))]
+               [(struct? expr)
+                (define v (struct->vector expr))
+                (apply append
+                       (for/list ([i (in-range 1 (vector-length v))])
+                         (collect-expr-vars (vector-ref v i))))]
+               [else '()]))
+           (define var-refs (remove-duplicates (collect-expr-vars condition)))
+           (define input-cids
+             (remove-duplicates
+              (for/list ([ref (in-list var-refs)]) (scope-ref-cid ref))))
+           (define cpaths
+             (for/list ([ref (in-list var-refs)] #:when (scope-ref? ref))
+               (cons (scope-ref-cid ref) (scope-ref-var ref))))
+
+           ;; Resolve condition expression using network cell values
+           (define (resolve-condition-from-net net)
+             (define (resolve-expr expr)
+               (cond
+                 [(expr-logic-var? expr)
+                  (define ref (hash-ref env (expr-logic-var-name expr) #f))
+                  (if (and ref (scope-ref? ref))
+                      (let ([v (logic-var-read net ref)])
+                        (if (eq? v scope-cell-bot) expr v))
+                      expr)]
+                 [(symbol? expr)
+                  (define ref (hash-ref env expr #f))
+                  (if (and ref (scope-ref? ref))
+                      (let ([v (logic-var-read net ref)])
+                        (if (eq? v scope-cell-bot) expr v))
+                      expr)]
+                 [(expr-app? expr)
+                  (expr-app (resolve-expr (expr-app-func expr))
+                            (resolve-expr (expr-app-arg expr)))]
+                 [(pair? expr)
+                  (cons (resolve-expr (car expr)) (resolve-expr (cdr expr)))]
+                 [else expr]))
+             (resolve-expr condition))
+
+           ;; Guard fire function: evaluate condition, write nogood if falsy.
+           ;; If truthy: guard assumption stays valid, tagged writes persist.
+           ;; If falsy: nogood eliminates h_guard, tagged writes invisible.
+           (define (guard-fire net)
+             (define resolved-cond (resolve-condition-from-net net))
+             (define cond-val
+               (if eval-fn (eval-fn resolved-cond) resolved-cond))
+             (define truthy?
+               (cond
+                 [(expr-true? cond-val) #t]
+                 [(expr-false? cond-val) #f]
+                 [(boolean? cond-val) cond-val]
+                 [(eq? cond-val #f) #f]
+                 [else #t]))
+             (if truthy?
+                 net  ;; guard passed — assumption stays valid
+                 ;; guard failed — write nogood (clear worldview bit)
+                 (let ()
+                   (define invalid-mask (arithmetic-shift 1 guard-bit-pos))
+                   (define current-wv (net-cell-read net worldview-cache-cell-id))
+                   (define cleared-wv (bitwise-and current-wv (bitwise-not invalid-mask)))
+                   (net-cell-write net worldview-cache-cell-id cleared-wv))))
+
+           ;; Install fire-once guard-test propagator
+           (define-values (net3 _pid)
+             (net-add-fire-once-propagator net2 input-cids '()
+                                           (maybe-wrap-worldview guard-fire)
+                                           #:component-paths cpaths))
+
+           ;; If guard has an inner goal, install it under guard bitmask
+           ;; (it's part of the "then" branch, gated by the guard assumption)
+           (define net4
+             (if (and inner-goal-expr (not (eq? inner-goal-expr #f)))
+                 (let ([inner-goal (expr->goal-desc inner-goal-expr)]
+                       [guard-bm (bitwise-ior (current-worldview-bitmask)
+                                              (arithmetic-shift 1 guard-bit-pos))])
+                   (parameterize ([current-worldview-bitmask guard-bm])
+                     (install-goal-propagator net3 inner-goal env answer-cid ctx)))
+                 net3))
+
+           net4))]
 
     [(cut) net]   ;; Out of scope (P2)
     [else net]))
@@ -2075,38 +2177,58 @@
 ;; Returns: new-network
 ;; Phase R1: store and config read from well-known cells on network.
 (define (install-conjunction net goals env answer-cid [ctx #f])
-  ;; Phase 1: Pre-scan for NAF goals, allocate assumptions.
+  ;; Phase 1: Pre-scan for NAF and guard goals, allocate assumptions.
+  ;; Phase 3: guards follow NAF pattern — allocate assumption, tag subsequent goals.
   ;; Phase R4: reads NAF bit positions from the NAF-pending cell (on-network).
+  ;; Guard bit positions come from solver-assume (returned in the network's
+  ;; worldview cache — each assumption adds a bit).
   (define naf-pending-before (net-cell-read net naf-pending-cell-id))
-  (define-values (net-with-nafs naf-bm)
+  (define gating-kinds '(not guard))  ;; both NAF and guard are gating goals
+  (define-values (net-with-gates gate-bm)
     (for/fold ([n net]
                [bm 0])
               ([goal (in-list goals)]
-               #:when (eq? (goal-desc-kind goal) 'not))
-      ;; Allocate NAF assumption + promote cells + register in NAF-pending cell
+               #:when (memq (goal-desc-kind goal) gating-kinds))
+      ;; Install the gating goal (allocates assumption + registers)
       (define n2 (install-goal-propagator n goal env answer-cid ctx))
-      ;; Phase R4: read NAF bit position from the NAF-pending cell.
-      ;; The NAF goal just wrote its registration. Find the new entry.
-      (define naf-pending-after (net-cell-read n2 naf-pending-cell-id))
-      (define new-entries
-        (for/list ([(k v) (in-hash naf-pending-after)]
-                   #:when (not (hash-has-key? naf-pending-before k)))
-          v))
-      (define naf-bit-pos
-        (if (pair? new-entries)
-            (hash-ref (car new-entries) 'naf-bit-pos 0)
-            0))
-      (values n2 (bitwise-ior bm (arithmetic-shift 1 naf-bit-pos)))))
+      ;; Read the new bit position from the network.
+      ;; For NAF: from the NAF-pending cell.
+      ;; For guard: from the worldview cache (solver-assume updates it).
+      (define bit-pos
+        (cond
+          [(eq? (goal-desc-kind goal) 'not)
+           ;; NAF: read from NAF-pending cell
+           (define naf-pending-after (net-cell-read n2 naf-pending-cell-id))
+           (define new-entries
+             (for/list ([(k v) (in-hash naf-pending-after)]
+                        #:when (not (hash-has-key? naf-pending-before k)))
+               v))
+           (if (pair? new-entries)
+               (hash-ref (car new-entries) 'naf-bit-pos 0)
+               0)]
+          [(eq? (goal-desc-kind goal) 'guard)
+           ;; Guard: the assumption bit is in the worldview cache.
+           ;; The worldview cache = OR of all assumption bits.
+           ;; New bit = cache-after XOR cache-before.
+           (define wv-before (net-cell-read n worldview-cache-cell-id))
+           (define wv-after (net-cell-read n2 worldview-cache-cell-id))
+           (define new-bits (bitwise-xor wv-after wv-before))
+           ;; Find the position of the new bit
+           (if (zero? new-bits) 0
+               (let loop ([b new-bits] [pos 0])
+                 (if (odd? b) pos (loop (arithmetic-shift b -1) (add1 pos)))))]
+          [else 0]))
+      (values n2 (bitwise-ior bm (arithmetic-shift 1 bit-pos)))))
 
-  ;; Phase 2: Install ALL non-NAF goals under the combined NAF bitmask.
-  ;; ALL goals' writes are tagged with the NAF assumptions — if ANY NAF
-  ;; fails (S1 writes nogood), the entire conjunction's results become invisible.
+  ;; Phase 2: Install ALL non-gating goals under the combined gate bitmask.
+  ;; ALL goals' writes are tagged with NAF + guard assumptions.
+  ;; If ANY NAF or guard fails, the conjunction's results become invisible.
   (define outer-bm (current-worldview-bitmask))
-  (define combined-bm (bitwise-ior outer-bm naf-bm))
-  (for/fold ([n net-with-nafs])
+  (define combined-bm (bitwise-ior outer-bm gate-bm))
+  (for/fold ([n net-with-gates])
             ([goal (in-list goals)]
-             #:unless (eq? (goal-desc-kind goal) 'not))  ;; skip NAF goals (already installed)
-    (if (zero? naf-bm)
+             #:unless (memq (goal-desc-kind goal) gating-kinds))
+    (if (zero? gate-bm)
         (install-goal-propagator n goal env answer-cid ctx)
         (parameterize ([current-worldview-bitmask combined-bm])
           (install-goal-propagator n goal env answer-cid ctx)))))
