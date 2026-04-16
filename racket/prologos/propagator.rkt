@@ -1459,8 +1459,10 @@
 ;; Phase 2b: Tree-reduce merge threshold. When worklist size >= threshold,
 ;; use hypercube tree-reduce instead of sequential for/fold for bulk-merge-writes.
 ;; #f = always sequential (disabled). 0 = always tree-reduce.
-;; :auto default TBD from benchmarks — placeholder 128 (thread crossover from §2.10).
-(define current-tree-reduce-threshold (make-parameter 128))
+;; Phase 2b benchmark: thread-based parallel merge is ~9-10x SLOWER than sequential
+;; at all tested sizes (N=4..512). Thread overhead (~3.6us) exceeds merge work (~0.5us).
+;; Disabled until Phase 2C delivers semaphore-based worker pool (expected crossover N≈8-16).
+(define current-tree-reduce-threshold (make-parameter #f))
 
 ;; B2f Phase 0: Per-quiescence cell-write instrumentation.
 ;; When non-#f, these are boxes that net-cell-write increments.

@@ -29,6 +29,7 @@
 | **R6** | **PU dissolution — answer egress cell** | ✅ | `8e8ea659`. dissolve-solver-pu reads scope+worldview cells, projects results, writes answer-cid (egress, total sink). NTT interface SolverNet :outputs alignment. |
 | 2a | NAF + scope sharing + product dissolution | ✅ | `a6b02159`→`4b2e5bdf`. Resolution B: scope sharing (no bridges). Product-worldview dissolution. S1 fork-based handler (R4). All adversarial NAF cases pass: basic ✅, variable ✅, both-passed 3 ✅, cross-relation 6 ✅. |
 | 2b | Parallel tree-reduce merge (hypercube) | ✅ | `bbf3eb82`. Per-propagator cell-id namespaces (high-bit encoding). CHAMP diff for new-cell capture. merge-fire-results + tree-reduce-fire-results. Parallel pairwise via threads. Threshold-configurable (default 128). |
+| 2c | Semaphore-based worker pool for BSP parallelism | ⬜ | Persistent K workers (K=cores), shared-memory buffer, semaphore dispatch (~0.01us vs ~3.6us thread). Expected crossover N≈8-16. Benefits both fire + merge phases. |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
 | 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
 | 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
