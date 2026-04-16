@@ -182,6 +182,11 @@
  naf-pending-merge
  register-stratum-handler!
  stratum-handlers
+ ;; BSP-LE Track 2B Phase 2b: parallel tree-reduce merge
+ current-cell-id-namespace
+ current-tree-reduce-threshold
+ merge-fire-results
+ tree-reduce-fire-results
  ;; BSP-LE Track 2 Phase 5.9b: promote cell to tagged-cell-value
  promote-cell-to-tagged
  ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
@@ -620,10 +625,13 @@
 (define (net-new-cell net initial-value merge-fn [contradicts? #f])
   ;; PAR Track 1 D.3: net-new-cell is CALM-safe during BSP fire rounds.
   ;; Cells without dependents don't affect scheduling topology.
-  ;; New cells are captured structurally via next-cell-id comparison
-  ;; in fire-and-collect-writes.
+  ;; Phase 2b: during parallel BSP fire, cell-ids are namespaced by propagator
+  ;; index to avoid collision. Namespace 0 = sequential (construction-time).
   (perf-inc-cell-alloc!)  ;; Track 7 Phase 0b
-  (define id (cell-id (prop-network-next-cell-id net)))
+  (define ns (current-cell-id-namespace))
+  (define local-id (prop-network-next-cell-id net))
+  (define id (cell-id (if (zero? ns) local-id
+                          (+ (arithmetic-shift ns 32) local-id))))
   (define cell (prop-cell initial-value champ-empty))
   (define h (cell-id-hash id))
   (define net*
@@ -650,7 +658,10 @@
 ;; Returns: (values new-network cell-id)
 (define (net-new-cell-desc net top-value meet-fn [contradicts? #f])
   (perf-inc-cell-alloc!)  ;; Track 7 Phase 0b
-  (define id (cell-id (prop-network-next-cell-id net)))
+  (define ns (current-cell-id-namespace))
+  (define local-id (prop-network-next-cell-id net))
+  (define id (cell-id (if (zero? ns) local-id
+                          (+ (arithmetic-shift ns 32) local-id))))
   (define cell (prop-cell top-value champ-empty))
   (define h (cell-id-hash id))
   (define net*
@@ -686,6 +697,7 @@
 
 (define (net-new-cells-batch-inner net specs n)
   (define start-id (prop-network-next-cell-id net))
+  (define ns (current-cell-id-namespace))
   ;; Build transient CHAMPs from current persistent maps
   (define t-cells (champ-transient (prop-network-cells net)))
   (define t-merge (champ-transient (prop-network-merge-fns net)))
@@ -696,7 +708,8 @@
     (for/list ([spec (in-list specs)]
                [i (in-naturals start-id)])
       (perf-inc-cell-alloc!)
-      (define id (cell-id i))
+      ;; Phase 2b: namespaced cell-id during parallel fire
+      (define id (cell-id (if (zero? ns) i (+ (arithmetic-shift ns 32) i))))
       (define h (cell-id-hash id))
       (define initial-value (car spec))
       (define merge-fn (cadr spec))
@@ -1436,6 +1449,19 @@
 ;; in filter-dependents-by-paths. The dependent-entry carries the
 ;; decision-cell-id — no ambient parameter needed.
 
+;; BSP-LE Track 2B Phase 2b: Per-propagator cell-id namespace for parallel fire.
+;; During BSP parallel fire, each propagator gets a unique namespace (its worklist
+;; index). Cell allocations use high-bit encoding: (prop-index << 32) | local-counter.
+;; Avoids cell-id collision when propagators fire in parallel against the same snapshot.
+;; 0 = no namespace (construction-time allocation uses sequential next-cell-id).
+(define current-cell-id-namespace (make-parameter 0))
+
+;; Phase 2b: Tree-reduce merge threshold. When worklist size >= threshold,
+;; use hypercube tree-reduce instead of sequential for/fold for bulk-merge-writes.
+;; #f = always sequential (disabled). 0 = always tree-reduce.
+;; :auto default TBD from benchmarks — placeholder 128 (thread crossover from §2.10).
+(define current-tree-reduce-threshold (make-parameter 128))
+
 ;; B2f Phase 0: Per-quiescence cell-write instrumentation.
 ;; When non-#f, these are boxes that net-cell-write increments.
 ;; - write-counter: every net-cell-write call
@@ -2057,15 +2083,17 @@
 ;; New cells are captured structurally via next-cell-id comparison.
 (struct fire-result (value-writes new-cells new-propagators contradiction undeclared-writes) #:transparent)
 
-(define (fire-and-collect-writes snapshot-net pid)
+(define (fire-and-collect-writes snapshot-net pid [namespace-idx 0])
   (define prop (champ-lookup (prop-network-propagators snapshot-net)
                               (prop-id-hash pid) pid))
   (when (eq? prop 'none)
     (error 'fire-and-collect-writes "unknown propagator: ~a" pid))
   (define snapshot-next-id (prop-network-next-cell-id snapshot-net))
-  ;; Fire propagator against snapshot (with CALM topology guard)
+  ;; Fire propagator against snapshot (with CALM topology guard).
+  ;; Phase 2b: set cell-id namespace for parallel-safe cell allocation.
   (define result-net
-    (parameterize ([current-bsp-fire-round? #t])
+    (parameterize ([current-bsp-fire-round? #t]
+                   [current-cell-id-namespace namespace-idx])
       ((propagator-fire-fn prop) snapshot-net)))
   (define result-next-id (prop-network-next-cell-id result-net))
   ;; Diff output cells for value writes (correct delta for merge-based cells).
@@ -2108,25 +2136,27 @@
                             acc
                             (cons (cons cid new-val) acc)))))]
                [else acc]))
-           '()))))  ;; PAR Track 1 D.3: Capture new cells via next-cell-id comparison.
-  ;; Cells with ids in [snapshot-next-id .. result-next-id) were created
-  ;; by the fire function. Extract them from result-net.
+           '()))))  ;; Phase 2b: Capture new cells via CHAMP diff (replaces range-based scan).
+  ;; With per-propagator cell-id namespaces, range scanning doesn't work —
+  ;; namespaced IDs are sparse. CHAMP diff finds cells in result not in snapshot.
+  ;; O(new cells) via structural comparison of persistent hash-array-mapped tries.
   (define new-cells
-    (if (= snapshot-next-id result-next-id)
-        '()  ;; No new cells — common case, zero overhead
-        (for/list ([i (in-range snapshot-next-id result-next-id)])
-          (define cid (cell-id i))
-          (define cell (champ-lookup (prop-network-cells result-net)
-                                     (cell-id-hash cid) cid))
-          (define merge-fn (champ-lookup (prop-network-merge-fns result-net)
-                                         (cell-id-hash cid) cid))
-          (define contra-fn (champ-lookup (prop-network-contradiction-fns result-net)
-                                          (cell-id-hash cid) cid))
-          (define widen-fn (champ-lookup (prop-network-widen-fns result-net)
-                                         (cell-id-hash cid) cid))
-          (define cell-dir (champ-lookup (prop-network-cell-dirs result-net)
-                                         (cell-id-hash cid) cid))
-          (list cid cell merge-fn contra-fn widen-fn cell-dir))))
+    (let ([snap-cells (prop-network-cells snapshot-net)]
+          [result-cells (prop-network-cells result-net)])
+      (if (eq? snap-cells result-cells)
+          '()  ;; No new cells — common case, zero overhead (same CHAMP node)
+          (champ-fold/hash
+           result-cells
+           (lambda (h cid cell acc)
+             (if (not (eq? 'none (champ-lookup snap-cells h cid)))
+                 acc  ;; Cell existed in snapshot — not new
+                 ;; New cell: extract merge-fn, contra-fn, widen-fn, cell-dir
+                 (let ([merge-fn (champ-lookup (prop-network-merge-fns result-net) h cid)]
+                       [contra-fn (champ-lookup (prop-network-contradiction-fns result-net) h cid)]
+                       [widen-fn (champ-lookup (prop-network-widen-fns result-net) h cid)]
+                       [cell-dir (champ-lookup (prop-network-cell-dirs result-net) h cid)])
+                   (cons (list cid cell merge-fn contra-fn widen-fn cell-dir) acc))))
+           '()))))
   ;; PAR Track 1: Capture new propagators via next-prop-id comparison.
   ;; Propagators created during BSP are NOT on the worklist (deferred).
   ;; The topology stratum adds them to the canonical network and schedules them.
@@ -2255,11 +2285,94 @@
     (list (propagator-inputs prop) (propagator-outputs prop) (propagator-fire-fn prop))))
 
 
+;; ========================================
+;; Phase 2b: Pairwise Write-Set Combination (Hypercube All-Reduce)
+;; ========================================
+;;
+;; Combines two fire-results into one merged fire-result.
+;; The combined result has the same effect as applying both sequentially.
+;; Cell merge functions are associative+commutative → order doesn't matter.
+;; This is the pairwise merge operation in the hypercube all-reduce tree.
+
+(define (merge-fire-results a b)
+  (cond
+    [(not (fire-result? a)) b]
+    [(not (fire-result? b)) a]
+    [else
+     (fire-result
+      ;; Value writes: concatenate (merge fns handle ordering)
+      (append (fire-result-value-writes a) (fire-result-value-writes b))
+      ;; New cells: concatenate (namespaced IDs prevent collision)
+      (append (fire-result-new-cells a) (fire-result-new-cells b))
+      ;; New propagators: concatenate
+      (append (fire-result-new-propagators a) (fire-result-new-propagators b))
+      ;; Contradiction: first non-#f wins
+      (or (fire-result-contradiction a) (fire-result-contradiction b))
+      ;; Undeclared writes: concatenate
+      (append (fire-result-undeclared-writes a) (fire-result-undeclared-writes b)))]))
+
+;; Tree-reduce T fire-results via pairwise combination.
+;; log₂(T) rounds, each round T/2 independent merges.
+;; Phase 0: sequential tree recursion. Self-hosted: parallel pairwise.
+;; Parallel version: each pairwise merge in a round runs on a separate thread.
+;; Returns: single merged fire-result (or #f for empty input).
+(define (tree-reduce-fire-results results [parallel? #f])
+  (cond
+    [(null? results) #f]
+    [(null? (cdr results)) (car results)]
+    [else
+     (if parallel?
+         ;; Parallel: pairwise merges via threads
+         (let loop ([rs results])
+           (cond
+             [(null? (cdr rs)) (car rs)]
+             [else
+              ;; Pair up, merge in parallel
+              (define pairs (pair-up rs))
+              (define merged
+                (map (lambda (pair)
+                       (if (cdr pair)
+                           (let ([ch (make-channel)])
+                             (thread (lambda ()
+                                       (channel-put ch (merge-fire-results (car pair) (cdr pair)))))
+                             ch)
+                           (car pair)))  ;; odd element — pass through
+                     pairs))
+              ;; Collect results from threads
+              (define collected
+                (map (lambda (m)
+                       (if (channel? m) (channel-get m) m))
+                     merged))
+              (loop collected)]))
+         ;; Sequential: recursive pairwise
+         (let loop ([rs results])
+           (cond
+             [(null? (cdr rs)) (car rs)]
+             [else
+              (define pairs (pair-up rs))
+              (define merged
+                (map (lambda (pair)
+                       (if (cdr pair)
+                           (merge-fire-results (car pair) (cdr pair))
+                           (car pair)))
+                     pairs))
+              (loop merged)])))]))
+
+;; Helper: pair up a list into (cons a b) pairs. Odd-length: last element paired with #f.
+(define (pair-up lst)
+  (cond
+    [(null? lst) '()]
+    [(null? (cdr lst)) (list (cons (car lst) #f))]
+    [else (cons (cons (car lst) (cadr lst))
+                (pair-up (cddr lst)))]))
+
 ;; Fire all propagators sequentially against the same snapshot.
-;; Returns a list of write-lists, one per propagator.
+;; Returns a list of fire-results, one per propagator.
+;; Phase 2b: each propagator gets a namespace index for parallel-safe cell allocation.
 (define (sequential-fire-all snapshot-net pids)
-  (map (lambda (pid) (fire-and-collect-writes snapshot-net pid))
-       pids))
+  (for/list ([pid (in-list pids)]
+             [idx (in-naturals 1)])  ;; namespace 1+ (0 = construction-time)
+    (fire-and-collect-writes snapshot-net pid idx)))
 
 ;; PAR Track 1 D.4: Topology request handlers.
 ;; Each module registers a handler for its request type at module load time.
@@ -2375,8 +2488,18 @@
                      [all-writes (executor snapshot pids)]
                      [t-fire-end (current-inexact-monotonic-milliseconds)]
                      ;; R1: time merge phase
+                     ;; Phase 2b: tree-reduce for large worklists (hypercube all-reduce).
+                     ;; Below threshold: sequential bulk-merge-writes (for/fold).
+                     ;; Above threshold: tree-reduce combines write-sets pairwise,
+                     ;; then applies the combined result in one pass.
                      [t-merge-start t-fire-end]
-                     [merged (bulk-merge-writes snapshot all-writes)]
+                     [tree-threshold (current-tree-reduce-threshold)]
+                     [merged (if (and tree-threshold (>= n tree-threshold))
+                                 (let ([combined (tree-reduce-fire-results all-writes #t)])
+                                   (if combined
+                                       (bulk-merge-writes snapshot (list combined))
+                                       snapshot))
+                                 (bulk-merge-writes snapshot all-writes))]
                      [t-merge-end (current-inexact-monotonic-milliseconds)]
                      ;; Apply deferred propagators
                      [deferred-props (collect-deferred-propagators all-writes)]
@@ -2488,12 +2611,13 @@
         ;; Below threshold: sequential (avoid future creation overhead)
         (sequential-fire-all snapshot-net pids)
         ;; Above threshold: parallel via Racket futures
+        ;; Phase 2b: each propagator gets a namespace index
         (let* ([futures
-                (map (lambda (pid)
-                       (future
-                        (lambda ()
-                          (fire-and-collect-writes snapshot-net pid))))
-                     pids)]
+                (for/list ([pid (in-list pids)]
+                           [idx (in-naturals 1)])
+                  (future
+                   (lambda ()
+                     (fire-and-collect-writes snapshot-net pid idx))))]
                [results (map touch futures)])
           results))))
 
@@ -2530,15 +2654,22 @@
                              (let-values ([(chunk rest) (split-at remaining (min chunk-size (length remaining)))])
                                (loop rest (cons chunk acc)))))]
                ;; Fire each chunk on a parallel thread
+               ;; Phase 2b: each propagator gets a namespace index (global across chunks)
+               [chunk-start-indices
+                (let loop ([chunks chunks] [start 1] [acc '()])
+                  (if (null? chunks) (reverse acc)
+                      (loop (cdr chunks) (+ start (length (car chunks)))
+                            (cons start acc))))]
                [result-channels
-                (for/list ([chunk (in-list chunks)])
+                (for/list ([chunk (in-list chunks)]
+                           [start-idx (in-list chunk-start-indices)])
                   (define ch (make-channel))
                   (thread #:pool 'own
                     (lambda ()
                       (define results
-                        (map (lambda (pid)
-                               (fire-and-collect-writes snapshot-net pid))
-                             chunk))
+                        (for/list ([pid (in-list chunk)]
+                                   [idx (in-naturals start-idx)])
+                          (fire-and-collect-writes snapshot-net pid idx)))
                       (channel-put ch results)))
                   ch)]
                ;; Join all threads by reading from channels
