@@ -29,7 +29,7 @@
 | **R6** | **PU dissolution — answer egress cell** | ✅ | `8e8ea659`. dissolve-solver-pu reads scope+worldview cells, projects results, writes answer-cid (egress, total sink). NTT interface SolverNet :outputs alignment. |
 | 2a | NAF + scope sharing + product dissolution | ✅ | `a6b02159`→`4b2e5bdf`. Resolution B: scope sharing (no bridges). Product-worldview dissolution. S1 fork-based handler (R4). All adversarial NAF cases pass: basic ✅, variable ✅, both-passed 3 ✅, cross-relation 6 ✅. |
 | 2b | Parallel tree-reduce merge (hypercube) | ✅ | `bbf3eb82`. Per-propagator cell-id namespaces (high-bit encoding). CHAMP diff for new-cell capture. merge-fire-results + tree-reduce-fire-results. Parallel pairwise via threads. Threshold-configurable (default 128). |
-| 2c | Semaphore-based worker pool for BSP parallelism | ⬜ | Persistent K workers (K=cores), shared-memory buffer, semaphore dispatch (~0.01us vs ~3.6us thread). Expected crossover N≈8-16. Benefits both fire + merge phases. |
+| 2c | Semaphore-based worker pool for BSP parallelism | ⬜ | Pool config as on-network cell (cell-id 5). Persistent K workers, semaphore dispatch (~0.01us). Closure-as-module dispatch. General BSP infrastructure in propagator.rkt via executor interface. Expected crossover N≈8-16. |
 | 3 | Guard as propagator | ⬜ | Guard-test propagator with topology-request for inner goals |
 | 5a | BSP fire-once fast-path (merged 5a+5c from critique) | ⬜ | Fire-once propagators execute directly, no scheduling ceremony. Handles fact-only (empty worklist) AND single-clause (one fire-once propagator). |
 | 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
@@ -900,6 +900,73 @@ dissolution solver-pu-exit
 | `stratum-handler naf-evaluation` | `register-stratum-handler!` + `process-naf-request` | relations.rkt | new (~40 lines) |
 | `strata-list` in BSP outer loop | Generalized topology processing to N strata | propagator.rkt | ~30 lines modified |
 | `dissolution solver-pu-exit` | `dissolve-solver-pu` function in `solve-goal-propagator` | relations.rkt | new (~30 lines, replaces ~65 lines) |
+
+### §3.2c Phase 2C: Semaphore-Based Worker Pool
+
+#### Architecture
+
+General BSP parallelism infrastructure in `propagator.rkt`. Replaces per-operation thread creation (~3.6us) with persistent workers dispatched via semaphores (~0.01us). Benefits ALL BSP consumers (solver, elaborator, type checker) via the existing `current-parallel-executor` interface.
+
+**Prior art**: Phase 0b Tier B analysis (§2.10) — shared-memory + semaphore dispatch estimated at ~1us per-round, crossover N≈8-16. Phase 2b benchmark confirmed: thread-based merge is 9-10x slower at all N, merge work ~0.5us per item, thread overhead ~3.6us dominates.
+
+**Principle**: closure-as-module. Each dispatched work item is a closure that captures its context (namespace, worldview bitmask, snapshot, chunk). Workers execute closures. The closure IS the module — its captured bindings are its interface. K closures = K independent modules. The tree-reduce merge IS the module reconstruction.
+
+#### On-Network Configuration
+
+Pool config as well-known cell (cell-id 5):
+
+```ntt
+cell pool-config : Lattice(PoolConfig)
+  :merge first-write-wins
+  :well-known cell-id-5
+  :fields [worker-count : Nat          ;; K, defaults to processor-count
+           merge-threshold : Nat        ;; tree-reduce activation threshold
+           status : PoolStatus]         ;; :idle :active :shutdown
+```
+
+The pool reads its configuration from this cell. Configurable K (defaults to `processor-count`). The execution substrate (Racket threads + semaphores) is Phase 0 implementation of the `interface WorkerPool`; self-hosting replaces with Prologos concurrency primitives, reading the same cell.
+
+#### Dispatch Protocol
+
+```
+Initialization (lazy, first BSP round):
+  Read pool-config cell for K
+  Spawn K persistent Racket threads
+  Allocate: K work-semaphores, K done-semaphores, K work-slots (boxes), K result-slots (boxes)
+  Workers: loop forever { wait(work-sem[i]); result-slot[i] := (work-slot[i])(); post(done-sem[i]) }
+
+Dispatch N items to K workers:
+  1. Build K closures (partition N items, each closure captures namespace + snapshot + chunk)
+  2. Write closures to work-slots (box-set!)
+  3. Post K work-semaphores (workers wake, ~0.01us each)
+  4. Wait K done-semaphores (~0.01us each)
+  5. Read K result-slots → concatenate
+  Total overhead: ~0.16us for K=8 (vs ~28.8us for 8 thread create+join)
+```
+
+#### Integration
+
+Drop-in executor via existing interface:
+
+```racket
+(define pool (make-worker-pool))  ;; lazy init, reads pool-config cell
+(define pool-executor (make-pool-executor pool))
+;; Same contract as make-parallel-thread-fire-all:
+;; (snapshot-net pids → (listof fire-result))
+```
+
+The BSP loop in `run-to-quiescence-bsp` already dispatches through `current-parallel-executor`. The pool executor replaces the thread executor. No BSP loop changes needed.
+
+The tree-reduce merge (Phase 2b) also dispatches pairwise merges through the pool when above threshold.
+
+#### Benchmark Plan
+
+After implementation: re-run `bench-tree-reduce.rkt` with the pool executor. Measure crossover for:
+- Fire phase: pool dispatch vs sequential
+- Merge phase: pool-dispatched tree-reduce vs sequential for/fold
+- Find `:auto` threshold from data
+
+Expected: crossover at N≈8-16 (from Phase 0b Tier B estimate).
 
 ### §3.2 NAF as Async Propagator — Lattice Analysis
 

@@ -93,11 +93,66 @@
     (let ([combined (tree-reduce-fire-results fire-results #f)])
       (if combined (bulk-merge-writes snapshot (list combined)) snapshot)))
 
-  ;; Strategy C: tree-reduce (parallel pairwise via threads)
-  (time-us "C: tree-reduce parallel"
+  ;; Strategy C: tree-reduce (parallel pairwise via threads — Phase 2b)
+  (time-us "C: tree-reduce threads"
     (let ([combined (tree-reduce-fire-results fire-results #t)])
       (if combined (bulk-merge-writes snapshot (list combined)) snapshot)))
 
   (printf "\n"))
 
+;; === Phase 2c: Pool-based executor benchmark ===
+;; Measures full fire+merge pipeline with pool dispatch vs sequential
+
+(printf "\n=== Pool Executor Fire+Merge Benchmark (Phase 2c) ===\n")
+(printf "Measuring full fire+merge pipeline\n\n")
+
+(define pool (make-worker-pool))
+(define pool-exec (make-pool-executor pool 4))
+
+(for ([n (in-list '(4 8 16 32 64 128 256 512))])
+  (printf "--- N = ~a ---\n" n)
+  ;; Create a fresh network + propagators for each test
+  (define net0 (make-prop-network 1000000))
+  (define-values (net-with-cells cell-ids)
+    (for/fold ([net net0] [cids '()])
+              ([i (in-range n)])
+      (define-values (net* cid) (net-new-cell net 0 +))
+      (values net* (cons cid cids))))
+  (define cids (reverse cell-ids))
+  (define net-with-props
+    (for/fold ([net net-with-cells])
+              ([cid (in-list cids)]
+               [i (in-naturals)])
+      (define val (+ i 1))
+      (define fire-fn (lambda (net) (net-cell-write net cid val)))
+      (define-values (net* _pid)
+        (net-add-fire-once-propagator net '() (list cid) fire-fn))
+      net*))
+  (define pids
+    (for/list ([i (in-range n)])
+      (prop-id (+ (prop-network-next-prop-id net0) i))))
+  (define snapshot
+    (struct-copy prop-network net-with-props
+      [hot (struct-copy prop-net-hot (prop-network-hot net-with-props)
+             [worklist '()])]))
+
+  ;; D: Sequential fire + for/fold merge
+  (time-us "D: sequential fire+merge"
+    (define results (sequential-fire-all snapshot pids))
+    (bulk-merge-writes snapshot results))
+
+  ;; E: Pool fire + for/fold merge
+  (time-us "E: pool fire + for/fold merge"
+    (define results (pool-exec snapshot pids))
+    (bulk-merge-writes snapshot results))
+
+  ;; F: Pool fire + tree-reduce merge
+  (time-us "F: pool fire + tree-reduce merge"
+    (define results (pool-exec snapshot pids))
+    (define combined (tree-reduce-fire-results results #f))
+    (if combined (bulk-merge-writes snapshot (list combined)) snapshot))
+
+  (printf "\n"))
+
+(worker-pool-shutdown! pool)
 (printf "=== Done ===\n")

@@ -107,7 +107,7 @@
 
 (test-case "serialize-network-topology: empty network"
   (define js (serialize-network-topology (make-prop-network)))
-  (check-equal? (hash-ref (hash-ref js 'stats) 'totalCells) 5)  ;; PAR Track 1: request cell at id 0, BSP-LE Track 2: worldview cache at id 1, R1: rel-store at 2, config at 3, naf-pending at 4
+  (check-equal? (hash-ref (hash-ref js 'stats) 'totalCells) 6)  ;; PAR Track 1: request cell at id 0, BSP-LE Track 2: worldview cache at id 1, R1: rel-store at 2, config at 3, naf-pending at 4, pool-config at 5
   (check-equal? (hash-ref (hash-ref js 'stats) 'totalPropagators) 0)
   (check-equal? (hash-ref (hash-ref js 'stats) 'contradiction) (json-null)))
 
@@ -121,7 +121,7 @@
     (if (eq? v 'bot) net (net-cell-write net cid-b v)))
   (define-values (net3 pid) (net-add-propagator net2 (list cid-a) (list cid-b) copy-fn))
   (define js (serialize-network-topology net3))
-  (check-equal? (hash-ref (hash-ref js 'stats) 'totalCells) 7)  ;; PAR Track 1: +1 request cell, BSP-LE Track 2: +1 worldview cache, R1: +2 well-known cells, +1 naf-pending
+  (check-equal? (hash-ref (hash-ref js 'stats) 'totalCells) 8)  ;; PAR Track 1: +1 request cell, BSP-LE Track 2: +1 worldview cache, R1: +2 well-known cells, +1 naf-pending, +1 pool-config
   (check-equal? (hash-ref (hash-ref js 'stats) 'totalPropagators) 1)
   ;; Check propagator has correct inputs/outputs
   (define prop-json (car (hash-ref js 'propagators)))

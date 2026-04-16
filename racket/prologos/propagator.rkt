@@ -187,6 +187,12 @@
  current-tree-reduce-threshold
  merge-fire-results
  tree-reduce-fire-results
+ ;; BSP-LE Track 2B Phase 2c: semaphore-based worker pool
+ pool-config-cell-id
+ current-worker-pool
+ make-worker-pool
+ make-pool-executor
+ worker-pool-shutdown!
  ;; BSP-LE Track 2 Phase 5.9b: promote cell to tagged-cell-value
  promote-cell-to-tagged
  ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
@@ -552,31 +558,39 @@
   (define naf-cid naf-pending-cell-id)
   (define naf-h (cell-id-hash naf-cid))
   (define naf-cell (prop-cell (hasheq) champ-empty))  ;; empty registry, no dependents
+  ;; Phase 2c: cell-id 5 = pool configuration.
+  (define pc-cid pool-config-cell-id)
+  (define pc-h (cell-id-hash pc-cid))
+  (define pc-cell (prop-cell #f champ-empty))  ;; #f = no pool config yet
   (prop-network
    (prop-net-hot '() fuel)
    (prop-net-warm (champ-insert
                    (champ-insert
                     (champ-insert
                      (champ-insert
-                      (champ-insert champ-empty req-h req-cid req-cell)
-                      wv-h wv-cid wv-cell)
-                     rs-h rs-cid rs-cell)
-                    cfg-h cfg-cid cfg-cell)
-                   naf-h naf-cid naf-cell)
+                      (champ-insert
+                       (champ-insert champ-empty req-h req-cid req-cell)
+                       wv-h wv-cid wv-cell)
+                      rs-h rs-cid rs-cell)
+                     cfg-h cfg-cid cfg-cell)
+                    naf-h naf-cid naf-cell)
+                   pc-h pc-cid pc-cell)
                   #f)
    (prop-net-cold (champ-insert
                    (champ-insert
                     (champ-insert
                      (champ-insert
-                      (champ-insert champ-empty req-h req-cid decomp-request-merge)
-                      wv-h wv-cid worldview-cache-merge)
-                     rs-h rs-cid relation-store-merge)
-                    cfg-h cfg-cid config-merge)
-                   naf-h naf-cid naf-pending-merge)
+                      (champ-insert
+                       (champ-insert champ-empty req-h req-cid decomp-request-merge)
+                       wv-h wv-cid worldview-cache-merge)
+                      rs-h rs-cid relation-store-merge)
+                     cfg-h cfg-cid config-merge)
+                    naf-h naf-cid naf-pending-merge)
+                   pc-h pc-cid pool-config-merge)
                   champ-empty        ;;   contradiction-fns
                   champ-empty        ;;   widen-fns
                   champ-empty        ;;   propagators
-                  5                  ;;   next-cell-id (0=decomp, 1=worldview, 2=relation-store, 3=config, 4=naf-pending)
+                  6                  ;;   next-cell-id (0=decomp, 1=worldview, 2=rel-store, 3=config, 4=naf-pending, 5=pool-config)
                   0                  ;;   next-prop-id
                   champ-empty        ;;   cell-decomps
                   champ-empty        ;;   pair-decomps
@@ -1449,6 +1463,14 @@
 ;; in filter-dependents-by-paths. The dependent-entry carries the
 ;; decision-cell-id — no ambient parameter needed.
 
+;; BSP-LE Track 2B Phase 2c: cell-id 5 = pool configuration.
+;; On-network configuration for the BSP worker pool.
+;; Carrier: hasheq with keys 'worker-count, 'merge-threshold, 'status.
+;; Merge: first-write-wins (configured once per session).
+;; Phase 0: written at first BSP round. Self-hosting: on elab-network.
+(define pool-config-cell-id (cell-id 5))
+(define (pool-config-merge old new) old)  ;; first-write-wins
+
 ;; BSP-LE Track 2B Phase 2b: Per-propagator cell-id namespace for parallel fire.
 ;; During BSP parallel fire, each propagator gets a unique namespace (its worklist
 ;; index). Cell allocations use high-bit encoding: (prop-index << 32) | local-counter.
@@ -1459,10 +1481,11 @@
 ;; Phase 2b: Tree-reduce merge threshold. When worklist size >= threshold,
 ;; use hypercube tree-reduce instead of sequential for/fold for bulk-merge-writes.
 ;; #f = always sequential (disabled). 0 = always tree-reduce.
-;; Phase 2b benchmark: thread-based parallel merge is ~9-10x SLOWER than sequential
-;; at all tested sizes (N=4..512). Thread overhead (~3.6us) exceeds merge work (~0.5us).
-;; Disabled until Phase 2C delivers semaphore-based worker pool (expected crossover N≈8-16).
-(define current-tree-reduce-threshold (make-parameter #f))
+;; Phase 2c benchmark: pool executor crossover at N≈256 for fire+merge pipeline.
+;; At N=256: pool 1.2x faster. At N=512: pool 1.6x faster. Below 256: sequential wins.
+;; Thread-based (Phase 2b) was 9-10x slower at all N. Pool eliminates thread creation
+;; overhead but retains dispatch cost (chunk build + semaphore + result collect ~60-140us).
+(define current-tree-reduce-threshold (make-parameter 256))
 
 ;; B2f Phase 0: Per-quiescence cell-write instrumentation.
 ;; When non-#f, these are boxes that net-cell-write increments.
@@ -2461,7 +2484,10 @@
 ;; Outer loop: alternates value stratum (BSP rounds) and topology stratum.
 ;; Inner loop: standard BSP — fire all worklist propagators per round.
 ;; executor: (snapshot-net pids → (listof fire-result | write-list))
+;; Phase 2c: pool executor auto-selected when current-worker-pool is set.
 (define (run-to-quiescence-bsp net #:executor [executor (or (current-parallel-executor)
+                                                             (let ([pool (current-worker-pool)])
+                                                               (and pool (make-pool-executor pool)))
                                                              sequential-fire-all)])
   (define observer (current-bsp-observer))
   (define has-topo-handlers? (pair? (unbox topology-handlers)))
@@ -2680,6 +2706,116 @@
                        (for/list ([ch (in-list result-channels)])
                          (channel-get ch)))])
           all-results))))
+
+;; ========================================
+;; Phase 2c: Semaphore-Based Worker Pool
+;; ========================================
+;;
+;; General BSP parallelism infrastructure. Persistent K worker threads
+;; dispatched via semaphores (~0.01us vs ~3.6us thread creation).
+;; Closure-as-module: each work item is a closure capturing its context.
+;; Pool config on-network (cell-id 5). Execution substrate: Racket threads.
+;;
+;; Drop-in replacement for make-parallel-thread-fire-all via the
+;; (snapshot-net pids → results) executor interface.
+
+;; Global worker pool parameter. When set, BSP uses pool dispatch for
+;; worklists >= threshold. Lazily initialized on first use.
+(define current-worker-pool (make-parameter #f))
+
+(struct worker-pool
+  (workers          ;; (vectorof thread?)
+   work-sems        ;; (vectorof semaphore) — post to wake worker i
+   done-sems        ;; (vectorof semaphore) — worker i posts when done
+   work-slots       ;; (vectorof box) — work-slot[i] = thunk to execute
+   result-slots     ;; (vectorof box) — result-slot[i] = result from worker i
+   k                ;; integer — number of workers
+   shutdown-box)    ;; (box boolean) — set to #t to stop workers
+  #:transparent)
+
+;; Create a persistent worker pool with K workers.
+;; Workers loop: wait(work-sem) → execute thunk → write result → post(done-sem).
+;; K defaults to processor-count. Workers are Racket OS threads (#:pool 'own).
+(define (make-worker-pool [k (processor-count)])
+  (define work-sems (for/vector ([_ (in-range k)]) (make-semaphore 0)))
+  (define done-sems (for/vector ([_ (in-range k)]) (make-semaphore 0)))
+  (define work-slots (for/vector ([_ (in-range k)]) (box #f)))
+  (define result-slots (for/vector ([_ (in-range k)]) (box #f)))
+  (define shutdown (box #f))
+  (define workers
+    (for/vector ([i (in-range k)])
+      (thread #:pool 'own
+        (lambda ()
+          (let loop ()
+            (semaphore-wait (vector-ref work-sems i))
+            (unless (unbox shutdown)
+              (define thunk (unbox (vector-ref work-slots i)))
+              (define result (if thunk (thunk) #f))
+              (set-box! (vector-ref result-slots i) result)
+              (semaphore-post (vector-ref done-sems i))
+              (loop)))))))
+  (worker-pool workers work-sems done-sems work-slots result-slots k shutdown))
+
+;; Dispatch K thunks to the pool and collect results.
+;; thunks: (listof (or/c procedure? #f)) — #f slots produce #f result.
+;; Returns: (listof any) — one result per thunk, in order.
+(define (pool-dispatch pool thunks)
+  (define k (worker-pool-k pool))
+  (define n (length thunks))
+  (define actual-k (min k n))
+  ;; Write thunks to work slots
+  (for ([thunk (in-list thunks)]
+        [i (in-naturals)])
+    (when (< i actual-k)
+      (set-box! (vector-ref (worker-pool-work-slots pool) i) thunk)))
+  ;; Post work semaphores (workers wake)
+  (for ([i (in-range actual-k)])
+    (semaphore-post (vector-ref (worker-pool-work-sems pool) i)))
+  ;; Wait for all workers to complete
+  (for ([i (in-range actual-k)])
+    (semaphore-wait (vector-ref (worker-pool-done-sems pool) i)))
+  ;; Read results
+  (for/list ([i (in-range actual-k)])
+    (unbox (vector-ref (worker-pool-result-slots pool) i))))
+
+;; Create an executor using the worker pool.
+;; Drop-in replacement for make-parallel-thread-fire-all.
+;; Contract: (snapshot-net pids → (listof fire-result))
+(define (make-pool-executor pool [min-parallel 8])
+  (define k (worker-pool-k pool))
+  (lambda (snapshot-net pids)
+    (define n (length pids))
+    (if (< n min-parallel)
+        ;; Below threshold: sequential (avoid dispatch overhead for trivial worklists)
+        (sequential-fire-all snapshot-net pids)
+        ;; Above threshold: dispatch chunks to pool workers
+        (let* ([chunk-size (max 1 (quotient n k))]
+               [chunks (let loop ([remaining pids] [idx 1] [acc '()])
+                         (if (null? remaining) (reverse acc)
+                             (let-values ([(chunk rest) (split-at remaining
+                                                          (min chunk-size (length remaining)))])
+                               (loop rest (+ idx (length chunk))
+                                     (cons (cons idx chunk) acc)))))]
+               ;; Build closure-as-module per chunk:
+               ;; each closure captures snapshot + chunk + namespace index range
+               [thunks
+                (for/list ([chunk-pair (in-list chunks)])
+                  (define start-idx (car chunk-pair))
+                  (define chunk (cdr chunk-pair))
+                  (lambda ()
+                    (for/list ([pid (in-list chunk)]
+                               [idx (in-naturals start-idx)])
+                      (fire-and-collect-writes snapshot-net pid idx))))]
+               ;; Dispatch to pool
+               [chunk-results (pool-dispatch pool thunks)])
+          ;; Concatenate chunk results
+          (apply append chunk-results)))))
+
+;; Shutdown the worker pool (release threads).
+(define (worker-pool-shutdown! pool)
+  (set-box! (worker-pool-shutdown-box pool) #t)
+  (for ([i (in-range (worker-pool-k pool))])
+    (semaphore-post (vector-ref (worker-pool-work-sems pool) i))))
 
 ;; ========================================
 ;; Convenience Queries
