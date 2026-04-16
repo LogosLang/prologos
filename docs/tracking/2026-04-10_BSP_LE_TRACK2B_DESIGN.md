@@ -33,8 +33,7 @@
 | 2d | Streaming BSP investigation | ✅ | Investigated: spin-wait (workers sleep during merge, ineffective), sync events (expensive dispatch), async-channel (30us/call), spin-poll (250us busy-spin). All worse than sync pool. Root cause: Racket inter-thread overhead > work granularity (~0.5us/propagator). Sync pool at N≈256 remains optimal for Phase 0. |
 | 3 | Guard as worldview assumption | ✅ | `83276b0d`. Same pattern as NAF: allocate assumption, tag subsequent goals, fire-once evaluates condition at S0, nogood if falsy. install-conjunction pre-scans both NAF + guard. |
 | 5a | BSP fire-once fast-path + Tier detection | ✅ | `333a5667`. Propagator flags (FIRE-ONCE, EMPTY-INPUTS). Tier 1 flush (worldview==0 + all fire-once+empty → direct fire). Self-clearing (fired-set + remove from dependents). |
-| 5b | Lazy solver-context allocation | ⬜ | Defer decisions/commitments/assumptions/nogoods cells until first amb. |
-| 5c | Solver-template cell (was: context pooling — on-network per critique) | ⬜ | First-write-wins cell replaces parameter. Template reused via CHAMP fork. |
+| 5b/5c | Template + Tier 1 + boundary normalization | ✅ | `d998b06c`→`01de93f5`. Tier 1 direct fact return (0.49us, 62x speedup, 2.3x faster than DFS). Network template. Scope-sensitive fire-once. PPN boundary normalization. |
 | 6 | `:auto` switch + adaptive parallel executor | ⬜ | Sequential default, threads at N≥128. Flip `:auto` → propagator. Full regression gate. |
 | T | Parity regression suite | ⬜ | `test-solver-parity.rkt` — representative queries, BOTH strategies, set-equal results |
 | PIR | Post-implementation review | ⬜ | |
