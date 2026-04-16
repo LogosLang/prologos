@@ -1594,14 +1594,13 @@
 ;; Fire-Once Propagator (BSP-LE Track 2 Phase 5, moved from typing-propagators.rkt)
 ;; ========================================
 ;;
-;; Phase 5a: Fire-once with BOTH closure guard AND scheduler-level optimization.
-;; The closure wrapper (fired? box) provides per-call protection — prevents
-;; double-fire within a BSP round if the propagator is self-triggered.
-;; The PROP-FIRE-ONCE flag enables scheduler-level optimization:
+;; Phase 5a: Fire-once as a scheduler-level concept.
+;; PROP-FIRE-ONCE flag enables scheduler-level once-semantics:
 ;; - Fired-set: skip already-fired propagators at worklist dedup (zero cost)
 ;; - Self-clearing: remove from dependents after fire (no future enqueuing)
 ;; - Tier 1 detection: all fire-once + empty-inputs → single-pass flush
 ;; Empty inputs → PROP-EMPTY-INPUTS (eligible for direct-fire, no snapshot).
+;; No closure wrapper — the scheduler handles all fire-once semantics.
 ;;
 ;; General pattern for propagators that produce output exactly once:
 ;; nogood narrowers, contradiction detectors, type-writes, ground unify (R3),
@@ -1611,22 +1610,11 @@
                                       #:component-paths [cpaths '()]
                                       #:assumption [assumption-id #f]
                                       #:decision-cell [decision-cell-id #f])
-  ;; Closure guard: per-call fire-once protection (belt)
-  (define fired? (box #f))
-  (define wrapped
-    (lambda (n)
-      (cond
-        [(unbox fired?) n]
-        [else
-         (define result (fire-fn n))
-         (cond
-           [(eq? result n) n]
-           [else (set-box! fired? #t) result])])))
-  ;; Flags: scheduler-level optimization (suspenders)
+  ;; Flags: scheduler implements fire-once. No closure wrapper.
   (define flags (bitwise-ior PROP-FIRE-ONCE
                              (if (null? inputs) PROP-EMPTY-INPUTS 0)))
   (define-values (net* pid)
-    (net-add-propagator net inputs outputs wrapped
+    (net-add-propagator net inputs outputs fire-fn
                         #:component-paths cpaths
                         #:assumption assumption-id
                         #:decision-cell decision-cell-id
@@ -2532,14 +2520,15 @@
           ;; No pending NAF/stratum requests
           (let ([naf-p (net-cell-read net naf-pending-cell-id)])
             (or (not naf-p) (and (hash? naf-p) (hash-empty? naf-p))))
-          ;; ALL worklist propagators must be fire-once with empty inputs.
+          ;; ALL worklist propagators must be fire-once AND have empty inputs.
           ;; If any has inputs, it may depend on other propagators → needs BSP loop.
           (for/and ([pid (in-list (prop-network-worklist net))])
             (define prop (champ-lookup (prop-network-propagators net)
                                        (prop-id-hash pid) pid))
             (and (not (eq? prop 'none))
-                 (not (zero? (bitwise-and (propagator-flags prop)
-                                          (bitwise-ior PROP-FIRE-ONCE PROP-EMPTY-INPUTS)))))))
+                 (= (bitwise-and (propagator-flags prop)
+                                 (bitwise-ior PROP-FIRE-ONCE PROP-EMPTY-INPUTS))
+                    (bitwise-ior PROP-FIRE-ONCE PROP-EMPTY-INPUTS)))))
      ;; TIER 1: single-pass flush. All propagators are fire-once with empty inputs.
      ;; No speculation, no branching, no NAF, no inter-propagator dependencies.
      ;; Fire all worklist propagators directly on canonical. One pass.
