@@ -97,7 +97,54 @@ Context compacted at `2392a2d9` (Phase 6 complete, handoff written) before Phase
 
 ---
 
-## 3. Test Coverage
+## 3. Stated Objectives vs Delivered (Gap Analysis)
+
+The design document's §1 stated the end state: *"The propagator-native solver IS the default solver. `:auto` routes to `solve-goal-propagator`."* with three success criteria. Here's the honest comparison:
+
+### 3.1 Stated end-state vs actual
+
+| Design objective | Actual delivery | Gap |
+|---|---|---|
+| `:auto` → propagator (always) | `:auto` → adaptive: NAF/guard → ATMS, N≥256 → ATMS, else → DFS | **Large (literal)**. The literal objective wasn't met. Measurement-driven reframing revealed DFS is 6-11x faster for practical clause queries (N<256). Adaptive dispatch is a *better* answer than the stated objective, not the stated objective. |
+| Per-fact-row PU isolation | ✅ Phase R2 per-row fire-once propagators | **None**. Delivered as designed. |
+| NAF: async propagator with NAF-result cell | NAF as S1 stratified worldview assumption with fork+BSP+nogood | **Mechanism changed**. D.11→D.13 redesigned NAF after D.10's async-thread approach couldn't compose multi-result cases. Delivered correctness; mechanism is different. |
+| Guard: guard-test propagator with inner-goal continuation | Guard as S0 worldview assumption (same pattern as NAF) | **Mechanism changed**. Unified with NAF under the gating-kinds pattern. Simpler than the design. |
+| `current-parallel-executor` → threads-default | Semaphore-based worker pool with threshold N≥256 | **Large**. Parallel infrastructure built + benchmarked but threshold-gated; not enabled by default for typical workloads. Racket parallelism floor (~8μs) makes enablement below N≈256 a regression. |
+| All `defr`/`solve` tests pass through propagator path | Tests pass under both strategies (T-b 15/15 parity); most default queries still go through DFS | **Large (literal)**. The "Validated ≠ Deployed" pattern (longitudinal, 3+ PIRs) applies. |
+
+### 3.2 Stated success criteria vs measured
+
+| Success criterion | Measured | Status |
+|---|---|---|
+| All 95 test files pass with `:strategy :atms` | 15 solver-exercising files tested in T-b, all BOTH PASS | ⚠️ **Scope not explicitly matched** — unclear what specific 95 files the design meant; 15 was the actual solver-test file count per audit. Parity validated for the actual set. |
+| A/B benchmarks show ≤15% regression vs DFS | Tier 1: 2.3x *faster* than DFS (62x improvement). Tier 2 (clauses): 6-11x *slower* than DFS. | ⚠️ **Partial pass**. Tier 1 wildly beats target; Tier 2 badly misses. Adaptive dispatch mitigates the Tier 2 gap by routing to DFS. |
+| Parallel executor shows speedup on N≥4 clause benchmarks | No speedup below N≈256. Crossover at N=128 in original Phase 0c; Phase 2c's semaphore pool pushed to N≈256 before seeing 1.6x at N=512. | ❌ **Not met as stated**. Phase 2d exhaustive investigation showed the N≥4 target was unreachable on Racket. |
+
+### 3.3 Emergent objectives (not in D.1 but delivered)
+
+Mid-track, objectives expanded through design iterations D.11-D.13 and the mantra audit:
+
+- **On-network redesign (Phase R)**: 6 architectural cleanups not in the original design. Driven by the mantra audit, not the stated objectives.
+- **Tier 1 direct return (universal)**: 62x speedup by skipping BSP for fact-only relations. Emerged from Phase 5a measurement — not designed.
+- **Adaptive `:auto` dispatch**: Emerged from Phase 6 crossover measurements; the stated "auto → propagator" was replaced.
+- **Parity regression suite (Phase T)**: Emerged from 2 test-wf-comparison failures; evolved into a permanent regression gate (test-solver-parity.rkt, 15 tests, 10 classes).
+- **Design mantra codification (4 rules files)**: Triggered by mid-track user introduction; not in D.1 but durable.
+
+### 3.4 Deferred work (explicit tracking)
+
+| Item | Why deferred | Tracked in |
+|---|---|---|
+| `:auto` default flip for clause queries | Measurement shows DFS faster at practical sizes; adaptive dispatch is the principled answer | Per "Validated ≠ Deployed" rule, the adaptive implementation IS the deployment — but the pattern continues if we don't re-examine once workloads change |
+| TMS dead-code removal (~200 lines in propagator.rkt) | Low-priority cleanup, not blocking | DEFERRED.md |
+| Tier 1 extension to single-clause simple bodies | Could cover more queries; out of Track 2B scope | DEFERRED.md |
+| Streaming BSP enablement below N≈256 | Racket floor; awaits self-hosting with heavier per-propagator work | SH Series placeholder in Master Roadmap |
+| Concurrency runtime (CDR) integration with `defproc`/`session` | Self-hosting prerequisite, not Phase 0 | SH Series placeholder |
+
+**Scope adherence (honest accounting)**: ~60% of Design D.1's literal objectives delivered as written; ~40% redirected mid-track by measurement and design mantra audit. The redirections produced a *better* architecture than the original design (adaptive dispatch, on-network Phase R, Tier 1 universal), but that's separate from "did we do what we said we'd do." We did not.
+
+---
+
+## 4. Test Coverage
 
 **New test file**: `tests/test-solver-parity.rkt` (274 lines, 15 tests, Phase T-c). Ten divergence classes covered: Tier 1 facts, single clause, multi-clause, NAF ground succeeds/fails, 2-strata / 3-strata chains, guards, mixed positive+NAF, gating-only (0-arity + with-vars), undefined NAF target, multi-fact narrowing.
 
@@ -109,7 +156,7 @@ Context compacted at `2392a2d9` (Phase 6 complete, handoff written) before Phase
 
 ---
 
-## 4. Bugs Found and Fixed
+## 5. Bugs Found and Fixed
 
 Fourteen concrete bugs. I've grouped by root-cause class.
 
@@ -171,7 +218,159 @@ The batch worker uses `dynamic-require` in a shared process, so tests don't get 
 
 ---
 
-## 5. Design Decisions and Rationale
+## 6. What Went Well
+
+Things that worked — not as general platitudes, but as specific decisions or practices that paid off and should be repeated.
+
+### 6.1 Design mantra as live gate (introduced mid-track)
+The mantra — *"All-at-once, all in parallel, structurally emergent information flow ON-NETWORK"* — was codified in 4 rules files mid-track. It caught 6 architectural violations that tests had missed. The audit triggered Phase R (6 sub-phases, ~5h active implementation), which would not have happened without the mantra. Every subsequent propagator design decision passed through the mantra challenge at each word. **Repeat**: apply the mantra at every `for/fold`, every parameter, every return value, every propagator installation.
+
+### 6.2 Phase R as a coherent unit
+Rather than incremental fixes for each of the 6 violations, Phase R fixed all of them together. Each fix interacted with the others (relation store on-network → discrimination data derivation propagators → goal installation propagator-mediated → general N-stratum infra → fact-row PU as per-row propagators → PU dissolution as egress cell). Incremental fixes would have required reworking earlier ones. **Repeat**: when an architectural audit finds related violations, fix them in one coherent pass.
+
+### 6.3 Module Theory resolved a bug class, not an instance
+After 3 failed attempts (D.9 probe, D.10 bitmask, D.11 stratified) to fix multi-result NAF composition, Resolution B (scope sharing via Module Theory's direct-sum-via-tagging) eliminated bridges entirely. Not "better bridges" — *no bridges*. This resolved the tag-collapse bug class, not one instance. **Repeat**: when patching keeps failing, look for the algebraic structure that eliminates the bug class.
+
+### 6.4 Tier 1 skip-mechanism insight
+Tier 1 direct fact return delivered 62x speedup (30.6μs → 0.49μs) by *skipping* the BSP entirely rather than optimizing it. Phase 5a's in-network optimizations delivered ~5% improvement. The biggest win wasn't making BSP faster — it was recognizing when BSP isn't needed. **Repeat**: before optimizing a mechanism, ask whether there's a class of inputs for which the mechanism isn't needed at all.
+
+### 6.5 PPN boundary normalization (cross-track pattern transfer)
+The PPN Track 1 insight — *normalize at the domain boundary, not at each consumer* — transferred cleanly to the solver's AST/raw value handling. One function (`normalize-solver-value`) at data entry (fact rows, discrimination data, NAF env) eliminated a whole bug class. **Repeat**: when a value crosses a type boundary, normalize once at the boundary.
+
+### 6.6 Parity regression suite as design artifact
+`test-solver-parity.rkt` (T-c, 15 tests, 10 classes) is more valuable than the literal "default flip" objective. It encodes the divergence classes discovered during T-a as permanent regression tests. Future work can experiment with dispatch strategies without fear of silent semantic drift. **Repeat**: for any architectural parity requirement, build the parity regression suite during the track, not as a PIR follow-up.
+
+### 6.7 Conversational cadence preserved architecture
+Every decision point was a conversation: user challenges ("N+1?", "belt-and-suspenders?", "what's Phase T?", "let's open up design considerations around X") consistently improved decisions. 13 design iterations emerged through conversation, not monologue. Phase R itself was triggered by a user challenge. **Repeat**: dialogue checkpoints at phase boundaries. Autonomous stretches longer than ~1h consistently produce architectural drift (this is confirmed across multiple PIRs).
+
+### 6.8 Handoff protocol survived context compaction
+Context compacted at `2392a2d9` between Phase 6 and Phase T. Sessions G and H post-compaction re-read the handoff document + design doc + dailies, then continued T-a/T-b/T-c without architectural drift. No re-learning required. **Repeat**: write handoff documents at phase boundaries under context pressure, not at session end.
+
+---
+
+## 7. Where We Got Lucky
+
+Things that could have gone worse. Per Google SRE, this section requires intellectual honesty — luck is not a strategy, and anything that relied on it should be hardened.
+
+### 7.1 Hash iteration order Heisenbug exposed a latent bug
+
+The dissolution duplicate-results bug (safe-edge 4 vs 2) was latent from Phase 2a. Lucky hash iteration order in other workloads hid it. It surfaced because adding debug code to `test-stratified-eval.rkt` changed compilation → memory layout → hash iteration order → exposed the duplicate. **Luck**: had we not added debug output during T-a investigation, the bug could have hidden longer, manifesting later on different inputs. **Hardening done**: pre-merge step enforces determinism; product-worldview dedup as defense-in-depth. **Hardening NOT done**: no systematic hash-iteration-order fuzz testing. Future bugs of this class could recur.
+
+### 7.2 The 2a bridge collapse wasn't "fixed" with partial patches
+
+We attempted 4 approaches before Module Theory resolved it (probe vars, NAF bitmask, success cell, stratified). Each worked for basic cases. We could have shipped the first "good enough" partial patch and left multi-result composition broken, treating it as an edge case. **Luck**: user's N+1 Principle challenge pushed past "good enough" to the algebraic resolution. **Hardening**: N+1 Principle is now codified in workflow.md; should survive author changes.
+
+### 7.3 S1 NAF infinite recursion was bounded by fuel
+
+The S1 fork handler inherited NAF-pending contents and re-processed them, forking infinitely. **Luck**: fuel limit (1,000,000 firings) bounded the recursion before it ran out of memory. A more realistic workload (or a fuel-unlimited configuration) would have hung or exhausted memory. **Hardening**: explicit `net-cell-reset` on fork; codified as "Fork inherits all cell state" in the mantra-audit findings.
+
+### 7.4 Belt-and-suspenders was caught early
+
+Phase 5a initially added BOTH the closure wrapper AND scheduler flags. User flagged "belt-and-suspenders" as a workflow red flag within the same session. **Luck**: if the wrapper had been kept as "defense in depth," the Tier 1 bitwise bug (`flags & (A|B)` passing when either bit set) would have stayed hidden behind the wrapper. Tests would have passed because the wrapper prevented the double-fire. The bug would have surfaced only when the wrapper was later removed. **Hardening**: "belt-and-suspenders is a red flag" codified in workflow.md. The rule needs repetition — this is the 3rd PIR where it recurred.
+
+### 7.5 Phase R 33% regression was recovered (and exceeded)
+
+Phase R added 7.6μs overhead per single-fact query (23μs → 30.6μs — a 33% regression). **Luck**: Tier 1 direct return (Phase 5b/5c) recovered this and then some (30.6μs → 0.49μs, 62x improvement). Without Tier 1, Phase R would have shipped a net regression. **Hardening**: per-phase benchmark measurement caught the regression immediately; the architectural insight (skip mechanism ≫ optimize mechanism) emerged from this specific context.
+
+### 7.6 Test-stratified-eval batch runner issue was latent
+
+The batch worker's `dynamic-require` shared-process model leaked parameters between tests. This was discovered only because safe-edge was *already* failing due to the dissolution bug — the batch worker behavior was different from individual `raco test`, which surfaced the issue. **Luck**: without the dissolution bug, we might not have noticed the batch-worker isolation gap. **Hardening**: `current-solver-strategy-override` added to `run-prologos-string` parameterize block; stale .zo detection extended to cover test files; the test harness parameterize pattern is now mandatory.
+
+### 7.7 Threshold 256 happened to match BSP pool crossover
+
+Phase 6's adaptive dispatch threshold is 256 for large-clause-set → ATMS. This matches the Phase 2c benchmark crossover (pool 1.6x faster at N=512, tied at N=256). **Luck**: the threshold naturally fell on an empirically-justified value. If the threshold had been arbitrary, adaptive dispatch would have routed poorly in the crossover region. **Hardening**: the threshold is configurable via `solver-config`, so users can tune for their workload.
+
+### 7.8 Handoff protocol worked on first use for this track
+
+Phase T post-compaction was the first time this track used the handoff protocol. It worked. **Luck**: the handoff document was written carefully (per HANDOFF_PROTOCOL.org) with the key files, design decisions, surprises, and hot-load reading order. A less-thorough handoff would have caused re-learning or missed context. **Hardening**: the handoff document (`2026-04-16_BSP_LE_2B_HANDOFF.md`) is now an exemplar that future handoffs can reference.
+
+---
+
+## 8. What Surprised Us
+
+Surprises are the richest source of learning — they reveal gaps in our mental model. Per the methodology.
+
+### 8.1 Racket parallelism has a hard ~8μs floor
+
+Phase 0c estimated thread crossover at N≈128 with 1.9x speedup. Phase 2d's exhaustive investigation revealed the crossover is actually **N≈256** due to OS thread wakeup cost (~8μs). Four alternative approaches benchmarked (spin-wait, sync events, async-channel, spin-poll-done-semaphores); all were worse than sync pool. No Racket-level mechanism beats the OS wakeup cost. **Surprise magnitude**: Phase 0c's design-time estimate was off by 2x in crossover and completely wrong about speedup availability below that. **Mental model update**: Racket's concurrency primitives have a fundamental floor that bounds propagator parallelism below ~0.5μs work granularity.
+
+### 8.2 Tier 1 delivered 62x; BSP ceremony delivered ~5%
+
+We expected BSP-level optimizations (fire-once flags, self-clearing fired-set, template forking) to drive the big wins. They delivered ~5% improvement. **Tier 1 (skip BSP entirely) delivered 62x.** **Surprise magnitude**: large. The measurement reframed the optimization work mid-Phase 5. **Mental model update**: structural overhead (allocation, cell writes, scheduling) is fixed; the only way to eliminate it is to bypass it. The skip-mechanism insight is now a general optimization principle (§16.4).
+
+### 8.3 Tests passed but architecture was wrong
+
+The design mantra audit found 6 architectural violations that the passing test suite hadn't surfaced. **Surprise magnitude**: large. Tests verify correctness of outputs; they don't verify that the architecture IS structurally emergent information flow. **Mental model update**: tests are insensitive to the on-network/off-network distinction. The mantra (or something like it) is the missing gate.
+
+### 8.4 Module Theory gave a decomposition we hadn't considered
+
+After 3 failed NAF approaches, the user suggested "Resolution B" based on Module Theory — direct-sum decomposition realized as bitmask tagging on a shared carrier cell. Not separate cells with morphisms. **Surprise magnitude**: medium. The algebraic framework suggested a realization we hadn't enumerated. **Mental model update**: when considering separate cells with bridges, always ask — is there a tagged-shared-cell realization? Usually yes. Codified in §6.3.
+
+### 8.5 Belt-and-suspenders actively hid a bug
+
+We thought dual mechanisms were defensive. They masked the Tier 1 bitwise check bug (`flags & (A|B)` passing when EITHER flag set, should require BOTH). **Surprise magnitude**: the category is now known (3+ PIRs), but each instance still surprises because it feels like "safety." **Mental model update**: belt-and-suspenders isn't safety; it's bug-hiding. If two mechanisms can mask a bug in either, they're not independent.
+
+### 8.6 Hash iteration order affected correctness, not just performance
+
+A latent dissolution bug was hidden by lucky hash iteration order. Adding debug code to the test file changed compilation → memory layout → iteration order → exposed the bug. **Surprise magnitude**: large. Hash iteration order is usually a performance concern, not a correctness concern. Here it was the difference between "test passes" and "test fails." **Mental model update**: Heisenbugs point to missing determinism invariants. The fix isn't making the bug deterministic — it's enforcing the invariant (pre-merge same-bitmask entries before structural analysis).
+
+### 8.7 The `raco make driver.rkt` + `--no-precompile` gap
+
+`raco make driver.rkt` recompiles production code but NOT test files (tests aren't in driver.rkt's dependency graph). `--no-precompile` bypasses the suite runner's own compilation step. Combined, test `.zo` files stay stale — and the batch worker's `dynamic-require` trusts cached .zo. **Surprise magnitude**: medium. The build infrastructure had a silent gap. **Mental model update**: never `--no-precompile` after manual `raco make driver.rkt`. Extended stale-.zo detection to cover test files (`946a98ac`).
+
+### 8.8 Gating-only clause bodies — a normal case we hadn't modeled
+
+`c :- not b.` (0-arity clause with gating-only body) is a standard logic programming pattern. The propagator solver's dissolution had no mechanism for it — gating goals don't write to scope cells, so dissolution read nothing even when gating succeeded. **Surprise magnitude**: medium. The dissolution design implicitly assumed positive goals would produce scope writes. **Mental model update**: result production in propagator solvers requires explicit success signals, not just absence of failure. Success-marker writes under the gating bitmask close this gap.
+
+### 8.9 13 design iterations were required
+
+D.1 through D.13. Design evolved through: NAF mechanism (D.9 → D.10 → D.11 → D.12), relation store on-network (D.13), Resolution B scope sharing (in D.13 post-mantra), Phase R audit findings (in D.13). **Surprise magnitude**: medium-to-large. Typical tracks land in 3-5 iterations; this one took 13. **Mental model update**: when a design area is genuinely novel (no prior art for the exact problem), iteration count scales. Compositional NAF (multi-result + multi-strata + worldview composition) was genuinely novel — our prior art covered pieces but not composition. Iterations were necessary, not wasteful.
+
+---
+
+## 9. Architecture Assessment — How It Held Up
+
+Did Track 2B integrate cleanly with existing systems? Which extension points worked, which required modification?
+
+### 9.1 Track 2 infrastructure held up perfectly
+
+The ATMS solver (Track 2) delivered solver-context, compound cells (decisions-state, commitments-state, scope-cell), tagged-cell-value, worldview bitmask infrastructure. Track 2B built heavily on all of these and *did not modify* the core Track 2 abstractions. Scope sharing (Resolution B) used Track 2's scope cells in a new way (direct mapping rather than via bridges), but the cells themselves were unchanged.
+
+**Held up**: worldview bitmask pattern, tagged-cell-value merge, scope cell merge function, solver-context, ATMS assumption allocation. All used extensively; none modified.
+
+### 9.2 PAR Track 1's BSP infrastructure integrated cleanly
+
+The BSP scheduler (PAR Track 1) with stratum handlers was the integration point for Phase R4's NAF S1 handler. `register-stratum-handler!` + request-accumulator cell pattern generalized from topology-only to N-strata without new mechanisms. The handler contract (`(net pending-hash) → net`) was unchanged.
+
+**Held up**: BSP outer loop, topology handler pattern, request-accumulator cells, fuel bounded fixpoint iteration.
+
+### 9.3 Phase R's on-network redesign was structural, not mechanical
+
+Phase R moved 6 components on-network. Each was a structural shift (parameter → cell, construction-time write → fire-once propagator, imperative scan → stratum handler + cell), not a rewrite. The shift required extending primitives (6 well-known cell IDs reserved 0-5, per-propagator cell-id namespaces for parallel allocation, general strata list), but the propagator model itself accommodated all of it.
+
+**Extended**: `PROP-FIRE-ONCE` / `PROP-EMPTY-INPUTS` flags on propagator struct. Per-propagator cell-id namespaces (high-bit encoding). Well-known cells (0-5) in `make-prop-network`.
+
+**Unchanged**: `net-add-propagator` contract, `net-cell-write`/`net-cell-read` interface, CHAMP-backed persistence, fork semantics.
+
+### 9.4 NTT interface alignment held
+
+Phase R6 aligned PU dissolution with NTT's `interface SolverNet :outputs [answers]` pattern — the answer-cid is an egress cell (total sink, no internal readers), dissolution writes to it after quiescence. This matched the NTT vision cleanly. **Validation**: the NTT design vocabulary (`interface`, `:inputs`, `:outputs`, `cell`, `propagator`) maps directly to the solver's structure.
+
+### 9.5 Friction points
+
+**PPN boundary normalization crossed a boundary the design didn't anticipate.** AST-node values from `.prologos` elaboration vs raw values from test stores — the solver had multiple sites handling this inconsistently. The `normalize-solver-value` function (Phase 5b/5c) was the integration fix: one function at the boundary, all sites normalized. The underlying friction: no explicit typing of "what enters the solver" at the relation-info boundary.
+
+**Batch-worker parameter isolation is a persistent friction.** The batch runner's `dynamic-require` in a shared process doesn't auto-isolate parameters. This is a longitudinal pattern (Pattern 7 in §17 longitudinal survey: "Two-Context Boundary Bugs," 6+ PIRs). Track 2B discovered `current-solver-strategy-override` wasn't in the test harness's parameterize block. The fix is pattern-level (always parameterize all solver params), not architectural — which means the friction persists.
+
+**Dissolution's cross-product of per-variable entries was a subtle gap.** Fact-row propagators write x and y to the scope cell in separate writes; dissolution treated them as independent branching sites. The pre-merge step (§13, T-a Fix 6) bridges the gap — but the underlying design assumption (one entry per branch) doesn't hold when propagators write multiple variables separately. This is a friction between the design intuition and the implementation reality.
+
+### 9.6 Net architectural assessment
+
+Track 2 + PAR Track 1 infrastructure provided sufficient abstraction for Track 2B's scope. The modifications Track 2B made (propagator flags, well-known cells, per-propagator namespaces, general strata) are *extensions*, not *changes*. The core propagator model held. **The mantra audit was the architectural validation**: the system as designed supported on-network computation; the violations were implementation drift, not architectural gaps.
+
+---
+
+## 10. Design Decisions and Rationale
 
 ### 5.1 Design Mantra as First-Class Gate
 
@@ -209,57 +408,235 @@ Tier 1 (facts) → direct; NAF/guard → ATMS (mandatory — requires worldview)
 
 OS thread wakeup ~8μs dominates all cross-thread communication. Sync pool crossover at N≈256. Exhaustive 2d investigation: spin-wait, sync events, async-channel, spin-poll — all ≥ sync pool. **Rationale**: no Racket-level mechanism beats the OS wakeup cost. Strategic decision: wait for self-hosting where per-propagator work increases. **Rejected**: FFI to C for lightweight threads (throwaway — self-hosting replaces); streaming BSP (overhead > benefit).
 
-### 5.10 N+1 Principle as Design Practice
+### 10.10 N+1 Principle as Design Practice
 
 User challenge mid-track: "When considering N options, ask what's the N+1th?" Applied at multiple decision points. NAF stratification: N options = threshold / probe / success cell → N+1 = fork-based S1 handler. Bridge composition: N options = better bridges / fmap / tag-transparent → N+1 = no bridges (scope sharing). Parallelism: N options = faster BSP / async / spin → N+1 = skip BSP (Tier 1). **Rationale**: the obvious options converge on "more of the same"; the breakthrough option is usually in a different category entirely.
 
 ---
 
-## 6. Lessons Learned
+## 11. Wrong Assumptions
 
-### 6.1 Design mantra as live challenge (not guideline)
+Not what broke — what we *believed* that turned out to be false. Wrong assumptions are more dangerous than bugs because they're invisible until they cause problems.
+
+### 11.1 ATMS would be the default, DFS a fallback
+**Believed**: propagator solver is strictly better; DFS retained only for compatibility. **Truth**: DFS is 6-11x faster for practical clause queries (N<256). ATMS's worldview machinery has fixed overhead that doesn't amortize below large clause sets. **How it manifested**: Phase 6 measurement forced adaptive dispatch. The D.1 literal objective (`:auto → propagator`) was quietly abandoned.
+
+### 11.2 Parallel executor would benefit workloads at N≥4
+**Believed**: thread-based parallelism would speed up multi-clause queries starting at small N. **Truth**: Racket OS thread wakeup (~8μs) dominates below N≈256. **How it manifested**: Phase 2d's exhaustive investigation (4 approaches benchmarked). The parallel infrastructure is architecturally correct but the payoff is bounded by Racket's primitives.
+
+### 11.3 NAF needs an async propagator with a result cell
+**Believed** (in D.1-D.10): NAF would be an async propagator that spawns a thread to evaluate the inner goal, writes result to a cell, continues. **Truth**: NAF is fundamentally non-monotone; stratification is its natural expression. D.11 → D.13 redesigned NAF as an S1 worldview assumption — simpler, correct, composable. **How it manifested**: 3 failed attempts (D.9 probe, D.10 bitmask, D.11 stratified intermediate) before D.12 landed the right design.
+
+### 11.4 Discrimination viability equals provability
+**Believed**: if discrimination narrows to a non-empty viable set for ground args, the goal is provable. **Truth**: discrimination is a *necessary* condition, not *sufficient*. It checks structural compatibility (alternatives that could match), not runtime success (alternatives whose clause bodies succeed after NAF/guard evaluation). **How it manifested**: T-a Fix 2. The 3-strata test failed (0 results for `c :- not b. b :- not a. a.`) because the ground provability check used discrimination as a proxy. DFS call replaced it.
+
+### 11.5 `raco make driver.rkt` covers the build graph
+**Believed**: recompiling driver.rkt propagates to all dependents, including test files. **Truth**: test files aren't in driver.rkt's dependency graph. `raco make driver.rkt` leaves test `.zo` stale. **How it manifested**: several cycles of "test passes individually, fails in batch runner." Fix in `946a98ac` (stale-.zo detection extended to cover test files).
+
+### 11.6 Belt-and-suspenders is defensive
+**Believed**: keeping the old mechanism alongside the new one is safe defense. **Truth**: dual mechanisms mask bugs in the new one — when the old still "works" for the test case, the new's bugs stay hidden. **How it manifested**: Phase 5a closure-wrapper + scheduler flags masked a Tier 1 bitwise check bug (`flags & (A|B)` when either bit set, should be both). Removing the wrapper exposed the real bug. Pattern now in 3+ PIRs.
+
+### 11.7 Bridges between scope cells are the right abstraction
+**Believed**: multi-level scope composition uses bridge propagators with fmap (standard propagator pattern). **Truth**: bridges collapse tagged entries because bidirectional `logic-var-read` is worldview-filtered. Scope sharing via bitmask tagging on a shared carrier cell is simpler and doesn't collapse. **How it manifested**: 3 design iterations of bridge-based NAF composition before Resolution B (Module Theory direct-sum-via-tagging) eliminated bridges entirely.
+
+### 11.8 0-arity queries would "just work" in the propagator solver
+**Believed**: scope-cell-based result production was the general mechanism; 0-arity would be a special case of the general. **Truth**: 0-arity has no scope cells, so dissolution has nothing to read. Gating-only clause bodies produce no scope writes at any arity. **How it manifested**: T-a Fix 3 (0-arity DFS delegation) and T-a Fix 4 (success markers). The propagator model's result production isn't universal — it requires explicit success signals for certain clause body shapes.
+
+### 11.9 Gating-only clause bodies are rare edge cases
+**Believed**: most clause bodies mix positive goals and gating goals; gating-only is unusual. **Truth**: `c :- not b.` and `check-ok :- not(bad "alice")` are normal logic programming patterns. Standard textbook NAF patterns exercise this. **How it manifested**: T-a surfaced failures in `test-wf-comparison-01.rkt` (3-strata) and `test-relational-e2e.rkt` (gating-only with vars).
+
+### 11.10 Hash iteration order doesn't affect correctness
+**Believed**: hash iteration order is a performance concern; deterministic output requires explicit sorting. **Truth**: for this solver, iteration order affected *correctness* — it determined whether a latent dissolution duplicate-worldview bug manifested. **How it manifested**: debug output in a test file changed compilation → memory layout → iteration order → exposed the bug. Pre-merge + dedup now enforce determinism.
+
+**Meta-observation**: 10 wrong assumptions in one track is a lot. Most were corrected by measurement (11.1, 11.2, 11.5), one by user challenge (11.6), three by debugging (11.4, 11.8, 11.10), three by architectural insight (11.3, 11.7, 11.9). The pattern: assumptions about *performance*, *correctness equivalence*, and *generality* are systematically too optimistic.
+
+---
+
+## 12. What We Learned About the Problem
+
+Implementation always teaches things that research and design cannot. What do we now understand about the problem domain that we didn't when the track started?
+
+### 12.1 NAF is stratification, not asynchrony
+
+The pre-track intuition: NAF is a side channel — check the inner goal asynchronously, write the result to a cell, continue. The correct framing (landed in D.12): NAF is a non-monotone operation at a higher stratum than S0. Stratification is the standard logic-programming treatment; the propagator model accommodates it via request-accumulator cell + S1 handler. **Problem insight**: the asynchrony framing was fighting the math. Stratification makes the non-monotonicity explicit and structural.
+
+### 12.2 Scope decomposition has two algebraic realizations; only one doesn't collapse
+
+Module Theory direct sum R = C₁ ⊕ ... ⊕ Cₙ can be realized as (a) separate cells with morphisms (bridges), or (b) tagged shared cell with bitmask layers. Realization (a) collapses tags through bidirectional bridges; realization (b) doesn't. **Problem insight**: the algebraic framework admits multiple realizations with different computational properties. The "natural" realization (separate cells) is wrong for worldview-sensitive computation; the tagged realization is correct.
+
+### 12.3 Result production requires explicit success signals
+
+In DFS, a clause body that "succeeds" returns the current substitution — success is the default; failure is what must be signaled. In the propagator model, result production comes from scope-cell writes by positive goals — success must be signaled (writes happen) or it's indistinguishable from failure (no writes). **Problem insight**: propagator solvers need an explicit success protocol that DFS doesn't need. Gating-only clause bodies exposed this gap — they pass (assumptions survive) but produce no writes. The success-marker pattern (T-a Fix 4) is the explicit protocol.
+
+### 12.4 Discrimination is structure, not semantics
+
+Discrimination data captures structural compatibility (which alternatives' argument patterns match). It does *not* capture runtime behavior (which alternatives' clause bodies succeed). **Problem insight**: structural and semantic narrowing are different computations. The propagator solver conflated them briefly (T-a Fix 2). Future narrowing work should keep them separate.
+
+### 12.5 Propagator parallelism in Racket has a fundamental floor
+
+Per-propagator work in the current solver is ~0.5μs. Racket's cross-thread communication has a ~8μs floor. The arithmetic bounds parallelism from below: below 16x per-propagator work, parallelism is a regression. **Problem insight**: lightweight concurrency is a compiler/runtime problem, not a library problem. Self-hosting with heavier per-propagator work (~5-50μs) changes the arithmetic; Phase 0 Racket doesn't.
+
+### 12.6 Pre-0 benchmarks are not optional
+
+Phase 0b estimated ATMS overhead at 24.5x (single-fact); actual decomposition (scheduling 52.6%, install 30.4%, allocation 15.5%, read 0.4%) guided Phase 5's optimization targets. Without Phase 0b, we'd have optimized the wrong things. **Problem insight**: design-time intuition about where overhead lives is reliably wrong. Measurement is the only oracle. (This is now architectural — Pattern A in the longitudinal, 10/10 PIRs.)
+
+### 12.7 Workload characteristics drive dispatch choice
+
+Single-fact queries: ATMS 2.3x faster via Tier 1. Multi-clause queries: DFS 6-11x faster. Multi-clause queries with NAF: ATMS required (worldview). Large clause sets (N≥256): ATMS pays off via parallelism. **Problem insight**: there is no universal best strategy. Adaptive dispatch is architecturally correct; "flip to propagator" was always the wrong framing.
+
+---
+
+## 13. Are We Solving the Right Problem?
+
+Argyris's double-loop learning: question the goals, not just the methods. Did the implementation reveal that the real need is different from what the design addressed?
+
+### 13.1 The stated problem vs the revealed problem
+
+**Stated (D.1 §1)**: "Make the propagator-native solver the default solver." Implied: propagator path is strictly better; we just need to enable it.
+
+**Revealed**: "Produce correct results efficiently regardless of strategy, with adaptive dispatch per query." No single strategy is universally best. The real need is:
+1. **Semantic equivalence** across strategies (parity) — so choice doesn't affect correctness
+2. **Workload-aware dispatch** — so choice affects performance per query's shape
+3. **Configurable threshold** — so users can tune for their workload
+4. **Permanent regression gate** — so future changes don't silently diverge
+
+Track 2B delivered all four. The parity regression suite (`test-solver-parity.rkt`) is arguably the most valuable deliverable — it's the infrastructure that enables future work on dispatch, thresholds, and new strategies without fear of semantic drift.
+
+### 13.2 Was the design mantra the right framing?
+
+**Asked**: is "all-at-once, all in parallel, structurally emergent information flow ON-NETWORK" the right north star? **Answered by Phase R**: yes. The 6 violations it caught were real architectural drift. Tests didn't surface them because tests check outputs, not structural properties. The mantra is a genuinely necessary gate for propagator architecture.
+
+**But**: applied literally, the mantra says everything should be on-network. The 0-arity DFS delegation (T-a Fix 3) is *off-network* — delegating to DFS. Is that a mantra violation? Honest answer: yes, it's a structural limitation of the current result-production model, acknowledged as scaffolding. The mantra doesn't say "no scaffolding ever"; it says "scaffolding must be labeled with a retirement plan." The 0-arity delegation is labeled as such (PIR §18 What's Next, §14 Technical Debt).
+
+### 13.3 Did the longitudinal patterns change our framing?
+
+**Pattern 5 (D:I ratio)** suggests 1.5:1 target for infrastructure tracks. Track 2B delivered at 0.55:1 calendar ratio but with 13 design iterations. The pattern is more nuanced than "design more": *iteration count* is a better proxy than *calendar time*. In-flight redesign (D.11 → D.12 → D.13 during implementation) is design investment too. **Framing update**: D:I ratio is a rough indicator; iteration count better captures design investment when the design space is genuinely novel.
+
+**Pattern 7 (two-context boundary bugs)** recurred in Track 2B via batch-worker parameter isolation. The codified `pipeline.md` "Two-Context Audit" didn't prevent it — the checklist lists parameters but doesn't prevent new ones from being added without updating the checklist. **Framing update**: pattern-level documentation is not architectural-level intervention. For 5+ PIR patterns, systemic response is needed (automated two-context testing, parameter registration requirement).
+
+### 13.4 What problem should the NEXT track solve?
+
+Implied by what Track 2B didn't fully resolve:
+
+1. **Flipping `:auto`**: measurement-driven threshold experiments with realistic workloads. Using `test-solver-parity.rkt` as safety net.
+2. **Tier 1 expansion**: single-clause simple bodies (no NAF/guard) could qualify. Expected 5-10x more queries covered.
+3. **Two-context automated testing**: architectural intervention for the recurring pattern. Build, don't document.
+
+These are smaller than Track 2B. The big architectural work (on-network, parallel infrastructure, adaptive dispatch) is done.
+
+---
+
+## 14. Technical Debt Accepted
+
+Explicit enumeration. Each item has a rationale and a tracking reference — per the methodology, debt without tracking is abandoned work.
+
+| Item | Rationale | Tracked in |
+|---|---|---|
+| `:auto` defaults to DFS for clause queries < 256 | Measurement-driven: DFS 6-11x faster at practical sizes. Adaptive dispatch is the principled answer, not a workaround. | PIR §13.1 (revealed problem) |
+| 0-arity queries delegate to DFS | Structural limitation of the scope-cell result model. Labeled scaffolding, retirement plan: unify with future success-cell-based result infrastructure. | PIR §14 (this table), §13.2 (mantra assessment) |
+| TMS dead code (~200 lines in propagator.rkt) | Low-priority cleanup; no blocking impact. | DEFERRED.md |
+| Tier 1 only single-variant fact-only | Extension to single-clause simple bodies would cover more queries; out of Track 2B scope. | DEFERRED.md, §13.4 |
+| Streaming BSP infrastructure enabled only at N≥256 | Racket floor (~8μs cross-thread) bounds parallelism. Infrastructure correct, payoff deferred to self-hosting. | SH Series placeholder in Master Roadmap |
+| Batch-worker parameter isolation partial | Listed params fixed (`current-solver-strategy-override`); general solution requires auto-registration architecture. | Longitudinal pattern (6+ PIRs); §13.3 calls for architectural intervention |
+| Network template is module-level mutable box (`solver-network-template`) | Caches across tests in batch worker. Not parameterized. Could leak if tests mutate. | No known leak; monitor. |
+| No acceptance `.prologos` file for Track 2B | Track is infrastructure-only, no user-facing syntax. Existing WFLE acceptance covers solver integration. | PIR §4 (Test Coverage gaps) |
+| Test-solver-parity unresolved-var normalization | DFS returns `X0→X0`, ATMS returns `X0→X0_g1025` — same semantics, different representation. Normalized for comparison. | Test harness documented; not a bug but a representation difference |
+| Product-worldview dedup is defensive, not root-cause | Pre-merge (Fix 6) is the real fix; dedup (Fix 7) is defense-in-depth. Could remove dedup if confident pre-merge is sufficient. | T-a commit messages; acceptable because dedup has no correctness cost |
+
+**Explicit non-debt** (things that might look like debt but aren't):
+- The DFS solver is retained as `:strategy :depth-first` and as `:auto`'s default below N=256 — not debt, but a permanent backend choice.
+- Adaptive dispatch thresholds (256 for size, NAF/guard routing) — configurable via `solver-config`; not debt, by design.
+
+---
+
+## 15. What We'd Do Differently
+
+Not hypothetical — based on what we now know. If the answer is "nothing," the design process worked well. If substantial, the process has a gap.
+
+### 15.1 Introduce the design mantra at Stage 0, not mid-track
+
+The mantra audit (`a5cde27f`) caught 6 violations that triggered Phase R (~5h of work). Had the mantra been codified at track start (before Phase 1a), Phase R wouldn't have been necessary — the violations wouldn't have existed. **Gap**: the Design Methodology didn't include a mantra-style structural gate; Track 2B introduced and codified it mid-track. **Change**: new Prologos tracks should start with a mantra/principles check per `.claude/rules/structural-thinking.md` before Phase 1.
+
+### 15.2 Run Pre-0 benchmarks for NAF composition specifically
+
+Phase 0b measured single-fact, multi-clause, and thread scaling. It didn't measure NAF composition at multi-result scale. If it had, the bridge-collapse failure mode would have surfaced pre-implementation, driving straight to Module Theory rather than through 3 failed design iterations. **Change**: Pre-0 benchmarks should cover each semantic axis the track exercises, not just performance axes.
+
+### 15.3 Write `test-solver-parity.rkt` at Phase T-design, not T-c
+
+The divergence classes encoded in T-c (gating-only, 0-arity, undefined NAF targets, multi-strata chains) were *discovered* during T-a bug-hunting. Had a parity test skeleton existed at Phase 0a (when the 3 divergence categories were first identified), each divergence would have surfaced as a failing test *at design time*, driving the design decisions rather than requiring mid-Phase-T bug fixes. **Change**: parity tests are design artifacts, not regression artifacts. Write them with the design doc.
+
+### 15.4 Acknowledge adaptive dispatch as the target from D.1
+
+D.1 wrote "`:auto` → propagator." D.13 delivered adaptive dispatch. The redirect was measurement-forced but arguably predictable: no single strategy is universally best is a common finding across solvers. Design D.1 could have posited adaptive and measured *which strategies* to route to under what conditions. **Change**: for strategy-dispatch designs, start with adaptive; benchmark to tune, not to discover the need.
+
+### 15.5 Write the handoff document at each phase boundary, not at compaction
+
+The handoff written at `2392a2d9` was successful, but it was written *at* the compaction boundary. If it had been written *at each phase boundary* (R complete, 2a complete, etc.), the track would have accumulated multiple handoffs and context loss would have been cheaper throughout. **Change**: make the handoff document a living artifact, updated per-phase, rather than a terminal artifact.
+
+### 15.6 Systematic hash-iteration-order fuzz testing
+
+The dissolution duplicate-worldview bug was latent and Heisenbug-shaped. Other hash-iteration-dependent bugs could exist; we don't know. **Change**: add a hash-iteration-order fuzz test (randomize `current-hash-seed` or equivalent across runs) to the CI. Run the full suite under 3-5 different hash seeds. Bugs that surface only under specific seeds are determinism-missing bugs.
+
+### 15.7 Smaller than 13 design iterations
+
+13 iterations is the most any Prologos track has had. Some were necessary (the genuinely novel NAF composition problem). Some were avoidable (the iteration-to-avoid-premature-commitment iterations could have been collapsed into fewer larger revisions). **Change**: at each iteration, ask "could this revision have been made in the previous one?" If yes, the previous iteration was premature.
+
+### 15.8 Things we'd keep
+
+- **Design mantra** introduced at track mid-point turned out to be load-bearing. Would introduce earlier (§15.1), but would absolutely keep.
+- **Phase R as a coherent unit** — fixing all 6 violations together was right. Would repeat.
+- **Module Theory resolution** — the algebraic frame was the key unlock. Would always reach for algebraic structure when patching keeps failing.
+- **Handoff protocol for context compaction** — worked. Would use again.
+- **Adaptive dispatch** — measurement-driven reframing from "propagator default" to "adaptive dispatch" was the correct call.
+- **Conversational cadence** — user challenges at every decision point consistently improved decisions. Would keep explicitly.
+
+---
+
+## 16. Lessons Learned
+
+### 16.1 Design mantra as live challenge (not guideline)
 
 The mantra caught 6 architectural violations tests had missed. Codified in 4 rules files. **What happened**: tests verify correctness of the code; they don't verify that the code IS structurally emergent information flow. Under implementation pressure, it's easy to write a `for/fold` that produces the right answer but through step-think ordering. **Why it matters**: tests are insensitive to the distinction; the mantra is the missing gate. **How to apply**: at every propagator installation, every `for/fold`, every parameter, every return value, challenge against each word. Name what fails, redesign, or label as scaffolding with a retirement plan.
 
-### 6.2 Belt-and-suspenders masks bugs in the new mechanism
+### 16.2 Belt-and-suspenders masks bugs in the new mechanism
 
 Phase 5a incident: closure wrapper + scheduler flags both implementing fire-once. The wrapper prevented the double-fire, which meant the test passed, which meant the scheduler-level Tier 1 detection bug was invisible. Removing the wrapper exposed and fixed the real issue. **Why it matters**: when two mechanisms do the same thing, the overlap masks bugs in either one. The "safety" of dual mechanisms is illusory. **How to apply**: if you find yourself adding a second mechanism "for safety" while keeping the old one, pause. Either delete the old and fix the new, or revert to the old.
 
-### 6.3 Normalize at the domain boundary (PPN insight, generalized)
+### 16.3 Normalize at the domain boundary (PPN insight, generalized)
 
 AST values vs raw values bugs appeared at N sites before Phase T. `normalize-solver-value` at data entry (discrimination data, fact rows, NAF env) eliminated all of them. Single function, multiple consumers. **Why it matters**: per-site normalization is duplicated, error-prone, and asymmetric — one site normalizes, another doesn't, they disagree. **How to apply**: when a value crosses a type boundary (AST → raw, string → symbol, expr-int → int), normalize once at the boundary, not at each consumer.
 
-### 6.4 Module Theory for scope decomposition
+### 16.4 Module Theory for scope decomposition
 
 R = C₁ ⊕ ... ⊕ Cₙ realized as bitmask layers on a shared carrier cell, not as separate cells with morphisms. Eliminated bridges and the tag-collapse bug class. **Why it matters**: algebraic structure determines implementation. The direct-sum decomposition has two realizations; one is much simpler (tagging) and eliminates a bug class. **How to apply**: when considering separate cells with bridge morphisms, ask: is there a tagged-shared-cell realization? Usually yes, usually simpler.
 
-### 6.5 Skip the mechanism, don't optimize it (N+1 applied)
+### 16.5 Skip the mechanism, don't optimize it (N+1 applied)
 
 Tier 1 direct return delivered 62x speedup. All BSP ceremony optimizations combined (Phase 5a) delivered ~5% improvement. **Why it matters**: the biggest wins come from recognizing when a mechanism isn't needed, not from making the mechanism faster. The structural overhead (allocation, cell writes, scheduling) is fixed; the only way to eliminate it is to bypass it. **How to apply**: before optimizing a mechanism, ask — is there a class of inputs for which the mechanism isn't needed at all? If yes, fast-path that class.
 
-### 6.6 Racket parallelism has a hard floor (measured, accepted)
+### 16.6 Racket parallelism has a hard floor (measured, accepted)
 
 OS thread wakeup ~8μs. No Racket-level mechanism beats it for ~0.5μs work granularity. Four approaches benchmarked exhaustively in Phase 2d. **Why it matters**: the parallel infrastructure is correct; the payoff is deferred. Knowing this lets us stop optimizing within Racket and start designing for self-hosting. **How to apply**: document the ceiling. Measure the actual work per propagator. If work < wakeup floor × overhead factor, don't parallelize — the arithmetic is against you.
 
-### 6.7 Measure before AND after (Pre-0 insight extended)
+### 16.7 Measure before AND after (Pre-0 insight extended)
 
 Phase 0b guided optimization targets. Phase 2d benchmarks revealed the Racket ceiling. Phase 5 benchmarks showed the Phase R regression. Each measurement changed strategy. **Why it matters**: without pre-measurement, optimization targets the wrong thing. Without post-measurement, you don't know if you made things worse. The handoff's Phase 2d "investigation" section documents 4 approaches with data; this is the gold standard for "design from evidence." **How to apply**: every optimization phase ends with before/after measurements. If a phase has no measurement, it's not complete.
 
-### 6.8 Hash iteration order Heisenbug → missing invariant
+### 16.8 Hash iteration order Heisenbug → missing invariant
 
 Adding debug output to a test file changed its compilation → different memory layout → different hash iteration order → exposed a latent duplicate-worldview bug in dissolution. The bug was there the whole time; lucky iteration order hid it. **Why it matters**: Heisenbugs point to missing invariants. The fix isn't just to make the bug deterministic — it's to add the invariant that prevents the bug class. In this case: the dissolution must produce deterministic results regardless of hash iteration order. The pre-merge + dedup fix enforces this. **How to apply**: when a bug appears/disappears based on seemingly-unrelated changes, suspect a non-deterministic dependency. Find it; add the invariant.
 
-### 6.9 `raco make driver.rkt` doesn't recompile test files
+### 16.9 `raco make driver.rkt` doesn't recompile test files
 
 Tests aren't in driver.rkt's dependency graph. `raco make driver.rkt` + `--no-precompile` leaves test `.zo` stale. Batch worker's `dynamic-require` trusts cached .zo; stale .zo produces silently wrong results. Extended Track 10B stale .zo detection to cover test files. **Why it matters**: the suite runner had this infrastructure (`precompile-modules!` compiles both), but the manual precompile path bypassed it. The detection gap let the confusion persist across multiple diagnostic cycles. **How to apply**: never use `--no-precompile` after manual `raco make driver.rkt`. Let the suite runner do its own precompilation.
 
-### 6.10 Context compaction via handoff protocol works
+### 16.10 Context compaction via handoff protocol works
 
 Track spanned multiple sessions; context compacted at Phase T boundary. The handoff document (written per HANDOFF_PROTOCOL.org) preserved reasoning across the compaction. Post-compaction session re-read handoff + design doc + dailies, then continued implementation without losing architectural understanding. **Why it matters**: large tracks exceed single-session context windows. The handoff is the preservation mechanism. **How to apply**: write handoff documents at natural boundaries (phase completion, context pressure), not at session end.
 
 ---
 
-## 7. Metrics
+## 17. Metrics
 
 | Metric | Value |
 |---|---|
@@ -287,11 +664,11 @@ Track spanned multiple sessions; context compacted at Phase T boundary. The hand
 
 ---
 
-## 8. What's Next
+## 18. What's Next
 
 ### Immediate (next session)
 
-1. **Distill lessons** (this PIR) into DEVELOPMENT_LESSONS.org and PATTERNS_AND_CONVENTIONS.org. See §10.
+1. **Distill lessons** (this PIR) into DEVELOPMENT_LESSONS.org and PATTERNS_AND_CONVENTIONS.org. See §20.
 2. **Update MEMORY.md** with Track 2B completion status.
 3. **Update Master Roadmap** — Track 2B ✅ on BSP-LE Master.
 4. **Review DEFERRED.md** — triage items newly-unblocked by Track 2B (tabling extensions, next-track prerequisites).
@@ -315,7 +692,7 @@ Track spanned multiple sessions; context compacted at Phase T boundary. The hand
 
 ---
 
-## 9. Key Files
+## 19. Key Files
 
 | File | Role | Key Sections |
 |---|---|---|
@@ -330,22 +707,22 @@ Track spanned multiple sessions; context compacted at Phase T boundary. The hand
 
 ---
 
-## 10. Lessons Distilled
+## 20. Lessons Distilled
 
 Per the PIR methodology, every lesson should flow to where future work will encounter it. Empty "Lessons Distilled" = broken PIR lifecycle.
 
 | Lesson | Distilled To | Status |
 |---|---|---|
-| Design mantra as live challenge (§6.1) | `on-network.md`, `propagator-design.md`, `workflow.md`, `structural-thinking.md` | ✅ Done pre-Phase R (`a5cde27f`) |
-| Belt-and-suspenders masks bugs (§6.2) | `DEVELOPMENT_LESSONS.org` | ⬜ Pending — extend existing "Validated ≠ Deployed" section with belt-and-suspenders as a specific anti-pattern |
-| Normalize at the domain boundary (§6.3) | `PATTERNS_AND_CONVENTIONS.org` | ⬜ Pending — codify as "PPN Boundary Normalization" pattern; reference sites in relations.rkt |
-| Module Theory for scope decomposition (§6.4) | `structural-thinking.md` | ⬜ Pending — extend "Module Theory of Lattices" with concrete direct-sum-via-tagging pattern |
-| Skip the mechanism, don't optimize (§6.5) | `DEVELOPMENT_LESSONS.org` | ⬜ Pending — new section "N+1 Principle in Optimization" |
-| Racket parallelism hard floor (§6.6) | `DEVELOPMENT_LESSONS.org` | ⬜ Pending — document the 8μs ceiling, measurement methodology, self-hosting implication |
-| Measure before AND after (§6.7) | `DESIGN_METHODOLOGY.org` (Stage 4, implementation protocol) | ⬜ Pending — elevate Pre-0 measurement rule to include phase-end measurement |
-| Hash iteration Heisenbug → missing invariant (§6.8) | `DEVELOPMENT_LESSONS.org` | ⬜ Pending — new section "Heisenbugs Point to Missing Determinism Invariants" |
-| `raco make driver.rkt` test `.zo` gap (§6.9) | `testing.md` rules | ⬜ Pending — document the `--no-precompile` trap, reference the extended stale .zo detection |
-| Context compaction via handoff (§6.10) | `HANDOFF_PROTOCOL.org` | ⬜ Pending — add "Post-compaction reload" section based on this track's successful instance |
+| Design mantra as live challenge (§16.1) | `on-network.md`, `propagator-design.md`, `workflow.md`, `structural-thinking.md` | ✅ Done pre-Phase R (`a5cde27f`) |
+| Belt-and-suspenders masks bugs (§16.2) | `DEVELOPMENT_LESSONS.org` | ⬜ Pending — extend existing "Validated ≠ Deployed" section with belt-and-suspenders as a specific anti-pattern |
+| Normalize at the domain boundary (§16.3) | `PATTERNS_AND_CONVENTIONS.org` | ⬜ Pending — codify as "PPN Boundary Normalization" pattern; reference sites in relations.rkt |
+| Module Theory for scope decomposition (§16.4) | `structural-thinking.md` | ⬜ Pending — extend "Module Theory of Lattices" with concrete direct-sum-via-tagging pattern |
+| Skip the mechanism, don't optimize (§16.5) | `DEVELOPMENT_LESSONS.org` | ⬜ Pending — new section "N+1 Principle in Optimization" |
+| Racket parallelism hard floor (§16.6) | `DEVELOPMENT_LESSONS.org` | ⬜ Pending — document the 8μs ceiling, measurement methodology, self-hosting implication |
+| Measure before AND after (§16.7) | `DESIGN_METHODOLOGY.org` (Stage 4, implementation protocol) | ⬜ Pending — elevate Pre-0 measurement rule to include phase-end measurement |
+| Hash iteration Heisenbug → missing invariant (§16.8) | `DEVELOPMENT_LESSONS.org` | ⬜ Pending — new section "Heisenbugs Point to Missing Determinism Invariants" |
+| `raco make driver.rkt` test `.zo` gap (§16.9) | `testing.md` rules | ⬜ Pending — document the `--no-precompile` trap, reference the extended stale .zo detection |
+| Context compaction via handoff (§16.10) | `HANDOFF_PROTOCOL.org` | ⬜ Pending — add "Post-compaction reload" section based on this track's successful instance |
 
 ### Meta-lesson (Patterns Across 3+ PIRs)
 
@@ -357,7 +734,7 @@ From the longitudinal survey of the 10 most recent PIRs, Track 2B **confirms** t
 - **Pre-0 benchmarks reshape design**: Phase 0a/0b/0c found 3 divergence categories + ATMS overhead decomposition → rebuilt the design around them. Confirmed (architectural pattern, 10/10 PIRs).
 - **Critique rounds prevent drift**: D.3, D.4 external critique caught the NAF design gaps; D.9 through D.13 iterations caught scope sharing need. Confirmed.
 - **Diagnostic discipline regression**: Track 2B ran the full suite multiple times diagnostically during T-a (5+ times). Partial regression — justified by the "is the solver broken?" risk, but the pattern holds.
-- **Validated ≠ Deployed**: `:auto` still defaults to DFS. Acknowledged explicitly in §8 as a follow-up track. Pattern continues, honestly documented.
+- **Validated ≠ Deployed**: `:auto` still defaults to DFS for small clause queries (adaptive routing). Acknowledged explicitly in §3 (Gap Analysis) and §14 (Technical Debt). Pattern continues, honestly documented.
 - **Two-context boundary bugs**: Batch worker parameter leakage is the latest instance. The pattern persists because new parameters are added faster than the checklist updates.
 
 Track 2B **extends** these patterns with new data:
