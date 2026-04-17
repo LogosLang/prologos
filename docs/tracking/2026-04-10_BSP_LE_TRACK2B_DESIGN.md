@@ -35,7 +35,9 @@
 | 5a | BSP fire-once fast-path + Tier detection | ✅ | `333a5667`. Propagator flags (FIRE-ONCE, EMPTY-INPUTS). Tier 1 flush (worldview==0 + all fire-once+empty → direct fire). Self-clearing (fired-set + remove from dependents). |
 | 5b/5c | Template + Tier 1 + boundary normalization | ✅ | `d998b06c`→`01de93f5`. Tier 1 direct fact return (0.49us, 62x speedup, 2.3x faster than DFS). Network template. Scope-sensitive fire-once. PPN boundary normalization. |
 | 6 | `:auto` adaptive dispatch | ✅ | `7d77d52a`. Adaptive: Tier 1 (facts), NAF/guard → ATMS, N≥threshold(256) → ATMS, else → DFS. Configurable threshold. 2 known wf-comparison parity issues (Phase T). |
-| T | Parity regression suite | ⬜ | `test-solver-parity.rkt` — representative queries, BOTH strategies, set-equal results |
+| T-a | Parity investigation + correctness fixes | ✅ | `1eb8b8cc`→`35a39865`. 7 fixes: CWA undefined error, ground provability DFS, 0-arity delegation, gating-only success markers, success marker guard, dissolution entry pre-merge, product dedup. 398/398 all pass. |
+| T-b | Systematic DFS↔ATMS parity sweep | ⬜ | `current-solver-strategy-override` across all solver tests |
+| T-c | Parity regression test file | ⬜ | `test-solver-parity.rkt` — representative queries, BOTH strategies, set-equal results |
 | PIR | Post-implementation review | ⬜ | |
 
 **Per-phase completion protocol** (from DESIGN_METHODOLOGY.org §4):
