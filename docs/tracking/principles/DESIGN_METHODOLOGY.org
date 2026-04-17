@@ -427,6 +427,146 @@ See: [[file:../2026-03-22_NTT_SYNTAX_DESIGN.md][NTT Syntax Design]] for the full
 Codified from PPN Track 2 + SRE Track 2G (2026-03-30). Pattern 5 in
 SRE Track 2G PIR longitudinal survey (2/2 instances confirmed).
 
+*** Design Mantra Audit (Stage 0 Gate)
+
+Before any implementation begins, conduct a *Design Mantra Audit* on
+the Stage 3 design. The mantra is: *"All-at-once, all in parallel,
+structurally emergent information flow ON-NETWORK."* (See
+=.claude/rules/on-network.md= for per-word interpretation.)
+
+**** What the audit checks
+
+For each major design component, challenge it against every word of
+the mantra:
+
+- *All-at-once*: Is this processing N independent items sequentially?
+- *All in parallel*: Is there imposed ordering that should emerge from dataflow?
+- *Structurally emergent*: Is imperative control flow deciding what happens when?
+- *Information flow*: Do values move through cells, or through return values/parameters/~for/fold~ accumulators?
+- *ON-NETWORK*: Is this a cell with monotone merge, or off-network state (parameters holding data, make-hasheq registries, etc.)?
+
+Any component failing a word must either be redesigned, or labeled
+explicitly as scaffolding with a retirement plan (which track retires
+it, what replaces it). Unlabeled failures are mantra violations.
+
+**** Why mandatory
+
+BSP-LE Track 2B introduced the mantra mid-track (2026-04-14) and
+immediately audited its own design, finding 6 architectural violations
+that tests had missed: relation store as parameter, fact-row PU using
+~for/fold~, ground unify as construction-time write, imperative S1,
+result reading off-network, ~for/list~ in bridges. These triggered
+Phase R (~5h active implementation, 6 sub-phases). Had the audit
+happened at Stage 0 before Phase 1, Phase R would have been
+unnecessary — the violations would not have existed in the first
+place.
+
+**** Relationship to other Stage 3 checks
+
+- The *NTT Model Requirement* (above) catches implementability gaps.
+- The *Design Mantra Audit* catches architectural drift (code that
+  "works" but embeds step-think or off-network state).
+- The *P/R/M Self-Critique* catches principle violations, code-reality
+  mismatches, and imperative step-think.
+
+All three run at Stage 0 (before implementation). They have
+complementary coverage — none subsumes the others.
+
+Codified from BSP-LE Track 2B PIR (2026-04-16) §6.1, §15.1, §20.
+
+*** Pre-0 Benchmarks Per Semantic Axis
+
+Pre-0 benchmarks have been mandatory since 2026-03-19 (see "Benchmark
+as design input" in this Stage 3 section). The longitudinal PIR
+pattern is unambiguous: Pre-0 benchmarks reshape design in 10/10
+recent PIRs. However, Pre-0 benchmarks have typically focused on
+*performance axes* (wall-time, allocation, contention). Track 2B
+revealed they must also cover *semantic axes*.
+
+**** What must be benchmarked
+
+For each track, enumerate the *semantic compositions* the track will
+exercise, not just performance scenarios. For each composition,
+build a Pre-0 adversarial example that exercises it. Run the
+existing system against it; capture behavior.
+
+Examples of semantic axes (not performance axes):
+- *Multi-result NAF composition*: what happens when a NAF target has
+  N≥2 solutions? Does the composition preserve all of them?
+- *Multi-strata NAF chains*: =c :- not b. b :- not a. a.= — does
+  the system handle this correctly?
+- *Gating-only clause bodies*: =c :- not b.= (no positive goals) —
+  does result production work?
+- *Undefined relation in a gating target*: CWA contract — error or
+  closed-world fail?
+- *Mixed positive + gating goals with free variables*: =safe-edge(X,Y) :- edge(X,Y), not(edge(Y,X))= —
+  multi-result correctness?
+
+If the Pre-0 run reveals the existing system handles a composition
+incorrectly (or the new design's draft doesn't), this data reshapes
+the design *before* implementation.
+
+**** Why mandatory
+
+BSP-LE Track 2B's Phase 0b measured performance axes (single-fact,
+multi-clause, thread scaling) but *not* semantic axes (NAF
+composition, multi-strata chains, gating-only bodies). The missing
+coverage led to 3 failed design iterations (D.9 probe, D.10
+bitmask, D.11 stratified intermediate) before D.12 found the right
+framing. Had semantic Pre-0 benchmarks surfaced the bridge-collapse
+failure mode pre-design, the track would have converged to Module
+Theory / scope sharing faster.
+
+**** Relationship to NTT model
+
+The NTT model catches *what can be expressed on-network*. Semantic
+Pre-0 benchmarks catch *what the on-network expression must handle
+correctly*. NTT is structural; semantic benchmarks are behavioral.
+Run both.
+
+Codified from BSP-LE Track 2B PIR (2026-04-16) §15.2.
+
+*** Parity Test Skeleton (for Tracks with Equivalent Paths)
+
+For tracks that introduce or modify *multiple equivalent computation
+paths* (strategies, algorithms, backends) that should produce the
+same results, write a *parity test skeleton* during Stage 3 — before
+implementation.
+
+**** What belongs in the skeleton
+
+- Query / input / scenario description
+- Expected behavior under each path
+- A test case that calls both paths and asserts set-equal / semantic-equal results
+- Representative coverage of each *divergence class* anticipated (one test per class)
+
+The skeleton does not need to pass at Stage 3 — most tests will fail
+before implementation. The skeleton's purpose is to surface
+divergence classes as design questions (what should happen for
+undefined relations? for multi-strata NAF? for gating-only bodies?)
+rather than discovering them later as bugs.
+
+**** Why mandatory for multi-path tracks
+
+BSP-LE Track 2B discovered 10 divergence classes during T-a bug
+hunting: undefined NAF targets, ground provability gaps, 0-arity
+dissolution, gating-only bodies, per-variable entry splits, and
+more. Each became a fix. Had =test-solver-parity.rkt= existed as
+a skeleton at Phase 0a (when 3 divergence categories were first
+identified), each class would have surfaced as a failing test *at
+design time*, driving design decisions rather than requiring mid-
+Phase-T bug fixes.
+
+**** Relationship to other artifacts
+
+- *Acceptance file* (existing): exercises ideal user-facing syntax
+- *NTT model* (existing): validates on-network expressibility
+- *Pre-0 benchmarks* (above): validates semantic-axis correctness
+- *Parity skeleton* (this): validates path-equivalence — "both paths
+  produce the same answer" for each divergence class
+
+Codified from BSP-LE Track 2B PIR (2026-04-16) §6.6, §15.3.
+
 - *Concrete over abstract*: Show elaboration examples, not just type
   signatures. Show how ~defr ancestor~ becomes propagator cells and
   fire functions, not just "relations elaborate to propagator networks."

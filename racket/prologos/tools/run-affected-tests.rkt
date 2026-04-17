@@ -178,6 +178,7 @@
 (define show-failures? (make-parameter #f))
 (define bail-timeout-threshold (make-parameter 3))
 (define force-rerun? (make-parameter #f))
+(define force-stale-zo? (make-parameter #f))
 
 (define (main)
   (command-line
@@ -211,6 +212,8 @@
     (bail-timeout-threshold 0)]
    ["--force-rerun" "Override rerun guard (force full suite even if no changes)"
     (force-rerun? #t)]
+   ["--force-stale-zo" "Run despite stale .zo files (reproduce old behavior intentionally)"
+    (force-stale-zo? #t)]
    #:multi
    ["--skip" file "Skip an additional test file (additive with .skip-tests)"
     (extra-skips (cons (string->symbol file) (extra-skips)))])
@@ -460,23 +463,30 @@
 
   ;; Track 10B + Phase T: Stale .zo detection when --no-precompile is used.
   ;; Checks driver.rkt AND test files against their compiled .zo timestamps.
-  ;; Phase T lesson: `raco make driver.rkt` recompiles production code but NOT
-  ;; test files (they're not in driver.rkt's dependency graph). The batch worker
-  ;; uses dynamic-require which trusts cached .zo — stale test .zo produces
-  ;; wrong results silently (not linklet errors, just old behavior).
-  ;; If stale, warn (don't fail — the user explicitly said --no-precompile).
+  ;; Phase T lesson (BSP-LE Track 2B PIR §11.5): `raco make driver.rkt`
+  ;; recompiles production code but NOT test files (they're not in driver.rkt's
+  ;; dependency graph). The batch worker uses dynamic-require which trusts
+  ;; cached .zo — stale test .zo produces wrong results SILENTLY (not linklet
+  ;; errors, just old behavior). Multiple cycles of "passes individually, fails
+  ;; in batch" during Track 2B Phase T-a tracked to this exact gap.
+  ;;
+  ;; I1 (Track 2B process): upgrade warning → BLOCK. Stale .zo silently
+  ;; corrupts test results. Blocking forces the user to either (a) remove
+  ;; --no-precompile (let the runner handle compilation), (b) compile test
+  ;; files explicitly (`raco make tests/*.rkt`), or (c) opt-in via
+  ;; --force-stale-zo (for intentional reproduction of old behavior).
   (unless (do-precompile?)
+    (define staleness-found? #f)
     (let* ([driver-src (build-path project-root "driver.rkt")]
            [driver-zo  (build-path project-root "compiled" "driver_rkt.zo")])
       (when (and (file-exists? driver-src) (file-exists? driver-zo))
         (when (> (file-or-directory-modify-seconds driver-src)
                  (file-or-directory-modify-seconds driver-zo))
-          (printf "⚠ WARNING: driver.rkt is newer than compiled/driver_rkt.zo\n")
-          (printf "  Run `raco make driver.rkt` or remove --no-precompile\n"))))
-    ;; Phase T: Also check test files against production .zo.
-    ;; If any production .zo is newer than a test .zo, the test was compiled
-    ;; against old production code. This catches the "raco make driver.rkt
-    ;; + --no-precompile" pattern that leaves test .zo stale.
+          (set! staleness-found? #t)
+          (eprintf "✗ BLOCKED: driver.rkt is newer than compiled/driver_rkt.zo\n")
+          (eprintf "  Run: raco make driver.rkt\n")
+          (eprintf "  Or: remove --no-precompile to let the runner compile\n"))))
+    ;; Test files against production .zo.
     (let* ([driver-zo (build-path project-root "compiled" "driver_rkt.zo")]
            [driver-ts (and (file-exists? driver-zo)
                            (file-or-directory-modify-seconds driver-zo))]
@@ -493,8 +503,14 @@
                      (< (file-or-directory-modify-seconds test-zo) driver-ts))
             (set! stale-count (add1 stale-count))))
         (when (positive? stale-count)
-          (printf "⚠ WARNING: ~a test .zo files are older than production .zo\n" stale-count)
-          (printf "  Test results may reflect old code. Remove --no-precompile to fix.\n")))))
+          (set! staleness-found? #t)
+          (eprintf "✗ BLOCKED: ~a test .zo file(s) older than production .zo\n" stale-count)
+          (eprintf "  Test results would silently reflect OLD code (not linklet errors).\n")
+          (eprintf "  Fix: remove --no-precompile (runner compiles both)\n")
+          (eprintf "  Or: raco make tests/*.rkt  (compile test files explicitly)\n"))))
+    (when (and staleness-found? (not (force-stale-zo?)))
+      (eprintf "\nOverride with --force-stale-zo (for intentional old-code reproduction).\n")
+      (exit 2)))
 
   ;; .pnet cache: set env var for batch workers, check/generate cache
   (cond
@@ -751,7 +767,21 @@
           (printf "    ~a\n" line)))
       (newline))
     (printf "~a\n" (make-string 60 #\─))
-    (printf "Failure logs: data/benchmarks/failures/*.log\n"))
+    (printf "Failure logs: data/benchmarks/failures/*.log\n")
+    ;; I2 (Track 2B process): diagnostic protocol reminder when 3+ failures.
+    ;; Longitudinal pattern 3 (diagnostic discipline regression, 4+ PIRs): under
+    ;; implementation pressure, the protocol of "audit domain → hypothesize →
+    ;; test narrowly" gets skipped in favor of full-suite re-runs. Reminder
+    ;; nudges toward the protocol without blocking.
+    (when (>= (length failed-files) 3)
+      (printf "\n~a\n" (make-string 60 #\═))
+      (printf "DIAGNOSTIC PROTOCOL REMINDER (~a failures):\n" (length failed-files))
+      (printf "  1. AUDIT: read ALL failure logs (data/benchmarks/failures/*.log)\n")
+      (printf "  2. HYPOTHESIZE: categorize failures by symptom + root-cause class\n")
+      (printf "  3. TEST NARROWLY: raco test tests/test-NAME.rkt per hypothesis\n")
+      (printf "  4. CHALLENGE BY PRINCIPLES: are we working around a deeper issue?\n")
+      (printf "  Do NOT re-run the full suite to diagnose. See .claude/rules/workflow.md\n")
+      (printf "~a\n" (make-string 60 #\═))))
 
   ;; Track 10B: Write summary file for easy inspection without re-running.
   ;; Read with: cat data/benchmarks/last-run-summary.txt
