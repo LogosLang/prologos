@@ -16,7 +16,7 @@
   (define cfg (make-solver-config))
   (check-true (solver-config? cfg))
   (check-equal? (solver-config-execution cfg) 'parallel)
-  (check-equal? (solver-config-threshold cfg) 4)
+  (check-equal? (solver-config-threshold cfg) 256)
   (check-equal? (solver-config-strategy cfg) 'auto)
   (check-equal? (solver-config-tabling cfg) 'by-default)
   (check-equal? (solver-config-provenance cfg) 'none)
@@ -29,7 +29,7 @@
   (check-equal? (solver-config-execution cfg) 'sequential)
   (check-equal? (solver-config-timeout cfg) 5000)
   ;; Non-overridden keys retain defaults
-  (check-equal? (solver-config-threshold cfg) 4)
+  (check-equal? (solver-config-threshold cfg) 256)
   (check-equal? (solver-config-strategy cfg) 'auto))
 
 (test-case "default-solver-config: is valid"
@@ -70,7 +70,7 @@
   (check-equal? (solver-config-execution merged) 'sequential)
   ;; Non-overridden keys retained
   (check-equal? (solver-config-strategy merged) 'auto)
-  (check-equal? (solver-config-threshold merged) 4))
+  (check-equal? (solver-config-threshold merged) 256))
 
 (test-case "solver-config-merge: empty overrides = identity"
   (define base (make-solver-config (hasheq 'timeout 1000)))

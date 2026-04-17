@@ -174,48 +174,35 @@
          ;; For ground args, discrimination narrows to viable facts — if any survive,
          ;; the inner goal is provable.
          (if (null? inner-vars-final)
-             ;; All args ground: provability = viability cell non-empty after discrimination.
-             ;; The inner goal's discrimination propagators narrowed the viable set.
-             ;; If any facts/clauses are viable for the ground args → provable.
-             ;; Simple check: did any fire-once propagator fire on the fork?
-             ;; Simplest: the inner goal installed discrimination + fact-row propagators.
-             ;; If the worklist is empty AND no contradiction → the goal converged.
-             ;; Check if any scope cell (from fact-row writes) has non-bot values.
-             ;; But with all-ground args, there are no scope cells to check.
-             ;; Use discrimination directly: read the viability cell on the fork.
-             ;; The viability cell was written by discrimination propagators during BSP.
-             ;; Non-empty viable set = provable.
+             ;; Phase T: All args ground — check provability by actually solving
+             ;; the inner goal via DFS. Static discrimination is INSUFFICIENT here:
+             ;; it checks structural compatibility (are there alternatives whose
+             ;; argument patterns match?) but NOT whether clause bodies succeed.
+             ;; For clause-based relations with NAF chains (e.g., b :- not a),
+             ;; discrimination says "1 viable clause" even when the clause body
+             ;; fails due to a nested NAF nogood. The DFS solver correctly handles
+             ;; nested NAF evaluation and returns empty results when appropriate.
+             ;; IMPORTANT: use AST-format args (not normalized resolved-args).
+             ;; The store's fact values are AST nodes (expr-string, expr-int, etc.);
+             ;; the DFS solver's unification uses equal? which requires matching types.
+             ;; resolved-args normalizes AST→raw (PPN boundary), but DFS expects AST.
              (let ()
-               (define the-store (net-cell-read fork3 relation-store-cell-id))
-               (define rel (and (hash? the-store) (hash-ref the-store goal-name #f)))
-               (if (not rel) #f
-                   ;; Check each variant's discrimination against resolved args
-                   (for/or ([variant (in-list (relation-info-variants rel))])
-                     (define discrim-data (build-discrimination-data variant))
-                     (define n-facts (length (variant-info-facts variant)))
-                     (define n-clauses (length (variant-info-clauses variant)))
-                     (define n-alts (+ n-facts n-clauses))
-                     (define viable
-                       (for/fold ([v (for/seteq ([i (in-range n-alts)]) i)])
-                                 ([arg (in-list resolved-args)]
-                                  [pos (in-naturals)])
-                         (define pos-data (hash-ref discrim-data pos discrimination-data-bot))
-                         (cond
-                           [(hash-empty? pos-data) v]
-                           [(or (scope-ref? arg) (cell-id? arg)) v]
-                           [else
-                            ;; Phase 5: discrimination data pre-normalized at boundary.
-                            ;; Normalize arg for comparison.
-                            (define compatible
-                              (for/seteq ([(idx expected) (in-hash pos-data)]
-                                          #:when (equal? expected (normalize-solver-value arg)))
-                                idx))
-                            (define wildcards
-                              (for/seteq ([i (in-range n-alts)]
-                                          #:when (not (hash-has-key? pos-data i)))
-                                i))
-                            (set-intersect v (set-union compatible wildcards))])))
-                     (not (set-empty? viable)))))
+               (define the-store (net-cell-read main-net relation-store-cell-id))
+               (define the-config (net-cell-read main-net config-cell-id))
+               ;; Resolve args in AST format: scope-refs → S0 fixpoint values,
+               ;; literals → keep as AST nodes (no normalization).
+               (define resolved-args-ast
+                 (for/list ([a (in-list goal-args)])
+                   (define r (resolve-term naf-env a))
+                   (cond
+                     [(scope-ref? r)
+                      (let ([v (logic-var-read forked r)])
+                        (if (eq? v scope-cell-bot) a v))]
+                     [else r])))
+               (define inner-results
+                 (solve-goal (or the-config (make-solver-config))
+                             the-store goal-name resolved-args-ast '()))
+               (pair? inner-results))
              ;; Has inner vars: check if any got bound
              (let ()
                (define inner-scope-ref
@@ -2248,13 +2235,39 @@
   ;; If ANY NAF or guard fails, the conjunction's results become invisible.
   (define outer-bm (current-worldview-bitmask))
   (define combined-bm (bitwise-ior outer-bm gate-bm))
-  (for/fold ([n net-with-gates])
-            ([goal (in-list goals)]
-             #:unless (memq (goal-desc-kind goal) gating-kinds))
-    (if (zero? gate-bm)
-        (install-goal-propagator n goal env answer-cid ctx)
-        (parameterize ([current-worldview-bitmask combined-bm])
-          (install-goal-propagator n goal env answer-cid ctx)))))
+  (define net-after-goals
+    (for/fold ([n net-with-gates])
+              ([goal (in-list goals)]
+               #:unless (memq (goal-desc-kind goal) gating-kinds))
+      (if (zero? gate-bm)
+          (install-goal-propagator n goal env answer-cid ctx)
+          (parameterize ([current-worldview-bitmask combined-bm])
+            (install-goal-propagator n goal env answer-cid ctx)))))
+
+  ;; Phase T: Gating-only clause bodies (all NAF/guard, no positive goals).
+  ;; When the body has no positive goals, nothing writes to scope cells.
+  ;; Dissolution reads scope cells → empty → 0 results, even when the gating
+  ;; succeeds. Fix: write a success marker (empty-but-non-bot scope-cell)
+  ;; to each query scope cell under the combined gating bitmask. The marker
+  ;; is tagged with the gating worldview: if the gating assumptions survive
+  ;; (no nogoods), the entry is visible; if any gating fails, it's invisible.
+  ;; This is a construction-time write (same pattern as Phase R3 ground unify).
+  (define all-gating?
+    (and (positive? gate-bm)
+         (for/and ([goal (in-list goals)])
+           (memq (goal-desc-kind goal) gating-kinds))))
+  (if all-gating?
+      ;; Write success marker to scope cells under combined gating bitmask.
+      ;; For each scope-ref in env: write empty scope-cell (non-bot marker).
+      (let ([scope-cids (remove-duplicates
+                         (for/list ([(k v) (in-hash env)]
+                                    #:when (scope-ref? v))
+                           (scope-ref-cid v)))])
+        (for/fold ([n net-after-goals])
+                  ([cid (in-list scope-cids)])
+          (parameterize ([current-worldview-bitmask combined-bm])
+            (net-cell-write n cid (scope-cell (hasheq))))))
+      net-after-goals))
 
 ;; ----------------------------------------
 ;; install-one-clause (helper)
@@ -2321,7 +2334,13 @@
   (define the-store (net-cell-read net relation-store-cell-id))
   (define rel (and (hash? the-store) (hash-ref the-store goal-name #f)))
   (cond
-    [(not rel) net]
+    [(not rel)
+     ;; Phase T: undefined relation is an error under CWA.
+     ;; CWA closes over DEFINED predicates — an undefined predicate is outside
+     ;; the program, not "false." Matches DFS solver behavior (solve-goal errors
+     ;; on unknown relation). Without this check, undefined relations silently
+     ;; return empty results, violating the stratified semantics contract.
+     (error 'solve-goal "unknown relation: ~a" goal-name)]
     [else
      (define resolved-args
        (for/list ([a (in-list goal-args)])
@@ -2679,6 +2698,10 @@
        ;; Each entry's scope-cell value has non-bot bindings for specific vars.
        (define entries (tagged-cell-value-entries scope-raw))
        (define entry-groups (make-hash))  ;; (setof var-name) → (listof bitmask)
+       ;; Phase T: collect success-marker bitmasks from gating-only clause bodies.
+       ;; These entries have empty scope-cell (no bindings) but are non-bot,
+       ;; signaling "clause succeeded under this worldview."
+       (define success-bitmasks '())
        (for ([entry (in-list entries)])
          (define bm (car entry))
          (define val (cdr entry))
@@ -2688,10 +2711,18 @@
                            #:when (not (eq? v scope-cell-bot)))
                  k)
                (seteq)))
-         (when (not (set-empty? bound-vars))
-           (hash-update! entry-groups bound-vars
-                         (lambda (bms) (set-add bms bm))
-                         (seteq bm))))
+         (cond
+           [(not (set-empty? bound-vars))
+            (hash-update! entry-groups bound-vars
+                          (lambda (bms) (set-add bms bm))
+                          (seteq bm))]
+           ;; Phase T: empty-but-non-bot scope-cell = success marker.
+           ;; Must check (hash-empty? bindings) to distinguish our explicit
+           ;; success markers (scope-cell (hasheq)) from initial promoted
+           ;; scope-cells (scope-cell (hasheq X0 bot X1 bot ...)) which have
+           ;; bindings at bot but are NOT success signals.
+           [(and (scope-cell? val) (hash-empty? (scope-cell-bindings val)))
+            (set! success-bitmasks (cons bm success-bitmasks))]))
 
        ;; Step 2: Compute product of groups' bitmask sets.
        ;; Each group represents an independent branching site.
@@ -2720,10 +2751,22 @@
                              scope-cell-bot))
              (values qv (if (eq? val scope-cell-bot) qv val)))))
        ;; Filter: skip results where ALL query vars are unresolved
-       (filter (lambda (result-subst)
-                 (not (for/and ([qv (in-list query-vars)])
-                        (eq? (hash-ref result-subst qv) qv))))
-               raw-results)]
+       ;; (only for normal entries — success markers handled separately below)
+       (define filtered-results
+         (filter (lambda (result-subst)
+                   (not (for/and ([qv (in-list query-vars)])
+                          (eq? (hash-ref result-subst qv) qv))))
+                 raw-results))
+       ;; Phase T: success marker results (gating-only bodies, no var bindings).
+       ;; Each visible success bitmask produces one result with all vars unresolved,
+       ;; matching DFS behavior (DFS returns current substitution when body succeeds,
+       ;; which has unresolved vars for free parameters).
+       (define success-results
+         (for/list ([bm (in-list success-bitmasks)]
+                    #:when (bitmask-visible? bm))
+           (for/hasheq ([qv (in-list query-vars)])
+             (values qv qv))))
+       (append filtered-results success-results)]
 
       ;; Plain scope cell: single result (no branching)
       [else
@@ -2829,7 +2872,19 @@
   ;; Universal dispatch (stratified-eval.rkt) checks first; this is the fallback.
   (define tier-1 (tier-1-direct-fact-return store goal-name effective-args query-vars))
   (when tier-1 (set! tier-1 tier-1))  ;; force — tier-1-direct-fact-return returns #f or list
-  (if tier-1 tier-1
+  (cond
+    [tier-1 tier-1]
+    ;; Phase T: 0-arity queries (no query vars) delegate to DFS.
+    ;; The propagator solver's dissolution depends on scope-cell writes to produce
+    ;; results. For 0-arity queries, there are no scope cells. Clause bodies that
+    ;; consist entirely of gating goals (NAF/guard) produce no scope writes —
+    ;; dissolution returns empty even when the gating succeeds. The DFS solver
+    ;; handles all NAF chains correctly through recursive evaluation. This is a
+    ;; structural limitation of the current dissolution for 0-arity; the self-hosted
+    ;; compiler will use answer-cid writes from gating-success propagators.
+    [(null? query-vars)
+     (solve-goal config store goal-name goal-args query-vars)]
+    [else
   (let ()
      ;; Tier 2: full propagator network
      (let ()
@@ -2882,4 +2937,4 @@
        ;; answer-cid is the total sink: no internal propagator reads it.
        ;; Dissolution reads internal cells (scope, worldview), projects results,
        ;; writes the complete result set to answer-cid.
-       (dissolve-solver-pu net5 query-vars query-env answer-cid)))))
+       (dissolve-solver-pu net5 query-vars query-env answer-cid)))]))
