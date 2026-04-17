@@ -2032,3 +2032,73 @@ This track does NOT add or modify user-facing syntax. All changes are internal s
 10. **Tier 1/Tier 2 dispatch** — should `solve-goal-propagator` detect Tier 1 queries (no branching) and take a dedicated fast-path? Or should the optimizations (5a-5d) make Tier 1 fast enough that a single path works? A dedicated Tier 1 path is simpler but creates a bifurcation. A unified path with optimizations is more architecturally clean but may not achieve <5x DFS.
 
 8. **NAF fuel budget** — should the NAF fork inherit the parent's remaining fuel (shared budget, NAF competes for firings), or get its own budget (independent, NAF can't starve the outer solver)? Independent budgets risk total fuel exceeding the user's intent; shared budgets risk NAF consuming all fuel. Phase 0b data will inform.
+
+---
+
+## §10 Addendum A1: Topology → General Stratum Unification (2026-04-16)
+
+**Status**: ✅ Complete (4 commits: `3dbea992`, `65508e74`, `7bb3bab6`, `4ec42b45`)
+**Scope**: Immediate follow-on to Track 2B PIR §9.6. Captured as addendum rather than standalone track (~150 LOC net change, spread across 5 files).
+
+### Motivation
+
+The Track 2B PIR §9.6 identified that stratification had become a first-class architectural pattern — but two parallel mechanisms existed for the same purpose:
+
+1. **Legacy topology stratum** (PAR Track 1, 2026-03-28): `register-topology-handler!` + `topology-handlers` box + try-each handler chain on shared `decomp-request-cell-id` (cell-id 0). Topology was special-cased in the BSP outer loop.
+2. **General strata mechanism** (Track 2B Phase R4, 2026-04-14): `register-stratum-handler!` + per-handler request cells + uniform iteration. S1 NAF was the first user.
+
+The legacy mechanism used **imperative try-each dispatch** inside the BSP scheduler — step-think disguised as propagator infrastructure. The general mechanism matches the design mantra (one cell ↔ one handler, uniform iteration). A1 unifies them.
+
+### Mini-Audit Findings
+
+Five topology handlers were registered, but auditing their producers revealed:
+
+| # | Handler | Request type | Producers | Status |
+|---|---|---|---|---|
+| 1 | callback-topology-request | constraint-propagators.rkt:284 | 1 site | Active — migrated |
+| 2 | nogood-install-request | **none** | **dead code** | **Deleted** |
+| 3 | elaborator decomp (domain=#f) | elaborator-network.rkt:853 | 1 site | Active — migrated |
+| 4 | narrowing branch + rule | narrowing.rkt:284, 335 | 2 sites | Active — migrated |
+| 5 | SRE decomp (domain=non-#f) | sre-core.rkt:854/1066/1090/1181/1194 | 5 sites | Active — migrated |
+
+Handler #2 had a defined struct, exported name, handler, and `install-per-nogood-infrastructure` function — but **zero constructor calls** across the codebase. BSP-LE Track 2 Phase 3 designed per-nogood infrastructure but the wiring was superseded by direct `nogood-add` writes from ATMS S1 handlers. Removed as dead code (~125 LOC deleted, Phase 2).
+
+### Design Decisions
+
+1. **Per-subsystem cells** (Option 3, over Option 1 "keep both" or Option 2 "compound handler"). Each subsystem owns its request cell. Dispatch is by cell-ID (structural, not imperative). Preserves the design mantra.
+2. **Two-tier strata** — `:tier 'topology | 'value` keyword on `register-stratum-handler!`. Topology tier runs before value tier in BSP outer loop. Inherent ordering: topology mutates network structure (cells/propagators), which subsequent strata observe.
+3. **Force migration** (no convenience wrapper) — cleaner architecture at the end. `register-topology-handler!` removed entirely.
+4. **Hard-coded cell-IDs** (6-9) in `propagator.rkt` — acknowledged as debt. Future track may explore dynamic allocation (see BSP-LE Master Open Question #6, cell-metadata-driven scheduling). For known-small, stable strata sets, hard-coded IDs are fine.
+
+### Cell ID Allocation
+
+| Cell ID | Name | Merge | Initial | Owner |
+|---|---|---|---|---|
+| 6 | constraint-propagators-topology-cell-id | set-union | `(set)` | constraint-propagators.rkt |
+| 7 | elaborator-topology-cell-id | set-union | `(set)` | elaborator-network.rkt |
+| 8 | narrowing-topology-cell-id | set-union | `(set)` | narrowing.rkt |
+| 9 | sre-topology-cell-id | set-union | `(set)` | sre-core.rkt |
+
+All four share `topology-request-merge` (set-union). Pre-allocated in `make-prop-network`; next-cell-id: 6 → 10.
+
+### Phased Implementation
+
+| Phase | Commit | Description |
+|---|---|---|
+| 1 | `3dbea992` | Infrastructure: add 4 cells + `:tier` + `#:reset-value` keywords + tiered BSP outer loop (legacy path still active) |
+| 2 | `65508e74` | Delete dead code: `nogood-install-request` struct + handler + `install-per-nogood-infrastructure` + 2 dead tests (~217 LOC removed) |
+| 3 | `7bb3bab6` | Atomic migration: 4 handlers + 9 writer sites swap to new cells + `:tier 'topology` registration |
+| 4 | `4ec42b45` | Retire legacy: remove `register-topology-handler!`, `topology-handlers` box, `process-topology-request`, and special-cased topology path in BSP outer loop |
+
+Each phase kept suite green (399/399 files, 7758-7765 tests). No user-visible behavior change.
+
+### Verification
+
+- **Suite**: 399/399 files, 7763 tests, 120s wall-clock. All pass.
+- **Architectural**: `stratification.md` (`.claude/rules/`) updated to reflect the unified mechanism.
+- **Design mantra**: dispatch is now structural (cell-ID → handler), not imperative (try-each). The mantra audit's "structurally emergent information flow" is better realized.
+
+### Residual Items
+
+- `decomp-request-cell-id` (cell-id 0) + `decomp-request-merge` remain in `propagator.rkt` and are still pre-allocated in `make-prop-network`. They are no longer actively used by any subsystem. The cell slot is reserved to avoid renumbering cells 1-9. A future minor cleanup could retire cell-id 0 and shift IDs; not urgent.
+- The ~150 LOC A1 change is proportional to the audit complexity; the actual architectural insight (stratification pattern generalization) was already realized in Track 2B Phase R4. A1 is "collect the tail" — retiring a legacy mechanism that Track 2B made obsolete.
