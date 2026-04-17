@@ -2696,7 +2696,22 @@
 
        ;; Step 1: Group entry bitmasks by which query vars they bind.
        ;; Each entry's scope-cell value has non-bot bindings for specific vars.
-       (define entries (tagged-cell-value-entries scope-raw))
+       ;; Phase T fix: merge entries at the same bitmask BEFORE grouping.
+       ;; Fact-row propagators write x and y separately → two entries at bm=3
+       ;; instead of one entry {x="a", y="b"}. Without pre-merging, the grouping
+       ;; creates separate groups ({x}:{3,5} and {y}:{3,5}) whose cross-product
+       ;; generates compound worldviews (3|5=7) that combine independent fact rows.
+       ;; Pre-merging combines same-bitmask entries: bm=3 gets {x="a", y="b"}.
+       (define raw-entries (tagged-cell-value-entries scope-raw))
+       (define merged-by-bm (make-hash))  ;; bitmask → merged scope-cell
+       (for ([e (in-list raw-entries)])
+         (define bm (car e))
+         (define val (cdr e))
+         (hash-update! merged-by-bm bm
+                       (lambda (existing) (scope-cell-merge existing val))
+                       val))
+       (define entries (for/list ([(bm val) (in-hash merged-by-bm)])
+                         (cons bm val)))
        (define entry-groups (make-hash))  ;; (setof var-name) → (listof bitmask)
        ;; Phase T: collect success-marker bitmasks from gating-only clause bodies.
        ;; These entries have empty scope-cell (no bindings) but are non-bot,
@@ -2728,14 +2743,20 @@
        ;; Each group represents an independent branching site.
        ;; Product = all combinations of one bitmask per group, ORed together.
        (define group-bitmask-sets (hash-values entry-groups))
+       ;; Phase T fix: deduplicate product worldviews. Independent groups
+       ;; may share the same bitmask values (e.g., x and y bound at same
+       ;; bitmasks but in separate entries). bitwise-ior of shared bitmasks
+       ;; produces duplicates (3|5=7 appears for each pair). Without dedup,
+       ;; dissolution produces duplicate results.
        (define product-worldviews
          (if (null? group-bitmask-sets)
              '()
-             (for/fold ([products (set->list (car group-bitmask-sets))])
-                       ([group (in-list (cdr group-bitmask-sets))])
-               (for*/list ([p (in-list products)]
-                           [g (in-set group)])
-                 (bitwise-ior p g)))))
+             (remove-duplicates
+              (for/fold ([products (set->list (car group-bitmask-sets))])
+                        ([group (in-list (cdr group-bitmask-sets))])
+                (for*/list ([p (in-list products)]
+                            [g (in-set group)])
+                  (bitwise-ior p g))))))
 
        ;; Step 3: Read scope cell at each product worldview, project query vars.
        (define domain-merge (make-tagged-merge scope-cell-merge))

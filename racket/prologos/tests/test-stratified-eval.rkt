@@ -53,6 +53,7 @@
                    [current-relation-store (make-relation-store)]
                    [current-relation-store-version 0]
                    [current-strata-cache #f]
+                   [current-solver-strategy-override #f]
                    [current-preparse-registry (current-preparse-registry)]
                    [current-trait-registry (current-trait-registry)]
                    [current-impl-registry (current-impl-registry)]
