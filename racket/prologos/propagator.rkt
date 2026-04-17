@@ -183,6 +183,12 @@
  naf-pending-merge
  register-stratum-handler!
  stratum-handlers
+ ;; BSP-LE Track 2B Addendum A1: per-subsystem topology cells + shared merge
+ constraint-propagators-topology-cell-id
+ elaborator-topology-cell-id
+ narrowing-topology-cell-id
+ sre-topology-cell-id
+ topology-request-merge
  ;; Phase 5a: propagator flags + fire-once as scheduler concept
  PROP-FIRE-ONCE
  PROP-EMPTY-INPUTS
@@ -517,6 +523,25 @@
           old)
       new))
 
+;; BSP-LE Track 2B Addendum A1: Per-subsystem topology request cells.
+;; Each subsystem's topology handler gets its own request cell with SET-valued
+;; carrier and set-union merge. Replaces the legacy shared decomp-request-cell
+;; approach where 4 subsystems wrote to cell-id 0 and dispatched via try-each
+;; handler chain (imperative dispatch). Now: one cell ↔ one handler, uniform
+;; stratum iteration.
+;;
+;; NOTE: hard-coded cell-IDs are a known debt. A future track may explore
+;; dynamic cell-ID allocation for strata (see BSP-LE Master "Open Questions" #6
+;; cell-metadata-driven scheduling). For now, 6-9 is the natural contiguous
+;; allocation after the 6 well-known cells (0-5).
+(define constraint-propagators-topology-cell-id (cell-id 6))
+(define elaborator-topology-cell-id (cell-id 7))
+(define narrowing-topology-cell-id (cell-id 8))
+(define sre-topology-cell-id (cell-id 9))
+;; Shared merge for all topology request cells: SET-valued, set-union.
+(define (topology-request-merge old new)
+  (set-union old new))
+
 ;; Worldview cache merge: replacement (D.10).
 ;; The projection propagator writes the complete recomputed bitmask from
 ;; the compound decisions cell's merge-maintained field. Replacement (not ior)
@@ -577,35 +602,51 @@
   (define pc-cid pool-config-cell-id)
   (define pc-h (cell-id-hash pc-cid))
   (define pc-cell (prop-cell #f champ-empty))  ;; #f = no pool config yet
+  ;; A1: cells 6-9 = per-subsystem topology request cells.
+  ;; All SET-valued with set-union merge; initial value empty set.
+  (define cp-cid constraint-propagators-topology-cell-id)
+  (define cp-h  (cell-id-hash cp-cid))
+  (define cp-cell (prop-cell (set) champ-empty))
+  (define elab-cid elaborator-topology-cell-id)
+  (define elab-h  (cell-id-hash elab-cid))
+  (define elab-cell (prop-cell (set) champ-empty))
+  (define narr-cid narrowing-topology-cell-id)
+  (define narr-h  (cell-id-hash narr-cid))
+  (define narr-cell (prop-cell (set) champ-empty))
+  (define sre-cid sre-topology-cell-id)
+  (define sre-h  (cell-id-hash sre-cid))
+  (define sre-cell (prop-cell (set) champ-empty))
   (prop-network
    (prop-net-hot '() fuel)
-   (prop-net-warm (champ-insert
-                   (champ-insert
-                    (champ-insert
-                     (champ-insert
-                      (champ-insert
-                       (champ-insert champ-empty req-h req-cid req-cell)
-                       wv-h wv-cid wv-cell)
-                      rs-h rs-cid rs-cell)
-                     cfg-h cfg-cid cfg-cell)
-                    naf-h naf-cid naf-cell)
-                   pc-h pc-cid pc-cell)
+   (prop-net-warm (for/fold ([acc champ-empty])
+                            ([pair (in-list (list (cons req-h (cons req-cid req-cell))
+                                                  (cons wv-h (cons wv-cid wv-cell))
+                                                  (cons rs-h (cons rs-cid rs-cell))
+                                                  (cons cfg-h (cons cfg-cid cfg-cell))
+                                                  (cons naf-h (cons naf-cid naf-cell))
+                                                  (cons pc-h (cons pc-cid pc-cell))
+                                                  (cons cp-h (cons cp-cid cp-cell))
+                                                  (cons elab-h (cons elab-cid elab-cell))
+                                                  (cons narr-h (cons narr-cid narr-cell))
+                                                  (cons sre-h (cons sre-cid sre-cell))))])
+                    (champ-insert acc (car pair) (cadr pair) (cddr pair)))
                   #f)
-   (prop-net-cold (champ-insert
-                   (champ-insert
-                    (champ-insert
-                     (champ-insert
-                      (champ-insert
-                       (champ-insert champ-empty req-h req-cid decomp-request-merge)
-                       wv-h wv-cid worldview-cache-merge)
-                      rs-h rs-cid relation-store-merge)
-                     cfg-h cfg-cid config-merge)
-                    naf-h naf-cid naf-pending-merge)
-                   pc-h pc-cid pool-config-merge)
+   (prop-net-cold (for/fold ([acc champ-empty])
+                            ([pair (in-list (list (cons req-h (cons req-cid decomp-request-merge))
+                                                  (cons wv-h (cons wv-cid worldview-cache-merge))
+                                                  (cons rs-h (cons rs-cid relation-store-merge))
+                                                  (cons cfg-h (cons cfg-cid config-merge))
+                                                  (cons naf-h (cons naf-cid naf-pending-merge))
+                                                  (cons pc-h (cons pc-cid pool-config-merge))
+                                                  (cons cp-h (cons cp-cid topology-request-merge))
+                                                  (cons elab-h (cons elab-cid topology-request-merge))
+                                                  (cons narr-h (cons narr-cid topology-request-merge))
+                                                  (cons sre-h (cons sre-cid topology-request-merge))))])
+                    (champ-insert acc (car pair) (cadr pair) (cddr pair)))
                   champ-empty        ;;   contradiction-fns
                   champ-empty        ;;   widen-fns
                   champ-empty        ;;   propagators
-                  6                  ;;   next-cell-id (0=decomp, 1=worldview, 2=rel-store, 3=config, 4=naf-pending, 5=pool-config)
+                  10                 ;;   next-cell-id (0-5 well-known; 6-9 topology subsystem)
                   0                  ;;   next-prop-id
                   champ-empty        ;;   cell-decomps
                   champ-empty        ;;   pair-decomps
@@ -2429,19 +2470,37 @@
         (let ([result ((car handlers) net req)])
           (if result result (loop (cdr handlers)))))))
 
-;; BSP-LE Track 2B Phase R4: General stratum handler infrastructure.
-;; Each stratum is a (cons request-cell-id handler-fn) pair.
-;; handler-fn: (prop-network hasheq) → prop-network
-;;   Receives the network and the request cell value (a hasheq of registrations).
-;;   Returns updated network (may write nogoods, modify cells).
-;; Strata are processed in order after S0 + topology quiesce.
-;; Same pattern as topology: request accumulator cell + handler function.
+;; BSP-LE Track 2B Phase R4 + A1: General stratum handler infrastructure.
+;; Each stratum is a (list request-cell-id handler-fn tier) entry.
+;;   request-cell-id: well-known cell-id; handler reads cell value, resets to init
+;;   handler-fn: (prop-network cell-value) → prop-network
+;;     Receives the network and the request cell's current value (set or hasheq
+;;     depending on the stratum's cell type). Returns updated network.
+;;   tier: 'topology (mutates network structure — runs FIRST after S0 quiesces)
+;;       | 'value    (computes/validates values — runs after topology tier)
+;;
+;; BSP outer loop: S0 → topology-tier strata → (S0 restart if new worklist) →
+;; value-tier strata → (S0 restart if new worklist) → fixpoint.
+;;
+;; A1: topology tier exists because topology changes (new cells, new propagators)
+;; must be observable by subsequent strata. Value tier (S1 NAF, etc.) runs after
+;; topology is stable so its fork sees the complete network.
 (define stratum-handlers (box '()))
 
-(define (register-stratum-handler! request-cell-id handler-fn)
+(define (register-stratum-handler! request-cell-id handler-fn
+                                   #:tier [tier 'value]
+                                   #:reset-value [reset-value (hasheq)])
+  (unless (memq tier '(topology value))
+    (error 'register-stratum-handler! "tier must be 'topology or 'value, got ~a" tier))
   (set-box! stratum-handlers
             (append (unbox stratum-handlers)
-                    (list (cons request-cell-id handler-fn)))))
+                    (list (list request-cell-id handler-fn tier reset-value)))))
+
+;; Accessors for stratum-handler entries.
+(define (stratum-handler-cell-id    entry) (car entry))
+(define (stratum-handler-fn         entry) (cadr entry))
+(define (stratum-handler-tier       entry) (caddr entry))
+(define (stratum-handler-reset-val  entry) (cadddr entry))
 
 ;; PAR Track 1: Built-in handler for callback-topology-request.
 ;; Calls the opaque callback outside BSP fire rounds.
@@ -2651,60 +2710,84 @@
                   (observer (bsp-round round-number merged-self-cleared (reverse diffs) pids
                                        (prop-network-contradiction merged-self-cleared) '())))
                 (inner-loop merged-self-cleared (add1 round-number)))])))
-          ;; TOPOLOGY STRATUM: process decomposition requests (sequential, outside BSP)
+          ;; TIERED STRATUM PROCESSING (A1 unified approach):
+          ;;   1. Legacy topology stratum (decomp-request-cell, try-each chain) — will be retired in A1.5
+          ;;   2. Topology-tier stratum handlers (per-subsystem cells; new A1 mechanism)
+          ;;   3. Value-tier stratum handlers (S1 NAF, future strata)
+          ;; Any tier producing S0 worklist → outer-loop restart from S0.
        (cond
          [(prop-network-contradiction value-result) value-result]
-         [(not has-topo-handlers?) value-result]  ;; No handlers registered — skip topology
          [else
-          ;; Read decomp-request cell
-          (define req-val (net-cell-read value-result decomp-request-cell-id))
-          (if (or (not req-val) (set-empty? req-val))
-              ;; No topology requests — proceed to higher strata (Phase R4)
-              (let ([after-topo value-result])
-                ;; BSP-LE Track 2B Phase R4: Process stratum handlers in order.
-                ;; Each handler reads its request cell, processes pending requests,
-                ;; clears the cell. If any produces S0 work → restart from S0.
-                ;; Same pattern as topology: request accumulator + handler.
-                (let process-strata ([net after-topo]
-                                     [remaining (unbox stratum-handlers)])
-                  (cond
-                    [(null? remaining) net]  ;; all strata empty → fixpoint reached
-                    [(prop-network-contradiction net) net]
-                    [else
-                     (define handler-pair (car remaining))
-                     (define req-cid (car handler-pair))
-                     (define handler-fn (cdr handler-pair))
-                     (define pending (net-cell-read net req-cid))
-                     (cond
-                       [(or (not pending) (and (hash? pending) (hash-empty? pending)))
-                        ;; Nothing pending at this stratum — advance to next
-                        (process-strata net (cdr remaining))]
-                       [else
-                        ;; Process pending requests, clear cell, check for S0 work
-                        (define processed (handler-fn net pending))
-                        (define cleared (net-cell-reset processed req-cid (hasheq)))
-                        (if (pair? (prop-network-worklist cleared))
-                            ;; S0 work produced → restart from S0
-                            ;; (S0↔Sk fixpoint iteration — well-founded semantics)
-                            (begin
-                              (when (> outer-round 20)
-                                (error 'run-to-quiescence-bsp
-                                       "stratum handlers: >20 outer iterations — possible infinite loop"))
-                              (outer-loop cleared (add1 outer-round)))
-                            ;; No new S0 work → continue to next stratum
-                            (process-strata cleared (cdr remaining)))])])))
-              ;; Topology requests exist — process them, then restart
-              (let* ([processed-net
-                      (for/fold ([n value-result])
-                                ([req (in-set req-val)])
-                        (process-topology-request n req))]
-                     ;; Clear request cell (non-monotone reset — bypasses merge)
-                     [cleared-net (net-cell-reset processed-net decomp-request-cell-id (set))])
-                ;; New propagators are on the worklist → back to value stratum
-                (when (> outer-round 20)
-                  (error 'run-to-quiescence-bsp
-                         "topology stratum: >20 outer iterations — possible infinite loop"))
-                (outer-loop cleared-net (add1 outer-round))))])])))]))
+          ;; Shared stratum-processing helper (DRY across tiers + legacy).
+          (define (process-tier net tier-predicate)
+            (let process ([net net]
+                          [remaining (filter tier-predicate (unbox stratum-handlers))])
+              (cond
+                [(null? remaining) net]
+                [(prop-network-contradiction net) net]
+                [else
+                 (define entry (car remaining))
+                 (define req-cid (stratum-handler-cell-id entry))
+                 (define handler-fn (stratum-handler-fn entry))
+                 (define reset-val (stratum-handler-reset-val entry))
+                 (define pending (net-cell-read net req-cid))
+                 (cond
+                   [(or (not pending)
+                        (and (hash? pending) (hash-empty? pending))
+                        (and (set? pending) (set-empty? pending)))
+                    (process net (cdr remaining))]
+                   [else
+                    (define processed (handler-fn net pending))
+                    (define cleared (net-cell-reset processed req-cid reset-val))
+                    (if (pair? (prop-network-worklist cleared))
+                        ;; Produced S0 work — return to outer-loop
+                        (begin
+                          (when (> outer-round 20)
+                            (error 'run-to-quiescence-bsp
+                                   "stratum handlers: >20 outer iterations — possible infinite loop"))
+                          cleared)
+                        (process cleared (cdr remaining)))])])))
+          ;; 1. Legacy topology (until A1.5 retirement) — try-each handler chain on shared cell
+          (define after-legacy-topo
+            (cond
+              [(not has-topo-handlers?) value-result]
+              [else
+               (define req-val (net-cell-read value-result decomp-request-cell-id))
+               (cond
+                 [(or (not req-val) (set-empty? req-val)) value-result]
+                 [else
+                  (define processed
+                    (for/fold ([n value-result]) ([req (in-set req-val)])
+                      (process-topology-request n req)))
+                  (net-cell-reset processed decomp-request-cell-id (set))])]))
+          ;; If legacy topology produced S0 work → restart
+          (cond
+            [(and has-topo-handlers?
+                  (pair? (prop-network-worklist after-legacy-topo))
+                  (not (eq? after-legacy-topo value-result)))
+             (when (> outer-round 20)
+               (error 'run-to-quiescence-bsp
+                      "topology stratum: >20 outer iterations — possible infinite loop"))
+             (outer-loop after-legacy-topo (add1 outer-round))]
+            [else
+             ;; 2. Topology-tier strata (A1: per-subsystem cells)
+             (define after-topo-tier
+               (process-tier after-legacy-topo
+                             (lambda (e) (eq? (stratum-handler-tier e) 'topology))))
+             (cond
+               [(and (pair? (prop-network-worklist after-topo-tier))
+                     (not (eq? after-topo-tier after-legacy-topo)))
+                (outer-loop after-topo-tier (add1 outer-round))]
+               [else
+                ;; 3. Value-tier strata (S1 NAF, etc.)
+                (define after-value-tier
+                  (process-tier after-topo-tier
+                                (lambda (e) (eq? (stratum-handler-tier e) 'value))))
+                (cond
+                  [(and (pair? (prop-network-worklist after-value-tier))
+                        (not (eq? after-value-tier after-topo-tier)))
+                   (outer-loop after-value-tier (add1 outer-round))]
+                  [else after-value-tier])])])])])))]))
 
 ;; ========================================
 ;; Parallel Executor (Phase 2.5c)

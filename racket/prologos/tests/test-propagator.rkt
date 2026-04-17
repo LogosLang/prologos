@@ -39,7 +39,7 @@
   (check-true (prop-network? net))
   (check-true (net-quiescent? net))
   (check-false (net-contradiction? net))
-  (check-equal? (prop-network-next-cell-id net) 6)  ;; cell-id 0=decomp-request, 1=worldview-cache, 2=relation-store, 3=config, 4=naf-pending, 5=pool-config
+  (check-equal? (prop-network-next-cell-id net) 10)  ;; well-known: 0=decomp-request, 1=worldview-cache, 2=relation-store, 3=config, 4=naf-pending, 5=pool-config, 6-9=topology subsystem cells (A1)
   (check-equal? (prop-network-next-prop-id net) 0))
 
 (test-case "make-prop-network: custom fuel"
@@ -69,16 +69,16 @@
   (define-values (net1 cid) (net-new-cell net 'bot flat-merge))
   (check-true (prop-network? net1))
   (check-true (cell-id? cid))
-  (check-equal? (cell-id-n cid) 6))  ;; BSP-LE Track 2B R1: first user cell is 6 (0=decomp, 1=worldview, 2=rel-store, 3=config, 4=naf-pending, 5=pool-config)
+  (check-equal? (cell-id-n cid) 10))  ;; A1: first user cell is 10 (0-5=well-known, 6-9=topology subsystem)
 
 (test-case "net-new-cell: sequential cell ids"
   (define net (make-prop-network))
   (define-values (net1 cid1) (net-new-cell net 'bot flat-merge))
   (define-values (net2 cid2) (net-new-cell net1 'bot flat-merge))
   (define-values (net3 cid3) (net-new-cell net2 'bot flat-merge))
-  (check-equal? (cell-id-n cid1) 6)  ;; BSP-LE Track 2B: offset by 6 (0=decomp, 1=worldview, 2=rel-store, 3=config, 4=naf-pending, 5=pool-config)
-  (check-equal? (cell-id-n cid2) 7)
-  (check-equal? (cell-id-n cid3) 8))
+  (check-equal? (cell-id-n cid1) 10)  ;; A1: offset by 10 (0-5 well-known + 6-9 topology)
+  (check-equal? (cell-id-n cid2) 11)
+  (check-equal? (cell-id-n cid3) 12))
 
 (test-case "net-new-cell: initial value accessible"
   (define-values (net cid) (net-new-cell (make-prop-network) 42 max-merge))
@@ -196,12 +196,12 @@
                       (list 'bot flat-merge)))
   (define-values (net* ids) (net-new-cells-batch net specs))
   (check-equal? (length ids) 3)
-  (check-equal? (map cell-id-n ids) '(6 7 8))  ;; BSP-LE Track 2B: offset by 6 (0=decomp, 1=worldview, 2=rel-store, 3=config, 4=naf-pending, 5=pool-config)
+  (check-equal? (map cell-id-n ids) '(10 11 12))  ;; A1: offset by 10 (0-5 well-known + 6-9 topology subsystem)
   ;; All cells readable with initial values
   (for ([cid (in-list ids)])
     (check-equal? (net-cell-read net* cid) 'bot))
-  ;; next-cell-id advanced by 3 from 6
-  (check-equal? (prop-network-next-cell-id net*) 9))
+  ;; next-cell-id advanced by 3 from 10
+  (check-equal? (prop-network-next-cell-id net*) 13))
 
 (test-case "net-new-cells-batch: cells are writable and merge correctly"
   (define net (make-prop-network))
@@ -233,7 +233,7 @@
   (define specs (list (list 'bot flat-merge)
                       (list 'bot flat-merge)))
   (define-values (net2 ids) (net-new-cells-batch net1 specs))
-  ;; BSP-LE Track 2B: existing cell is ID 6 (0=decomp, 1=worldview, 2=rel-store, 3=config, 4=naf-pending, 5=pool-config), batch starts at 7
-  (check-equal? (cell-id-n existing-id) 6)
-  (check-equal? (map cell-id-n ids) '(7 8))
-  (check-equal? (prop-network-next-cell-id net2) 9))
+  ;; A1: existing cell is ID 10 (0-5 well-known + 6-9 topology), batch starts at 11
+  (check-equal? (cell-id-n existing-id) 10)
+  (check-equal? (map cell-id-n ids) '(11 12))
+  (check-equal? (prop-network-next-cell-id net2) 13))
